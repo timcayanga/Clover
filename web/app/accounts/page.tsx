@@ -1701,7 +1701,7 @@ function AccountsPageContent() {
       if (!options?.silent) {
         void (async () => {
           try {
-            await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}&repairImportedAccounts=1&cleanupImportedAccounts=1`, {
+            await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}&repairImportedAccounts=1&cleanupImportedAccounts=1&maintenance=1`, {
               cache: "no-store",
             });
           } catch {

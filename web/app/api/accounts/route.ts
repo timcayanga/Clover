@@ -1052,12 +1052,17 @@ export async function GET(request: Request) {
     }
 
     await assertWorkspaceAccess(userId, workspaceId);
-    await repairWorkspaceDataVisibility(workspaceId).catch((error) => {
-      console.warn("[accounts] unable to repair workspace data visibility", {
-        workspaceId,
-        error,
+    const shouldRunAccountMaintenance = ["1", "true"].includes(
+      (searchParams.get("maintenance") ?? "").trim().toLowerCase()
+    );
+    if (shouldRunAccountMaintenance) {
+      await repairWorkspaceDataVisibility(workspaceId).catch((error) => {
+        console.warn("[accounts] unable to repair workspace data visibility", {
+          workspaceId,
+          error,
+        });
       });
-    });
+    }
     const compatibleColumns = await getCompatibleAccountColumns();
     const shouldRepairImportedAccounts = ["1", "true"].includes(
       (searchParams.get("repairImportedAccounts") ?? "").trim().toLowerCase()
@@ -1100,14 +1105,14 @@ export async function GET(request: Request) {
       });
     }
 
-    const accounts = await prisma.account.findMany({
-      where: { workspaceId },
-      orderBy: { createdAt: "desc" },
-      select: getCompatibleAccountSelect(compatibleColumns),
-    });
-    const accountRules = await loadAccountRules(workspaceId);
-
-    const statementCheckpoints = await (async () => {
+    const [accounts, accountRules, statementCheckpoints] = await Promise.all([
+      prisma.account.findMany({
+        where: { workspaceId },
+        orderBy: { createdAt: "desc" },
+        select: getCompatibleAccountSelect(compatibleColumns),
+      }),
+      loadAccountRules(workspaceId),
+      (async () => {
       if (!(await hasCompatibleTable("AccountStatementCheckpoint"))) {
         return [];
       }
@@ -1184,7 +1189,8 @@ export async function GET(request: Request) {
         updatedAt: checkpoint.updatedAt.toISOString(),
         sourceMetadata: checkpoint.sourceMetadata ?? null,
       }));
-    })();
+      })(),
+    ]);
     const accountIds = accounts.map((account) => account.id);
     const transactionCounts = accountIds.length
       ? await prisma.transaction.groupBy({

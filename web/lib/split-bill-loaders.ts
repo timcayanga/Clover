@@ -129,27 +129,21 @@ const workspaceBillSelect = {
 };
 
 export const loadSplitBillWorkspaceData = async (userId: string) => {
-  const groups = await prisma.splitBillGroup.findMany({
-    where: { OR: [{ userId }, { collaborators: { some: { userId } } }], archivedAt: null },
-    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-    select: {
-      id: true,
-      name: true,
-      avatarUrl: true,
-      archivedAt: true,
-      members: {
-        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-        select: { id: true, name: true, sortOrder: true },
+  const [groups, people] = await Promise.all([
+    prisma.splitBillGroup.findMany({
+      where: { OR: [{ userId }, { collaborators: { some: { userId } } }], archivedAt: null },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        name: true,
+        avatarUrl: true,
+        archivedAt: true,
+        members: {
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+          select: { id: true, name: true, sortOrder: true },
+        },
+        _count: { select: { bills: true } },
       },
-      _count: { select: { bills: true } },
-    },
-  });
-  const accessibleGroupIds = groups.map((group) => group.id);
-  const [bills, people] = await Promise.all([
-    prisma.splitBill.findMany({
-      where: { OR: [{ userId }, ...(accessibleGroupIds.length > 0 ? [{ groupId: { in: accessibleGroupIds } }] : [])] },
-      orderBy: [{ billDate: "desc" }, { updatedAt: "desc" }],
-      select: workspaceBillSelect,
     }),
     prisma.splitBillPerson.findMany({
       where: { userId },
@@ -161,6 +155,12 @@ export const loadSplitBillWorkspaceData = async (userId: string) => {
       },
     }),
   ]);
+  const accessibleGroupIds = groups.map((group) => group.id);
+  const bills = await prisma.splitBill.findMany({
+    where: { OR: [{ userId }, ...(accessibleGroupIds.length > 0 ? [{ groupId: { in: accessibleGroupIds } }] : [])] },
+    orderBy: [{ billDate: "desc" }, { updatedAt: "desc" }],
+    select: workspaceBillSelect,
+  });
   const transferSettlementsByBillId = await loadSplitBillTransferSettlementsForBills(bills.map((bill) => bill.id));
 
   return {

@@ -821,7 +821,7 @@ export default function InvestmentsPage() {
       try {
         const [accountsResponse, transactionsResponse] = await Promise.all([
           fetch(`/api/accounts?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`),
-          fetch(`/api/transactions?workspaceId=${encodeURIComponent(selectedWorkspaceId)}&pageSize=all&summaryMode=light`),
+          fetch(`/api/transactions?workspaceId=${encodeURIComponent(selectedWorkspaceId)}&accountType=investment&pageSize=all&summaryMode=light`),
         ]);
         if (!accountsResponse.ok || cancelled) {
           if (!cancelled) {

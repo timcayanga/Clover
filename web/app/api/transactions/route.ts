@@ -22,8 +22,6 @@ import {
   parseTransactionQueryFilters,
   type TransactionQueryFilters,
 } from "@/lib/transaction-query";
-import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
-import { recoverWorkspaceImportEnrichment } from "@/lib/import-enrichment-recovery";
 
 export const dynamic = "force-dynamic";
 
@@ -711,150 +709,7 @@ const getWorkspaceCurrencyCodes = async (workspaceId: string) => {
   return codes.length > 0 ? codes : ["PHP"];
 };
 
-const normalizeLegacyTransactionVisibility = async (workspaceId: string) => {
-  await prisma.$executeRaw`
-    UPDATE "Transaction"
-    SET "isExcluded" = false
-    WHERE "workspaceId" = ${workspaceId}
-      AND "isExcluded" IS NULL
-  `;
-};
-
-const IMPORT_RECOVERY_TIMEOUT_MS = 1200;
 const RECENT_IMPORT_VISIBILITY_WINDOW_MS = 10 * 60 * 1000;
-
-const hasActiveWorkspaceImport = async (workspaceId: string) => {
-  const activeImportCount = await prisma.importFile.count({
-    where: {
-      workspaceId,
-      status: "processing",
-    },
-  });
-
-  return activeImportCount > 0;
-};
-
-const withImportRecoveryTimeout = async (task: Promise<boolean>) =>
-  Promise.race([
-    task,
-    new Promise<false>((resolve) => {
-      setTimeout(() => resolve(false), IMPORT_RECOVERY_TIMEOUT_MS);
-    }),
-  ]);
-
-const findOrphanParsedImportIdsForAccount = async (account: {
-  id: string;
-  workspaceId: string;
-  name: string;
-  institution: string | null;
-  accountNumber: string | null;
-}) => {
-  const accountDigits = normalizeDigits(account.accountNumber ?? account.name);
-  const accountLastFour = accountDigits.length >= 4 ? accountDigits.slice(-4) : "";
-  const institutionToken = normalizeParsedImportToken(account.institution ?? account.name)
-    .replace(/\b(account|bank|checking|savings)\b/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  const nameToken = normalizeParsedImportToken(account.name).replace(/\d+/g, " ").replace(/\s+/g, " ").trim();
-
-  if (!accountLastFour && !institutionToken && !nameToken) {
-    return [];
-  }
-
-  const rows = await prisma.$queryRaw<Array<{ importFileId: string; rowCount: bigint }>>`
-    SELECT pt."importFileId" AS "importFileId", COUNT(*)::bigint AS "rowCount"
-    FROM "ParsedTransaction" pt
-    INNER JOIN "ImportFile" i ON i."id" = pt."importFileId"
-    WHERE pt."workspaceId" = ${account.workspaceId}
-      AND pt."importFileId" IS NOT NULL
-      AND (i."accountId" IS NULL OR i."accountId" = ${account.id})
-      AND (
-        i."status" = 'done'
-        OR i."confirmedAt" IS NOT NULL
-        OR COALESCE(i."parsedRowsCount", 0) > 0
-      )
-      AND (
-        (${accountDigits} <> '' AND regexp_replace(COALESCE(pt."accountNumber", ''), '\\D', '', 'g') = ${accountDigits})
-        OR (${accountLastFour} <> '' AND right(regexp_replace(COALESCE(pt."accountNumber", ''), '\\D', '', 'g'), 4) = ${accountLastFour})
-        OR (${institutionToken} <> '' AND lower(COALESCE(pt."institution", '')) LIKE ${`%${institutionToken}%`})
-        OR (${nameToken} <> '' AND lower(COALESCE(pt."accountName", '')) LIKE ${`%${nameToken}%`})
-      )
-    GROUP BY pt."importFileId"
-    HAVING COUNT(*) >= 2
-    ORDER BY MIN(pt."createdAt") ASC NULLS LAST, pt."importFileId" ASC
-    LIMIT 6
-  `.catch(() => []);
-
-  const candidateImportIds = rows.map((row) => row.importFileId).filter(Boolean);
-  if (candidateImportIds.length === 0) {
-    return [];
-  }
-
-  const existingRows = await prisma.transaction.groupBy({
-    by: ["importFileId"],
-    where: {
-      workspaceId: account.workspaceId,
-      deletedAt: null,
-      importFileId: { in: candidateImportIds },
-    },
-    _count: { _all: true },
-  });
-  const importIdsWithVisibleRows = new Set(existingRows.filter((row) => row.importFileId).map((row) => row.importFileId as string));
-  return candidateImportIds.filter((importFileId) => !importIdsWithVisibleRows.has(importFileId));
-};
-
-const materializeOrphanParsedImportsForWorkspace = async (
-  workspaceId: string,
-  accounts: Array<{
-    id: string;
-    workspaceId: string;
-    name: string;
-    institution: string | null;
-    type: string;
-    accountNumber: string | null;
-    source: string;
-  }>
-) => {
-  const uploadAccounts = accounts.filter((account) => account.source === "upload");
-  if (uploadAccounts.length === 0) {
-    return false;
-  }
-
-  const existingCounts = await prisma.transaction.groupBy({
-    by: ["accountId"],
-    where: {
-      workspaceId,
-      deletedAt: null,
-      accountId: { in: uploadAccounts.map((account) => account.id) },
-    },
-    _count: { _all: true },
-  });
-  const accountIdsWithRows = new Set(existingCounts.map((row) => row.accountId));
-  const accountsWithoutRows = uploadAccounts.filter((account) => !accountIdsWithRows.has(account.id));
-  if (accountsWithoutRows.length === 0) {
-    return false;
-  }
-
-  const { confirmImportFile } = await import("@/workers/import-processor");
-  let materialized = false;
-  const confirmedImportIds = new Set<string>();
-
-  for (const account of accountsWithoutRows) {
-    const orphanImportIds = await findOrphanParsedImportIdsForAccount(account);
-    for (const importFileId of orphanImportIds) {
-      if (confirmedImportIds.has(importFileId)) {
-        continue;
-      }
-
-      confirmedImportIds.add(importFileId);
-      await confirmImportFile(importFileId, account.id);
-      materialized = true;
-    }
-  }
-
-  return materialized;
-};
-
 export async function GET(request: Request) {
   try {
     const userId = await resolveTransactionsRouteUserId();
@@ -866,38 +721,10 @@ export async function GET(request: Request) {
     }
 
     await assertWorkspaceAccess(userId, workspaceId);
-    await repairWorkspaceDataVisibility(workspaceId).catch((error) => {
-      console.warn("[transactions] unable to repair workspace data visibility", {
-        workspaceId,
-        error,
-      });
-    });
-    await normalizeLegacyTransactionVisibility(workspaceId);
     const workspaceAccountRows = await prisma.account.findMany({
       where: { workspaceId },
-      select: { id: true, workspaceId: true, name: true, institution: true, type: true, accountNumber: true, source: true },
+      select: { id: true, accountNumber: true },
     });
-    const shouldRunImportRecovery = !(await hasActiveWorkspaceImport(workspaceId));
-    if (shouldRunImportRecovery) {
-      await withImportRecoveryTimeout(materializeOrphanParsedImportsForWorkspace(workspaceId, workspaceAccountRows)).catch((error) => {
-        console.warn("[transactions] unable to materialize orphan parsed import rows", {
-          workspaceId,
-          error,
-        });
-      });
-      await withImportRecoveryTimeout(
-        recoverWorkspaceImportEnrichment({
-          workspaceId,
-          workerId: `transactions-import-enrichment-${workspaceId}`,
-          maxJobs: 2,
-        })
-      ).catch((error) => {
-        console.warn("[transactions] unable to recover workspace import enrichment", {
-          workspaceId,
-          error,
-        });
-      });
-    }
     const workspaceAccounts = workspaceAccountRows.map((account) => ({
       id: account.id,
       accountNumber: account.accountNumber,
@@ -922,7 +749,13 @@ export async function GET(request: Request) {
       workspaceId,
       hasEffectiveCategoryFilters ? { ...filters, categoryIds: [] } : filters
     );
-    const visibleWhere = { ...where, isExcluded: false };
+    const visibleWhere = {
+      ...where,
+      isExcluded: false,
+      ...(searchParams.get("accountType") === "investment"
+        ? { account: { is: { type: "investment" as const } } }
+        : {}),
+    };
     const orderBy = buildTransactionQueryOrderBy(filters);
     const pageSizeParam = searchParams.get("pageSize");
     const includeAll = pageSizeParam === "all";

@@ -1330,41 +1330,42 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     investmentInterestRate: account.investmentInterestRate === null ? null : Number(account.investmentInterestRate),
     investmentMaturityValue: account.investmentMaturityValue === null ? null : Number(account.investmentMaturityValue),
   })) satisfies WorkspaceAccount[];
-  const plannedPaymentSuggestions = await getPlannedPaymentSuggestions(resolvedWorkspace.id).catch(() => []);
-
-  const adviserInteractions = await prisma.auditLog.findMany({
-    where: {
-      workspaceId: resolvedWorkspace.id,
-      action: {
-        in: ["adviser.card_opened", "adviser.prompt_clicked", "adviser.chat_asked"],
+  const [plannedPaymentSuggestions, adviserInteractions, adviserCompletionLogs, budgetData] = await Promise.all([
+    getPlannedPaymentSuggestions(resolvedWorkspace.id).catch(() => []),
+    prisma.auditLog.findMany({
+      where: {
+        workspaceId: resolvedWorkspace.id,
+        action: {
+          in: ["adviser.card_opened", "adviser.prompt_clicked", "adviser.chat_asked"],
+        },
       },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-    select: {
-      action: true,
-      entityId: true,
-      metadata: true,
-      createdAt: true,
-    },
-  });
-
-  const adviserCompletionLogs = await prisma.auditLog.findMany({
-    where: {
-      workspaceId: resolvedWorkspace.id,
-      action: {
-        in: ["adviser.action_completed"],
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: {
+        action: true,
+        entityId: true,
+        metadata: true,
+        createdAt: true,
       },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-    select: {
-      action: true,
-      entityId: true,
-      metadata: true,
-      createdAt: true,
-    },
-  });
+    }),
+    prisma.auditLog.findMany({
+      where: {
+        workspaceId: resolvedWorkspace.id,
+        action: {
+          in: ["adviser.action_completed"],
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: {
+        action: true,
+        entityId: true,
+        metadata: true,
+        createdAt: true,
+      },
+    }),
+    loadBudgetWorkspaceData(resolvedWorkspace.id, now),
+  ]);
 
   const adviserMemoryByGroup = new Map<string, AdviserMemoryStats>();
   const adviserMemoryByItem = new Map<string, AdviserMemoryStats>();
@@ -1501,7 +1502,6 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     },
     displayCurrency
   );
-  const budgetData = await loadBudgetWorkspaceData(resolvedWorkspace.id, now);
   const budgetOverview = budgetData.overview;
   const goalLabel = goalValue ? ({ save_more: "Save more", pay_down_debt: "Pay down debt", track_spending: "Track spending", build_emergency_fund: "Build an emergency fund", invest_better: "Invest better" }[goalValue] ?? goalValue) : null;
 
