@@ -95,6 +95,7 @@ export default async function PricingPage() {
             </p>
             <ul className="pricing-card__list">
               <PlanFeatureItem label="Manual transaction tracking" />
+              <PlanFeatureItem label="Up to 3 Profiles, including Personal" />
               <PlanFeatureItem label="Receipt scanning" />
               <PlanFeatureItem label="5 accounts in addition to Cash" />
               <PlanFeatureItem label="10 monthly uploads total, including statements and receipts" />
@@ -124,6 +125,7 @@ export default async function PricingPage() {
             </p>
             <ul className="pricing-card__list">
               <PlanFeatureItem label="Manual transaction tracking" />
+              <PlanFeatureItem label="Up to 10 Profiles, including Personal" />
               <PlanFeatureItem label="20 non-cash accounts" />
               <PlanFeatureItem label="100 monthly uploads total" />
               <PlanFeatureItem label="Unlimited transaction rows" />
