@@ -7666,14 +7666,15 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   align-items: flex-start;
 }
 
-.reports-subtab-card .report-card__head-title h4,
-.reports-subtab-card .report-card__head > div:first-child h4,
-.reports-subtab-card > h4 {
-  font-family: var(--font-heading);
-  font-size: 1.06rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+.reports-subtab-title {
+  margin: 0;
+  color: var(--muted-2);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  line-height: 1.25;
+  text-transform: uppercase;
 }
 
 .reports-subtab-card > .report-card__stat {
