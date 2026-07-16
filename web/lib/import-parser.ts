@@ -1432,6 +1432,83 @@ const buildGenericScreenshotSnapshotRows = (
   ];
 };
 
+const buildGenericScreenshotAccountRows = (
+  text: string,
+  metadata: DetectedStatementMetadata,
+  fileName = ""
+): ParsedImportRow[] => {
+  const normalizedText = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  const isAccountOverview =
+    /\b(?:your\s+products|my\s+accounts?|deposit\s+accounts?|view\s+other\s+accounts?|accounts?\s+overview)\b/i.test(normalizedText) &&
+    !/\b(?:transaction\s+history|past\s+transactions|latest\s+transactions|recent\s+transactions)\b/i.test(normalizedText);
+  if (!isAccountOverview) return [];
+
+  const lines = splitStatementLines(text).map((line) => normalizeScreenshotSummaryLine(line)).filter(Boolean);
+  const accountIdentityPattern = /^(?:\d{2}[- ]\d{2}[- ]\d{2}\s+)?(?:[*xX•]+\s*)?\d{4,18}$/;
+  const moneyPattern = /(?:PHP|USD|EUR|GBP|SGD|AED|AUD|CAD|JPY|HKD|CNY|THB|₱|£|\$)?\s*[+-]?\s*[0-9][0-9,]*\.\d{2}/i;
+  const rows: ParsedImportRow[] = [];
+  const seen = new Set<string>();
+  const institution = metadata.institution ?? sanitizeBankNameLabel(detectInstitutionFromText(normalizedText)) ?? "Unknown";
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const identityLine = lines[index] ?? "";
+    if (!accountIdentityPattern.test(identityLine)) continue;
+    const accountNumber = identityLine.replace(/\D/g, "").slice(-4) || null;
+    const accountName = lines
+      .slice(Math.max(0, index - 3), index)
+      .reverse()
+      .find((line) =>
+        /[A-Za-z]/.test(line) &&
+        !isGenericScreenshotNoiseLine(line) &&
+        !/^(?:your products|my accounts?|deposit accounts?|currency balances|more currencies|accounts?)$/i.test(line)
+      ) ?? null;
+    if (!accountName) continue;
+
+    const balanceLine = lines.slice(index + 1, index + 5).find((line) => moneyPattern.test(line));
+    const balance = parseMoney(balanceLine?.match(/[+-]?\s*(?:PHP|USD|EUR|GBP|SGD|AED|AUD|CAD|JPY|HKD|CNY|THB|₱|£|\$)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+    const key = [accountName.toLowerCase(), identityLine, balance ?? ""].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({
+      date: metadata.endDate ?? metadata.startDate ?? new Date().toISOString(),
+      amount: "0.00",
+      currency: metadata.currency ?? detectCurrencyFromText(normalizedText) ?? null,
+      merchantRaw: humanizeMerchantText(`${accountName} balance`),
+      merchantClean: summarizeMerchantText(`${accountName} balance`, institution),
+      description: `${accountName} account snapshot`,
+      categoryName: "Other",
+      accountName,
+      accountNumber: accountNumber ?? undefined,
+      institution,
+      type: "transfer",
+      confidence: Math.max(72, metadata.confidence - 8),
+      parserConfidence: Math.max(70, metadata.confidence - 6),
+      categoryConfidence: 60,
+      rawPayload: {
+        bank: institution,
+        institutionRaw: metadata.institution ?? institution,
+        kind: "account_snapshot_marker",
+        source: "generic_account_list_screenshot",
+        sourceFileName: fileName,
+        sourceRowIndex: index,
+        documentType: "account_detail",
+        accountName,
+        accountNumber,
+        accountType: metadata.accountType ?? "bank",
+        balance,
+        statementEndingBalance: balance,
+        currency: metadata.currency ?? detectCurrencyFromText(normalizedText) ?? null,
+        reviewRequired: true,
+        reviewReasons: [
+          "Account-list screenshot; confirm the account identity and visible balance before relying on the snapshot.",
+        ],
+      },
+    });
+  }
+
+  return rows;
+};
+
 export const getTrailingBalanceFromParsedRows = (rows: ParsedImportRow[]) => {
   const statementEndingBalancePayload = [...rows]
     .reverse()
@@ -21080,6 +21157,12 @@ export const parseImportTextGenericOnly = (
   // Keep unfamiliar screenshot-only pages visible in the review flow instead
   // of dropping them when the generic statement parser has no table rows.
   const genericScreenshotMetadata = parseGenericScreenshotStatementMetadata(text, fileName);
+  const genericAccountRows = genericScreenshotMetadata
+    ? buildGenericScreenshotAccountRows(text, genericScreenshotMetadata, fileName)
+    : [];
+  if (genericAccountRows.length > 0) {
+    return filterSharedScreenshotParsedRows(genericAccountRows, text, fileName, context);
+  }
   const genericScreenshotSnapshotRows = genericScreenshotMetadata
     ? buildGenericScreenshotSnapshotRows(text, genericScreenshotMetadata)
     : null;
@@ -22803,6 +22886,14 @@ export const parseImportText = (
   const genericCardParsed = parseGenericCreditCardText(text, context);
   if (genericCardParsed && genericCardParsed.rows.length > 0) {
     return genericCardParsed.rows;
+  }
+
+  const genericScreenshotMetadata = parseGenericScreenshotStatementMetadata(text, fileName);
+  const genericAccountRows = genericScreenshotMetadata
+    ? buildGenericScreenshotAccountRows(text, genericScreenshotMetadata, fileName)
+    : [];
+  if (genericAccountRows.length > 0) {
+    return filterSharedScreenshotParsedRows(genericAccountRows, text, fileName, context);
   }
 
   const genericParsed = parseGenericBankStatementText(text, context, { fileName });

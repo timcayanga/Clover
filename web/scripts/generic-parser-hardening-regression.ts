@@ -259,6 +259,33 @@ Accounts
   assert.equal(unfamiliarScreenshotRows[0]?.rawPayload?.balance, 12345.67);
   assert.ok((unfamiliarScreenshotRows[0]?.confidence ?? 100) < 70, "Expected unfamiliar screenshot snapshots to require review.");
 
+  const unfamiliarAccountOverviewRows = parseImportText(
+    `
+Your products
+Savings account
+12-34-56 12345678
+GBP 100.00
+Current account
+34-56-78 87654321
+GBP 250.00
+`,
+    "Screenshot_123.png",
+    "image/png"
+  );
+  assert.equal(unfamiliarAccountOverviewRows.length, 2, "Expected unfamiliar account-list screenshots to preserve each visible product.");
+  assert.deepEqual(
+    unfamiliarAccountOverviewRows.map((row) => row.rawPayload?.kind),
+    ["account_snapshot_marker", "account_snapshot_marker"]
+  );
+  assert.deepEqual(
+    unfamiliarAccountOverviewRows.map((row) => row.rawPayload?.balance),
+    [100, 250]
+  );
+  assert.ok(
+    unfamiliarAccountOverviewRows.every((row) => row.rawPayload?.reviewRequired === true),
+    "Expected account-list snapshots to require confirmation."
+  );
+
   assert.equal(getSharedMerchantCategoryHint("Maria Harman"), "Transfers", "Expected person-like names to map to Transfers.");
   assert.equal(getSharedMerchantCategoryHint("Visa Provisioning Service"), "Shopping", "Expected provisioning checks to map to Shopping.");
   assert.equal(getSharedMerchantCategoryHint("Great Ocean Road Choc"), "Travel & Lifestyle");
