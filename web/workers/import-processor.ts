@@ -86,6 +86,7 @@ import { coerceTransactionTypeFromCategoryName, isTransferCategoryName, toIntern
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { isProtectedTransactionReviewStatus } from "@/lib/data-engine-safety";
+import { applyImportValidationToRows, validateParsedImportRows } from "@/lib/data-engine-validation";
 import {
   isGenericMobileScreenshotFileName,
   resolveStatementIdentityFromMetadata,
@@ -6608,6 +6609,10 @@ export const processImportFileText = async (
   const autoRerunEnabled = options.qaSource === "import_processing" || options.qaSource === "import_confirmation";
   const skipVisualBackupParser = Boolean(options.skipVisualBackupParser);
   const importFile = await fetchImportFileCompat(importFileId);
+  const traceId =
+    (importFile && typeof (importFile as { traceId?: unknown }).traceId === "string" && String((importFile as { traceId: string }).traceId).trim()) ||
+    crypto.randomUUID();
+  await updateImportFileCompat(importFileId, { traceId }).catch(() => null);
   const emitImportProcessingEvent = (
     event: "import_processing_started" | "import_processing_completed" | "import_processing_stalled",
     properties: Record<string, unknown> = {}
@@ -8521,7 +8526,9 @@ export const processImportFileText = async (
     });
     return { imported: 0, duplicate: true, metadata: resolvedMetadata };
   }
-  const rows = effectiveRows as EnrichedParsedImportRow[];
+  const rawRows = effectiveRows as EnrichedParsedImportRow[];
+  const importValidation = validateParsedImportRows({ rows: rawRows, metadata: resolvedMetadata });
+  const rows = applyImportValidationToRows(rawRows, importValidation);
   const backupLearningSignalsForTemplate = extractBackupParserLearningSignals(
     rows.filter((row) => {
       const rawPayload = row.rawPayload;
@@ -8618,6 +8625,10 @@ export const processImportFileText = async (
     usedHybridRaceMode: parserRoutingMetadata.usedHybridRaceMode,
     backupParserRaceResolved: parserRoutingMetadata.backupParserRaceResolved,
     backupParserRaceTimedOut: parserRoutingMetadata.backupParserRaceTimedOut,
+    importValidationScore: importValidation.score,
+    importValidationCritical: importValidation.critical,
+    importValidationFindings: importValidation.findings,
+    importValidationMetrics: importValidation.metrics,
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
   const receiptDocumentCashAccountId =
@@ -9122,6 +9133,7 @@ export const processImportFileText = async (
       fileName: String(importFile.fileName ?? "imported-file"),
       fileType: String(importFile.fileType ?? "unknown"),
       parserVersion: DATA_ENGINE_VERSION,
+      traceId,
       documentType: importMode,
       parsedRows: rows as unknown as DataQaParsedRow[],
       metadata: resolvedMetadata,

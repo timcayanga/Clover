@@ -79,6 +79,7 @@ export type DataQaRunInput = {
   fileName: string;
   fileType: string;
   parserVersion?: string;
+  traceId?: string | null;
   documentType?: DataQaDocumentType | null;
   parsedRows: DataQaParsedRow[];
   metadata: DataQaStatementSnapshot;
@@ -856,6 +857,7 @@ export const recordDataQaRun = async (input: DataQaRunInput) => {
       stage: input.source,
       status: "completed",
       parserVersion: input.parserVersion ?? DATA_ENGINE_VERSION,
+      traceId: input.traceId ?? null,
       parserDurationMs: input.timings?.parsingMs ?? null,
       totalDurationMs: input.timings?.totalMs ?? null,
       score: evaluation.score,

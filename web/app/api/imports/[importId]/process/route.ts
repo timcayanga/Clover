@@ -23,7 +23,7 @@ import { enqueueImportProcessing } from "@/lib/import-queue";
 import { ensureImportProcessingWorker } from "@/lib/import-worker-runtime";
 import { loadImportStatusSnapshot } from "@/lib/import-status-snapshot";
 import { uploadObject } from "@/lib/s3";
-import { validateImportFile } from "@/lib/import-file-validation";
+import { validateImportFile, validateImportFileBytes } from "@/lib/import-file-validation";
 import { countWorkspaceOwnerImportFilesThisMonth } from "@/lib/plan-access";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
@@ -1317,6 +1317,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       try {
         await updateImportFileCompat(importId, {
           status: "processing",
+          rawExpiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
           processingPhase: "queued_retry",
           processingMessage: options?.processingMessage ?? "Queued for background processing...",
         });
@@ -1788,6 +1789,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         processingMessage: "Uploading file...",
       });
       const bytes = new Uint8Array(await file.arrayBuffer());
+      const byteValidationError = validateImportFileBytes({
+        fileName: file.name || formFileName || "imported-file",
+        contentType: file.type || formFileType || null,
+        bytes,
+      });
+      if (byteValidationError) {
+        return NextResponse.json({ error: byteValidationError }, { status: 400 });
+      }
       const fileFingerprint = makeImportFileBytesFingerprint(bytes);
       const effectiveFileName = file.name || formFileName || "imported-file";
       const effectiveFileType = file.type || formFileType || "";

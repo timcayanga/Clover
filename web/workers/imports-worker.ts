@@ -15,6 +15,11 @@ import {
 } from "@/lib/import-visual-recovery";
 import { processImportEnrichmentJobs, processImportFileText } from "@/workers/import-processor";
 import { summarizeErrorForLog } from "@/lib/security-logging";
+import { purgeExpiredImportFiles } from "@/lib/import-retention";
+
+void purgeExpiredImportFiles({ limit: 50 }).catch((error) => {
+  console.warn("Unable to purge expired raw import files at worker startup", { error: summarizeErrorForLog(error) });
+});
 
 const connection = getRedisConnection();
 

@@ -13,7 +13,7 @@ import {
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { assessStatementExtractionQuality } from "@/lib/import-quality";
 
-const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v3";
+const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v4";
 const OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION = "clover_bank_statement_transcription_v2";
 const OPENAI_IMPORT_FAST_MODEL_FALLBACK = "gpt-5.4-mini";
 const OPENAI_IMPORT_STRONG_MODEL_FALLBACK = "gpt-5.5";
@@ -93,6 +93,8 @@ const GENERIC_PARSER_GUIDANCE = [
   "- When OCR is character-spaced or fragmented, reconstruct the intended words first, then extract metadata and rows conservatively.",
   "- If the statement summary and the detailed rows disagree, prefer the rows that are visibly tied to dates and amounts, and mark low confidence instead of inventing extra activity.",
   "- If the page clearly shows a transaction table but the OCR is partial, return only the rows that can be supported by visible evidence instead of padding the list with guesswork.",
+  "- Every returned row must include parser_evidence with source_text plus page, region, or another location hint when available; omit a row when no source evidence supports its date and amount.",
+  "- Never manufacture dates, amounts, merchants, balances, or categories to make a statement reconcile. Use null and lower confidence when a field is unreadable.",
 ].join(" ");
 
 const GENERIC_NORMALIZATION_GUIDANCE = [

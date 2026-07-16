@@ -179,6 +179,7 @@ export async function POST(request: Request) {
       fileType: payload.fileType,
       storageKey,
       status: "processing",
+      rawExpiresAt: payload.skipUpload ? null : new Date(Date.now() + 72 * 60 * 60 * 1000),
     });
 
     if (!importFile) {

@@ -114,6 +114,13 @@ enum TrainingSignalSource {
   manual_transaction_creation
 }
 
+enum LearningRuleStatus {
+  candidate
+  active
+  suspended
+  rejected
+}
+
 enum PlanTier {
   free
   pro
@@ -632,6 +639,9 @@ model ImportFile {
   sourceFingerprint          String?
   sourceTimezone             String?
   sourceLocale               String?
+  traceId                    String?
+  rawExpiresAt               DateTime?
+  rawPurgedAt                DateTime?
   workspace                  Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   account                    Account?                    @relation(fields: [accountId], references: [id], onDelete: SetNull)
   documentImport             DocumentImport?
@@ -1244,8 +1254,15 @@ model MerchantRule {
   categoryId      String?
   categoryName    String?
   source          String    @default("manual")
+  status          LearningRuleStatus @default(active)
+  version         Int       @default(1)
   confidence      Int       @default(100)
   timesConfirmed  Int       @default(1)
+  applicationCount Int      @default(0)
+  correctionCount Int       @default(0)
+  provenance      Json?
+  negativeExamples Json?
+  lastEvaluatedAt DateTime?
   lastUsedAt      DateTime  @default(now())
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -1293,6 +1310,11 @@ model TrainingSignal {
   categoryName   String?
   type           TransactionType
   confidence     Int                  @default(100)
+  teachabilityScore Int?
+  approvalStatus String               @default("active")
+  fieldName      String?
+  previousValue  Json?
+  correctedValue Json?
   notes          String?
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
@@ -1316,6 +1338,7 @@ model DataQaRun {
   stage                   String?
   status                  String          @default("completed")
   parserVersion           String?
+  traceId                 String?
   parserDurationMs        Int?
   totalDurationMs         Int?
   score                   Int             @default(0)

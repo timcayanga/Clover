@@ -38,6 +38,7 @@
     "qa:rcbc-screenshots": "tsx scripts/rcbc-screenshot-regression.ts",
     "qa:training-signals": "tsx scripts/training-signal-dedupe.ts",
     "qa:data-engine-safety": "tsx scripts/data-engine-safety-regression.ts",
+    "qa:data-engine-validation": "tsx scripts/data-engine-validation-regression.ts",
     "qa:backup-parser-template": "tsx scripts/backup-parser-template-regression.ts",
     "qa:training-signals-db": "tsx scripts/record-training-signal-regression.ts",
     "qa:data-loop": "tsx scripts/data-qa-regression.ts",

@@ -27,6 +27,9 @@ import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from
 export const DATA_ENGINE_VERSION = "v2";
 export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v7";
 
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 type TrainingSignalRow = {
   categoryId: string;
   categoryName: string | null;
@@ -79,6 +82,8 @@ type MerchantRuleRow = {
   categoryId: string | null;
   categoryName: string | null;
   source: string;
+  status?: string;
+  version?: number;
   confidence: number;
   timesConfirmed: number;
 };
@@ -101,6 +106,7 @@ type AccountRuleRow = {
 };
 
 type StatementTemplateRow = {
+  id?: string;
   fingerprint: string;
   fileType: string | null;
   institution: string | null;
@@ -397,8 +403,15 @@ const MERCHANT_RULE_COLUMNS = [
   "categoryId",
   "categoryName",
   "source",
+  "status",
+  "version",
   "confidence",
   "timesConfirmed",
+  "applicationCount",
+  "correctionCount",
+  "provenance",
+  "negativeExamples",
+  "lastEvaluatedAt",
   "lastUsedAt",
   "createdAt",
   "updatedAt",
@@ -439,6 +452,9 @@ const IMPORT_FILE_COLUMNS = [
   "sourceFingerprint",
   "sourceTimezone",
   "sourceLocale",
+  "traceId",
+  "rawExpiresAt",
+  "rawPurgedAt",
   "uploadedAt",
   "deletedAt",
   "createdAt",
@@ -458,6 +474,11 @@ const TRAINING_SIGNAL_COLUMNS = [
   "categoryName",
   "type",
   "confidence",
+  "teachabilityScore",
+  "approvalStatus",
+  "fieldName",
+  "previousValue",
+  "correctedValue",
   "notes",
   "createdAt",
 ] as const;
@@ -1480,6 +1501,7 @@ export const buildTrainingSignalDedupeKey = (params: {
   merchantKey: string;
   categoryId: string;
   type: TransactionType;
+  fieldName?: string | null;
 }) =>
   [
     params.source,
@@ -1488,6 +1510,7 @@ export const buildTrainingSignalDedupeKey = (params: {
     params.merchantKey,
     params.categoryId,
     params.type,
+    params.fieldName ?? "",
   ].join("|");
 
 export const guessCategoryFallback = (description: string, type: TransactionType) => {
@@ -2596,6 +2619,7 @@ export const buildImportFileInsertData = async (params: {
   fileType: string;
   storageKey: string;
   status?: string;
+  rawExpiresAt?: Date | null;
 }) => {
   const columns = new Set(await getCompatibleImportFileColumns());
   const record: Record<string, unknown> = {};
@@ -2607,6 +2631,7 @@ export const buildImportFileInsertData = async (params: {
   if (columns.has("fileType")) record.fileType = params.fileType;
   if (columns.has("storageKey")) record.storageKey = params.storageKey;
   if (columns.has("status")) record.status = params.status ?? "processing";
+  if (columns.has("rawExpiresAt")) record.rawExpiresAt = params.rawExpiresAt ?? null;
   if (columns.has("parsedRowsCount")) record.parsedRowsCount = 0;
   if (columns.has("confirmedTransactionsCount")) record.confirmedTransactionsCount = 0;
   if (columns.has("confirmedAt")) record.confirmedAt = null;
@@ -2626,6 +2651,7 @@ export const insertImportFileCompat = async (params: {
   fileType: string;
   storageKey: string;
   status?: string;
+  rawExpiresAt?: Date | null;
 }): Promise<any> => {
   const record = await buildImportFileInsertData(params);
   const columns = Object.keys(record);
@@ -3361,6 +3387,8 @@ export const loadMerchantRules = async (workspaceId: string) => {
     categoryId: string | null;
     categoryName: string | null;
     source: string;
+    status: string;
+    version: number;
     confidence: number;
     timesConfirmed: number;
     category: { name: string } | null;
@@ -3368,7 +3396,7 @@ export const loadMerchantRules = async (workspaceId: string) => {
 
   try {
     rules = await prisma.merchantRule.findMany({
-      where: { workspaceId },
+      where: { workspaceId, status: "active" },
       include: {
         category: true,
       },
@@ -3388,6 +3416,8 @@ export const loadMerchantRules = async (workspaceId: string) => {
     categoryId: rule.categoryId,
     categoryName: rule.category?.name ?? rule.categoryName ?? null,
     source: rule.source,
+    status: rule.status,
+    version: rule.version,
     confidence: rule.confidence,
     timesConfirmed: rule.timesConfirmed,
   }));
@@ -3441,6 +3471,25 @@ export const upsertMerchantRule = async (params: {
   const merchantKey = normalizeMerchantText(params.merchantText);
 
   try {
+    const incomingConfidence = Math.max(0, Math.min(100, Math.round(params.confidence ?? 100)));
+    const existing = await prisma.merchantRule.findUnique({
+      where: { workspaceId_merchantKey: { workspaceId: params.workspaceId, merchantKey } },
+      select: { id: true, status: true, source: true, confidence: true },
+    });
+    const incomingIsManual = /manual/i.test(params.source);
+    if (
+      existing &&
+      existing.status === "active" &&
+      !incomingIsManual &&
+      existing.source === "manual" &&
+      existing.confidence >= incomingConfidence
+    ) {
+      return await prisma.merchantRule.update({
+        where: { id: existing.id },
+        data: { applicationCount: { increment: 1 }, lastUsedAt: new Date() },
+      });
+    }
+
     const rule = await prisma.merchantRule.upsert({
       where: {
         workspaceId_merchantKey: {
@@ -3454,8 +3503,12 @@ export const upsertMerchantRule = async (params: {
         categoryId: params.categoryId,
         categoryName: params.categoryName ?? null,
         source: params.source,
-        confidence: params.confidence ?? 100,
+        status: "active",
+        version: { increment: 1 },
+        confidence: incomingConfidence,
         timesConfirmed: { increment: 1 },
+        applicationCount: { increment: 1 },
+        provenance: { source: params.source, updatedAt: new Date().toISOString() },
         lastUsedAt: new Date(),
       },
       create: {
@@ -3466,8 +3519,12 @@ export const upsertMerchantRule = async (params: {
         categoryId: params.categoryId,
         categoryName: params.categoryName ?? null,
         source: params.source,
-        confidence: params.confidence ?? 100,
+        status: "active",
+        version: 1,
+        confidence: incomingConfidence,
         timesConfirmed: 1,
+        applicationCount: 1,
+        provenance: { source: params.source, createdAt: new Date().toISOString() },
         lastUsedAt: new Date(),
       },
     });
@@ -4335,6 +4392,9 @@ export const promoteUnsupervisedLearningClustersForWorkspace = async (params: {
   });
 
   let candidateCount = 0;
+  let promotedCount = 0;
+  const categories = await prisma.category.findMany({ where: { workspaceId: params.workspaceId }, select: { id: true, name: true } }).catch(() => []);
+  const categoryByName = new Map(categories.map((category) => [normalizeMerchantText(category.name), category] as const));
   for (const template of templates) {
     const parserConfig =
       template.parserConfig && typeof template.parserConfig === "object" && !Array.isArray(template.parserConfig)
@@ -4346,14 +4406,61 @@ export const promoteUnsupervisedLearningClustersForWorkspace = async (params: {
         : null;
     const clusters = Array.isArray(snapshot?.clusters) ? snapshot.clusters : [];
     candidateCount += clusters.length;
+    for (const cluster of clusters) {
+      if (!isPlainObject(cluster)) continue;
+      const count = Number(cluster.count ?? 0);
+      const confidence = Number(cluster.avgConfidence ?? 0);
+      const teachability = Number(cluster.avgTeachability ?? 0);
+      const merchantSeed = typeof cluster.merchantSeed === "string" ? cluster.merchantSeed.trim() : "";
+      const categoryName = typeof cluster.categoryName === "string" ? cluster.categoryName.trim() : "";
+      const category = categoryByName.get(normalizeMerchantText(categoryName));
+      if (count < 2 || confidence < 85 || teachability < 70 || !merchantSeed || !category || categoryName.toLowerCase() === "other") continue;
+      const merchantKey = normalizeMerchantText(merchantSeed);
+      const existing = await prisma.merchantRule.findUnique({
+        where: { workspaceId_merchantKey: { workspaceId: params.workspaceId, merchantKey } },
+        select: { status: true },
+      }).catch(() => null);
+      if (existing?.status === "active") continue;
+      await prisma.merchantRule.upsert({
+        where: { workspaceId_merchantKey: { workspaceId: params.workspaceId, merchantKey } },
+        update: {
+          status: "candidate",
+          version: { increment: 1 },
+          normalizedName: merchantSeed,
+          categoryId: category.id,
+          categoryName: category.name,
+          confidence: Math.min(89, Math.round(confidence)),
+          provenance: { source: "unsupervised_learning", templateId: template.id, count, teachability },
+          lastEvaluatedAt: new Date(),
+        },
+        create: {
+          workspaceId: params.workspaceId,
+          merchantKey,
+          merchantPattern: merchantSeed,
+          normalizedName: merchantSeed,
+          categoryId: category.id,
+          categoryName: category.name,
+          source: "unsupervised_learning",
+          status: "candidate",
+          version: 1,
+          confidence: Math.min(89, Math.round(confidence)),
+          timesConfirmed: 0,
+          applicationCount: 0,
+          correctionCount: 0,
+          provenance: { source: "unsupervised_learning", templateId: template.id, count, teachability },
+          lastEvaluatedAt: new Date(),
+        },
+      }).catch(() => null);
+      promotedCount += 1;
+    }
   }
 
   return {
     audit: {
       candidateCount,
-      promotedCount: 0,
-      suspendedCount: candidateCount,
-      reason: candidateCount > 0 ? "snapshot_only_requires_manual_promotion" : "no_candidates",
+      promotedCount,
+      suspendedCount: Math.max(0, candidateCount - promotedCount),
+      reason: candidateCount > 0 ? "candidates_created_but_not_active" : "no_candidates",
     },
   };
 };
@@ -4392,6 +4499,9 @@ export const recordTrainingSignal = async (params: {
   teachabilityScore?: number | null;
   notes?: string | null;
   actorUserId?: string | null;
+  fieldName?: string | null;
+  previousValue?: Prisma.InputJsonValue | null;
+  correctedValue?: Prisma.InputJsonValue | null;
 }) => {
   const teachabilityScore =
     typeof params.teachabilityScore === "number" && Number.isFinite(params.teachabilityScore)
@@ -4414,6 +4524,7 @@ export const recordTrainingSignal = async (params: {
     merchantKey,
     categoryId: params.categoryId,
     type: params.type,
+    fieldName: params.fieldName ?? null,
   });
 
   const columns = await getCompatibleTrainingSignalColumns();
@@ -4437,6 +4548,11 @@ export const recordTrainingSignal = async (params: {
     categoryName: params.categoryName ?? null,
     type: params.type,
     confidence: params.confidence ?? 100,
+    teachabilityScore,
+    approvalStatus: "active",
+    fieldName: params.fieldName ?? null,
+    previousValue: params.previousValue ?? Prisma.DbNull,
+    correctedValue: params.correctedValue ?? Prisma.DbNull,
     notes: params.notes ?? null,
   };
 
@@ -4458,6 +4574,11 @@ export const recordTrainingSignal = async (params: {
       categoryName: params.categoryName ?? null,
       type: params.type,
       confidence: params.confidence ?? 100,
+      teachabilityScore,
+      approvalStatus: "active",
+      fieldName: params.fieldName ?? null,
+      previousValue: params.previousValue ?? Prisma.DbNull,
+      correctedValue: params.correctedValue ?? Prisma.DbNull,
       notes: params.notes ?? null,
     },
   });
