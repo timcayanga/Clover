@@ -31397,6 +31397,16 @@ body:has(.pricing-page) {
   backdrop-filter: none;
 }
 
+/* Keep the public pricing treatment stable when later page styles are loaded. */
+.pricing-page .pricing-page__header {
+  padding-top: 10px !important;
+  padding-bottom: 8px;
+}
+
+.pricing-page .pricing-page__header h1 {
+  font-size: clamp(1.35rem, 2vw, 1.75rem) !important;
+}
+
 .pricing-card {
   display: grid;
   gap: 8px;
@@ -31411,8 +31421,8 @@ body:has(.pricing-page) {
 
 .pricing-card--featured {
   border-color: rgba(3, 168, 192, 0.22);
-  background: linear-gradient(145deg, #038fa7 0%, #03a8c0 52%, #6ee7b7 100%);
-  color: white;
+  background: linear-gradient(120deg, #006d82 0%, #00b8c7 45%, #5ee6bb 100%) !important;
+  color: white !important;
   box-shadow:
     0 24px 60px rgba(3, 168, 192, 0.14),
     var(--shadow);
