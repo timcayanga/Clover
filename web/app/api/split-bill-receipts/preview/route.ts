@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { normalizeReceiptImageForVision, readUploadedFileText, renderReceiptPdfPagesForVision } from "@/lib/import-file-text.server";
 import { parseImportTextWithOpenAIFallback } from "@/lib/openai-import-parser";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
-import { assessReceiptPreviewQuality, normalizeCurrencyCode, parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
+import { assessReceiptPreviewQuality, normalizeCurrencyCode, parseAmountValue, parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -10,8 +10,8 @@ export const maxDuration = 60;
 
 const asText = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
 const asAmount = (value: unknown) => {
-  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value.replace(/,/g, "").trim()) : NaN;
-  return Number.isFinite(parsed) ? parsed.toFixed(2) : null;
+  const parsed = typeof value === "number" ? parseAmountValue(value) : typeof value === "string" ? parseAmountValue(value) : null;
+  return parsed !== null ? parsed.toFixed(2) : null;
 };
 
 const asReceiptDate = (value: unknown) => {
