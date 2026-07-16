@@ -34,6 +34,9 @@ const asReceiptDate = (value: unknown) => {
     : null;
 };
 
+const isVisualReceiptFile = (file: File) =>
+  file.type.startsWith("image/") || file.type === "application/pdf" || /\.(?:jpe?g|png|webp|heic|heif|pdf)$/i.test(file.name);
+
 const mergeReceiptBackup = (
   localPreview: ReceiptPreviewResult,
   backup: Record<string, unknown>,
@@ -169,9 +172,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Receipt file is required" }, { status: 400 });
     }
 
-    const receiptText = await readUploadedFileText(file as File, undefined, { importMode: "receipt" });
-    const localPreview = parseReceiptText(receiptText);
-    const preview = await tryReceiptBackup({ file: file as File, receiptText, preview: localPreview });
+    const selectedFile = file as File;
+    let receiptText = "";
+    let localPreview: ReceiptPreviewResult;
+    try {
+      receiptText = await readUploadedFileText(selectedFile, undefined, { importMode: "receipt" });
+      localPreview = parseReceiptText(receiptText);
+    } catch (error) {
+      if (!isVisualReceiptFile(selectedFile)) {
+        throw error;
+      }
+      console.warn("Local receipt extraction failed; trying backup parser", error);
+      localPreview = parseReceiptText("");
+    }
+    const preview = await tryReceiptBackup({ file: selectedFile, receiptText, preview: localPreview });
 
     return NextResponse.json({ preview });
   } catch (error) {
