@@ -21325,6 +21325,13 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   display: none !important;
 }
 
+@media (min-width: 981px) {
+  .accounts-group:not(:last-child) {
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--stroke) !important;
+  }
+}
+
 .accounts-group__head {
   display: flex;
   align-items: flex-start;
