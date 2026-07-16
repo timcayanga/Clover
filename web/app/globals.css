@@ -1479,7 +1479,8 @@ body.transactions-manual-open .shell-quick-add-button {
     min-height: 21px;
     padding: 0 6px;
     gap: 8px;
-    font-size: 13px;
+    font-size: 12px;
+    line-height: 1.1;
   }
 
   .nav-link__icon {
@@ -1501,12 +1502,16 @@ body.transactions-manual-open .shell-quick-add-button {
   }
 
   .sidebar-nav__section + .sidebar-nav__section {
-    margin-top: 0;
+    margin-top: 3px;
+    padding-top: 3px;
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
   }
 
   .sidebar-nav__section-label {
     padding: 0 6px;
-    font-size: 7px;
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 0.04em;
   }
 
   .sidebar-nav {
