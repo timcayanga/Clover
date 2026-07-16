@@ -34442,6 +34442,7 @@ body:has(.pricing-page) {
 .settings-data-shell {
   padding: 24px;
   background: rgba(247, 249, 250, 0.82);
+  container-type: inline-size;
 }
 
 .settings-data-shell__grid {
@@ -34507,7 +34508,8 @@ body:has(.pricing-page) {
   color: var(--text);
   letter-spacing: -0.02em;
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .settings-data-danger-item {
@@ -34551,12 +34553,46 @@ body:has(.pricing-page) {
   min-width: 180px;
   padding-inline: 16px;
   justify-content: center;
-  white-space: normal;
+  white-space: nowrap;
   text-align: center;
 }
 
 .settings-data-danger-item .button-danger--history {
   min-width: 180px;
+}
+
+@container (max-width: 780px) {
+  .settings-data-shell__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-data-danger-item--history {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .settings-data-danger-controls {
+    justify-content: flex-start;
+  }
+}
+
+@container (max-width: 440px) {
+  .settings-data-export-card,
+  .settings-data-danger-item {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-data-export-card > .button,
+  .settings-data-danger-item > .button,
+  .settings-data-danger-controls > .button {
+    justify-self: start;
+  }
+
+  .settings-data-danger-item .button-danger,
+  .settings-data-danger-item .button-danger--history {
+    min-width: 0;
+    width: 100%;
+  }
 }
 
 .settings-data-download {
