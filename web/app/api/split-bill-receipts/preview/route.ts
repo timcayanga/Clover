@@ -14,6 +14,11 @@ const asAmount = (value: unknown) => {
   return parsed !== null ? parsed.toFixed(2) : null;
 };
 
+const asNumber = (value: unknown) => {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value.trim()) : NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 const asReceiptDate = (value: unknown) => {
   const raw = asText(value);
   if (!raw) {
@@ -55,7 +60,7 @@ const mergeReceiptBackup = (
         return description && amount ? [{
           description,
           amount,
-          quantity: typeof value.quantity === "number" ? value.quantity : null,
+          quantity: asNumber(value.quantity),
           unitPrice: asAmount(value.unit_price),
         }] : [];
       })
@@ -86,9 +91,7 @@ const mergeReceiptBackup = (
     ? {
         accountName: asText(accountMatch.account_name),
         accountLast4: asText(accountMatch.account_last4),
-        confidence: typeof accountMatch.confidence === "number" && Number.isFinite(accountMatch.confidence)
-          ? Math.max(0, Math.min(100, Math.round(accountMatch.confidence)))
-          : 0,
+        confidence: Math.max(0, Math.min(100, Math.round(asNumber(accountMatch.confidence) ?? 0))),
         reason: asText(accountMatch.reason),
       }
     : null;
@@ -130,9 +133,7 @@ const mergeReceiptBackup = (
     backupParser: {
       model: asText(backupAudit.model),
       promptVersion: asText(backupAudit.promptVersion),
-      confidence: typeof backupAudit.confidence === "number" && Number.isFinite(backupAudit.confidence)
-        ? Math.max(0, Math.min(100, Math.round(backupAudit.confidence)))
-        : backupConfidence || null,
+      confidence: Math.max(0, Math.min(100, Math.round(asNumber(backupAudit.confidence) ?? backupConfidence))) || null,
       schemaValidated: typeof backupAudit.schemaValidated === "boolean" ? backupAudit.schemaValidated : null,
     },
   };
