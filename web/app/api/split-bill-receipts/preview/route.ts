@@ -95,6 +95,11 @@ const mergeReceiptBackup = (
         reason: asText(accountMatch.reason),
       }
     : null;
+  const backupPaymentMethod = asText(backup.payment_method) ?? (normalizedAccountMatch?.accountName
+    ? normalizedAccountMatch.accountLast4
+      ? `${normalizedAccountMatch.accountName} ending ${normalizedAccountMatch.accountLast4}`
+      : normalizedAccountMatch.accountName
+    : null);
   const backupType = asText(backup.receipt_type)?.toLowerCase();
   const receiptType = backupType === "restaurant_receipt" || backupType === "official_receipt" || backupType === "tax_invoice" ||
     backupType === "travel_ticket" || backupType === "wallet_transfer" ? backupType : localPreview.receiptType;
@@ -116,7 +121,7 @@ const mergeReceiptBackup = (
       : backupCurrency
         ? [backupCurrency]
         : localPreview.currencyMentions,
-    paymentMethod: localPreview.paymentMethod ?? asText(backup.payment_method),
+    paymentMethod: localPreview.paymentMethod ?? backupPaymentMethod,
     receiptPayerName: localPreview.receiptPayerName ?? asText(backup.buyer_name),
     receiptAccountMatch: localPreview.receiptAccountMatch ?? normalizedAccountMatch,
     subtotal: localPreview.subtotal ?? asAmount(backup.subtotal),
