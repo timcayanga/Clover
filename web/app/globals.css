@@ -7681,14 +7681,18 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 }
 
 .reports-subtab-card > .report-card__head > .reports-container-info {
-  position: static;
+  display: inline-flex !important;
+  position: static !important;
   margin-left: auto;
 }
 
 .reports-subtab-card > .reports-container-info {
-  left: auto;
-  right: 18px;
-  top: 18px;
+  display: inline-flex !important;
+  left: auto !important;
+  position: absolute !important;
+  right: 18px !important;
+  top: 18px !important;
+  margin: 0;
 }
 
 .report-card__head-title,
