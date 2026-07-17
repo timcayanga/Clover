@@ -655,7 +655,7 @@ async function DashboardStream({
       : null;
   const encodedSpikeCategory = categorySpike ? encodeURIComponent(categorySpike.name) : "";
   const uploadReminderCopy = latestImport
-    ? `Last import was ${daysSinceLastImport === 0 ? "today" : `${daysSinceLastImport ?? 0} day${daysSinceLastImport === 1 ? "" : "s"} ago`}. Add recent statements so advice stays current.`
+    ? `Last upload was ${daysSinceLastImport === 0 ? "today" : `${daysSinceLastImport ?? 0} day${daysSinceLastImport === 1 ? "" : "s"} ago`}. Add recent statements so advice stays current.`
     : "Upload a recent statement so Clover can start finding spending patterns.";
   const weeklySpendDelta = weeklySummary.current.expense - weeklySummary.previous.expense;
   const weeklyNetLabel =
@@ -681,10 +681,10 @@ async function DashboardStream({
     daysSinceLastImport === null || daysSinceLastImport >= 7
       ? {
           emoji: "📥",
-          label: "Import Reminder",
+          label: "Upload Reminder",
           copy: uploadReminderCopy,
           href: "/transactions",
-          actionLabel: "Import now",
+          actionLabel: "Upload now",
           tone: daysSinceLastImport === null ? "neutral" : "warning",
         }
       : null,
