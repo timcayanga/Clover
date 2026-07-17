@@ -4542,11 +4542,12 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .dashboard-home__report-card .eyebrow,
-.dashboard-home__goal-card-head .eyebrow {
+.dashboard-home__goal-card-head .eyebrow,
+.dashboard-home__insight-strip > .eyebrow {
   margin: 0 0 6px;
   color: var(--muted-2);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   line-height: 1.45;
   letter-spacing: 0.14em;
 }
@@ -4611,6 +4612,16 @@ body.transactions-manual-open .shell-quick-add-button {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+}
+
+.dashboard-home__insight-strip-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
 }
 
 .dashboard-home__insight-strip-item {

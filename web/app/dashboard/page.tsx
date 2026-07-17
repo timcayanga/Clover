@@ -813,9 +813,9 @@ async function DashboardStream({
           ))}
         </section>
 
-        {insightItems.length > 0 ? (
-          <article className="dashboard-home__insight-strip glass" aria-label="Home Adviser">
-            <p className="eyebrow">Adviser</p>
+        <article className="dashboard-home__insight-strip glass" aria-label="Home Adviser">
+          <p className="eyebrow">Adviser</p>
+          {insightItems.length > 0 ? (
             <div className="dashboard-home__insight-strip-list">
               {insightItems.map((item) => (
                 <div key={item.label} className={`dashboard-home__insight-strip-item${item.tone ? ` dashboard-home__insight-strip-item--${item.tone}` : ""}`}>
@@ -832,8 +832,13 @@ async function DashboardStream({
                 </div>
               ))}
             </div>
-          </article>
-        ) : null}
+          ) : (
+            <div className="dashboard-home__insight-strip-empty">
+              <span className="dashboard-home__insight-strip-emoji" aria-hidden="true">✨</span>
+              <span>No new suggestions right now. Clover will surface helpful next steps here.</span>
+            </div>
+          )}
+        </article>
 
         <DashboardBudgetPulse />
 
