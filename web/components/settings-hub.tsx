@@ -218,17 +218,6 @@ const guidanceOptions: Array<{ value: GuidancePresetLevel; label: string; helper
   },
 ];
 
-const guidanceTableRows = [
-  ["Dashboard", "Key cards and one recommended next action", "Standard cards, trends, and comparisons", "Current compact dashboard"],
-  ["Transactions", "Essential fields with plain labels", "Standard transaction details", "Current efficient table"],
-  ["Imports", "Step-by-step upload and review", "Normal upload and review flow", "Fast import workflow"],
-  ["Review", "One decision at a time with explanations", "Grouped recommendations", "Batch actions and detailed controls"],
-  ["Adviser", "Step-by-step guidance", "Practical recommendations", "Numbers, trends, and tradeoffs"],
-  ["Reports", "A few guided summaries", "Presets plus basic filters", "Full filters and analysis"],
-  ["Budgets", "Guided setup with suggested defaults", "Normal budget editor", "Direct editing and projections"],
-  ["Advanced details", "Behind Show more", "Available but secondary", "Immediately accessible"],
-] as const;
-
 const readStoredAccountIdentity = (): SettingsAccountIdentityCache | null => {
   if (typeof window === "undefined") {
     return null;
@@ -2165,7 +2154,6 @@ export function SettingsHub({
               <div className="settings-guidance-menu-wrap">
                 <div className="settings-guidance-menu-head">
                   <h6>Menu visibility</h6>
-                  <p>Use a preset above, or check the items you want kept in the main menu. Unchecked items stay in More.</p>
                 </div>
                 <table className="settings-guidance-menu-table">
                   <caption className="sr-only">Choose which Clover areas appear in the main menu</caption>
@@ -2205,30 +2193,6 @@ export function SettingsHub({
                         </tr>
                       );
                     })}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="settings-guidance-table-wrap">
-                <table className="settings-guidance-table">
-                  <caption>How guidance level changes Clover</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Area</th>
-                      <th scope="col">Still learning</th>
-                      <th scope="col">Comfortable</th>
-                      <th scope="col">Very comfortable</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {guidanceTableRows.map(([area, learning, comfortable, veryComfortable]) => (
-                      <tr key={area}>
-                        <th scope="row">{area}</th>
-                        <td>{learning}</td>
-                        <td>{comfortable}</td>
-                        <td>{veryComfortable}</td>
-                      </tr>
-                    ))}
                   </tbody>
                 </table>
               </div>
