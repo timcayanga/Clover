@@ -554,9 +554,6 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
             {onTrackBudgets.slice(0, 3).map((budget) => (
               <button key={budget.id} className="budget-summary-card__item" type="button" title={`Edit ${budget.name}`} onClick={() => openEditEditor(budget.id)}>
                 <span>{budget.name}</span>
-                <small>
-                  {cadenceLabels[budget.cadence]} · {toPercentage(budget.progressPercent)}
-                </small>
               </button>
             ))}
             {onTrackBudgets.length > 3 ? <span className="budget-summary-card__more">and {onTrackBudgets.length - 3} others</span> : null}
@@ -573,9 +570,6 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
             {atRiskBudgets.slice(0, 3).map((budget) => (
               <button key={budget.id} className="budget-summary-card__item" type="button" title={`Edit ${budget.name}`} onClick={() => openEditEditor(budget.id)}>
                 <span>{budget.name}</span>
-                <small>
-                  {cadenceLabels[budget.cadence]} · {toPercentage(budget.progressPercent)}
-                </small>
               </button>
             ))}
             {atRiskBudgets.length > 3 ? <span className="budget-summary-card__more">and {atRiskBudgets.length - 3} others</span> : null}

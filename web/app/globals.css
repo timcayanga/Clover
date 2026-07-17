@@ -5767,13 +5767,14 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .budget-summary-card {
-  padding: 18px;
+  min-height: 92px;
+  height: 92px;
+  padding: 10px 12px 11px;
   display: grid;
-  gap: 14px;
-  min-height: 154px;
-  border-radius: 28px;
+  gap: 4px;
+  border-radius: 16px;
   border: 1px solid var(--stroke);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-soft);
 }
 
 .budget-summary-card--positive {
@@ -5791,7 +5792,7 @@ body.transactions-manual-open .shell-quick-add-button {
 .budget-summary-card__head {
   display: grid;
   justify-items: center;
-  gap: 5px;
+  gap: 3px;
   text-align: center;
 }
 
@@ -5800,22 +5801,26 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .budget-summary-card__head strong {
-  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  font-size: 1.46rem;
   line-height: 1;
-  letter-spacing: -0.05em;
+  letter-spacing: -0.03em;
 }
 
 .budget-summary-card__items {
-  display: grid;
-  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  min-width: 0;
   justify-items: center;
+  justify-content: center;
+  align-items: baseline;
 }
 
 .budget-summary-card__item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  width: min(100%, 320px);
-  gap: 12px;
+  display: inline-flex;
+  flex: 0 1 calc(25% - 6px);
+  max-width: calc(25% - 6px);
+  min-width: 0;
   align-items: baseline;
   padding: 0 2px;
   border: 0;
@@ -5825,24 +5830,26 @@ body.transactions-manual-open .shell-quick-add-button {
   cursor: pointer;
 }
 
+.budget-summary-card__more {
+  flex: 0 1 calc(25% - 6px);
+  max-width: calc(25% - 6px);
+  min-width: 0;
+  text-align: center;
+}
+
 .budget-summary-card__item span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 0.72rem;
+  text-align: center;
 }
 
-.budget-summary-card__item small,
-.budget-summary-card__more,
 .budget-summary-card__empty {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 0.72rem;
   line-height: 1.4;
-}
-
-.budget-summary-card__item small {
-  white-space: nowrap;
 }
 
 .budget-summary-card__item:hover span,
