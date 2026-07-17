@@ -28,6 +28,8 @@ type BillingActionsProps = {
   returnPath: string;
   subscription?: BillingSubscriptionSummary | null;
   className?: string;
+  compactInterval?: BillingInterval;
+  hideIntervalActions?: boolean;
 };
 
 type ActionState = {
@@ -96,6 +98,8 @@ export function BillingActions({
   returnPath,
   subscription,
   className,
+  compactInterval,
+  hideIntervalActions = false,
 }: BillingActionsProps) {
   const router = useRouter();
   const [state, setState] = useState<ActionState>({ key: "", message: null });
@@ -148,6 +152,24 @@ export function BillingActions({
     });
 
   const isFree = planTier === "free";
+
+  if (!isFree && compactInterval) {
+    if (compactInterval === currentInterval) {
+      return null;
+    }
+
+    const compactPlanId = compactInterval === "monthly" ? monthlyPlanId : annualPlanId;
+    return compactPlanId ? (
+      <button
+        className="button button-secondary button-small"
+        type="button"
+        onClick={() => void handleRevision(compactInterval)}
+        disabled={state.key !== ""}
+      >
+        {state.key === `revise-${compactInterval}` ? "Opening PayPal..." : `Switch to ${getBillingPlanLabel(compactInterval)}`}
+      </button>
+    ) : null;
+  }
 
   return (
     <div className={className}>
@@ -242,7 +264,7 @@ export function BillingActions({
 
           <div className="billing-actions__stack">
             <div className="billing-actions__row">
-              {currentInterval !== "monthly" && monthlyPlanId ? (
+              {!hideIntervalActions && currentInterval !== "monthly" && monthlyPlanId ? (
                 <button
                   className="button button-secondary button-small"
                   type="button"
@@ -252,7 +274,7 @@ export function BillingActions({
                   {state.key === "revise-monthly" ? "Opening PayPal..." : "Switch to Monthly"}
                 </button>
               ) : null}
-              {currentInterval !== "annual" && annualPlanId ? (
+              {!hideIntervalActions && currentInterval !== "annual" && annualPlanId ? (
                 <button
                   className="button button-secondary button-small"
                   type="button"
@@ -272,10 +294,6 @@ export function BillingActions({
               </button>
             </div>
 
-            <p className="billing-helper">
-              Changes made through PayPal take effect after the buyer re-consents. Unsubscribing stops the subscription in PayPal and Clover will
-              move the account back to Free.
-            </p>
           </div>
         </div>
       )}

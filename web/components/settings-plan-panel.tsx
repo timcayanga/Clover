@@ -129,9 +129,11 @@ const planCards: PlanCard[] = [
     badge: "",
     features: [
       "Manual transaction tracking",
-      "5 non-cash accounts",
-      "10 monthly uploads",
-      "1,000 transaction rows",
+      "Up to 3 Profiles, including Personal",
+      "Receipt scanning",
+      "5 accounts in addition to Cash",
+      "10 monthly uploads total, including statements and receipts",
+      "1,000 transaction rows total",
       "Basic investment tracking",
       "Basic reports and Adviser guidance",
       "Basic goal tracking",
@@ -144,7 +146,8 @@ const planCards: PlanCard[] = [
     badge: "Pro",
     savings: annualSavings > 0 ? `Save PHP ${annualSavings.toLocaleString()} vs monthly` : undefined,
     features: [
-      "Everything in Free",
+      "Manual transaction tracking",
+      "Up to 10 Profiles, including Personal",
       "20 non-cash accounts",
       "100 monthly uploads",
       "Unlimited transaction rows",
@@ -159,7 +162,8 @@ const planCards: PlanCard[] = [
     price: `${monthlyBillingPlan?.priceLabel ?? "PHP 149"} / month`,
     badge: "",
     features: [
-      "Everything in Free",
+      "Manual transaction tracking",
+      "Up to 10 Profiles, including Personal",
       "20 non-cash accounts",
       "100 monthly uploads",
       "Unlimited transaction rows",
@@ -222,15 +226,6 @@ export function SettingsPlanPanel({
         </div>
       </div>
 
-      {planLoading && !planLoaded ? (
-        <article className="settings-action-card">
-          <div>
-            <h5>Loading plan details</h5>
-            <p>Fetching your limits, usage, and billing status.</p>
-          </div>
-        </article>
-      ) : null}
-
       <div className="settings-plan-usage settings-plan-usage--with-plan" aria-label="Current plan usage">
         <article className="settings-plan-usage__card settings-plan-usage__card--plan">
           <div className="settings-plan-usage__head">
@@ -273,7 +268,7 @@ export function SettingsPlanPanel({
       </div>
 
       <div className="settings-plan-grid" role="radiogroup" aria-label="Billing plan">
-        {planCards.map((option) => {
+        {planCards.filter((option) => isFree || option.value !== "free").map((option) => {
           const isCurrent = currentPlanValue === option.value;
 
           return (
@@ -353,7 +348,21 @@ export function SettingsPlanPanel({
                     )
                   ) : (
                     <div className="settings-plan-card__current">
-                      {isCurrent ? <span className="settings-pill">Current plan</span> : <span className="settings-helper">Manage this plan below.</span>}
+                      {isCurrent ? (
+                        <span className="settings-pill">Current plan</span>
+                      ) : (
+                        <BillingActions
+                          planTier="pro"
+                          clientId={paypalClientId}
+                          monthlyPlanId={paypalMonthlyPlanId}
+                          annualPlanId={paypalAnnualPlanId}
+                          buyerCountry={paypalBuyerCountry}
+                          customId={billingCustomerId ?? ""}
+                          returnPath="/settings"
+                          subscription={billingSubscription}
+                          compactInterval={option.value}
+                        />
+                      )}
                     </div>
                   )}
                 </div>
@@ -375,6 +384,7 @@ export function SettingsPlanPanel({
             returnPath="/settings"
             subscription={billingSubscription}
             className="settings-plan-panel__billing"
+            hideIntervalActions
           />
         </div>
       ) : null}

@@ -6,7 +6,9 @@ import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { getEffectiveProfileLimit } from "@/lib/user-limits";
+import { getEffectiveProfileLimit, getEffectiveUserLimits } from "@/lib/user-limits";
+import { getUserPlanUsage } from "@/lib/plan-access";
+import { getEnv } from "@/lib/env";
 
 export const metadata = {
   title: "Settings",
@@ -27,9 +29,15 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
     updatedAt: string;
   }> = [];
   let user: Awaited<ReturnType<typeof getOrCreateCurrentUser>> | null = null;
+  let initialPlanLimits: ReturnType<typeof getEffectiveUserLimits> | null = null;
+  let initialPlanUsage: Awaited<ReturnType<typeof getUserPlanUsage>> | null = null;
+  const env = getEnv();
 
   try {
     user = session.isGuest ? null : await getOrCreateCurrentUser(session.userId);
+    if (user) {
+      [initialPlanLimits, initialPlanUsage] = await Promise.all([getEffectiveUserLimits(user), getUserPlanUsage(user.id)]);
+    }
   } catch (error) {
     console.error("[settings-page] unable to load current user", error);
   }
@@ -132,10 +140,12 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
         avatarUrl={null}
         planTier={user?.planTier ?? "free"}
         profileLimit={user ? getEffectiveProfileLimit(user) : null}
-        paypalClientId={null}
-        paypalMonthlyPlanId={null}
-        paypalAnnualPlanId={null}
-        paypalBuyerCountry={null}
+        initialPlanLimits={initialPlanLimits}
+        initialPlanUsage={initialPlanUsage}
+        paypalClientId={env.PAYPAL_CLIENT_ID ?? null}
+        paypalMonthlyPlanId={env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
+        paypalAnnualPlanId={env.PAYPAL_ANNUAL_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
+        paypalBuyerCountry={env.PAYPAL_BUYER_COUNTRY ?? null}
         disableWorkspaceBootstrap={Boolean(user?.dataWipedAt)}
       />
     </CloverShell>

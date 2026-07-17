@@ -36,16 +36,7 @@ const SettingsProfilesPanel = dynamic(
 
 const SettingsPlanPanel = dynamic(
   () => import("@/components/settings-plan-panel").then((module) => module.SettingsPlanPanel),
-  {
-    loading: () => (
-      <article className="settings-action-card">
-        <div>
-          <h5>Loading plan details</h5>
-          <p>Fetching your limits, usage, and billing status.</p>
-        </div>
-      </article>
-    ),
-  }
+  { loading: () => null }
 );
 
 type SettingsSectionKey =
@@ -143,6 +134,17 @@ type SettingsHubProps = {
   avatarUrl?: string | null;
   planTier: "free" | "pro";
   profileLimit: number | null;
+  initialPlanLimits?: {
+    accountLimit: number | null;
+    monthlyUploadLimit: number | null;
+    transactionLimit: number | null;
+  } | null;
+  initialPlanUsage?: {
+    accountCount: number;
+    cashAccountCount: number;
+    monthlyUploadCount: number;
+    transactionCount: number;
+  } | null;
   paypalClientId?: string | null;
   paypalMonthlyPlanId?: string | null;
   paypalAnnualPlanId?: string | null;
@@ -432,6 +434,8 @@ export function SettingsHub({
   avatarUrl: initialAvatarUrl,
   planTier: initialPlanTier,
   profileLimit,
+  initialPlanLimits = null,
+  initialPlanUsage = null,
   paypalClientId: initialPaypalClientId,
   paypalMonthlyPlanId: initialPaypalMonthlyPlanId,
   paypalAnnualPlanId: initialPaypalAnnualPlanId,
@@ -481,15 +485,15 @@ export function SettingsHub({
   const [profileListMessage, setProfileListMessage] = useState<string | null>(null);
   const [billingSubscription, setBillingSubscription] = useState<BillingSubscriptionSummary | null>(null);
   const [planLimits, setPlanLimits] = useState({
-    accountLimit: 0,
-    monthlyUploadLimit: 0,
-    transactionLimit: null as number | null,
+    accountLimit: initialPlanLimits?.accountLimit ?? 0,
+    monthlyUploadLimit: initialPlanLimits?.monthlyUploadLimit ?? 0,
+    transactionLimit: initialPlanLimits?.transactionLimit ?? null,
   });
   const [planUsage, setPlanUsage] = useState({
-    accountCount: 0,
-    cashAccountCount: 0,
-    monthlyUploadCount: 0,
-    transactionCount: 0,
+    accountCount: initialPlanUsage?.accountCount ?? 0,
+    cashAccountCount: initialPlanUsage?.cashAccountCount ?? 0,
+    monthlyUploadCount: initialPlanUsage?.monthlyUploadCount ?? 0,
+    transactionCount: initialPlanUsage?.transactionCount ?? 0,
   });
   const [planLoaded, setPlanLoaded] = useState(false);
   const [planLoading, setPlanLoading] = useState(false);
@@ -834,10 +838,7 @@ export function SettingsHub({
       setPlanLoading(true);
 
       try {
-        const [meResponse, summaryResponse] = await Promise.all([
-          fetch("/api/me", { cache: "no-store" }),
-          fetch(`/api/settings/summary?workspaceId=${encodeURIComponent(workspaceId)}`, { cache: "no-store" }),
-        ]);
+        const meResponse = await fetch("/api/me", { cache: "no-store" });
 
         const mePayload = (await meResponse.json().catch(() => ({}))) as {
           user?: {
@@ -845,25 +846,17 @@ export function SettingsHub({
             accountLimit?: number;
             monthlyUploadLimit?: number;
             transactionLimit?: number | null;
+            usage?: {
+              accountCount: number;
+              cashAccountCount: number;
+              monthlyUploadCount: number;
+              transactionCount: number;
+            };
           };
           error?: string;
         };
-        const summaryPayload = (await summaryResponse.json().catch(() => ({}))) as {
-          planUsage?: {
-            accountCount: number;
-            cashAccountCount: number;
-            monthlyUploadCount: number;
-            transactionCount: number;
-          };
-          error?: string;
-        };
-
         if (!meResponse.ok) {
           throw new Error(mePayload.error ?? "Unable to load plan details.");
-        }
-
-        if (!summaryResponse.ok) {
-          throw new Error(summaryPayload.error ?? "Unable to load plan usage.");
         }
 
         if (!cancelled) {
@@ -874,7 +867,7 @@ export function SettingsHub({
             transactionLimit: mePayload.user?.transactionLimit ?? null,
           });
           setPlanUsage(
-            summaryPayload.planUsage ?? {
+            mePayload.user?.usage ?? {
               accountCount: 0,
               cashAccountCount: 0,
               monthlyUploadCount: 0,
@@ -886,6 +879,7 @@ export function SettingsHub({
       } catch (error) {
         if (!cancelled) {
           setStatusMessage(error instanceof Error ? error.message : "Unable to load plan details.");
+          setPlanLoaded(true);
         }
       } finally {
         if (!cancelled) {
