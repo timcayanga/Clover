@@ -2,7 +2,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { BillingSubscriptionStatus, Prisma, type FinancialExperienceLevel, type PlanTier, type User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getAdminDataEnvironment } from "@/lib/admin";
-import { reconcileBillingPlanTier } from "@/lib/paypal-billing";
+import { cancelPayPalSubscription, reconcileBillingPlanTier } from "@/lib/paypal-billing";
 import { getEffectiveUserLimits, getPlanDisplayLabel } from "@/lib/user-limits";
 
 export type AdminUserListFilters = {
@@ -859,6 +859,8 @@ export async function updateAdminUser(userId: string, input: AdminUserUpdateInpu
       billingSubscription: {
         select: {
           id: true,
+          providerSubscriptionId: true,
+          status: true,
         },
       },
     },
@@ -914,6 +916,19 @@ export async function updateAdminUser(userId: string, input: AdminUserUpdateInpu
   }
 
   const planTierChanged = input.planTier !== undefined && input.planTier !== currentUser.planTier;
+  const shouldCancelPaidSubscription =
+    planTierChanged &&
+    input.planTier === "free" &&
+    Boolean(currentUser.billingSubscription?.providerSubscriptionId) &&
+    currentUser.billingSubscription?.status !== "cancelled" &&
+    currentUser.billingSubscription?.status !== "expired";
+
+  if (shouldCancelPaidSubscription) {
+    await cancelPayPalSubscription({
+      subscriptionId: currentUser.billingSubscription!.providerSubscriptionId!,
+      reason: "Clover Admin changed this account to the Free plan.",
+    });
+  }
 
   if (nextFirstName !== undefined || nextLastName !== undefined) {
     const client = await clerkClient();
@@ -970,9 +985,22 @@ export async function updateAdminUser(userId: string, input: AdminUserUpdateInpu
     ) {
       await tx.billingSubscription.update({
         where: { id: currentUser.billingSubscription.id },
-        data: { planTier: input.planTier },
+        data: shouldCancelPaidSubscription
+          ? {
+              status: "cancelled",
+              planTier: "free",
+              pendingPlanId: null,
+              pendingInterval: null,
+              cancelledAt: new Date(),
+              lastEventType: "ADMIN.CANCEL",
+              lastSyncedAt: new Date(),
+            }
+          : { planTier: input.planTier },
       });
-      updated.billingSubscription.planTier = input.planTier;
+      updated.billingSubscription.planTier = shouldCancelPaidSubscription ? "free" : input.planTier;
+      if (shouldCancelPaidSubscription) {
+        updated.billingSubscription.status = "cancelled";
+      }
     }
 
     return updated;

@@ -50,6 +50,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams?: 
       <section className="onboarding-page__shell">
         <OnboardingForm
           workspaceId={onboardingWorkspace?.id ?? starterWorkspace.id}
+          billingCustomerId={user.id}
           workspaceAccounts={onboardingWorkspace?.accounts ?? []}
           currentExperience={user.financialExperience}
           upgradeForPro={upgradeForPro}

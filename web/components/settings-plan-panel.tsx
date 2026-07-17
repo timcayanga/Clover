@@ -20,6 +20,7 @@ type BillingSubscriptionSummary = {
 
 type SettingsPlanPanelProps = {
   workspaceId: string;
+  billingCustomerId?: string | null;
   planTier: "free" | "pro";
   preferredBillingInterval?: BillingInterval;
   paypalClientId?: string | null;
@@ -171,6 +172,7 @@ const planCards: PlanCard[] = [
 
 export function SettingsPlanPanel({
   workspaceId,
+  billingCustomerId,
   planTier,
   preferredBillingInterval,
   paypalClientId,
@@ -184,12 +186,13 @@ export function SettingsPlanPanel({
   planLoaded,
 }: SettingsPlanPanelProps) {
   const isFree = planTier === "free";
+  const isAwaitingApproval = billingSubscription?.status === "approval_pending";
   const currentPlanValue = planTier === "free" ? "free" : billingSubscription?.interval ?? "annual";
   const currentPlanCard = planCards.find((plan) => plan.value === currentPlanValue) ?? planCards[0];
   const currentPlanLabel = getPlanDisplayLabel(planTier, billingSubscription?.interval ?? null);
   const renewalDate = formatPlanDate(billingSubscription?.currentPeriodEnd ?? billingSubscription?.nextBillingTime ?? null);
-  const annualCheckoutReady = Boolean(paypalClientId && paypalAnnualPlanId);
-  const monthlyCheckoutReady = Boolean(paypalClientId && paypalMonthlyPlanId);
+  const annualCheckoutReady = Boolean(paypalClientId && paypalAnnualPlanId && billingCustomerId);
+  const monthlyCheckoutReady = Boolean(paypalClientId && paypalMonthlyPlanId && billingCustomerId);
   const planUsageCards = [
     {
       label: "Accounts",
@@ -307,12 +310,15 @@ export function SettingsPlanPanel({
                   {option.value === "free" ? (
                     <div className="settings-plan-card__current">{isCurrent ? <span className="settings-pill">Current plan</span> : null}</div>
                   ) : isFree ? (
+                    isAwaitingApproval ? (
+                      <p className="settings-helper">Waiting for PayPal to confirm your current subscription.</p>
+                    ) : (
                     <div className="settings-plan-card__cta">
                       {option.value === "annual" && annualCheckoutReady ? (
                         <PayPalSubscribeButton
                           clientId={paypalClientId!}
                           planId={paypalAnnualPlanId!}
-                          customId={workspaceId}
+                          customId={billingCustomerId ?? ""}
                           buyerCountry={paypalBuyerCountry}
                           className="settings-plan-card__paypal"
                           fundingSource="card"
@@ -328,7 +334,7 @@ export function SettingsPlanPanel({
                         <PayPalSubscribeButton
                           clientId={paypalClientId!}
                           planId={paypalMonthlyPlanId!}
-                          customId={workspaceId}
+                          customId={billingCustomerId ?? ""}
                           buyerCountry={paypalBuyerCountry}
                           className="settings-plan-card__paypal"
                           fundingSource="card"
@@ -344,6 +350,7 @@ export function SettingsPlanPanel({
                         <p className="settings-helper">PayPal checkout is not configured yet.</p>
                       )}
                     </div>
+                    )
                   ) : (
                     <div className="settings-plan-card__current">
                       {isCurrent ? <span className="settings-pill">Current plan</span> : <span className="settings-helper">Manage this plan below.</span>}
@@ -364,7 +371,7 @@ export function SettingsPlanPanel({
             monthlyPlanId={paypalMonthlyPlanId}
             annualPlanId={paypalAnnualPlanId}
             buyerCountry={paypalBuyerCountry}
-            customId={workspaceId}
+            customId={billingCustomerId ?? ""}
             returnPath="/settings"
             subscription={billingSubscription}
             className="settings-plan-panel__billing"

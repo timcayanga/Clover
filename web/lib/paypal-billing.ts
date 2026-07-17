@@ -437,10 +437,9 @@ async function applyBillingSubscriptionSnapshot(
   pendingPlanId?: string | null,
   pendingInterval?: BillingInterval | null
 ) {
-  const planTier =
-    snapshot.status === BillingSubscriptionStatus.active || snapshot.status === BillingSubscriptionStatus.approval_pending
-      ? PlanTier.pro
-      : PlanTier.free;
+  // Approval pending means the buyer has not completed the PayPal consent flow.
+  // Do not grant paid entitlements until PayPal reports an active subscription.
+  const planTier = snapshot.status === BillingSubscriptionStatus.active ? PlanTier.pro : PlanTier.free;
   const shouldClearPending = eventType !== "MANUAL.REVISE" && snapshot.status !== BillingSubscriptionStatus.approval_pending;
 
   const existing = await prisma.billingSubscription.findUnique({
@@ -542,10 +541,7 @@ export async function reconcileBillingPlanTier(userId: string) {
     return null;
   }
 
-  const nextPlanTier =
-    subscription.status === BillingSubscriptionStatus.active || subscription.status === BillingSubscriptionStatus.approval_pending
-      ? PlanTier.pro
-      : PlanTier.free;
+  const nextPlanTier = subscription.status === BillingSubscriptionStatus.active ? PlanTier.pro : PlanTier.free;
 
   if (subscription.planTier !== nextPlanTier) {
     await prisma.billingSubscription.update({

@@ -133,6 +133,7 @@ type SettingsHubProps = {
   initialSection?: SettingsSectionKey;
   preferredBillingInterval?: BillingInterval;
   workspaceId: string;
+  billingCustomerId?: string | null;
   workspaceName: string;
   selectedProfileId: string;
   initialProfileList?: ProfileSummary[];
@@ -421,6 +422,7 @@ export function SettingsHub({
   initialSection = "account",
   preferredBillingInterval,
   workspaceId: initialWorkspaceId,
+  billingCustomerId: initialBillingCustomerId,
   workspaceName: initialWorkspaceName,
   selectedProfileId: initialSelectedProfileId,
   initialProfileList = [],
@@ -443,6 +445,7 @@ export function SettingsHub({
   const { isLoaded, isSignedIn, user } = useUser();
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>(initialSection);
   const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId);
+  const [billingCustomerId, setBillingCustomerId] = useState(initialBillingCustomerId ?? null);
   const [workspaceName, setWorkspaceName] = useState(initialWorkspaceName);
   const [selectedProfileId, setSelectedProfileId] = useState(initialSelectedProfileId);
   const [firstName, setFirstName] = useState<string | null>(initialFirstName);
@@ -607,6 +610,7 @@ export function SettingsHub({
         });
         const payload = (await response.json().catch(() => ({}))) as {
           workspaceId?: string;
+          billingCustomerId?: string | null;
           workspaceName?: string;
           selectedProfileId?: string;
           firstName?: string | null;
@@ -630,6 +634,7 @@ export function SettingsHub({
         }
 
         setWorkspaceId(payload.workspaceId ?? "");
+        setBillingCustomerId(payload.billingCustomerId ?? initialBillingCustomerId ?? null);
         setWorkspaceName(payload.workspaceName ?? "Settings");
         setSelectedProfileId(payload.selectedProfileId ?? "");
         setActiveProfileId(payload.selectedProfileId ?? "");
@@ -651,6 +656,7 @@ export function SettingsHub({
       } catch {
         if (!cancelled) {
           setWorkspaceId("");
+          setBillingCustomerId(initialBillingCustomerId ?? null);
           setWorkspaceName(initialWorkspaceName);
           setSelectedProfileId(initialSelectedProfileId);
           setActiveProfileId(initialSelectedProfileId);
@@ -684,6 +690,7 @@ export function SettingsHub({
     initialPaypalMonthlyPlanId,
     initialSelectedProfileId,
     initialWorkspaceId,
+    initialBillingCustomerId,
     initialWorkspaceName,
     disableWorkspaceBootstrap,
   ]);
@@ -699,6 +706,7 @@ export function SettingsHub({
 
     const payload = (await response.json().catch(() => ({}))) as {
       workspaceId?: string;
+      billingCustomerId?: string | null;
       workspaceName?: string;
       selectedProfileId?: string;
       firstName?: string | null;
@@ -720,6 +728,7 @@ export function SettingsHub({
     const nextWorkspaceId = payload.workspaceId ?? "";
     if (nextWorkspaceId) {
       setWorkspaceId(nextWorkspaceId);
+      setBillingCustomerId(payload.billingCustomerId ?? initialBillingCustomerId ?? null);
       setWorkspaceName(payload.workspaceName ?? "Personal");
       setSelectedProfileId(payload.selectedProfileId ?? nextWorkspaceId);
       setActiveProfileId(payload.selectedProfileId ?? nextWorkspaceId);
@@ -2233,6 +2242,7 @@ export function SettingsHub({
         {activeSection === "plan" ? (
           <SettingsPlanPanel
             workspaceId={workspaceId}
+            billingCustomerId={billingCustomerId}
             planTier={planTier}
             preferredBillingInterval={preferredBillingInterval}
             paypalClientId={paypalClientId}

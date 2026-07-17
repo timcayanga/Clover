@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { deleteWorkspaceTransactions } from "@/lib/account-deletion";
+import { BillingSubscriptionStatus } from "@prisma/client";
+import { cancelPayPalSubscription } from "@/lib/paypal-billing";
 
 export const wipeLocalUserData = async (
   clerkUserId: string,
@@ -68,11 +70,26 @@ export const wipeLocalUserData = async (
 export const deleteLocalUserAccount = async (clerkUserId: string) => {
   const user = await prisma.user.findUnique({
     where: { clerkUserId },
-    select: { id: true },
+    select: {
+      id: true,
+      billingSubscription: {
+        select: { providerSubscriptionId: true, status: true },
+      },
+    },
   });
 
   if (!user) {
     return false;
+  }
+
+  const subscription = user.billingSubscription;
+  const isTerminalSubscription =
+    subscription?.status === BillingSubscriptionStatus.cancelled || subscription?.status === BillingSubscriptionStatus.expired;
+  if (subscription?.providerSubscriptionId && !isTerminalSubscription) {
+    await cancelPayPalSubscription({
+      subscriptionId: subscription.providerSubscriptionId,
+      reason: "Clover account deleted by the subscriber.",
+    });
   }
 
   await prisma.user.delete({

@@ -105,6 +105,7 @@ export function BillingActions({
   const renewalDate = formatBillingDate(subscription?.currentPeriodEnd ?? subscription?.nextBillingTime ?? null);
   const hasMonthly = Boolean(clientId && monthlyPlanId && customId);
   const hasAnnual = Boolean(clientId && annualPlanId && customId);
+  const isAwaitingApproval = subscription?.status === "approval_pending";
 
   const runAction = async (key: string, action: () => Promise<void>) => {
     setState({ key, message: null });
@@ -151,6 +152,16 @@ export function BillingActions({
   return (
     <div className={className}>
       {isFree ? (
+        isAwaitingApproval ? (
+          <div className="billing-actions">
+            <div className="billing-actions__intro">
+              <p className="billing-actions__eyebrow">Payment approval in progress</p>
+              <p className="billing-actions__text">
+                Clover is waiting for PayPal to confirm your subscription. We will unlock Pro automatically after confirmation.
+              </p>
+            </div>
+          </div>
+        ) : (
         <div className="billing-actions">
           <div className="billing-actions__intro">
             <p className="billing-actions__eyebrow">Upgrade options</p>
@@ -213,6 +224,7 @@ export function BillingActions({
             </section>
           </div>
         </div>
+        )
       ) : (
         <div className="billing-actions billing-actions--pro">
           <div className="billing-actions__intro">

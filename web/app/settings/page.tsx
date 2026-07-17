@@ -122,6 +122,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
         initialSection={initialSection}
         preferredBillingInterval={preferredBillingInterval}
         workspaceId={workspaceId}
+        billingCustomerId={user?.id ?? null}
         workspaceName={workspaceName}
         selectedProfileId={workspaceId}
         initialProfileList={profileList}

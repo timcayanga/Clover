@@ -47,6 +47,7 @@ const EXPERIENCE_OPTIONS: ExperienceOption[] = [
 
 type OnboardingFormProps = {
   workspaceId: string;
+  billingCustomerId: string;
   workspaceAccounts: Array<{
     id: string;
     name: string;
@@ -68,6 +69,7 @@ const jsonHeaders = { "Content-Type": "application/json" };
 
 export function OnboardingForm({
   workspaceId,
+  billingCustomerId,
   workspaceAccounts,
   currentExperience = null,
   upgradeForPro = false,
@@ -309,7 +311,7 @@ export function OnboardingForm({
           <PayPalSubscribeButton
             clientId={paypalClientId}
             planId={upgradePlanId}
-            customId={workspaceId}
+            customId={billingCustomerId}
             buyerCountry={paypalBuyerCountry}
             fundingSource="card"
             className="onboarding-upgrade__paypal"
