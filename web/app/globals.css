@@ -4640,7 +4640,7 @@ body.transactions-manual-open .shell-quick-add-button {
 .dashboard-home__insight-strip-label span:not(.dashboard-home__insight-strip-emoji) {
   color: var(--muted);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -4650,9 +4650,10 @@ body.transactions-manual-open .shell-quick-add-button {
   line-height: 1;
 }
 
-.dashboard-home__insight-strip-item strong {
+.dashboard-home__insight-strip-copy {
   color: var(--text-strong);
   font-size: 13px;
+  font-weight: 400;
   line-height: 1.35;
 }
 

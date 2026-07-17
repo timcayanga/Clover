@@ -681,7 +681,7 @@ async function DashboardStream({
     daysSinceLastImport === null || daysSinceLastImport >= 7
       ? {
           emoji: "📥",
-          label: "Import reminder",
+          label: "Import Reminder",
           copy: uploadReminderCopy,
           href: "/transactions",
           actionLabel: "Import now",
@@ -823,7 +823,7 @@ async function DashboardStream({
                     <span className="dashboard-home__insight-strip-emoji" aria-hidden="true">{item.emoji}</span>
                     <span>{item.label}</span>
                   </div>
-                  <strong>{item.copy}</strong>
+                  <span className="dashboard-home__insight-strip-copy">{item.copy}</span>
                   {item.href && item.actionLabel ? (
                     <Link className="dashboard-home__insight-strip-action" href={item.href}>
                       {item.actionLabel}
@@ -860,8 +860,8 @@ async function DashboardStream({
                 <strong>{weeklyWindowSummary.transactions}</strong>
               </span>
             </div>
-            <Link className="dashboard-home__report-link" href="/reports">
-              Open reports
+            <Link className="dashboard-home__report-link" href="/reports?section=trends">
+              Open Adviser
             </Link>
           </article>
 
@@ -887,8 +887,8 @@ async function DashboardStream({
                 <strong>{monthSummary.transactions}</strong>
               </span>
             </div>
-            <Link className="dashboard-home__report-link" href="/reports">
-              Open reports
+            <Link className="dashboard-home__report-link" href="/reports?section=trends">
+              Open Adviser
             </Link>
           </article>
         </div>
@@ -923,7 +923,7 @@ async function DashboardStream({
                 </small>
               </div>
             </div>
-            <Link className="button button-secondary button-small" href="/recurring">
+            <Link className="dashboard-home__report-link" href="/recurring">
               Open recurring
             </Link>
           </div>
@@ -969,7 +969,7 @@ async function DashboardStream({
                   </small>
                 </div>
               </div>
-              <Link className="button button-secondary button-small" href={reviewAttentionCount > 0 ? "/review" : "/transactions"}>
+              <Link className="dashboard-home__report-link" href={reviewAttentionCount > 0 ? "/review" : "/transactions"}>
                 {reviewAttentionCount > 0 ? "Open review" : "Open transactions"}
               </Link>
             </div>
