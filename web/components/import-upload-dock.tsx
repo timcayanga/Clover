@@ -88,7 +88,9 @@ export function ImportUploadDock({
   const fileLabel =
     safeFileTotal > 0
       ? fileName
-        ? `File ${safeFileIndex} of ${safeFileTotal}`
+        ? isComplete
+          ? `File ${safeFileIndex} of ${safeFileTotal} imported`
+          : `Processing file ${safeFileIndex} of ${safeFileTotal}`
         : `${safeCompletedFiles} of ${safeFileTotal} ${tone === "error" ? "files checked" : "files ready"}`
       : "Clover is getting things ready";
   const displayFileName = fileName ? truncateMiddle(fileName) : null;
@@ -97,15 +99,15 @@ export function ImportUploadDock({
       ? isComplete
         ? `${safeCompletedFiles} of ${safeFileTotal}`
         : fileName
-          ? `Processing ${safeFileIndex} of ${safeFileTotal}`
+          ? "Processing"
           : `${safeCompletedFiles} of ${safeFileTotal}`
       : "Preparing";
   const progressCaption =
     safeFileTotal > 0
-      ? isComplete
-        ? tone === "error" ? "files checked" : "files ready"
+        ? isComplete
+          ? tone === "error" ? "files checked" : "files ready"
         : fileName
-          ? "current file"
+          ? `file ${safeFileIndex} of ${safeFileTotal}`
           : tone === "error" ? "files checked" : "files ready"
       : "import queue";
   const resultHeadline = isComplete ? formatImportResultHeadline(summary) : "";
