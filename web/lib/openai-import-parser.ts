@@ -22,6 +22,21 @@ const OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK = "gpt-5.5";
 const OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK = "gpt-5.4-mini";
 const OPENAI_IMPORT_LEGACY_PDF_MODEL_FALLBACK = "gpt-5.5";
 
+export const getRemainingOpenAIImportAttemptTimeout = (params: {
+  deadlineMs: number;
+  requestedTimeoutMs: number;
+  nowMs?: number;
+  minimumRemainingMs?: number;
+}) => {
+  const remainingMs = params.deadlineMs - (params.nowMs ?? Date.now());
+  const minimumRemainingMs = params.minimumRemainingMs ?? 5_000;
+  if (!Number.isFinite(remainingMs) || remainingMs < minimumRemainingMs) {
+    return null;
+  }
+
+  return Math.max(1_000, Math.min(params.requestedTimeoutMs, remainingMs));
+};
+
 const resolveOpenAIImportModel = (value: string | undefined, fallback: string, label: string) => {
   const model = value?.trim();
   if (!model) {
@@ -2286,10 +2301,19 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   const callOpenAIWithFallbackModels = async (
     models: string[],
     pageImages: Array<{ page: number; dataUrl: string }>,
-    timeoutMs: number
+    timeoutMs: number,
+    deadlineMs: number
   ): Promise<{ response: Response; model: string } | null> => {
     for (const candidateModel of models) {
-      let response = await callOpenAI(candidateModel, pageImages, timeoutMs);
+      const attemptTimeoutMs = getRemainingOpenAIImportAttemptTimeout({
+        deadlineMs,
+        requestedTimeoutMs: timeoutMs,
+      });
+      if (attemptTimeoutMs === null) {
+        return null;
+      }
+
+      let response = await callOpenAI(candidateModel, pageImages, attemptTimeoutMs);
       let errorText = response ? await response.text().catch(() => "") : "timeout";
 
       if (response && shouldRetryWithFewerImages(response.status, errorText, pageImages.length)) {
@@ -2299,7 +2323,14 @@ export const parseImportTextWithOpenAIFallback = async (params: {
           statusText: response.statusText,
           imageCount: pageImages.length,
         });
-        response = await callOpenAI(candidateModel, pageImages.slice(0, 1), timeoutMs);
+        const reducedImageTimeoutMs = getRemainingOpenAIImportAttemptTimeout({
+          deadlineMs,
+          requestedTimeoutMs: timeoutMs,
+        });
+        if (reducedImageTimeoutMs === null) {
+          return null;
+        }
+        response = await callOpenAI(candidateModel, pageImages.slice(0, 1), reducedImageTimeoutMs);
         errorText = response ? await response.text().catch(() => "") : "timeout";
       }
 
@@ -2359,14 +2390,31 @@ export const parseImportTextWithOpenAIFallback = async (params: {
             : inferredDifficulty === "hard"
               ? 55_000
               : 45_000;
-    const attempted = await callOpenAIWithFallbackModels(fallbackChain, pageImagesToSend, primaryTimeoutMs);
+    const totalFallbackBudgetMs =
+      typeof params.timeoutMs === "number" && Number.isFinite(params.timeoutMs)
+        ? Math.max(10_000, Math.floor(params.timeoutMs))
+        : isReceiptMode
+          ? 55_000
+          : pdfFileDataBase64
+            ? 100_000
+            : pageImagesToSend.length > 0
+              ? 120_000
+              : 75_000;
+    const fallbackDeadlineMs = Date.now() + totalFallbackBudgetMs;
+    const attempted = await callOpenAIWithFallbackModels(
+      fallbackChain,
+      pageImagesToSend,
+      primaryTimeoutMs,
+      fallbackDeadlineMs
+    );
     const attemptedResult =
       attempted ??
       (pageImagesToSend.length > 0 && model !== textModel
         ? await callOpenAIWithFallbackModels(
             dedupeOpenAIImportModels([textModel, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]),
             pageImagesToSend.slice(0, 1),
-            retryTimeoutMs
+            retryTimeoutMs,
+            fallbackDeadlineMs
           )
         : null);
     if (!attemptedResult) {
