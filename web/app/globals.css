@@ -7638,6 +7638,21 @@ html[data-theme="dark"] .reports-section-empty {
   color: var(--accent);
 }
 
+.animated-tabs__tab.is-locked,
+.animated-tabs__tab.is-locked:hover,
+.animated-tabs__tab.is-locked:focus-visible,
+.animated-tabs__tab.is-locked.is-active,
+.animated-tabs__tab.is-locked.is-active:hover,
+.animated-tabs__tab.is-locked.is-active:focus-visible {
+  color: rgba(100, 116, 139, 0.62);
+  opacity: 0.62;
+  transform: none;
+}
+
+.animated-tabs.is-locked-active .animated-tabs__indicator {
+  background: rgba(100, 116, 139, 0.38);
+}
+
 .animated-tabs__tab:not(.is-active) {
   opacity: 0.72;
 }
@@ -7667,6 +7682,21 @@ html[data-theme="dark"] .reports-section-empty {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.animated-tabs__tab:not(.is-locked) .animated-tabs__badge {
+  background: rgba(20, 184, 166, 0.12);
+  color: rgb(13, 148, 136);
+}
+
+.animated-tabs__tab.is-active:not(.is-locked) .animated-tabs__badge {
+  background: rgba(3, 168, 192, 0.16);
+  color: var(--accent-strong);
+}
+
+.adviser-pro-upgrade-callout,
+.investments-pro-gate {
+  margin-top: 4px;
 }
 
 .insights-tabs-shell,

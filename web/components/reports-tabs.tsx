@@ -9,6 +9,7 @@ type ReportsTabsContextValue = {
   activeSection: ReportsSection;
   setActiveSection: (section: ReportsSection) => void;
   availableSections: ReportsSection[];
+  lockedSections: ReportsSection[];
 };
 
 const reportsSectionLabels: Record<ReportsSection, string> = {
@@ -32,10 +33,12 @@ const normalizeReportsSection = (value: string | null | undefined, availableSect
 export function ReportsTabsProvider({
   initialSection,
   availableSections,
+  lockedSections = [],
   children,
 }: {
   initialSection: ReportsSection;
   availableSections: ReportsSection[];
+  lockedSections?: ReportsSection[];
   children: ReactNode;
 }) {
   const [activeSection, setActiveSection] = useState<ReportsSection>(() => {
@@ -59,7 +62,7 @@ export function ReportsTabsProvider({
   }, [activeSection]);
 
   return (
-    <ReportsTabsContext.Provider value={{ activeSection, setActiveSection, availableSections }}>
+    <ReportsTabsContext.Provider value={{ activeSection, setActiveSection, availableSections, lockedSections }}>
       {children}
     </ReportsTabsContext.Provider>
   );
@@ -75,7 +78,7 @@ function useReportsTabs() {
 }
 
 export function ReportsTopTabs() {
-  const { activeSection, setActiveSection, availableSections } = useReportsTabs();
+  const { activeSection, setActiveSection, availableSections, lockedSections } = useReportsTabs();
 
   return (
     <AnimatedTabs
@@ -86,6 +89,7 @@ export function ReportsTopTabs() {
         key: section,
         label: reportsSectionLabels[section],
         badge: section === "advanced" ? "Pro" : null,
+        locked: lockedSections.includes(section),
       }))}
     />
   );

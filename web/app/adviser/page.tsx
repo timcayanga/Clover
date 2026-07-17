@@ -26,6 +26,7 @@ import { TransientDataRecovery } from "@/components/transient-data-recovery";
 import { ReportsRangeMenu } from "@/components/reports-range-menu";
 import { ReportsSection as ReportsSectionPanel, ReportsTabsProvider, ReportsTopTabs } from "@/components/reports-tabs";
 import { ReportsStream } from "@/app/reports/page";
+import { PlanUpgradeCallout } from "@/components/plan-upgrade-callout";
 
 export const dynamic = "force-dynamic";
 
@@ -3216,10 +3217,14 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     6
   );
 
-  const reportSections = user.planTier === "pro" ? ["overview", "spending", "trends", "advanced"] as const : ["overview", "spending", "trends"] as const;
+  const reportSections = ["overview", "spending", "trends", "advanced"] as const;
 
   return (
-    <ReportsTabsProvider initialSection="overview" availableSections={[...reportSections]}>
+    <ReportsTabsProvider
+      initialSection="overview"
+      availableSections={[...reportSections]}
+      lockedSections={user.planTier === "free" ? ["advanced"] : []}
+    >
       <CloverShell
         active="adviser"
         title="Adviser"
@@ -3281,6 +3286,20 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
       </section>
       </ReportsSectionPanel>
       <ReportsStream active="adviser" searchParams={resolvedSearchParams} />
+      {user.planTier === "free" ? (
+        <ReportsSectionPanel section="advanced">
+          <PlanUpgradeCallout
+            planTier="free"
+            title="Unlock deeper Adviser insights"
+            copy="Upgrade to Pro to open the full Insights view, with more context around your cash flow, patterns, and next actions."
+            ctaHref="/settings?upgrade=pro&interval=annual"
+            ctaLabel="Upgrade to Pro"
+            secondaryHref="/pricing"
+            secondaryLabel="Compare plans"
+            className="adviser-pro-upgrade-callout"
+          />
+        </ReportsSectionPanel>
+      ) : null}
       </CloverShell>
     </ReportsTabsProvider>
   );

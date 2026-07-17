@@ -9,6 +9,7 @@ type AnimatedTab = {
   icon?: ReactNode;
   badge?: string | null;
   disabled?: boolean;
+  locked?: boolean;
   ariaLabel?: string | null;
 };
 
@@ -45,7 +46,7 @@ export function AnimatedTabs({ className, activeKey, onChange, tabs }: AnimatedT
   }, [activeTab, tabs]);
 
   return (
-    <div ref={containerRef} className={`animated-tabs${className ? ` ${className}` : ""}`}>
+    <div ref={containerRef} className={`animated-tabs${activeTab?.locked ? " is-locked-active" : ""}${className ? ` ${className}` : ""}`}>
       <span
         className="animated-tabs__indicator"
         style={{
@@ -68,13 +69,14 @@ export function AnimatedTabs({ className, activeKey, onChange, tabs }: AnimatedT
               }
             }}
             type="button"
-            className={`animated-tabs__tab${isActive ? " is-active" : ""}`}
+            className={`animated-tabs__tab${isActive ? " is-active" : ""}${tab.locked ? " is-locked" : ""}`}
             onClick={() => {
               if (!tab.disabled) {
                 onChange(tab.key);
               }
             }}
             disabled={tab.disabled}
+            aria-disabled={tab.locked || undefined}
             aria-pressed={isActive}
           aria-label={tab.ariaLabel ?? tab.label}
         >

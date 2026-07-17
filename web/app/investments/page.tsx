@@ -8,6 +8,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { AnimatedTabs } from "@/components/animated-tabs";
+import { PlanUpgradeCallout } from "@/components/plan-upgrade-callout";
 import { CurrencySelector } from "@/components/currency-selector";
 import { InfoTip } from "@/components/info-tip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
@@ -498,9 +499,6 @@ const INVESTMENT_TABS: Array<{ key: InvestmentTab; label: string; icon: ReactNod
     proOnly: true,
   },
 ];
-
-const getVisibleInvestmentTabs = (canUseProTabs: boolean) =>
-  INVESTMENT_TABS.filter((tab) => canUseProTabs || !tab.proOnly);
 
 const investmentsEmptyStateIllustration = "/illustrations/clover-investments-portfolio-3d.png";
 
@@ -1287,9 +1285,9 @@ export default function InvestmentsPage() {
       investmentSortKey !== "value_desc" ||
       portfolioCurrencyFilter !== "all"
   );
-  const canUseProTabs = planTier !== "free";
+  const canUseProTabs = planTier === "pro";
   const canAccessSelectedTab = !((selectedTab === "market" || selectedTab === "analysis") && !canUseProTabs);
-  const visibleInvestmentTabs = useMemo(() => getVisibleInvestmentTabs(canUseProTabs), [canUseProTabs]);
+  const visibleInvestmentTabs = INVESTMENT_TABS;
   const editingAccount = editingAccountId ? visibleInvestmentAccounts.find((account) => account.id === editingAccountId) ?? accounts.find((account) => account.id === editingAccountId) ?? null : null;
   const selectedInvestmentAsset = selectedInvestmentAssetId
     ? visibleInvestmentAccounts.find((account) => account.id === selectedInvestmentAssetId) ??
@@ -1627,7 +1625,8 @@ export default function InvestmentsPage() {
             label: tab.label,
             icon: tab.icon,
             disabled: false,
-            badge: tab.proOnly && tab.key === "analysis" ? "PRO" : null,
+            badge: tab.proOnly ? "PRO" : null,
+            locked: tab.proOnly && planTier === "free",
             ariaLabel: tab.label,
           }))}
         />
@@ -1684,7 +1683,8 @@ export default function InvestmentsPage() {
               label: tab.label,
               icon: tab.icon,
               disabled: false,
-              badge: tab.proOnly && tab.key === "analysis" ? "PRO" : null,
+              badge: tab.proOnly ? "PRO" : null,
+              locked: tab.proOnly && planTier === "free",
               ariaLabel: tab.label,
             }))}
           />
@@ -1728,13 +1728,16 @@ export default function InvestmentsPage() {
         {!loading && message ? <p className="panel-muted">{message}</p> : null}
 
         {!canAccessSelectedTab ? (
-          <section className="investments-pro-gate glass">
-            <div className="investments-pro-gate__badge">Pro</div>
-            <h5>{selectedTab === "market" ? "Markets" : "Analysis"}</h5>
-            <Link className="button button-primary button-small" href="/pricing">
-              Upgrade to Pro
-            </Link>
-          </section>
+          <PlanUpgradeCallout
+            planTier="free"
+            title={`Unlock ${selectedTab === "market" ? "Markets" : "Analysis"}`}
+            copy="Upgrade to Pro to unlock the full investment workspace, including market context and portfolio analysis."
+            ctaHref="/settings?upgrade=pro&interval=annual"
+            ctaLabel="Upgrade to Pro"
+            secondaryHref="/pricing"
+            secondaryLabel="Compare plans"
+            className="investments-pro-gate"
+          />
         ) : selectedTab === "overview" ? (
           <>
             <section className="investments-overview-metrics" aria-label="Portfolio totals">
