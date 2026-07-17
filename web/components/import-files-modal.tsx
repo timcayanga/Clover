@@ -3742,7 +3742,23 @@ export function ImportFilesModal({
 
     localPreparseStartedRef.current.add(itemId);
     updateItem(itemId, {
+      status: "importing",
+      progress: Math.max(IMPORT_PROGRESS.preparing, Number(item.progress ?? 0)),
       progressLabel: "Reading locally",
+    });
+    publishImportActivity({
+      workspaceId,
+      surface: importActivitySurfaceRef.current,
+      status: "active",
+      importFileId: item.importFileId ?? item.id,
+      fileName: item.file.name,
+      fileIndex: itemsRef.current.findIndex((entry) => entry.id === itemId) + 1,
+      fileTotal: itemsRef.current.length,
+      completedFiles: completedFileCount,
+      progress: Math.max(IMPORT_PROGRESS.preparing, Number(item.progress ?? 0)),
+      detail: "Clover is scanning the file locally",
+      summary: null,
+      errorMessage: null,
     });
 
     try {
