@@ -35,6 +35,7 @@ import {
   readImportedFileImageDataUrls,
   readImportedFileTextWithCacheInfo,
   readImportedPdfPageImages,
+  isPdfPasswordError,
   resolveKnownStatementImageFallbackText,
   storeImportedFileTextCacheRecord,
 } from "@/lib/import-file-text.server";
@@ -6910,6 +6911,9 @@ export const processImportFileText = async (
         );
         text = textCacheInfo.text;
       } catch (error) {
+        if (isPdfPasswordError(error)) {
+          throw error;
+        }
         console.warn("Unable to read imported file text; continuing with vision fallback", {
           importFileId,
           error,

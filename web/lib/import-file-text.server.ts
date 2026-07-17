@@ -1670,14 +1670,20 @@ const extractTextFromPdfBytesWithRenderFirstFallback = async (
       return ocrText;
     }
   } catch (error) {
+    if (isPdfPasswordError(error)) {
+      throw error;
+    }
     console.warn("PDF OCR-first extraction failed; retrying with text extraction", error);
   }
 
   try {
-      return await extractTextFromPdfBytesWithOcrFallback(data, password, baseUrl, profile);
-    } catch (error) {
-      console.warn("PDF OCR-first fallback after render-first extraction failed", error);
-      return "";
+    return await extractTextFromPdfBytesWithOcrFallback(data, password, baseUrl, profile);
+  } catch (error) {
+    if (isPdfPasswordError(error)) {
+      throw error;
+    }
+    console.warn("PDF OCR-first fallback after render-first extraction failed", error);
+    return "";
   }
 };
 
@@ -1727,7 +1733,7 @@ const createPdfJsLoadOptions = (data: Uint8Array, password?: string, baseUrl?: s
   };
 };
 
-const isPdfPasswordError = (error: unknown) => {
+export const isPdfPasswordError = (error: unknown) => {
   if (!error || typeof error !== "object") {
     return false;
   }
@@ -2137,6 +2143,9 @@ const extractTextFromPdfBytesWithOcrFallback = async (
   try {
     extractedText = await extractTextFromPdfBytes(data, password, baseUrl);
   } catch (error) {
+    if (isPdfPasswordError(error)) {
+      throw error;
+    }
     console.warn("PDF text extraction failed; retrying with rendered page OCR", error);
   }
 
@@ -2177,6 +2186,9 @@ const extractTextFromPdfBytesWithOcrFallback = async (
     }
     return extractedText;
   } catch (error) {
+    if (isPdfPasswordError(error)) {
+      throw error;
+    }
     console.warn("PDF OCR fallback failed; retrying with a lighter render path", error);
     try {
       const pageImages = await renderPdfPageImagesFromBytes(data, password, 6, 2.2, false);
@@ -2210,6 +2222,9 @@ const extractTextFromPdfBytesWithOcrFallback = async (
       }
       return extractedText;
     } catch (retryError) {
+      if (isPdfPasswordError(retryError)) {
+        throw retryError;
+      }
       console.warn("PDF OCR fallback retry failed", retryError);
       return extractedText;
     }
