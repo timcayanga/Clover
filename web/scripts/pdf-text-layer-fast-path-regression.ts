@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  buildPdfJsStandardFontDataUrl,
   getPdfJsStandardFontDataUrl,
   pdfTextLayerLooksSufficientForParsing,
 } from "@/lib/import-file-text.server";
@@ -32,9 +33,15 @@ assert.equal(
 );
 
 assert.match(
-  getPdfJsStandardFontDataUrl("https://staging.clover.ph"),
+  getPdfJsStandardFontDataUrl("https://staging.clover.ph") ?? "",
   /^file:.*\/pdfjs-dist\/standard_fonts\/$/,
   "Server PDF extraction must use bundled fonts instead of a deployment self-fetch."
+);
+
+assert.equal(
+  buildPdfJsStandardFontDataUrl(70270),
+  null,
+  "A webpack module id must disable the optional font path instead of crashing PDF extraction."
 );
 
 console.log("PDF text-layer fast-path regression passed.");

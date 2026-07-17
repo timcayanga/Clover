@@ -1746,7 +1746,7 @@ const createPdfJsLoadOptions = (data: Uint8Array, password?: string, baseUrl?: s
     useWorkerFetch: false,
     isOffscreenCanvasSupported: false,
     isImageDecoderSupported: false,
-    standardFontDataUrl,
+    ...(standardFontDataUrl ? { standardFontDataUrl } : {}),
   };
 };
 
@@ -1788,12 +1788,20 @@ export const getConfiguredPdfJsBaseUrl = () => {
   return typeof configuredBaseUrl === "string" && configuredBaseUrl.trim() ? configuredBaseUrl : null;
 };
 
+export const buildPdfJsStandardFontDataUrl = (pdfJsPackagePath: unknown) => {
+  if (typeof pdfJsPackagePath !== "string" || !pdfJsPackagePath.trim()) {
+    return null;
+  }
+
+  return `${pathToFileURL(join(dirname(pdfJsPackagePath), "standard_fonts")).toString().replace(/\/?$/, "")}/`;
+};
+
 export const getPdfJsStandardFontDataUrl = (_baseUrl?: string | null) => {
   // Self-fetching public font assets is slow and brittle in serverless functions.
   // Next traces this package directory into the function bundle instead.
   // Build the specifier at runtime so webpack does not replace it with a numeric module id.
   const pdfJsPackagePath = nodeRequire.resolve(["pdfjs-dist", "package.json"].join("/"));
-  return `${pathToFileURL(join(dirname(pdfJsPackagePath), "standard_fonts")).toString().replace(/\/?$/, "")}/`;
+  return buildPdfJsStandardFontDataUrl(pdfJsPackagePath);
 };
 
 const decodeBody = async (body: unknown) => {

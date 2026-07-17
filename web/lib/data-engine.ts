@@ -25,7 +25,7 @@ import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 
 export const DATA_ENGINE_VERSION = "v2";
-export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v9";
+export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v10";
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
