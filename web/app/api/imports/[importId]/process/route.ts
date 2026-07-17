@@ -1435,6 +1435,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       options?: { processingMessage?: string | null; queueWaitMessage?: string | null }
     ) => {
       stage = "scheduling background processing";
+      // Do not let parsing start against a storage upload that is still in flight.
+      await uploadPromise;
       await updateImportFileCompat(importId, {
         status: "processing",
         processingPhase: "queued_retry",
@@ -1443,7 +1445,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       after(async () => {
         try {
-          await uploadPromise;
           if (localDev) {
             await ensureImportProcessingWorker();
             await updateImportFileCompat(importId, {
