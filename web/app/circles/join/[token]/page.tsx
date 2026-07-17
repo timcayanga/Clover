@@ -1,6 +1,8 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 
 type CircleInvite = {
   circle: {
@@ -17,15 +19,23 @@ type CircleInvite = {
   privacy: string;
 };
 
+type InvitationViewer = {
+  signedIn: boolean;
+  onboardingCompleted: boolean;
+};
+
 export default function CircleJoinPage({
   params,
 }: {
   params: Promise<{ token: string }>;
 }) {
   const { token } = use(params);
+  const searchParams = useSearchParams();
   const [invitation, setInvitation] = useState<CircleInvite | null>(null);
+  const [viewer, setViewer] = useState<InvitationViewer | null>(null);
   const [message, setMessage] = useState("Loading your Circle invitation...");
   const [isJoining, setIsJoining] = useState(false);
+  const autoJoinStarted = useRef(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -37,6 +47,7 @@ export default function CircleJoinPage({
         if (!response.ok)
           throw new Error(payload.error || "This invitation is unavailable.");
         setInvitation(payload.invitation);
+        setViewer(payload.viewer);
         setMessage("");
       })
       .catch((error) => {
@@ -51,7 +62,7 @@ export default function CircleJoinPage({
     return () => controller.abort();
   }, [token]);
 
-  const join = async () => {
+  const join = useCallback(async () => {
     setIsJoining(true);
     setMessage("Joining Circle...");
     try {
@@ -69,7 +80,23 @@ export default function CircleJoinPage({
       );
       setIsJoining(false);
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    if (
+      searchParams?.get("accept") !== "1" ||
+      !invitation ||
+      !viewer?.signedIn ||
+      !viewer.onboardingCompleted ||
+      autoJoinStarted.current
+    ) {
+      return;
+    }
+    autoJoinStarted.current = true;
+    void join();
+  }, [invitation, join, searchParams, viewer]);
+
+  const encodedToken = encodeURIComponent(token);
 
   return (
     <main className="circle-join-page">
@@ -121,14 +148,40 @@ export default function CircleJoinPage({
               })}
               .
             </p>
-            <button
-              className="button button-primary"
-              type="button"
-              onClick={() => void join()}
-              disabled={isJoining}
-            >
-              {isJoining ? "Joining..." : "Join Circle"}
-            </button>
+            <div className="circle-join-card__actions">
+              {viewer?.signedIn && viewer.onboardingCompleted ? (
+                <button
+                  className="button button-primary"
+                  type="button"
+                  onClick={() => void join()}
+                  disabled={isJoining}
+                >
+                  {isJoining ? "Joining..." : "Join Circle"}
+                </button>
+              ) : viewer?.signedIn ? (
+                <Link
+                  className="button button-primary"
+                  href={`/onboarding?circleInvite=${encodedToken}`}
+                >
+                  Finish setup to join
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    className="button button-primary"
+                    href={`/sign-up?circleInvite=${encodedToken}`}
+                  >
+                    Create free account
+                  </Link>
+                  <Link
+                    className="button button-secondary"
+                    href={`/sign-in?circleInvite=${encodedToken}`}
+                  >
+                    Sign in
+                  </Link>
+                </>
+              )}
+            </div>
           </>
         ) : (
           <>

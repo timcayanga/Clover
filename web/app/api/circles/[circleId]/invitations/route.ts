@@ -13,9 +13,16 @@ import {
   assertTrustedRequestOrigin,
 } from "@/lib/request-security";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { sendCircleInvitationEmail } from "@/lib/circle-invitation-email";
+import {
+  CIRCLE_INVITATION_DURATION_DAYS,
+  getCircleInvitationPath,
+  getCircleInviteeDisplayName,
+} from "@/lib/circle-invitations";
+import { getUserDisplayName } from "@/lib/user-display-name";
 
 const invitationSchema = z.object({
-  email: z.string().trim().email().max(254).nullable().optional(),
+  email: z.string().trim().email().max(254),
   displayName: z.string().trim().min(1).max(100).nullable().optional(),
   role: z.enum(circleRoles).default("member"),
 });
@@ -31,27 +38,28 @@ export async function POST(
     const { circleId } = await params;
     const access = await getCircleAccess(circleId, user.id, "organizer");
     const body = invitationSchema.parse(await request.json());
-    const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(
+      Date.now() + CIRCLE_INVITATION_DURATION_DAYS * 24 * 60 * 60 * 1000,
+    );
 
     const invitation = await prisma.$transaction(async (tx) => {
-      if (body.email || body.displayName) {
-        const invitedName = body.displayName || body.email || "Invited member";
+      if (body.email) {
+        const invitedName = getCircleInviteeDisplayName(
+          body.email,
+          body.displayName,
+        );
         const existingGuest = await tx.circleMembership.findFirst({
           where: {
             circleId,
             userId: null,
             status: "invited",
             OR: [
-              ...(body.email
-                ? [
-                    {
-                      email: {
-                        equals: body.email,
-                        mode: "insensitive" as const,
-                      },
-                    },
-                  ]
-                : []),
+              {
+                email: {
+                  equals: body.email,
+                  mode: "insensitive" as const,
+                },
+              },
               ...(body.displayName
                 ? [
                     {
@@ -69,7 +77,7 @@ export async function POST(
           await tx.circleMembership.update({
             where: { id: existingGuest.id },
             data: {
-              email: body.email || existingGuest.email,
+              email: body.email,
               displayName: body.displayName || existingGuest.displayName,
               role: body.role,
             },
@@ -79,7 +87,7 @@ export async function POST(
             data: {
               circleId,
               displayName: invitedName,
-              email: body.email || null,
+              email: body.email,
               role: body.role,
               status: "invited",
             },
@@ -111,7 +119,7 @@ export async function POST(
         data: {
           circleId,
           invitedByUserId: user.id,
-          email: body.email || null,
+          email: body.email,
           displayName: body.displayName || null,
           role: body.role,
           token: randomBytes(24).toString("hex"),
@@ -138,11 +146,31 @@ export async function POST(
       invitation_has_email: Boolean(body.email),
     });
 
+    const shareUrl = getCircleInvitationPath(invitation.token);
+    let emailSent = false;
+    try {
+      await sendCircleInvitationEmail({
+        to: body.email,
+        circleName: access.circle.name,
+        inviterName: getUserDisplayName(user),
+        inviteUrl: new URL(shareUrl, request.url).toString(),
+        expiresAt: invitation.expiresAt,
+      });
+      emailSent = true;
+    } catch (error) {
+      console.error("[Circles] Invitation email failed", {
+        circleId,
+        invitationId: invitation.id,
+        error: error instanceof Error ? error.message : "Unknown email error",
+      });
+    }
+
     return NextResponse.json({
       invitation: {
         id: invitation.id,
-        shareUrl: `/circles/join/${invitation.token}`,
+        shareUrl,
         expiresAt: invitation.expiresAt.toISOString(),
+        emailSent,
       },
     });
   } catch (error) {

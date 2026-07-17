@@ -68,6 +68,21 @@ export function CircleCreateDialog({
       setMessage("Give your Circle a name before continuing.");
       return;
     }
+    const enteredInvitees = members.filter(
+      (member) => member.email.trim() || member.displayName.trim(),
+    );
+    if (enteredInvitees.some((member) => !member.email.trim())) {
+      setMessage("Enter an email for each person you want to invite.");
+      return;
+    }
+    if (
+      enteredInvitees.some(
+        (member) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(member.email.trim()),
+      )
+    ) {
+      setMessage("Check that each invitation email is valid.");
+      return;
+    }
     setIsSaving(true);
     setMessage("Creating your Circle...");
     try {
@@ -80,10 +95,11 @@ export function CircleCreateDialog({
           description: description || null,
           currency,
           members: members
-            .filter((member) => member.displayName.trim())
+            .filter((member) => member.email.trim())
             .map((member) => ({
-              displayName: member.displayName,
-              email: member.email || null,
+              displayName:
+                member.displayName.trim() || member.email.split("@")[0],
+              email: member.email,
               role: "member",
             })),
         }),
@@ -122,15 +138,13 @@ export function CircleCreateDialog({
       >
         <div className="circles-dialog__head">
           <div>
-            <p className="eyebrow">Create a Circle · Step {step + 1} of 4</p>
+            <p className="eyebrow">Add a Circle · Step {step + 1} of 3</p>
             <h2 id="circle-create-title">
               {step === 0
                 ? "What are you managing together?"
                 : step === 1
                   ? "Make it yours"
-                  : step === 2
-                    ? "Your privacy comes first"
-                    : "Who should be included?"}
+                  : "Who should be included?"}
             </h2>
           </div>
           <button
@@ -144,7 +158,7 @@ export function CircleCreateDialog({
         </div>
 
         <div className="circles-stepper" aria-label="Circle setup progress">
-          {[0, 1, 2, 3].map((index) => (
+          {[0, 1, 2].map((index) => (
             <span key={index} className={index <= step ? "is-active" : ""} />
           ))}
         </div>
@@ -159,7 +173,6 @@ export function CircleCreateDialog({
                 onClick={() => selectTemplate(template.type)}
               >
                 <strong>{template.title}</strong>
-                <span>{template.description}</span>
               </button>
             ))}
           </div>
@@ -205,63 +218,22 @@ export function CircleCreateDialog({
         ) : null}
 
         {step === 2 ? (
-          <div className="circles-privacy-card">
-            <img
-              src="/assets/3d%20icons/menu/profiles.png"
-              alt=""
-              width={96}
-              height={96}
-            />
-            <h3>Your personal finances stay personal.</h3>
-            <p>
-              Creating a Circle does not share your accounts, balances, salary,
-              or transaction history.
-            </p>
-            <ul>
-              <li>
-                You choose each expense, goal, contribution, or investment
-                summary you share.
-              </li>
-              <li>
-                Other members cannot edit your personal or confirmed financial
-                records.
-              </li>
-              <li>
-                Clover previews what a Circle will see before personal data is
-                shared.
-              </li>
-            </ul>
-          </div>
-        ) : null}
-
-        {step === 3 ? (
           <div className="circles-form-stack">
             <p className="panel-muted">
-              Add people now, or skip this and invite them later. They will not
-              see anything until they join.
+              Invite people by email now, or add them later. Clover will send
+              each person a secure link that expires in 14 days.
             </p>
+            <div className="circles-privacy-note">
+              <strong>Your finances stay private.</strong>
+              <span>
+                Creating a Circle does not share your accounts, balances,
+                salary, or transaction history.
+              </span>
+            </div>
             {members.map((member, index) => (
               <div className="circles-member-draft" key={index}>
                 <label>
-                  <span>Name</span>
-                  <input
-                    value={member.displayName}
-                    onChange={(event) =>
-                      setMembers((current) =>
-                        current.map((entry, entryIndex) =>
-                          entryIndex === index
-                            ? { ...entry, displayName: event.target.value }
-                            : entry,
-                        ),
-                      )
-                    }
-                    placeholder="e.g. Ana"
-                  />
-                </label>
-                <label>
-                  <span>
-                    Email <small>Optional</small>
-                  </span>
+                  <span>Email</span>
                   <input
                     value={member.email}
                     type="email"
@@ -275,6 +247,24 @@ export function CircleCreateDialog({
                       )
                     }
                     placeholder="ana@example.com"
+                  />
+                </label>
+                <label>
+                  <span>
+                    Name <small>Optional</small>
+                  </span>
+                  <input
+                    value={member.displayName}
+                    onChange={(event) =>
+                      setMembers((current) =>
+                        current.map((entry, entryIndex) =>
+                          entryIndex === index
+                            ? { ...entry, displayName: event.target.value }
+                            : entry,
+                        ),
+                      )
+                    }
+                    placeholder="e.g. Ana"
                   />
                 </label>
                 {members.length > 1 ? (
@@ -342,7 +332,7 @@ export function CircleCreateDialog({
               Cancel
             </button>
           )}
-          {step < 3 ? (
+          {step < 2 ? (
             <button
               className="button button-primary"
               type="button"

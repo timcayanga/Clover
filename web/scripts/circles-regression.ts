@@ -9,6 +9,12 @@ import {
   type CircleMemberSummary,
 } from "../lib/circles";
 import { assertTrustedRequestOrigin } from "../lib/request-security";
+import {
+  getCircleInvitationPath,
+  getCircleInviteeDisplayName,
+  isCircleInvitationToken,
+} from "../lib/circle-invitations";
+import { buildCircleInvitationEmail } from "../lib/circle-invitation-email";
 
 const logPass = (persona: string, behavior: string) => process.stdout.write(`✓ ${persona}: ${behavior}\n`);
 
@@ -94,10 +100,38 @@ const runRequestSecurityUat = () => {
   );
 };
 
+const runInvitationUat = () => {
+  const token = "a".repeat(48);
+  assert.equal(isCircleInvitationToken(token), true);
+  assert.equal(isCircleInvitationToken("short-token"), false);
+  assert.equal(
+    getCircleInvitationPath(token, { accept: true }),
+    `/circles/join/${token}?accept=1`,
+  );
+  assert.equal(getCircleInviteeDisplayName("ana@example.com", ""), "ana");
+
+  const email = buildCircleInvitationEmail({
+    circleName: "Trip <2027>",
+    inviterName: "Ana & Ben",
+    inviteUrl: `https://staging.clover.ph/circles/join/${token}`,
+    expiresAt: new Date("2026-07-31T00:00:00.000Z"),
+  });
+  assert.match(email.subject, /invited you to Trip/);
+  assert.match(email.text, /free account setup/i);
+  assert.match(email.text, /does not share your accounts, balances, salary/i);
+  assert.match(email.html, /Trip &lt;2027&gt;/);
+  assert.doesNotMatch(email.html, /Trip <2027>/);
+  logPass(
+    "new and existing invitees",
+    "receive a private, expiring link that returns through sign-in or free onboarding",
+  );
+};
+
 runBeginnerUat();
 runExperiencedUat();
 runBarkadaUat();
 runCoupleUat();
 runRequestSecurityUat();
+runInvitationUat();
 
 process.stdout.write("Circles regression suite passed.\n");

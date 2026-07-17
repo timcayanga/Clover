@@ -575,6 +575,13 @@ type ShellNotification = {
   onDismiss: () => void;
 };
 
+type ShellCircleInvitation = {
+  id: string;
+  circleName: string;
+  invitedBy: string;
+  href: string;
+};
+
 const dismissedNotificationStorageKey = "clover.dismissed-notifications.v1";
 
 const readDismissedNotifications = () => {
@@ -761,6 +768,7 @@ export function CloverShell({
   const [searchTickerLoading, setSearchTickerLoading] = useState(false);
   const [importActivity, setImportActivity] = useState<ImportActivitySnapshot | null>(() => readImportActivity());
   const [reviewQueueCount, setReviewQueueCount] = useState(0);
+  const [circleInvitations, setCircleInvitations] = useState<ShellCircleInvitation[]>([]);
   const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(() => readDismissedNotifications());
   const [previousPathname, setPreviousPathname] = useState<string | null>(null);
   const quickAddAccounts = useMemo(
@@ -1048,6 +1056,21 @@ export function CloverShell({
       window.removeEventListener("storage", handleStorage);
     };
   }, [searchWorkspaceId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/circle-invitations", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((result: { invitations?: ShellCircleInvitation[] } | null) => {
+        if (!cancelled) setCircleInvitations(result?.invitations ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setCircleInvitations([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1360,8 +1383,23 @@ export function CloverShell({
       }
     }
 
+    circleInvitations.forEach((invitation) => {
+      const notificationId = `circle-invitation:${invitation.id}`;
+      if (!dismissedNotifications.has(notificationId)) {
+        items.push({
+          id: notificationId,
+          title: `Join ${invitation.circleName}`,
+          detail: `${invitation.invitedBy} invited you to a Circle.`,
+          href: invitation.href,
+          tone: "Circle invitation",
+          dismissLabel: "Dismiss Circle invitation notification",
+          onDismiss: () => dismissNotification(notificationId),
+        });
+      }
+    });
+
     return items;
-  }, [dismissedNotifications, importActivity, reviewQueueCount, searchWorkspaceId]);
+  }, [circleInvitations, dismissedNotifications, importActivity, reviewQueueCount, searchWorkspaceId]);
   const notificationCount = notifications.length;
   const navigateTo = (href: string) => {
     closeChrome();

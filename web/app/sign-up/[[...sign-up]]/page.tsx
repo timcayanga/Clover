@@ -1,6 +1,7 @@
 import { ClerkAuthScreen } from "@/components/clerk-auth-screen";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
+import { isCircleInvitationToken } from "@/lib/circle-invitations";
 
 const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? process.env.CLERK_PUBLISHABLE_KEY;
 
@@ -12,7 +13,14 @@ export default async function SignUpPage({ searchParams }: { searchParams?: Prom
   const params = (await searchParams) ?? {};
   const intent = params.intent === "pro" ? "pro" : "free";
   const interval = params.interval === "monthly" ? "monthly" : "annual";
-  const completeRedirectUrl = intent === "pro" ? `/onboarding?upgrade=pro&interval=${interval}` : "/onboarding";
+  const circleInvite = Array.isArray(params.circleInvite)
+    ? params.circleInvite[0]
+    : params.circleInvite;
+  const completeRedirectUrl = isCircleInvitationToken(circleInvite)
+    ? `/onboarding?circleInvite=${encodeURIComponent(circleInvite)}`
+    : intent === "pro"
+      ? `/onboarding?upgrade=pro&interval=${interval}`
+      : "/onboarding";
 
   return (
     <main className="auth-page auth-page--signup">

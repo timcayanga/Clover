@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -11,12 +12,18 @@ import {
   assertTrustedRequestOrigin,
 } from "@/lib/request-security";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { sendCircleInvitationEmail } from "@/lib/circle-invitation-email";
+import {
+  CIRCLE_INVITATION_DURATION_DAYS,
+  getCircleInvitationPath,
+  getCircleInviteeDisplayName,
+} from "@/lib/circle-invitations";
 
 export const dynamic = "force-dynamic";
 
 const memberSchema = z.object({
   displayName: z.string().trim().min(1).max(100),
-  email: z.string().trim().email().max(254).nullable().optional(),
+  email: z.string().trim().email().max(254),
   role: z.enum(circleRoles).optional().default("member"),
 });
 
@@ -61,13 +68,20 @@ export async function POST(request: Request) {
     const ownerName = getUserDisplayName(user);
     const uniqueMembers = body.members.filter(
       (member, index, members) =>
-        member.displayName.toLowerCase() !== ownerName.toLowerCase() &&
+        member.email.toLowerCase() !== user.email.toLowerCase() &&
         members.findIndex(
           (candidate) =>
-            candidate.displayName.toLowerCase() ===
-            member.displayName.toLowerCase(),
+            candidate.email.toLowerCase() === member.email.toLowerCase(),
         ) === index,
     );
+    const expiresAt = new Date(
+      Date.now() + CIRCLE_INVITATION_DURATION_DAYS * 24 * 60 * 60 * 1000,
+    );
+    const invitationDrafts = uniqueMembers.map((member) => ({
+      ...member,
+      token: randomBytes(24).toString("hex"),
+      displayName: getCircleInviteeDisplayName(member.email, member.displayName),
+    }));
 
     const circle = await prisma.$transaction(async (tx) => {
       const created = await tx.circle.create({
@@ -89,9 +103,9 @@ export async function POST(request: Request) {
                 status: "active",
                 joinedAt: new Date(),
               },
-              ...uniqueMembers.map((member) => ({
+              ...invitationDrafts.map((member) => ({
                 displayName: member.displayName,
-                email: member.email || null,
+                email: member.email,
                 role: member.role,
                 status: "invited" as const,
               })),
@@ -107,13 +121,27 @@ export async function POST(request: Request) {
           name: created.name,
           avatarUrl: created.avatarUrl,
           members: {
-            create: uniqueMembers.map((member, index) => ({
+            create: invitationDrafts.map((member, index) => ({
               name: member.displayName,
               sortOrder: index,
             })),
           },
         },
       });
+
+      if (invitationDrafts.length > 0) {
+        await tx.circleInvitation.createMany({
+          data: invitationDrafts.map((invitation) => ({
+            circleId: created.id,
+            invitedByUserId: user.id,
+            email: invitation.email,
+            displayName: invitation.displayName,
+            role: invitation.role,
+            token: invitation.token,
+            expiresAt,
+          })),
+        });
+      }
 
       await tx.circleActivity.create({
         data: {
@@ -125,7 +153,8 @@ export async function POST(request: Request) {
           summary: `${ownerName} created ${created.name}.`,
           metadata: {
             type: created.type,
-            memberCount: uniqueMembers.length + 1,
+            memberCount: invitationDrafts.length + 1,
+            invitationsSent: invitationDrafts.length,
           },
         },
       });
@@ -136,10 +165,48 @@ export async function POST(request: Request) {
     void capturePostHogServerEvent("circle_created", user.id, {
       circle_id: circle.id,
       circle_type: circle.type,
-      initial_member_count: uniqueMembers.length + 1,
+      initial_member_count: invitationDrafts.length + 1,
     });
 
-    return NextResponse.json({ circleId: circle.id }, { status: 201 });
+    const origin = new URL(request.url).origin;
+    const deliveryResults = await Promise.allSettled(
+      invitationDrafts.map((invitation) =>
+        sendCircleInvitationEmail({
+          to: invitation.email,
+          circleName: circle.name,
+          inviterName: ownerName,
+          inviteUrl: new URL(
+            getCircleInvitationPath(invitation.token),
+            origin,
+          ).toString(),
+          expiresAt,
+        }),
+      ),
+    );
+    deliveryResults.forEach((result, index) => {
+      if (result.status === "rejected") {
+        console.error("[Circles] Initial invitation email failed", {
+          circleId: circle.id,
+          invitationEmail: invitationDrafts[index]?.email,
+          error:
+            result.reason instanceof Error
+              ? result.reason.message
+              : "Unknown email error",
+        });
+      }
+    });
+
+    return NextResponse.json(
+      {
+        circleId: circle.id,
+        invitations: invitationDrafts.map((invitation, index) => ({
+          email: invitation.email,
+          shareUrl: getCircleInvitationPath(invitation.token),
+          emailSent: deliveryResults[index]?.status === "fulfilled",
+        })),
+      },
+      { status: 201 },
+    );
   } catch (error) {
     return NextResponse.json(
       {

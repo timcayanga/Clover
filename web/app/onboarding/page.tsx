@@ -5,6 +5,10 @@ import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
+import {
+  getCircleInvitationPath,
+  isCircleInvitationToken,
+} from "@/lib/circle-invitations";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -12,6 +16,13 @@ export const metadata = {
 };
 
 export default async function OnboardingPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = (await searchParams) ?? {};
+  const circleInvite = Array.isArray(params.circleInvite)
+    ? params.circleInvite[0]
+    : params.circleInvite;
+  const completionUrl = isCircleInvitationToken(circleInvite)
+    ? getCircleInvitationPath(circleInvite, { accept: true })
+    : "/dashboard";
   let session;
 
   try {
@@ -22,7 +33,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams?: 
 
   const user = await getOrCreateCurrentUser(session.userId);
   if (!session.isGuest && hasCompletedOnboarding(user)) {
-    redirect("/dashboard");
+    redirect(completionUrl);
   }
 
   const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
@@ -40,7 +51,6 @@ export default async function OnboardingPage({ searchParams }: { searchParams?: 
       },
     },
   });
-  const params = (await searchParams) ?? {};
   const upgradeForPro = params.upgrade === "pro";
   const upgradeInterval = params.interval === "monthly" ? "monthly" : "annual";
   const env = getEnv();
@@ -59,6 +69,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams?: 
           paypalMonthlyPlanId={env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
           paypalAnnualPlanId={env.PAYPAL_ANNUAL_PLAN_ID ?? null}
           paypalBuyerCountry={env.PAYPAL_BUYER_COUNTRY ?? null}
+          completionUrl={completionUrl}
         />
       </section>
     </main>

@@ -61,6 +61,7 @@ type OnboardingFormProps = {
   paypalMonthlyPlanId?: string | null;
   paypalAnnualPlanId?: string | null;
   paypalBuyerCountry?: string | null;
+  completionUrl?: string;
 };
 
 const acceptedImportFiles = ".csv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif";
@@ -78,6 +79,7 @@ export function OnboardingForm({
   paypalMonthlyPlanId = null,
   paypalAnnualPlanId = null,
   paypalBuyerCountry = null,
+  completionUrl = "/dashboard",
 }: OnboardingFormProps) {
   const router = useRouter();
   const photoInputRef = useRef<HTMLInputElement | null>(null);
@@ -99,21 +101,23 @@ export function OnboardingForm({
 
   const upgradePlanId = selectedUpgradeInterval === "annual" ? paypalAnnualPlanId : paypalMonthlyPlanId;
 
-  const persistOnboarding = (startAction: "import" | "skip") => {
+  const persistOnboarding = async (startAction: "import" | "skip") => {
     const payload = JSON.stringify({
       experience,
       startAction,
       skipped: startAction === "skip",
     });
 
-    void fetch("/api/onboarding", {
+    const response = await fetch("/api/onboarding", {
       method: "POST",
       headers: jsonHeaders,
       body: payload,
       keepalive: true,
-    }).catch(() => {
-      // Best effort only. The visible flow should continue either way.
     });
+    if (!response.ok) {
+      const result = (await response.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(result?.error || "Unable to finish Clover setup.");
+    }
   };
 
   const openImportFiles = (files: File[]) => {
@@ -122,7 +126,9 @@ export function OnboardingForm({
     }
 
     startTransition(() => {
-      persistOnboarding("import");
+      void persistOnboarding("import").catch(() => {
+        // The import flow also persists onboarding after a completed upload.
+      });
       setMessage(`Opening ${files.length === 1 ? files[0].name : `${files.length} files`}...`);
       setImportSeedFiles(files);
       setImportOpen(true);
@@ -137,9 +143,12 @@ export function OnboardingForm({
 
   const handleSkip = () => {
     startTransition(() => {
-      persistOnboarding("skip");
-      setMessage("Opening your dashboard...");
-      router.replace("/dashboard");
+      setMessage(completionUrl === "/dashboard" ? "Opening your dashboard..." : "Opening your Circle invitation...");
+      void persistOnboarding("skip")
+        .then(() => router.replace(completionUrl))
+        .catch((error) => {
+          setMessage(error instanceof Error ? error.message : "Unable to finish Clover setup.");
+        });
     });
   };
 
@@ -365,8 +374,13 @@ export function OnboardingForm({
             return;
           }
 
-          setMessage("Import complete. Taking you to the dashboard.");
-          router.replace("/dashboard");
+          try {
+            await persistOnboarding("import");
+            setMessage(completionUrl === "/dashboard" ? "Import complete. Taking you to the dashboard." : "Import complete. Opening your Circle invitation.");
+            router.replace(completionUrl);
+          } catch (error) {
+            setMessage(error instanceof Error ? error.message : "Unable to finish Clover setup.");
+          }
         }}
       />
     </>

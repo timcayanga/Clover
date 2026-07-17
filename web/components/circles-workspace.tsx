@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { CircleCreateDialog } from "@/components/circle-create-dialog";
 import type { CircleSummary, CirclesWorkspaceData } from "@/lib/circles";
 
@@ -19,7 +20,17 @@ type CirclesWorkspaceProps = {
   initialData: CirclesWorkspaceData;
   initialCircleId?: string | null;
   initialTab?: string | null;
+  initialCreate?: boolean;
 };
+
+const emptyStateCircleTypes = [
+  ["🏠", "Household"],
+  ["💞", "Couple"],
+  ["👨‍👩‍👧", "Family"],
+  ["✈️", "Travel"],
+  ["🫶", "Barkada"],
+  ["🎯", "Shared goal"],
+] as const;
 
 const formatMoney = (amount: number, currency: string) =>
   new Intl.NumberFormat("en-PH", {
@@ -46,7 +57,9 @@ export function CirclesWorkspace({
   initialData,
   initialCircleId,
   initialTab,
+  initialCreate = false,
 }: CirclesWorkspaceProps) {
+  const router = useRouter();
   const [data, setData] = useState(initialData);
   const [selectedCircleId, setSelectedCircleId] = useState(
     initialCircleId &&
@@ -59,7 +72,7 @@ export function CirclesWorkspace({
       ? (initialTab as CircleTab)
       : "overview",
   );
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useState(initialCreate);
   const [openForm, setOpenForm] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -72,6 +85,20 @@ export function CirclesWorkspace({
       null,
     [data.circles, selectedCircleId],
   );
+
+  useEffect(() => {
+    if (initialCreate) setShowCreate(true);
+  }, [initialCreate]);
+
+  const closeCreate = () => {
+    setShowCreate(false);
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("create")) {
+      params.delete("create");
+      const query = params.toString();
+      router.replace(query ? `/circles?${query}` : "/circles", { scroll: false });
+    }
+  };
 
   const updateLocation = (circleId: string, tab: CircleTab) => {
     const params = new URLSearchParams(window.location.search);
@@ -260,7 +287,7 @@ export function CirclesWorkspace({
         },
       );
       const payload = (await response.json()) as {
-        invitation?: { shareUrl: string };
+        invitation?: { shareUrl: string; emailSent?: boolean };
         error?: string;
       };
       if (!response.ok || !payload.invitation)
@@ -278,9 +305,13 @@ export function CirclesWorkspace({
       }
       await refresh(selectedCircle.id);
       setMessage(
-        copied
-          ? "Invitation link copied. It expires in 14 days."
-          : "Invitation link created. Copy it below; it expires in 14 days.",
+        payload.invitation.emailSent
+          ? copied
+            ? "Invitation emailed and link copied. It expires in 14 days."
+            : "Invitation emailed. The secure link expires in 14 days."
+          : copied
+            ? "Invitation link copied. Email delivery was unavailable, so you can share the link directly."
+            : "Invitation created. Copy the secure link below to share it directly.",
       );
     } catch (error) {
       setMessage(
@@ -341,24 +372,6 @@ export function CirclesWorkspace({
 
   return (
     <section className="circles-page">
-      <div className="circles-page__head">
-        <div>
-          <p className="eyebrow">Shared money spaces</p>
-          <h1>Manage money together, without sharing everything.</h1>
-          <p>
-            Your accounts stay private. Only the expenses, plans, and summaries
-            you choose are shared.
-          </p>
-        </div>
-        <button
-          className="button button-primary"
-          type="button"
-          onClick={() => setShowCreate(true)}
-        >
-          Create Circle
-        </button>
-      </div>
-
       {data.circles.length === 0 ? (
         <section className="circles-empty panel glass">
           <img
@@ -368,11 +381,14 @@ export function CirclesWorkspace({
             height={120}
           />
           <p className="eyebrow">Your first Circle</p>
-          <h2>Start with people you already manage money with.</h2>
-          <p>
-            Create a household, couple, family, travel, barkada, or shared-goal
-            Circle in a few simple steps.
-          </p>
+          <h2>Manage money together, without sharing everything.</h2>
+          <div className="circles-empty__chips" aria-label="Circle ideas">
+            {emptyStateCircleTypes.map(([emoji, label]) => (
+              <span key={label}>
+                <span aria-hidden="true">{emoji}</span> {label}
+              </span>
+            ))}
+          </div>
           <button
             className="button button-primary"
             type="button"
@@ -555,7 +571,7 @@ export function CirclesWorkspace({
 
       <CircleCreateDialog
         open={showCreate}
-        onClose={() => setShowCreate(false)}
+        onClose={closeCreate}
         onCreated={async (circleId) => {
           await refresh(circleId);
           setSelectedCircleId(circleId);
@@ -1466,16 +1482,14 @@ function CircleMembers({
           </div>
           <form className="circles-inline-form" onSubmit={submitInvite}>
             <label>
+              <span>Email</span>
+              <input name="email" type="email" placeholder="ana@example.com" required />
+            </label>
+            <label>
               <span>
                 Name <small>Optional</small>
               </span>
               <input name="displayName" placeholder="e.g. Ana" />
-            </label>
-            <label>
-              <span>
-                Email <small>Optional for a general link</small>
-              </span>
-              <input name="email" type="email" placeholder="ana@example.com" />
             </label>
             <label>
               <span>Role</span>
@@ -1494,7 +1508,7 @@ function CircleMembers({
               type="submit"
               disabled={isSaving}
             >
-              Create invitation link
+              Send invitation
             </button>
           </form>
           {latestInviteUrl ? (

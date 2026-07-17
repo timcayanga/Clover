@@ -39,6 +39,16 @@ type AdviserAlert = {
   actionLabel: string;
 };
 
+type CircleInvitationAlert = {
+  id: string;
+  circleName: string;
+  circleType: string;
+  invitedBy: string;
+  role: string;
+  expiresAt: string;
+  href: string;
+};
+
 const ADVISER_ALERT_DISMISSALS_KEY = "clover.adviser-alert-dismissals.v1";
 const ADVISER_ALERTS_ENABLED_KEY = "clover.adviser-alerts-enabled.v1";
 
@@ -99,6 +109,7 @@ export function NotificationsClient() {
   const [adviserAlerts, setAdviserAlerts] = useState<AdviserAlert[]>([]);
   const [dismissedAdviserAlerts, setDismissedAdviserAlerts] = useState<string[]>([]);
   const [adviserAlertsEnabled, setAdviserAlertsEnabled] = useState(true);
+  const [circleInvitations, setCircleInvitations] = useState<CircleInvitationAlert[]>([]);
 
   useEffect(() => subscribeImportActivity(() => setActivity(readImportActivity())), []);
   useEffect(() => {
@@ -111,6 +122,21 @@ export function NotificationsClient() {
     } catch {
       setDismissedAdviserAlerts([]);
     }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/circle-invitations", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((result: { invitations?: CircleInvitationAlert[] } | null) => {
+        if (!cancelled) setCircleInvitations(result?.invitations ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setCircleInvitations([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
   useEffect(() => {
     const stored = window.localStorage.getItem(ADVISER_ALERTS_ENABLED_KEY);
@@ -205,6 +231,32 @@ export function NotificationsClient() {
         </div>
 
         <div className="notifications-list">
+          {circleInvitations.length > 0 ? (
+            <section className="notifications-budget">
+              <div className="report-card__head report-card__head--compact">
+                <div>
+                  <p className="eyebrow">Circle invitations</p>
+                  <h4>People want to manage money with you</h4>
+                </div>
+              </div>
+              <div className="notifications-budget__grid">
+                {circleInvitations.map((invitation) => (
+                  <article key={invitation.id} className="notification-item glass notification-item--positive">
+                    <div className="notification-item__main">
+                      <p className="notification-item__tone">{invitation.circleType} Circle</p>
+                      <h4>{invitation.circleName}</h4>
+                      <p>{invitation.invitedBy} invited you to join as {invitation.role}.</p>
+                    </div>
+                    <div className="notification-item__time">
+                      <time>Expires {new Date(invitation.expiresAt).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}</time>
+                      <a className="button button-primary button-small" href={invitation.href}>View invitation</a>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           {activity ? (
             <article className="notification-item glass">
               <div className="notification-item__main">

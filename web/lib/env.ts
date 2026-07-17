@@ -41,6 +41,7 @@ const envSchema = z.object({
   ZOHO_SMTP_PASSWORD: z.string().min(1).optional(),
   ZOHO_SMTP_HOST: z.string().min(1).optional(),
   ZOHO_SMTP_PORT: z.coerce.number().int().positive().optional(),
+  CIRCLE_INVITATION_FROM: z.string().email().optional(),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

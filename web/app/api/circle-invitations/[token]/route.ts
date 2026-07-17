@@ -7,6 +7,38 @@ import {
 } from "@/lib/circle-access";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { getSessionContext, isLocalDevHost } from "@/lib/auth";
+import {
+  getOrCreateCurrentUser,
+  hasCompletedOnboarding,
+} from "@/lib/user-context";
+import { isCircleInvitationToken } from "@/lib/circle-invitations";
+
+const getInvitationViewer = async () => {
+  if (await isLocalDevHost()) {
+    const user = await getCircleCurrentUser();
+    return {
+      user,
+      signedIn: true,
+      onboardingCompleted: hasCompletedOnboarding(user),
+    };
+  }
+
+  try {
+    const session = await getSessionContext();
+    if (session.isGuest) {
+      return { user: null, signedIn: false, onboardingCompleted: false };
+    }
+    const user = await getOrCreateCurrentUser(session.userId);
+    return {
+      user,
+      signedIn: true,
+      onboardingCompleted: hasCompletedOnboarding(user),
+    };
+  } catch {
+    return { user: null, signedIn: false, onboardingCompleted: false };
+  }
+};
 
 const findInvitation = (token: string) =>
   prisma.circleInvitation.findUnique({
@@ -39,6 +71,12 @@ export async function GET(
   { params }: { params: Promise<{ token: string }> },
 ) {
   const { token } = await params;
+  if (!isCircleInvitationToken(token)) {
+    return NextResponse.json(
+      { error: "This Circle invitation is unavailable or has expired." },
+      { status: 404 },
+    );
+  }
   const invitation = await findInvitation(token);
   if (
     !invitation ||
@@ -51,6 +89,7 @@ export async function GET(
     );
   }
 
+  const viewer = await getInvitationViewer();
   return NextResponse.json({
     invitation: {
       circle: {
@@ -74,6 +113,10 @@ export async function GET(
       privacy:
         "Your accounts and transactions stay private. Only items you choose to share will be visible in this Circle.",
     },
+    viewer: {
+      signedIn: viewer.signedIn,
+      onboardingCompleted: viewer.onboardingCompleted,
+    },
   });
 }
 
@@ -83,8 +126,27 @@ export async function POST(
 ) {
   try {
     assertTrustedRequestOrigin(request);
-    const user = await getCircleCurrentUser();
     const { token } = await params;
+    if (!isCircleInvitationToken(token)) {
+      throw new CircleAccessError(
+        "This Circle invitation is no longer available.",
+        404,
+      );
+    }
+    const viewer = await getInvitationViewer();
+    if (!viewer.signedIn || !viewer.user) {
+      throw new CircleAccessError(
+        "Sign in or create a free Clover account to join this Circle.",
+        401,
+      );
+    }
+    if (!viewer.onboardingCompleted) {
+      throw new CircleAccessError(
+        "Finish your Clover setup before joining this Circle.",
+        409,
+      );
+    }
+    const user = viewer.user;
     const invitation = await findInvitation(token);
     if (!invitation || invitation.status !== "pending") {
       throw new CircleAccessError(

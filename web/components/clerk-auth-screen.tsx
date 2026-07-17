@@ -236,7 +236,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
     if (auth.isLoaded && auth.isSignedIn) {
       router.replace(completeRedirectUrl);
     }
-  }, [auth.isLoaded, auth.isSignedIn, router]);
+  }, [auth.isLoaded, auth.isSignedIn, completeRedirectUrl, router]);
 
   useEffect(() => {
     if (mode !== "sign-in") {
