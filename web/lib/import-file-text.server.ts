@@ -1055,6 +1055,23 @@ const scoreStatementTextCandidate = (text: string) => {
   return score;
 };
 
+export const pdfTextLayerLooksSufficientForParsing = (text: string) => {
+  const normalized = text.trim();
+  if (normalized.length < 250) {
+    return false;
+  }
+
+  const datedAmountLines = normalized
+    .split(/\r?\n/)
+    .filter(
+      (line) =>
+        /(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b\d{4}-\d{2}-\d{2}\b)/i.test(line) &&
+        /(?:[₱$€£¥]\s*)?\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b|\b\d+(?:\.\d{2})\b/.test(line)
+    ).length;
+
+  return datedAmountLines >= 2 && scoreStatementTextCandidate(normalized) >= 25;
+};
+
 const normalizeStatementTextLine = (line: string) =>
   line.replace(/\u00a0/g, " ").replace(/[|¦]/g, " ").replace(/\s+/g, " ").trim();
 
@@ -2147,6 +2164,10 @@ const extractTextFromPdfBytesWithOcrFallback = async (
       throw error;
     }
     console.warn("PDF text extraction failed; retrying with rendered page OCR", error);
+  }
+
+  if (pdfTextLayerLooksSufficientForParsing(extractedText)) {
+    return extractedText;
   }
 
   try {
