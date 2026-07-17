@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import Link from "next/link";
 import { trackAdviserInteraction } from "@/lib/adviser-interactions";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 
@@ -65,6 +66,7 @@ type AdviserAction = {
 
 type AdviserChatProps = {
   prompts: AdviserPrompt[];
+  isPro: boolean;
 };
 
 const adviserChatStorageKey = "clover-adviser-chat-session-v1";
@@ -93,7 +95,7 @@ const actionDetails = (action: AdviserAction) =>
     .map(([key, value]) => `${key.replace(/[A-Z]/g, (letter) => ` ${letter.toLowerCase()}`)}: ${Array.isArray(value) ? value.join(", ") : String(value)}`)
     .join(" • ");
 
-export function AdviserChat({ prompts }: AdviserChatProps) {
+export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -345,6 +347,37 @@ export function AdviserChat({ prompts }: AdviserChatProps) {
       keepalive: true,
     }).catch(() => null);
   };
+
+  if (!isPro) {
+    return (
+      <div className="adviser-chat adviser-chat--locked" aria-label="Ask Clover is available with Pro">
+        <div className="adviser-chat__locked-preview" aria-hidden="true">
+          <div className="adviser-chat__composer-bar">
+            <input type="text" value="Ask Clover a question about your money..." readOnly tabIndex={-1} />
+            <button type="button" className="button button-primary button-small" disabled>
+              Send
+            </button>
+          </div>
+          <div className="adviser-chat__prompt-row">
+            {prompts.slice(0, 3).map((prompt) => (
+              <span key={prompt.id} className="adviser-chat__prompt">
+                <span className="adviser-chat__prompt-emoji">{getPromptEmoji(prompt.group)}</span>
+                <span>{prompt.label}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="adviser-chat__locked-copy">
+          <p className="eyebrow">Pro feature</p>
+          <h3>Ask Clover about your money</h3>
+          <p>Get personalized answers grounded in your accounts, transactions, goals, and recurring bills.</p>
+          <Link className="button button-primary button-small" href="/pricing">
+            Upgrade to Pro
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="adviser-chat">

@@ -9782,6 +9782,28 @@ html[data-theme="dark"] .adviser-section {
   gap: 16px;
 }
 
+.adviser-chat__locked-preview {
+  min-width: 0;
+  flex: 1 1 auto;
+  opacity: 0.48;
+  filter: grayscale(0.35);
+  pointer-events: none;
+  user-select: none;
+}
+
+.adviser-chat__locked-preview .adviser-chat__composer-bar {
+  margin-bottom: 10px;
+}
+
+.adviser-chat__locked-preview .adviser-chat__prompt-row {
+  overflow: hidden;
+  flex-wrap: nowrap;
+}
+
+.adviser-chat__locked-preview .adviser-chat__prompt {
+  flex: 0 0 auto;
+}
+
 .adviser-chat__locked-copy {
   max-width: 68ch;
 }
@@ -9795,6 +9817,10 @@ html[data-theme="dark"] .adviser-section {
   margin: 0;
   color: var(--muted);
   line-height: 1.55;
+}
+
+.adviser-chat__locked-copy .button {
+  margin-top: 14px;
 }
 
 .adviser-chat__prompt-row {
@@ -10114,6 +10140,11 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   .adviser-chat--locked {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .adviser-chat__locked-preview,
+  .adviser-chat__locked-copy {
+    width: 100%;
   }
 
   .adviser-chat__composer-bar {

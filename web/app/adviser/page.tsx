@@ -3275,7 +3275,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
 
         <section className="adviser-section adviser-section--questions glass">
           <p className="eyebrow">Recommended questions</p>
-          <AdviserChat prompts={promptSuggestions} />
+          <AdviserChat prompts={promptSuggestions} isPro={user.planTier === "pro"} />
         </section>
 
       </section>
