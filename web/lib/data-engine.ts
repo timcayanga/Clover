@@ -2500,6 +2500,7 @@ export const upsertImportFileExtractionCache = async (params: {
   }
 
   const record: Record<string, unknown> = {};
+  if (columns.includes("id")) record.id = crypto.randomUUID();
   if (columns.includes("workspaceId")) record.workspaceId = params.workspaceId;
   if (columns.includes("fileFingerprint")) record.fileFingerprint = params.fileFingerprint;
   if (columns.includes("fileType")) record.fileType = params.fileType;
@@ -2524,7 +2525,9 @@ export const upsertImportFileExtractionCache = async (params: {
 
   try {
     const placeholders = recordColumns.map((_, index) => `$${index + 1}`).join(", ");
-    const updateColumns = recordColumns.filter((column) => !["workspaceId", "fileFingerprint", "fileType", "importMode", "cacheVersion", "createdAt"].includes(column));
+    const updateColumns = recordColumns.filter(
+      (column) => !["id", "workspaceId", "fileFingerprint", "fileType", "importMode", "cacheVersion", "createdAt"].includes(column)
+    );
     const updateClause = updateColumns
       .map((column, index) => `"${column}" = EXCLUDED."${column}"`)
       .join(", ");

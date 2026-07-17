@@ -1791,7 +1791,8 @@ export const getConfiguredPdfJsBaseUrl = () => {
 export const getPdfJsStandardFontDataUrl = (_baseUrl?: string | null) => {
   // Self-fetching public font assets is slow and brittle in serverless functions.
   // Next traces this package directory into the function bundle instead.
-  const pdfJsPackagePath = nodeRequire.resolve("pdfjs-dist/package.json");
+  // Build the specifier at runtime so webpack does not replace it with a numeric module id.
+  const pdfJsPackagePath = nodeRequire.resolve(["pdfjs-dist", "package.json"].join("/"));
   return `${pathToFileURL(join(dirname(pdfJsPackagePath), "standard_fonts")).toString().replace(/\/?$/, "")}/`;
 };
 
