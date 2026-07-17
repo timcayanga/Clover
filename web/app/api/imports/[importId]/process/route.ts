@@ -58,6 +58,13 @@ import {
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+const isImportPasswordError = (error: unknown, message: string) => {
+  const name = error && typeof error === "object" && "name" in error ? String((error as { name?: unknown }).name ?? "") : "";
+  return /passwordexception|password\s*(?:required|incorrect|invalid)|password-protected|encrypted\s+(?:pdf|file)/i.test(
+    `${name} ${message}`
+  );
+};
+
 const upsertUploadBankHint = async (params: {
   importFileId: string;
   workspaceId: string;
@@ -2661,6 +2668,25 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       );
     }
     if (importId) {
+      if (isImportPasswordError(error, errorMessage)) {
+        const passwordMessage = "This file is password-protected. Enter the password to continue.";
+        await updateImportFileCompat(importId, {
+          status: "failed",
+          processingPhase: "password_required",
+          processingMessage: passwordMessage,
+        }).catch(() => null);
+
+        return NextResponse.json(
+          {
+            error: passwordMessage,
+            code: "IMPORT_PASSWORD_REQUIRED",
+            stage,
+            importFileId: importId,
+          },
+          { status: 422 }
+        );
+      }
+
       const savedTransactionsCount = await countTransactionsByImportFileCompat(importId).catch(() => 0);
       const parsedRowsCount = await countParsedTransactionRows(importId).catch(() => 0);
       const recoveryImportFile = await fetchImportFileCompat(importId).catch(() => null);

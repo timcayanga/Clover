@@ -1508,6 +1508,40 @@ export function ImportFilesModal({
     );
   };
 
+  const requestPasswordForItem = (itemId: string, wrongPassword = false) => {
+    const currentItem = itemsRef.current.find((entry) => entry.id === itemId);
+    if (!currentItem) {
+      return;
+    }
+
+    const passwordMessage = wrongPassword
+      ? `Wrong password for ${currentItem.file.name}.`
+      : `${currentItem.file.name} is password-protected. Enter the password to continue.`;
+    setLaunchInBackground(false);
+    updateItem(itemId, {
+      status: "needs_password",
+      confirmationState: "staged",
+      error: passwordMessage,
+      password: "",
+      passwordVisible: false,
+      progress: 0,
+      progressLabel: "Password needed",
+    });
+    publishImportActivity({
+      workspaceId,
+      surface: importActivitySurfaceRef.current,
+      status: "active",
+      fileName: currentItem.file.name,
+      fileIndex: itemsRef.current.findIndex((entry) => entry.id === itemId) + 1,
+      fileTotal: itemsRef.current.length,
+      completedFiles: completedFileCount,
+      progress: 0,
+      detail: "This file needs a password",
+      summary: null,
+      errorMessage: passwordMessage,
+    });
+  };
+
   useEffect(() => {
     return subscribeImportActivity(() => {
       const currentActivity = readImportActivity();
@@ -2186,6 +2220,11 @@ export function ImportFilesModal({
         }
 
         if (importFile?.status === "failed" && parsedRowsCount === 0 && confirmedTransactionsCount === 0) {
+          if (processingPhase === "password_required" || /password-protected|password required/i.test(processingMessage ?? "")) {
+            requestPasswordForItem(itemId);
+            return;
+          }
+
           if (visualRepairGraceActive) {
             emitItemUpdate({
               status: "importing",
@@ -5946,30 +5985,7 @@ export function ImportFilesModal({
             error_code: getImportErrorCode(error),
           });
         }
-        const needsPasswordMessage = item.password.trim()
-          ? `Wrong password for ${item.file.name}.`
-          : `${item.file.name} is password-protected. Enter the password to continue.`;
-      updateItem(itemId, {
-        status: "needs_password",
-        error: needsPasswordMessage,
-        password: "",
-        passwordVisible: false,
-        progress: 0,
-        progressLabel: "Password needed",
-      });
-      publishImportActivity({
-        workspaceId,
-        surface: importActivitySurfaceRef.current,
-        status: "active",
-        fileName: item.file.name,
-        fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
-        fileTotal: items.length,
-        completedFiles: completedFileCount,
-        progress: 0,
-        detail: "This file needs a password",
-        summary: null,
-        errorMessage: needsPasswordMessage,
-      });
+        requestPasswordForItem(itemId, Boolean(item.password.trim()));
       return { status: "needs_password", importedRows: null, summary: null };
       }
 
@@ -7241,7 +7257,7 @@ export function ImportFilesModal({
     return null;
   }
 
-  if (backgroundOnly) {
+  if (backgroundOnly && !activePasswordItem) {
     return null;
   }
 
@@ -7250,7 +7266,7 @@ export function ImportFilesModal({
     return null;
   }
 
-  if (backgroundOnly || launchInBackground) {
+  if ((backgroundOnly || launchInBackground) && !activePasswordItem) {
     return null;
   }
 
