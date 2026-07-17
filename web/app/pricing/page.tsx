@@ -54,7 +54,7 @@ export default async function PricingPage() {
     ? {
         signedIn: true,
         displayName: user.firstName ?? user.email?.split("@")[0] ?? "Account",
-        avatarUrl: user.imageUrl ?? null,
+        avatarUrl: null,
       }
     : {
         signedIn: false,

@@ -68,13 +68,17 @@ export async function GET() {
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
-        imageUrl: user.imageUrl ?? null,
+        imageUrl: null,
         planTier: user.planTier,
         paypalClientId: env.PAYPAL_CLIENT_ID ?? null,
         paypalMonthlyPlanId: env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null,
         paypalAnnualPlanId: env.PAYPAL_ANNUAL_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null,
         paypalBuyerCountry: env.PAYPAL_BUYER_COUNTRY ?? null,
       });
+    }
+
+    if (!selectedWorkspace) {
+      return NextResponse.json({ error: "workspace_unavailable" }, { status: 503 });
     }
 
     return NextResponse.json({
@@ -84,7 +88,7 @@ export async function GET() {
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
-      imageUrl: user.imageUrl ?? null,
+      imageUrl: null,
       planTier: user.planTier,
       paypalClientId: env.PAYPAL_CLIENT_ID ?? null,
       paypalMonthlyPlanId: env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null,

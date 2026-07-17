@@ -128,7 +128,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
         firstName={user?.firstName ?? null}
         lastName={user?.lastName ?? null}
         email={user?.email ?? ""}
-        avatarUrl={user?.imageUrl ?? null}
+        avatarUrl={null}
         planTier={user?.planTier ?? "free"}
         profileLimit={user ? getEffectiveProfileLimit(user) : null}
         paypalClientId={null}

@@ -4,6 +4,8 @@ type ScrollRevealProps = {
   children: ReactNode;
   className?: string;
   delay?: number;
+  threshold?: number;
+  rootMargin?: string;
   as?: "div" | "section" | "article" | "header";
   id?: string;
 };

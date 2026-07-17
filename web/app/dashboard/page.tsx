@@ -417,14 +417,16 @@ async function resolveDashboardWorkspaceSummary(user: Awaited<ReturnType<typeof 
     redirect("/home");
   }
 
-  await repairWorkspaceDataVisibility(workspaceSummary.id).catch((error) => {
+  const activeWorkspaceSummary = workspaceSummary;
+
+  await repairWorkspaceDataVisibility(activeWorkspaceSummary.id).catch((error) => {
     console.warn("[home] unable to repair workspace data visibility", {
-      workspaceId: workspaceSummary.id,
+      workspaceId: activeWorkspaceSummary.id,
       error,
     });
   });
   workspaceSummary = await prisma.workspace.findUnique({
-    where: { id: workspaceSummary.id },
+    where: { id: activeWorkspaceSummary.id },
     select: workspaceSelect,
   });
 
