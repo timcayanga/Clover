@@ -23,6 +23,13 @@ import {
   type ImportActivitySnapshot,
 } from "@/lib/import-activity";
 import { formatImportResultHeadline } from "@/lib/import-result-summary";
+import {
+  getGuidanceMenuPreset,
+  isGuidanceMenuVisibility,
+  SETTINGS_GUIDANCE_MENU_EVENT,
+  SETTINGS_GUIDANCE_MENU_KEY,
+  type GuidanceMenuVisibility,
+} from "@/lib/guidance-menu";
 
 type CloverChromeActions = {
   closeChrome: () => void;
@@ -725,6 +732,9 @@ export function CloverShell({
   const quickAddPhotoInputRef = useRef<HTMLInputElement | null>(null);
   const quickAddPhotoLibraryInputRef = useRef<HTMLInputElement | null>(null);
   const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | "more" | null>(null);
+  const [guidanceMenuVisibility, setGuidanceMenuVisibility] = useState<GuidanceMenuVisibility>(() =>
+    getGuidanceMenuPreset("very-comfortable")
+  );
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [notificationsPopoverStyle, setNotificationsPopoverStyle] = useState<{ left: number; bottom: number } | null>(null);
@@ -759,6 +769,15 @@ export function CloverShell({
   const isNotificationsActive = openMenu === "notifications";
   const isProfileMenuOpen = openMenu === "profile";
   const isMoreMenuOpen = openMenu === "more";
+  const visibleDesktopNavSections = desktopNavSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => guidanceMenuVisibility[item.key]),
+    }))
+    .filter((section) => section.items.length > 0);
+  const hasHiddenDesktopNavItems = desktopNavSections.some((section) =>
+    section.items.some((item) => !guidanceMenuVisibility[item.key])
+  );
   const shouldShowBackButton =
     !!previousPathname &&
     !pathname?.startsWith("/home") &&
@@ -904,6 +923,41 @@ export function CloverShell({
     setQuickAddSeedFiles(null);
     clearStaleInteractionLocks();
   }, [pathname]);
+
+  useEffect(() => {
+    const readMenuVisibility = () => {
+      try {
+        const raw = window.localStorage.getItem(SETTINGS_GUIDANCE_MENU_KEY);
+        const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+        if (isGuidanceMenuVisibility(parsed)) {
+          setGuidanceMenuVisibility(parsed);
+          return;
+        }
+      } catch {
+        // Fall back to the complete menu when preferences are unavailable.
+      }
+
+      setGuidanceMenuVisibility(getGuidanceMenuPreset("very-comfortable"));
+    };
+
+    const handleMenuPreferenceChange = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (isGuidanceMenuVisibility(detail)) {
+        setGuidanceMenuVisibility(detail);
+      } else {
+        readMenuVisibility();
+      }
+    };
+
+    readMenuVisibility();
+    window.addEventListener(SETTINGS_GUIDANCE_MENU_EVENT, handleMenuPreferenceChange);
+    window.addEventListener("storage", readMenuVisibility);
+
+    return () => {
+      window.removeEventListener(SETTINGS_GUIDANCE_MENU_EVENT, handleMenuPreferenceChange);
+      window.removeEventListener("storage", readMenuVisibility);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -1456,7 +1510,7 @@ export function CloverShell({
         </div>
 
         <nav className="sidebar-nav" aria-label="Primary" id="primary-navigation">
-          {desktopNavSections.map((section) => (
+          {visibleDesktopNavSections.map((section) => (
             <div key={section.label} className="sidebar-nav__section">
               <p className="sidebar-nav__section-label">{section.label}</p>
               {section.items.map((item) => (
@@ -1485,6 +1539,31 @@ export function CloverShell({
               ))}
             </div>
           ))}
+          {hasHiddenDesktopNavItems ? (
+            <div className="sidebar-nav__section sidebar-nav__section--more">
+              <button
+                className={`nav-link ${isMoreActive ? "is-active" : ""}`}
+                aria-current={isMoreActive ? "page" : undefined}
+                type="button"
+                onMouseDown={(event) => {
+                  if (event.button !== 0) {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  navigateTo("/more");
+                }}
+                onClick={() => navigateTo("/more")}
+                onMouseEnter={() => prefetchNavTarget("/more")}
+                onTouchStart={() => prefetchNavTarget("/more")}
+              >
+                <span className="nav-link__icon" aria-hidden="true">
+                  <MenuIcon name="more" />
+                </span>
+                More
+              </button>
+            </div>
+          ) : null}
         </nav>
 
         <div className="sidebar-footer">

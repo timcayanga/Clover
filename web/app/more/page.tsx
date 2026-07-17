@@ -15,7 +15,7 @@ type MoreSection = {
   items: MoreLink[];
 };
 
-type PageIconName = "dashboard" | "adviser" | "accounts" | "transactions" | "recurring" | "split-bill" | "investments" | "reports" | "goals" | "budgeting" | "notifications" | "settings" | "help";
+type PageIconName = "dashboard" | "adviser" | "accounts" | "transactions" | "recurring" | "split-bill" | "investments" | "goals" | "budgeting" | "notifications" | "settings" | "help";
 
 const MORE_ICON_SRC: Record<PageIconName, string> = {
   dashboard: "/assets/3d%20icons/menu/home.png",
@@ -25,7 +25,6 @@ const MORE_ICON_SRC: Record<PageIconName, string> = {
   recurring: "/assets/3d%20icons/menu/recurring.png",
   "split-bill": "/assets/3d%20icons/menu/split-bills.png",
   investments: "/assets/3d%20icons/menu/investments.png",
-  reports: "/assets/3d%20icons/menu/reports.png",
   goals: "/assets/icons/goals.png",
   budgeting: "/assets/3d%20icons/menu/budgeting.png",
   notifications: "/assets/3d%20icons/menu/notifications-v2.png",
@@ -95,11 +94,6 @@ const moreSections: MoreSection[] = [
         href: "/investments",
         title: "Investments",
         icon: "investments",
-      },
-      {
-        href: "/reports",
-        title: "Reports",
-        icon: "reports",
       },
     ],
   },

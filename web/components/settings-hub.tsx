@@ -5,6 +5,15 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import {
+  getGuidanceMenuPreset,
+  guidanceMenuItems,
+  isGuidanceMenuVisibility,
+  SETTINGS_GUIDANCE_MENU_EVENT,
+  SETTINGS_GUIDANCE_MENU_KEY,
+  type GuidanceMenuKey,
+  type GuidanceMenuVisibility,
+} from "@/lib/guidance-menu";
 import { useClerk, useSession, useSessionList, useUser } from "@clerk/nextjs";
 import { UserAvatarEditor } from "@/components/user-avatar-editor";
 import { applyHelperTextPreference, HELPER_TEXT_STORAGE_KEY, readStoredHelperTextPreference } from "@/lib/helper-text-preference";
@@ -188,9 +197,10 @@ type SettingsAccountIdentityCache = {
   imageUrl?: string | null;
 };
 
-type GuidanceLevel = "learning" | "comfortable" | "very-comfortable";
+type GuidancePresetLevel = "learning" | "comfortable" | "very-comfortable";
+type GuidanceLevel = GuidancePresetLevel | "custom";
 
-const guidanceOptions: Array<{ value: GuidanceLevel; label: string; helper: string }> = [
+const guidanceOptions: Array<{ value: GuidancePresetLevel; label: string; helper: string }> = [
   {
     value: "learning",
     label: "Still learning",
@@ -496,6 +506,9 @@ export function SettingsHub({
   const [themeMode, setThemeMode] = useState<ThemeMode>("light");
   const [helperTextVisible, setHelperTextVisible] = useState(true);
   const [guidanceLevel, setGuidanceLevel] = useState<GuidanceLevel>("very-comfortable");
+  const [guidanceMenuVisibility, setGuidanceMenuVisibility] = useState<GuidanceMenuVisibility>(() =>
+    getGuidanceMenuPreset("very-comfortable")
+  );
   const [guidancePreferenceLoaded, setGuidancePreferenceLoaded] = useState(false);
   const [historyCutoff, setHistoryCutoff] = useState(() => new Date().toISOString().slice(0, 10));
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -935,8 +948,26 @@ export function SettingsHub({
     applyHelperTextPreference(initialHelperText);
 
     const storedGuidanceLevel = window.localStorage.getItem(SETTINGS_GUIDANCE_KEY);
-    if (storedGuidanceLevel === "learning" || storedGuidanceLevel === "comfortable" || storedGuidanceLevel === "very-comfortable") {
+    if (storedGuidanceLevel === "learning" || storedGuidanceLevel === "comfortable" || storedGuidanceLevel === "very-comfortable" || storedGuidanceLevel === "custom") {
       setGuidanceLevel(storedGuidanceLevel);
+
+      const storedMenuVisibility = window.localStorage.getItem(SETTINGS_GUIDANCE_MENU_KEY);
+      try {
+        const parsedMenuVisibility = storedMenuVisibility ? (JSON.parse(storedMenuVisibility) as unknown) : null;
+        setGuidanceMenuVisibility(
+          isGuidanceMenuVisibility(parsedMenuVisibility)
+            ? parsedMenuVisibility
+          : storedGuidanceLevel === "custom"
+            ? getGuidanceMenuPreset("very-comfortable")
+            : getGuidanceMenuPreset(storedGuidanceLevel)
+        );
+      } catch {
+        setGuidanceMenuVisibility(
+          storedGuidanceLevel === "custom" ? getGuidanceMenuPreset("very-comfortable") : getGuidanceMenuPreset(storedGuidanceLevel)
+        );
+      }
+    } else {
+      setGuidanceMenuVisibility(getGuidanceMenuPreset("very-comfortable"));
     }
     setGuidancePreferenceLoaded(true);
   }, []);
@@ -1001,7 +1032,9 @@ export function SettingsHub({
 
     window.localStorage.setItem(SETTINGS_GUIDANCE_KEY, guidanceLevel);
     document.documentElement.dataset.cloverGuidance = guidanceLevel;
-  }, [guidanceLevel, guidancePreferenceLoaded]);
+    window.localStorage.setItem(SETTINGS_GUIDANCE_MENU_KEY, JSON.stringify(guidanceMenuVisibility));
+    window.dispatchEvent(new CustomEvent(SETTINGS_GUIDANCE_MENU_EVENT, { detail: guidanceMenuVisibility }));
+  }, [guidanceLevel, guidanceMenuVisibility, guidancePreferenceLoaded]);
 
   useEffect(() => {
     writeStoredJsonValue(SETTINGS_NOTIFICATIONS_KEY, notificationPreferences);
@@ -2117,13 +2150,63 @@ export function SettingsHub({
                         name="guidance-level"
                         value={option.value}
                         checked={isSelected}
-                        onChange={() => setGuidanceLevel(option.value)}
+                        onChange={() => {
+                          setGuidanceLevel(option.value);
+                          setGuidanceMenuVisibility(getGuidanceMenuPreset(option.value));
+                        }}
                       />
                       <strong>{option.label}</strong>
                       <span>{option.helper}</span>
                     </label>
                   );
                 })}
+              </div>
+
+              <div className="settings-guidance-menu-wrap">
+                <div className="settings-guidance-menu-head">
+                  <h6>Menu visibility</h6>
+                  <p>Use a preset above, or check the items you want kept in the main menu. Unchecked items stay in More.</p>
+                </div>
+                <table className="settings-guidance-menu-table">
+                  <caption className="sr-only">Choose which Clover areas appear in the main menu</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Main menu</th>
+                      <th scope="col">Show</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {guidanceMenuItems.map((item) => {
+                      const isVisible = guidanceMenuVisibility[item.key];
+
+                      return (
+                        <tr key={item.key}>
+                          <th scope="row">
+                            <span>{item.label}</span>
+                            {isVisible ? <small>{item.description}</small> : null}
+                          </th>
+                          <td>
+                            <label className="settings-guidance-checkbox">
+                              <input
+                                type="checkbox"
+                                checked={isVisible}
+                                onChange={(event) => {
+                                  const nextVisibility = {
+                                    ...guidanceMenuVisibility,
+                                    [item.key as GuidanceMenuKey]: event.target.checked,
+                                  };
+                                  setGuidanceMenuVisibility(nextVisibility);
+                                  setGuidanceLevel("custom");
+                                }}
+                              />
+                              <span className="sr-only">Show {item.label} in the main menu</span>
+                            </label>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
 
               <div className="settings-guidance-table-wrap">
