@@ -20,7 +20,7 @@ export default async function AdminErrorsPage({ searchParams }: { searchParams: 
   const data = await getAdminErrorLogs({ query, page });
 
   return (
-    <AdminPageChrome active="errors" title="Error Logs" kicker="Internal tools" subtitle="Inspect production errors, builds, routes, users, and stack traces without leaving Clover.">
+    <AdminPageChrome active="errors" title="Error Logs" kicker="Internal tools" subtitle="Inspect errors, builds, routes, users, and stack traces in this environment.">
       <AdminErrorLogsTable data={data} query={query} />
     </AdminPageChrome>
   );

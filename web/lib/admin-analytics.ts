@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getAdminDataEnvironment } from "@/lib/admin";
 import { getPostHogConfig, type AnalyticsEventName } from "@/lib/analytics";
 
 export type AdminAnalyticsEvent = {
@@ -86,7 +87,7 @@ export type AdminAnalyticsSnapshot = {
   };
 };
 
-const productionUser = { environment: "production" } as const;
+const productionUser = { environment: getAdminDataEnvironment() } as const;
 const productionWorkspace = { user: productionUser } as const;
 const activeImport = { status: { not: "deleted" } } as const;
 const activeTransaction = { deletedAt: null } as const;
@@ -162,8 +163,8 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
         workspace: productionWorkspace,
       },
     }),
-    prisma.appErrorLog.count({ where: { environment: "production", occurredAt: { gte: oneDayAgo } } }),
-    prisma.appErrorLog.count({ where: { environment: "production", occurredAt: { gte: sevenDaysAgo } } }),
+    prisma.appErrorLog.count({ where: { environment: getAdminDataEnvironment(), occurredAt: { gte: oneDayAgo } } }),
+    prisma.appErrorLog.count({ where: { environment: getAdminDataEnvironment(), occurredAt: { gte: sevenDaysAgo } } }),
     prisma.contactInquiry.count({ where: { status: "open" } }),
     prisma.user.count({ where: { ...productionUser, workspaces: { some: { importFiles: { some: activeImport } } } } }),
     prisma.user.count({ where: { ...productionUser, workspaces: { some: { importFiles: { some: { ...activeImport, status: "done" } } } } } }),

@@ -1,7 +1,6 @@
 import { getEnv } from "@/lib/env";
+import { getAdminDataEnvironment } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
-
-const productionWorkspace = { user: { environment: "production" } } as const;
 
 export type AdminOperationsSnapshot = {
   generatedAt: string;
@@ -39,22 +38,24 @@ export type AdminOperationsSnapshot = {
 const list = (value: string | undefined) => (value ?? "").split(",").map((item) => item.trim()).filter(Boolean);
 
 export async function getAdminOperationsSnapshot(): Promise<AdminOperationsSnapshot> {
+  const environment = getAdminDataEnvironment();
+  const scopedWorkspace = { user: { environment } } as const;
   const now = Date.now();
   const dayAgo = new Date(now - 24 * 60 * 60 * 1000);
   const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
   const staleCutoff = new Date(now - 30 * 60 * 1000);
   const [active, pending, cancelled, suspended, recentEvents, processing, stale, failed24h, queuedJobs, failedJobs, recentImports, actions24h, notes7d, snapshotsAvailable, recentActions] = await Promise.all([
-    prisma.billingSubscription.count({ where: { status: "active", user: { environment: "production" } } }),
-    prisma.billingSubscription.count({ where: { status: "approval_pending", user: { environment: "production" } } }),
-    prisma.billingSubscription.count({ where: { status: "cancelled", user: { environment: "production" } } }),
-    prisma.billingSubscription.count({ where: { status: "suspended", user: { environment: "production" } } }),
-    prisma.billingEvent.findMany({ where: { createdAt: { gte: weekAgo } }, orderBy: { createdAt: "desc" }, take: 12, include: { user: { select: { email: true } } } }),
-    prisma.importFile.count({ where: { status: "processing", workspace: productionWorkspace } }),
-    prisma.importFile.count({ where: { status: "processing", updatedAt: { lt: staleCutoff }, workspace: productionWorkspace } }),
-    prisma.importFile.count({ where: { status: "failed", updatedAt: { gte: dayAgo }, workspace: productionWorkspace } }),
-    prisma.importEnrichmentJob.count({ where: { status: "queued", workspace: productionWorkspace } }),
-    prisma.importEnrichmentJob.count({ where: { status: "failed", workspace: productionWorkspace } }),
-    prisma.importFile.findMany({ where: { status: { in: ["processing", "failed"] }, workspace: productionWorkspace }, orderBy: { updatedAt: "desc" }, take: 15, include: { workspace: { include: { user: { select: { email: true } } } }, enrichmentJob: { select: { phase: true } } } }),
+    prisma.billingSubscription.count({ where: { status: "active", user: { environment } } }),
+    prisma.billingSubscription.count({ where: { status: "approval_pending", user: { environment } } }),
+    prisma.billingSubscription.count({ where: { status: "cancelled", user: { environment } } }),
+    prisma.billingSubscription.count({ where: { status: "suspended", user: { environment } } }),
+    prisma.billingEvent.findMany({ where: { createdAt: { gte: weekAgo }, user: { environment } }, orderBy: { createdAt: "desc" }, take: 12, include: { user: { select: { email: true } } } }),
+    prisma.importFile.count({ where: { status: "processing", workspace: scopedWorkspace } }),
+    prisma.importFile.count({ where: { status: "processing", updatedAt: { lt: staleCutoff }, workspace: scopedWorkspace } }),
+    prisma.importFile.count({ where: { status: "failed", updatedAt: { gte: dayAgo }, workspace: scopedWorkspace } }),
+    prisma.importEnrichmentJob.count({ where: { status: "queued", workspace: scopedWorkspace } }),
+    prisma.importEnrichmentJob.count({ where: { status: "failed", workspace: scopedWorkspace } }),
+    prisma.importFile.findMany({ where: { status: { in: ["processing", "failed"] }, workspace: scopedWorkspace }, orderBy: { updatedAt: "desc" }, take: 15, include: { workspace: { include: { user: { select: { email: true } } } }, enrichmentJob: { select: { phase: true } } } }),
     prisma.adminSupportAction.count({ where: { createdAt: { gte: dayAgo } } }),
     prisma.adminSupportNote.count({ where: { createdAt: { gte: weekAgo } } }),
     prisma.adminDataSnapshot.count({ where: { restoredAt: null } }),
@@ -82,7 +83,7 @@ export async function getAdminOperationsSnapshot(): Promise<AdminOperationsSnaps
       configuredAdminEmails: list(getEnv().ADMIN_EMAILS),
       configuredAdminOnlyIds: list(getEnv().ADMIN_ONLY_USER_IDS),
       adminUserIds: list(getEnv().ADMIN_USER_IDS),
-      environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "unknown",
+      environment,
       note: "Admin access is managed through deployment environment variables and Clerk identity; it is intentionally not editable from the browser.",
     },
     support: {

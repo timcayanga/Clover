@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdminAuth } from "@/lib/admin";
+import { getAdminDataEnvironment, requireAdminAuth } from "@/lib/admin";
 import { createAdminDataSnapshot, recordAdminSupportAction } from "@/lib/admin-support";
 import { prisma } from "@/lib/prisma";
 
@@ -9,7 +9,7 @@ export async function GET(_request: Request, context: { params: Promise<{ userId
   try {
     const admin = await requireAdminAuth();
     const { userId } = await context.params;
-    const user = await prisma.user.findFirst({ where: { id: userId, environment: "production" }, select: { email: true } });
+    const user = await prisma.user.findFirst({ where: { id: userId, environment: getAdminDataEnvironment() }, select: { email: true } });
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
     const snapshot = await createAdminDataSnapshot(userId, admin.userId);
     const stored = await prisma.adminDataSnapshot.findUnique({ where: { id: snapshot.id }, select: { payload: true } });

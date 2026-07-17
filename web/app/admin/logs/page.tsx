@@ -20,7 +20,7 @@ export default async function AdminLogsPage({ searchParams }: { searchParams: Pr
   const data = await getAdminAuditLogs({ query, page });
 
   return (
-    <AdminPageChrome active="logs" title="Audit Logs" kicker="Internal tools" subtitle="Trace durable actions and changes across production workspaces.">
+    <AdminPageChrome active="logs" title="Audit Logs" kicker="Internal tools" subtitle="Trace durable actions and changes across this environment.">
       <AdminAuditLogsTable data={data} query={query} />
     </AdminPageChrome>
   );

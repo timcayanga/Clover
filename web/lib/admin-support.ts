@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getAdminDataEnvironment } from "@/lib/admin";
 
 export type SupportActionInput = {
   actorUserId: string;
@@ -31,8 +32,9 @@ export async function getAdminSupportNotes(targetUserId: string) {
 }
 
 export async function createAdminDataSnapshot(targetUserId: string, actorUserId: string) {
+  const environment = getAdminDataEnvironment();
   const user = await prisma.user.findFirst({
-    where: { id: targetUserId, environment: "production" },
+    where: { id: targetUserId, environment },
     select: {
       id: true,
       clerkUserId: true,

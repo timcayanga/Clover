@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { getAdminDataEnvironment } from "@/lib/admin";
 import { recordAppError } from "@/lib/error-logs";
 
 export type AdminErrorLogFilters = {
@@ -41,7 +42,7 @@ export type AdminErrorLogListResponse = {
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
 const PRODUCTION_ERROR_LOG_WHERE = {
-  environment: "production",
+  environment: getAdminDataEnvironment(),
 };
 
 type AdminErrorLogRecord = {

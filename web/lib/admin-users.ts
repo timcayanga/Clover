@@ -1,6 +1,7 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { BillingSubscriptionStatus, Prisma, type FinancialExperienceLevel, type PlanTier, type User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { getAdminDataEnvironment } from "@/lib/admin";
 import { reconcileBillingPlanTier } from "@/lib/paypal-billing";
 import { getEffectiveUserLimits, getPlanDisplayLabel } from "@/lib/user-limits";
 
@@ -197,7 +198,7 @@ export type AdminUserSearchFilters = {
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
 const PRODUCTION_USER_WHERE: Prisma.UserWhereInput = {
-  environment: "production",
+  environment: getAdminDataEnvironment(),
 };
 const ACTIVE_TRANSACTION_WHERE: Prisma.TransactionWhereInput = {
   deletedAt: null,
@@ -484,7 +485,7 @@ async function fetchUserMetrics(userIds: string[]) {
     prisma.$queryRaw<Array<{ userId: string; recentErrorCount: bigint }>>(Prisma.sql`
       SELECT e."userId" AS "userId", COUNT(*)::bigint AS "recentErrorCount"
       FROM "AppErrorLog" e
-      WHERE e."environment" = 'production'
+      WHERE e."environment" = ${getAdminDataEnvironment()}
         AND e."userId" IN (${Prisma.join(userIdFragments)})
         AND e."occurredAt" >= ${thirtyDaysAgo}
       GROUP BY e."userId"
@@ -605,7 +606,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
       SELECT COALESCE(SUM(ABS(t."amount")), 0) AS total
       FROM "Transaction" t
       INNER JOIN "Workspace" w ON w."id" = t."workspaceId"
-      INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = 'production'
+      INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = ${getAdminDataEnvironment()}
       WHERE t."isExcluded" = false
         AND t."isTransfer" = false
         AND t."deletedAt" IS NULL
@@ -614,7 +615,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
       SELECT COALESCE(SUM(GREATEST(COALESCE(a."balance", 0), 0)), 0) AS total
       FROM "Account" a
       INNER JOIN "Workspace" w ON w."id" = a."workspaceId"
-      INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = 'production'
+      INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = ${getAdminDataEnvironment()}
       WHERE a."type" = 'investment'::"AccountType"
     `),
     prisma.importFile.count({
@@ -636,7 +637,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
     }),
     prisma.appErrorLog.count({
       where: {
-        environment: "production",
+        environment: getAdminDataEnvironment(),
         occurredAt: {
           gte: sevenDaysAgo,
         },
@@ -648,14 +649,14 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
         SELECT w."userId", t."workspaceId"
         FROM "Transaction" t
         INNER JOIN "Workspace" w ON w."id" = t."workspaceId"
-        INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = 'production'
+        INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = ${getAdminDataEnvironment()}
         WHERE t."date" >= ${thirtyDaysAgo}
           AND t."deletedAt" IS NULL
         UNION
         SELECT w."userId", i."workspaceId"
         FROM "ImportFile" i
         INNER JOIN "Workspace" w ON w."id" = i."workspaceId"
-        INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = 'production'
+        INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = ${getAdminDataEnvironment()}
         WHERE i."uploadedAt" >= ${thirtyDaysAgo}
           AND i."status" <> 'deleted'
       ) AS source_user
@@ -666,14 +667,14 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
         SELECT w."userId"
         FROM "Transaction" t
         INNER JOIN "Workspace" w ON w."id" = t."workspaceId"
-        INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = 'production'
+        INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = ${getAdminDataEnvironment()}
         WHERE t."createdAt" >= ${sevenDaysAgo}
           AND t."deletedAt" IS NULL
         UNION
         SELECT w."userId"
         FROM "ImportFile" i
         INNER JOIN "Workspace" w ON w."id" = i."workspaceId"
-        INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = 'production'
+        INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = ${getAdminDataEnvironment()}
         WHERE i."uploadedAt" >= ${sevenDaysAgo}
           AND i."status" <> 'deleted'
       ) AS source_user
@@ -684,7 +685,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
         SELECT w."userId"
         FROM "Transaction" t
         INNER JOIN "Workspace" w ON w."id" = t."workspaceId"
-        INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = 'production'
+        INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = ${getAdminDataEnvironment()}
         WHERE t."createdAt" >= ${fourteenDaysAgo}
           AND t."createdAt" < ${sevenDaysAgo}
           AND t."deletedAt" IS NULL
@@ -692,7 +693,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
         SELECT w."userId"
         FROM "ImportFile" i
         INNER JOIN "Workspace" w ON w."id" = i."workspaceId"
-        INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = 'production'
+        INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = ${getAdminDataEnvironment()}
         WHERE i."uploadedAt" >= ${fourteenDaysAgo}
           AND i."uploadedAt" < ${sevenDaysAgo}
           AND i."status" <> 'deleted'
@@ -716,7 +717,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
         },
       },
     }),
-    prisma.appErrorLog.count({ where: { environment: "production", occurredAt: { gte: fourteenDaysAgo, lt: sevenDaysAgo } } }),
+    prisma.appErrorLog.count({ where: { environment: getAdminDataEnvironment(), occurredAt: { gte: fourteenDaysAgo, lt: sevenDaysAgo } } }),
     prisma.user.count({ where: { ...PRODUCTION_USER_WHERE, createdAt: { gte: sevenDaysAgo } } }),
     prisma.user.count({ where: { ...PRODUCTION_USER_WHERE, createdAt: { gte: fourteenDaysAgo, lt: sevenDaysAgo } } }),
   ]);
@@ -852,7 +853,7 @@ export async function updateAdminUser(userId: string, input: AdminUserUpdateInpu
   const currentUser = await prisma.user.findFirst({
     where: {
       id: userId,
-      environment: "production",
+      environment: getAdminDataEnvironment(),
     },
     include: {
       billingSubscription: {
@@ -1010,7 +1011,7 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
   const user = await prisma.user.findFirst({
     where: {
       id: userId,
-      environment: "production",
+      environment: getAdminDataEnvironment(),
     },
     include: {
       billingSubscription: {
@@ -1103,7 +1104,7 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
       },
     }),
     prisma.appErrorLog.findMany({
-      where: { userId: user.id, environment: "production" },
+      where: { userId: user.id, environment: getAdminDataEnvironment() },
       orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
       take: 10,
       select: {

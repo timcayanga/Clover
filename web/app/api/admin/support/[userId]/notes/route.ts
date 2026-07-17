@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAdminAuth } from "@/lib/admin";
+import { getAdminDataEnvironment, requireAdminAuth } from "@/lib/admin";
 import { getAdminSupportNotes, recordAdminSupportAction } from "@/lib/admin-support";
 import { prisma } from "@/lib/prisma";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
@@ -26,7 +26,7 @@ export async function POST(request: Request, context: { params: Promise<{ userId
     const admin = await requireAdminAuth();
     const { userId } = await context.params;
     const payload = schema.parse(await request.json());
-    const user = await prisma.user.findFirst({ where: { id: userId, environment: "production" }, select: { id: true } });
+    const user = await prisma.user.findFirst({ where: { id: userId, environment: getAdminDataEnvironment() }, select: { id: true } });
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
     const note = await prisma.adminSupportNote.create({ data: { targetUserId: user.id, actorUserId: admin.userId, body: payload.body } });
     await recordAdminSupportAction({ actorUserId: admin.userId, targetUserId: user.id, action: "add_support_note" });

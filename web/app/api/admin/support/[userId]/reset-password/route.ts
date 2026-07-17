@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAdminAuth } from "@/lib/admin";
+import { getAdminDataEnvironment, requireAdminAuth } from "@/lib/admin";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { prisma } from "@/lib/prisma";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
@@ -21,7 +21,7 @@ export async function POST(request: Request, context: { params: Promise<{ userId
     const { userId } = await context.params;
     schema.parse(await request.json());
     const user = await prisma.user.findFirst({
-      where: { id: userId, environment: "production" },
+      where: { id: userId, environment: getAdminDataEnvironment() },
       select: { id: true, clerkUserId: true },
     });
 

@@ -1,6 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { cookies } from "next/headers";
-import { isLocalDevHost, isStagingHost } from "@/lib/auth";
+import { isLocalDevHost } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
 import { isConfiguredAdminEmail } from "@/lib/admin-access";
 
@@ -12,21 +11,15 @@ const normalizeList = (value: string | undefined) =>
 
 export const getAdminUserIds = () => new Set(normalizeList(getEnv().ADMIN_USER_IDS));
 
+// Preview deployments represent staging; local Admin work continues to inspect production data.
+export const getAdminDataEnvironment = () => (process.env.VERCEL_ENV === "preview" ? "staging" : "production");
+
 export const isAdminUserId = (userId: string | null | undefined) => {
   if (!userId) {
     return false;
   }
 
   return getAdminUserIds().has(userId);
-};
-
-export const hasStagingAccess = async () => {
-  if (!(await isStagingHost())) {
-    return false;
-  }
-
-  const cookieStore = await cookies();
-  return cookieStore.get("clover_staging_access")?.value === "1";
 };
 
 export const requireAdminAuth = async () => {
@@ -40,7 +33,8 @@ export const requireAdminAuth = async () => {
     throw new Error("UNAUTHORIZED");
   }
 
-  if (!isAdminUserId(session.userId) && !(await isConfiguredAdminEmail(session.userId)) && !(await hasStagingAccess())) {
+  // Staging access only gates the app itself. It must never grant Admin privileges.
+  if (!isAdminUserId(session.userId) && !(await isConfiguredAdminEmail(session.userId))) {
     throw new Error("FORBIDDEN");
   }
 

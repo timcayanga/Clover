@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAdminAuth } from "@/lib/admin";
+import { getAdminDataEnvironment, requireAdminAuth } from "@/lib/admin";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { wipeLocalUserData } from "@/lib/account-management";
 import { prisma } from "@/lib/prisma";
@@ -21,7 +21,7 @@ export async function POST(request: Request, context: { params: Promise<{ userId
     const { userId } = await context.params;
     const payload = schema.parse(await request.json());
     const user = await prisma.user.findFirst({
-      where: { id: userId, environment: "production" },
+      where: { id: userId, environment: getAdminDataEnvironment() },
       select: { id: true, clerkUserId: true },
     });
 

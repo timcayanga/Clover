@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getAdminDataEnvironment } from "@/lib/admin";
 import type { AdminCommandCenterSnapshot } from "@/components/admin-command-center";
 
 const formatCount = (value: number) => value.toLocaleString();
@@ -7,13 +8,13 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
   const [users, workspaces, bankAccounts, transactions, imports, errors, analytics] = await Promise.all([
     prisma.user.count({
       where: {
-        environment: "production",
+        environment: getAdminDataEnvironment(),
       },
     }),
     prisma.workspace.count({
       where: {
         user: {
-          environment: "production",
+          environment: getAdminDataEnvironment(),
         },
       },
     }),
@@ -21,7 +22,7 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
       where: {
         workspace: {
           user: {
-            environment: "production",
+            environment: getAdminDataEnvironment(),
           },
         },
       },
@@ -31,7 +32,7 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
         deletedAt: null,
         workspace: {
           user: {
-            environment: "production",
+            environment: getAdminDataEnvironment(),
           },
         },
       },
@@ -43,41 +44,41 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
         },
         workspace: {
           user: {
-            environment: "production",
+            environment: getAdminDataEnvironment(),
           },
         },
       },
     }),
     prisma.appErrorLog.count({
       where: {
-        environment: "production",
+        environment: getAdminDataEnvironment(),
       },
     }),
     Promise.all([
       prisma.user.count({
         where: {
-          environment: "production",
+          environment: getAdminDataEnvironment(),
           onboardingCompletedAt: { not: null },
         },
       }),
       prisma.importFile.count({
         where: {
           status: "processing",
-          workspace: { user: { environment: "production" } },
+          workspace: { user: { environment: getAdminDataEnvironment() } },
         },
       }),
       prisma.importFile.count({
         where: {
           status: "done",
           updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-          workspace: { user: { environment: "production" } },
+          workspace: { user: { environment: getAdminDataEnvironment() } },
         },
       }),
       prisma.importFile.count({
         where: {
           status: "failed",
           updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-          workspace: { user: { environment: "production" } },
+          workspace: { user: { environment: getAdminDataEnvironment() } },
         },
       }),
       prisma.transaction.count({
@@ -85,7 +86,7 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
           deletedAt: null,
           isExcluded: false,
           reviewStatus: { notIn: ["confirmed", "rejected", "duplicate_skipped"] },
-          workspace: { user: { environment: "production" } },
+          workspace: { user: { environment: getAdminDataEnvironment() } },
         },
       }),
       prisma.transaction.count({
@@ -97,7 +98,7 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
             { categoryConfidence: { lt: 70 } },
             { accountMatchConfidence: { lt: 70 } },
           ],
-          workspace: { user: { environment: "production" } },
+          workspace: { user: { environment: getAdminDataEnvironment() } },
         },
       }),
     ]),

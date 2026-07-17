@@ -27,7 +27,7 @@ export default async function AdminUsersPage() {
       active="users"
       title="User Management"
       kicker="Internal tools"
-      subtitle="Review production users, plan tiers, limits, activity, and support signals."
+      subtitle="Review users in this environment, plan tiers, limits, activity, and support signals."
     >
       <AdminUsersConsole initialData={initialData} initialErrorLogData={initialErrorLogData} />
     </AdminPageChrome>
