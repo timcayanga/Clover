@@ -325,8 +325,8 @@ type AdminUserListRow = User & {
 function mapUser(user: AdminUserListRow): AdminUserListItem {
   const effectiveLimits = getEffectiveUserLimits(user, { ignoreDevelopmentOverride: true });
   const attentionFlags = classifyAttentionFlags({
-    accountLimit: effectiveLimits.accountLimit,
-    monthlyUploadLimit: effectiveLimits.monthlyUploadLimit,
+    accountLimit: effectiveLimits.accountLimit ?? 0,
+    monthlyUploadLimit: effectiveLimits.monthlyUploadLimit ?? 0,
     transactionLimit: effectiveLimits.transactionLimit,
     bankAccountCount: user.bankAccountCount ?? 0,
     transactionCount: user.transactionCount ?? 0,
@@ -354,8 +354,8 @@ function mapUser(user: AdminUserListRow): AdminUserListItem {
     primaryGoal: user.primaryGoal,
     goalTargetAmount: user.goalTargetAmount !== null ? user.goalTargetAmount.toString() : null,
     goalTargetSource: user.goalTargetSource,
-    accountLimit: effectiveLimits.accountLimit,
-    monthlyUploadLimit: effectiveLimits.monthlyUploadLimit,
+    accountLimit: effectiveLimits.accountLimit ?? 0,
+    monthlyUploadLimit: effectiveLimits.monthlyUploadLimit ?? 0,
     transactionLimit: effectiveLimits.transactionLimit,
     onboardingCompletedAt: user.onboardingCompletedAt ? user.onboardingCompletedAt.toISOString() : null,
     dataWipedAt: user.dataWipedAt ? user.dataWipedAt.toISOString() : null,
@@ -1037,8 +1037,8 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
   const metrics = await fetchUserMetrics([user.id]);
   const effectiveLimits = getEffectiveUserLimits(user, { ignoreDevelopmentOverride: true });
   const attentionFlags = classifyAttentionFlags({
-    accountLimit: effectiveLimits.accountLimit,
-    monthlyUploadLimit: effectiveLimits.monthlyUploadLimit,
+    accountLimit: effectiveLimits.accountLimit ?? 0,
+    monthlyUploadLimit: effectiveLimits.monthlyUploadLimit ?? 0,
     transactionLimit: effectiveLimits.transactionLimit,
     bankAccountCount: metrics.bankAccountCounts.get(user.id) ?? 0,
     transactionCount: metrics.transactionCounts.get(user.id) ?? 0,

@@ -106,7 +106,7 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
 
   return {
     metrics: [
-      { label: "Production users", value: formatCount(users), href: "/admin/users" },
+      { label: "Users", value: formatCount(users), href: "/admin/users" },
       { label: "Workspaces", value: formatCount(workspaces), href: "/admin/users" },
       { label: "Bank accounts", value: formatCount(bankAccounts), href: "/admin/users" },
       { label: "Transactions", value: formatCount(transactions), href: "/admin/users" },
@@ -124,7 +124,7 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
     cards: [
       {
         title: "Users",
-        body: "Review production users, plan tiers, account limits, and activity signals.",
+        body: "Review users, plan tiers, account limits, and activity signals in this environment.",
         href: "/admin/users",
       },
       {

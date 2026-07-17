@@ -177,7 +177,7 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
           <div><span>Imports total</span><strong>{snapshot.product.imports.toLocaleString()}</strong></div>
           <div><span>Errors, 7d</span><strong>{snapshot.reliability.errors7d.toLocaleString()}</strong></div>
         </div>
-        <p className="admin-analytics__footnote">Generated {formatDate(snapshot.generatedAt)}. Counts are production-scoped and exclude staging users.</p>
+        <p className="admin-analytics__footnote">Generated {formatDate(snapshot.generatedAt)}. Counts are scoped to the current environment.</p>
       </section>
     </section>
   );

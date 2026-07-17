@@ -10,7 +10,7 @@ export function AdminOnlyRedirect() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoaded || !user || pathname.startsWith("/admin")) {
+    if (!isLoaded || !user || !pathname || pathname.startsWith("/admin")) {
       return;
     }
 
