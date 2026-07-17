@@ -273,7 +273,6 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
     );
   }, [data.budgets, editingBudget, editorPreset, isEditorOpen]);
 
-  const activeAlerts = data.overview.alerts;
   const visibleBudgets = data.budgets;
   const pausedBudgets = data.overview.inactiveBudgets;
   const onTrackBudgets = visibleBudgets.filter((budget) => !budget.isAtRisk);
@@ -548,53 +547,46 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
       <section className="budget-summary-grid">
         <article className="budget-summary-card glass budget-summary-card--positive">
           <div className="budget-summary-card__head">
-            <div>
-              <p className="eyebrow">On Track</p>
-              <h4>{onTrackBudgets.length} budgets</h4>
-            </div>
-            <strong>{onTrackBudgets.length > 0 ? "On pace" : "—"}</strong>
+            <p className="eyebrow">On Track</p>
+            <strong>{onTrackBudgets.length}</strong>
           </div>
           <div className="budget-summary-card__items">
             {onTrackBudgets.slice(0, 3).map((budget) => (
-              <div key={budget.id} className="budget-summary-card__item">
+              <button key={budget.id} className="budget-summary-card__item" type="button" title={`Edit ${budget.name}`} onClick={() => openEditEditor(budget.id)}>
                 <span>{budget.name}</span>
-                <strong>
+                <small>
                   {cadenceLabels[budget.cadence]} · {toPercentage(budget.progressPercent)}
-                </strong>
-              </div>
+                </small>
+              </button>
             ))}
-            {onTrackBudgets.length === 0 ? <p className="budget-summary-card__empty">Nothing is comfortably on track yet.</p> : null}
+            {onTrackBudgets.length > 3 ? <span className="budget-summary-card__more">and {onTrackBudgets.length - 3} others</span> : null}
+            {onTrackBudgets.length === 0 ? <p className="budget-summary-card__empty">No budgets yet</p> : null}
           </div>
         </article>
 
         <article className="budget-summary-card glass budget-summary-card--warning">
           <div className="budget-summary-card__head">
-            <div>
-              <p className="eyebrow">At Risk</p>
-              <h4>{atRiskBudgets.length} budgets</h4>
-            </div>
-            <strong>{activeAlerts.length}</strong>
+            <p className="eyebrow">At Risk</p>
+            <strong>{atRiskBudgets.length}</strong>
           </div>
           <div className="budget-summary-card__items">
             {atRiskBudgets.slice(0, 3).map((budget) => (
-              <div key={budget.id} className="budget-summary-card__item">
+              <button key={budget.id} className="budget-summary-card__item" type="button" title={`Edit ${budget.name}`} onClick={() => openEditEditor(budget.id)}>
                 <span>{budget.name}</span>
-                <strong>
+                <small>
                   {cadenceLabels[budget.cadence]} · {toPercentage(budget.progressPercent)}
-                </strong>
-              </div>
+                </small>
+              </button>
             ))}
-            {atRiskBudgets.length === 0 ? <p className="budget-summary-card__empty">No budgets are close to a threshold.</p> : null}
+            {atRiskBudgets.length > 3 ? <span className="budget-summary-card__more">and {atRiskBudgets.length - 3} others</span> : null}
+            {atRiskBudgets.length === 0 ? <p className="budget-summary-card__empty">No budgets yet</p> : null}
           </div>
         </article>
       </section>
 
       <section className="budgeting-section glass">
         <div className="budgeting-section__head">
-          <div>
-            <p className="eyebrow">Budgets</p>
-            <h4>Current budgets</h4>
-          </div>
+          <h4>Current Budgets</h4>
           <button className="button button-secondary button-pill" type="button" onClick={openCreateEditor}>
             Add budget
           </button>

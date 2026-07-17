@@ -5768,6 +5768,7 @@ body.transactions-manual-open .shell-quick-add-button {
   padding: 18px;
   display: grid;
   gap: 14px;
+  min-height: 154px;
   border-radius: 28px;
   border: 1px solid var(--stroke);
   box-shadow: var(--shadow);
@@ -5786,10 +5787,14 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .budget-summary-card__head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: flex-start;
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  text-align: center;
+}
+
+.budget-summary-card__head .eyebrow {
+  margin: 0;
 }
 
 .budget-summary-card__head strong {
@@ -5801,17 +5806,21 @@ body.transactions-manual-open .shell-quick-add-button {
 .budget-summary-card__items {
   display: grid;
   gap: 10px;
+  justify-items: center;
 }
 
 .budget-summary-card__item {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: min(100%, 320px);
   gap: 12px;
   align-items: baseline;
-  padding: 10px 12px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.76);
-  border: 1px solid rgba(15, 23, 42, 0.06);
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
 }
 
 .budget-summary-card__item span {
@@ -5819,13 +5828,36 @@ body.transactions-manual-open .shell-quick-add-button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 13px;
 }
 
-.budget-summary-card__item strong,
+.budget-summary-card__item small,
+.budget-summary-card__more,
 .budget-summary-card__empty {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 11px;
   line-height: 1.4;
+}
+
+.budget-summary-card__item small {
+  white-space: nowrap;
+}
+
+.budget-summary-card__item:hover span,
+.budget-summary-card__item:focus-visible span {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.budget-summary-card__item:focus-visible {
+  outline: 2px solid rgba(3, 168, 192, 0.3);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.budget-summary-card__more {
+  justify-self: center;
 }
 
 .budget-summary-card__empty {
@@ -5996,6 +6028,7 @@ body.transactions-manual-open .shell-quick-add-button {
   display: grid;
   gap: 14px;
   padding: 18px;
+  border-radius: 28px;
   border: 1px solid var(--stroke);
   box-shadow: var(--shadow);
 }
@@ -6008,7 +6041,7 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .budgeting-section__head h4 {
-  margin: 4px 0 0;
+  margin: 0;
   font-size: 22px;
   line-height: 1.18;
   letter-spacing: -0.035em;
