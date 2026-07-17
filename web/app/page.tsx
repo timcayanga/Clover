@@ -79,8 +79,7 @@ export default async function HomePage() {
             <span className="landing-highlight">Organized in minutes.</span>
           </h1>
           <div className="landing-hero__lede">
-            <p>Upload bank statements, receipts, screenshots, or spreadsheets.</p>
-            <p>Clover automatically organizes them into transactions, accounts, reports, and practical financial guidance.</p>
+            <p>Upload statements, receipts, screenshots, or spreadsheets. Understand your money and take one clearer step at a time.</p>
           </div>
 
           <div className="landing-hero__actions">
@@ -153,9 +152,7 @@ export default async function HomePage() {
         }
         copy={
           <>
-            <p>Stop rebuilding your finances one transaction at a time.</p>
-            <p>Upload the records you already have - <strong>bank statements, receipts, screenshots, spreadsheets, or manual entries</strong> - and Clover extracts the useful details automatically.</p>
-            <p>Months of financial history can take shape in minutes.</p>
+            <p>Stop starting from zero. Upload the files you already have, and Clover organizes months of financial history so you can focus on understanding your patterns and making better decisions.</p>
           </>
         }
         visual={
@@ -285,7 +282,7 @@ export default async function HomePage() {
         <div className="landing-cta__inner">
           <LandingCloverBloom />
           <div className="landing-cta__copy">
-            <h2>Ready to organize months of finances in minutes?</h2>
+            <h2>Ready to make clearer money decisions?</h2>
           </div>
           <div className="landing-cta__actions">
             <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>

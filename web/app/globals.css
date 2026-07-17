@@ -42166,6 +42166,19 @@ body:has(.landing-page) {
   display: inline-block;
 }
 
+/* Let highlighted feature headings wrap at natural word boundaries. */
+.landing-feature__title .landing-highlight {
+  display: inline;
+  text-decoration: underline;
+  text-decoration-color: var(--mint);
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.08em;
+}
+
+.landing-feature__title .landing-highlight::after {
+  display: none;
+}
+
 .landing-feature__title .landing-highlight::after,
 .landing-hero__title .landing-highlight::after {
   content: "";
