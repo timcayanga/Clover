@@ -36206,6 +36206,80 @@ html[data-helper-text="hidden"] .settings-helper {
 }
 
 @media (max-width: 760px) {
+  .settings-hub {
+    gap: 10px;
+  }
+
+  .settings-hub__menu {
+    display: grid;
+    gap: 6px;
+    padding: 8px 10px 10px;
+    border-radius: 20px;
+  }
+
+  .settings-hub__brand {
+    gap: 8px;
+    padding: 0 4px 2px;
+  }
+
+  .settings-hub__brand-mark {
+    width: 32px;
+    height: 32px;
+  }
+
+  .settings-hub__brand-copy {
+    gap: 0;
+  }
+
+  .settings-hub__brand-copy strong {
+    font-size: 12px;
+  }
+
+  .settings-hub__brand-copy span {
+    font-size: 10px;
+  }
+
+  .settings-hub__menu-list {
+    display: flex;
+    gap: 4px;
+    min-width: 0;
+    padding: 0 0 2px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+    scroll-snap-type: inline proximity;
+  }
+
+  .settings-hub__menu-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings-hub__menu-item {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 32px;
+    padding: 6px 9px;
+    border-radius: 11px;
+    gap: 6px;
+    scroll-snap-align: start;
+  }
+
+  .settings-hub__menu-item strong {
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .settings-hub__menu-icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .settings-hub__panel {
+    gap: 12px;
+    padding: 14px;
+    border-radius: 20px;
+  }
+
   .help-page {
     padding: 0;
   }
