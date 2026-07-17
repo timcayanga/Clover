@@ -1,5 +1,5 @@
 import { Worker } from "bullmq";
-import { getRedisConnection } from "@/lib/import-queue";
+import { enqueueImportProcessing, getRedisConnection } from "@/lib/import-queue";
 import {
   countParsedTransactionRows,
   countTransactionsByImportFileCompat,
@@ -115,6 +115,29 @@ worker.on("failed", async (job, error) => {
         parsedRowsCount: 0,
         confirmedTransactionsCount: 0,
       });
+
+      const configuredAttempts = Number(job?.opts.attempts ?? 1);
+      const attemptsExhausted = Boolean(job) && Number(job?.attemptsMade ?? 0) >= Math.max(1, configuredAttempts);
+      if (attemptsExhausted && job) {
+        try {
+          await enqueueImportProcessing(
+            {
+              ...job.data,
+              importFileId,
+            },
+            { jobId: `${importFileId}:visual-retry:${nextAttempt}` }
+          );
+        } catch (queueError) {
+          console.error("Visual import recovery requeue failed", {
+            importFileId,
+            nextAttempt,
+            error: summarizeErrorForLog(queueError),
+          });
+          await updateImportFileCompat(importFileId, {
+            processingMessage: "Clover will retry this file when the import queue is available again.",
+          }).catch(() => null);
+        }
+      }
       return;
     }
 

@@ -44,9 +44,9 @@ export const getImportQueue = () => {
   return queue;
 };
 
-export const enqueueImportProcessing = async (payload: ImportJobPayload) => {
+export const enqueueImportProcessing = async (payload: ImportJobPayload, options?: { jobId?: string }) => {
   return getImportQueue().add("process-import", payload, {
-    jobId: payload.importFileId,
+    jobId: options?.jobId ?? payload.importFileId,
   });
 };
 
