@@ -86,7 +86,7 @@ export default async function SplitBillDetailPage({ params }: { params: Promise<
 
   return (
     <CloverShell
-      active="split-bill"
+      active="circles"
       title={splitBill.title}
       kicker="Split Bill"
       subtitle="A separate mini-ledger for receipts, shares, and settlements."

@@ -136,6 +136,7 @@ export const getUserPlanUsage = async (userId: string, referenceDate = new Date(
 
   return {
     accountCount: countNonCashAccounts(accounts),
+    cashAccountCount: accounts.filter((account) => account.type === "cash").length,
     monthlyUploadCount,
     transactionCount,
   };

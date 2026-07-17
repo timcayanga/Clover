@@ -354,7 +354,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ bil
     const bill = await prisma.splitBill.findFirst({
       where: {
         id: billId,
-        userId: user.id,
+        OR: [
+          { userId: user.id },
+          { group: { collaborators: { some: { userId: user.id } } } },
+          { group: { circle: { memberships: { some: { userId: user.id, status: "active" } } } } },
+        ],
       },
       include: getBillInclude,
     });

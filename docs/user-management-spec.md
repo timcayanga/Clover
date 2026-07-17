@@ -190,7 +190,7 @@ In the product UI, Clover should present each user-scoped container as a `Profil
 - Pro includes up to 10 Profiles total, including the required Personal Profile.
 - Profile limits are enforced at the account level and count all Profiles owned by the account.
 - A Profile is currently a regular, single-account container. Group Profiles, invitations, and cross-account access are not part of the current model.
-- A future Circle model may add explicit membership, invitations, and roles without changing the isolation boundary between Profiles.
+- Circles add explicit membership, invitations, and roles without changing the isolation boundary between Profiles. See `docs/circles-product-spec.md`.
 
 ### Suggested Additions for Later
 

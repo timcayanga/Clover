@@ -10,7 +10,7 @@ export default async function NewSplitBillPage() {
   const groups = await loadSplitBillEditorGroups(user.id);
 
   return (
-    <CloverShell active="split-bill" title="Split Bills">
+    <CloverShell active="circles" title="Split Bills">
       <SplitBillEditor mode="create" groups={groups} />
     </CloverShell>
   );

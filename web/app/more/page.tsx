@@ -15,7 +15,7 @@ type MoreSection = {
   items: MoreLink[];
 };
 
-type PageIconName = "dashboard" | "adviser" | "accounts" | "transactions" | "recurring" | "split-bill" | "investments" | "goals" | "budgeting" | "notifications" | "settings" | "help";
+type PageIconName = "dashboard" | "adviser" | "accounts" | "transactions" | "recurring" | "circles" | "investments" | "goals" | "budgeting" | "notifications" | "settings" | "help";
 
 const MORE_ICON_SRC: Record<PageIconName, string> = {
   dashboard: "/assets/3d%20icons/menu/home.png",
@@ -23,7 +23,7 @@ const MORE_ICON_SRC: Record<PageIconName, string> = {
   accounts: "/assets/3d%20icons/menu/bank-account.png",
   transactions: "/assets/3d%20icons/menu/transactions.png",
   recurring: "/assets/3d%20icons/menu/recurring.png",
-  "split-bill": "/assets/3d%20icons/menu/split-bills.png",
+  circles: "/assets/3d%20icons/menu/profiles.png",
   investments: "/assets/3d%20icons/menu/investments.png",
   goals: "/assets/icons/goals.png",
   budgeting: "/assets/3d%20icons/menu/budgeting.png",
@@ -71,9 +71,9 @@ const moreSections: MoreSection[] = [
         icon: "recurring",
       },
       {
-        href: "/split-bill",
-        title: "Split Bills",
-        icon: "split-bill",
+        href: "/circles",
+        title: "Circles",
+        icon: "circles",
       },
     ],
   },

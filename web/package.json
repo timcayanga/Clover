@@ -44,6 +44,7 @@
     "qa:training-signals-db": "tsx scripts/record-training-signal-regression.ts",
     "qa:data-loop": "tsx scripts/data-qa-regression.ts",
     "qa:budgeting": "tsx scripts/budgeting-regression.ts",
+    "qa:circles": "tsx scripts/circles-regression.ts",
     "train:image-labels": "tsx --tsconfig tsconfig.json scripts/train-image-label-corpus.ts"
   },
   "dependencies": {

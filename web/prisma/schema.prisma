@@ -147,6 +147,49 @@ enum SplitBillPaymentRequestStatus {
   declined
 }
 
+enum CircleType {
+  household
+  couple
+  family
+  travel
+  friends
+  goal
+  custom
+}
+
+enum CircleRole {
+  organizer
+  member
+  participant
+}
+
+enum CircleMemberStatus {
+  invited
+  active
+  left
+  removed
+}
+
+enum CircleInvitationStatus {
+  pending
+  accepted
+  revoked
+  expired
+}
+
+enum CircleVisibility {
+  summary
+  item
+  circle_owned
+}
+
+enum CircleGoalStatus {
+  active
+  paused
+  completed
+  archived
+}
+
 enum BillingSubscriptionStatus {
   approval_pending
   active
@@ -210,6 +253,13 @@ model User {
   splitBillPeople              SplitBillPerson[]
   splitBills                   SplitBill[]
   splitBillPaymentProfiles     SplitBillPaymentProfile[]
+  ownedCircles                 Circle[]                     @relation("CircleOwner")
+  circleMemberships            CircleMembership[]
+  circleInvitationsSent        CircleInvitation[]           @relation("CircleInvitationSender")
+  circleActivities             CircleActivity[]             @relation("CircleActivityActor")
+  circleContributions          CircleContribution[]
+  circleSharedTransactions     CircleSharedTransaction[]
+  circleInvestmentShares       CircleInvestmentShare[]
   billingSubscription          BillingSubscription?
   billingEvents                BillingEvent[]
   adminSupportActions          AdminSupportAction[]         @relation("SupportActionTarget")
@@ -515,6 +565,7 @@ model Account {
   investmentHoldings      InvestmentHolding[]
   recurringPatterns       RecurringPattern[]
   budgets                 Budget[]
+  circleInvestmentShares  CircleInvestmentShare[]
 
   @@index([workspaceId])
 }
@@ -607,45 +658,47 @@ model Tag {
 }
 
 model Transaction {
-  id                     String                @id @default(cuid())
+  id                     String                    @id @default(cuid())
   workspaceId            String
   accountId              String
   importFileId           String?
   categoryId             String?
-  reviewStatus           ReviewStatus          @default(suggested)
-  reviewPriority         String                @default("none")
+  reviewStatus           ReviewStatus              @default(suggested)
+  reviewPriority         String                    @default("none")
   reviewReasons          Json?
-  parserConfidence       Int                   @default(0)
-  categoryConfidence     Int                   @default(0)
-  accountMatchConfidence Int                   @default(0)
-  duplicateConfidence    Int                   @default(0)
-  transferConfidence     Int                   @default(0)
+  parserConfidence       Int                       @default(0)
+  categoryConfidence     Int                       @default(0)
+  accountMatchConfidence Int                       @default(0)
+  duplicateConfidence    Int                       @default(0)
+  transferConfidence     Int                       @default(0)
   rawPayload             Json?
   normalizedPayload      Json?
   learnedRuleIdsApplied  Json?
   sourceRowKey           String?
   date                   DateTime
-  amount                 Decimal               @db.Decimal(18, 2)
-  currency               String                @default("PHP")
+  amount                 Decimal                   @db.Decimal(18, 2)
+  currency               String                    @default("PHP")
   type                   TransactionType
   merchantRaw            String
   merchantClean          String?
   description            String?
-  isTransfer             Boolean               @default(false)
-  isExcluded             Boolean               @default(false)
+  isTransfer             Boolean                   @default(false)
+  isExcluded             Boolean                   @default(false)
   deletedAt              DateTime?
-  createdAt              DateTime              @default(now())
-  updatedAt              DateTime              @updatedAt
-  workspace              Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  account                Account               @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+  workspace              Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account                Account                   @relation(fields: [accountId], references: [id], onDelete: Cascade)
   financialCommitments   FinancialCommitment[]
-  importFile             ImportFile?           @relation(fields: [importFileId], references: [id], onDelete: SetNull)
-  category               Category?             @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  importFile             ImportFile?               @relation(fields: [importFileId], references: [id], onDelete: SetNull)
+  category               Category?                 @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   trainingSignals        TrainingSignal[]
   dataQaFindings         DataQaFinding[]
   receiptDocument        ReceiptDocument?
   splitBill              SplitBill?
   transactionTags        TransactionTag[]
+  circleSharedEntries    CircleSharedTransaction[]
+  circleContributions    CircleContribution[]
 
   @@index([workspaceId])
   @@index([accountId])
@@ -1035,9 +1088,224 @@ model GoalSetting {
   @@index([userId, createdAt])
 }
 
+model Circle {
+  id                 String                    @id @default(cuid())
+  ownerUserId        String
+  name               String
+  type               CircleType                @default(custom)
+  description        String?
+  avatarUrl          String?                   @db.Text
+  color              String                    @default("teal")
+  currency           String                    @default("PHP")
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  archivedAt         DateTime?
+  owner              User                      @relation("CircleOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  memberships        CircleMembership[]
+  invitations        CircleInvitation[]
+  activities         CircleActivity[]
+  budgets            CircleBudget[]
+  goals              CircleGoal[]
+  commitments        CircleCommitment[]
+  contributions      CircleContribution[]
+  sharedTransactions CircleSharedTransaction[]
+  investmentShares   CircleInvestmentShare[]
+  splitBillGroup     SplitBillGroup?
+
+  @@index([ownerUserId])
+  @@index([archivedAt])
+  @@index([type])
+}
+
+model CircleMembership {
+  id                  String               @id @default(cuid())
+  circleId            String
+  userId              String?
+  displayName         String
+  email               String?
+  role                CircleRole           @default(member)
+  status              CircleMemberStatus   @default(active)
+  contributionTarget  Decimal?             @db.Decimal(18, 2)
+  contributionCadence BudgetCadence        @default(monthly)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  joinedAt            DateTime?
+  leftAt              DateTime?
+  circle              Circle               @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  user                User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  assignedCommitments CircleCommitment[]
+  contributions       CircleContribution[]
+
+  @@unique([circleId, userId])
+  @@index([circleId, status])
+  @@index([userId, status])
+  @@index([email])
+}
+
+model CircleInvitation {
+  id              String                 @id @default(cuid())
+  circleId        String
+  invitedByUserId String
+  email           String?
+  displayName     String?
+  role            CircleRole             @default(member)
+  status          CircleInvitationStatus @default(pending)
+  token           String                 @unique
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  circle          Circle                 @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  invitedBy       User                   @relation("CircleInvitationSender", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([circleId, status])
+  @@index([email, status])
+  @@index([expiresAt])
+}
+
+model CircleActivity {
+  id          String   @id @default(cuid())
+  circleId    String
+  actorUserId String?
+  action      String
+  entityType  String?
+  entityId    String?
+  summary     String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  circle      Circle   @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  actor       User?    @relation("CircleActivityActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([circleId, createdAt])
+  @@index([actorUserId])
+  @@index([entityType, entityId])
+}
+
+model CircleBudget {
+  id           String        @id @default(cuid())
+  circleId     String
+  name         String
+  targetAmount Decimal       @db.Decimal(18, 2)
+  currency     String        @default("PHP")
+  cadence      BudgetCadence @default(monthly)
+  categoryName String?
+  startsAt     DateTime?
+  endsAt       DateTime?
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  circle       Circle        @relation(fields: [circleId], references: [id], onDelete: Cascade)
+
+  @@index([circleId, isActive])
+}
+
+model CircleGoal {
+  id             String               @id @default(cuid())
+  circleId       String
+  name           String
+  purpose        String?
+  targetAmount   Decimal              @db.Decimal(18, 2)
+  startingAmount Decimal              @default(0) @db.Decimal(18, 2)
+  currency       String               @default("PHP")
+  targetDate     DateTime?
+  status         CircleGoalStatus     @default(active)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  circle         Circle               @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  contributions  CircleContribution[]
+
+  @@index([circleId, status])
+  @@index([targetDate])
+}
+
+model CircleCommitment {
+  id               String               @id @default(cuid())
+  circleId         String
+  assignedMemberId String?
+  title            String
+  amount           Decimal?             @db.Decimal(18, 2)
+  currency         String               @default("PHP")
+  recurrence       CommitmentRecurrence @default(monthly)
+  nextDueDate      DateTime?
+  notes            String?
+  isActive         Boolean              @default(true)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  circle           Circle               @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  assignedMember   CircleMembership?    @relation(fields: [assignedMemberId], references: [id], onDelete: SetNull)
+
+  @@index([circleId, isActive])
+  @@index([assignedMemberId])
+  @@index([nextDueDate])
+}
+
+model CircleContribution {
+  id                  String            @id @default(cuid())
+  circleId            String
+  memberId            String?
+  goalId              String?
+  contributedByUserId String?
+  sourceTransactionId String?
+  amount              Decimal           @db.Decimal(18, 2)
+  currency            String            @default("PHP")
+  contributionDate    DateTime          @default(now())
+  note                String?
+  createdAt           DateTime          @default(now())
+  circle              Circle            @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  member              CircleMembership? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  goal                CircleGoal?       @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  contributedBy       User?             @relation(fields: [contributedByUserId], references: [id], onDelete: SetNull)
+  sourceTransaction   Transaction?      @relation(fields: [sourceTransactionId], references: [id], onDelete: SetNull)
+
+  @@index([circleId, contributionDate])
+  @@index([memberId])
+  @@index([goalId])
+  @@index([contributedByUserId])
+  @@index([sourceTransactionId])
+}
+
+model CircleSharedTransaction {
+  id             String           @id @default(cuid())
+  circleId       String
+  transactionId  String
+  sharedByUserId String
+  visibility     CircleVisibility @default(item)
+  sharedAmount   Decimal?         @db.Decimal(18, 2)
+  sharedTitle    String?
+  note           String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  circle         Circle           @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  transaction    Transaction      @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  sharedBy       User             @relation(fields: [sharedByUserId], references: [id], onDelete: Cascade)
+
+  @@unique([circleId, transactionId])
+  @@index([circleId, createdAt])
+  @@index([sharedByUserId])
+}
+
+model CircleInvestmentShare {
+  id              String           @id @default(cuid())
+  circleId        String
+  accountId       String
+  sharedByUserId  String
+  visibility      CircleVisibility @default(summary)
+  includeHoldings Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  circle          Circle           @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  account         Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  sharedBy        User             @relation(fields: [sharedByUserId], references: [id], onDelete: Cascade)
+
+  @@unique([circleId, accountId])
+  @@index([circleId, createdAt])
+  @@index([sharedByUserId])
+}
+
 model SplitBillGroup {
   id            String                       @id @default(cuid())
   userId        String
+  circleId      String?                      @unique
   name          String
   avatarUrl     String?                      @db.Text
   shareToken    String?                      @unique
@@ -1045,11 +1313,13 @@ model SplitBillGroup {
   updatedAt     DateTime                     @updatedAt
   archivedAt    DateTime?
   user          User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  circle        Circle?                      @relation(fields: [circleId], references: [id], onDelete: SetNull)
   members       SplitBillGroupMember[]
   collaborators SplitBillGroupCollaborator[]
   bills         SplitBill[]
 
   @@index([userId])
+  @@index([circleId])
 }
 
 model SplitBillGroupCollaborator {

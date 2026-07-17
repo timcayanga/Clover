@@ -56,7 +56,6 @@ export default async function SplitBillGroupPage({ params }: { params: Promise<{
     loadSplitBillGroup(user.id, groupId),
     prisma.splitBill.findMany({
       where: {
-        userId: user.id,
         groupId,
       },
       orderBy: [{ billDate: "desc" }, { updatedAt: "desc" }],
@@ -88,7 +87,7 @@ export default async function SplitBillGroupPage({ params }: { params: Promise<{
       : "Mixed";
 
   return (
-    <CloverShell active="split-bill" title={group.name}>
+    <CloverShell active="circles" title={group.name}>
       <div className="split-bill-home">
         <section className="split-bill-panel panel glass">
           <div className="split-bill-panel__head">

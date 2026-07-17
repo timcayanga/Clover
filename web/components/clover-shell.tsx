@@ -55,6 +55,7 @@ type CloverShellProps = {
   | "accounts"
   | "investments"
   | "split-bill"
+  | "circles"
   | "transactions"
   | "recurring"
   | "reports"
@@ -146,6 +147,14 @@ const sidebarSearchPages: Array<{
     icon: "recurring",
     detail: "Upcoming payments, reminders, and repeating costs.",
     terms: ["recurring", "scheduled", "upcoming", "payments", "bills", "reminders", "loans"],
+  },
+  {
+    key: "circles",
+    title: "Circles",
+    href: "/circles",
+    icon: "circles",
+    detail: "Shared expenses, budgets, goals, and commitments.",
+    terms: ["circles", "household", "couple", "family", "barkada", "shared money", "group finance"],
   },
   {
     key: "split-bill",
@@ -275,7 +284,7 @@ const desktopNavSections = [
       { href: "/accounts", label: "Accounts", key: "accounts" as const },
       { href: "/transactions", label: "Transactions", key: "transactions" as const },
       { href: "/recurring", label: "Recurring", key: "recurring" as const },
-      { href: "/split-bill", label: "Split Bills", key: "split-bill" as const },
+      { href: "/circles", label: "Circles", key: "circles" as const },
     ],
   },
   {
@@ -296,6 +305,7 @@ type IconName =
   | "accounts"
   | "investments"
   | "split-bill"
+  | "circles"
   | "transactions"
   | "recurring"
   | "reports"
@@ -319,6 +329,7 @@ const MENU_ICON_SRC: Partial<Record<IconName, string>> = {
   accounts: "/assets/3d%20icons/menu/bank-account.png",
   investments: "/assets/3d%20icons/menu/investments.png",
   "split-bill": "/assets/3d%20icons/menu/split-bills.png",
+  circles: "/assets/3d%20icons/menu/profiles.png",
   transactions: "/assets/3d%20icons/menu/transactions.png",
   recurring: "/assets/3d%20icons/menu/recurring.png",
   reports: "/assets/3d%20icons/menu/reports.png",
@@ -340,6 +351,7 @@ const PRELOADED_MENU_ICON_NAMES: IconName[] = [
   "sign-out",
   "investments",
   "split-bill",
+  "circles",
   "goals",
   "budgeting",
   "reports",

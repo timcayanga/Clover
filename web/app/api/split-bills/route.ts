@@ -229,7 +229,21 @@ const buildBillPayload = async (userId: string, input: z.infer<typeof billSchema
     ? await prisma.splitBillGroup.findFirst({
         where: {
           id: groupId,
-          userId,
+          OR: [
+            { userId },
+            { collaborators: { some: { userId } } },
+            {
+              circle: {
+                memberships: {
+                  some: {
+                    userId,
+                    status: "active",
+                    role: { in: ["organizer", "member"] },
+                  },
+                },
+              },
+            },
+          ],
         },
         select: {
           id: true,
@@ -487,7 +501,13 @@ export async function GET() {
   try {
     const user = await getSplitBillCurrentUser();
     const bills = await prisma.splitBill.findMany({
-      where: { userId: user.id },
+      where: {
+        OR: [
+          { userId: user.id },
+          { group: { collaborators: { some: { userId: user.id } } } },
+          { group: { circle: { memberships: { some: { userId: user.id, status: "active" } } } } },
+        ],
+      },
       orderBy: [{ billDate: "desc" }, { updatedAt: "desc" }],
       include: getBillInclude,
     });

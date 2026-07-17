@@ -25,8 +25,27 @@ export const assertTrustedRequestOrigin = (request: Request) => {
   const originHeader = parseOrigin(request.headers.get("origin"));
   const refererHeader = parseOrigin(request.headers.get("referer"));
   const candidateOrigin = originHeader || refererHeader;
+  const isEquivalentLoopbackOrigin = (() => {
+    if (!requestOrigin || !candidateOrigin) {
+      return false;
+    }
 
-  if (!requestOrigin || !candidateOrigin || candidateOrigin !== requestOrigin) {
+    try {
+      const requestUrl = new URL(requestOrigin);
+      const candidateUrl = new URL(candidateOrigin);
+      const loopbackHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
+      return (
+        loopbackHosts.has(requestUrl.hostname) &&
+        loopbackHosts.has(candidateUrl.hostname) &&
+        requestUrl.protocol === candidateUrl.protocol &&
+        requestUrl.port === candidateUrl.port
+      );
+    } catch {
+      return false;
+    }
+  })();
+
+  if (!requestOrigin || !candidateOrigin || (candidateOrigin !== requestOrigin && !isEquivalentLoopbackOrigin)) {
     throw new Error("Untrusted request origin.");
   }
 };

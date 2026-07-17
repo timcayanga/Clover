@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
 import { upsertSplitBillPeopleFromNames } from "@/lib/split-bill-people";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ const updateGroupSchema = z.object({
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ groupId: string }> }) {
   try {
+    assertTrustedRequestOrigin(request);
     const user = await getSplitBillCurrentUser();
     const { groupId } = await params;
     const body = updateGroupSchema.parse(await request.json());
@@ -29,6 +31,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ gr
       where: {
         id: groupId,
         userId: user.id,
+      },
+      include: {
+        members: { select: { name: true } },
       },
     });
 
@@ -58,6 +63,62 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ gr
           sortOrder: member.sortOrder ?? index,
         })),
       });
+
+      if (existing.circleId) {
+        await tx.circle.update({
+          where: { id: existing.circleId },
+          data: {
+            name: body.name,
+            avatarUrl: body.avatarUrl === undefined ? existing.avatarUrl ?? null : body.avatarUrl?.trim() || null,
+            archivedAt: body.archivedAt === undefined ? undefined : body.archivedAt ? new Date(body.archivedAt) : null,
+          },
+        });
+        const guestMemberships = await tx.circleMembership.findMany({
+          where: { circleId: existing.circleId, userId: null },
+        });
+        const previousGroupMemberNames = new Set(
+          existing.members.map((member) => member.name.trim().toLowerCase()),
+        );
+        const retainedGuestIds = new Set<string>();
+        for (const member of body.members) {
+          const matched = guestMemberships.find(
+            (entry) => entry.displayName.trim().toLowerCase() === member.name.trim().toLowerCase()
+          );
+          if (matched) {
+            retainedGuestIds.add(matched.id);
+            await tx.circleMembership.update({ where: { id: matched.id }, data: { status: "invited" } });
+          } else {
+            const created = await tx.circleMembership.create({
+              data: { circleId: existing.circleId, displayName: member.name, role: "participant", status: "invited" },
+            });
+            retainedGuestIds.add(created.id);
+          }
+        }
+        const removedGuestIds = guestMemberships
+          .filter(
+            (membership) =>
+              previousGroupMemberNames.has(
+                membership.displayName.trim().toLowerCase(),
+              ) && !retainedGuestIds.has(membership.id),
+          )
+          .map((membership) => membership.id);
+        if (removedGuestIds.length) {
+          await tx.circleMembership.updateMany({
+            where: { id: { in: removedGuestIds } },
+            data: { status: "removed", leftAt: new Date() },
+          });
+        }
+        await tx.circleActivity.create({
+          data: {
+            circleId: existing.circleId,
+            actorUserId: user.id,
+            action: "split_bill_group_updated",
+            entityType: "circle",
+            entityId: existing.circleId,
+            summary: `${body.name} people and Split Bills settings were updated.`,
+          },
+        });
+      }
 
       const people = await upsertSplitBillPeopleFromNames(
         tx,
@@ -93,8 +154,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ gr
   }
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ groupId: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ groupId: string }> }) {
   try {
+    assertTrustedRequestOrigin(request);
     const user = await getSplitBillCurrentUser();
     const { groupId } = await params;
     const existing = await prisma.splitBillGroup.findFirst({
@@ -102,16 +164,18 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
         id: groupId,
         userId: user.id,
       },
-      select: { id: true },
+      select: { id: true, circleId: true },
     });
 
     if (!existing) {
       return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
 
-    await prisma.splitBillGroup.delete({
-      where: { id: groupId },
-    });
+    const archivedAt = new Date();
+    await prisma.$transaction([
+      prisma.splitBillGroup.update({ where: { id: groupId }, data: { archivedAt } }),
+      ...(existing.circleId ? [prisma.circle.update({ where: { id: existing.circleId }, data: { archivedAt } })] : []),
+    ]);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

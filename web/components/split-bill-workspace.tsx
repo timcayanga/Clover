@@ -743,17 +743,16 @@ export function SplitBillWorkspace({
       return;
     }
     const billId = searchParams.get("bill");
-    if (!billId || selected?.kind === "bill") {
+    if (billId && selected?.kind !== "bill" && bills.some((entry) => entry.id === billId)) {
+      setSelected({ kind: "bill", id: billId });
       return;
     }
 
-    const bill = bills.find((entry) => entry.id === billId);
-    if (!bill) {
-      return;
+    const groupId = searchParams.get("group");
+    if (groupId && selected?.kind !== "group" && groups.some((entry) => entry.id === groupId)) {
+      setSelected({ kind: "group", id: groupId });
     }
-
-    setSelected({ kind: "bill", id: billId });
-  }, [bills, searchParams, selected?.kind]);
+  }, [bills, groups, searchParams, selected?.kind]);
 
   const billEditorParticipants = selectedBillDraft?.participants ?? [];
   const billEditorItems = selectedBillDraft?.items ?? [];
@@ -1233,7 +1232,7 @@ export function SplitBillWorkspace({
 
   return (
     <CloverShell
-      active="split-bill"
+      active="circles"
       title="Split Bills"
       actions={
         <SplitBillPageActions
