@@ -1248,6 +1248,41 @@ export async function ReportsStream({
     const currentMonthBucket = monthBuckets[monthBuckets.length - 1];
     const previousMonthBucket = monthBuckets[monthBuckets.length - 2] ?? monthBuckets[monthBuckets.length - 1];
     const monthlyNetChange = currentMonthBucket.net - previousMonthBucket.net;
+    const weeklySummaryEnd = reportTrendTransactions[0]?.date ?? reportAllTransactions[0]?.date ?? now;
+    const weeklySummaryStart = new Date(weeklySummaryEnd);
+    weeklySummaryStart.setDate(weeklySummaryStart.getDate() - 6);
+    const previousWeeklySummaryEnd = new Date(weeklySummaryStart);
+    previousWeeklySummaryEnd.setDate(previousWeeklySummaryEnd.getDate() - 1);
+    const previousWeeklySummaryStart = new Date(previousWeeklySummaryEnd);
+    previousWeeklySummaryStart.setDate(previousWeeklySummaryStart.getDate() - 6);
+    const summarizeReportTransactions = (transactions: ReportTransaction[]): WindowSummary =>
+      transactions.reduce(
+        (summary, transaction) => {
+          const magnitude = toReportMagnitude(transaction.amount);
+          const transactionType = getReportTransactionType(transaction);
+          if (transactionType === "income") {
+            summary.income += magnitude;
+          } else if (transactionType === "expense") {
+            summary.expense += magnitude;
+          } else {
+            summary.transfer += magnitude;
+          }
+          return summary;
+        },
+        { income: 0, expense: 0, transfer: 0, expenseCategories: new Map<string, number>() }
+      );
+    const weeklySummary = summarizeReportTransactions(
+      reportScopedTransactions.filter((transaction) => transaction.date >= weeklySummaryStart && transaction.date <= weeklySummaryEnd)
+    );
+    const previousWeeklySummary = summarizeReportTransactions(
+      reportScopedTransactions.filter(
+        (transaction) => transaction.date >= previousWeeklySummaryStart && transaction.date <= previousWeeklySummaryEnd
+      )
+    );
+    const weeklyNet = weeklySummary.income - weeklySummary.expense;
+    const previousWeeklyNet = previousWeeklySummary.income - previousWeeklySummary.expense;
+    const weeklyNetChange = weeklyNet - previousWeeklyNet;
+    const weeklySummaryLabel = `${formatShortDate(weeklySummaryStart)} - ${formatShortDate(weeklySummaryEnd)}`;
     const reportChartWidth = 560;
     const reportChartHeight = 220;
     const reportChartPadding = 24;
@@ -2082,7 +2117,50 @@ export async function ReportsStream({
           <article className="report-card reports-subtab-card glass">
             <div className="report-card__head">
               <div className="report-card__head-title">
-                <h4 className="reports-subtab-title">Month summary</h4>
+                <h4 className="reports-subtab-title">Weekly summary</h4>
+              </div>
+              <ReportInfoTip className="reports-container-info" label="A quick look at this week versus the previous seven days." />
+            </div>
+
+            <div className="report-insight-grid">
+              <div className="report-insight">
+                <span>Gross inflow</span>
+                <strong>{formatCurrency(weeklySummary.income)}</strong>
+                <small>{weeklySummaryLabel}</small>
+              </div>
+              <div className="report-insight">
+                <span>Gross outflow</span>
+                <strong>{formatCurrency(weeklySummary.expense)}</strong>
+                <small>All tracked expenses</small>
+              </div>
+              <div className="report-insight">
+                <span>Net position</span>
+                <strong className={weeklyNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(weeklyNet)}</strong>
+                <small>Income minus spending</small>
+              </div>
+              <div className="report-insight">
+                <span>Week-over-week delta</span>
+                <strong className={weeklyNetChange >= 0 ? "positive" : "negative"}>{formatSignedCurrency(weeklyNetChange)}</strong>
+                <small>{formatShortDate(previousWeeklySummaryStart)} - {formatShortDate(previousWeeklySummaryEnd)}</small>
+              </div>
+            </div>
+            <div className="report-subsection report-subsection--compact">
+              <Link
+                className="pill-link pill-link--inline"
+                href={buildTransactionsHref({
+                  customStart: weeklySummaryStart.toISOString().slice(0, 10),
+                  customEnd: weeklySummaryEnd.toISOString().slice(0, 10),
+                })}
+              >
+                Open this week
+              </Link>
+            </div>
+          </article>
+
+          <article className="report-card reports-subtab-card glass">
+            <div className="report-card__head">
+              <div className="report-card__head-title">
+                <h4 className="reports-subtab-title">Monthly summary</h4>
               </div>
               <ReportInfoTip className="reports-container-info" label="A quick look at this month versus the last one." />
             </div>

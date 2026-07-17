@@ -28737,6 +28737,10 @@ button.accounts-detail__transaction-head-cell {
     grid-template-columns: 1fr;
   }
 
+  .reports-grid--trends .report-insight-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .reports-pro-preview {
     flex-direction: column;
     align-items: flex-start;
