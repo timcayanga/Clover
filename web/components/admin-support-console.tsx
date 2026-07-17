@@ -28,6 +28,8 @@ type Detail = User & {
   workspaces: Array<{ id: string; name: string; type: string; accountCount: number; transactionCount: number; importCount: number }>;
 };
 
+type SupportNote = { id: string; body: string; actorUserId: string; createdAt: string };
+
 const fetchJson = async <T,>(url: string, init?: RequestInit) => {
   const response = await fetch(url, init);
   const payload = (await response.json().catch(() => null)) as T & { error?: string };
@@ -47,6 +49,9 @@ export function AdminSupportConsole() {
   const [message, setMessage] = useState<string | null>(null);
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
   const [reseed, setReseed] = useState(true);
+  const [notes, setNotes] = useState<SupportNote[]>([]);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [snapshotId, setSnapshotId] = useState<string | null>(null);
 
   const loadUsers = async (search = query) => {
     setBusy("search");
@@ -74,13 +79,18 @@ export function AdminSupportConsole() {
       return;
     }
     setBusy("detail");
-    void fetchJson<{ detail: Detail }>(`/api/admin/users/${selectedId}/details`)
-      .then(({ detail: next }) => {
+    void Promise.all([
+      fetchJson<{ detail: Detail }>(`/api/admin/users/${selectedId}/details`),
+      fetchJson<{ notes: SupportNote[] }>(`/api/admin/support/${selectedId}/notes`),
+    ])
+      .then(([{ detail: next }, { notes: nextNotes }]) => {
         setDetail(next);
+        setNotes(nextNotes);
         setFirstName(next.firstName ?? "");
         setLastName(next.lastName ?? "");
         setEmail(next.email);
         setTemporaryPassword(null);
+        setSnapshotId(null);
       })
       .catch((error) => setMessage(error instanceof Error ? error.message : "Unable to load user details."))
       .finally(() => setBusy(null));
@@ -128,13 +138,44 @@ export function AdminSupportConsole() {
     }
     setBusy("wipe"); setMessage(null); setTemporaryPassword(null);
     try {
-      await fetchJson(`/api/admin/support/${detail.id}/wipe-data`, {
+      const result = await fetchJson<{ snapshotId: string }>(`/api/admin/support/${detail.id}/wipe-data`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmation: "WIPE", reseedStarterWorkspace: reseed }),
       });
+      setSnapshotId(result.snapshotId);
       setMessage(reseed ? "User data wiped and a fresh starter workspace was created." : "User data wiped.");
       await loadUsers(query);
       setSelectedId(detail.id);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to wipe user data."); }
+    finally { setBusy(null); }
+  };
+
+  const addNote = async () => {
+    if (!detail || !noteDraft.trim()) return;
+    setBusy("note"); setMessage(null);
+    try {
+      const { note } = await fetchJson<{ note: SupportNote }>(`/api/admin/support/${detail.id}/notes`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body: noteDraft.trim() }),
+      });
+      setNotes((current) => [note, ...current]);
+      setNoteDraft("");
+      setMessage("Support note added.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to add support note."); }
+    finally { setBusy(null); }
+  };
+
+  const restoreData = async () => {
+    if (!snapshotId) return;
+    const confirmation = window.prompt("This restores core accounts, categories, and transactions. Type RESTORE to continue.");
+    if (confirmation !== "RESTORE") return;
+    setBusy("restore"); setMessage(null);
+    try {
+      await fetchJson(`/api/admin/support/${detail?.id ?? ""}/restore`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmation: "RESTORE", snapshotId }),
+      });
+      setMessage("Core financial data restored from the pre-wipe snapshot.");
+      setSnapshotId(null);
+      if (detail) setSelectedId(detail.id);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to restore data."); }
     finally { setBusy(null); }
   };
 
@@ -167,8 +208,11 @@ export function AdminSupportConsole() {
           <div className="admin-support__stats"><div><strong>{detail.workspaceCount}</strong><span>Workspaces</span></div><div><strong>{detail.bankAccountCount}</strong><span>Accounts</span></div><div><strong>{detail.transactionCount.toLocaleString()}</strong><span>Transactions</span></div><div><strong>{detail.monthlyUploads}</strong><span>Uploads this month</span></div></div>
           <div className="admin-support__form"><label>First name<input value={firstName} onChange={(event) => setFirstName(event.target.value)} /></label><label>Last name<input value={lastName} onChange={(event) => setLastName(event.target.value)} /></label><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label></div>
           <div className="admin-support__actions"><button className="button button-primary" type="button" onClick={() => void saveInfo()} disabled={busy !== null}>{busy === "save" ? "Saving..." : "Save user info"}</button><button className="button button-secondary" type="button" onClick={() => void setAccess(!detail.verified)} disabled={busy !== null}>{busy === "access" ? "Updating..." : detail.verified ? "Block access" : "Restore access"}</button><button className="button button-secondary" type="button" onClick={() => void resetPassword()} disabled={busy !== null}>{busy === "password" ? "Resetting..." : "Reset password"}</button></div>
+          <div className="admin-support__actions"><a className="button button-secondary button-small" href={`/api/admin/support/${detail.id}/export`}>Export user data</a></div>
+          <section className="admin-support__notes"><div><p className="eyebrow">Internal notes</p><h4>Support history</h4></div><textarea value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} placeholder="Record the issue, resolution, or follow-up..." maxLength={5000} /><button className="button button-secondary button-small" type="button" onClick={() => void addNote()} disabled={busy !== null || !noteDraft.trim()}>{busy === "note" ? "Adding..." : "Add note"}</button>{notes.length > 0 ? <div className="admin-support__note-list">{notes.map((note) => <article key={note.id}><p>{note.body}</p><small>{new Date(note.createdAt).toLocaleString("en-PH")} · {note.actorUserId}</small></article>)}</div> : <p className="panel-muted">No internal notes yet.</p>}</section>
           <div className="admin-support__danger"><div><p className="eyebrow">Destructive action</p><h4>Wipe Clover data</h4><p className="panel-muted">Deletes workspaces, accounts, transactions, imports, split bills, and goals. The Clerk login remains available.</p><label className="admin-support__checkbox"><input type="checkbox" checked={reseed} onChange={(event) => setReseed(event.target.checked)} />Create a blank starter workspace afterward</label></div><button className="button button-danger" type="button" onClick={() => void wipeData()} disabled={busy !== null}>{busy === "wipe" ? "Wiping..." : "Wipe data"}</button></div>
           {temporaryPassword ? <div className="admin-support__password"><strong>Temporary password</strong><code>{temporaryPassword}</code><p>Copy this once and deliver it through an approved secure channel. Clover does not store or recover this value.</p></div> : null}
+          {snapshotId ? <div className="admin-support__restore"><strong>Recovery snapshot available</strong><p>Core accounts, categories, and transactions were preserved before the wipe. Raw source files are not included in this snapshot.</p><button className="button button-secondary button-small" type="button" onClick={() => void restoreData()} disabled={busy !== null}>{busy === "restore" ? "Restoring..." : "Restore core data"}</button></div> : null}
         </>}
       </section>
     </div>

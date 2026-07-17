@@ -5,6 +5,7 @@ import { capturePostHogServerEvent } from "@/lib/analytics";
 import { wipeLocalUserData } from "@/lib/account-management";
 import { prisma } from "@/lib/prisma";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
+import { createAdminDataSnapshot, recordAdminSupportAction } from "@/lib/admin-support";
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +29,20 @@ export async function POST(request: Request, context: { params: Promise<{ userId
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    const snapshot = await createAdminDataSnapshot(user.id, admin.userId);
+
     const wiped = await wipeLocalUserData(user.clerkUserId, payload);
     if (!wiped) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
+
+    await recordAdminSupportAction({
+      actorUserId: admin.userId,
+      targetUserId: user.id,
+      targetClerkUserId: user.clerkUserId,
+      action: "wipe_data",
+      metadata: { snapshot_id: snapshot.id, reseeded_starter_workspace: payload.reseedStarterWorkspace },
+    });
 
     void capturePostHogServerEvent("admin_support_action", admin.userId, {
       action: "wipe_data",
@@ -40,7 +51,7 @@ export async function POST(request: Request, context: { params: Promise<{ userId
     });
     void capturePostHogServerEvent("account_wiped", user.clerkUserId, { wipe_scope: "admin_support" });
 
-    return NextResponse.json({ success: true, reseededStarterWorkspace: payload.reseedStarterWorkspace });
+    return NextResponse.json({ success: true, snapshotId: snapshot.id, reseededStarterWorkspace: payload.reseedStarterWorkspace });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to wipe user data.";
     if (message === "FORBIDDEN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });

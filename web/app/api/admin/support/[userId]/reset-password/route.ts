@@ -6,6 +6,7 @@ import { requireAdminAuth } from "@/lib/admin";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { prisma } from "@/lib/prisma";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
+import { recordAdminSupportAction } from "@/lib/admin-support";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,13 @@ export async function POST(request: Request, context: { params: Promise<{ userId
     await client.users.updateUser(user.clerkUserId, {
       password: temporaryPassword,
       signOutOfOtherSessions: true,
+    });
+
+    await recordAdminSupportAction({
+      actorUserId: admin.userId,
+      targetUserId: user.id,
+      targetClerkUserId: user.clerkUserId,
+      action: "reset_password",
     });
 
     void capturePostHogServerEvent("admin_support_action", admin.userId, {

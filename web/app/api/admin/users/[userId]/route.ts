@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminAuth } from "@/lib/admin";
 import { updateAdminUser } from "@/lib/admin-users";
+import { recordAdminSupportAction } from "@/lib/admin-support";
 
 export const dynamic = "force-dynamic";
 
@@ -25,10 +26,18 @@ const schema = z.object({
 
 export async function PATCH(request: Request, context: { params: Promise<{ userId: string }> }) {
   try {
-    await requireAdminAuth();
+    const admin = await requireAdminAuth();
     const { userId } = await context.params;
     const payload = schema.parse(await request.json());
     const updated = await updateAdminUser(userId, payload);
+    await recordAdminSupportAction({
+      actorUserId: admin.userId,
+      targetUserId: userId,
+      action: "update_user",
+      metadata: {
+        changed_fields: Object.keys(payload).join(","),
+      },
+    });
 
     return NextResponse.json({ user: updated });
   } catch (error) {
