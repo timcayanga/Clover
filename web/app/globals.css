@@ -69,6 +69,7 @@
 
 @media (max-width: 720px) {
   .pricing-page__comparison { grid-template-rows: repeat(2, minmax(0, 1fr)); }
+  .pricing-page .pricing-card--featured { order: -1; }
 }
 
 * {
@@ -1983,8 +1984,8 @@ body.transactions-manual-open .shell-quick-add-button {
   transition: opacity 140ms ease, transform 140ms ease;
 }
 
-.plan-feature-item:hover .plan-feature-item__tooltip,
-.plan-feature-item:focus-within .plan-feature-item__tooltip {
+.plan-feature-item__info-wrap:hover .plan-feature-item__tooltip,
+.plan-feature-item__info-wrap:focus-within .plan-feature-item__tooltip {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
@@ -32202,8 +32203,8 @@ body:has(.pricing-page) {
   transform: translate(-50%, -4px);
 }
 
-.pricing-page .plan-feature-item:hover .plan-feature-item__tooltip,
-.pricing-page .plan-feature-item:focus-within .plan-feature-item__tooltip {
+.pricing-page .plan-feature-item__info-wrap:hover .plan-feature-item__tooltip,
+.pricing-page .plan-feature-item__info-wrap:focus-within .plan-feature-item__tooltip {
   transform: translate(-50%, 0);
 }
 

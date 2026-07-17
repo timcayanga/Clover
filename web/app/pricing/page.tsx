@@ -97,8 +97,8 @@ export default async function PricingPage() {
               <PlanFeatureItem label="Manual transaction tracking" />
               <PlanFeatureItem label="Up to 3 Profiles, including Personal" />
               <PlanFeatureItem label="Receipt scanning" />
-              <PlanFeatureItem label="5 accounts in addition to Cash" />
-              <PlanFeatureItem label="10 monthly uploads total, including statements and receipts" />
+              <PlanFeatureItem label="5 non-cash accounts" />
+              <PlanFeatureItem label="10 monthly uploads total" />
               <PlanFeatureItem label="1,000 transaction rows total" />
               <PlanFeatureItem label="Basic investment tracking" />
               <PlanFeatureItem label="Basic reports and Adviser guidance" />
@@ -127,6 +127,7 @@ export default async function PricingPage() {
               <PlanFeatureItem label="Manual transaction tracking" />
               <PlanFeatureItem label="Up to 10 Profiles, including Personal" />
               <PlanFeatureItem label="20 non-cash accounts" />
+              <PlanFeatureItem label="Receipt scanning" />
               <PlanFeatureItem label="100 monthly uploads total" />
               <PlanFeatureItem label="Unlimited transaction rows" />
               <PlanFeatureItem label="Full investment portfolio tools" />
