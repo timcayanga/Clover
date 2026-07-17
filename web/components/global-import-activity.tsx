@@ -55,9 +55,9 @@ const canShowImportActivityOnPath = (pathname: string | null) => {
 };
 
 const dismissedImportActivityStorageKey = "clover.import.activity.dismissed.v1";
-const staleActiveImportBaseTimeoutMs = 2 * 60 * 1000;
-const staleActiveImportPerFileTimeoutMs = 30 * 1000;
-const staleActiveImportMaxTimeoutMs = 12 * 60 * 1000;
+const staleActiveImportBaseTimeoutMs = 60 * 1000;
+const staleActiveImportPerFileTimeoutMs = 15 * 1000;
+const staleActiveImportMaxTimeoutMs = 5 * 60 * 1000;
 
 const getStaleActiveImportTimeoutMs = (activity: ImportActivitySnapshot) => {
   const fileTotal = Number.isFinite(Number(activity.fileTotal)) ? Math.max(1, Number(activity.fileTotal)) : 1;

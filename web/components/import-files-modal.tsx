@@ -340,7 +340,7 @@ const buildImportErrorNotice = (stage: ImportErrorStage, fileName: string | null
 };
 
 const MAX_IMPORT_FILES_PER_BATCH = 5;
-const IMPORT_BACKGROUND_HARD_STOP_MS = 10 * 60_000;
+const IMPORT_BACKGROUND_HARD_STOP_MS = 60_000;
 
 const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
@@ -1634,9 +1634,7 @@ export function ImportFilesModal({
       }
     };
     const emitImportError = (stage: ImportErrorStage, fileName: string, message: string | null | undefined) => {
-      if (!backgroundOnly) {
-        closeImportAfterError(itemId, stage, fileName, message);
-      }
+      closeImportAfterError(itemId, stage, fileName, message);
     };
     const resolvedAccountId =
       accountId && !accountId.startsWith("optimistic-")
@@ -2043,9 +2041,7 @@ export function ImportFilesModal({
       }
     };
     const emitImportError = (stage: ImportErrorStage, fileName: string, message: string | null | undefined) => {
-      if (!backgroundOnly) {
-        closeImportAfterError(itemId, stage, fileName, message);
-      }
+      closeImportAfterError(itemId, stage, fileName, message);
     };
     const emitImportRecoverable = (fileName: string, detail: string, progressLabel = "Review needed") => {
       if (!backgroundOnly) {
@@ -2301,6 +2297,16 @@ export function ImportFilesModal({
         }
 
         if (Date.now() - startedAt >= MAX_WAIT_MS) {
+          if (backgroundOnly) {
+            closeImportAfterError(
+              itemId,
+              "monitor",
+              summaryContext.fileName,
+              processingMessage ?? "Timed out while Clover was still reading the document."
+            );
+            return;
+          }
+
           const hasRecoverableProgress =
             parsedRowsCount > 0 ||
             confirmedTransactionsCount > 0 ||
