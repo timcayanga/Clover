@@ -8,6 +8,7 @@ import { ensureImportProcessingWorker } from "@/lib/import-worker-runtime";
 import { getImportEnrichmentJobByImportFileId } from "@/lib/import-enrichment-jobs";
 import { prisma } from "@/lib/prisma";
 import { getConfiguredPdfJsBaseUrl } from "@/lib/import-file-text.server";
+import { importProcessingLooksActive } from "@/lib/import-resume-policy";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -88,6 +89,28 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         telemetryMessage: telemetry.message,
         canResume: telemetry.canResume,
         resumeReason: telemetry.resumeReason,
+        importFileId: importId,
+        accountId: importFile.accountId ?? null,
+      });
+    }
+
+    if (
+      importProcessingLooksActive({
+        status: importFile.status,
+        processingPhase: importFile.processingPhase,
+        updatedAt: importFile.updatedAt,
+      })
+    ) {
+      return NextResponse.json({
+        ok: true,
+        queued: true,
+        skipped: true,
+        alreadyProcessing: true,
+        telemetryPhase: telemetry.phase,
+        telemetryLabel: telemetry.phaseLabel,
+        telemetryMessage: telemetry.message,
+        canResume: false,
+        resumeReason: "processing_active",
         importFileId: importId,
         accountId: importFile.accountId ?? null,
       });

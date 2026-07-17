@@ -38,6 +38,7 @@ import {
 } from "@/lib/import-parser";
 import { assessReceiptPreviewQuality, parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
 import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
+import { shouldAutoResumeQueuedImport } from "@/lib/import-resume-policy";
 import {
   buildReceiptOptimisticSummary,
   buildReceiptPreviewTransactions,
@@ -100,6 +101,7 @@ import {
 } from "@/lib/import-statement-identity";
 import {
   getImportVisibilityTimeoutMsForItems,
+  hasActiveServerImport,
   hasVisibleImportData,
   importContextLooksWise,
   isExplicitLowQualityUnionBankStatementFilename,
@@ -214,6 +216,7 @@ type ImportStatusPayload = {
     processingAttempt?: number | null;
     processingTargetScore?: number | null;
     processingCurrentScore?: number | null;
+    updatedAt?: string | null;
   };
   receiptDocument?: {
     id?: string;
@@ -931,6 +934,14 @@ export function ImportFilesModal({
         (item) => item.status === "pending" || item.status === "parsing" || item.status === "importing"
       );
       if (hasUnsettledItem || busy) {
+        if (hasActiveServerImport(itemsRef.current)) {
+          visibilityDeadlineRef.current = null;
+          if (visibilityHardStopTimerRef.current) {
+            window.clearTimeout(visibilityHardStopTimerRef.current);
+            visibilityHardStopTimerRef.current = null;
+          }
+          return;
+        }
         hardStopVisibleImportModal("deadline");
       }
     }, 1000);
@@ -2053,8 +2064,16 @@ export function ImportFilesModal({
       try {
         const visibilityDeadline = visibilityDeadlineRef.current;
         if (!backgroundOnly && visibilityDeadline && Date.now() >= visibilityDeadline) {
-          hardStopVisibleImportModal("deadline");
-          return;
+          if (hasActiveServerImport(itemsRef.current)) {
+            visibilityDeadlineRef.current = null;
+            if (visibilityHardStopTimerRef.current) {
+              window.clearTimeout(visibilityHardStopTimerRef.current);
+              visibilityHardStopTimerRef.current = null;
+            }
+          } else {
+            hardStopVisibleImportModal("deadline");
+            return;
+          }
         }
 
         const response = await fetch(`/api/imports/${importFileId}/status`, {
@@ -2303,16 +2322,17 @@ export function ImportFilesModal({
         }
 
         if (!visibleImportComplete) {
-          const shouldAutoResumeQueuedImport =
-            !backgroundOnly &&
-            !queuedResumeAttempted &&
-            canResume &&
-            (processingPhase === "queued_retry" || telemetryPhase === "queued") &&
-            parsedRowsCount === 0 &&
-            confirmedTransactionsCount === 0 &&
-            Date.now() - startedAt >= 5_000;
+          const shouldAutoResumeQueuedImportNow = shouldAutoResumeQueuedImport({
+            backgroundOnly,
+            resumeAttempted: queuedResumeAttempted,
+            canResume,
+            processingPhase,
+            parsedRowsCount,
+            confirmedTransactionsCount,
+            updatedAt: importFile?.updatedAt,
+          });
 
-          if (shouldAutoResumeQueuedImport) {
+          if (shouldAutoResumeQueuedImportNow) {
             queuedResumeAttempted = true;
             emitItemUpdate({
               status: "importing",
@@ -6742,6 +6762,10 @@ export function ImportFilesModal({
     visibilityHardStopTimerRef.current = window.setTimeout(() => {
       visibilityHardStopTimerRef.current = null;
       if (busy || itemsRef.current.some((item) => item.status === "pending" || item.status === "parsing" || item.status === "importing")) {
+        if (hasActiveServerImport(itemsRef.current)) {
+          visibilityDeadlineRef.current = null;
+          return;
+        }
         hardStopVisibleImportModal("deadline");
       }
     }, visibilityTimeoutMs);

@@ -253,6 +253,13 @@ export const hasVisibleImportData = (
   return itemHasRows || localHasRows || localHasAccountDetails;
 };
 
+export const hasActiveServerImport = (items: VisibilityQueueItem[]) =>
+  items.some(
+    (item) =>
+      (item.status === "importing" || item.status === "parsing") &&
+      Number(item.progress ?? 0) >= IMPORT_PROGRESS_UPLOADING
+  );
+
 export const summarizeVisibilityOutcome = <TItem extends VisibilityQueueItem>(
   items: TItem[],
   getSummary: (item: TItem) => UploadInsightsSummary | null | undefined

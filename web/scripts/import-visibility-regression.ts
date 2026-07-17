@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { hasVisibleImportData } from "@/lib/import-visibility-rules";
+import { hasActiveServerImport, hasVisibleImportData } from "@/lib/import-visibility-rules";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 
 const gcryptoOptimisticSummary: UploadInsightsSummary = {
@@ -61,6 +61,42 @@ assert.equal(
   ),
   false,
   "Optimistic screenshot previews should not dismiss the import UI before server-backed visibility exists."
+);
+
+assert.equal(
+  hasActiveServerImport([
+    {
+      id: "queue-active",
+      file: { name: "statement.pdf", type: "application/pdf" },
+      importMode: "statement",
+      status: "importing",
+      targetAccountId: null,
+      importedRows: null,
+      confirmationState: "pending",
+      progress: 80,
+      importFileId: "import-active",
+    },
+  ]),
+  true,
+  "An import handed to the server must keep polling after the initial visibility deadline."
+);
+
+assert.equal(
+  hasActiveServerImport([
+    {
+      id: "queue-local",
+      file: { name: "statement.pdf", type: "application/pdf" },
+      importMode: "statement",
+      status: "pending",
+      targetAccountId: null,
+      importedRows: null,
+      confirmationState: "none",
+      progress: 20,
+      importFileId: "import-local",
+    },
+  ]),
+  false,
+  "A local pre-scan must not masquerade as an active server import."
 );
 
 assert.equal(
