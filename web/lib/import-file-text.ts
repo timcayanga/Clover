@@ -67,9 +67,10 @@ export const extractTextFromFile = async (
         standardFontDataUrl: pdfjsStandardFontDataUrl,
       } as any);
       try {
-        const probePdf = await probeTask.promise;
+        const probePdf = await withTimeout(probeTask.promise, CLIENT_PDF_TEXT_EXTRACTION_TIMEOUT_MS);
         await probePdf.destroy();
       } catch (error) {
+        await probeTask.destroy().catch(() => undefined);
         if (isPdfPasswordError(error)) {
           throw new Error("This file is password-protected. Enter the password to continue.", { cause: error });
         }

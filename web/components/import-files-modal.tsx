@@ -50,7 +50,7 @@ import {
   loadOptimisticPreviewTransactions,
 } from "@/lib/import-preview-transactions";
 import { friendlyImportPhaseLabel, friendlyImportProgressLabel, IMPORT_PROGRESS } from "@/lib/import-progress";
-import { resolveImportModalStatusDecision } from "@/lib/import-modal-status";
+import { getLocalPreparseProgressPatch, resolveImportModalStatusDecision } from "@/lib/import-modal-status";
 import { waitForImportSettledVisibility } from "@/lib/import-settled-visibility";
 import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 import { getImportErrorSpec, getImportErrorSpecForCode, isResumableImportErrorCode, type ImportErrorStage, type ImportErrorSpec } from "@/lib/import-error-spec";
@@ -3741,11 +3741,8 @@ export function ImportFilesModal({
     }
 
     localPreparseStartedRef.current.add(itemId);
-    updateItem(itemId, {
-      status: "importing",
-      progress: Math.max(IMPORT_PROGRESS.preparing, Number(item.progress ?? 0)),
-      progressLabel: "Reading locally",
-    });
+    // Local scanning is advisory; keep the item pending so auto-start can hand it to the server.
+    updateItem(itemId, getLocalPreparseProgressPatch(item.progress));
     publishImportActivity({
       workspaceId,
       surface: importActivitySurfaceRef.current,

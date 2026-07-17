@@ -30,6 +30,11 @@ const toCount = (value: unknown) => {
 
 const cleanLabel = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
 
+export const getLocalPreparseProgressPatch = (currentProgress?: number | null) => ({
+  progress: Math.max(IMPORT_PROGRESS.preparing, Number(currentProgress ?? 0)),
+  progressLabel: "Reading locally",
+});
+
 const getDefaultWaitingLabel = (importMode: ImportModalStatusMode, processingPhase: string | null) => {
   if (processingPhase === "queued_retry") {
     return importMode === "receipt" ? "Queued for receipt retry" : "Queued for backup reading";

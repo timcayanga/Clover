@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
-import { resolveImportModalStatusDecision } from "@/lib/import-modal-status";
+import { getLocalPreparseProgressPatch, resolveImportModalStatusDecision } from "@/lib/import-modal-status";
 
 const main = () => {
+  const localPreparsePatch = getLocalPreparseProgressPatch(0);
+  assert.equal(
+    "status" in localPreparsePatch,
+    false,
+    "Local pre-scan must leave queued files pending so the upload auto-start effect can run."
+  );
+
   const queuedReceipt = resolveImportModalStatusDecision({
     importMode: "receipt",
     status: "processing",
