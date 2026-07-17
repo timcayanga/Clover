@@ -1734,7 +1734,21 @@ const normalizeBpiText = (text: string) =>
       const tokens = normalized.split(" ");
       const singleCharacterTokens = tokens.filter((token) => /^[A-Za-z0-9]$/.test(token)).length;
       const looksCharacterSpaced = tokens.length >= 6 && singleCharacterTokens / tokens.length >= 0.65;
-      return looksCharacterSpaced ? tokens.join("") : normalized;
+      const repaired = (looksCharacterSpaced ? tokens.join("") : normalized)
+        // BPI's scanned month and ledger labels commonly lose one glyph in OCR.
+        .replace(/^way(?=\s*\d{1,2}\b)/i, "May")
+        .replace(/^sun(?=\s*\d{1,2}\b)/i, "Jun")
+        .replace(/^sui(?=\s*\d{1,2}\b)/i, "Jul")
+        .replace(/^Jui(?=\s*\d{1,2}\b)/i, "Jul")
+        .replace(/^Jui\s+0s\b/i, "Jul 05")
+        .replace(/^suto\s*(\d{1,2})\b/i, "Jul $1")
+        .replace(/^sut\s*0?(\d{1,2})\b/i, "Jul $1")
+        .replace(/\bTranster\b/gi, "Transfer")
+        .replace(/\bTransier\b/gi, "Transfer")
+        .replace(/\bFung(?=\s+Transfer\b)/gi, "Fund")
+        .replace(/\bT0(?=\s*:)/gi, "TO")
+        .replace(/\b(\d{1,3})\.(\d{3})[,.](\d{2})\b/g, "$1,$2.$3");
+      return repaired;
     })
     .join("\n");
 
@@ -22470,7 +22484,7 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
     strongBpiSavingsParsed &&
     /\b(?:BANK\s+OF\s+THE\s+PHILIPPINE\s+ISLANDS|BPI)\b/i.test(text) &&
     /\bPERIOD\s+C[O0][VY]ERED\b/i.test(text) &&
-    /\bDEBIT\s+AMT\b[\s\S]{0,80}\bCREDIT\s+AMT\b[\s\S]{0,80}\bBALANCE\b/i.test(text)
+    /\bDEBIT\s+AM(?:T|OUNT)\b[\s\S]{0,80}\bCREDIT\s+AM(?:T|OUNT)\b[\s\S]{0,80}\bBALANCE\b/i.test(text)
   ) {
     const bpiPeriodCount = text.match(/\bPERIOD\s+C[O0][VY]ERED\b/gi)?.length ?? 0;
     const trailingBalance = getTrailingBalanceFromParsedRows(strongBpiSavingsParsed.rows);
@@ -22935,6 +22949,18 @@ export const parseImportText = (
 
   if (isNoisyOCRBankLikeStatement(text, context)) {
     return [];
+  }
+
+  // Run BPI savings parsing before broader bank heuristics. OCR can make a
+  // BPI header resemble another institution, while the ledger shape remains
+  // recoverable by the dedicated BPI parser.
+  const bpiSavingsParsed = parseBpiImportText(text);
+  if (
+    bpiSavingsParsed &&
+    bpiSavingsParsed.rows.length > 0 &&
+    (/\b(?:BANK\s+OF\s+THE\s+PHILIPPINE\s+ISLANDS|BPI)\b/i.test(text) || institution === "BPI")
+  ) {
+    return bpiSavingsParsed.rows;
   }
 
   const wiseMobileParsed = parseWiseMobileScreenshotImportText(text, context);

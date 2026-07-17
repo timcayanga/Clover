@@ -9389,6 +9389,47 @@ export const processImportFileText = async (
       });
     }
 
+    // Preserve partially readable statements for user review instead of
+    // converting a low-confidence parse into a generic I-104 failure.
+    const shouldStageStatementForReview = !isDocumentImport && rows.length > 0 && hasCriticalFindings;
+    if (shouldStageStatementForReview) {
+      try {
+        confirmedImportResult = await confirmImportFileWithRetry("qa_review_stage");
+        await updateImportFileCompat(importFileId, {
+          status: "processing",
+          processingPhase: "staged",
+          processingCurrentScore: qaRunResult.evaluation.score,
+          processingMessage: "Clover saved the readable rows for review because this statement needs a second look.",
+          confirmedTransactionsCount: 0,
+        });
+        emitImportProcessingEvent("import_processing_stalled", {
+          processing_status: "staged",
+          processing_phase: "staged",
+          reason: "statement_rows_need_review",
+          final_score: qaRunResult.evaluation.score,
+          parsed_rows: rows.length,
+        });
+        return {
+          imported: confirmedImportResult.imported,
+          duplicate: Boolean(confirmedImportResult.duplicate),
+          metadata: resolvedMetadata,
+          accountId: confirmedImportResult.accountId ?? null,
+          accountSummaries: confirmedImportResult.accountSummaries,
+          confirmedTransactionsCount: 0,
+          insightSummary: confirmedImportResult.insightSummary ?? undefined,
+          accountBalance: confirmedImportResult.accountBalance ?? null,
+          status: "staged",
+        };
+      } catch (error) {
+        await updateImportFileCompat(importFileId, {
+          status: "failed",
+          processingPhase: "repair_needed",
+          processingMessage: "Clover parsed some rows but could not stage them for review.",
+        }).catch(() => null);
+        throw error;
+      }
+    }
+
     const shouldMarkDone =
       isDocumentImport
         ? Boolean(documentImportRecord)
