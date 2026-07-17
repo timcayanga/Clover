@@ -1063,7 +1063,7 @@ export function SettingsHub({
           return;
         }
 
-        await Promise.all(otherSessions.map((entry) => entry.remove()));
+        await Promise.all(otherSessions.map((entry) => (entry as unknown as { revoke: () => Promise<void> }).revoke()));
         const refreshedSessions = await user.getSessions();
         setSecuritySessions(
           refreshedSessions.map((entry) => ({

@@ -14,10 +14,10 @@ type DeleteAccountArtifactsResult = {
 const inList = (values: string[]) => ({ in: values });
 
 export const deleteWorkspaceTransactions = async (tx: any, where: Record<string, unknown>) => {
-  const transactions = await tx.transaction.findMany({
+  const transactions = (await tx.transaction.findMany({
     where,
     select: { id: true },
-  });
+  })) as Array<{ id: string }>;
   const transactionIds = transactions.map((transaction: { id: string }) => transaction.id);
 
   if (transactionIds.length === 0) {
@@ -59,7 +59,7 @@ export const deleteOrphanedWorkspaceTransactions = async (tx: any, workspaceId: 
     return 0;
   }
 
-  const orphanedTransactions = await tx.$queryRaw<Array<{ id: string }>>`
+  const orphanedTransactions = (await tx.$queryRaw<Array<{ id: string }>>`
     SELECT t."id"
     FROM "Transaction" t
     WHERE t."workspaceId" = ${workspaceId}
@@ -68,7 +68,7 @@ export const deleteOrphanedWorkspaceTransactions = async (tx: any, workspaceId: 
         FROM "Account" a
         WHERE a."id" = t."accountId"
       )
-  `;
+  `) as Array<{ id: string }>;
 
   return deleteWorkspaceTransactions(tx, {
     workspaceId,

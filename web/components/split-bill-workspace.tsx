@@ -739,6 +739,9 @@ export function SplitBillWorkspace({
   }, [currentUserName, selectedBill]);
 
   useEffect(() => {
+    if (!searchParams) {
+      return;
+    }
     const billId = searchParams.get("bill");
     if (!billId || selected?.kind === "bill") {
       return;
@@ -886,16 +889,16 @@ export function SplitBillWorkspace({
       return;
     }
 
-    const participants = billEditorParticipants
+    const participants: BillEditorParticipant[] = billEditorParticipants
       .filter((participant) => participant.name.trim())
       .map((participant) => ({
-      id: participant.id,
+      id: participant.id ?? createSplitBillDraftId(),
       name: participant.name.trim(),
     }));
     const items = billEditorItems
       .filter((item) => item.description.trim() || item.amount.trim())
       .map((item) => ({
-      id: item.id,
+      id: item.id ?? createSplitBillDraftId(),
       description: item.description.trim(),
       amount: item.amount,
       participantIds: item.participantIds.filter((participantId) => participants.some((participant) => participant.id === participantId)),
@@ -1152,10 +1155,10 @@ export function SplitBillWorkspace({
                         <input
                           className="settings-input"
                           value={item.description}
-                          onChange={(event) => updateBillEditorItem(item.id, { description: event.target.value })}
+                          onChange={(event) => updateBillEditorItem(item.id ?? "", { description: event.target.value })}
                           placeholder="Item description"
                         />
-                        <button className="button button-secondary button-small" type="button" onClick={() => removeBillEditorItem(item.id)}>
+                        <button className="button button-secondary button-small" type="button" onClick={() => removeBillEditorItem(item.id ?? "")}>
                           Remove
                         </button>
                       </div>
@@ -1168,7 +1171,7 @@ export function SplitBillWorkspace({
                       <input
                         className="settings-input"
                         value={item.amount}
-                        onChange={(event) => updateBillEditorItem(item.id, { amount: event.target.value })}
+                        onChange={(event) => updateBillEditorItem(item.id ?? "", { amount: event.target.value })}
                         placeholder="Amount"
                       />
                     ) : (
@@ -1176,7 +1179,7 @@ export function SplitBillWorkspace({
                     )}
                   </td>
                   {participants.map((participant) => {
-                    const checked = item.participantIds.includes(participant.id);
+                    const checked = item.participantIds.includes(participant.id ?? "");
                     return (
                       <td key={participant.id} className="split-bill-detail-modal__check-cell">
                         {editable ? (
@@ -1184,7 +1187,7 @@ export function SplitBillWorkspace({
                             <input
                               type="checkbox"
                               checked={checked}
-                              onChange={() => toggleBillEditorItemParticipant(item.id, participant.id)}
+                              onChange={() => toggleBillEditorItemParticipant(item.id ?? "", participant.id ?? "")}
                               aria-label={`${item.description || "Item"} for ${participant.name}`}
                             />
                           </label>
@@ -1386,10 +1389,10 @@ export function SplitBillWorkspace({
                           <input
                             className="settings-input"
                             value={participant.name}
-                            onChange={(event) => updateBillEditorParticipant(participant.id, event.target.value)}
+                            onChange={(event) => updateBillEditorParticipant(participant.id ?? "", event.target.value)}
                             placeholder="Person name"
                           />
-                          <button className="button button-secondary button-small" type="button" onClick={() => removeBillEditorParticipant(participant.id)}>
+                          <button className="button button-secondary button-small" type="button" onClick={() => removeBillEditorParticipant(participant.id ?? "")}>
                             Remove
                           </button>
                         </div>

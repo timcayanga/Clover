@@ -151,7 +151,7 @@ const SUPPORTED_CURRENCY_CODES = [
   "ZAR",
 ] as const;
 
-const SUGGESTED_CURRENCY_CODES = new Set(
+const SUGGESTED_CURRENCY_CODES: Set<string> = new Set(
   SUPPORTED_CURRENCY_CODES.filter((code) => CURRENCY_DEFINITIONS.some((definition) => definition.code === code && definition.suggested))
 );
 

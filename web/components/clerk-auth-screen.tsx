@@ -172,6 +172,16 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
   const router = useRouter();
   const auth = useAuth();
   const signInState = useSignIn();
+  const legacySignIn = signInState.signIn as unknown as {
+    reset: () => Promise<void>;
+    resetPasswordEmailCode: {
+      sendCode: () => Promise<{ error?: unknown }>;
+      verifyCode: (input: { code: string }) => Promise<{ error?: unknown }>;
+      submitPassword: (input: { password: string }) => Promise<{ error?: unknown }>;
+    };
+    status?: string;
+    finalize: (input: { navigate: (args: { session?: { currentTask?: unknown }; decorateUrl: (url: string) => string }) => Promise<void> }) => Promise<void>;
+  };
   const signUpState = useSignUp();
 
   const [email, setEmail] = useState("");
@@ -318,7 +328,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
   };
 
   const startPasswordReset = async () => {
-    await signInState.signIn.reset();
+    await legacySignIn.reset();
     setPhase("reset-request");
     setError(null);
     setNotice(null);
@@ -332,7 +342,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
   };
 
   const cancelPasswordReset = async () => {
-    await signInState.signIn.reset();
+    await legacySignIn.reset();
     setPhase("form");
     setError(null);
     setNotice(null);
@@ -362,7 +372,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
         identifier: trimmedResetEmail,
       });
 
-      const { error: sendCodeError } = await signInState.signIn.resetPasswordEmailCode.sendCode();
+      const { error: sendCodeError } = await legacySignIn.resetPasswordEmailCode.sendCode();
 
       if (sendCodeError) {
         setError(formatError(sendCodeError));
@@ -385,7 +395,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
     setAttemptedSubmit(true);
 
     try {
-      const { error: verifyCodeError } = await signInState.signIn.resetPasswordEmailCode.verifyCode({
+      const { error: verifyCodeError } = await legacySignIn.resetPasswordEmailCode.verifyCode({
         code: resetVerificationCode.trim(),
       });
 
@@ -415,7 +425,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
     }
 
     try {
-      const { error: passwordError } = await signInState.signIn.resetPasswordEmailCode.submitPassword({
+      const { error: passwordError } = await legacySignIn.resetPasswordEmailCode.submitPassword({
         password: resetPassword,
       });
 
@@ -424,8 +434,8 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
         return;
       }
 
-      if (signInState.signIn.status === "complete") {
-        await signInState.signIn.finalize({
+      if (legacySignIn.status === "complete") {
+        await legacySignIn.finalize({
           navigate: async ({ session, decorateUrl }) => {
             if (session?.currentTask) {
               return;
@@ -745,7 +755,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
                 setNotice(null);
                 setBusy(true);
                 try {
-                  const { error: resendCodeError } = await signInState.signIn.resetPasswordEmailCode.sendCode();
+                  const { error: resendCodeError } = await legacySignIn.resetPasswordEmailCode.sendCode();
                   if (resendCodeError) {
                     setError(formatError(resendCodeError));
                     return;

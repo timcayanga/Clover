@@ -145,6 +145,7 @@ const getBillInclude = {
   transaction: {
     select: {
       id: true,
+      workspaceId: true,
       merchantRaw: true,
       merchantClean: true,
       date: true,
@@ -172,6 +173,16 @@ const getBillInclude = {
     orderBy: splitBillItemOrderBy,
   },
   payments: true,
+};
+
+const getUserWorkspaceId = async (userId: string) => {
+  const workspace = await prisma.workspace.findFirst({
+    where: { userId },
+    orderBy: [{ type: "asc" }, { createdAt: "asc" }],
+    select: { id: true },
+  });
+  if (!workspace) throw new Error("Workspace not found.");
+  return workspace.id;
 };
 
 const resolveLinkedTransactionId = async (userId: string, transactionId: string | null | undefined, existingBillId: string) => {
@@ -371,11 +382,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ bi
     const { billId } = await params;
     const body = billSchema.parse(await request.json());
     const bill = await buildBillPayload(user.id, body, billId);
+    const workspaceId = await getUserWorkspaceId(user.id);
 
     const updated = await prisma.$transaction(async (tx) => {
       const existing = await tx.splitBill.findFirst({
         where: { id: billId, userId: user.id },
-        select: { id: true, workspaceId: true },
+        select: { id: true },
       });
 
       if (!existing) {
@@ -447,7 +459,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ bi
 
       await tx.auditLog.create({
         data: {
-          workspaceId: existing.workspaceId,
+          workspaceId,
           actorUserId: user.id,
           action: "split_bill_updated",
           entity: "SplitBill",
@@ -466,7 +478,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ bi
     });
 
     await recordAdviserActionCompletion({
-      workspaceId: updated.workspaceId,
+      workspaceId,
       actorUserId: user.id,
       group: "cashflow",
       itemId: billId,
@@ -498,13 +510,14 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   try {
     const user = await getSplitBillCurrentUser();
     const { billId } = await params;
+    const workspaceId = await getUserWorkspaceId(user.id);
 
     const existing = await prisma.splitBill.findFirst({
       where: {
         id: billId,
         userId: user.id,
       },
-      select: { id: true, workspaceId: true },
+      select: { id: true },
     });
 
     if (!existing) {
@@ -517,7 +530,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
     await prisma.auditLog.create({
       data: {
-        workspaceId: existing.workspaceId,
+        workspaceId,
         actorUserId: user.id,
         action: "split_bill_deleted",
         entity: "SplitBill",
@@ -529,7 +542,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     });
 
     await recordAdviserActionCompletion({
-      workspaceId: existing.workspaceId,
+      workspaceId,
       actorUserId: user.id,
       group: "cashflow",
       itemId: billId,

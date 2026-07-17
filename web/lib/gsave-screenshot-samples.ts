@@ -151,7 +151,7 @@ export const buildGsaveScreenshotFallbackText = (params: {
   const normalizedFingerprint = normalizeFingerprint(params.fileFingerprint);
   const matchedSample = GSAVE_SCREENSHOT_SAMPLES.find(
     (sample) =>
-      sample.fileNames.includes(normalizedFileName) ||
+      (sample.fileNames as readonly string[]).includes(normalizedFileName) ||
       (normalizedFingerprint && sample.fileFingerprint === normalizedFingerprint)
   );
 

@@ -110,7 +110,7 @@ const normalizeFingerprint = (value?: string | null) => value?.trim().toLowerCas
 
 export const isKnownGfundsScreenshotFile = (fileName: string) => {
   const normalized = normalizeFileName(fileName);
-  return GFUNDS_SCREENSHOT_SAMPLES.some((sample) => sample.fileNames.includes(normalized));
+  return GFUNDS_SCREENSHOT_SAMPLES.some((sample) => (sample.fileNames as readonly string[]).includes(normalized));
 };
 
 export const buildGfundsScreenshotFallbackText = (params: {
@@ -121,7 +121,7 @@ export const buildGfundsScreenshotFallbackText = (params: {
   const normalizedFingerprint = normalizeFingerprint(params.fileFingerprint);
   const matchedSample = GFUNDS_SCREENSHOT_SAMPLES.find(
     (sample) =>
-      sample.fileNames.includes(normalizedFileName) ||
+      (sample.fileNames as readonly string[]).includes(normalizedFileName) ||
       (normalizedFingerprint && sample.fileFingerprint === normalizedFingerprint)
   );
 

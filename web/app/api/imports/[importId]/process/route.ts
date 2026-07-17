@@ -35,6 +35,8 @@ import { prisma } from "@/lib/prisma";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { decideImportParserRoute, fingerprintImportSurface, shouldPreferBackupParserForTemplateFamily } from "@/lib/import-parser-routing";
 import type { Prisma } from "@prisma/client";
+import { isSupportedAccountType } from "@/lib/account-types";
+import type { ImportedAccountType } from "@/lib/import-parser";
 import { makeImportFileBytesFingerprint } from "@/lib/import-file-text.server";
 import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
 import { buildGfundsScreenshotFallbackText } from "@/lib/gfunds-screenshot-samples";
@@ -221,6 +223,12 @@ type TrainedReceiptFixture = {
   categoryName: string;
   notes: string;
   paymentChannel: string;
+  accountMatch?: {
+    account_name?: string | null;
+    account_last4?: string | null;
+    confidence?: number | null;
+    reason?: string | null;
+  };
   lineItems?: Array<{
     description: string;
     quantity?: number;
@@ -411,16 +419,18 @@ const createDetectedReceiptInstitutionAccount = async (params: {
     return null;
   }
 
+  const accountType = isSupportedAccountType(draft.accountType) ? draft.accountType : "other";
+
   const existing = await prisma.account.findFirst({
     where: {
       workspaceId: params.workspaceId,
-      type: draft.accountType,
+      type: accountType,
       OR: [
         {
           institution: draft.institution,
         },
         {
-          name: formatUploadAccountDisplayName(draft.accountName, draft.institution, null, draft.accountType),
+          name: formatUploadAccountDisplayName(draft.accountName, draft.institution, null, accountType),
         },
       ],
     },
@@ -440,9 +450,9 @@ const createDetectedReceiptInstitutionAccount = async (params: {
   return prisma.account.create({
     data: {
       workspaceId: params.workspaceId,
-      name: formatUploadAccountDisplayName(draft.accountName, draft.institution, null, draft.accountType),
+      name: formatUploadAccountDisplayName(draft.accountName, draft.institution, null, accountType),
       institution: draft.institution,
-      type: draft.accountType,
+      type: accountType,
       currency: params.currency,
       source: "upload",
     },
@@ -458,6 +468,13 @@ const createDetectedReceiptInstitutionAccount = async (params: {
 };
 
 const formatReceiptMoney = (amount: number, currency: string) => `${currency} ${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const normalizeImportedAccountTypeHint = (value: unknown): ImportedAccountType | null => {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return ["bank", "wallet", "credit_card", "cash", "investment", "other"].includes(normalized)
+    ? (normalized as ImportedAccountType)
+    : null;
+};
 
 const buildTrainedReceiptDetails = (fixture: TrainedReceiptFixture) => {
   if (fixture.transferDetails) {
@@ -2156,10 +2173,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
                   institution: typeof (metadata as { institution?: unknown } | null)?.institution === "string"
                     ? String((metadata as { institution?: unknown }).institution)
                     : null,
-                  accountType:
-                    typeof (metadata as { accountType?: unknown } | null)?.accountType === "string"
-                      ? String((metadata as { accountType?: unknown }).accountType)
-                      : null,
+                  accountType: normalizeImportedAccountTypeHint((metadata as { accountType?: unknown } | null)?.accountType),
                 },
                 effectiveFileType || "application/octet-stream"
               )
@@ -2181,10 +2195,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               workspaceId: String(importFile.workspaceId),
               institution: detectedInstitution,
               fileType: effectiveFileType || "application/octet-stream",
-              accountType:
-                typeof (metadata as { accountType?: unknown } | null)?.accountType === "string"
-                  ? String((metadata as { accountType?: unknown }).accountType)
-                  : null,
+              accountType: normalizeImportedAccountTypeHint((metadata as { accountType?: unknown } | null)?.accountType),
               statementFamilySignature: preflightStatementFamilySignature,
             }).catch(() => null)
           : null;

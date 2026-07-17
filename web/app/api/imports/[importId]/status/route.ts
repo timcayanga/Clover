@@ -12,6 +12,7 @@ import { mergeCheckpointSourceMetadata, readCheckpointImportMode } from "@/lib/i
 import { prisma } from "@/lib/prisma";
 import { processImportEnrichmentJobs } from "@/workers/import-processor";
 import { after, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -105,7 +106,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
             sourceMetadata: mergeCheckpointSourceMetadata(snapshot.statementCheckpoint?.sourceMetadata, {
               publishedVisibleImportComplete: snapshot.visibleImportComplete,
               publishedAccountSummaries: snapshot.accountSummaries,
-            }),
+            }) as Prisma.InputJsonValue,
           },
         })
         .catch(() => null);

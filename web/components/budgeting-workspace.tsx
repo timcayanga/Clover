@@ -288,7 +288,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
       { id: "shopping", label: "Shopping", emoji: "🛍️", terms: ["shopping", "clothing", "retail"], amount: 5000 },
       { id: "dining", label: "Eating out", emoji: "🍽️", terms: ["dining", "restaurant", "food"], amount: 5000 },
     ]
-      .map((example) => {
+      .map((example): BudgetExample | null => {
         const category = categoryFor(example.terms);
         return category
           ? { id: example.id, label: category.name, emoji: example.emoji, amount: example.amount, kind: "spend_limit" as const, categoryId: category.id }
@@ -300,7 +300,7 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
       ...categoryExamples.filter((example, index, examples) => examples.findIndex((candidate) => candidate.categoryId === example.categoryId) === index),
       { id: "all-spending", label: "All spending", emoji: "🧾", amount: 30000, kind: "spend_limit", categoryId: "__all__" },
       { id: "save-monthly", label: "Save monthly", emoji: "🌱", amount: 10000, kind: "savings_target", categoryId: "__all__" },
-    ].slice(0, 4);
+    ].slice(0, 4) as BudgetExample[];
   }, [data.categories]);
 
   const budgetGroups = useMemo(() => {

@@ -22,6 +22,7 @@ const getBillInclude = {
   transaction: {
     select: {
       id: true,
+      workspaceId: true,
       merchantRaw: true,
       merchantClean: true,
       date: true,
@@ -78,6 +79,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ bil
       return NextResponse.json({ error: "Bill not found" }, { status: 404 });
     }
 
+    const workspaceId = bill.transaction?.workspaceId ?? (await prisma.workspace.findFirst({
+      where: { userId: user.id },
+      orderBy: [{ type: "asc" }, { createdAt: "asc" }],
+      select: { id: true },
+    }))?.id;
+    if (!workspaceId) {
+      return NextResponse.json({ error: "Workspace not found" }, { status: 409 });
+    }
+
     const fromParticipant = bill.participants.find((participant) => participant.id === body.fromParticipantId);
     const toParticipant = bill.participants.find((participant) => participant.id === body.toParticipantId);
 
@@ -108,7 +118,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ bil
 
     await prisma.auditLog.create({
       data: {
-        workspaceId: bill.workspaceId,
+        workspaceId,
         actorUserId: user.id,
         action: "split_bill_transfer_settled",
         entity: "SplitBill",
@@ -123,7 +133,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ bil
     });
 
     await recordAdviserActionCompletion({
-      workspaceId: bill.workspaceId,
+      workspaceId,
       actorUserId: user.id,
       group: "cashflow",
       itemId: `${bill.id}:${fromParticipant.id}:${toParticipant.id}`,
