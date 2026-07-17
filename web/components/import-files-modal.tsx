@@ -4089,7 +4089,8 @@ export function ImportFilesModal({
       }
 
       if (isPasswordError(error)) {
-        localPreparseStartedRef.current.delete(itemId);
+        requestPasswordForItem(itemId, Boolean(item.password.trim()));
+        return;
       }
       // Browser-local preparse is best-effort only. The server path still finalizes the import.
     }

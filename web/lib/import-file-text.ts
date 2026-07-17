@@ -22,6 +22,8 @@ const isPdfPasswordError = (error: unknown) => {
   return /passwordexception/i.test(name) || /password/i.test(message) || /encrypted pdf/i.test(message);
 };
 
+const PDF_PASSWORD_PROBE = "__clover_password_probe__";
+
 export const extractTextFromFile = async (
   file: File,
   password?: string,
@@ -40,6 +42,22 @@ export const extractTextFromFile = async (
   if (lowerName.endsWith(".pdf")) {
     const { pdfjs } = await import("@/lib/pdfjs");
     const data = new Uint8Array(await file.arrayBuffer());
+    if (!password) {
+      const probeTask = pdfjs.getDocument({
+        data,
+        password: PDF_PASSWORD_PROBE,
+        standardFontDataUrl: pdfjsStandardFontDataUrl,
+      } as any);
+      try {
+        const probePdf = await probeTask.promise;
+        await probePdf.destroy();
+      } catch (error) {
+        if (isPdfPasswordError(error)) {
+          throw new Error("This file is password-protected. Enter the password to continue.", { cause: error });
+        }
+        throw error;
+      }
+    }
     const readPdfText = async (pdfPassword?: string) => {
       const options = pdfPassword
         ? { data, password: pdfPassword, standardFontDataUrl: pdfjsStandardFontDataUrl }

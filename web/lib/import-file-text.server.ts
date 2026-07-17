@@ -1738,6 +1738,22 @@ const isPdfPasswordError = (error: unknown) => {
   return /passwordexception/i.test(name) || /password/i.test(message) || /encrypted pdf/i.test(message);
 };
 
+const PDF_PASSWORD_PROBE = "__clover_password_probe__";
+
+const assertPdfPasswordIsNotRequired = async (data: Uint8Array, baseUrl?: string | null) => {
+  const pdfjs = await loadPdfJsText();
+  const probeTask = pdfjs.getDocument(createPdfJsLoadOptions(data, PDF_PASSWORD_PROBE, baseUrl) as any);
+  try {
+    const probePdf = await probeTask.promise;
+    await probePdf.destroy();
+  } catch (error) {
+    if (isPdfPasswordError(error)) {
+      throw new Error("This file is password-protected. Enter the password to continue.", { cause: error });
+    }
+    throw error;
+  }
+};
+
 export const getConfiguredPdfJsBaseUrl = () => {
   const configuredBaseUrl =
     process.env.APP_URL ??
@@ -1933,6 +1949,9 @@ type ImportFileLike = {
 
 const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, baseUrl?: string | null) => {
   const pdfjs = await loadPdfJsText();
+  if (!password) {
+    await assertPdfPasswordIsNotRequired(data, baseUrl);
+  }
   const readPdfText = async (pdfPassword?: string) => {
     const options = createPdfJsLoadOptions(data, pdfPassword, baseUrl);
     const loadingTask = pdfjs.getDocument(options as any);
