@@ -114,20 +114,20 @@ export default async function HomePage() {
               </thead>
               <tbody>
                 <tr>
-                  <td>Type transactions one by one</td>
+                  <td>Enter transactions one by one</td>
                   <td className="landing-bridge__clover-cell"><strong>1. Upload</strong> statements, receipts, or screenshots</td>
                 </tr>
                 <tr>
-                  <td>Build your history manually</td>
+                  <td>Build your financial history manually</td>
                   <td className="landing-bridge__clover-cell"><strong>2. Organize</strong> months of transactions in minutes</td>
                 </tr>
                 <tr>
-                  <td>Sort and categorize everything yourself</td>
-                  <td className="landing-bridge__clover-cell"><strong>3. Review</strong> what Clover organized</td>
+                  <td>Guess what changed in your finances</td>
+                  <td className="landing-bridge__clover-cell"><strong>3. Understand</strong> patterns, reports, and Adviser guidance</td>
                 </tr>
                 <tr>
-                  <td>Use separate apps to understand your money</td>
-                  <td className="landing-bridge__clover-cell"><strong>4. See</strong> one clear financial picture</td>
+                  <td>Make decisions without knowing what to do next</td>
+                  <td className="landing-bridge__clover-cell"><strong>4. Improve</strong> by acting on one clear recommendation at a time</td>
                 </tr>
               </tbody>
             </table>
@@ -135,10 +135,10 @@ export default async function HomePage() {
 
           <div className="landing-bridge__copy">
             <h2 className="landing-bridge__title">
-              Stop tracking. <span className="landing-highlight">Start organizing.</span>
+              Stop tracking. <span className="landing-highlight">Start making progress.</span>
             </h2>
             <p className="landing-bridge__subtitle">
-              Most budgeting apps ask you to manually record every expense. Clover starts with the financial records you already have.
+              Most budgeting apps ask you to record every expense manually. Clover starts with the records you already have, helps you understand what they mean, and gives you clear next steps to build better financial habits.
             </p>
           </div>
         </div>
