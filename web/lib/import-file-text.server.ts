@@ -1,7 +1,5 @@
-import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
-import { pathToFileURL } from "node:url";
 import { Prisma } from "@prisma/client";
 import { downloadImportObject } from "@/lib/import-storage.server";
 import {
@@ -1737,8 +1735,7 @@ const clonePdfBytes = (data: Uint8Array) => {
   return copy;
 };
 
-const createPdfJsLoadOptions = (data: Uint8Array, password?: string, baseUrl?: string | null, disableWorker = true) => {
-  const standardFontDataUrl = getPdfJsStandardFontDataUrl(baseUrl);
+const createPdfJsLoadOptions = (data: Uint8Array, password?: string, _baseUrl?: string | null, disableWorker = true) => {
   return {
     data: clonePdfBytes(data),
     ...(password ? { password } : {}),
@@ -1746,7 +1743,6 @@ const createPdfJsLoadOptions = (data: Uint8Array, password?: string, baseUrl?: s
     useWorkerFetch: false,
     isOffscreenCanvasSupported: false,
     isImageDecoderSupported: false,
-    ...(standardFontDataUrl ? { standardFontDataUrl } : {}),
   };
 };
 
@@ -1786,22 +1782,6 @@ export const getConfiguredPdfJsBaseUrl = () => {
     (process.env.PORT ? `http://127.0.0.1:${process.env.PORT}` : null);
 
   return typeof configuredBaseUrl === "string" && configuredBaseUrl.trim() ? configuredBaseUrl : null;
-};
-
-export const buildPdfJsStandardFontDataUrl = (pdfJsPackagePath: unknown) => {
-  if (typeof pdfJsPackagePath !== "string" || !pdfJsPackagePath.trim()) {
-    return null;
-  }
-
-  return `${pathToFileURL(join(dirname(pdfJsPackagePath), "standard_fonts")).toString().replace(/\/?$/, "")}/`;
-};
-
-export const getPdfJsStandardFontDataUrl = (_baseUrl?: string | null) => {
-  // Self-fetching public font assets is slow and brittle in serverless functions.
-  // Next traces this package directory into the function bundle instead.
-  // Build the specifier at runtime so webpack does not replace it with a numeric module id.
-  const pdfJsPackagePath = nodeRequire.resolve(["pdfjs-dist", "package.json"].join("/"));
-  return buildPdfJsStandardFontDataUrl(pdfJsPackagePath);
 };
 
 const decodeBody = async (body: unknown) => {

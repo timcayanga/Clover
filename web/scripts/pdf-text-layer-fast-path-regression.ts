@@ -1,9 +1,5 @@
 import assert from "node:assert/strict";
-import {
-  buildPdfJsStandardFontDataUrl,
-  getPdfJsStandardFontDataUrl,
-  pdfTextLayerLooksSufficientForParsing,
-} from "@/lib/import-file-text.server";
+import { pdfTextLayerLooksSufficientForParsing } from "@/lib/import-file-text.server";
 
 const healthyStatementText = [
   "RCBC VISA PLATINUM STATEMENT OF ACCOUNT",
@@ -30,18 +26,6 @@ assert.equal(
   pdfTextLayerLooksSufficientForParsing("RCBC VISA PLATINUM\nStatement Date Mar 22, 2026\nTotal Amount Due 12,746.52"),
   false,
   "Sparse summary text must still receive the OCR fallback."
-);
-
-assert.match(
-  getPdfJsStandardFontDataUrl("https://staging.clover.ph") ?? "",
-  /^file:.*\/pdfjs-dist\/standard_fonts\/$/,
-  "Server PDF extraction must use bundled fonts instead of a deployment self-fetch."
-);
-
-assert.equal(
-  buildPdfJsStandardFontDataUrl(70270),
-  null,
-  "A webpack module id must disable the optional font path instead of crashing PDF extraction."
 );
 
 console.log("PDF text-layer fast-path regression passed.");

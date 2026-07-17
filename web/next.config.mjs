@@ -5,10 +5,7 @@ const nextConfig = {
   reactStrictMode: true,
   serverExternalPackages: ["@napi-rs/canvas", "tesseract.js"],
   outputFileTracingIncludes: {
-    "/*": [
-      "./node_modules/@napi-rs/canvas*/**/*",
-      "./node_modules/pdfjs-dist/standard_fonts/**/*",
-    ],
+    "/*": ["./node_modules/@napi-rs/canvas*/**/*"],
   },
   typescript: {
     ignoreBuildErrors: true,
