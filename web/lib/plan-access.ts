@@ -44,6 +44,7 @@ export const countWorkspaceImportFilesThisMonth = (workspaceId: string, referenc
   prisma.importFile.count({
     where: {
       workspaceId,
+      status: "done",
       createdAt: {
         gte: getMonthStart(referenceDate),
       },
@@ -62,6 +63,7 @@ export const countWorkspaceOwnerImportFilesThisMonth = async (workspaceId: strin
 
   return prisma.importFile.count({
     where: {
+      status: "done",
       workspace: {
         userId: workspace.userId,
       },
@@ -114,6 +116,7 @@ export const getUserPlanUsage = async (userId: string, referenceDate = new Date(
     }),
     prisma.importFile.count({
       where: {
+        status: "done",
         workspace: {
           userId,
         },

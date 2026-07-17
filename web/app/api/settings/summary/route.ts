@@ -42,6 +42,7 @@ export async function GET(request: Request) {
       prisma.importFile.count({
         where: {
           workspaceId,
+          status: "done",
           uploadedAt: { gte: startOfMonth },
         },
       }),

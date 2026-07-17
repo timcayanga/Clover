@@ -479,7 +479,7 @@ async function fetchUserMetrics(userIds: string[]) {
       WHERE w."userId" IN (${Prisma.join(userIdFragments)})
         AND i."uploadedAt" >= ${startOfMonth}
         AND i."uploadedAt" < ${nextMonth}
-        AND i."status" <> 'deleted'
+        AND i."status" = 'done'
       GROUP BY w."userId"
     `),
     prisma.$queryRaw<Array<{ userId: string; recentErrorCount: bigint }>>(Prisma.sql`
