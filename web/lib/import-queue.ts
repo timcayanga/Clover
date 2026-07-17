@@ -45,9 +45,20 @@ export const getImportQueue = () => {
 };
 
 export const enqueueImportProcessing = async (payload: ImportJobPayload, options?: { jobId?: string }) => {
-  return getImportQueue().add("process-import", payload, {
-    jobId: options?.jobId ?? payload.importFileId,
-  });
+  const importQueue = getImportQueue();
+  const jobId = options?.jobId ?? payload.importFileId;
+  const existingJob = await importQueue.getJob(jobId);
+
+  if (existingJob) {
+    const state = await existingJob.getState();
+    if (["active", "delayed", "prioritized", "waiting", "waiting-children"].includes(state)) {
+      return existingJob;
+    }
+
+    await existingJob.remove();
+  }
+
+  return importQueue.add("process-import", payload, { jobId });
 };
 
 export const getRedisConnection = getConnection;
