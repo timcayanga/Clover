@@ -23,6 +23,24 @@ const isPdfPasswordError = (error: unknown) => {
 };
 
 const PDF_PASSWORD_PROBE = "__clover_password_probe__";
+const CLIENT_PDF_TEXT_EXTRACTION_TIMEOUT_MS = 12_000;
+
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number) => {
+  let timeoutId: number | null = null;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      reject(new Error("Local PDF reading timed out; continuing with Clover's server reader."));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId !== null) {
+      window.clearTimeout(timeoutId);
+    }
+  }
+};
 
 export const extractTextFromFile = async (
   file: File,
@@ -99,13 +117,13 @@ export const extractTextFromFile = async (
     };
 
     try {
-      return await readPdfText(password);
+      return await withTimeout(readPdfText(password), CLIENT_PDF_TEXT_EXTRACTION_TIMEOUT_MS);
     } catch (error) {
       if (password || !isPdfPasswordError(error)) {
         throw error;
       }
 
-      return readPdfText("");
+      return withTimeout(readPdfText(""), CLIENT_PDF_TEXT_EXTRACTION_TIMEOUT_MS);
     }
   }
 

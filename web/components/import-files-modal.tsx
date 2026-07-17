@@ -4734,7 +4734,20 @@ export function ImportFilesModal({
           progressLabel: "Reading the file",
           status: "importing",
         });
-        extractedTextForUpload = await extractTextFromFile(item.file, item.password.trim() || undefined);
+        try {
+          extractedTextForUpload = await extractTextFromFile(item.file, item.password.trim() || undefined);
+        } catch (error) {
+          if (isPasswordError(error)) {
+            throw error;
+          }
+
+          console.warn("Local statement read failed; continuing with server parser", {
+            importFileId,
+            fileName: item.file.name,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          extractedTextForUpload = "";
+        }
         if (extractedTextForUpload.trim()) {
           localPreparseTextByItemIdRef.current.set(itemId, extractedTextForUpload);
         }
