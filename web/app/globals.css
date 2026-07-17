@@ -34671,6 +34671,104 @@ body:has(.pricing-page) {
   color: var(--text);
 }
 
+.settings-guidance-card {
+  gap: 18px;
+}
+
+.settings-guidance-card__head {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-guidance-card__head p {
+  max-width: 760px;
+}
+
+.settings-guidance-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settings-guidance-option {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.58);
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.settings-guidance-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.settings-guidance-option strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.settings-guidance-option span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.settings-guidance-option.is-selected {
+  border-color: rgba(3, 168, 192, 0.42);
+  background: rgba(3, 168, 192, 0.1);
+  box-shadow: 0 8px 18px rgba(3, 168, 192, 0.08);
+}
+
+.settings-guidance-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+}
+
+.settings-guidance-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.settings-guidance-table caption {
+  padding: 12px 14px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.settings-guidance-table th,
+.settings-guidance-table td {
+  padding: 10px 12px;
+  border-top: 1px solid rgba(15, 23, 42, 0.07);
+  text-align: left;
+  vertical-align: top;
+}
+
+.settings-guidance-table thead th {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.settings-guidance-table tbody th {
+  width: 130px;
+  color: var(--text);
+  font-weight: 600;
+}
+
 .settings-action-card {
   display: grid;
   gap: 16px;
@@ -36219,6 +36317,10 @@ html[data-helper-text="hidden"] .settings-helper {
 }
 
 @media (max-width: 760px) {
+  .settings-guidance-options {
+    grid-template-columns: 1fr;
+  }
+
   .settings-hub {
     gap: 10px;
   }

@@ -158,6 +158,7 @@ const SETTINGS_IMPORTS_KEY = "clover.settings.imports.v1";
 const SETTINGS_REGIONAL_KEY = "clover.settings.regional.v1";
 const SETTINGS_DATA_USE_KEY = "clover.settings.data-use.v1";
 const SETTINGS_WORKSPACE_DEFAULTS_KEY = "clover.settings.workspace-defaults.v1";
+const SETTINGS_GUIDANCE_KEY = "clover.settings.guidance-level.v1";
 const FALLBACK_TIME_ZONES = [
   "GMT",
   "UTC",
@@ -186,6 +187,37 @@ type SettingsAccountIdentityCache = {
   email?: string;
   imageUrl?: string | null;
 };
+
+type GuidanceLevel = "learning" | "comfortable" | "very-comfortable";
+
+const guidanceOptions: Array<{ value: GuidanceLevel; label: string; helper: string }> = [
+  {
+    value: "learning",
+    label: "Still learning",
+    helper: "Fewer choices, simpler language, and more guided next steps.",
+  },
+  {
+    value: "comfortable",
+    label: "Comfortable",
+    helper: "Balanced detail with practical explanations when they help.",
+  },
+  {
+    value: "very-comfortable",
+    label: "Very comfortable",
+    helper: "Keep Clover streamlined, with metrics and controls close at hand.",
+  },
+];
+
+const guidanceTableRows = [
+  ["Dashboard", "Key cards and one recommended next action", "Standard cards, trends, and comparisons", "Current compact dashboard"],
+  ["Transactions", "Essential fields with plain labels", "Standard transaction details", "Current efficient table"],
+  ["Imports", "Step-by-step upload and review", "Normal upload and review flow", "Fast import workflow"],
+  ["Review", "One decision at a time with explanations", "Grouped recommendations", "Batch actions and detailed controls"],
+  ["Adviser", "Step-by-step guidance", "Practical recommendations", "Numbers, trends, and tradeoffs"],
+  ["Reports", "A few guided summaries", "Presets plus basic filters", "Full filters and analysis"],
+  ["Budgets", "Guided setup with suggested defaults", "Normal budget editor", "Direct editing and projections"],
+  ["Advanced details", "Behind Show more", "Available but secondary", "Immediately accessible"],
+] as const;
 
 const readStoredAccountIdentity = (): SettingsAccountIdentityCache | null => {
   if (typeof window === "undefined") {
@@ -463,6 +495,8 @@ export function SettingsHub({
   const [paypalBuyerCountry, setPaypalBuyerCountry] = useState<string | null>(initialPaypalBuyerCountry ?? null);
   const [themeMode, setThemeMode] = useState<ThemeMode>("light");
   const [helperTextVisible, setHelperTextVisible] = useState(true);
+  const [guidanceLevel, setGuidanceLevel] = useState<GuidanceLevel>("very-comfortable");
+  const [guidancePreferenceLoaded, setGuidancePreferenceLoaded] = useState(false);
   const [historyCutoff, setHistoryCutoff] = useState(() => new Date().toISOString().slice(0, 10));
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [accountMessage, setAccountMessage] = useState<string | null>(null);
@@ -899,6 +933,12 @@ export function SettingsHub({
     const initialHelperText = readStoredHelperTextPreference();
     setHelperTextVisible(initialHelperText);
     applyHelperTextPreference(initialHelperText);
+
+    const storedGuidanceLevel = window.localStorage.getItem(SETTINGS_GUIDANCE_KEY);
+    if (storedGuidanceLevel === "learning" || storedGuidanceLevel === "comfortable" || storedGuidanceLevel === "very-comfortable") {
+      setGuidanceLevel(storedGuidanceLevel);
+    }
+    setGuidancePreferenceLoaded(true);
   }, []);
 
   useEffect(() => {
@@ -953,6 +993,15 @@ export function SettingsHub({
     window.localStorage.setItem(HELPER_TEXT_STORAGE_KEY, helperTextVisible ? "visible" : "hidden");
     applyHelperTextPreference(helperTextVisible);
   }, [helperTextVisible]);
+
+  useEffect(() => {
+    if (!guidancePreferenceLoaded) {
+      return;
+    }
+
+    window.localStorage.setItem(SETTINGS_GUIDANCE_KEY, guidanceLevel);
+    document.documentElement.dataset.cloverGuidance = guidanceLevel;
+  }, [guidanceLevel, guidancePreferenceLoaded]);
 
   useEffect(() => {
     writeStoredJsonValue(SETTINGS_NOTIFICATIONS_KEY, notificationPreferences);
@@ -2049,6 +2098,58 @@ export function SettingsHub({
                 );
               })}
             </div>
+
+            <article className="settings-guidance-card settings-action-card">
+              <div className="settings-guidance-card__head">
+                <div>
+                  <h5>Guidance Preferences</h5>
+                  <p>Choose how much explanation and detail Clover should show. This does not change your data or permissions.</p>
+                </div>
+              </div>
+              <div className="settings-guidance-options" role="radiogroup" aria-label="Guidance level">
+                {guidanceOptions.map((option) => {
+                  const isSelected = guidanceLevel === option.value;
+
+                  return (
+                    <label key={option.value} className={`settings-guidance-option${isSelected ? " is-selected" : ""}`}>
+                      <input
+                        type="radio"
+                        name="guidance-level"
+                        value={option.value}
+                        checked={isSelected}
+                        onChange={() => setGuidanceLevel(option.value)}
+                      />
+                      <strong>{option.label}</strong>
+                      <span>{option.helper}</span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="settings-guidance-table-wrap">
+                <table className="settings-guidance-table">
+                  <caption>How guidance level changes Clover</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Area</th>
+                      <th scope="col">Still learning</th>
+                      <th scope="col">Comfortable</th>
+                      <th scope="col">Very comfortable</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {guidanceTableRows.map(([area, learning, comfortable, veryComfortable]) => (
+                      <tr key={area}>
+                        <th scope="row">{area}</th>
+                        <td>{learning}</td>
+                        <td>{comfortable}</td>
+                        <td>{veryComfortable}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </article>
 
             <article className="settings-display-toggle">
               <div className="settings-display-toggle__copy">
