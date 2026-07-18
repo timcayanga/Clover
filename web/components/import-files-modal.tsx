@@ -304,6 +304,15 @@ const triggerImportEnrichment = (importFileId: string) => {
     });
 };
 
+const reportImportClientStage = (stage: string, details: Record<string, string | number | boolean | null> = {}) => {
+  void fetch("/api/imports/client-events", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ stage, details }),
+    keepalive: true,
+  }).catch(() => undefined);
+};
+
 const clearImportInteractionLocks = () => {
   if (typeof document === "undefined") {
     return;
@@ -1027,9 +1036,14 @@ export function ImportFilesModal({
       setMessage("");
       setValidationNotice(null);
       initialFilesSignatureRef.current = null;
-      if (!items.some((item) => item.status === "pending" || item.status === "needs_password" || item.status === "parsing" || item.status === "importing")) {
+      const serverImportStillActive = hasActiveServerImport(itemsRef.current);
+      if (!serverImportStillActive) {
+        // Pending client-only rows are not durable work. Keeping them after close
+        // poisons retries because the next selection is rejected as a duplicate.
+        itemsRef.current = [];
         setItems([]);
         setBusy(false);
+        autoStartRef.current = false;
       }
       return;
     }
@@ -1318,6 +1332,12 @@ export function ImportFilesModal({
         return;
       }
 
+      if (busy) {
+        // Keep autoStartRef armed. The regular effect will start this queue when
+        // the previous run releases the busy state.
+        return;
+      }
+
       const hasPendingFile = itemsRef.current.some(
         (item) => item.status === "pending" || (item.status === "needs_password" && item.password.trim())
       );
@@ -1326,6 +1346,9 @@ export function ImportFilesModal({
       }
 
       autoStartRef.current = false;
+      reportImportClientStage("auto_start_dispatched", {
+        pendingFiles: itemsRef.current.filter((item) => item.status === "pending").length,
+      });
       void handleStartImportRef.current?.();
     }, 0);
   };
@@ -1349,11 +1372,22 @@ export function ImportFilesModal({
     const shouldLaunchInBackground = Boolean(options?.launchInBackground || backgroundOnly || launchInBackground);
       flushSync(() => {
         setItems((current) => {
-        const existing = new Set(current.map((item) => fileKey(item.file)));
+        // A file that never reached the server must remain retryable. Replace a
+        // stale copy of the same selection instead of silently treating it as a
+        // duplicate forever.
+        const incomingKeys = new Set(nextFiles.map(fileKey));
+        const retainedCurrent = current.filter(
+          (item) =>
+            !incomingKeys.has(fileKey(item.file)) &&
+            item.status !== "error" &&
+            item.status !== "done" &&
+            item.confirmationState !== "confirmed"
+        );
+        const existing = new Set(retainedCurrent.map((item) => fileKey(item.file)));
         // The server enforces the monthly upload quota per file. The modal should
         // only cap extreme UI batches, otherwise a stale user-limit payload can
         // accidentally turn a multi-file selection into a one-file import.
-        const availableSlots = Math.max(0, MAX_IMPORT_FILES_PER_BATCH - current.length);
+        const availableSlots = Math.max(0, MAX_IMPORT_FILES_PER_BATCH - retainedCurrent.length);
       let skippedTooMany = 0;
       let additionsCount = 0;
       const validationIssues: string[] = [];
@@ -1453,7 +1487,7 @@ export function ImportFilesModal({
         });
       }
 
-          queuedItemsSnapshot = [...current, ...additions];
+          queuedItemsSnapshot = [...retainedCurrent, ...additions];
           return queuedItemsSnapshot;
         });
       });
@@ -1471,6 +1505,10 @@ export function ImportFilesModal({
     if (additions.length > 0) {
       autoStartRef.current = true;
       autoCloseAfterStartRef.current = shouldAutoClose;
+      reportImportClientStage("files_queued", {
+        fileCount: additions.length,
+        workspaceReady: Boolean(workspaceId),
+      });
       scheduleQueuedImport();
       if (shouldLaunchInBackground) {
         setLaunchInBackground(true);
@@ -1496,6 +1534,13 @@ export function ImportFilesModal({
 
     if (feedbackMessage) {
       setMessage(feedbackMessage);
+    }
+
+    if (additions.length === 0) {
+      reportImportClientStage("files_rejected_before_queue", {
+        fileCount: nextFiles.length,
+        workspaceReady: Boolean(workspaceId),
+      });
     }
 
     setValidationNotice(validationMessage || null);
@@ -1601,8 +1646,9 @@ export function ImportFilesModal({
 
       const canRetireVisibleImport = itemsRef.current.some(
         (item) =>
-          (item.status === "importing" || item.status === "pending" || item.confirmationState === "staged") &&
-          (item.importFileId || item.targetAccountId || item.importedRows !== null || item.progress >= IMPORT_PROGRESS.uploading)
+          ((item.status === "importing" || item.status === "parsing") && item.progress >= IMPORT_PROGRESS.uploading) ||
+          item.confirmationState === "confirmed" ||
+          Number(item.importedRows ?? 0) > 0
       );
       if (!canRetireVisibleImport) {
         return;
@@ -4751,6 +4797,11 @@ export function ImportFilesModal({
 
     try {
       importFileId = item.importFileId ?? crypto.randomUUID();
+      reportImportClientStage("process_file_started", {
+        importMode: itemImportMode,
+        fileSize: item.file.size,
+        hasWorkspace: Boolean(workspaceId),
+      });
       capturePostHogClientEvent("import_started", {
         file_type: fileTypeLabel(item.file),
         file_size_bytes: item.file.size,
@@ -7300,6 +7351,10 @@ export function ImportFilesModal({
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
+      reportImportClientStage("file_input_changed", {
+        fileCount: event.target.files.length,
+        workspaceReady: Boolean(workspaceId),
+      });
       addFiles(event.target.files);
     }
     event.target.value = "";
