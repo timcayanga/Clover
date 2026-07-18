@@ -1408,6 +1408,22 @@ const hasRecentWorkspaceImportEvidence = (
   return activity.status === "active" || importActivityHasCompletedRows(activity);
 };
 
+const isCanceledWorkspaceImport = (
+  activity: ImportActivitySnapshot | null,
+  workspaceId: string
+) => {
+  if (!workspaceId || !activity || activity.workspaceId !== workspaceId || activity.status !== "error") {
+    return false;
+  }
+
+  const statusText = [activity.detail, activity.errorTitle, activity.errorMessage]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .toLowerCase();
+
+  return statusText.includes("upload canceled") || statusText.includes("upload cancelled");
+};
+
 const hasImportedTransactionIdentity = (transaction: Transaction) => {
   if (typeof transaction.importFileId === "string" && transaction.importFileId.trim()) {
     return true;
@@ -2216,6 +2232,7 @@ function TransactionsPageContent() {
   const [merchantRenameSuggestion, setMerchantRenameSuggestion] = useState<MerchantRenameSuggestion | null>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [importActivitySnapshot, setImportActivitySnapshot] = useState<ImportActivitySnapshot | null>(() => readImportActivity());
+  const canceledImportWorkspaceIdsRef = useRef(new Set<string>());
   const mobileSearchInputRef = useRef<HTMLInputElement | null>(null);
   const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
   const searchText = useMemo(() => normalizeTransactionSearch(query), [query]);
@@ -2232,9 +2249,21 @@ function TransactionsPageContent() {
   useEffect(() => {
     setImportActivitySnapshot(readImportActivity());
     return subscribeImportActivity(() => {
-      setImportActivitySnapshot(readImportActivity());
+      const snapshot = readImportActivity();
+      if (snapshot?.workspaceId && snapshot.status === "active") {
+        canceledImportWorkspaceIdsRef.current.delete(snapshot.workspaceId);
+      }
+      if (isCanceledWorkspaceImport(snapshot, snapshot?.workspaceId ?? "") && snapshot?.workspaceId) {
+        canceledImportWorkspaceIdsRef.current.add(snapshot.workspaceId);
+        if (snapshot.workspaceId === selectedWorkspaceId) {
+          setIsWorkspaceDataReady(true);
+          setTransactionsLoadFailed(false);
+          setHasInitialTransactionsLoaded(true);
+        }
+      }
+      setImportActivitySnapshot(snapshot);
     });
-  }, []);
+  }, [selectedWorkspaceId]);
   const [merchantRenameBusy, setMerchantRenameBusy] = useState(false);
   const [manualCategoryTouched, setManualCategoryTouched] = useState(false);
   const [manualMoreOpen, setManualMoreOpen] = useState(false);
@@ -6502,9 +6531,16 @@ function TransactionsPageContent() {
     </div>
   ) : null;
   const isWorkspaceSelectionSettling = !hasLoadedWorkspaceList || (!selectedWorkspaceId && workspaces.length > 0);
+  const isCanceledImport = Boolean(
+    selectedWorkspaceId &&
+    (
+      canceledImportWorkspaceIdsRef.current.has(selectedWorkspaceId) ||
+      isCanceledWorkspaceImport(importActivitySnapshot, selectedWorkspaceId)
+    )
+  );
   const isTableLoading =
     transactions.length === 0 &&
-    (isWorkspaceSelectionSettling || (Boolean(selectedWorkspaceId) && !isWorkspaceDataReady));
+    (isWorkspaceSelectionSettling || (!isCanceledImport && Boolean(selectedWorkspaceId) && !isWorkspaceDataReady));
   const hasTransactionDataEvidence =
     Boolean(selectedWorkspaceId) &&
     (
@@ -6516,6 +6552,7 @@ function TransactionsPageContent() {
     totalTransactionCountForDisplay === 0 &&
     !hasActiveServerSideFilters &&
     !transactionsLoadFailed &&
+    !isCanceledImport &&
     !isTableLoading &&
     hasTransactionDataEvidence;
   const hasKnownTransactionsAwaitingRows =
@@ -6523,7 +6560,8 @@ function TransactionsPageContent() {
     !transactionsLoadFailed &&
     transactions.length === 0 &&
     totalTransactionCountForDisplay > 0;
-  const showTransactionsLoadingState = isTableLoading || shouldShowSyncingInsteadOfEmpty || hasKnownTransactionsAwaitingRows;
+  const showTransactionsLoadingState =
+    !isCanceledImport && (isTableLoading || shouldShowSyncingInsteadOfEmpty || hasKnownTransactionsAwaitingRows);
   const transactionsBlankState = (
     <div className="empty-state transactions-empty-state transactions-empty-state--table">
       <div className="transactions-empty-state__art" aria-hidden="true">
