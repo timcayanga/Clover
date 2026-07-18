@@ -7,6 +7,8 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 const encoder = new TextEncoder();
+const IMPORT_STATUS_STREAM_POLL_MS = 1_500;
+const IMPORT_STATUS_STREAM_MAX_ERRORS = 3;
 
 const formatSseEvent = (event: string, data: unknown) => encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 
@@ -25,23 +27,26 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
       await assertWorkspaceAccess(userId, importFile.workspaceId as string);
     }
 
+    let closeStream: () => void = () => undefined;
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         let closed = false;
-        let timer: ReturnType<typeof setInterval> | null = null;
+        let timer: ReturnType<typeof setTimeout> | null = null;
         let lastSerializedSnapshot = "";
         let visibleEventSent = false;
+        let consecutiveErrors = 0;
         const close = () => {
           if (closed) {
             return;
           }
           closed = true;
           if (timer) {
-            clearInterval(timer);
+            clearTimeout(timer);
             timer = null;
           }
           controller.close();
         };
+        closeStream = close;
 
         const send = (event: string, data: unknown) => {
           if (closed) {
@@ -57,7 +62,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
 
           try {
             const snapshot = await loadImportStatusSnapshot(importId, {
-              importFile,
               promoteFailedVisibleImport: true,
             });
 
@@ -66,6 +70,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
               close();
               return;
             }
+            consecutiveErrors = 0;
 
             const serialized = JSON.stringify(snapshot);
             if (serialized !== lastSerializedSnapshot) {
@@ -83,18 +88,32 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
               send("visible", snapshot);
             }
 
+            const terminalStatus =
+              snapshot.importFile.status === "done" ||
+              snapshot.importFile.status === "failed";
             const finished =
               snapshot.confirmationStatus === "confirmed" ||
-              visible;
+              visible ||
+              terminalStatus;
 
             if (finished) {
-              send("complete", snapshot);
+              send(snapshot.importFile.status === "failed" ? "error" : "complete", snapshot);
               close();
             }
           } catch (error) {
-            send("error", {
-              error: error instanceof Error ? error.message : "Unable to stream import status",
-            });
+            consecutiveErrors += 1;
+            if (consecutiveErrors >= IMPORT_STATUS_STREAM_MAX_ERRORS) {
+              send("error", {
+                error: error instanceof Error ? error.message : "Unable to stream import status",
+              });
+              close();
+            }
+          } finally {
+            if (!closed) {
+              timer = setTimeout(() => {
+                void poll();
+              }, IMPORT_STATUS_STREAM_POLL_MS);
+            }
           }
         };
 
@@ -103,13 +122,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
           phase: "queued",
         });
         void poll();
-        timer = setInterval(() => {
-          void poll();
-        }, 250);
 
         request.signal.addEventListener("abort", close, { once: true });
       },
-      cancel() {},
+      cancel() {
+        closeStream();
+      },
     });
 
     return new Response(stream, {

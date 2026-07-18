@@ -9,6 +9,8 @@ import {
   isVisualImportRetryBudgetExhausted,
   shouldQueueDifficultVisualImportInsteadOfFailing,
   shouldKeepFailedVisualImportRecoverable,
+  shouldLoadReceiptVisionAssets,
+  shouldProcessReceiptInline,
   shouldStopStaleVisualImportRetry,
 } from "@/lib/import-visual-recovery";
 
@@ -103,6 +105,49 @@ const main = () => {
     }),
     false,
     "Non-visual imports should not be held in visual recovery."
+  );
+  assert.equal(
+    shouldProcessReceiptInline({ forceInlineProcessing: false }),
+    false,
+    "Normal receipt uploads should return promptly and continue parsing after the response."
+  );
+  assert.equal(
+    shouldProcessReceiptInline({ forceInlineProcessing: true }),
+    true,
+    "Explicit QA runs should retain forced inline receipt processing."
+  );
+  assert.equal(
+    shouldLoadReceiptVisionAssets({
+      imageImport: true,
+      importMode: "receipt",
+      hasTrainedReceiptDetails: false,
+      receiptPreviewIsUsable: false,
+      skipVisualBackupParser: false,
+    }),
+    true,
+    "Untrained receipts with weak local OCR must send the source image to the vision backup parser."
+  );
+  assert.equal(
+    shouldLoadReceiptVisionAssets({
+      imageImport: true,
+      importMode: "receipt",
+      hasTrainedReceiptDetails: false,
+      receiptPreviewIsUsable: true,
+      skipVisualBackupParser: false,
+    }),
+    false,
+    "Reliable local receipt parses should keep the fast path."
+  );
+  assert.equal(
+    shouldLoadReceiptVisionAssets({
+      imageImport: true,
+      importMode: "receipt",
+      hasTrainedReceiptDetails: true,
+      receiptPreviewIsUsable: false,
+      skipVisualBackupParser: false,
+    }),
+    false,
+    "Trained receipt fixtures should not pay the vision fallback cost."
   );
 
   console.log("Import visual recovery regression passed.");

@@ -40,6 +40,22 @@ export const shouldQueueDifficultVisualImportInsteadOfFailing = (params: {
   params.forceInlineProcessing !== true &&
   params.canReuseCachedParseSnapshot !== true;
 
+export const shouldProcessReceiptInline = (params: { forceInlineProcessing: boolean }) =>
+  params.forceInlineProcessing;
+
+export const shouldLoadReceiptVisionAssets = (params: {
+  imageImport: boolean;
+  importMode?: string | null;
+  hasTrainedReceiptDetails: boolean;
+  receiptPreviewIsUsable: boolean;
+  skipVisualBackupParser: boolean;
+}) =>
+  params.imageImport &&
+  params.importMode === "receipt" &&
+  !params.hasTrainedReceiptDetails &&
+  !params.receiptPreviewIsUsable &&
+  !params.skipVisualBackupParser;
+
 export const shouldKeepFailedVisualImportRecoverable = (params: {
   importMode?: VisualImportRecoveryMode | null;
   isVisualImport?: boolean;

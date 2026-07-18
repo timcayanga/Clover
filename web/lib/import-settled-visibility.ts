@@ -194,7 +194,9 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
   const expectedBalance = toBalanceString(params.expectedBalance);
   const timeoutMs = params.timeoutMs ?? 10_000;
   const startedAt = Date.now();
-  const pollDelayMs = 250;
+  // Status snapshots fan out to several database reads. Keep client polling
+  // comfortably below the server's stream cadence to avoid connection storms.
+  const pollDelayMs = 1_500;
 
   const streamResult = await waitWithStatusStream({
     accountId,

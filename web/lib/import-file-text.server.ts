@@ -2323,6 +2323,7 @@ const renderPdfPageImagesFromBytes = async (
       useWorkerFetch: false,
       isOffscreenCanvasSupported: false,
       isImageDecoderSupported: false,
+      CanvasFactory: NodeCanvasFactory,
     };
     const loadingTask = pdfjs.getDocument(options as any);
     const pdf = await loadingTask.promise;

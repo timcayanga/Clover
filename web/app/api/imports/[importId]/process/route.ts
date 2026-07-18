@@ -51,6 +51,7 @@ import {
   getNextVisualImportAttempt,
   getVisualImportRepairMessage,
   getVisualImportRetryMessage,
+  shouldProcessReceiptInline,
   shouldQueueDifficultVisualImportInsteadOfFailing,
   type VisualImportRecoveryMode,
 } from "@/lib/import-visual-recovery";
@@ -187,25 +188,6 @@ const isPdfUpload = (fileName: string, fileType: string) =>
 const isImageUploadFile = (fileName: string, fileType: string) =>
   fileType.toLowerCase().startsWith("image/") ||
   /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(fileName.toLowerCase());
-
-const shouldProcessReceiptInline = (params: {
-  fileName: string;
-  fileType: string;
-  bytesLength: number;
-  forceInlineProcessing: boolean;
-}) => {
-  if (params.forceInlineProcessing) {
-    return true;
-  }
-
-  const isImageReceipt = isImageUploadFile(params.fileName, params.fileType);
-  const isPdfReceipt = isPdfUpload(params.fileName, params.fileType);
-  if (!isImageReceipt && !isPdfReceipt) {
-    return false;
-  }
-
-  return params.bytesLength <= 8_000_000;
-};
 
 const isLikelyLowQualityPnbStatementFile = (fileName: string, bankHint: string) => {
   if (bankHint !== "PNB") {
@@ -1944,9 +1926,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const shouldInlineReceiptProcessing =
         importMode === "receipt" &&
         shouldProcessReceiptInline({
-          fileName: effectiveFileName,
-          fileType: effectiveFileType,
-          bytesLength: bytes.length,
           forceInlineProcessing,
         });
 

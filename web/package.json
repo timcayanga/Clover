@@ -15,6 +15,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "qa:parsers": "tsx scripts/parser-regression.ts",
     "qa:imports": "tsx scripts/import-smoke-regression.ts",
+    "qa:import-status-stream": "tsx scripts/import-status-stream-regression.ts",
     "qa:generic-parser-hardening": "tsx scripts/generic-parser-hardening-regression.ts",
     "qa:screenshot-routing": "tsx scripts/screenshot-routing-regression.ts",
     "qa:bpi-enrichment": "tsx scripts/bpi-four-file-enrichment-regression.ts",

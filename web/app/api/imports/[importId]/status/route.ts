@@ -11,6 +11,12 @@ import { loadImportStatusSnapshot } from "@/lib/import-status-snapshot";
 import { mergeCheckpointSourceMetadata, readCheckpointImportMode } from "@/lib/import-workflow";
 import { prisma } from "@/lib/prisma";
 import { processImportEnrichmentJobs } from "@/workers/import-processor";
+import {
+  VISUAL_IMPORT_RETRY_LIMIT,
+  getNextVisualImportAttempt,
+  getVisualImportRepairMessage,
+  getVisualImportRetryMessage,
+} from "@/lib/import-visual-recovery";
 import { after, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 
@@ -392,10 +398,60 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       Date.now() - updatedAtMs > STALE_RECEIPT_PROCESSING_MS;
 
     if (staleReceiptProcessing) {
+      const nextAttempt = getNextVisualImportAttempt(snapshot.importFile.processingAttempt);
+      if (nextAttempt <= VISUAL_IMPORT_RETRY_LIMIT) {
+        await updateImportFileCompat(importId, {
+          status: "processing",
+          processingPhase: "reading_receipt_vision",
+          processingAttempt: nextAttempt,
+          processingMessage: getVisualImportRetryMessage("receipt", nextAttempt),
+          parsedRowsCount: 0,
+          confirmedTransactionsCount: 0,
+        });
+        after(async () => {
+          try {
+            const { getConfiguredPdfJsBaseUrl } = await import("@/lib/import-file-text.server");
+            const { processImportFileText } = await import("@/workers/import-processor");
+            await processImportFileText(importId, {
+              actorUserId: userId,
+              qaSource: "import_processing",
+              importMode: "receipt",
+              autoRerunAttempt: nextAttempt,
+              pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
+            });
+          } catch {
+            await updateImportFileCompat(importId, {
+              status: "failed",
+              processingPhase: "repair_needed",
+              processingAttempt: nextAttempt,
+              processingMessage: getVisualImportRepairMessage("receipt"),
+              parsedRowsCount: 0,
+              confirmedTransactionsCount: 0,
+            }).catch(() => null);
+          }
+        });
+        const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
+          importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+          promoteFailedVisibleImport: true,
+        });
+        if (refreshedSnapshot) {
+          return NextResponse.json({
+            ...refreshedSnapshot,
+            receiptSelfHeal: {
+              reason: "stale_receipt_retry",
+              attempt: nextAttempt,
+              retryLimit: VISUAL_IMPORT_RETRY_LIMIT,
+              staleAfterSeconds: Math.round(STALE_RECEIPT_PROCESSING_MS / 1000),
+            },
+          });
+        }
+      }
+
       await updateImportFileCompat(importId, {
         status: "failed",
         processingPhase: "repair_needed",
-        processingMessage: "Clover couldn't finish reading this receipt. Please retry or use a clearer photo.",
+        processingAttempt: nextAttempt,
+        processingMessage: getVisualImportRepairMessage("receipt"),
         parsedRowsCount: 0,
         confirmedTransactionsCount: 0,
       });

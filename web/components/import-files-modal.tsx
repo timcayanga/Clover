@@ -4260,7 +4260,8 @@ export function ImportFilesModal({
               ? "Notes screenshot imported"
               : "Screenshot imported";
 
-    for (let attempt = 0; attempt < Math.ceil(MAX_WAIT_MS / 500); attempt += 1) {
+    const statusPollDelayMs = 1_500;
+    for (let attempt = 0; attempt < Math.ceil(MAX_WAIT_MS / statusPollDelayMs); attempt += 1) {
       const response = await fetch(`/api/imports/${importFileId}/status`, {
         cache: "no-store",
       });
@@ -4325,7 +4326,7 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
-          await sleep(500);
+          await sleep(statusPollDelayMs);
           continue;
         }
         closeImportAfterError(itemId, "background", fileName, statusDecision.message);
@@ -4366,7 +4367,7 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
-          await sleep(500);
+          await sleep(statusPollDelayMs);
           continue;
         }
         closeImportAfterError(
@@ -4518,7 +4519,7 @@ export function ImportFilesModal({
               summary: null,
               errorMessage: null,
             });
-            await sleep(500);
+            await sleep(statusPollDelayMs);
             continue;
           }
           closeImportAfterError(
@@ -4551,7 +4552,7 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
-          await sleep(500);
+          await sleep(statusPollDelayMs);
           continue;
         }
 
@@ -4605,7 +4606,7 @@ export function ImportFilesModal({
           return { completed: false, summary: null };
         }
 
-        await sleep(500);
+        await sleep(statusPollDelayMs);
         continue;
       }
 
@@ -4684,7 +4685,7 @@ export function ImportFilesModal({
         return { completed: false, summary: null };
       }
 
-      await sleep(500);
+      await sleep(statusPollDelayMs);
     }
 
     const hasRecoverableFinalProgress = Boolean(importFileId);
