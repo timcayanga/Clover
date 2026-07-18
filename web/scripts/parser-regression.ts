@@ -668,9 +668,9 @@ const main = async () => {
   const parser = await import("../lib/import-parser");
   const receiptAccountResolutionModule = await import("../lib/receipt-account-resolution");
   const splitBillModule = await import("../lib/split-bill");
-  if (dataEngine.IMPORT_FILE_EXTRACTION_CACHE_VERSION !== "v8") {
+  if (dataEngine.IMPORT_FILE_EXTRACTION_CACHE_VERSION !== "v11") {
     throw new Error(
-      `expected receipt OCR cache version v8 after extraction recovery changes, got ${dataEngine.IMPORT_FILE_EXTRACTION_CACHE_VERSION}`
+      `expected import extraction cache version v11 after extraction recovery changes, got ${dataEngine.IMPORT_FILE_EXTRACTION_CACHE_VERSION}`
     );
   }
 
