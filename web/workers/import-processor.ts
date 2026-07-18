@@ -87,6 +87,7 @@ import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
 import { coerceTransactionTypeFromCategoryName, isTransferCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
+import { inferInvestmentClassification } from "@/lib/investments";
 import { shouldLoadReceiptVisionAssets } from "@/lib/import-visual-recovery";
 import { isProtectedTransactionReviewStatus } from "@/lib/data-engine-safety";
 import { applyImportValidationToRows, validateParsedImportRows } from "@/lib/data-engine-validation";
@@ -4709,11 +4710,29 @@ const resolveConfirmationAccount = async (params: {
             typeof payload.totalCost === "number")
       ) ?? null;
     if (marketInvestmentPayload) {
+      const marketClassification = inferInvestmentClassification({
+        subtype:
+          typeof marketInvestmentPayload.investmentSubtype === "string"
+            ? marketInvestmentPayload.investmentSubtype
+            : null,
+        name: [marketInvestmentPayload.assetName, marketInvestmentPayload.accountLabel, params.statementMetadata?.accountName]
+          .filter((value): value is string => typeof value === "string")
+          .join(" "),
+        institution:
+          typeof marketInvestmentPayload.institution === "string"
+            ? marketInvestmentPayload.institution
+            : typeof params.statementMetadata?.institution === "string"
+              ? params.statementMetadata.institution
+              : null,
+        symbol:
+          typeof marketInvestmentPayload.investmentSymbol === "string"
+            ? marketInvestmentPayload.investmentSymbol
+            : null,
+        assetType: typeof marketInvestmentPayload.assetType === "string" ? marketInvestmentPayload.assetType : null,
+        provider: typeof marketInvestmentPayload.provider === "string" ? marketInvestmentPayload.provider : null,
+      });
       return {
-        investmentSubtype:
-          typeof marketInvestmentPayload.investmentSubtype === "string" && marketInvestmentPayload.investmentSubtype.trim()
-            ? marketInvestmentPayload.investmentSubtype.trim()
-            : "stock",
+        investmentSubtype: marketClassification.subtype,
         investmentSymbol:
           typeof marketInvestmentPayload.investmentSymbol === "string" && marketInvestmentPayload.investmentSymbol.trim()
             ? marketInvestmentPayload.investmentSymbol.trim()
@@ -4726,6 +4745,34 @@ const resolveConfirmationAccount = async (params: {
           typeof marketInvestmentPayload.totalCost === "number" && Number.isFinite(marketInvestmentPayload.totalCost)
             ? marketInvestmentPayload.totalCost
             : null,
+        investmentPrincipal: null,
+        investmentInterestRate: null,
+        investmentMaturityValue: null,
+        investmentMaturityDate: null,
+      };
+    }
+
+    const inferredClassification = inferInvestmentClassification({
+      name: [params.statementMetadata?.accountName, ...payloads.map((payload) => payload.accountLabel ?? payload.assetName)]
+        .filter((value): value is string => typeof value === "string")
+        .join(" "),
+      institution:
+        typeof params.statementMetadata?.institution === "string"
+          ? params.statementMetadata.institution
+          : null,
+      assetType: payloads
+        .map((payload) => payload.assetType)
+        .find((value): value is string => typeof value === "string"),
+      provider: payloads
+        .map((payload) => payload.provider)
+        .find((value): value is string => typeof value === "string"),
+    });
+    if (inferredClassification.source === "inferred") {
+      return {
+        investmentSubtype: inferredClassification.subtype,
+        investmentSymbol: null,
+        investmentQuantity: null,
+        investmentCostBasis: null,
         investmentPrincipal: null,
         investmentInterestRate: null,
         investmentMaturityValue: null,

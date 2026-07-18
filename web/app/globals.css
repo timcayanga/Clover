@@ -19488,6 +19488,52 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   min-height: 0;
 }
 
+.investments-valuation-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 9px 12px;
+  border: 1px solid rgba(3, 168, 192, 0.16);
+  border-radius: 14px;
+  background: rgba(3, 168, 192, 0.05);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.investments-valuation-note.is-warning {
+  align-items: flex-start;
+  border-color: rgba(217, 119, 6, 0.22);
+  background: rgba(245, 158, 11, 0.07);
+}
+
+.investments-currency-comparison-state {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 6px;
+  min-height: 240px;
+  padding: 24px;
+  text-align: center;
+}
+
+.investments-currency-comparison-state p {
+  max-width: 52ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.investments-currency-comparison-state--analysis {
+  grid-column: 1 / -1;
+  min-height: 0;
+  border: 1px solid rgba(217, 119, 6, 0.2);
+  border-radius: 16px;
+  background: rgba(245, 158, 11, 0.06);
+}
+
 .investments-market {
   display: grid;
   gap: 14px;
@@ -20091,6 +20137,31 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
   .investments-overview-metrics__card .investments-overview-card__subvalue {
     font-size: 0.72rem;
+  }
+
+  .investments-valuation-note {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .investments-overview-mix-panel .report-donut,
+  .investments-insights-grid .investments-analysis-donut {
+    grid-template-columns: 1fr;
+  }
+
+  .investments-overview-mix-panel .report-donut__chart,
+  .investments-insights-grid .investments-analysis-donut .report-donut__chart {
+    width: min(100%, 250px);
+    justify-self: center;
+  }
+
+  .investments-overview-mix-panel .report-donut__legend,
+  .investments-insights-grid .investments-analysis-donut .report-donut__legend {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .investments-portfolio-table__total {
+    max-width: calc(100vw - 64px);
   }
 
   .market-chart__canvas {
@@ -20742,6 +20813,38 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   gap: 10px;
 }
 
+.investments-portfolio-table__asset-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.investments-portfolio-table__asset-button:hover strong,
+.investments-portfolio-table__asset-button:focus-visible strong {
+  color: var(--accent);
+}
+
+.investments-portfolio-table__asset-button:focus-visible {
+  border-radius: 10px;
+  outline: 2px solid rgba(3, 168, 192, 0.28);
+  outline-offset: 3px;
+}
+
+.investments-classification-badge {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
 .investments-portfolio-table__cell--asset strong {
   min-width: 0;
   font-size: 13px;
@@ -20909,6 +21012,33 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
   .investments-insights-grid .investments-analysis-donut .report-donut__chart {
     width: min(100%, 280px);
+  }
+}
+
+@media (max-width: 760px) {
+  .investments-mobile-header__bar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .investments-tabs--mobile {
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  .investments-overview-mix-panel .report-donut,
+  .investments-insights-grid .investments-analysis-donut {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .investments-overview-mix-panel .report-donut__legend,
+  .investments-insights-grid .investments-analysis-donut .report-donut__legend {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .investments-overview-mix-panel .report-donut__legend-item,
+  .investments-insights-grid .investments-analysis-donut .report-donut__legend-item {
+    min-width: 0;
   }
 }
 
@@ -23701,6 +23831,11 @@ button.accounts-detail__transaction-head-cell {
   gap: 6px;
 }
 
+.accounts-manual-form__field {
+  display: grid;
+  gap: 6px;
+}
+
 .accounts-add-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -24110,6 +24245,19 @@ button.accounts-detail__transaction-head-cell {
 .investments-add-modal__currency-selector .currency-selector__trigger-token,
 .investments-add-modal__currency-selector .currency-selector__trigger-all {
   font-size: 0.72rem;
+}
+
+.investments-classification-suggestion {
+  justify-self: start;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .investments-asset-detail-modal {

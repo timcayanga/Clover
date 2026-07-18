@@ -13,6 +13,22 @@ export const INVESTMENT_SUBTYPES = [
 
 export type InvestmentSubtype = (typeof INVESTMENT_SUBTYPES)[number];
 
+export type InvestmentClassification = {
+  subtype: InvestmentSubtype;
+  confidence: number;
+  reason: string;
+  source: "confirmed" | "inferred" | "fallback";
+};
+
+export type InvestmentClassificationInput = {
+  subtype?: string | null;
+  name?: string | null;
+  institution?: string | null;
+  symbol?: string | null;
+  assetType?: string | null;
+  provider?: string | null;
+};
+
 export type InvestmentFieldConfig = {
   key: string;
   label: string;
@@ -24,6 +40,108 @@ export type InvestmentFieldConfig = {
 const MARKET_SUBTYPES = new Set<InvestmentSubtype>(["stock", "etf", "mutual_fund", "money_market_fund", "uitf", "reit", "crypto"]);
 const FIXED_INCOME_SUBTYPES = new Set<InvestmentSubtype>(["bond", "time_deposit"]);
 const DIVIDEND_SUBTYPES = new Set<InvestmentSubtype>(["stock", "etf", "mutual_fund", "money_market_fund", "uitf", "reit"]);
+
+const normalizeClassificationText = (value: string | null | undefined) =>
+  String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const CLASSIFICATION_RULES: Array<{
+  subtype: InvestmentSubtype;
+  confidence: number;
+  label: string;
+  pattern: RegExp;
+}> = [
+  {
+    subtype: "money_market_fund",
+    confidence: 96,
+    label: "money market fund wording",
+    pattern: /\b(money market|cash management fund|liquidity fund)\b/,
+  },
+  {
+    subtype: "time_deposit",
+    confidence: 96,
+    label: "time deposit product wording",
+    pattern: /\b(time deposit|term deposit|fixed deposit|unoboost|uno boost|certificate of deposit)\b/,
+  },
+  {
+    subtype: "reit",
+    confidence: 95,
+    label: "REIT wording or symbol",
+    pattern: /\b(reit|real estate investment trust|areit|creit|mreit|rcr)\b/,
+  },
+  {
+    subtype: "etf",
+    confidence: 95,
+    label: "ETF wording or known ETF symbol",
+    pattern: /\b(etf|exchange traded fund|fmetf|spy|qqq|voo|vti)\b/,
+  },
+  {
+    subtype: "uitf",
+    confidence: 95,
+    label: "UITF wording",
+    pattern: /\b(uitf|unit investment trust fund)\b/,
+  },
+  {
+    subtype: "crypto",
+    confidence: 94,
+    label: "crypto provider, asset, or token wording",
+    pattern: /\b(gcrypto|pdax|binance|coins ph|crypto|cryptocurrency|bitcoin|btc|ethereum|eth|solana|sol|xrp|usdt|usdc|bnb|doge|cardano|ada)\b/,
+  },
+  {
+    subtype: "bond",
+    confidence: 92,
+    label: "bond or fixed-income wording",
+    pattern: /\b(bond|bonds|treasury|fixed income|government securities|corporate note)\b/,
+  },
+  {
+    subtype: "mutual_fund",
+    confidence: 90,
+    label: "managed fund wording or provider",
+    pattern: /\b(mutual fund|feeder fund|index fund|equity fund|balanced fund|income fund|atram|gfunds|philequity|sun life prosperity|alfm)\b/,
+  },
+  {
+    subtype: "stock",
+    confidence: 90,
+    label: "stock, broker, or securities wording",
+    pattern: /\b(stock|stocks|share|shares|equity|equities|gstocks|broker|brokerage|securities|col financial|ab capital|investatrade|gotrade|dragonfi|philstocks)\b/,
+  },
+];
+
+export const inferInvestmentClassification = (input: InvestmentClassificationInput): InvestmentClassification => {
+  const explicitSubtype = String(input.subtype ?? "").trim() as InvestmentSubtype;
+  if (INVESTMENT_SUBTYPES.includes(explicitSubtype)) {
+    return {
+      subtype: explicitSubtype,
+      confidence: 100,
+      reason: "Saved investment type",
+      source: "confirmed",
+    };
+  }
+
+  const evidence = normalizeClassificationText(
+    [input.assetType, input.name, input.symbol, input.institution, input.provider].filter(Boolean).join(" ")
+  );
+  for (const rule of CLASSIFICATION_RULES) {
+    if (rule.pattern.test(evidence)) {
+      return {
+        subtype: rule.subtype,
+        confidence: rule.confidence,
+        reason: `Matched ${rule.label}`,
+        source: "inferred",
+      };
+    }
+  }
+
+  return {
+    subtype: "other",
+    confidence: explicitSubtype === "other" ? 100 : 35,
+    reason: explicitSubtype === "other" ? "Saved as Other" : "Not enough information to identify the investment type",
+    source: explicitSubtype === "other" ? "confirmed" : "fallback",
+  };
+};
 
 export const isMarketInvestmentSubtype = (value: string | null | undefined): value is InvestmentSubtype =>
   !!value && MARKET_SUBTYPES.has(value as InvestmentSubtype);

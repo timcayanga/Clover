@@ -1,5 +1,5 @@
 import { getAccountBrand, type AccountBrand } from "@/lib/account-brand";
-import { isFixedIncomeInvestmentSubtype, isMarketInvestmentSubtype, type InvestmentSubtype } from "@/lib/investments";
+import { isFixedIncomeInvestmentSubtype, type InvestmentSubtype } from "@/lib/investments";
 
 type InvestmentAssetBrandInput = {
   symbol?: string | null;
@@ -9,83 +9,38 @@ type InvestmentAssetBrandInput = {
   institution?: string | null;
 };
 
-const INVESTMENT_IMAGE_FOLDERS = {
-  crypto: "crypto",
-  ph: "ph markets",
-  us: "us markets",
-} as const;
-
 const assetIconPath = "/assets/banks/investment.png";
-
-const encodeAssetPath = (...segments: string[]) => `/${segments.map((segment) => encodeURIComponent(segment)).join("/")}`;
 
 const uniqueValues = (values: string[]) => Array.from(new Set(values.filter((value) => value.length > 0)));
 
-const normalizeAssetStem = (value: string) => {
-  const trimmed = value.trim().toLowerCase();
-  if (!trimmed) {
+const escapeSvgText = (value: string) =>
+  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+const getAssetMonogram = (params: InvestmentAssetBrandInput) => {
+  const source = params.symbol?.trim() || params.name?.trim() || "IN";
+  const words = source.split(/[^a-z0-9]+/i).filter(Boolean);
+  const initials = (words.length > 1 ? words.slice(0, 2).map((word) => word[0]).join("") : source.slice(0, 3)).toUpperCase();
+  return initials || "IN";
+};
+
+const getAssetMonogramDataUri = (params: InvestmentAssetBrandInput) => {
+  const isCrypto = params.subtype === "crypto";
+  const isFixedIncome = isFixedIncomeInvestmentSubtype(params.subtype);
+  const background = isCrypto ? "#16a34a" : isFixedIncome ? "#2563eb" : "#0891b2";
+  const text = escapeSvgText(getAssetMonogram(params));
+  const fontSize = text.length > 2 ? 22 : 26;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80"><rect width="80" height="80" rx="22" fill="${background}"/><text x="40" y="48" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-size="${fontSize}" font-weight="700">${text}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+};
+
+export const getInvestmentAssetLogoCandidates = (params: InvestmentAssetBrandInput) => {
+  if (!params.symbol?.trim() && !params.name?.trim()) {
     return [];
   }
 
-  const original = value.trim().replace(/\.[a-z0-9]+$/i, "");
-  const lowerOriginal = original.toLowerCase();
-  const withoutExtension = trimmed.replace(/\.[a-z0-9]+$/i, "");
-  const parts = withoutExtension.split(/[^a-z0-9]+/g).filter(Boolean);
-  const candidates = [
-    original,
-    original.toUpperCase(),
-    lowerOriginal,
-    withoutExtension,
-    withoutExtension.replace(/[^a-z0-9]+/g, "-"),
-    withoutExtension.replace(/[^a-z0-9]+/g, ""),
-    lowerOriginal.replace(/[^a-z0-9]+/g, "-"),
-    lowerOriginal.replace(/[^a-z0-9]+/g, ""),
-    ...parts,
-    ...parts.map((part) => part.toUpperCase()),
-    parts.join("-"),
-  ];
-
-  return uniqueValues(candidates);
-};
-
-const getInvestmentImageFolderOrder = (params: InvestmentAssetBrandInput) => {
-  if (params.subtype === "crypto") {
-    return [INVESTMENT_IMAGE_FOLDERS.crypto, INVESTMENT_IMAGE_FOLDERS.ph, INVESTMENT_IMAGE_FOLDERS.us, ""];
-  }
-
-  if (isMarketInvestmentSubtype(params.subtype) || isFixedIncomeInvestmentSubtype(params.subtype)) {
-    const preferredMarket = params.currency?.trim().toUpperCase() === "USD" ? INVESTMENT_IMAGE_FOLDERS.us : INVESTMENT_IMAGE_FOLDERS.ph;
-    const secondaryMarket = preferredMarket === INVESTMENT_IMAGE_FOLDERS.us ? INVESTMENT_IMAGE_FOLDERS.ph : INVESTMENT_IMAGE_FOLDERS.us;
-    return [preferredMarket, secondaryMarket, "", INVESTMENT_IMAGE_FOLDERS.crypto];
-  }
-
-  return ["", INVESTMENT_IMAGE_FOLDERS.ph, INVESTMENT_IMAGE_FOLDERS.us, INVESTMENT_IMAGE_FOLDERS.crypto];
-};
-
-const getInvestmentImageExtensions = (folder: string) =>
-  folder === INVESTMENT_IMAGE_FOLDERS.crypto ? ["png", "webp", "jpg", "jpeg", "svg", "avif"] : ["svg", "png", "webp", "jpg", "jpeg", "avif"];
-
-export const getInvestmentAssetLogoCandidates = (params: InvestmentAssetBrandInput) => {
-  const folderOrder = getInvestmentImageFolderOrder(params);
-  const stems = uniqueValues([
-    ...(params.symbol ? normalizeAssetStem(params.symbol) : []),
-    ...(params.name ? normalizeAssetStem(params.name) : []),
-  ]);
-
-  const candidates: string[] = [];
-
-  for (const folder of folderOrder) {
-    const extensions = getInvestmentImageExtensions(folder);
-
-    for (const stem of stems) {
-      for (const extension of extensions) {
-        const fileName = `${stem}.${extension}`;
-        candidates.push(folder ? encodeAssetPath("assets", "investments", folder, fileName) : encodeAssetPath("assets", "investments", fileName));
-      }
-    }
-  }
-
-  return uniqueValues(candidates);
+  // A deterministic local monogram avoids probing dozens of missing image URLs,
+  // which previously made investment marks flicker while their fallbacks loaded.
+  return [getAssetMonogramDataUri(params)];
 };
 
 export const getInvestmentAssetBrand = (params: InvestmentAssetBrandInput): AccountBrand => {
@@ -99,7 +54,8 @@ export const getInvestmentAssetBrand = (params: InvestmentAssetBrandInput): Acco
         type: "investment",
       })
     : null;
-  const shouldPreferInstitutionLogo = !params.symbol?.trim() || !params.subtype || params.subtype === "other";
+  const shouldPreferInstitutionLogo =
+    !params.symbol?.trim() || !params.subtype || params.subtype === "other" || isFixedIncome;
   const institutionLogoCandidates = uniqueValues([
     ...(institutionBrand?.logoSrcs ?? []),
     ...(institutionBrand?.logoSrc ? [institutionBrand.logoSrc] : []),

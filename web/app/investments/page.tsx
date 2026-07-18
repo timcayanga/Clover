@@ -33,6 +33,7 @@ import {
 import {
   canTrackInvestmentDividends,
   canTrackInvestmentPurchaseHistory,
+  inferInvestmentClassification,
   getInvestmentFieldConfigs,
   getInvestmentPurchaseSummaryLabel,
   getInvestmentSubtypeDescription,
@@ -40,6 +41,7 @@ import {
   INVESTMENT_SUBTYPES,
   isFixedIncomeInvestmentSubtype,
   isMarketInvestmentSubtype,
+  type InvestmentClassification,
   type InvestmentSubtype,
 } from "@/lib/investments";
 
@@ -206,6 +208,18 @@ const formatDate = (value: string) =>
     year: "numeric",
   });
 
+const formatValuationFreshness = (value: Date | null) => {
+  if (!value) {
+    return "No valuation date available";
+  }
+
+  return `Recorded values updated ${value.toLocaleDateString("en-PH", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })}`;
+};
+
 const normalizeInvestmentLabel = (value: string | null | undefined) =>
   String(value ?? "")
     .trim()
@@ -257,97 +271,26 @@ const extractInvestmentAssetNameFromTransaction = (transaction: InvestmentTransa
 };
 
 const inferInvestmentSubtypeFromAssetName = (assetName: string | null | undefined): InvestmentSubtype | null => {
-  const normalized = normalizeInvestmentLabel(assetName);
-  if (!normalized) {
+  if (!assetName?.trim()) {
     return null;
   }
 
-  if (normalized.includes("money market")) {
-    return "money_market_fund";
-  }
-
-  if (normalized.includes("bond")) {
-    return "bond";
-  }
-
-  if (normalized.includes("fund")) {
-    return "mutual_fund";
-  }
-
-  if (/\b(uitf|unit investment trust fund)\b/i.test(normalized)) {
-    return "uitf";
-  }
-
-  if (/\b(etf|exchange traded fund)\b/i.test(normalized)) {
-    return "etf";
-  }
-
-  if (/\b(reit|real estate investment trust)\b/i.test(normalized)) {
-    return "reit";
-  }
-
-  if (/\b(crypto|bitcoin|btc|ethereum|eth|solana|usdt|gcrypto)\b/i.test(normalized)) {
-    return "crypto";
-  }
-
-  if (/\b(stock|stocks|share|shares|equity|gstocks|broker|securities)\b/i.test(normalized)) {
-    return "stock";
-  }
-
-  if (/\b(time\s+deposit|term\s+deposit|fixed\s+deposit|deposit|gsave)\b/i.test(normalized)) {
-    return "time_deposit";
-  }
-
-  if (/\b(bond|treasury|fixed\s+income)\b/i.test(normalized)) {
-    return "bond";
-  }
-
-  return null;
+  const classification = inferInvestmentClassification({ name: assetName });
+  return classification.source === "fallback" ? null : classification.subtype;
 };
 
-const inferInvestmentSubtypeFromAccount = (account: Account, assetNames: string[] = []) => {
-  if (account.investmentSubtype) {
-    return account.investmentSubtype;
-  }
+const getInvestmentClassificationForAccount = (account: Account, assetNames: string[] = []) =>
+  inferInvestmentClassification({
+    // Imported "other" values are parser fallbacks, not user confirmations. Keep
+    // manually selected Other values authoritative while allowing imports to improve.
+    subtype: account.source === "manual" ? account.investmentSubtype : account.investmentSubtype === "other" ? null : account.investmentSubtype,
+    name: [account.name, ...assetNames].filter(Boolean).join(" "),
+    institution: account.institution,
+    symbol: account.investmentSymbol,
+  });
 
-  const accountText = [
-    account.name,
-    account.institution ?? "",
-    account.investmentSymbol ?? "",
-    ...assetNames,
-  ].join(" ");
-  const normalized = normalizeInvestmentLabel(accountText);
-
-  if (/\b(gcrypto|crypto|bitcoin|btc|ethereum|eth|solana|usdt)\b/i.test(normalized)) {
-    return "crypto" as const;
-  }
-  if (/\b(time\s+deposit|term\s+deposit|fixed\s+deposit|gsave)\b/i.test(normalized)) {
-    return "time_deposit" as const;
-  }
-  if (/\b(uitf|unit investment trust fund)\b/i.test(normalized)) {
-    return "uitf" as const;
-  }
-  if (/\b(etf|exchange traded fund)\b/i.test(normalized)) {
-    return "etf" as const;
-  }
-  if (/\b(reit|real estate investment trust)\b/i.test(normalized)) {
-    return "reit" as const;
-  }
-  if (/\b(money market|money-market)\b/i.test(normalized)) {
-    return "money_market_fund" as const;
-  }
-  if (/\b(mutual fund|fund|atram|gfunds|philequity|sunlife|investment fund)\b/i.test(normalized)) {
-    return "mutual_fund" as const;
-  }
-  if (/\b(bond|treasury|fixed income)\b/i.test(normalized)) {
-    return "bond" as const;
-  }
-  if (/\b(stock|stocks|share|shares|equity|gstocks|broker|securities|col financial|philstocks)\b/i.test(normalized)) {
-    return "stock" as const;
-  }
-
-  return "other" as const;
-};
+const inferInvestmentSubtypeFromAccount = (account: Account, assetNames: string[] = []) =>
+  getInvestmentClassificationForAccount(account, assetNames).subtype;
 
 const getInvestmentHighlights = (account: Account) => {
   const subtype = account.investmentSubtype;
@@ -404,6 +347,7 @@ type InvestmentAllocationRow = InvestmentGroup & {
 
 type PortfolioDisplayRow = {
   key: string;
+  accountId: string;
   assetId: string;
   name: string;
   institution: string | null;
@@ -414,6 +358,7 @@ type PortfolioDisplayRow = {
   purchaseValue: number | null;
   gainLoss: number | null;
   currency: string;
+  classification: InvestmentClassification;
 };
 
 const getInvestmentTableDetail = (account: Account, subtype: InvestmentSubtype | null) => {
@@ -667,7 +612,7 @@ const getInvestmentSearchBlob = (account: Account) =>
 const serializeInvestmentEditDraft = (account: Account): InvestmentEditDraft => ({
   name: account.name,
   institution: account.institution ?? "",
-  investmentSubtype: account.investmentSubtype ?? "other",
+  investmentSubtype: inferInvestmentSubtypeFromAccount(account),
   investmentSymbol: account.investmentSymbol ?? "",
   investmentQuantity: account.investmentQuantity ?? "",
   investmentCostBasis: account.investmentCostBasis ?? "",
@@ -933,9 +878,11 @@ export default function InvestmentsPage() {
 
       if (!isGeneric || distinctAssetNames.length <= 1) {
         const preferredAssetName = distinctAssetNames[0] ?? account.name;
-        const subtype = inferInvestmentSubtypeFromAccount(account, distinctAssetNames);
+        const classification = getInvestmentClassificationForAccount(account, distinctAssetNames);
+        const subtype = classification.subtype;
         rows.push({
           key: account.id,
+          accountId: account.id,
           assetId: account.id,
           name: preferredAssetName,
           institution: account.institution,
@@ -949,23 +896,35 @@ export default function InvestmentsPage() {
           purchaseValue,
           gainLoss,
           currency: account.currency,
+          classification,
         });
         continue;
       }
 
       for (const assetName of distinctAssetNames) {
+        const assetClassification = inferInvestmentClassification({
+          name: assetName,
+          institution: account.institution,
+          symbol: account.investmentSymbol,
+        });
+        const classification =
+          assetClassification.source === "fallback"
+            ? getInvestmentClassificationForAccount(account, distinctAssetNames)
+            : assetClassification;
         rows.push({
           key: `${account.id}:${assetName}`,
+          accountId: account.id,
           assetId: `${account.id}:${assetName}`,
           name: assetName,
           institution: account.institution,
-          subtype: inferInvestmentSubtypeFromAssetName(assetName) ?? inferInvestmentSubtypeFromAccount(account, distinctAssetNames),
+          subtype: inferInvestmentSubtypeFromAssetName(assetName) ?? classification.subtype,
           symbol: null,
           detail: null,
           currentValue: null,
           purchaseValue: null,
           gainLoss: null,
           currency: account.currency,
+          classification,
         });
       }
     }
@@ -1090,10 +1049,30 @@ export default function InvestmentsPage() {
 
   const selectedCurrencyCodes = useMemo(() => getCurrencyCodes(selectedCurrencyInvestmentAccounts), [selectedCurrencyInvestmentAccounts]);
   const hasVisibleCurrencySelection = selectedCurrencyInvestmentAccounts.length > 0;
+  const canAggregateSelectedCurrency = selectedCurrencyCodes.length <= 1;
+  const latestValuationDate = useMemo(() => {
+    const timestamps = selectedCurrencyInvestmentAccounts
+      .map((account) => new Date(account.updatedAt).getTime())
+      .filter(Number.isFinite);
+    return timestamps.length > 0 ? new Date(Math.max(...timestamps)) : null;
+  }, [selectedCurrencyInvestmentAccounts]);
+  const currencyBreakdown = useMemo(
+    () =>
+      selectedCurrencyCodes.map((currency) => {
+        const currencyAccounts = selectedCurrencyInvestmentAccounts.filter(
+          (account) => formatCurrencyCode(account.currency) === currency
+        );
+        return {
+          currency,
+          value: currencyAccounts.reduce((sum, account) => sum + (parseNullableAmount(account.balance) ?? 0), 0),
+        };
+      }),
+    [selectedCurrencyCodes, selectedCurrencyInvestmentAccounts]
+  );
 
   const investmentGroups = useMemo<InvestmentGroup[]>(
-    () => buildInvestmentGroups(selectedCurrencyInvestmentAccounts),
-    [selectedCurrencyInvestmentAccounts]
+    () => (canAggregateSelectedCurrency ? buildInvestmentGroups(selectedCurrencyInvestmentAccounts) : []),
+    [canAggregateSelectedCurrency, selectedCurrencyInvestmentAccounts]
   );
 
   const portfolioTableRows = useMemo(() => visiblePortfolioRows, [visiblePortfolioRows]);
@@ -1124,7 +1103,7 @@ export default function InvestmentsPage() {
 
   const accountPerformance = useMemo(
     () =>
-      selectedCurrencyInvestmentAccounts.map((account) => {
+      (canAggregateSelectedCurrency ? selectedCurrencyInvestmentAccounts : []).map((account) => {
         const currentValue = parseNullableAmount(account.balance) ?? 0;
         const purchaseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
         const gainLoss = purchaseValue === null ? null : currentValue - purchaseValue;
@@ -1138,7 +1117,7 @@ export default function InvestmentsPage() {
           returnPercent,
         };
       }),
-    [selectedCurrencyInvestmentAccounts]
+    [canAggregateSelectedCurrency, selectedCurrencyInvestmentAccounts]
   );
 
   const topHoldings = useMemo(
@@ -1187,7 +1166,7 @@ export default function InvestmentsPage() {
       label: item.account.name,
       value: item.value,
       valueLabel: formatInvestmentAmount(item.value, item.account.currency),
-      detailLabel: item.account.institution ?? (item.account.investmentSubtype ? getInvestmentSubtypeLabel(item.account.investmentSubtype) : "Unclassified"),
+      detailLabel: item.account.institution ?? getInvestmentSubtypeLabel(inferInvestmentSubtypeFromAccount(item.account)),
       color: INVESTMENT_ANALYSIS_COLORS[index % INVESTMENT_ANALYSIS_COLORS.length],
     }));
 
@@ -1216,7 +1195,7 @@ export default function InvestmentsPage() {
       detailLabel: item.returnPercent === null
         ? item.account.investmentSubtype
           ? getInvestmentSubtypeLabel(item.account.investmentSubtype)
-          : "Unclassified"
+          : "Other"
         : `${item.returnPercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(item.returnPercent))} return`,
       color: INVESTMENT_ANALYSIS_COLORS[index % INVESTMENT_ANALYSIS_COLORS.length],
     }));
@@ -1270,6 +1249,15 @@ export default function InvestmentsPage() {
     () => getInvestmentFieldConfigs(manualInvestmentSubtype),
     [manualInvestmentSubtype]
   );
+  const manualSuggestedClassification = useMemo(
+    () =>
+      inferInvestmentClassification({
+        name: manualName,
+        institution: manualInstitution,
+        symbol: manualInvestmentSymbol,
+      }),
+    [manualInstitution, manualInvestmentSymbol, manualName]
+  );
   const manualCanTrackPurchases = canTrackInvestmentPurchaseHistory(manualInvestmentSubtype);
   const manualCanTrackDividends = canTrackInvestmentDividends(manualInvestmentSubtype);
 
@@ -1288,6 +1276,14 @@ export default function InvestmentsPage() {
   const canUseProTabs = planTier === "pro";
   const canAccessSelectedTab = !((selectedTab === "market" || selectedTab === "analysis") && !canUseProTabs);
   const visibleInvestmentTabs = INVESTMENT_TABS;
+  const classifiedInvestmentAccounts = useMemo(
+    () =>
+      investmentAccounts.map((account) => ({
+        ...account,
+        investmentSubtype: inferInvestmentSubtypeFromAccount(account),
+      })),
+    [investmentAccounts]
+  );
   const editingAccount = editingAccountId ? visibleInvestmentAccounts.find((account) => account.id === editingAccountId) ?? accounts.find((account) => account.id === editingAccountId) ?? null : null;
   const selectedInvestmentAsset = selectedInvestmentAssetId
     ? visibleInvestmentAccounts.find((account) => account.id === selectedInvestmentAssetId) ??
@@ -1308,7 +1304,7 @@ export default function InvestmentsPage() {
     ? getInvestmentAssetBrand({
         symbol: selectedInvestmentAsset.investmentSymbol,
         name: selectedInvestmentAsset.name,
-        subtype: selectedInvestmentAsset.investmentSubtype,
+        subtype: inferInvestmentSubtypeFromAccount(selectedInvestmentAsset),
         currency: selectedInvestmentAsset.currency,
         institution: selectedInvestmentAsset.institution,
       })
@@ -1750,10 +1746,13 @@ export default function InvestmentsPage() {
                 </button>
                 <p className="eyebrow">Current Value</p>
                 <strong className="accounts-overview-card__amount is-good">
-                  {hasVisibleCurrencySelection
+                  {hasVisibleCurrencySelection && canAggregateSelectedCurrency
                     ? formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)
-                    : "—"}
+                    : hasVisibleCurrencySelection
+                      ? "Select a currency"
+                      : "—"}
                 </strong>
+                <span className="investments-overview-card__subvalue">Recorded value, not a live market quote</span>
               </article>
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
                 <button className="accounts-overview-card__info" type="button" aria-label="How P&L is calculated">
@@ -1764,19 +1763,41 @@ export default function InvestmentsPage() {
                 </button>
                 <p className="eyebrow">P&amp;L</p>
                 <strong className={`accounts-overview-card__amount ${portfolioTotals.gainLoss > 0 ? "is-good" : portfolioTotals.gainLoss < 0 ? "is-danger" : "is-neutral"}`}>
-                  {hasVisibleCurrencySelection
+                  {hasVisibleCurrencySelection && canAggregateSelectedCurrency
                     ? formatInvestmentAggregate(portfolioTotals.gainLoss, selectedCurrencyInvestmentAccounts)
-                    : "—"}
+                    : hasVisibleCurrencySelection
+                      ? "Select a currency"
+                      : "—"}
                 </strong>
                 <span className="investments-overview-card__subvalue">
-                  {hasVisibleCurrencySelection && selectedCurrencyCodes.length === 1 && portfolioTotals.purchaseValue > 0
+                  {hasVisibleCurrencySelection && canAggregateSelectedCurrency && portfolioTotals.purchaseValue > 0
                     ? percentFormatter.format(portfolioTotals.gainLoss / portfolioTotals.purchaseValue)
                     : "—"}
                 </span>
               </article>
             </section>
+            {hasVisibleCurrencySelection ? (
+              <div className={`investments-valuation-note${canAggregateSelectedCurrency ? "" : " is-warning"}`}>
+                <span>{formatValuationFreshness(latestValuationDate)}</span>
+                {canAggregateSelectedCurrency ? (
+                  <span>Values come from saved entries and the latest imports.</span>
+                ) : (
+                  <span>
+                    Clover does not add unlike currencies together. Choose one currency to compare allocation and performance.
+                    {currencyBreakdown.length > 0
+                      ? ` ${currencyBreakdown.map((item) => formatInvestmentAmount(item.value, item.currency)).join(" · ")}`
+                      : ""}
+                  </span>
+                )}
+              </div>
+            ) : null}
             <section className="investments-allocation investments-allocation--overview glass">
-              {portfolioAllocation.length > 0 ? (
+              {!canAggregateSelectedCurrency && selectedCurrencyInvestmentAccounts.length > 0 ? (
+                <div className="investments-currency-comparison-state">
+                  <strong>Choose one currency to view Portfolio Mix</strong>
+                  <p>Allocation percentages only make sense when every holding uses the same currency.</p>
+                </div>
+              ) : portfolioAllocation.length > 0 ? (
                 <>
                   <div className="investments-allocation__head">
                     <div className="investments-allocation__head-title">
@@ -1787,7 +1808,7 @@ export default function InvestmentsPage() {
                     </div>
                     <div className="investments-allocation__summary">
                       <span>Visible holdings</span>
-                      <strong>{portfolioAllocation.reduce((sum, group) => sum + group.accounts.length, 0)} accounts</strong>
+                      <strong>{portfolioAllocation.reduce((sum, group) => sum + group.accounts.length, 0)} holdings</strong>
                     </div>
                   </div>
                   <div className="investments-overview-mix-grid">
@@ -1901,23 +1922,38 @@ export default function InvestmentsPage() {
                     return (
                       <div key={row.key} className="investments-portfolio-table__row" role="row">
                         <div className="investments-portfolio-table__cell investments-portfolio-table__cell--asset">
-                          <AccountBrandMark
-                            accountBrand={getInvestmentAssetBrand({
-                              symbol: row.symbol,
-                              name: row.name,
-                              subtype: row.subtype,
-                              currency: row.currency,
-                              institution: row.institution,
-                            })}
-                            label={row.symbol ?? row.name}
-                          />
-                          <div>
-                            <strong>{row.name}</strong>
-                            <span>{row.institution ?? ""}</span>
-                          </div>
+                          <button
+                            className="investments-portfolio-table__asset-button"
+                            type="button"
+                            onClick={() => {
+                              const account = investmentAccounts.find((item) => item.id === row.accountId);
+                              if (account) openInvestmentAsset(account);
+                            }}
+                            aria-label={`Open ${row.name}`}
+                          >
+                            <AccountBrandMark
+                              accountBrand={getInvestmentAssetBrand({
+                                symbol: row.symbol,
+                                name: row.name,
+                                subtype: row.subtype,
+                                currency: row.currency,
+                                institution: row.institution,
+                              })}
+                              label={row.symbol ?? row.name}
+                            />
+                            <div>
+                              <strong>{row.name}</strong>
+                              <span>{row.institution ?? ""}</span>
+                            </div>
+                          </button>
                         </div>
                         <div className="investments-portfolio-table__cell">
-                          {row.subtype ? getInvestmentSubtypeLabel(row.subtype) : ""}
+                          <span>{row.subtype ? getInvestmentSubtypeLabel(row.subtype) : ""}</span>
+                          {row.classification.source === "inferred" ? (
+                            <small className="investments-classification-badge" title={row.classification.reason}>
+                              Suggested · {row.classification.confidence}%
+                            </small>
+                          ) : null}
                         </div>
                         <div className="investments-portfolio-table__cell">
                           {row.symbol ?? ""}
@@ -1948,9 +1984,15 @@ export default function InvestmentsPage() {
             </section>
           </>
         ) : selectedTab === "market" ? (
-          <InvestmentMarketChart investmentAccounts={investmentAccounts} />
+          <InvestmentMarketChart investmentAccounts={classifiedInvestmentAccounts} />
         ) : (
           <section className="investments-insights-grid">
+            {!canAggregateSelectedCurrency && selectedCurrencyInvestmentAccounts.length > 0 ? (
+              <div className="investments-currency-comparison-state investments-currency-comparison-state--analysis">
+                <strong>Choose one currency to compare performance</strong>
+                <p>Clover keeps unlike currencies separate so gains and allocation percentages are not misleading.</p>
+              </div>
+            ) : null}
             <div className="investments-insights__stats investments-insights__stats--top">
               <article className="accounts-overview-card glass">
                 <div className="investments-metric__label">
@@ -2125,6 +2167,7 @@ export default function InvestmentsPage() {
                       {[selectedInvestmentAsset.institution, selectedInvestmentAsset.investmentSymbol].filter(Boolean).join(" · ")}
                     </span>
                   ) : null}
+                  <span>{formatValuationFreshness(new Date(selectedInvestmentAsset.updatedAt))}</span>
                 </div>
               </div>
 
@@ -2143,7 +2186,7 @@ export default function InvestmentsPage() {
                     type="button"
                     onClick={() => focusInvestmentAssetField("balance")}
                   >
-                    <span>Current value</span>
+                    <span>Recorded current value</span>
                     <strong>
                       {selectedInvestmentCurrentValue === null
                         ? "Not set"
@@ -2340,16 +2383,29 @@ export default function InvestmentsPage() {
                   placeholder="Example: COL Financial"
                   variant="investment"
                 />
-                <label>
-                  Investment subtype
-                  <select value={manualInvestmentSubtype} onChange={(event) => setManualInvestmentSubtype(event.target.value as InvestmentSubtype)}>
+                <div className="accounts-manual-form__field">
+                  <label htmlFor="manual-investment-subtype">Investment type</label>
+                  <select
+                    id="manual-investment-subtype"
+                    value={manualInvestmentSubtype}
+                    onChange={(event) => setManualInvestmentSubtype(event.target.value as InvestmentSubtype)}
+                  >
                     {INVESTMENT_SUBTYPES.map((subtype) => (
                       <option key={subtype} value={subtype}>
                         {getInvestmentSubtypeLabel(subtype)}
                       </option>
                     ))}
                   </select>
-                </label>
+                  {manualSuggestedClassification.source === "inferred" && manualSuggestedClassification.subtype !== manualInvestmentSubtype ? (
+                    <button
+                      className="investments-classification-suggestion"
+                      type="button"
+                      onClick={() => setManualInvestmentSubtype(manualSuggestedClassification.subtype)}
+                    >
+                      Use Clover suggestion: {getInvestmentSubtypeLabel(manualSuggestedClassification.subtype)}
+                    </button>
+                  ) : null}
+                </div>
                 <div className="investments-add-modal__money-row">
                   <div className="accounts-form-currency-field">
                     <span className="sr-only">Currency</span>
