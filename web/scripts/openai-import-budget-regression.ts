@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { getRemainingOpenAIImportAttemptTimeout } from "@/lib/openai-import-parser";
+import { getRemainingOpenAIImportAttemptTimeout, shouldReadOpenAIImportErrorBody } from "@/lib/openai-import-parser";
 
 const nowMs = Date.parse("2026-07-17T12:00:00.000Z");
 
@@ -32,5 +32,13 @@ assert.equal(
   null,
   "Fallback retries must stop when too little persistence budget remains."
 );
+
+assert.equal(
+  shouldReadOpenAIImportErrorBody({ ok: true }),
+  false,
+  "Successful OpenAI response bodies must remain untouched for structured JSON parsing."
+);
+assert.equal(shouldReadOpenAIImportErrorBody({ ok: false }), true);
+assert.equal(shouldReadOpenAIImportErrorBody(null), false);
 
 console.log("OpenAI import budget regression passed.");

@@ -37,6 +37,9 @@ export const getRemainingOpenAIImportAttemptTimeout = (params: {
   return Math.max(1_000, Math.min(params.requestedTimeoutMs, remainingMs));
 };
 
+export const shouldReadOpenAIImportErrorBody = (response: Pick<Response, "ok"> | null) =>
+  Boolean(response && !response.ok);
+
 const resolveOpenAIImportModel = (value: string | undefined, fallback: string, label: string) => {
   const model = value?.trim();
   if (!model) {
@@ -2313,7 +2316,11 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       }
 
       let response = await callOpenAI(candidateModel, pageImages, attemptTimeoutMs);
-      let errorText = response ? await response.text().catch(() => "") : "timeout";
+      let errorText = shouldReadOpenAIImportErrorBody(response)
+        ? await response!.text().catch(() => "")
+        : response
+          ? ""
+          : "timeout";
 
       if (response && shouldRetryWithFewerImages(response.status, errorText, pageImages.length)) {
         console.warn("OpenAI import fallback request retried with fewer page images", {
@@ -2330,7 +2337,11 @@ export const parseImportTextWithOpenAIFallback = async (params: {
           return null;
         }
         response = await callOpenAI(candidateModel, pageImages.slice(0, 1), reducedImageTimeoutMs);
-        errorText = response ? await response.text().catch(() => "") : "timeout";
+        errorText = shouldReadOpenAIImportErrorBody(response)
+          ? await response!.text().catch(() => "")
+          : response
+            ? ""
+            : "timeout";
       }
 
       if (response?.ok) {
