@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { pdfTextLayerLooksSufficientForParsing } from "@/lib/import-file-text.server";
+import {
+  ensurePdfJsTextPolyfills,
+  pdfTextLayerLooksSufficientForParsing,
+} from "@/lib/import-file-text.server";
+import { pdfjs } from "@/lib/pdfjs.server";
+
+ensurePdfJsTextPolyfills();
+assert.equal(typeof globalThis.DOMMatrix, "function", "Text extraction should install its lightweight DOMMatrix fallback.");
+assert.equal(typeof pdfjs.getDocument, "function", "The server PDF.js module should load without resolving a filesystem worker path.");
 
 const healthyStatementText = [
   "RCBC VISA PLATINUM STATEMENT OF ACCOUNT",

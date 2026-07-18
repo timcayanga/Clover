@@ -1702,30 +1702,44 @@ const extractTextFromPdfBytesWithRenderFirstFallback = async (
   }
 };
 
-const ensurePdfJsPolyfills = async () => {
-  const canvasModule = await loadCanvasModule();
-
+export const ensurePdfJsTextPolyfills = () => {
   if (typeof globalThis.DOMMatrix === "undefined") {
-    (globalThis as any).DOMMatrix = canvasModule?.DOMMatrix ?? SimpleDOMMatrix;
+    (globalThis as any).DOMMatrix = SimpleDOMMatrix;
   }
 
   if (typeof globalThis.ImageData === "undefined") {
-    (globalThis as any).ImageData = canvasModule?.ImageData ?? SimpleImageData;
+    (globalThis as any).ImageData = SimpleImageData;
   }
 
   if (typeof globalThis.Path2D === "undefined") {
-    (globalThis as any).Path2D = canvasModule?.Path2D ?? SimplePath2D;
+    (globalThis as any).Path2D = SimplePath2D;
   }
 };
 
+const ensurePdfJsRenderPolyfills = async () => {
+  const canvasModule = await loadCanvasModule();
+
+  if (canvasModule?.DOMMatrix) {
+    (globalThis as any).DOMMatrix = canvasModule.DOMMatrix;
+  }
+  if (canvasModule?.ImageData) {
+    (globalThis as any).ImageData = canvasModule.ImageData;
+  }
+  if (canvasModule?.Path2D) {
+    (globalThis as any).Path2D = canvasModule.Path2D;
+  }
+
+  ensurePdfJsTextPolyfills();
+};
+
 const loadPdfJsText = async () => {
-  await ensurePdfJsPolyfills();
+  ensurePdfJsTextPolyfills();
   const pdfjsModule = await import("./pdfjs.server");
   return (pdfjsModule as { pdfjs: typeof import("./pdfjs.server").pdfjs }).pdfjs;
 };
 
 const loadPdfJsRender = async () => {
-  await ensurePdfJsPolyfills();
+  await ensurePdfJsRenderPolyfills();
   return import("./pdfjs.server");
 };
 
