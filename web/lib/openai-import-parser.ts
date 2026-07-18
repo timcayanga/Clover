@@ -2245,7 +2245,6 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         },
         body: JSON.stringify({
           model: selectedModel,
-          temperature: 0,
           max_output_tokens: isReceiptMode
             ? 2_500
             : pdfFileDataBase64
@@ -2840,7 +2839,6 @@ export const transcribeImportImagesWithOpenAI = async (params: {
         },
         body: JSON.stringify({
           model: selectedModel,
-          temperature: 0,
           max_output_tokens: 6_000,
           input: [
             {

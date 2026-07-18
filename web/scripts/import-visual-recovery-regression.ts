@@ -13,6 +13,7 @@ import {
   shouldProcessReceiptInline,
   shouldStopStaleVisualImportRetry,
 } from "@/lib/import-visual-recovery";
+import { assessReceiptPreviewQuality, parseReceiptText } from "@/lib/split-bill";
 
 const main = () => {
   assert.equal(VISUAL_IMPORT_RETRY_LIMIT, 3, "Expected visual imports to get one local attempt plus three recovery passes.");
@@ -148,6 +149,28 @@ const main = () => {
     }),
     false,
     "Trained receipt fixtures should not pay the vision fallback cost."
+  );
+
+  const restaurantReceipt = parseReceiptText(
+    [
+      "10/02/2023 13:31:13",
+      "Qty Description Amount",
+      "2.00 YAKIJAKE BENTO 1100.00",
+      "2.00 SALMON POKE 1240.00",
+      "2.00 CHOCO PLATE 180.00",
+      "5.00 BLUE PLATE 750.00",
+      "SUB-TOTAL 3270.00",
+      "AMOUNT DUE 3270.00",
+      "TOTAL NO OF ITEMS: 17.00",
+      "TEMPORARY BILL",
+    ].join("\n")
+  );
+  assert.equal(restaurantReceipt.total, "3270.00", "Item counts must never replace an explicit amount due.");
+  assert.equal(restaurantReceipt.items.length, 4);
+  assert.equal(
+    assessReceiptPreviewQuality(restaurantReceipt).issues.includes("looks like a split allocation worksheet, not a receipt"),
+    false,
+    "Dense restaurant receipt rows must not be mistaken for a split worksheet when receipt totals are explicit."
   );
 
   console.log("Import visual recovery regression passed.");

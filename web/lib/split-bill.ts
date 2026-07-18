@@ -1901,7 +1901,7 @@ const extractReceiptField = (text: string, patterns: RegExp[]) => {
   return null;
 };
 
-const isSuspiciousReceiptMerchantName = (value: string | null | undefined) => {
+export const isSuspiciousReceiptMerchantName = (value: string | null | undefined) => {
   const normalized = normalizeWhitespace(value ?? "");
   if (!normalized) {
     return true;
@@ -2085,6 +2085,10 @@ const looksLikeSplitAllocationWorksheet = (text: string) => {
 
   if (/\bitem\b.*\btotal\b.*\b(?:joey|grace|tim|annab|jannie|mj|iris|ferdie)\b/i.test(normalized)) {
     return true;
+  }
+
+  if (/\b(?:sub\s*-?\s*total|amount due|grand total|bill total)\b/i.test(normalized)) {
+    return false;
   }
 
   const lines = text
@@ -2333,7 +2337,8 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   const filteredItems = pruneSuspiciousReceiptItems(rawItems);
   const rawItemTotal = filteredItems.reduce((sum, item) => sum + (parseAmountValue(item.amount) ?? 0), 0);
   const totalLine = [...lines].reverse().find((line) =>
-    /^[+\-*•]?\s*(amount due|grand total|bill total|bill amount|gross amount|net total|total)\b/i.test(line)
+    /^[+\-*•]?\s*(amount due|grand total|bill total|bill amount|gross amount|net total|total)\b/i.test(line) &&
+    !/^\s*total\s+(?:no\.?\s+of\s+)?items?\b/i.test(line)
   );
   let subtotal =
     subtotalLine

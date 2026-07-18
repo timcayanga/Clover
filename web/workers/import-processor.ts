@@ -42,7 +42,7 @@ import {
 import { downloadImportObject } from "@/lib/import-storage.server";
 import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
-import { assessReceiptPreviewQuality, parseReceiptText } from "@/lib/split-bill";
+import { assessReceiptPreviewQuality, isSuspiciousReceiptMerchantName, parseReceiptText } from "@/lib/split-bill";
 import {
   DATA_ENGINE_VERSION,
   applyDataQaReviewLearning,
@@ -1599,8 +1599,8 @@ const normalizeReceiptLineItems = (
 
 const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptText>) => ({
   receipt_type: "receipt",
-  merchant_raw: preview.merchantName ?? null,
-  merchant_clean: preview.merchantName ?? null,
+  merchant_raw: isSuspiciousReceiptMerchantName(preview.merchantName) ? null : preview.merchantName ?? null,
+  merchant_clean: isSuspiciousReceiptMerchantName(preview.merchantName) ? null : preview.merchantName ?? null,
   document_number: null,
   invoice_number: null,
   booking_reference: null,
@@ -7755,6 +7755,7 @@ export const processImportFileText = async (
   }
   const receiptPreview = imageImport ? parseReceiptText(textForParse) : null;
   const receiptPreviewDetails = receiptPreview ? buildReceiptDetailsFromPreview(receiptPreview) : null;
+  const receiptPreviewQuality = receiptPreview ? assessReceiptPreviewQuality(receiptPreview) : null;
   const suppressReceiptPreviewForGsaveStatement =
     imageImport &&
     importMode === "statement" &&
@@ -7772,6 +7773,13 @@ export const processImportFileText = async (
         )
     );
   const receiptPreviewIsUsable = !suppressReceiptPreviewForGsaveStatement && isReceiptPreviewUsable(receiptPreview);
+  const receiptPreviewHasReviewableDetails = Boolean(
+    !suppressReceiptPreviewForGsaveStatement &&
+      receiptPreview &&
+      receiptPreview.total !== null &&
+      (receiptPreview.billDate || receiptPreview.items.length > 0) &&
+      (receiptPreviewQuality?.score ?? 0) >= 4
+  );
   const canUseFastImageParse =
     canReuseCachedStatementParse ||
     hasReliableDeterministicStatementParse ||
@@ -7956,7 +7964,7 @@ export const processImportFileText = async (
       openAiParsed.receiptDetails.line_items.length > 0 ||
       openAiParsed.receiptDetails.split_allocations.length > 0)
       ? openAiParsed.receiptDetails
-      : receiptPreviewIsUsable
+      : receiptPreviewIsUsable || receiptPreviewHasReviewableDetails
         ? receiptPreviewDetails
         : null;
   let receiptAccountMatch =
@@ -8173,7 +8181,7 @@ export const processImportFileText = async (
                 openAiParsed.receiptDetails.line_items.length > 0 ||
                 openAiParsed.receiptDetails.split_allocations.length > 0)
               ? openAiParsed.receiptDetails
-              : receiptPreviewIsUsable
+              : receiptPreviewIsUsable || receiptPreviewHasReviewableDetails
                 ? receiptPreviewDetails
                 : null;
 
@@ -9473,13 +9481,19 @@ export const processImportFileText = async (
         }
 
         if (isDocumentImport) {
+          const receiptCompletionMessage =
+            importMode === "receipt" && (openAiReceiptValidation?.score ?? 0) === 0
+              ? "Receipt saved for review, but Clover could not extract reliable merchant, date, or total details."
+              : importMode === "receipt" && (openAiReceiptValidation?.issues.length ?? 0) > 0
+                ? `Receipt saved with ${openAiReceiptValidation?.issues.length ?? 0} field${(openAiReceiptValidation?.issues.length ?? 0) === 1 ? "" : "s"} needing review.`
+                : "Receipt document saved.";
           await updateImportFileCompat(importFileId, {
             status: "done",
             processingPhase: "complete",
             processingCurrentScore: qaRunResult.evaluation.score,
             processingMessage:
               importMode === "receipt"
-                ? "Receipt document saved."
+                ? receiptCompletionMessage
                 : importMode === "portfolio"
                   ? "Portfolio snapshot saved."
                   : importMode === "account_detail"
@@ -9794,6 +9808,17 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         (receiptPayloadSource && typeof receiptPayloadSource.receipt_details === "object" && !Array.isArray(receiptPayloadSource.receipt_details)
           ? (receiptPayloadSource.receipt_details as Record<string, unknown>)
           : null);
+      const receiptValidationRecord =
+        receiptPayloadSource &&
+        typeof receiptPayloadSource.receiptValidation === "object" &&
+        !Array.isArray(receiptPayloadSource.receiptValidation)
+          ? (receiptPayloadSource.receiptValidation as Record<string, unknown>)
+          : null;
+      const receiptValidationScore = Number(receiptValidationRecord?.score ?? 0);
+      const receiptValidationIssues = Array.isArray(receiptValidationRecord?.issues)
+        ? receiptValidationRecord.issues.filter((issue): issue is string => typeof issue === "string" && issue.trim().length > 0)
+        : [];
+      const receiptNeedsReview = receiptValidationScore < 6 || receiptValidationIssues.length > 0;
       const receiptLineItems = normalizeReceiptLineItems(
         Array.isArray(receiptDetailsRecord?.line_items)
           ? (receiptDetailsRecord.line_items as Array<{
@@ -9975,13 +10000,16 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             importFileId,
             categoryId: receiptCategoryId,
             categoryName: receiptCategoryName,
-            reviewStatus: "confirmed",
+            reviewStatus: receiptNeedsReview ? "pending_review" : "confirmed",
             parserConfidence:
-              Number(
-                receiptDocument?.rawPayload && typeof receiptDocument.rawPayload === "object"
-                  ? (receiptDocument.rawPayload as Record<string, unknown>).confidence ?? 0
-                  : receiptPayloadSource?.confidence ?? receiptPayloadSource?.confidence_score ?? 0
-              ) || 95,
+              Math.max(
+                1,
+                Math.min(
+                  receiptNeedsReview ? 69 : 100,
+                  Number(receiptDetailsRecord?.confidence_score ?? receiptPayloadSource?.confidence ?? receiptPayloadSource?.confidence_score ?? 0) ||
+                    (receiptNeedsReview ? 50 : 95)
+                )
+              ),
             categoryConfidence: 95,
             accountMatchConfidence: 100,
             duplicateConfidence: 0,
