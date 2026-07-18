@@ -14385,7 +14385,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 .line-item-header {
   display: grid;
   grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(130px, 0.95fr) minmax(150px, 1fr) minmax(110px, 0.8fr) 40px 40px;
-  gap: 6px;
+  gap: 10px;
   align-items: center;
   padding: 2px 2px 1px;
   color: var(--muted-2);
@@ -28038,11 +28038,10 @@ button.accounts-detail__transaction-head-cell {
 
 .transactions-loading-state {
   display: grid;
-  gap: 10px;
-  padding: 4px 0 2px;
+  gap: 0;
+  padding: 0;
 }
 
-.transactions-loading-header,
 .transactions-loading-row {
   display: grid;
   grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(130px, 0.95fr) minmax(150px, 1fr) minmax(110px, 0.8fr) 40px 40px;
@@ -28050,20 +28049,21 @@ button.accounts-detail__transaction-head-cell {
   align-items: center;
 }
 
-.transactions-loading-header {
-  padding: 8px 0 12px;
-  border-bottom: 1px solid rgba(219, 227, 232, 0.8);
-}
-
 .transactions-loading-row {
-  min-height: 72px;
-  padding: 0 0 8px;
-  border-bottom: 1px solid rgba(219, 227, 232, 0.68);
+  min-height: 44px;
+  padding: 6px 4px;
 }
 
 .transactions-loading-name {
+  min-width: 0;
+}
+
+.transactions-loading-account {
   display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .skeleton-block {
@@ -28075,14 +28075,15 @@ button.accounts-detail__transaction-head-cell {
 }
 
 .skeleton-block--checkbox {
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
 }
 
 .skeleton-block--icon {
-  width: 36px;
-  height: 36px;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
 }
 
 .skeleton-block--name {
@@ -28091,8 +28092,8 @@ button.accounts-detail__transaction-head-cell {
 }
 
 .skeleton-block--date {
-  width: 112px;
-  height: 20px;
+  width: min(112px, 100%);
+  height: 16px;
 }
 
 .skeleton-block--account {
@@ -28100,14 +28101,25 @@ button.accounts-detail__transaction-head-cell {
   height: 20px;
 }
 
+.skeleton-block--account-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+}
+
+.skeleton-block--account-line {
+  width: min(112px, 100%);
+  height: 16px;
+}
+
 .skeleton-block--category {
-  width: 150px;
-  height: 20px;
+  width: min(150px, 100%);
+  height: 16px;
 }
 
 .skeleton-block--amount {
-  width: 104px;
-  height: 20px;
+  width: min(104px, 100%);
+  height: 16px;
 }
 
 .skeleton-block--chevron {
