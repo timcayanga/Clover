@@ -6,7 +6,7 @@ import {
   fetchImportFileCompat,
   updateImportFileCompat,
 } from "@/lib/data-engine";
-import { getConfiguredPdfJsBaseUrl } from "@/lib/import-file-text.server";
+import { getConfiguredPdfJsBaseUrl, isPdfPasswordError } from "@/lib/import-file-text.server";
 import {
   getNextVisualImportAttempt,
   getVisualImportRetryMessage,
@@ -22,24 +22,37 @@ void purgeExpiredImportFiles({ limit: 50 }).catch((error) => {
 });
 
 const connection = getRedisConnection();
+const passwordRequiredMessage = "This file is password-protected. Enter the password to continue.";
 
 const worker = new Worker(
   "import-processing",
   async (job) => {
     const { importFileId, actorUserId, password, allowDuplicateStatement, bankName, importMode, pdfJsBaseUrl } = job.data;
-    return processImportFileText(importFileId, {
-      actorUserId: actorUserId ?? null,
-      password,
-      allowDuplicateStatement,
-      importMode,
-      qaSource: "import_processing",
-      pdfJsBaseUrl: pdfJsBaseUrl ?? getConfiguredPdfJsBaseUrl(),
-      statementMetadataOverride: bankName
-        ? {
-            institution: bankName,
-          }
-        : null,
-    });
+    try {
+      return await processImportFileText(importFileId, {
+        actorUserId: actorUserId ?? null,
+        password,
+        allowDuplicateStatement,
+        importMode,
+        qaSource: "import_processing",
+        pdfJsBaseUrl: pdfJsBaseUrl ?? getConfiguredPdfJsBaseUrl(),
+        statementMetadataOverride: bankName
+          ? {
+              institution: bankName,
+            }
+          : null,
+      });
+    } catch (error) {
+      if (isPdfPasswordError(error)) {
+        job.discard();
+        await updateImportFileCompat(importFileId, {
+          status: "failed",
+          processingPhase: "password_required",
+          processingMessage: passwordRequiredMessage,
+        }).catch(() => null);
+      }
+      throw error;
+    }
   },
   {
     connection,
@@ -68,6 +81,15 @@ worker.on("failed", async (job, error) => {
   console.error("Import job failed", { jobId: job?.id ?? null, error: summarizeErrorForLog(error) });
   const importFileId = job?.data?.importFileId;
   if (importFileId) {
+    if (isPdfPasswordError(error)) {
+      await updateImportFileCompat(importFileId, {
+        status: "failed",
+        processingPhase: "password_required",
+        processingMessage: passwordRequiredMessage,
+      }).catch(() => null);
+      return;
+    }
+
     const latestImportFile = await fetchImportFileCompat(importFileId).catch(() => null);
     const fileName = String(latestImportFile?.fileName ?? "");
     const fileType = String(latestImportFile?.fileType ?? "");

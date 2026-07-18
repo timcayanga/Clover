@@ -2124,6 +2124,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               : null
           );
         } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          if (isImportPasswordError(error, errorMessage)) {
+            throw error;
+          }
           console.warn("Unable to pre-read statement metadata", { importId, error: summarizeErrorForLog(error) });
         }
       }
@@ -2323,6 +2327,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               : null
           );
         } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          if (isImportPasswordError(error, errorMessage)) {
+            throw error;
+          }
           console.warn("Unable to pre-read statement metadata", { importId, error: summarizeErrorForLog(error) });
         }
       }

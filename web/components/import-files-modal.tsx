@@ -1309,6 +1309,27 @@ export function ImportFilesModal({
     }
   };
 
+  const scheduleQueuedImport = () => {
+    // Starting an upload must not depend solely on a ref-driven effect. A ref update
+    // does not schedule a React render, so a file selection could otherwise remain
+    // pending forever when the queue update and its effects settle first.
+    window.setTimeout(() => {
+      if (!autoStartRef.current || !workspaceId) {
+        return;
+      }
+
+      const hasPendingFile = itemsRef.current.some(
+        (item) => item.status === "pending" || (item.status === "needs_password" && item.password.trim())
+      );
+      if (!hasPendingFile || itemsRef.current.some((item) => item.status === "needs_password" && !item.password.trim())) {
+        return;
+      }
+
+      autoStartRef.current = false;
+      void handleStartImportRef.current?.();
+    }, 0);
+  };
+
   const addFiles = (incoming: FileList | File[], options?: { launchInBackground?: boolean }) => {
     const nextFiles = Array.from(incoming);
     if (nextFiles.length === 0) return;
@@ -1324,6 +1345,7 @@ export function ImportFilesModal({
     let validationMessage = "";
     let shouldAutoClose = false;
     let additions: QueuedFile[] = [];
+    let queuedItemsSnapshot: QueuedFile[] | null = null;
     const shouldLaunchInBackground = Boolean(options?.launchInBackground || backgroundOnly || launchInBackground);
       flushSync(() => {
         setItems((current) => {
@@ -1431,9 +1453,16 @@ export function ImportFilesModal({
         });
       }
 
-          return [...current, ...additions];
+          queuedItemsSnapshot = [...current, ...additions];
+          return queuedItemsSnapshot;
         });
       });
+
+    // Keep the imperative upload handoff synchronized with the queue immediately;
+    // the passive items effect may not have run before the zero-delay starter.
+    if (queuedItemsSnapshot) {
+      itemsRef.current = queuedItemsSnapshot;
+    }
 
     if (additions.length > 0) {
       primaryVisibilityCompletedRef.current = false;
@@ -1442,6 +1471,7 @@ export function ImportFilesModal({
     if (additions.length > 0) {
       autoStartRef.current = true;
       autoCloseAfterStartRef.current = shouldAutoClose;
+      scheduleQueuedImport();
       if (shouldLaunchInBackground) {
         setLaunchInBackground(true);
         importActivitySurfaceRef.current = "background";
@@ -4128,7 +4158,8 @@ export function ImportFilesModal({
       }
 
       if (isPasswordError(error)) {
-        requestPasswordForItem(itemId, Boolean(item.password.trim()));
+        // Password detection during the advisory browser scan must not stop the
+        // upload. The server owns password handling and backup-parser routing.
         return;
       }
       // Browser-local preparse is best-effort only. The server path still finalizes the import.
@@ -4763,35 +4794,9 @@ export function ImportFilesModal({
           localPreparseTextByItemIdRef.current.set(itemId, extractedTextForUpload);
         }
       }
-      if (
-        !shouldSkipLocalStatementPreparse &&
-        !extractedTextForUpload &&
-        itemImportMode === "statement" &&
-        (lowerFileName.endsWith(".pdf") || lowerFileName.endsWith(".csv"))
-      ) {
-        updateItem(itemId, {
-          progress: IMPORT_PROGRESS.preparing,
-          progressLabel: "Reading the file",
-          status: "importing",
-        });
-        try {
-          extractedTextForUpload = await extractTextFromFile(item.file, item.password.trim() || undefined);
-        } catch (error) {
-          if (isPasswordError(error)) {
-            throw error;
-          }
-
-          console.warn("Local statement read failed; continuing with server parser", {
-            importFileId,
-            fileName: item.file.name,
-            error: error instanceof Error ? error.message : String(error),
-          });
-          extractedTextForUpload = "";
-        }
-        if (extractedTextForUpload.trim()) {
-          localPreparseTextByItemIdRef.current.set(itemId, extractedTextForUpload);
-        }
-      }
+      // Never wait for browser-side parsing before upload. If the advisory scan
+      // has already produced text, include it; otherwise the server receives the
+      // original file immediately and can run its deterministic and backup readers.
       let processResponseSettled = false;
       const processResponsePromise = postFileWithProgress(
         `/api/imports/${importFileId}/process`,
