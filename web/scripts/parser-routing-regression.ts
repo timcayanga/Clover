@@ -4,6 +4,7 @@ import {
   buildParserRoutingHistoryHint,
   buildImportReviewReasons,
   getImportReviewPriority,
+  hasStrongWisePdfDeterministicParse,
   mergeParserRoutingHistoryHints,
 } from "@/workers/import-processor";
 
@@ -47,6 +48,65 @@ assert.equal(
   noTemplateMemoryDecision.decision,
   "backup_required",
   `Expected borderline file without template memory to escalate immediately. got=${noTemplateMemoryDecision.decision}`
+);
+
+const strongWiseRows = [
+  {
+    date: "2026-01-05",
+    currency: "PHP",
+    rawPayload: { kind: "wise_pdf_statement_transaction" },
+  },
+  {
+    date: "2026-01-06",
+    currency: "PHP",
+    rawPayload: { kind: "wise_pdf_statement_transaction" },
+  },
+];
+assert.equal(
+  hasStrongWisePdfDeterministicParse({
+    fileType: "application/pdf",
+    imageImport: false,
+    importMode: "statement",
+    institution: "Wise",
+    accountNumber: "2001545280",
+    statementCurrency: "PHP",
+    metadataConfidence: 98,
+    parsedDateCoverage: 1,
+    rows: strongWiseRows,
+  }),
+  true,
+  "Expected a complete dedicated Wise PDF parse to remain on the deterministic path."
+);
+assert.equal(
+  hasStrongWisePdfDeterministicParse({
+    fileType: "application/pdf",
+    imageImport: false,
+    importMode: "statement",
+    institution: "Wise",
+    accountNumber: "2001545280",
+    statementCurrency: "PHP",
+    metadataConfidence: 98,
+    parsedDateCoverage: 1,
+    rows: [{ ...strongWiseRows[0], currency: "HKD" }],
+  }),
+  false,
+  "Expected a cross-currency Wise result to remain eligible for backup review."
+);
+
+const strongWiseRoutingDecision = buildParserRoutingDecision({
+  ...baseRoutingInput,
+  parsedRowsLength: strongWiseRows.length,
+  metadataConfidence: 98,
+  hasAccountNumber: true,
+  hasReliableDeterministicStatementParse: true,
+  genericParseLooksSuspicious: true,
+  genericIdentityLooksWeak: true,
+  parsedDateCoverage: 1,
+});
+assert.equal(
+  strongWiseRoutingDecision.decision,
+  "local_fast",
+  "Expected validated Wise parser provenance to override generic identity suspicion."
 );
 
 const backupHistoryHint = mergeParserRoutingHistoryHints([

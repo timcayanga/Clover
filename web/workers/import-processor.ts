@@ -683,6 +683,43 @@ export const mergeParserRoutingHistoryHints = (hints: Array<ParserRoutingHistory
   };
 };
 
+export const hasStrongWisePdfDeterministicParse = (params: {
+  fileType: string | null | undefined;
+  imageImport: boolean;
+  importMode: ImportImageMode;
+  institution: string | null | undefined;
+  accountNumber: string | null | undefined;
+  statementCurrency: string | null | undefined;
+  metadataConfidence: number;
+  parsedDateCoverage: number;
+  rows: Array<Record<string, unknown>>;
+}) => {
+  if (
+    params.fileType !== "application/pdf" ||
+    params.imageImport ||
+    params.importMode !== "statement" ||
+    String(params.institution ?? "").toLowerCase() !== "wise" ||
+    !String(params.accountNumber ?? "").trim() ||
+    params.metadataConfidence < 90 ||
+    params.parsedDateCoverage < 0.9 ||
+    params.rows.length === 0
+  ) {
+    return false;
+  }
+
+  const statementCurrency = String(params.statementCurrency ?? "").trim().toUpperCase();
+  return params.rows.every((row) => {
+    const rawPayload = row.rawPayload;
+    const hasWiseParserProvenance =
+      rawPayload &&
+      typeof rawPayload === "object" &&
+      !Array.isArray(rawPayload) &&
+      (rawPayload as Record<string, unknown>).kind === "wise_pdf_statement_transaction";
+    const rowCurrency = String(row.currency ?? "").trim().toUpperCase();
+    return Boolean(hasWiseParserProvenance && (!statementCurrency || rowCurrency === statementCurrency));
+  });
+};
+
 export const buildParserRoutingDecision = (params: {
   fileType: string | null | undefined;
   imageImport: boolean;
@@ -7262,6 +7299,17 @@ export const processImportFileText = async (
         })
       : null;
   const preliminaryImageStatementParseLooksUsable = preliminaryImageStatementAssessment?.parseLooksUsable ?? false;
+  const preliminaryHasStrongWisePdfDeterministicParse = hasStrongWisePdfDeterministicParse({
+    fileType: importFile.fileType,
+    imageImport,
+    importMode,
+    institution: metadataForParse.institution,
+    accountNumber: metadataForParse.accountNumber,
+    statementCurrency: metadataForParse.currency,
+    metadataConfidence: metadataForParse.confidence ?? 0,
+    parsedDateCoverage: preliminaryParsedDateCoverage,
+    rows: parsedRows as Array<Record<string, unknown>>,
+  });
   const preliminaryParserRoutingDecision = buildParserRoutingDecision({
     fileType: importFile.fileType,
     imageImport,
@@ -7271,7 +7319,7 @@ export const processImportFileText = async (
     hasTemplateMemory,
     trainedReceiptDetails: Boolean(trainedReceiptDetails),
     canReuseCachedStatementParse,
-    hasReliableDeterministicStatementParse: false,
+    hasReliableDeterministicStatementParse: preliminaryHasStrongWisePdfDeterministicParse,
     imageStatementParseLooksUsable: preliminaryImageStatementParseLooksUsable,
     textForParse,
     parsedRowsLength: parsedRows.length,
@@ -7753,7 +7801,19 @@ export const processImportFileText = async (
   const suspiciousScreenshotCoverage = imageStatementAssessment?.suspiciousScreenshotCoverage ?? 0;
   const screenshotRowsLookStructurallyWeak = imageStatementAssessment?.screenshotRowsLookStructurallyWeak ?? false;
   const imageStatementParseLooksUsable = imageStatementAssessment?.parseLooksUsable ?? false;
+  const hasStrongWiseDeterministicParse = hasStrongWisePdfDeterministicParse({
+    fileType: importFile.fileType,
+    imageImport,
+    importMode,
+    institution: metadataForParse.institution,
+    accountNumber: metadataForParse.accountNumber,
+    statementCurrency: metadataForParse.currency,
+    metadataConfidence: metadataForParse.confidence ?? 0,
+    parsedDateCoverage,
+    rows: parsedRows as Array<Record<string, unknown>>,
+  });
   const hasReliableDeterministicStatementParse =
+    hasStrongWiseDeterministicParse ||
     hasKnownUnionBankSampleRows ||
     (importMode === "statement" &&
       !imageImport &&
