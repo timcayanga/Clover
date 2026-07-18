@@ -30,6 +30,45 @@ assert.equal(
   "A transaction-rich PDF text layer should bypass redundant server OCR."
 );
 
+const wiseStatementText = [
+  "Wise Pilipinas Inc.",
+  "GBP statement",
+  "1 January 2026 [GMT+08:00] - 30 June 2026 [GMT+08:00]",
+  "GBP on 30 June 2026 [GMT+08:00] 30.96 GBP",
+  "Description Incoming Outgoing Amount",
+  "Card transaction of 1,032.58 BWP issued by Maun Airport -55.36 30.96",
+  "10 June 2026 Card ending in 6453 Transaction: CARD-3904653901",
+  "Card transaction of -43.54 GBP issued by Trainpal London 43.54 103.54",
+  "13 April 2026 Card ending in 6453 Transaction: CARD-3666012761",
+  "Sent money to EMMANUEL COLLEGE -111.50 540.63",
+  "28 February 2026 Transaction: TRANSFER-1995929409 Reference: HT Cayanga",
+  "Received money from EMMANUEL PAYMENTS with reference noref 548.00 652.13",
+].join("\n");
+
+assert.equal(
+  pdfTextLayerLooksSufficientForParsing(wiseStatementText),
+  true,
+  "Day-first Wise transaction dates should keep a healthy PDF text layer on the deterministic fast path."
+);
+
+const emptyWiseStatementText = [
+  "Wise Pilipinas Inc.",
+  "WeWork 30th Floor Yuchengco Tower, RCBC Plaza, 6819 Ayala Ave., Makati City, Philippines",
+  "EUR statement",
+  "1 January 2026 [GMT+08:00] - 30 June 2026 [GMT+08:00]",
+  "Account Holder IBAN Swift/BIC",
+  "Timothy Cayanga BE11 9050 2880 3448 TRWIBEB1XXX",
+  "EUR on 30 June 2026 [GMT+08:00] 0.00 EUR",
+  "Description Incoming Outgoing Amount",
+  "Wise Pilipinas Inc. is licensed by the Bangko Sentral ng Pilipinas.",
+].join("\n");
+
+assert.equal(
+  pdfTextLayerLooksSufficientForParsing(emptyWiseStatementText),
+  true,
+  "A structurally complete zero-activity Wise statement should not spend time on OCR."
+);
+
 assert.equal(
   pdfTextLayerLooksSufficientForParsing("RCBC VISA PLATINUM\nStatement Date Mar 22, 2026\nTotal Amount Due 12,746.52"),
   false,

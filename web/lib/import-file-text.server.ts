@@ -973,7 +973,7 @@ const scoreStatementTextCandidate = (text: string) => {
     return Number.NEGATIVE_INFINITY;
   }
 
-  const datePattern = /(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}(?:,\s*\d{4})?\b|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b\d{4}-\d{2}-\d{2}\b)/i;
+  const datePattern = /(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}(?:,\s*\d{4})?\b|\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:[a-z]+)?\.?\s+\d{4}\b|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b\d{4}-\d{2}-\d{2}\b)/i;
   const amountPattern = /(?:[₱$€£¥]\s*)?\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b|\b\d+(?:\.\d{2})\b/;
   const balancePattern = /\b(?:balance|opening|closing|ending|running|available|statement balance|total amount due|minimum amount due)\b/i;
   const transactionPattern = /\b(?:debit|credit|withdraw|deposit|transfer|payment|purchase|refund|charge|fee|interest|cash|atm|branch|merchant|reference|pos|card)\b/i;
@@ -1059,15 +1059,26 @@ export const pdfTextLayerLooksSufficientForParsing = (text: string) => {
     return false;
   }
 
-  const datedAmountLines = normalized
-    .split(/\r?\n/)
-    .filter(
-      (line) =>
-        /(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b\d{4}-\d{2}-\d{2}\b)/i.test(line) &&
-        /(?:[₱$€£¥]\s*)?\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b|\b\d+(?:\.\d{2})\b/.test(line)
-    ).length;
+  const isStructuredWiseStatement =
+    /\bWise\s+Pilipinas\s+Inc\.?\b/i.test(normalized) &&
+    /\b[A-Z]{3}\s+statement\b/.test(normalized) &&
+    /\bDescription\s+Incoming\s+Outgoing\s+Amount\b/i.test(normalized) &&
+    /\b[A-Z]{3}\s+on\s+\d{1,2}\s+[A-Za-z]+\s+\d{4}[^\n]*\d[\d,]*\.\d{2}\s+[A-Z]{3}\b/i.test(normalized);
+  if (isStructuredWiseStatement) {
+    return true;
+  }
 
-  return datedAmountLines >= 2 && scoreStatementTextCandidate(normalized) >= 25;
+  const lines = normalized.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  const datePattern = /(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}|\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:[a-z]+)?\.?\s+\d{4}\b|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b\d{4}-\d{2}-\d{2}\b)/i;
+  const amountPattern = /(?:[₱$€£¥]\s*)?\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b|\b\d+(?:\.\d{2})\b/;
+  const transactionPattern = /\b(?:card transaction|transaction:|transfer|payment|purchase|refund|withdraw|deposit|debit|credit)\b/i;
+  const datedAmountLines = lines.filter((line) => datePattern.test(line) && amountPattern.test(line)).length;
+  const dateLines = lines.filter((line) => datePattern.test(line)).length;
+  const amountLines = lines.filter((line) => amountPattern.test(line)).length;
+  const transactionLines = lines.filter((line) => transactionPattern.test(line)).length;
+  const hasSplitTransactionLayout = dateLines >= 3 && amountLines >= 4 && transactionLines >= 3;
+
+  return (datedAmountLines >= 2 || hasSplitTransactionLayout) && scoreStatementTextCandidate(normalized) >= 25;
 };
 
 const normalizeStatementTextLine = (line: string) =>
@@ -1081,7 +1092,7 @@ const scoreStatementTextLineCandidate = (line: string) => {
     return Number.NEGATIVE_INFINITY;
   }
 
-  const datePattern = /(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}(?:,\s*\d{4})?\b|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b\d{4}-\d{2}-\d{2}\b)/i;
+  const datePattern = /(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}(?:,\s*\d{4})?\b|\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:[a-z]+)?\.?\s+\d{4}\b|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b\d{4}-\d{2}-\d{2}\b)/i;
   const amountPattern = /(?:[₱$€£¥]\s*)?\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b|\b\d+(?:\.\d{2})\b/;
   const balancePattern = /\b(?:balance|opening|closing|ending|running|available|statement balance|total amount due|minimum amount due)\b/i;
   const transactionPattern = /\b(?:debit|credit|withdraw|deposit|transfer|payment|purchase|refund|charge|fee|interest|cash|atm|branch|merchant|reference|pos|card)\b/i;

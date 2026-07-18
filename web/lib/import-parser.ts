@@ -21807,6 +21807,128 @@ const parseMayaSavingsImportText = (text: string, context: ImportParseContext = 
   };
 };
 
+const wisePdfDatePattern = /^\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{4}\b/i;
+
+const parseWisePdfStatement = (text: string) => {
+  const currency = text.match(/\b([A-Z]{3})\s+statement\b/i)?.[1]?.toUpperCase() ?? null;
+  if (!currency || !/\bWise\s+Pilipinas\s+Inc\.?\b/i.test(text)) {
+    return null;
+  }
+
+  const accountNumber =
+    text.match(/\bAccount Holder\s+Account number(?:\s+(?:UK sort code|Routing number|Bank code))?[\s\S]{0,180}?\b(\d{8,16})\b/i)?.[1] ?? null;
+  const periodMatch = text.match(
+    /\b(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{4})\s*\[[^\]]+\]\s*-\s*(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{4})\b/i
+  );
+  const startDate = parseDateValue(periodMatch?.[1] ?? null);
+  const endDate = parseDateValue(periodMatch?.[2] ?? null);
+  const endingBalanceMatch = text.match(
+    new RegExp(`\\b${currency}\\s+on\\s+\\d{1,2}\\s+[A-Za-z]+\\s+\\d{4}[^\\n]*?(-?[0-9][0-9,]*\\.\\d{2})\\s+${currency}\\b`, "i")
+  );
+  const endingBalance = parseMoney(endingBalanceMatch?.[1] ?? null);
+  const lines = splitStatementLines(text);
+  const rows: ParsedImportRow[] = [];
+
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    const description = lines[index] ?? "";
+    const nextLine = lines[index + 1] ?? "";
+    const nextLineAmounts = Array.from(nextLine.matchAll(/-?\d[\d,]*\.\d{2}/g));
+    const separateDetailOffset = nextLineAmounts.length >= 2
+      ? [2, 3, 4].find((offset) => wisePdfDatePattern.test(lines[index + offset] ?? "")) ?? null
+      : null;
+    const hasSeparateAmountLine = separateDetailOffset !== null;
+    const continuationLines = hasSeparateAmountLine
+      ? lines.slice(index + 2, index + separateDetailOffset)
+      : [];
+    const transactionLine = hasSeparateAmountLine
+      ? `${description} ${continuationLines.join(" ")} ${nextLine}`
+      : description;
+    const detailLine = lines[index + (separateDetailOffset ?? 1)] ?? "";
+    const isCard = /^Card transaction of\b/i.test(description);
+    const isSent = /^Sent money to\b/i.test(description);
+    const isReceived = /^Received money from\b/i.test(description);
+    const isConverted = /^Converted\b/i.test(description);
+    if ((!isCard && !isSent && !isReceived && !isConverted) || !wisePdfDatePattern.test(detailLine)) {
+      continue;
+    }
+
+    const dateText = detailLine.match(wisePdfDatePattern)?.[0] ?? null;
+    const parsedDate = parseDateValue(dateText);
+    const amounts = Array.from(transactionLine.matchAll(/-?\d[\d,]*\.\d{2}/g))
+      .map((match) => parseMoney(match[0]))
+      .filter((value): value is number => value !== null);
+    if (!parsedDate || amounts.length < 2) {
+      continue;
+    }
+
+    const accountImpact = amounts.at(-2);
+    const runningBalance = amounts.at(-1);
+    if (accountImpact === undefined || runningBalance === undefined) {
+      continue;
+    }
+
+    const merchantMatch = isCard
+      ? transactionLine.match(/\bissued by\s+(.+?)(?=\s+-?\d[\d,]*\.\d{2}\s+-?\d[\d,]*\.\d{2}\s*$)/i)
+      : isSent
+        ? transactionLine.match(/^Sent money to\s+(.+?)(?=\s+-?\d[\d,]*\.\d{2}\s+-?\d[\d,]*\.\d{2}\s*$)/i)
+        : isReceived
+          ? transactionLine.match(/^Received money from\s+(.+?)(?:\s+with reference\s+\S+)?(?=\s+-?\d[\d,]*\.\d{2}\s+-?\d[\d,]*\.\d{2}\s*$)/i)
+          : null;
+    const merchantRaw = normalizeWhitespace(
+      merchantMatch?.[1] ?? (isConverted ? "Wise currency conversion" : isSent || isReceived ? "Wise transfer" : "Wise card transaction")
+    );
+    const type: TransactionType = isCard ? "expense" : "transfer";
+    const categoryName = isCard
+      ? /\b(?:airport|train|rail|transport|bus|taxi|parking)\b/i.test(merchantRaw)
+        ? "Transport"
+        : guessCategoryName(merchantRaw, type)
+      : "Transfers";
+
+    rows.push({
+      date: parsedDate.toISOString().slice(0, 10),
+      amount: String(Math.abs(accountImpact)),
+      currency,
+      merchantRaw,
+      merchantClean: summarizeMerchantText(merchantRaw, "Wise"),
+      description,
+      runningBalance,
+      categoryName,
+      accountName: "Wise",
+      accountNumber: accountNumber ?? undefined,
+      institution: "Wise",
+      type,
+      confidence: 98,
+      parserConfidence: 98,
+      categoryConfidence: categoryName === "Other" ? 55 : 94,
+      rawPayload: {
+        bank: "Wise",
+        kind: "wise_pdf_statement_transaction",
+        sourceLine: description,
+        amountLine: hasSeparateAmountLine ? nextLine : null,
+        continuationLines,
+        detailLine,
+        accountImpact,
+        runningBalance,
+      },
+    });
+  }
+
+  const metadata: DetectedStatementMetadata = {
+    institution: "Wise",
+    accountNumber,
+    accountName: "Wise",
+    accountType: "wallet",
+    currency,
+    openingBalance: null,
+    endingBalance,
+    startDate: startDate?.toISOString() ?? null,
+    endDate: endDate?.toISOString() ?? null,
+    confidence: rows.length > 0 ? 98 : 85,
+  };
+
+  return { metadata, rows };
+};
+
 const wiseMobileDatePattern = /^(?:[A-Z]|\d{0,2}\s*)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}$/i;
 const wiseMobileAmountPattern =
   /^([+−-]?\s*)?([0-9][0-9,]*(?:\.\d{1,2})?|0)\s+(AED|AUD|CAD|CHF|CNY|EUR|GBP|HKD|JPY|NZD|PHP|SGD|THB|USD)$/i;
@@ -22399,6 +22521,11 @@ const filterSharedScreenshotParsedRows = (
 };
 
 export const detectStatementMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  const wisePdfStatement = parseWisePdfStatement(text);
+  if (wisePdfStatement) {
+    return wisePdfStatement.metadata;
+  }
+
   const gotradeMetadata = gotradeScreenshotMetadata(text, fileName);
   if (gotradeMetadata) {
     return withDetectedCurrency(gotradeMetadata, text);
@@ -22844,6 +22971,11 @@ export const parseImportText = (
   fileType: string,
   context: ImportParseContext = {}
 ): ParsedImportRow[] => {
+  const wisePdfStatement = parseWisePdfStatement(text);
+  if (wisePdfStatement) {
+    return wisePdfStatement.rows;
+  }
+
   const shouldForceWiseScreenshotPath =
     /wise/i.test(String(context.institution ?? "")) ||
     /wise/i.test(String(context.accountName ?? "")) ||

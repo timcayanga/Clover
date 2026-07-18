@@ -4,7 +4,7 @@ This document captures Wise parsing rules learned from mobile transaction-histor
 
 ## Scope
 
-- Applies to Wise mobile transaction-history screenshots and any future Wise exports.
+- Applies to Wise mobile transaction-history screenshots and Wise PDF statements.
 - Treat Wise as a multi-currency wallet, not a conventional bank statement.
 - Wise screenshots may not show an account number, statement period, opening balance, or ending balance.
 - A missing account number is acceptable when visible transaction rows can be extracted.
@@ -22,6 +22,11 @@ This document captures Wise parsing rules learned from mobile transaction-histor
 - Multi-currency rows may show a bold/larger merchant-currency amount first and a smaller account-currency amount below it.
 
 ## Transaction Rules
+
+- Wise PDF statements place the transaction description and account-impact amounts before the following dated card/transfer detail line; pair those lines before parsing.
+- For PDF card rows, use the second-to-last monetary value as the account-impact amount and the final value as the running balance. The amount embedded after `Card transaction of` can be a merchant-currency amount and must not replace the wallet impact.
+- Detect Wise PDF statements from the `Wise Pilipinas Inc.` issuer and `<CURRENCY> statement` header before scanning address text for bank names. `RCBC Plaza` is an address and must not classify the statement as RCBC.
+- Preserve the PDF statement currency and visible Wise account number as wallet identity. Do not infer PHP from the Philippine issuer address.
 
 - If a row has one amount, use that amount/currency as the Clover transaction amount because it is one of the user's Wise account currencies.
 - If a row has two amounts, use the second/lower smaller-font amount/currency as the Clover transaction amount because it is the actual amount spent from the user's Wise account. This means `20.95 AUD` / `804.31 PHP` should import as `804.31 PHP`, even though PHP is numerically larger.

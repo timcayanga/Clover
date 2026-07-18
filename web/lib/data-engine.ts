@@ -1842,7 +1842,11 @@ export const detectStatementMetadataFromText = (text: string, fileName = ""): St
         )
       : [];
   const isMultiAccountCimbStatement = cimbAccountNumbers.length > 1;
-  const accountNumber = isMultiAccountCimbStatement ? null : metadata?.accountNumber ?? detectAccountNumber(text);
+  const accountNumber = isMultiAccountCimbStatement
+    ? null
+    : institution === "Wise"
+      ? metadata?.accountNumber ?? null
+      : metadata?.accountNumber ?? detectAccountNumber(text);
   const metadataAccountName = sanitizeBankNameLabel(metadata?.accountName);
   const accountName =
     (isMultiAccountCimbStatement ? "CIMB" : metadataAccountName && !isGenericStatementAccountLabel(metadataAccountName) ? metadataAccountName : null) ??
