@@ -2,7 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
   serverExternalPackages: ["@napi-rs/canvas", "tesseract.js"],
-  outputFileTracingRoot: process.cwd(),
   outputFileTracingIncludes: {
     "/api/imports/**/*": [
       "./node_modules/@napi-rs/canvas/**/*",
