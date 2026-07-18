@@ -400,7 +400,6 @@ export function ImportFilesModal({
   const lastImportActivityRef = useRef<ImportActivitySnapshot | null>(null);
   const retiredImportActivityFileNamesRef = useRef(new Set<string>());
   const autoCloseAfterStartRef = useRef(false);
-  const autoCloseCompletedBatchTimerRef = useRef<number | null>(null);
   const compactProgressUnlockTimerRef = useRef<number | null>(null);
   const compactProgressStartedAtRef = useRef<number | null>(null);
   const visibilityDeadlineRef = useRef<number | null>(null);
@@ -886,17 +885,9 @@ export function ImportFilesModal({
         errorNextSteps: null,
       });
 
-      if (autoCloseCompletedBatchTimerRef.current) {
-        window.clearTimeout(autoCloseCompletedBatchTimerRef.current);
-      }
       primaryVisibilityCompletedRef.current = true;
-      // The import activity dock can continue showing progress after the full modal closes.
-      autoCloseCompletedBatchTimerRef.current = window.setTimeout(() => {
-        autoCloseCompletedBatchTimerRef.current = null;
-        clearImportActivity();
-        lastImportActivityRef.current = null;
-        onClose();
-      }, 0);
+      // Keep the completed result visible until the user dismisses it. Closing
+      // immediately makes a successful import indistinguishable from a crash.
     }
   };
 
@@ -1590,8 +1581,7 @@ export function ImportFilesModal({
   };
 
   const updateItem = (id: string, patch: Partial<QueuedFile>) => {
-    setItems((current) =>
-      current.map((item) => {
+    const nextItems = itemsRef.current.map((item) => {
         if (item.id !== id) {
           return item;
         }
@@ -1629,8 +1619,13 @@ export function ImportFilesModal({
             : {}),
           ...(nextProgress === undefined ? {} : { progress: nextProgress }),
         };
-      })
-    );
+      });
+
+    // Queue decisions run from refs between React commits. Keep the ref in sync
+    // immediately so a just-completed file cannot be dispatched again while its
+    // state update is still batched.
+    itemsRef.current = nextItems;
+    setItems(nextItems);
   };
 
   const requestPasswordForItem = (itemId: string, wrongPassword = false) => {
@@ -4979,6 +4974,29 @@ export function ImportFilesModal({
       ).finally(() => {
         processResponseSettled = true;
       });
+      // Tiny files can finish uploading without a computable progress event.
+      // Once the request is in flight, advance out of "preparing" so the modal
+      // truthfully reflects server-side reading and the visibility deadline does
+      // not mistake an active request for an abandoned client-only file.
+      updateItem(itemId, {
+        status: "importing",
+        progress: IMPORT_PROGRESS.uploading,
+        progressLabel: "Reading statement details",
+      });
+      publishImportActivity({
+        workspaceId,
+        surface: importActivitySurfaceRef.current,
+        status: "active",
+        importFileId,
+        fileName: item.file.name,
+        fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+        fileTotal: items.length,
+        completedFiles: completedFileCount,
+        progress: IMPORT_PROGRESS.uploading,
+        detail: "Clover uploaded the file and is reading its transactions",
+        summary: null,
+        errorMessage: null,
+      });
       if (shouldSkipLocalStatementPreparse) {
         void (async () => {
           await new Promise((resolve) => window.setTimeout(resolve, 8_000));
@@ -5334,78 +5352,6 @@ export function ImportFilesModal({
           duplicateAccountSummaries[0] ??
           null;
         const duplicateRowsImported = Number(processPayload?.confirmedTransactionsCount ?? processPayload?.imported ?? 0) || 0;
-        const duplicateSummary =
-          duplicateAccountSummary || duplicateAccountId
-            ? ({
-                fileName: item.file.name,
-                rowsImported: Math.max(duplicateRowsImported, duplicateAccountSummary?.rowsImported ?? 0),
-                accountId: duplicateAccountId,
-                accountName:
-                  duplicateAccountSummary?.accountName ??
-                  statementIdentity?.accountName ??
-                  guessedIdentity?.accountName ??
-                  item.file.name,
-                institution:
-                  duplicateAccountSummary?.institution ??
-                  statementIdentity?.institution ??
-                  guessedIdentity?.institution ??
-                  null,
-                accountNumber:
-                  duplicateAccountSummary?.accountNumber ??
-                  statementIdentity?.accountNumber ??
-                  guessedIdentity?.accountNumber ??
-                  null,
-                accountType:
-                  duplicateAccountSummary?.accountType ??
-                  statementIdentity?.accountType ??
-                  inferAccountTypeFromStatement(
-                    duplicateAccountSummary?.institution ?? statementIdentity?.institution ?? guessedIdentity?.institution ?? null,
-                    duplicateAccountSummary?.accountName ?? statementIdentity?.accountName ?? guessedIdentity?.accountName ?? item.file.name,
-                    "bank"
-                  ),
-                balance: duplicateAccountSummary?.balance ?? null,
-                accountSummaries: duplicateAccountSummaries.length > 0 ? duplicateAccountSummaries : undefined,
-                optimisticAccountId: null,
-                previewTransactions: duplicateAccountId
-                  ? getKnownPreviewTransactions({
-                      workspaceId,
-                      accountId: duplicateAccountId,
-                      optimisticAccountId: item.optimisticAccountId ?? null,
-                      accountName:
-                        duplicateAccountSummary?.accountName ??
-                        statementIdentity?.accountName ??
-                        guessedIdentity?.accountName ??
-                        item.file.name,
-                      institution:
-                        duplicateAccountSummary?.institution ??
-                        statementIdentity?.institution ??
-                        guessedIdentity?.institution ??
-                        null,
-                      accountNumber:
-                        duplicateAccountSummary?.accountNumber ??
-                        statementIdentity?.accountNumber ??
-                        guessedIdentity?.accountNumber ??
-                        null,
-                      accountType:
-                        duplicateAccountSummary?.accountType ??
-                        statementIdentity?.accountType ??
-                        inferAccountTypeFromStatement(
-                          duplicateAccountSummary?.institution ?? statementIdentity?.institution ?? guessedIdentity?.institution ?? null,
-                          duplicateAccountSummary?.accountName ?? statementIdentity?.accountName ?? guessedIdentity?.accountName ?? item.file.name,
-                          "bank"
-                        ),
-                    })
-                  : [],
-                incomeTotal: 0,
-                expenseTotal: 0,
-                netTotal: 0,
-                topCategoryName: null,
-                topCategoryAmount: null,
-                topCategoryShare: null,
-                topMerchantName: null,
-                topMerchantCount: null,
-              } satisfies UploadInsightsSummary)
-            : null;
         const duplicateMessage = formatDuplicateImportMessage(item.file.name, guessedIdentity?.accountName ?? null);
         updateItem(itemId, {
           status: "done",
@@ -5417,10 +5363,6 @@ export function ImportFilesModal({
           progress: 100,
           progressLabel: "Already imported in this workspace",
         });
-        if (duplicateSummary) {
-          seedImportedWorkspaceCaches(workspaceId, duplicateSummary);
-          await Promise.resolve(onImported(duplicateSummary));
-        }
         publishImportActivity({
           workspaceId,
           surface: importActivitySurfaceRef.current,
@@ -5431,12 +5373,11 @@ export function ImportFilesModal({
           completedFiles: completedFileCount + 1,
           progress: 100,
           detail: duplicateMessage,
-          summary: duplicateSummary,
+          summary: null,
           errorMessage: null,
         });
         setMessage(duplicateMessage);
-        router.refresh();
-        return { status: "done", importedRows: duplicateSummary?.rowsImported ?? 0, summary: duplicateSummary };
+        return { status: "done", importedRows: 0, summary: null };
       }
 
       capturePostHogClientEvent("import_parsed_successfully", {

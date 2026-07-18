@@ -43,6 +43,9 @@ export const postFileWithProgress = (
 
       onProgress(Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100))));
     };
+    xhr.upload.onload = () => {
+      onProgress?.(100);
+    };
 
     xhr.onload = () => {
       settled = true;

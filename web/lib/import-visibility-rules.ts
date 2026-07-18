@@ -29,6 +29,7 @@ const IMPORT_IMAGE_HEAVY_VISIBILITY_MAX_TIMEOUT_MS = 5 * 60_000;
 const IMPORT_SERVER_HEAVY_VISIBILITY_BASE_TIMEOUT_MS = 60_000;
 const IMPORT_SERVER_HEAVY_VISIBILITY_ADDITIONAL_FILE_TIMEOUT_MS = 30_000;
 const IMPORT_SERVER_HEAVY_VISIBILITY_MAX_TIMEOUT_MS = 4 * 60_000;
+const IMPORT_PROGRESS_PREPARING = 20;
 const IMPORT_PROGRESS_UPLOADING = 40;
 const IMPORT_BACKGROUND_HARD_STOP_MINUTES = 10;
 
@@ -257,7 +258,8 @@ export const hasActiveServerImport = (items: VisibilityQueueItem[]) =>
   items.some(
     (item) =>
       (item.status === "importing" || item.status === "parsing") &&
-      Number(item.progress ?? 0) >= IMPORT_PROGRESS_UPLOADING
+      Boolean(item.importFileId) &&
+      Number(item.progress ?? 0) >= IMPORT_PROGRESS_PREPARING
   );
 
 export const summarizeVisibilityOutcome = <TItem extends VisibilityQueueItem>(

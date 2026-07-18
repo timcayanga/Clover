@@ -15,12 +15,15 @@ const section = (source: string, start: string, end: string) => {
 };
 
 const main = async () => {
-  const [modalSource, processRouteSource, workerSource, importProcessorSource, settledVisibilitySource] = await Promise.all([
+  const [modalSource, processRouteSource, workerSource, importProcessorSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource] = await Promise.all([
     readFile(join(webRoot, "components/import-files-modal.tsx"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/process/route.ts"), "utf8"),
     readFile(join(webRoot, "workers/imports-worker.ts"), "utf8"),
     readFile(join(webRoot, "workers/import-processor.ts"), "utf8"),
     readFile(join(webRoot, "lib/import-settled-visibility.ts"), "utf8"),
+    readFile(join(webRoot, "lib/import-file-post.ts"), "utf8"),
+    readFile(join(webRoot, "lib/import-visibility-rules.ts"), "utf8"),
+    readFile(join(webRoot, "app/transactions/page.tsx"), "utf8"),
   ]);
   const localPreparseSource = section(
     modalSource,
@@ -33,6 +36,9 @@ const main = async () => {
   assert.match(modalSource, /const scheduleQueuedImport = \(delayMs = 0\) =>/);
   assert.match(modalSource, /void handleStartImportRef\.current\(\)/);
   assert.match(modalSource, /uploadRunnerActiveRef\.current = true/);
+  assert.match(modalSource, /itemsRef\.current = nextItems;\s*setItems\(nextItems\);/);
+  assert.match(filePostSource, /xhr\.upload\.onload = \(\) => \{\s*onProgress\?\.\(100\);/);
+  assert.match(visibilityRulesSource, /Boolean\(item\.importFileId\)[\s\S]{0,100}IMPORT_PROGRESS_PREPARING/);
   assert.match(modalSource, /scheduleQueuedImport\(150\)/);
   assert.match(modalSource, /canonical_import_adopted/);
   assert.match(modalSource, /startedImportMonitorKeys\.has\(monitorKey\)/);
@@ -43,8 +49,23 @@ const main = async () => {
     /hasCompletedBatchNow[\s\S]{0,500}window\.setTimeout\([\s\S]{0,250}onClose\(\)[\s\S]{0,100}, 0\)/,
     "A completed server job must not close the modal before UI visibility is verified."
   );
+  assert.doesNotMatch(
+    modalSource,
+    /primaryVisibilityCompletedRef\.current = true;[\s\S]{0,300}onClose\(\)/,
+    "A successful result must remain visible until the user dismisses it."
+  );
   assert.match(settledVisibilitySource, /transaction\?\.importFileId === params\.importFileId/);
   assert.match(settledVisibilitySource, /params\.importedRows > 0 \? null : expectedBalance/);
+  const duplicateSource = section(modalSource, "if (processPayload?.duplicate)", "capturePostHogClientEvent(\"import_parsed_successfully\"");
+  assert.doesNotMatch(duplicateSource, /incomeTotal:\s*0/);
+  assert.doesNotMatch(duplicateSource, /await Promise\.resolve\(onImported/);
+  assert.doesNotMatch(duplicateSource, /router\.refresh\(\)/);
+  assert.match(duplicateSource, /return \{ status: "done", importedRows: 0, summary: null \}/);
+  assert.doesNotMatch(
+    transactionsPageSource,
+    /pendingImportSummary\.optimistic[\s\S]{0,500}setImportOpen\(false\)/,
+    "The transactions page must not close the modal before its visibility contract completes."
+  );
   assert.doesNotMatch(modalSource, /if \(busy \|\| !workspaceId \|\| !autoStartRef\.current\)/);
   assert.match(modalSource, /const incomingKeys = new Set\(nextFiles\.map\(fileKey\)\)/);
   assert.match(modalSource, /const serverImportStillActive = hasActiveServerImport\(itemsRef\.current\)/);

@@ -2919,7 +2919,7 @@ function TransactionsPageContent() {
           currentSummary.income !== 0 ||
           currentSummary.spending !== 0 ||
           currentSummary.transfers !== 0;
-        if (options?.background && nextIsEmpty && currentHasValue && mergedTransactionsWithImports.length > 0) {
+        if (nextIsEmpty && currentHasValue && mergedTransactionsWithImports.length > 0 && hasRecentImportEvidence) {
           return {
             ...currentSummary,
             totalCount: Math.max(currentSummary.totalCount, mergedTransactionsWithImports.length),
@@ -6796,27 +6796,6 @@ function TransactionsPageContent() {
       setSelectionMenuOpen(false);
     }
   }, [bulkDeleteConfirmOpen]);
-
-  useEffect(() => {
-    if (!importOpen || !pendingImportSummary || pendingImportSummary.optimistic) {
-      return;
-    }
-
-    const settledAccountId = resolvePersistedImportedAccountId(pendingImportSummary, accounts);
-    const targetAccountId = settledAccountId ?? pendingImportSummary.accountId ?? pendingImportSummary.optimisticAccountId ?? null;
-    if (!targetAccountId || targetAccountId.startsWith("optimistic-")) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      setImportOpen(false);
-      setPendingImportSummary(null);
-    }, 250);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [importOpen, pendingImportSummary, accounts, transactions]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 1100px)");
