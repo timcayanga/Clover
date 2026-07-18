@@ -109,6 +109,7 @@ export type AnalyticsEventName =
   | "split_bill_settled"
   | "circle_created"
   | "circle_updated"
+  | "circle_deleted"
   | "circle_invitation_created"
   | "circle_invitation_accepted"
   | "circle_member_updated"

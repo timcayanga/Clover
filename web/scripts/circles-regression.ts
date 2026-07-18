@@ -66,8 +66,8 @@ const runBarkadaUat = () => {
 
 const runCoupleUat = () => {
   const members: CircleMemberSummary[] = [
-    { id: "a", userId: "a", displayName: "Ana", email: null, role: "organizer", status: "active", contributionTarget: 15_000, contributionCadence: "monthly", contributedThisMonth: 10_000 },
-    { id: "b", userId: "b", displayName: "Ben", email: null, role: "member", status: "active", contributionTarget: 15_000, contributionCadence: "monthly", contributedThisMonth: 15_000 },
+    { id: "a", userId: "a", isOwner: true, displayName: "Ana", email: null, role: "organizer", status: "active", contributionTarget: 15_000, contributionCadence: "monthly", contributedThisMonth: 10_000 },
+    { id: "b", userId: "b", isOwner: false, displayName: "Ben", email: null, role: "member", status: "active", contributionTarget: 15_000, contributionCadence: "monthly", contributedThisMonth: 15_000 },
   ];
   const budgets: CircleBudgetSummary[] = [{ id: "home", name: "Household", targetAmount: 30_000, spentAmount: 31_500, remainingAmount: -1_500, progressPercent: 100, currency: "PHP", cadence: "monthly", categoryName: null, isActive: true }];
   const goals: CircleGoalSummary[] = [{ id: "wedding", name: "Wedding", purpose: null, targetAmount: 300_000, currentAmount: 225_000, remainingAmount: 75_000, progressPercent: 75, currency: "PHP", targetDate: null, status: "active", estimatedCompletionDate: null, estimateConfidence: null, estimateReason: null }];

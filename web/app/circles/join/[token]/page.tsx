@@ -73,7 +73,7 @@ export default function CircleJoinPage({
       const payload = await response.json();
       if (!response.ok)
         throw new Error(payload.error || "Unable to join this Circle.");
-      window.location.href = `/circles?circle=${encodeURIComponent(payload.circleId)}`;
+      window.location.href = "/circles";
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "Unable to join this Circle.",

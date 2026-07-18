@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   useEffect,
   useMemo,
@@ -9,8 +8,10 @@ import {
   useState,
   type ChangeEvent,
   type FormEvent,
+  type ReactNode,
 } from "react";
 import { CircleCreateDialog } from "@/components/circle-create-dialog";
+import { AnimatedTabs } from "@/components/animated-tabs";
 import {
   type CircleSummary,
   type CirclesWorkspaceData,
@@ -30,9 +31,10 @@ type CircleTab = (typeof tabs)[number];
 
 type CirclesWorkspaceProps = {
   initialData: CirclesWorkspaceData;
-  initialCircleId?: string | null;
-  initialTab?: string | null;
-  initialCreate?: boolean;
+  selectedCircleId: string | null;
+  onSelectedCircleChange: (circleId: string | null) => void;
+  onCirclesChange: (circles: CircleSummary[]) => void;
+  createRequest: number;
 };
 
 const emptyStateCircleTypes = [
@@ -104,25 +106,15 @@ const getInitials = (name: string) => {
 
 export function CirclesWorkspace({
   initialData,
-  initialCircleId,
-  initialTab,
-  initialCreate = false,
+  selectedCircleId,
+  onSelectedCircleChange,
+  onCirclesChange,
+  createRequest,
 }: CirclesWorkspaceProps) {
-  const router = useRouter();
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [data, setData] = useState(initialData);
-  const [selectedCircleId, setSelectedCircleId] = useState(
-    initialCircleId &&
-      initialData.circles.some((circle) => circle.id === initialCircleId)
-      ? initialCircleId
-      : (initialData.circles[0]?.id ?? null),
-  );
-  const [activeTab, setActiveTab] = useState<CircleTab>(
-    tabs.includes(initialTab as CircleTab)
-      ? (initialTab as CircleTab)
-      : "overview",
-  );
-  const [showCreate, setShowCreate] = useState(initialCreate);
+  const [activeTab, setActiveTab] = useState<CircleTab>("overview");
+  const [showCreate, setShowCreate] = useState(false);
   const [createInitialType, setCreateInitialType] =
     useState<CircleTypeValue | null>(null);
   const [isLoadingCreatedCircle, setIsLoadingCreatedCircle] = useState(false);
@@ -140,11 +132,21 @@ export function CirclesWorkspace({
   );
 
   useEffect(() => {
-    if (initialCreate) {
+    if (createRequest > 0) {
       setCreateInitialType(null);
       setShowCreate(true);
     }
-  }, [initialCreate]);
+  }, [createRequest]);
+
+  useEffect(() => {
+    onCirclesChange(data.circles);
+  }, [data.circles, onCirclesChange]);
+
+  useEffect(() => {
+    setActiveTab("overview");
+    setOpenForm(null);
+    setMessage(null);
+  }, [selectedCircleId]);
 
   const openCreate = (type: CircleTypeValue | null = null) => {
     setCreateInitialType(type);
@@ -154,12 +156,6 @@ export function CirclesWorkspace({
   const closeCreate = () => {
     setShowCreate(false);
     setCreateInitialType(null);
-    const params = new URLSearchParams(window.location.search);
-    if (params.has("create")) {
-      params.delete("create");
-      const query = params.toString();
-      router.replace(query ? `/circles?${query}` : "/circles", { scroll: false });
-    }
   };
 
   const updateCircleAvatar = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -197,25 +193,10 @@ export function CirclesWorkspace({
     }
   };
 
-  const updateLocation = (circleId: string, tab: CircleTab) => {
-    const params = new URLSearchParams(window.location.search);
-    params.set("circle", circleId);
-    params.set("tab", tab);
-    window.history.replaceState(null, "", `/circles?${params.toString()}`);
-  };
-
-  const selectCircle = (circleId: string) => {
-    setSelectedCircleId(circleId);
-    setOpenForm(null);
-    setMessage(null);
-    updateLocation(circleId, activeTab);
-  };
-
   const selectTab = (tab: CircleTab) => {
     setActiveTab(tab);
     setOpenForm(null);
     setMessage(null);
-    if (selectedCircle) updateLocation(selectedCircle.id, tab);
   };
 
   const refresh = async (preferredCircleId?: string) => {
@@ -228,8 +209,8 @@ export function CirclesWorkspace({
     setData(payload);
     const nextId = preferredCircleId || selectedCircleId;
     if (nextId && payload.circles.some((circle) => circle.id === nextId))
-      setSelectedCircleId(nextId);
-    else setSelectedCircleId(payload.circles[0]?.id ?? null);
+      onSelectedCircleChange(nextId);
+    else onSelectedCircleChange(payload.circles[0]?.id ?? null);
   };
 
   const runResource = async (
@@ -421,21 +402,22 @@ export function CirclesWorkspace({
     }
   };
 
-  const submitMemberTarget = (
-    event: FormEvent<HTMLFormElement>,
-    memberId: string,
-  ) => {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
+  const updateMemberRole = (memberId: string, role: string) => {
     void runResource(
       {
         action: "update_member",
         id: memberId,
-        contributionTarget: form.get("contributionTarget") || null,
-        contributionCadence: form.get("contributionCadence"),
-        role: form.get("role"),
+        role,
       },
-      "Member agreement updated.",
+      "Member role updated.",
+    );
+  };
+
+  const removeMember = (memberId: string, displayName: string) => {
+    if (!window.confirm(`Remove ${displayName} from this Circle?`)) return;
+    void runResource(
+      { action: "update_member", id: memberId, status: "removed" },
+      `${displayName} was removed from the Circle.`,
     );
   };
 
@@ -500,11 +482,11 @@ export function CirclesWorkspace({
     }
   };
 
-  const archiveCircle = async () => {
+  const deleteCircle = async () => {
     if (
       !selectedCircle ||
       !window.confirm(
-        `Archive ${selectedCircle.name}? Its financial history will be preserved.`,
+        `Delete ${selectedCircle.name}? Circle budgets, goals, commitments, invitations, and activity will be permanently deleted. Existing personal transactions and Split Bills will remain.`,
       )
     )
       return;
@@ -515,14 +497,14 @@ export function CirclesWorkspace({
       });
       const payload = (await response.json()) as { error?: string };
       if (!response.ok)
-        throw new Error(payload.error || "Unable to archive this Circle.");
+        throw new Error(payload.error || "Unable to delete this Circle.");
       await refresh();
-      setMessage("Circle archived. Its financial history was preserved.");
+      setMessage("Circle deleted.");
     } catch (error) {
       setMessage(
         error instanceof Error
           ? error.message
-          : "Unable to archive this Circle.",
+          : "Unable to delete this Circle.",
       );
     } finally {
       setIsSaving(false);
@@ -568,99 +550,32 @@ export function CirclesWorkspace({
         </section>
       ) : (
         <div className="circles-layout">
-          <nav className="circles-circle-tabs" aria-label="Your Circles">
-            {data.circles.map((circle) => (
-              <button
-                key={circle.id}
-                className={`circles-circle-tab ${circle.id === selectedCircle?.id ? "is-selected" : ""}`}
-                type="button"
-                onClick={() => selectCircle(circle.id)}
-              >
-                <span
-                  className={`circles-avatar circles-avatar--small circles-avatar--${circle.color}`}
-                >
-                  <img src={getCircleAvatarUrl(circle)} alt="" />
-                </span>
-                <strong>{circle.name}</strong>
-                {circle.pendingCount > 0 ? (
-                  <span className="circles-count">{circle.pendingCount}</span>
-                ) : null}
-              </button>
-            ))}
-            <button
-              className="circles-circle-tab circles-circle-tab--add"
-              type="button"
-              aria-label="Create another Circle"
-              onClick={() => openCreate()}
-            >
-              <span aria-hidden="true">+</span> New Circle
-            </button>
-          </nav>
-
           {selectedCircle ? (
             <main className="circles-workspace">
-              <header className="circles-workspace-heading">
-                {selectedCircle.role === "organizer" ? (
-                  <button
-                    className={`circles-avatar circles-avatar--large circles-avatar--editable circles-avatar--${selectedCircle.color}`}
-                    type="button"
-                    aria-label={`Change ${selectedCircle.name} photo`}
-                    title="Change Circle photo"
-                    onClick={() => avatarInputRef.current?.click()}
-                    disabled={isSaving}
-                  >
-                    <img src={getCircleAvatarUrl(selectedCircle)} alt="" />
-                    <span aria-hidden="true">✎</span>
-                  </button>
-                ) : (
-                  <span
-                    className={`circles-avatar circles-avatar--large circles-avatar--${selectedCircle.color}`}
-                  >
-                    <img src={getCircleAvatarUrl(selectedCircle)} alt="" />
-                  </span>
-                )}
-                <h2>{selectedCircle.name}</h2>
-                <div
-                  className="circles-workspace-heading__members"
-                  aria-label={`${selectedCircle.memberCount} Circle members`}
-                >
-                  {selectedCircle.members
-                    .filter((member) => member.status === "active")
-                    .slice(0, 5)
-                    .map((member) => (
-                    <span key={member.id} title={member.displayName}>
-                      {getInitials(member.displayName)}
-                    </span>
-                    ))}
-                  {selectedCircle.memberCount > 5 ? (
-                    <span>+{selectedCircle.memberCount - 5}</span>
-                  ) : null}
-                </div>
-                <input
-                  ref={avatarInputRef}
-                  className="sr-only"
-                  type="file"
-                  accept="image/*"
-                  aria-label="Choose a Circle photo"
-                  onChange={(event) => void updateCircleAvatar(event)}
-                />
-              </header>
-
-              <nav
-                className="circles-tabs"
-                aria-label={`${selectedCircle.name} sections`}
-              >
-                {tabs.map((tab) => (
-                  <button
-                    key={tab}
-                    className={activeTab === tab ? "is-active" : ""}
-                    type="button"
-                    onClick={() => selectTab(tab)}
-                  >
-                    {tab[0].toUpperCase() + tab.slice(1)}
-                  </button>
-                ))}
-              </nav>
+              <AnimatedTabs
+                className="investments-tabs circles-section-tabs"
+                activeKey={activeTab}
+                onChange={(key) => selectTab(key as CircleTab)}
+                tabs={tabs.map((tab) => ({
+                  key: tab,
+                  label:
+                    tab === "budget"
+                      ? "Budgeting"
+                      : tab[0].toUpperCase() + tab.slice(1),
+                  ariaLabel:
+                    tab === "budget"
+                      ? "Budgeting"
+                      : tab[0].toUpperCase() + tab.slice(1),
+                }))}
+              />
+              <input
+                ref={avatarInputRef}
+                className="sr-only"
+                type="file"
+                accept="image/*"
+                aria-label="Choose a Circle photo"
+                onChange={(event) => void updateCircleAvatar(event)}
+              />
 
               {message ? (
                 <div className="circles-message" role="status">
@@ -719,9 +634,11 @@ export function CirclesWorkspace({
                   circle={selectedCircle}
                   latestInviteUrl={latestInviteUrl}
                   submitInvite={submitInvite}
-                  submitMemberTarget={submitMemberTarget}
+                  updateMemberRole={updateMemberRole}
+                  removeMember={removeMember}
                   manageInvitation={manageInvitation}
-                  archiveCircle={archiveCircle}
+                  deleteCircle={deleteCircle}
+                  onChangeCirclePhoto={() => avatarInputRef.current?.click()}
                   isSaving={isSaving}
                 />
               ) : null}
@@ -739,7 +656,7 @@ export function CirclesWorkspace({
           setMessage("Circle created. Opening it now...");
           void refresh(circleId)
             .then(() => {
-              setSelectedCircleId(circleId);
+              onSelectedCircleChange(circleId);
               setActiveTab("overview");
               setMessage(
                 "Circle created. Your personal finances are still private.",
@@ -765,6 +682,24 @@ type SharedPanelProps = {
   setOpenForm: (value: string | null) => void;
   isSaving: boolean;
 };
+
+function CircleEmptyState({
+  image,
+  title,
+  children,
+}: {
+  image: string;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="circles-soft-empty circles-soft-empty--illustrated">
+      <img src={image} alt="" width={92} height={92} />
+      <strong>{title}</strong>
+      <p>{children}</p>
+    </div>
+  );
+}
 
 function CircleOverview({
   circle,
@@ -819,12 +754,6 @@ function CircleOverview({
             >
               <strong>{insight.title}</strong>
               <p>{insight.detail}</p>
-              <details>
-                <summary>How Clover calculated this</summary>
-                <span>
-                  {insight.reason} Confidence: {insight.confidence}%.
-                </span>
-              </details>
             </article>
           ))}
         </div>
@@ -910,10 +839,13 @@ function CircleOverview({
               </article>
             ))
           ) : (
-            <div className="circles-soft-empty">
-              No commitments yet. Add rent, utilities, tuition, family support,
-              or another recurring responsibility.
-            </div>
+            <CircleEmptyState
+              image="/assets/3d%20icons/menu/recurring.png"
+              title="No commitments yet"
+            >
+              Add rent, utilities, tuition, family support, or another recurring
+              responsibility.
+            </CircleEmptyState>
           )}
         </div>
       </section>
@@ -1068,10 +1000,12 @@ function CircleExpenses({
             </article>
           ))
         ) : (
-          <div className="circles-soft-empty">
-            No shared expenses yet. Add a Split Bill or selectively share one of
-            your own transactions.
-          </div>
+          <CircleEmptyState
+            image="/illustrations/clover-transactions-search-3d.png"
+            title="No shared expenses yet"
+          >
+            Add a Split Bill or selectively share one of your own transactions.
+          </CircleEmptyState>
         )}
       </div>
     </section>
@@ -1203,10 +1137,13 @@ function CircleBudgets({
             </article>
           ))
         ) : (
-          <div className="circles-soft-empty">
-            No Circle budgets yet. Start with one broad monthly budget and
-            refine it after the group has real shared activity.
-          </div>
+          <CircleEmptyState
+            image="/assets/3d%20icons/menu/budgeting.png"
+            title="No shared budgets yet"
+          >
+            Start with one broad monthly budget and refine it after the group
+            has real shared activity.
+          </CircleEmptyState>
         )}
       </div>
     </section>
@@ -1423,10 +1360,12 @@ function CircleGoals({
               </article>
             ))
           ) : (
-            <div className="circles-soft-empty">
-              No shared goals yet. Choose a life event or create a
-              straightforward savings target.
-            </div>
+            <CircleEmptyState
+              image="/illustrations/clover-goals-progress-3d.png"
+              title="No shared goals yet"
+            >
+              Choose a life event or create a straightforward savings target.
+            </CircleEmptyState>
           )}
         </div>
       </section>
@@ -1522,9 +1461,12 @@ function CircleGoals({
               </article>
             ))
           ) : (
-            <div className="circles-soft-empty">
+            <CircleEmptyState
+              image="/illustrations/clover-investments-portfolio-3d.png"
+              title="No shared investments"
+            >
               No investment information is shared with this Circle.
-            </div>
+            </CircleEmptyState>
           )}
         </div>
       </section>
@@ -1556,9 +1498,12 @@ function CircleActivity({ circle }: { circle: CircleSummary }) {
             </article>
           ))
         ) : (
-          <div className="circles-soft-empty">
-            Circle activity will appear here.
-          </div>
+          <CircleEmptyState
+            image="/illustrations/clover-review-checklist-3d.png"
+            title="No Circle activity yet"
+          >
+            Changes made by Circle members will appear here.
+          </CircleEmptyState>
         )}
       </div>
     </section>
@@ -1569,132 +1514,115 @@ function CircleMembers({
   circle,
   latestInviteUrl,
   submitInvite,
-  submitMemberTarget,
+  updateMemberRole,
+  removeMember,
   manageInvitation,
-  archiveCircle,
+  deleteCircle,
+  onChangeCirclePhoto,
   isSaving,
 }: {
   circle: CircleSummary;
   latestInviteUrl: string | null;
   submitInvite: (event: FormEvent<HTMLFormElement>) => void;
-  submitMemberTarget: (
-    event: FormEvent<HTMLFormElement>,
-    memberId: string,
-  ) => void;
+  updateMemberRole: (memberId: string, role: string) => void;
+  removeMember: (memberId: string, displayName: string) => void;
   manageInvitation: (
     invitationId: string,
     action: "resend" | "revoke" | "copy",
     shareUrl: string,
   ) => Promise<void>;
-  archiveCircle: () => Promise<void>;
+  deleteCircle: () => Promise<void>;
+  onChangeCirclePhoto: () => void;
   isSaving: boolean;
 }) {
+  const [inviteOpen, setInviteOpen] = useState(false);
+
   return (
     <div className="circles-panel-stack">
       <section className="circles-section panel glass">
         <div className="circles-section__head">
           <div>
-            <p className="eyebrow">Privacy at a glance</p>
-            <h3>What this Circle can see</h3>
-            <p>
-              Only items deliberately added to {circle.name} are visible to its
-              members. Personal accounts, balances, salary, and unshared
-              transactions stay private.
-            </p>
+            <h3 className="eyebrow">People and permissions</h3>
           </div>
-        </div>
-        <div className="circles-privacy-summary">
-          <span><strong>{circle.expenses.length}</strong> shared expenses</span>
-          <span><strong>{circle.goals.length}</strong> shared goals</span>
-          <span><strong>{circle.budgets.length}</strong> shared budgets</span>
-          <span><strong>{circle.investmentShares.length}</strong> investment summaries</span>
-        </div>
-      </section>
-      <section className="circles-section panel glass">
-        <div className="circles-section__head">
-          <div>
-            <p className="eyebrow">People and permissions</p>
-            <h3>Members of {circle.name}</h3>
-          </div>
+          {circle.role === "organizer" ? (
+            <button
+              className="circles-change-photo"
+              type="button"
+              onClick={onChangeCirclePhoto}
+              disabled={isSaving}
+            >
+              <span
+                className={`circles-avatar circles-avatar--small circles-avatar--${circle.color}`}
+              >
+                <img src={getCircleAvatarUrl(circle)} alt="" />
+              </span>
+              Change Circle photo
+            </button>
+          ) : null}
         </div>
         <div className="circles-member-list">
-          {circle.members.map((member) => (
-            <article key={member.id}>
-              <span className="circles-avatar">
-                {getInitials(member.displayName)}
-              </span>
-              <div>
-                <strong>{member.displayName}</strong>
-                <span>
-                  {member.status === "invited"
-                    ? "Not joined yet"
-                    : member.email || "Active member"}
+          {circle.members
+            .filter(
+              (member) =>
+                member.status !== "removed" && member.status !== "left",
+            )
+            .map((member) => (
+              <article key={member.id}>
+                <span className="circles-avatar">
+                  {getInitials(member.displayName)}
                 </span>
-              </div>
-              <form onSubmit={(event) => submitMemberTarget(event, member.id)}>
-                <select
-                  name="role"
-                  defaultValue={member.role}
-                  disabled={
-                    circle.role !== "organizer" ||
-                    Boolean(
-                      member.userId &&
-                        circle.isOwner &&
-                        member.role === "organizer",
-                    )
-                  }
-                >
-                  <option value="organizer">Organizer</option>
-                  <option value="member">Member</option>
-                  <option value="participant">Participant</option>
-                </select>
-                <input
-                  name="contributionTarget"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  defaultValue={member.contributionTarget ?? ""}
-                  placeholder="Monthly target"
-                  disabled={circle.role !== "organizer"}
-                />
-                <select
-                  name="contributionCadence"
-                  defaultValue={member.contributionCadence}
-                  aria-label={`${member.displayName} contribution cadence`}
-                  disabled={circle.role !== "organizer"}
-                >
-                  <option value="weekly">Weekly</option>
-                  <option value="biweekly">Every two weeks</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="quarterly">Quarterly</option>
-                  <option value="annual">Annually</option>
-                </select>
-                {circle.role === "organizer" ? (
-                  <button
-                    className="button button-secondary button-small"
-                    type="submit"
-                    disabled={isSaving}
+                <div>
+                  <strong>{member.displayName}</strong>
+                  <span>
+                    {member.status === "invited"
+                      ? "Not joined yet"
+                      : member.email || "Active member"}
+                  </span>
+                </div>
+                <div className="circles-member-list__actions">
+                  <select
+                    value={member.role}
+                    aria-label={`${member.displayName} role`}
+                    onChange={(event) =>
+                      updateMemberRole(member.id, event.currentTarget.value)
+                    }
+                    disabled={
+                      circle.role !== "organizer" ||
+                      member.isOwner ||
+                      isSaving
+                    }
                   >
-                    Save
-                  </button>
-                ) : null}
-              </form>
-            </article>
-          ))}
+                    <option value="organizer">Organizer</option>
+                    <option value="member">Member</option>
+                    <option value="participant">Participant</option>
+                  </select>
+                  {circle.role === "organizer" && !member.isOwner ? (
+                    <button
+                      className="circles-member-remove"
+                      type="button"
+                      aria-label={`Remove ${member.displayName}`}
+                      title={`Remove ${member.displayName}`}
+                      onClick={() => removeMember(member.id, member.displayName)}
+                      disabled={isSaving}
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+          {circle.role === "organizer" ? (
+            <button
+              className="circles-add-person"
+              type="button"
+              onClick={() => setInviteOpen((current) => !current)}
+              aria-expanded={inviteOpen}
+            >
+              <span aria-hidden="true">+</span> Add person
+            </button>
+          ) : null}
         </div>
-      </section>
-      {circle.role === "organizer" ? (
-        <section className="circles-section panel glass">
-          <div className="circles-section__head">
-            <div>
-              <p className="eyebrow">Invite securely</p>
-              <h3>Bring someone into this Circle</h3>
-              <p>
-                They will see the Circle purpose and privacy boundary before
-                joining.
-              </p>
-            </div>
-          </div>
+        {circle.role === "organizer" && inviteOpen ? (
           <form className="circles-inline-form" onSubmit={submitInvite}>
             <label>
               <span>Email</span>
@@ -1726,7 +1654,8 @@ function CircleMembers({
               Send invitation
             </button>
           </form>
-          {latestInviteUrl ? (
+        ) : null}
+        {latestInviteUrl ? (
             <div className="circles-invite-result">
               <input
                 readOnly
@@ -1765,24 +1694,23 @@ function CircleMembers({
               ))}
             </div>
           ) : null}
-        </section>
-      ) : null}
+      </section>
       {circle.isOwner ? (
-        <section className="circles-danger-zone panel glass">
-          <div>
-            <strong>Archive this Circle</strong>
-            <p>
-              Members will lose access, but bills, goals, contributions, and the
-              audit history will be preserved.
-            </p>
+        <section className="settings-action-card settings-account-card settings-account-card--danger circles-delete-card">
+          <div className="settings-account-card__head">
+            <h5>Delete Circle</h5>
           </div>
+          <p>
+            Permanently delete this Circle and its shared plans. Personal
+            transactions and existing Split Bills will remain.
+          </p>
           <button
-            className="button button-secondary"
+            className="button button-danger button-small"
             type="button"
-            onClick={() => void archiveCircle()}
+            onClick={() => void deleteCircle()}
             disabled={isSaving}
           >
-            Archive Circle
+            Delete Circle
           </button>
         </section>
       ) : null}

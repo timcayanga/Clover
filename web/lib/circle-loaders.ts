@@ -117,6 +117,7 @@ export const loadCirclesWorkspaceData = async (
       (membership) => ({
         id: membership.id,
         userId: membership.userId,
+        isOwner: membership.userId === circle.ownerUserId,
         displayName: membership.displayName,
         email:
           role === "organizer" || membership.userId === user.id

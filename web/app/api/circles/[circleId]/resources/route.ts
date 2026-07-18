@@ -418,6 +418,32 @@ export async function POST(
                   : undefined,
             },
           });
+          const invitationMatch = [member.email, member.displayName]
+            .filter((value): value is string => Boolean(value?.trim()))
+            .map((value) => ({
+              OR: [
+                { email: { equals: value, mode: "insensitive" as const } },
+                {
+                  displayName: {
+                    equals: value,
+                    mode: "insensitive" as const,
+                  },
+                },
+              ],
+            }));
+          if (invitationMatch.length > 0 && (body.role || body.status === "removed")) {
+            await tx.circleInvitation.updateMany({
+              where: {
+                circleId,
+                status: "pending",
+                OR: invitationMatch,
+              },
+              data: {
+                role: body.role,
+                status: body.status === "removed" ? "revoked" : undefined,
+              },
+            });
+          }
           if (body.displayName && body.displayName !== member.displayName) {
             const group = await tx.splitBillGroup.findUnique({
               where: { circleId },

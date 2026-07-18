@@ -94,28 +94,19 @@ export async function DELETE(
     const user = await getCircleCurrentUser();
     const { circleId } = await params;
     const access = await getCircleAccess(circleId, user.id, "organizer");
-    const now = new Date();
+    if (access.circle.ownerUserId !== user.id) {
+      return NextResponse.json(
+        { error: "Only the Circle owner can delete this Circle." },
+        { status: 403 },
+      );
+    }
 
-    await prisma.$transaction([
-      prisma.circle.update({
-        where: { id: circleId },
-        data: { archivedAt: now },
-      }),
-      prisma.splitBillGroup.updateMany({
-        where: { circleId },
-        data: { archivedAt: now },
-      }),
-      prisma.circleActivity.create({
-        data: {
-          circleId,
-          actorUserId: user.id,
-          action: "circle_archived",
-          entityType: "circle",
-          entityId: circleId,
-          summary: `${access.circle.name} was archived. Financial records were preserved.`,
-        },
-      }),
-    ]);
+    await prisma.circle.delete({ where: { id: circleId } });
+
+    void capturePostHogServerEvent("circle_deleted", user.id, {
+      circle_id: circleId,
+      deletion_mode: "permanent",
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {
