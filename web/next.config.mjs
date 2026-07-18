@@ -3,9 +3,15 @@ const nextConfig = {
   reactStrictMode: true,
   serverExternalPackages: ["@napi-rs/canvas", "tesseract.js"],
   outputFileTracingIncludes: {
-    "/api/imports/**/*": [
+    "/*": [
       "./node_modules/@napi-rs/canvas/**/*",
       "./node_modules/@napi-rs/canvas-*/**/*",
+      "./node_modules/tesseract.js-core/tesseract-core-relaxedsimd.js",
+      "./node_modules/tesseract.js-core/tesseract-core-relaxedsimd.wasm",
+      "../node_modules/@napi-rs/canvas/**/*",
+      "../node_modules/@napi-rs/canvas-*/**/*",
+      "../node_modules/tesseract.js-core/tesseract-core-relaxedsimd.js",
+      "../node_modules/tesseract.js-core/tesseract-core-relaxedsimd.wasm",
     ],
   },
   typescript: {
