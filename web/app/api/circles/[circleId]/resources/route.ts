@@ -98,6 +98,9 @@ const resourceSchema = z.discriminatedUnion("action", [
     displayName: z.string().trim().min(1).max(100).optional(),
     role: z.enum(circleRoles).optional(),
     contributionTarget: amount.nullable().optional(),
+    contributionCadence: z
+      .enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"])
+      .optional(),
     status: z.enum(["invited", "active", "left", "removed"]).optional(),
   }),
   z.object({
@@ -407,6 +410,7 @@ export async function POST(
               displayName: body.displayName,
               role: body.role,
               contributionTarget: body.contributionTarget,
+              contributionCadence: body.contributionCadence,
               status: body.status,
               leftAt:
                 body.status === "left" || body.status === "removed"

@@ -1,12 +1,11 @@
 import { randomBytes } from "node:crypto";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { circleRoles, circleTypes } from "@/lib/circles";
 import { getCircleCurrentUser } from "@/lib/circle-access";
 import { loadCirclesWorkspaceData } from "@/lib/circle-loaders";
 import { getUserDisplayName } from "@/lib/user-display-name";
-import { pickSplitBillAvatarUrl } from "@/lib/split-bill-avatars";
 import {
   assertContentLengthWithin,
   assertTrustedRequestOrigin,
@@ -90,7 +89,7 @@ export async function POST(request: Request) {
           name: body.name,
           type: body.type,
           description: body.description || null,
-          avatarUrl: body.avatarUrl || pickSplitBillAvatarUrl(body.name),
+          avatarUrl: body.avatarUrl || null,
           color: body.color,
           currency: body.currency,
           memberships: {
@@ -169,40 +168,42 @@ export async function POST(request: Request) {
     });
 
     const origin = new URL(request.url).origin;
-    const deliveryResults = await Promise.allSettled(
-      invitationDrafts.map((invitation) =>
-        sendCircleInvitationEmail({
-          to: invitation.email,
-          circleName: circle.name,
-          inviterName: ownerName,
-          inviteUrl: new URL(
-            getCircleInvitationPath(invitation.token),
-            origin,
-          ).toString(),
-          expiresAt,
-        }),
-      ),
-    );
-    deliveryResults.forEach((result, index) => {
-      if (result.status === "rejected") {
-        console.error("[Circles] Initial invitation email failed", {
-          circleId: circle.id,
-          invitationEmail: invitationDrafts[index]?.email,
-          error:
-            result.reason instanceof Error
-              ? result.reason.message
-              : "Unknown email error",
-        });
-      }
+    after(async () => {
+      const deliveryResults = await Promise.allSettled(
+        invitationDrafts.map((invitation) =>
+          sendCircleInvitationEmail({
+            to: invitation.email,
+            circleName: circle.name,
+            inviterName: ownerName,
+            inviteUrl: new URL(
+              getCircleInvitationPath(invitation.token),
+              origin,
+            ).toString(),
+            expiresAt,
+          }),
+        ),
+      );
+      deliveryResults.forEach((result, index) => {
+        if (result.status === "rejected") {
+          console.error("[Circles] Initial invitation email failed", {
+            circleId: circle.id,
+            invitationEmail: invitationDrafts[index]?.email,
+            error:
+              result.reason instanceof Error
+                ? result.reason.message
+                : "Unknown email error",
+          });
+        }
+      });
     });
 
     return NextResponse.json(
       {
         circleId: circle.id,
-        invitations: invitationDrafts.map((invitation, index) => ({
+        invitations: invitationDrafts.map((invitation) => ({
           email: invitation.email,
           shareUrl: getCircleInvitationPath(invitation.token),
-          emailSent: deliveryResults[index]?.status === "fulfilled",
+          emailQueued: true,
         })),
       },
       { status: 201 },

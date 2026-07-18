@@ -1,18 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { circleTemplates, type CircleTypeValue } from "@/lib/circles";
 
 type CircleCreateDialogProps = {
   open: boolean;
+  initialType?: CircleTypeValue | null;
   onClose: () => void;
-  onCreated: (circleId: string) => void | Promise<void>;
+  onCreated: (circleId: string) => void;
 };
 
 type DraftMember = { displayName: string; email: string };
 
 export function CircleCreateDialog({
   open,
+  initialType = null,
   onClose,
   onCreated,
 }: CircleCreateDialogProps) {
@@ -32,6 +34,17 @@ export function CircleCreateDialog({
   ]);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || !initialType) return;
+    const template =
+      circleTemplates.find((entry) => entry.type === initialType) ??
+      circleTemplates[0];
+    setType(template.type);
+    setName(template.suggestedName);
+    setStep(1);
+    setMessage(null);
+  }, [initialType, open]);
 
   if (!open) return null;
 
@@ -110,9 +123,10 @@ export function CircleCreateDialog({
       };
       if (!response.ok || !payload.circleId)
         throw new Error(payload.error || "Unable to create this Circle.");
-      await onCreated(payload.circleId);
       setIsSaving(false);
+      const circleId = payload.circleId;
       resetAndClose();
+      onCreated(circleId);
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -219,10 +233,6 @@ export function CircleCreateDialog({
 
         {step === 2 ? (
           <div className="circles-form-stack">
-            <p className="panel-muted">
-              Invite people by email now, or add them later. Clover will send
-              each person a secure link that expires in 14 days.
-            </p>
             <div className="circles-privacy-note">
               <strong>Your finances stay private.</strong>
               <span>
@@ -295,13 +305,6 @@ export function CircleCreateDialog({
             >
               Add another person
             </button>
-
-            <div className="circles-starter-preview">
-              <strong>Good ways to start</strong>
-              {selectedTemplate.starterActions.map((action) => (
-                <span key={action}>{action}</span>
-              ))}
-            </div>
           </div>
         ) : null}
 
