@@ -6,7 +6,6 @@ import { PasswordIcon } from "@/components/password-icon";
 type PasswordImportFile = {
   id: string;
   name: string;
-  sizeLabel: string;
   error: string | null;
   password: string;
   passwordVisible: boolean;
@@ -56,23 +55,13 @@ export function ImportPasswordModal({
         className="modal-card import-password-modal glass"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="import-password-title"
+        aria-labelledby="import-password-notice"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="import-password-header">
-          <div>
-            <p className="eyebrow">Password required</p>
-            <h4 id="import-password-title">Unlock this file</h4>
-            <p className="modal-copy">
-              This statement is password-protected. Enter its password to continue importing.
-            </p>
-          </div>
-        </div>
-
         <div className="import-password-body">
+          <p className="eyebrow" id="import-password-notice">Password required</p>
           <div className="import-password-file">
             <strong>{activeFile.name}</strong>
-            <span>{activeFile.sizeLabel}</span>
           </div>
 
           {activeFile.error ? <p className="import-password-error">{activeFile.error}</p> : null}
@@ -85,7 +74,7 @@ export function ImportPasswordModal({
             }}
           >
             <label className="import-password-field">
-              <span>Password for {activeFile.name}</span>
+              <span>Password</span>
               <div className="import-password-input">
                 <input
                   ref={passwordInputRef}

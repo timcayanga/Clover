@@ -7340,7 +7340,6 @@ export function ImportFilesModal({
         files={passwordItems.map((item) => ({
           id: item.id,
           name: item.file.name,
-          sizeLabel: `${fileTypeLabel(item.file)} · ${Math.max(1, Math.round(item.file.size / 1024))} KB`,
           error: item.error,
           password: item.password,
           passwordVisible: item.passwordVisible,
