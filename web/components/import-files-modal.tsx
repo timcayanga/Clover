@@ -350,6 +350,7 @@ const buildImportErrorNotice = (stage: ImportErrorStage, fileName: string | null
 
 const MAX_IMPORT_FILES_PER_BATCH = 5;
 const IMPORT_BACKGROUND_HARD_STOP_MS = 60_000;
+const startedImportMonitorKeys = new Set<string>();
 
 const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
@@ -411,6 +412,7 @@ export function ImportFilesModal({
   const busyRef = useRef(false);
   const uploadRunnerActiveRef = useRef(false);
   const uploadRunnerTimerRef = useRef<number | null>(null);
+  const importModalInstanceIdRef = useRef(crypto.randomUUID());
   const wasOpenRef = useRef(open);
   const itemsRef = useRef<QueuedFile[]>([]);
 
@@ -1372,6 +1374,7 @@ export function ImportFilesModal({
       uploadRunnerActiveRef.current = true;
       reportImportClientStage("auto_start_dispatched", {
         pendingFiles: pendingFiles.length,
+        instanceId: importModalInstanceIdRef.current,
       });
       void handleStartImportRef.current()
         .catch((error) => {
@@ -1543,6 +1546,7 @@ export function ImportFilesModal({
       reportImportClientStage("files_queued", {
         fileCount: additions.length,
         workspaceReady: Boolean(workspaceId),
+        instanceId: importModalInstanceIdRef.current,
       });
       scheduleQueuedImport();
       if (shouldLaunchInBackground) {
@@ -2139,6 +2143,17 @@ export function ImportFilesModal({
       backgroundOnly?: boolean;
     }
   ) => {
+    const monitorKey = `${importModalInstanceIdRef.current}:${workspaceId}:${importFileId}`;
+    if (startedImportMonitorKeys.has(monitorKey)) {
+      reportImportClientStage("monitor_reused", {
+        importFileId,
+        instanceId: importModalInstanceIdRef.current,
+      });
+      return;
+    }
+    startedImportMonitorKeys.add(monitorKey);
+    window.setTimeout(() => startedImportMonitorKeys.delete(monitorKey), 10 * 60 * 1000);
+
     const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
     const backgroundOnly = Boolean(options?.backgroundOnly);
     const emitItemUpdate = (patch: Partial<QueuedFile>) => {
@@ -4836,6 +4851,8 @@ export function ImportFilesModal({
         importMode: itemImportMode,
         fileSize: item.file.size,
         hasWorkspace: Boolean(workspaceId),
+        importFileId,
+        instanceId: importModalInstanceIdRef.current,
       });
       capturePostHogClientEvent("import_started", {
         file_type: fileTypeLabel(item.file),
@@ -4994,6 +5011,24 @@ export function ImportFilesModal({
       }
 
       const processPayload = await processResponse.json().catch(() => ({}));
+      const canonicalImportFileId =
+        typeof processPayload?.canonicalImportFileId === "string"
+          ? processPayload.canonicalImportFileId
+          : typeof processPayload?.duplicateOfImportFileId === "string"
+            ? processPayload.duplicateOfImportFileId
+            : null;
+      if (canonicalImportFileId && canonicalImportFileId !== importFileId) {
+        reportImportClientStage("canonical_import_adopted", {
+          importFileId,
+          canonicalImportFileId,
+          instanceId: importModalInstanceIdRef.current,
+        });
+        importFileId = canonicalImportFileId;
+        updateItem(itemId, { importFileId: canonicalImportFileId });
+      }
+      if (!importFileId) {
+        throw new Error("Clover lost the import identifier while reconciling this upload.");
+      }
       if (isDocumentImport) {
         const importedLabel =
           itemImportMode === "receipt"

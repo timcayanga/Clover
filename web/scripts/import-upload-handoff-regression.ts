@@ -32,6 +32,8 @@ const main = async () => {
   assert.match(modalSource, /void handleStartImportRef\.current\(\)/);
   assert.match(modalSource, /uploadRunnerActiveRef\.current = true/);
   assert.match(modalSource, /scheduleQueuedImport\(150\)/);
+  assert.match(modalSource, /canonical_import_adopted/);
+  assert.match(modalSource, /startedImportMonitorKeys\.has\(monitorKey\)/);
   assert.doesNotMatch(modalSource, /if \(busy \|\| !workspaceId \|\| !autoStartRef\.current\)/);
   assert.match(modalSource, /const incomingKeys = new Set\(nextFiles\.map\(fileKey\)\)/);
   assert.match(modalSource, /const serverImportStillActive = hasActiveServerImport\(itemsRef\.current\)/);
@@ -42,6 +44,9 @@ const main = async () => {
     "Advisory local parsing must not block upload by opening the password flow."
   );
   assert.match(uploadHandoffSource, /postFileWithProgress\(/);
+  assert.match(processRouteSource, /sourceFingerprint: fileFingerprint/);
+  assert.match(processRouteSource, /canonicalImportFileId: canonicalImport\.id/);
+  assert.match(processRouteSource, /await uploadPromise;[\s\S]{0,500}processingMessage: canonicalStillProcessing/);
   assert.doesNotMatch(
     uploadHandoffSource,
     /await extractTextFromFile/,

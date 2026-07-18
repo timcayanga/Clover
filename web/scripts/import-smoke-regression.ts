@@ -7,6 +7,7 @@ type ImportCase = {
   relativePath: string;
   bankName: string;
   fileType?: string;
+  expectedPasswordRequired?: boolean;
 };
 
 type WorkspaceRecord = {
@@ -58,6 +59,7 @@ const cases: ImportCase[] = [
     label: "Security Bank",
     relativePath: "Samples/Security Bank/748042099-Security-Bank-Statement-Gsr.pdf",
     bankName: "Security Bank",
+    expectedPasswordRequired: true,
   },
   {
     label: "UnionBank",
@@ -93,7 +95,13 @@ const fileNameFromPath = (relativePath: string) => relativePath.split("/").pop()
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const uploadStatement = async (workspaceId: string, filePath: string, bankName: string, fileType = "application/pdf") => {
+const uploadStatement = async (
+  workspaceId: string,
+  filePath: string,
+  bankName: string,
+  fileType = "application/pdf",
+  expectedPasswordRequired = false
+) => {
   const fileName = fileNameFromPath(filePath);
   const bytes = await readFile(resolve(statementRoot, filePath));
 
@@ -129,10 +137,14 @@ const uploadStatement = async (workspaceId: string, filePath: string, bankName: 
   });
   const processPayload = (await processResponse.json().catch(() => ({}))) as Record<string, unknown>;
   if (!processResponse.ok) {
-    throw new Error((processPayload.error as string) || `Unable to process ${fileName}`);
+    const errorMessage = String(processPayload.error ?? `Unable to process ${fileName}`);
+    if (expectedPasswordRequired && /password-protected|enter the password|password required/i.test(errorMessage)) {
+      return { importId, fileName, processPayload, passwordRequired: true };
+    }
+    throw new Error(errorMessage);
   }
 
-  return { importId, fileName, processPayload };
+  return { importId, fileName, processPayload, passwordRequired: false };
 };
 
 const pollImport = async (importId: string, fileName: string) => {
@@ -202,16 +214,32 @@ const main = async () => {
   const workspaceId = await getWorkspaceId();
   console.log(`Using workspace ${workspaceId}`);
 
-  const results: Array<{ label: string; fileName: string; importId: string; elapsedMs: number; resumed: boolean }> = [];
+  const results: Array<{ label: string; fileName: string; importId: string; elapsedMs: number; resumed: boolean; outcome: string }> = [];
 
   for (const testCase of cases) {
-    const { importId, fileName, processPayload } = await uploadStatement(
+    const { importId, fileName, processPayload, passwordRequired } = await uploadStatement(
       workspaceId,
       testCase.relativePath,
       testCase.bankName,
-      testCase.fileType ?? "application/pdf"
+      testCase.fileType ?? "application/pdf",
+      Boolean(testCase.expectedPasswordRequired)
     );
     console.log(`[${testCase.label}] process response: ${JSON.stringify(processPayload)}`);
+
+    if (passwordRequired) {
+      assert(testCase.expectedPasswordRequired, `${testCase.label} unexpectedly required a password.`);
+      results.push({
+        label: testCase.label,
+        fileName,
+        importId,
+        elapsedMs: 0,
+        resumed: false,
+        outcome: "password_required",
+      });
+      continue;
+    }
+
+    assert(!testCase.expectedPasswordRequired, `${testCase.label} should have requested its PDF password.`);
 
     const { payload, resumed, elapsedMs } = await pollImport(importId, fileName);
     assert(payload.parsedRowsCount && payload.parsedRowsCount > 0, `${testCase.label} did not parse rows.`);
@@ -226,6 +254,7 @@ const main = async () => {
       importId,
       elapsedMs,
       resumed,
+      outcome: "confirmed",
     });
   }
 
@@ -233,7 +262,7 @@ const main = async () => {
   console.log("Import smoke regression summary:");
   for (const result of results) {
     console.log(
-      `- ${result.label}: ${result.fileName} | ${result.importId} | ${Math.round(result.elapsedMs / 1000)}s | resumed=${result.resumed}`
+      `- ${result.label}: ${result.fileName} | ${result.importId} | ${Math.round(result.elapsedMs / 1000)}s | resumed=${result.resumed} | outcome=${result.outcome}`
     );
   }
 };

@@ -4,10 +4,27 @@ import {
   buildParserRoutingHistoryHint,
   buildImportReviewReasons,
   getImportReviewPriority,
+  hasStrongStructuredPdfParse,
   hasStrongWisePdfDeterministicParse,
   normalizeWiseWalletParsedRows,
   mergeParserRoutingHistoryHints,
 } from "@/workers/import-processor";
+
+assert.equal(
+  hasStrongStructuredPdfParse({
+    fileType: "application/pdf",
+    imageImport: false,
+    importMode: "statement",
+    parsedRowsLength: 17,
+    parsedDateCoverage: 1,
+    metadataConfidence: 95,
+    hasKnownInstitution: true,
+    hasAccountNumber: true,
+    hasMultipleAccountNumbers: false,
+  }),
+  true,
+  "Expected a complete known-bank PDF parse to remain trustworthy even when statement headers contain spaced lettering."
+);
 
 const baseRoutingInput = {
   fileType: "application/pdf",

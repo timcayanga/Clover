@@ -844,6 +844,26 @@ export const buildParserRoutingDecision = (params: {
   };
 };
 
+export const hasStrongStructuredPdfParse = (params: {
+  fileType: string | null | undefined;
+  imageImport: boolean;
+  importMode: ImportImageMode;
+  parsedRowsLength: number;
+  parsedDateCoverage: number;
+  metadataConfidence: number;
+  hasKnownInstitution: boolean;
+  hasAccountNumber: boolean;
+  hasMultipleAccountNumbers: boolean;
+}) =>
+  params.fileType === "application/pdf" &&
+  !params.imageImport &&
+  params.importMode === "statement" &&
+  params.parsedRowsLength >= 6 &&
+  params.parsedDateCoverage >= 0.8 &&
+  params.metadataConfidence >= 80 &&
+  params.hasKnownInstitution &&
+  (params.hasAccountNumber || params.hasMultipleAccountNumbers);
+
 const normalizeTransactionDedupeText = (value: unknown) =>
   String(value ?? "")
     .replace(/\s+/g, " ")
@@ -7266,9 +7286,22 @@ export const processImportFileText = async (
     /^Account\s+\d{4}$/i.test(metadataForParse.accountName) ||
     /^(CUSTOMER NUMBER|ACCOUNT NUMBER)$/i.test(metadataForParse.accountName);
   const preliminaryLooksCharacterSpacedOcr = /(?:\b[A-Z]\s+){8,}[A-Z]\b/.test(textForParse);
+  const preliminaryStrongStructuredPdfParse = hasStrongStructuredPdfParse({
+    fileType: importFile.fileType,
+    imageImport,
+    importMode,
+    parsedRowsLength: parsedRows.length,
+    parsedDateCoverage: preliminaryParsedDateCoverage,
+    metadataConfidence: metadataForParse.confidence ?? 0,
+    hasKnownInstitution: preliminaryHasKnownInstitution,
+    hasAccountNumber: Boolean(metadataForParse.accountNumber),
+    hasMultipleAccountNumbers: preliminaryParsedRowsHaveMultipleAccountNumbers,
+  });
   const preliminaryGenericParseLooksSuspicious =
     (importFile.fileType === "application/pdf" || imageImport) &&
-    (preliminaryLooksCharacterSpacedOcr || preliminaryGenericIdentityLooksWeak || (metadataForParse.confidence ?? 0) < 75);
+    ((preliminaryLooksCharacterSpacedOcr && !preliminaryStrongStructuredPdfParse) ||
+      preliminaryGenericIdentityLooksWeak ||
+      (metadataForParse.confidence ?? 0) < 75);
   const preliminaryGsaveImageStatement =
     imageImport &&
     importMode === "statement" &&
@@ -7774,6 +7807,17 @@ export const processImportFileText = async (
     metadataForParse.accountName === metadataForParse.institution ||
     /^Account\s+\d{4}$/i.test(metadataForParse.accountName) ||
     /^(CUSTOMER NUMBER|ACCOUNT NUMBER)$/i.test(metadataForParse.accountName);
+  const strongStructuredPdfParse = hasStrongStructuredPdfParse({
+    fileType: importFile.fileType,
+    imageImport,
+    importMode,
+    parsedRowsLength: parsedRows.length,
+    parsedDateCoverage,
+    metadataConfidence: metadataForParse.confidence ?? 0,
+    hasKnownInstitution,
+    hasAccountNumber: Boolean(metadataForParse.accountNumber),
+    hasMultipleAccountNumbers: parsedRowsHaveMultipleAccountNumbers,
+  });
   const noisyVisionPreferredInstitutions = new Set(["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"]);
   const isLikelyLowQualityUnionBankStatement =
     metadataForParse.institution === "UnionBank" &&
@@ -7792,7 +7836,7 @@ export const processImportFileText = async (
     !hasStrongChinaBankDeterministicParse;
   const genericParseLooksSuspicious =
     (importFile.fileType === "application/pdf" || imageImport) &&
-    (looksCharacterSpacedOcr || genericIdentityLooksWeak || (metadataForParse.confidence ?? 0) < 75);
+    ((looksCharacterSpacedOcr && !strongStructuredPdfParse) || genericIdentityLooksWeak || (metadataForParse.confidence ?? 0) < 75);
   const screenshotLikeFile = isLikelyScreenshotImageFile(fileName);
   const suspiciousDateCoverage =
     (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 6 && parsedRowsWithDates === 0

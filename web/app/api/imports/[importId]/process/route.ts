@@ -1805,6 +1805,92 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         return NextResponse.json({ error: byteValidationError }, { status: 400 });
       }
       const fileFingerprint = makeImportFileBytesFingerprint(bytes);
+      const uploadPromise = uploadObject(
+        String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)),
+        bytes,
+        file.type || "application/octet-stream"
+      );
+      await updateImportFileCompat(importId, {
+        sourceFingerprint: fileFingerprint,
+      });
+
+      // File selection can be delivered more than once when two import surfaces
+      // overlap or a client retries while the first request is still running.
+      // Elect the oldest matching upload as the canonical owner before parsing,
+      // otherwise both requests can create and confirm the same transactions.
+      if (!allowDuplicateStatement) {
+        const recentProcessingCutoff = new Date(Date.now() - 15 * 60 * 1000);
+        const canonicalImport = await prisma.importFile.findFirst({
+          where: {
+            workspaceId: String(importFile.workspaceId),
+            sourceFingerprint: fileFingerprint,
+            OR: [
+              {
+                status: "done",
+                OR: [{ parsedRowsCount: { gt: 0 } }, { confirmedTransactionsCount: { gt: 0 } }],
+              },
+              { status: "processing", createdAt: { gte: recentProcessingCutoff } },
+            ],
+          },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        });
+
+        if (canonicalImport && canonicalImport.id !== importId) {
+          const canonicalSnapshot = await loadImportStatusSnapshot(canonicalImport.id, {
+            importFile: canonicalImport,
+            promoteFailedVisibleImport: true,
+          }).catch(() => null);
+          const canonicalConfirmedRows = Number(canonicalSnapshot?.confirmedTransactionsCount ?? 0);
+          const canonicalParsedRows = Number(canonicalSnapshot?.parsedRowsCount ?? 0);
+          const canonicalAccountSummaries = canonicalSnapshot?.accountSummaries ?? [];
+          const canonicalVisible = Boolean(
+            canonicalSnapshot?.visibleImportComplete ||
+              canonicalConfirmedRows > 0 ||
+              canonicalParsedRows > 0 ||
+              canonicalAccountSummaries.length > 0
+          );
+          const canonicalStillProcessing = canonicalImport.status === "processing";
+
+          // A completed but empty import is not a useful canonical result. Let a
+          // new attempt repair it; active imports remain canonical single-flight.
+          if (canonicalStillProcessing || canonicalVisible) {
+            // Keep the duplicate import record auditable even though processing is
+            // delegated to the canonical record.
+            await uploadPromise;
+            await updateImportFileCompat(importId, {
+              status: "done",
+              processingPhase: "complete",
+              processingMessage: canonicalStillProcessing
+                ? "Clover is following the existing upload of this file."
+                : "Clover found that this file was already imported and skipped the duplicate.",
+              parsedRowsCount: canonicalParsedRows,
+              confirmedTransactionsCount: canonicalConfirmedRows,
+            });
+
+            return NextResponse.json({
+              ok: true,
+              queued: canonicalStillProcessing,
+              processed: !canonicalStillProcessing,
+              importedRows: canonicalConfirmedRows || canonicalParsedRows,
+              duplicate: true,
+              status: canonicalStillProcessing ? "queued" : "done",
+              importFileId: importId,
+              canonicalImportFileId: canonicalImport.id,
+              duplicateOfImportFileId: canonicalImport.id,
+              metadata: null,
+              accountId:
+                canonicalSnapshot?.importFile.accountId ??
+                (canonicalAccountSummaries.length === 1 ? canonicalAccountSummaries[0]?.accountId ?? null : null),
+              accountSummaries: canonicalAccountSummaries,
+              confirmedTransactionsCount: canonicalConfirmedRows,
+              visibleImportComplete: canonicalVisible,
+              finalizationInBackground: canonicalStillProcessing,
+              receiptDocument: canonicalSnapshot?.receiptDocument ?? null,
+              receiptTransaction: canonicalSnapshot?.receiptTransaction ?? null,
+            });
+          }
+        }
+      }
       const effectiveFileName = file.name || formFileName || "imported-file";
       const effectiveFileType = file.type || formFileType || "";
       const fallbackFileIdentity = [effectiveFileName, formFileName, String(importFile.fileName ?? "")]
@@ -1851,11 +1937,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const shouldDeferRawUploadForKnownBpiScreenshot =
         knownBpiMobileScreenshot && isStatementImageUpload && Boolean(sampleFallbackText);
       const shouldQueueDocumentUpload = !isStatementImageUpload && (isImageUpload || Boolean(importMode && importMode !== "statement"));
-      const uploadPromise = uploadObject(
-        String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)),
-        bytes,
-        file.type || "application/octet-stream"
-      );
       const uploadBankHintPromise = upsertUploadBankHint({
         importFileId: importId,
         workspaceId: String(importFile.workspaceId),
