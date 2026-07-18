@@ -1941,6 +1941,18 @@ export function ImportFilesModal({
         seedImportedWorkspaceCaches(workspaceId, summary);
         await Promise.resolve(onImported(summary));
 
+        triggerImportEnrichment(importFileId);
+        const settledVisible = await waitForSettledVisibility(
+          itemId,
+          importFileId,
+          resolvedAccountId,
+          importedRows,
+          summary.balance ?? null,
+          "Import confirmation succeeded before settled data became visible"
+        );
+        if (!settledVisible) {
+          return { status: "staged", importedRows, summary };
+        }
         emitItemUpdate({
           status: "done",
           confirmationState: "confirmed",
@@ -1949,7 +1961,7 @@ export function ImportFilesModal({
           targetAccountId: resolvedAccountId,
           importedRows,
           progress: 100,
-          progressLabel: "Done",
+          progressLabel: "Visible in Clover",
         });
         emitImportActivity({
           workspaceId,
@@ -1964,14 +1976,7 @@ export function ImportFilesModal({
           summary,
           errorMessage: null,
         });
-        triggerImportEnrichment(importFileId);
-        queueSettledVisibilityCheck(
-          importFileId,
-          resolvedAccountId,
-          importedRows,
-          summary.balance ?? null,
-          "Import confirmation succeeded before settled data became visible"
-        );
+        window.setTimeout(closeVisibleImportModalIfPrimaryDataReady, 0);
         capturePostHogClientEvent("import_confirmed", {
           workspace_id: workspaceId || null,
           file_name: summaryContext.fileName,
@@ -2095,28 +2100,59 @@ export function ImportFilesModal({
     return telemetryMessage?.trim() || telemetryLabel?.trim() || resumeReason?.trim() || fallback;
   };
 
-  const queueSettledVisibilityCheck = (
+  const waitForSettledVisibility = async (
+    itemId: string,
     importFileId: string,
     accountId: string | null,
     importedRows: number,
     expectedBalance: string | null,
     warningMessage: string
   ) => {
-    void waitForImportSettledVisibility({
+    updateItem(itemId, {
+      status: "importing",
+      confirmationState: "staged",
+      importFileId,
+      targetAccountId: accountId,
+      importedRows,
+      progress: 99,
+      progressLabel: "Making transactions visible",
+    });
+    setMessage("Clover saved the import and is making the transactions visible in your workspace.");
+    publishImportActivity({
+      workspaceId,
+      surface: importActivitySurfaceRef.current,
+      status: "active",
+      importFileId,
+      fileName: itemsRef.current.find((item) => item.id === itemId)?.file.name ?? null,
+      fileIndex: Math.max(1, itemsRef.current.findIndex((item) => item.id === itemId) + 1),
+      fileTotal: itemsRef.current.length,
+      completedFiles: completedFileCount,
+      progress: 99,
+      detail: "Clover saved the import and is making the transactions visible.",
+      summary: null,
+      errorMessage: null,
+    });
+
+    const settledVisible = await waitForImportSettledVisibility({
       importFileId,
       accountId,
       importedRows,
       expectedBalance,
-      timeoutMs: 10_000,
-    }).then((settledVisible) => {
-      if (!settledVisible) {
-        console.warn(warningMessage, {
-          importFileId,
-          accountId,
-          importedRows,
-        });
-      }
+      timeoutMs: 30_000,
     });
+
+    if (settledVisible) {
+      return true;
+    }
+
+    console.warn(warningMessage, { importFileId, accountId, importedRows });
+    closeImportAfterError(
+      itemId,
+      "confirm",
+      itemsRef.current.find((item) => item.id === itemId)?.file.name ?? "this file",
+      "Clover saved the file, but the transactions are taking longer than expected to appear. Nothing was discarded. Keep this window open and retry this import status in a moment."
+    );
+    return false;
   };
 
   const monitorQueuedImportAndConfirm = async (
@@ -5581,13 +5617,21 @@ export function ImportFilesModal({
           await Promise.resolve(onImported(confirmedSummary));
         }
 
-        queueSettledVisibilityCheck(
+        const settledVisible = await waitForSettledVisibility(
+          itemId,
           importFileId,
           serverConfirmedAccountId,
           settledRows,
           confirmedSummary.balance ?? null,
           "Import finished before the settled data became visible"
         );
+        if (!settledVisible) {
+          return {
+            status: "staged",
+            importedRows: settledRows,
+            summary: confirmedSummary,
+          };
+        }
 
         updateItem(itemId, {
           status: "done",
@@ -5597,7 +5641,7 @@ export function ImportFilesModal({
           targetAccountId: serverConfirmedAccountId,
           importedRows: settledRows,
           progress: 100,
-          progressLabel: "Done",
+          progressLabel: "Visible in Clover",
         });
         publishImportActivity({
           workspaceId,
@@ -5612,6 +5656,7 @@ export function ImportFilesModal({
           summary: confirmedSummary,
           errorMessage: null,
         });
+        window.setTimeout(closeVisibleImportModalIfPrimaryDataReady, 0);
 
         setMessage(`Imported ${item.file.name}.`);
         router.refresh();
@@ -5791,14 +5836,6 @@ export function ImportFilesModal({
               previewTransactions: queuedVisibleSummary.previewTransactions ?? previewTransactions,
             },
             { backgroundOnly: false }
-          );
-
-          queueSettledVisibilityCheck(
-            importFileId,
-            queuedVisibleSummary.accountId ?? optimisticAccountId,
-            queuedVisibleRows,
-            queuedVisibleSummary.balance ?? null,
-            "Import confirmation succeeded before settled data became visible"
           );
 
           router.refresh();
@@ -6030,8 +6067,9 @@ export function ImportFilesModal({
       }
 
       if (targetAccountId) {
+        let confirmationResult: ImportProcessResult | null = null;
         try {
-          const result = await confirmItemImport(
+          confirmationResult = await confirmItemImport(
             itemId,
             importFileId,
             targetAccountId,
@@ -6049,9 +6087,9 @@ export function ImportFilesModal({
             }
           );
 
-          if (result.summary) {
-            seedImportedWorkspaceCaches(workspaceId, result.summary);
-            await Promise.resolve(onImported(result.summary));
+          if (confirmationResult.summary) {
+            seedImportedWorkspaceCaches(workspaceId, confirmationResult.summary);
+            await Promise.resolve(onImported(confirmationResult.summary));
           }
         } catch (error) {
           console.warn("Background import confirmation failed", {
@@ -6060,13 +6098,13 @@ export function ImportFilesModal({
           });
         }
 
-        queueSettledVisibilityCheck(
-          importFileId,
-          targetAccountId,
-          Number(processPayload?.imported ?? 0) || 0,
-          optimisticPreviewSummary?.balance ?? null,
-          "Import finished before the settled data became visible"
-        );
+        if (!confirmationResult || confirmationResult.status !== "done") {
+          return confirmationResult ?? {
+            status: "staged",
+            importedRows: Number(processPayload?.imported ?? 0) || null,
+            summary: publishableOptimisticPreviewSummary,
+          };
+        }
 
         updateItem(itemId, {
           status: "done",
@@ -6076,7 +6114,7 @@ export function ImportFilesModal({
           targetAccountId,
           importedRows: Number(processPayload?.imported ?? 0) || 0,
           progress: 100,
-          progressLabel: "Done",
+          progressLabel: "Visible in Clover",
         });
         publishImportActivity({
           workspaceId,
@@ -6091,6 +6129,7 @@ export function ImportFilesModal({
           summary: publishableOptimisticPreviewSummary,
           errorMessage: null,
         });
+        window.setTimeout(closeVisibleImportModalIfPrimaryDataReady, 0);
       } else {
         void monitorQueuedImportAndConfirm(itemId, importFileId, null, {
           fileName: item.file.name,
@@ -6835,37 +6874,6 @@ export function ImportFilesModal({
     lastImportActivityRef.current = nextSnapshot;
     setImportActivity(nextSnapshot);
   }, [activeProgressItem, activityProgressFloor, activitySnapshotForDisplay, busy, completedFileCount, displayedCompletedFileCount, displayedOverallProgress, items, message, open, progressSettledFileCount, validationNotice, workspaceId]);
-  useEffect(() => {
-    if (autoCloseCompletedBatchTimerRef.current) {
-      window.clearTimeout(autoCloseCompletedBatchTimerRef.current);
-      autoCloseCompletedBatchTimerRef.current = null;
-    }
-
-    if (!open) {
-      return;
-    }
-
-    const hasCompletedBatchNow = items.length > 0 && items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
-    if (!hasCompletedBatchNow) {
-      return;
-    }
-
-    // Do not hold the completed-upload summary open in the full import window.
-    autoCloseCompletedBatchTimerRef.current = window.setTimeout(() => {
-      autoCloseCompletedBatchTimerRef.current = null;
-      clearImportActivity();
-      lastImportActivityRef.current = null;
-      setBusy(false);
-      onClose();
-    }, 0);
-
-    return () => {
-      if (autoCloseCompletedBatchTimerRef.current) {
-        window.clearTimeout(autoCloseCompletedBatchTimerRef.current);
-        autoCloseCompletedBatchTimerRef.current = null;
-      }
-    };
-  }, [items, onClose, open]);
   useEffect(() => {
     if (!open || passwordItems.length === 0) {
       setSelectedPasswordItemId(null);

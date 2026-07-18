@@ -24,6 +24,13 @@ type AccountPayload = {
   };
 } | null;
 
+type TransactionsPayload = {
+  transactions?: Array<{
+    importFileId?: string | null;
+  }>;
+  totalCount?: number | null;
+} | null;
+
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 const normalizeBalance = (value: unknown) => {
@@ -198,16 +205,21 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
   // comfortably below the server's stream cadence to avoid connection storms.
   const pollDelayMs = 1_500;
 
-  const streamResult = await waitWithStatusStream({
-    accountId,
-    importFileId: params.importFileId ?? null,
-    importedRows: params.importedRows,
-    expectedBalance,
-    timeoutMs,
-    pollDelayMs,
-  });
-  if (streamResult !== null) {
-    return streamResult;
+  // A status-stream "visible" event only proves that the import tables settled.
+  // For transaction imports, also prove that the same read endpoint used by the
+  // account UI can return the imported rows before declaring the modal complete.
+  if (params.importedRows <= 0) {
+    const streamResult = await waitWithStatusStream({
+      accountId,
+      importFileId: params.importFileId ?? null,
+      importedRows: params.importedRows,
+      expectedBalance,
+      timeoutMs,
+      pollDelayMs,
+    });
+    if (streamResult !== null) {
+      return streamResult;
+    }
   }
 
   while (Date.now() - startedAt < timeoutMs) {
@@ -220,9 +232,9 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
             })
           : null;
       const transactionsResponsePromise =
-        params.importedRows > 0 && !params.importFileId
+        params.importedRows > 0
           ? fetch(
-              `/api/accounts/${encodeURIComponent(accountId)}/transactions?page=1&pageSize=${Math.min(Math.max(params.importedRows, 25), 100)}`,
+              `/api/accounts/${encodeURIComponent(accountId)}/transactions?page=1&pageSize=${Math.min(Math.max(params.importedRows, 25), 500)}`,
               {
                 cache: "no-store",
               }
@@ -235,13 +247,13 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
         transactionsResponsePromise ?? Promise.resolve(null),
       ]);
 
-      if (
-        !accountLooksSettled({
-          account: accountPayload?.account ?? null,
-          accountId,
-          expectedBalance,
-        })
-      ) {
+      if (!accountLooksSettled({
+        account: accountPayload?.account ?? null,
+        accountId,
+        // Row-backed imports can legitimately change an existing account whose
+        // aggregate balance differs from one statement's ending balance.
+        expectedBalance: params.importedRows > 0 ? null : expectedBalance,
+      })) {
         await sleep(pollDelayMs);
         continue;
       }
@@ -250,6 +262,10 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
         statusResponse && statusResponse.ok ? statusResponse.json().catch(() => null) : Promise.resolve(null),
         transactionsResponse && transactionsResponse.ok ? transactionsResponse.json().catch(() => null) : Promise.resolve(null),
       ]);
+
+      const transactionRows = Array.isArray((transactionPayload as TransactionsPayload)?.transactions)
+        ? (transactionPayload as NonNullable<TransactionsPayload>).transactions ?? []
+        : [];
 
       if (params.importedRows > 0 && params.importFileId) {
         const confirmedTransactionsCount = Number(statusPayload?.confirmedTransactionsCount ?? 0);
@@ -263,8 +279,17 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
           await sleep(pollDelayMs);
           continue;
         }
+
+        const matchingVisibleRows = transactionRows.filter(
+          (transaction) => transaction?.importFileId === params.importFileId
+        ).length;
+        const expectedVisibleRows = Math.max(1, Math.min(params.importedRows, confirmedTransactionsCount || params.importedRows));
+        if (matchingVisibleRows < expectedVisibleRows) {
+          await sleep(pollDelayMs);
+          continue;
+        }
       } else if (params.importedRows > 0) {
-        const totalCount = Number(transactionPayload?.totalCount ?? 0);
+        const totalCount = Number((transactionPayload as TransactionsPayload)?.totalCount ?? 0);
         if (totalCount < params.importedRows) {
           await sleep(pollDelayMs);
           continue;

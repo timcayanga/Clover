@@ -15,11 +15,12 @@ const section = (source: string, start: string, end: string) => {
 };
 
 const main = async () => {
-  const [modalSource, processRouteSource, workerSource, importProcessorSource] = await Promise.all([
+  const [modalSource, processRouteSource, workerSource, importProcessorSource, settledVisibilitySource] = await Promise.all([
     readFile(join(webRoot, "components/import-files-modal.tsx"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/process/route.ts"), "utf8"),
     readFile(join(webRoot, "workers/imports-worker.ts"), "utf8"),
     readFile(join(webRoot, "workers/import-processor.ts"), "utf8"),
+    readFile(join(webRoot, "lib/import-settled-visibility.ts"), "utf8"),
   ]);
   const localPreparseSource = section(
     modalSource,
@@ -35,6 +36,15 @@ const main = async () => {
   assert.match(modalSource, /scheduleQueuedImport\(150\)/);
   assert.match(modalSource, /canonical_import_adopted/);
   assert.match(modalSource, /startedImportMonitorKeys\.has\(monitorKey\)/);
+  assert.match(modalSource, /const settledVisible = await waitForSettledVisibility\(/);
+  assert.match(modalSource, /progressLabel: "Making transactions visible"/);
+  assert.doesNotMatch(
+    modalSource,
+    /hasCompletedBatchNow[\s\S]{0,500}window\.setTimeout\([\s\S]{0,250}onClose\(\)[\s\S]{0,100}, 0\)/,
+    "A completed server job must not close the modal before UI visibility is verified."
+  );
+  assert.match(settledVisibilitySource, /transaction\?\.importFileId === params\.importFileId/);
+  assert.match(settledVisibilitySource, /params\.importedRows > 0 \? null : expectedBalance/);
   assert.doesNotMatch(modalSource, /if \(busy \|\| !workspaceId \|\| !autoStartRef\.current\)/);
   assert.match(modalSource, /const incomingKeys = new Set\(nextFiles\.map\(fileKey\)\)/);
   assert.match(modalSource, /const serverImportStillActive = hasActiveServerImport\(itemsRef\.current\)/);
