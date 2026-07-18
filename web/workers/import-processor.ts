@@ -3920,6 +3920,16 @@ const parsedRowLooksWiseAccount = (row: Record<string, unknown>, fallbackInstitu
       .join(" ")
   );
 
+export const isDedicatedWisePdfStatementRow = (row: Record<string, unknown>) => {
+  const rawPayload = row.rawPayload;
+  return Boolean(
+    rawPayload &&
+      typeof rawPayload === "object" &&
+      !Array.isArray(rawPayload) &&
+      (rawPayload as Record<string, unknown>).kind === "wise_pdf_statement_transaction"
+  );
+};
+
 const accountGroupKeyForParsedRow = (
   row: Record<string, unknown>,
   params?: {
@@ -4193,7 +4203,7 @@ const readWiseVisibleDateFromRowEvidence = (row: Record<string, unknown>) => {
   return null;
 };
 
-const normalizeWiseWalletParsedRows = (
+export const normalizeWiseWalletParsedRows = (
   rows: Array<Record<string, unknown>>,
   metadata?: { institution?: string | null; accountType?: string | null } | null
 ) => {
@@ -4203,6 +4213,11 @@ const normalizeWiseWalletParsedRows = (
   }
 
   return rows.map((row) => {
+    // Dedicated PDF rows already express the account-impact amount and currency.
+    if (isDedicatedWisePdfStatementRow(row)) {
+      return row;
+    }
+
     const rowLooksWise = rowLooksLikeWiseWalletScreenshot(row, metadataLooksWise);
     if (readParsedRowAccountNumber(row) && !rowLooksWise) {
       return row;
@@ -10555,13 +10570,17 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     const groupEndingBalance = getImportAccountBalanceFromParsedRows(groupRows);
     const groupCurrency = readRowAccountCurrency(firstGroupRow);
     const groupLooksWiseAccount = rowLooksWiseAccount(firstGroupRow);
+    const groupHasDedicatedWisePdfIdentity = groupRows.length > 0 && groupRows.every(isDedicatedWisePdfStatementRow);
     const groupAccount = await resolveConfirmationAccount({
       importFile,
       statementMetadata: {
         ...baseStatementMetadata,
         accountName: groupLooksWiseAccount ? "Wise" : readRowAccountName(firstGroupRow) ?? baseStatementMetadata.accountName,
         institution: groupLooksWiseAccount ? "Wise" : readRowInstitution(firstGroupRow) ?? baseStatementMetadata.institution ?? checkpointBankName ?? null,
-        accountNumber: groupLooksWiseAccount ? null : readRowAccountNumber(firstGroupRow) ?? baseStatementMetadata.accountNumber,
+        accountNumber:
+          groupLooksWiseAccount && !groupHasDedicatedWisePdfIdentity
+            ? null
+            : readRowAccountNumber(firstGroupRow) ?? baseStatementMetadata.accountNumber,
         accountType: groupLooksWiseAccount ? "wallet" : baseStatementMetadata.accountType,
         currency:
           groupCurrency ??

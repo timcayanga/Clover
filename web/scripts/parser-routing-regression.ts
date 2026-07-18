@@ -5,6 +5,7 @@ import {
   buildImportReviewReasons,
   getImportReviewPriority,
   hasStrongWisePdfDeterministicParse,
+  normalizeWiseWalletParsedRows,
   mergeParserRoutingHistoryHints,
 } from "@/workers/import-processor";
 
@@ -54,6 +55,8 @@ const strongWiseRows = [
   {
     date: "2026-01-05",
     currency: "PHP",
+    amount: "107920.33",
+    accountNumber: "2001545280",
     rawPayload: { kind: "wise_pdf_statement_transaction" },
   },
   {
@@ -62,6 +65,11 @@ const strongWiseRows = [
     rawPayload: { kind: "wise_pdf_statement_transaction" },
   },
 ];
+assert.deepEqual(
+  normalizeWiseWalletParsedRows(strongWiseRows, { institution: "Wise", accountType: "wallet" }),
+  strongWiseRows,
+  "Expected Wise PDF account-impact values and identity to survive screenshot normalization unchanged."
+);
 assert.equal(
   hasStrongWisePdfDeterministicParse({
     fileType: "application/pdf",
