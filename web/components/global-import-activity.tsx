@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { ImportErrorToast } from "@/components/import-error-toast";
 import { ImportUploadDock } from "@/components/import-upload-dock";
-import { UploadInsightsToast } from "@/components/upload-insights-toast";
 import {
   clearImportActivity,
   readImportActivity,
@@ -13,9 +12,6 @@ import {
   type ImportActivitySnapshot,
 } from "@/lib/import-activity";
 import { getImportErrorNextSteps, getImportErrorSpecForCode } from "@/lib/import-error-spec";
-
-const isCompletedSummary = (activity: ImportActivitySnapshot | null) =>
-  Boolean(activity && activity.status === "done" && activity.summary);
 
 const isBackgroundFinalizationActivity = (activity: ImportActivitySnapshot | null) =>
   Boolean(
@@ -265,8 +261,8 @@ export function GlobalImportActivity() {
     setActivity(null);
   };
 
-  if (isCompletedSummary(activity) && activity.summary) {
-    return <UploadInsightsToast summary={activity.summary} onClose={handleClose} />;
+  if (activity.status === "done") {
+    return null;
   }
 
   const isError = activity.status === "error";
@@ -319,7 +315,6 @@ export function GlobalImportActivity() {
       completedFiles={activity.completedFiles}
       progress={activity.progress}
       detail={activity.detail}
-      summary={activity.summary}
       onClose={handleClose}
     />
   );

@@ -7328,10 +7328,6 @@ export function ImportFilesModal({
     return null;
   }
 
-  const completedBatchSummary =
-    hasCompletedBatch ? lastImportActivityRef.current?.summary ?? buildVisibleImportSummary(items) : null;
-  const compactProgressSummary =
-    showCompactProgress ? completedBatchSummary ?? buildVisibleImportSummary(items) : null;
   const compactErrorSpec = currentErrorItem?.errorCode ? getImportErrorSpecForCode(currentErrorItem.errorCode) : null;
 
   const modalContent = activePasswordItem ? (
@@ -7370,7 +7366,6 @@ export function ImportFilesModal({
         fileTotal={items.length}
         completedFiles={displayedCompletedFileCount}
         progress={Math.max(displayedOverallProgress, activityProgressFloor)}
-        summary={compactProgressSummary}
         detail={
           (currentErrorItem ? compactErrorSpec?.message ?? currentErrorItem.errorTitle ?? "Clover could not finish this import." : null) ??
           (activityProgressFloor > displayedOverallProgress && activitySnapshotForDisplay?.detail
