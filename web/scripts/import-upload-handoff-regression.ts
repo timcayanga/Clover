@@ -28,8 +28,11 @@ const main = async () => {
   const uploadHandoffSource = section(modalSource, "const processFile", "const processResponse = await");
 
   assert.match(modalSource, /autoStartRef\.current = true;[\s\S]{0,500}scheduleQueuedImport\(\);/);
-  assert.match(modalSource, /const scheduleQueuedImport = \(\) =>/);
-  assert.match(modalSource, /void handleStartImportRef\.current\?\.\(\)/);
+  assert.match(modalSource, /const scheduleQueuedImport = \(delayMs = 0\) =>/);
+  assert.match(modalSource, /void handleStartImportRef\.current\(\)/);
+  assert.match(modalSource, /uploadRunnerActiveRef\.current = true/);
+  assert.match(modalSource, /scheduleQueuedImport\(150\)/);
+  assert.doesNotMatch(modalSource, /if \(busy \|\| !workspaceId \|\| !autoStartRef\.current\)/);
   assert.match(modalSource, /const incomingKeys = new Set\(nextFiles\.map\(fileKey\)\)/);
   assert.match(modalSource, /const serverImportStillActive = hasActiveServerImport\(itemsRef\.current\)/);
   assert.match(modalSource, /reportImportClientStage\("file_input_changed"/);

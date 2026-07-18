@@ -408,12 +408,19 @@ export function ImportFilesModal({
   const uploadCancelRequestedRef = useRef(false);
   const primaryVisibilityCompletedRef = useRef(false);
   const activeUploadAbortControllersRef = useRef<Set<AbortController>>(new Set());
+  const busyRef = useRef(false);
+  const uploadRunnerActiveRef = useRef(false);
+  const uploadRunnerTimerRef = useRef<number | null>(null);
   const wasOpenRef = useRef(open);
   const itemsRef = useRef<QueuedFile[]>([]);
 
   useEffect(() => {
     itemsRef.current = items;
   }, [items]);
+
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
 
   useEffect(() => {
     uploadPausedRef.current = uploadPaused;
@@ -1044,6 +1051,11 @@ export function ImportFilesModal({
         setItems([]);
         setBusy(false);
         autoStartRef.current = false;
+        uploadRunnerActiveRef.current = false;
+        if (uploadRunnerTimerRef.current !== null) {
+          window.clearTimeout(uploadRunnerTimerRef.current);
+          uploadRunnerTimerRef.current = null;
+        }
       }
       return;
     }
@@ -1323,34 +1335,57 @@ export function ImportFilesModal({
     }
   };
 
-  const scheduleQueuedImport = () => {
-    // Starting an upload must not depend solely on a ref-driven effect. A ref update
-    // does not schedule a React render, so a file selection could otherwise remain
-    // pending forever when the queue update and its effects settle first.
-    window.setTimeout(() => {
-      if (!autoStartRef.current || !workspaceId) {
-        return;
-      }
+  const scheduleQueuedImport = (delayMs = 0) => {
+    if (uploadRunnerTimerRef.current !== null) {
+      window.clearTimeout(uploadRunnerTimerRef.current);
+    }
 
-      if (busy) {
-        // Keep autoStartRef armed. The regular effect will start this queue when
-        // the previous run releases the busy state.
-        return;
-      }
-
-      const hasPendingFile = itemsRef.current.some(
+    uploadRunnerTimerRef.current = window.setTimeout(() => {
+      uploadRunnerTimerRef.current = null;
+      const pendingFiles = itemsRef.current.filter(
         (item) => item.status === "pending" || (item.status === "needs_password" && item.password.trim())
       );
-      if (!hasPendingFile || itemsRef.current.some((item) => item.status === "needs_password" && !item.password.trim())) {
+      const hasLockedPasswordFile = itemsRef.current.some(
+        (item) => item.status === "needs_password" && !item.password.trim()
+      );
+
+      if (!workspaceId || pendingFiles.length === 0 || hasLockedPasswordFile) {
+        reportImportClientStage("auto_start_blocked", {
+          workspaceReady: Boolean(workspaceId),
+          pendingFiles: pendingFiles.length,
+          passwordBlocked: hasLockedPasswordFile,
+        });
+        return;
+      }
+
+      if (busyRef.current || uploadRunnerActiveRef.current || !handleStartImportRef.current) {
+        reportImportClientStage("auto_start_waiting", {
+          busy: busyRef.current,
+          runnerActive: uploadRunnerActiveRef.current,
+          handlerReady: Boolean(handleStartImportRef.current),
+        });
+        scheduleQueuedImport(150);
         return;
       }
 
       autoStartRef.current = false;
+      uploadRunnerActiveRef.current = true;
       reportImportClientStage("auto_start_dispatched", {
-        pendingFiles: itemsRef.current.filter((item) => item.status === "pending").length,
+        pendingFiles: pendingFiles.length,
       });
-      void handleStartImportRef.current?.();
-    }, 0);
+      void handleStartImportRef.current()
+        .catch((error) => {
+          reportImportClientStage("auto_start_failed", {
+            reason: error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200),
+          });
+        })
+        .finally(() => {
+          uploadRunnerActiveRef.current = false;
+          if (itemsRef.current.some((item) => item.status === "pending")) {
+            scheduleQueuedImport(150);
+          }
+        });
+    }, delayMs);
   };
 
   const addFiles = (incoming: FileList | File[], options?: { launchInBackground?: boolean }) => {
@@ -4782,7 +4817,7 @@ export function ImportFilesModal({
   };
 
   const processFile = async (itemId: string, options?: { signal?: AbortSignal | null }): Promise<ImportProcessResult> => {
-    const item = items.find((entry) => entry.id === itemId);
+    const item = itemsRef.current.find((entry) => entry.id === itemId);
     if (!item) return { status: "error", importedRows: null, summary: null };
     const guessedIdentity = guessStatementIdentity(item.file.name);
     const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName && guessedIdentity.accountNumber);
@@ -6808,8 +6843,6 @@ export function ImportFilesModal({
   }, [open, passwordItems, selectedPasswordItemId]);
 
   const handleStartImport = async () => {
-    if (busy) return;
-
     primaryVisibilityCompletedRef.current = false;
     uploadCancelRequestedRef.current = false;
     setUploadPaused(false);
@@ -6817,7 +6850,8 @@ export function ImportFilesModal({
     setBusy(true);
     setValidationNotice(null);
     setMessage("Clover is lining up your files...");
-    const visibilityTimeoutMs = getImportVisibilityTimeoutMsForItems(items);
+    const queuedItems = itemsRef.current;
+    const visibilityTimeoutMs = getImportVisibilityTimeoutMsForItems(queuedItems);
     visibilityDeadlineRef.current = Date.now() + visibilityTimeoutMs;
     if (visibilityHardStopTimerRef.current) {
       window.clearTimeout(visibilityHardStopTimerRef.current);
@@ -6836,7 +6870,7 @@ export function ImportFilesModal({
     capturePostHogClientEventOnce(
       "first_import_started",
       {
-        file_count: items.length,
+        file_count: queuedItems.length,
         workspace_id: workspaceId || null,
       },
       analyticsOnceKey("first_import_started", "session")
@@ -6846,10 +6880,10 @@ export function ImportFilesModal({
     let blockedCount = 0;
     let stagedCount = 0;
     let errorCount = 0;
-    const alreadyConfirmedCount = items.filter((item) => item.confirmationState === "confirmed").length;
+    const alreadyConfirmedCount = queuedItems.filter((item) => item.confirmationState === "confirmed").length;
     const uploadInsightsSummaries: UploadInsightsSummary[] = [];
 
-    const itemsToProcess = items.filter(
+    const itemsToProcess = queuedItems.filter(
       (item) => item.confirmationState !== "confirmed" && item.status !== "needs_password"
     );
 
@@ -6946,7 +6980,7 @@ export function ImportFilesModal({
         void preparsePendingItemLocally(item.id);
       }
 
-      const preUploadVisibilityReady = await waitForLocalPrimaryVisibility(Math.min(3_000, 1_200 + items.length * 450));
+      const preUploadVisibilityReady = await waitForLocalPrimaryVisibility(Math.min(3_000, 1_200 + queuedItems.length * 450));
       if (
         canContinueBatchInBackground &&
         preUploadVisibilityReady &&
@@ -6967,7 +7001,7 @@ export function ImportFilesModal({
     }
 
     const processResultsPromise = processItemsForBatch(itemsToProcess);
-    const localVisibilityReady = await waitForLocalPrimaryVisibility(Math.min(12_000, 4_000 + items.length * 2_000));
+    const localVisibilityReady = await waitForLocalPrimaryVisibility(Math.min(12_000, 4_000 + queuedItems.length * 2_000));
 
     if (
       canContinueBatchInBackground &&
@@ -7049,7 +7083,7 @@ export function ImportFilesModal({
       visibilityHardStopTimerRef.current = null;
     }
 
-    const finishedEnough = blockedCount === 0 && errorCount === 0 && (importedCount > 0 || alreadyConfirmedCount === items.length);
+    const finishedEnough = blockedCount === 0 && errorCount === 0 && (importedCount > 0 || alreadyConfirmedCount === queuedItems.length);
 
     if (finishedEnough) {
       capturePostHogClientEventOnce(
@@ -7074,9 +7108,9 @@ export function ImportFilesModal({
           publishImportActivity({
             status: "done",
             fileName: completedSummary.fileName,
-            fileIndex: items.length,
-            fileTotal: items.length,
-            completedFiles: items.length,
+            fileIndex: queuedItems.length,
+            fileTotal: queuedItems.length,
+            completedFiles: queuedItems.length,
             progress: 100,
             detail: "Accounts and transactions are visible in Clover. Clover will keep cleaning up names and categories in the background.",
             summary: completedSummary,
@@ -7131,6 +7165,7 @@ export function ImportFilesModal({
 
     setMessage("All passwords saved. Clover is starting the rest.");
     autoStartRef.current = true;
+    scheduleQueuedImport();
   };
 
   const handleResumeImport = async (itemId: string) => {
@@ -7326,28 +7361,6 @@ export function ImportFilesModal({
       setBusy(false);
     }
   };
-
-  useEffect(() => {
-    if (busy || !workspaceId || !autoStartRef.current) {
-      return;
-    }
-
-    if (items.some((item) => item.status === "needs_password")) {
-      return;
-    }
-
-    const nextItem = items.find(
-      (item) => item.status === "pending" || (item.status === "needs_password" && item.password.trim())
-    );
-
-    if (!nextItem) {
-      autoStartRef.current = false;
-      return;
-    }
-
-    autoStartRef.current = false;
-    void handleStartImport();
-  }, [busy, handleStartImport, items, workspaceId]);
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
@@ -7776,7 +7789,7 @@ export function ImportFilesModal({
           <button className="button button-secondary" type="button" onClick={onClose}>
             Close
           </button>
-          <button className="button button-primary" type="button" onClick={() => void handleStartImport()} disabled={busy || !readyToImport || !workspaceId}>
+          <button className="button button-primary" type="button" onClick={() => scheduleQueuedImport()} disabled={busy || !readyToImport || !workspaceId}>
             {busy ? "Uploading..." : "Upload files"}
           </button>
         </div>
