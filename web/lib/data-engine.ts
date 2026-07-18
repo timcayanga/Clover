@@ -2524,7 +2524,10 @@ export const upsertImportFileExtractionCache = async (params: {
   }
 
   try {
-    const placeholders = recordColumns.map((_, index) => `$${index + 1}`).join(", ");
+    const jsonColumns = new Set(["metadata", "parsedRows"]);
+    const placeholders = recordColumns
+      .map((column, index) => `$${index + 1}${jsonColumns.has(column) ? "::jsonb" : ""}`)
+      .join(", ");
     const updateColumns = recordColumns.filter(
       (column) => !["id", "workspaceId", "fileFingerprint", "fileType", "importMode", "cacheVersion", "createdAt"].includes(column)
     );
@@ -2537,7 +2540,10 @@ export const upsertImportFileExtractionCache = async (params: {
        VALUES (${placeholders})
        ON CONFLICT ("workspaceId", "fileFingerprint", "fileType", "importMode", "cacheVersion")
        DO UPDATE SET ${updateClause || `"updatedAt" = EXCLUDED."updatedAt"`}`,
-      ...recordColumns.map((column) => record[column] ?? null)
+      ...recordColumns.map((column) => {
+        const value = record[column] ?? null;
+        return jsonColumns.has(column) && value !== null ? JSON.stringify(value) : value;
+      })
     );
 
     return loadImportFileExtractionCache({

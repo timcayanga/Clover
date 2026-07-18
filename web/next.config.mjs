@@ -1,11 +1,12 @@
-import path from "node:path";
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   serverExternalPackages: ["@napi-rs/canvas", "tesseract.js"],
   outputFileTracingIncludes: {
-    "/*": ["./node_modules/@napi-rs/canvas*/**/*"],
+    "/api/imports/**/*": [
+      "./node_modules/@napi-rs/canvas/**/*",
+      "./node_modules/@napi-rs/canvas-*/**/*",
+    ],
   },
   typescript: {
     ignoreBuildErrors: true,
@@ -13,7 +14,6 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  outputFileTracingRoot: path.join(process.cwd(), ".."),
   async rewrites() {
     return [
       {
