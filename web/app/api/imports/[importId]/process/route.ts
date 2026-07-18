@@ -179,7 +179,7 @@ const isTransientDatabaseCapacityError = (error: unknown) => {
       : "",
   ].join(" ");
 
-  return /EMAXCONN|max client connections|too many connections|remaining connection slots|connection limit/i.test(message);
+  return /EMAXCONN|max client connections|too many connections|remaining connection slots|connection limit|timeout exceeded when trying to (?:connect|acquire)|timed out fetching a new connection/i.test(message);
 };
 
 const isPdfUpload = (fileName: string, fileType: string) =>

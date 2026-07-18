@@ -19,6 +19,12 @@ import {
 } from "@/lib/import-visual-recovery";
 import { after, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
+import {
+  createTransientDataUnavailableResponse,
+  isTransientDataError,
+  isUnauthorizedDataError,
+} from "@/lib/transient-data";
+import { summarizeErrorForLog } from "@/lib/security-logging";
 
 export const dynamic = "force-dynamic";
 
@@ -535,7 +541,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     }
 
     return NextResponse.json(snapshot);
-  } catch {
+  } catch (error) {
+    if (isTransientDataError(error)) {
+      console.warn("[import-status] database temporarily unavailable", summarizeErrorForLog(error));
+      return createTransientDataUnavailableResponse("Clover is reconnecting while this import continues in the background.");
+    }
+
+    if (isUnauthorizedDataError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    console.error("[import-status] unable to load import status", summarizeErrorForLog(error));
     return NextResponse.json({ error: "Unable to load import status" }, { status: 400 });
   }
 }

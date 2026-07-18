@@ -22,6 +22,12 @@ import {
   normalizeImportedCurrencyCode,
 } from "@/lib/imported-account-identity";
 import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
+import {
+  createTransientDataUnavailableResponse,
+  isTransientDataError,
+  isUnauthorizedDataError,
+} from "@/lib/transient-data";
+import { summarizeErrorForLog } from "@/lib/security-logging";
 
 export const dynamic = "force-dynamic";
 
@@ -1479,8 +1485,18 @@ export async function GET(request: Request) {
       accountRules,
       statementCheckpoints,
     });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (isTransientDataError(error)) {
+      console.warn("[accounts] database temporarily unavailable", summarizeErrorForLog(error));
+      return createTransientDataUnavailableResponse("Clover is reconnecting to your accounts. Please retry shortly.");
+    }
+
+    if (isUnauthorizedDataError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    console.error("[accounts] unable to load accounts", summarizeErrorForLog(error));
+    return NextResponse.json({ error: "Unable to load accounts" }, { status: 500 });
   }
 }
 

@@ -22,6 +22,12 @@ import {
   parseTransactionQueryFilters,
   type TransactionQueryFilters,
 } from "@/lib/transaction-query";
+import {
+  createTransientDataUnavailableResponse,
+  isTransientDataError,
+  isUnauthorizedDataError,
+} from "@/lib/transient-data";
+import { summarizeErrorForLog } from "@/lib/security-logging";
 
 export const dynamic = "force-dynamic";
 
@@ -1283,8 +1289,18 @@ export async function GET(request: Request) {
         firstReviewTransactionIndex: summaryState.firstReviewTransactionIndex,
       },
     });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (isTransientDataError(error)) {
+      console.warn("[transactions] database temporarily unavailable", summarizeErrorForLog(error));
+      return createTransientDataUnavailableResponse("Clover is reconnecting to your transactions. Please retry shortly.");
+    }
+
+    if (isUnauthorizedDataError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    console.error("[transactions] unable to load transactions", summarizeErrorForLog(error));
+    return NextResponse.json({ error: "Unable to load transactions" }, { status: 500 });
   }
 }
 

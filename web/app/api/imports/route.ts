@@ -17,6 +17,12 @@ import { normalizeImportImageMode } from "@/lib/import-image-mode";
 import { listImportEnrichmentJobsByWorkspace } from "@/lib/import-enrichment-jobs";
 import { recoverWorkspaceImportEnrichment } from "@/lib/import-enrichment-recovery";
 import type { Prisma } from "@prisma/client";
+import {
+  createTransientDataUnavailableResponse,
+  isTransientDataError,
+  isUnauthorizedDataError,
+} from "@/lib/transient-data";
+import { summarizeErrorForLog } from "@/lib/security-logging";
 
 export const dynamic = "force-dynamic";
 
@@ -127,8 +133,18 @@ export async function GET(request: Request) {
     const importFiles = await listImportFilesCompat(workspaceId);
 
     return NextResponse.json({ importFiles: await attachEnrichmentJobs(workspaceId, importFiles) });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (isTransientDataError(error)) {
+      console.warn("[imports] database temporarily unavailable while listing imports", summarizeErrorForLog(error));
+      return createTransientDataUnavailableResponse("Clover is reconnecting to your import history. Please retry shortly.");
+    }
+
+    if (isUnauthorizedDataError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    console.error("[imports] unable to list imports", summarizeErrorForLog(error));
+    return NextResponse.json({ error: "Unable to load imports" }, { status: 500 });
   }
 }
 
@@ -207,6 +223,15 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Invalid import payload";
+    if (isTransientDataError(error)) {
+      console.warn("[imports] database temporarily unavailable while preparing import", summarizeErrorForLog(error));
+      return createTransientDataUnavailableResponse("Clover is reconnecting before starting this upload. Please retry shortly.");
+    }
+
+    if (isUnauthorizedDataError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     return NextResponse.json({ error: message === "WORKSPACE_NOT_FOUND" ? "Workspace not found." : "Invalid import payload" }, { status: 400 });
   }
 }

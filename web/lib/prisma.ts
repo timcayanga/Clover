@@ -56,10 +56,14 @@ const resolveDatabaseUrl = () => {
 
 const connectionString = resolveDatabaseUrl();
 
-const resolvePoolMax = () => {
-  const configured = Number.parseInt(process.env.DATABASE_POOL_MAX ?? "3", 10);
+export const resolvePoolMax = () => {
+  // Vercel can fan one upload across several function instances while the UI
+  // polls status, accounts, and transactions. The Supabase transaction pooler
+  // already multiplexes queries, so reserve only one connection per instance.
+  const defaultPoolMax = process.env.VERCEL ? "1" : "3";
+  const configured = Number.parseInt(process.env.DATABASE_POOL_MAX ?? defaultPoolMax, 10);
   if (!Number.isFinite(configured)) {
-    return 3;
+    return Number(defaultPoolMax);
   }
 
   return Math.max(1, Math.min(configured, 5));
@@ -72,6 +76,7 @@ const pool =
     max: resolvePoolMax(),
     connectionTimeoutMillis: 8_000,
     idleTimeoutMillis: 10_000,
+    allowExitOnIdle: true,
   });
 
 const adapter = new PrismaPg(pool);

@@ -9,6 +9,12 @@ const TRANSIENT_DATABASE_MESSAGE_PATTERNS = [
   "connection reset",
   "terminating connection",
   "timed out fetching a new connection",
+  "timeout exceeded when trying to connect",
+  "timeout exceeded when trying to acquire",
+  "max client connections",
+  "too many connections",
+  "remaining connection slots",
+  "connection limit",
   "fetch failed",
   "network error",
   "econnreset",
@@ -41,5 +47,8 @@ export const createTransientDataUnavailableResponse = (message = "Temporarily un
       message,
       retryable: true,
     },
-    { status: 503 }
+    {
+      status: 503,
+      headers: { "Retry-After": "2" },
+    }
   );
