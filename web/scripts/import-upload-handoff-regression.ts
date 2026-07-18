@@ -15,10 +15,11 @@ const section = (source: string, start: string, end: string) => {
 };
 
 const main = async () => {
-  const [modalSource, processRouteSource, workerSource] = await Promise.all([
+  const [modalSource, processRouteSource, workerSource, importProcessorSource] = await Promise.all([
     readFile(join(webRoot, "components/import-files-modal.tsx"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/process/route.ts"), "utf8"),
     readFile(join(webRoot, "workers/imports-worker.ts"), "utf8"),
+    readFile(join(webRoot, "workers/import-processor.ts"), "utf8"),
   ]);
   const localPreparseSource = section(
     modalSource,
@@ -45,8 +46,15 @@ const main = async () => {
   );
   assert.match(uploadHandoffSource, /postFileWithProgress\(/);
   assert.match(processRouteSource, /sourceFingerprint: fileFingerprint/);
+  assert.match(processRouteSource, /reusableRawImport[\s\S]{0,900}storageKey: rawStorageKey/);
   assert.match(processRouteSource, /canonicalImportFileId: canonicalImport\.id/);
+  assert.match(processRouteSource, /countTransactionsByImportFileCompat\(candidate\.id\)/);
+  assert.match(processRouteSource, /isPdfUpload\(effectiveFileName, effectiveFileType\)[\s\S]{0,180}shouldQueueDocumentUpload/);
   assert.match(processRouteSource, /await uploadPromise;[\s\S]{0,500}processingMessage: canonicalStillProcessing/);
+  assert.match(importProcessorSource, /sourceFingerprint: importFile\.sourceFingerprint/);
+  assert.match(importProcessorSource, /countTransactionsByImportFileCompat\(sourceMatch\.id\)/);
+  assert.match(importProcessorSource, /already imported and skipped the duplicate/);
+  assert.match(importProcessorSource, /textCacheInfo\?\.fileFingerprint[\s\S]{0,180}importFile\.sourceFingerprint/);
   assert.doesNotMatch(
     uploadHandoffSource,
     /await extractTextFromFile/,

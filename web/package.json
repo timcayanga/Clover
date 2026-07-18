@@ -17,6 +17,7 @@
     "qa:imports": "tsx scripts/import-smoke-regression.ts",
     "qa:import-status-stream": "tsx scripts/import-status-stream-regression.ts",
     "qa:import-upload-handoff": "tsx scripts/import-upload-handoff-regression.ts",
+    "qa:import-sequential-dedupe": "tsx scripts/import-sequential-dedupe-regression.ts",
     "qa:generic-parser-hardening": "tsx scripts/generic-parser-hardening-regression.ts",
     "qa:screenshot-routing": "tsx scripts/screenshot-routing-regression.ts",
     "qa:bpi-enrichment": "tsx scripts/bpi-four-file-enrichment-regression.ts",

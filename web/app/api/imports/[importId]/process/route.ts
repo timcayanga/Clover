@@ -1249,10 +1249,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             }
           : null,
       });
-      const statusSnapshot = await loadImportStatusSnapshot(importId, {
-        importFile: (await fetchImportFileCompat(importId)) ?? importFile,
-        promoteFailedVisibleImport: true,
-      });
+      const canUseCommittedStatementResult =
+        (importMode ?? "statement") === "statement" &&
+        result.status === "done" &&
+        Number(result.confirmedTransactionsCount ?? result.imported ?? 0) > 0;
+      const statusSnapshot = canUseCommittedStatementResult
+        ? null
+        : await loadImportStatusSnapshot(importId, {
+            importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+            promoteFailedVisibleImport: true,
+          });
       if (
         result.status === "error" &&
         statusSnapshot?.importFile.status === "processing" &&
@@ -1805,14 +1811,28 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         return NextResponse.json({ error: byteValidationError }, { status: 400 });
       }
       const fileFingerprint = makeImportFileBytesFingerprint(bytes);
-      const uploadPromise = uploadObject(
-        String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)),
-        bytes,
-        file.type || "application/octet-stream"
-      );
+      const reusableRawImport = await prisma.importFile.findFirst({
+        where: {
+          workspaceId: String(importFile.workspaceId),
+          sourceFingerprint: fileFingerprint,
+          id: { not: importId },
+          rawPurgedAt: null,
+          status: { in: ["processing", "done"] },
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        select: { storageKey: true },
+      }).catch(() => null);
+      const rawStorageKey =
+        reusableRawImport?.storageKey ??
+        String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName));
+      const uploadPromise = reusableRawImport
+        ? Promise.resolve()
+        : uploadObject(rawStorageKey, bytes, file.type || "application/octet-stream");
       await updateImportFileCompat(importId, {
         sourceFingerprint: fileFingerprint,
+        storageKey: rawStorageKey,
       });
+      importFile = { ...importFile, sourceFingerprint: fileFingerprint, storageKey: rawStorageKey };
 
       // File selection can be delivered more than once when two import surfaces
       // overlap or a client retries while the first request is still running.
@@ -1820,36 +1840,89 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       // otherwise both requests can create and confirm the same transactions.
       if (!allowDuplicateStatement) {
         const recentProcessingCutoff = new Date(Date.now() - 15 * 60 * 1000);
-        const canonicalImport = await prisma.importFile.findFirst({
+        const canonicalCandidates = await prisma.importFile.findMany({
           where: {
             workspaceId: String(importFile.workspaceId),
             sourceFingerprint: fileFingerprint,
             OR: [
-              {
-                status: "done",
-                OR: [{ parsedRowsCount: { gt: 0 } }, { confirmedTransactionsCount: { gt: 0 } }],
-              },
+              { status: "done" },
               { status: "processing", createdAt: { gte: recentProcessingCutoff } },
             ],
           },
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+          take: 12,
+          include: { account: true },
         });
+        let canonicalImport: (typeof canonicalCandidates)[number] | null = null;
+        let canonicalVisibleRows = 0;
+        const completedCounterCandidate = canonicalCandidates.find(
+          (candidate) =>
+            candidate.id !== importId &&
+            candidate.status === "done" &&
+            Number(candidate.confirmedTransactionsCount ?? 0) > 0
+        );
+        if (completedCounterCandidate) {
+          canonicalImport = completedCounterCandidate;
+          canonicalVisibleRows = Number(completedCounterCandidate.confirmedTransactionsCount ?? 0);
+        }
+        for (const candidate of canonicalCandidates) {
+          if (canonicalImport || candidate.id === importId || candidate.status !== "done") {
+            continue;
+          }
+          // Counters can lag behind compatibility-linked transactions. Verify
+          // the actual visible rows so a completed import stays authoritative
+          // even when its denormalized counters are stale.
+          const visibleRows = await countTransactionsByImportFileCompat(candidate.id).catch(() => 0);
+          if (visibleRows > 0) {
+            canonicalImport = candidate;
+            canonicalVisibleRows = visibleRows;
+            break;
+          }
+        }
+        if (!canonicalImport) {
+          canonicalImport =
+            canonicalCandidates.find((candidate) => candidate.id !== importId && candidate.status === "processing") ?? null;
+        }
 
-        if (canonicalImport && canonicalImport.id !== importId) {
-          const canonicalSnapshot = await loadImportStatusSnapshot(canonicalImport.id, {
-            importFile: canonicalImport,
-            promoteFailedVisibleImport: true,
-          }).catch(() => null);
-          const canonicalConfirmedRows = Number(canonicalSnapshot?.confirmedTransactionsCount ?? 0);
+        if (canonicalImport) {
+          const canonicalStillProcessing = canonicalImport.status === "processing";
+          const canUseFastCompletedStatementDuplicate =
+            !canonicalStillProcessing && (importMode ?? "statement") === "statement" && canonicalVisibleRows > 0;
+          const canonicalSnapshot = canUseFastCompletedStatementDuplicate
+            ? null
+            : await loadImportStatusSnapshot(canonicalImport.id, {
+                importFile: canonicalImport,
+                promoteFailedVisibleImport: true,
+              }).catch(() => null);
+          const canonicalConfirmedRows = Math.max(
+            canonicalVisibleRows,
+            Number(canonicalSnapshot?.confirmedTransactionsCount ?? 0)
+          );
           const canonicalParsedRows = Number(canonicalSnapshot?.parsedRowsCount ?? 0);
-          const canonicalAccountSummaries = canonicalSnapshot?.accountSummaries ?? [];
+          const canonicalAccountSummaries =
+            canonicalSnapshot?.accountSummaries ??
+            (canonicalImport.account
+              ? [{
+                  accountId: canonicalImport.account.id,
+                  accountName: formatUploadAccountDisplayName(
+                    canonicalImport.account.name,
+                    canonicalImport.account.institution,
+                    canonicalImport.account.accountNumber,
+                    canonicalImport.account.type
+                  ),
+                  institution: canonicalImport.account.institution,
+                  accountNumber: canonicalImport.account.accountNumber,
+                  accountType: canonicalImport.account.type,
+                  balance: canonicalImport.account.balance?.toString() ?? null,
+                  rowsImported: canonicalConfirmedRows,
+                }]
+              : []);
           const canonicalVisible = Boolean(
             canonicalSnapshot?.visibleImportComplete ||
               canonicalConfirmedRows > 0 ||
               canonicalParsedRows > 0 ||
               canonicalAccountSummaries.length > 0
           );
-          const canonicalStillProcessing = canonicalImport.status === "processing";
 
           // A completed but empty import is not a useful canonical result. Let a
           // new attempt repair it; active imports remain canonical single-flight.
@@ -1871,7 +1944,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               ok: true,
               queued: canonicalStillProcessing,
               processed: !canonicalStillProcessing,
-              importedRows: canonicalConfirmedRows || canonicalParsedRows,
+              importedRows: 0,
               duplicate: true,
               status: canonicalStillProcessing ? "queued" : "done",
               importFileId: importId,
@@ -1948,7 +2021,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         knownBpiMobileScreenshot && isStatementImageUpload && Boolean(sampleFallbackText);
       const shouldUseCachedExtractionRecord =
         !shouldBypassCachedExtractionForKnownBpiScreenshot &&
-        (shouldQueueDocumentUpload || isNoisyPdfBank || isStatementImageUpload);
+        (isPdfUpload(effectiveFileName, effectiveFileType) ||
+          shouldQueueDocumentUpload ||
+          isNoisyPdfBank ||
+          isStatementImageUpload);
       const cachedDocRecordPromise = shouldUseCachedExtractionRecord
         ? loadImportFileExtractionCache({
             workspaceId: String(importFile.workspaceId),
@@ -1958,6 +2034,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             cacheVersion: IMPORT_FILE_EXTRACTION_CACHE_VERSION,
           }).catch(() => null)
         : null;
+      const cachedDocRecord = cachedDocRecordPromise ? await cachedDocRecordPromise : null;
+      const hasReusableCachedDocRecord = Boolean(
+        cachedDocRecord?.parsedRows &&
+        cachedDocRecord.statementFingerprint &&
+        cachedDocRecord.metadata
+      );
 
       if (trainedReceiptFixture) {
         await uploadBankHintPromise.catch((error) => {
@@ -2030,12 +2112,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           }),
         ]);
       } else {
-        if (shouldDeferRawUploadForKnownBpiScreenshot || shouldQueueStatementImageAfterUpload) {
+        if (shouldDeferRawUploadForKnownBpiScreenshot || shouldQueueStatementImageAfterUpload || hasReusableCachedDocRecord) {
           await uploadBankHintPromise;
-          if (shouldDeferRawUploadForKnownBpiScreenshot) {
+          if (shouldDeferRawUploadForKnownBpiScreenshot || hasReusableCachedDocRecord) {
             after(async () => {
               await uploadPromise.catch((error) => {
-                console.warn("Unable to finish known BPI screenshot raw file upload", {
+                console.warn("Unable to finish cached import raw file upload", {
                   importId,
                   error: summarizeErrorForLog(error),
                 });
@@ -2097,7 +2179,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           : sampleFallbackText;
       let cachedDocTextInfo: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null = null;
       let preflightText: Awaited<ReturnType<typeof readImportedStatementTextWithCache>> | null = null;
-      const cachedDocRecord = cachedDocRecordPromise ? await cachedDocRecordPromise : null;
 
       if (
         !shouldBypassCachedExtractionForKnownBpiScreenshot &&
@@ -2476,10 +2557,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               }
             : null,
         });
-        const statusSnapshot = await loadImportStatusSnapshot(importId, {
-          importFile: (await fetchImportFileCompat(importId)) ?? importFile,
-          promoteFailedVisibleImport: true,
-        });
+        const canUseCommittedStatementResult =
+          (importMode ?? "statement") === "statement" &&
+          result.status === "done" &&
+          Number(result.confirmedTransactionsCount ?? result.imported ?? 0) > 0;
+        const statusSnapshot = canUseCommittedStatementResult
+          ? null
+          : await loadImportStatusSnapshot(importId, {
+              importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+              promoteFailedVisibleImport: true,
+            });
         if (
           result.status === "error" &&
           statusSnapshot?.importFile.status === "processing" &&
@@ -2649,10 +2736,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             }
           : null,
       });
-      const statusSnapshot = await loadImportStatusSnapshot(importId, {
-        importFile: (await fetchImportFileCompat(importId)) ?? importFile,
-        promoteFailedVisibleImport: true,
-      });
+      const canUseCommittedStatementResult =
+        (importMode ?? "statement") === "statement" &&
+        result.status === "done" &&
+        Number(result.confirmedTransactionsCount ?? result.imported ?? 0) > 0;
+      const statusSnapshot = canUseCommittedStatementResult
+        ? null
+        : await loadImportStatusSnapshot(importId, {
+            importFile: (await fetchImportFileCompat(importId)) ?? importFile,
+            promoteFailedVisibleImport: true,
+          });
       const accountSummaries =
         statusSnapshot?.accountSummaries?.length ? statusSnapshot.accountSummaries : result.accountSummaries ?? [];
       const responseAccountId =

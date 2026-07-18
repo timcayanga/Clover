@@ -6868,6 +6868,48 @@ export const processImportFileText = async (
   const isDocumentImportMode =
     importMode === "receipt" || importMode === "portfolio" || importMode === "account_detail" || importMode === "notes";
   const previouslyVisibleRows = isDocumentImportMode ? 0 : await countTransactionsByImportFileCompat(importFileId).catch(() => 0);
+  if (
+    !options.allowDuplicateStatement &&
+    previouslyVisibleRows === 0 &&
+    typeof importFile.sourceFingerprint === "string" &&
+    importFile.sourceFingerprint.trim()
+  ) {
+    const completedSourceMatches = await prisma.importFile.findMany({
+      where: {
+        workspaceId: String(importFile.workspaceId),
+        sourceFingerprint: importFile.sourceFingerprint,
+        id: { not: importFileId },
+        status: "done",
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      take: 12,
+    });
+
+    for (const sourceMatch of completedSourceMatches) {
+      const visibleRows = await countTransactionsByImportFileCompat(sourceMatch.id).catch(() => 0);
+      if (visibleRows <= 0) {
+        continue;
+      }
+
+      await updateImportFileCompat(importFileId, {
+        status: "done",
+        processingPhase: "complete",
+        processingMessage: "Clover found that this file was already imported and skipped the duplicate.",
+        parsedRowsCount: Math.max(Number(sourceMatch.parsedRowsCount ?? 0), visibleRows),
+        confirmedTransactionsCount: visibleRows,
+      });
+      return {
+        imported: 0,
+        duplicate: true,
+        metadata: detectStatementMetadataFromText("", importFile.fileName),
+        accountId: typeof sourceMatch.accountId === "string" ? sourceMatch.accountId : null,
+        confirmedTransactionsCount: visibleRows,
+        insightSummary: undefined,
+        accountBalance: null,
+        status: "done",
+      };
+    }
+  }
   const checkpointBankName = readCheckpointBankName(statementCheckpoint?.sourceMetadata);
   const fileType = String(importFile.fileType ?? "");
   const fileName = String(importFile.fileName ?? "");
@@ -8827,7 +8869,10 @@ export const processImportFileText = async (
         : "Clover is identifying transactions.",
   });
 
-  const extractedTextFileFingerprint = textCacheInfo?.cacheRecord?.fileFingerprint ?? null;
+  const extractedTextFileFingerprint =
+    textCacheInfo?.fileFingerprint ??
+    textCacheInfo?.cacheRecord?.fileFingerprint ??
+    (typeof importFile.sourceFingerprint === "string" ? importFile.sourceFingerprint : null);
   if (extractedTextFileFingerprint) {
     await updateImportFileCompat(importFileId, {
       sourceFingerprint: extractedTextFileFingerprint,
@@ -9303,6 +9348,13 @@ export const processImportFileText = async (
         processingMessage: "Clover is matching the visible rows to the account.",
       });
       confirmedImportResult = await confirmImportFileWithRetry("fast_image_statement");
+      console.info("[import-performance] statement rows visible", {
+        importFileId,
+        rowCount: rows.length,
+        totalMs: Date.now() - startedAt,
+        cachedParse: canReuseCachedStatementParse,
+        parserRoute: parserRoutingMetadata.decision,
+      });
       if (confirmedImportResult.status === "staged") {
         await updateImportFileCompat(importFileId, {
           status: "processing",
@@ -9906,6 +9958,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     getWorkspaceOwnerLimits(String(importFile.workspaceId)),
     getWorkspaceOwnerPlanUsage(String(importFile.workspaceId)),
   ]);
+  const planReadyAt = Date.now();
   const documentCheckpointRecord = (await hasCompatibleTable("AccountStatementCheckpoint"))
     ? await prisma.accountStatementCheckpoint.findUnique({
         where: { importFileId },
@@ -10421,6 +10474,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       status: "staged",
     };
   }
+  const parsedRowsReadyAt = Date.now();
 
   const statementCheckpointRecord = (await hasCompatibleTable("AccountStatementCheckpoint"))
     ? await prisma.accountStatementCheckpoint.findUnique({
@@ -11790,6 +11844,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       status: "done",
     };
   }, { maxWait: 15_000, timeout: 30_000 });
+  const transactionCommittedAt = Date.now();
 
   if (multiAccountImport) {
     const resolvedAccountIdsForCleanup = resolvedAccounts.map((entry) => entry.id);
@@ -11988,21 +12043,21 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     }
   }
 
-  await collapseDuplicateTransactionsForImport(importFileId).catch((error) => {
+  void collapseDuplicateTransactionsForImport(importFileId).catch((error) => {
     console.warn("Unable to collapse duplicate transactions after confirmation", {
       importFileId,
       error,
     });
   });
 
-  await syncWorkspaceRecurringPatterns(String(importFile.workspaceId)).catch((error) => {
+  void syncWorkspaceRecurringPatterns(String(importFile.workspaceId)).catch((error) => {
     console.warn("Unable to sync recurring patterns after import confirmation", {
       importFileId,
       error,
     });
   });
 
-  await Promise.allSettled(
+  void Promise.allSettled(
     trainingSignals.map((entry) =>
       recordTrainingSignal({
         workspaceId: importFile.workspaceId,
@@ -12031,8 +12086,11 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     );
   }) as EnrichedParsedImportRow[];
   if (backupParserRows.length > 0) {
-    const backupLearningSignals = extractBackupParserLearningSignals(backupParserRows);
-    if (backupLearningSignals.length > 0) {
+    void (async () => {
+      const backupLearningSignals = extractBackupParserLearningSignals(backupParserRows);
+      if (backupLearningSignals.length === 0) {
+        return;
+      }
       const categories = await prisma.category.findMany({
         where: { workspaceId: importFile.workspaceId },
         select: { id: true, name: true },
@@ -12064,13 +12122,14 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             notes: signal.notes,
           });
         })
-      ).catch(() => null);
-    }
+      );
+    })().catch((error) => {
+      console.warn("Backup parser learning failed after import confirmation", { importFileId, error });
+    });
   }
 
   if (qaMetadataForRun && qaAccountForRun) {
-    try {
-      await recordDataQaRun({
+    void recordDataQaRun({
         workspaceId: String(importFile.workspaceId),
         importFileId,
         accountId: resolvedAccountId,
@@ -12089,14 +12148,22 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         },
         duplicate: false,
         actorUserId: null,
-      });
-    } catch (error) {
+      }).catch((error) => {
       console.warn("Data QA recording failed after import confirmation", {
         importFileId,
         error,
       });
-    }
+    });
   }
+
+  console.info("[import-performance] confirmation visible", {
+    importFileId,
+    rowCount: parsedRows.length,
+    totalMs: Date.now() - startedAt,
+    planUsageMs: planReadyAt - startedAt,
+    parsedRowsWaitMs: parsedRowsReadyAt - planReadyAt,
+    confirmationTransactionMs: transactionCommittedAt - parsedRowsReadyAt,
+  });
 
   return confirmationResult;
 };
