@@ -532,7 +532,9 @@ type UpdateTransactionOptions = {
 };
 
 const todayIso = new Date().toISOString().slice(0, 10);
-const importedTransactionsRefreshDelays = [0, 200, 600, 1_200, 2_500, 5_000];
+// Preview rows make the import visible immediately. Keep settlement checks
+// sparse so a busy database can recover instead of receiving a retry burst.
+const importedTransactionsRefreshDelays = [600, 2_500];
 
 const wait = (milliseconds: number) =>
   new Promise<void>((resolve) => {
@@ -2919,7 +2921,7 @@ function TransactionsPageContent() {
           currentSummary.income !== 0 ||
           currentSummary.spending !== 0 ||
           currentSummary.transfers !== 0;
-        if (nextIsEmpty && currentHasValue && mergedTransactionsWithImports.length > 0 && hasRecentImportEvidence) {
+        if (nextIsEmpty && currentHasValue && mergedTransactionsWithImports.length > 0) {
           return {
             ...currentSummary,
             totalCount: Math.max(currentSummary.totalCount, mergedTransactionsWithImports.length),
@@ -3001,13 +3003,15 @@ function TransactionsPageContent() {
       }
 
       try {
-        await loadWorkspaceMetadata(workspaceId, { skipImports: true, background: true });
-        await loadTransactionsPage(workspaceId, {
-          background: true,
-          pageOverride: 1,
-          pageSizeOverride: transactionsPageSize,
-          summaryMode: "light",
-        });
+        await Promise.all([
+          loadWorkspaceMetadata(workspaceId, { skipImports: true, background: true }),
+          loadTransactionsPage(workspaceId, {
+            background: true,
+            pageOverride: 1,
+            pageSizeOverride: transactionsPageSize,
+            summaryMode: "light",
+          }),
+        ]);
       } catch {
         // Import settlement is best-effort; the regular page retry path remains available.
       }

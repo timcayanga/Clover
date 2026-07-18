@@ -66,6 +66,17 @@ const main = async () => {
     /pendingImportSummary\.optimistic[\s\S]{0,500}setImportOpen\(false\)/,
     "The transactions page must not close the modal before its visibility contract completes."
   );
+  assert.match(transactionsPageSource, /const importedTransactionsRefreshDelays = \[600, 2_500\]/);
+  assert.match(
+    transactionsPageSource,
+    /await Promise\.all\(\[\s*loadWorkspaceMetadata[\s\S]{0,500}loadTransactionsPage/,
+    "Post-import settlement must avoid sequential database retry bursts."
+  );
+  assert.match(
+    transactionsPageSource,
+    /nextIsEmpty && currentHasValue && mergedTransactionsWithImports\.length > 0\)/,
+    "Visible transactions must not be paired with an empty cash-flow summary."
+  );
   assert.doesNotMatch(modalSource, /if \(busy \|\| !workspaceId \|\| !autoStartRef\.current\)/);
   assert.match(modalSource, /const incomingKeys = new Set\(nextFiles\.map\(fileKey\)\)/);
   assert.match(modalSource, /const serverImportStillActive = hasActiveServerImport\(itemsRef\.current\)/);
