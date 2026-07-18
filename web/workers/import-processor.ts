@@ -87,6 +87,7 @@ import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
 import { coerceTransactionTypeFromCategoryName, isTransferCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
+import { shouldLoadReceiptVisionAssets } from "@/lib/import-visual-recovery";
 import { isProtectedTransactionReviewStatus } from "@/lib/data-engine-safety";
 import { applyImportValidationToRows, validateParsedImportRows } from "@/lib/data-engine-validation";
 import { assessStatementExtractionQuality, compareStatementExtractionCandidates } from "@/lib/import-quality";
@@ -7787,6 +7788,13 @@ export const processImportFileText = async (
         !genericParseLooksSuspicious &&
         !suspiciousDateCoverage &&
         !prefersVisionFallbackForInstitution)));
+  const shouldLoadReceiptBackupAssets = shouldLoadReceiptVisionAssets({
+    imageImport,
+    importMode,
+    hasTrainedReceiptDetails: Boolean(trainedReceiptDetails),
+    receiptPreviewIsUsable,
+    skipVisualBackupParser,
+  });
   if (shouldUseVisionFallback || shouldForceBackupForSuspiciousParse) {
     await updateImportFileCompat(importFileId, {
       status: "processing",
@@ -7797,7 +7805,7 @@ export const processImportFileText = async (
           : "Double-checking this file with Clover backup parser.",
     }).catch(() => null);
   }
-  if (shouldUseVisionFallback && !pageImages && !pdfFileDataBase64) {
+  if ((shouldUseVisionFallback || shouldLoadReceiptBackupAssets) && !pageImages && !pdfFileDataBase64) {
     try {
       if (fallbackAssetPrefetchPromise) {
         const prefetchedAssets = await fallbackAssetPrefetchPromise;
