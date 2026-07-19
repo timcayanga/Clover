@@ -5,7 +5,7 @@
  * confirmed transaction values. Keep raw statement text outside this module.
  */
 
-export const CONTEXT_CORPUS_VERSION = "2026.07.16";
+export const CONTEXT_CORPUS_VERSION = "2026.07.17";
 
 export type ContextSignal = {
   id: string;
@@ -814,12 +814,27 @@ export const getContextCorpusCoverageReport = () => {
   }, {});
   const purposeHintCounts = countBy(entries.map((entry) => entry.purposeHint));
   const signalKindCounts = countBy(entries.map((entry) => entry.signalKind));
+  const classifyAliasScript = (alias: string) => {
+    if (/[\u0E00-\u0E7F]/u.test(alias)) return "thai";
+    if (/[\uAC00-\uD7AF]/u.test(alias)) return "hangul";
+    if (/[\u3040-\u30FF]/u.test(alias)) return "japanese";
+    if (/[\u4E00-\u9FFF]/u.test(alias)) return "han";
+    if (/[\u0900-\u097F]/u.test(alias)) return "devanagari";
+    if (/[\u0600-\u06FF]/u.test(alias)) return "arabic";
+    return "latin_or_other";
+  };
+  const allAliases = entries.flatMap((entry) => entry.aliases);
+  const canonicalEntries = entries.filter((entry) => entry.coverage !== "descriptor_variant");
 
   return {
     ...quality,
     corpusVersion: CONTEXT_CORPUS_VERSION,
-    canonicalEntryCount: entries.filter((entry) => entry.coverage !== "descriptor_variant").length,
+    canonicalEntryCount: canonicalEntries.length,
     descriptorVariantEntryCount: entries.filter((entry) => entry.coverage === "descriptor_variant").length,
+    canonicalCountryCounts: countBy(canonicalEntries.map((entry) => entry.countryCode)),
+    aliasCount: allAliases.length,
+    localizedAliasCount: allAliases.filter((alias) => classifyAliasScript(alias) !== "latin_or_other").length,
+    aliasScriptCounts: countBy(allAliases.map(classifyAliasScript)),
     countryCounts: countBy(entries.map((entry) => entry.countryCode)),
     regionCounts: countBy(entries.map((entry) => entry.regionCode)),
     signalKindCounts,
