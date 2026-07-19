@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { CONTEXT_CORPUS_VERSION, getContextCorpusEntries, getContextCorpusQualityReport, parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
+import { CONTEXT_CORPUS_VERSION, deriveTravelEpisodes, getContextCorpusEntries, getContextCorpusQualityReport, parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
 
 assert.ok(CONTEXT_CORPUS_VERSION);
 assert.ok(getContextCorpusEntries().length >= 20);
@@ -62,5 +62,15 @@ assert.equal(parseRegionalDateValue("12/31/2025", "US")?.toISOString().slice(0, 
 assert.equal(parseRegionalAmountValue("1.234,56", "ID"), 1234.56);
 assert.equal(parseRegionalAmountValue("1,234.56", "PH"), 1234.56);
 assert.equal(parseRegionalAmountValue("(1.234,56)", "ID"), -1234.56);
+
+const travelEpisodes = deriveTravelEpisodes([
+  { date: "2026-01-10", merchantRaw: "HOTEL TOKYO", currency: "JPY" },
+  { date: "2026-01-12", merchantRaw: "SUICA JR EAST", currency: "JPY" },
+  { date: "2026-02-20", merchantRaw: "HOTEL TOKYO", currency: "JPY" },
+]);
+assert.equal(travelEpisodes.size, 3);
+assert.equal(travelEpisodes.get(0)?.episodeId, travelEpisodes.get(1)?.episodeId);
+assert.notEqual(travelEpisodes.get(0)?.episodeId, travelEpisodes.get(2)?.episodeId);
+assert.equal(travelEpisodes.get(0)?.countries.includes("JP"), true);
 
 console.log(`context corpus regression passed (${CONTEXT_CORPUS_VERSION})`);

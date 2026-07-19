@@ -5,7 +5,7 @@
  * confirmed transaction values. Keep raw statement text outside this module.
  */
 
-export const CONTEXT_CORPUS_VERSION = "2026.07.6";
+export const CONTEXT_CORPUS_VERSION = "2026.07.7";
 
 export type ContextSignal = {
   id: string;
@@ -63,6 +63,17 @@ export type TransactionContext = {
     transactionTypeHint: number;
   };
   signals: ContextSignal[];
+  confidence: number;
+  evidence: string[];
+};
+
+export type TravelEpisodeContext = {
+  episodeId: string;
+  startDate: string;
+  endDate: string;
+  countries: string[];
+  currencies: string[];
+  transactionCount: number;
   confidence: number;
   evidence: string[];
 };
@@ -348,6 +359,50 @@ export const parseRegionalAmountValue = (value: string | number | null | undefin
   const parsed = Number(cleaned);
   if (!Number.isFinite(parsed)) return null;
   return negative ? -Math.abs(parsed) : parsed;
+};
+
+export const deriveTravelEpisodes = (rows: Array<{
+  date?: string | null;
+  merchantRaw?: string | null;
+  merchantClean?: string | null;
+  description?: string | null;
+  currency?: string | null;
+}>): Map<number, TravelEpisodeContext> => {
+  const candidates = rows
+    .map((row, index) => ({ row, index, context: resolveTransactionContext(row), date: new Date(String(row.date ?? "")) }))
+    .filter(({ context, date }) => context.travelLikely && !Number.isNaN(date.getTime()))
+    .sort((left, right) => left.date.getTime() - right.date.getTime());
+  const groups: Array<typeof candidates> = [];
+  for (const candidate of candidates) {
+    const previous = groups.at(-1)?.at(-1);
+    const daysSincePrevious = previous ? (candidate.date.getTime() - previous.date.getTime()) / 86_400_000 : Infinity;
+    if (!previous || daysSincePrevious <= 5) {
+      if (groups.length === 0) groups.push([]);
+      groups.at(-1)!.push(candidate);
+    } else {
+      groups.push([candidate]);
+    }
+  }
+
+  const result = new Map<number, TravelEpisodeContext>();
+  groups.forEach((group, groupIndex) => {
+    const startDate = group[0]!.date.toISOString().slice(0, 10);
+    const endDate = group.at(-1)!.date.toISOString().slice(0, 10);
+    const countries = [...new Set(group.map(({ context }) => context.countryCode).filter((value): value is string => Boolean(value)))];
+    const currencies = [...new Set(group.map(({ row }) => String(row.currency ?? "").trim().toUpperCase()).filter(Boolean))];
+    const episode: TravelEpisodeContext = {
+      episodeId: `travel-${startDate}-${groupIndex + 1}`,
+      startDate,
+      endDate,
+      countries,
+      currencies,
+      transactionCount: group.length,
+      confidence: Math.min(92, 68 + group.length * 6),
+      evidence: [...new Set(group.flatMap(({ context }) => context.evidence.map((value) => `travel:${value}`)))],
+    };
+    group.forEach(({ index }) => result.set(index, episode));
+  });
+  return result;
 };
 
 export const getContextCorpusEntries = () => entries.map((entry) => ({

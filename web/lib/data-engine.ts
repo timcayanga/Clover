@@ -22,7 +22,7 @@ import {
   shouldTreatAsTransferDescription,
 } from "@/lib/merchant-category-hints";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
-import { resolveTransactionContext } from "@/lib/context-corpus";
+import { deriveTravelEpisodes, resolveTransactionContext } from "@/lib/context-corpus";
 import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 
 export const DATA_ENGINE_VERSION = "v2";
@@ -3293,6 +3293,15 @@ export const buildParsedTransactionInsertData = async (params: {
   statementFingerprint: string;
 }) => {
   const columns = new Set(await getCompatibleParsedTransactionColumns());
+  const travelEpisodes = deriveTravelEpisodes(
+    params.rows.map((row) => ({
+      date: row.date,
+      merchantRaw: row.merchantRaw,
+      merchantClean: row.merchantClean,
+      description: row.description,
+      currency: row.currency,
+    }))
+  );
 
   return params.rows.flatMap((row, index) => {
     const amount = parseAmountValue(row.amount ?? null);
@@ -3347,13 +3356,14 @@ export const buildParsedTransactionInsertData = async (params: {
         description: row.description,
         currency,
       });
+      const travelEpisode = travelEpisodes.get(index);
       const existingNormalizedPayload =
         row.normalizedPayload && typeof row.normalizedPayload === "object" && !Array.isArray(row.normalizedPayload)
           ? (row.normalizedPayload as Record<string, unknown>)
           : {};
       record.normalizedPayload = {
         ...existingNormalizedPayload,
-        context,
+        context: travelEpisode ? { ...context, travelEpisode } : context,
       } as Prisma.InputJsonValue;
     }
     if (columns.has("learnedRuleIdsApplied")) record.learnedRuleIdsApplied = (row.learnedRuleIdsApplied ?? null) as Prisma.InputJsonValue | null;
