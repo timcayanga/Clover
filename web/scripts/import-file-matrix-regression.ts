@@ -38,6 +38,7 @@ type MatrixCase = {
   expectedCategory?: string;
   expectedAllTransfers?: boolean;
   expectedAmount?: number;
+  expectedAmounts?: number[];
   exactTransactions?: number;
   maximumMs?: number;
 };
@@ -134,6 +135,23 @@ const cases: MatrixCase[] = [
     fileType: "image/webp",
     minimumTransactions: 1,
     expectedAmount: 2_344,
+  },
+  {
+    label: "auto-detected receipt photo dropped as statement",
+    path: join(receiptRoot, "Actual Receipts/2026-05-01 22.04.59.jpg"),
+    mode: "statement",
+    fileType: "image/jpeg",
+    minimumTransactions: 1,
+    expectedAmount: 2_191.64,
+  },
+  {
+    label: "auto-detected digital notes dropped as statement",
+    path: join(receiptRoot, "Actual Receipts/2026-05-01 22.06.24.jpg"),
+    mode: "statement",
+    fileType: "image/jpeg",
+    minimumTransactions: 1,
+    exactTransactions: 3,
+    expectedAmounts: [306.67, 209.67, 226.67],
   },
 ];
 
@@ -251,6 +269,14 @@ const verifyTransactions = async (workspaceId: string, importId: string, matrixC
       transactions.some((row) => Math.abs(Number(row.amount) - matrixCase.expectedAmount!) < 0.01),
       `${matrixCase.label}: expected amount ${matrixCase.expectedAmount} was not found.`
     );
+  }
+  if (matrixCase.expectedAmounts) {
+    for (const expectedAmount of matrixCase.expectedAmounts) {
+      assert.ok(
+        transactions.some((row) => Math.abs(Number(row.amount) - expectedAmount) < 0.01),
+        `${matrixCase.label}: expected amount ${expectedAmount} was not found.`
+      );
+    }
   }
 
   const totals = transactions.reduce(

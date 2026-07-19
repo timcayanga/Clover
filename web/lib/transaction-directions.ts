@@ -61,6 +61,13 @@ export const coerceTransactionTypeFromCategoryName = (
   }
 
   if (isTransferCategoryName(categoryName)) {
+    // `false` means the caller checked workspace ownership and found no
+    // matching account. Preserve the parsed money direction in that case;
+    // the category label alone must not turn payments to other people into
+    // internal transfers or remove them from spending/income totals.
+    if (isTransfer === false) {
+      return fallback === "income" ? "income" : "expense";
+    }
     return "transfer";
   }
 

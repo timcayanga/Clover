@@ -140,20 +140,11 @@ export function PageFileDropZone({
     document.addEventListener("dragover", handleDragOver, capture);
     document.addEventListener("dragleave", handleDragLeave, capture);
     document.addEventListener("drop", handleDrop, capture);
-    window.addEventListener("dragenter", handleDragEnter, capture);
-    window.addEventListener("dragover", handleDragOver, capture);
-    window.addEventListener("dragleave", handleDragLeave, capture);
-    window.addEventListener("drop", handleDrop, capture);
-
     return () => {
       document.removeEventListener("dragenter", handleDragEnter, capture);
       document.removeEventListener("dragover", handleDragOver, capture);
       document.removeEventListener("dragleave", handleDragLeave, capture);
       document.removeEventListener("drop", handleDrop, capture);
-      window.removeEventListener("dragenter", handleDragEnter, capture);
-      window.removeEventListener("dragover", handleDragOver, capture);
-      window.removeEventListener("dragleave", handleDragLeave, capture);
-      window.removeEventListener("drop", handleDrop, capture);
     };
   }, [enabled, onFilesDropped]);
 

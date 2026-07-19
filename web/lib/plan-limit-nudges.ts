@@ -66,7 +66,10 @@ export const parsePlanLimitMessage = (
     };
   }
 
-  if (normalized.includes("transaction rows")) {
+  if (
+    normalized.includes("transaction rows") &&
+    /(?:limit|reached|up to|includes|upgrade|more rows)/i.test(message)
+  ) {
     return {
       planTier: fallbackPlanTier,
       limitType: "transaction_limit",

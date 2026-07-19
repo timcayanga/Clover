@@ -1912,8 +1912,17 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           }
         }
         if (!canonicalImport) {
-          canonicalImport =
-            canonicalCandidates.find((candidate) => candidate.id !== importId && candidate.status === "processing") ?? null;
+          const currentCandidateIndex = canonicalCandidates.findIndex((candidate) => candidate.id === importId);
+          // Only a request that was created before this one may become its
+          // canonical in-flight owner. Letting the oldest request follow a
+          // newer request creates a circular wait where both uploads finish
+          // with zero rows and neither one actually parses the file.
+          canonicalImport = canonicalCandidates.find(
+            (candidate, candidateIndex) =>
+              candidate.id !== importId &&
+              candidate.status === "processing" &&
+              (currentCandidateIndex < 0 || candidateIndex < currentCandidateIndex)
+          ) ?? null;
         }
 
         if (canonicalImport) {

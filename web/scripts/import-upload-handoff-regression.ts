@@ -16,7 +16,7 @@ const section = (source: string, start: string, end: string) => {
 };
 
 const main = async () => {
-  const [modalSource, processRouteSource, confirmRouteSource, workerSource, importQueueSource, importProcessorSource, importFileTextSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource] = await Promise.all([
+  const [modalSource, processRouteSource, confirmRouteSource, workerSource, importQueueSource, importProcessorSource, importFileTextSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource, pageDropSource] = await Promise.all([
     readFile(join(webRoot, "components/import-files-modal.tsx"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/process/route.ts"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/confirm/route.ts"), "utf8"),
@@ -28,6 +28,7 @@ const main = async () => {
     readFile(join(webRoot, "lib/import-file-post.ts"), "utf8"),
     readFile(join(webRoot, "lib/import-visibility-rules.ts"), "utf8"),
     readFile(join(webRoot, "app/transactions/page.tsx"), "utf8"),
+    readFile(join(webRoot, "components/page-file-drop-zone.tsx"), "utf8"),
   ]);
   const localPreparseSource = section(
     modalSource,
@@ -119,6 +120,12 @@ const main = async () => {
   assert.match(processRouteSource, /sourceFingerprint: fileFingerprint/);
   assert.match(processRouteSource, /reusableRawImport[\s\S]{0,900}storageKey: rawStorageKey/);
   assert.match(processRouteSource, /canonicalImportFileId: canonicalImport\.id/);
+  assert.match(processRouteSource, /candidateIndex < currentCandidateIndex/);
+  assert.doesNotMatch(
+    pageDropSource,
+    /window\.addEventListener\("drop", handleDrop/,
+    "One physical drop must not be delivered once by window and again by document."
+  );
   assert.match(processRouteSource, /countTransactionsByImportFileCompat\(candidate\.id\)/);
   assert.match(processRouteSource, /isPdfUpload\(effectiveFileName, effectiveFileType\)[\s\S]{0,180}shouldQueueDocumentUpload/);
   assert.match(processRouteSource, /await uploadPromise;[\s\S]{0,500}processingMessage: canonicalStillProcessing/);

@@ -912,7 +912,12 @@ const createDetailDraft = (
       source: transaction.source ?? null,
       type: transaction.type,
     }) ?? transaction.categoryName ?? null;
-  const effectiveType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type, transaction.amount);
+  const effectiveType = coerceTransactionTypeFromCategoryName(
+    categoryName,
+    transaction.type,
+    transaction.amount,
+    transaction.isTransfer
+  );
 
   return buildTransactionDetailDraft(transaction, {
     merchantClean:
@@ -946,7 +951,12 @@ const getDisplayTransactionCategoryName = (
     source: transaction.source ?? null,
     type: transaction.type,
   });
-  const effectiveType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type, transaction.amount);
+  const effectiveType = coerceTransactionTypeFromCategoryName(
+    categoryName,
+    transaction.type,
+    transaction.amount,
+    transaction.isTransfer
+  );
   return (
     categoryName ??
     guessCategoryName(

@@ -1122,7 +1122,13 @@ const mergeImportedTransactionRecord = <T extends CachedRecord>(current: T, inco
       ? incoming.type.trim()
       : typeof current.type === "string" && current.type.trim()
         ? current.type.trim()
-        : "expense") as "income" | "expense" | "transfer"
+        : "expense") as "income" | "expense" | "transfer",
+    incoming.amount ?? current.amount,
+    typeof incoming.isTransfer === "boolean"
+      ? incoming.isTransfer
+      : typeof current.isTransfer === "boolean"
+        ? current.isTransfer
+        : undefined
   );
 
   const currentCategoryId = typeof current.categoryId === "string" && current.categoryId.trim() ? current.categoryId.trim() : null;

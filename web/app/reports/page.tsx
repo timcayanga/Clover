@@ -90,6 +90,7 @@ type ReportTransaction = {
     name: string;
   } | null;
   importFileId: string | null;
+  isTransfer: boolean;
 };
 
 const getReportTransactionCategoryName = (transaction: ReportTransaction) =>
@@ -105,7 +106,12 @@ const getReportTransactionCategoryName = (transaction: ReportTransaction) =>
   }) ?? "Uncategorized";
 
 const getReportTransactionType = (transaction: ReportTransaction) =>
-  coerceTransactionTypeFromCategoryName(getReportTransactionCategoryName(transaction), transaction.type, transaction.amount);
+  coerceTransactionTypeFromCategoryName(
+    getReportTransactionCategoryName(transaction),
+    transaction.type,
+    transaction.amount,
+    transaction.isTransfer
+  );
 
 const reportSankeyExcludedMerchantMatchers = [
   "check clearing",
@@ -299,6 +305,7 @@ const mapParsedRowsToReportTransactions = (
         },
         category: row.categoryName ? { name: row.categoryName } : null,
         importFileId: row.importFileId,
+        isTransfer: type === "transfer",
       },
     ];
   });
@@ -514,6 +521,7 @@ export async function ReportsStream({
           description: true,
           rawPayload: true,
           importFileId: true,
+          isTransfer: true,
           account: {
             select: {
               name: true,

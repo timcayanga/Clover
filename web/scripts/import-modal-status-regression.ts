@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { getLocalPreparseProgressPatch, resolveImportModalStatusDecision } from "@/lib/import-modal-status";
+import { parsePlanLimitMessage } from "@/lib/plan-limit-nudges";
+import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 
 const main = () => {
   const localPreparsePatch = getLocalPreparseProgressPatch(0);
@@ -85,6 +87,27 @@ const main = () => {
     genericWaiting.progress,
     "Poll attempts must not fabricate percentage progress."
   );
+
+  assert.equal(
+    parsePlanLimitMessage("Clover could not read enough visible transaction rows from this screenshot.", "pro"),
+    null,
+    "A parser quality message must never be shown as a billing limit."
+  );
+  assert.equal(
+    parsePlanLimitMessage("Free includes up to 1,000 transaction rows. Upgrade to Pro.", "free")?.limitType,
+    "transaction_limit"
+  );
+  assert.equal(
+    coerceTransactionTypeFromCategoryName("Transfers", "expense", "50000", false),
+    "expense",
+    "An outgoing payment without an owned-account match must remain spending."
+  );
+  assert.equal(
+    coerceTransactionTypeFromCategoryName("Transfers", "income", "3494.94", false),
+    "income",
+    "Incoming money without an owned-account match must remain income."
+  );
+  assert.equal(coerceTransactionTypeFromCategoryName("Transfers", "expense", "50000", true), "transfer");
 
   console.log("Import modal status regression passed.");
 };

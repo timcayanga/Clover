@@ -177,6 +177,7 @@ type TransactionApiRow = {
   categoryConfidence: number;
   description: string | null;
   isExcluded: boolean;
+  isTransfer: boolean;
   importFileId: string | null;
   source: string;
   rawPayload: Prisma.JsonValue;
@@ -201,6 +202,7 @@ const mapTransactionRow = (transaction: {
   category: { id: string; name: string } | null;
   description: string | null;
   isExcluded: boolean;
+  isTransfer: boolean;
   importFileId: string | null;
   createdAt: Date;
   transactionTags: Array<{ tag: { id: string; name: string } }>;
@@ -246,7 +248,8 @@ const mapTransactionRow = (transaction: {
     type: coerceTransactionTypeFromCategoryName(
       categoryName,
       landbankOverride?.type ?? transaction.type,
-      transaction.amount
+      transaction.amount,
+      transaction.isTransfer
     ),
     date: transaction.date.toISOString(),
     merchantRaw: transaction.merchantRaw,
@@ -256,6 +259,7 @@ const mapTransactionRow = (transaction: {
       institution: transaction.institution ?? null,
     }),
     categoryName,
+    isTransfer: transaction.isTransfer,
     reviewStatus: transaction.reviewStatus,
     categoryConfidence: transaction.categoryConfidence,
     description: transaction.description,
@@ -585,6 +589,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
           normalizedPayload: true,
           description: true,
           isExcluded: true,
+          isTransfer: true,
           createdAt: true,
           account: {
             select: {

@@ -103,7 +103,7 @@ const GENERIC_PARSER_GUIDANCE = [
   "- Preserve each transaction's visible currency separately from the account currency when the source is multi-currency.",
   "- For multi-currency wallet screenshots, treat the amount debited from the user's wallet as the canonical transaction amount and preserve any merchant currency amount separately in notes or evidence.",
   "- If a screenshot shows an inbound marker like +, Added, Received, Refunded, Deposit, or Cash In, treat it as money in. Otherwise do not infer income unless the evidence is explicit.",
-  "- If a counterparty looks like a person's name, prefer Transfers unless the screenshot clearly shows a merchant or institution.",
+  "- A payment to another person is an expense and money received from another person is income. Use Transfers only when the evidence identifies another account owned by the same Clover user.",
   "- Reject page headers, footers, legal text, reward banners, and summary noise as transactions.",
   "- Ignore mobile status bars, search bars, filter chips, pagination chrome, and overlapping screenshot edges.",
   "- If multiple screenshots overlap, avoid duplicating the same transaction unless the evidence clearly shows two separate rows.",
@@ -1564,7 +1564,7 @@ export const buildOpenAIBackupSystemPrompt = (importMode: ImportMode | null | un
     "Transfers, wallet funding, ATM withdrawals, card payments, and deposits are not spending or income by default.",
     "If a screenshot shows both a merchant currency amount and the user's wallet/account currency amount, use the wallet/account currency amount as the canonical amount when it is clearly the debited account amount.",
     "If the screenshot uses a + prefix, Added, Received, Deposit, Cash In, or Refunded, treat it as inbound movement. Otherwise default to outbound movement unless the document clearly says otherwise.",
-    "If a visible counterparty looks like a person instead of a merchant, prefer Transfers.",
+    "Treat outgoing payments to other people as expenses and incoming payments from other people as income. Use Transfers only when the evidence identifies another account owned by the same Clover user.",
     "For crypto, fund, and investment screenshots, preserve visible asset names, symbols, quantities, order IDs, status labels, and wallet or trading-wallet references in notes or parser evidence instead of dropping them.",
     "For crypto, fund, and investment screenshots, Buy, Subscribe, and Convert Out are outbound investment activity by default; Sell, Redeem, and Convert In are inbound investment activity by default; wallet funding, settlement transfers, and withdrawals between visible internal wallets or accounts are transfers unless the screen clearly shows external spending or income.",
     "Never copy filename fragments, page numbers, mobile status text, search bars, or filter chips into transaction names or account numbers.",
@@ -1606,8 +1606,13 @@ export const buildOpenAIBackupSystemPrompt = (importMode: ImportMode | null | un
               ? [
                   "Treat this as a notes or informal transaction list first.",
                   "Prefer conservative extraction with lower confidence when fields are incomplete.",
+                  "For split-cost tables with people as columns, return one review transaction per person's bottom final amount and leave the date null when absent.",
                 ]
-              : [];
+              : [
+                  "Classify the financial document from its visible content instead of assuming it is a bank statement.",
+                  "Receipts and financial notes are valid Clover inputs even without an account number or ledger layout.",
+                  "For a split-cost notes table with people as columns, return one review transaction per person's bottom final amount; do not reject it merely because it is not a bank statement.",
+                ];
 
   const inputGuidance =
     hasPdfInput
@@ -1635,6 +1640,16 @@ const inferOpenAIDocumentFamily = (params: {
     /gcrypto|gfunds|fund|portfolio|holdings|asset details|trading wallet|spot wallet|spot order|buy order|sell order|redeem|subscription|navpu|units|shares|market value|btc|eth|usdt|crypto/i.test(
       combinedText,
     );
+  const genericImageFileName = /(?:^|[\\/])(?:img|image|photo|screenshot|screen\s*shot|dsc|pxl|\d{4}-\d{2}-\d{2})[^\\/]*\.(?:jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(
+    String(params.fileName ?? "")
+  );
+  const hasStatementEvidence = Boolean(
+    params.detectedMetadata?.institution ||
+      params.detectedMetadata?.accountNumber ||
+      /\b(?:statement|account\s+(?:number|no\.?|balance)|transaction\s+history|available\s+balance|opening\s+balance|closing\s+balance)\b/i.test(
+        String(params.text ?? "")
+      )
+  );
 
   if (params.importMode === "receipt" || /sent via gcash|sent via maya|wallet transfer|express send|ref\.?\s*no/i.test(combinedText)) {
     if (/gcash|maya|wise|wallet/i.test(combinedText)) {
@@ -1654,6 +1669,12 @@ const inferOpenAIDocumentFamily = (params: {
   if (params.importMode === "statement") {
     if (looksLikeInvestmentHistory) {
       return "investment_history" satisfies OpenAIDocumentFamily;
+    }
+    // A camera filename with no statement evidence may be a receipt, notes
+    // table, or another trackable financial document. Keep the backup reader
+    // in classification mode instead of forcing the bank-statement schema.
+    if (genericImageFileName && !hasStatementEvidence) {
+      return "generic_document" satisfies OpenAIDocumentFamily;
     }
     return "bank_statement" satisfies OpenAIDocumentFamily;
   }
@@ -1865,6 +1886,7 @@ const buildOpenAIInputPayload = (params: {
     ...(params.importMode === "notes"
       ? [
           "This input is a notes-app screenshot of a transaction list. The layout may be informal, so prefer conservative extraction and lower confidence when fields are partial.",
+          "For split-cost tables with people as columns, create one review transaction per person's bottom final amount. Do not create rows for subtotal, fee, discount, or intermediate arithmetic lines; leave date null when absent.",
         ]
       : []),
     ...(params.importMode === "portfolio"
@@ -1897,7 +1919,8 @@ const buildOpenAIInputPayload = (params: {
           "If the image is a Wise mobile transaction-history screenshot, treat it as a wallet statement even when no account number or ending balance is visible. For rows with two amounts, use the second/lower smaller-font account-currency amount as the transaction amount, even when it is numerically larger than the bold merchant-currency amount. Preserve the bold first merchant-currency amount as supporting evidence.",
           "If the image is a crypto, fund, or investment transaction-history screenshot, preserve asset identity, quantity, order/reference IDs, status labels, and wallet or trading-wallet context. Do not invent holdings or balances when the screen only shows activity rows.",
           "If the document is a portfolio or account-detail page that shows holdings or positions, extract those into holdings instead of transaction rows.",
-          "If the document is a receipt, portfolio screen, account detail screen, or notes screenshot, keep the transaction array empty unless the page clearly shows true ledger rows.",
+          "If the document is a receipt, portfolio screen, or account detail screen, keep the transaction array empty unless the page clearly shows true ledger rows.",
+          "If it is a financial notes image, create conservative transaction rows for each clearly labeled paid, payable, due, final, net-total, or allocated amount that Clover can track. A split-cost table with people as columns and a final or net total per person is trackable financial data: create one review transaction per person's final amount. When the last row is an unlabeled arithmetic result beneath subtotal, fee, and discount rows, use that bottom result—not the earlier gross total—as each person's final amount. Keep date null when none is visible, set review_required true, and do not turn subtotal, fee, discount, or intermediate arithmetic rows into extra transactions.",
           "Use the account number and balance shown in the page image, not any earlier summary-like number unless it is the final ending balance.",
           "",
         ]
@@ -2137,6 +2160,12 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     pageImagesCount: params.pageImages?.length ?? 0,
     documentFamily: inferredDocumentFamily,
   });
+  const promptImportMode =
+    inferredDocumentFamily === "generic_document" &&
+    params.importMode === "statement" &&
+    (params.pageImages?.length ?? 0) > 0
+      ? null
+      : params.importMode ?? null;
 
   const userPrompt = buildOpenAIInputPayload({
     fileName: params.fileName ?? null,
@@ -2146,7 +2175,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     text: inputText,
     pageImages: params.pageImages ?? null,
     fileDataBase64: params.fileDataBase64 ?? null,
-    importMode: params.importMode ?? null,
+    importMode: promptImportMode,
   });
 
   const pageImagesInput = params.pageImages ?? [];
@@ -2172,7 +2201,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     (params.importMode ?? "statement") === "statement" &&
     pageImagesToSend.length > 0 &&
     !pdfFileDataBase64;
-  const systemPrompt = buildOpenAIBackupSystemPrompt(params.importMode ?? null, pageImagesToSend.length > 0, Boolean(pdfFileDataBase64));
+  const systemPrompt = buildOpenAIBackupSystemPrompt(promptImportMode, pageImagesToSend.length > 0, Boolean(pdfFileDataBase64));
   const fastModel = resolveOpenAIImportModel(
     (env as { OPENAI_IMPORT_PARSER_MODEL?: string }).OPENAI_IMPORT_PARSER_MODEL,
     OPENAI_IMPORT_FAST_MODEL_FALLBACK,
@@ -2189,6 +2218,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     OPENAI_IMPORT_STRONG_MODEL_FALLBACK,
     "strong model",
   );
+  const genericDocumentModel = OPENAI_IMPORT_FAST_MODEL_FALLBACK;
   const pdfModel = resolveOpenAIImportModel(
     (env as { OPENAI_IMPORT_PARSER_PDF_MODEL?: string }).OPENAI_IMPORT_PARSER_PDF_MODEL,
     OPENAI_IMPORT_PDF_MODEL_FALLBACK,
@@ -2197,7 +2227,9 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   const model = pdfFileDataBase64
     ? pdfModel
     : pageImagesToSend.length > 0
-      ? inferredDifficulty === "hard"
+      ? inferredDocumentFamily === "generic_document"
+        ? genericDocumentModel
+        : inferredDifficulty === "hard"
         ? strongModel
         : isReceiptMode || params.importMode === "notes" || params.importMode === "account_detail"
           ? imageModel
@@ -2209,7 +2241,9 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         ? [strongModel, pdfModel, OPENAI_IMPORT_LEGACY_PDF_MODEL_FALLBACK]
         : [model, strongModel, OPENAI_IMPORT_LEGACY_PDF_MODEL_FALLBACK]
       : pageImagesToSend.length > 0
-        ? inferredDifficulty === "hard"
+        ? inferredDocumentFamily === "generic_document"
+          ? [genericDocumentModel, imageModel, strongModel, textModel, OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
+          : inferredDifficulty === "hard"
           ? [strongModel, imageModel, textModel, OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
           : inferredDocumentFamily === "wallet_screenshot" || inferredDocumentFamily === "investment_history"
             ? [strongModel, imageModel, textModel, OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
@@ -2250,6 +2284,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
           model: selectedModel,
           max_output_tokens: isReceiptMode
             ? 2_500
+            : inferredDocumentFamily === "generic_document"
+              ? 3_000
             : pdfFileDataBase64
               ? 6_000
               : isImageStatementMode
@@ -2775,13 +2811,6 @@ export const transcribeImportImagesWithOpenAI = async (params: {
     "Do not invent text.",
   ].join(" ");
 
-  const userPrompt = buildImageTranscriptionInputPayload({
-    fileName: params.fileName ?? null,
-    fileType: params.fileType ?? null,
-    detectedMetadata: params.detectedMetadata,
-    pageImages: params.pageImages,
-    importMode: params.importMode ?? null,
-  });
   const inferredDocumentFamily = inferOpenAIDocumentFamily({
     fileName: params.fileName ?? null,
     detectedMetadata: params.detectedMetadata,
@@ -2796,6 +2825,17 @@ export const transcribeImportImagesWithOpenAI = async (params: {
     importMode: params.importMode ?? null,
     pageImagesCount: params.pageImages.length,
     documentFamily: inferredDocumentFamily,
+  });
+  const promptImportMode =
+    inferredDocumentFamily === "generic_document" && params.importMode === "statement"
+      ? null
+      : params.importMode ?? null;
+  const userPrompt = buildImageTranscriptionInputPayload({
+    fileName: params.fileName ?? null,
+    fileType: params.fileType ?? null,
+    detectedMetadata: params.detectedMetadata,
+    pageImages: params.pageImages,
+    importMode: promptImportMode,
   });
 
   const ocrModel = resolveOpenAIImportModel(
@@ -2814,7 +2854,7 @@ export const transcribeImportImagesWithOpenAI = async (params: {
     "strong OCR model",
   );
   const modelCandidates = dedupeOpenAIImportModels([
-    ...(inferredDifficulty === "hard" || params.importMode === "statement"
+    ...(inferredDifficulty === "hard" || promptImportMode === "statement"
       ? [strongModel, imageModel, ocrModel]
       : [imageModel, ocrModel, strongModel]),
     OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK,

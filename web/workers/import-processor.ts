@@ -7118,7 +7118,7 @@ export const processImportFileText = async (
 
   let text = options.text ?? "";
   const imageImport = isImageImportFile(fileType, fileName);
-  const isDocumentImport = isDocumentImportMode || (imageImport && importMode !== "statement");
+  let isDocumentImport = isDocumentImportMode || (imageImport && importMode !== "statement");
   const trainedReceiptFixture = importMode === "receipt" ? getTrainedReceiptFixture(fileName) : null;
   const trainedReceiptDetails = trainedReceiptFixture ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture) : null;
   const likelyScreenshotStatement = imageImport && importMode === "statement" && isLikelyScreenshotImageFile(fileName);
@@ -7465,7 +7465,10 @@ export const processImportFileText = async (
           accountNumber: metadataForParse.accountNumber,
         });
   let parsedRows = parsedRowsAfterFallback.length > 0 ? parsedRowsAfterFallback : parsedRowsInitial;
-  const effectiveImportMode = inferStructuredDocumentImportModeFromParsedRows(importMode, parsedRows, metadataForParse);
+  let effectiveImportMode = inferStructuredDocumentImportModeFromParsedRows(importMode, parsedRows, metadataForParse);
+  if (effectiveImportMode !== "statement") {
+    isDocumentImport = true;
+  }
   const preliminaryParsedRowsHaveMultipleAccountNumbers = hasMultipleParsedAccountNumbers(parsedRows as Array<Record<string, unknown>>);
   const preliminaryParsedRowsWithDates = countRowsWithParseableDates(parsedRows);
   const preliminaryParsedDateCoverage =
@@ -8302,6 +8305,13 @@ export const processImportFileText = async (
           }
         )
       : null;
+    if (imageImport && importMode === "statement" && openAiParsed) {
+      const detectedBackupImportMode = normalizeImportImageMode(openAiParsed.documentType);
+      if (detectedBackupImportMode !== "statement") {
+        effectiveImportMode = detectedBackupImportMode;
+        isDocumentImport = true;
+      }
+    }
   }
   const parserRoutingMetadata = {
     decision: parserRoutingDecision.decision,
@@ -8317,10 +8327,10 @@ export const processImportFileText = async (
     backupParserRaceTimedOut,
   } as const;
   let receiptDetails =
-    importMode === "receipt" &&
+    effectiveImportMode === "receipt" &&
     trainedReceiptDetails
       ? trainedReceiptDetails
-      : importMode === "receipt" &&
+      : effectiveImportMode === "receipt" &&
     openAiParsed?.receiptDetails &&
     (openAiParsed.receiptDetails.merchant_raw ||
       openAiParsed.receiptDetails.merchant_clean ||
@@ -8334,7 +8344,7 @@ export const processImportFileText = async (
         ? receiptPreviewDetails
         : null;
   let receiptAccountMatch =
-    importMode === "receipt"
+    effectiveImportMode === "receipt"
       ? trainedReceiptFixture?.accountMatch ??
         openAiParsed?.receiptAccountMatch ??
         (receiptPreview?.receiptAccountMatch
@@ -8355,14 +8365,14 @@ export const processImportFileText = async (
       : null;
 
   let openAiReceiptValidation =
-    importMode === "receipt"
+    effectiveImportMode === "receipt"
       ? assessReceiptExtractionQuality({
           receiptDetails: receiptDetails ?? null,
           expectedCurrency: openAiMetadata?.currency ?? metadataForParse.currency ?? null,
         })
       : null;
   const receiptAccountResolution =
-    importMode === "receipt" && receiptAccountMatch
+    effectiveImportMode === "receipt" && receiptAccountMatch
       ? await (async () => {
           const compatibleAccountColumns = await getCompatibleAccountColumns();
           const workspaceAccounts = await prisma.account.findMany({
@@ -8385,8 +8395,7 @@ export const processImportFileText = async (
     imageImport &&
     pageImages?.length &&
     shouldRunOpenAiFallback &&
-    importMode !== "receipt" &&
-    (!shouldPreferDirectImageStatementVision || likelyScreenshotStatement)
+    importMode !== "receipt"
   );
   const receiptTranscriptRequiresRetry = Boolean(
     imageImport &&
@@ -8414,15 +8423,16 @@ export const processImportFileText = async (
       (Boolean(openAiMetadata?.accountName) || Boolean(openAiParsed?.rows.some((row) => row.accountName || row.institution))));
   const openAiResultLooksSparse =
     !openAiParsed ||
-    (importMode === "statement" &&
+    (effectiveImportMode === "statement" &&
       !openAiParseIsUsableWiseScreenshot &&
       (openAiParsed.rows.length === 0 || !openAiStatementIdentityPresent)) ||
-    (importMode === "receipt" &&
+    (effectiveImportMode === "receipt" &&
       (!openAiParsed.receiptDetails ||
         (openAiReceiptValidation !== null && openAiReceiptValidation.score < 2) ||
         (countReceiptDetailSignals(openAiParsed.receiptDetails) < 2 &&
           !openAiParsed.receiptAccountMatch))) ||
-    ((importMode === "portfolio" || importMode === "account_detail") &&
+    (effectiveImportMode === "notes" && openAiParsed.rows.length === 0) ||
+    ((effectiveImportMode === "portfolio" || effectiveImportMode === "account_detail") &&
       (!openAiParsed.holdings.length || !openAiMetadata?.accountName));
 
   if (receiptTranscriptRequiresRetry && openAiResultLooksSparse) {
@@ -8656,6 +8666,10 @@ export const processImportFileText = async (
 
       if (shouldAdoptTranscriptParse) {
         openAiParsed = transcriptParsed;
+        if (importMode === "statement" && transcriptImportMode !== "statement") {
+          effectiveImportMode = transcriptImportMode;
+          isDocumentImport = true;
+        }
         openAiMetadata = transcriptParsed
       ? mergeStatementMetadataWithTemplate(
               {
@@ -8690,6 +8704,19 @@ export const processImportFileText = async (
           : null;
       }
     }
+  }
+
+  // The image transcription pass can discover that a generic camera upload
+  // is a receipt after the initial statement-mode parse. Rehydrate receipt
+  // details from the adopted result before persisting the document and
+  // confirming its transaction.
+  if (effectiveImportMode === "receipt" && openAiParsed?.receiptDetails) {
+    receiptDetails = openAiParsed.receiptDetails;
+    receiptAccountMatch = openAiParsed.receiptAccountMatch ?? receiptAccountMatch;
+    openAiReceiptValidation = assessReceiptExtractionQuality({
+      receiptDetails,
+      expectedCurrency: openAiMetadata?.currency ?? metadataForParse.currency ?? null,
+    });
   }
 
   if (openAiParsed?.audit && options.actorUserId) {
@@ -8793,7 +8820,7 @@ export const processImportFileText = async (
           }
         )
       : [];
-  const effectiveRowsBase = normalizeWiseWalletParsedRows(
+  const effectiveRowsBaseRaw = normalizeWiseWalletParsedRows(
     (
       knownBpiMobileScreenshotFallbackRows.length > 0
         ? knownBpiMobileScreenshotFallbackRows
@@ -8803,6 +8830,27 @@ export const processImportFileText = async (
     ) as Array<Record<string, unknown>>,
     effectiveMetadataSource
   ) as typeof parsedRows;
+  const effectiveRowsBase =
+    effectiveImportMode === "notes"
+      ? effectiveRowsBaseRaw.map((row) => {
+          if (parseDateValue(typeof row.date === "string" ? row.date : null)) {
+            return row;
+          }
+          return {
+            ...row,
+            date: importFile.uploadedAt.toISOString(),
+            confidence: Math.min(Number(row.confidence ?? 60), 60),
+            rawPayload: {
+              ...(row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+                ? (row.rawPayload as Record<string, unknown>)
+                : {}),
+              dateInferredFromUpload: true,
+              reviewRequired: true,
+              reviewReason: "The financial note did not show a transaction date; review the upload-date fallback.",
+            },
+          };
+        })
+      : effectiveRowsBaseRaw;
   const effectiveRows = isLikelyBpiScreenshotStatement
     ? normalizeBpiScreenshotOpenAiRows(effectiveRowsBase as Array<Record<string, unknown>>, {
         fileName,
