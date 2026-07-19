@@ -5,7 +5,7 @@
  * confirmed transaction values. Keep raw statement text outside this module.
  */
 
-export const CONTEXT_CORPUS_VERSION = "2026.07.9";
+export const CONTEXT_CORPUS_VERSION = "2026.07.10";
 
 export type ContextSignal = {
   id: string;
@@ -103,7 +103,7 @@ type ContextEntry = {
   reviewStatus?: ContextSignal["reviewStatus"];
 };
 
-const entries: ContextEntry[] = [
+const baseEntries: ContextEntry[] = [
   // Philippines: launch market and strongest deterministic context.
   { id: "ph-gcash", aliases: ["gcash", "g-xchange", "gcash cash in", "gcash cash out"], signalKind: "payment_rail", countryCode: "PH", regionCode: "SEA", paymentRail: "gcash", institutionType: "wallet", currency: "PHP", transactionTypeHint: "transfer", counterpartyType: "wallet", purposeHint: "transfer", confidence: 96 },
   { id: "ph-maya", aliases: ["maya", "maya wallet", "paymaya", "maya bank"], signalKind: "payment_rail", countryCode: "PH", regionCode: "SEA", paymentRail: "maya", institutionType: "wallet", currency: "PHP", transactionTypeHint: "transfer", counterpartyType: "wallet", purposeHint: "transfer", confidence: 94 },
@@ -251,6 +251,31 @@ const entries: ContextEntry[] = [
   { id: "global-insurance", aliases: ["insurance premium", "life insurance", "health insurance", "axa", "allianz", "prudential", "sun life"], signalKind: "merchant", countryCode: "GLOBAL", regionCode: "GLOBAL", categoryHint: "Insurance", counterpartyType: "insurer", purposeHint: "insurance", confidence: 78 },
   { id: "global-investment", aliases: ["brokerage", "securities", "mutual fund", "etf purchase", "interactive brokers", "robinhood", "trading account", "coinbase"], signalKind: "merchant", countryCode: "GLOBAL", regionCode: "GLOBAL", categoryHint: "Investments", transactionTypeHint: "transfer", counterpartyType: "investment_platform", purposeHint: "investment", confidence: 76 },
 ];
+
+/**
+ * Statement providers frequently decorate a known name with a descriptor word
+ * such as "payment", "transaction", or "merchant". Keep these as separate,
+ * lower-confidence evidence entries so the corpus can recognize those forms
+ * without making them as authoritative as the canonical alias.
+ */
+const buildDescriptorExpansion = (sourceEntries: ContextEntry[]): ContextEntry[] =>
+  sourceEntries.flatMap((entry) =>
+    entry.aliases
+      .filter((alias) => alias.trim().split(/\s+/).length >= 2)
+      .flatMap((alias, aliasIndex) =>
+        ["payment", "transaction", "merchant"].map((suffix, suffixIndex) => ({
+          ...entry,
+          id: `descriptor-${entry.id}-${aliasIndex + 1}-${suffixIndex + 1}`,
+          aliases: [`${alias} ${suffix}`],
+          negativeAliases: [],
+          confidence: Math.max(55, entry.confidence - 18),
+          source: "curated" as const,
+          reviewStatus: "active" as const,
+        }))
+      )
+  );
+
+const entries: ContextEntry[] = [...baseEntries, ...buildDescriptorExpansion(baseEntries)];
 
 const regionalProfiles: RegionalParsingProfile[] = [
   { countryCode: "PH", regionCode: "SEA", locales: ["en-PH", "fil-PH"], primaryLocale: "en-PH", languages: ["en", "fil"], dateOrder: "mdy", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "PHP", legalEntitySuffixes: ["inc", "corp", "corporation", "co", "ltd"], confidence: 86 },

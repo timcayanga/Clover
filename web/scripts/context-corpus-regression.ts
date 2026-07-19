@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { CONTEXT_CORPUS_VERSION, deriveTravelEpisodes, getContextCorpusEntries, getContextCorpusQualityReport, parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
 
 assert.ok(CONTEXT_CORPUS_VERSION);
-assert.ok(getContextCorpusEntries().length >= 120);
+assert.ok(getContextCorpusEntries().length >= 1000);
 assert.ok(getContextCorpusQualityReport().profileCount >= 25);
 assert.equal(getContextCorpusQualityReport().valid, true);
 
