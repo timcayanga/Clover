@@ -6831,6 +6831,10 @@ export function ImportFilesModal({
     uploadCancelRequestedRef.current = false;
     setUploadPaused(false);
     uploadPausedRef.current = false;
+    // Uploads continue independently of the page, so release the full-screen
+    // modal as soon as the user starts the batch.
+    setLaunchInBackground(true);
+    importActivitySurfaceRef.current = "background";
     setBusy(true);
     setValidationNotice(null);
     setMessage("Clover is lining up your files...");
