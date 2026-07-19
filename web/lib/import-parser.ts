@@ -18693,6 +18693,18 @@ const classifyGenericStatementTransaction = (description: string, credit: number
   const compact = compactWhitespace(description).toLowerCase();
   const codeOnlyReference = /^\d{2}\s+[a-z0-9/_-]{6,}$/i.test(description);
   const inferDirectionalType = (): TransactionType => {
+    // Textual direction is authoritative for transfer rows. Some statements
+    // print the fee before its transfer even though the running balances are
+    // in the opposite order; relying on that adjacent delta reverses "Sent to"
+    // rows and can make the principal look like the fee.
+    if (/\b(?:outgoing|sent|send|paid\s*out|money\s*out|withdrawal|debit|dr\b|to\s+account|transfer\s+out)\b/i.test(description)) {
+      return "expense";
+    }
+
+    if (/\b(?:incoming|received|receive|paid\s*in|money\s*in|deposit|credit|cr\b|from\s+account|transfer\s+in)\b/i.test(description)) {
+      return "income";
+    }
+
     if ((credit ?? 0) > 0 && (debit ?? 0) === 0) {
       return "income";
     }
@@ -18703,14 +18715,6 @@ const classifyGenericStatementTransaction = (description: string, credit: number
 
     if ((explicitAmount ?? 0) < 0) {
       return "expense";
-    }
-
-    if (/\b(?:outgoing|sent|send|paid\s*out|money\s*out|withdrawal|debit|dr\b|to\s+account|transfer\s+out)\b/i.test(description)) {
-      return "expense";
-    }
-
-    if (/\b(?:incoming|received|receive|paid\s*in|money\s*in|deposit|credit|cr\b|from\s+account|transfer\s+in)\b/i.test(description)) {
-      return "income";
     }
 
     return "expense";
@@ -19398,7 +19402,14 @@ const parseGenericStatementTransactionBlock = (
 
   if (state.previousBalance !== null && balance !== null) {
     const balanceDelta = Math.abs(balance - state.previousBalance);
+    const isTransferPrincipalWithFeeSizedDelta =
+      /\b(?:sent\s+to|send\s+to|transfer\s+to|instapay\s+send|outgoing\s+transfer)\b/i.test(lowerBody) &&
+      balanceDelta > 0 &&
+      balanceDelta <= 100 &&
+      explicitAmount !== null &&
+      explicitAmount >= 1_000;
     if (
+      !isTransferPrincipalWithFeeSizedDelta &&
       balanceDelta > 0 &&
       explicitAmount !== null &&
       explicitAmount > balanceDelta * 10 &&

@@ -55,6 +55,11 @@ const main = async () => {
     /primaryVisibilityCompletedRef\.current = true;[\s\S]{0,300}onClose\(\)/,
     "A successful result must remain visible until the user dismisses it."
   );
+  assert.doesNotMatch(
+    modalSource,
+    /if \(\(backgroundOnly \|\| launchInBackground\) && !activePasswordItem\) \{\s*return null;/,
+    "A visible import launched in the background must render its progress dock instead of disappearing."
+  );
   assert.match(settledVisibilitySource, /transaction\?\.importFileId === params\.importFileId/);
   assert.match(settledVisibilitySource, /params\.importedRows > 0 \? null : expectedBalance/);
   assert.doesNotMatch(
@@ -77,7 +82,7 @@ const main = async () => {
     /pendingImportSummary\.optimistic[\s\S]{0,500}setImportOpen\(false\)/,
     "The transactions page must not close the modal before its visibility contract completes."
   );
-  assert.match(transactionsPageSource, /const importedTransactionsRefreshDelays = \[600, 2_500\]/);
+  assert.match(transactionsPageSource, /const importedTransactionsRefreshDelays = \[400\]/);
   assert.match(
     transactionsPageSource,
     /await Promise\.all\(\[\s*loadWorkspaceMetadata[\s\S]{0,500}loadTransactionsPage/,

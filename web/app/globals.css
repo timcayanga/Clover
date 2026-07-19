@@ -15939,10 +15939,12 @@ input.transaction-inline-edit--amount::placeholder {
 .warning-mark::after {
   content: "!";
   position: absolute;
-  left: -3px;
-  top: 2px;
+  left: 0;
+  top: 4px;
+  transform: translateX(-50%);
   font-size: 0.72rem;
   font-weight: 800;
+  line-height: 1;
   color: #ffffff;
 }
 

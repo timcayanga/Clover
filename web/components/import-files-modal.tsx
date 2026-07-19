@@ -1053,22 +1053,18 @@ export function ImportFilesModal({
       return;
     }
 
+    // Modal initialization must run once per open session. Queue progress and
+    // account updates happen frequently during an import; replaying this block
+    // for each update caused hundreds of duplicate Accounts/Transactions reads
+    // and left the page feeling locked after the modal docked.
+    if (wasOpen) {
+      return;
+    }
+
     importActivitySurfaceRef.current = backgroundOnly || launchInBackground ? "background" : "modal";
 
     router.prefetch("/accounts");
     router.prefetch("/transactions");
-    if (workspaceId) {
-      void Promise.all([
-        fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`),
-        fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}`),
-      ]);
-    }
-
-    const map = new Map<string, string>();
-    for (const account of accounts) {
-      map.set(accountKey(account.name, account.institution, account.accountNumber, account.currency ?? null, account.type), account.id);
-    }
-    accountIdByKeyRef.current = map;
 
     setSelectedAccountId((current) => {
       if (current && accounts.some((account) => account.id === current)) {
@@ -1080,6 +1076,14 @@ export function ImportFilesModal({
     setMessage("");
     setValidationNotice(null);
   }, [accounts, backgroundOnly, defaultAccountId, items, launchInBackground, open]);
+
+  useEffect(() => {
+    const map = new Map<string, string>();
+    for (const account of accounts) {
+      map.set(accountKey(account.name, account.institution, account.accountNumber, account.currency ?? null, account.type), account.id);
+    }
+    accountIdByKeyRef.current = map;
+  }, [accounts]);
 
   useEffect(() => {
     if (!open) {
@@ -6618,7 +6622,7 @@ export function ImportFilesModal({
       compactProgressUnlockTimerRef.current = null;
     }
 
-    if (!open || backgroundOnly || launchInBackground || !progressSessionActive) {
+    if (!open || backgroundOnly || !progressSessionActive) {
       compactProgressStartedAtRef.current = null;
       setCompactProgressUnlocked(false);
       return;
@@ -6645,7 +6649,7 @@ export function ImportFilesModal({
         compactProgressUnlockTimerRef.current = null;
       }
     };
-  }, [backgroundOnly, launchInBackground, open, progressSessionActive]);
+  }, [backgroundOnly, open, progressSessionActive]);
 
   useEffect(() => {
     if (!showCompactProgress) {
@@ -7387,10 +7391,6 @@ export function ImportFilesModal({
 
   const portalTarget = typeof document === "undefined" ? null : document.body;
   if (!portalTarget) {
-    return null;
-  }
-
-  if ((backgroundOnly || launchInBackground) && !activePasswordItem) {
     return null;
   }
 

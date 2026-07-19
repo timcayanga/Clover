@@ -63,7 +63,7 @@ import {
   normalizeTransactionNoteValue,
 } from "@/lib/transaction-notes";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
-import { coerceTransactionTypeFromCategoryName, isTransferCategoryName } from "@/lib/transaction-directions";
+import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId, selectedWorkspaceKey } from "@/lib/workspace-selection";
 import {
@@ -534,7 +534,7 @@ type UpdateTransactionOptions = {
 const todayIso = new Date().toISOString().slice(0, 10);
 // Preview rows make the import visible immediately. Keep settlement checks
 // sparse so a busy database can recover instead of receiving a retry burst.
-const importedTransactionsRefreshDelays = [600, 2_500];
+const importedTransactionsRefreshDelays = [400];
 
 const wait = (milliseconds: number) =>
   new Promise<void>((resolve) => {
@@ -613,7 +613,7 @@ const getTransactionDisplayType = (
     return "transfer";
   }
 
-  if (transaction.type === "transfer" || transaction.isTransfer || isTransferCategoryName(transaction.categoryName)) {
+  if (transaction.type === "transfer" || transaction.isTransfer) {
     return "transfer";
   }
 
@@ -2280,7 +2280,7 @@ function TransactionsPageContent() {
   const transactionsHydrationVersionRef = useRef(new Map<string, number>());
   const mobileLoadMoreRef = useRef<HTMLDivElement | null>(null);
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
-  const [importRefreshInFlight, setImportRefreshInFlight] = useState(false);
+  const importRefreshInFlightRef = useRef(false);
   const handledImportedSummaryKeysRef = useRef(new Set<string>());
   const reviewTransactionParamRef = useRef<string | null>(null);
   const drilldownParamRef = useRef<string | null>(null);
@@ -3139,10 +3139,12 @@ function TransactionsPageContent() {
         return;
       }
 
-      setImportRefreshInFlight(true);
-      void refreshTransactionsAfterImport(selectedWorkspaceId).finally(() => {
-        setImportRefreshInFlight(false);
-      });
+      if (!importRefreshInFlightRef.current) {
+        importRefreshInFlightRef.current = true;
+        void refreshTransactionsAfterImport(selectedWorkspaceId).finally(() => {
+          importRefreshInFlightRef.current = false;
+        });
+      }
 
       setMessage("Import complete. Accounts and Transactions are updated.");
     },
@@ -6268,7 +6270,8 @@ function TransactionsPageContent() {
   };
 
   const netCashFlow = displayedTransactionsSummary.income - displayedTransactionsSummary.spending;
-  const warningTransactionCount = displayedTransactionsSummary.review;
+  const visibleWarningTransactionCount = visibleTransactions.filter(isReviewableTransaction).length;
+  const warningTransactionCount = Math.max(displayedTransactionsSummary.review, visibleWarningTransactionCount);
   const hasReviewItems = warningTransactionCount > 0;
   const dateFilterLabel = getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd);
   const headerMenuTitle =
@@ -7549,7 +7552,7 @@ function TransactionsPageContent() {
             <div className="transactions-footer" style={{ ...transactionsFooterStyle, marginTop: "auto" }}>
               <div className="table-footer__summary">
                 {totalTransactionCountForDisplay > 0 ? (
-                  <span className="pill pill-subtle">Showing filtered {currentPageLabel}</span>
+                  <span className="pill pill-subtle">Showing {currentPageLabel}</span>
                 ) : null}
                 {warningTransactionCount > 0 ? (
                   <button
@@ -8238,13 +8241,6 @@ function TransactionsPageContent() {
                 />
               </label>
 
-              {selectedTransactionRawNote ? (
-                <div className="transaction-drawer-more__row transaction-drawer-more__row--stacked">
-                  <span>Parsed note</span>
-                  <strong>{selectedTransactionRawNote}</strong>
-                </div>
-              ) : null}
-
               <label>
                 Date
                 <input
@@ -8406,11 +8402,22 @@ function TransactionsPageContent() {
                 <label className="transaction-drawer-form__notes">
                   Notes
                   <textarea
-                    value={detailDraft?.description ?? ""}
+                    value={
+                      selectedTransactionRawNote &&
+                      (detailDraft?.description ?? "").trim() === selectedTransactionRawNote.trim()
+                        ? ""
+                        : detailDraft?.description ?? ""
+                    }
                     onChange={(event) => setDetailDraft((current) => (current ? { ...current, description: event.target.value } : current))}
                     placeholder="Optional note or review context"
                   />
                 </label>
+                {selectedTransactionRawNote ? (
+                  <div className="transaction-drawer-more__row transaction-drawer-more__row--stacked">
+                    <span>Parsed note</span>
+                    <p>{selectedTransactionRawNote}</p>
+                  </div>
+                ) : null}
                 {selectedTransactionRawSourceLine ? (
                   <div className="transaction-drawer-more__row transaction-drawer-more__row--stacked">
                     <span>Raw source line</span>

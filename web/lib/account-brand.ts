@@ -986,12 +986,13 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
     });
   }
 
-  if (/\bgcash\b/i.test(rawBrandText)) {
+  if (/\bgcrypto\b/i.test(rawBrandText)) {
     return makeBrand({
-      label: "GCash",
+      label: "GCrypto",
       logoSrcs: philippinesLogoWithVariants("gcash"),
-      fallbackIconSrc: walletIcon,
+      fallbackIconSrc: investmentIcon,
       accent: "#1479E7",
+      background: "linear-gradient(135deg, rgba(20, 121, 231, 0.18), rgba(20, 121, 231, 0.06))",
     });
   }
 
@@ -1002,6 +1003,15 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
       fallbackIconSrc: investmentIcon,
       accent: "#1479E7",
       background: "linear-gradient(135deg, rgba(20, 121, 231, 0.18), rgba(20, 121, 231, 0.06))",
+    });
+  }
+
+  if (/\bgcash\b/i.test(rawBrandText)) {
+    return makeBrand({
+      label: "GCash",
+      logoSrcs: philippinesLogoWithVariants("gcash"),
+      fallbackIconSrc: walletIcon,
+      accent: "#1479E7",
     });
   }
 

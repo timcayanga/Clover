@@ -4887,7 +4887,12 @@ function AccountDetailPageContent() {
                   <label className="transaction-drawer-form__notes">
                     Notes
                     <textarea
-                      value={detailDraft?.description ?? ""}
+                      value={
+                        selectedTransactionRawNote &&
+                        (detailDraft?.description ?? "").trim() === selectedTransactionRawNote.trim()
+                          ? ""
+                          : detailDraft?.description ?? ""
+                      }
                       onChange={(event) => setDetailDraft((current) => (current ? { ...current, description: event.target.value } : current))}
                       placeholder="Optional note or review context"
                     />
@@ -4901,7 +4906,7 @@ function AccountDetailPageContent() {
                   {selectedTransactionRawNote ? (
                     <div className="transaction-drawer-more__row transaction-drawer-more__row--stacked">
                       <span>Parsed note</span>
-                      <strong>{selectedTransactionRawNote}</strong>
+                      <p>{selectedTransactionRawNote}</p>
                     </div>
                   ) : null}
 
