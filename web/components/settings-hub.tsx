@@ -2293,6 +2293,9 @@ export function SettingsHub({
                               <rect x="4" y="5.5" width="16" height="15" rx="2" />
                               <path d="M7.5 3.5v4M16.5 3.5v4M4 9.5h16" />
                             </svg>
+                            <span className="settings-date-control__value">
+                              {historyCutoff.split("-").reverse().join("/")}
+                            </span>
                             <input
                               type="date"
                               aria-label="Before date"

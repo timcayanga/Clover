@@ -36089,37 +36089,36 @@ body:has(.pricing-page) {
   pointer-events: none;
 }
 
-.settings-date-control input {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 100%;
-  min-width: 0;
+.settings-date-control__value {
+  display: flex;
+  align-items: center;
   min-height: 32px;
+  width: 100%;
   padding: 4px 0 4px 24px;
-  border: 0;
-  border-radius: 0;
-  outline: 0;
-  background: transparent;
   color: var(--text);
   font: inherit;
+  white-space: nowrap;
+}
+
+.settings-date-control input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  outline: 0;
+  background: transparent !important;
+  color: transparent;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .settings-date-control input:focus {
   box-shadow: none;
-}
-
-.settings-date-control input::-webkit-calendar-picker-indicator {
-  display: none;
-}
-
-.settings-date-control input::-webkit-datetime-edit,
-.settings-date-control input::-webkit-datetime-edit-text,
-.settings-date-control input::-webkit-datetime-edit-month-field,
-.settings-date-control input::-webkit-datetime-edit-day-field,
-.settings-date-control input::-webkit-datetime-edit-year-field {
-  color: var(--text);
-  opacity: 1;
-  cursor: pointer;
 }
 
 .settings-plan-grid {
