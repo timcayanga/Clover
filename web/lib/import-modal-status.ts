@@ -92,7 +92,6 @@ export const resolveImportModalStatusDecision = (params: {
   const visible =
     Boolean(params.visibleImportComplete) ||
     Boolean(params.hasStructuredReceiptVisibility) ||
-    parsedRowsCount > 0 ||
     confirmedTransactionsCount > 0;
 
   if (visible) {
@@ -123,12 +122,11 @@ export const resolveImportModalStatusDecision = (params: {
     };
   }
 
-  const attemptProgress = Math.max(0, Number(params.processingAttempt ?? 0) || 0);
   const progressFloor = Math.max(IMPORT_PROGRESS.parsing, Number(params.progressFloor ?? IMPORT_PROGRESS.parsing) || 0);
   const progress =
     processingPhase === "queued_retry"
-      ? Math.max(IMPORT_PROGRESS.uploading, Math.min(90, IMPORT_PROGRESS.uploading + attemptProgress))
-      : Math.max(progressFloor, Math.min(90, progressFloor + attemptProgress));
+      ? IMPORT_PROGRESS.uploading
+      : Math.min(IMPORT_PROGRESS.finalizing, progressFloor);
 
   return {
     kind: "waiting",

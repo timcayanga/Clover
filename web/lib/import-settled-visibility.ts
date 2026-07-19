@@ -120,13 +120,11 @@ const waitWithStatusStream = async (params: {
 
       if (params.importedRows > 0 && params.importFileId) {
         const confirmedTransactionsCount = Number(latestStatusRef.current?.confirmedTransactionsCount ?? 0);
-        const parsedRowsCount = Number(latestStatusRef.current?.parsedRowsCount ?? 0);
         const hasVisibleReceiptOrImport =
           latestStatusRef.current?.visibleImportComplete === true ||
           latestStatusRef.current?.confirmationStatus === "confirmed" ||
-          Boolean(latestStatusRef.current?.receiptTransaction) ||
-          Boolean(latestStatusRef.current?.receiptDocument);
-        return confirmedTransactionsCount >= params.importedRows || parsedRowsCount >= params.importedRows || hasVisibleReceiptOrImport;
+          Boolean(latestStatusRef.current?.receiptTransaction);
+        return confirmedTransactionsCount >= params.importedRows || hasVisibleReceiptOrImport;
       }
 
       return true;
@@ -269,13 +267,11 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
 
       if (params.importedRows > 0 && params.importFileId) {
         const confirmedTransactionsCount = Number(statusPayload?.confirmedTransactionsCount ?? 0);
-        const parsedRowsCount = Number(statusPayload?.parsedRowsCount ?? 0);
         const hasVisibleReceiptOrImport =
           statusPayload?.visibleImportComplete === true ||
           statusPayload?.confirmationStatus === "confirmed" ||
-          Boolean(statusPayload?.receiptTransaction) ||
-          Boolean(statusPayload?.receiptDocument);
-        if (confirmedTransactionsCount < params.importedRows && parsedRowsCount < params.importedRows && !hasVisibleReceiptOrImport) {
+          Boolean(statusPayload?.receiptTransaction);
+        if (confirmedTransactionsCount < params.importedRows && !hasVisibleReceiptOrImport) {
           await sleep(pollDelayMs);
           continue;
         }

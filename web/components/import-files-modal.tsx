@@ -2240,9 +2240,7 @@ export function ImportFilesModal({
         const importFile = payload.importFile;
         const parsedRowsCount = Number(payload.parsedRowsCount ?? 0);
         const confirmedTransactionsCount = Number(payload.confirmedTransactionsCount ?? 0);
-        const visibleImportComplete = requiresVisibleRows
-          ? parsedRowsCount > 0 || confirmedTransactionsCount > 0
-          : Boolean(payload.visibleImportComplete || confirmedTransactionsCount > 0);
+        const visibleImportComplete = Boolean(payload.visibleImportComplete || confirmedTransactionsCount > 0);
         const suppressUnionBankPreview = isLikelyLowQualityUnionBankStatementFile(summaryContext.fileName);
         const statusAccountSummaries = normalizeServerAccountSummaries(payload.accountSummaries);
         const primaryStatusAccountSummary =
@@ -2347,7 +2345,7 @@ export function ImportFilesModal({
             processingIdentity?.accountName ||
             processingIdentity?.accountNumber
         );
-        const hasRowBackedVisibility = parsedRowsCount > 0 || confirmedTransactionsCount > 0 || visibleImportComplete;
+        const hasRowBackedVisibility = confirmedTransactionsCount > 0 || visibleImportComplete;
         const visibleProgressSignal = requiresVisibleRows ? hasRowBackedVisibility : hasVisibleImportDataSignal;
         const visualRepairGraceActive =
           isRecoverableVisualUploadFileName(summaryContext.fileName) &&
@@ -3130,10 +3128,7 @@ export function ImportFilesModal({
           emitItemUpdate({
             status: "importing",
             confirmationState: "pending",
-            progress: Math.max(
-              IMPORT_PROGRESS.loadingAccount,
-              Math.min(90, IMPORT_PROGRESS.loadingAccount + Number(importFile.processingAttempt ?? 0))
-            ),
+            progress: IMPORT_PROGRESS.loadingAccount,
             progressLabel: "Loading transactions",
             targetAccountId: latestResolvedAccountId && !latestResolvedAccountId.startsWith("optimistic-") ? latestResolvedAccountId : null,
           });
@@ -3145,10 +3140,7 @@ export function ImportFilesModal({
             fileIndex: items.findIndex((item) => item.id === itemId) + 1,
             fileTotal: items.length,
             completedFiles: completedFileCount,
-            progress: Math.max(
-              IMPORT_PROGRESS.loadingAccount,
-              Math.min(90, IMPORT_PROGRESS.loadingAccount + Number(importFile.processingAttempt ?? 0))
-            ),
+            progress: IMPORT_PROGRESS.loadingAccount,
             detail: getProgressDetail(
               {
                 accountName: processingIdentity?.accountName ?? summaryContext.accountName,
@@ -3428,7 +3420,7 @@ export function ImportFilesModal({
           if (shouldWaitForDeferredConfirmation) {
             emitItemUpdate({
               status: "importing",
-              progress: Math.max(IMPORT_PROGRESS.loadingAccount, Math.min(98, IMPORT_PROGRESS.loadingAccount + attempt * 0.5)),
+              progress: IMPORT_PROGRESS.loadingAccount,
               progressLabel: telemetryLabel ?? "Finalizing import",
               targetAccountId: resolvedAccountId,
             });
@@ -3440,7 +3432,7 @@ export function ImportFilesModal({
               fileIndex: items.findIndex((item) => item.id === itemId) + 1,
               fileTotal: items.length,
               completedFiles: completedFileCount,
-              progress: Math.max(IMPORT_PROGRESS.loadingAccount, Math.min(98, IMPORT_PROGRESS.loadingAccount + attempt * 0.5)),
+              progress: IMPORT_PROGRESS.loadingAccount,
               detail: getTelemetryDetail(
                 getProgressDetail(
                   {
@@ -4454,9 +4446,12 @@ export function ImportFilesModal({
         parsedRowsCount,
         confirmedTransactionsCount,
         visibleImportComplete: Boolean(payload.visibleImportComplete),
-        hasStructuredReceiptVisibility: Boolean(payload.receiptDocument || payload.receiptTransaction),
+        hasStructuredReceiptVisibility: Boolean(payload.receiptTransaction),
         processingAttempt: importFile?.processingAttempt ?? null,
-        progressFloor: IMPORT_PROGRESS.parsing + attempt * 0.25,
+        progressFloor:
+          processingPhase === "reading_account_details" || processingPhase === "finalizing"
+            ? IMPORT_PROGRESS.finalizing
+            : IMPORT_PROGRESS.parsing,
       });
 
       if (statusDecision.kind === "repair_needed") {
@@ -4603,11 +4598,9 @@ export function ImportFilesModal({
 
         const receiptHasStructuredVisibility =
           Boolean(payload.receiptTransaction) ||
-          Boolean(payload.receiptDocument) ||
-          parsedRowsCount > 0 ||
           confirmedTransactionsCount > 0;
 
-        if (receiptSummary && (receiptHasStructuredVisibility || importStatus === "done")) {
+        if (receiptSummary && receiptHasStructuredVisibility) {
           updateItem(itemId, {
             status: "done",
             confirmationState: "confirmed",
@@ -4693,8 +4686,8 @@ export function ImportFilesModal({
           updateItem(itemId, {
             status: "importing",
             confirmationState: "pending",
-            progress: 100,
-            progressLabel: "Receipt imported",
+            progress: IMPORT_PROGRESS.finalizing,
+            progressLabel: "Making transaction visible",
             targetAccountId: receiptAccountId ?? null,
           });
           publishImportActivity({
@@ -4705,7 +4698,7 @@ export function ImportFilesModal({
             fileIndex: items.findIndex((item) => item.id === itemId) + 1,
             fileTotal: items.length,
             completedFiles: completedFileCount,
-            progress: 100,
+            progress: IMPORT_PROGRESS.finalizing,
             detail: "Receipt imported; waiting for the transaction to appear",
             summary: null,
             errorMessage: null,
@@ -4768,7 +4761,7 @@ export function ImportFilesModal({
         continue;
       }
 
-      if (importStatus === "done") {
+      if (importStatus === "done" && statusDecision.kind === "visible") {
         updateItem(itemId, {
           status: "done",
           confirmationState: "confirmed",
@@ -4791,6 +4784,18 @@ export function ImportFilesModal({
         });
         router.refresh();
         return { completed: true, summary: null };
+      }
+
+      if (importStatus === "done") {
+        updateItem(itemId, {
+          status: "importing",
+          confirmationState: "pending",
+          progress: IMPORT_PROGRESS.finalizing,
+          progressLabel: "Making data visible",
+          targetAccountId: importFile?.accountId ?? null,
+        });
+        await sleep(statusPollDelayMs);
+        continue;
       }
 
       updateItem(itemId, {

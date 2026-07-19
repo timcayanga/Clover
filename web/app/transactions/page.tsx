@@ -2911,6 +2911,22 @@ function TransactionsPageContent() {
             firstReviewTransactionIndex: null,
           };
       setTransactionsSummary((currentSummary) => {
+        const nextFinancialsAreEmpty =
+          nextTransactionsSummary.income === 0 &&
+          nextTransactionsSummary.spending === 0 &&
+          nextTransactionsSummary.transfers === 0;
+        const currentFinancialsHaveValue =
+          currentSummary.income !== 0 || currentSummary.spending !== 0 || currentSummary.transfers !== 0;
+        if (nextFinancialsAreEmpty && currentFinancialsHaveValue && hasRecentImportEvidence) {
+          return {
+            ...nextTransactionsSummary,
+            totalCount: Math.max(currentSummary.totalCount, nextTransactionsSummary.totalCount),
+            income: currentSummary.income,
+            spending: currentSummary.spending,
+            transfers: currentSummary.transfers,
+          };
+        }
+
         const nextIsEmpty =
           nextTransactionsSummary.totalCount === 0 &&
           nextTransactionsSummary.income === 0 &&
@@ -3031,6 +3047,7 @@ function TransactionsPageContent() {
       );
       const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
       let nextAccountsSnapshot: Account[] | null = null;
+      let nextTransactionsSnapshot: Transaction[] | null = null;
 
       flushSync(() => {
         setIsWorkspaceDataReady(true);
@@ -3067,12 +3084,19 @@ function TransactionsPageContent() {
         if (importedAccountId) {
           setTransactions((current) => {
             if (previewTransactions.length === 0) {
+              nextTransactionsSnapshot = current;
               return current;
             }
-            return mergeImportedPreviewTransactions(current, previewTransactions);
+            const next = mergeImportedPreviewTransactions(current, previewTransactions);
+            nextTransactionsSnapshot = next;
+            return next;
           });
         } else if (previewTransactions.length > 0) {
-          setTransactions((current) => mergeImportedPreviewTransactions(current, previewTransactions));
+          setTransactions((current) => {
+            const next = mergeImportedPreviewTransactions(current, previewTransactions);
+            nextTransactionsSnapshot = next;
+            return next;
+          });
         }
 
         if (optimisticAccount) {
@@ -3081,6 +3105,19 @@ function TransactionsPageContent() {
             nextAccountsSnapshot = next;
             return next;
           });
+        }
+
+        if (nextTransactionsSnapshot && previewTransactions.length > 0) {
+          setTransactionsSummary((current) =>
+            buildVisibleTransactionSummary(
+              nextTransactionsSnapshot ?? [],
+              {
+                ...current,
+                totalCount: Math.max(current.totalCount, nextTransactionsSnapshot?.length ?? 0),
+              },
+              accountNumberById
+            )
+          );
         }
       });
 
@@ -3109,7 +3146,7 @@ function TransactionsPageContent() {
 
       setMessage("Import complete. Accounts and Transactions are updated.");
     },
-    [refreshTransactionsAfterImport, selectedWorkspaceId]
+    [accountNumberById, refreshTransactionsAfterImport, selectedWorkspaceId]
   );
 
   useEffect(() => {

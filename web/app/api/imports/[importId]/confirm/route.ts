@@ -1,6 +1,7 @@
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { fetchImportFileCompat } from "@/lib/data-engine";
+import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -24,6 +25,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ imp
 
     if (!localDev) {
       await assertWorkspaceAccess(userId, importFile.workspaceId as string);
+    }
+
+    const recordedConfirmedTransactions = Number(importFile.confirmedTransactionsCount ?? 0);
+    if (importFile.status === "done" && recordedConfirmedTransactions > 0) {
+      const savedTransactionsCount = await prisma.transaction.count({
+        where: {
+          importFileId: importId,
+          deletedAt: null,
+        },
+      });
+      if (savedTransactionsCount >= recordedConfirmedTransactions) {
+        return NextResponse.json({
+          ok: true,
+          result: {
+            imported: savedTransactionsCount,
+            duplicate: true,
+            accountId: importFile.accountId ?? payload.accountId,
+            confirmedTransactionsCount: savedTransactionsCount,
+            status: "done",
+          },
+        });
+      }
     }
 
     const { confirmImportFile } = await import("@/workers/import-processor");

@@ -33,7 +33,7 @@ const main = () => {
   assert.equal(exhaustedReceipt.progressLabel, "Review needed");
   assert.match(exhaustedReceipt.message, /local and backup receipt readers/i);
 
-  const visibleRowsWin = resolveImportModalStatusDecision({
+  const parsedRowsAreNotVisible = resolveImportModalStatusDecision({
     importMode: "statement",
     status: "failed",
     processingPhase: "repair_needed",
@@ -41,9 +41,21 @@ const main = () => {
     confirmedTransactionsCount: 0,
     processingMessage: "Clover could not finish enrichment.",
   });
-  assert.equal(visibleRowsWin.kind, "visible", "Rows already visible should not render as an import failure.");
-  assert.equal(visibleRowsWin.progress, 100);
-  assert.equal(visibleRowsWin.progressLabel, "Visible in Clover");
+  assert.equal(
+    parsedRowsAreNotVisible.kind,
+    "repair_needed",
+    "Parsed staging rows must not be reported as visible transactions."
+  );
+
+  const confirmedRowsWin = resolveImportModalStatusDecision({
+    importMode: "statement",
+    status: "processing",
+    parsedRowsCount: 12,
+    confirmedTransactionsCount: 12,
+  });
+  assert.equal(confirmedRowsWin.kind, "visible");
+  assert.equal(confirmedRowsWin.progress, 100);
+  assert.equal(confirmedRowsWin.progressLabel, "Visible in Clover");
 
   const receiptDocumentWin = resolveImportModalStatusDecision({
     importMode: "receipt",
@@ -51,7 +63,7 @@ const main = () => {
     processingPhase: "reading_receipt_vision",
     hasStructuredReceiptVisibility: true,
   });
-  assert.equal(receiptDocumentWin.kind, "visible", "Receipt document visibility should settle the modal.");
+  assert.equal(receiptDocumentWin.kind, "visible", "A persisted receipt transaction should settle the modal.");
 
   const genericWaiting = resolveImportModalStatusDecision({
     importMode: "statement",
@@ -61,6 +73,18 @@ const main = () => {
   });
   assert.equal(genericWaiting.kind, "waiting");
   assert.equal(genericWaiting.progressLabel, "Reading file details");
+
+  const laterWaitingAttempt = resolveImportModalStatusDecision({
+    importMode: "statement",
+    status: "processing",
+    processingPhase: "reading_account_details",
+    processingAttempt: 50,
+  });
+  assert.equal(
+    laterWaitingAttempt.progress,
+    genericWaiting.progress,
+    "Poll attempts must not fabricate percentage progress."
+  );
 
   console.log("Import modal status regression passed.");
 };

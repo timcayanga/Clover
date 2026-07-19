@@ -15,9 +15,10 @@ const section = (source: string, start: string, end: string) => {
 };
 
 const main = async () => {
-  const [modalSource, processRouteSource, workerSource, importProcessorSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource] = await Promise.all([
+  const [modalSource, processRouteSource, confirmRouteSource, workerSource, importProcessorSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource] = await Promise.all([
     readFile(join(webRoot, "components/import-files-modal.tsx"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/process/route.ts"), "utf8"),
+    readFile(join(webRoot, "app/api/imports/[importId]/confirm/route.ts"), "utf8"),
     readFile(join(webRoot, "workers/imports-worker.ts"), "utf8"),
     readFile(join(webRoot, "workers/import-processor.ts"), "utf8"),
     readFile(join(webRoot, "lib/import-settled-visibility.ts"), "utf8"),
@@ -56,6 +57,16 @@ const main = async () => {
   );
   assert.match(settledVisibilitySource, /transaction\?\.importFileId === params\.importFileId/);
   assert.match(settledVisibilitySource, /params\.importedRows > 0 \? null : expectedBalance/);
+  assert.doesNotMatch(
+    settledVisibilitySource,
+    /parsedRowsCount >= params\.importedRows/,
+    "Parsed staging rows must not satisfy the transaction visibility contract."
+  );
+  assert.match(
+    confirmRouteSource,
+    /importFile\.status === "done"[\s\S]{0,800}savedTransactionsCount >= recordedConfirmedTransactions/,
+    "Repeated confirmation requests should return the already committed import without rerunning confirmation."
+  );
   const duplicateSource = section(modalSource, "if (processPayload?.duplicate)", "capturePostHogClientEvent(\"import_parsed_successfully\"");
   assert.doesNotMatch(duplicateSource, /incomeTotal:\s*0/);
   assert.doesNotMatch(duplicateSource, /await Promise\.resolve\(onImported/);
@@ -76,6 +87,16 @@ const main = async () => {
     transactionsPageSource,
     /nextIsEmpty && currentHasValue && mergedTransactionsWithImports\.length > 0\)/,
     "Visible transactions must not be paired with an empty cash-flow summary."
+  );
+  assert.match(
+    transactionsPageSource,
+    /nextFinancialsAreEmpty && currentFinancialsHaveValue && hasRecentImportEvidence/,
+    "A transient empty aggregate response must not erase cash-flow cards during import settlement."
+  );
+  assert.match(
+    transactionsPageSource,
+    /nextTransactionsSnapshot[\s\S]{0,1200}buildVisibleTransactionSummary/,
+    "Imported preview rows should update transaction cards in the same UI commit."
   );
   assert.doesNotMatch(modalSource, /if \(busy \|\| !workspaceId \|\| !autoStartRef\.current\)/);
   assert.match(modalSource, /const incomingKeys = new Set\(nextFiles\.map\(fileKey\)\)/);
