@@ -36088,6 +36088,8 @@ body:has(.pricing-page) {
 }
 
 .settings-date-control input {
+  appearance: none;
+  -webkit-appearance: none;
   width: 100%;
   min-width: 0;
   min-height: 32px;
@@ -36105,8 +36107,16 @@ body:has(.pricing-page) {
 }
 
 .settings-date-control input::-webkit-calendar-picker-indicator {
-  opacity: 0;
-  width: 100%;
+  display: none;
+}
+
+.settings-date-control input::-webkit-datetime-edit,
+.settings-date-control input::-webkit-datetime-edit-text,
+.settings-date-control input::-webkit-datetime-edit-month-field,
+.settings-date-control input::-webkit-datetime-edit-day-field,
+.settings-date-control input::-webkit-datetime-edit-year-field {
+  color: var(--text);
+  opacity: 1;
   cursor: pointer;
 }
 
