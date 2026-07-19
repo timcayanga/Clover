@@ -48,10 +48,21 @@ assert.equal(ambiguous.paymentRail, null);
 const lodging = resolveTransactionContext({ merchantRaw: "HOTEL RESERVATION", currency: "JPY" });
 assert.equal(lodging.travelLikely, true);
 assert.equal(lodging.categoryHint, "Travel & Lifestyle");
+assert.equal(lodging.counterpartyType, "travel_provider");
 
 const salary = resolveTransactionContext({ description: "SALARY CREDIT", currency: "PHP" });
 assert.equal(salary.categoryHint, "Income");
 assert.equal(salary.transactionTypeHint, "income");
+assert.equal(salary.counterpartyType, "employer");
+assert.equal(salary.purposeHint, "salary");
+
+const tax = resolveTransactionContext({ description: "WITHHOLDING TAX", currency: "PHP" });
+assert.equal(tax.counterpartyType, "government");
+assert.equal(tax.purposeHint, "tax");
+
+const remittance = resolveTransactionContext({ merchantRaw: "WESTERN UNION", currency: "PHP" });
+assert.equal(remittance.counterpartyType, "remittance_provider");
+assert.equal(remittance.purposeHint, "remittance");
 
 const falsePositive = resolveTransactionContext({ merchantRaw: "VISA CAFE", currency: "PHP" });
 assert.equal(falsePositive.paymentRail, null);

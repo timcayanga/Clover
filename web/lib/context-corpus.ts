@@ -5,7 +5,7 @@
  * confirmed transaction values. Keep raw statement text outside this module.
  */
 
-export const CONTEXT_CORPUS_VERSION = "2026.07.7";
+export const CONTEXT_CORPUS_VERSION = "2026.07.8";
 
 export type ContextSignal = {
   id: string;
@@ -42,6 +42,8 @@ export type TransactionContext = {
   currency: string | null;
   categoryHint: string | null;
   transactionTypeHint: "income" | "expense" | "transfer" | null;
+  counterpartyType: "merchant" | "employer" | "government" | "financial_institution" | "remittance_provider" | "travel_provider" | "wallet" | null;
+  purposeHint: "salary" | "tax" | "government_contribution" | "remittance" | "travel" | "fee" | "transfer" | null;
   primaryLocale: string | null;
   dateOrder: RegionalParsingProfile["dateOrder"];
   decimalSeparator: RegionalParsingProfile["decimalSeparator"] | null;
@@ -90,6 +92,8 @@ type ContextEntry = {
   currency?: string;
   categoryHint?: string;
   transactionTypeHint?: TransactionContext["transactionTypeHint"];
+  counterpartyType?: TransactionContext["counterpartyType"];
+  purposeHint?: TransactionContext["purposeHint"];
   travelLikely?: boolean;
   foreignCurrencyLikely?: boolean;
   confidence: number;
@@ -99,8 +103,8 @@ type ContextEntry = {
 
 const entries: ContextEntry[] = [
   // Philippines: launch market and strongest deterministic context.
-  { id: "ph-gcash", aliases: ["gcash", "g-xchange", "gcash cash in", "gcash cash out"], signalKind: "payment_rail", countryCode: "PH", regionCode: "SEA", paymentRail: "gcash", institutionType: "wallet", currency: "PHP", transactionTypeHint: "transfer", confidence: 96 },
-  { id: "ph-maya", aliases: ["maya", "maya wallet", "paymaya", "maya bank"], signalKind: "payment_rail", countryCode: "PH", regionCode: "SEA", paymentRail: "maya", institutionType: "wallet", currency: "PHP", transactionTypeHint: "transfer", confidence: 94 },
+  { id: "ph-gcash", aliases: ["gcash", "g-xchange", "gcash cash in", "gcash cash out"], signalKind: "payment_rail", countryCode: "PH", regionCode: "SEA", paymentRail: "gcash", institutionType: "wallet", currency: "PHP", transactionTypeHint: "transfer", counterpartyType: "wallet", purposeHint: "transfer", confidence: 96 },
+  { id: "ph-maya", aliases: ["maya", "maya wallet", "paymaya", "maya bank"], signalKind: "payment_rail", countryCode: "PH", regionCode: "SEA", paymentRail: "maya", institutionType: "wallet", currency: "PHP", transactionTypeHint: "transfer", counterpartyType: "wallet", purposeHint: "transfer", confidence: 94 },
   { id: "ph-bank-transfer", aliases: ["instapay", "insta pay", "pesonet", "pesonet transfer"], signalKind: "payment_rail", countryCode: "PH", regionCode: "SEA", paymentRail: "philippines_bank_transfer", currency: "PHP", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 98 },
   { id: "ph-bpi", aliases: ["bpi", "bank of the philippine islands"], signalKind: "institution", countryCode: "PH", regionCode: "SEA", institutionType: "bank", currency: "PHP", confidence: 98 },
   { id: "ph-bdo", aliases: ["bdo", "banco de oro"], signalKind: "institution", countryCode: "PH", regionCode: "SEA", institutionType: "bank", currency: "PHP", confidence: 98 },
@@ -140,23 +144,23 @@ const entries: ContextEntry[] = [
   { id: "au-bank-rail", aliases: ["payid", "osko", "bpay"], signalKind: "payment_rail", countryCode: "AU", regionCode: "OCE", paymentRail: "australia_bank_rail", currency: "AUD", confidence: 88 },
 
   // Global providers and cross-border context.
-  { id: "global-wise", aliases: ["wise", "wise transfer", "transferwise"], signalKind: "payment_rail", countryCode: "GLOBAL", regionCode: "GLOBAL", paymentRail: "cross_border_transfer", institutionType: "fintech", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 96 },
+  { id: "global-wise", aliases: ["wise", "wise transfer", "transferwise"], signalKind: "payment_rail", countryCode: "GLOBAL", regionCode: "GLOBAL", paymentRail: "cross_border_transfer", institutionType: "fintech", categoryHint: "Transfers", transactionTypeHint: "transfer", counterpartyType: "financial_institution", purposeHint: "transfer", confidence: 96 },
   { id: "global-paypal", aliases: ["paypal"], signalKind: "payment_rail", countryCode: "GLOBAL", regionCode: "GLOBAL", paymentRail: "paypal", institutionType: "wallet", confidence: 94 },
   { id: "global-card-network", aliases: ["visa", "mastercard", "american express", "amex"], signalKind: "institution", countryCode: "GLOBAL", regionCode: "GLOBAL", institutionType: "card_network", confidence: 82 },
 
   // Travel and FX signals intentionally do not infer a country on their own.
-  { id: "global-airline", aliases: ["airlines", "airways", "airport", "flight", "booking.com", "agoda", "expedia"], signalKind: "travel", countryCode: "GLOBAL", regionCode: "GLOBAL", categoryHint: "Travel & Lifestyle", travelLikely: true, confidence: 78 },
-  { id: "global-lodging", aliases: ["hotel", "resort", "hostel", "airbnb"], signalKind: "travel", countryCode: "GLOBAL", regionCode: "GLOBAL", categoryHint: "Travel & Lifestyle", travelLikely: true, confidence: 78 },
-  { id: "global-fx-fee", aliases: ["foreign transaction fee", "international service fee", "currency conversion fee", "dynamic currency conversion", "dcc fee"], signalKind: "fee", countryCode: "GLOBAL", regionCode: "GLOBAL", categoryHint: "Financial", foreignCurrencyLikely: true, confidence: 94 },
+  { id: "global-airline", aliases: ["airlines", "airways", "airport", "flight", "booking.com", "agoda", "expedia"], signalKind: "travel", countryCode: "GLOBAL", regionCode: "GLOBAL", categoryHint: "Travel & Lifestyle", travelLikely: true, counterpartyType: "travel_provider", purposeHint: "travel", confidence: 78 },
+  { id: "global-lodging", aliases: ["hotel", "resort", "hostel", "airbnb"], signalKind: "travel", countryCode: "GLOBAL", regionCode: "GLOBAL", categoryHint: "Travel & Lifestyle", travelLikely: true, counterpartyType: "travel_provider", purposeHint: "travel", confidence: 78 },
+  { id: "global-fx-fee", aliases: ["foreign transaction fee", "international service fee", "currency conversion fee", "dynamic currency conversion", "dcc fee"], signalKind: "fee", countryCode: "GLOBAL", regionCode: "GLOBAL", categoryHint: "Financial", foreignCurrencyLikely: true, counterpartyType: "financial_institution", purposeHint: "fee", confidence: 94 },
   { id: "global-foreign-currency", aliases: ["exchange rate", "fx markup", "foreign exchange", "overseas transaction"], signalKind: "currency", countryCode: "GLOBAL", regionCode: "GLOBAL", foreignCurrencyLikely: true, confidence: 88 },
 
   // Financial semantics: these are hints, not automatic user categorization.
-  { id: "global-salary-payroll", aliases: ["salary", "payroll", "pay credit", "wage payment"], signalKind: "merchant", countryCode: "GLOBAL", regionCode: "GLOBAL", categoryHint: "Income", transactionTypeHint: "income", confidence: 84 },
-  { id: "global-tax", aliases: ["tax withheld", "withholding tax", "income tax", "vat", "gst", "sales tax"], signalKind: "fee", countryCode: "GLOBAL", regionCode: "GLOBAL", categoryHint: "Financial", transactionTypeHint: "expense", confidence: 82 },
-  { id: "ph-contributions", aliases: ["sss", "philhealth", "pag ibig", "pag-ibig", "bir ewt", "expanded withholding tax"], signalKind: "fee", countryCode: "PH", regionCode: "SEA", currency: "PHP", categoryHint: "Financial", transactionTypeHint: "expense", confidence: 90 },
-  { id: "sg-contributions", aliases: ["cpf contribution", "cpf", "iras gst"], signalKind: "fee", countryCode: "SG", regionCode: "SEA", currency: "SGD", categoryHint: "Financial", transactionTypeHint: "expense", confidence: 86 },
-  { id: "my-contributions", aliases: ["epf contribution", "kwsp", "socso", "perkeso"], signalKind: "fee", countryCode: "MY", regionCode: "SEA", currency: "MYR", categoryHint: "Financial", transactionTypeHint: "expense", confidence: 86 },
-  { id: "global-remittance-provider", aliases: ["western union", "moneygram", "remitly", "worldremit"], signalKind: "payment_rail", countryCode: "GLOBAL", regionCode: "GLOBAL", paymentRail: "remittance", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 90 },
+  { id: "global-salary-payroll", aliases: ["salary", "payroll", "pay credit", "wage payment"], signalKind: "merchant", countryCode: "GLOBAL", regionCode: "GLOBAL", categoryHint: "Income", transactionTypeHint: "income", counterpartyType: "employer", purposeHint: "salary", confidence: 84 },
+  { id: "global-tax", aliases: ["tax withheld", "withholding tax", "income tax", "vat", "gst", "sales tax"], signalKind: "fee", countryCode: "GLOBAL", regionCode: "GLOBAL", categoryHint: "Financial", transactionTypeHint: "expense", counterpartyType: "government", purposeHint: "tax", confidence: 82 },
+  { id: "ph-contributions", aliases: ["sss", "philhealth", "pag ibig", "pag-ibig", "bir ewt", "expanded withholding tax"], signalKind: "fee", countryCode: "PH", regionCode: "SEA", currency: "PHP", categoryHint: "Financial", transactionTypeHint: "expense", counterpartyType: "government", purposeHint: "government_contribution", confidence: 90 },
+  { id: "sg-contributions", aliases: ["cpf contribution", "cpf", "iras gst"], signalKind: "fee", countryCode: "SG", regionCode: "SEA", currency: "SGD", categoryHint: "Financial", transactionTypeHint: "expense", counterpartyType: "government", purposeHint: "government_contribution", confidence: 86 },
+  { id: "my-contributions", aliases: ["epf contribution", "kwsp", "socso", "perkeso"], signalKind: "fee", countryCode: "MY", regionCode: "SEA", currency: "MYR", categoryHint: "Financial", transactionTypeHint: "expense", counterpartyType: "government", purposeHint: "government_contribution", confidence: 86 },
+  { id: "global-remittance-provider", aliases: ["western union", "moneygram", "remitly", "worldremit"], signalKind: "payment_rail", countryCode: "GLOBAL", regionCode: "GLOBAL", paymentRail: "remittance", categoryHint: "Transfers", transactionTypeHint: "transfer", counterpartyType: "remittance_provider", purposeHint: "remittance", confidence: 90 },
 ];
 
 const regionalProfiles: RegionalParsingProfile[] = [
@@ -242,6 +246,8 @@ export const resolveTransactionContext = (params: {
       currency: explicitCurrency,
       categoryHint: null,
       transactionTypeHint: null,
+      counterpartyType: null,
+      purposeHint: null,
       ...emptyParsingContext,
       travelLikely: false,
       foreignCurrencyLikely: false,
@@ -279,6 +285,8 @@ export const resolveTransactionContext = (params: {
   const resolvedRail = ambiguous ? null : matched.paymentRail ?? null;
   const resolvedCategory = ambiguous ? null : matched.categoryHint ?? null;
   const resolvedType = ambiguous ? null : matched.transactionTypeHint ?? null;
+  const resolvedCounterparty = ambiguous ? null : matched.counterpartyType ?? null;
+  const resolvedPurpose = ambiguous ? null : matched.purposeHint ?? null;
   const baseConfidence = ambiguous ? Math.min(74, matched.confidence) : matched.confidence;
   const parsingProfile = getRegionalProfile(resolvedCountry);
   return {
@@ -290,6 +298,8 @@ export const resolveTransactionContext = (params: {
     currency: explicitCurrency ?? matched.currency ?? null,
     categoryHint: resolvedCategory,
     transactionTypeHint: resolvedType,
+    counterpartyType: resolvedCounterparty,
+    purposeHint: resolvedPurpose,
     primaryLocale: parsingProfile?.primaryLocale ?? null,
     dateOrder: parsingProfile?.dateOrder ?? "unknown",
     decimalSeparator: parsingProfile?.decimalSeparator ?? null,

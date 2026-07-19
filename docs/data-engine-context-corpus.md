@@ -1,6 +1,6 @@
 # Data Engine Context Corpus
 
-Version: `2026.07.7`
+Version: `2026.07.8`
 
 The context corpus provides regional and global evidence for transaction normalization. It is advisory context: it may enrich a parsed row or increase confidence, but it must not overwrite confirmed transaction fields.
 
@@ -31,6 +31,8 @@ Every corpus signal is marked as curated, learned, or user-confirmed, with an ac
 Repeated confirmed or edited user corrections can now be aggregated into reviewable corpus candidates. Candidates require repeated consistent observations, are capped below deterministic confidence, and remain `source: learned` plus `reviewStatus: candidate` until explicitly reviewed. Conflicting country or currency evidence is retained as evidence rather than auto-resolved.
 
 Rows with strong travel signals can be grouped into conservative travel episodes when they occur within five days. The episode is attached to normalized parsed-row context with dates, countries, currencies, evidence, and confidence; it does not replace transaction categories or amounts.
+
+Context can also provide `counterpartyType` and `purposeHint` values such as employer/salary, government/tax, remittance provider/remittance, travel provider/travel, and financial institution/fee. These are enrichment signals with independent confidence—not automatic category replacements.
 
 For generic delimited imports, known regional profiles now provide a conservative fallback for numeric dates and amount separators. Explicit statement parser rules still take precedence; unknown or ambiguous regions fall back to the existing parser and retain the original raw record.
 
