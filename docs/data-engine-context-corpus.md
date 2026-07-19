@@ -1,16 +1,16 @@
 # Data Engine Context Corpus
 
-Version: `2026.07.8`
+Version: `2026.07.9`
 
 The context corpus provides regional and global evidence for transaction normalization. It is advisory context: it may enrich a parsed row or increase confidence, but it must not overwrite confirmed transaction fields.
 
 ## Current coverage
 
-- Global: Wise, PayPal, card networks, cross-border transfers
-- Philippines: GCash, Maya, InstaPay, PESONet, BPI, BDO, UnionBank
-- Southeast Asia: Singapore, Malaysia, Indonesia, Thailand, Vietnam
-- East Asia: Japan, Hong Kong, Taiwan
-- Diaspora and international accounts: India, UAE, SEPA/Europe, United States, United Kingdom, Australia
+- Global: Wise, PayPal, card networks, remittance providers, travel booking, rideshare, subscriptions, healthcare, education, insurance, and investment platforms
+- Philippines: banks and digital banks, GCash/Maya/PalawanPay, InstaPay/PESONet, remittance and bill-payment agencies, supermarkets, pharmacies, delivery, toll/transit, utilities, telecom, ecommerce, fuel, and airlines
+- Southeast Asia: Singapore, Malaysia, Indonesia, Thailand, Vietnam, Cambodia, Myanmar, Brunei, and Laos, including national QR/instant-payment rails, banks, wallets, transit, grocery, commerce, and utility ecosystems
+- East Asia: Japan, South Korea, Hong Kong, Taiwan, and mainland China, including transit IC cards, wallets, banks, ecommerce, convenience stores, and local transport
+- Diaspora and international accounts: India, UAE, Saudi Arabia, Qatar, Kuwait, SEPA/Europe, United States, Canada, United Kingdom, and Australia
 
 ## Evidence policy
 
@@ -34,6 +34,12 @@ Rows with strong travel signals can be grouped into conservative travel episodes
 
 Context can also provide `counterpartyType` and `purposeHint` values such as employer/salary, government/tax, remittance provider/remittance, travel provider/travel, and financial institution/fee. These are enrichment signals with independent confidence—not automatic category replacements.
 
+The expansion pass prioritizes places where Filipino financial context is likely to originate: the Philippines launch market; ASEAN work, travel, and payment corridors; East Asian tourism and employment corridors; Western Asia OFW destinations; and large diaspora markets. It captures both institution-level evidence (banks, wallets, payment rails, remittance channels) and merchant-level evidence (groceries, transport, utilities, telecom, healthcare, education, travel, ecommerce, subscriptions, and fuel). Country inference remains conservative: a global merchant signal can enrich purpose without claiming a country.
+
+Research basis for prioritization includes the Philippine Statistics Authority's 2024 Survey on Overseas Filipinos, which places Asia at 74.5% of OFWs and identifies Saudi Arabia, the UAE, Kuwait, Qatar, Hong Kong, Taiwan, Singapore, and Japan among the major Asian destinations. Payment-rail coverage follows current official descriptions from Bank Indonesia (QRIS), Bank of Thailand (PromptPay), PayNet Malaysia (DuitNow), Octopus/Hong Kong FPS, and Japan's transport-card guidance. These references guide coverage priorities; aliases remain curated evidence and are not treated as proof of identity or location.
+
+Reference sources: [PSA Survey on Overseas Filipinos 2024](https://psa.gov.ph/content/results-2024-overseas-filipino-workers-number-overseas-filipino-workers-grew), [Bank Indonesia QRIS](https://www.bi.go.id/en/fungsi-utama/sistem-pembayaran/ritel/kanal-layanan/qris/default.aspx), [Bank of Thailand PromptPay](https://www.bot.or.th/en/financial-innovation/digital-finance/digital-payment/promptpay.html), [PayNet DuitNow](https://paynet.my/personal-solutions/duitnow-qr.html), [Octopus FPS](https://www.octopus.com.hk/en/consumer/mobile-payment/fps/index.html), and [JNTO IC travel cards](https://faq.japan-travel.jnto.go.jp/en/plan/ic-card/).
+
 For generic delimited imports, known regional profiles now provide a conservative fallback for numeric dates and amount separators. Explicit statement parser rules still take precedence; unknown or ambiguous regions fall back to the existing parser and retain the original raw record.
 
 The engine should keep these layers separate:
@@ -55,6 +61,7 @@ When corpus evidence conflicts with a confirmed value, the confirmed value wins.
 4. Add foreign-currency conversion, exchange-fee, and travel-event grouping.
 5. Add regional regression fixtures and confidence calibration.
 6. Promote repeated, high-quality user corrections into versioned corpus entries only after review.
+7. Continue harvesting statement-specific aliases from confirmed imports, keeping country packs and merchant-vertical packs separately reviewable.
 
 ## Adding an entry
 

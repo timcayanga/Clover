@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { CONTEXT_CORPUS_VERSION, deriveTravelEpisodes, getContextCorpusEntries, getContextCorpusQualityReport, parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
 
 assert.ok(CONTEXT_CORPUS_VERSION);
-assert.ok(getContextCorpusEntries().length >= 20);
+assert.ok(getContextCorpusEntries().length >= 120);
+assert.ok(getContextCorpusQualityReport().profileCount >= 25);
 assert.equal(getContextCorpusQualityReport().valid, true);
 
 const gcash = resolveTransactionContext({ merchantRaw: "GCASH CASH IN", currency: "PHP" });
@@ -63,6 +64,21 @@ assert.equal(tax.purposeHint, "tax");
 const remittance = resolveTransactionContext({ merchantRaw: "WESTERN UNION", currency: "PHP" });
 assert.equal(remittance.counterpartyType, "remittance_provider");
 assert.equal(remittance.purposeHint, "remittance");
+
+const expandedFixtures = [
+  { input: { description: "DUITNOW QR PAYMENT", currency: "MYR" }, countryCode: "MY", paymentRail: "duitnow", purposeHint: null },
+  { input: { description: "QRIS MERCHANT PAYMENT", currency: "IDR" }, countryCode: "ID", paymentRail: "qris_bi_fast", purposeHint: null },
+  { input: { merchantRaw: "T MONEY TOP UP", currency: "KRW" }, countryCode: "KR", paymentRail: "korea_transit", purposeHint: "transport" },
+  { input: { merchantRaw: "AL ANSARI EXCHANGE", currency: "AED" }, countryCode: "AE", paymentRail: "remittance", purposeHint: "remittance" },
+  { input: { merchantRaw: "MERALCO", currency: "PHP" }, countryCode: "PH", purposeHint: "utilities" },
+  { input: { merchantRaw: "WOOLWORTHS AUSTRALIA", currency: "AUD" }, countryCode: "AU", purposeHint: "groceries" },
+] as const;
+for (const fixture of expandedFixtures) {
+  const context = resolveTransactionContext(fixture.input);
+  assert.equal(context.countryCode, fixture.countryCode);
+  if (fixture.paymentRail) assert.equal(context.paymentRail, fixture.paymentRail);
+  assert.equal(context.purposeHint, fixture.purposeHint);
+}
 
 const falsePositive = resolveTransactionContext({ merchantRaw: "VISA CAFE", currency: "PHP" });
 assert.equal(falsePositive.paymentRail, null);
