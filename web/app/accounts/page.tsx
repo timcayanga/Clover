@@ -77,6 +77,7 @@ import {
   isGenericUploadedAccountShadowed,
   isTransientUploadedAccountPlaceholder,
   transactionMatchesImportedAccount,
+  uploadSummaryCanDismissImportUi,
   uploadSummaryMatchesImportedAccount,
 } from "@/lib/imported-account-ui";
 
@@ -2663,9 +2664,10 @@ function AccountsPageContent() {
       return;
     }
 
-    const settledAccountId = resolvePersistedImportedAccountId(pendingImportSummary, accounts);
-    const targetAccountId = settledAccountId ?? pendingImportSummary.accountId ?? pendingImportSummary.optimisticAccountId ?? null;
-    if (!targetAccountId || targetAccountId.startsWith("optimistic-")) {
+    const inferredType =
+      pendingImportSummary.accountType ??
+      inferAccountTypeFromStatement(pendingImportSummary.institution, pendingImportSummary.accountName, "bank");
+    if (!uploadSummaryCanDismissImportUi(pendingImportSummary, accounts, inferredType, true)) {
       return;
     }
 

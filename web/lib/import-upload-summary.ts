@@ -176,12 +176,22 @@ export const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[
   const incomeTotal = summaries.reduce((total, summary) => total + Number(summary.incomeTotal ?? 0), 0);
   const expenseTotal = summaries.reduce((total, summary) => total + Number(summary.expenseTotal ?? 0), 0);
   const accountSummaries = dedupeAccountSummaries(summaries.flatMap((summary) => summary.accountSummaries ?? []));
+  const sameAccountIdentity =
+    accountSummaries.length === 1 ||
+    (accountSummaries.length === 0 &&
+      summaries.every(
+        (summary) =>
+          summary.accountId === first.accountId &&
+          summary.accountNumber === first.accountNumber &&
+          summary.accountName === first.accountName &&
+          summary.accountType === first.accountType
+      ));
 
   return {
     fileName: `${summaries.length} files`,
     rowsImported,
     accountId: null,
-    accountName: sameInstitution ? first.accountName : null,
+    accountName: sameInstitution && sameAccountIdentity ? first.accountName : null,
     institution: sameInstitution ? first.institution : null,
     accountNumber: null,
     accountType: sameAccountType ? first.accountType : null,

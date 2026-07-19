@@ -6886,7 +6886,7 @@ export const processImportFileText = async (
   const traceId =
     (importFile && typeof (importFile as { traceId?: unknown }).traceId === "string" && String((importFile as { traceId: string }).traceId).trim()) ||
     crypto.randomUUID();
-  await updateImportFileCompat(importFileId, { traceId }).catch(() => null);
+  const traceUpdatePromise = updateImportFileCompat(importFileId, { traceId }).catch(() => null);
   const emitImportProcessingEvent = (
     event: "import_processing_started" | "import_processing_completed" | "import_processing_stalled",
     properties: Record<string, unknown> = {}
@@ -6904,14 +6904,17 @@ export const processImportFileText = async (
       ...properties,
     }).catch(() => null);
   };
-  const confirmImportFileWithRetry = async (reason: string): Promise<ConfirmImportResult> => {
+  const confirmImportFileWithRetry = async (
+    reason: string,
+    matchedAccountId: string | null = null
+  ): Promise<ConfirmImportResult> => {
     const maxAttempts = 5;
     let lastError: unknown = null;
     let lastParsedRowsReady = 0;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
-        return await confirmImportFile(importFileId, null);
+        return await confirmImportFile(importFileId, matchedAccountId);
       } catch (error) {
         lastError = error;
         lastParsedRowsReady = await prisma.parsedTransaction.count({ where: { importFileId } }).catch(() => 0);
@@ -6957,18 +6960,22 @@ export const processImportFileText = async (
     throw new Error("Import file not found");
   }
 
-  const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
-    ? await prisma.accountStatementCheckpoint.findUnique({
-        where: { importFileId },
-        select: {
-          sourceMetadata: true,
-        },
-      }).catch(() => null)
-    : null;
+  const [statementCheckpoint, previouslyVisibleRows] = await Promise.all([
+    (async () =>
+      (await hasCompatibleTable("AccountStatementCheckpoint"))
+        ? prisma.accountStatementCheckpoint.findUnique({
+            where: { importFileId },
+            select: {
+              sourceMetadata: true,
+            },
+          }).catch(() => null)
+        : null)(),
+    countTransactionsByImportFileCompat(importFileId).catch(() => 0),
+    traceUpdatePromise,
+  ]);
   const importMode = options.importMode ?? readCheckpointImportMode(statementCheckpoint?.sourceMetadata) ?? "statement";
   const isDocumentImportMode =
     importMode === "receipt" || importMode === "portfolio" || importMode === "account_detail" || importMode === "notes";
-  const previouslyVisibleRows = isDocumentImportMode ? 0 : await countTransactionsByImportFileCompat(importFileId).catch(() => 0);
   if (
     !options.allowDuplicateStatement &&
     previouslyVisibleRows === 0 &&
@@ -9497,7 +9504,7 @@ export const processImportFileText = async (
         processingPhase: "reconciling",
         processingMessage: "Clover is matching the visible rows to the account.",
       });
-      confirmedImportResult = await confirmImportFileWithRetry("fast_image_statement");
+      confirmedImportResult = await confirmImportFileWithRetry("fast_image_statement", linkedImportAccountId);
       console.info("[import-performance] statement rows visible", {
         importFileId,
         rowCount: rows.length,
@@ -9778,7 +9785,7 @@ export const processImportFileText = async (
     const shouldStageStatementForReview = !isDocumentImport && rows.length > 0 && hasCriticalFindings;
     if (shouldStageStatementForReview) {
       try {
-        confirmedImportResult = await confirmImportFileWithRetry("qa_review_stage");
+        confirmedImportResult = await confirmImportFileWithRetry("qa_review_stage", linkedImportAccountId);
         await updateImportFileCompat(importFileId, {
           status: "processing",
           processingPhase: "staged",
@@ -9822,7 +9829,7 @@ export const processImportFileText = async (
           canFinalizeStableScreenshotImport;
     if (shouldMarkDone) {
       try {
-        confirmedImportResult = await confirmImportFileWithRetry("qa_finalize");
+        confirmedImportResult = await confirmImportFileWithRetry("qa_finalize", linkedImportAccountId);
         if (confirmedImportResult.status === "staged") {
           await updateImportFileCompat(importFileId, {
             status: "processing",

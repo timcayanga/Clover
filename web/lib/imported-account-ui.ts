@@ -108,6 +108,32 @@ export const resolvePersistedImportedAccountId = <TAccount extends ImportedAccou
   return importedAccount?.id ?? null;
 };
 
+export const uploadSummaryCanDismissImportUi = <TAccount extends ImportedAccountLike>(
+  summary: UploadInsightsSummary,
+  accounts: TAccount[],
+  inferredType: TAccount["type"],
+  allowAccountOnlyVisibility = false
+) => {
+  if (summary.optimistic) {
+    return false;
+  }
+
+  const persistedAccountId = resolvePersistedImportedAccountId(summary, accounts, inferredType, true);
+  if (!persistedAccountId) {
+    return false;
+  }
+
+  const hasVisibleRows =
+    summary.rowsImported > 0 ||
+    Boolean(summary.previewTransactions?.length) ||
+    Boolean(summary.accountSummaries?.some((accountSummary) => accountSummary.rowsImported > 0));
+  const hasVisibleAccountSummary = Boolean(
+    summary.accountSummaries?.some((accountSummary) => accountSummary.accountId === persistedAccountId)
+  );
+
+  return hasVisibleRows || (allowAccountOnlyVisibility && hasVisibleAccountSummary);
+};
+
 export const mergeImportedPreviewTransactions = <TTransaction extends Record<string, unknown>>(
   currentTransactions: TTransaction[],
   previewTransactions: NonNullable<UploadInsightsSummary["previewTransactions"]>
@@ -117,6 +143,22 @@ export const mergeImportedPreviewTransactions = <TTransaction extends Record<str
   }
 
   return mergeImportedWorkspaceTransactions(currentTransactions, previewTransactions);
+};
+
+export const mergeFetchedTransactionsPreservingImported = <TTransaction extends Record<string, unknown>>(
+  fetchedTransactions: TTransaction[],
+  currentImportedTransactions: TTransaction[],
+  options?: { exactServerTotalCount?: number | null }
+) => {
+  const exactServerTotalCount = Number(options?.exactServerTotalCount ?? fetchedTransactions.length);
+  const serverResponseIsPartial =
+    Number.isFinite(exactServerTotalCount) && exactServerTotalCount > fetchedTransactions.length;
+  const transactionsToPreserve = serverResponseIsPartial ? currentImportedTransactions : [];
+
+  return mergeImportedWorkspaceTransactions(
+    transactionsToPreserve,
+    fetchedTransactions as Parameters<typeof mergeImportedWorkspaceTransactions>[1]
+  ) as TTransaction[];
 };
 
 export const transactionMatchesImportedAccount = <
