@@ -4590,6 +4590,131 @@ body.transactions-manual-open .shell-quick-add-button {
   white-space: nowrap;
 }
 
+.dashboard-home__report-metric-value--income {
+  color: var(--good) !important;
+}
+
+.dashboard-home__report-metric-value--expense {
+  color: var(--bad) !important;
+}
+
+.dashboard-home__report-flow {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dashboard-home__report-flow-bars {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  align-items: end;
+  gap: 5px;
+  height: 74px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(3, 168, 192, 0.12);
+}
+
+.dashboard-home__report-flow--monthly .dashboard-home__report-flow-bars {
+  grid-template-columns: repeat(31, minmax(0, 1fr));
+  gap: 2px;
+  height: 64px;
+}
+
+.dashboard-home__report-flow-bar {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 4px;
+  min-width: 0;
+  height: 100%;
+}
+
+.dashboard-home__report-flow-track {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-start;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 6px;
+  background: rgba(219, 227, 232, 0.42);
+}
+
+.dashboard-home__report-flow-segment {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  transition: height 180ms ease;
+}
+
+.dashboard-home__report-flow-segment[data-active="true"] {
+  min-height: 3px;
+}
+
+.dashboard-home__report-flow-segment--income {
+  background: #22c55e;
+}
+
+.dashboard-home__report-flow-segment--expense {
+  background: #ef4444;
+}
+
+.dashboard-home__report-flow-label {
+  overflow: hidden;
+  color: var(--muted-2);
+  font-size: 9px;
+  line-height: 1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-home__report-flow-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted-2);
+  font-size: 9px;
+}
+
+.dashboard-home__report-flow-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dashboard-home__report-flow-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.dashboard-home__report-flow-dot--income {
+  background: #22c55e;
+}
+
+.dashboard-home__report-flow-dot--expense {
+  background: #ef4444;
+}
+
+.dashboard-home__report-flow--loading .dashboard-home__report-flow-bars {
+  border-top-color: transparent;
+}
+
+.dashboard-home__report-flow-loading-bar {
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 6px;
+  background: rgba(233, 238, 242, 0.58);
+}
+
+.dashboard-home__report-flow-loading-bar .skeleton-block {
+  width: 100%;
+  height: 56%;
+  border-radius: 6px;
+}
+
 .dashboard-home__report-link {
   width: fit-content;
   color: var(--accent);
