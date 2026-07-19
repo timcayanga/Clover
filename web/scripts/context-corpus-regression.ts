@@ -80,6 +80,9 @@ const expandedFixtures = [
   { input: { description: "BIZUM SPAIN", currency: "EUR" }, countryCode: "ES", paymentRail: "spain_bank_rail", purposeHint: null },
   { input: { description: "BKASH BANGLADESH", currency: "BDT" }, countryCode: "BD", paymentRail: "bangladesh_wallet", purposeHint: null },
   { input: { description: "MPESA KENYA", currency: "KES" }, countryCode: "KE", paymentRail: "kenya_wallet", purposeHint: null },
+  { input: { description: "VIPPS NORWAY", currency: "NOK" }, countryCode: "NO", paymentRail: "norway_bank_rail", purposeHint: null },
+  { input: { description: "MPAY MACAU", currency: "MOP" }, countryCode: "MO", paymentRail: "macau_wallet", purposeHint: null },
+  { input: { description: "MOBILE MONEY GHANA", currency: "GHS" }, countryCode: "GH", paymentRail: "ghana_wallet", purposeHint: null },
 ] as const;
 for (const fixture of expandedFixtures) {
   const context = resolveTransactionContext(fixture.input);
