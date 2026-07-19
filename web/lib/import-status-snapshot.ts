@@ -110,7 +110,7 @@ export type ImportStatusSnapshot = {
 };
 
 const loadVisibleImportAccountSummaries = async (importFileId: string): Promise<ImportAccountSummary[]> => {
-  const transactions = await prisma.transaction.findMany({
+  const transactionGroups = await prisma.transaction.groupBy({
     where: {
       deletedAt: null,
       OR: [
@@ -123,40 +123,37 @@ const loadVisibleImportAccountSummaries = async (importFileId: string): Promise<
         },
       ],
     },
-    select: {
-      accountId: true,
-      account: {
-        select: {
-          name: true,
-          institution: true,
-          accountNumber: true,
-          type: true,
-          balance: true,
-        },
-      },
-    },
+    by: ["accountId"],
+    _count: { _all: true },
   }).catch(() => []);
 
-  const summariesByAccountId = new Map<string, ImportAccountSummary>();
-  for (const transaction of transactions) {
-    const existing = summariesByAccountId.get(transaction.accountId);
-    if (existing) {
-      existing.rowsImported += 1;
-      continue;
-    }
+  if (transactionGroups.length === 0) return [];
 
-    summariesByAccountId.set(transaction.accountId, {
-      accountId: transaction.accountId,
-      accountName: transaction.account?.name ?? null,
-      institution: transaction.account?.institution ?? null,
-      accountNumber: transaction.account?.accountNumber ?? null,
-      accountType: (transaction.account?.type ?? null) as AccountType | null,
-      balance: transaction.account?.balance?.toString() ?? null,
-      rowsImported: 1,
-    });
-  }
+  const accounts = await prisma.account.findMany({
+    where: { id: { in: transactionGroups.map((group) => group.accountId) } },
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      accountNumber: true,
+      type: true,
+      balance: true,
+    },
+  }).catch(() => []);
+  const accountById = new Map(accounts.map((account) => [account.id, account] as const));
 
-  return Array.from(summariesByAccountId.values()).sort((left, right) =>
+  return transactionGroups.map((group) => {
+    const account = accountById.get(group.accountId);
+    return {
+      accountId: group.accountId,
+      accountName: account?.name ?? null,
+      institution: account?.institution ?? null,
+      accountNumber: account?.accountNumber ?? null,
+      accountType: (account?.type ?? null) as AccountType | null,
+      balance: account?.balance?.toString() ?? null,
+      rowsImported: group._count._all,
+    };
+  }).sort((left, right) =>
     (left.accountName ?? left.accountId).localeCompare(right.accountName ?? right.accountId)
   );
 };
@@ -343,14 +340,26 @@ export const loadImportStatusSnapshot = async (
 
   const parsedRowsCountBefore = Number(importFile.parsedRowsCount ?? 0);
   const confirmedTransactionsCountBefore = Number(importFile.confirmedTransactionsCount ?? 0);
-  const documentImport = (await hasCompatibleTable("DocumentImport"))
-    ? await prisma.documentImport.findUnique({
-        where: { importFileId },
-        select: { id: true },
-      }).catch(() => null)
-    : null;
+  const [supportsDocumentImports, supportsReceiptDocuments, supportsStatementCheckpoints] = await Promise.all([
+    hasCompatibleTable("DocumentImport"),
+    hasCompatibleTable("ReceiptDocument"),
+    hasCompatibleTable("AccountStatementCheckpoint"),
+  ]);
+  const [documentImport, initialStatementCheckpoint, savedTransactionsCount, enrichmentJob] = await Promise.all([
+    supportsDocumentImports
+      ? prisma.documentImport.findUnique({
+          where: { importFileId },
+          select: { id: true },
+        }).catch(() => null)
+      : Promise.resolve(null),
+    supportsStatementCheckpoints
+      ? prisma.accountStatementCheckpoint.findUnique({ where: { importFileId } }).catch(() => null)
+      : Promise.resolve(null),
+    countTransactionsByImportFileCompat(importFileId).catch(() => 0),
+    getImportEnrichmentJobByImportFileId(importFileId).catch(() => null),
+  ]);
   const receiptDocument =
-    documentImport?.id && (await hasCompatibleTable("ReceiptDocument"))
+    documentImport?.id && supportsReceiptDocuments
       ? await prisma.receiptDocument.findUnique({
           where: { documentImportId: documentImport.id },
           select: {
@@ -436,15 +445,10 @@ export const loadImportStatusSnapshot = async (
             orderBy: [{ date: "desc" }, { createdAt: "desc" }],
           }).catch(() => null)
       : null;
-  let statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
-    ? await prisma.accountStatementCheckpoint.findUnique({
-        where: { importFileId },
-      })
-    : null;
+  let statementCheckpoint = initialStatementCheckpoint;
   let checkpointRowCount = Number(statementCheckpoint?.rowCount ?? 0);
   const checkpointWorkflowStage = readCheckpointWorkflowStage(statementCheckpoint?.sourceMetadata);
   const hasParsedRows = parsedRowsCountBefore > 0 || checkpointRowCount > 0;
-  const savedTransactionsCount = await countTransactionsByImportFileCompat(importFileId).catch(() => 0);
   const hasConfirmedRows = confirmedTransactionsCountBefore > 0 || savedTransactionsCount > 0;
 
   let parsedRowsCount = Math.max(Number(importFile.parsedRowsCount ?? 0), checkpointRowCount);
@@ -495,13 +499,14 @@ export const loadImportStatusSnapshot = async (
     confirmedTransactionsCount > 0 || hasConfirmedRows || accountDetailOnlyImport || receiptHasVisibleTransaction;
   const hasVisibleImportData =
     visibleImportComplete || parsedRowsCount > 0 || checkpointRowCount > 0 || receiptHasVisibleDocument;
-  const checkpointAccountSummaries = hasVisibleImportData
-    ? await buildCheckpointAccountSummary(statementCheckpoint, importFile.accountId ?? null)
-    : [];
-  const visibleTransactionAccountSummaries =
+  const [checkpointAccountSummaries, visibleTransactionAccountSummaries] = await Promise.all([
+    hasVisibleImportData
+      ? buildCheckpointAccountSummary(statementCheckpoint, importFile.accountId ?? null)
+      : Promise.resolve([]),
     confirmedTransactionsCount > 0 || hasConfirmedRows || receiptHasVisibleTransaction
-      ? await loadVisibleImportAccountSummaries(importFileId)
-      : [];
+      ? loadVisibleImportAccountSummaries(importFileId)
+      : Promise.resolve([]),
+  ]);
   const receiptDocumentAccountSummaries =
     receiptHasVisibleDocument && visibleTransactionAccountSummaries.length === 0
       ? await buildReceiptDocumentAccountSummary(receiptDocument)
@@ -554,7 +559,6 @@ export const loadImportStatusSnapshot = async (
       }).catch(() => null)) ?? importFile;
   }
 
-  const enrichmentJob = await getImportEnrichmentJobByImportFileId(importFileId).catch(() => null);
   const finalizationRemainingRows = enrichmentJob
     ? Math.max(0, Number(enrichmentJob.totalRows ?? 0) - Number(enrichmentJob.processedRows ?? 0))
     : 0;

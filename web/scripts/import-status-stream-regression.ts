@@ -7,8 +7,9 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const webRoot = join(scriptDir, "..");
 
 const main = async () => {
-  const [routeSource, visibilitySource, modalSource] = await Promise.all([
+  const [routeSource, statusRouteSource, visibilitySource, modalSource] = await Promise.all([
     readFile(join(webRoot, "app/api/imports/[importId]/events/route.ts"), "utf8"),
+    readFile(join(webRoot, "app/api/imports/[importId]/status/route.ts"), "utf8"),
     readFile(join(webRoot, "lib/import-settled-visibility.ts"), "utf8"),
     readFile(join(webRoot, "components/import-files-modal.tsx"), "utf8"),
   ]);
@@ -24,8 +25,19 @@ const main = async () => {
   assert.match(routeSource, /consecutiveErrors\s*>=\s*IMPORT_STATUS_STREAM_MAX_ERRORS/);
   assert.match(visibilitySource, /const pollDelayMs\s*=\s*1_500/);
   assert.match(modalSource, /const statusPollDelayMs\s*=\s*1_500/);
+  assert.match(
+    statusRouteSource,
+    /if \(shouldSelfHealEnrichment\) \{\s*after\(async \(\) => \{/,
+    "Status reads must return visible transactions before enrichment self-healing runs."
+  );
+  assert.match(
+    statusRouteSource,
+    /if \(shouldPersistPublishedAccountSummaries\(snapshot\)\) \{\s*after\(async \(\) => \{/,
+    "Publishing derived account summaries must not delay a visibility response."
+  );
+  assert.match(modalSource, /const queuedImportPollDelayMs = \(\) => Math\.min\(1_000, 500/);
 
-  console.log("[PASS] Import status streaming uses fresh, bounded, non-overlapping database polling.");
+  console.log("[PASS] Import status reads stay bounded and return visibility before deferred cleanup work.");
 };
 
 main().catch((error) => {

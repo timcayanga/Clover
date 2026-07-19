@@ -111,17 +111,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     }
 
     if (shouldPersistPublishedAccountSummaries(snapshot)) {
-      await prisma.accountStatementCheckpoint
-        .update({
-          where: { importFileId: importId },
-          data: {
-            sourceMetadata: mergeCheckpointSourceMetadata(snapshot.statementCheckpoint?.sourceMetadata, {
-              publishedVisibleImportComplete: snapshot.visibleImportComplete,
-              publishedAccountSummaries: snapshot.accountSummaries,
-            }) as Prisma.InputJsonValue,
-          },
-        })
-        .catch(() => null);
+      after(async () => {
+        await prisma.accountStatementCheckpoint
+          .update({
+            where: { importFileId: importId },
+            data: {
+              sourceMetadata: mergeCheckpointSourceMetadata(snapshot.statementCheckpoint?.sourceMetadata, {
+                publishedVisibleImportComplete: snapshot.visibleImportComplete,
+                publishedAccountSummaries: snapshot.accountSummaries,
+              }) as Prisma.InputJsonValue,
+            },
+          })
+          .catch(() => null);
+      });
     }
 
     const importMode = readCheckpointImportMode(snapshot.statementCheckpoint?.sourceMetadata);
@@ -479,65 +481,51 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     const shouldSelfHealEnrichment =
       snapshot.visibleImportComplete &&
       (!snapshot.enrichmentJob ||
-        snapshot.enrichmentJob.status === "queued" ||
-        snapshot.enrichmentJob.status === "retrying" ||
         snapshot.enrichmentJob.status === "failed" ||
         isImportEnrichmentJobStale(snapshot.enrichmentJob));
     if (shouldSelfHealEnrichment) {
-      const [parsedRowCount, needsCleanupCount] = await Promise.all([
-        prisma.parsedTransaction.count({ where: { importFileId: importId } }),
-        prisma.transaction.count({
-          where: {
-            deletedAt: null,
-            OR: [
-              { importFileId: importId },
-              {
-                rawPayload: {
-                  path: ["sourceImportFileId"],
-                  equals: importId,
+      after(async () => {
+        const [parsedRowCount, needsCleanupCount] = await Promise.all([
+          prisma.parsedTransaction.count({ where: { importFileId: importId } }),
+          prisma.transaction.count({
+            where: {
+              deletedAt: null,
+              OR: [
+                { importFileId: importId },
+                {
+                  rawPayload: {
+                    path: ["sourceImportFileId"],
+                    equals: importId,
+                  },
                 },
-              },
-            ],
-            reviewStatus: { notIn: ["edited", "rejected", "duplicate_skipped"] },
-            AND: [
-              {
-                OR: [{ merchantClean: null }, { categoryId: null }, { category: { is: { name: "Other" } } }],
-              },
-            ],
-          },
-        }),
-      ]);
-      if (parsedRowCount > 0 && needsCleanupCount > 0) {
-        await upsertImportEnrichmentJob({
+              ],
+              reviewStatus: { notIn: ["edited", "rejected", "duplicate_skipped"] },
+              AND: [
+                {
+                  OR: [{ merchantClean: null }, { categoryId: null }, { category: { is: { name: "Other" } } }],
+                },
+              ],
+            },
+          }),
+        ]);
+        if (parsedRowCount > 0 && needsCleanupCount > 0) {
+          await upsertImportEnrichmentJob({
             workspaceId: String(importFile.workspaceId),
             importFileId: importId,
             totalRows: parsedRowCount,
             phase: "queued",
             forceRequeue: snapshot.enrichmentJob?.status === "failed",
           });
-        const result = await processImportEnrichmentJobs({
-          importFileId: importId,
-          limit: MAX_IMPORT_ENRICHMENT_ATTEMPTS,
-          batchSize: 500,
-          workerId: `status-import-enrichment-${userId}`,
-        });
-        const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
-          importFile: (await fetchImportFileCompat(importId)) ?? importFile,
-          promoteFailedVisibleImport: true,
-        });
-        if (refreshedSnapshot) {
-          return NextResponse.json({ ...refreshedSnapshot, enrichmentSelfHeal: result });
+          await processImportEnrichmentJobs({
+            importFileId: importId,
+            limit: MAX_IMPORT_ENRICHMENT_ATTEMPTS,
+            batchSize: 500,
+            workerId: `status-import-enrichment-${userId}`,
+          });
+        } else if (snapshot.enrichmentJob && needsCleanupCount === 0 && snapshot.enrichmentJob.status !== "done") {
+          await completeImportEnrichmentJob({ id: snapshot.enrichmentJob.id, totalRows: parsedRowCount });
         }
-      } else if (snapshot.enrichmentJob && needsCleanupCount === 0 && snapshot.enrichmentJob.status !== "done") {
-        await completeImportEnrichmentJob({ id: snapshot.enrichmentJob.id, totalRows: parsedRowCount });
-        const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
-          importFile: (await fetchImportFileCompat(importId)) ?? importFile,
-          promoteFailedVisibleImport: true,
-        });
-        if (refreshedSnapshot) {
-          return NextResponse.json({ ...refreshedSnapshot, enrichmentSelfHeal: { processedJobs: 0, results: [] } });
-        }
-      }
+      });
     }
 
     return NextResponse.json(snapshot);

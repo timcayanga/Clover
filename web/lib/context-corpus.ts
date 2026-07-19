@@ -25,7 +25,7 @@ export type RegionalParsingProfile = {
   languages: string[];
   dateOrder: "mdy" | "dmy" | "ymd" | "unknown";
   decimalSeparator: "." | ",";
-  groupingSeparator: "," | "." | " " | "unknown";
+  groupingSeparator: "," | "." | " " | "'" | "unknown";
   defaultCurrency: string;
   legalEntitySuffixes: string[];
   confidence: number;

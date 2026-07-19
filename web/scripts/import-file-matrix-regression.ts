@@ -15,6 +15,7 @@ const screenshotRoot = process.env.CLOVER_SCREENSHOT_ROOT ?? "/Users/TimCayanga1
 const receiptRoot = process.env.CLOVER_RECEIPT_ROOT ?? "/Users/TimCayanga1/Documents/Receipt Samples";
 const passwordFixture = join(webRoot, "tmp/pdfs/rcbc-password-qa.pdf");
 const maxVisibleMs = Number(process.env.CLOVER_IMPORT_MAX_VISIBLE_MS ?? 20_000);
+const maxStatusMs = Number(process.env.CLOVER_IMPORT_MAX_STATUS_MS ?? 3_000);
 const caseFilter = process.env.CLOVER_IMPORT_MATRIX_CASE?.trim().toLowerCase() ?? "";
 const keepWorkspaces = process.env.CLOVER_IMPORT_MATRIX_KEEP_WORKSPACES === "true";
 
@@ -285,6 +286,26 @@ const getTransactionApiSnapshot = async (workspaceId: string, summaryMode: "ligh
   };
 };
 
+const verifyVisibleStatusHandoff = async (importId: string, expectedTransactions: number, label: string) => {
+  const startedAt = Date.now();
+  const response = await fetch(`${baseUrl}/api/imports/${importId}/status`, { cache: "no-store" });
+  const payload = (await response.json().catch(() => ({}))) as {
+    visibleImportComplete?: boolean;
+    confirmedTransactionsCount?: number;
+    importFile?: { status?: string };
+  };
+  const elapsedMs = Date.now() - startedAt;
+  assert.equal(response.ok, true, `${label}: status API failed: ${JSON.stringify(payload)}`);
+  assert.equal(payload.visibleImportComplete, true, `${label}: status API did not publish visible transactions.`);
+  assert.equal(payload.importFile?.status, "done", `${label}: status API did not report a completed import.`);
+  assert.ok(
+    Number(payload.confirmedTransactionsCount ?? 0) >= expectedTransactions,
+    `${label}: status API reported fewer confirmed rows than the transaction table.`
+  );
+  assert.ok(elapsedMs <= maxStatusMs, `${label}: status handoff took ${elapsedMs}ms; expected at most ${maxStatusMs}ms.`);
+  return elapsedMs;
+};
+
 const assertClose = (actual: number, expected: number, label: string) =>
   assert.ok(Math.abs(actual - expected) < 0.01, `${label}: expected ${expected}, got ${actual}.`);
 
@@ -409,6 +430,7 @@ const main = async () => {
         throw error;
       }
       let downstream;
+      const statusApiMs = await verifyVisibleStatusHandoff(posted.importId, quality.count, matrixCase.label);
       try {
         downstream = await verifyDownstreamStability(workspace.id, quality, matrixCase.label);
       } catch (error) {
@@ -431,8 +453,8 @@ const main = async () => {
         throw error;
       }
       const duplicateReplayMs = await verifyDuplicateReplay(workspace.id, matrixCase, quality.count);
-      results.push({ label: matrixCase.label, elapsedMs, status: settled.status, ...quality, ...downstream, duplicateReplayMs });
-      console.log(`[PASS] ${matrixCase.label}: ${quality.count} transactions visible in ${elapsedMs}ms; API stable; replay deduped in ${duplicateReplayMs}ms.`);
+      results.push({ label: matrixCase.label, elapsedMs, status: settled.status, ...quality, statusApiMs, ...downstream, duplicateReplayMs });
+      console.log(`[PASS] ${matrixCase.label}: ${quality.count} transactions visible in ${elapsedMs}ms; status ${statusApiMs}ms; API stable; replay deduped in ${duplicateReplayMs}ms.`);
     }
 
     console.log(JSON.stringify(results, null, 2));

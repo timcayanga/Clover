@@ -11160,30 +11160,12 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     const retainedExistingImportTransactionIds = new Set<string>();
     let retainedExistingImportTransactionsCount = 0;
 
-    await tx.trainingSignal.deleteMany({
-      where: {
-        importFileId,
-        source: "import_confirmation",
-      },
-    });
-
-    await updateImportFileWithTxCompat(
-      tx,
-      importFileId,
-      {
-        accountId: resolvedAccountId,
-        confirmedAt: new Date(),
-        status: "done",
-      },
-      compatibleImportFileColumns
-    );
-
   const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
     ? await tx.accountStatementCheckpoint.findUnique({
         where: { importFileId },
       })
     : null;
-  let openingBalanceInserted = false;
+  const openingBalanceInserted = false;
 
   if (statementCheckpoint) {
     const statementStartDate = statementCheckpoint.statementStartDate ?? null;
@@ -11240,32 +11222,8 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       },
     });
 
-    const hasParsedOpeningBalance = parsedRows.some((row) => {
-      const merchantRaw = typeof row.merchantRaw === "string" ? row.merchantRaw.trim() : "";
-      const merchantClean = typeof row.merchantClean === "string" ? row.merchantClean.trim() : "";
-      const categoryName = typeof row.categoryName === "string" ? row.categoryName.trim() : "";
-      return (
-        /^beginning balance$/i.test(merchantRaw) ||
-        /^beginning balance$/i.test(merchantClean) ||
-        /^opening balance$/i.test(categoryName)
-      );
-    });
-
-    if (
-      statementCheckpoint.openingBalance !== null &&
-      !hasParsedOpeningBalance &&
-      !(await tx.transaction.findFirst({
-        where: {
-          accountId: resolvedAccountId,
-          merchantRaw: "Beginning balance",
-          date: statementStartDate ?? undefined,
-        },
-      }))
-    ) {
-      // Keep the checkpoint opening balance for reconciliation, but avoid synthesizing
-      // an extra transaction row. That keeps live imports aligned with the JSON fixtures.
-      openingBalanceInserted = false;
-    }
+    // Keep checkpoint opening balances for reconciliation without synthesizing an
+    // extra transaction row. Live imports stay aligned with the parser fixtures.
   }
 
   statementRow = parsedRows.find((row) => typeof row.accountName === "string" && row.accountName.trim()) ?? parsedRows[0] ?? null;
@@ -12175,6 +12133,13 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   }) as EnrichedParsedImportRow[];
   const analyticsDistinctId = String(importFile.workspaceId ?? "import-worker");
   schedulePostVisibleImportWork(`finalize:${importFileId}`, async () => {
+    await prisma.trainingSignal.deleteMany({
+      where: {
+        importFileId,
+        source: "import_confirmation",
+      },
+    }).catch(() => null);
+
     await collapseDuplicateTransactionsForImport(importFileId).catch((error) => {
       console.warn("Unable to collapse duplicate transactions after confirmation", { importFileId, error });
     });

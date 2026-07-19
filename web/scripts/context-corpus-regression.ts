@@ -99,6 +99,7 @@ assert.equal(parseRegionalDateValue("31/12/2025", "ID")?.toISOString().slice(0, 
 assert.equal(parseRegionalDateValue("12/31/2025", "US")?.toISOString().slice(0, 10), "2025-12-31");
 assert.equal(parseRegionalAmountValue("1.234,56", "ID"), 1234.56);
 assert.equal(parseRegionalAmountValue("1,234.56", "PH"), 1234.56);
+assert.equal(parseRegionalAmountValue("1'234.56", "CH"), 1234.56);
 assert.equal(parseRegionalAmountValue("(1.234,56)", "ID"), -1234.56);
 
 const travelEpisodes = deriveTravelEpisodes([

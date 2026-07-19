@@ -2212,6 +2212,7 @@ export function ImportFilesModal({
     let seededFallbackSummary = false;
     let queuedResumeAttempted = false;
     const startedAt = Date.now();
+    const queuedImportPollDelayMs = () => Math.min(1_000, 500 + Math.floor((Date.now() - startedAt) / 15_000) * 250);
     const requiresVisibleRows =
       shouldRequireVisibleRowsForImport(summaryContext.fileName) || importContextLooksWise(summaryContext);
     const allowFilenameFallbackIdentity = !isGenericMobileScreenshotFileName(summaryContext.fileName);
@@ -2438,7 +2439,7 @@ export function ImportFilesModal({
           }
 
           if (hasRecoverableImportSignal && attempt < 6) {
-            await sleep(300);
+            await sleep(queuedImportPollDelayMs());
             continue;
           }
           const limitPayload = parsePlanLimitMessage(processingMessage, planTier);
@@ -2523,7 +2524,7 @@ export function ImportFilesModal({
               method: "POST",
               headers: { "Content-Type": "application/json" },
             }).catch(() => null);
-            await sleep(300);
+            await sleep(queuedImportPollDelayMs());
             continue;
           }
 
@@ -2580,7 +2581,7 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
-          await sleep(parsedRowsCount > 0 || visibleProgressSignal ? 250 : 200);
+          await sleep(queuedImportPollDelayMs());
           continue;
         }
 
@@ -2957,7 +2958,7 @@ export function ImportFilesModal({
             }
           }
           if (!latestResolvedAccountId || latestResolvedAccountId.startsWith("optimistic-")) {
-            await sleep(250);
+            await sleep(queuedImportPollDelayMs());
             continue;
           }
         }
@@ -3156,7 +3157,7 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
-          await sleep(250);
+          await sleep(queuedImportPollDelayMs());
           continue;
         }
 
@@ -3284,7 +3285,7 @@ export function ImportFilesModal({
                     )
                   : null;
               if (!fallbackAccountId) {
-                await sleep(250);
+                await sleep(queuedImportPollDelayMs());
                 continue;
               }
               latestResolvedAccountId = fallbackAccountId;
@@ -3373,7 +3374,7 @@ export function ImportFilesModal({
               errorMessage: null,
             });
             }
-            await sleep(parsedRowsCount > 0 ? 150 : 250);
+            await sleep(queuedImportPollDelayMs());
             continue;
           }
 
@@ -3453,7 +3454,7 @@ export function ImportFilesModal({
               summary: null,
               errorMessage: null,
             });
-            await sleep(250);
+            await sleep(queuedImportPollDelayMs());
             continue;
           }
 
@@ -3704,7 +3705,7 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
-          await sleep(250);
+          await sleep(queuedImportPollDelayMs());
           continue;
         }
         capturePostHogClientEvent("import_retry_failed", {
@@ -3718,7 +3719,7 @@ export function ImportFilesModal({
         return;
       }
 
-      await sleep(250);
+      await sleep(queuedImportPollDelayMs());
     }
 
     const latestItem = itemsRef.current.find((entry) => entry.id === itemId);
