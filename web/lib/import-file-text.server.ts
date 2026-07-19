@@ -2450,7 +2450,14 @@ export const readUploadedFileText = async (
 };
 
 export const readImportedFileTextWithCacheInfo = async (
-  params: { storageKey: string; fileType: string; fileName: string; workspaceId?: string | null; importMode?: string | null },
+  params: {
+    storageKey: string;
+    fileType: string;
+    fileName: string;
+    workspaceId?: string | null;
+    importMode?: string | null;
+    sourceBytes?: Uint8Array | null;
+  },
   password?: string,
   pdfJsBaseUrl?: string | null,
   options?: {
@@ -2464,7 +2471,7 @@ export const readImportedFileTextWithCacheInfo = async (
     fileName: params.fileName,
     importMode: params.importMode,
   });
-  const bytes = await downloadImportObject(params.storageKey);
+  const bytes = params.sourceBytes ?? (await downloadImportObject(params.storageKey));
   const fileFingerprint = makeImportFileBytesFingerprint(bytes);
   const cacheKey = [
     "text",
@@ -2760,17 +2767,23 @@ export const readImportedPdfPageImages = async (
   }
 };
 
-export const readImportedFileImageDataUrls = async (params: { storageKey: string; fileType: string; fileName: string; importMode?: string | null }) => {
+export const readImportedFileImageDataUrls = async (params: {
+  storageKey: string;
+  fileType: string;
+  fileName: string;
+  importMode?: string | null;
+  sourceBytes?: Uint8Array | null;
+}) => {
   const lowerName = `${params.fileType} ${params.fileName}`.toLowerCase();
   if (!/\.(png|jpe?g|webp|heic|heif|gif|bmp|avif)$/.test(lowerName) && !/^image\//.test(String(params.fileType ?? "").toLowerCase())) {
     return [];
   }
 
-  let bytes: Awaited<ReturnType<typeof downloadImportObject>> | null = null;
+  let bytes: Uint8Array | null = params.sourceBytes ?? null;
   let lastDownloadError: unknown = null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; !bytes && attempt < 3; attempt += 1) {
     try {
-      bytes = await downloadImportObject(params.storageKey);
+      bytes = new Uint8Array(await downloadImportObject(params.storageKey));
       break;
     } catch (error) {
       lastDownloadError = error;

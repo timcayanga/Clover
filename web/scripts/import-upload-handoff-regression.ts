@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readImportedFileTextWithCacheInfo } from "@/lib/import-file-text.server";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const webRoot = join(scriptDir, "..");
@@ -146,6 +147,23 @@ const main = async () => {
     importFileTextSource,
     /if \(!pdfJsBaseUrl \|\| isPdfPasswordError\(error\)\) \{\s*throw error;/,
     "Password failures must not repeat PDF extraction before prompting the user."
+  );
+  const directBytesText = await readImportedFileTextWithCacheInfo({
+    storageKey: "qa/nonexistent/direct-request-bytes.csv",
+    fileType: "text/csv",
+    fileName: "direct-request-bytes.csv",
+    importMode: "statement",
+    sourceBytes: new TextEncoder().encode("date,amount,merchant\n2026-07-19,12.34,QA"),
+  });
+  assert.match(
+    directBytesText.text,
+    /12\.34,QA/,
+    "Request-byte extraction must not download the just-uploaded file from storage."
+  );
+  assert.match(
+    importProcessorSource,
+    /if \(options\.rawFileReady\) \{\s*await options\.rawFileReady;/,
+    "Normalized import writes must wait for durable raw-file storage."
   );
   assert.match(
     importProcessorSource,

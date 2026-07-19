@@ -1186,6 +1186,7 @@ const readImportedStatementTextWithCache = async (params: {
   fileName: string;
   workspaceId: string;
   importMode?: ImportImageMode | null;
+  sourceBytes?: Uint8Array | null;
 }, password?: string, pdfJsBaseUrl?: string | null) => {
   const { readImportedFileTextWithCacheInfo } = await import("@/lib/import-file-text.server");
   return readImportedFileTextWithCacheInfo(
@@ -1195,6 +1196,7 @@ const readImportedStatementTextWithCache = async (params: {
       fileName: params.fileName,
       workspaceId: params.workspaceId,
       importMode: params.importMode ?? null,
+      sourceBytes: params.sourceBytes ?? null,
     },
     password,
     pdfJsBaseUrl
@@ -1224,6 +1226,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       bankName?: string | null;
       progressMessage?: string;
       skipVisualBackupParser?: boolean;
+      sourceBytes?: Uint8Array | null;
+      rawFileReady?: Promise<unknown> | null;
     }) => {
       stage = "processing statement text";
       await updateImportFileCompat(importId, {
@@ -1243,6 +1247,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         importMode,
         pdfJsBaseUrl,
         skipVisualBackupParser: options?.skipVisualBackupParser,
+        sourceBytes: options?.sourceBytes ?? null,
+        rawFileReady: options?.rawFileReady ?? null,
         statementMetadataOverride: options?.bankName
           ? {
               institution: options.bankName,
@@ -1324,7 +1330,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
     };
 
-    const queueBackgroundProcessing = async (bankName?: string | null, options?: { processingMessage?: string | null }) => {
+    const queueBackgroundProcessing = async (
+      bankName?: string | null,
+      options?: {
+        processingMessage?: string | null;
+        sourceBytes?: Uint8Array | null;
+        rawFileReady?: Promise<unknown> | null;
+      }
+    ) => {
       stage = "scheduling background processing";
       try {
         await updateImportFileCompat(importId, {
@@ -1334,6 +1347,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           processingMessage: options?.processingMessage ?? "Queued for background processing...",
         });
         if (localDev) {
+          if (options?.rawFileReady) {
+            await options.rawFileReady;
+          }
           await ensureImportProcessingWorker();
           await enqueueImportProcessing({
             importFileId: importId,
@@ -1360,6 +1376,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
                 allowDuplicateStatement,
                 importMode,
                 pdfJsBaseUrl,
+                sourceBytes: options?.sourceBytes ?? null,
+                rawFileReady: options?.rawFileReady ?? null,
                 statementMetadataOverride: bankName
                   ? {
                       institution: bankName,
@@ -1420,11 +1438,18 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     const queueBackgroundProcessingAfterUpload = async (
       uploadPromise: Promise<unknown>,
       bankName?: string | null,
-      options?: { processingMessage?: string | null; queueWaitMessage?: string | null }
+      options?: {
+        processingMessage?: string | null;
+        queueWaitMessage?: string | null;
+        sourceBytes?: Uint8Array | null;
+      }
     ) => {
       stage = "scheduling background processing";
-      // Do not let parsing start against a storage upload that is still in flight.
-      await uploadPromise;
+      if (localDev) {
+        // Local processing is queued into a separate worker process and cannot
+        // receive the request buffer, so storage must finish first.
+        await uploadPromise;
+      }
       await updateImportFileCompat(importId, {
         status: "processing",
         processingPhase: "queued_retry",
@@ -1463,6 +1488,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               allowDuplicateStatement,
               importMode,
               pdfJsBaseUrl,
+              sourceBytes: options?.sourceBytes ?? null,
+              rawFileReady: uploadPromise,
               statementMetadataOverride: bankName
                 ? {
                     institution: bankName,
@@ -1495,7 +1522,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
     };
 
-    const processReceiptAfterResponse = async (bankName?: string | null) => {
+    const processReceiptAfterResponse = async (
+      bankName?: string | null,
+      options?: { sourceBytes?: Uint8Array | null; rawFileReady?: Promise<unknown> | null }
+    ) => {
       stage = "scheduling receipt processing";
       await updateImportFileCompat(importId, {
         status: "processing",
@@ -1513,6 +1543,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             allowDuplicateStatement,
             importMode: "receipt",
             pdfJsBaseUrl,
+            sourceBytes: options?.sourceBytes ?? null,
+            rawFileReady: options?.rawFileReady ?? null,
             statementMetadataOverride: bankName
               ? {
                   institution: bankName,
@@ -2040,6 +2072,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         cachedDocRecord.statementFingerprint &&
         cachedDocRecord.metadata
       );
+      const canExtractPdfFromRequestBytes =
+        isPdfUpload(effectiveFileName, effectiveFileType) &&
+        bytes.length <= 10_000_000 &&
+        !shouldAvoidPdfPreflight;
+      const canProcessImageFromRequestBytes = isImageUpload && bytes.length <= 10_000_000;
 
       if (trainedReceiptFixture) {
         await uploadBankHintPromise.catch((error) => {
@@ -2124,6 +2161,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               });
             });
           }
+        } else if (canExtractPdfFromRequestBytes || canProcessImageFromRequestBytes) {
+          // The request already contains the complete file. Let durable storage
+          // and parsing run concurrently instead of uploading and immediately
+          // downloading the same bytes again.
+          await uploadBankHintPromise;
         } else {
           await Promise.all([uploadPromise, uploadBankHintPromise]);
         }
@@ -2157,6 +2199,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         return processInline({
           bankName: processingBankName || null,
           progressMessage: "Importing trained receipt...",
+          sourceBytes: canProcessImageFromRequestBytes ? bytes : null,
+          rawFileReady: uploadPromise,
         });
       }
 
@@ -2164,11 +2208,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         return processInline({
           bankName: processingBankName || null,
           progressMessage: "Reading receipt image...",
+          sourceBytes: canProcessImageFromRequestBytes ? bytes : null,
+          rawFileReady: uploadPromise,
         });
       }
 
       if (importMode === "receipt" && !forceInlineProcessing) {
-        return processReceiptAfterResponse(processingBankName || null);
+        return processReceiptAfterResponse(processingBankName || null, {
+          sourceBytes: canProcessImageFromRequestBytes ? bytes : null,
+          rawFileReady: uploadPromise,
+        });
       }
 
       let metadata: Record<string, unknown> | null = null;
@@ -2202,7 +2251,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
 
       if (shouldQueueDocumentUpload && !cachedDocTextInfo) {
-        return queueBackgroundProcessing(processingBankName || null);
+        return queueBackgroundProcessing(processingBankName || null, {
+          sourceBytes: canProcessImageFromRequestBytes ? bytes : null,
+          rawFileReady: uploadPromise,
+        });
       }
 
       if (cachedDocTextInfo?.cacheRecord?.statementFingerprint && cachedDocTextInfo.cacheRecord?.parsedRows && cachedDocTextInfo.cacheRecord?.metadata) {
@@ -2268,6 +2320,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               fileName: effectiveFileName,
               workspaceId: String(importFile.workspaceId),
               importMode,
+              sourceBytes: canExtractPdfFromRequestBytes ? bytes : null,
             },
             password,
             pdfJsBaseUrl
@@ -2291,7 +2344,17 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             throw error;
           }
           console.warn("Unable to pre-read statement metadata", { importId, error: summarizeErrorForLog(error) });
+        } finally {
+          if (canExtractPdfFromRequestBytes) {
+            await uploadPromise;
+          }
         }
+      }
+
+      if (canExtractPdfFromRequestBytes) {
+        // Preserve the raw-file audit trail before any branch can publish rows
+        // or hand processing to a background worker.
+        await uploadPromise;
       }
 
       if (!metadata && extractedText.trim()) {
@@ -2471,6 +2534,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               fileName: effectiveFileName,
               workspaceId: String(importFile.workspaceId),
               importMode,
+              sourceBytes: canExtractPdfFromRequestBytes ? bytes : null,
             },
             password,
             pdfJsBaseUrl
@@ -2529,6 +2593,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         return queueBackgroundProcessingAfterUpload(uploadPromise, processingBankName || null, {
           processingMessage: "Starting screenshot import...",
           queueWaitMessage: "Finishing the screenshot upload before Clover starts the import...",
+          sourceBytes: canProcessImageFromRequestBytes ? bytes : null,
         });
       }
 
@@ -2550,6 +2615,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           allowDuplicateStatement,
           importMode,
           pdfJsBaseUrl,
+          sourceBytes: canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes ? bytes : null,
+          rawFileReady: canProcessImageFromRequestBytes ? uploadPromise : null,
           skipVisualBackupParser: shouldPreferSampleFallback && Boolean(sampleFallbackText),
           statementMetadataOverride: processingBankName
             ? {

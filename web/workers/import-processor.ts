@@ -6876,6 +6876,8 @@ export const processImportFileText = async (
     }> | null;
     importMode?: ImportImageMode | null;
     pdfJsBaseUrl?: string | null;
+    sourceBytes?: Uint8Array | null;
+    rawFileReady?: Promise<unknown> | null;
   } = {}
 ): Promise<ProcessImportResult> => {
   const startedAt = Date.now();
@@ -7126,13 +7128,14 @@ export const processImportFileText = async (
           fileType,
           fileName,
           importMode,
+          sourceBytes: options.sourceBytes ?? null,
         }),
         pdfFileDataBase64: null,
       };
     }
 
     if (fileType === "application/pdf") {
-      const importedBytes = await downloadImportObject(storageKey);
+      const importedBytes = options.sourceBytes ?? (await downloadImportObject(storageKey));
       return {
         pageImages: null,
         pdfFileDataBase64: Buffer.from(importedBytes).toString("base64"),
@@ -7175,6 +7178,7 @@ export const processImportFileText = async (
             fileName,
             workspaceId: String(importFile.workspaceId),
             importMode,
+            sourceBytes: options.sourceBytes ?? null,
           },
           options.password,
           options.pdfJsBaseUrl
@@ -7251,6 +7255,7 @@ export const processImportFileText = async (
       fileType,
       fileName,
       importMode,
+      sourceBytes: options.sourceBytes ?? null,
     });
   }
 
@@ -7600,6 +7605,9 @@ export const processImportFileText = async (
           });
         })()
       : null;
+  if (options.rawFileReady) {
+    await options.rawFileReady;
+  }
   if (await hasCompatibleTable("AccountStatementCheckpoint")) {
     const preliminaryCheckpointSourceMetadata = {
       ...metadataForParse,

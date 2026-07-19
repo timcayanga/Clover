@@ -18,6 +18,7 @@ const maxVisibleMs = Number(process.env.CLOVER_IMPORT_MAX_VISIBLE_MS ?? 20_000);
 const maxStatusMs = Number(process.env.CLOVER_IMPORT_MAX_STATUS_MS ?? 3_000);
 const caseFilter = process.env.CLOVER_IMPORT_MATRIX_CASE?.trim().toLowerCase() ?? "";
 const keepWorkspaces = process.env.CLOVER_IMPORT_MATRIX_KEEP_WORKSPACES === "true";
+const forceInlineProcessing = process.env.CLOVER_IMPORT_MATRIX_FORCE_INLINE !== "false";
 
 type ImportMode = "statement" | "receipt" | "notes";
 
@@ -160,7 +161,7 @@ const postFile = async (workspaceId: string, matrixCase: MatrixCase, importId = 
   form.set("fileName", fileName);
   form.set("fileType", matrixCase.fileType);
   form.set("importMode", matrixCase.mode);
-  form.set("forceInlineProcessing", "true");
+  form.set("forceInlineProcessing", String(forceInlineProcessing));
   if (matrixCase.bankName) form.set("bankName", matrixCase.bankName);
   if (matrixCase.password) form.set("password", matrixCase.password);
   form.set("file", new Blob([bytes], { type: matrixCase.fileType }), fileName);
@@ -368,6 +369,22 @@ const verifyDuplicateReplay = async (workspaceId: string, matrixCase: MatrixCase
   return elapsedMs;
 };
 
+const waitForPostVisibleJobs = async (workspaceIds: string[], timeoutMs = 20_000) => {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const activeJobs = await prisma.importEnrichmentJob.count({
+      where: {
+        workspaceId: { in: workspaceIds },
+        status: { in: ["queued", "running", "retrying"] },
+      },
+    });
+    if (activeJobs === 0) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+};
+
 const main = async () => {
   const health = await fetch(`${baseUrl}/api/health`).catch(() => null);
   assert.equal(health?.ok, true, `Start Clover locally at ${baseUrl} before running this regression.`);
@@ -464,7 +481,8 @@ const main = async () => {
       console.log(`[QA] Preserved workspaces: ${workspaces.join(", ")}`);
     } else {
       // Post-visible learning and QA are deliberately delayed so user-facing reads get database priority.
-      await new Promise((resolve) => setTimeout(resolve, 11_000));
+      await waitForPostVisibleJobs(workspaces);
+      await new Promise((resolve) => setTimeout(resolve, 500));
       for (const workspaceId of workspaces) {
         await prisma.workspace.delete({ where: { id: workspaceId } }).catch(() => null);
       }
