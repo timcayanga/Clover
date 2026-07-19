@@ -4545,6 +4545,12 @@ body.transactions-manual-open .shell-quick-add-button {
   line-height: 1.45;
 }
 
+.dashboard-home__report-card .dashboard-home__report-note {
+  margin-top: 6px;
+  color: var(--muted-2);
+  font-size: 12px;
+}
+
 .dashboard-home__report-card .eyebrow,
 .dashboard-home__goal-card-head .eyebrow,
 .dashboard-home__insight-strip > .eyebrow {

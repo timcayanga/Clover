@@ -182,7 +182,7 @@ function DailyFlowChart({ days, label, currency }: { days: DailyFlow[]; label: s
   const isMonthly = days.length > 7;
 
   return (
-    <div className={`dashboard-home__report-flow${isMonthly ? " dashboard-home__report-flow--monthly" : ""}`} aria-label={`${label} daily income and expenses`}>
+    <div className={`dashboard-home__report-flow${isMonthly ? " dashboard-home__report-flow--monthly" : ""}`} aria-label={`${label} daily money in and expenses`}>
       <div className="dashboard-home__report-flow-bars">
         {days.map((day) => {
           const segments = day.income > day.expense
@@ -213,7 +213,7 @@ function DailyFlowChart({ days, label, currency }: { days: DailyFlow[]; label: s
         })}
       </div>
       <div className="dashboard-home__report-flow-legend" aria-hidden="true">
-        <span><i className="dashboard-home__report-flow-dot dashboard-home__report-flow-dot--income" />Income</span>
+        <span><i className="dashboard-home__report-flow-dot dashboard-home__report-flow-dot--income" />Money in</span>
         <span><i className="dashboard-home__report-flow-dot dashboard-home__report-flow-dot--expense" />Expenses</span>
       </div>
     </div>
@@ -759,14 +759,16 @@ async function DashboardStream({
     ? `Last upload was ${daysSinceLastImport === 0 ? "today" : `${daysSinceLastImport ?? 0} day${daysSinceLastImport === 1 ? "" : "s"} ago`}. Add recent statements so advice stays current.`
     : "Upload a recent statement so Clover can start finding spending patterns.";
   const weeklySpendDelta = weeklySummary.current.expense - weeklySummary.previous.expense;
-  const weeklyNetLabel =
-    weeklySummary.net >= 0
-      ? `${formatCurrency(weeklySummary.net)} left after spending`
-      : `${formatCurrency(Math.abs(weeklySummary.net))} short this week`;
   const weeklySpendMovement =
     weeklySummary.previous.expense > 0
       ? `${weeklySpendDelta >= 0 ? "up" : "down"} ${formatCurrency(Math.abs(weeklySpendDelta))} vs last week`
-      : `${formatCurrency(weeklySummary.current.expense)} spent this week`;
+      : weeklySummary.current.expense > 0
+        ? "there is not enough prior activity to compare yet"
+        : "there is no spending to compare yet";
+  const weeklyActivityCopy =
+    weeklySummary.current.expense > 0
+      ? `${formatCurrency(weeklySummary.current.expense)} in spending recorded this week${weeklySummary.current.transfer > 0 ? `; ${formatCurrency(weeklySummary.current.transfer)} moved between accounts` : ""}.`
+      : "No spending was recorded this week.";
   const nextSevenDays = new Date(now);
   nextSevenDays.setDate(nextSevenDays.getDate() + 7);
   const plannedPaymentSuggestions = await getPlannedPaymentSuggestions(workspaceSummary.id).catch(() => []);
@@ -823,7 +825,7 @@ async function DashboardStream({
       ? {
           emoji: "🗓️",
           label: "Weekly summary",
-          copy: `${weeklyNetLabel}; spending is ${weeklySpendMovement}.`,
+          copy: `${weeklyActivityCopy} Spending is ${weeklySpendMovement}.`,
           href: "/adviser",
           actionLabel: "Open Adviser",
           tone: weeklySummary.net >= 0 ? "positive" : "warning",
@@ -947,13 +949,14 @@ async function DashboardStream({
           <article className={`dashboard-home__report-card dashboard-home__report-card--${weeklyReportTone} glass`}>
             <div className="dashboard-home__report-card-head">
               <div>
-                <p className="eyebrow">Weekly Report</p>
-                <h4>{formatSignedCurrency(weeklySummary.net, displayCurrency)}</h4>
+                <p className="eyebrow">Weekly Spending</p>
+                <h4>{formatCurrency(weeklySummary.current.expense, displayCurrency)}</h4>
+                <p className="dashboard-home__report-note">Recorded spending in the last 7 days</p>
               </div>
             </div>
             <div className="dashboard-home__report-metrics" aria-label="Weekly report metrics">
               <span>
-                <small>Income</small>
+                <small>Money in</small>
                 <strong className="dashboard-home__report-metric-value--income">{formatCurrency(weeklySummary.current.income, displayCurrency)}</strong>
               </span>
               <span>
@@ -976,13 +979,14 @@ async function DashboardStream({
           <article className={`dashboard-home__report-card dashboard-home__report-card--${monthlyReportTone} glass`}>
             <div className="dashboard-home__report-card-head">
               <div>
-                <p className="eyebrow">Monthly Report</p>
-                <h4>{formatSignedCurrency(monthSummary.net, displayCurrency)}</h4>
+                <p className="eyebrow">Monthly Spending</p>
+                <h4>{formatCurrency(monthSummary.expense, displayCurrency)}</h4>
+                <p className="dashboard-home__report-note">Recorded spending this month</p>
               </div>
             </div>
             <div className="dashboard-home__report-metrics" aria-label="Monthly report metrics">
               <span>
-                <small>Income</small>
+                <small>Money in</small>
                 <strong className="dashboard-home__report-metric-value--income">{formatCurrency(monthSummary.income, displayCurrency)}</strong>
               </span>
               <span>
