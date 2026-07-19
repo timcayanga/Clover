@@ -4942,6 +4942,7 @@ export function ImportFilesModal({
       // has already produced text, include it; otherwise the server receives the
       // original file immediately and can run its deterministic and backup readers.
       let processResponseSettled = false;
+      let inFlightStatusMonitorStopped = false;
       const processResponsePromise = postFileWithProgress(
         `/api/imports/${importFileId}/process`,
         item.file,
@@ -4983,6 +4984,7 @@ export function ImportFilesModal({
         { signal: options?.signal ?? null }
       ).finally(() => {
         processResponseSettled = true;
+        inFlightStatusMonitorStopped = true;
       });
       // Tiny files can finish uploading without a computable progress event.
       // Once the request is in flight, advance out of "preparing" so the modal
@@ -5007,6 +5009,102 @@ export function ImportFilesModal({
         summary: null,
         errorMessage: null,
       });
+      // The multipart request stays open while the deterministic parser saves
+      // rows. Poll the durable import state during that request so progress is
+      // driven by real server phases instead of freezing at the upload boundary.
+      // This also refreshes the page as soon as committed rows are visible,
+      // without waiting for post-visible QA or response serialization.
+      void (async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 750));
+        while (!inFlightStatusMonitorStopped && !processResponseSettled) {
+          try {
+            const response = await fetch(`/api/imports/${importFileId}/status`, { cache: "no-store" });
+            if (response.ok) {
+              const payload = (await response.json()) as ImportStatusPayload;
+              const importFile = payload.importFile;
+              const processingPhase = typeof importFile?.processingPhase === "string" ? importFile.processingPhase : null;
+              const processingMessage = typeof importFile?.processingMessage === "string" ? importFile.processingMessage : null;
+              const parsedRowsCount = Number(payload.parsedRowsCount ?? 0);
+              const confirmedTransactionsCount = Number(payload.confirmedTransactionsCount ?? 0);
+              const statusDecision = resolveImportModalStatusDecision({
+                importMode: itemImportMode,
+                status: typeof importFile?.status === "string" ? importFile.status : null,
+                processingPhase,
+                processingMessage,
+                telemetryPhase: typeof payload.telemetryPhase === "string" ? payload.telemetryPhase : null,
+                telemetryLabel: typeof payload.telemetryLabel === "string" ? payload.telemetryLabel : null,
+                telemetryMessage: typeof payload.telemetryMessage === "string" ? payload.telemetryMessage : null,
+                parsedRowsCount,
+                confirmedTransactionsCount,
+                visibleImportComplete: Boolean(payload.visibleImportComplete),
+                hasStructuredReceiptVisibility: Boolean(payload.receiptTransaction),
+                processingAttempt: importFile?.processingAttempt ?? null,
+                progressFloor:
+                  processingPhase === "reconciling" || processingPhase === "staged" || processingPhase === "finalizing"
+                    ? IMPORT_PROGRESS.finalizing
+                    : processingPhase === "uploading"
+                      ? IMPORT_PROGRESS.uploading
+                      : IMPORT_PROGRESS.parsing,
+              });
+
+              if (statusDecision.kind === "visible") {
+                updateItem(itemId, {
+                  status: "importing",
+                  confirmationState: "confirmed",
+                  progress: 99,
+                  progressLabel: "Making transactions visible",
+                });
+                publishImportActivity({
+                  workspaceId,
+                  surface: importActivitySurfaceRef.current,
+                  status: "active",
+                  importFileId,
+                  fileName: item.file.name,
+                  fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+                  fileTotal: items.length,
+                  completedFiles: completedFileCount,
+                  progress: 99,
+                  detail: `${statusDecision.detail} Clover is updating this page now.`,
+                  summary: null,
+                  errorMessage: null,
+                });
+                router.refresh();
+                inFlightStatusMonitorStopped = true;
+                break;
+              }
+
+              if (statusDecision.kind === "waiting") {
+                const currentItem = itemsRef.current.find((entry) => entry.id === itemId);
+                const nextProgress = Math.max(Number(currentItem?.progress ?? 0), statusDecision.progress);
+                updateItem(itemId, {
+                  status: "importing",
+                  progress: nextProgress,
+                  progressLabel: statusDecision.progressLabel,
+                });
+                publishImportActivity({
+                  workspaceId,
+                  surface: importActivitySurfaceRef.current,
+                  status: "active",
+                  importFileId,
+                  fileName: item.file.name,
+                  fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+                  fileTotal: items.length,
+                  completedFiles: completedFileCount,
+                  progress: nextProgress,
+                  detail: statusDecision.detail,
+                  summary: null,
+                  errorMessage: null,
+                });
+              }
+            }
+          } catch {
+            // The process response remains authoritative. A missed status poll
+            // must never turn a healthy upload into an error.
+          }
+
+          await new Promise((resolve) => window.setTimeout(resolve, 1_000));
+        }
+      })();
       if (shouldSkipLocalStatementPreparse) {
         void (async () => {
           await new Promise((resolve) => window.setTimeout(resolve, 8_000));

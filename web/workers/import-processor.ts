@@ -8987,17 +8987,25 @@ export const processImportFileText = async (
       : unionBankKnownSampleMetadata?.endingBalance ?? ucpbKnownSampleMetadata?.endingBalance ?? effectiveMetadataSource.endingBalance ?? parsedEndingBalance,
   };
   let confirmedImportResult: ConfirmImportResult | null = null;
-  const materializedParsedAccounts = (await ensureParsedAccountGroupsMaterialized({
-    importFile,
-    rows: effectiveRows as Array<Record<string, unknown>>,
-    metadata: resolvedMetadata,
-  }).catch((error) => {
-    console.warn("[import-account-match] unable to materialize parsed account groups before duplicate check", {
-      importFileId,
-      error,
-    });
-    return [];
-  })) as unknown as Array<{
+  // Statement confirmation resolves and materializes the account in the same
+  // transaction that publishes the visible rows. Doing that work here as well
+  // made every statement pay for account matching twice before it could appear
+  // in the UI. Structured document previews still need an account before their
+  // document record is assembled, so retain the early pass for those modes.
+  const shouldMaterializeAccountBeforeConfirmation = effectiveImportMode !== "statement";
+  const materializedParsedAccounts = (shouldMaterializeAccountBeforeConfirmation
+    ? await ensureParsedAccountGroupsMaterialized({
+        importFile,
+        rows: effectiveRows as Array<Record<string, unknown>>,
+        metadata: resolvedMetadata,
+      }).catch((error) => {
+        console.warn("[import-account-match] unable to materialize parsed account groups before duplicate check", {
+          importFileId,
+          error,
+        });
+        return [];
+      })
+    : []) as unknown as Array<{
     id: string;
     name: string | null;
     institution: string | null;

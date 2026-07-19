@@ -117,6 +117,16 @@ const main = async () => {
     "Advisory local parsing must not block upload by opening the password flow."
   );
   assert.match(uploadHandoffSource, /postFileWithProgress\(/);
+  assert.match(
+    uploadHandoffSource,
+    /fetch\(`\/api\/imports\/\$\{importFileId\}\/status`, \{ cache: "no-store" \}\)/,
+    "The modal should read durable server phases while the multipart process request is still open."
+  );
+  assert.match(
+    uploadHandoffSource,
+    /statusDecision\.kind === "visible"[\s\S]{0,900}progress: 99[\s\S]{0,900}router\.refresh\(\)/,
+    "Committed rows should refresh the current page before the process response finishes, without claiming 100% too early."
+  );
   assert.match(processRouteSource, /sourceFingerprint: fileFingerprint/);
   assert.match(processRouteSource, /reusableRawImport[\s\S]{0,900}storageKey: rawStorageKey/);
   assert.match(processRouteSource, /canonicalImportFileId: canonicalImport\.id/);
@@ -132,6 +142,11 @@ const main = async () => {
   assert.match(importProcessorSource, /sourceFingerprint: importFile\.sourceFingerprint/);
   assert.match(importProcessorSource, /countTransactionsByImportFileCompat\(sourceMatch\.id\)/);
   assert.match(importProcessorSource, /already imported and skipped the duplicate/);
+  assert.match(
+    importProcessorSource,
+    /const shouldMaterializeAccountBeforeConfirmation = effectiveImportMode !== "statement"/,
+    "Statements should materialize their account once, inside confirmation, instead of paying for account matching twice."
+  );
   assert.match(importProcessorSource, /textCacheInfo\?\.fileFingerprint[\s\S]{0,180}importFile\.sourceFingerprint/);
   assert.doesNotMatch(
     uploadHandoffSource,
