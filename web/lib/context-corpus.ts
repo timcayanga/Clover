@@ -5,7 +5,7 @@
  * confirmed transaction values. Keep raw statement text outside this module.
  */
 
-export const CONTEXT_CORPUS_VERSION = "2026.07.2";
+export const CONTEXT_CORPUS_VERSION = "2026.07.3";
 
 export type ContextSignal = {
   id: string;
@@ -13,6 +13,20 @@ export type ContextSignal = {
   value: string;
   confidence: number;
   evidence: string;
+};
+
+export type RegionalParsingProfile = {
+  countryCode: string;
+  regionCode: string;
+  locales: string[];
+  primaryLocale: string;
+  languages: string[];
+  dateOrder: "mdy" | "dmy" | "ymd" | "unknown";
+  decimalSeparator: "." | ",";
+  groupingSeparator: "," | "." | " " | "unknown";
+  defaultCurrency: string;
+  legalEntitySuffixes: string[];
+  confidence: number;
 };
 
 export type TransactionContext = {
@@ -24,6 +38,13 @@ export type TransactionContext = {
   currency: string | null;
   categoryHint: string | null;
   transactionTypeHint: "income" | "expense" | "transfer" | null;
+  primaryLocale: string | null;
+  dateOrder: RegionalParsingProfile["dateOrder"];
+  decimalSeparator: RegionalParsingProfile["decimalSeparator"] | null;
+  groupingSeparator: RegionalParsingProfile["groupingSeparator"] | null;
+  languages: string[];
+  legalEntitySuffixes: string[];
+  parsingProfileConfidence: number;
   travelLikely: boolean;
   foreignCurrencyLikely: boolean;
   contextStatus: "matched" | "ambiguous" | "unmatched";
@@ -67,6 +88,19 @@ const entries: ContextEntry[] = [
   { id: "ph-bpi", aliases: ["bpi", "bank of the philippine islands"], signalKind: "institution", countryCode: "PH", regionCode: "SEA", institutionType: "bank", currency: "PHP", confidence: 98 },
   { id: "ph-bdo", aliases: ["bdo", "banco de oro"], signalKind: "institution", countryCode: "PH", regionCode: "SEA", institutionType: "bank", currency: "PHP", confidence: 98 },
   { id: "ph-unionbank", aliases: ["unionbank", "union bank of the philippines"], signalKind: "institution", countryCode: "PH", regionCode: "SEA", institutionType: "bank", currency: "PHP", confidence: 98 },
+  { id: "ph-metrobank", aliases: ["metrobank", "metropolitan bank"], signalKind: "institution", countryCode: "PH", regionCode: "SEA", institutionType: "bank", currency: "PHP", confidence: 98 },
+  { id: "ph-security-bank", aliases: ["security bank"], signalKind: "institution", countryCode: "PH", regionCode: "SEA", institutionType: "bank", currency: "PHP", confidence: 98 },
+  { id: "ph-eastwest", aliases: ["eastwest", "east west bank"], signalKind: "institution", countryCode: "PH", regionCode: "SEA", institutionType: "bank", currency: "PHP", confidence: 98 },
+  { id: "ph-rcbc", aliases: ["rcbc", "rizal commercial banking"], signalKind: "institution", countryCode: "PH", regionCode: "SEA", institutionType: "bank", currency: "PHP", confidence: 98 },
+  { id: "ph-landbank", aliases: ["landbank", "land bank of the philippines"], signalKind: "institution", countryCode: "PH", regionCode: "SEA", institutionType: "bank", currency: "PHP", confidence: 98 },
+  { id: "ph-chinabank", aliases: ["chinabank", "china bank"], signalKind: "institution", countryCode: "PH", regionCode: "SEA", institutionType: "bank", currency: "PHP", confidence: 98 },
+  { id: "ph-psbank", aliases: ["psbank", "philippine savings bank"], signalKind: "institution", countryCode: "PH", regionCode: "SEA", institutionType: "bank", currency: "PHP", confidence: 98 },
+  { id: "ph-ucpb", aliases: ["ucpb", "united coconut planters bank"], signalKind: "institution", countryCode: "PH", regionCode: "SEA", institutionType: "bank", currency: "PHP", confidence: 98 },
+  { id: "ph-cimb", aliases: ["cimb", "gsave"], signalKind: "institution", countryCode: "PH", regionCode: "SEA", institutionType: "bank", currency: "PHP", confidence: 94 },
+  { id: "ph-maribank", aliases: ["maribank", "seabank philippines"], signalKind: "institution", countryCode: "PH", regionCode: "SEA", institutionType: "bank", currency: "PHP", confidence: 94 },
+  { id: "ph-gotyme", aliases: ["gotyme", "go tyme"], signalKind: "institution", countryCode: "PH", regionCode: "SEA", institutionType: "bank", currency: "PHP", confidence: 94 },
+  { id: "ph-aub", aliases: ["aub", "asia united bank"], signalKind: "institution", countryCode: "PH", regionCode: "SEA", institutionType: "bank", currency: "PHP", confidence: 94 },
+  { id: "ph-pnb", aliases: ["pnb", "philippine national bank"], signalKind: "institution", countryCode: "PH", regionCode: "SEA", institutionType: "bank", currency: "PHP", confidence: 94 },
 
   // Southeast Asia expansion packs.
   { id: "sg-paynow", aliases: ["paynow", "fast transfer", "fast payments"], signalKind: "payment_rail", countryCode: "SG", regionCode: "SEA", paymentRail: "paynow_fast", currency: "SGD", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 96 },
@@ -81,7 +115,7 @@ const entries: ContextEntry[] = [
   { id: "tw-wallet", aliases: ["line pay taiwan", "jko pay", "jkopay", "easycard"], signalKind: "payment_rail", countryCode: "TW", regionCode: "EAS", paymentRail: "taiwan_wallet", currency: "TWD", confidence: 88 },
 
   // Diaspora and international-account context.
-  { aliases: ["upi", "upi collect", "imps", "neft", "rtgs india"], countryCode: "IN", regionCode: "SAS", paymentRail: "india_bank_rail", currency: "INR", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 94 },
+  { id: "in-bank-rail", aliases: ["upi", "upi collect", "imps", "neft", "rtgs india"], signalKind: "payment_rail", countryCode: "IN", regionCode: "SAS", paymentRail: "india_bank_rail", currency: "INR", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 94 },
   { id: "ae-remittance", aliases: ["uae exchange", "al ansari exchange", "lu lu exchange", "remittance"], signalKind: "payment_rail", countryCode: "AE", regionCode: "MEA", paymentRail: "remittance", currency: "AED", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 86 },
   { id: "eu-sepa", aliases: ["sepa", "sepa direct debit", "iban transfer"], signalKind: "payment_rail", countryCode: "EU", regionCode: "EUR", paymentRail: "sepa", currency: "EUR", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 92 },
   { id: "us-ach-wallet", aliases: ["ach", "zelle", "venmo", "cash app"], signalKind: "payment_rail", countryCode: "US", regionCode: "NAM", paymentRail: "us_ach_wallet", currency: "USD", confidence: 88 },
@@ -99,6 +133,37 @@ const entries: ContextEntry[] = [
   { id: "global-fx-fee", aliases: ["foreign transaction fee", "international service fee", "currency conversion fee", "dynamic currency conversion", "dcc fee"], signalKind: "fee", countryCode: "GLOBAL", regionCode: "GLOBAL", categoryHint: "Financial", foreignCurrencyLikely: true, confidence: 94 },
   { id: "global-foreign-currency", aliases: ["exchange rate", "fx markup", "foreign exchange", "overseas transaction"], signalKind: "currency", countryCode: "GLOBAL", regionCode: "GLOBAL", foreignCurrencyLikely: true, confidence: 88 },
 ];
+
+const regionalProfiles: RegionalParsingProfile[] = [
+  { countryCode: "PH", regionCode: "SEA", locales: ["en-PH", "fil-PH"], primaryLocale: "en-PH", languages: ["en", "fil"], dateOrder: "mdy", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "PHP", legalEntitySuffixes: ["inc", "corp", "corporation", "co", "ltd"], confidence: 86 },
+  { countryCode: "SG", regionCode: "SEA", locales: ["en-SG", "zh-SG", "ms-SG"], primaryLocale: "en-SG", languages: ["en", "zh", "ms"], dateOrder: "dmy", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "SGD", legalEntitySuffixes: ["pte ltd", "ltd", "llp", "inc"] , confidence: 84 },
+  { countryCode: "MY", regionCode: "SEA", locales: ["en-MY", "ms-MY", "zh-MY"], primaryLocale: "en-MY", languages: ["en", "ms", "zh"], dateOrder: "dmy", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "MYR", legalEntitySuffixes: ["sdn bhd", "bhd", "berhad", "ltd"], confidence: 84 },
+  { countryCode: "ID", regionCode: "SEA", locales: ["id-ID", "en-ID"], primaryLocale: "id-ID", languages: ["id", "en"], dateOrder: "dmy", decimalSeparator: ",", groupingSeparator: ".", defaultCurrency: "IDR", legalEntitySuffixes: ["pt", "tbk", "cv", "persero"], confidence: 84 },
+  { countryCode: "TH", regionCode: "SEA", locales: ["th-TH", "en-TH"], primaryLocale: "th-TH", languages: ["th", "en"], dateOrder: "dmy", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "THB", legalEntitySuffixes: ["co ltd", "ltd", "public company limited"], confidence: 78 },
+  { countryCode: "VN", regionCode: "SEA", locales: ["vi-VN", "en-VN"], primaryLocale: "vi-VN", languages: ["vi", "en"], dateOrder: "dmy", decimalSeparator: ",", groupingSeparator: ".", defaultCurrency: "VND", legalEntitySuffixes: ["tnhh", "jsc", "cp", "co ltd"], confidence: 78 },
+  { countryCode: "JP", regionCode: "EAS", locales: ["ja-JP", "en-JP"], primaryLocale: "ja-JP", languages: ["ja", "en"], dateOrder: "ymd", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "JPY", legalEntitySuffixes: ["kk", "kabushiki kaisha", "yugen kaisha"], confidence: 82 },
+  { countryCode: "HK", regionCode: "EAS", locales: ["zh-HK", "en-HK"], primaryLocale: "zh-HK", languages: ["zh", "en"], dateOrder: "dmy", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "HKD", legalEntitySuffixes: ["ltd", "limited", "company"], confidence: 80 },
+  { countryCode: "TW", regionCode: "EAS", locales: ["zh-TW", "en-TW"], primaryLocale: "zh-TW", languages: ["zh", "en"], dateOrder: "ymd", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "TWD", legalEntitySuffixes: ["co ltd", "ltd", "inc"], confidence: 78 },
+  { countryCode: "IN", regionCode: "SAS", locales: ["en-IN", "hi-IN"], primaryLocale: "en-IN", languages: ["en", "hi"], dateOrder: "dmy", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "INR", legalEntitySuffixes: ["pvt ltd", "private limited", "ltd", "llp"], confidence: 82 },
+  { countryCode: "AE", regionCode: "MEA", locales: ["en-AE", "ar-AE"], primaryLocale: "en-AE", languages: ["en", "ar"], dateOrder: "dmy", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "AED", legalEntitySuffixes: ["llc", "l l c", "pjsc", "est"], confidence: 80 },
+  { countryCode: "EU", regionCode: "EUR", locales: ["en-IE", "de-DE", "fr-FR"], primaryLocale: "en-IE", languages: ["en", "de", "fr"], dateOrder: "dmy", decimalSeparator: ",", groupingSeparator: ".", defaultCurrency: "EUR", legalEntitySuffixes: ["gmbh", "sarl", "sa", "bv", "oy", "ab", "ltd"], confidence: 64 },
+  { countryCode: "US", regionCode: "NAM", locales: ["en-US", "es-US"], primaryLocale: "en-US", languages: ["en", "es"], dateOrder: "mdy", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "USD", legalEntitySuffixes: ["inc", "incorporated", "llc", "corp", "corporation", "co"], confidence: 86 },
+  { countryCode: "GB", regionCode: "EUR", locales: ["en-GB"], primaryLocale: "en-GB", languages: ["en"], dateOrder: "dmy", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "GBP", legalEntitySuffixes: ["ltd", "limited", "plc", "llp"], confidence: 86 },
+  { countryCode: "AU", regionCode: "OCE", locales: ["en-AU"], primaryLocale: "en-AU", languages: ["en"], dateOrder: "dmy", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "AUD", legalEntitySuffixes: ["pty ltd", "proprietary limited", "ltd", "inc"], confidence: 86 },
+];
+
+const getRegionalProfile = (countryCode: string | null | undefined) =>
+  regionalProfiles.find((profile) => profile.countryCode === countryCode) ?? null;
+
+const emptyParsingContext = {
+  primaryLocale: null,
+  dateOrder: "unknown" as const,
+  decimalSeparator: null,
+  groupingSeparator: null,
+  languages: [] as string[],
+  legalEntitySuffixes: [] as string[],
+  parsingProfileConfidence: 0,
+};
 
 const normalizeText = (value: unknown) =>
   String(value ?? "")
@@ -150,6 +215,7 @@ export const resolveTransactionContext = (params: {
       currency: explicitCurrency,
       categoryHint: null,
       transactionTypeHint: null,
+      ...emptyParsingContext,
       travelLikely: false,
       foreignCurrencyLikely: false,
       contextStatus: "unmatched",
@@ -185,6 +251,7 @@ export const resolveTransactionContext = (params: {
   const resolvedCategory = ambiguous ? null : matched.categoryHint ?? null;
   const resolvedType = ambiguous ? null : matched.transactionTypeHint ?? null;
   const baseConfidence = ambiguous ? Math.min(74, matched.confidence) : matched.confidence;
+  const parsingProfile = getRegionalProfile(resolvedCountry);
   return {
     corpusVersion: CONTEXT_CORPUS_VERSION,
     countryCode: resolvedCountry,
@@ -194,6 +261,13 @@ export const resolveTransactionContext = (params: {
     currency: explicitCurrency ?? matched.currency ?? null,
     categoryHint: resolvedCategory,
     transactionTypeHint: resolvedType,
+    primaryLocale: parsingProfile?.primaryLocale ?? null,
+    dateOrder: parsingProfile?.dateOrder ?? "unknown",
+    decimalSeparator: parsingProfile?.decimalSeparator ?? null,
+    groupingSeparator: parsingProfile?.groupingSeparator ?? null,
+    languages: parsingProfile?.languages ?? [],
+    legalEntitySuffixes: parsingProfile?.legalEntitySuffixes ?? [],
+    parsingProfileConfidence: parsingProfile?.confidence ?? 0,
     travelLikely: strongestMatches.some(({ entry }) => entry.travelLikely),
     foreignCurrencyLikely: strongestMatches.some(({ entry }) => entry.foreignCurrencyLikely) || Boolean(explicitCurrency && matched.currency && explicitCurrency !== matched.currency),
     contextStatus: ambiguous ? "ambiguous" : "matched",
@@ -211,6 +285,11 @@ export const resolveTransactionContext = (params: {
     confidence: Math.min(99, baseConfidence + (explicitCurrency && sameCurrency ? 1 : 0)),
     evidence,
   };
+};
+
+export const getRegionalParsingProfile = (countryCode?: string | null) => {
+  const profile = getRegionalProfile(countryCode);
+  return profile ? { ...profile, locales: [...profile.locales], languages: [...profile.languages], legalEntitySuffixes: [...profile.legalEntitySuffixes] } : null;
 };
 
 export const getContextCorpusEntries = () => entries.map((entry) => ({ ...entry, aliases: [...entry.aliases], negativeAliases: [...(entry.negativeAliases ?? [])] }));

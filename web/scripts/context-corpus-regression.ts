@@ -8,6 +8,16 @@ const gcash = resolveTransactionContext({ merchantRaw: "GCASH CASH IN", currency
 assert.equal(gcash.countryCode, "PH");
 assert.equal(gcash.paymentRail, "gcash");
 assert.equal(gcash.transactionTypeHint, "transfer");
+assert.equal(gcash.primaryLocale, "en-PH");
+assert.equal(gcash.dateOrder, "mdy");
+assert.equal(gcash.decimalSeparator, ".");
+
+const indonesia = resolveTransactionContext({ institution: "Bank Indonesia", description: "QRIS payment", currency: "IDR" });
+assert.equal(indonesia.countryCode, "ID");
+assert.equal(indonesia.primaryLocale, "id-ID");
+assert.equal(indonesia.decimalSeparator, ",");
+assert.equal(indonesia.groupingSeparator, ".");
+assert.equal(indonesia.legalEntitySuffixes.includes("pt"), true);
 
 const paynow = resolveTransactionContext({ description: "PAYNOW TRANSFER", currency: "SGD" });
 assert.equal(paynow.countryCode, "SG");
@@ -22,6 +32,7 @@ assert.equal(unknown.countryCode, null);
 assert.equal(unknown.currency, "USD");
 assert.equal(unknown.confidence, 55);
 assert.equal(unknown.contextStatus, "unmatched");
+assert.equal(unknown.primaryLocale, null);
 
 const fx = resolveTransactionContext({ description: "Foreign transaction fee", currency: "PHP" });
 assert.equal(fx.foreignCurrencyLikely, true);

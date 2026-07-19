@@ -1,6 +1,6 @@
 # Data Engine Context Corpus
 
-Version: `2026.07.2`
+Version: `2026.07.3`
 
 The context corpus provides regional and global evidence for transaction normalization. It is advisory context: it may enrich a parsed row or increase confidence, but it must not overwrite confirmed transaction fields.
 
@@ -16,13 +16,15 @@ The context corpus provides regional and global evidence for transaction normali
 
 Each entry has aliases, geography, payment rail, institution type, currency, semantic hints, and confidence. Aliases are evidence only; they are not sufficient by themselves to replace a user-confirmed merchant, category, or type.
 
-The resolver returns multiple signals and a `contextStatus`:
+The resolver returns multiple signals, regional parsing metadata, and a `contextStatus`:
 
 - `matched`: one coherent regional interpretation;
 - `ambiguous`: conflicting country or rail evidence, so regional fields and semantic hints are suppressed;
 - `unmatched`: no corpus evidence beyond any explicitly supplied currency.
 
 Field-level confidence is tracked separately for geography, rail, institution type, currency, category, and transaction type. Travel and foreign-currency signals are intentionally separate from country inference: an overseas hotel does not prove which country the user visited.
+
+Regional parsing metadata includes likely locale, date order, decimal separator, grouping separator, languages, and common legal-entity suffixes. These values are parsing hints only. The parser must still prefer statement headers, explicit format metadata, and successful statement templates when they disagree.
 
 The engine should keep these layers separate:
 
@@ -39,7 +41,7 @@ When corpus evidence conflicts with a confirmed value, the confirmed value wins.
 
 1. Add explicit country, region, payment rail, and evidence fields to normalized payloads.
 2. Expand institution and wallet aliases from real imported statements.
-3. Add locale-aware date, decimal, language, and legal-entity normalization.
+3. Use locale-aware date, decimal, language, and legal-entity metadata in generic parsing fallbacks.
 4. Add foreign-currency conversion, exchange-fee, and travel-event grouping.
 5. Add regional regression fixtures and confidence calibration.
 6. Promote repeated, high-quality user corrections into versioned corpus entries.
