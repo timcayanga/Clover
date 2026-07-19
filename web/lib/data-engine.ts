@@ -22,6 +22,7 @@ import {
   shouldTreatAsTransferDescription,
 } from "@/lib/merchant-category-hints";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
+import { resolveTransactionContext } from "@/lib/context-corpus";
 import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 
 export const DATA_ENGINE_VERSION = "v2";
@@ -3215,7 +3216,22 @@ const buildTransactionInsertRecord = async (params: TransactionInsertParams, col
   if (columnSet.has("duplicateConfidence")) record.duplicateConfidence = params.duplicateConfidence ?? 0;
   if (columnSet.has("transferConfidence")) record.transferConfidence = params.transferConfidence ?? 0;
   if (columnSet.has("rawPayload")) record.rawPayload = params.rawPayload ?? null;
-  if (columnSet.has("normalizedPayload")) record.normalizedPayload = params.normalizedPayload ?? null;
+  if (columnSet.has("normalizedPayload")) {
+    const context = resolveTransactionContext({
+      merchantRaw: params.merchantRaw,
+      merchantClean: params.merchantClean,
+      description: params.description,
+      currency: params.currency,
+    });
+    const existingNormalizedPayload =
+      params.normalizedPayload && typeof params.normalizedPayload === "object" && !Array.isArray(params.normalizedPayload)
+        ? (params.normalizedPayload as Record<string, unknown>)
+        : {};
+    record.normalizedPayload = {
+      ...existingNormalizedPayload,
+      context,
+    } as Prisma.InputJsonValue;
+  }
   if (columnSet.has("learnedRuleIdsApplied")) record.learnedRuleIdsApplied = params.learnedRuleIdsApplied ?? null;
   if (columnSet.has("sourceRowKey")) record.sourceRowKey = params.sourceRowKey ?? null;
   if (columnSet.has("date")) record.date = params.date;
@@ -3322,7 +3338,24 @@ export const buildParsedTransactionInsertData = async (params: {
     if (columns.has("accountMatchConfidence")) record.accountMatchConfidence = row.accountMatchConfidence ?? 0;
     if (columns.has("duplicateConfidence")) record.duplicateConfidence = row.duplicateConfidence ?? 0;
     if (columns.has("transferConfidence")) record.transferConfidence = row.transferConfidence ?? 0;
-    if (columns.has("normalizedPayload")) record.normalizedPayload = (row.normalizedPayload ?? null) as Prisma.InputJsonValue | null;
+    if (columns.has("normalizedPayload")) {
+      const context = resolveTransactionContext({
+        institution: params.metadata.institution,
+        accountName: row.accountName ?? params.metadata.accountName,
+        merchantRaw: row.merchantRaw,
+        merchantClean: row.merchantClean,
+        description: row.description,
+        currency,
+      });
+      const existingNormalizedPayload =
+        row.normalizedPayload && typeof row.normalizedPayload === "object" && !Array.isArray(row.normalizedPayload)
+          ? (row.normalizedPayload as Record<string, unknown>)
+          : {};
+      record.normalizedPayload = {
+        ...existingNormalizedPayload,
+        context,
+      } as Prisma.InputJsonValue;
+    }
     if (columns.has("learnedRuleIdsApplied")) record.learnedRuleIdsApplied = (row.learnedRuleIdsApplied ?? null) as Prisma.InputJsonValue | null;
     if (columns.has("createdAt")) record.createdAt = new Date();
     return [record];

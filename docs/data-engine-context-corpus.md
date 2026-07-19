@@ -1,0 +1,41 @@
+# Data Engine Context Corpus
+
+Version: `2026.07.1`
+
+The context corpus provides regional and global evidence for transaction normalization. It is advisory context: it may enrich a parsed row or increase confidence, but it must not overwrite confirmed transaction fields.
+
+## Current coverage
+
+- Global: Wise, PayPal, card networks, cross-border transfers
+- Philippines: GCash, Maya, InstaPay, PESONet, BPI, BDO, UnionBank
+- Southeast Asia: Singapore, Malaysia, Indonesia, Thailand, Vietnam
+- East Asia: Japan, Hong Kong, Taiwan
+- Diaspora and international accounts: India, UAE, SEPA/Europe, United States, United Kingdom, Australia
+
+## Evidence policy
+
+Each entry has aliases, geography, payment rail, institution type, currency, semantic hints, and confidence. Aliases are evidence only; they are not sufficient by themselves to replace a user-confirmed merchant, category, or type.
+
+The engine should keep these layers separate:
+
+1. raw statement/OCR text;
+2. parsed values;
+3. corpus-derived context;
+4. normalized values;
+5. learned user rules;
+6. confirmed user values.
+
+When corpus evidence conflicts with a confirmed value, the confirmed value wins. When evidence is unfamiliar or ambiguous, the row remains reviewable.
+
+## Expansion roadmap
+
+1. Add explicit country, region, payment rail, and evidence fields to normalized payloads.
+2. Expand institution and wallet aliases from real imported statements.
+3. Add locale-aware date, decimal, language, and legal-entity normalization.
+4. Add foreign-currency, exchange-fee, and travel context.
+5. Add regional regression fixtures and confidence calibration.
+6. Promote repeated, high-quality user corrections into versioned corpus entries.
+
+## Adding an entry
+
+Prefer a narrow alias and an explicit semantic meaning. Include a negative example when an alias is commonly ambiguous. Do not add a merchant to a shared corpus solely because one user confirmed it; that belongs in workspace-scoped learning rules.
