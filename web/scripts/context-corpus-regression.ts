@@ -10,6 +10,9 @@ assert.equal(coverage.corpusVersion, CONTEXT_CORPUS_VERSION);
 assert.ok(coverage.canonicalEntryCount >= 100);
 assert.ok(coverage.descriptorVariantEntryCount > 1000);
 assert.ok(Object.keys(coverage.countryCounts).length >= 25);
+assert.ok((coverage.countryPurposeCounts.PH?.utilities ?? 0) > 0);
+assert.ok((coverage.countryPurposeCounts.SG?.healthcare ?? 0) > 0);
+assert.ok((coverage.countryPurposeCounts.AE?.utilities ?? 0) > 0);
 
 const gcash = resolveTransactionContext({ merchantRaw: "GCASH CASH IN", currency: "PHP" });
 assert.equal(gcash.countryCode, "PH");
@@ -98,6 +101,9 @@ const expandedFixtures = [
   { input: { description: "VIPPS NORWAY", currency: "NOK" }, countryCode: "NO", paymentRail: "norway_bank_rail", purposeHint: null },
   { input: { description: "MPAY MACAU", currency: "MOP" }, countryCode: "MO", paymentRail: "macau_wallet", purposeHint: null },
   { input: { description: "MOBILE MONEY GHANA", currency: "GHS" }, countryCode: "GH", paymentRail: "ghana_wallet", purposeHint: null },
+  { input: { merchantRaw: "RAFFLES MEDICAL SINGAPORE", currency: "SGD" }, countryCode: "SG", paymentRail: null, purposeHint: "healthcare" },
+  { input: { merchantRaw: "DEWA DUBAI", currency: "AED" }, countryCode: "AE", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "TELSTRA BUSINESS AUSTRALIA", currency: "AUD" }, countryCode: "AU", paymentRail: null, purposeHint: "utilities" },
 ] as const;
 for (const fixture of expandedFixtures) {
   const context = resolveTransactionContext(fixture.input);

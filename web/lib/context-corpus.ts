@@ -5,7 +5,7 @@
  * confirmed transaction values. Keep raw statement text outside this module.
  */
 
-export const CONTEXT_CORPUS_VERSION = "2026.07.15";
+export const CONTEXT_CORPUS_VERSION = "2026.07.16";
 
 export type ContextSignal = {
   id: string;
@@ -402,6 +402,19 @@ const baseEntries: ContextEntry[] = [
   { id: "gh-payment-rails", aliases: ["mobile money ghana", "momo ghana", "vodafone cash ghana", "mtn momo ghana", "expresspay ghana"], signalKind: "payment_rail", countryCode: "GH", regionCode: "AFR", paymentRail: "ghana_wallet", currency: "GHS", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 64 },
   { id: "tz-payment-rails", aliases: ["mpesa tanzania", "tigopesa tanzania", "airtel money tanzania", "mixx by yas", "nmb bank tanzania"], signalKind: "payment_rail", countryCode: "TZ", regionCode: "AFR", paymentRail: "tanzania_wallet", currency: "TZS", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 62 },
   { id: "lk-payment-rails", aliases: ["lankaqr", "frimi sri lanka", "sampath bank sri lanka", "commercial bank sri lanka", "dialog genie"], signalKind: "payment_rail", countryCode: "LK", regionCode: "SAS", paymentRail: "sri_lanka_wallet", currency: "LKR", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 62 },
+  { id: "sg-healthcare-education", aliases: ["raffles medical singapore", "parkway pantai singapore", "national university of singapore", "nanyang technological university"], signalKind: "merchant", countryCode: "SG", regionCode: "SEA", currency: "SGD", categoryHint: "Health & Wellness", counterpartyType: "healthcare_provider", purposeHint: "healthcare", confidence: 78 },
+  { id: "my-healthcare-education", aliases: ["gleneagles hospital malaysia", "pantai hospital malaysia", "universiti malaya", "monash university malaysia"], signalKind: "merchant", countryCode: "MY", regionCode: "SEA", currency: "MYR", categoryHint: "Health & Wellness", counterpartyType: "healthcare_provider", purposeHint: "healthcare", confidence: 76 },
+  { id: "hk-utilities-telecom", aliases: ["hong kong electric", "hong kong and china gas", "csl hong kong", "smartone hong kong"], signalKind: "merchant", countryCode: "HK", regionCode: "EAS", currency: "HKD", categoryHint: "Bills & Utilities", counterpartyType: "utility_provider", purposeHint: "utilities", confidence: 78 },
+  { id: "tw-wallets-telecom", aliases: ["taiwan pay", "chunghwa telecom taiwan", "taiwan mobile", "fareastone taiwan"], signalKind: "payment_rail", countryCode: "TW", regionCode: "EAS", paymentRail: "taiwan_wallet", currency: "TWD", institutionType: "wallet", categoryHint: "Transfers", transactionTypeHint: "transfer", purposeHint: "transfer", confidence: 78 },
+  { id: "jp-utilities-telecom", aliases: ["tepco japan", "tokyo electric power", "ntt docomo japan", "softbank japan"], signalKind: "merchant", countryCode: "JP", regionCode: "EAS", currency: "JPY", categoryHint: "Bills & Utilities", counterpartyType: "utility_provider", purposeHint: "utilities", confidence: 78 },
+  { id: "ae-utilities-telecom", aliases: ["abu dhabi distribution company", "al ain distribution company", "emirates central cooling", "du home broadband"], signalKind: "merchant", countryCode: "AE", regionCode: "MEA", currency: "AED", categoryHint: "Bills & Utilities", counterpartyType: "utility_provider", purposeHint: "utilities", confidence: 78 },
+  { id: "sa-utilities-retail-health", aliases: ["saudi electricity company", "national water company saudi", "nahdi medical saudi", "saudi telecom business"], signalKind: "merchant", countryCode: "SA", regionCode: "MEA", currency: "SAR", categoryHint: "Bills & Utilities", counterpartyType: "utility_provider", purposeHint: "utilities", confidence: 76 },
+  { id: "qa-utilities-telecom", aliases: ["qatar cool", "kahramaa qatar", "qatar fuel", "vodafone qatar business"], signalKind: "merchant", countryCode: "QA", regionCode: "MEA", currency: "QAR", categoryHint: "Bills & Utilities", counterpartyType: "utility_provider", purposeHint: "utilities", confidence: 74 },
+  { id: "kw-utilities-telecom", aliases: ["mew kuwait", "kuwait municipality", "ooredoo kuwait business", "koc kuwait"], signalKind: "merchant", countryCode: "KW", regionCode: "MEA", currency: "KWD", categoryHint: "Bills & Utilities", counterpartyType: "utility_provider", purposeHint: "utilities", confidence: 72 },
+  { id: "us-utilities-telecom", aliases: ["duke energy", "pge california residential", "verizon fios", "spectrum mobile us"], signalKind: "merchant", countryCode: "US", regionCode: "NAM", currency: "USD", categoryHint: "Bills & Utilities", counterpartyType: "utility_provider", purposeHint: "utilities", confidence: 76 },
+  { id: "ca-utilities-telecom", aliases: ["hydro quebec", "hydro one residential", "rogers wireless canada", "bell mobility canada"], signalKind: "merchant", countryCode: "CA", regionCode: "NAM", currency: "CAD", categoryHint: "Bills & Utilities", counterpartyType: "utility_provider", purposeHint: "utilities", confidence: 74 },
+  { id: "au-utilities-telecom", aliases: ["origin energy australia", "energex australia", "telstra business australia", "optus business australia"], signalKind: "merchant", countryCode: "AU", regionCode: "OCE", currency: "AUD", categoryHint: "Bills & Utilities", counterpartyType: "utility_provider", purposeHint: "utilities", confidence: 76 },
+  { id: "gb-utilities-telecom", aliases: ["british gas", "octopus energy uk", "bt broadband uk", "ee mobile uk"], signalKind: "merchant", countryCode: "GB", regionCode: "EUR", currency: "GBP", categoryHint: "Bills & Utilities", counterpartyType: "utility_provider", purposeHint: "utilities", confidence: 76 },
 ];
 
 /**
@@ -792,6 +805,13 @@ export const getContextCorpusCoverageReport = () => {
       if (value) counts[value] = (counts[value] ?? 0) + 1;
       return counts;
     }, {});
+  const countryPurposeCounts = entries.reduce<Record<string, Record<string, number>>>((counts, entry) => {
+    if (!entry.purposeHint) return counts;
+    const purposes = counts[entry.countryCode] ?? {};
+    purposes[entry.purposeHint] = (purposes[entry.purposeHint] ?? 0) + 1;
+    counts[entry.countryCode] = purposes;
+    return counts;
+  }, {});
   const purposeHintCounts = countBy(entries.map((entry) => entry.purposeHint));
   const signalKindCounts = countBy(entries.map((entry) => entry.signalKind));
 
@@ -804,6 +824,7 @@ export const getContextCorpusCoverageReport = () => {
     regionCounts: countBy(entries.map((entry) => entry.regionCode)),
     signalKindCounts,
     purposeHintCounts,
+    countryPurposeCounts,
     currencies: [...new Set(entries.map((entry) => entry.currency).filter((value): value is string => Boolean(value)))].sort(),
   };
 };
