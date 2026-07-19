@@ -36072,7 +36072,7 @@ body:has(.pricing-page) {
   display: flex;
   align-items: center;
   min-width: 0;
-  width: 100%;
+  width: fit-content;
   border-bottom: 1px solid rgba(15, 23, 42, 0.26);
 }
 
@@ -36093,10 +36093,11 @@ body:has(.pricing-page) {
   display: flex;
   align-items: center;
   min-height: 32px;
-  width: 100%;
+  width: fit-content;
   padding: 4px 0 4px 24px;
   color: var(--text);
-  font: inherit;
+  font-size: 14px;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
