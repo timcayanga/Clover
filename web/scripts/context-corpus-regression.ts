@@ -76,6 +76,10 @@ const expandedFixtures = [
   { input: { description: "EFTPOS NEW ZEALAND", currency: "NZD" }, countryCode: "NZ", paymentRail: "new_zealand_bank_rail", purposeHint: null },
   { input: { description: "PIX BRAZIL", currency: "BRL" }, countryCode: "BR", paymentRail: "brazil_pix", purposeHint: null },
   { input: { description: "MADA SAUDI", currency: "SAR" }, countryCode: null, paymentRail: "gulf_domestic_rail", purposeHint: null },
+  { input: { description: "TWINT SWITZERLAND", currency: "CHF" }, countryCode: "CH", paymentRail: "switzerland_bank_rail", purposeHint: null },
+  { input: { description: "BIZUM SPAIN", currency: "EUR" }, countryCode: "ES", paymentRail: "spain_bank_rail", purposeHint: null },
+  { input: { description: "BKASH BANGLADESH", currency: "BDT" }, countryCode: "BD", paymentRail: "bangladesh_wallet", purposeHint: null },
+  { input: { description: "MPESA KENYA", currency: "KES" }, countryCode: "KE", paymentRail: "kenya_wallet", purposeHint: null },
 ] as const;
 for (const fixture of expandedFixtures) {
   const context = resolveTransactionContext(fixture.input);
