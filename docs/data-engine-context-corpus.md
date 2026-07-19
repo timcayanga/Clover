@@ -1,6 +1,6 @@
 # Data Engine Context Corpus
 
-Version: `2026.07.10`
+Version: `2026.07.11`
 
 The context corpus provides regional and global evidence for transaction normalization. It is advisory context: it may enrich a parsed row or increase confidence, but it must not overwrite confirmed transaction fields.
 
@@ -10,7 +10,7 @@ The context corpus provides regional and global evidence for transaction normali
 - Philippines: banks and digital banks, GCash/Maya/PalawanPay, InstaPay/PESONet, remittance and bill-payment agencies, supermarkets, pharmacies, delivery, toll/transit, utilities, telecom, ecommerce, fuel, and airlines
 - Southeast Asia: Singapore, Malaysia, Indonesia, Thailand, Vietnam, Cambodia, Myanmar, Brunei, and Laos, including national QR/instant-payment rails, banks, wallets, transit, grocery, commerce, and utility ecosystems
 - East Asia: Japan, South Korea, Hong Kong, Taiwan, and mainland China, including transit IC cards, wallets, banks, ecommerce, convenience stores, and local transport
-- Diaspora and international accounts: India, UAE, Saudi Arabia, Qatar, Kuwait, SEPA/Europe, United States, Canada, United Kingdom, and Australia
+- Diaspora and international accounts: India, UAE, Saudi Arabia, Qatar, Kuwait, SEPA/Europe, United States, Canada, United Kingdom, Australia, and New Zealand
 
 ## Evidence policy
 
@@ -37,6 +37,8 @@ Context can also provide `counterpartyType` and `purposeHint` values such as emp
 The expansion pass prioritizes places where Filipino financial context is likely to originate: the Philippines launch market; ASEAN work, travel, and payment corridors; East Asian tourism and employment corridors; Western Asia OFW destinations; and large diaspora markets. It captures both institution-level evidence (banks, wallets, payment rails, remittance channels) and merchant-level evidence (groceries, transport, utilities, telecom, healthcare, education, travel, ecommerce, subscriptions, and fuel). Country inference remains conservative: a global merchant signal can enrich purpose without claiming a country.
 
 The corpus now contains more than 1,000 entries. In addition to canonical regional entries, it includes lower-confidence descriptor variants for multi-word signals, such as a known institution or merchant followed by `payment`, `transaction`, or `merchant`. These variants model the way statement processors decorate names, retain the same regional and semantic context, and are intentionally scored below canonical aliases.
+
+The latest canonical layer adds Indian UPI/IMPS/NEFT participants and consumer ecosystems, New Zealand EFTPOS and bank/retail context, SEPA credit-transfer/direct-debit variants, Gulf utilities and remittance-adjacent providers, and additional country-specific banks, commerce, transit, airline, telecom, and investment signals.
 
 Research basis for prioritization includes the Philippine Statistics Authority's 2024 Survey on Overseas Filipinos, which places Asia at 74.5% of OFWs and identifies Saudi Arabia, the UAE, Kuwait, Qatar, Hong Kong, Taiwan, Singapore, and Japan among the major Asian destinations. Payment-rail coverage follows current official descriptions from Bank Indonesia (QRIS), Bank of Thailand (PromptPay), PayNet Malaysia (DuitNow), Octopus/Hong Kong FPS, and Japan's transport-card guidance. These references guide coverage priorities; aliases remain curated evidence and are not treated as proof of identity or location.
 
