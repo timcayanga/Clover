@@ -41,6 +41,46 @@ const truncateMiddle = (value: string, maxLength = 44) => {
   return `${value.slice(0, leading)}…${value.slice(-trailing)}${extension}`;
 };
 
+const describeImportStage = (label: string, progress: number) => {
+  const normalizedLabel = label.trim().toLowerCase();
+
+  if (/password/.test(normalizedLabel)) {
+    return "Password needed";
+  }
+  if (/categor|enrich|normal|duplicate|finaliz|apply/.test(normalizedLabel)) {
+    return "Enriching transactions";
+  }
+  if (/identif|transaction|parsing/.test(normalizedLabel)) {
+    return "Identifying transactions";
+  }
+  if (/account|matching|saving visible|visible in clover/.test(normalizedLabel)) {
+    return "Matching account";
+  }
+  if (/read|scan|statement|document|details|layout/.test(normalizedLabel)) {
+    return "Reading statement";
+  }
+  if (/queue|wait|start/.test(normalizedLabel)) {
+    return "Queued for import";
+  }
+  if (/upload|receiv|prepar|ready/.test(normalizedLabel)) {
+    return "Received file";
+  }
+
+  if (progress >= 95) {
+    return "Saving transactions";
+  }
+  if (progress >= 75) {
+    return "Enriching transactions";
+  }
+  if (progress >= 50) {
+    return "Identifying transactions";
+  }
+  if (progress >= 25) {
+    return "Reading statement";
+  }
+  return "Received file";
+};
+
 export function ImportUploadDock({
   open,
   fileName = null,
@@ -87,28 +127,21 @@ export function ImportUploadDock({
   const donutStyle = { ["--progress" as any]: `${value}%` } as CSSProperties;
   const fileLabel =
     safeFileTotal > 0
-      ? fileName
-        ? isComplete
-          ? `File ${safeFileIndex} of ${safeFileTotal} imported`
-          : `Processing file ${safeFileIndex} of ${safeFileTotal}`
-        : `${safeCompletedFiles} of ${safeFileTotal} ${tone === "error" ? "files checked" : "files ready"}`
-      : "Clover is getting things ready";
-  const displayFileName = fileName ? truncateMiddle(fileName) : null;
-  const progressLabel =
-    safeFileTotal > 0
       ? isComplete
-        ? `${safeCompletedFiles} of ${safeFileTotal}`
-        : fileName
-          ? "Processing"
-          : `${safeCompletedFiles} of ${safeFileTotal}`
-      : "Preparing";
+        ? `File ${safeFileIndex} of ${safeFileTotal} imported`
+        : tone === "error"
+          ? `${safeCompletedFiles} of ${safeFileTotal} files checked`
+          : null
+      : null;
+  const displayFileName = fileName ? truncateMiddle(fileName) : null;
+  const progressLabel = isComplete
+    ? `${safeCompletedFiles} of ${safeFileTotal}`
+    : describeImportStage(detail || phaseLabel || "", value);
   const progressCaption =
     safeFileTotal > 0
-        ? isComplete
-          ? tone === "error" ? "files checked" : "files ready"
-        : fileName
-          ? `file ${safeFileIndex} of ${safeFileTotal}`
-          : tone === "error" ? "files checked" : "files ready"
+      ? isComplete
+        ? tone === "error" ? "files checked" : "files ready"
+        : `file ${safeFileIndex} of ${safeFileTotal}`
       : "import queue";
   const resultHeadline = isComplete ? formatImportResultHeadline(summary) : "";
   const importMilestones = buildImportResultChecklist(summary);
@@ -133,11 +166,10 @@ export function ImportUploadDock({
         <div className="import-upload-dock__header">
           <div className="import-upload-dock__copy">
             <p className="eyebrow">Import progress</p>
-            <strong>{tone === "error" && errorTitle ? errorTitle : fileLabel}</strong>
+            {tone === "error" && errorTitle ? <strong>{errorTitle}</strong> : fileLabel ? <strong>{fileLabel}</strong> : null}
             {displayFileName ? <p className="import-upload-dock__file-name" title={fileName ?? undefined}>{displayFileName}</p> : null}
-            {phaseLabel ? <p className="import-upload-dock__phase">{phaseLabel}</p> : null}
             <p className="import-upload-dock__message">{statusDetail}</p>
-            {timingSummary ? <p className="import-upload-dock__phase">{timingSummary}</p> : null}
+            {tone === "error" && timingSummary ? <p className="import-upload-dock__phase">{timingSummary}</p> : null}
             {tone === "error" && errorCode ? <p className="import-upload-dock__phase">Import code {errorCode}</p> : null}
           </div>
           <div className="import-upload-dock__header-actions">
