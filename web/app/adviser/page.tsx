@@ -19,7 +19,7 @@ import { EmptyDataCta } from "@/components/empty-data-cta";
 import { isLiabilityAccountType, isSpendableAccountType, isTrackedAssetAccountType } from "@/lib/account-types";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
-import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
+import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
 import { isTransientDataError } from "@/lib/transient-data";
 import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
 import { TransientDataRecovery } from "@/components/transient-data-recovery";
@@ -39,6 +39,7 @@ type AdviserTransaction = {
   date: Date;
   amount: unknown;
   type: "income" | "expense" | "transfer";
+  isTransfer: boolean;
   merchantRaw: string;
   merchantClean: string | null;
   description: string | null;
@@ -967,8 +968,9 @@ const buildTransactionSummary = (transactions: AdviserTransaction[]) =>
     (accumulator, transaction) => {
       const amount = Number(transaction.amount);
       const categoryName =
+        transaction.category?.name ??
         getEffectiveTransactionCategoryName({
-          categoryName: transaction.category?.name ?? null,
+          categoryName: null,
           rawPayload: transaction.rawPayload as never,
           merchantRaw: transaction.merchantRaw,
           merchantClean: transaction.merchantClean,
@@ -977,7 +979,16 @@ const buildTransactionSummary = (transactions: AdviserTransaction[]) =>
           source: transaction.importFileId ? "upload" : "manual",
           type: transaction.type,
         }) ?? "Uncategorized";
-      const transactionType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type, transaction.amount);
+      const transactionType = resolveFinancialTransactionType({
+        type: transaction.type,
+        amount: transaction.amount,
+        isTransfer: transaction.isTransfer,
+        categoryName,
+        merchantRaw: transaction.merchantRaw,
+        merchantClean: transaction.merchantClean,
+        description: transaction.description,
+        institution: transaction.account.institution,
+      });
       if (transactionType === "income") {
         accumulator.income += amount;
       } else if (transactionType === "expense") {
@@ -1218,12 +1229,14 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
       where: {
         workspaceId: resolvedWorkspace.id,
         isExcluded: false,
+        deletedAt: null,
       },
       select: {
         id: true,
         date: true,
         amount: true,
         type: true,
+        isTransfer: true,
         merchantRaw: true,
         merchantClean: true,
         description: true,

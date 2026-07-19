@@ -2,11 +2,28 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveBudgetingWorkspace } from "@/lib/budgeting-context";
 import { isMissingBudgetTableError, loadBudgetWorkspaceData } from "@/lib/budgeting-data";
+import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
 
 export const dynamic = "force-dynamic";
 
-const sumExpenses = (transactions: Array<{ amount: unknown; type: string }>) =>
-  transactions.reduce((sum, transaction) => (transaction.type === "expense" ? sum + Math.abs(Number(transaction.amount)) : sum), 0);
+const sumExpenses = (transactions: Array<{
+  amount: unknown;
+  type: "income" | "expense" | "transfer";
+  isTransfer: boolean;
+  category: { name: string } | null;
+}>) =>
+  transactions.reduce(
+    (sum, transaction) =>
+      resolveFinancialTransactionType({
+        type: transaction.type,
+        amount: transaction.amount,
+        isTransfer: transaction.isTransfer,
+        categoryName: transaction.category?.name,
+      }) === "expense"
+        ? sum + Math.abs(Number(transaction.amount))
+        : sum,
+    0
+  );
 
 export async function GET() {
   try {
@@ -20,10 +37,16 @@ export async function GET() {
     nextFourteenDays.setDate(nextFourteenDays.getDate() + 14);
     const [transactions, recurring, budgetData] = await Promise.all([
       prisma.transaction.findMany({
-        where: { workspaceId: context.workspaceId, isExcluded: false },
+        where: { workspaceId: context.workspaceId, isExcluded: false, deletedAt: null },
         orderBy: { date: "desc" },
         take: 5000,
-        select: { date: true, amount: true, type: true },
+        select: {
+          date: true,
+          amount: true,
+          type: true,
+          isTransfer: true,
+          category: { select: { name: true } },
+        },
       }),
       prisma.recurringPattern.findMany({
         where: { workspaceId: context.workspaceId, nextExpectedDate: { gte: now, lte: nextFourteenDays } },

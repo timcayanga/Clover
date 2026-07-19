@@ -123,6 +123,7 @@ type Workspace = {
 
 type Account = {
   id: string;
+  workspaceId?: string;
   name: string;
   institution: string | null;
   accountNumber: string | null;
@@ -173,6 +174,8 @@ const buildCashFallbackAccount = (currency: string): Account => {
 };
 
 const isCashFallbackAccount = (account: Account) => account.id.startsWith("fallback-cash-");
+const isWorkspaceAccount = (account: Account, workspaceId: string) =>
+  account.workspaceId === workspaceId || (!account.workspaceId && isCashFallbackAccount(account));
 
 type UploadAccountLoadingContext = {
   latestCheckpoint: StatementCheckpoint | null;
@@ -410,10 +413,16 @@ const getCachedWorkspaceHydration = (workspaceId: string) => {
   const accountsSnapshot = getCachedAccountsWorkspace(workspaceId);
   if (accountsSnapshot) {
     return {
-      accounts: (accountsSnapshot.accounts as Account[] | undefined) ?? [],
+      accounts: ((accountsSnapshot.accounts as Account[] | undefined) ?? []).filter((account) =>
+        isWorkspaceAccount(account, workspaceId)
+      ),
       accountRules: (accountsSnapshot.accountRules as AccountRule[] | undefined) ?? [],
-      transactions: (accountsSnapshot.transactions as Transaction[] | undefined) ?? [],
-      statementCheckpoints: (accountsSnapshot.statementCheckpoints as StatementCheckpoint[] | undefined) ?? [],
+      transactions: ((accountsSnapshot.transactions as Transaction[] | undefined) ?? []).filter(
+        (transaction) => transaction.workspaceId === workspaceId
+      ),
+      statementCheckpoints: ((accountsSnapshot.statementCheckpoints as StatementCheckpoint[] | undefined) ?? []).filter(
+        (checkpoint) => checkpoint.workspaceId === workspaceId
+      ),
       imports: (transactionsSnapshot?.imports as ImportFile[] | undefined) ?? [],
       updatedAt: accountsSnapshot.updatedAt,
     };
@@ -424,9 +433,13 @@ const getCachedWorkspaceHydration = (workspaceId: string) => {
   }
 
   return {
-    accounts: (transactionsSnapshot.accounts as Account[] | undefined) ?? [],
+    accounts: ((transactionsSnapshot.accounts as Account[] | undefined) ?? []).filter((account) =>
+      isWorkspaceAccount(account, workspaceId)
+    ),
     accountRules: [] as AccountRule[],
-    transactions: (transactionsSnapshot.transactions as Transaction[] | undefined) ?? [],
+    transactions: ((transactionsSnapshot.transactions as Transaction[] | undefined) ?? []).filter(
+      (transaction) => transaction.workspaceId === workspaceId
+    ),
     statementCheckpoints: [] as StatementCheckpoint[],
     imports: (transactionsSnapshot.imports as ImportFile[] | undefined) ?? [],
     updatedAt: transactionsSnapshot.updatedAt,
@@ -480,6 +493,7 @@ type ImportFile = {
 
 type Transaction = {
   id: string;
+  workspaceId?: string;
   accountId: string;
   accountName?: string;
   institution?: string | null;
@@ -505,6 +519,7 @@ type Transaction = {
 
 type StatementCheckpoint = {
   id: string;
+  workspaceId?: string;
   accountId: string | null;
   statementStartDate: string | null;
   statementEndDate: string | null;
@@ -1612,11 +1627,13 @@ function AccountsPageContent() {
       if (accountsResponse.ok) {
         setAccountsLoadFailed(false);
         const payload = accountsResponse.json;
-        fetchedAccounts = Array.isArray(payload?.accounts) ? (payload.accounts as Account[]) : [];
+        fetchedAccounts = Array.isArray(payload?.accounts)
+          ? (payload.accounts as Account[]).filter((account) => isWorkspaceAccount(account, workspaceId))
+          : [];
         const cachedWorkspaceAccounts = getCachedAccountsWorkspace(workspaceId)?.accounts as Account[] | undefined;
         visibleFetchedAccounts = fetchedAccounts.filter((account) => !deletedAccountIdsRef.current.has(account.id));
         visibleCachedWorkspaceAccounts = (cachedWorkspaceAccounts ?? []).filter(
-          (account) => !deletedAccountIdsRef.current.has(account.id)
+          (account) => isWorkspaceAccount(account, workspaceId) && !deletedAccountIdsRef.current.has(account.id)
         );
         shouldAwaitBackgroundBeforeCompletingInitialLoad =
           !options?.silent && visibleFetchedAccounts.length === 0 && visibleCachedWorkspaceAccounts.length === 0;
@@ -1626,10 +1643,15 @@ function AccountsPageContent() {
         setAccounts((current) =>
           mergeAccountsWithOptimisticImports(
             visibleFetchedAccounts,
-            current.length > 0 ? current.filter((account) => !deletedAccountIdsRef.current.has(account.id)) : visibleCachedWorkspaceAccounts,
+            current.length > 0
+              ? current.filter(
+                  (account) => isWorkspaceAccount(account, workspaceId) && !deletedAccountIdsRef.current.has(account.id)
+                )
+              : visibleCachedWorkspaceAccounts,
             deletedAccountIdsRef.current,
             transactions.filter(
               (transaction) =>
+                transaction.workspaceId === workspaceId &&
                 !deletedAccountIdsRef.current.has(transaction.accountId) &&
                 !deletingAccountIdsRef.current.has(transaction.accountId)
             ),
@@ -1760,7 +1782,9 @@ function AccountsPageContent() {
 
           if (transactionsResponse.ok) {
             const fetchedTransactions = Array.isArray(transactionsResponse.json?.transactions)
-              ? (transactionsResponse.json.transactions as Transaction[])
+              ? (transactionsResponse.json.transactions as Transaction[]).filter(
+                  (transaction) => transaction.workspaceId === workspaceId
+                )
               : [];
             const cachedWorkspaceTransactions = getCachedAccountsWorkspace(workspaceId)?.transactions as Transaction[] | undefined;
             const visibleFetchedTransactions = fetchedTransactions.filter(
@@ -1770,6 +1794,7 @@ function AccountsPageContent() {
             );
             const visibleCachedWorkspaceTransactions = (cachedWorkspaceTransactions ?? []).filter(
               (transaction) =>
+                transaction.workspaceId === workspaceId &&
                 !deletedAccountIdsRef.current.has(transaction.accountId) &&
                 !deletingAccountIdsRef.current.has(transaction.accountId)
             );
@@ -1790,7 +1815,9 @@ function AccountsPageContent() {
             setAccounts((current) =>
               mergeAccountsWithOptimisticImports(
                 visibleFetchedAccounts,
-                current.filter((account) => !deletedAccountIdsRef.current.has(account.id)),
+                current.filter(
+                  (account) => isWorkspaceAccount(account, workspaceId) && !deletedAccountIdsRef.current.has(account.id)
+                ),
                 deletedAccountIdsRef.current,
                 visibleFetchedTransactions.length > 0 ? visibleFetchedTransactions : visibleCachedWorkspaceTransactions,
                 { preserveImportedEvidence: true }
@@ -2025,10 +2052,12 @@ function AccountsPageContent() {
     }
 
     const updatedAt = persistAccountsWorkspaceCache(selectedWorkspaceId, {
-      accounts,
+      accounts: accounts.filter((account) => isWorkspaceAccount(account, selectedWorkspaceId)),
       accountRules,
-      transactions,
-      statementCheckpoints,
+      transactions: transactions.filter((transaction) => transaction.workspaceId === selectedWorkspaceId),
+      statementCheckpoints: statementCheckpoints.filter(
+        (checkpoint) => checkpoint.workspaceId === selectedWorkspaceId
+      ),
     });
     markWorkspaceHydrated(selectedWorkspaceId, updatedAt);
   }, [accounts, accountRules, accountsLoadFailed, accountsLoading, selectedWorkspaceId, statementCheckpoints, transactions]);

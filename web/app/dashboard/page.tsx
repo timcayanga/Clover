@@ -20,7 +20,7 @@ import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions"
 import { isTransientDataError } from "@/lib/transient-data";
 import { TransientDataRecovery } from "@/components/transient-data-recovery";
 import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
-import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
+import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
 import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
 import { buildVisibleWorkspaceTransactionWhere } from "@/lib/transaction-query";
 import { DashboardBudgetPulse } from "@/components/dashboard-budget-pulse";
@@ -49,6 +49,7 @@ type DashboardTransaction = {
   categoryConfidence: number | null;
   categoryId: string | null;
   type: "income" | "expense" | "transfer";
+  isTransfer: boolean;
   merchantRaw: string | null;
   merchantClean: string | null;
   account: {
@@ -128,7 +129,12 @@ const toDayStart = (date: Date) => new Date(date.getFullYear(), date.getMonth(),
 const normalizeNetWorthBalance = (type: string, value: number) => (isLiabilityAccountType(type as Parameters<typeof isLiabilityAccountType>[0]) ? -Math.abs(value) : Math.abs(value));
 
 const getDashboardTransactionType = (transaction: DashboardTransaction) =>
-  coerceTransactionTypeFromCategoryName(transaction.category?.name, transaction.type, transaction.amount);
+  resolveFinancialTransactionType({
+    type: transaction.type,
+    amount: transaction.amount,
+    isTransfer: transaction.isTransfer,
+    categoryName: transaction.category?.name,
+  });
 
 const summarizeWindow = (transactions: DashboardTransaction[], label: string): WindowSummary => {
   const totals = summarizeTransactions(transactions);
@@ -649,6 +655,7 @@ async function DashboardStream({
           categoryConfidence: true,
           categoryId: true,
           type: true,
+          isTransfer: true,
           merchantRaw: true,
           merchantClean: true,
           account: {

@@ -83,6 +83,53 @@ export const coerceTransactionTypeFromCategoryName = (
   return "expense";
 };
 
+export const resolveFinancialTransactionType = (transaction: {
+  type: TransactionType;
+  amount?: unknown;
+  isTransfer?: boolean;
+  categoryName?: unknown;
+  merchantRaw?: string | null;
+  merchantClean?: string | null;
+  description?: string | null;
+  institution?: string | null;
+}): TransactionType => {
+  const categoryType = coerceTransactionTypeFromCategoryName(
+    transaction.categoryName,
+    transaction.type,
+    transaction.amount,
+    transaction.isTransfer
+  );
+
+  if (categoryType === "income" || categoryType === "transfer") {
+    return categoryType;
+  }
+
+  const institution = transaction.institution?.trim().toLowerCase() ?? "";
+  if (!/\bbdo\b|\bbanco de oro\b/.test(institution)) {
+    return categoryType;
+  }
+
+  const description = [transaction.merchantClean, transaction.merchantRaw, transaction.description]
+    .map((value) => value?.trim() ?? "")
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (/incoming\s+transfer|interbank\s+deposit|funds?\s+deposited|received\s+a\/c|reciv(?:ed)?\s+a\/c|cash\s+deposit|salary|payroll|interest|intrest|credit\s+movement/.test(description)) {
+    return "income";
+  }
+
+  if (/bank\s+transfer|pob\s+ibft|ibft\s+bn|fund\s+transfer|transfer\s+to|payment\s+to|debit\s+movement/.test(description)) {
+    return "expense";
+  }
+
+  if (/internal\s+clearing|internal\s+clearing\s+on-us|on-us\s+transaction|encashment|check\s+issued|check\s+deposit|dm1|icc|ilnsdm1|pdck3|cm1|drt|cd|ck1/.test(description)) {
+    return "transfer";
+  }
+
+  return categoryType;
+};
+
 export const coerceTransactionDirection = (value: unknown, amount?: unknown): TransactionDirection => {
   const normalized = normalizeDirectionText(value);
 

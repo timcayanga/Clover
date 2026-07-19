@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { loadEnvConfig } from "@next/env";
 import { prisma } from "@/lib/prisma";
+import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
 
 const webRoot = basename(process.cwd()) === "web" ? process.cwd() : join(process.cwd(), "web");
 loadEnvConfig(webRoot);
@@ -15,6 +16,7 @@ const receiptRoot = process.env.CLOVER_RECEIPT_ROOT ?? "/Users/TimCayanga1/Docum
 const passwordFixture = join(webRoot, "tmp/pdfs/rcbc-password-qa.pdf");
 const maxVisibleMs = Number(process.env.CLOVER_IMPORT_MAX_VISIBLE_MS ?? 20_000);
 const caseFilter = process.env.CLOVER_IMPORT_MATRIX_CASE?.trim().toLowerCase() ?? "";
+const keepWorkspaces = process.env.CLOVER_IMPORT_MATRIX_KEEP_WORKSPACES === "true";
 
 type ImportMode = "statement" | "receipt" | "notes";
 
@@ -237,12 +239,107 @@ const verifyTransactions = async (workspaceId: string, importId: string, matrixC
     );
   }
 
-  const spending = transactions.filter((row) => row.type === "expense" && !row.isTransfer).reduce((sum, row) => sum + Number(row.amount), 0);
-  const income = transactions.filter((row) => row.type === "income" && !row.isTransfer).reduce((sum, row) => sum + Number(row.amount), 0);
-  const transfers = transactions.filter((row) => row.isTransfer || row.type === "transfer").reduce((sum, row) => sum + Number(row.amount), 0);
+  const totals = transactions.reduce(
+    (summary, row) => {
+      const amount = Math.abs(Number(row.amount));
+      const type = resolveFinancialTransactionType({
+        type: row.type,
+        amount: row.amount,
+        isTransfer: row.isTransfer,
+        categoryName: row.category?.name,
+        merchantRaw: row.merchantRaw,
+        merchantClean: row.merchantClean,
+        description: row.description,
+        institution: row.account.institution,
+      });
+      summary[type === "expense" ? "spending" : type === "transfer" ? "transfers" : "income"] += amount;
+      return summary;
+    },
+    { spending: 0, income: 0, transfers: 0 }
+  );
+  const { spending, income, transfers } = totals;
   assert.ok(spending > 0 || income > 0 || transfers > 0, `${matrixCase.label}: visible summary values cannot all be zero.`);
 
+  const accountIds = new Set(transactions.map((row) => row.accountId));
+  assert.equal(accountIds.size, 1, `${matrixCase.label}: one file unexpectedly created transactions across multiple accounts.`);
+
   return { count: transactions.length, spending, income, transfers };
+};
+
+const getTransactionApiSnapshot = async (workspaceId: string, summaryMode: "light" | "full") => {
+  const startedAt = Date.now();
+  const response = await fetch(
+    `${baseUrl}/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}&page=1&pageSize=1&summaryMode=${summaryMode}`
+  );
+  const payload = (await response.json().catch(() => ({}))) as {
+    totalCount?: number;
+    summary?: { income?: number; spending?: number; transfers?: number };
+  };
+  assert.equal(response.ok, true, `${summaryMode} transaction API failed: ${JSON.stringify(payload)}`);
+  return {
+    elapsedMs: Date.now() - startedAt,
+    totalCount: Number(payload.totalCount ?? 0),
+    income: Number(payload.summary?.income ?? 0),
+    spending: Number(payload.summary?.spending ?? 0),
+    transfers: Number(payload.summary?.transfers ?? 0),
+  };
+};
+
+const assertClose = (actual: number, expected: number, label: string) =>
+  assert.ok(Math.abs(actual - expected) < 0.01, `${label}: expected ${expected}, got ${actual}.`);
+
+const verifyDownstreamStability = async (
+  workspaceId: string,
+  quality: { count: number; spending: number; income: number; transfers: number },
+  label: string
+) => {
+  const lightSnapshots = [];
+  for (let index = 0; index < 3; index += 1) {
+    lightSnapshots.push(await getTransactionApiSnapshot(workspaceId, "light"));
+    if (index < 2) await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+  const full = await getTransactionApiSnapshot(workspaceId, "full");
+
+  for (const snapshot of [...lightSnapshots, full]) {
+    assert.equal(snapshot.totalCount, quality.count, `${label}: API and persisted row counts diverged.`);
+    assertClose(snapshot.income, quality.income, `${label} income`);
+    assertClose(snapshot.spending, quality.spending, `${label} spending`);
+    assertClose(snapshot.transfers, quality.transfers, `${label} transfers`);
+  }
+  assert.deepEqual(
+    lightSnapshots.map(({ totalCount, income, spending, transfers }) => ({ totalCount, income, spending, transfers })),
+    Array.from({ length: 3 }, () => ({
+      totalCount: quality.count,
+      income: quality.income,
+      spending: quality.spending,
+      transfers: quality.transfers,
+    })),
+    `${label}: summary cards fluctuated after the import settled.`
+  );
+
+  return {
+    lightApiMs: Math.max(...lightSnapshots.map((snapshot) => snapshot.elapsedMs)),
+    fullApiMs: full.elapsedMs,
+  };
+};
+
+const verifyDuplicateReplay = async (workspaceId: string, matrixCase: MatrixCase, expectedCount: number) => {
+  const accountCountBefore = await prisma.account.count({ where: { workspaceId } });
+  const replay = await postFile(workspaceId, matrixCase);
+  assert.equal(replay.response.ok, true, `${matrixCase.label} replay: ${JSON.stringify(replay.payload)}`);
+  const settled = await waitForSettledImport(replay.importId, maxVisibleMs);
+  const elapsedMs = Date.now() - replay.startedAt;
+  assert.equal(settled.status, "done", `${matrixCase.label} replay did not complete.`);
+  assert.ok(elapsedMs <= maxVisibleMs, `${matrixCase.label} replay took ${elapsedMs}ms.`);
+  const [transactionCountAfter, replayRows, accountCountAfter] = await Promise.all([
+    prisma.transaction.count({ where: { workspaceId, deletedAt: null } }),
+    prisma.transaction.count({ where: { workspaceId, importFileId: replay.importId, deletedAt: null } }),
+    prisma.account.count({ where: { workspaceId } }),
+  ]);
+  assert.equal(transactionCountAfter, expectedCount, `${matrixCase.label}: replay duplicated persisted transactions.`);
+  assert.equal(replayRows, 0, `${matrixCase.label}: replay materialized ${replayRows} duplicate rows.`);
+  assert.equal(accountCountAfter, accountCountBefore, `${matrixCase.label}: replay created a duplicate account.`);
+  return elapsedMs;
 };
 
 const main = async () => {
@@ -306,15 +403,42 @@ const main = async () => {
         console.error(JSON.stringify({ label: matrixCase.label, elapsedMs, diagnostics }, null, 2));
         throw error;
       }
-      results.push({ label: matrixCase.label, elapsedMs, status: settled.status, ...quality });
-      console.log(`[PASS] ${matrixCase.label}: ${quality.count} transactions visible in ${elapsedMs}ms.`);
+      let downstream;
+      try {
+        downstream = await verifyDownstreamStability(workspace.id, quality, matrixCase.label);
+      } catch (error) {
+        const [rows, light, full] = await Promise.all([
+          prisma.transaction.findMany({
+            where: { workspaceId: workspace.id, deletedAt: null },
+            select: {
+              amount: true,
+              type: true,
+              isTransfer: true,
+              merchantRaw: true,
+              category: { select: { name: true } },
+              account: { select: { institution: true, type: true } },
+            },
+          }),
+          getTransactionApiSnapshot(workspace.id, "light"),
+          getTransactionApiSnapshot(workspace.id, "full"),
+        ]);
+        console.error(JSON.stringify({ label: matrixCase.label, quality, rows, light, full }, null, 2));
+        throw error;
+      }
+      const duplicateReplayMs = await verifyDuplicateReplay(workspace.id, matrixCase, quality.count);
+      results.push({ label: matrixCase.label, elapsedMs, status: settled.status, ...quality, ...downstream, duplicateReplayMs });
+      console.log(`[PASS] ${matrixCase.label}: ${quality.count} transactions visible in ${elapsedMs}ms; API stable; replay deduped in ${duplicateReplayMs}ms.`);
     }
 
     console.log(JSON.stringify(results, null, 2));
     console.log(`[PASS] ${results.length} real-file import paths met quality checks and the ${maxVisibleMs}ms visibility ceiling.`);
   } finally {
-    for (const workspaceId of workspaces) {
-      await prisma.workspace.delete({ where: { id: workspaceId } }).catch(() => null);
+    if (keepWorkspaces) {
+      console.log(`[QA] Preserved workspaces: ${workspaces.join(", ")}`);
+    } else {
+      for (const workspaceId of workspaces) {
+        await prisma.workspace.delete({ where: { id: workspaceId } }).catch(() => null);
+      }
     }
     await prisma.$disconnect();
   }

@@ -2876,9 +2876,9 @@ function TransactionsPageContent() {
       const nextTransactionsSummary: TransactionPageMeta = summaryPayload
         ? {
             totalCount: displayedTotalCount,
-            income: typeof summaryPayload.income === "number" && summaryPayload.income !== 0 ? summaryPayload.income : visibleSummaryFallback?.income ?? 0,
-            spending: typeof summaryPayload.spending === "number" && summaryPayload.spending !== 0 ? summaryPayload.spending : visibleSummaryFallback?.spending ?? 0,
-            transfers: typeof summaryPayload.transfers === "number" && summaryPayload.transfers !== 0 ? summaryPayload.transfers : visibleSummaryFallback?.transfers ?? 0,
+            income: typeof summaryPayload.income === "number" ? summaryPayload.income : visibleSummaryFallback?.income ?? 0,
+            spending: typeof summaryPayload.spending === "number" ? summaryPayload.spending : visibleSummaryFallback?.spending ?? 0,
+            transfers: typeof summaryPayload.transfers === "number" ? summaryPayload.transfers : visibleSummaryFallback?.transfers ?? 0,
             review: typeof summaryPayload.review === "number" ? summaryPayload.review : 0,
             currencyCodes: nextCurrencyCodes,
             topCategory: Array.isArray(summaryPayload.topCategory) ? summaryPayload.topCategory : null,

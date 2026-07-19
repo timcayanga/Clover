@@ -1,5 +1,6 @@
 import type { BudgetCadence, BudgetKind, BudgetScope, CommitmentKind, CommitmentStatus, TransactionType } from "@prisma/client";
 import { formatCurrencyAmount } from "@/lib/currency-format";
+import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
 
 export type BudgetRecord = {
   id: string;
@@ -25,6 +26,8 @@ export type BudgetTransaction = {
   accountId: string;
   categoryId: string | null;
   type: TransactionType;
+  isTransfer?: boolean;
+  category?: { name: string } | null;
   amount: unknown;
   date: Date;
   isExcluded: boolean;
@@ -306,8 +309,15 @@ const formatHistoryLabel = (cadence: BudgetCadence, start: Date, end: Date) => {
 };
 
 const getBudgetActualAmount = (kind: BudgetKind, transactions: BudgetTransaction[]) => {
-  const spendingTransactions = transactions.filter((transaction) => transaction.type === "expense");
-  const incomeTransactions = transactions.filter((transaction) => transaction.type === "income");
+  const getType = (transaction: BudgetTransaction) =>
+    resolveFinancialTransactionType({
+      type: transaction.type,
+      amount: transaction.amount,
+      isTransfer: transaction.isTransfer,
+      categoryName: transaction.category?.name,
+    });
+  const spendingTransactions = transactions.filter((transaction) => getType(transaction) === "expense");
+  const incomeTransactions = transactions.filter((transaction) => getType(transaction) === "income");
 
   if (kind === "savings_target") {
     return Math.max(

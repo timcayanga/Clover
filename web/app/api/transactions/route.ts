@@ -10,7 +10,7 @@ import { countWorkspaceOwnerTransactions } from "@/lib/plan-access";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName, getLandbankTransactionDisplayOverride } from "@/lib/transaction-display";
-import { coerceTransactionTypeFromCategoryName, isTransferCategoryName } from "@/lib/transaction-directions";
+import { coerceTransactionTypeFromCategoryName, resolveFinancialTransactionType } from "@/lib/transaction-directions";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
@@ -31,8 +31,6 @@ import { summarizeErrorForLog } from "@/lib/security-logging";
 
 export const dynamic = "force-dynamic";
 
-const normalizeCategoryName = (value?: string | null) => value?.trim().toLowerCase() ?? "";
-
 const getSummaryTransactionType = (transaction: {
   type: "income" | "expense" | "transfer";
   isTransfer: boolean;
@@ -42,44 +40,7 @@ const getSummaryTransactionType = (transaction: {
   description?: string | null;
   institution?: string | null;
 }) => {
-  const merchantText = [
-    transaction.merchantClean?.trim() || "",
-    transaction.merchantRaw?.trim() || "",
-    transaction.description?.trim() || "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-  const lowerMerchantText = merchantText.toLowerCase();
-  const institutionText = transaction.institution?.trim().toLowerCase() ?? "";
-  const normalizedCategoryName = normalizeCategoryName(transaction.categoryName);
-
-  if (normalizedCategoryName === "income") {
-    return "income" as const;
-  }
-
-  if (isTransferCategoryName(transaction.categoryName)) {
-    return "transfer" as const;
-  }
-
-  if (/\bbdo\b|\bbanco de oro\b/.test(institutionText)) {
-    if (/incoming\s+transfer|interbank\s+deposit|funds?\s+deposited|received\s+a\/c|reciv(?:ed)?\s+a\/c|cash\s+deposit|salary|payroll|interest|intrest|credit\s+movement/.test(lowerMerchantText)) {
-      return "income" as const;
-    }
-
-    if (/bank\s+transfer|pob\s+ibft|ibft\s+bn|fund\s+transfer|transfer\s+to|payment\s+to|debit\s+movement/.test(lowerMerchantText)) {
-      return "expense" as const;
-    }
-
-    if (/internal\s+clearing|internal\s+clearing\s+on-us|on-us\s+transaction|encashment|check\s+issued|check\s+deposit|dm1|icc|ilnsdm1|pdck3|cm1|drt|cd|ck1/.test(lowerMerchantText)) {
-      return "transfer" as const;
-    }
-  }
-
-  if (transaction.isTransfer) {
-    return "transfer" as const;
-  }
-
-  return transaction.type;
+  return resolveFinancialTransactionType(transaction);
 };
 
 const resolveTransactionsRouteUserId = async () => {
@@ -813,7 +774,7 @@ export async function GET(request: Request) {
         !filters.amountMin?.trim() &&
         !filters.amountMax?.trim();
       const recentImportCutoff = new Date(Date.now() - RECENT_IMPORT_VISIBILITY_WINDOW_MS);
-      const [pageRows, recentImportRows, duplicateRows] = await Promise.all([
+      const [pageRows, recentImportRows, duplicateRows, summaryRows] = await Promise.all([
         prisma.transaction.findMany({
           where: visibleWhere,
           select: {
@@ -932,6 +893,27 @@ export async function GET(request: Request) {
           orderBy,
           take: 250,
         }),
+        prisma.transaction.findMany({
+          where: visibleWhere,
+          select: {
+            amount: true,
+            type: true,
+            isTransfer: true,
+            merchantRaw: true,
+            merchantClean: true,
+            description: true,
+            category: {
+              select: {
+                name: true,
+              },
+            },
+            account: {
+              select: {
+                institution: true,
+              },
+            },
+          },
+        }),
       ]);
       const recentImportRowIds = new Set(recentImportRows.map((transaction) => transaction.id));
       const boostedPageRows = [
@@ -986,17 +968,21 @@ export async function GET(request: Request) {
         spending: 0,
         transfers: 0,
       };
-      for (const transaction of transactions) {
-        if (transaction.isExcluded) {
-          continue;
-        }
-
+      for (const transaction of summaryRows) {
         const amount = Math.abs(Number(transaction.amount));
         if (!Number.isFinite(amount)) {
           continue;
         }
 
-        const effectiveType = getSummaryTransactionType(transaction);
+        const effectiveType = getSummaryTransactionType({
+          type: transaction.type,
+          isTransfer: transaction.isTransfer,
+          categoryName: transaction.category?.name,
+          merchantRaw: transaction.merchantRaw,
+          merchantClean: transaction.merchantClean,
+          description: transaction.description,
+          institution: transaction.account?.institution,
+        });
         if (effectiveType === "income") {
           lightSummary.income += amount;
         } else if (effectiveType === "transfer") {
@@ -1232,13 +1218,13 @@ export async function GET(request: Request) {
 
       if (!mappedTransaction.isExcluded) {
         const effectiveType = getSummaryTransactionType({
-          type: mappedTransaction.type,
-          isTransfer: mappedTransaction.isTransfer,
-          categoryName: mappedTransaction.categoryName,
-          merchantRaw: mappedTransaction.merchantRaw,
-          merchantClean: mappedTransaction.merchantClean,
-          description: mappedTransaction.description,
-          institution: mappedTransaction.institution,
+          type: transaction?.type ?? mappedTransaction.type,
+          isTransfer: transaction?.isTransfer ?? mappedTransaction.isTransfer,
+          categoryName: transaction?.category?.name ?? mappedTransaction.categoryName,
+          merchantRaw: transaction?.merchantRaw ?? mappedTransaction.merchantRaw,
+          merchantClean: transaction?.merchantClean ?? mappedTransaction.merchantClean,
+          description: transaction?.description ?? mappedTransaction.description,
+          institution: transaction?.account?.institution ?? mappedTransaction.institution,
         });
 
         if (effectiveType === "income") {

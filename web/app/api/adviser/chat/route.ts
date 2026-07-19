@@ -10,7 +10,7 @@ import { getEnv } from "@/lib/env";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
-import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
+import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
 import { recordAdviserChatQuestion } from "@/lib/adviser-actions";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { assertRateLimit } from "@/lib/rate-limit";
@@ -150,6 +150,7 @@ type AdviserChatAccountSource = {
   transactions: Array<{
     amount: unknown;
     type: "income" | "expense" | "transfer";
+    isTransfer?: boolean;
     isExcluded: boolean;
     merchantRaw: string;
     merchantClean: string | null;
@@ -210,6 +211,7 @@ const buildTransactionSummary = (
   transactions: Array<{
     amount: unknown;
     type: "income" | "expense" | "transfer";
+    isTransfer?: boolean;
     merchantRaw: string;
     merchantClean: string | null;
     description?: string | null;
@@ -227,8 +229,9 @@ const buildTransactionSummary = (
     (accumulator, transaction) => {
       const amount = Number(transaction.amount);
       const categoryName =
+        transaction.category?.name ??
         getEffectiveTransactionCategoryName({
-          categoryName: transaction.category?.name ?? null,
+          categoryName: null,
           rawPayload: transaction.rawPayload as never,
           merchantRaw: transaction.merchantRaw,
           merchantClean: transaction.merchantClean,
@@ -237,7 +240,16 @@ const buildTransactionSummary = (
           source: transaction.importFileId ? "upload" : "manual",
           type: transaction.type,
         }) ?? "Uncategorized";
-      const transactionType = coerceTransactionTypeFromCategoryName(categoryName, transaction.type, transaction.amount);
+      const transactionType = resolveFinancialTransactionType({
+        type: transaction.type,
+        amount: transaction.amount,
+        isTransfer: transaction.isTransfer,
+        categoryName,
+        merchantRaw: transaction.merchantRaw,
+        merchantClean: transaction.merchantClean,
+        description: transaction.description,
+        institution: transaction.account?.institution,
+      });
       if (transactionType === "income") {
         accumulator.income += amount;
       } else if (transactionType === "expense") {
@@ -1012,12 +1024,14 @@ export async function POST(request: Request) {
           where: {
             workspaceId: workspace.id,
             isExcluded: false,
+            deletedAt: null,
           },
           select: {
             id: true,
             date: true,
             amount: true,
             type: true,
+            isTransfer: true,
             merchantRaw: true,
             merchantClean: true,
             description: true,
@@ -1226,6 +1240,7 @@ export async function POST(request: Request) {
       date: Date;
       amount: unknown;
       type: "income" | "expense" | "transfer";
+      isTransfer: boolean;
       merchantRaw: string;
       merchantClean: string | null;
       description: string | null;
@@ -1239,10 +1254,23 @@ export async function POST(request: Request) {
         name: string;
       } | null;
     }>;
+    const normalizedAllTransactions = allTransactions.map((transaction) => ({
+      ...transaction,
+      type: resolveFinancialTransactionType({
+        type: transaction.type,
+        amount: transaction.amount,
+        isTransfer: transaction.isTransfer,
+        categoryName: transaction.category?.name,
+        merchantRaw: transaction.merchantRaw,
+        merchantClean: transaction.merchantClean,
+        description: transaction.description,
+        institution: transaction.account?.institution,
+      }),
+    }));
 
-    const analysisAnchorDate = allTransactions[0]?.date ?? now;
+    const analysisAnchorDate = normalizedAllTransactions[0]?.date ?? now;
     const dataFreshnessLabel = getDataFreshnessCopy(analysisAnchorDate, now);
-    const incomeHistory = allTransactions
+    const incomeHistory = normalizedAllTransactions
       .filter((transaction) => transaction.type === "income" && Math.abs(Number(transaction.amount ?? 0)) > 0)
       .sort((left, right) => left.date.getTime() - right.date.getTime());
     const recentIncomeHistory = incomeHistory.slice(-12);
@@ -1267,22 +1295,22 @@ export async function POST(request: Request) {
     const previousWindowStart = new Date(analysisAnchorDate);
     previousWindowStart.setDate(previousWindowStart.getDate() - 60);
 
-    const currentWindowTransactions = allTransactions.filter(
+    const currentWindowTransactions = normalizedAllTransactions.filter(
       (transaction) => transaction.date > currentWindowStart && transaction.date <= analysisAnchorDate
     );
-    const previousWindowTransactions = allTransactions.filter(
+    const previousWindowTransactions = normalizedAllTransactions.filter(
       (transaction) => transaction.date > previousWindowStart && transaction.date <= currentWindowStart
     );
-    const activeTransactions = currentWindowTransactions.length > 0 ? currentWindowTransactions : allTransactions;
+    const activeTransactions = currentWindowTransactions.length > 0 ? currentWindowTransactions : normalizedAllTransactions;
     const comparisonWindowTransactions =
       previousWindowTransactions.length > 0
         ? previousWindowTransactions
-        : allTransactions.filter((transaction) => transaction.date <= currentWindowStart);
+        : normalizedAllTransactions.filter((transaction) => transaction.date <= currentWindowStart);
 
     const currentSummary = buildTransactionSummary(activeTransactions);
     const previousSummary = buildTransactionSummary(comparisonWindowTransactions);
-    const allSummary = buildTransactionSummary(allTransactions);
-    const monthlySeries = buildMonthlySeries(allTransactions);
+    const allSummary = buildTransactionSummary(normalizedAllTransactions);
+    const monthlySeries = buildMonthlySeries(normalizedAllTransactions);
     const monthlyExpenseTrend = calculateTrendSignal(monthlySeries.map((point) => point.expense));
     const monthlyIncomeTrend = calculateTrendSignal(monthlySeries.map((point) => point.income));
     const monthlyNetTrend = calculateTrendSignal(monthlySeries.map((point) => point.net));
@@ -1295,7 +1323,7 @@ export async function POST(request: Request) {
     const previousNet = previousSummary.income - previousSummary.expense;
     const currentSavingsRate = currentSummary.income > 0 ? currentNet / currentSummary.income : null;
     const previousSavingsRate = previousSummary.income > 0 ? (previousSummary.income - previousSummary.expense) / previousSummary.income : null;
-    const historySpanDays = allTransactions.length > 0 ? Math.max(1, Math.ceil((analysisAnchorDate.getTime() - allTransactions[allTransactions.length - 1].date.getTime()) / (1000 * 60 * 60 * 24))) : 0;
+    const historySpanDays = normalizedAllTransactions.length > 0 ? Math.max(1, Math.ceil((analysisAnchorDate.getTime() - normalizedAllTransactions[normalizedAllTransactions.length - 1].date.getTime()) / (1000 * 60 * 60 * 24))) : 0;
     const historyWindowCount = Math.max(historySpanDays / 30, 1);
     const longTermAverageSpend = allSummary.expense / historyWindowCount;
     const longTermAverageIncome = allSummary.income / historyWindowCount;
