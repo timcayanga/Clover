@@ -35462,6 +35462,17 @@ body:has(.pricing-page) {
   }
 }
 
+@container (max-width: 520px) {
+  .settings-data-danger-item--history {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .settings-data-danger-item--history .settings-data-danger-controls {
+    justify-content: flex-start;
+  }
+}
+
 @container (max-width: 440px) {
   .settings-data-export-card,
   .settings-data-danger-item {
@@ -35920,12 +35931,52 @@ body:has(.pricing-page) {
 }
 
 .settings-inline-field--history {
-  min-width: min(100%, 190px);
+  min-width: min(100%, 170px);
 }
 
-.settings-inline-field--history input {
-  min-height: 38px;
-  padding-inline: 12px;
+.settings-date-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.26);
+}
+
+.settings-date-control__icon {
+  position: absolute;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--muted);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+  pointer-events: none;
+}
+
+.settings-date-control input {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 4px 0 4px 24px;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
+.settings-date-control input:focus {
+  box-shadow: none;
+}
+
+.settings-date-control input::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  width: 100%;
+  cursor: pointer;
 }
 
 .settings-plan-grid {

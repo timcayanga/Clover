@@ -2288,7 +2288,18 @@ export function SettingsHub({
                         <strong>Transactions</strong>
                         <label className="settings-inline-field settings-inline-field--history">
                           <span>Before date</span>
-                          <input type="date" value={historyCutoff} onChange={(event) => setHistoryCutoff(event.target.value)} />
+                          <span className="settings-date-control">
+                            <svg className="settings-date-control__icon" viewBox="0 0 24 24" aria-hidden="true">
+                              <rect x="4" y="5.5" width="16" height="15" rx="2" />
+                              <path d="M7.5 3.5v4M16.5 3.5v4M4 9.5h16" />
+                            </svg>
+                            <input
+                              type="date"
+                              aria-label="Before date"
+                              value={historyCutoff}
+                              onChange={(event) => setHistoryCutoff(event.target.value)}
+                            />
+                          </span>
                         </label>
                       </div>
                       <div className="settings-data-danger-controls">
