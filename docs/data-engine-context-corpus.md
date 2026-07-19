@@ -1,6 +1,6 @@
 # Data Engine Context Corpus
 
-Version: `2026.07.14`
+Version: `2026.07.15`
 
 The context corpus provides regional and global evidence for transaction normalization. It is advisory context: it may enrich a parsed row or increase confidence, but it must not overwrite confirmed transaction fields.
 
@@ -37,6 +37,8 @@ Context can also provide `counterpartyType` and `purposeHint` values such as emp
 The expansion pass prioritizes places where Filipino financial context is likely to originate: the Philippines launch market; ASEAN work, travel, and payment corridors; East Asian tourism and employment corridors; Western Asia OFW destinations; and large diaspora markets. It captures both institution-level evidence (banks, wallets, payment rails, remittance channels) and merchant-level evidence (groceries, transport, utilities, telecom, healthcare, education, travel, ecommerce, subscriptions, and fuel). Country inference remains conservative: a global merchant signal can enrich purpose without claiming a country.
 
 The corpus now contains more than 1,000 entries. In addition to canonical regional entries, it includes lower-confidence descriptor variants for multi-word signals, such as a known institution or merchant followed by `payment`, `transaction`, or `merchant`. These variants model the way statement processors decorate names, retain the same regional and semantic context, and are intentionally scored below canonical aliases.
+
+Matching also tolerates compact statement descriptors such as `GCASHCASHIN` when the compact alias is at least five characters long. Compact matches are recorded with `:compact` evidence so downstream review and diagnostics can distinguish them from ordinary word-boundary matches. Every result reports a coverage tier (`canonical`, `descriptor_variant`, `currency_only`, or `none`) plus the matched aliases. The coverage report exposes canonical and descriptor-variant counts, and breaks entries down by country, region, signal kind, semantic purpose, and currency so expansion work can target real gaps rather than only increasing volume.
 
 The latest canonical layer adds Indian UPI/IMPS/NEFT participants and consumer ecosystems, New Zealand EFTPOS and bank/retail context, SEPA credit-transfer/direct-debit variants, Gulf utilities and remittance-adjacent providers, and additional country-specific banks, commerce, transit, airline, telecom, and investment signals.
 

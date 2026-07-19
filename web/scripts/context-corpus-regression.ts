@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
-import { CONTEXT_CORPUS_VERSION, deriveTravelEpisodes, getContextCorpusEntries, getContextCorpusQualityReport, parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
+import { CONTEXT_CORPUS_VERSION, deriveTravelEpisodes, getContextCorpusCoverageReport, getContextCorpusEntries, getContextCorpusQualityReport, parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
 
 assert.ok(CONTEXT_CORPUS_VERSION);
 assert.ok(getContextCorpusEntries().length >= 1000);
 assert.ok(getContextCorpusQualityReport().profileCount >= 25);
 assert.equal(getContextCorpusQualityReport().valid, true);
+const coverage = getContextCorpusCoverageReport();
+assert.equal(coverage.corpusVersion, CONTEXT_CORPUS_VERSION);
+assert.ok(coverage.canonicalEntryCount >= 100);
+assert.ok(coverage.descriptorVariantEntryCount > 1000);
+assert.ok(Object.keys(coverage.countryCounts).length >= 25);
 
 const gcash = resolveTransactionContext({ merchantRaw: "GCASH CASH IN", currency: "PHP" });
 assert.equal(gcash.countryCode, "PH");
@@ -13,6 +18,16 @@ assert.equal(gcash.transactionTypeHint, "transfer");
 assert.equal(gcash.primaryLocale, "en-PH");
 assert.equal(gcash.dateOrder, "mdy");
 assert.equal(gcash.decimalSeparator, ".");
+
+const compactGcash = resolveTransactionContext({ merchantRaw: "GCASHCASHIN", currency: "PHP" });
+assert.equal(compactGcash.paymentRail, "gcash");
+assert.equal(compactGcash.coverageTier, "canonical");
+assert.equal(compactGcash.matchedAliases.includes("gcash cash in"), true);
+assert.equal(compactGcash.evidence.some((value) => value.includes(":compact")), true);
+
+const descriptorVariant = resolveTransactionContext({ merchantRaw: "BANK OF COMMERCE PHILIPPINES PAYMENT", currency: "PHP" });
+assert.equal(descriptorVariant.coverageTier, "descriptor_variant");
+assert.equal(descriptorVariant.matchedAliases.includes("bank of commerce philippines payment"), true);
 
 const indonesia = resolveTransactionContext({ institution: "Bank Indonesia", description: "QRIS payment", currency: "IDR" });
 assert.equal(indonesia.countryCode, "ID");

@@ -5,7 +5,7 @@
  * confirmed transaction values. Keep raw statement text outside this module.
  */
 
-export const CONTEXT_CORPUS_VERSION = "2026.07.14";
+export const CONTEXT_CORPUS_VERSION = "2026.07.15";
 
 export type ContextSignal = {
   id: string;
@@ -54,7 +54,9 @@ export type TransactionContext = {
   travelLikely: boolean;
   foreignCurrencyLikely: boolean;
   contextStatus: "matched" | "ambiguous" | "unmatched";
+  coverageTier: "canonical" | "descriptor_variant" | "currency_only" | "none";
   matchedEntryIds: string[];
+  matchedAliases: string[];
   fieldConfidence: {
     countryCode: number;
     regionCode: number;
@@ -101,6 +103,7 @@ type ContextEntry = {
   confidence: number;
   source?: ContextSignal["source"];
   reviewStatus?: ContextSignal["reviewStatus"];
+  coverage?: "canonical" | "descriptor_variant";
 };
 
 const baseEntries: ContextEntry[] = [
@@ -420,6 +423,7 @@ const buildDescriptorExpansion = (sourceEntries: ContextEntry[]): ContextEntry[]
           confidence: Math.max(55, entry.confidence - 18),
           source: "curated" as const,
           reviewStatus: "active" as const,
+          coverage: "descriptor_variant" as const,
         }))
       )
   );
@@ -506,12 +510,21 @@ const normalizeText = (value: unknown) =>
     .replace(/\s+/g, " ")
     .trim();
 
-const matchesAlias = (text: string, alias: string) => {
+const normalizeCompactText = (value: unknown) => normalizeText(value).replace(/\s+/g, "");
+
+type AliasMatchMode = "boundary" | "compact";
+
+const findAliasMatch = (text: string, alias: string): AliasMatchMode | null => {
   const normalizedAlias = normalizeText(alias);
-  if (!normalizedAlias) return false;
+  if (!normalizedAlias) return null;
   const escapedAlias = normalizedAlias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(?:^|\\s)${escapedAlias}(?=$|\\s)`, "u").test(text);
+  if (new RegExp(`(?:^|\\s)${escapedAlias}(?=$|\\s)`, "u").test(text)) return "boundary";
+  const compactAlias = normalizedAlias.replace(/\s+/g, "");
+  if (!/\s/.test(text) && compactAlias.length >= 6 && normalizeCompactText(text).includes(compactAlias)) return "compact";
+  return null;
 };
+
+const matchesAlias = (text: string, alias: string) => Boolean(findAliasMatch(text, alias));
 
 export const resolveTransactionContext = (params: {
   institution?: string | null;
@@ -529,14 +542,17 @@ export const resolveTransactionContext = (params: {
   const matches = entries
     .map((entry) => ({
       entry,
-      alias: entry.aliases.find((candidate) => matchesAlias(text, candidate)),
+      aliasMatch: entry.aliases
+        .map((candidate) => ({ alias: candidate, mode: findAliasMatch(text, candidate) }))
+        .sort((left, right) => right.alias.length - left.alias.length)
+        .find((candidate): candidate is { alias: string; mode: AliasMatchMode } => Boolean(candidate.mode)),
     }))
-    .filter((match): match is { entry: ContextEntry; alias: string } => {
-      if (!match.alias) return false;
+    .filter((match): match is { entry: ContextEntry; aliasMatch: { alias: string; mode: AliasMatchMode } } => {
+      if (!match.aliasMatch) return false;
       return !(match.entry.negativeAliases ?? []).some((alias) => matchesAlias(text, alias));
     })
     .sort((left, right) => {
-      const lengthDifference = right.alias.length - left.alias.length;
+      const lengthDifference = right.aliasMatch.alias.length - left.aliasMatch.alias.length;
       return lengthDifference !== 0 ? lengthDifference : right.entry.confidence - left.entry.confidence;
     });
 
@@ -556,7 +572,9 @@ export const resolveTransactionContext = (params: {
       travelLikely: false,
       foreignCurrencyLikely: false,
       contextStatus: "unmatched",
+      coverageTier: explicitCurrency ? "currency_only" : "none",
       matchedEntryIds: [],
+      matchedAliases: [],
       fieldConfidence: { countryCode: 0, regionCode: 0, paymentRail: 0, institutionType: 0, currency: explicitCurrency ? 55 : 0, categoryHint: 0, transactionTypeHint: 0, counterpartyType: 0, purposeHint: 0 },
       signals: explicitCurrency ? [{ id: "explicit-currency", kind: "currency", value: explicitCurrency, confidence: 55, evidence: `currency:${explicitCurrency}`, source: "curated", reviewStatus: "active" }] : [],
       confidence: explicitCurrency ? 55 : 0,
@@ -569,13 +587,13 @@ export const resolveTransactionContext = (params: {
   const distinctCountries = new Set(strongestMatches.map(({ entry }) => entry.countryCode).filter((value) => value !== "GLOBAL"));
   const distinctRails = new Set(strongestMatches.map(({ entry }) => entry.paymentRail).filter(Boolean));
   const ambiguous = distinctCountries.size > 1 || distinctRails.size > 1;
-  const evidence = strongestMatches.map(({ alias }) => `alias:${alias}`);
-  const signals: ContextSignal[] = strongestMatches.map(({ entry, alias }) => ({
+  const evidence = strongestMatches.map(({ aliasMatch }) => `alias:${aliasMatch.alias}${aliasMatch.mode === "compact" ? ":compact" : ""}`);
+  const signals: ContextSignal[] = strongestMatches.map(({ entry, aliasMatch }) => ({
     id: entry.id,
     kind: entry.signalKind ?? "merchant",
     value: entry.paymentRail ?? entry.categoryHint ?? entry.id,
     confidence: entry.confidence,
-    evidence: `alias:${alias}`,
+    evidence: `alias:${aliasMatch.alias}${aliasMatch.mode === "compact" ? ":compact" : ""}`,
     source: entry.source ?? "curated",
     reviewStatus: entry.reviewStatus ?? "active",
   }));
@@ -593,6 +611,7 @@ export const resolveTransactionContext = (params: {
   const resolvedPurpose = ambiguous ? null : matched.purposeHint ?? null;
   const baseConfidence = ambiguous ? Math.min(74, matched.confidence) : matched.confidence;
   const parsingProfile = getRegionalProfile(resolvedCountry);
+  const coverageTier = strongestMatches.some(({ entry }) => entry.coverage === "descriptor_variant") ? "descriptor_variant" : "canonical";
   return {
     corpusVersion: CONTEXT_CORPUS_VERSION,
     countryCode: resolvedCountry,
@@ -614,7 +633,9 @@ export const resolveTransactionContext = (params: {
     travelLikely: strongestMatches.some(({ entry }) => entry.travelLikely),
     foreignCurrencyLikely: strongestMatches.some(({ entry }) => entry.foreignCurrencyLikely) || Boolean(explicitCurrency && matched.currency && explicitCurrency !== matched.currency),
     contextStatus: ambiguous ? "ambiguous" : "matched",
+    coverageTier,
     matchedEntryIds: strongestMatches.map(({ entry }) => entry.id),
+    matchedAliases: strongestMatches.map(({ aliasMatch }) => aliasMatch.alias),
     fieldConfidence: {
       countryCode: resolvedCountry ? baseConfidence : 0,
       regionCode: resolvedRegion ? baseConfidence : 0,
@@ -761,5 +782,28 @@ export const getContextCorpusQualityReport = () => {
     invalidEntryIds: invalidEntries.map((entry) => entry.id),
     duplicateProfiles: [...new Set(duplicateProfiles)],
     valid: duplicateIds.length === 0 && duplicateAliases.length === 0 && invalidEntries.length === 0 && duplicateProfiles.length === 0,
+  };
+};
+
+export const getContextCorpusCoverageReport = () => {
+  const quality = getContextCorpusQualityReport();
+  const countBy = (values: Array<string | null | undefined>) =>
+    values.reduce<Record<string, number>>((counts, value) => {
+      if (value) counts[value] = (counts[value] ?? 0) + 1;
+      return counts;
+    }, {});
+  const purposeHintCounts = countBy(entries.map((entry) => entry.purposeHint));
+  const signalKindCounts = countBy(entries.map((entry) => entry.signalKind));
+
+  return {
+    ...quality,
+    corpusVersion: CONTEXT_CORPUS_VERSION,
+    canonicalEntryCount: entries.filter((entry) => entry.coverage !== "descriptor_variant").length,
+    descriptorVariantEntryCount: entries.filter((entry) => entry.coverage === "descriptor_variant").length,
+    countryCounts: countBy(entries.map((entry) => entry.countryCode)),
+    regionCounts: countBy(entries.map((entry) => entry.regionCode)),
+    signalKindCounts,
+    purposeHintCounts,
+    currencies: [...new Set(entries.map((entry) => entry.currency).filter((value): value is string => Boolean(value)))].sort(),
   };
 };
