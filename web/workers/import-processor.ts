@@ -6197,6 +6197,20 @@ export const countImportTransactionsNeedingCleanup = async (importFileId: string
     },
   });
 
+export const shouldRetryImportEnrichmentCleanup = (params: {
+  attempt: number;
+  cleanupRowsBeforeAttempt: number;
+  remainingCleanupRows: number;
+}) => {
+  if (params.remainingCleanupRows <= 0 || params.attempt >= MAX_IMPORT_ENRICHMENT_ATTEMPTS) {
+    return false;
+  }
+
+  // The second pass enables the stronger deterministic fallback. After that,
+  // retry only when the previous pass actually resolved at least one row.
+  return params.attempt === 1 || params.remainingCleanupRows < params.cleanupRowsBeforeAttempt;
+};
+
 const markRemainingImportCleanupRowsForReview = async (importFileId: string) =>
   prisma.transaction.updateMany({
     where: {
@@ -6381,6 +6395,9 @@ export const processImportEnrichmentJobs = async (options: {
         results.push({ importFileId: job.importFileId, status: "done", processedRows: 0, totalRows: 0 });
         continue;
       }
+      const cleanupRowsBeforeAttempt = await countImportTransactionsNeedingCleanup(job.importFileId).catch(
+        () => totalRows
+      );
 
       const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
         ? await prisma.accountStatementCheckpoint.findUnique({
@@ -6589,7 +6606,13 @@ export const processImportEnrichmentJobs = async (options: {
           });
         });
         const remainingCleanupCount = await countImportTransactionsNeedingCleanup(job.importFileId).catch(() => 0);
-        if (remainingCleanupCount > 0 && attempt < MAX_IMPORT_ENRICHMENT_ATTEMPTS) {
+        if (
+          shouldRetryImportEnrichmentCleanup({
+            attempt,
+            cleanupRowsBeforeAttempt,
+            remainingCleanupRows: remainingCleanupCount,
+          })
+        ) {
           await updateImportEnrichmentJobProgress({
             id: job.id,
             leaseToken,
@@ -6609,19 +6632,12 @@ export const processImportEnrichmentJobs = async (options: {
 
         if (remainingCleanupCount > 0) {
           await markRemainingImportCleanupRowsForReview(job.importFileId).catch(() => null);
-          await failImportEnrichmentJob({
-            id: job.id,
-            workerId,
-            leaseToken,
-            errorCode: "I-206",
-            errorMessage: "Some transaction details may need review.",
-            retryable: false,
-          });
+          await completeImportEnrichmentJob({ id: job.id, totalRows, workerId, leaseToken });
           await updateImportFileCompat(job.importFileId, {
             processingPhase: "complete",
-            processingMessage: "Some transaction details may need review.",
+            processingMessage: "Some transaction details need review.",
           });
-          results.push({ importFileId: job.importFileId, status: "failed", processedRows, totalRows });
+          results.push({ importFileId: job.importFileId, status: "done", processedRows, totalRows });
         } else {
           await completeImportEnrichmentJob({ id: job.id, totalRows, workerId, leaseToken });
           await updateImportFileCompat(job.importFileId, {

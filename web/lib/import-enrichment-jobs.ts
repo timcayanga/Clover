@@ -106,25 +106,35 @@ export const upsertImportEnrichmentJob = async (params: {
         "workspaceId" = EXCLUDED."workspaceId",
         "status" = CASE
           WHEN $6::boolean THEN 'queued'::"ImportEnrichmentJobStatus"
-          WHEN "ImportEnrichmentJob"."status" = 'done' THEN 'done'::"ImportEnrichmentJobStatus"
-          WHEN "ImportEnrichmentJob"."status" = 'failed' THEN 'failed'::"ImportEnrichmentJobStatus"
+          WHEN "ImportEnrichmentJob"."status" IN ('running', 'done', 'failed') THEN "ImportEnrichmentJob"."status"
           ELSE 'queued'::"ImportEnrichmentJobStatus"
         END,
         "phase" = CASE
           WHEN $6::boolean THEN EXCLUDED."phase"
-          WHEN "ImportEnrichmentJob"."status" = 'done' THEN "ImportEnrichmentJob"."phase"
-          WHEN "ImportEnrichmentJob"."status" = 'failed' THEN "ImportEnrichmentJob"."phase"
+          WHEN "ImportEnrichmentJob"."status" IN ('running', 'done', 'failed') THEN "ImportEnrichmentJob"."phase"
           ELSE EXCLUDED."phase"
         END,
         "totalRows" = GREATEST("ImportEnrichmentJob"."totalRows", EXCLUDED."totalRows"),
         "lastRowIndex" = CASE WHEN $6::boolean THEN 0 ELSE "ImportEnrichmentJob"."lastRowIndex" END,
         "processedRows" = CASE WHEN $6::boolean THEN 0 ELSE "ImportEnrichmentJob"."processedRows" END,
         "attempts" = CASE WHEN $6::boolean THEN 0 ELSE "ImportEnrichmentJob"."attempts" END,
-        "errorCode" = NULL,
-        "errorMessage" = NULL,
-        "lockedAt" = NULL,
-        "lockedBy" = NULL,
-        "leaseToken" = NULL,
+        "errorCode" = CASE WHEN $6::boolean THEN NULL ELSE "ImportEnrichmentJob"."errorCode" END,
+        "errorMessage" = CASE WHEN $6::boolean THEN NULL ELSE "ImportEnrichmentJob"."errorMessage" END,
+        "lockedAt" = CASE
+          WHEN $6::boolean THEN NULL
+          WHEN "ImportEnrichmentJob"."status" = 'running' THEN "ImportEnrichmentJob"."lockedAt"
+          ELSE NULL
+        END,
+        "lockedBy" = CASE
+          WHEN $6::boolean THEN NULL
+          WHEN "ImportEnrichmentJob"."status" = 'running' THEN "ImportEnrichmentJob"."lockedBy"
+          ELSE NULL
+        END,
+        "leaseToken" = CASE
+          WHEN $6::boolean THEN NULL
+          WHEN "ImportEnrichmentJob"."status" = 'running' THEN "ImportEnrichmentJob"."leaseToken"
+          ELSE NULL
+        END,
         "leaseVersion" = CASE WHEN $6::boolean THEN "ImportEnrichmentJob"."leaseVersion" + 1 ELSE "ImportEnrichmentJob"."leaseVersion" END,
         "startedAt" = CASE WHEN $6::boolean THEN NULL ELSE "ImportEnrichmentJob"."startedAt" END,
         "completedAt" = CASE WHEN $6::boolean THEN NULL ELSE "ImportEnrichmentJob"."completedAt" END,
