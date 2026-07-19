@@ -18,6 +18,7 @@ type CorpusFileResult = {
   identity: boolean;
   protected: boolean;
   visualRequired: boolean;
+  recognizedEmptyStatement?: boolean;
   otherSamples?: Array<{ merchantRaw: string; merchantClean: string; description: string }>;
   duplicateSamples?: Array<{ key: string; count: number; merchants: string[]; sourceLines: string[] }>;
   error?: string;
@@ -112,11 +113,26 @@ const summarizeFile = async (filePath: string): Promise<CorpusFileResult> => {
       };
     }
     const metadata = detectStatementMetadataFromText(extraction.text, basename(filePath));
-    const rows = parseImportText(extraction.text, basename(filePath), "application/pdf", {
+    const parsedRows = parseImportText(extraction.text, basename(filePath), "application/pdf", {
       institution: metadata.institution,
       accountName: metadata.accountName,
       accountNumber: metadata.accountNumber,
-    }).filter((row) => row.rawPayload?.kind !== "opening_balance");
+    });
+    const rows = parsedRows.filter(
+      (row) => row.rawPayload?.kind !== "opening_balance" && row.rawPayload?.kind !== "account_snapshot_marker"
+    );
+    const hasDedicatedParserEvidence = parsedRows.some((row) =>
+      ["hsbc_uk_pdf_statement_transaction", "wise_pdf_statement_transaction"].includes(String(row.rawPayload?.kind ?? ""))
+    );
+    const hasStructuredEmptyMarker = parsedRows.some(
+      (row) => row.rawPayload?.kind === "account_snapshot_marker" && row.rawPayload?.zeroActivityStatement === true
+    );
+    const isStructuredEmptyWiseStatement =
+      rows.length === 0 &&
+      /\bWise\s+Pilipinas\s+Inc\.?\b/i.test(extraction.text) &&
+      /\bDescription\s+Incoming\s+Outgoing\s+Amount\b/i.test(extraction.text) &&
+      /\b[A-Z]{3}\s+on\s+\d{1,2}\s+[A-Za-z]+\s+\d{4}[^\n]*\b0\.00\s+[A-Z]{3}\b/i.test(extraction.text);
+    const recognizedEmptyStatement = hasStructuredEmptyMarker || isStructuredEmptyWiseStatement;
     const quality = assessStatementExtractionQuality({ rows, pageCount: extraction.pageCount });
     const datedRows = rows.filter((row) => Boolean(row.date)).length;
     const normalizedRows = rows.filter((row) => Boolean(row.merchantClean?.trim())).length;
@@ -161,7 +177,9 @@ const summarizeFile = async (filePath: string): Promise<CorpusFileResult> => {
       protected: false,
       // A sparse text layer on a multi-page statement usually means the table
       // is image-backed; do not count it as complete parser coverage.
-      visualRequired: extraction.pageCount > 1 && rows.length <= 1,
+      visualRequired:
+        extraction.pageCount > 1 && rows.length <= 1 && !hasDedicatedParserEvidence && !recognizedEmptyStatement,
+      ...(recognizedEmptyStatement ? { recognizedEmptyStatement: true } : {}),
       ...(otherSamples.length > 0 ? { otherSamples } : {}),
       ...(duplicateSamples.length > 0 ? { duplicateSamples } : {}),
     };
@@ -193,7 +211,7 @@ const qualityKey = (row: { date?: unknown; amount?: unknown; merchantRaw?: unkno
     ? (row.rawPayload as Record<string, unknown>)
     : null;
   const identity = payload
-    ? payload.referenceNo ?? payload.referenceNumber ?? payload.transactionId ?? payload.transactionNumber ?? payload.timeText ?? payload.transactionTime
+    ? payload.referenceNo ?? payload.referenceNumber ?? payload.transactionId ?? payload.transactionNumber ?? payload.timeText ?? payload.transactionTime ?? payload.sourceRowIndex
     : "";
   return [row.date, row.amount, row.merchantRaw, identity]
     .map((value) => String(value ?? "").trim().toLowerCase().replace(/\s+/g, " "))
@@ -214,7 +232,14 @@ const main = async () => {
   const totalOtherRows = parsed.reduce((sum, result) => sum + result.otherRows, 0);
   const totalRecoverableOtherRows = parsed.reduce((sum, result) => sum + result.recoverableOtherRows, 0);
   const totalDuplicateRiskRows = parsed.reduce((sum, result) => sum + result.duplicateKeyRate * result.rows, 0);
-  const highRiskFiles = evaluated.filter((result) => result.visualRequired || result.rows === 0 || rate(result.otherRows, result.rows) > 0.2 || rate(result.normalizedRows, result.rows) < 0.75 || result.duplicateKeyRate > 0.05);
+  const highRiskFiles = evaluated.filter(
+    (result) =>
+      result.visualRequired ||
+      (result.rows === 0 && !result.recognizedEmptyStatement) ||
+      (!result.recognizedEmptyStatement && rate(result.otherRows, result.rows) > 0.2) ||
+      (!result.recognizedEmptyStatement && rate(result.normalizedRows, result.rows) < 0.75) ||
+      result.duplicateKeyRate > 0.05
+  );
 
   const output = {
     root,

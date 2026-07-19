@@ -11479,6 +11479,244 @@ const parseHsbcAccountNumber = (lines: string[]) => {
   return match?.[2] ?? null;
 };
 
+const hsbcUkPdfDatePattern = /^(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{2,4})\s+(.+)$/i;
+
+const parseHsbcUkPdfStatement = (text: string) => {
+  const normalizedText = normalizeWhitespace(text);
+  if (
+    !/\bHSBC\s+UK\s+Bank\s+plc\b/i.test(normalizedText) ||
+    !/\bYour\s+Statement\b/i.test(normalizedText) ||
+    !/\bYour\s+Bank\s+Account\s+details\b/i.test(normalizedText)
+  ) {
+    return null;
+  }
+
+  const lines = splitStatementLines(text).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const accountNumber = parseHsbcAccountNumber(lines);
+  const periodMatch = normalizedText.match(
+    new RegExp(
+      `\\b(\\d{1,2}\\s+(?:${monthNamePattern})\\s+\\d{4})\\s+to\\s+(\\d{1,2}\\s+(?:${monthNamePattern})\\s+\\d{4})\\b`,
+      "i"
+    )
+  );
+  const startDate = parseDateValue(periodMatch?.[1] ?? null);
+  const endDate = parseDateValue(periodMatch?.[2] ?? null);
+  const rows: ParsedImportRow[] = [];
+  let previousBalance: number | null = null;
+  let openingBalance: number | null = null;
+  let endingBalance: number | null = null;
+  let currentDate: string | null = null;
+  let activeLedger = false;
+  let pendingSegment: { lines: string[]; sourceRowIndex: number; transactionCode: string | null } | null = null;
+
+  const readMoneyValues = (values: string[]) =>
+    values
+      .flatMap((line) => Array.from(line.matchAll(/\b[0-9][0-9,]*\.\d{2}(?!\d)/g)))
+      .map((match) => parseMoney(match[0]))
+      .filter((value): value is number => value !== null);
+
+  const emitPendingSegment = (boundaryBalance: number | null = null, inferTrailingBalance = false) => {
+    const segment = pendingSegment;
+    pendingSegment = null;
+    if (!segment || !currentDate) {
+      return;
+    }
+
+    const moneyValues = readMoneyValues(segment.lines);
+    if (moneyValues.length === 0) {
+      return;
+    }
+    const trailingValue = moneyValues.at(-1) ?? null;
+    const hasBoundaryBalance =
+      boundaryBalance !== null && trailingValue !== null && Math.abs(trailingValue - boundaryBalance) < 0.005;
+    const carriesRunningBalance = (hasBoundaryBalance || inferTrailingBalance) && moneyValues.length >= 2;
+    const accountImpact = carriesRunningBalance ? moneyValues.at(-2) : trailingValue;
+    const runningBalance = hasBoundaryBalance ? boundaryBalance : carriesRunningBalance ? trailingValue : null;
+    if (accountImpact === undefined || accountImpact === null) {
+      return;
+    }
+
+    const descriptionCandidates = segment.lines
+      .map((line, blockIndex) => {
+        let candidate = line.replace(/\b[0-9][0-9,]*\.\d{2}(?!\d).*$/, "").trim();
+        if (blockIndex === 0 && segment.transactionCode) {
+          candidate = candidate.slice(segment.transactionCode.length).trim();
+        }
+        candidate = candidate.replace(/^INT['’]?L\s+\d+\s*/i, "").trim();
+        candidate = candidate.replace(/^\d{5,}(?:\s+\d{5,})?\s*/, "").trim();
+        return candidate;
+      })
+      .filter((candidate) => /[A-Za-z]/.test(candidate));
+    const distinctCandidates = descriptionCandidates.filter((candidate, candidateIndex, allCandidates) => {
+      const normalizedCandidate = candidate.toLowerCase().replace(/[^a-z0-9]+/g, "");
+      if (!normalizedCandidate) {
+        return false;
+      }
+      return !allCandidates.some((other, otherIndex) => {
+        if (otherIndex === candidateIndex) {
+          return false;
+        }
+        const normalizedOther = other.toLowerCase().replace(/[^a-z0-9]+/g, "");
+        return normalizedOther.length > normalizedCandidate.length && normalizedOther.startsWith(normalizedCandidate);
+      });
+    });
+    const description = normalizeWhitespace(distinctCandidates.join(" ") || segment.lines.join(" "));
+    const normalizedCode = String(segment.transactionCode ?? "").toUpperCase();
+    const personalCounterparty = isLikelyPersonToPersonMerchant(description);
+    const inferredType: TransactionType =
+      normalizedCode === "CR" || /\b(?:credit|salary|interest|refund)\b/i.test(description) ? "income" : "expense";
+    const type: TransactionType =
+      ["BP", "TFR", "FPI", "SO", "DD"].includes(normalizedCode) ||
+      (normalizedCode === "CR" && personalCounterparty) ||
+      isStatementPaymentSettlementDescription(description)
+        ? "transfer"
+        : inferredType;
+    const categoryName = type === "transfer" ? "Transfers" : guessCategoryName(description, type);
+
+    rows.push({
+      date: currentDate,
+      amount: Math.abs(accountImpact).toFixed(2),
+      currency: "GBP",
+      merchantRaw: humanizeMerchantText(description),
+      merchantClean: summarizeMerchantText(description, "HSBC"),
+      description,
+      runningBalance: runningBalance ?? undefined,
+      categoryName,
+      accountName: "HSBC",
+      accountNumber: accountNumber ?? undefined,
+      institution: "HSBC",
+      type,
+      confidence: 98,
+      parserConfidence: 98,
+      categoryConfidence: categoryName === "Other" ? 58 : 92,
+      rawPayload: {
+        bank: "HSBC",
+        kind: "hsbc_uk_pdf_statement_transaction",
+        source: "hsbc_uk_pdf_statement",
+        sourceRowIndex: segment.sourceRowIndex,
+        sourceLines: segment.lines,
+        transactionCode: segment.transactionCode,
+        accountImpact,
+        previousBalance,
+        runningBalance,
+      },
+    });
+    if (runningBalance !== null) {
+      previousBalance = runningBalance;
+      endingBalance = runningBalance;
+    }
+  };
+
+  const transactionStartPattern = /^((?:VIS|VMS|BP|CR|DR|TFR|FPI|SO|DD|ATM|CHQ|[)>]{2,4}))\s+(.+)$/i;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (/^Your\s+Bank\s+Account\s+details$/i.test(line)) {
+      activeLedger = true;
+      continue;
+    }
+    if (!activeLedger) {
+      continue;
+    }
+    if (/^(?:Date\s+Pay|A$)/i.test(line)) {
+      continue;
+    }
+    if (/^(?:63-64\s+St\s+Andrews|Contact\s+tel|Information\s+about\s+the\s+Financial)/i.test(line)) {
+      emitPendingSegment();
+      activeLedger = false;
+      continue;
+    }
+
+    const datedLine = line.match(hsbcUkPdfDatePattern);
+    const dateText = datedLine?.[1] ?? null;
+    const ledgerText = datedLine?.[2] ?? line;
+    if (dateText) {
+      emitPendingSegment(null, true);
+      currentDate = parseDateValue(dateText)?.toISOString().slice(0, 10) ?? currentDate;
+    }
+
+    if (/\bBALANCE\s+BROUGHT\s+FORWARD\b/i.test(ledgerText)) {
+      emitPendingSegment();
+      const balance = readMoneyValues([ledgerText]).at(-1) ?? null;
+      previousBalance = balance;
+      openingBalance = openingBalance ?? balance;
+      continue;
+    }
+    if (/\bBALANCE\s+CARRIED\s+FORWARD\b/i.test(ledgerText)) {
+      const balance = readMoneyValues([ledgerText]).at(-1) ?? null;
+      emitPendingSegment(balance);
+      endingBalance = balance ?? endingBalance;
+      previousBalance = balance ?? previousBalance;
+      continue;
+    }
+
+    const transactionStart = ledgerText.match(transactionStartPattern);
+    if (transactionStart) {
+      emitPendingSegment();
+      pendingSegment = {
+        lines: [ledgerText],
+        sourceRowIndex: index,
+        transactionCode: transactionStart[1] ?? null,
+      };
+      continue;
+    }
+    if (pendingSegment) {
+      pendingSegment.lines.push(ledgerText);
+    }
+  }
+  emitPendingSegment(null, true);
+
+  const metadata: DetectedStatementMetadata = {
+    institution: "HSBC",
+    accountNumber,
+    accountName: "HSBC",
+    accountType: "bank",
+    currency: "GBP",
+    openingBalance,
+    endingBalance,
+    startDate: startDate?.toISOString() ?? null,
+    endDate: endDate?.toISOString() ?? null,
+    paymentDueDate: null,
+    totalAmountDue: null,
+    confidence: rows.length > 0 ? 98 : 82,
+  };
+
+  if (rows.length === 0 && openingBalance !== null && endingBalance !== null) {
+    rows.push({
+      date: endDate?.toISOString().slice(0, 10) ?? startDate?.toISOString().slice(0, 10) ?? "2000-01-01",
+      amount: "0.00",
+      currency: "GBP",
+      merchantRaw: "HSBC account snapshot",
+      merchantClean: "HSBC account snapshot",
+      description: "HSBC account snapshot",
+      runningBalance: endingBalance,
+      categoryName: "Other",
+      accountName: "HSBC",
+      accountNumber: accountNumber ?? undefined,
+      institution: "HSBC",
+      type: "transfer",
+      confidence: 96,
+      parserConfidence: 98,
+      categoryConfidence: 100,
+      rawPayload: {
+        bank: "HSBC",
+        kind: "account_snapshot_marker",
+        source: "hsbc_uk_pdf_statement",
+        documentType: "account_detail",
+        accountNumber,
+        accountType: "bank",
+        balance: endingBalance,
+        statementOpeningBalance: openingBalance,
+        statementEndingBalance: endingBalance,
+        currency: "GBP",
+        zeroActivityStatement: true,
+        reviewRequired: false,
+      },
+    });
+  }
+
+  return { metadata, rows };
+};
+
 const parseHsbcScreenshotImportText = (text: string, fileName = "") => {
   const metadata = hsbcScreenshotMetadata(text, fileName);
   if (!metadata) return null;
@@ -22581,6 +22819,11 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
     return wisePdfStatement.metadata;
   }
 
+  const hsbcUkPdfStatement = parseHsbcUkPdfStatement(text);
+  if (hsbcUkPdfStatement) {
+    return hsbcUkPdfStatement.metadata;
+  }
+
   const gotradeMetadata = gotradeScreenshotMetadata(text, fileName);
   if (gotradeMetadata) {
     return withDetectedCurrency(gotradeMetadata, text);
@@ -23029,6 +23272,11 @@ export const parseImportText = (
   const wisePdfStatement = parseWisePdfStatement(text);
   if (wisePdfStatement) {
     return wisePdfStatement.rows;
+  }
+
+  const hsbcUkPdfStatement = parseHsbcUkPdfStatement(text);
+  if (hsbcUkPdfStatement) {
+    return hsbcUkPdfStatement.rows;
   }
 
   const shouldForceWiseScreenshotPath =

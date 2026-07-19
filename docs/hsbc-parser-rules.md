@@ -1,8 +1,8 @@
-# HSBC UK Screenshot Parser Rules
+# HSBC UK Parser Rules
 
 ## Scope
 
-These rules cover HSBC UK mobile screenshots using GBP, including the products overview and account-information screens.
+These rules cover HSBC UK mobile screenshots and HSBC UK current-account PDF statements using GBP.
 
 ## Deterministic Rules
 
@@ -14,6 +14,18 @@ These rules cover HSBC UK mobile screenshots using GBP, including the products o
 - Preserve transaction codes such as `INT` and `GPC028LV2Z` in the raw payload.
 - Accept both `Friday, 01 May 2026` and `May 01 2026` date layouts.
 - Deduplicate overlapping mobile screenshots using date, amount, account, description, and the HSBC screenshot source key.
+
+## PDF Statement Rules
+
+- Detect the HSBC UK statement layout from `HSBC UK Bank plc`, `Your Statement`, and `Your Bank Account details` together.
+- Accept OCR-spaced labels such as `Pay m e nt`, `Ope ning Balance`, and `Clos ing Balance`; transaction extraction must rely on the dated ledger rows rather than exact header spelling.
+- Carry the last visible `DD Mon YY` date across following transaction-code rows because HSBC omits repeated dates for same-day transactions.
+- Start a new transaction at each HSBC code such as `VIS`, `VMS`, `BP`, `CR`, `DR`, `TFR`, `FPI`, `SO`, or `DD`; retain following merchant/location lines until the next code or balance anchor.
+- Treat `BALANCE BROUGHT FORWARD` and `BALANCE CARRIED FORWARD` as reconciliation anchors, not transactions.
+- The last two monetary values in a transaction block are the account impact and running balance. Use the running-balance movement to determine money in versus money out when PDF column spacing is lost.
+- Preserve HSBC transaction codes such as `VIS` and the original grouped source lines in `rawPayload`.
+- Remove routing/reference prefixes such as `INT'L <digits>` from the normalized merchant while retaining them in the audit payload.
+- Reconcile parsed rows from opening balance through the final running or carried-forward balance before treating the deterministic parse as high confidence.
 
 ## Review Rules
 

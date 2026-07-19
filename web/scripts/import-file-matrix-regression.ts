@@ -89,6 +89,18 @@ const cases: MatrixCase[] = [
     expectedAllTransfers: true,
   },
   {
+    label: "HSBC UK same-date SOA",
+    path: join(statementRoot, "Actual SOAs/HSBC UK/2026-06-20_Statement.pdf"),
+    mode: "statement",
+    fileType: "application/pdf",
+    bankName: "HSBC",
+    minimumTransactions: 8,
+    exactTransactions: 8,
+    expectedInstitution: /HSBC/i,
+    expectedAccountType: "bank",
+    expectedMerchant: /Jack'?s Gelato/i,
+  },
+  {
     label: "Maya bank screenshot",
     path: join(screenshotRoot, "Maya/IMG_1363.PNG"),
     mode: "statement",

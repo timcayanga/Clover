@@ -2521,6 +2521,34 @@ const genericSimplifierRules: SimplifierRule[] = [
     patterns: [/\bpriority\s+pass\b/i, /\b15-?ppass\b/i, /\bppass\b/i],
     replacement: "Priority Pass",
   },
+  {
+    patterns: [/\bryanair\b/i],
+    replacement: "Ryanair",
+  },
+  {
+    patterns: [/\bnational\s+express\b/i],
+    replacement: "National Express",
+  },
+  {
+    patterns: [/\bwasabi[_\s]/i],
+    replacement: "Wasabi",
+  },
+  {
+    patterns: [/\bjack(?:'?s|\s+s)\s+gelato\b/i],
+    replacement: "Jack's Gelato",
+  },
+  {
+    patterns: [/\bsainsbury'?s\b/i],
+    replacement: "Sainsbury's",
+  },
+  {
+    patterns: [/\bflat\s+iron\b/i],
+    replacement: "Flat Iron",
+  },
+  {
+    patterns: [/\bcivil\s+aviation\b/i, /\bwww\.caa\.co\.uk\b/i],
+    replacement: "UK Civil Aviation Authority",
+  },
 ];
 
 const stripLeadingStatementNoise = (value: string) => {

@@ -16,13 +16,23 @@ const SPECIFIC_MERCHANT_CATEGORY_HINTS: Array<{
 }> = [
   {
     category: "Food & Dining",
-    lower: /velveteen\s+house|kineya\s+don\s+don\s+tei|don\s+don\s+tei|soi\s+chicken|tartufo\s+ristorante|single\s+origin|kaokee|pickup\s+coffee|cha\s+tuk\s+chak|chatukchak/,
-    compact: /velveteenhouse|kineyadondondtei|dondondtei|soichicken|tartuforistorante|singleorigin|kaokee|pickupcoffee|chatukchak|chatukchak/,
+    lower: /velveteen\s+house|kineya\s+don\s+don\s+tei|don\s+don\s+tei|soi\s+chicken|tartufo\s+ristorante|single\s+origin|kaokee|pickup\s+coffee|cha\s+tuk\s+chak|chatukchak|wasabi(?:_|\s)|jack(?:'?s|\s+s)\s+gelato|flat\s+iron|grain\s*&?\s*hop|damascena|sumup\s*\*?al\s+chile/,
+    compact: /velveteenhouse|kineyadondondtei|dondondtei|soichicken|tartuforistorante|singleorigin|kaokee|pickupcoffee|chatukchak|wasabi|jacksgelato|flatiron|grainhop|damascena|sumupalchile/,
   },
   {
     category: "Travel & Lifestyle",
-    lower: /\bairasia\b|\bnomad\b/,
-    compact: /airasia|nomad/,
+    lower: /\bairasia\b|\bnomad\b|\bryanair\b|holiday\s+inn|civil\s+aviation|usebounce|\bbounce\s*-\s*usebounce\b/,
+    compact: /airasia|nomad|ryanair|holidayinn|civilaviation|usebounce/,
+  },
+  {
+    category: "Transport",
+    lower: /national\s+express|translink\s+fare|contactless\.travel/,
+    compact: /nationalexpress|translinkfare|contactlesstravel/,
+  },
+  {
+    category: "Shopping",
+    lower: /sainsbury'?s|\blondis\b|wh\s*smith|norn\s+irish\s+gif/,
+    compact: /sainsburys|londis|whsmith|nornirishgif/,
   },
   {
     category: "Entertainment",
