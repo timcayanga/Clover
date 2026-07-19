@@ -1,6 +1,6 @@
 # Data Engine Context Corpus
 
-Version: `2026.07.3`
+Version: `2026.07.4`
 
 The context corpus provides regional and global evidence for transaction normalization. It is advisory context: it may enrich a parsed row or increase confidence, but it must not overwrite confirmed transaction fields.
 
@@ -26,6 +26,8 @@ Field-level confidence is tracked separately for geography, rail, institution ty
 
 Regional parsing metadata includes likely locale, date order, decimal separator, grouping separator, languages, and common legal-entity suffixes. These values are parsing hints only. The parser must still prefer statement headers, explicit format metadata, and successful statement templates when they disagree.
 
+Every corpus signal is marked as curated, learned, or user-confirmed, with an active, candidate, or retired review status. The quality report checks unique entry IDs, duplicate aliases, valid confidence bounds, and unique regional profiles before a corpus change is accepted.
+
 The engine should keep these layers separate:
 
 1. raw statement/OCR text;
@@ -44,7 +46,7 @@ When corpus evidence conflicts with a confirmed value, the confirmed value wins.
 3. Use locale-aware date, decimal, language, and legal-entity metadata in generic parsing fallbacks.
 4. Add foreign-currency conversion, exchange-fee, and travel-event grouping.
 5. Add regional regression fixtures and confidence calibration.
-6. Promote repeated, high-quality user corrections into versioned corpus entries.
+6. Promote repeated, high-quality user corrections into versioned corpus entries only after review.
 
 ## Adding an entry
 

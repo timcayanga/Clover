@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { CONTEXT_CORPUS_VERSION, getContextCorpusEntries, resolveTransactionContext } from "@/lib/context-corpus";
+import { CONTEXT_CORPUS_VERSION, getContextCorpusEntries, getContextCorpusQualityReport, resolveTransactionContext } from "@/lib/context-corpus";
 
 assert.ok(CONTEXT_CORPUS_VERSION);
 assert.ok(getContextCorpusEntries().length >= 20);
+assert.equal(getContextCorpusQualityReport().valid, true);
 
 const gcash = resolveTransactionContext({ merchantRaw: "GCASH CASH IN", currency: "PHP" });
 assert.equal(gcash.countryCode, "PH");
@@ -47,5 +48,13 @@ assert.equal(ambiguous.paymentRail, null);
 const lodging = resolveTransactionContext({ merchantRaw: "HOTEL RESERVATION", currency: "JPY" });
 assert.equal(lodging.travelLikely, true);
 assert.equal(lodging.categoryHint, "Travel & Lifestyle");
+
+const salary = resolveTransactionContext({ description: "SALARY CREDIT", currency: "PHP" });
+assert.equal(salary.categoryHint, "Income");
+assert.equal(salary.transactionTypeHint, "income");
+
+const falsePositive = resolveTransactionContext({ merchantRaw: "VISA CAFE", currency: "PHP" });
+assert.equal(falsePositive.paymentRail, null);
+assert.equal(falsePositive.institutionType, "card_network");
 
 console.log(`context corpus regression passed (${CONTEXT_CORPUS_VERSION})`);

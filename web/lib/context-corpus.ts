@@ -5,7 +5,7 @@
  * confirmed transaction values. Keep raw statement text outside this module.
  */
 
-export const CONTEXT_CORPUS_VERSION = "2026.07.3";
+export const CONTEXT_CORPUS_VERSION = "2026.07.4";
 
 export type ContextSignal = {
   id: string;
@@ -13,6 +13,8 @@ export type ContextSignal = {
   value: string;
   confidence: number;
   evidence: string;
+  source: "curated" | "learned" | "user_confirmed";
+  reviewStatus: "active" | "candidate" | "retired";
 };
 
 export type RegionalParsingProfile = {
@@ -27,6 +29,8 @@ export type RegionalParsingProfile = {
   defaultCurrency: string;
   legalEntitySuffixes: string[];
   confidence: number;
+  source?: ContextSignal["source"];
+  reviewStatus?: ContextSignal["reviewStatus"];
 };
 
 export type TransactionContext = {
@@ -78,6 +82,8 @@ type ContextEntry = {
   travelLikely?: boolean;
   foreignCurrencyLikely?: boolean;
   confidence: number;
+  source?: ContextSignal["source"];
+  reviewStatus?: ContextSignal["reviewStatus"];
 };
 
 const entries: ContextEntry[] = [
@@ -132,6 +138,14 @@ const entries: ContextEntry[] = [
   { id: "global-lodging", aliases: ["hotel", "resort", "hostel", "airbnb"], signalKind: "travel", countryCode: "GLOBAL", regionCode: "GLOBAL", categoryHint: "Travel & Lifestyle", travelLikely: true, confidence: 78 },
   { id: "global-fx-fee", aliases: ["foreign transaction fee", "international service fee", "currency conversion fee", "dynamic currency conversion", "dcc fee"], signalKind: "fee", countryCode: "GLOBAL", regionCode: "GLOBAL", categoryHint: "Financial", foreignCurrencyLikely: true, confidence: 94 },
   { id: "global-foreign-currency", aliases: ["exchange rate", "fx markup", "foreign exchange", "overseas transaction"], signalKind: "currency", countryCode: "GLOBAL", regionCode: "GLOBAL", foreignCurrencyLikely: true, confidence: 88 },
+
+  // Financial semantics: these are hints, not automatic user categorization.
+  { id: "global-salary-payroll", aliases: ["salary", "payroll", "pay credit", "wage payment"], signalKind: "merchant", countryCode: "GLOBAL", regionCode: "GLOBAL", categoryHint: "Income", transactionTypeHint: "income", confidence: 84 },
+  { id: "global-tax", aliases: ["tax withheld", "withholding tax", "income tax", "vat", "gst", "sales tax"], signalKind: "fee", countryCode: "GLOBAL", regionCode: "GLOBAL", categoryHint: "Financial", transactionTypeHint: "expense", confidence: 82 },
+  { id: "ph-contributions", aliases: ["sss", "philhealth", "pag ibig", "pag-ibig", "bir ewt", "expanded withholding tax"], signalKind: "fee", countryCode: "PH", regionCode: "SEA", currency: "PHP", categoryHint: "Financial", transactionTypeHint: "expense", confidence: 90 },
+  { id: "sg-contributions", aliases: ["cpf contribution", "cpf", "iras gst"], signalKind: "fee", countryCode: "SG", regionCode: "SEA", currency: "SGD", categoryHint: "Financial", transactionTypeHint: "expense", confidence: 86 },
+  { id: "my-contributions", aliases: ["epf contribution", "kwsp", "socso", "perkeso"], signalKind: "fee", countryCode: "MY", regionCode: "SEA", currency: "MYR", categoryHint: "Financial", transactionTypeHint: "expense", confidence: 86 },
+  { id: "global-remittance-provider", aliases: ["western union", "moneygram", "remitly", "worldremit"], signalKind: "payment_rail", countryCode: "GLOBAL", regionCode: "GLOBAL", paymentRail: "remittance", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 90 },
 ];
 
 const regionalProfiles: RegionalParsingProfile[] = [
@@ -175,7 +189,9 @@ const normalizeText = (value: unknown) =>
 
 const matchesAlias = (text: string, alias: string) => {
   const normalizedAlias = normalizeText(alias);
-  return normalizedAlias.length > 0 && (text === normalizedAlias || text.includes(normalizedAlias));
+  if (!normalizedAlias) return false;
+  const escapedAlias = normalizedAlias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|\\s)${escapedAlias}(?=$|\\s)`, "u").test(text);
 };
 
 export const resolveTransactionContext = (params: {
@@ -221,7 +237,7 @@ export const resolveTransactionContext = (params: {
       contextStatus: "unmatched",
       matchedEntryIds: [],
       fieldConfidence: { countryCode: 0, regionCode: 0, paymentRail: 0, institutionType: 0, currency: explicitCurrency ? 55 : 0, categoryHint: 0, transactionTypeHint: 0 },
-      signals: explicitCurrency ? [{ id: "explicit-currency", kind: "currency", value: explicitCurrency, confidence: 55, evidence: `currency:${explicitCurrency}` }] : [],
+      signals: explicitCurrency ? [{ id: "explicit-currency", kind: "currency", value: explicitCurrency, confidence: 55, evidence: `currency:${explicitCurrency}`, source: "curated", reviewStatus: "active" }] : [],
       confidence: explicitCurrency ? 55 : 0,
       evidence: explicitCurrency ? [`currency:${explicitCurrency}`] : [],
     };
@@ -239,10 +255,12 @@ export const resolveTransactionContext = (params: {
     value: entry.paymentRail ?? entry.categoryHint ?? entry.id,
     confidence: entry.confidence,
     evidence: `alias:${alias}`,
+    source: entry.source ?? "curated",
+    reviewStatus: entry.reviewStatus ?? "active",
   }));
   if (explicitCurrency) {
     evidence.push(`currency:${explicitCurrency}`);
-    signals.push({ id: "explicit-currency", kind: "currency", value: explicitCurrency, confidence: 65, evidence: `currency:${explicitCurrency}` });
+    signals.push({ id: "explicit-currency", kind: "currency", value: explicitCurrency, confidence: 65, evidence: `currency:${explicitCurrency}`, source: "curated", reviewStatus: "active" });
   }
   const sameCurrency = !explicitCurrency || !matched.currency || explicitCurrency === matched.currency;
   const resolvedCountry = ambiguous || matched.countryCode === "GLOBAL" ? null : matched.countryCode;
@@ -292,4 +310,45 @@ export const getRegionalParsingProfile = (countryCode?: string | null) => {
   return profile ? { ...profile, locales: [...profile.locales], languages: [...profile.languages], legalEntitySuffixes: [...profile.legalEntitySuffixes] } : null;
 };
 
-export const getContextCorpusEntries = () => entries.map((entry) => ({ ...entry, aliases: [...entry.aliases], negativeAliases: [...(entry.negativeAliases ?? [])] }));
+export const getContextCorpusEntries = () => entries.map((entry) => ({
+  ...entry,
+  aliases: [...entry.aliases],
+  negativeAliases: [...(entry.negativeAliases ?? [])],
+  source: entry.source ?? "curated",
+  reviewStatus: entry.reviewStatus ?? "active",
+}));
+
+export const getContextCorpusQualityReport = () => {
+  const ids = entries.map((entry) => entry.id);
+  const aliasOwners = new Map<string, string[]>();
+  for (const entry of entries) {
+    for (const alias of entry.aliases) {
+      const normalizedAlias = normalizeText(alias);
+      const owners = aliasOwners.get(normalizedAlias) ?? [];
+      owners.push(entry.id);
+      aliasOwners.set(normalizedAlias, owners);
+    }
+  }
+  const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
+  const duplicateAliases = [...aliasOwners.entries()]
+    .filter(([, owners]) => new Set(owners).size > 1)
+    .map(([alias]) => alias);
+  const invalidEntries = entries.filter((entry) =>
+    !entry.id ||
+    entry.aliases.length === 0 ||
+    entry.aliases.some((alias) => !normalizeText(alias)) ||
+    entry.confidence < 0 ||
+    entry.confidence > 100
+  );
+  const profileCodes = regionalProfiles.map((profile) => profile.countryCode);
+  const duplicateProfiles = profileCodes.filter((code, index) => profileCodes.indexOf(code) !== index);
+  return {
+    entryCount: entries.length,
+    profileCount: regionalProfiles.length,
+    duplicateIds: [...new Set(duplicateIds)],
+    duplicateAliases: [...new Set(duplicateAliases)],
+    invalidEntryIds: invalidEntries.map((entry) => entry.id),
+    duplicateProfiles: [...new Set(duplicateProfiles)],
+    valid: duplicateIds.length === 0 && duplicateAliases.length === 0 && invalidEntries.length === 0 && duplicateProfiles.length === 0,
+  };
+};
