@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { CONTEXT_CORPUS_VERSION, getContextCorpusEntries, getContextCorpusQualityReport, resolveTransactionContext } from "@/lib/context-corpus";
+import { CONTEXT_CORPUS_VERSION, getContextCorpusEntries, getContextCorpusQualityReport, parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
 
 assert.ok(CONTEXT_CORPUS_VERSION);
 assert.ok(getContextCorpusEntries().length >= 20);
@@ -56,5 +56,11 @@ assert.equal(salary.transactionTypeHint, "income");
 const falsePositive = resolveTransactionContext({ merchantRaw: "VISA CAFE", currency: "PHP" });
 assert.equal(falsePositive.paymentRail, null);
 assert.equal(falsePositive.institutionType, "card_network");
+
+assert.equal(parseRegionalDateValue("31/12/2025", "ID")?.toISOString().slice(0, 10), "2025-12-31");
+assert.equal(parseRegionalDateValue("12/31/2025", "US")?.toISOString().slice(0, 10), "2025-12-31");
+assert.equal(parseRegionalAmountValue("1.234,56", "ID"), 1234.56);
+assert.equal(parseRegionalAmountValue("1,234.56", "PH"), 1234.56);
+assert.equal(parseRegionalAmountValue("(1.234,56)", "ID"), -1234.56);
 
 console.log(`context corpus regression passed (${CONTEXT_CORPUS_VERSION})`);

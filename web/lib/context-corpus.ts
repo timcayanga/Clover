@@ -5,7 +5,7 @@
  * confirmed transaction values. Keep raw statement text outside this module.
  */
 
-export const CONTEXT_CORPUS_VERSION = "2026.07.4";
+export const CONTEXT_CORPUS_VERSION = "2026.07.5";
 
 export type ContextSignal = {
   id: string;
@@ -308,6 +308,46 @@ export const resolveTransactionContext = (params: {
 export const getRegionalParsingProfile = (countryCode?: string | null) => {
   const profile = getRegionalProfile(countryCode);
   return profile ? { ...profile, locales: [...profile.locales], languages: [...profile.languages], legalEntitySuffixes: [...profile.legalEntitySuffixes] } : null;
+};
+
+const makeValidUtcDate = (year: number, month: number, day: number) => {
+  const date = new Date(Date.UTC(year, month - 1, day, 12));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? date : null;
+};
+
+export const parseRegionalDateValue = (value: string | null | undefined, countryCode?: string | null) => {
+  const profile = getRegionalProfile(countryCode);
+  if (!profile || profile.dateOrder === "unknown" || !value) return null;
+  const match = String(value).trim().match(/^(\d{1,4})[-/.](\d{1,2})[-/.](\d{1,4})$/);
+  if (!match) return null;
+  let first = Number(match[1]);
+  let second = Number(match[2]);
+  let third = Number(match[3]);
+  const year = first >= 1000 ? first : third >= 1000 ? third : third + (third >= 70 ? 1900 : 2000);
+  if (first >= 1000) {
+    return makeValidUtcDate(year, second, third);
+  }
+  if (profile.dateOrder === "dmy") return makeValidUtcDate(year, second, first);
+  if (profile.dateOrder === "mdy") return makeValidUtcDate(year, first, second);
+  return makeValidUtcDate(year, first, second);
+};
+
+export const parseRegionalAmountValue = (value: string | number | null | undefined, countryCode?: string | null) => {
+  const profile = getRegionalProfile(countryCode);
+  if (!profile || value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const raw = String(value).trim();
+  const negative = /^\s*-/.test(raw) || /^\s*\(/.test(raw);
+  let cleaned = raw.replace(/\u00a0/g, " ").replace(/[^0-9,\.\s]/g, "").replace(/\s+/g, "");
+  if (!cleaned) return null;
+  if (profile.decimalSeparator === ",") {
+    cleaned = cleaned.replace(/\./g, "").replace(/,/g, ".");
+  } else {
+    cleaned = cleaned.replace(/,/g, "");
+  }
+  const parsed = Number(cleaned);
+  if (!Number.isFinite(parsed)) return null;
+  return negative ? -Math.abs(parsed) : parsed;
 };
 
 export const getContextCorpusEntries = () => entries.map((entry) => ({

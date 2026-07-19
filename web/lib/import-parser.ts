@@ -8,6 +8,7 @@ import {
   normalizeScreenshotArtifactText,
 } from "@/lib/screenshot-artifact-filter";
 import { normalizeGcashFamilyScreenshotOcrText } from "@/lib/gcash-family-screenshot";
+import { parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
 
 export type ImportedAccountType =
   | "bank"
@@ -21392,11 +21393,18 @@ export const parseImportTextGenericOnly = (
   }
 
   const records = parseDelimitedText(text, delimiter, context.institution);
+  const corpusContext = resolveTransactionContext({ institution: context.institution, accountName: context.accountName });
+  const regionalCountry = corpusContext.countryCode;
 
   return filterSharedScreenshotParsedRows(
-    records.map((record) => ({
-      date: record.date || record.transaction_date || record.posted_at || record.posted,
-      amount: record.amount || record.value || record.debit || record.credit,
+    records.map((record) => {
+      const rawDate = record.date || record.transaction_date || record.posted_at || record.posted;
+      const rawAmount = record.amount || record.value || record.debit || record.credit;
+      const regionalDate = parseRegionalDateValue(rawDate, regionalCountry);
+      const regionalAmount = parseRegionalAmountValue(rawAmount, regionalCountry);
+      return {
+      date: regionalDate?.toISOString().slice(0, 10) ?? rawDate,
+      amount: regionalAmount !== null ? regionalAmount.toFixed(2) : rawAmount,
       currency: record.currency || record.currency_code || record.currencycode || record.curr,
       merchantRaw: humanizeMerchantText(record.merchant || record.description || record.name || record.payee || record.label || ""),
       merchantClean: summarizeMerchantText(record.merchant_clean || record.clean_merchant || record.name || record.merchant || record.description || "", null),
@@ -21406,7 +21414,7 @@ export const parseImportTextGenericOnly = (
       institution: context.institution ?? undefined,
       type: inferType(record),
       rawPayload: record,
-    })),
+    }; }),
     text,
     fileName,
     context
