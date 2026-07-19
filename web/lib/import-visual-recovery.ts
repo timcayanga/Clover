@@ -43,6 +43,18 @@ export const shouldQueueDifficultVisualImportInsteadOfFailing = (params: {
 export const shouldProcessReceiptInline = (params: { forceInlineProcessing: boolean }) =>
   params.forceInlineProcessing;
 
+export const shouldUseReceiptPreviewFastPath = (params: {
+  receiptPreviewIsUsable: boolean;
+  transactionDate?: string | null;
+  total?: number | string | null;
+  merchant?: string | null;
+}) =>
+  params.receiptPreviewIsUsable &&
+  Boolean(String(params.transactionDate ?? "").trim()) &&
+  Number.isFinite(Number(params.total)) &&
+  Number(params.total) > 0 &&
+  Boolean(String(params.merchant ?? "").trim());
+
 export const shouldLoadReceiptVisionAssets = (params: {
   imageImport: boolean;
   importMode?: string | null;

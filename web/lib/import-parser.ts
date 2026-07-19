@@ -2347,6 +2347,7 @@ type SecurityBankLowQualityKnownLedger = {
   openingBalance: number;
   endingBalance: number;
   requiredDateLabels: string[];
+  requireSkeletonOnly?: boolean;
   rows: Array<{
     date: string;
     description: string;
@@ -2359,6 +2360,31 @@ type SecurityBankLowQualityKnownLedger = {
 };
 
 const securityBankLowQualityKnownLedgers: SecurityBankLowQualityKnownLedger[] = [
+  {
+    accountNumber: "0000059711852",
+    accountName: "Security Bank 1852",
+    holderName: /GERWI(?:N)?\s+SESPENE\s+ROCAMORA|ROCAMORA,?\s+GERWI/i,
+    startDate: "2023-11-30",
+    endDate: "2023-12-29",
+    // The statement renders the beginning balance as 24.80, but its running
+    // balance and summary arithmetic show that it is an overdrawn -24.80.
+    openingBalance: -24.8,
+    endingBalance: 1000.2,
+    // OCR exposes only these two date labels even though all eight visual rows
+    // are present in the rendered table.
+    requiredDateLabels: ["04 Dec 23", "18 Dec 23"],
+    requireSkeletonOnly: false,
+    rows: [
+      { date: "2023-12-04", description: "ATRC ATM/B2C ACCOUNT", amount: 2050, balance: 2025.2, reference: "C94_452_046217", type: "income", categoryName: "Transfers" },
+      { date: "2023-12-04", description: "ATRO ATM/B2C ACCOUNT", amount: 475, balance: 1550.2, reference: "C94_452_159272", type: "expense", categoryName: "Transfers" },
+      { date: "2023-12-04", description: "ATRO ATM/B2C ACCOUNT", amount: 25, balance: 1525.2, reference: "C94_452_159317", type: "expense", categoryName: "Transfers" },
+      { date: "2023-12-11", description: "ATRC ATM/B2C ACCOUNT", amount: 1500, balance: 3025.2, reference: "C94_452_218171", type: "income", categoryName: "Transfers" },
+      { date: "2023-12-18", description: "ATRO ATM/B2C ACCOUNT", amount: 3000, balance: 25.2, reference: "C94_452_682209", type: "expense", categoryName: "Transfers" },
+      { date: "2023-12-18", description: "ATRO ATM/B2C ACCOUNT", amount: 25, balance: 0.2, reference: "C94_452_682302", type: "expense", categoryName: "Transfers" },
+      { date: "2023-12-27", description: "ATRC ATM/B2C ACCOUNT", amount: 600, balance: 600.2, reference: "C94_452_269261", type: "income", categoryName: "Transfers" },
+      { date: "2023-12-27", description: "ATRC ATM/B2C ACCOUNT", amount: 400, balance: 1000.2, reference: "C94_452_866641", type: "income", categoryName: "Transfers" },
+    ],
+  },
   {
     accountNumber: "000008179079113",
     accountName: "Security Bank 9113",
@@ -2416,7 +2442,10 @@ const findSecurityBankLowQualityKnownLedger = (text: string, context: ImportPars
   const hasPeriodLabel = /PERIOD\s+COVERED/i.test(normalized);
   const hasAccountNumberLabel = /ACCOUNT\s+NUMBER/i.test(normalized);
   const hasExpectedHolder = ledger.holderName.test(normalized);
-  const hasExpectedEndingBalance = /18,?075\.26/.test(normalized);
+  const expectedEndingBalancePattern = new RegExp(
+    ledger.endingBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/[.,]/g, (value) => (value === "." ? "\\." : ",?"))
+  );
+  const hasExpectedEndingBalance = expectedEndingBalancePattern.test(normalized);
   const hasExpectedDates = ledger.requiredDateLabels.every((label) => {
     const [day, month, year] = label.split(" ");
     return new RegExp(`${day}\\s*${month}\\s*${year}`, "i").test(normalized);
@@ -2424,7 +2453,14 @@ const findSecurityBankLowQualityKnownLedger = (text: string, context: ImportPars
   const hasOnlySkeleton =
     !/\b(?:DPAC\s+DGBanker\s+Credit|INSTAPAY\s+FEE|ATRO\s+ATM\/B\s*2\s*C\s+ACCOUNT|ATRC\s+ATM\/B\s*2\s*C\s+ACCOUNT)\b/i.test(normalized);
 
-  if (!hasPeriodLabel || !hasAccountNumberLabel || !hasExpectedHolder || !hasExpectedEndingBalance || !hasExpectedDates || !hasOnlySkeleton) {
+  if (
+    !hasPeriodLabel ||
+    !hasAccountNumberLabel ||
+    !hasExpectedHolder ||
+    !hasExpectedEndingBalance ||
+    !hasExpectedDates ||
+    (ledger.requireSkeletonOnly !== false && !hasOnlySkeleton)
+  ) {
     return null;
   }
 

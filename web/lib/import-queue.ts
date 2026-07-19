@@ -14,6 +14,8 @@ type ImportJobPayload = {
 };
 
 const redisUrl = getEnv().REDIS_URL ?? "redis://127.0.0.1:6379";
+export const getImportQueueName = () =>
+  process.env.NODE_ENV === "production" ? "import-processing" : "import-processing-local";
 
 let connection: Redis | null = null;
 let queue: Queue<ImportJobPayload> | null = null;
@@ -28,7 +30,7 @@ const getConnection = () => {
 };
 
 export const getImportQueue = () => {
-  queue ??= new Queue<ImportJobPayload>("import-processing", {
+  queue ??= new Queue<ImportJobPayload>(getImportQueueName(), {
     connection: getConnection(),
     defaultJobOptions: {
       attempts: 3,

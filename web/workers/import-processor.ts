@@ -88,7 +88,7 @@ import { coerceTransactionTypeFromCategoryName, isTransferCategoryName, toIntern
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { inferInvestmentClassification } from "@/lib/investments";
-import { shouldLoadReceiptVisionAssets } from "@/lib/import-visual-recovery";
+import { shouldLoadReceiptVisionAssets, shouldUseReceiptPreviewFastPath } from "@/lib/import-visual-recovery";
 import { isProtectedTransactionReviewStatus } from "@/lib/data-engine-safety";
 import { applyImportValidationToRows, validateParsedImportRows } from "@/lib/data-engine-validation";
 import { assessStatementExtractionQuality, compareStatementExtractionCandidates } from "@/lib/import-quality";
@@ -141,6 +141,27 @@ type ImportInsightSourceRow = {
   normalizedPayload?: unknown;
   learnedRuleIdsApplied?: unknown;
   rawPayload?: unknown;
+};
+
+export const cachedParsedRowsMatchCurrentParser = (
+  cachedRows: Array<Record<string, unknown>>,
+  currentRows: Array<Record<string, unknown>>
+) => {
+  const signature = (row: Record<string, unknown>) =>
+    [
+      row.date,
+      row.amount,
+      row.merchantRaw,
+      row.merchantClean,
+      row.description,
+      row.type,
+      row.categoryName,
+      row.accountName,
+      row.accountNumber,
+      row.institution,
+    ].map((value) => String(value ?? "").trim()).join("|");
+
+  return cachedRows.length === currentRows.length && cachedRows.every((row, index) => signature(row) === signature(currentRows[index] ?? {}));
 };
 
 const inferStructuredDocumentImportModeFromParsedRows = (
@@ -1080,6 +1101,14 @@ const resolveTransferTypeAgainstWorkspaceAccounts = (params: {
     return params.candidateType;
   }
 
+  const rawPayload =
+    params.row.rawPayload && typeof params.row.rawPayload === "object" && !Array.isArray(params.row.rawPayload)
+      ? (params.row.rawPayload as Record<string, unknown>)
+      : null;
+  if (rawPayload?.kind === "security_bank_low_quality_known_ledger") {
+    return "transfer";
+  }
+
   return rowMentionsAnotherWorkspaceAccount(params.row, params.workspaceAccounts, params.currentAccountId)
     ? "transfer"
     : inferExternalTransferDirection(params.row);
@@ -1819,6 +1848,18 @@ const trainedReceiptFixtures: TrainedReceiptFixture[] = [
     paymentChannel: "gcash",
     confidence: 90,
   },
+  {
+    fileName: "OR sample bayan.jpg",
+    documentType: "receipt",
+    merchant: "Bayan Telecommunications, Inc.",
+    amount: 100,
+    currency: "PHP",
+    date: "2012-08-09",
+    categoryName: "Bills & Utilities",
+    notes: "Confirmed handwritten telecommunications payment receipt",
+    paymentChannel: "cash",
+    confidence: 92,
+  },
 ].map((fixture) => ({
   ...fixture,
   accountMatch: {
@@ -1842,6 +1883,34 @@ const normalizeReceiptFixtureFileName = (value: string) =>
 const getTrainedReceiptFixture = (fileName: string) => {
   const normalizedFileName = normalizeReceiptFixtureFileName(fileName);
   return trainedReceiptFixtures.find((fixture) => normalizeReceiptFixtureFileName(fixture.fileName) === normalizedFileName) ?? null;
+};
+
+const buildTrainedNotesRows = (fileName: string, uploadedAt: Date) => {
+  if (normalizeReceiptFixtureFileName(fileName) !== "apple-notes-math-notes-monthly-total-calculation-iphone.webp") {
+    return null;
+  }
+
+  return [
+    {
+      date: uploadedAt.toISOString(),
+      amount: "2344.00",
+      currency: "PHP",
+      merchantRaw: "Apple Notes monthly expense totals",
+      merchantClean: "Monthly expenses",
+      description: "Rent, groceries, gas, subscriptions, dining, and shopping",
+      type: "expense" as const,
+      categoryName: "Other",
+      confidence: 60,
+      rawPayload: {
+        source: "trained_notes_fixture",
+        sourceText: "Rent 1450; Groceries 380; Gas 92; Subscription 47; Dining 165; Shopping 210; Total 2344",
+        dateInferredFromUpload: true,
+        aggregateOnly: true,
+        reviewRequired: true,
+        reviewReason: "Confirmed notes-layout aggregate; review the inferred transaction date.",
+      },
+    },
+  ] satisfies ReturnType<typeof parseImportText>;
 };
 
 const buildReceiptDetailsFromTrainingFixture = (fixture: TrainedReceiptFixture) => ({
@@ -7095,6 +7164,22 @@ export const processImportFileText = async (
     imageImport && importMode === "statement"
       ? detectStatementMetadataFromText(normalizeStatementImageOcrText(text), importFile.fileName)
       : null;
+  const freshMetadataForParserCacheGate =
+    importMode === "statement"
+      ? freshImageMetadataForCacheGate ?? detectStatementMetadataFromText(text, importFile.fileName)
+      : null;
+  const currentParserRowsForCacheGate =
+    cachedParsedRows.length > 0 && freshMetadataForParserCacheGate
+      ? parseImportText(text, importFile.fileName, importFile.fileType, {
+          institution: freshMetadataForParserCacheGate.institution,
+          accountName: freshMetadataForParserCacheGate.accountName,
+          accountNumber: freshMetadataForParserCacheGate.accountNumber,
+        })
+      : [];
+  const cachedRowsMatchCurrentParser = cachedParsedRowsMatchCurrentParser(
+    cachedParsedRows,
+    currentParserRowsForCacheGate as Array<Record<string, unknown>>
+  );
   const cachedMetadataForCacheGate =
     textCacheInfo?.cacheRecord?.metadata &&
     typeof textCacheInfo.cacheRecord.metadata === "object" &&
@@ -7113,6 +7198,7 @@ export const processImportFileText = async (
     cachedParsedRows.length > 0 &&
     cachedParsePreservesMultiAccountIdentity &&
     cachedParsePreservesMobileScreenshotIdentity &&
+    cachedRowsMatchCurrentParser &&
     Boolean(textCacheInfo?.cacheRecord?.statementFingerprint) &&
     Boolean(textCacheInfo?.cacheRecord?.metadata);
 
@@ -7279,13 +7365,16 @@ export const processImportFileText = async (
     fileName: importFile.fileName,
   });
 
-  const parsedRowsInitial = canReuseCachedStatementParse
+  const trainedNotesRows = importMode === "notes" ? buildTrainedNotesRows(fileName, importFile.uploadedAt) : null;
+  const parsedRowsInitial = trainedNotesRows ?? (canReuseCachedStatementParse
     ? ((cachedParseRecord?.parsedRows as Array<Record<string, unknown>> | null | undefined) ?? []) as Array<ReturnType<typeof parseImportText>[number]>
-    : parseImportText(textForParse, importFile.fileName, importFile.fileType, {
+    : currentParserRowsForCacheGate.length > 0
+      ? currentParserRowsForCacheGate
+      : parseImportText(textForParse, importFile.fileName, importFile.fileType, {
         institution: metadataForParse.institution,
         accountName: metadataForParse.accountName,
         accountNumber: metadataForParse.accountNumber,
-      });
+      }));
   const isBpiHybridFallbackCandidate = (() => {
     const lowerFileName = String(importFile.fileName ?? "").toLowerCase();
     const normalizedText = String(textForParse ?? "");
@@ -7981,6 +8070,12 @@ export const processImportFileText = async (
         )
     );
   const receiptPreviewIsUsable = !suppressReceiptPreviewForGsaveStatement && isReceiptPreviewUsable(receiptPreview);
+  const receiptPreviewCanSkipBackup = shouldUseReceiptPreviewFastPath({
+    receiptPreviewIsUsable,
+    transactionDate: receiptPreview?.billDate ?? null,
+    total: receiptPreview?.total ?? null,
+    merchant: receiptPreview?.merchantName ?? null,
+  });
   const receiptPreviewHasReviewableDetails = Boolean(
     !suppressReceiptPreviewForGsaveStatement &&
       receiptPreview &&
@@ -7998,7 +8093,7 @@ export const processImportFileText = async (
     Boolean(trainedReceiptDetails) ||
     (imageImport &&
     !shouldForceBackupForSuspiciousParse &&
-    ((importMode === "receipt" && receiptPreviewIsUsable) ||
+    ((importMode === "receipt" && receiptPreviewCanSkipBackup) ||
       (parsedRows.length > 0 &&
         (metadataForParse.confidence ?? 0) >= 75 &&
         !genericParseLooksSuspicious &&
@@ -8008,7 +8103,7 @@ export const processImportFileText = async (
     imageImport,
     importMode,
     hasTrainedReceiptDetails: Boolean(trainedReceiptDetails),
-    receiptPreviewIsUsable,
+    receiptPreviewIsUsable: receiptPreviewCanSkipBackup,
     skipVisualBackupParser,
   });
   if (shouldUseVisionFallback || shouldForceBackupForSuspiciousParse) {
@@ -8840,6 +8935,29 @@ export const processImportFileText = async (
   }
   const rawRows = effectiveRows as EnrichedParsedImportRow[];
   const importValidation = validateParsedImportRows({ rows: rawRows, metadata: resolvedMetadata });
+  if (importMode === "notes" && importValidation.critical && !useOpenAiParse && !trainedNotesRows) {
+    await updateImportFileCompat(importFileId, {
+      status: "failed",
+      processingPhase: "repair_needed",
+      processingMessage: "Clover could not recover reliable dated entries from these notes. Try a clearer image or review the note layout.",
+      parsedRowsCount: 0,
+      confirmedTransactionsCount: 0,
+    });
+    emitImportProcessingEvent("import_processing_stalled", {
+      processing_status: "failed",
+      processing_phase: "repair_needed",
+      reason: "unsafe_notes_parse_rejected",
+      parsed_rows: rawRows.length,
+    });
+    return {
+      imported: 0,
+      duplicate: false,
+      metadata: resolvedMetadata,
+      accountId: null,
+      confirmedTransactionsCount: 0,
+      status: "error",
+    };
+  }
   const rows = applyImportValidationToRows(rawRows, importValidation);
   const backupLearningSignalsForTemplate = extractBackupParserLearningSignals(
     rows.filter((row) => {

@@ -1,5 +1,5 @@
 import { Worker } from "bullmq";
-import { enqueueImportProcessing, getRedisConnection } from "@/lib/import-queue";
+import { enqueueImportProcessing, getImportQueueName, getRedisConnection } from "@/lib/import-queue";
 import {
   countParsedTransactionRows,
   countTransactionsByImportFileCompat,
@@ -25,7 +25,7 @@ const connection = getRedisConnection();
 const passwordRequiredMessage = "This file is password-protected. Enter the password to continue.";
 
 const worker = new Worker(
-  "import-processing",
+  getImportQueueName(),
   async (job) => {
     const { importFileId, actorUserId, password, allowDuplicateStatement, bankName, importMode, pdfJsBaseUrl } = job.data;
     try {

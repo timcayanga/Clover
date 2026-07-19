@@ -1,0 +1,327 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { basename, extname, join } from "node:path";
+import { loadEnvConfig } from "@next/env";
+import { prisma } from "@/lib/prisma";
+
+const webRoot = basename(process.cwd()) === "web" ? process.cwd() : join(process.cwd(), "web");
+loadEnvConfig(webRoot);
+
+const baseUrl = process.env.CLOVER_IMPORT_REGRESSION_BASE_URL ?? "http://localhost:3001";
+const statementRoot = process.env.CLOVER_STATEMENT_ROOT ?? "/Users/TimCayanga1/Documents/Bank Statements";
+const screenshotRoot = process.env.CLOVER_SCREENSHOT_ROOT ?? "/Users/TimCayanga1/Documents/Bank Screenshots";
+const receiptRoot = process.env.CLOVER_RECEIPT_ROOT ?? "/Users/TimCayanga1/Documents/Receipt Samples";
+const passwordFixture = join(webRoot, "tmp/pdfs/rcbc-password-qa.pdf");
+const maxVisibleMs = Number(process.env.CLOVER_IMPORT_MAX_VISIBLE_MS ?? 20_000);
+const caseFilter = process.env.CLOVER_IMPORT_MATRIX_CASE?.trim().toLowerCase() ?? "";
+
+type ImportMode = "statement" | "receipt" | "notes";
+
+type MatrixCase = {
+  label: string;
+  path: string;
+  mode: ImportMode;
+  fileType: string;
+  bankName?: string;
+  password?: string;
+  expectedPasswordPrompt?: boolean;
+  minimumTransactions: number;
+  expectedInstitution?: RegExp;
+  expectedAccountType?: string;
+  expectedMerchant?: RegExp;
+  expectedAllMerchants?: RegExp;
+  expectedCategory?: string;
+  expectedAllTransfers?: boolean;
+  expectedAmount?: number;
+  exactTransactions?: number;
+  maximumMs?: number;
+};
+
+const cases: MatrixCase[] = [
+  {
+    label: "RCBC unlocked SOA",
+    path: join(statementRoot, "Actual SOAs/RCBC/Unlocked/eStatement_VISA PLATINUM_DEC 22 2025_1014_unlocked.pdf"),
+    mode: "statement",
+    fileType: "application/pdf",
+    bankName: "RCBC",
+    minimumTransactions: 50,
+    expectedInstitution: /RCBC/i,
+    expectedAccountType: "credit_card",
+  },
+  {
+    label: "RCBC password prompt",
+    path: passwordFixture,
+    mode: "statement",
+    fileType: "application/pdf",
+    bankName: "RCBC",
+    expectedPasswordPrompt: true,
+    minimumTransactions: 0,
+    maximumMs: 10_000,
+  },
+  {
+    label: "RCBC password retry",
+    path: passwordFixture,
+    mode: "statement",
+    fileType: "application/pdf",
+    bankName: "RCBC",
+    password: "clover-qa",
+    minimumTransactions: 50,
+    expectedInstitution: /RCBC/i,
+    expectedAccountType: "credit_card",
+  },
+  {
+    label: "Security Bank owner-encrypted SOA",
+    path: join(statementRoot, "Samples/Security Bank/748042099-Security-Bank-Statement-Gsr.pdf"),
+    mode: "statement",
+    fileType: "application/pdf",
+    bankName: "Security Bank",
+    minimumTransactions: 8,
+    exactTransactions: 8,
+    expectedInstitution: /Security Bank/i,
+    expectedAccountType: "bank",
+    expectedAllMerchants: /Account Transfer|ATRC|ATRO/i,
+    expectedCategory: "Transfers",
+    expectedAllTransfers: true,
+  },
+  {
+    label: "Maya bank screenshot",
+    path: join(screenshotRoot, "Maya/IMG_1363.PNG"),
+    mode: "statement",
+    fileType: "image/png",
+    bankName: "Maya",
+    minimumTransactions: 4,
+    expectedInstitution: /Maya/i,
+  },
+  {
+    label: "receipt photo",
+    path: join(receiptRoot, "Actual Receipts/2026-05-01 22.01.12.jpg"),
+    mode: "receipt",
+    fileType: "image/jpeg",
+    minimumTransactions: 1,
+    expectedMerchant: /Jarandjam/i,
+    expectedAmount: 7_782.95,
+  },
+  {
+    label: "handwritten financial record",
+    path: join(receiptRoot, "Samples/OR sample bayan.jpg"),
+    mode: "receipt",
+    fileType: "image/jpeg",
+    minimumTransactions: 1,
+    expectedMerchant: /Bayan/i,
+    expectedAmount: 100,
+  },
+  {
+    label: "digital notes screenshot",
+    path: join(receiptRoot, "Samples/apple-notes-math-notes-monthly-total-calculation-iphone.webp"),
+    mode: "notes",
+    fileType: "image/webp",
+    minimumTransactions: 1,
+    expectedAmount: 2_344,
+  },
+];
+
+const waitForSettledImport = async (importId: string, timeoutMs: number) => {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const snapshot = await prisma.importFile.findUnique({
+      where: { id: importId },
+      select: {
+        status: true,
+        processingPhase: true,
+        processingMessage: true,
+        confirmedTransactionsCount: true,
+      },
+    });
+    if (snapshot?.status === "done" || snapshot?.status === "failed") return snapshot;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new Error(`${importId} did not settle within ${timeoutMs}ms.`);
+};
+
+const createWorkspace = async (userId: string, label: string) =>
+  prisma.workspace.create({
+    data: {
+      userId,
+      name: `Import matrix - ${label} - ${randomUUID()}`,
+      type: "personal",
+    },
+    select: { id: true },
+  });
+
+const postFile = async (workspaceId: string, matrixCase: MatrixCase, importId = randomUUID()) => {
+  const bytes = await readFile(matrixCase.path);
+  const fileName = basename(matrixCase.path);
+  const form = new FormData();
+  form.set("workspaceId", workspaceId);
+  form.set("fileName", fileName);
+  form.set("fileType", matrixCase.fileType);
+  form.set("importMode", matrixCase.mode);
+  form.set("forceInlineProcessing", "true");
+  if (matrixCase.bankName) form.set("bankName", matrixCase.bankName);
+  if (matrixCase.password) form.set("password", matrixCase.password);
+  form.set("file", new Blob([bytes], { type: matrixCase.fileType }), fileName);
+
+  const startedAt = Date.now();
+  const response = await fetch(`${baseUrl}/api/imports/${importId}/process`, { method: "POST", body: form });
+  const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  return { importId, response, payload, startedAt };
+};
+
+const verifyTransactions = async (workspaceId: string, importId: string, matrixCase: MatrixCase) => {
+  const transactions = await prisma.transaction.findMany({
+    where: { workspaceId, importFileId: importId, deletedAt: null },
+    include: {
+      account: { select: { institution: true, type: true, name: true } },
+      category: { select: { name: true } },
+    },
+    orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+  });
+  assert.ok(
+    transactions.length >= matrixCase.minimumTransactions,
+    `${matrixCase.label}: expected at least ${matrixCase.minimumTransactions} transactions, got ${transactions.length}.`
+  );
+  if (matrixCase.exactTransactions != null) {
+    assert.equal(transactions.length, matrixCase.exactTransactions, `${matrixCase.label}: unexpected row count.`);
+  }
+  assert.ok(transactions.every((row) => Number(row.amount) > 0), `${matrixCase.label}: every transaction needs a positive amount.`);
+  assert.ok(transactions.every((row) => row.merchantRaw.trim().length > 0), `${matrixCase.label}: every row needs source text.`);
+  assert.ok(
+    transactions.every((row) => row.parserConfidence >= 0 && row.parserConfidence <= 100),
+    `${matrixCase.label}: parser confidence must remain in range.`
+  );
+
+  const rowKeys = transactions.map((row) => row.sourceRowKey).filter((value): value is string => Boolean(value));
+  assert.equal(new Set(rowKeys).size, rowKeys.length, `${matrixCase.label}: duplicate source row keys were materialized.`);
+
+  if (matrixCase.expectedInstitution) {
+    assert.ok(
+      transactions.some((row) => matrixCase.expectedInstitution!.test(row.account.institution ?? row.account.name)),
+      `${matrixCase.label}: expected institution/account identity was not preserved.`
+    );
+  }
+  if (matrixCase.expectedAccountType) {
+    assert.ok(
+      transactions.every((row) => row.account.type === matrixCase.expectedAccountType),
+      `${matrixCase.label}: expected account type ${matrixCase.expectedAccountType}.`
+    );
+  }
+  if (matrixCase.expectedMerchant) {
+    assert.ok(
+      transactions.some((row) => matrixCase.expectedMerchant!.test(row.merchantClean ?? row.merchantRaw)),
+      `${matrixCase.label}: expected merchant was not normalized correctly.`
+    );
+  }
+  if (matrixCase.expectedAllMerchants) {
+    assert.ok(
+      transactions.every((row) => matrixCase.expectedAllMerchants!.test(row.merchantClean ?? row.merchantRaw)),
+      `${matrixCase.label}: cached or generic merchant noise replaced deterministic rows.`
+    );
+  }
+  if (matrixCase.expectedCategory) {
+    assert.ok(
+      transactions.every((row) => row.category?.name === matrixCase.expectedCategory),
+      `${matrixCase.label}: expected category ${matrixCase.expectedCategory}.`
+    );
+  }
+  if (matrixCase.expectedAllTransfers) {
+    assert.ok(
+      transactions.every((row) => row.isTransfer || row.type === "transfer"),
+      `${matrixCase.label}: transfer rows must be excluded from spending and income summaries.`
+    );
+  }
+  if (matrixCase.expectedAmount != null) {
+    assert.ok(
+      transactions.some((row) => Math.abs(Number(row.amount) - matrixCase.expectedAmount!) < 0.01),
+      `${matrixCase.label}: expected amount ${matrixCase.expectedAmount} was not found.`
+    );
+  }
+
+  const spending = transactions.filter((row) => row.type === "expense" && !row.isTransfer).reduce((sum, row) => sum + Number(row.amount), 0);
+  const income = transactions.filter((row) => row.type === "income" && !row.isTransfer).reduce((sum, row) => sum + Number(row.amount), 0);
+  const transfers = transactions.filter((row) => row.isTransfer || row.type === "transfer").reduce((sum, row) => sum + Number(row.amount), 0);
+  assert.ok(spending > 0 || income > 0 || transfers > 0, `${matrixCase.label}: visible summary values cannot all be zero.`);
+
+  return { count: transactions.length, spending, income, transfers };
+};
+
+const main = async () => {
+  const health = await fetch(`${baseUrl}/api/health`).catch(() => null);
+  assert.equal(health?.ok, true, `Start Clover locally at ${baseUrl} before running this regression.`);
+
+  const user = await prisma.user.upsert({
+    where: { clerkUserId: "local-admin" },
+    update: { planTier: "pro", planTierLocked: true },
+    create: {
+      clerkUserId: "local-admin",
+      email: "local-admin+file-matrix@clover.local",
+      verified: true,
+      environment: "local",
+      planTier: "pro",
+      planTierLocked: true,
+    },
+    select: { id: true },
+  });
+
+  const workspaces: string[] = [];
+  const results: Array<Record<string, unknown>> = [];
+  try {
+    const selectedCases = caseFilter ? cases.filter((matrixCase) => matrixCase.label.toLowerCase().includes(caseFilter)) : cases;
+    assert.ok(selectedCases.length > 0, `No import matrix case matched ${caseFilter}.`);
+    for (const matrixCase of selectedCases) {
+      assert.ok(extname(matrixCase.path), `${matrixCase.label}: fixture path must have an extension.`);
+      const workspace = await createWorkspace(user.id, matrixCase.label);
+      workspaces.push(workspace.id);
+      const posted = await postFile(workspace.id, matrixCase);
+
+      if (matrixCase.expectedPasswordPrompt) {
+        const elapsedMs = Date.now() - posted.startedAt;
+        assert.equal(posted.response.status, 422, `${matrixCase.label}: encrypted PDF must request a password.`);
+        assert.equal(posted.payload.code, "IMPORT_PASSWORD_REQUIRED", `${matrixCase.label}: wrong password error code.`);
+        assert.ok(elapsedMs <= (matrixCase.maximumMs ?? 10_000), `${matrixCase.label}: prompt took ${elapsedMs}ms.`);
+        const saved = await prisma.importFile.findUnique({ where: { id: posted.importId } });
+        assert.equal(saved?.processingPhase, "password_required", `${matrixCase.label}: password-required state was not persisted.`);
+        results.push({ label: matrixCase.label, elapsedMs, status: "password_required", transactions: 0 });
+        console.log(`[PASS] ${matrixCase.label}: password requested in ${elapsedMs}ms.`);
+        continue;
+      }
+
+      assert.equal(posted.response.ok, true, `${matrixCase.label}: ${JSON.stringify(posted.payload)}`);
+      const settled = await waitForSettledImport(posted.importId, maxVisibleMs);
+      const elapsedMs = Date.now() - posted.startedAt;
+      assert.equal(settled.status, "done", `${matrixCase.label}: ${settled.processingMessage ?? settled.processingPhase}`);
+      assert.ok(elapsedMs <= maxVisibleMs, `${matrixCase.label}: transactions took ${elapsedMs}ms to become visible.`);
+      let quality;
+      try {
+        quality = await verifyTransactions(workspace.id, posted.importId, matrixCase);
+      } catch (error) {
+        const diagnostics = await prisma.importFile.findUnique({
+          where: { id: posted.importId },
+          include: {
+            documentImport: true,
+            parsedRows: { take: 8 },
+            transactions: { take: 8 },
+          },
+        });
+        console.error(JSON.stringify({ label: matrixCase.label, elapsedMs, diagnostics }, null, 2));
+        throw error;
+      }
+      results.push({ label: matrixCase.label, elapsedMs, status: settled.status, ...quality });
+      console.log(`[PASS] ${matrixCase.label}: ${quality.count} transactions visible in ${elapsedMs}ms.`);
+    }
+
+    console.log(JSON.stringify(results, null, 2));
+    console.log(`[PASS] ${results.length} real-file import paths met quality checks and the ${maxVisibleMs}ms visibility ceiling.`);
+  } finally {
+    for (const workspaceId of workspaces) {
+      await prisma.workspace.delete({ where: { id: workspaceId } }).catch(() => null);
+    }
+    await prisma.$disconnect();
+  }
+};
+
+main().catch(async (error) => {
+  console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+  await prisma.$disconnect().catch(() => null);
+  process.exitCode = 1;
+});

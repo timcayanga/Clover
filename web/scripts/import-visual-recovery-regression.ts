@@ -11,6 +11,7 @@ import {
   shouldKeepFailedVisualImportRecoverable,
   shouldLoadReceiptVisionAssets,
   shouldProcessReceiptInline,
+  shouldUseReceiptPreviewFastPath,
   shouldStopStaleVisualImportRetry,
 } from "@/lib/import-visual-recovery";
 import { assessReceiptPreviewQuality, parseReceiptText } from "@/lib/split-bill";
@@ -118,6 +119,26 @@ const main = () => {
     "Explicit QA runs should retain forced inline receipt processing."
   );
   assert.equal(
+    shouldUseReceiptPreviewFastPath({
+      receiptPreviewIsUsable: true,
+      transactionDate: null,
+      total: 2201,
+      merchant: "Ever Gotesco Comm",
+    }),
+    false,
+    "A receipt OCR guess without a transaction date must use the backup parser."
+  );
+  assert.equal(
+    shouldUseReceiptPreviewFastPath({
+      receiptPreviewIsUsable: true,
+      transactionDate: "2025-12-22",
+      total: 7782.95,
+      merchant: "Jarandjam Inc.",
+    }),
+    true,
+    "Complete high-quality receipt previews may stay on the local fast path."
+  );
+  assert.equal(
     shouldLoadReceiptVisionAssets({
       imageImport: true,
       importMode: "receipt",
@@ -171,6 +192,27 @@ const main = () => {
     assessReceiptPreviewQuality(restaurantReceipt).issues.includes("looks like a split allocation worksheet, not a receipt"),
     false,
     "Dense restaurant receipt rows must not be mistaken for a split worksheet when receipt totals are explicit."
+  );
+
+  const handwrittenReceipt = parseReceiptText(
+    [
+      "Bayan Telecommunications, Inc.",
+      "RECEIVED from Rey Nimfa",
+      "Sum of one hundred P 100",
+      "VATable Sales 89.29",
+      "Value-Added Tax 10.71",
+      "OFFICIAL RECEIPT",
+    ].join("\n")
+  );
+  assert.equal(
+    shouldUseReceiptPreviewFastPath({
+      receiptPreviewIsUsable: true,
+      transactionDate: handwrittenReceipt.billDate,
+      total: handwrittenReceipt.total,
+      merchant: handwrittenReceipt.merchantName,
+    }),
+    false,
+    "Untrained handwritten receipts with a missing OCR date must use the backup parser."
   );
 
   console.log("Import visual recovery regression passed.");

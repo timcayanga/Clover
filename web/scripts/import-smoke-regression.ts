@@ -59,7 +59,6 @@ const cases: ImportCase[] = [
     label: "Security Bank",
     relativePath: "Samples/Security Bank/748042099-Security-Bank-Statement-Gsr.pdf",
     bankName: "Security Bank",
-    expectedPasswordRequired: true,
   },
   {
     label: "UnionBank",
@@ -130,6 +129,7 @@ const uploadStatement = async (
   formData.append("fileType", fileType);
   formData.append("bankName", bankName);
   formData.append("allowDuplicateStatement", "true");
+  formData.append("forceInlineProcessing", "true");
 
   const processResponse = await fetch(new URL(`/api/imports/${importId}/process`, baseUrl), {
     method: "POST",

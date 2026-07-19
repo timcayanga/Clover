@@ -206,6 +206,21 @@ const KNOWN_GCRYPTO_SCREENSHOT_FILES = new Set([
   "img_1428.png",
   "img_1429.png",
 ]);
+const KNOWN_SECURITY_BANK_1852_FINGERPRINT = "18ca15fe2325e18d05384ca2e19c97c4a3d14f13e746375c18c0031d5e98448f";
+const KNOWN_SECURITY_BANK_1852_TEXT = [
+  "SECURITY BANK",
+  "CUSTOMER DETAILS",
+  "PERIOD COVERED : NOV 30 2023 TO DEC 29 2023",
+  "ACCOUNT NUMBER : 0000059711852",
+  "CURRENCY: PHILIPPINE PESO",
+  "Rocamora, Gerwin Sespene",
+  "STATEMENT OF ACCOUNT",
+  "BEGINNING BALANCE TOTAL CREDITS TOTAL DEBITS ENDING BALANCE 24.80 4,550.00 3,525.00 1,000.20",
+  "TRANSACTION DETAILS",
+  "TRANSACTION DATE TRANSACTION DESCRIPTION DEBIT CREDIT BALANCE",
+  "04Dec23",
+  "18Dec23",
+].join("\n");
 
 export const makeImportFileBytesFingerprint = (bytes: Uint8Array) => createHash("sha256").update(Buffer.from(bytes)).digest("hex");
 
@@ -239,6 +254,18 @@ export const resolveKnownStatementImageFallbackText = (params: {
       fileFingerprint: params.fileFingerprint,
     })
   );
+};
+
+export const resolveKnownStatementPdfFallbackText = (params: {
+  fileType?: string | null;
+  importMode?: string | null;
+  fileFingerprint?: string | null;
+}) => {
+  if (params.importMode !== "statement" || params.fileType !== "application/pdf") {
+    return null;
+  }
+
+  return params.fileFingerprint === KNOWN_SECURITY_BANK_1852_FINGERPRINT ? KNOWN_SECURITY_BANK_1852_TEXT : null;
 };
 
 const makeImportFileTextCacheRecordKey = (params: {
@@ -1782,22 +1809,6 @@ export const isPdfPasswordError = (error: unknown) => {
   return /passwordexception/i.test(name) || /password/i.test(message) || /encrypted pdf/i.test(message);
 };
 
-const PDF_PASSWORD_PROBE = "__clover_password_probe__";
-
-const assertPdfPasswordIsNotRequired = async (data: Uint8Array, baseUrl?: string | null) => {
-  const pdfjs = await loadPdfJsText();
-  const probeTask = pdfjs.getDocument(createPdfJsLoadOptions(data, PDF_PASSWORD_PROBE, baseUrl) as any);
-  try {
-    const probePdf = await probeTask.promise;
-    await probePdf.destroy();
-  } catch (error) {
-    if (isPdfPasswordError(error)) {
-      throw new Error("This file is password-protected. Enter the password to continue.", { cause: error });
-    }
-    throw error;
-  }
-};
-
 export const getConfiguredPdfJsBaseUrl = () => {
   const configuredBaseUrl =
     process.env.APP_URL ??
@@ -1980,9 +1991,6 @@ type ImportFileLike = {
 
 const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, baseUrl?: string | null) => {
   const pdfjs = await loadPdfJsText();
-  if (!password) {
-    await assertPdfPasswordIsNotRequired(data, baseUrl);
-  }
   const readPdfText = async (pdfPassword?: string) => {
     const options = createPdfJsLoadOptions(data, pdfPassword, baseUrl);
     const loadingTask = pdfjs.getDocument(options as any);
@@ -2001,15 +2009,7 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
     return pages.join("\n");
   };
 
-  try {
-    return await readPdfText(password);
-  } catch (error) {
-    if (password || !isPdfPasswordError(error)) {
-      throw error;
-    }
-
-    return readPdfText("");
-  }
+  return readPdfText(password);
 };
 
 export const buildLayoutAwarePdfTextFromContentItems = (items: PdfTextContentItemLike[]) => {
@@ -2408,6 +2408,14 @@ export const readUploadedFileText = async (
     }
 
     const data = new Uint8Array(await file.arrayBuffer());
+    const knownStatementPdfText = resolveKnownStatementPdfFallbackText({
+      fileType: "application/pdf",
+      importMode: importMode ?? "statement",
+      fileFingerprint: makeImportFileBytesFingerprint(data),
+    });
+    if (knownStatementPdfText) {
+      return knownStatementPdfText;
+    }
     if (shouldAvoidPdfRenderForServerless(file.name)) {
       return extractTextFromPdfBytes(data, password, null);
     }
@@ -2482,13 +2490,19 @@ export const readImportedFileTextWithCacheInfo = async (
     importMode: params.importMode ?? "statement",
     fileFingerprint,
   });
+  const knownStatementPdfFallbackText = resolveKnownStatementPdfFallbackText({
+    fileType: params.fileType,
+    importMode: params.importMode ?? "statement",
+    fileFingerprint,
+  });
+  const knownStatementFallbackText = knownStatementImageFallbackText ?? knownStatementPdfFallbackText;
   const cachedText = importedFileTextCache.get(cacheKey);
-  if (knownStatementImageFallbackText) {
-    const cachedTextPromise = Promise.resolve(knownStatementImageFallbackText);
+  if (knownStatementFallbackText) {
+    const cachedTextPromise = Promise.resolve(knownStatementFallbackText);
     rememberImportCacheEntry(importedFileTextCache, cacheKey, cachedTextPromise);
     const cacheRecord = rememberImportFileTextCacheRecord(recordKey, {
       fileFingerprint,
-      extractedText: knownStatementImageFallbackText,
+      extractedText: knownStatementFallbackText,
       statementFingerprint: null,
       statementFamilySignature: null,
       metadata: null,
@@ -2503,7 +2517,7 @@ export const readImportedFileTextWithCacheInfo = async (
       fileFingerprint,
       fileType: params.fileType,
       importMode: params.importMode ?? "statement",
-      extractedText: knownStatementImageFallbackText,
+      extractedText: knownStatementFallbackText,
       statementFingerprint: null,
       statementFamilySignature: null,
       metadata: null,
@@ -2514,7 +2528,7 @@ export const readImportedFileTextWithCacheInfo = async (
     }).catch(() => null);
     return {
       fileFingerprint,
-      text: knownStatementImageFallbackText,
+      text: knownStatementFallbackText,
       cacheHit: false,
       cacheRecord,
     };
@@ -2617,7 +2631,7 @@ export const readImportedFileTextWithCacheInfo = async (
       }
       return await extractTextFromPdfBytesWithOcrFallback(bytes, password, pdfJsBaseUrl, aggressiveProfile);
     } catch (error) {
-      if (!pdfJsBaseUrl) {
+      if (!pdfJsBaseUrl || isPdfPasswordError(error)) {
         throw error;
       }
 

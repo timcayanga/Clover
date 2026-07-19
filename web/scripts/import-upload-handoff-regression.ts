@@ -15,12 +15,14 @@ const section = (source: string, start: string, end: string) => {
 };
 
 const main = async () => {
-  const [modalSource, processRouteSource, confirmRouteSource, workerSource, importProcessorSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource] = await Promise.all([
+  const [modalSource, processRouteSource, confirmRouteSource, workerSource, importQueueSource, importProcessorSource, importFileTextSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource] = await Promise.all([
     readFile(join(webRoot, "components/import-files-modal.tsx"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/process/route.ts"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/confirm/route.ts"), "utf8"),
     readFile(join(webRoot, "workers/imports-worker.ts"), "utf8"),
+    readFile(join(webRoot, "lib/import-queue.ts"), "utf8"),
     readFile(join(webRoot, "workers/import-processor.ts"), "utf8"),
+    readFile(join(webRoot, "lib/import-file-text.server.ts"), "utf8"),
     readFile(join(webRoot, "lib/import-settled-visibility.ts"), "utf8"),
     readFile(join(webRoot, "lib/import-file-post.ts"), "utf8"),
     readFile(join(webRoot, "lib/import-visibility-rules.ts"), "utf8"),
@@ -134,6 +136,22 @@ const main = async () => {
   );
   assert.match(workerSource, /if \(isPdfPasswordError\(error\)\) \{\s*job\.discard\(\);/);
   assert.match(workerSource, /processingPhase: "password_required"/);
+  assert.match(workerSource, /getImportQueueName\(\)/, "The worker and producer must share the environment-scoped queue.");
+  assert.match(
+    importQueueSource,
+    /process\.env\.NODE_ENV === "production" \? "import-processing" : "import-processing-local"/,
+    "Local QA must never consume staging or production import jobs."
+  );
+  assert.match(
+    importFileTextSource,
+    /if \(!pdfJsBaseUrl \|\| isPdfPasswordError\(error\)\) \{\s*throw error;/,
+    "Password failures must not repeat PDF extraction before prompting the user."
+  );
+  assert.match(
+    importProcessorSource,
+    /cachedRowsMatchCurrentParser &&/,
+    "Cached extracted text may be reused only when its parsed rows still match the current deterministic parser."
+  );
 
   console.log("[PASS] Uploads start immediately, while encrypted files prompt once instead of entering parser retries.");
 };
