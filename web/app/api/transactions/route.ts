@@ -688,24 +688,26 @@ export async function GET(request: Request) {
     }
 
     await assertWorkspaceAccess(userId, workspaceId);
-    const workspaceAccountRows = await prisma.account.findMany({
-      where: { workspaceId },
-      select: { id: true, accountNumber: true },
-    });
+    const parsedFilters: TransactionQueryFilters = parseTransactionQueryFilters(searchParams);
+    const [workspaceAccountRows, expandedAccountIds, expandedIdentityAccountIds] = await Promise.all([
+      prisma.account.findMany({
+        where: { workspaceId },
+        select: { id: true, accountNumber: true, institution: true },
+      }),
+      expandImportedAccountFilters(workspaceId, parsedFilters.accountIds),
+      expandImportedAccountIdentityFilters(workspaceId, {
+        accountName: searchParams.get("accountName"),
+        accountInstitution: searchParams.get("accountInstitution"),
+        accountNumber: searchParams.get("accountNumber"),
+        accountType: searchParams.get("accountType"),
+        accountCurrency: searchParams.get("accountCurrency"),
+      }),
+    ]);
     const workspaceAccounts = workspaceAccountRows.map((account) => ({
       id: account.id,
       accountNumber: account.accountNumber,
     }));
 
-    const parsedFilters: TransactionQueryFilters = parseTransactionQueryFilters(searchParams);
-    const expandedAccountIds = await expandImportedAccountFilters(workspaceId, parsedFilters.accountIds);
-    const expandedIdentityAccountIds = await expandImportedAccountIdentityFilters(workspaceId, {
-      accountName: searchParams.get("accountName"),
-      accountInstitution: searchParams.get("accountInstitution"),
-      accountNumber: searchParams.get("accountNumber"),
-      accountType: searchParams.get("accountType"),
-      accountCurrency: searchParams.get("accountCurrency"),
-    });
     const filters: TransactionQueryFilters = {
       ...parsedFilters,
       accountIds: Array.from(new Set([...expandedAccountIds, ...expandedIdentityAccountIds])),
@@ -729,9 +731,10 @@ export async function GET(request: Request) {
     const summaryMode = searchParams.get("summaryMode") === "light" ? "light" : "full";
     const requestedPage = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
     const requestedPageSize = includeAll ? null : Math.max(1, Number(pageSizeParam ?? "25") || 25);
-    const currencyCodes = await getWorkspaceCurrencyCodes(workspaceId);
-
-    const totalCount = await prisma.transaction.count({ where: visibleWhere });
+    const [currencyCodes, totalCount] = await Promise.all([
+      getWorkspaceCurrencyCodes(workspaceId),
+      prisma.transaction.count({ where: visibleWhere }),
+    ]);
     if (totalCount === 0) {
       return NextResponse.json({
         transactions: [],
@@ -774,7 +777,10 @@ export async function GET(request: Request) {
         !filters.amountMin?.trim() &&
         !filters.amountMax?.trim();
       const recentImportCutoff = new Date(Date.now() - RECENT_IMPORT_VISIBILITY_WINDOW_MS);
-      const [pageRows, recentImportRows, duplicateRows, summaryRows] = await Promise.all([
+      const bdoAccountIds = workspaceAccountRows
+        .filter((account) => /\bbdo\b|\bbanco de oro\b/i.test(account.institution ?? ""))
+        .map((account) => account.id);
+      const [pageRows, recentImportRows, duplicateRows, summaryGroups, summaryCategories, bdoSummaryRows] = await Promise.all([
         prisma.transaction.findMany({
           where: visibleWhere,
           select: {
@@ -893,27 +899,34 @@ export async function GET(request: Request) {
           orderBy,
           take: 250,
         }),
-        prisma.transaction.findMany({
+        prisma.transaction.groupBy({
           where: visibleWhere,
-          select: {
+          by: ["type", "isTransfer", "categoryId", "accountId"],
+          _sum: {
             amount: true,
-            type: true,
-            isTransfer: true,
-            merchantRaw: true,
-            merchantClean: true,
-            description: true,
-            category: {
-              select: {
-                name: true,
-              },
-            },
-            account: {
-              select: {
-                institution: true,
-              },
-            },
           },
         }),
+        prisma.category.findMany({
+          where: { workspaceId },
+          select: { id: true, name: true },
+        }),
+        bdoAccountIds.length > 0
+          ? prisma.transaction.findMany({
+              where: {
+                AND: [visibleWhere, { accountId: { in: bdoAccountIds } }],
+              },
+              select: {
+                amount: true,
+                type: true,
+                isTransfer: true,
+                merchantRaw: true,
+                merchantClean: true,
+                description: true,
+                category: { select: { name: true } },
+                account: { select: { institution: true } },
+              },
+            })
+          : Promise.resolve([]),
       ]);
       const recentImportRowIds = new Set(recentImportRows.map((transaction) => transaction.id));
       const boostedPageRows = [
@@ -968,12 +981,31 @@ export async function GET(request: Request) {
         spending: 0,
         transfers: 0,
       };
-      for (const transaction of summaryRows) {
-        const amount = Math.abs(Number(transaction.amount));
+      const categoryNameById = new Map(summaryCategories.map((category) => [category.id, category.name] as const));
+      const bdoAccountIdSet = new Set(bdoAccountIds);
+      for (const group of summaryGroups) {
+        if (bdoAccountIdSet.has(group.accountId)) continue;
+        const amount = Math.abs(Number(group._sum.amount ?? 0));
         if (!Number.isFinite(amount)) {
           continue;
         }
 
+        const effectiveType = getSummaryTransactionType({
+          type: group.type,
+          isTransfer: group.isTransfer,
+          categoryName: group.categoryId ? categoryNameById.get(group.categoryId) : null,
+        });
+        if (effectiveType === "income") {
+          lightSummary.income += amount;
+        } else if (effectiveType === "transfer") {
+          lightSummary.transfers += amount;
+        } else {
+          lightSummary.spending += amount;
+        }
+      }
+      for (const transaction of bdoSummaryRows) {
+        const amount = Math.abs(Number(transaction.amount));
+        if (!Number.isFinite(amount)) continue;
         const effectiveType = getSummaryTransactionType({
           type: transaction.type,
           isTransfer: transaction.isTransfer,
@@ -983,13 +1015,9 @@ export async function GET(request: Request) {
           description: transaction.description,
           institution: transaction.account?.institution,
         });
-        if (effectiveType === "income") {
-          lightSummary.income += amount;
-        } else if (effectiveType === "transfer") {
-          lightSummary.transfers += amount;
-        } else {
-          lightSummary.spending += amount;
-        }
+        if (effectiveType === "income") lightSummary.income += amount;
+        else if (effectiveType === "transfer") lightSummary.transfers += amount;
+        else lightSummary.spending += amount;
       }
 
       return NextResponse.json({

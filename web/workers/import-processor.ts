@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import type { AccountType, ReviewStatus, TransactionType } from "@prisma/client";
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
 import { capturePostHogServerEvent } from "@/lib/analytics";
@@ -108,6 +109,43 @@ import {
   updateRunningImportEnrichmentJobProgress,
   upsertImportEnrichmentJob,
 } from "@/lib/import-enrichment-jobs";
+
+const POST_VISIBLE_IMPORT_DELAY_MS = 5_000;
+
+const schedulePostVisibleImportWork = (
+  label: string,
+  task: () => Promise<void>,
+  delayMs = POST_VISIBLE_IMPORT_DELAY_MS
+) => {
+  const run = async () => {
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+    try {
+      await task();
+    } catch (error) {
+      console.warn("Post-visible import work failed", { label, error });
+    }
+  };
+
+  try {
+    after(run);
+  } catch {
+    void run();
+  }
+};
+
+const runWithConcurrency = async <T>(items: T[], concurrency: number, task: (item: T, index: number) => Promise<unknown>) => {
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(Math.max(1, concurrency), items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      await task(items[index]!, index);
+    }
+  });
+  await Promise.allSettled(workers);
+};
 
 type ImportInsightSummary = {
   incomeTotal: number;
@@ -5606,31 +5644,28 @@ const recordImportDataQaInBackground = (params: {
   usedOpenAiFallback: boolean;
   actorUserId?: string | null;
 }) => {
-  void recordDataQaRun({
-    workspaceId: params.workspaceId,
-    importFileId: params.importFileId,
-    source: "import_processing",
-    fileName: params.fileName,
-    fileType: params.fileType,
-    parserVersion: DATA_ENGINE_VERSION,
-    documentType: params.importMode,
-    parsedRows: params.rows as unknown as DataQaParsedRow[],
-    metadata: params.metadata,
-    timings: {
-      totalMs: Date.now() - params.startedAt,
-      parsingMs: Date.now() - params.startedAt,
-      usedVisionFallback: params.usedVisionFallback,
-      usedOpenAiFallback: params.usedOpenAiFallback,
-      usedDeterministicParser: !params.usedOpenAiFallback,
-    },
-    duplicate: false,
-    actorUserId: params.actorUserId ?? null,
-  }).catch((error) => {
-    console.warn("Background data QA recording failed after visible import", {
+  schedulePostVisibleImportWork(`data-qa:${params.importFileId}`, async () => {
+    await recordDataQaRun({
+      workspaceId: params.workspaceId,
       importFileId: params.importFileId,
-      error,
+      source: "import_processing",
+      fileName: params.fileName,
+      fileType: params.fileType,
+      parserVersion: DATA_ENGINE_VERSION,
+      documentType: params.importMode,
+      parsedRows: params.rows as unknown as DataQaParsedRow[],
+      metadata: params.metadata,
+      timings: {
+        totalMs: Date.now() - params.startedAt,
+        parsingMs: Date.now() - params.startedAt,
+        usedVisionFallback: params.usedVisionFallback,
+        usedOpenAiFallback: params.usedOpenAiFallback,
+        usedDeterministicParser: !params.usedOpenAiFallback,
+      },
+      duplicate: false,
+      actorUserId: params.actorUserId ?? null,
     });
-  });
+  }, 10_000);
 };
 
 const deleteTransactionsForImportWithTx = async (tx: Prisma.TransactionClient, importFileId: string) => {
@@ -6649,11 +6684,8 @@ const processImportEnrichmentJobsInBackground = (importFileId: string, totalRows
     MAX_IMPORT_ENRICHMENT_ATTEMPTS,
     Math.min(10, Math.ceil(normalizedTotalRows / 500))
   );
-  void processImportEnrichmentJobs({ importFileId, limit, batchSize: 500 }).catch((error) => {
-    console.warn("Background import enrichment job failed", {
-      importFileId,
-      error,
-    });
+  schedulePostVisibleImportWork(`enrichment:${importFileId}`, async () => {
+    await processImportEnrichmentJobs({ importFileId, limit, batchSize: 500 });
   });
 };
 
@@ -10946,6 +10978,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     status: string;
     rowCount: number;
   } | null = null;
+  let pendingAccountRule: Parameters<typeof upsertAccountRule>[0] | null = null;
   const coerceAmountToString = (value: unknown) => {
     if (value === null || value === undefined) {
       return null;
@@ -11810,7 +11843,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       }
     }
 
-    for (const batch of chunkArray(preparedTransactions, 25)) {
+    for (const batch of chunkArray(preparedTransactions, 250)) {
       await tx.transaction.createMany({
         data: batch.map((entry) => {
           const { categoryName: _categoryName, ...transactionRow } = entry.insertRow as Record<string, unknown>;
@@ -11839,36 +11872,6 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       compatibleImportFileColumns
     );
 
-  const analyticsDistinctId = String(importFile.workspaceId ?? "import-worker");
-  for (const entry of preparedTransactions) {
-    const insertRow = entry.insertRow as {
-      currency?: unknown;
-      reviewStatus?: unknown;
-      isTransfer?: unknown;
-      isExcluded?: unknown;
-      categoryId?: unknown;
-      categoryConfidence?: unknown;
-      accountMatchConfidence?: unknown;
-      parserConfidence?: unknown;
-      type?: unknown;
-    };
-
-    void capturePostHogServerEvent("transaction_imported", analyticsDistinctId, {
-      workspace_id: String(importFile.workspaceId ?? null),
-      import_file_id: importFileId,
-      transaction_id: entry.transactionId,
-      currency: String(insertRow.currency ?? "PHP"),
-      transaction_type: String(entry.insightRow.type ?? "expense"),
-      review_status: typeof insertRow.reviewStatus === "string" ? insertRow.reviewStatus : null,
-      is_transfer: Boolean(insertRow.isTransfer),
-      is_excluded: Boolean(insertRow.isExcluded),
-      category_id: typeof insertRow.categoryId === "string" ? insertRow.categoryId : null,
-      category_confidence: typeof insertRow.categoryConfidence === "number" ? insertRow.categoryConfidence : null,
-      account_match_confidence: typeof insertRow.accountMatchConfidence === "number" ? insertRow.accountMatchConfidence : null,
-      parser_confidence: typeof insertRow.parserConfidence === "number" ? insertRow.parserConfidence : null,
-    });
-  }
-
   for (const entry of preparedTransactions) {
     transactions.push(entry.insightRow);
     trainingSignals.push({
@@ -11890,7 +11893,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     confirmedStatementRow.accountName.trim() &&
     statementConfidence >= 70
   ) {
-    void upsertAccountRule({
+    pendingAccountRule = {
       workspaceId: importFile.workspaceId,
       accountId: resolvedAccountId,
       accountName: confirmedStatementRow.accountName.trim(),
@@ -11901,7 +11904,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       accountType: account.type,
       source: "import_confirmation",
       confidence: 100,
-    }).catch(() => null);
+    };
   }
 
   const insightSummary = buildImportInsightSummary(transactions);
@@ -12161,23 +12164,31 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     }
   }
 
-  void collapseDuplicateTransactionsForImport(importFileId).catch((error) => {
-    console.warn("Unable to collapse duplicate transactions after confirmation", {
-      importFileId,
-      error,
+  const backupParserRows = parsedRows.filter((row) => {
+    const rawPayload = row.rawPayload;
+    return (
+      rawPayload &&
+      typeof rawPayload === "object" &&
+      !Array.isArray(rawPayload) &&
+      (rawPayload as Record<string, unknown>).source === "openai"
+    );
+  }) as EnrichedParsedImportRow[];
+  const analyticsDistinctId = String(importFile.workspaceId ?? "import-worker");
+  schedulePostVisibleImportWork(`finalize:${importFileId}`, async () => {
+    await collapseDuplicateTransactionsForImport(importFileId).catch((error) => {
+      console.warn("Unable to collapse duplicate transactions after confirmation", { importFileId, error });
     });
-  });
 
-  void syncWorkspaceRecurringPatterns(String(importFile.workspaceId)).catch((error) => {
-    console.warn("Unable to sync recurring patterns after import confirmation", {
-      importFileId,
-      error,
+    if (pendingAccountRule) {
+      await upsertAccountRule(pendingAccountRule).catch(() => null);
+    }
+
+    await syncWorkspaceRecurringPatterns(String(importFile.workspaceId)).catch((error) => {
+      console.warn("Unable to sync recurring patterns after import confirmation", { importFileId, error });
     });
-  });
 
-  void Promise.allSettled(
-    trainingSignals.map((entry) =>
-      recordTrainingSignal({
+    await runWithConcurrency(trainingSignals, 4, async (entry) => {
+      await recordTrainingSignal({
         workspaceId: importFile.workspaceId,
         importFileId,
         transactionId: entry.transactionId,
@@ -12190,41 +12201,24 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         confidence: entry.confidence,
         teachabilityScore: entry.teachabilityScore,
         notes: entry.notes,
-      })
-    )
-  ).catch(() => null);
+      }).catch(() => null);
+    });
 
-  const backupParserRows = parsedRows.filter((row) => {
-    const rawPayload = row.rawPayload;
-    return (
-      rawPayload &&
-      typeof rawPayload === "object" &&
-      !Array.isArray(rawPayload) &&
-      (rawPayload as Record<string, unknown>).source === "openai"
-    );
-  }) as EnrichedParsedImportRow[];
-  if (backupParserRows.length > 0) {
-    void (async () => {
+    if (backupParserRows.length > 0) {
       const backupLearningSignals = extractBackupParserLearningSignals(backupParserRows);
-      if (backupLearningSignals.length === 0) {
-        return;
-      }
-      const categories = await prisma.category.findMany({
-        where: { workspaceId: importFile.workspaceId },
-        select: { id: true, name: true },
-      }).catch(() => []);
-      const categoryIdsByName = new Map(
-        categories.map((category) => [category.name.trim().toLowerCase(), category.id] as const)
-      );
+      if (backupLearningSignals.length > 0) {
+        const categories = await prisma.category.findMany({
+          where: { workspaceId: importFile.workspaceId },
+          select: { id: true, name: true },
+        }).catch(() => []);
+        const categoryIdsByName = new Map(
+          categories.map((category) => [category.name.trim().toLowerCase(), category.id] as const)
+        );
 
-      await Promise.allSettled(
-        backupLearningSignals.map((signal, index) => {
+        await runWithConcurrency(backupLearningSignals, 4, async (signal, index) => {
           const categoryId = categoryIdsByName.get(signal.categoryName.trim().toLowerCase());
-          if (!categoryId) {
-            return Promise.resolve(null);
-          }
-
-          return recordTrainingSignal({
+          if (!categoryId) return;
+          await recordTrainingSignal({
             workspaceId: importFile.workspaceId,
             importFileId,
             transactionId: `${importFileId}:backup:${index + 1}`,
@@ -12238,16 +12232,13 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             confidence: signal.confidence,
             teachabilityScore: signal.teachabilityScore,
             notes: signal.notes,
-          });
-        })
-      );
-    })().catch((error) => {
-      console.warn("Backup parser learning failed after import confirmation", { importFileId, error });
-    });
-  }
+          }).catch(() => null);
+        });
+      }
+    }
 
-  if (qaMetadataForRun && qaAccountForRun) {
-    void recordDataQaRun({
+    if (qaMetadataForRun && qaAccountForRun) {
+      await recordDataQaRun({
         workspaceId: String(importFile.workspaceId),
         importFileId,
         accountId: resolvedAccountId,
@@ -12267,12 +12258,37 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         duplicate: false,
         actorUserId: null,
       }).catch((error) => {
-      console.warn("Data QA recording failed after import confirmation", {
-        importFileId,
-        error,
+        console.warn("Data QA recording failed after import confirmation", { importFileId, error });
       });
+    }
+
+    await runWithConcurrency(preparedTransactions, 4, async (entry) => {
+      const insertRow = entry.insertRow as {
+        currency?: unknown;
+        reviewStatus?: unknown;
+        isTransfer?: unknown;
+        isExcluded?: unknown;
+        categoryId?: unknown;
+        categoryConfidence?: unknown;
+        accountMatchConfidence?: unknown;
+        parserConfidence?: unknown;
+      };
+      await capturePostHogServerEvent("transaction_imported", analyticsDistinctId, {
+        workspace_id: String(importFile.workspaceId ?? null),
+        import_file_id: importFileId,
+        transaction_id: entry.transactionId,
+        currency: String(insertRow.currency ?? "PHP"),
+        transaction_type: String(entry.insightRow.type ?? "expense"),
+        review_status: typeof insertRow.reviewStatus === "string" ? insertRow.reviewStatus : null,
+        is_transfer: Boolean(insertRow.isTransfer),
+        is_excluded: Boolean(insertRow.isExcluded),
+        category_id: typeof insertRow.categoryId === "string" ? insertRow.categoryId : null,
+        category_confidence: typeof insertRow.categoryConfidence === "number" ? insertRow.categoryConfidence : null,
+        account_match_confidence: typeof insertRow.accountMatchConfidence === "number" ? insertRow.accountMatchConfidence : null,
+        parser_confidence: typeof insertRow.parserConfidence === "number" ? insertRow.parserConfidence : null,
+      }).catch(() => null);
     });
-  }
+  });
 
   console.info("[import-performance] confirmation visible", {
     importFileId,

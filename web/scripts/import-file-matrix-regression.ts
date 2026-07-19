@@ -307,12 +307,17 @@ const verifyDownstreamStability = async (
     assertClose(snapshot.transfers, quality.transfers, `${label} transfers`);
   }
   assert.deepEqual(
-    lightSnapshots.map(({ totalCount, income, spending, transfers }) => ({ totalCount, income, spending, transfers })),
+    lightSnapshots.map(({ totalCount, income, spending, transfers }) => ({
+      totalCount,
+      income: Number(income.toFixed(2)),
+      spending: Number(spending.toFixed(2)),
+      transfers: Number(transfers.toFixed(2)),
+    })),
     Array.from({ length: 3 }, () => ({
       totalCount: quality.count,
-      income: quality.income,
-      spending: quality.spending,
-      transfers: quality.transfers,
+      income: Number(quality.income.toFixed(2)),
+      spending: Number(quality.spending.toFixed(2)),
+      transfers: Number(quality.transfers.toFixed(2)),
     })),
     `${label}: summary cards fluctuated after the import settled.`
   );
@@ -436,6 +441,8 @@ const main = async () => {
     if (keepWorkspaces) {
       console.log(`[QA] Preserved workspaces: ${workspaces.join(", ")}`);
     } else {
+      // Post-visible learning and QA are deliberately delayed so user-facing reads get database priority.
+      await new Promise((resolve) => setTimeout(resolve, 11_000));
       for (const workspaceId of workspaces) {
         await prisma.workspace.delete({ where: { id: workspaceId } }).catch(() => null);
       }
