@@ -5,7 +5,7 @@
  * confirmed transaction values. Keep raw statement text outside this module.
  */
 
-export const CONTEXT_CORPUS_VERSION = "2026.07.5";
+export const CONTEXT_CORPUS_VERSION = "2026.07.6";
 
 export type ContextSignal = {
   id: string;

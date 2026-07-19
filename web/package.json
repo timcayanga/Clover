@@ -46,6 +46,7 @@
     "qa:backup-parser-template": "tsx scripts/backup-parser-template-regression.ts",
     "qa:training-signals-db": "tsx scripts/record-training-signal-regression.ts",
     "qa:context-corpus": "tsx scripts/context-corpus-regression.ts",
+    "qa:context-corpus-learning": "tsx scripts/context-corpus-learning-regression.ts",
     "qa:data-loop": "tsx scripts/data-qa-regression.ts",
     "qa:budgeting": "tsx scripts/budgeting-regression.ts",
     "qa:investments": "tsx scripts/investments-regression.ts",
