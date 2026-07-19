@@ -1,6 +1,6 @@
 # Data Engine Context Corpus
 
-Version: `2026.07.11`
+Version: `2026.07.12`
 
 The context corpus provides regional and global evidence for transaction normalization. It is advisory context: it may enrich a parsed row or increase confidence, but it must not overwrite confirmed transaction fields.
 
@@ -39,6 +39,8 @@ The expansion pass prioritizes places where Filipino financial context is likely
 The corpus now contains more than 1,000 entries. In addition to canonical regional entries, it includes lower-confidence descriptor variants for multi-word signals, such as a known institution or merchant followed by `payment`, `transaction`, or `merchant`. These variants model the way statement processors decorate names, retain the same regional and semantic context, and are intentionally scored below canonical aliases.
 
 The latest canonical layer adds Indian UPI/IMPS/NEFT participants and consumer ecosystems, New Zealand EFTPOS and bank/retail context, SEPA credit-transfer/direct-debit variants, Gulf utilities and remittance-adjacent providers, and additional country-specific banks, commerce, transit, airline, telecom, and investment signals.
+
+This pass extends the worldwide fallback layer with Canadian Interac and bank/utility descriptors; Saudi, Qatar, Kuwait, and broader Gulf domestic rails; and Brazil Pix, Mexico SPEI, South Africa PayShap, and Turkey FAST/EFT context. These markets are intentionally lower-confidence than the Philippines and core ASEAN packs unless a statement also supplies matching currency or institution evidence.
 
 Research basis for prioritization includes the Philippine Statistics Authority's 2024 Survey on Overseas Filipinos, which places Asia at 74.5% of OFWs and identifies Saudi Arabia, the UAE, Kuwait, Qatar, Hong Kong, Taiwan, Singapore, and Japan among the major Asian destinations. Payment-rail coverage follows current official descriptions from Bank Indonesia (QRIS), Bank of Thailand (PromptPay), PayNet Malaysia (DuitNow), Octopus/Hong Kong FPS, and Japan's transport-card guidance. These references guide coverage priorities; aliases remain curated evidence and are not treated as proof of identity or location.
 
