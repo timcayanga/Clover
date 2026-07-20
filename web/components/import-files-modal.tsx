@@ -712,6 +712,26 @@ export function ImportFilesModal({
     autoCloseAfterStartRef.current = false;
   };
 
+  const scheduleSuccessfulImportAutoClose = () => {
+    if (backgroundOnly || importActivitySurfaceRef.current === "background") {
+      return;
+    }
+
+    if (successfulImportAutoCloseTimerRef.current !== null) {
+      window.clearTimeout(successfulImportAutoCloseTimerRef.current);
+    }
+
+    successfulImportAutoCloseTimerRef.current = window.setTimeout(() => {
+      successfulImportAutoCloseTimerRef.current = null;
+      if (!primaryVisibilityCompletedRef.current) {
+        return;
+      }
+      clearImportActivity();
+      lastImportActivityRef.current = null;
+      onClose();
+    }, 10_000);
+  };
+
   const hardStopVisibleImportModal = (reason: "deadline" | "background" | "visible") => {
     const currentItems = itemsRef.current;
     if (currentItems.length === 0) {
@@ -890,20 +910,7 @@ export function ImportFilesModal({
       // The success state is only allowed to close after durable rows are
       // visible. This gives the user feedback without leaving a completed
       // modal on screen indefinitely.
-      if (!backgroundOnly && !launchInBackground) {
-        if (successfulImportAutoCloseTimerRef.current !== null) {
-          window.clearTimeout(successfulImportAutoCloseTimerRef.current);
-        }
-        successfulImportAutoCloseTimerRef.current = window.setTimeout(() => {
-          successfulImportAutoCloseTimerRef.current = null;
-          if (!primaryVisibilityCompletedRef.current) {
-            return;
-          }
-          clearImportActivity();
-          lastImportActivityRef.current = null;
-          onClose();
-        }, 10_000);
-      }
+      scheduleSuccessfulImportAutoClose();
     }
   };
 
@@ -7236,6 +7243,7 @@ export function ImportFilesModal({
           router.refresh();
         }
       }
+      scheduleSuccessfulImportAutoClose();
     }
   };
 
