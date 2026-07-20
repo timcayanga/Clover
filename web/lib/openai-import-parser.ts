@@ -1089,6 +1089,70 @@ const buildModelInputText = (text: string) => {
   return `${compact.slice(0, 42_000)}\n\n[TRUNCATED FOR MODEL INPUT]\n\n${compact.slice(-18_000)}`;
 };
 
+const OPENAI_VISION_MAX_LONGEST_EDGE = 1600;
+const OPENAI_VISION_JPEG_QUALITY = 72;
+
+const selectRepresentativeVisionPages = <T>(pages: T[], limit: number) => {
+  if (pages.length <= limit) {
+    return pages;
+  }
+
+  if (limit <= 1) {
+    return pages.slice(0, 1);
+  }
+
+  const selectedIndexes = new Set<number>([0, pages.length - 1]);
+  for (let index = 1; selectedIndexes.size < limit && index < pages.length - 1; index += 1) {
+    const candidate = Math.round((index * (pages.length - 1)) / (limit - 1));
+    selectedIndexes.add(candidate);
+  }
+
+  return Array.from(selectedIndexes)
+    .sort((left, right) => left - right)
+    .slice(0, limit)
+    .map((index) => pages[index]);
+};
+
+const compactVisionImageDataUrl = async (dataUrl: string) => {
+  if (!dataUrl.startsWith("data:image/")) {
+    return dataUrl;
+  }
+
+  try {
+    const commaIndex = dataUrl.indexOf(",");
+    if (commaIndex < 0) {
+      return dataUrl;
+    }
+
+    const sharpModule = await import("sharp");
+    const sharp = sharpModule.default;
+    const input = Buffer.from(dataUrl.slice(commaIndex + 1), "base64");
+    const output = await sharp(input)
+      .rotate()
+      .resize({
+        width: OPENAI_VISION_MAX_LONGEST_EDGE,
+        height: OPENAI_VISION_MAX_LONGEST_EDGE,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: OPENAI_VISION_JPEG_QUALITY, chromaSubsampling: "4:2:0" })
+      .toBuffer();
+
+    return `data:image/jpeg;base64,${output.toString("base64")}`;
+  } catch {
+    // The model request should still work in environments without sharp.
+    return dataUrl;
+  }
+};
+
+const compactVisionPageImages = async (pages: Array<{ page: number; dataUrl: string }>) =>
+  Promise.all(
+    pages.map(async (page) => ({
+      page: page.page,
+      dataUrl: await compactVisionImageDataUrl(page.dataUrl),
+    }))
+  );
+
 const buildDeterministicParserSummary = (params: {
   detectedMetadata: DetectedStatementMetadata | null;
   parsedRows: ParsedImportRow[];
@@ -2167,21 +2231,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       ? null
       : params.importMode ?? null;
 
-  const userPrompt = buildOpenAIInputPayload({
-    fileName: params.fileName ?? null,
-    fileType: params.fileType ?? null,
-    detectedMetadata: params.detectedMetadata,
-    parsedRows: params.parsedRows,
-    text: inputText,
-    pageImages: params.pageImages ?? null,
-    fileDataBase64: params.fileDataBase64 ?? null,
-    importMode: promptImportMode,
-  });
-
   const pageImagesInput = params.pageImages ?? [];
   const isReceiptMode = params.importMode === "receipt";
-  const pdfFileDataBase64 =
-    params.fileDataBase64 && String(params.fileType ?? "").toLowerCase().includes("pdf") ? params.fileDataBase64 : null;
   const pageImageLimit =
     typeof params.pageImageLimit === "number" && Number.isFinite(params.pageImageLimit)
       ? Math.max(1, Math.floor(params.pageImageLimit))
@@ -2196,7 +2247,28 @@ export const parseImportTextWithOpenAIFallback = async (params: {
           : isNoisyVisionInstitution
             ? 8
             : 2;
-  const pageImagesToSend = pageImagesInput.slice(0, Math.min(pageImageLimit, pageImagesInput.length));
+  const selectedVisionPages = selectRepresentativeVisionPages(
+    pageImagesInput,
+    Math.min(pageImageLimit, pageImagesInput.length)
+  );
+  const pageImagesToSend = await compactVisionPageImages(selectedVisionPages);
+  const pdfFileDataBase64 =
+    params.fileDataBase64 &&
+    String(params.fileType ?? "").toLowerCase().includes("pdf") &&
+    pageImagesToSend.length === 0
+      ? params.fileDataBase64
+      : null;
+
+  const userPrompt = buildOpenAIInputPayload({
+    fileName: params.fileName ?? null,
+    fileType: params.fileType ?? null,
+    detectedMetadata: params.detectedMetadata,
+    parsedRows: params.parsedRows,
+    text: inputText,
+    pageImages: pageImagesToSend,
+    fileDataBase64: pdfFileDataBase64,
+    importMode: promptImportMode,
+  });
   const isImageStatementMode =
     (params.importMode ?? "statement") === "statement" &&
     pageImagesToSend.length > 0 &&
@@ -2859,9 +2931,16 @@ export const transcribeImportImagesWithOpenAI = async (params: {
       : [imageModel, ocrModel, strongModel]),
     OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK,
   ]);
-  const pageImagesToSend = params.pageImages.slice(
-    0,
-    params.importMode === "statement" ? (inferredDifficulty === "hard" ? 8 : 6) : inferredDifficulty === "hard" ? 5 : 4
+  const pageImageLimit =
+    params.importMode === "statement"
+      ? inferredDifficulty === "hard"
+        ? 8
+        : 6
+      : inferredDifficulty === "hard"
+        ? 5
+        : 4;
+  const pageImagesToSend = await compactVisionPageImages(
+    selectRepresentativeVisionPages(params.pageImages, pageImageLimit)
   );
   const controller = new AbortController();
   const timeout = setTimeout(
