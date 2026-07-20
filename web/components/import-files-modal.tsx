@@ -5048,26 +5048,35 @@ export function ImportFilesModal({
               });
 
               if (statusDecision.kind === "visible") {
+                const visibleRows = Math.max(confirmedTransactionsCount, parsedRowsCount);
+                const visibleAccountId =
+                  typeof importFile?.accountId === "string" && importFile.accountId.trim()
+                    ? importFile.accountId.trim()
+                    : null;
                 updateItem(itemId, {
-                  status: "importing",
+                  status: "done",
                   confirmationState: "confirmed",
-                  progress: 99,
-                  progressLabel: "Making transactions visible",
+                  error: null,
+                  targetAccountId: visibleAccountId,
+                  importedRows: visibleRows,
+                  progress: 100,
+                  progressLabel: "Imported successfully",
                 });
                 publishImportActivity({
                   workspaceId,
                   surface: importActivitySurfaceRef.current,
-                  status: "active",
+                  status: "done",
                   importFileId,
                   fileName: item.file.name,
                   fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
                   fileTotal: items.length,
-                  completedFiles: completedFileCount,
-                  progress: 99,
-                  detail: `${statusDecision.detail} Clover is updating this page now.`,
+                  completedFiles: completedFileCount + 1,
+                  progress: 100,
+                  detail: `${visibleRows} transaction${visibleRows === 1 ? "" : "s"} imported successfully.`,
                   summary: null,
                   errorMessage: null,
                 });
+                setMessage(`Imported ${item.file.name}.`);
                 router.refresh();
                 inFlightStatusMonitorStopped = true;
                 break;

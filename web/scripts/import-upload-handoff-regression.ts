@@ -50,7 +50,7 @@ const main = async () => {
   assert.match(modalSource, /canonical_import_adopted/);
   assert.match(modalSource, /startedImportMonitorKeys\.has\(monitorKey\)/);
   assert.match(modalSource, /const settledVisible = await waitForSettledVisibility\(/);
-  assert.match(modalSource, /progressLabel: "Making transactions visible"/);
+  assert.match(modalSource, /progressLabel: "Imported successfully"/);
   assert.doesNotMatch(
     modalSource,
     /hasCompletedBatchNow[\s\S]{0,500}window\.setTimeout\([\s\S]{0,250}onClose\(\)[\s\S]{0,100}, 0\)/,
@@ -66,7 +66,12 @@ const main = async () => {
     /if \(\(backgroundOnly \|\| launchInBackground\) && !activePasswordItem\) \{\s*return null;/,
     "A visible import launched in the background must render its progress dock instead of disappearing."
   );
-  assert.match(settledVisibilitySource, /transaction\?\.importFileId === params\.importFileId/);
+  assert.match(settledVisibilitySource, /\/progress`/);
+  assert.doesNotMatch(
+    settledVisibilitySource,
+    /transaction\?\.importFileId === params\.importFileId/,
+    "Historical statement imports must not wait for their rows to appear on page 1 of a date-sorted account feed."
+  );
   assert.match(settledVisibilitySource, /params\.importedRows > 0 \? null : expectedBalance/);
   assert.doesNotMatch(
     settledVisibilitySource,
@@ -129,8 +134,8 @@ const main = async () => {
   assert.match(progressRouteSource, /visibleImportComplete: confirmedTransactionsCount > 0/);
   assert.match(
     uploadHandoffSource,
-    /statusDecision\.kind === "visible"[\s\S]{0,900}progress: 99[\s\S]{0,900}router\.refresh\(\)/,
-    "Committed rows should refresh the current page before the process response finishes, without claiming 100% too early."
+    /statusDecision\.kind === "visible"[\s\S]{0,900}status: "done"[\s\S]{0,900}progress: 100[\s\S]{0,1200}router\.refresh\(\)/,
+    "Durably committed rows should show an explicit 100% success and refresh the current page before the process response finishes."
   );
   assert.match(processRouteSource, /sourceFingerprint: fileFingerprint/);
   assert.match(processRouteSource, /reusableRawImport[\s\S]{0,900}storageKey: rawStorageKey/);

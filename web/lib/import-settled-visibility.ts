@@ -24,13 +24,6 @@ type AccountPayload = {
   };
 } | null;
 
-type TransactionsPayload = {
-  transactions?: Array<{
-    importFileId?: string | null;
-  }>;
-  totalCount?: number | null;
-} | null;
-
 const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 const normalizeBalance = (value: unknown) => {
@@ -203,9 +196,9 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
   // comfortably below the server's stream cadence to avoid connection storms.
   const pollDelayMs = 1_500;
 
-  // A status-stream "visible" event only proves that the import tables settled.
-  // For transaction imports, also prove that the same read endpoint used by the
-  // account UI can return the imported rows before declaring the modal complete.
+  // Receipts and account-only imports can use the status stream. Statement rows
+  // use the lightweight progress endpoint below so an older statement does not
+  // wait for its rows to appear on page 1 of a date-sorted account feed.
   if (params.importedRows <= 0) {
     const streamResult = await waitWithStatusStream({
       accountId,
@@ -225,12 +218,12 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
       const accountResponsePromise = fetchAccountPayload(accountId);
       const statusResponsePromise =
         params.importedRows > 0 && params.importFileId
-          ? fetch(`/api/imports/${encodeURIComponent(params.importFileId)}/status`, {
+          ? fetch(`/api/imports/${encodeURIComponent(params.importFileId)}/progress`, {
               cache: "no-store",
             })
           : null;
       const transactionsResponsePromise =
-        params.importedRows > 0
+        params.importedRows > 0 && !params.importFileId
           ? fetch(
               `/api/accounts/${encodeURIComponent(accountId)}/transactions?page=1&pageSize=${Math.min(Math.max(params.importedRows, 25), 500)}`,
               {
@@ -261,10 +254,6 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
         transactionsResponse && transactionsResponse.ok ? transactionsResponse.json().catch(() => null) : Promise.resolve(null),
       ]);
 
-      const transactionRows = Array.isArray((transactionPayload as TransactionsPayload)?.transactions)
-        ? (transactionPayload as NonNullable<TransactionsPayload>).transactions ?? []
-        : [];
-
       if (params.importedRows > 0 && params.importFileId) {
         const confirmedTransactionsCount = Number(statusPayload?.confirmedTransactionsCount ?? 0);
         const hasVisibleReceiptOrImport =
@@ -275,17 +264,8 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
           await sleep(pollDelayMs);
           continue;
         }
-
-        const matchingVisibleRows = transactionRows.filter(
-          (transaction) => transaction?.importFileId === params.importFileId
-        ).length;
-        const expectedVisibleRows = Math.max(1, Math.min(params.importedRows, confirmedTransactionsCount || params.importedRows));
-        if (matchingVisibleRows < expectedVisibleRows) {
-          await sleep(pollDelayMs);
-          continue;
-        }
       } else if (params.importedRows > 0) {
-        const totalCount = Number((transactionPayload as TransactionsPayload)?.totalCount ?? 0);
+        const totalCount = Number(transactionPayload?.totalCount ?? 0);
         if (totalCount < params.importedRows) {
           await sleep(pollDelayMs);
           continue;
