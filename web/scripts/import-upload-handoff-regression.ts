@@ -241,6 +241,16 @@ const main = async () => {
     /const documentCheckpointPromise =[\s\S]{0,600}Promise\.all\(\[[\s\S]{0,400}documentCheckpointPromise/,
     "Confirmation should overlap checkpoint loading with plan-limit reads instead of serializing database round trips."
   );
+  assert.match(
+    importProcessorSource,
+    /const confirmationReadSnapshotPromise = Promise\.all\(\[/,
+    "Confirmation should start matching reads before it enters the statement transaction."
+  );
+  assert.match(
+    importProcessorSource,
+    /const \[existingCategories, workspaceAccountsForTransferMatching, existingRowsForAccount\] = await confirmationReadSnapshotPromise;/,
+    "Confirmation should reuse the preloaded matching reads instead of serializing them in the transaction."
+  );
   assert.match(importProcessorSource, /countTransactionsByImportFileCompat\(sourceMatch\.id\)/);
   assert.match(importProcessorSource, /already imported and skipped the duplicate/);
   assert.match(

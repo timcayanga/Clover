@@ -11097,6 +11097,44 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     ])
   );
   const compatibleImportFileColumns = new Set(await compatibleImportFileColumnsPromise);
+  // These reads inform matching and categorization but do not mutate the
+  // imported statement. Start them before the statement-specific lock so a
+  // slow pooled database round trip overlaps the lock/account work instead of
+  // extending the visible confirmation transaction.
+  const confirmationReadSnapshotPromise = Promise.all([
+    prisma.category.findMany({
+      where: { workspaceId: importFile.workspaceId },
+    }),
+    prisma.account.findMany({
+      where: { workspaceId: importFile.workspaceId },
+      select: {
+        id: true,
+        name: true,
+        institution: true,
+        accountNumber: true,
+        type: true,
+        currency: true,
+      },
+    }),
+    prisma.transaction.findMany({
+      where: {
+        accountId: { in: matchingAccountIdsForImport },
+        deletedAt: null,
+        OR: [{ importFileId: null }, { importFileId: { not: importFileId } }],
+      },
+      select: {
+        accountId: true,
+        date: true,
+        amount: true,
+        currency: true,
+        type: true,
+        merchantRaw: true,
+        merchantClean: true,
+        description: true,
+        rawPayload: true,
+      },
+    }),
+  ]);
 
   let statementRow: Record<string, unknown> | null = null;
   let statementConfidence = 0;
@@ -11532,39 +11570,8 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     }
   }
 
-  const existingCategories = await tx.category.findMany({
-    where: { workspaceId: importFile.workspaceId },
-  });
+  const [existingCategories, workspaceAccountsForTransferMatching, existingRowsForAccount] = await confirmationReadSnapshotPromise;
   const categoryByName = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
-  const workspaceAccountsForTransferMatching = await tx.account.findMany({
-    where: { workspaceId: importFile.workspaceId },
-    select: {
-      id: true,
-      name: true,
-      institution: true,
-      accountNumber: true,
-      type: true,
-      currency: true,
-    },
-  });
-  const existingRowsForAccount = await tx.transaction.findMany({
-    where: {
-      accountId: { in: matchingAccountIdsForImport },
-      deletedAt: null,
-      OR: [{ importFileId: null }, { importFileId: { not: importFileId } }],
-    },
-    select: {
-      accountId: true,
-      date: true,
-      amount: true,
-      currency: true,
-      type: true,
-      merchantRaw: true,
-      merchantClean: true,
-      description: true,
-      rawPayload: true,
-    },
-  });
   const existingDedupeCounts = new Map<string, number>();
   for (const existingRow of existingRowsForAccount) {
     const key = buildConfirmedTransactionDedupeKey({
