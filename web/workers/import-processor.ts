@@ -4806,6 +4806,9 @@ const resolveConfirmationAccount = async (params: {
     accountLimit: number | null;
   } | null;
   planAccountCount?: number | null;
+  workspaceAccounts?: Prisma.AccountGetPayload<{
+    select: ReturnType<typeof getCompatibleAccountSelect>;
+  }>[];
 }) => {
   const workspaceId = String(params.importFile.workspaceId);
   const compatibleAccountColumns = await getCompatibleAccountColumns();
@@ -5224,10 +5227,15 @@ const resolveConfirmationAccount = async (params: {
     (inferAccountTypeFromStatement(inferredInstitution, inferredAccountName ?? inferredAccountNumber, "bank") as AccountType);
   const shouldClearImportedBalanceForActivityOnlyInvestment =
     accountIdentityType === "investment" && gcryptoActivityHistoryImport;
-  const workspaceAccounts = await prisma.account.findMany({
-    where: { workspaceId },
-    select: getCompatibleAccountSelect(compatibleAccountColumns),
-  });
+  // Confirmation already needs an account snapshot for transaction matching.
+  // Reusing it avoids a second full workspace account scan on the user-visible
+  // path, while the creation lock below remains the source of truth for races.
+  const workspaceAccounts =
+    params.workspaceAccounts ??
+    (await prisma.account.findMany({
+      where: { workspaceId },
+      select: getCompatibleAccountSelect(compatibleAccountColumns),
+    }));
   const sortImportedAccountsByFreshness = (
     left: { updatedAt: Date; createdAt: Date },
     right: { updatedAt: Date; createdAt: Date }
@@ -10970,21 +10978,19 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       parsedAccountGroups.some((group) => group.rows.some((row) => Boolean(readRowAccountNumber(row))))) ||
     hasMultipleWiseWalletAccountGroups ||
     hasMultipleInvestmentAccountGroups;
-  // These are needed after account resolution, not before it. Start them now
-  // so their database latency overlaps the identity match/create path.
-  const workspaceAccountCandidatesPromise = prisma.account.findMany({
-    where: { workspaceId: String(importFile.workspaceId) },
-    select: {
-      id: true,
-      name: true,
-      institution: true,
-      accountNumber: true,
-      type: true,
-    },
-  });
+  // Start the workspace snapshot before account resolution so it can serve
+  // both identity matching and later transaction matching in one read.
+  const compatibleAccountColumnsPromise = getCompatibleAccountColumns();
+  const workspaceAccountCandidatesPromise = compatibleAccountColumnsPromise.then((columns) =>
+    prisma.account.findMany({
+      where: { workspaceId: String(importFile.workspaceId) },
+      select: getCompatibleAccountSelect(columns),
+    })
+  );
   const compatibleImportFileColumnsPromise = getCompatibleImportFileColumns();
   const accountByGroupKey = new Map<string, Awaited<ReturnType<typeof resolveConfirmationAccount>>>();
   let resolvedAccountSequence = 0;
+  const workspaceAccountCandidates = await workspaceAccountCandidatesPromise;
   for (const group of multiAccountImport ? parsedAccountGroups : parsedAccountGroups.slice(0, 1)) {
     const firstGroupRow = group.rows[0] ?? {};
     const groupRows = group.rows as EnrichedParsedImportRow[];
@@ -11017,6 +11023,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         planUsage?.accountCount === null || planUsage?.accountCount === undefined
           ? null
           : planUsage.accountCount + resolvedAccountSequence,
+      workspaceAccounts: workspaceAccountCandidates,
     });
     if (!groupAccount) {
       throw new Error("Account not found");
@@ -11085,9 +11092,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   const matchingAccountIdsForImport = Array.from(
     new Set([
       ...resolvedAccounts.map((entry) => entry.id),
-      ...(
-        await workspaceAccountCandidatesPromise
-      )
+      ...workspaceAccountCandidates
         .filter(
           (candidate) =>
             resolvedAccountIdentityKeys.has(normalizeImportedAccountKey(candidate.name, candidate.institution, candidate.accountNumber, candidate.type)) ||

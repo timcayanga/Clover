@@ -5233,6 +5233,38 @@ const isBpiStatementPaymentCredit = (description: string) => {
   );
 };
 
+// BPI card OCR occasionally glues an approval/reference number to the PHP
+// amount. Keep the original token for traceability, but only publish the
+// recoverable monetary tail (for example `40293577335,706.50` represents
+// approval `4029357733` and amount `5,706.50`).
+const recoverBpiCreditCardMergedAmount = (amountText: string | null) => {
+  if (!amountText) {
+    return null;
+  }
+
+  const normalized = amountText.replace(/\s+/g, "");
+  const commaMerged = normalized.match(/^(?<sign>-?)(?<approvalCode>\d{10})(?<amountHead>\d{1,3}),(?<amountTail>\d{3}\.\d{2})$/);
+  if (commaMerged?.groups?.approvalCode && commaMerged.groups.amountHead && commaMerged.groups.amountTail) {
+    return {
+      amountText: `${commaMerged.groups.sign ?? ""}${commaMerged.groups.amountHead},${commaMerged.groups.amountTail}`,
+      approvalCode: commaMerged.groups.approvalCode,
+    };
+  }
+
+  // Compact OCR has no separator in some statements. An 11–12 digit prefix
+  // followed by a 3–6 digit currency amount is a reference-number shape, not
+  // a plausible single card charge.
+  const compactMerged = normalized.match(/^(?<sign>-?)(?<approvalCode>\d{11,12})(?<amountInteger>\d{3,6}\.\d{2})$/);
+  if (compactMerged?.groups?.approvalCode && compactMerged.groups.amountInteger) {
+    return {
+      amountText: `${compactMerged.groups.sign ?? ""}${compactMerged.groups.amountInteger}`,
+      approvalCode: compactMerged.groups.approvalCode,
+    };
+  }
+
+  return null;
+};
+
 const parseBpiCreditCardTransactionLine = (
   line: string,
   state: {
@@ -5262,7 +5294,9 @@ const parseBpiCreditCardTransactionLine = (
 
   const moneyMatches = body.match(/-?[0-9][0-9,]*\.\d{2}/g) ?? [];
   const amountText = moneyMatches.at(-1) ?? null;
-  const amount = parseMoney(amountText);
+  const mergedAmount = recoverBpiCreditCardMergedAmount(amountText);
+  const recoveredAmountText = mergedAmount?.amountText ?? null;
+  const amount = parseMoney(recoveredAmountText ?? amountText);
   if (amount === null) {
     return null;
   }
@@ -5314,6 +5348,9 @@ const parseBpiCreditCardTransactionLine = (
       saleDate: saleDateResult.date.toISOString().slice(0, 10),
       postDate: postDateResult.date.toISOString().slice(0, 10),
       amountText,
+      mergedAmountText: mergedAmount ? amountText : null,
+      recoveredAmountText,
+      approvalCode: mergedAmount?.approvalCode ?? null,
       foreignAmountText,
       fxNote,
       line: normalized,
@@ -5322,9 +5359,35 @@ const parseBpiCreditCardTransactionLine = (
   } satisfies ParsedImportRow;
 };
 
-const parseBpiCreditCardImportText = (text: string) => {
+const parseBpiCreditCardImportText = (
+  text: string,
+  context: Pick<ImportParseContext, "institution" | "accountName" | "accountNumber"> = {}
+) => {
   const normalizedText = normalizeBpiText(text);
-  const metadata = bpiCreditCardStatementMetadata(normalizedText);
+  const detectedMetadata = bpiCreditCardStatementMetadata(normalizedText);
+  // Some scanned BPI card statements lose the BPI header completely, but the
+  // upload context still identifies the institution and the two-date card
+  // ledger remains deterministic. Use that narrow path before generic parsing
+  // so customer-number boilerplate never becomes a transaction.
+  const hasBpiContext = /\bbpi\b/i.test(context.institution ?? "");
+  const collapsedLines = normalizedText.split(/\r?\n/).map((line) => collapseBpiCreditCardOcrLine(line));
+  const hasBpiCardLedgerShape =
+    collapsedLines.some((line) => /CUSTOMERNUMBER/i.test(line.replace(/\s+/g, ""))) &&
+    collapsedLines.some((line) => isBpiCreditCardTransactionStartLine(line));
+  const metadata =
+    detectedMetadata ??
+    (hasBpiContext && hasBpiCardLedgerShape
+      ? {
+          institution: "BPI",
+          accountNumber: context.accountNumber ?? null,
+          accountName:
+            context.accountName ?? formatSimpleBankAccountName("BPI", context.accountNumber?.replace(/\D/g, "").slice(-4) ?? "9001"),
+          accountType: "credit_card" as const,
+          currency: "PHP",
+          startDate: null,
+          endDate: null,
+        }
+      : null);
   if (!metadata) {
     return null;
   }
@@ -5506,7 +5569,9 @@ const parseBpiCreditCardSegment = (
     return null;
   }
   const amountText = moneyMatches.at(-1) ?? null;
-  const amount = parseMoney(amountText);
+  const mergedAmount = recoverBpiCreditCardMergedAmount(amountText);
+  const recoveredAmountText = mergedAmount?.amountText ?? null;
+  const amount = parseMoney(recoveredAmountText ?? amountText);
   if (amount === null) {
     return null;
   }
@@ -5573,6 +5638,9 @@ const parseBpiCreditCardSegment = (
       saleDate: saleDate.toISOString().slice(0, 10),
       postDate: postDate.toISOString().slice(0, 10),
       amountText,
+      mergedAmountText: mergedAmount ? amountText : null,
+      recoveredAmountText,
+      approvalCode: mergedAmount?.approvalCode ?? null,
       foreignAmountText,
       fxNote,
       line: segmentText,
@@ -19512,7 +19580,13 @@ const parseGenericStatementTransactionBlock = (
     return null;
   }
 
-  const numericValues = moneyMatches.map((match) => parseMoney(match[0]?.replace(/^PHP\s*/i, "") ?? null));
+  const supportsBpiCreditAmountRepair = /\b(?:bpi|bank of the philippine islands)\b/i.test(state.institution ?? "");
+  const bpiMergedAmounts = moneyMatches.map((match) =>
+    supportsBpiCreditAmountRepair ? recoverBpiCreditCardMergedAmount(match[0]?.replace(/^PHP\s*/i, "") ?? null) : null
+  );
+  const numericValues = moneyMatches.map((match, index) =>
+    parseMoney(bpiMergedAmounts[index]?.amountText ?? match[0]?.replace(/^PHP\s*/i, "") ?? null)
+  );
   if (numericValues.some((value) => value === null)) {
     return null;
   }
@@ -19765,6 +19839,10 @@ const parseGenericStatementTransactionBlock = (
     return null;
   }
 
+  const selectedAmountIndex =
+    amountMatchIndex !== null ? amountMatchIndex : moneyMatches.length === 2 ? 0 : null;
+  const selectedMergedAmount = selectedAmountIndex !== null ? bpiMergedAmounts[selectedAmountIndex] : null;
+
   return {
     date: anchoredDate.toISOString().slice(0, 10),
     amount: amount.toFixed(2),
@@ -19791,6 +19869,9 @@ const parseGenericStatementTransactionBlock = (
           : moneyMatches.length === 2
             ? moneyMatches[0]?.[0] ?? null
             : null,
+      mergedAmountText: selectedMergedAmount ? moneyMatches[selectedAmountIndex ?? 0]?.[0]?.trim() ?? null : null,
+      recoveredAmountText: selectedMergedAmount?.amountText ?? null,
+      approvalCode: selectedMergedAmount?.approvalCode ?? null,
       amountDirectionMarker: explicitAmountDirectionMarker,
       currency: detectCurrencyFromText(rowText),
       balanceText:
@@ -23517,7 +23598,7 @@ export const parseImportText = (
     return bdoParsed.rows;
   }
 
-  const bpiCreditParsed = parseBpiCreditCardImportText(text);
+  const bpiCreditParsed = parseBpiCreditCardImportText(text, context);
   if (bpiCreditParsed && bpiCreditParsed.rows.length > 0) {
     return bpiCreditParsed.rows;
   }
