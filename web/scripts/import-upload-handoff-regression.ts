@@ -16,7 +16,7 @@ const section = (source: string, start: string, end: string) => {
 };
 
 const main = async () => {
-  const [modalSource, processRouteSource, progressRouteSource, confirmRouteSource, workerSource, importQueueSource, importProcessorSource, importFileTextSource, statusSnapshotSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource, pageDropSource] = await Promise.all([
+  const [modalSource, processRouteSource, progressRouteSource, confirmRouteSource, workerSource, importQueueSource, importProcessorSource, importFileTextSource, statusSnapshotSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource, pageDropSource, globalImportActivitySource] = await Promise.all([
     readFile(join(webRoot, "components/import-files-modal.tsx"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/process/route.ts"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/progress/route.ts"), "utf8"),
@@ -31,6 +31,7 @@ const main = async () => {
     readFile(join(webRoot, "lib/import-visibility-rules.ts"), "utf8"),
     readFile(join(webRoot, "app/transactions/page.tsx"), "utf8"),
     readFile(join(webRoot, "components/page-file-drop-zone.tsx"), "utf8"),
+    readFile(join(webRoot, "components/global-import-activity.tsx"), "utf8"),
   ]);
   const localPreparseSource = section(
     modalSource,
@@ -51,6 +52,17 @@ const main = async () => {
   assert.match(modalSource, /startedImportMonitorKeys\.has\(monitorKey\)/);
   assert.match(modalSource, /const settledVisible = await waitForSettledVisibility\(/);
   assert.match(modalSource, /progressLabel: "Imported successfully"/);
+  assert.match(
+    globalImportActivitySource,
+    /if \(activity\.status === "done"\) \{[\s\S]{0,700}<ImportUploadDock[\s\S]{0,300}tone="success"/,
+    "A background import must retain a visible success result instead of disappearing when it reaches done."
+  );
+  assert.doesNotMatch(
+    globalImportActivitySource,
+    /status === "done"[\s\S]{0,200}setActivity\(null\)/,
+    "Completed background imports must wait for explicit dismissal."
+  );
+  assert.doesNotMatch(processRouteSource, /Fast preflight routed/, "Progress copy should describe user-visible work, not internal parser jargon.");
   assert.match(
     modalSource,
     /const showCompactProgress = launchInBackground && compactProgressUnlocked && progressSessionActive/,

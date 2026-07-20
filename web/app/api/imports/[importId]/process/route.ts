@@ -2497,8 +2497,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         return queueBackgroundProcessing(processingBankName || null, {
           processingMessage:
             preflightSurfaceFingerprint.kind === "wallet_screenshot" || preflightSurfaceFingerprint.kind === "statement_screenshot"
-              ? "Fast preflight routed this screenshot to Clover's AI backup parser..."
-              : "Fast preflight routed this file to Clover's AI backup parser...",
+              ? "Clover is choosing the best reader for this screenshot..."
+              : "Clover is choosing the best reader for this file...",
         });
       }
       const shouldQueuePdfImmediately =

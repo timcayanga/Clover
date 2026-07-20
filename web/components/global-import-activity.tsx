@@ -13,15 +13,6 @@ import {
 } from "@/lib/import-activity";
 import { getImportErrorNextSteps, getImportErrorSpecForCode } from "@/lib/import-error-spec";
 
-const isBackgroundFinalizationActivity = (activity: ImportActivitySnapshot | null) =>
-  Boolean(
-    activity &&
-      activity.status !== "error" &&
-      /visible in clover|accounts and transactions are visible|cleaning up names and categories|finalizing_enrichment/i.test(
-        activity.detail ?? ""
-      )
-  );
-
 const IMPORT_ACTIVITY_APP_PATH_PREFIXES = [
   "/accounts",
   "/admin",
@@ -107,10 +98,6 @@ export function GlobalImportActivity() {
   const dismissedKeysRef = useRef<Set<string>>(readDismissedKeys());
   const [activity, setActivity] = useState<ImportActivitySnapshot | null>(() => {
     const snapshot = readImportActivity();
-    if (isBackgroundFinalizationActivity(snapshot)) {
-      clearImportActivity();
-      return null;
-    }
     const dismissKey = getDismissKey(snapshot);
     return dismissKey && dismissedKeysRef.current.has(dismissKey) ? null : snapshot;
   });
@@ -129,11 +116,6 @@ export function GlobalImportActivity() {
     () =>
       subscribeImportActivity(() => {
         const snapshot = readImportActivity();
-        if (isBackgroundFinalizationActivity(snapshot)) {
-          clearImportActivity();
-          setActivity(null);
-          return;
-        }
         const dismissKey = getDismissKey(snapshot);
         if (dismissKey && dismissedKeysRef.current.has(dismissKey)) {
           setActivity(null);
@@ -200,21 +182,6 @@ export function GlobalImportActivity() {
   }, []);
 
   useEffect(() => {
-    if (!activity || activity.status !== "done") {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      clearImportActivity();
-      setActivity(null);
-    }, 1500);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [activity]);
-
-  useEffect(() => {
     if (!activity || activity.status !== "active") {
       return;
     }
@@ -262,7 +229,20 @@ export function GlobalImportActivity() {
   };
 
   if (activity.status === "done") {
-    return null;
+    return (
+      <ImportUploadDock
+        open
+        tone="success"
+        fileName={activity.fileName}
+        fileIndex={activity.fileIndex}
+        fileTotal={activity.fileTotal}
+        completedFiles={activity.completedFiles}
+        progress={100}
+        detail={activity.detail || "Import complete. Your data is ready in Clover."}
+        summary={activity.summary}
+        onClose={handleClose}
+      />
+    );
   }
 
   const isError = activity.status === "error";
