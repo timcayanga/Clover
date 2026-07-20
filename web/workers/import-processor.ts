@@ -7198,9 +7198,30 @@ export const processImportFileText = async (
 
     if (fileType === "application/pdf") {
       const importedBytes = options.sourceBytes ?? (await downloadImportObject(storageKey));
+      let renderedPages: Array<{ page: number; dataUrl: string }> = [];
+      try {
+        renderedPages = await readImportedPdfPageImages(
+          {
+            storageKey,
+            fileType,
+            fileName,
+          },
+          options.password,
+          !text.trim() ? 8 : importMode === "receipt" ? 4 : 4,
+          !text.trim() ? 1.6 : importMode === "receipt" ? 1.35 : 1.1,
+          options.pdfJsBaseUrl,
+          !text.trim()
+        );
+      } catch (error) {
+        console.warn("Unable to render compact PDF pages for backup parser; retaining PDF fallback", {
+          importFileId,
+          error,
+        });
+      }
+
       return {
-        pageImages: null,
-        pdfFileDataBase64: Buffer.from(importedBytes).toString("base64"),
+        pageImages: renderedPages.length > 0 ? renderedPages : null,
+        pdfFileDataBase64: renderedPages.length > 0 ? null : Buffer.from(importedBytes).toString("base64"),
       };
     }
 
