@@ -7248,6 +7248,9 @@ export function ImportFilesModal({
           router.refresh();
         }
       }
+      // Stop the active-state effect from refreshing the completed snapshot and
+      // allow the scheduled success dismissal to close the visible modal.
+      primaryVisibilityCompletedRef.current = true;
       scheduleSuccessfulImportAutoClose();
     }
   };
