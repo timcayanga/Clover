@@ -139,6 +139,11 @@ const expandedFixtures = [
   { input: { merchantRaw: "SHOWMAX SOUTH AFRICA", currency: "ZAR" }, countryCode: "ZA", paymentRail: null, purposeHint: "subscription" },
   { input: { merchantRaw: "RENT PAYMENT UAE", currency: "AED" }, countryCode: null, paymentRail: null, purposeHint: "housing" },
   { input: { merchantRaw: "UNICEF DONATION", currency: "USD" }, countryCode: null, paymentRail: null, purposeHint: "charity" },
+  { input: { merchantRaw: "ITAU UNIBANCO BRASIL", currency: "BRL" }, countryCode: "BR", paymentRail: null, purposeHint: null },
+  { input: { merchantRaw: "NU MEXICO", currency: "MXN" }, countryCode: "MX", paymentRail: null, purposeHint: null },
+  { input: { merchantRaw: "KCB KENYA", currency: "KES" }, countryCode: "KE", paymentRail: null, purposeHint: null },
+  { input: { merchantRaw: "KBZ BANK MYANMAR", currency: "MMK" }, countryCode: "MM", paymentRail: null, purposeHint: null },
+  { input: { merchantRaw: "PHILLIP BANK CAMBODIA", currency: "KHR" }, countryCode: "KH", paymentRail: null, purposeHint: null },
 ] as const;
 for (const fixture of expandedFixtures) {
   const context = resolveTransactionContext(fixture.input);

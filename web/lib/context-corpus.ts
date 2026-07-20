@@ -5,7 +5,7 @@
  * confirmed transaction values. Keep raw statement text outside this module.
  */
 
-export const CONTEXT_CORPUS_VERSION = "2026.07.22";
+export const CONTEXT_CORPUS_VERSION = "2026.07.23";
 
 export type ContextSignal = {
   id: string;
@@ -511,6 +511,19 @@ const baseEntries: ContextEntry[] = [
   { id: "kw-subscriptions-household", aliases: ["netflix kuwait", "spotify kuwait", "ooredoo home kuwait", "stc home kuwait", "osn kuwait"], signalKind: "merchant", countryCode: "KW", regionCode: "MEA", currency: "KWD", categoryHint: "Subscriptions", counterpartyType: "merchant", purposeHint: "subscription", confidence: 58 },
   { id: "global-charity-expanded", aliases: ["red cross donation", "unicef donation", "world vision donation", "charity donation", "ngo contribution"], signalKind: "merchant", countryCode: "GLOBAL", regionCode: "GLOBAL", categoryHint: "Financial", counterpartyType: "government", purposeHint: "charity", confidence: 70 },
   { id: "global-household-services", aliases: ["rent payment", "property management", "homeowners association", "condominium dues", "utility bill payment"], signalKind: "merchant", countryCode: "GLOBAL", regionCode: "GLOBAL", categoryHint: "Home", counterpartyType: "merchant", purposeHint: "housing", confidence: 68 },
+  { id: "br-institutions-expanded", aliases: ["itau unibanco brasil", "bradesco brasil", "caixa economica federal", "banco do brasil", "santander brasil"], signalKind: "institution", countryCode: "BR", regionCode: "LATAM", institutionType: "bank", currency: "BRL", confidence: 74 },
+  { id: "mx-institutions-expanded", aliases: ["nu mexico", "hsbc mexico", "scotiabank mexico", "citibanamex", "klar mexico"], signalKind: "institution", countryCode: "MX", regionCode: "LATAM", institutionType: "bank", currency: "MXN", confidence: 70 },
+  { id: "co-institutions-expanded", aliases: ["davivienda colombia", "bbva colombia", "banco de bogota", "nu colombia", "lulo bank"], signalKind: "institution", countryCode: "CO", regionCode: "LATAM", institutionType: "bank", currency: "COP", confidence: 68 },
+  { id: "cl-institutions-expanded", aliases: ["banco de chile", "bci chile", "scotiabank chile", "tenpo chile", "dale bancoestado"], signalKind: "institution", countryCode: "CL", regionCode: "LATAM", institutionType: "bank", currency: "CLP", confidence: 68 },
+  { id: "za-institutions-expanded", aliases: ["absa bank south africa", "fnb south africa", "nedbank south africa", "tymebank south africa", "discovery bank south africa"], signalKind: "institution", countryCode: "ZA", regionCode: "AFR", institutionType: "bank", currency: "ZAR", confidence: 68 },
+  { id: "ke-institutions-expanded", aliases: ["kcb kenya", "cooperative bank kenya", "ncba kenya", "mshwari kenya", "fuliza kenya"], signalKind: "institution", countryCode: "KE", regionCode: "AFR", institutionType: "bank", currency: "KES", confidence: 66 },
+  { id: "ng-institutions-expanded", aliases: ["gtbank nigeria", "access bank nigeria", "zenith bank nigeria", "kuda nigeria", "moniepoint nigeria"], signalKind: "institution", countryCode: "NG", regionCode: "AFR", institutionType: "bank", currency: "NGN", confidence: 64 },
+  { id: "gh-institutions-expanded", aliases: ["gcb bank ghana", "ecobank ghana", "fidelity bank ghana", "calbank ghana", "zeepay ghana"], signalKind: "institution", countryCode: "GH", regionCode: "AFR", institutionType: "bank", currency: "GHS", confidence: 62 },
+  { id: "tz-institutions-expanded", aliases: ["crdb bank tanzania", "stanbic bank tanzania", "absa tanzania", "nmb mobile tanzania", "halopesa tanzania"], signalKind: "institution", countryCode: "TZ", regionCode: "AFR", institutionType: "bank", currency: "TZS", confidence: 60 },
+  { id: "kh-institutions-expanded", aliases: ["phillip bank cambodia", "canadia bank cambodia", "prince bank cambodia", "sathapana bank cambodia", "cambodia public bank"], signalKind: "institution", countryCode: "KH", regionCode: "SEA", institutionType: "bank", currency: "KHR", confidence: 66 },
+  { id: "mm-institutions-expanded", aliases: ["kbz bank myanmar", "cb bank myanmar", "aya bank myanmar", "uab bank myanmar", "myanmar apex bank"], signalKind: "institution", countryCode: "MM", regionCode: "SEA", institutionType: "bank", currency: "MMK", confidence: 62 },
+  { id: "bn-institutions-expanded", aliases: ["standard chartered brunei", "bank islam brunei", "bibd at tamwil", "taib brunei", "baiduri finance brunei"], signalKind: "institution", countryCode: "BN", regionCode: "SEA", institutionType: "bank", currency: "BND", confidence: 62 },
+  { id: "la-institutions-expanded", aliases: ["joint development bank laos", "phongsavanh bank", "maruhan japan bank laos", "indochina bank laos", "agriculture promotion bank laos"], signalKind: "institution", countryCode: "LA", regionCode: "SEA", institutionType: "bank", currency: "LAK", confidence: 60 },
 ];
 
 /**
