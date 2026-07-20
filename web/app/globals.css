@@ -14515,7 +14515,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 
 .line-item-header {
   display: grid;
-  grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(150px, 1.15fr) minmax(110px, 0.75fr) minmax(110px, 0.8fr) 40px 40px;
+  grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(170px, 1.55fr) minmax(90px, 0.55fr) minmax(110px, 0.8fr) 40px 40px;
   gap: 10px;
   align-items: center;
   padding: 2px 2px 1px;
@@ -15271,7 +15271,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 
 .line-item {
   display: grid;
-  grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(150px, 1.15fr) minmax(110px, 0.75fr) minmax(110px, 0.8fr) 40px 40px;
+  grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(170px, 1.55fr) minmax(90px, 0.55fr) minmax(110px, 0.8fr) 40px 40px;
   gap: 10px;
   align-items: center;
   padding: 6px 4px;
@@ -28177,7 +28177,7 @@ button.accounts-detail__transaction-head-cell {
 
 .transactions-loading-row {
   display: grid;
-  grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(150px, 1.15fr) minmax(110px, 0.75fr) minmax(110px, 0.8fr) 40px 40px;
+  grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(170px, 1.55fr) minmax(90px, 0.55fr) minmax(110px, 0.8fr) 40px 40px;
   gap: 10px;
   align-items: center;
 }
