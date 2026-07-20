@@ -125,6 +125,11 @@ const expandedFixtures = [
   { input: { merchantRaw: "PHONEPE INDIA", currency: "INR" }, countryCode: "IN", paymentRail: "india_wallet", purposeHint: null },
   { input: { merchantRaw: "HUNGERSTATION SAUDI", currency: "SAR" }, countryCode: "SA", paymentRail: null, purposeHint: "retail" },
   { input: { merchantRaw: "KAISER PERMANENTE", currency: "USD" }, countryCode: "US", paymentRail: null, purposeHint: "healthcare" },
+  { input: { merchantRaw: "GOTRADE PHILIPPINES", currency: "PHP" }, countryCode: "PH", paymentRail: null, purposeHint: "investment" },
+  { input: { merchantRaw: "Fidelity Investments", currency: "USD" }, countryCode: "US", paymentRail: null, purposeHint: "investment" },
+  { input: { merchantRaw: "Rent Payment Canada", currency: "CAD" }, countryCode: "CA", paymentRail: null, purposeHint: "housing" },
+  { input: { merchantRaw: "HUNGERSTATION SAUDI", currency: "SAR" }, countryCode: "SA", paymentRail: null, purposeHint: "retail" },
+  { input: { merchantRaw: "HAMAD MEDICAL CORPORATION", currency: "QAR" }, countryCode: "QA", paymentRail: null, purposeHint: "healthcare" },
 ] as const;
 for (const fixture of expandedFixtures) {
   const context = resolveTransactionContext(fixture.input);
