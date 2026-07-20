@@ -710,6 +710,8 @@ model Transaction {
   @@index([date])
   @@index([workspaceId, date])
   @@index([importFileId, sourceRowKey])
+  @@index([accountId, deletedAt])
+  @@index([workspaceId, deletedAt, accountId])
 }
 
 model TransactionTag {
@@ -763,6 +765,7 @@ model ImportFile {
   @@index([workspaceId])
   @@index([accountId])
   @@index([status])
+  @@index([workspaceId, sourceFingerprint, status])
 }
 
 model ImportFileExtractionCache {
