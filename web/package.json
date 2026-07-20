@@ -17,6 +17,7 @@
     "qa:imports": "tsx scripts/import-smoke-regression.ts",
     "qa:import-status-stream": "tsx scripts/import-status-stream-regression.ts",
     "qa:import-upload-handoff": "tsx scripts/import-upload-handoff-regression.ts",
+    "qa:import-account-race": "tsx scripts/import-account-creation-race-regression.ts",
     "qa:import-enrichment-queue": "tsx scripts/import-enrichment-queue-regression.ts",
     "qa:import-sequential-dedupe": "tsx scripts/import-sequential-dedupe-regression.ts",
     "qa:import-file-matrix": "tsx scripts/import-file-matrix-regression.ts",

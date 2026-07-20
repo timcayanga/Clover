@@ -5537,9 +5537,54 @@ const resolveConfirmationAccount = async (params: {
       }
 
     try {
-      const createdAccount = await prisma.account.create({
-        data: accountData,
-        select: getCompatibleAccountSelect(compatibleAccountColumns),
+      // Parsing and confirmation can reach account creation from separate
+      // requests for the same statement. Re-check the identity while holding a
+      // transaction-scoped lock so two near-simultaneous paths cannot create
+      // two identical uploaded accounts (for example UnionBank card 3912).
+      const accountCreationLockKey = [
+        "import-account-create",
+        workspaceId,
+        normalizeImportedAccountKey(
+          accountData.name,
+          inferredInstitution,
+          inferredAccountNumber,
+          accountIdentityType
+        ),
+        inferredCurrency ?? "PHP",
+      ].join(":");
+      const createdAccount = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw<Array<{ acquired: number }>>`
+          WITH account_creation_lock AS MATERIALIZED (
+            SELECT pg_advisory_xact_lock(hashtextextended(${accountCreationLockKey}, 0))
+          )
+          SELECT 1::int AS acquired FROM account_creation_lock
+        `;
+
+        const concurrentCandidates = await tx.account.findMany({
+          where: {
+            workspaceId,
+            source: "upload",
+            ...(inferredCurrency ? { currency: inferredCurrency } : {}),
+          },
+          select: getCompatibleAccountSelect(compatibleAccountColumns),
+        });
+        const existingConcurrentAccount = concurrentCandidates.find((candidate) =>
+          matchesImportedAccountIdentity(candidate, {
+            name: accountData.name,
+            institution: inferredInstitution,
+            accountNumber: inferredAccountNumber,
+            type: accountIdentityType,
+            currency: inferredCurrency,
+          })
+        );
+        if (existingConcurrentAccount) {
+          return existingConcurrentAccount;
+        }
+
+        return tx.account.create({
+          data: accountData,
+          select: getCompatibleAccountSelect(compatibleAccountColumns),
+        });
       });
 
       await ensureWorkspaceCashAccount(workspaceId, createdAccount.currency ?? inferredCurrency ?? "PHP");
