@@ -55,12 +55,17 @@ const main = async () => {
   assert.match(
     globalImportActivitySource,
     /if \(activity\.status === "done"\) \{[\s\S]{0,700}<ImportUploadDock[\s\S]{0,300}tone="success"/,
-    "A background import must retain a visible success result instead of disappearing when it reaches done."
+    "A background import must show an explicit success result before it is dismissed."
   );
-  assert.doesNotMatch(
+  assert.match(
     globalImportActivitySource,
-    /status === "done"[\s\S]{0,200}setActivity\(null\)/,
-    "Completed background imports must wait for explicit dismissal."
+    /const completedImportDismissDelayMs = 10 \* 1000;/,
+    "Completed import success should remain visible for ten seconds."
+  );
+  assert.match(
+    globalImportActivitySource,
+    /if \(!activity \|\| activity\.status !== "done"\) \{[\s\S]{0,1000}current\.status !== "done" \|\| current\.updatedAt !== activity\.updatedAt[\s\S]{0,400}clearImportActivity\(\);[\s\S]{0,120}setActivity\(null\);/,
+    "A completed background import should dismiss its success dock without hiding a newer import."
   );
   assert.doesNotMatch(processRouteSource, /Fast preflight routed/, "Progress copy should describe user-visible work, not internal parser jargon.");
   assert.match(
@@ -160,6 +165,11 @@ const main = async () => {
     transactionsPageSource,
     /nextTransactionsSnapshot[\s\S]{0,1200}buildVisibleTransactionSummary/,
     "Imported preview rows should update transaction cards in the same UI commit."
+  );
+  assert.match(
+    transactionsPageSource,
+    /The visible table is intentionally paged\.[\s\S]{0,650}getCachedTransactionsWorkspace\(selectedWorkspaceId \?\? ""\)\?\.summary\?\.totalCount/,
+    "Optimistic preview rows must preserve the known workspace total until the authoritative page refresh arrives."
   );
   assert.doesNotMatch(modalSource, /if \(busy \|\| !workspaceId \|\| !autoStartRef\.current\)/);
   assert.match(modalSource, /const incomingKeys = new Set\(nextFiles\.map\(fileKey\)\)/);

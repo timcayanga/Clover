@@ -3113,7 +3113,15 @@ function TransactionsPageContent() {
               nextTransactionsSnapshot ?? [],
               {
                 ...current,
-                totalCount: Math.max(current.totalCount, nextTransactionsSnapshot?.length ?? 0),
+                // The visible table is intentionally paged. Do not replace the
+                // known workspace total with the first page plus the optimistic
+                // import rows while the authoritative refresh is still in flight.
+                totalCount: Math.max(
+                  current.totalCount,
+                  getCachedTransactionsWorkspace(selectedWorkspaceId ?? "")?.totalCount ?? 0,
+                  getCachedTransactionsWorkspace(selectedWorkspaceId ?? "")?.summary?.totalCount ?? 0,
+                  nextTransactionsSnapshot?.length ?? 0
+                ),
               },
               accountNumberById
             )

@@ -45,6 +45,7 @@ const dismissedImportActivityStorageKey = "clover.import.activity.dismissed.v1";
 const staleActiveImportBaseTimeoutMs = 60 * 1000;
 const staleActiveImportPerFileTimeoutMs = 15 * 1000;
 const staleActiveImportMaxTimeoutMs = 5 * 60 * 1000;
+const completedImportDismissDelayMs = 10 * 1000;
 
 const getStaleActiveImportTimeoutMs = (activity: ImportActivitySnapshot) => {
   const fileTotal = Number.isFinite(Number(activity.fileTotal)) ? Math.max(1, Number(activity.fileTotal)) : 1;
@@ -207,6 +208,28 @@ export function GlobalImportActivity() {
       };
       setImportActivity(timedOutSnapshot);
       setActivity(timedOutSnapshot);
+    }, remainingMs);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [activity]);
+
+  useEffect(() => {
+    if (!activity || activity.status !== "done") {
+      return;
+    }
+
+    const remainingMs = Math.max(0, completedImportDismissDelayMs - (Date.now() - activity.updatedAt));
+    const timeout = window.setTimeout(() => {
+      const current = readImportActivity();
+      // Never dismiss a newer import that reused the global activity store.
+      if (!current || current.status !== "done" || current.updatedAt !== activity.updatedAt) {
+        return;
+      }
+
+      clearImportActivity();
+      setActivity(null);
     }, remainingMs);
 
     return () => {
