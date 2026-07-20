@@ -67,6 +67,7 @@ This document captures the PNB parsing rules learned from the synthetic training
 - Skip the report header, request metadata, and branch / office boilerplate so they do not become fake transactions.
 - If PNB OCR interleaves `STATEMENT OF ACCOUNT REPORT` transfer rows with later remittance/check rows, recover the ledger from explicit dated rows and running-balance math instead of allowing the generic parser to create partial income-only rows.
 - For the January 2021 Project SOA shape, recover the seven ledger rows: check batch local, three outward fund transfers, cash deposit, check deposit, and international remittance. The final balance should be PHP 537,915.35.
+- Normalize the OCR variant `Garnet )Days Check` to `Check Deposit`.
 - `PHILIPPINE NATIONAL BANK` statements with `Statement Period`, `Date Description Debit (PHP) Credit (PHP) Balance (PHP)`, and month/day rows should also parse as savings ledgers.
 - For that simpler shape, ignore `Starting Balance`, `Total Credits`, `Total Debits`, `Ending Balance`, and the system-generated footer note.
 - Treat `GCash Top-up` as a transfer, `Online Transfer` as a transfer, and keep bill-payment rows under `Bills & Utilities`.

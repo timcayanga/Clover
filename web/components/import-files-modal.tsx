@@ -1818,7 +1818,11 @@ export function ImportFilesModal({
     });
 
     try {
-      for (let stagedAttempt = 0; stagedAttempt < 15; stagedAttempt += 1) {
+      // Background confirmation is a lightweight wait while the worker owns
+      // the save. Give it enough time to observe a durable result rather than
+      // publishing an optimistic success before the UI can read the rows.
+      const maxStagedAttempts = backgroundOnly ? 90 : 15;
+      for (let stagedAttempt = 0; stagedAttempt < maxStagedAttempts; stagedAttempt += 1) {
         const visibilityDeadline = visibilityDeadlineRef.current;
         if (!backgroundOnly && visibilityDeadline && Date.now() >= visibilityDeadline) {
           hardStopVisibleImportModal("deadline");
@@ -1842,7 +1846,7 @@ export function ImportFilesModal({
             /account not found|import file not found|parsed rows|still processing|not ready|finalizing|loading account|loading transactions|checkpoint|pending|queued|unable to confirm|cannot confirm|timed out|error code i-104|error code i-105|couldn't save that import|couldn't keep tracking that file|wasn't able to finish this import/i.test(
               confirmErrorMessage.toLowerCase()
             );
-          if (recoverableConfirmError && stagedAttempt < 29) {
+          if (recoverableConfirmError && stagedAttempt < maxStagedAttempts - 1) {
             emitItemUpdate({
               status: "importing",
               confirmationState: "pending",
@@ -1902,7 +1906,7 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
-          if (stagedAttempt < 14) {
+          if (stagedAttempt < maxStagedAttempts - 1) {
             await new Promise((resolve) => window.setTimeout(resolve, 500));
             continue;
           }
@@ -3458,46 +3462,25 @@ export function ImportFilesModal({
             continue;
           }
 
-          const previewSummary = buildResolvedOptimisticUploadSummary({
-            accounts,
-            workspaceId,
-            fileName: summaryContext.fileName,
-            importedRows: Math.max(parsedRowsCount, summaryContext.previewTransactions?.length ?? 0),
-            accountId: resolvedAccountId,
-            accountName: resolvedAccountDisplayName,
-            institution: resolvedIdentity.institution ?? null,
-            accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
-            accountType:
-              resolvedAccountType ??
-              inferAccountTypeFromStatement(resolvedIdentity.institution, resolvedIdentity.accountName, "bank"),
-            optimisticAccountId: summaryContext.optimisticAccountId,
-            balanceSources: [summaryContext.initialBalance],
-            previewTransactions: summaryContext.previewTransactions,
-            showBalanceEvenIfEmpty: true,
-          });
-
           if (!suppressUnionBankPreview) {
             emitItemUpdate({
-              status: "done",
-              confirmationState: "confirmed",
-              progress: 100,
-              progressLabel: "Done",
+              status: "importing",
+              confirmationState: "pending",
+              progress: IMPORT_PROGRESS.finalizing,
+              progressLabel: "Saving transactions",
               targetAccountId: resolvedAccountId,
             });
-
-            seedImportedWorkspaceCaches(workspaceId, previewSummary);
-            await Promise.resolve(onImported(previewSummary));
             emitImportActivity({
               workspaceId,
               surface: importActivitySurfaceRef.current,
-              status: "done",
+              status: "active",
               fileName: summaryContext.fileName,
               fileIndex: items.findIndex((item) => item.id === itemId) + 1,
               fileTotal: items.length,
-              completedFiles: completedFileCount + 1,
-              progress: 100,
-              detail: "Accounts and transactions are visible. Clover will keep cleaning up names and categories in the background.",
-              summary: previewSummary,
+              completedFiles: completedFileCount,
+              progress: IMPORT_PROGRESS.finalizing,
+              detail: "Clover is saving transactions to your workspace.",
+              summary: null,
               errorMessage: null,
             });
           } else {
@@ -3541,6 +3524,28 @@ export function ImportFilesModal({
               if (result.summary) {
                 seedImportedWorkspaceCaches(workspaceId, result.summary);
                 await Promise.resolve(onImported(result.summary));
+                emitItemUpdate({
+                  status: "done",
+                  confirmationState: "confirmed",
+                  progress: 100,
+                  progressLabel: "Visible in Clover",
+                  targetAccountId: resolvedAccountId,
+                  importedRows: result.importedRows ?? null,
+                });
+                emitImportActivity({
+                  workspaceId,
+                  surface: importActivitySurfaceRef.current,
+                  status: "done",
+                  fileName: summaryContext.fileName,
+                  fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+                  fileTotal: items.length,
+                  completedFiles: completedFileCount + 1,
+                  progress: 100,
+                  detail: "Accounts and transactions are visible. Clover will keep cleaning up names and categories in the background.",
+                  summary: result.summary,
+                  errorMessage: null,
+                });
+                window.setTimeout(closeVisibleImportModalIfPrimaryDataReady, 0);
                 return;
               }
 

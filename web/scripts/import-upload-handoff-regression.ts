@@ -110,6 +110,21 @@ const main = async () => {
     /importFile\.status === "done"[\s\S]{0,800}savedTransactionsCount >= recordedConfirmedTransactions/,
     "Repeated confirmation requests should return the already committed import without rerunning confirmation."
   );
+  assert.match(
+    confirmRouteSource,
+    /importFile\.status === "queued" \|\| importFile\.status === "processing"[\s\S]{0,700}status: "staged"/,
+    "The confirmation endpoint must not start a second worker path while the import worker is processing."
+  );
+  assert.match(
+    modalSource,
+    /const maxStagedAttempts = backgroundOnly \? 90 : 15;/,
+    "Background confirmation should wait for the worker result without timing out before a normal statement save completes."
+  );
+  assert.match(
+    modalSource,
+    /progressLabel: "Saving transactions"[\s\S]{0,600}Clover is saving transactions to your workspace\./,
+    "The modal must not report 100% before the transactions are durable and visible."
+  );
   const duplicateSource = section(modalSource, "if (processPayload?.duplicate)", "capturePostHogClientEvent(\"import_parsed_successfully\"");
   assert.doesNotMatch(duplicateSource, /incomeTotal:\s*0/);
   assert.doesNotMatch(duplicateSource, /await Promise\.resolve\(onImported/);

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { applyDeterministicMerchantRescue } from "@/lib/merchant-enrichment";
+import { summarizeMerchantText } from "@/lib/merchant-labels";
 
 const main = () => {
   const cases = [
@@ -40,6 +41,11 @@ const main = () => {
   const confirmedLike = applyDeterministicMerchantRescue({ merchantRaw: "Custom source", merchantClean: "Confirmed Merchant", categoryName: "Shopping", type: "expense" });
   assert.equal(confirmedLike.merchantClean, "Confirmed Merchant");
   assert.equal(confirmedLike.categoryName, "Shopping");
+  assert.equal(
+    summarizeMerchantText("1 012500024 Garnet )Days Check 1233 - Pasig", "PNB"),
+    "Check Deposit",
+    "PNB Project SOA check-deposit OCR should not remain an unnormalized title."
+  );
 
   console.log("Merchant enrichment regression checks passed.");
 };

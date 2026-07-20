@@ -1347,7 +1347,9 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Month-End Sweep",
     },
     {
-      patterns: [/check[_\s-]?dep(?:osit)?/i, /check\s+deposit/i],
+      // Project SOAs sometimes OCR this as "Garnet )Days Check" without the
+      // word deposit. It is the PNB check-deposit ledger code, not a merchant.
+      patterns: [/check[_\s-]?dep(?:osit)?/i, /check\s+deposit/i, /garnet\s+\)?days\s+check/i],
       replacement: "Check Deposit",
     },
     {

@@ -49,6 +49,27 @@ export async function POST(request: Request, { params }: { params: Promise<{ imp
       }
     }
 
+    // The import worker owns confirmation while an import is queued or
+    // processing. Returning a cheap staged response here prevents the modal
+    // from starting a second parser/account-resolution pass that only waits on
+    // the same database lock. The client polls this endpoint until the worker
+    // records its durable result.
+    if (importFile.status === "queued" || importFile.status === "processing") {
+      return NextResponse.json(
+        {
+          ok: true,
+          result: {
+            imported: 0,
+            duplicate: false,
+            accountId: importFile.accountId ?? payload.accountId,
+            confirmedTransactionsCount: 0,
+            status: "staged",
+          },
+        },
+        { status: 202 }
+      );
+    }
+
     const { confirmImportFile } = await import("@/workers/import-processor");
     const result = await confirmImportFile(importId, payload.accountId);
     return NextResponse.json({ ok: true, result });
