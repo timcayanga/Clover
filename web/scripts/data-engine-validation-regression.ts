@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { applyImportValidationToRows, calibrateConfidenceScore, validateParsedImportRows } from "@/lib/data-engine-validation";
-import { validateImportFileBytes } from "@/lib/import-file-validation";
+import { MAX_IMPORT_FILE_SIZE, validateImportFile, validateImportFileBytes } from "@/lib/import-file-validation";
 
 const goodRows = [
   { date: "2026-01-02", amount: "-100.00", merchantRaw: "SHOP", merchantClean: "Shop", type: "expense" as const, rawPayload: { parserEvidence: { page: 1, source_text: "SHOP -100.00" } } },
@@ -19,4 +19,10 @@ assert.equal(calibrateConfidenceScore({ rawConfidence: 40, validationScore: 80, 
 
 assert.equal(validateImportFileBytes({ fileName: "statement.pdf", contentType: "application/pdf", bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]) }), null);
 assert.match(String(validateImportFileBytes({ fileName: "statement.pdf", contentType: "application/pdf", bytes: new Uint8Array([1, 2, 3]) })), /valid PDF/i);
+assert.equal(MAX_IMPORT_FILE_SIZE, 2 * 1024 * 1024);
+assert.equal(validateImportFile({ fileName: "statement.pdf", contentType: "application/pdf", fileSize: MAX_IMPORT_FILE_SIZE }), null);
+assert.match(
+  String(validateImportFile({ fileName: "statement.pdf", contentType: "application/pdf", fileSize: 3 * 1024 * 1024 })),
+  /2 MB or smaller/i
+);
 console.log("Data Engine validation regression passed.");

@@ -11155,6 +11155,37 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       SELECT 1::int AS acquired FROM confirmation_lock
     `;
 
+    // A visible modal can request confirmation while the import worker already
+    // owns this lock. Re-read the durable state *after* waiting for the lock so
+    // that the second request returns the first commit instead of reprocessing
+    // every row in the statement.
+    const lockedImportFile = await tx.importFile.findUnique({
+      where: { id: importFileId },
+      select: {
+        status: true,
+        accountId: true,
+        confirmedTransactionsCount: true,
+      },
+    });
+    const lockedConfirmedTransactions = Number(lockedImportFile?.confirmedTransactionsCount ?? 0);
+    if (lockedImportFile?.status === "done" && lockedConfirmedTransactions > 0) {
+      const savedTransactionsCount = await tx.transaction.count({
+        where: {
+          importFileId,
+          deletedAt: null,
+        },
+      });
+      if (savedTransactionsCount >= lockedConfirmedTransactions) {
+        return {
+          imported: savedTransactionsCount,
+          duplicate: true,
+          accountId: lockedImportFile.accountId ?? accountId ?? null,
+          confirmedTransactionsCount: savedTransactionsCount,
+          status: "done",
+        } satisfies ConfirmImportResult;
+      }
+    }
+
     const existingImportTransactionMatchClauses = [
       { importFileId },
       {

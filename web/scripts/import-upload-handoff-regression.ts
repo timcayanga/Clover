@@ -83,10 +83,10 @@ const main = async () => {
     /hasCompletedBatchNow[\s\S]{0,500}window\.setTimeout\([\s\S]{0,250}onClose\(\)[\s\S]{0,100}, 0\)/,
     "A completed server job must not close the modal before UI visibility is verified."
   );
-  assert.doesNotMatch(
+  assert.match(
     modalSource,
-    /primaryVisibilityCompletedRef\.current = true;[\s\S]{0,300}onClose\(\)/,
-    "A successful result must remain visible until the user dismisses it."
+    /primaryVisibilityCompletedRef\.current = true;[\s\S]{0,800}successfulImportAutoCloseTimerRef\.current = window\.setTimeout[\s\S]{0,400}onClose\(\)[\s\S]{0,100}, 10_000\)/,
+    "A verified successful import should close its modal ten seconds after rows are visible."
   );
   assert.doesNotMatch(
     modalSource,
@@ -237,6 +237,11 @@ const main = async () => {
   assert.match(importFileTextSource, /v12-pdf-text-first|resolveImportFileExtractionCacheVersion/);
   assert.match(importProcessorSource, /SELECT pg_advisory_xact_lock/);
   assert.match(importProcessorSource, /SELECT 1::int AS acquired FROM confirmation_lock/);
+  assert.match(
+    importProcessorSource,
+    /const lockedImportFile = await tx\.importFile\.findUnique\([\s\S]{0,900}savedTransactionsCount >= lockedConfirmedTransactions/,
+    "A competing confirmation request must return the first committed result after it acquires the statement lock."
+  );
   assert.doesNotMatch(importProcessorSource, /SELECT pg_try_advisory_xact_lock/);
   assert.match(statusSnapshotSource, /confirmedTransactionsCount > confirmedTransactionsCountBefore/);
   const directBytesText = await readImportedFileTextWithCacheInfo({

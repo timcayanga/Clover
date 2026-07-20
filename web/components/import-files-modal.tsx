@@ -400,6 +400,7 @@ export function ImportFilesModal({
   const lastImportActivityRef = useRef<ImportActivitySnapshot | null>(null);
   const retiredImportActivityFileNamesRef = useRef(new Set<string>());
   const autoCloseAfterStartRef = useRef(false);
+  const successfulImportAutoCloseTimerRef = useRef<number | null>(null);
   const compactProgressUnlockTimerRef = useRef<number | null>(null);
   const compactProgressStartedAtRef = useRef<number | null>(null);
   const visibilityDeadlineRef = useRef<number | null>(null);
@@ -886,8 +887,23 @@ export function ImportFilesModal({
       });
 
       primaryVisibilityCompletedRef.current = true;
-      // Keep the completed result visible until the user dismisses it. Closing
-      // immediately makes a successful import indistinguishable from a crash.
+      // The success state is only allowed to close after durable rows are
+      // visible. This gives the user feedback without leaving a completed
+      // modal on screen indefinitely.
+      if (!backgroundOnly && !launchInBackground) {
+        if (successfulImportAutoCloseTimerRef.current !== null) {
+          window.clearTimeout(successfulImportAutoCloseTimerRef.current);
+        }
+        successfulImportAutoCloseTimerRef.current = window.setTimeout(() => {
+          successfulImportAutoCloseTimerRef.current = null;
+          if (!primaryVisibilityCompletedRef.current) {
+            return;
+          }
+          clearImportActivity();
+          lastImportActivityRef.current = null;
+          onClose();
+        }, 10_000);
+      }
     }
   };
 
@@ -1027,6 +1043,10 @@ export function ImportFilesModal({
       localPreparseStartedRef.current.clear();
       localPreparseSummaryByItemIdRef.current.clear();
       autoCloseAfterStartRef.current = false;
+      if (successfulImportAutoCloseTimerRef.current !== null) {
+        window.clearTimeout(successfulImportAutoCloseTimerRef.current);
+        successfulImportAutoCloseTimerRef.current = null;
+      }
       visibilityDeadlineRef.current = null;
       if (visibilityHardStopTimerRef.current) {
         window.clearTimeout(visibilityHardStopTimerRef.current);
