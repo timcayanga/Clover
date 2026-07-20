@@ -1087,6 +1087,19 @@ export const pdfTextLayerLooksSufficientForParsing = (text: string) => {
     return false;
   }
 
+  // PNB's Project/SOA report is a text PDF whose glyph positions collapse into
+  // a single long line. Its deterministic parser deliberately consumes that
+  // compact representation, so requiring generic line-shaped date/amount
+  // pairs here would unnecessarily render and OCR the same PDF twice. The
+  // combination below is specific to that report layout, not a filename hint.
+  const isDeterministicPnbProjectReport =
+    /\bSTATEMENT\s+OF\s+ACCOUNT\s+REPORT\b/i.test(normalized) &&
+    /\bNEGOTIATING\s+TRANSACTION\b/i.test(normalized) &&
+    /\b(?:DEBIT|CREDIT|BALANCE|DM_INTRA_XFR|DEPOSIT|WITHDRAW(?:AL)?)\b/i.test(normalized);
+  if (isDeterministicPnbProjectReport) {
+    return true;
+  }
+
   const isStructuredWiseStatement =
     /\bWise\s+Pilipinas\s+Inc\.?\b/i.test(normalized) &&
     /\b[A-Z]{3}\s+statement\b/.test(normalized) &&
