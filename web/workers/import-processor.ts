@@ -10947,6 +10947,19 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       parsedAccountGroups.some((group) => group.rows.some((row) => Boolean(readRowAccountNumber(row))))) ||
     hasMultipleWiseWalletAccountGroups ||
     hasMultipleInvestmentAccountGroups;
+  // These are needed after account resolution, not before it. Start them now
+  // so their database latency overlaps the identity match/create path.
+  const workspaceAccountCandidatesPromise = prisma.account.findMany({
+    where: { workspaceId: String(importFile.workspaceId) },
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      accountNumber: true,
+      type: true,
+    },
+  });
+  const compatibleImportFileColumnsPromise = getCompatibleImportFileColumns();
   const accountByGroupKey = new Map<string, Awaited<ReturnType<typeof resolveConfirmationAccount>>>();
   let resolvedAccountSequence = 0;
   for (const group of multiAccountImport ? parsedAccountGroups : parsedAccountGroups.slice(0, 1)) {
@@ -11050,16 +11063,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     new Set([
       ...resolvedAccounts.map((entry) => entry.id),
       ...(
-        await prisma.account.findMany({
-          where: { workspaceId: String(importFile.workspaceId) },
-          select: {
-            id: true,
-            name: true,
-            institution: true,
-            accountNumber: true,
-            type: true,
-          },
-        })
+        await workspaceAccountCandidatesPromise
       )
         .filter(
           (candidate) =>
@@ -11069,7 +11073,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         .map((candidate) => candidate.id),
     ])
   );
-  const compatibleImportFileColumns = new Set(await getCompatibleImportFileColumns());
+  const compatibleImportFileColumns = new Set(await compatibleImportFileColumnsPromise);
 
   let statementRow: Record<string, unknown> | null = null;
   let statementConfidence = 0;

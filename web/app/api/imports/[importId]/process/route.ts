@@ -1187,8 +1187,8 @@ const readImportedStatementTextWithCache = async (params: {
   workspaceId: string;
   importMode?: ImportImageMode | null;
   sourceBytes?: Uint8Array | null;
-}, password?: string, pdfJsBaseUrl?: string | null) => {
-  const { readImportedFileTextWithCacheInfo } = await import("@/lib/import-file-text.server");
+}, password?: string, pdfJsBaseUrl?: string | null, importFileTextPromise?: Promise<typeof import("@/lib/import-file-text.server")>) => {
+  const { readImportedFileTextWithCacheInfo } = await (importFileTextPromise ?? import("@/lib/import-file-text.server"));
   return readImportedFileTextWithCacheInfo(
     {
       storageKey: params.storageKey,
@@ -1210,6 +1210,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
   // upload decoding, and deterministic text extraction run so a cold function
   // does not add its module-startup cost after the file is already uploaded.
   const importProcessorPromise = import("@/workers/import-processor");
+  const importFileTextPromise = import("@/lib/import-file-text.server");
   try {
     const { importId } = await params;
     const localDev = await isLocalDevHost();
@@ -1847,23 +1848,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         return NextResponse.json({ error: byteValidationError }, { status: 400 });
       }
       const fileFingerprint = makeImportFileBytesFingerprint(bytes);
-      const reusableRawImport = await prisma.importFile.findFirst({
-        where: {
-          workspaceId: String(importFile.workspaceId),
-          sourceFingerprint: fileFingerprint,
-          id: { not: importId },
-          rawPurgedAt: null,
-          status: { in: ["processing", "done"] },
-        },
-        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-        select: { storageKey: true },
-      }).catch(() => null);
-      const rawStorageKey =
-        reusableRawImport?.storageKey ??
-        String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName));
-      const uploadPromise = reusableRawImport
-        ? Promise.resolve()
-        : uploadObject(rawStorageKey, bytes, file.type || "application/octet-stream");
+      // Start durable storage immediately. The previous cross-import raw-file
+      // lookup delayed every first upload before its S3 transfer could begin.
+      // Transaction duplicates remain prevented by canonical-import election
+      // and the confirmation lock, while each import retains its own audit raw.
+      const rawStorageKey = String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName));
+      const uploadPromise = uploadObject(rawStorageKey, bytes, file.type || "application/octet-stream");
       await updateImportFileCompat(importId, {
         sourceFingerprint: fileFingerprint,
         storageKey: rawStorageKey,
@@ -2337,7 +2327,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               sourceBytes: canExtractPdfFromRequestBytes ? bytes : null,
             },
             password,
-            pdfJsBaseUrl
+            pdfJsBaseUrl,
+            importFileTextPromise
           );
           extractedText = preflightText.text;
           const detectedMetadata = detectStatementMetadataFromText(extractedText, effectiveFileName);
@@ -2551,7 +2542,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               sourceBytes: canExtractPdfFromRequestBytes ? bytes : null,
             },
             password,
-            pdfJsBaseUrl
+            pdfJsBaseUrl,
+            importFileTextPromise
           );
           extractedText = preflightText.text;
           const detectedMetadata = detectStatementMetadataFromText(extractedText, effectiveFileName);

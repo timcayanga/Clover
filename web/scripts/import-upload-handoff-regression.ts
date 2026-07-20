@@ -175,7 +175,21 @@ const main = async () => {
     /await import\("@\/workers\/import-processor"\)/,
     "Import processing should reuse the request-started worker load instead of starting a late module import on the critical path."
   );
-  assert.match(processRouteSource, /reusableRawImport[\s\S]{0,900}storageKey: rawStorageKey/);
+  assert.ok(
+    processRouteSource.indexOf('const importFileTextPromise = import("@/lib/import-file-text.server");') <
+      processRouteSource.indexOf("const formData = await _request.formData();"),
+    "The extraction module should begin loading before multipart decoding so cold PDF readers overlap the upload handoff."
+  );
+  assert.match(
+    processRouteSource,
+    /const rawStorageKey = String\(importFile\.storageKey[\s\S]{0,220}const uploadPromise = uploadObject\(rawStorageKey, bytes/,
+    "Raw-file storage should begin immediately after byte validation, before duplicate-import reconciliation."
+  );
+  assert.doesNotMatch(
+    processRouteSource,
+    /const reusableRawImport = await prisma\.importFile\.findFirst/,
+    "A cross-import raw-file lookup must not delay starting the new upload."
+  );
   assert.match(processRouteSource, /canonicalImportFileId: canonicalImport\.id/);
   assert.match(processRouteSource, /candidateIndex < currentCandidateIndex/);
   assert.doesNotMatch(
