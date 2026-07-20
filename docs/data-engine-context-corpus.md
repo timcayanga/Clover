@@ -1,6 +1,6 @@
 # Data Engine Context Corpus
 
-Version: `2026.07.17`
+Version: `2026.07.18`
 
 The context corpus provides regional and global evidence for transaction normalization. It is advisory context: it may enrich a parsed row or increase confidence, but it must not overwrite confirmed transaction fields.
 
@@ -49,6 +49,8 @@ The newest country packs add Ireland, Switzerland, Germany, Spain, Italy, France
 The latest pass adds Austria, Belgium, the Netherlands, Sweden, Norway, Denmark, Poland, Greece, Macau, Guam, Fiji, Ghana, Tanzania, and Sri Lanka, including local mobile-money rails, transit cards, airlines, banks, supermarkets, telecoms, and utility descriptors.
 
 The latest targeted enrichment pass adds high-value utility, telecom, healthcare, and education context for Singapore, Malaysia, Hong Kong, Taiwan, Japan, Gulf markets, North America, Australia, and the United Kingdom. These canonical entries are kept separate from generated descriptor variants so their stronger evidence remains visible and calibratable.
+
+The canonical depth pass adds new regional packs for Brazil, Mexico, South Africa, Turkey, Bangladesh, Pakistan, Colombia, Chile, Kenya, Nigeria, Ghana, Tanzania, Sri Lanka, New Zealand, Austria, Belgium, the Netherlands, Sweden, Norway, Denmark, Poland, and Greece. These entries add local transfer rails, utilities, telecoms, transport, grocery, pharmacy, and remittance-adjacent descriptors instead of relying only on global aliases or generated variants.
 
 Coverage diagnostics now distinguish canonical country counts from generated descriptor counts and report total aliases, localized-script aliases, and alias counts by script. This makes it possible to see whether a country is genuinely represented by reviewed canonical context, rather than appearing well covered only because descriptor variants multiplied its entries.
 

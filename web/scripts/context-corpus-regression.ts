@@ -114,6 +114,12 @@ const expandedFixtures = [
   { input: { description: "八達通", currency: "HKD" }, countryCode: "HK", paymentRail: "hong_kong_fps", purposeHint: null },
   { input: { description: "支付宝", currency: "CNY" }, countryCode: "CN", paymentRail: "china_wallet", purposeHint: null },
   { input: { description: "พร้อมเพย์", currency: "THB" }, countryCode: "TH", paymentRail: "promptpay", purposeHint: null },
+  { input: { description: "PIX QR CODE BRAZIL", currency: "BRL" }, countryCode: "BR", paymentRail: "brazil_pix", purposeHint: null },
+  { input: { description: "SPEI TRANSFERENCIA", currency: "MXN" }, countryCode: "MX", paymentRail: "mexico_spei", purposeHint: null },
+  { input: { description: "CAPITEC PAY", currency: "ZAR" }, countryCode: "ZA", paymentRail: "south_africa_payshap", purposeHint: null },
+  { input: { merchantRaw: "CFE MEXICO", currency: "MXN" }, countryCode: "MX", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "KENYA POWER", currency: "KES" }, countryCode: "KE", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "VECTOR AUCKLAND ELECTRICITY", currency: "NZD" }, countryCode: "NZ", paymentRail: null, purposeHint: "utilities" },
 ] as const;
 for (const fixture of expandedFixtures) {
   const context = resolveTransactionContext(fixture.input);
