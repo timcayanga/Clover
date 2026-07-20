@@ -58,15 +58,17 @@ const connectionString = resolveDatabaseUrl();
 
 export const resolvePoolMax = () => {
   // Vercel can fan one upload across several function instances while the UI
-  // polls status, accounts, and transactions. The Supabase transaction pooler
-  // already multiplexes queries, so reserve only one connection per instance.
-  const defaultPoolMax = process.env.VERCEL ? "1" : "3";
+  // polls status, accounts, and transactions. Two connections let a
+  // confirmation transaction coexist with its read snapshot; one connection
+  // causes those intentionally concurrent reads to time out locally. The
+  // Supabase transaction pooler still multiplexes these connections upstream.
+  const defaultPoolMax = process.env.VERCEL ? "2" : "3";
   const configured = Number.parseInt(process.env.DATABASE_POOL_MAX ?? defaultPoolMax, 10);
   if (!Number.isFinite(configured)) {
     return Number(defaultPoolMax);
   }
 
-  return Math.max(1, Math.min(configured, 5));
+  return Math.max(1, Math.min(configured, 4));
 };
 
 const pool =

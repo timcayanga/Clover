@@ -210,6 +210,11 @@ const main = async () => {
     /const shouldQueuePdfImmediately =[\s\S]{0,700}localDev &&/,
     "Serverless PDFs must remain on the durable inline path instead of becoming stranded queued_retry imports."
   );
+  assert.match(
+    processRouteSource,
+    /if \(importId && isTransientDatabaseCapacityError\(error\)\) \{[\s\S]{0,1200}if \(!localDev\) \{[\s\S]{0,1200}status: "failed"[\s\S]{0,1200}code: "I-107"/,
+    "A serverless database-capacity error must become a retryable failure, not an unconsumed queued_retry job."
+  );
   assert.ok(
     processRouteSource.indexOf('const importProcessorPromise = import("@/workers/import-processor");') <
       processRouteSource.indexOf("const formData = await _request.formData();"),

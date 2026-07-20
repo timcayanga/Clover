@@ -28,6 +28,7 @@ import { countWorkspaceOwnerImportFilesThisMonth } from "@/lib/plan-access";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { summarizeErrorForLog } from "@/lib/security-logging";
+import { getErrorDetails, recordAppError } from "@/lib/error-logs";
 import { after, NextResponse } from "next/server";
 import { normalizeBankName } from "@/lib/data-qa-banks";
 import { hasCompatibleTable } from "@/lib/data-engine";
@@ -2881,6 +2882,49 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     console.error("Import processing failed", { stage, error: summarizeErrorForLog(error) });
     const errorMessage = error instanceof Error ? error.message || "Unable to process import" : "Unable to process import";
     if (importId && isTransientDatabaseCapacityError(error)) {
+      const errorDetails = getErrorDetails(error);
+      void recordAppError({
+        message: errorDetails.message,
+        name: errorDetails.name,
+        stack: errorDetails.stack,
+        source: "import_processing_capacity",
+        route: "/api/imports/[importId]/process",
+        method: "POST",
+        statusCode: 503,
+        metadata: {
+          importId,
+          stage,
+          recovery: localDev ? "local_queue" : "terminal_serverless_failure",
+        },
+      }).catch(() => null);
+
+      if (!localDev) {
+        // A Vercel function has no resident BullMQ worker. Returning 202 here
+        // strands the file at queued_retry once the request exits. Surface a
+        // retryable failure instead so the modal cannot remain at 90% forever.
+        await updateImportFileCompat(importId, {
+          status: "failed",
+          processingPhase: "failed",
+          processingMessage: "Clover could not save this import because the database was temporarily busy. Please try again.",
+        }).catch((updateError) => {
+          console.error("Import capacity failure status update failed", {
+            importId,
+            error: summarizeErrorForLog(updateError),
+          });
+        });
+
+        return NextResponse.json(
+          {
+            error: "Clover could not save this import because the database was temporarily busy. Please try again.",
+            code: "I-107",
+            retryable: true,
+            stage,
+            importFileId: importId,
+          },
+          { status: 503 }
+        );
+      }
+
       await updateImportFileCompat(importId, {
         status: "processing",
         processingPhase: "queued_retry",
