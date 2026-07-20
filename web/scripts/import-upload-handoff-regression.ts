@@ -85,8 +85,13 @@ const main = async () => {
   );
   assert.match(
     modalSource,
-    /primaryVisibilityCompletedRef\.current = true;[\s\S]{0,800}successfulImportAutoCloseTimerRef\.current = window\.setTimeout[\s\S]{0,400}onClose\(\)[\s\S]{0,100}, 10_000\)/,
+    /const scheduleSuccessfulImportAutoClose = \(\) =>[\s\S]{0,800}successfulImportAutoCloseTimerRef\.current = window\.setTimeout[\s\S]{0,400}onClose\(\)[\s\S]{0,100}, 10_000\)/,
     "A verified successful import should close its modal ten seconds after rows are visible."
+  );
+  assert.match(
+    modalSource,
+    /primaryVisibilityCompletedRef\.current = true;[\s\S]{0,300}scheduleSuccessfulImportAutoClose\(\)/,
+    "The successful auto-close timer must start only after the visibility contract completes."
   );
   assert.doesNotMatch(
     modalSource,
@@ -180,6 +185,11 @@ const main = async () => {
     "Durably committed rows should show an explicit 100% success and refresh the current page before the process response finishes."
   );
   assert.match(processRouteSource, /sourceFingerprint: fileFingerprint/);
+  assert.match(
+    processRouteSource,
+    /const shouldProcessHighConfidenceTextPdfInline =[\s\S]{0,350}parsedMetadataConfidence >= 85/,
+    "Small, high-confidence text PDFs should use the inline statement path instead of waiting for queue handoff."
+  );
   assert.ok(
     processRouteSource.indexOf('const importProcessorPromise = import("@/workers/import-processor");') <
       processRouteSource.indexOf("const formData = await _request.formData();"),
@@ -218,6 +228,11 @@ const main = async () => {
   assert.match(importProcessorSource, /sourceFingerprint: importFile\.sourceFingerprint/);
   assert.match(importProcessorSource, /countTransactionsByImportFileCompat\(sourceMatch\.id\)/);
   assert.match(importProcessorSource, /already imported and skipped the duplicate/);
+  assert.match(
+    settledVisibilitySource,
+    /if \(params\.importedRows > 0 && params\.importFileId\) \{\s*return true;/,
+    "A committed statement result should not wait for an additional client-side visibility poll."
+  );
   assert.match(
     importProcessorSource,
     /const shouldMaterializeAccountBeforeConfirmation = effectiveImportMode !== "statement"/,

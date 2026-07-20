@@ -2480,6 +2480,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         (hasExtractedText || canReuseCachedParseSnapshot) &&
         bytes.length <= 10_000_000 &&
         (hasKnownInlineInstitution || canReuseCachedParseSnapshot);
+      // A compact, text-readable SOA with a strong identity does not benefit
+      // from queue handoff just because Clover has not seen that institution
+      // before. Parse it in the request so its committed rows can reach the UI
+      // in the same upload flow. Suspicious/backup-routed documents remain
+      // queued below.
+      const shouldProcessHighConfidenceTextPdfInline =
+        isPdfUpload(effectiveFileName, effectiveFileType) &&
+        hasExtractedText &&
+        bytes.length <= 2 * 1024 * 1024 &&
+        parsedMetadataConfidence >= 85;
       const shouldQueueBackupRouteImmediately =
         !forceInlineProcessing &&
         !knownBpiMobileScreenshot &&
@@ -2569,9 +2579,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       const shouldProcessInlinePdf =
         isPdfUpload(effectiveFileName, effectiveFileType) &&
-        (forceInlineProcessing || shouldProcessKnownStatementInline || isNoisyPdfBank || isPnbPdfUpload || treatAsKnownUnionBankSampleStatement) &&
+        (forceInlineProcessing || shouldProcessKnownStatementInline || shouldProcessHighConfidenceTextPdfInline || isNoisyPdfBank || isPnbPdfUpload || treatAsKnownUnionBankSampleStatement) &&
         (hasExtractedText || canReuseCachedParseSnapshot || isNoisyPdfBank || isPnbPdfUpload || treatAsKnownUnionBankSampleStatement) &&
-        (parsedMetadataConfidence >= 80 || shouldProcessKnownStatementInline || isNoisyPdfBank || isPnbPdfUpload || treatAsKnownUnionBankSampleStatement);
+        (parsedMetadataConfidence >= 80 || shouldProcessKnownStatementInline || shouldProcessHighConfidenceTextPdfInline || isNoisyPdfBank || isPnbPdfUpload || treatAsKnownUnionBankSampleStatement);
       const shouldProcessInlineKnownBpiScreenshot =
         knownBpiMobileScreenshot &&
         isStatementImageUpload &&

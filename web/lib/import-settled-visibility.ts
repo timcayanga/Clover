@@ -184,6 +184,14 @@ const waitWithStatusStream = async (params: {
 };
 
 export const waitForImportSettledVisibility = async (params: SettledVisibilityParams) => {
+  // Statement confirmation returns only after its transaction/account commit.
+  // The caller has already seeded that committed summary into client state, so
+  // an additional account/feed poll only delays a truthful UI result. Images
+  // and account-only imports still use the stricter visibility checks below.
+  if (params.importedRows > 0 && params.importFileId) {
+    return true;
+  }
+
   const accountId = params.accountId && !params.accountId.startsWith("optimistic-") ? params.accountId : null;
   if (!accountId) {
     return true;

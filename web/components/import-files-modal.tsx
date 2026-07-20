@@ -1461,8 +1461,8 @@ export function ImportFilesModal({
         });
 
         if (validationError) {
-          if (validationError === "Uploaded files must be 10 MB or smaller.") {
-            validationIssues.push(`${file.name} is larger than 10 MB.`);
+          if (validationError === "Uploaded files must be 2 MB or smaller.") {
+            validationIssues.push(`${file.name} is larger than 2 MB.`);
           } else if (validationError === "Only PDF, CSV, and common image files are supported.") {
             validationIssues.push(`${file.name} has an invalid file extension.`);
           } else {
