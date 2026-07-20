@@ -1944,7 +1944,11 @@ export function ImportFilesModal({
           accountType: resolvedAccountType ?? null,
           optimisticAccountId: resolvedAccountId.startsWith("optimistic-") ? summaryContext.optimisticAccountId ?? resolvedAccountId : null,
           balanceSources: [accountBalance],
-          previewTransactions: summaryContext.previewTransactions,
+          // The local preview is useful while parsing, but its transfer type
+          // can be provisional. Once confirmation succeeds, let the workspace
+          // refresh render the committed rows rather than briefly replacing
+          // them with the parser's preliminary classification.
+          previewTransactions: [],
           insightMetrics: insightSummary,
           optimistic: false,
         });
