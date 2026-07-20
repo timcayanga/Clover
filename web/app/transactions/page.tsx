@@ -2678,12 +2678,12 @@ function TransactionsPageContent() {
       setIsWorkspaceDataReady(hasImmediateFallbackRows);
     }
 
-    const compactViewport = typeof window !== "undefined" && window.matchMedia("(max-width: 1100px)").matches;
+    const compactViewport = isCompactViewport;
 
     const requestPage = options?.pageOverride ?? transactionsPage;
-    const requestPageSize = options?.includeAll
-      ? "all"
-      : options?.pageSizeOverride ?? (compactViewport ? MOBILE_TRANSACTIONS_BATCH_SIZE : transactionsPageSize);
+    // The Rows selector must remain stable across numbered pages. Mobile load-more
+    // requests pass their smaller batch explicitly through pageSizeOverride.
+    const requestPageSize = options?.includeAll ? "all" : options?.pageSizeOverride ?? transactionsPageSize;
     const hasServerSideFilters = Boolean(
       query.trim() ||
         currencyFilter.trim() ||
