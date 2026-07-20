@@ -1834,7 +1834,13 @@ const extractTrailingMoneyFromText = (text: string) => {
 
 export const detectStatementMetadataFromText = (text: string, fileName = ""): StatementMetadataSnapshot => {
   const metadata = detectStatementMetadata(text, fileName);
-  const institution = sanitizeBankNameLabel(metadata?.institution ?? detectInstitutionFromText(text));
+  // Some Metrobank online PDFs preserve the MB-Online-MSOA filename but lose
+  // the bank masthead during extraction. Prefer that durable filename signal
+  // over incidental words (for example, a contact email containing "Wise").
+  const fileNameSignalsMetrobank = /\b(?:metrobank|mb[-_ ]?online[-_ ]?msoa)\b/i.test(fileName);
+  const institution = fileNameSignalsMetrobank
+    ? "Metrobank"
+    : sanitizeBankNameLabel(metadata?.institution ?? detectInstitutionFromText(text));
   const normalizedText = normalizeWhitespace(text);
   const cimbAccountNumbers =
     institution === "CIMB"
