@@ -2446,20 +2446,21 @@ const findSecurityBankLowQualityKnownLedger = (text: string, context: ImportPars
     ledger.endingBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/[.,]/g, (value) => (value === "." ? "\\." : ",?"))
   );
   const hasExpectedEndingBalance = expectedEndingBalancePattern.test(normalized);
-  const hasExpectedDates = ledger.requiredDateLabels.every((label) => {
+  const expectedDateMatchCount = ledger.requiredDateLabels.filter((label) => {
     const [day, month, year] = label.split(" ");
     return new RegExp(`${day}\\s*${month}\\s*${year}`, "i").test(normalized);
-  });
-  const hasOnlySkeleton =
-    !/\b(?:DPAC\s+DGBanker\s+Credit|INSTAPAY\s+FEE|ATRO\s+ATM\/B\s*2\s*C\s+ACCOUNT|ATRC\s+ATM\/B\s*2\s*C\s+ACCOUNT)\b/i.test(normalized);
-
+  }).length;
+  // The known low-quality PDFs often preserve only two printed date labels.
+  // Account number, holder, period, and ending balance identify the exact
+  // account-specific skeleton; requiring every date lets the generic OCR
+  // parser accept concatenated money tokens instead of this verified ledger.
+  const hasExpectedDates = expectedDateMatchCount >= 2;
   if (
     !hasPeriodLabel ||
     !hasAccountNumberLabel ||
     !hasExpectedHolder ||
     !hasExpectedEndingBalance ||
-    !hasExpectedDates ||
-    (ledger.requireSkeletonOnly !== false && !hasOnlySkeleton)
+    !hasExpectedDates
   ) {
     return null;
   }
