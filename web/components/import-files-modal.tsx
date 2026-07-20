@@ -4726,7 +4726,7 @@ export function ImportFilesModal({
 
         updateItem(itemId, {
           status: "importing",
-          progress: statusDecision.progress,
+          progress: Math.max(statusDecision.progress, Number(itemsRef.current.find((item) => item.id === itemId)?.progress ?? 0)),
           progressLabel: statusDecision.progressLabel,
         });
         publishImportActivity({
@@ -4737,7 +4737,7 @@ export function ImportFilesModal({
           fileIndex: items.findIndex((item) => item.id === itemId) + 1,
           fileTotal: items.length,
           completedFiles: completedFileCount,
-          progress: statusDecision.progress,
+          progress: Math.max(statusDecision.progress, Number(itemsRef.current.find((item) => item.id === itemId)?.progress ?? 0)),
           detail: getTelemetryDetail(
             telemetryPhase === "repair_needed"
               ? "Clover needs another pass to finish this file"
@@ -4817,7 +4817,7 @@ export function ImportFilesModal({
 
       updateItem(itemId, {
         status: "importing",
-        progress: statusDecision.progress,
+        progress: Math.max(statusDecision.progress, Number(itemsRef.current.find((item) => item.id === itemId)?.progress ?? 0)),
         progressLabel: statusDecision.progressLabel,
       });
       publishImportActivity({
@@ -4828,7 +4828,7 @@ export function ImportFilesModal({
         fileIndex: items.findIndex((item) => item.id === itemId) + 1,
         fileTotal: items.length,
         completedFiles: completedFileCount,
-        progress: statusDecision.progress,
+        progress: Math.max(statusDecision.progress, Number(itemsRef.current.find((item) => item.id === itemId)?.progress ?? 0)),
         detail: getTelemetryDetail(
           telemetryPhase === "repair_needed"
             ? "Clover needs another pass to finish this file"
