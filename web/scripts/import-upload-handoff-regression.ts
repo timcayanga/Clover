@@ -51,6 +51,21 @@ const main = async () => {
   assert.match(modalSource, /startedImportMonitorKeys\.has\(monitorKey\)/);
   assert.match(modalSource, /const settledVisible = await waitForSettledVisibility\(/);
   assert.match(modalSource, /progressLabel: "Imported successfully"/);
+  assert.match(
+    modalSource,
+    /const showCompactProgress = launchInBackground && compactProgressUnlocked && progressSessionActive/,
+    "A standard upload must remain in its modal; only explicitly backgrounded work may use the compact dock."
+  );
+  assert.match(
+    modalSource,
+    /setLaunchInBackground\(backgroundOnly\);[\s\S]{0,180}importActivitySurfaceRef\.current = backgroundOnly \? "background" : "modal"/,
+    "Starting an ordinary upload must not force it into the background."
+  );
+  assert.match(
+    modalSource,
+    /activity-store update can race[\s\S]{0,500}hardStopVisibleImportModal\("visible"\);/,
+    "An activity-store race must settle the visible modal instead of closing it."
+  );
   assert.doesNotMatch(
     modalSource,
     /hasCompletedBatchNow[\s\S]{0,500}window\.setTimeout\([\s\S]{0,250}onClose\(\)[\s\S]{0,100}, 0\)/,

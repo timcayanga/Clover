@@ -1692,30 +1692,10 @@ export function ImportFilesModal({
         return;
       }
 
-      for (const item of itemsRef.current) {
-        retiredImportActivityFileNamesRef.current.add(item.file.name);
-      }
-      lastImportActivityRef.current = null;
-      setBusy(false);
-      autoStartRef.current = false;
-      setItems((current) =>
-        current.map((item) =>
-          item.status === "importing" || item.status === "pending" || item.confirmationState === "staged"
-            ? {
-                ...item,
-                status: "done",
-                confirmationState: "confirmed",
-                error: null,
-                errorCode: null,
-                errorTitle: null,
-                errorNextSteps: null,
-                progress: 100,
-                progressLabel: "Done",
-              }
-            : item
-        )
-      );
-      onClose();
+      // An activity-store update can race the modal's final server response.
+      // Settle the visible modal instead of closing it: closing here makes a
+      // successful import indistinguishable from a failed/disconnected upload.
+      hardStopVisibleImportModal("visible");
     });
   }, [onClose]);
 
@@ -6626,7 +6606,10 @@ export function ImportFilesModal({
   const activityProgressFloor = Math.max(0, Math.min(100, Number(activitySnapshotForDisplay?.progress ?? 0)));
   const hasCompletedBatch = items.length > 0 && items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
   const progressSessionActive = busy || Boolean(activeItem) || hasCompletedBatch || Boolean(currentErrorItem);
-  const showCompactProgress = compactProgressUnlocked && progressSessionActive;
+  // Standard uploads stay in the modal until there is an explicit outcome.
+  // The compact dock is reserved for imports the caller intentionally sends to
+  // the background, so a completed import cannot silently disappear.
+  const showCompactProgress = launchInBackground && compactProgressUnlocked && progressSessionActive;
   const targetDisplayProgress = showCompactProgress ? Math.max(overallProgress, activityProgressFloor) : 0;
   const shouldLockPageInteraction =
     open && !backgroundOnly && !launchInBackground && Boolean(activePasswordItem);
@@ -6948,10 +6931,11 @@ export function ImportFilesModal({
     uploadCancelRequestedRef.current = false;
     setUploadPaused(false);
     uploadPausedRef.current = false;
-    // Uploads continue independently of the page, so release the full-screen
-    // modal as soon as the user starts the batch.
-    setLaunchInBackground(true);
-    importActivitySurfaceRef.current = "background";
+    // Keep a normal upload visible through its terminal success or failure.
+    // Only callers that explicitly launch in the background use the compact
+    // progress dock.
+    setLaunchInBackground(backgroundOnly);
+    importActivitySurfaceRef.current = backgroundOnly ? "background" : "modal";
     setBusy(true);
     setValidationNotice(null);
     setMessage("Clover is lining up your files...");
