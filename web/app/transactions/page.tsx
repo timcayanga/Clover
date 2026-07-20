@@ -391,6 +391,18 @@ type TransactionPageMeta = {
   firstReviewTransactionIndex: number | null;
 };
 
+type TransactionListPayload = {
+  transactions?: Transaction[];
+  totalCount?: number;
+  summary?: TransactionPageMeta;
+  currencyCodes?: string[];
+};
+
+type TransactionPrefetchEntry = {
+  payload: TransactionListPayload;
+  expiresAt: number;
+};
+
 type ImportFile = {
   id: string;
   fileName: string;
@@ -2176,6 +2188,7 @@ function TransactionsPageContent() {
   );
   const [transactionsPageSize, setTransactionsPageSize] = useState(25);
   const [transactionsPage, setTransactionsPage] = useState(1);
+  const transactionPrefetchRef = useRef<Map<string, TransactionPrefetchEntry>>(new Map());
   const [query, setQuery] = useState("");
   const [currencyFilter, setCurrencyFilter] = useState("");
   const [sortField, setSortField] = useState<TransactionSortField>("date");
@@ -2628,9 +2641,10 @@ function TransactionsPageContent() {
       pageOverride?: number;
       pageSizeOverride?: number;
       summaryMode?: "light" | "full";
+      prefetchOnly?: boolean;
     }
   ) => {
-    const requestId = ++transactionsLoadRequestRef.current;
+    const requestId = options?.prefetchOnly ? transactionsLoadRequestRef.current : ++transactionsLoadRequestRef.current;
     const hasResilientFallbackEvidence = () =>
       hasCachedTransactionsWorkspaceEvidence(workspaceId) ||
       hasRecentWorkspaceImportEvidence(importActivitySnapshot, workspaceId);
@@ -2666,6 +2680,22 @@ function TransactionsPageContent() {
 
     const compactViewport = typeof window !== "undefined" && window.matchMedia("(max-width: 1100px)").matches;
 
+    const requestPage = options?.pageOverride ?? transactionsPage;
+    const requestPageSize = options?.includeAll
+      ? "all"
+      : options?.pageSizeOverride ?? (compactViewport ? MOBILE_TRANSACTIONS_BATCH_SIZE : transactionsPageSize);
+    const hasServerSideFilters = Boolean(
+      query.trim() ||
+        currencyFilter.trim() ||
+        categoryFilters.length > 0 ||
+        expandedAccountFilters.length > 0 ||
+        typeFilters.length > 0 ||
+        dateFilterMode !== "ltd" ||
+        customStart.trim() ||
+        customEnd.trim() ||
+        amountMin.trim() ||
+        amountMax.trim()
+    );
     const searchParams = buildTransactionQuerySearchParams(
       workspaceId,
       {
@@ -2684,26 +2714,69 @@ function TransactionsPageContent() {
         amountMax,
       },
       {
-        page: options?.pageOverride ?? transactionsPage,
-        pageSize:
-          options?.includeAll
-            ? "all"
-            : options?.pageSizeOverride ?? (compactViewport ? MOBILE_TRANSACTIONS_BATCH_SIZE : transactionsPageSize),
+        page: requestPage,
+        pageSize: requestPageSize,
       }
     );
     searchParams.set("summaryMode", options?.summaryMode ?? "light");
+    const largePageSearchParams = buildTransactionQuerySearchParams(
+      workspaceId,
+      {
+        query,
+        currencyFilter,
+        categoryIds: categoryFilters,
+        accountIds: expandedAccountFilters,
+        typeFilters,
+        dateFilterMode,
+        dateFilterAnchor,
+        customStart,
+        customEnd,
+        sortField,
+        sortDirection,
+        amountMin,
+        amountMax,
+      },
+      { page: 1, pageSize: 200 }
+    );
+    largePageSearchParams.set("summaryMode", "light");
+    const largePageKey = `transactions:list:${workspaceId}:${largePageSearchParams.toString()}`;
+    const cachedPrefetch =
+      !options?.background &&
+      !options?.append &&
+      !options?.includeAll &&
+      requestPage === 1 &&
+      Number(requestPageSize) <= 200 &&
+      !hasServerSideFilters
+        ? transactionPrefetchRef.current.get(largePageKey)
+        : undefined;
+    const usableCachedPrefetch = cachedPrefetch && cachedPrefetch.expiresAt > Date.now() ? cachedPrefetch : undefined;
+    if (cachedPrefetch && !usableCachedPrefetch) {
+      transactionPrefetchRef.current.delete(largePageKey);
+    }
 
     try {
-      const response = await fetchJsonOnce<{ transactions?: Transaction[]; totalCount?: number; summary?: TransactionPageMeta; currencyCodes?: string[] }>({
-        key: `transactions:list:${workspaceId}:${searchParams.toString()}`,
-        route: "transactions.list",
-        workspaceId,
-        detail: options?.background ? "background" : options?.append ? "append" : "foreground",
-        input: `/api/transactions?${searchParams?.toString() ?? ""}`,
-        timeoutMs: options?.background ? null : 6500,
-      });
+      const response = usableCachedPrefetch
+        ? { ok: true, json: usableCachedPrefetch.payload }
+        : await fetchJsonOnce<TransactionListPayload>({
+            key: `transactions:list:${workspaceId}:${searchParams.toString()}`,
+            route: "transactions.list",
+            workspaceId,
+            detail: options?.background ? "background" : options?.append ? "append" : "foreground",
+            input: `/api/transactions?${searchParams?.toString() ?? ""}`,
+            timeoutMs: options?.background ? null : 6500,
+          });
       if (!response.ok) {
         throw new Error("Unable to load transactions.");
+      }
+
+      if (options?.prefetchOnly) {
+        if (response.json) {
+          transactionPrefetchRef.current.set(largePageKey, {
+            payload: response.json,
+            expiresAt: Date.now() + 30_000,
+          });
+        }
+        return;
       }
 
       if (requestId !== transactionsLoadRequestRef.current) {
@@ -2965,6 +3038,18 @@ function TransactionsPageContent() {
           pageSizeOverride: options?.pageSizeOverride ?? transactionsPageSize,
           summaryMode: "full",
         });
+
+        if (!options?.append && !compactViewport && !hasServerSideFilters && requestPage === 1 && Number(requestPageSize) <= 25) {
+          window.setTimeout(() => {
+            void loadTransactionsPage(workspaceId, {
+              background: true,
+              prefetchOnly: true,
+              pageOverride: 1,
+              pageSizeOverride: 200,
+              summaryMode: "light",
+            });
+          }, 0);
+        }
       }
     } catch {
       if (requestId !== transactionsLoadRequestRef.current) {
@@ -5482,6 +5567,7 @@ function TransactionsPageContent() {
       return;
     }
 
+    transactionPrefetchRef.current.clear();
     void loadTransactionsPage(selectedWorkspaceId, {
       background: true,
       pageOverride: transactionsPage,
