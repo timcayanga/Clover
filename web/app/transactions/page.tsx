@@ -3443,7 +3443,6 @@ function TransactionsPageContent() {
     sortDirection,
     amountMin,
     amountMax,
-    transactionsPageSize,
   ]);
 
   useEffect(() => {
@@ -4227,7 +4226,6 @@ function TransactionsPageContent() {
     sortDirection,
     amountMin,
     amountMax,
-    transactionsPageSize,
   ]);
 
   useEffect(() => {
