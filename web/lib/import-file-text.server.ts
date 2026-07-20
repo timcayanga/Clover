@@ -5,6 +5,7 @@ import { downloadImportObject } from "@/lib/import-storage.server";
 import {
   IMPORT_FILE_EXTRACTION_CACHE_VERSION,
   loadImportFileExtractionCache,
+  resolveImportFileExtractionCacheVersion,
   upsertImportFileExtractionCache,
 } from "@/lib/data-engine";
 import { buildGsaveScreenshotFallbackText } from "@/lib/gsave-screenshot-samples";
@@ -273,12 +274,13 @@ const makeImportFileTextCacheRecordKey = (params: {
   fileFingerprint: string;
   fileType: string;
   importMode: string;
+  cacheVersion?: string;
 }) => [
   String(params.workspaceId ?? ""),
   params.fileFingerprint,
   params.fileType,
   params.importMode,
-  IMPORT_FILE_EXTRACTION_CACHE_VERSION,
+  params.cacheVersion ?? IMPORT_FILE_EXTRACTION_CACHE_VERSION,
 ].join(":");
 
 const rememberImportCacheEntry = <T>(cache: Map<string, Promise<T>>, key: string, value: Promise<T>) => {
@@ -339,6 +341,7 @@ const readImportedFileTextCacheRecord = async (params: {
   fileFingerprint: string;
   fileType: string;
   importMode: string;
+  cacheVersion?: string;
 }) => {
   const recordKey = makeImportFileTextCacheRecordKey(params);
   const cachedRecord = importedFileTextCacheRecordMap.get(recordKey);
@@ -355,7 +358,7 @@ const readImportedFileTextCacheRecord = async (params: {
     fileFingerprint: params.fileFingerprint,
     fileType: params.fileType,
     importMode: params.importMode,
-    cacheVersion: IMPORT_FILE_EXTRACTION_CACHE_VERSION,
+    cacheVersion: params.cacheVersion ?? IMPORT_FILE_EXTRACTION_CACHE_VERSION,
   });
 
   if (!cacheRecord) {
@@ -389,6 +392,7 @@ export const storeImportedFileTextCacheRecord = async (params: {
   pageCount?: number;
   confidence?: number;
   hitCount?: number;
+  cacheVersion?: string;
 }) => {
   if (!params.workspaceId) {
     return null;
@@ -407,7 +411,7 @@ export const storeImportedFileTextCacheRecord = async (params: {
     pageCount: params.pageCount ?? 0,
     confidence: params.confidence ?? 0,
     hitCount: params.hitCount ?? 0,
-    cacheVersion: IMPORT_FILE_EXTRACTION_CACHE_VERSION,
+    cacheVersion: params.cacheVersion ?? IMPORT_FILE_EXTRACTION_CACHE_VERSION,
   });
 
   if (cached) {
@@ -421,7 +425,7 @@ export const storeImportedFileTextCacheRecord = async (params: {
       pageCount: params.pageCount ?? 0,
       confidence: params.confidence ?? 0,
       hitCount: params.hitCount ?? 0,
-      cacheVersion: IMPORT_FILE_EXTRACTION_CACHE_VERSION,
+      cacheVersion: params.cacheVersion ?? IMPORT_FILE_EXTRACTION_CACHE_VERSION,
     });
   }
 
@@ -925,9 +929,6 @@ const shouldPreferPdfOcrFirst = (fileName?: string | null) => {
     lower.includes("china-bank") ||
     lower.includes("chinabank") ||
     (/union[\s_-]*bank/i.test(lower) && (lower.includes("word") || lower.includes("excel") || lower.includes("template") || lower.includes("business_statement"))) ||
-    lower.includes("bank cert") ||
-    lower.includes("bank-cert") ||
-    lower.includes("bankstatementandbankcert") ||
     (lower.includes("aub") && lower.includes("template"))
   );
 };
@@ -2465,6 +2466,7 @@ export const readImportedFileTextWithCacheInfo = async (
   }
 ): Promise<ImportedFileTextWithCacheInfo> => {
   const lowerName = `${params.fileType} ${params.fileName}`.toLowerCase();
+  const cacheVersion = resolveImportFileExtractionCacheVersion(params.fileName);
   const aggressiveProfile = shouldUseAggressivePdfOcrProfile(params.fileName) ? "aggressive" : "standard";
   const imageProfile = resolveImageNormalizationProfile({
     fileType: params.fileType,
@@ -2490,6 +2492,7 @@ export const readImportedFileTextWithCacheInfo = async (
     fileFingerprint,
     fileType: params.fileType,
     importMode: params.importMode ?? "statement",
+    cacheVersion,
   });
   const knownStatementImageFallbackText = resolveKnownStatementImageFallbackText({
     fileName: params.fileName,
@@ -2517,7 +2520,7 @@ export const readImportedFileTextWithCacheInfo = async (
       pageCount: 0,
       confidence: 0,
       hitCount: 0,
-      cacheVersion: IMPORT_FILE_EXTRACTION_CACHE_VERSION,
+      cacheVersion,
     });
     void storeImportedFileTextCacheRecord({
       workspaceId: params.workspaceId ?? null,
@@ -2532,6 +2535,7 @@ export const readImportedFileTextWithCacheInfo = async (
       pageCount: 0,
       confidence: 0,
       hitCount: 0,
+      cacheVersion,
     }).catch(() => null);
     return {
       fileFingerprint,
@@ -2549,6 +2553,7 @@ export const readImportedFileTextWithCacheInfo = async (
         fileFingerprint,
         fileType: params.fileType,
         importMode: params.importMode ?? "statement",
+        cacheVersion,
       });
     }
     if (cachedRecord) {
@@ -2567,6 +2572,7 @@ export const readImportedFileTextWithCacheInfo = async (
     fileFingerprint,
     fileType: params.fileType,
     importMode: params.importMode ?? "statement",
+    cacheVersion,
   });
   if (persistentCache?.extractedText) {
     const resolvedText = String(persistentCache.extractedText ?? "");
@@ -2585,6 +2591,7 @@ export const readImportedFileTextWithCacheInfo = async (
       pageCount: persistentCache.pageCount ?? 0,
       confidence: persistentCache.confidence ?? 0,
       hitCount: persistentCache.hitCount + 1,
+      cacheVersion,
     }).catch(() => null);
     return {
       fileFingerprint,
@@ -2668,7 +2675,7 @@ export const readImportedFileTextWithCacheInfo = async (
       pageCount: 0,
       confidence: 0,
       hitCount: 0,
-      cacheVersion: IMPORT_FILE_EXTRACTION_CACHE_VERSION,
+      cacheVersion,
     });
     void storeImportedFileTextCacheRecord({
       workspaceId: params.workspaceId ?? null,
@@ -2683,6 +2690,7 @@ export const readImportedFileTextWithCacheInfo = async (
       pageCount: 0,
       confidence: 0,
       hitCount: 0,
+      cacheVersion,
     }).catch(() => null);
     return {
       fileFingerprint,

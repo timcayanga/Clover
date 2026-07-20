@@ -16,7 +16,7 @@ import {
   buildStatementFingerprint,
   buildStatementFamilySignatureFromText,
   insertTransactionCompat,
-  IMPORT_FILE_EXTRACTION_CACHE_VERSION,
+  resolveImportFileExtractionCacheVersion,
 } from "@/lib/data-engine";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { enqueueImportProcessing } from "@/lib/import-queue";
@@ -2066,13 +2066,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           shouldQueueDocumentUpload ||
           isNoisyPdfBank ||
           isStatementImageUpload);
+      const extractionCacheVersion = resolveImportFileExtractionCacheVersion(effectiveFileName);
       const cachedDocRecordPromise = shouldUseCachedExtractionRecord
         ? loadImportFileExtractionCache({
             workspaceId: String(importFile.workspaceId),
             fileFingerprint,
             fileType: effectiveFileType || "application/octet-stream",
             importMode: importMode ?? "statement",
-            cacheVersion: IMPORT_FILE_EXTRACTION_CACHE_VERSION,
+            cacheVersion: extractionCacheVersion,
           }).catch(() => null)
         : null;
       const cachedDocRecord = cachedDocRecordPromise ? await cachedDocRecordPromise : null;

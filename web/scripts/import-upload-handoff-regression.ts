@@ -16,14 +16,16 @@ const section = (source: string, start: string, end: string) => {
 };
 
 const main = async () => {
-  const [modalSource, processRouteSource, confirmRouteSource, workerSource, importQueueSource, importProcessorSource, importFileTextSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource, pageDropSource] = await Promise.all([
+  const [modalSource, processRouteSource, progressRouteSource, confirmRouteSource, workerSource, importQueueSource, importProcessorSource, importFileTextSource, statusSnapshotSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource, pageDropSource] = await Promise.all([
     readFile(join(webRoot, "components/import-files-modal.tsx"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/process/route.ts"), "utf8"),
+    readFile(join(webRoot, "app/api/imports/[importId]/progress/route.ts"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/confirm/route.ts"), "utf8"),
     readFile(join(webRoot, "workers/imports-worker.ts"), "utf8"),
     readFile(join(webRoot, "lib/import-queue.ts"), "utf8"),
     readFile(join(webRoot, "workers/import-processor.ts"), "utf8"),
     readFile(join(webRoot, "lib/import-file-text.server.ts"), "utf8"),
+    readFile(join(webRoot, "lib/import-status-snapshot.ts"), "utf8"),
     readFile(join(webRoot, "lib/import-settled-visibility.ts"), "utf8"),
     readFile(join(webRoot, "lib/import-file-post.ts"), "utf8"),
     readFile(join(webRoot, "lib/import-visibility-rules.ts"), "utf8"),
@@ -119,9 +121,12 @@ const main = async () => {
   assert.match(uploadHandoffSource, /postFileWithProgress\(/);
   assert.match(
     uploadHandoffSource,
-    /fetch\(`\/api\/imports\/\$\{importFileId\}\/status`, \{ cache: "no-store" \}\)/,
-    "The modal should read durable server phases while the multipart process request is still open."
+    /fetch\(`\/api\/imports\/\$\{importFileId\}\/progress`, \{ cache: "no-store" \}\)/,
+    "The modal should read durable server phases from the lightweight endpoint while the multipart request is open."
   );
+  assert.doesNotMatch(uploadHandoffSource, /\/status`, \{ cache: "no-store" \}/);
+  assert.doesNotMatch(progressRouteSource, /confirmImportFile|processImportFileText|loadImportStatusSnapshot|updateImportFileCompat/);
+  assert.match(progressRouteSource, /visibleImportComplete: confirmedTransactionsCount > 0/);
   assert.match(
     uploadHandoffSource,
     /statusDecision\.kind === "visible"[\s\S]{0,900}progress: 99[\s\S]{0,900}router\.refresh\(\)/,
@@ -170,6 +175,14 @@ const main = async () => {
     /if \(!pdfJsBaseUrl \|\| isPdfPasswordError\(error\)\) \{\s*throw error;/,
     "Password failures must not repeat PDF extraction before prompting the user."
   );
+  const pdfOcrRoutingSource = section(importFileTextSource, "const shouldPreferPdfOcrFirst", "const shouldAvoidPdfRenderForServerless");
+  assert.doesNotMatch(pdfOcrRoutingSource, /bank cert|bank-cert|bankstatementandbankcert/);
+  assert.match(processRouteSource, /resolveImportFileExtractionCacheVersion\(effectiveFileName\)/);
+  assert.match(importFileTextSource, /v12-pdf-text-first|resolveImportFileExtractionCacheVersion/);
+  assert.match(importProcessorSource, /SELECT pg_advisory_xact_lock/);
+  assert.match(importProcessorSource, /SELECT 1::int AS acquired FROM confirmation_lock/);
+  assert.doesNotMatch(importProcessorSource, /SELECT pg_try_advisory_xact_lock/);
+  assert.match(statusSnapshotSource, /confirmedTransactionsCount > confirmedTransactionsCountBefore/);
   const directBytesText = await readImportedFileTextWithCacheInfo({
     storageKey: "qa/nonexistent/direct-request-bytes.csv",
     fileType: "text/csv",

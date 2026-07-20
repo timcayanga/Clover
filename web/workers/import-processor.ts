@@ -76,6 +76,7 @@ import {
   recordStatementTemplateOutcome,
   promoteUnsupervisedLearningClustersForWorkspace,
   recordUnsupervisedLearningAuditForTemplate,
+  resolveImportFileExtractionCacheVersion,
   updateImportFileCompat,
   upsertAccountRule,
   upsertStatementTemplate,
@@ -9127,6 +9128,8 @@ export const processImportFileText = async (
       pageCount: pageImages?.length ?? 0,
       confidence: resolvedMetadata.confidence ?? 0,
       hitCount: (textCacheInfo?.cacheRecord?.hitCount ?? 0) + 1,
+      cacheVersion:
+        textCacheInfo?.cacheRecord?.cacheVersion ?? resolveImportFileExtractionCacheVersion(fileName),
     }).catch((error) => {
       console.warn("Import file extraction cache update failed", {
         importFileId,
@@ -10043,9 +10046,11 @@ export const processImportFileText = async (
     metadata: resolvedMetadata,
     accountId: confirmedImportResult?.accountId ?? null,
     accountSummaries: confirmedImportResult?.accountSummaries,
-    confirmedTransactionsCount: confirmedImportResult?.imported ?? null,
+    confirmedTransactionsCount:
+      confirmedImportResult?.confirmedTransactionsCount ?? confirmedImportResult?.imported ?? null,
     insightSummary: confirmedImportResult?.insightSummary ?? undefined,
     accountBalance: confirmedImportResult?.accountBalance ?? undefined,
+    status: confirmedImportResult?.status === "staged" ? "staged" : confirmedImportResult ? "done" : "error",
   };
 };
 
@@ -11091,44 +11096,15 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         resolvedAccountId,
       statementFingerprints.length > 0 ? statementFingerprints.join(",") : importFileId,
     ].join(":");
-    const lockRows = await tx.$queryRaw<Array<{ locked: boolean }>>`
-      SELECT pg_try_advisory_xact_lock(hashtextextended(${confirmationLockKey}, 0)) AS locked
+    // Serialize confirmation for this statement. The former non-blocking lock
+    // let a competing request observe zero rows immediately before the winning
+    // transaction committed, leaving successful imports with a zero counter.
+    await tx.$queryRaw<Array<{ acquired: number }>>`
+      WITH confirmation_lock AS MATERIALIZED (
+        SELECT pg_advisory_xact_lock(hashtextextended(${confirmationLockKey}, 0))
+      )
+      SELECT 1::int AS acquired FROM confirmation_lock
     `;
-    if (!lockRows[0]?.locked) {
-      const existingVisibleRows = await tx.transaction.count({
-        where: {
-          deletedAt: null,
-          workspaceId: String(importFile.workspaceId),
-          accountId: { in: matchingAccountIdsForImport },
-          OR: [
-            { importFileId },
-            {
-              rawPayload: {
-                path: ["sourceImportFileId"],
-                equals: importFileId,
-              },
-            },
-            ...statementFingerprints.map((fingerprint) => ({
-              rawPayload: {
-                path: ["sourceStatementFingerprint"],
-                equals: fingerprint,
-              },
-            })),
-          ],
-        },
-      });
-
-      return {
-        imported: existingVisibleRows,
-        duplicate: true,
-        accountId: resolvedAccountId,
-        accountSummaries,
-        insightSummary: null,
-        accountBalance: null,
-        confirmedTransactionsCount: existingVisibleRows,
-        status: existingVisibleRows > 0 ? "done" : "staged",
-      };
-    }
 
     const existingImportTransactionMatchClauses = [
       { importFileId },

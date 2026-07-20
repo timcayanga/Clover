@@ -531,14 +531,16 @@ export const loadImportStatusSnapshot = async (
       Boolean(statementCheckpoint?.accountId) ||
       (checkpointAccountSummaries.length === 1 &&
         Boolean(checkpointAccountSummaries[0]?.accountName || checkpointAccountSummaries[0]?.accountNumber)));
+  const shouldPersistConfirmedTransactionsCount =
+    confirmedTransactionsCount > confirmedTransactionsCountBefore;
 
-  if (shouldPersistResolvedAccountId && resolvedAccountId) {
+  if (shouldPersistResolvedAccountId || shouldPersistConfirmedTransactionsCount) {
     importFile =
       (await updateImportFileCompat(importFileId, {
-        accountId: resolvedAccountId,
+        ...(shouldPersistResolvedAccountId && resolvedAccountId ? { accountId: resolvedAccountId } : {}),
         confirmedTransactionsCount,
       }).catch(() => null)) ?? importFile;
-    if (statementCheckpoint && !statementCheckpoint.accountId) {
+    if (shouldPersistResolvedAccountId && resolvedAccountId && statementCheckpoint && !statementCheckpoint.accountId) {
       await prisma.accountStatementCheckpoint.update({
         where: { importFileId },
         data: { accountId: resolvedAccountId },

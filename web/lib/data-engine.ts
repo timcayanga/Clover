@@ -27,6 +27,10 @@ import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from
 
 export const DATA_ENGINE_VERSION = "v2";
 export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v11";
+export const resolveImportFileExtractionCacheVersion = (fileName?: string | null) =>
+  /bank[\s_-]*cert|bankstatementandbankcert/i.test(String(fileName ?? ""))
+    ? "v12-pdf-text-first"
+    : IMPORT_FILE_EXTRACTION_CACHE_VERSION;
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

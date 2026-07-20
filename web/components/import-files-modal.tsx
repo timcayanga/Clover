@@ -5010,7 +5010,7 @@ export function ImportFilesModal({
         errorMessage: null,
       });
       // The multipart request stays open while the deterministic parser saves
-      // rows. Poll the durable import state during that request so progress is
+      // rows. Poll the read-only lightweight progress endpoint so progress is
       // driven by real server phases instead of freezing at the upload boundary.
       // This also refreshes the page as soon as committed rows are visible,
       // without waiting for post-visible QA or response serialization.
@@ -5018,7 +5018,7 @@ export function ImportFilesModal({
         await new Promise((resolve) => window.setTimeout(resolve, 750));
         while (!inFlightStatusMonitorStopped && !processResponseSettled) {
           try {
-            const response = await fetch(`/api/imports/${importFileId}/status`, { cache: "no-store" });
+            const response = await fetch(`/api/imports/${importFileId}/progress`, { cache: "no-store" });
             if (response.ok) {
               const payload = (await response.json()) as ImportStatusPayload;
               const importFile = payload.importFile;
