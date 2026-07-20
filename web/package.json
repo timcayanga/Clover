@@ -37,6 +37,7 @@
     "qa:gcrypto-screenshot-import": "tsx scripts/gcrypto-screenshot-import-regression.ts",
     "qa:gstocks-screenshot-import": "tsx scripts/gstocks-screenshot-import-regression.ts",
     "qa:gotrade-screenshots": "tsx scripts/gotrade-screenshot-regression.ts",
+    "qa:gotyme-directions": "tsx scripts/gotyme-transaction-direction-regression.ts",
     "qa:imported-accounts": "tsx scripts/imported-account-ui-regression.ts",
     "qa:parser-routing": "tsx scripts/parser-routing-regression.ts",
     "qa:import-quality": "tsx scripts/import-quality-regression.ts",

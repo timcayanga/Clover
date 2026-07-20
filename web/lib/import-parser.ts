@@ -15836,7 +15836,7 @@ const parseGoTymeDate = (value?: string | null) => {
   return parseDateValue(normalized);
 };
 
-const classifyGoTymeTransaction = (description: string, credit: number, debit: number): { type: TransactionType; categoryName: string } => {
+export const classifyGoTymeTransaction = (description: string, credit: number, debit: number): { type: TransactionType; categoryName: string } => {
   const lower = description.toLowerCase();
   const compact = compactWhitespace(lower);
 
@@ -15852,12 +15852,18 @@ const classifyGoTymeTransaction = (description: string, credit: number, debit: n
     return { type: "expense", categoryName: "Financial" };
   }
 
+  // A statement refund reverses a previous card charge. It is incoming money,
+  // but it is not an internal account transfer or ordinary earned income.
+  if (/\b(?:refund|refunded|reversal)\b.*\b(?:card\s+payment|card)\b|\b(?:card\s+payment|card)\b.*\b(?:refund|refunded|reversal)\b/.test(lower)) {
+    return { type: "income", categoryName: "Financial" };
+  }
+
   if (/^(?:inbound(?:\s+interbank)?\s+transfer|received\s+transfer)/.test(lower)) {
-    return { type: "income", categoryName: "Income" };
+    return { type: "income", categoryName: "Transfers" };
   }
 
   if (/^(?:outbound(?:\s+interbank)?\s+transfer|sent\s+transfer)/.test(lower)) {
-    return { type: "expense", categoryName: "Expense" };
+    return { type: "expense", categoryName: "Transfers" };
   }
 
   if (/qr\s+payment/.test(lower)) {

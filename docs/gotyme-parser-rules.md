@@ -12,7 +12,10 @@ This document captures the GoTyme parsing rules learned from the synthetic train
 
 - Keep `Salary Credit` as `Income`.
 - Keep `Fund Transfer` as `Transfers`.
+- Keep `Outbound Transfer` as `Transfers` with an `Expense` type, unless Clover can prove the destination is another account owned by the user.
+- Keep `Inbound Transfer` as `Transfers` with an `Income` type when it is from an external counterparty.
 - Keep `Transfer Fee` as `Financial`.
+- Keep card-payment refunds and reversals as `Financial` with an `Income` type; they are reversals of a financial charge, not transfers.
 - Keep `Meralco` as `Bills & Utilities`.
 - Keep `Debit Card Purchase` as spend with merchant/category learning.
 - Keep `ATM Withdrawal` and `ATM Fee` as separate rows.
