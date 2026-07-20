@@ -1206,6 +1206,10 @@ const readImportedStatementTextWithCache = async (params: {
 export async function POST(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
   let stage = "initializing";
   let responsePlanTier: "free" | "pro" | "unknown" = "unknown";
+  // The parser worker is substantial. Start loading it while authentication,
+  // upload decoding, and deterministic text extraction run so a cold function
+  // does not add its module-startup cost after the file is already uploaded.
+  const importProcessorPromise = import("@/workers/import-processor");
   try {
     const { importId } = await params;
     const localDev = await isLocalDevHost();
@@ -1236,7 +1240,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         processingMessage: options?.progressMessage ?? "Reading file details...",
       });
 
-      const { processImportFileText } = await import("@/workers/import-processor");
+      const { processImportFileText } = await importProcessorPromise;
       const result = await processImportFileText(importId, {
         text: options?.text,
         textCacheInfo: options?.textCacheInfo ?? undefined,
@@ -1363,7 +1367,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         } else {
           after(async () => {
             try {
-              const { processImportFileText } = await import("@/workers/import-processor");
+              const { processImportFileText } = await importProcessorPromise;
               await updateImportFileCompat(importId, {
                 status: "processing",
                 processingPhase: "reading_account_details",
@@ -1475,7 +1479,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               pdfJsBaseUrl,
             });
           } else {
-            const { processImportFileText } = await import("@/workers/import-processor");
+            const { processImportFileText } = await importProcessorPromise;
             await updateImportFileCompat(importId, {
               status: "processing",
               processingPhase: "reading_account_details",
@@ -1535,7 +1539,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       after(async () => {
         try {
-          const { confirmImportFile, processImportFileText } = await import("@/workers/import-processor");
+          const { confirmImportFile, processImportFileText } = await importProcessorPromise;
           const result = await processImportFileText(importId, {
             password,
             actorUserId: userId,
@@ -2615,7 +2619,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           processingMessage: "Reading file details...",
         });
 
-        const { processImportFileText } = await import("@/workers/import-processor");
+        const { processImportFileText } = await importProcessorPromise;
         const result = await processImportFileText(importId, {
           text: extractedText,
           textCacheInfo: preflightText,
@@ -2799,7 +2803,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
 
       stage = "processing statement text";
-      const { processImportFileText } = await import("@/workers/import-processor");
+      const { processImportFileText } = await importProcessorPromise;
       const result = await processImportFileText(importId, {
         text,
         password,

@@ -165,6 +165,16 @@ const main = async () => {
     "Durably committed rows should show an explicit 100% success and refresh the current page before the process response finishes."
   );
   assert.match(processRouteSource, /sourceFingerprint: fileFingerprint/);
+  assert.ok(
+    processRouteSource.indexOf('const importProcessorPromise = import("@/workers/import-processor");') <
+      processRouteSource.indexOf("const formData = await _request.formData();"),
+    "The import worker should begin loading before multipart decoding so cold module startup overlaps the upload handoff."
+  );
+  assert.doesNotMatch(
+    processRouteSource,
+    /await import\("@\/workers\/import-processor"\)/,
+    "Import processing should reuse the request-started worker load instead of starting a late module import on the critical path."
+  );
   assert.match(processRouteSource, /reusableRawImport[\s\S]{0,900}storageKey: rawStorageKey/);
   assert.match(processRouteSource, /canonicalImportFileId: canonicalImport\.id/);
   assert.match(processRouteSource, /candidateIndex < currentCandidateIndex/);
