@@ -120,6 +120,11 @@ const expandedFixtures = [
   { input: { merchantRaw: "CFE MEXICO", currency: "MXN" }, countryCode: "MX", paymentRail: null, purposeHint: "utilities" },
   { input: { merchantRaw: "KENYA POWER", currency: "KES" }, countryCode: "KE", paymentRail: null, purposeHint: "utilities" },
   { input: { merchantRaw: "VECTOR AUCKLAND ELECTRICITY", currency: "NZD" }, countryCode: "NZ", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "EDC CAMBODIA", currency: "KHR" }, countryCode: "KH", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "CHINA MOBILE", currency: "CNY" }, countryCode: "CN", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "PHONEPE INDIA", currency: "INR" }, countryCode: "IN", paymentRail: "india_wallet", purposeHint: null },
+  { input: { merchantRaw: "HUNGERSTATION SAUDI", currency: "SAR" }, countryCode: "SA", paymentRail: null, purposeHint: "retail" },
+  { input: { merchantRaw: "KAISER PERMANENTE", currency: "USD" }, countryCode: "US", paymentRail: null, purposeHint: "healthcare" },
 ] as const;
 for (const fixture of expandedFixtures) {
   const context = resolveTransactionContext(fixture.input);
