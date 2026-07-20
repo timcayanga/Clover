@@ -200,6 +200,16 @@ const main = async () => {
     /const shouldProcessHighConfidenceTextPdfInline =[\s\S]{0,350}parsedMetadataConfidence >= 85/,
     "Small, high-confidence text PDFs should use the inline statement path instead of waiting for queue handoff."
   );
+  assert.match(
+    processRouteSource,
+    /const shouldQueueBackupRouteImmediately =[\s\S]{0,700}localDev &&/,
+    "Serverless backup-routed PDFs must not rely on a best-effort post-response queue before confirmation."
+  );
+  assert.match(
+    processRouteSource,
+    /const shouldQueuePdfImmediately =[\s\S]{0,700}localDev &&/,
+    "Serverless PDFs must remain on the durable inline path instead of becoming stranded queued_retry imports."
+  );
   assert.ok(
     processRouteSource.indexOf('const importProcessorPromise = import("@/workers/import-processor");') <
       processRouteSource.indexOf("const formData = await _request.formData();"),

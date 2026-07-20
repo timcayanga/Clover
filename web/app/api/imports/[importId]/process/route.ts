@@ -2483,14 +2483,19 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       // A compact, text-readable SOA with a strong identity does not benefit
       // from queue handoff just because Clover has not seen that institution
       // before. Parse it in the request so its committed rows can reach the UI
-      // in the same upload flow. Suspicious/backup-routed documents remain
-      // queued below.
+      // in the same upload flow.
       const shouldProcessHighConfidenceTextPdfInline =
         isPdfUpload(effectiveFileName, effectiveFileType) &&
         hasExtractedText &&
         bytes.length <= 2 * 1024 * 1024 &&
         parsedMetadataConfidence >= 85;
       const shouldQueueBackupRouteImmediately =
+        // Vercel's `after` callback is not a durable worker. A retry routed
+        // through it can parse rows, then vanish before confirmation and leave
+        // the import permanently at queued_retry. In serverless, let the
+        // deterministic parser run inline first; it can invoke the backup
+        // parser itself only when the local result is genuinely insufficient.
+        localDev &&
         !forceInlineProcessing &&
         !knownBpiMobileScreenshot &&
         !canReuseCachedParseSnapshot &&
@@ -2507,6 +2512,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         });
       }
       const shouldQueuePdfImmediately =
+        // The local worker queue is available only in development. Production
+        // uploads must remain on the request path until they are committed so
+        // a PDF can never become a stranded queued_retry record.
+        localDev &&
         isPdfUpload(effectiveFileName, effectiveFileType) &&
         !forceInlineProcessing &&
         !treatAsKnownUnionBankSampleStatement &&
@@ -2517,10 +2526,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         !isPnbPdfUpload;
 
       if (shouldQueuePdfImmediately) {
-        if (!localDev) {
-          return queueBackgroundProcessing(processingBankName || null);
-        }
-
         stage = "scheduling background processing";
         try {
           return queueBackgroundProcessing(processingBankName || null);
