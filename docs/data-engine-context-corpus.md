@@ -1,6 +1,6 @@
 # Data Engine Context Corpus
 
-Version: `2026.07.21`
+Version: `2026.07.22`
 
 The context corpus provides regional and global evidence for transaction normalization. It is advisory context: it may enrich a parsed row or increase confidence, but it must not overwrite confirmed transaction fields.
 
@@ -57,6 +57,8 @@ The follow-on breadth pass adds canonical everyday-spend context for Cambodia, M
 The semantic depth pass adds canonical investment, insurance, housing, subscription, healthcare, and education providers for the Philippines, Japan, Korea, Taiwan, Gulf markets, North America, Australia, and the United Kingdom. These are deliberately modeled as purpose-bearing entries so the engine can enrich transactions without replacing confirmed user categories.
 
 The latest ASEAN and Europe semantic pass adds healthcare, education, utilities, telecom, pharmacy, ecommerce, housing, and charity descriptors for Indonesia, Vietnam, Thailand, Germany, France, Spain, Italy, Switzerland, Ireland, and the Philippines.
+
+The recurring-spend pass adds canonical subscription, household-service, food-delivery, rental, telecom, and charity context across the Philippines, ASEAN, Latin America, Africa, South Asia, and Gulf markets, plus global household and donation descriptors. These remain advisory purpose signals and do not replace confirmed categories.
 
 Coverage diagnostics now distinguish canonical country counts from generated descriptor counts and report total aliases, localized-script aliases, and alias counts by script. This makes it possible to see whether a country is genuinely represented by reviewed canonical context, rather than appearing well covered only because descriptor variants multiplied its entries.
 
