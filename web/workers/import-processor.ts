@@ -11102,6 +11102,66 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     ])
   );
   const compatibleImportFileColumns = new Set(await compatibleImportFileColumnsPromise);
+  const existingImportTransactionMatchClauses = [
+    { importFileId },
+    {
+      rawPayload: {
+        path: ["sourceImportFileId"],
+        equals: importFileId,
+      },
+    },
+    ...statementFingerprints.map((fingerprint) => ({
+      rawPayload: {
+        path: ["sourceStatementFingerprint"],
+        equals: fingerprint,
+      },
+    })),
+  ];
+  // The statement lock below still decides which confirmation may commit.
+  // These rows are read-only inputs, so starting them before that lock removes
+  // two round trips from the user-visible transaction without weakening
+  // duplicate prevention.
+  const existingImportTransactionsPromise = prisma.transaction.findMany({
+    where: {
+      deletedAt: null,
+      workspaceId: String(importFile.workspaceId),
+      OR: [
+        {
+          accountId: { in: matchingAccountIdsForImport },
+          OR: existingImportTransactionMatchClauses,
+        },
+        ...statementFingerprints.map((fingerprint) => ({
+          rawPayload: {
+            path: ["sourceStatementFingerprint"],
+            equals: fingerprint,
+          },
+        })),
+      ],
+    },
+    select: {
+      id: true,
+      accountId: true,
+      rawPayload: true,
+      date: true,
+      amount: true,
+      currency: true,
+      type: true,
+      merchantRaw: true,
+      merchantClean: true,
+      description: true,
+      reviewStatus: true,
+    },
+  });
+  const previousStatementCheckpointPromise = documentCheckpointRecord?.statementStartDate
+    ? prisma.accountStatementCheckpoint.findFirst({
+        where: {
+          accountId: resolvedAccountId,
+          statementEndDate: { lt: documentCheckpointRecord.statementStartDate },
+          status: { in: ["reconciled", "mismatch"] },
+        },
+        orderBy: [{ statementEndDate: "desc" }, { createdAt: "desc" }],
+      })
+    : Promise.resolve(null);
   // These reads inform matching and categorization but do not mutate the
   // imported statement. Start them before the statement-specific lock so a
   // slow pooled database round trip overlaps the lock/account work instead of
@@ -11257,52 +11317,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       }
     }
 
-    const existingImportTransactionMatchClauses = [
-      { importFileId },
-      {
-        rawPayload: {
-          path: ["sourceImportFileId"],
-          equals: importFileId,
-        },
-      },
-      ...statementFingerprints.map((fingerprint) => ({
-        rawPayload: {
-          path: ["sourceStatementFingerprint"],
-          equals: fingerprint,
-        },
-      })),
-    ];
-    const existingImportTransactions = await tx.transaction.findMany({
-      where: {
-        deletedAt: null,
-        workspaceId: String(importFile.workspaceId),
-        OR: [
-          {
-            accountId: { in: matchingAccountIdsForImport },
-            OR: existingImportTransactionMatchClauses,
-          },
-          ...statementFingerprints.map((fingerprint) => ({
-            rawPayload: {
-              path: ["sourceStatementFingerprint"],
-              equals: fingerprint,
-            },
-          })),
-        ],
-      },
-      select: {
-        id: true,
-        accountId: true,
-        rawPayload: true,
-        date: true,
-        amount: true,
-        currency: true,
-        type: true,
-        merchantRaw: true,
-        merchantClean: true,
-        description: true,
-        reviewStatus: true,
-      },
-    });
+    const existingImportTransactions = await existingImportTransactionsPromise;
     const mobileScreenshotOverlapDedupeEnabled = parsedRows.some((row) =>
       getMobileScreenshotPayloadKind(
         row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
@@ -11374,30 +11389,13 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     const retainedExistingImportTransactionIds = new Set<string>();
     let retainedExistingImportTransactionsCount = 0;
 
-  const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
-    ? await tx.accountStatementCheckpoint.findUnique({
-        where: { importFileId },
-      })
-    : null;
+  const statementCheckpoint = documentCheckpointRecord;
   const openingBalanceInserted = false;
 
   if (statementCheckpoint) {
     const statementStartDate = statementCheckpoint.statementStartDate ?? null;
     const statementEndDate = statementCheckpoint.statementEndDate ?? null;
-    const previousCheckpoint = statementStartDate
-      ? await tx.accountStatementCheckpoint.findFirst({
-          where: {
-            accountId: resolvedAccountId,
-            statementEndDate: {
-              lt: statementStartDate,
-            },
-            status: {
-              in: ["reconciled", "mismatch"],
-            },
-          },
-          orderBy: [{ statementEndDate: "desc" }, { createdAt: "desc" }],
-        })
-      : null;
+    const previousCheckpoint = statementStartDate ? await previousStatementCheckpointPromise : null;
 
     let checkpointStatus: "pending" | "reconciled" | "mismatch" = "pending";
     let mismatchReason: string | null = null;
