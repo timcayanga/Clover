@@ -1866,6 +1866,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       // otherwise both requests can create and confirm the same transactions.
       if (!allowDuplicateStatement) {
         const recentProcessingCutoff = new Date(Date.now() - 15 * 60 * 1000);
+        const activeCanonicalImportCutoff = new Date(Date.now() - 90 * 1000);
         const canonicalCandidates = await prisma.importFile.findMany({
           where: {
             workspaceId: String(importFile.workspaceId),
@@ -1910,11 +1911,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           // Only a request that was created before this one may become its
           // canonical in-flight owner. Letting the oldest request follow a
           // newer request creates a circular wait where both uploads finish
-          // with zero rows and neither one actually parses the file.
+          // with zero rows and neither one actually parses the file. A stale
+          // or queued-retry record is not an active owner: it has not
+          // committed financial data and must never suppress a new attempt.
           canonicalImport = canonicalCandidates.find(
             (candidate, candidateIndex) =>
               candidate.id !== importId &&
               candidate.status === "processing" &&
+              candidate.updatedAt >= activeCanonicalImportCutoff &&
+              (localDev || candidate.processingPhase !== "queued_retry") &&
               (currentCandidateIndex < 0 || candidateIndex < currentCandidateIndex)
           ) ?? null;
         }
@@ -1954,9 +1959,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               : []);
           const canonicalVisible = Boolean(
             canonicalSnapshot?.visibleImportComplete ||
-              canonicalConfirmedRows > 0 ||
-              canonicalParsedRows > 0 ||
-              canonicalAccountSummaries.length > 0
+              canonicalConfirmedRows > 0
           );
 
           // A completed but empty import is not a useful canonical result. Let a

@@ -243,6 +243,21 @@ const main = async () => {
     "One physical drop must not be delivered once by window and again by document."
   );
   assert.match(processRouteSource, /countTransactionsByImportFileCompat\(candidate\.id\)/);
+  assert.match(
+    processRouteSource,
+    /const activeCanonicalImportCutoff = new Date\(Date\.now\(\) - 90 \* 1000\)/,
+    "An in-flight duplicate owner must have a bounded freshness window."
+  );
+  assert.match(
+    processRouteSource,
+    /candidate\.updatedAt >= activeCanonicalImportCutoff[\s\S]{0,300}candidate\.processingPhase !== "queued_retry"/,
+    "A stale or queued-retry import with no committed transactions must not become the canonical duplicate owner."
+  );
+  assert.doesNotMatch(
+    processRouteSource,
+    /const canonicalVisible = Boolean\([\s\S]{0,300}canonicalParsedRows > 0/,
+    "Parsed staging rows must not make an import visible or eligible as a duplicate."
+  );
   assert.match(processRouteSource, /isPdfUpload\(effectiveFileName, effectiveFileType\)[\s\S]{0,180}shouldQueueDocumentUpload/);
   assert.match(processRouteSource, /await uploadPromise;[\s\S]{0,500}processingMessage: canonicalStillProcessing/);
   assert.match(importProcessorSource, /sourceFingerprint: importFile\.sourceFingerprint/);
