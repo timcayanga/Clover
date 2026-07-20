@@ -11101,6 +11101,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   // imported statement. Start them before the statement-specific lock so a
   // slow pooled database round trip overlaps the lock/account work instead of
   // extending the visible confirmation transaction.
+  const confirmationReadSnapshotStartedAt = Date.now();
   const confirmationReadSnapshotPromise = Promise.all([
     prisma.category.findMany({
       where: { workspaceId: importFile.workspaceId },
@@ -11135,6 +11136,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       },
     }),
   ]);
+  const confirmationReadSnapshotReadyAtPromise = confirmationReadSnapshotPromise.then(() => Date.now());
 
   let statementRow: Record<string, unknown> | null = null;
   let statementConfidence = 0;
@@ -11197,6 +11199,8 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     return null;
   };
 
+  let confirmationLockAcquiredAt: number | null = null;
+  let confirmationReadSnapshotReadyAt: number | null = null;
   const confirmationResult = await prisma.$transaction(async (tx) => {
     const confirmationLockKey = [
       "import-confirm",
@@ -11215,6 +11219,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       )
       SELECT 1::int AS acquired FROM confirmation_lock
     `;
+    confirmationLockAcquiredAt = Date.now();
 
     // A visible modal can request confirmation while the import worker already
     // owns this lock. Re-read the durable state *after* waiting for the lock so
@@ -11570,7 +11575,12 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     }
   }
 
-  const [existingCategories, workspaceAccountsForTransferMatching, existingRowsForAccount] = await confirmationReadSnapshotPromise;
+  const [confirmationReadSnapshot, readSnapshotReadyAt] = await Promise.all([
+    confirmationReadSnapshotPromise,
+    confirmationReadSnapshotReadyAtPromise,
+  ]);
+  confirmationReadSnapshotReadyAt = readSnapshotReadyAt;
+  const [existingCategories, workspaceAccountsForTransferMatching, existingRowsForAccount] = confirmationReadSnapshot;
   const categoryByName = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
   const existingDedupeCounts = new Map<string, number>();
   for (const existingRow of existingRowsForAccount) {
@@ -12435,6 +12445,10 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     planUsageMs: planReadyAt - startedAt,
     parsedRowsWaitMs: parsedRowsReadyAt - planReadyAt,
     confirmationTransactionMs: transactionCommittedAt - parsedRowsReadyAt,
+    confirmationReadSnapshotMs: confirmationReadSnapshotReadyAt
+      ? confirmationReadSnapshotReadyAt - confirmationReadSnapshotStartedAt
+      : null,
+    confirmationLockToCommitMs: confirmationLockAcquiredAt ? transactionCommittedAt - confirmationLockAcquiredAt : null,
   });
 
   return confirmationResult;

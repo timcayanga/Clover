@@ -248,7 +248,7 @@ const main = async () => {
   );
   assert.match(
     importProcessorSource,
-    /const \[existingCategories, workspaceAccountsForTransferMatching, existingRowsForAccount\] = await confirmationReadSnapshotPromise;/,
+    /const \[confirmationReadSnapshot, readSnapshotReadyAt\] = await Promise\.all\([\s\S]{0,180}const \[existingCategories, workspaceAccountsForTransferMatching, existingRowsForAccount\] = confirmationReadSnapshot;/,
     "Confirmation should reuse the preloaded matching reads instead of serializing them in the transaction."
   );
   assert.match(importProcessorSource, /countTransactionsByImportFileCompat\(sourceMatch\.id\)/);
