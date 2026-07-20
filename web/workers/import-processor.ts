@@ -10262,16 +10262,18 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     throw new Error("Import file not found");
   }
 
-  const [planLimits, planUsage] = await Promise.all([
+  const documentCheckpointPromise = (async () =>
+    (await hasCompatibleTable("AccountStatementCheckpoint"))
+      ? prisma.accountStatementCheckpoint.findUnique({
+          where: { importFileId },
+        })
+      : null)();
+  const [planLimits, planUsage, documentCheckpointRecord] = await Promise.all([
     getWorkspaceOwnerLimits(String(importFile.workspaceId)),
     getWorkspaceOwnerPlanUsage(String(importFile.workspaceId)),
+    documentCheckpointPromise,
   ]);
   const planReadyAt = Date.now();
-  const documentCheckpointRecord = (await hasCompatibleTable("AccountStatementCheckpoint"))
-    ? await prisma.accountStatementCheckpoint.findUnique({
-        where: { importFileId },
-      })
-    : null;
   const importMode = readCheckpointImportMode(documentCheckpointRecord?.sourceMetadata) ?? "statement";
   const imageImport = isImageImportFile(String(importFile.fileType ?? ""), String(importFile.fileName ?? ""));
   const isDocumentImport =

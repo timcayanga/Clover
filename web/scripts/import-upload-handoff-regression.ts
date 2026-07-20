@@ -226,6 +226,11 @@ const main = async () => {
   assert.match(processRouteSource, /isPdfUpload\(effectiveFileName, effectiveFileType\)[\s\S]{0,180}shouldQueueDocumentUpload/);
   assert.match(processRouteSource, /await uploadPromise;[\s\S]{0,500}processingMessage: canonicalStillProcessing/);
   assert.match(importProcessorSource, /sourceFingerprint: importFile\.sourceFingerprint/);
+  assert.match(
+    importProcessorSource,
+    /const documentCheckpointPromise =[\s\S]{0,600}Promise\.all\(\[[\s\S]{0,400}documentCheckpointPromise/,
+    "Confirmation should overlap checkpoint loading with plan-limit reads instead of serializing database round trips."
+  );
   assert.match(importProcessorSource, /countTransactionsByImportFileCompat\(sourceMatch\.id\)/);
   assert.match(importProcessorSource, /already imported and skipped the duplicate/);
   assert.match(
