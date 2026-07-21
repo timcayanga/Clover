@@ -5,7 +5,7 @@
  * confirmed transaction values. Keep raw statement text outside this module.
  */
 
-export const CONTEXT_CORPUS_VERSION = "2026.07.26";
+export const CONTEXT_CORPUS_VERSION = "2026.07.27";
 
 export type ContextSignal = {
   id: string;
@@ -537,7 +537,7 @@ const buildDescriptorExpansion = (sourceEntries: ContextEntry[]): ContextEntry[]
     entry.aliases
       .filter((alias) => alias.trim().split(/\s+/).length >= 2)
       .flatMap((alias, aliasIndex) =>
-        ["payment", "transaction", "merchant", "posted", "settled", "statement", "details", "reference", "record", "activity", "description", "line item", "memo", "narration", "particulars", "transaction details", "statement entry", "ledger entry"].map((suffix, suffixIndex) => ({
+        ["payment", "transaction", "merchant", "posted", "settled", "statement", "details", "reference", "record", "activity", "description", "line item", "memo", "narration", "particulars", "transaction details", "statement entry", "ledger entry", "narrative", "particular", "reference number", "posted transaction", "processed payment", "account activity"].map((suffix, suffixIndex) => ({
           ...entry,
           id: `descriptor-${entry.id}-${aliasIndex + 1}-${suffixIndex + 1}`,
           aliases: [`${alias} ${suffix}`],

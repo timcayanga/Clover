@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { CONTEXT_CORPUS_VERSION, deriveTravelEpisodes, getContextCorpusCoverageReport, getContextCorpusEntries, getContextCorpusQualityReport, parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
 
 assert.ok(CONTEXT_CORPUS_VERSION);
-assert.ok(getContextCorpusEntries().length >= 30000);
+assert.ok(getContextCorpusEntries().length >= 40000);
 assert.ok(getContextCorpusQualityReport().profileCount >= 25);
 assert.equal(getContextCorpusQualityReport().valid, true);
 const coverage = getContextCorpusCoverageReport();
 assert.equal(coverage.corpusVersion, CONTEXT_CORPUS_VERSION);
 assert.ok(coverage.canonicalEntryCount >= 100);
-assert.ok(coverage.descriptorVariantEntryCount > 27000);
+assert.ok(coverage.descriptorVariantEntryCount > 38000);
 assert.ok(Object.keys(coverage.countryCounts).length >= 25);
 assert.ok((coverage.canonicalCountryCounts.PH ?? 0) > 0);
 assert.ok(coverage.localizedAliasCount >= 20);
@@ -48,6 +48,10 @@ assert.equal(referenceDescriptor.matchedAliases.includes("bank of commerce phili
 const ledgerDescriptor = resolveTransactionContext({ merchantRaw: "BANK OF COMMERCE PHILIPPINES LEDGER ENTRY", currency: "PHP" });
 assert.equal(ledgerDescriptor.coverageTier, "descriptor_variant");
 assert.equal(ledgerDescriptor.matchedAliases.includes("bank of commerce philippines ledger entry"), true);
+
+const activityDescriptor = resolveTransactionContext({ merchantRaw: "BANK OF COMMERCE PHILIPPINES ACCOUNT ACTIVITY", currency: "PHP" });
+assert.equal(activityDescriptor.coverageTier, "descriptor_variant");
+assert.equal(activityDescriptor.matchedAliases.includes("bank of commerce philippines account activity"), true);
 
 const indonesia = resolveTransactionContext({ institution: "Bank Indonesia", description: "QRIS payment", currency: "IDR" });
 assert.equal(indonesia.countryCode, "ID");

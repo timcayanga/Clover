@@ -1,6 +1,6 @@
 # Data Engine Context Corpus
 
-Version: `2026.07.26`
+Version: `2026.07.27`
 
 The context corpus provides regional and global evidence for transaction normalization. It is advisory context: it may enrich a parsed row or increase confidence, but it must not overwrite confirmed transaction fields.
 
@@ -67,6 +67,8 @@ The 10,000-entry expansion adds additional realistic statement decorations—`po
 The follow-on expansion adds another statement-label layer—`details`, `reference`, `record`, `activity`, `description`, and `line item`—to improve matching against exported ledger and card-statement formats. These are also lower-confidence descriptor variants and do not increase canonical coverage or override confirmed transaction values.
 
 The next expansion adds bank-export terminology—`memo`, `narration`, `particulars`, `transaction details`, `statement entry`, and `ledger entry`—for another broad set of statement forms. These remain lower-confidence descriptor variants, keeping canonical institution and merchant evidence distinct from formatting vocabulary.
+
+The latest expansion adds additional card and bank-export phrasing—`narrative`, `particular`, `reference number`, `posted transaction`, `processed payment`, and `account activity`. These forms improve recognition across statement providers without treating formatting text as stronger evidence than a curated canonical alias.
 
 Coverage diagnostics now distinguish canonical country counts from generated descriptor counts and report total aliases, localized-script aliases, and alias counts by script. This makes it possible to see whether a country is genuinely represented by reviewed canonical context, rather than appearing well covered only because descriptor variants multiplied its entries.
 
