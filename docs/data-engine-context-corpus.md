@@ -70,6 +70,8 @@ The next expansion adds bank-export terminology—`memo`, `narration`, `particul
 
 The latest expansion adds additional card and bank-export phrasing—`narrative`, `particular`, `reference number`, `posted transaction`, `processed payment`, and `account activity`. These forms improve recognition across statement providers without treating formatting text as stronger evidence than a curated canonical alias.
 
+The canonical-depth pass adds reviewed banking, wallet, transport, food-delivery, grocery, fuel, and remittance signals across India, mainland China, Cambodia, Myanmar, Bangladesh, Pakistan, Colombia, and Chile. Duplicate aliases are filtered before descriptor generation, and compatible regional rail identifiers are preserved so the new evidence does not create artificial ambiguity with existing coverage.
+
 Coverage diagnostics now distinguish canonical country counts from generated descriptor counts and report total aliases, localized-script aliases, and alias counts by script. This makes it possible to see whether a country is genuinely represented by reviewed canonical context, rather than appearing well covered only because descriptor variants multiplied its entries.
 
 Localized alias coverage now includes high-confidence script forms for Thai PromptPay and wallets, Japanese transit and wallet services, Korean wallets and transit cards, Hong Kong Octopus/FPS, Taiwan wallets and stored-value cards, mainland Chinese wallets, and Hindi UPI. The localized form is retained as an alias on the same canonical entry; it does not create a separate country inference path or overwrite user-confirmed values.

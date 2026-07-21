@@ -526,6 +526,49 @@ const baseEntries: ContextEntry[] = [
   { id: "la-institutions-expanded", aliases: ["joint development bank laos", "phongsavanh bank", "maruhan japan bank laos", "indochina bank laos", "agriculture promotion bank laos"], signalKind: "institution", countryCode: "LA", regionCode: "SEA", institutionType: "bank", currency: "LAK", confidence: 60 },
 ];
 
+// Additional canonical depth for high-priority travel, diaspora, and regional
+// statement ecosystems. These are curated evidence entries; generated
+// statement decorations are added only after this canonical layer is assembled.
+const additionalCanonicalEntries: ContextEntry[] = [
+  // India.
+  { id: "in-hdfc", aliases: ["hdfc bank", "hdfc bank india"], signalKind: "institution", countryCode: "IN", regionCode: "SAS", institutionType: "bank", currency: "INR", confidence: 90 },
+  { id: "in-icici", aliases: ["icici bank", "icici bank india"], signalKind: "institution", countryCode: "IN", regionCode: "SAS", institutionType: "bank", currency: "INR", confidence: 90 },
+  { id: "in-sbi", aliases: ["state bank of india", "sbi india"], signalKind: "institution", countryCode: "IN", regionCode: "SAS", institutionType: "bank", currency: "INR", confidence: 90 },
+  { id: "in-phonepe", aliases: ["phonepe", "phonepe india"], signalKind: "payment_rail", countryCode: "IN", regionCode: "SAS", paymentRail: "india_wallet", institutionType: "wallet", currency: "INR", transactionTypeHint: "transfer", counterpartyType: "wallet", purposeHint: "transfer", confidence: 88 },
+  { id: "in-paytm", aliases: ["paytm", "paytm india"], signalKind: "payment_rail", countryCode: "IN", regionCode: "SAS", paymentRail: "india_wallet", institutionType: "wallet", currency: "INR", transactionTypeHint: "transfer", counterpartyType: "wallet", purposeHint: "transfer", confidence: 86 },
+  { id: "in-ola", aliases: ["ola cabs", "ola india"], signalKind: "merchant", countryCode: "IN", regionCode: "SAS", currency: "INR", categoryHint: "Transport", counterpartyType: "transport_provider", purposeHint: "transport", confidence: 82 },
+  // Mainland China.
+  { id: "cn-icbc", aliases: ["industrial and commercial bank of china", "icbc china"], signalKind: "institution", countryCode: "CN", regionCode: "EAS", institutionType: "bank", currency: "CNY", confidence: 88 },
+  { id: "cn-ccb", aliases: ["china construction bank", "ccb china"], signalKind: "institution", countryCode: "CN", regionCode: "EAS", institutionType: "bank", currency: "CNY", confidence: 88 },
+  { id: "cn-unionpay", aliases: ["china unionpay", "unionpay china"], signalKind: "payment_rail", countryCode: "CN", regionCode: "EAS", paymentRail: "unionpay", currency: "CNY", categoryHint: "Financial", confidence: 86 },
+  { id: "cn-didi", aliases: ["didi china", "didi chuxing"], signalKind: "merchant", countryCode: "CN", regionCode: "EAS", currency: "CNY", categoryHint: "Transport", counterpartyType: "transport_provider", purposeHint: "transport", confidence: 84 },
+  { id: "cn-meituan", aliases: ["meituan", "meituan china"], signalKind: "merchant", countryCode: "CN", regionCode: "EAS", currency: "CNY", categoryHint: "Food & Dining", counterpartyType: "merchant", purposeHint: "food_delivery", confidence: 82 },
+  { id: "cn-alipay", aliases: ["alipay china", "alipay mainland"], signalKind: "payment_rail", countryCode: "CN", regionCode: "EAS", paymentRail: "alipay", institutionType: "wallet", currency: "CNY", counterpartyType: "wallet", purposeHint: "transfer", confidence: 88 },
+  // Cambodia and Myanmar.
+  { id: "kh-acleda", aliases: ["acleda bank", "acleda cambodia"], signalKind: "institution", countryCode: "KH", regionCode: "SEA", institutionType: "bank", currency: "KHR", confidence: 84 },
+  { id: "kh-wing", aliases: ["wing money", "wing cambodia"], signalKind: "payment_rail", countryCode: "KH", regionCode: "SEA", paymentRail: "cambodia_qr_wallet", institutionType: "wallet", currency: "KHR", counterpartyType: "wallet", purposeHint: "remittance", confidence: 82 },
+  { id: "kh-khqr", aliases: ["khqr", "bakong khqr"], signalKind: "payment_rail", countryCode: "KH", regionCode: "SEA", paymentRail: "cambodia_qr_wallet", currency: "KHR", transactionTypeHint: "transfer", purposeHint: "transfer", confidence: 84 },
+  { id: "kh-lucky", aliases: ["lucky supermarket cambodia", "lucky mall cambodia"], signalKind: "merchant", countryCode: "KH", regionCode: "SEA", currency: "KHR", categoryHint: "Groceries", counterpartyType: "grocer", purposeHint: "groceries", confidence: 78 },
+  { id: "mm-wave", aliases: ["wave money", "wave money myanmar"], signalKind: "payment_rail", countryCode: "MM", regionCode: "SEA", paymentRail: "myanmar_wallet", institutionType: "wallet", currency: "MMK", counterpartyType: "wallet", purposeHint: "remittance", confidence: 80 },
+  { id: "mm-kbzpay", aliases: ["kbzpay", "kbz pay myanmar"], signalKind: "payment_rail", countryCode: "MM", regionCode: "SEA", paymentRail: "myanmar_wallet", institutionType: "wallet", currency: "MMK", counterpartyType: "wallet", purposeHint: "transfer", confidence: 80 },
+  // Bangladesh and Pakistan.
+  { id: "bd-bkash", aliases: ["bkash", "bikash bangladesh"], signalKind: "payment_rail", countryCode: "BD", regionCode: "SAS", paymentRail: "bangladesh_wallet", institutionType: "wallet", currency: "BDT", counterpartyType: "wallet", purposeHint: "remittance", confidence: 84 },
+  { id: "bd-nagad", aliases: ["nagad", "nagad bangladesh"], signalKind: "payment_rail", countryCode: "BD", regionCode: "SAS", paymentRail: "bangladesh_wallet", institutionType: "wallet", currency: "BDT", counterpartyType: "wallet", purposeHint: "transfer", confidence: 82 },
+  { id: "bd-brac", aliases: ["brac bank", "brac bank bangladesh"], signalKind: "institution", countryCode: "BD", regionCode: "SAS", institutionType: "bank", currency: "BDT", confidence: 82 },
+  { id: "bd-dutchbangla", aliases: ["dutch bangla bank", "dbbl bangladesh"], signalKind: "institution", countryCode: "BD", regionCode: "SAS", institutionType: "bank", currency: "BDT", confidence: 80 },
+  { id: "pk-jazzcash", aliases: ["jazzcash", "jazzcash pakistan"], signalKind: "payment_rail", countryCode: "PK", regionCode: "SAS", paymentRail: "pakistan_wallet", institutionType: "wallet", currency: "PKR", counterpartyType: "wallet", purposeHint: "transfer", confidence: 82 },
+  { id: "pk-easypaisa", aliases: ["easypaisa", "easypaisa pakistan"], signalKind: "payment_rail", countryCode: "PK", regionCode: "SAS", paymentRail: "pakistan_wallet", institutionType: "wallet", currency: "PKR", counterpartyType: "wallet", purposeHint: "remittance", confidence: 82 },
+  // Colombia and Chile.
+  { id: "co-nequi", aliases: ["nequi", "nequi colombia"], signalKind: "payment_rail", countryCode: "CO", regionCode: "LATAM", paymentRail: "colombia_wallet", institutionType: "wallet", currency: "COP", counterpartyType: "wallet", purposeHint: "transfer", confidence: 82 },
+  { id: "co-daviplata", aliases: ["daviplata", "daviplata colombia"], signalKind: "payment_rail", countryCode: "CO", regionCode: "LATAM", paymentRail: "colombia_wallet", institutionType: "wallet", currency: "COP", counterpartyType: "wallet", purposeHint: "transfer", confidence: 82 },
+  { id: "co-rappi", aliases: ["rappi colombia", "rappi delivery colombia"], signalKind: "merchant", countryCode: "CO", regionCode: "LATAM", currency: "COP", categoryHint: "Food & Dining", counterpartyType: "merchant", purposeHint: "food_delivery", confidence: 78 },
+  { id: "co-ecopetrol", aliases: ["ecopetrol", "ecopetrol colombia"], signalKind: "merchant", countryCode: "CO", regionCode: "LATAM", currency: "COP", categoryHint: "Fuel", counterpartyType: "merchant", purposeHint: "fuel", confidence: 76 },
+  { id: "cl-mach", aliases: ["mach", "machbank chile"], signalKind: "payment_rail", countryCode: "CL", regionCode: "LATAM", paymentRail: "chile_bank_rail", institutionType: "wallet", currency: "CLP", counterpartyType: "wallet", purposeHint: "transfer", confidence: 80 },
+  { id: "cl-fpay", aliases: ["fpay chile", "fpay wallet"], signalKind: "payment_rail", countryCode: "CL", regionCode: "LATAM", paymentRail: "chile_bank_rail", institutionType: "wallet", currency: "CLP", counterpartyType: "wallet", purposeHint: "transfer", confidence: 76 },
+  { id: "cl-lider", aliases: ["lider chile", "supermercados lider"], signalKind: "merchant", countryCode: "CL", regionCode: "LATAM", currency: "CLP", categoryHint: "Groceries", counterpartyType: "grocer", purposeHint: "groceries", confidence: 78 },
+  { id: "cl-copec", aliases: ["copec chile", "estaciones copec"], signalKind: "merchant", countryCode: "CL", regionCode: "LATAM", currency: "CLP", categoryHint: "Fuel", counterpartyType: "merchant", purposeHint: "fuel", confidence: 78 },
+];
+
 /**
  * Statement providers frequently decorate a known name with a descriptor word
  * such as "payment", "transaction", or "merchant". Keep these as separate,
@@ -550,7 +593,21 @@ const buildDescriptorExpansion = (sourceEntries: ContextEntry[]): ContextEntry[]
       )
   );
 
-const entries: ContextEntry[] = [...baseEntries, ...buildDescriptorExpansion(baseEntries)];
+const normalizeCanonicalAlias = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+const usedCanonicalAliases = new Set(baseEntries.flatMap((entry) => entry.aliases.map(normalizeCanonicalAlias)));
+const deduplicatedAdditionalCanonicalEntries = additionalCanonicalEntries
+  .map((entry) => ({
+    ...entry,
+    aliases: entry.aliases.filter((alias) => {
+      const normalizedAlias = normalizeCanonicalAlias(alias);
+      if (!normalizedAlias || usedCanonicalAliases.has(normalizedAlias)) return false;
+      usedCanonicalAliases.add(normalizedAlias);
+      return true;
+    }),
+  }))
+  .filter((entry) => entry.aliases.length > 0);
+const canonicalEntries: ContextEntry[] = [...baseEntries, ...deduplicatedAdditionalCanonicalEntries];
+const entries: ContextEntry[] = [...canonicalEntries, ...buildDescriptorExpansion(canonicalEntries)];
 
 const regionalProfiles: RegionalParsingProfile[] = [
   { countryCode: "PH", regionCode: "SEA", locales: ["en-PH", "fil-PH"], primaryLocale: "en-PH", languages: ["en", "fil"], dateOrder: "mdy", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "PHP", legalEntitySuffixes: ["inc", "corp", "corporation", "co", "ltd"], confidence: 86 },
