@@ -181,6 +181,8 @@ const main = async () => {
     "Advisory local parsing must not block upload by opening the password flow."
   );
   assert.match(uploadHandoffSource, /postFileWithProgress\(/);
+  assert.match(modalSource, /const IN_FLIGHT_IMPORT_PROGRESS_INITIAL_DELAY_MS = 400;/);
+  assert.match(modalSource, /const IN_FLIGHT_IMPORT_PROGRESS_POLL_INTERVAL_MS = 500;/);
   assert.match(
     uploadHandoffSource,
     /fetch\(`\/api\/imports\/\$\{importFileId\}\/progress`, \{ cache: "no-store" \}\)/,

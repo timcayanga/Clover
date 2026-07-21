@@ -206,6 +206,8 @@ type QaRunSummary = {
 };
 
 const MIN_FULLSCREEN_IMPORT_MODAL_MS = 1200;
+const IN_FLIGHT_IMPORT_PROGRESS_INITIAL_DELAY_MS = 400;
+const IN_FLIGHT_IMPORT_PROGRESS_POLL_INTERVAL_MS = 500;
 
 type ImportStatusPayload = {
   importFile?: {
@@ -5031,7 +5033,7 @@ export function ImportFilesModal({
       // This also refreshes the page as soon as committed rows are visible,
       // without waiting for post-visible QA or response serialization.
       void (async () => {
-        await new Promise((resolve) => window.setTimeout(resolve, 750));
+        await new Promise((resolve) => window.setTimeout(resolve, IN_FLIGHT_IMPORT_PROGRESS_INITIAL_DELAY_MS));
         while (!inFlightStatusMonitorStopped && !processResponseSettled) {
           try {
             const response = await fetch(`/api/imports/${importFileId}/progress`, { cache: "no-store" });
@@ -5127,7 +5129,7 @@ export function ImportFilesModal({
             // must never turn a healthy upload into an error.
           }
 
-          await new Promise((resolve) => window.setTimeout(resolve, 1_000));
+          await new Promise((resolve) => window.setTimeout(resolve, IN_FLIGHT_IMPORT_PROGRESS_POLL_INTERVAL_MS));
         }
       })();
       if (shouldSkipLocalStatementPreparse) {
