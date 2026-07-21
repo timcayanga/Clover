@@ -4929,7 +4929,7 @@ export function ImportFilesModal({
         fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
         fileTotal: items.length,
         completedFiles: completedFileCount,
-        progress: 20,
+        progress: IMPORT_PROGRESS.preparing,
         detail: "Clover is uploading the file.",
         summary: null,
         errorMessage: null,
@@ -5005,13 +5005,12 @@ export function ImportFilesModal({
         inFlightStatusMonitorStopped = true;
       });
       // Tiny files can finish uploading without a computable progress event.
-      // Once the request is in flight, advance out of "preparing" so the modal
-      // truthfully reflects server-side reading and the visibility deadline does
-      // not mistake an active request for an abandoned client-only file.
+      // Once the request is in flight, leave preparation but keep the label at
+      // the truthful upload stage until the server reports file reading.
       updateItem(itemId, {
         status: "importing",
         progress: IMPORT_PROGRESS.uploading,
-        progressLabel: "File uploaded",
+        progressLabel: "Sending file",
       });
       publishImportActivity({
         workspaceId,
@@ -5023,7 +5022,7 @@ export function ImportFilesModal({
         fileTotal: items.length,
         completedFiles: completedFileCount,
         progress: IMPORT_PROGRESS.uploading,
-        detail: "File uploaded. Clover is reading the file details.",
+        detail: "Clover is uploading the file.",
         summary: null,
         errorMessage: null,
       });

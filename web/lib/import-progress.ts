@@ -1,10 +1,11 @@
 import type { ImportImageMode } from "@/lib/import-image-mode";
 
 export const IMPORT_PROGRESS = {
-  preparing: 20,
-  uploading: 40,
+  preparing: 10,
+  uploading: 30,
+  reading: 40,
   parsing: 60,
-  loadingAccount: 80,
+  loadingAccount: 70,
   finalizing: 90,
   done: 100,
 } as const;
@@ -18,6 +19,7 @@ export const friendlyImportPhaseLabel = (label: string, fileName?: string | null
     case "Starting upload":
     case "Uploading the file":
     case "Uploading file":
+    case "Sending file":
       return "Uploading file";
     case "File uploaded":
       return "Reading file details";
@@ -64,6 +66,7 @@ export const friendlyImportProgressLabel = (label: string, _fileName?: string | 
       return "Clover is checking the file format";
     case "Uploading the file":
     case "Uploading file":
+    case "Sending file":
       return "Clover is uploading the file";
     case "File uploaded":
       return "Clover uploaded the file and is reading its details";

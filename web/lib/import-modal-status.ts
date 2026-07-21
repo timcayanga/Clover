@@ -76,6 +76,10 @@ const getWaitingProgress = (processingPhase: string | null, progressFloor: numbe
     return Math.max(IMPORT_PROGRESS.loadingAccount, progressFloor);
   }
 
+  if (processingPhase === "reading_account_details" || processingPhase === "reading_receipt_vision") {
+    return Math.max(IMPORT_PROGRESS.reading, progressFloor);
+  }
+
   if (processingPhase === "reconciling" || processingPhase === "staged" || processingPhase === "finalizing") {
     return IMPORT_PROGRESS.finalizing;
   }
@@ -150,7 +154,7 @@ export const resolveImportModalStatusDecision = (params: {
     };
   }
 
-  const progressFloor = Math.max(IMPORT_PROGRESS.parsing, Number(params.progressFloor ?? IMPORT_PROGRESS.parsing) || 0);
+  const progressFloor = Math.max(IMPORT_PROGRESS.preparing, Number(params.progressFloor ?? IMPORT_PROGRESS.preparing) || 0);
   const progress = Math.min(IMPORT_PROGRESS.finalizing, getWaitingProgress(processingPhase, progressFloor));
 
   return {

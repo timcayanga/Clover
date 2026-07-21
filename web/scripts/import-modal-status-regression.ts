@@ -76,7 +76,7 @@ const main = () => {
   });
   assert.equal(genericWaiting.kind, "waiting");
   assert.equal(genericWaiting.progressLabel, "Reading file details");
-  assert.equal(genericWaiting.progress, 60, "Reading file details should occupy its own 60% stage.");
+  assert.equal(genericWaiting.progress, 40, "Reading file details should occupy its own 40% stage.");
 
   const identifyingTransactions = resolveImportModalStatusDecision({
     importMode: "statement",
@@ -84,7 +84,7 @@ const main = () => {
     processingPhase: "identifying_transactions",
     telemetryLabel: "Parser detail that must not replace the durable stage",
   });
-  assert.equal(identifyingTransactions.progress, 80);
+  assert.equal(identifyingTransactions.progress, 70);
   assert.equal(identifyingTransactions.progressLabel, "Identifying transactions");
 
   const savingTransactions = resolveImportModalStatusDecision({
