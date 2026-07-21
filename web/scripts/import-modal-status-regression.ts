@@ -19,7 +19,8 @@ const main = () => {
     processingMessage: "Clover hit a temporary receipt-reading issue and queued backup pass 3/3.",
   });
   assert.equal(queuedReceipt.kind, "waiting");
-  assert.equal(queuedReceipt.progressLabel, "Clover hit a temporary receipt-reading issue and queued backup pass 3/3.");
+  assert.equal(queuedReceipt.progressLabel, "Trying backup receipt reader");
+  assert.match(queuedReceipt.detail, /queued backup pass 3\/3/i, "The stable stage should keep the helpful retry detail.");
   assert.ok(queuedReceipt.progress >= 4, "Expected queued retry to remain visibly active in the modal.");
 
   const exhaustedReceipt = resolveImportModalStatusDecision({
@@ -75,6 +76,24 @@ const main = () => {
   });
   assert.equal(genericWaiting.kind, "waiting");
   assert.equal(genericWaiting.progressLabel, "Reading file details");
+  assert.equal(genericWaiting.progress, 60, "Reading file details should occupy its own 60% stage.");
+
+  const identifyingTransactions = resolveImportModalStatusDecision({
+    importMode: "statement",
+    status: "processing",
+    processingPhase: "identifying_transactions",
+    telemetryLabel: "Parser detail that must not replace the durable stage",
+  });
+  assert.equal(identifyingTransactions.progress, 80);
+  assert.equal(identifyingTransactions.progressLabel, "Identifying transactions");
+
+  const savingTransactions = resolveImportModalStatusDecision({
+    importMode: "statement",
+    status: "processing",
+    processingPhase: "finalizing",
+  });
+  assert.equal(savingTransactions.progress, 90);
+  assert.equal(savingTransactions.progressLabel, "Saving transactions");
 
   const laterWaitingAttempt = resolveImportModalStatusDecision({
     importMode: "statement",

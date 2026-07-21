@@ -1513,7 +1513,7 @@ export function ImportFilesModal({
             optimisticAccountId,
             importedRows: null,
             progress: IMPORT_PROGRESS.preparing,
-            progressLabel: "Clover is getting your file ready",
+            progressLabel: "Preparing file",
           },
         ];
       });
@@ -1586,7 +1586,7 @@ export function ImportFilesModal({
           fileTotal: additions.length || nextFiles.length,
           completedFiles: completedFileCount,
           progress: IMPORT_PROGRESS.preparing,
-          detail: "Clover is getting your file ready",
+          detail: "Clover is checking the file.",
           summary: null,
           errorMessage: null,
         });
@@ -4916,8 +4916,8 @@ export function ImportFilesModal({
         file_size_bytes: item.file.size,
         import_mode: itemImportMode,
       });
-      updateItem(itemId, { status: "importing", error: null, progress: IMPORT_PROGRESS.preparing, progressLabel: "Starting upload", importFileId });
-      updateItem(itemId, { progress: IMPORT_PROGRESS.preparing, progressLabel: "Uploading the file" });
+      updateItem(itemId, { status: "importing", error: null, progress: IMPORT_PROGRESS.preparing, progressLabel: "Preparing file", importFileId });
+      updateItem(itemId, { progress: IMPORT_PROGRESS.preparing, progressLabel: "Uploading file" });
       publishImportActivity({
         workspaceId,
         surface: importActivitySurfaceRef.current,
@@ -4928,7 +4928,7 @@ export function ImportFilesModal({
         fileTotal: items.length,
         completedFiles: completedFileCount,
         progress: 20,
-        detail: "Clover is getting your file ready",
+        detail: "Clover is uploading the file.",
         summary: null,
         errorMessage: null,
       });
@@ -4987,13 +4987,13 @@ export function ImportFilesModal({
             fileTotal: items.length,
             completedFiles: completedFileCount,
             progress: IMPORT_PROGRESS.preparing + progress * ((IMPORT_PROGRESS.uploading - IMPORT_PROGRESS.preparing) / 100),
-            detail: "Clover is uploading the file",
+            detail: "Clover is uploading the file.",
             summary: null,
             errorMessage: null,
           });
           updateItem(itemId, {
             progress: IMPORT_PROGRESS.preparing + progress * ((IMPORT_PROGRESS.uploading - IMPORT_PROGRESS.preparing) / 100),
-            progressLabel: "Uploading the file",
+            progressLabel: "Uploading file",
             status: "importing",
           });
         },
@@ -5009,7 +5009,7 @@ export function ImportFilesModal({
       updateItem(itemId, {
         status: "importing",
         progress: IMPORT_PROGRESS.uploading,
-        progressLabel: "Reading statement details",
+        progressLabel: "File uploaded",
       });
       publishImportActivity({
         workspaceId,
@@ -5021,7 +5021,7 @@ export function ImportFilesModal({
         fileTotal: items.length,
         completedFiles: completedFileCount,
         progress: IMPORT_PROGRESS.uploading,
-        detail: "Clover uploaded the file and is reading its transactions",
+        detail: "File uploaded. Clover is reading the file details.",
         summary: null,
         errorMessage: null,
       });
@@ -7283,7 +7283,7 @@ export function ImportFilesModal({
       errorTitle: null,
       errorNextSteps: null,
       progress: 0,
-      progressLabel: "Clover is getting your file ready",
+      progressLabel: "Preparing file",
     });
 
     const remainingLockedFiles = items.filter((item) => item.id !== itemId && item.status === "needs_password");
@@ -7771,7 +7771,7 @@ export function ImportFilesModal({
                               ? "Parsing locally..."
                               : item.status === "needs_password"
                                 ? "Waiting for password"
-                                : "Clover is getting your file ready"}
+                                : "Preparing file"}
                     </span>
                     <div className="accounts-import-file__actions">
                       {showQaTools && item.importFileId ? (

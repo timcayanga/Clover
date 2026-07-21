@@ -32,27 +32,55 @@ const cleanLabel = (value: unknown) => (typeof value === "string" && value.trim(
 
 export const getLocalPreparseProgressPatch = (currentProgress?: number | null) => ({
   progress: Math.max(IMPORT_PROGRESS.preparing, Number(currentProgress ?? 0)),
-  progressLabel: "Reading locally",
+  progressLabel: "Preparing file",
 });
 
 const getDefaultWaitingLabel = (importMode: ImportModalStatusMode, processingPhase: string | null) => {
   if (processingPhase === "queued_retry") {
-    return importMode === "receipt" ? "Queued for receipt retry" : "Queued for backup reading";
+    return importMode === "receipt" ? "Trying backup receipt reader" : "Trying backup reader";
+  }
+
+  if (processingPhase === "uploading") {
+    return "Uploading file";
   }
 
   if (processingPhase === "identifying_transactions") {
-    return "Reading transactions";
+    return "Identifying transactions";
   }
 
   if (processingPhase === "reading_receipt_vision") {
-    return "Reading receipt";
+    return "Reading receipt details";
   }
 
   if (processingPhase === "reading_account_details") {
     return importMode === "receipt" ? "Reading receipt details" : "Reading file details";
   }
 
-  return importMode === "receipt" ? "Reading receipt in background" : "Reading document in background";
+  if (processingPhase === "reconciling" || processingPhase === "staged" || processingPhase === "finalizing") {
+    return "Saving transactions";
+  }
+
+  if (processingPhase === "auto_rerunning") {
+    return "Rechecking file";
+  }
+
+  return importMode === "receipt" ? "Reading receipt details" : "Reading file details";
+};
+
+const getWaitingProgress = (processingPhase: string | null, progressFloor: number) => {
+  if (processingPhase === "queued_retry" || processingPhase === "uploading") {
+    return IMPORT_PROGRESS.uploading;
+  }
+
+  if (processingPhase === "identifying_transactions") {
+    return Math.max(IMPORT_PROGRESS.loadingAccount, progressFloor);
+  }
+
+  if (processingPhase === "reconciling" || processingPhase === "staged" || processingPhase === "finalizing") {
+    return IMPORT_PROGRESS.finalizing;
+  }
+
+  return Math.max(IMPORT_PROGRESS.parsing, progressFloor);
 };
 
 const getDefaultWaitingDetail = (importMode: ImportModalStatusMode, processingPhase: string | null) => {
@@ -123,18 +151,14 @@ export const resolveImportModalStatusDecision = (params: {
   }
 
   const progressFloor = Math.max(IMPORT_PROGRESS.parsing, Number(params.progressFloor ?? IMPORT_PROGRESS.parsing) || 0);
-  const progress =
-    processingPhase === "queued_retry"
-      ? IMPORT_PROGRESS.uploading
-      : Math.min(IMPORT_PROGRESS.finalizing, progressFloor);
+  const progress = Math.min(IMPORT_PROGRESS.finalizing, getWaitingProgress(processingPhase, progressFloor));
 
   return {
     kind: "waiting",
     progress,
-    progressLabel:
-      cleanLabel(params.telemetryLabel) ??
-      cleanLabel(params.processingMessage) ??
-      getDefaultWaitingLabel(params.importMode, processingPhase),
+    // Telemetry may change several times during one parser phase. Keep the
+    // visible label tied to the durable phase so a percentage has one meaning.
+    progressLabel: getDefaultWaitingLabel(params.importMode, processingPhase),
     detail:
       cleanLabel(params.telemetryMessage) ??
       cleanLabel(params.processingMessage) ??

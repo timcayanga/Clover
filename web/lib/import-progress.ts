@@ -13,9 +13,14 @@ export const friendlyImportPhaseLabel = (label: string, fileName?: string | null
   const fileSuffix = fileName ? ` ${fileName}` : "";
 
   switch (label) {
+    case "Preparing file":
+      return "Preparing file";
     case "Starting upload":
     case "Uploading the file":
+    case "Uploading file":
       return "Uploading file";
+    case "File uploaded":
+      return "Reading file details";
     case "Password needed":
       return "Password needed";
     case "Waiting for account details":
@@ -51,12 +56,17 @@ export const friendlyImportPhaseLabel = (label: string, fileName?: string | null
 
 export const friendlyImportProgressLabel = (label: string, _fileName?: string | null, _importMode?: ImportImageMode | null) => {
   switch (label) {
+    case "Preparing file":
+      return "Clover is checking the file";
     case "Starting upload":
       return "Clover is checking the file format";
     case "Clover is getting your file ready":
       return "Clover is checking the file format";
     case "Uploading the file":
-      return "Clover is securely reading the statement";
+    case "Uploading file":
+      return "Clover is uploading the file";
+    case "File uploaded":
+      return "Clover uploaded the file and is reading its details";
     case "Password needed":
       return "This file needs a password before Clover can continue";
     case "Waiting for account details":
@@ -82,6 +92,16 @@ export const friendlyImportProgressLabel = (label: string, _fileName?: string | 
       return "Clover is pulling the file details into preview";
     case "Reading statement details":
       return "Clover is reading the file details";
+    case "Identifying transactions":
+      return "Clover is identifying transactions";
+    case "Saving transactions":
+      return "Clover is saving transactions to your workspace";
+    case "Trying backup reader":
+      return "Clover is trying the backup reader";
+    case "Trying backup receipt reader":
+      return "Clover is trying the backup receipt reader";
+    case "Rechecking file":
+      return "Clover is rechecking the file";
     case "Import failed":
       return "Clover couldn't finish the import";
     case "Done":
