@@ -9232,6 +9232,7 @@ export const processImportFileText = async (
   await updateImportFileCompat(importFileId, {
     parsedRowsCount: rows.length,
   });
+  const parsedRowsPersistedAt = Date.now();
 
   const documentImportSourceMetadata = {
     importMode: effectiveImportMode,
@@ -9301,31 +9302,38 @@ export const processImportFileText = async (
         }
       : null,
     } as Prisma.InputJsonValue;
-  const documentImportRecord = await upsertDocumentImportCompat({
-    workspaceId: String(importFile.workspaceId),
-    importFileId,
-    accountId: documentImportAccountId,
-    documentFamily: effectiveImportMode,
-    documentSubtype:
-      effectiveImportMode === "receipt"
-        ? "receipt"
-        : effectiveImportMode === "portfolio"
-          ? resolvedMetadata.accountType ?? resolvedMetadata.accountName ?? "portfolio"
-          : effectiveImportMode === "account_detail"
-            ? resolvedMetadata.accountType ?? resolvedMetadata.accountName ?? "account_detail"
-            : effectiveImportMode === "notes"
-              ? "notes"
-              : "statement",
-    institution: effectiveImportMode === "receipt" ? null : resolvedMetadata.institution ?? null,
-    accountName: effectiveImportMode === "receipt" ? "Cash" : resolvedMetadata.accountName ?? null,
-    accountNumber: effectiveImportMode === "receipt" ? null : resolvedMetadata.accountNumber ?? null,
-    currency: resolvedMetadata.currency ?? null,
-    pageCount: pageImages?.length ?? 0,
-    confidence: resolvedMetadata.confidence ?? 0,
-    sourceMetadata: documentImportSourceMetadata,
-    rawPayload: documentImportExtractedPayload,
-    extractedPayload: documentImportExtractedPayload,
-  });
+  // Parsed rows and the statement checkpoint are the durable audit trail a
+  // statement needs before it becomes visible. The document-preview record is
+  // only needed for document imports (or an explicit receipt-like statement),
+  // so do not put an extra write in the normal statement critical path.
+  const shouldPersistDocumentImportBeforeConfirmation = isDocumentImport || receiptPreviewLooksLikeReceipt;
+  const documentImportRecord = shouldPersistDocumentImportBeforeConfirmation
+    ? await upsertDocumentImportCompat({
+        workspaceId: String(importFile.workspaceId),
+        importFileId,
+        accountId: documentImportAccountId,
+        documentFamily: effectiveImportMode,
+        documentSubtype:
+          effectiveImportMode === "receipt"
+            ? "receipt"
+            : effectiveImportMode === "portfolio"
+              ? resolvedMetadata.accountType ?? resolvedMetadata.accountName ?? "portfolio"
+              : effectiveImportMode === "account_detail"
+                ? resolvedMetadata.accountType ?? resolvedMetadata.accountName ?? "account_detail"
+                : effectiveImportMode === "notes"
+                  ? "notes"
+                  : "statement",
+        institution: effectiveImportMode === "receipt" ? null : resolvedMetadata.institution ?? null,
+        accountName: effectiveImportMode === "receipt" ? "Cash" : resolvedMetadata.accountName ?? null,
+        accountNumber: effectiveImportMode === "receipt" ? null : resolvedMetadata.accountNumber ?? null,
+        currency: resolvedMetadata.currency ?? null,
+        pageCount: pageImages?.length ?? 0,
+        confidence: resolvedMetadata.confidence ?? 0,
+        sourceMetadata: documentImportSourceMetadata,
+        rawPayload: documentImportExtractedPayload,
+        extractedPayload: documentImportExtractedPayload,
+      })
+    : null;
 
   if (documentImportRecord && pageImages?.length) {
     await replaceDocumentImportPagesCompat({
@@ -9459,9 +9467,10 @@ export const processImportFileText = async (
     }
   }
 
-  let template: Awaited<ReturnType<typeof upsertStatementTemplate>> | null = null;
-  try {
-    template = await upsertStatementTemplate({
+  // Template learning and checkpoint persistence are independent. Start the
+  // template write now so its database round-trip overlaps the required
+  // checkpoint write below instead of delaying visible transactions.
+  const templateUpsertPromise = upsertStatementTemplate({
       workspaceId: importFile.workspaceId,
       fingerprint: statementFingerprint,
       metadata: resolvedMetadata,
@@ -9508,15 +9517,19 @@ export const processImportFileText = async (
               ? rows.at(-1)?.merchantRaw
               : null,
       } as Prisma.InputJsonValue,
-    });
-  } catch (error) {
+    }).catch((error) => {
     console.warn("Statement template upsert failed; continuing import", {
       importFileId,
       error,
     });
-  }
+    return null;
+  });
 
-  if (template && unsupervisedLearningSnapshot.clusterCount > 0) {
+  void templateUpsertPromise.then((template) => {
+    if (!template || unsupervisedLearningSnapshot.clusterCount <= 0) {
+      return;
+    }
+
     void promoteUnsupervisedLearningClustersForWorkspace({
       workspaceId: importFile.workspaceId,
     })
@@ -9548,7 +9561,7 @@ export const processImportFileText = async (
           error,
         });
       });
-  }
+  });
 
   if (await hasCompatibleTable("AccountStatementCheckpoint")) {
     try {
@@ -9656,6 +9669,7 @@ export const processImportFileText = async (
 
   if (!isDocumentImport) {
     try {
+      const statementConfirmationStartedAt = Date.now();
       await updateImportFileCompat(importFileId, {
         status: "processing",
         processingPhase: "reconciling",
@@ -9666,6 +9680,9 @@ export const processImportFileText = async (
         importFileId,
         rowCount: rows.length,
         totalMs: Date.now() - startedAt,
+        parseToPersistedRowsMs: parsedRowsPersistedAt - startedAt,
+        preConfirmationPersistenceMs: statementConfirmationStartedAt - parsedRowsPersistedAt,
+        confirmationMs: Date.now() - statementConfirmationStartedAt,
         cachedParse: canReuseCachedStatementParse,
         parserRoute: parserRoutingMetadata.decision,
       });
