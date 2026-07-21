@@ -5,7 +5,7 @@
  * confirmed transaction values. Keep raw statement text outside this module.
  */
 
-export const CONTEXT_CORPUS_VERSION = "2026.07.27";
+export const CONTEXT_CORPUS_VERSION = "2026.07.28";
 
 export type ContextSignal = {
   id: string;
@@ -567,6 +567,46 @@ const additionalCanonicalEntries: ContextEntry[] = [
   { id: "cl-fpay", aliases: ["fpay chile", "fpay wallet"], signalKind: "payment_rail", countryCode: "CL", regionCode: "LATAM", paymentRail: "chile_bank_rail", institutionType: "wallet", currency: "CLP", counterpartyType: "wallet", purposeHint: "transfer", confidence: 76 },
   { id: "cl-lider", aliases: ["lider chile", "supermercados lider"], signalKind: "merchant", countryCode: "CL", regionCode: "LATAM", currency: "CLP", categoryHint: "Groceries", counterpartyType: "grocer", purposeHint: "groceries", confidence: 78 },
   { id: "cl-copec", aliases: ["copec chile", "estaciones copec"], signalKind: "merchant", countryCode: "CL", regionCode: "LATAM", currency: "CLP", categoryHint: "Fuel", counterpartyType: "merchant", purposeHint: "fuel", confidence: 78 },
+  // Brunei, Laos, and deeper ASEAN coverage.
+  { id: "bn-bibd", aliases: ["bibd", "bank islam brunei darussalam"], signalKind: "institution", countryCode: "BN", regionCode: "SEA", institutionType: "bank", currency: "BND", confidence: 82 },
+  { id: "bn-progresif", aliases: ["progresif brunei", "progresif mobile brunei"], signalKind: "merchant", countryCode: "BN", regionCode: "SEA", currency: "BND", categoryHint: "Telecom", counterpartyType: "telecom_provider", purposeHint: "telecom", confidence: 76 },
+  { id: "bn-royal-brunei", aliases: ["royal brunei airlines", "rba brunei"], signalKind: "merchant", countryCode: "BN", regionCode: "SEA", currency: "BND", categoryHint: "Travel", counterpartyType: "travel_provider", purposeHint: "travel", confidence: 76, travelLikely: true },
+  { id: "la-bcel", aliases: ["bcel bank", "bcel laos"], signalKind: "institution", countryCode: "LA", regionCode: "SEA", institutionType: "bank", currency: "LAK", confidence: 80 },
+  { id: "la-ldb", aliases: ["lao development bank", "ldb laos"], signalKind: "institution", countryCode: "LA", regionCode: "SEA", institutionType: "bank", currency: "LAK", confidence: 78 },
+  { id: "la-unitel", aliases: ["unitel laos", "unitel mobile laos"], signalKind: "merchant", countryCode: "LA", regionCode: "SEA", currency: "LAK", categoryHint: "Telecom", counterpartyType: "telecom_provider", purposeHint: "telecom", confidence: 74 },
+  { id: "vn-momo", aliases: ["momo vietnam", "momo wallet vietnam"], signalKind: "payment_rail", countryCode: "VN", regionCode: "SEA", paymentRail: "vietnam_wallet", institutionType: "wallet", currency: "VND", counterpartyType: "wallet", purposeHint: "transfer", confidence: 80 },
+  { id: "id-gopay", aliases: ["gopay indonesia", "go pay indonesia"], signalKind: "payment_rail", countryCode: "ID", regionCode: "SEA", paymentRail: "indonesia_wallet", institutionType: "wallet", currency: "IDR", counterpartyType: "wallet", purposeHint: "transfer", confidence: 80 },
+  { id: "my-touchngo", aliases: ["touch n go ewallet", "touch n go malaysia"], signalKind: "payment_rail", countryCode: "MY", regionCode: "SEA", paymentRail: "malaysia_wallet", institutionType: "wallet", currency: "MYR", counterpartyType: "wallet", purposeHint: "transfer", confidence: 80 },
+  { id: "sg-grabpay", aliases: ["grabpay singapore", "grab pay singapore"], signalKind: "payment_rail", countryCode: "SG", regionCode: "SEA", paymentRail: "singapore_wallet", institutionType: "wallet", currency: "SGD", counterpartyType: "wallet", purposeHint: "transfer", confidence: 80 },
+  // Africa.
+  { id: "ke-mpesa", aliases: ["mpesa kenya", "m-pesa kenya"], signalKind: "payment_rail", countryCode: "KE", regionCode: "AFR", paymentRail: "mpesa", institutionType: "wallet", currency: "KES", counterpartyType: "wallet", purposeHint: "transfer", confidence: 86 },
+  { id: "ke-equity", aliases: ["equity bank kenya", "equity kenya"], signalKind: "institution", countryCode: "KE", regionCode: "AFR", institutionType: "bank", currency: "KES", confidence: 78 },
+  { id: "ke-kenya-airways", aliases: ["kenya airways", "kenya airways booking"], signalKind: "merchant", countryCode: "KE", regionCode: "AFR", currency: "KES", categoryHint: "Travel", counterpartyType: "travel_provider", purposeHint: "travel", confidence: 74, travelLikely: true },
+  { id: "ng-flutterwave", aliases: ["flutterwave nigeria", "flutterwave"], signalKind: "payment_rail", countryCode: "NG", regionCode: "AFR", paymentRail: "nigeria_payment", currency: "NGN", categoryHint: "Financial", confidence: 76 },
+  { id: "ng-paga", aliases: ["paga nigeria", "paga wallet nigeria"], signalKind: "payment_rail", countryCode: "NG", regionCode: "AFR", paymentRail: "nigeria_wallet", institutionType: "wallet", currency: "NGN", counterpartyType: "wallet", purposeHint: "transfer", confidence: 76 },
+  { id: "ng-airtel", aliases: ["airtel money nigeria", "airtel nigeria"], signalKind: "payment_rail", countryCode: "NG", regionCode: "AFR", paymentRail: "nigeria_wallet", institutionType: "wallet", currency: "NGN", counterpartyType: "wallet", purposeHint: "transfer", confidence: 74 },
+  { id: "gh-mtn-mobile-money", aliases: ["mtn mobile money ghana", "mtn momo ghana"], signalKind: "payment_rail", countryCode: "GH", regionCode: "AFR", paymentRail: "ghana_mobile_money", institutionType: "wallet", currency: "GHS", counterpartyType: "wallet", purposeHint: "transfer", confidence: 78 },
+  { id: "gh-vodafone-cash", aliases: ["vodafone cash ghana", "telecel cash ghana"], signalKind: "payment_rail", countryCode: "GH", regionCode: "AFR", paymentRail: "ghana_mobile_money", institutionType: "wallet", currency: "GHS", counterpartyType: "wallet", purposeHint: "transfer", confidence: 74 },
+  { id: "tz-mpesa", aliases: ["mpesa tanzania", "m-pesa tanzania"], signalKind: "payment_rail", countryCode: "TZ", regionCode: "AFR", paymentRail: "tanzania_mobile_money", institutionType: "wallet", currency: "TZS", counterpartyType: "wallet", purposeHint: "transfer", confidence: 78 },
+  { id: "tz-airtel-money", aliases: ["airtel money tanzania", "airtel tanzania"], signalKind: "payment_rail", countryCode: "TZ", regionCode: "AFR", paymentRail: "tanzania_mobile_money", institutionType: "wallet", currency: "TZS", counterpartyType: "wallet", purposeHint: "transfer", confidence: 74 },
+  // Gulf and South Asian diaspora corridors.
+  { id: "ae-careem", aliases: ["careem uae", "careem dubai"], signalKind: "merchant", countryCode: "AE", regionCode: "MEA", currency: "AED", categoryHint: "Transport", counterpartyType: "transport_provider", purposeHint: "transport", confidence: 78, travelLikely: true },
+  { id: "ae-noon", aliases: ["noon uae", "noon ecommerce uae"], signalKind: "merchant", countryCode: "AE", regionCode: "MEA", currency: "AED", categoryHint: "Shopping", counterpartyType: "merchant", purposeHint: "ecommerce", confidence: 76 },
+  { id: "sa-jarir", aliases: ["jarir bookstore saudi", "jarir saudi arabia"], signalKind: "merchant", countryCode: "SA", regionCode: "MEA", currency: "SAR", categoryHint: "Shopping", counterpartyType: "merchant", purposeHint: "retail", confidence: 74 },
+  { id: "sa-hungerstation", aliases: ["hungerstation saudi", "hunger station saudi arabia"], signalKind: "merchant", countryCode: "SA", regionCode: "MEA", currency: "SAR", categoryHint: "Food & Dining", counterpartyType: "merchant", purposeHint: "food_delivery", confidence: 74 },
+  { id: "qa-karwa", aliases: ["karwa taxi qatar", "mowasalat karwa"], signalKind: "merchant", countryCode: "QA", regionCode: "MEA", currency: "QAR", categoryHint: "Transport", counterpartyType: "transport_provider", purposeHint: "transport", confidence: 74, travelLikely: true },
+  { id: "kw-talabat", aliases: ["talabat kuwait", "talabat delivery kuwait"], signalKind: "merchant", countryCode: "KW", regionCode: "MEA", currency: "KWD", categoryHint: "Food & Dining", counterpartyType: "merchant", purposeHint: "food_delivery", confidence: 74 },
+  { id: "bd-rocket", aliases: ["rocket bangladesh", "dutch bangla rocket"], signalKind: "payment_rail", countryCode: "BD", regionCode: "SAS", paymentRail: "bangladesh_wallet", institutionType: "wallet", currency: "BDT", counterpartyType: "wallet", purposeHint: "transfer", confidence: 76 },
+  { id: "pk-sadapay", aliases: ["sadapay pakistan", "sada pay pakistan"], signalKind: "payment_rail", countryCode: "PK", regionCode: "SAS", paymentRail: "pakistan_wallet", institutionType: "wallet", currency: "PKR", counterpartyType: "wallet", purposeHint: "transfer", confidence: 74 },
+  // Diaspora destinations and European rails.
+  { id: "ca-td", aliases: ["td canada trust", "td bank canada"], signalKind: "institution", countryCode: "CA", regionCode: "NAM", institutionType: "bank", currency: "CAD", confidence: 84 },
+  { id: "ca-wealthsimple", aliases: ["wealthsimple canada", "wealthsimple trade"], signalKind: "merchant", countryCode: "CA", regionCode: "NAM", currency: "CAD", categoryHint: "Investments", counterpartyType: "investment_platform", purposeHint: "investment", confidence: 76 },
+  { id: "au-commbank", aliases: ["commonwealth bank australia", "commbank australia"], signalKind: "institution", countryCode: "AU", regionCode: "OCE", institutionType: "bank", currency: "AUD", confidence: 84 },
+  { id: "au-opal", aliases: ["opal card sydney", "transport for nsw opal"], signalKind: "merchant", countryCode: "AU", regionCode: "OCE", currency: "AUD", categoryHint: "Transport", counterpartyType: "transport_provider", purposeHint: "transport", confidence: 76, travelLikely: true },
+  { id: "gb-monzo", aliases: ["monzo uk", "monzo bank"], signalKind: "institution", countryCode: "GB", regionCode: "EUR", institutionType: "bank", currency: "GBP", confidence: 80 },
+  { id: "gb-oyster", aliases: ["oyster card london", "tfl oyster"], signalKind: "merchant", countryCode: "GB", regionCode: "EUR", currency: "GBP", categoryHint: "Transport", counterpartyType: "transport_provider", purposeHint: "transport", confidence: 76, travelLikely: true },
+  { id: "us-venmo", aliases: ["venmo", "venmo usa"], signalKind: "payment_rail", countryCode: "US", regionCode: "NAM", paymentRail: "us_wallet", institutionType: "wallet", currency: "USD", counterpartyType: "wallet", purposeHint: "transfer", confidence: 80 },
+  { id: "us-chase", aliases: ["chase bank usa", "jpmorgan chase"], signalKind: "institution", countryCode: "US", regionCode: "NAM", institutionType: "bank", currency: "USD", confidence: 84 },
 ];
 
 /**
