@@ -2616,10 +2616,18 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       if (shouldProcessInlineRequest) {
         stage = "processing statement text";
-        await updateImportFileCompat(importId, {
+        // The import is already marked processing above. This more specific
+        // progress label must not delay starting the inline deterministic
+        // parser and its visible-row confirmation work.
+        void updateImportFileCompat(importId, {
           status: "processing",
           processingPhase: "reading_account_details",
           processingMessage: "Reading file details...",
+        }).catch((error) => {
+          console.warn("Unable to update inline import progress", {
+            importId,
+            error: summarizeErrorForLog(error),
+          });
         });
 
         const { processImportFileText } = await importProcessorPromise;

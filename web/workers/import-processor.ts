@@ -9170,7 +9170,10 @@ export const processImportFileText = async (
     minTeachability: useOpenAiParse ? 58 : 55,
   });
 
-  await updateImportFileCompat(importFileId, {
+  // This is progress-only state: do not put a separate database round trip in
+  // front of the durable parsed-row write that makes a statement available for
+  // confirmation.
+  void updateImportFileCompat(importFileId, {
     status: "processing",
     processingPhase: rows.length > 0 ? "reconciling" : "identifying_transactions",
     processingMessage:
@@ -9179,6 +9182,8 @@ export const processImportFileText = async (
           ? "Clover is reusing the cached parse and saving the results."
           : "Clover is saving the visible rows."
         : "Clover is identifying transactions.",
+  }).catch((error) => {
+    console.warn("Unable to update import reconciliation progress", { importFileId, error });
   });
 
   const extractedTextFileFingerprint =
@@ -9186,9 +9191,15 @@ export const processImportFileText = async (
     textCacheInfo?.cacheRecord?.fileFingerprint ??
     (typeof importFile.sourceFingerprint === "string" ? importFile.sourceFingerprint : null);
   if (extractedTextFileFingerprint) {
-    await updateImportFileCompat(importFileId, {
-      sourceFingerprint: extractedTextFileFingerprint,
-    }).catch(() => null);
+    // The upload route has already stored this fingerprint for normal file
+    // imports. Avoid a second write on the statement's visible-row path.
+    if (importFile.sourceFingerprint !== extractedTextFileFingerprint) {
+      void updateImportFileCompat(importFileId, {
+        sourceFingerprint: extractedTextFileFingerprint,
+      }).catch((error) => {
+        console.warn("Unable to persist extracted-text fingerprint", { importFileId, error });
+      });
+    }
     void storeImportedFileTextCacheRecord({
       workspaceId: String(importFile.workspaceId),
       fileFingerprint: extractedTextFileFingerprint,
@@ -9212,19 +9223,22 @@ export const processImportFileText = async (
     });
   }
 
-  if (await hasCompatibleTable("ParsedTransaction")) {
-    await prisma.parsedTransaction.deleteMany({
-      where: { importFileId },
-    });
-  }
-
-  const parsedTransactionData = await buildParsedTransactionInsertData({
+  // Creating the normalized audit payload is CPU work. Overlap it with the
+  // schema guard and replacement of any retry's stale parsed rows.
+  const parsedTransactionDataPromise = buildParsedTransactionInsertData({
     importFileId,
     workspaceId: importFile.workspaceId,
     rows,
     metadata: resolvedMetadata,
     statementFingerprint,
   });
+  if (await hasCompatibleTable("ParsedTransaction")) {
+    await prisma.parsedTransaction.deleteMany({
+      where: { importFileId },
+    });
+  }
+
+  const parsedTransactionData = await parsedTransactionDataPromise;
   await insertParsedTransactionsCompat({
     importFileId,
     rows: parsedTransactionData,
