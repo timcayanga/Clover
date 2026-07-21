@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { CONTEXT_CORPUS_VERSION, deriveTravelEpisodes, getContextCorpusCoverageReport, getContextCorpusEntries, getContextCorpusQualityReport, parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
 
 assert.ok(CONTEXT_CORPUS_VERSION);
-assert.ok(getContextCorpusEntries().length >= 10000);
+assert.ok(getContextCorpusEntries().length >= 20000);
 assert.ok(getContextCorpusQualityReport().profileCount >= 25);
 assert.equal(getContextCorpusQualityReport().valid, true);
 const coverage = getContextCorpusCoverageReport();
 assert.equal(coverage.corpusVersion, CONTEXT_CORPUS_VERSION);
 assert.ok(coverage.canonicalEntryCount >= 100);
-assert.ok(coverage.descriptorVariantEntryCount > 9000);
+assert.ok(coverage.descriptorVariantEntryCount > 18000);
 assert.ok(Object.keys(coverage.countryCounts).length >= 25);
 assert.ok((coverage.canonicalCountryCounts.PH ?? 0) > 0);
 assert.ok(coverage.localizedAliasCount >= 20);
@@ -40,6 +40,10 @@ assert.equal(descriptorVariant.matchedAliases.includes("bank of commerce philipp
 const postedDescriptor = resolveTransactionContext({ merchantRaw: "BANK OF COMMERCE PHILIPPINES POSTED", currency: "PHP" });
 assert.equal(postedDescriptor.coverageTier, "descriptor_variant");
 assert.equal(postedDescriptor.matchedAliases.includes("bank of commerce philippines posted"), true);
+
+const referenceDescriptor = resolveTransactionContext({ merchantRaw: "BANK OF COMMERCE PHILIPPINES REFERENCE", currency: "PHP" });
+assert.equal(referenceDescriptor.coverageTier, "descriptor_variant");
+assert.equal(referenceDescriptor.matchedAliases.includes("bank of commerce philippines reference"), true);
 
 const indonesia = resolveTransactionContext({ institution: "Bank Indonesia", description: "QRIS payment", currency: "IDR" });
 assert.equal(indonesia.countryCode, "ID");
