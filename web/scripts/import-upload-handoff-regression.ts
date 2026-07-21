@@ -265,7 +265,16 @@ const main = async () => {
     /const canonicalVisible = Boolean\([\s\S]{0,300}canonicalParsedRows > 0/,
     "Parsed staging rows must not make an import visible or eligible as a duplicate."
   );
-  assert.match(processRouteSource, /isPdfUpload\(effectiveFileName, effectiveFileType\)[\s\S]{0,180}shouldQueueDocumentUpload/);
+  assert.match(
+    processRouteSource,
+    /const cachedDocRecordPromise = shouldUseCachedExtractionRecord[\s\S]{0,700}if \(!allowDuplicateStatement\)/,
+    "The extraction-cache lookup should overlap canonical-import election instead of waiting behind it."
+  );
+  assert.match(
+    processRouteSource,
+    /rawFileReady: canProcessImageFromRequestBytes \|\| canExtractPdfFromRequestBytes \? uploadPromise : null/,
+    "Request-byte PDFs should overlap storage and parsing, with the worker preserving the raw-file write boundary."
+  );
   assert.match(processRouteSource, /await uploadPromise;[\s\S]{0,500}processingMessage: canonicalStillProcessing/);
   assert.match(importProcessorSource, /sourceFingerprint: importFile\.sourceFingerprint/);
   assert.match(

@@ -1861,6 +1861,26 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
       importFile = { ...importFile, sourceFingerprint: fileFingerprint, storageKey: rawStorageKey };
 
+      // Start the extraction-cache lookup as soon as the byte fingerprint is
+      // known. Canonical-import election below is another database round trip
+      // and neither operation depends on the other; previously every PDF paid
+      // for them serially before it could start reading the statement.
+      const effectiveFileName = file.name || formFileName || "imported-file";
+      const effectiveFileType = file.type || formFileType || "";
+      const earlyImageUpload = isImageUploadFile(effectiveFileName, effectiveFileType);
+      const shouldUseCachedExtractionRecord =
+        isPdfUpload(effectiveFileName, effectiveFileType) || earlyImageUpload || isNoisyPdfBank;
+      const extractionCacheVersion = resolveImportFileExtractionCacheVersion(effectiveFileName);
+      const cachedDocRecordPromise = shouldUseCachedExtractionRecord
+        ? loadImportFileExtractionCache({
+            workspaceId: String(importFile.workspaceId),
+            fileFingerprint,
+            fileType: effectiveFileType || "application/octet-stream",
+            importMode: importMode ?? "statement",
+            cacheVersion: extractionCacheVersion,
+          }).catch(() => null)
+        : null;
+
       // File selection can be delivered more than once when two import surfaces
       // overlap or a client retries while the first request is still running.
       // Elect the oldest matching upload as the canonical owner before parsing,
@@ -2003,8 +2023,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           }
         }
       }
-      const effectiveFileName = file.name || formFileName || "imported-file";
-      const effectiveFileType = file.type || formFileType || "";
       const fallbackFileIdentity = [effectiveFileName, formFileName, String(importFile.fileName ?? "")]
         .filter(Boolean)
         .join(" ");
@@ -2048,6 +2066,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const shouldQueueStatementImageAfterUpload = isStatementImageUpload && !forceInlineProcessing && !hasClientExtractedStatementImageText;
       const shouldDeferRawUploadForKnownBpiScreenshot =
         knownBpiMobileScreenshot && isStatementImageUpload && Boolean(sampleFallbackText);
+      const shouldBypassCachedExtractionForKnownBpiScreenshot =
+        knownBpiMobileScreenshot && isStatementImageUpload && Boolean(sampleFallbackText);
       const shouldQueueDocumentUpload = !isStatementImageUpload && (isImageUpload || Boolean(importMode && importMode !== "statement"));
       const uploadBankHintPromise = upsertUploadBankHint({
         importFileId: importId,
@@ -2056,24 +2076,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         importMode,
         trainingMode: formTrainingMode,
       });
-      const shouldBypassCachedExtractionForKnownBpiScreenshot =
-        knownBpiMobileScreenshot && isStatementImageUpload && Boolean(sampleFallbackText);
-      const shouldUseCachedExtractionRecord =
-        !shouldBypassCachedExtractionForKnownBpiScreenshot &&
-        (isPdfUpload(effectiveFileName, effectiveFileType) ||
-          shouldQueueDocumentUpload ||
-          isNoisyPdfBank ||
-          isStatementImageUpload);
-      const extractionCacheVersion = resolveImportFileExtractionCacheVersion(effectiveFileName);
-      const cachedDocRecordPromise = shouldUseCachedExtractionRecord
-        ? loadImportFileExtractionCache({
-            workspaceId: String(importFile.workspaceId),
-            fileFingerprint,
-            fileType: effectiveFileType || "application/octet-stream",
-            importMode: importMode ?? "statement",
-            cacheVersion: extractionCacheVersion,
-          }).catch(() => null)
-        : null;
       const cachedDocRecord = cachedDocRecordPromise ? await cachedDocRecordPromise : null;
       const hasReusableCachedDocRecord = Boolean(
         cachedDocRecord?.parsedRows &&
@@ -2353,17 +2355,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             throw error;
           }
           console.warn("Unable to pre-read statement metadata", { importId, error: summarizeErrorForLog(error) });
-        } finally {
-          if (canExtractPdfFromRequestBytes) {
-            await uploadPromise;
-          }
         }
-      }
-
-      if (canExtractPdfFromRequestBytes) {
-        // Preserve the raw-file audit trail before any branch can publish rows
-        // or hand processing to a background worker.
-        await uploadPromise;
       }
 
       if (!metadata && extractedText.trim()) {
@@ -2641,7 +2633,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           importMode,
           pdfJsBaseUrl,
           sourceBytes: canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes ? bytes : null,
-          rawFileReady: canProcessImageFromRequestBytes ? uploadPromise : null,
+          // The processor awaits this promise immediately before its first
+          // persistence write. That retains the raw-file audit guarantee while
+          // allowing storage, PDF extraction, and local parsing to overlap.
+          rawFileReady: canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes ? uploadPromise : null,
           skipVisualBackupParser: shouldPreferSampleFallback && Boolean(sampleFallbackText),
           statementMetadataOverride: processingBankName
             ? {
