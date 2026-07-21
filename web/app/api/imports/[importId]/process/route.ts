@@ -59,6 +59,10 @@ import {
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
+// The import processor performs many transactional reads and writes against
+// Clover's Singapore database. Keeping this Node function in sin1 avoids
+// multiplying inter-region latency across the parse-and-confirm pipeline.
+export const preferredRegion = "sin1";
 
 const isImportPasswordError = (error: unknown, message: string) => {
   const name = error && typeof error === "object" && "name" in error ? String((error as { name?: unknown }).name ?? "") : "";

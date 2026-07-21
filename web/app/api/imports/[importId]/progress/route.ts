@@ -5,6 +5,9 @@ import { fetchImportFileCompat } from "@/lib/data-engine";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 
 export const dynamic = "force-dynamic";
+// Keep high-frequency progress polls next to the same database as the import
+// processor, rather than adding a Virginia-to-Singapore round trip per poll.
+export const preferredRegion = "sin1";
 
 // Keep in-flight progress polling read-only and limited to one import lookup.
 // The full status endpoint may repair workflows and load account summaries,

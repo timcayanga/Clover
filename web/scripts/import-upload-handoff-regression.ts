@@ -237,6 +237,11 @@ const main = async () => {
     /const rawStorageKey = String\(importFile\.storageKey[\s\S]{0,220}const uploadPromise = uploadObject\(rawStorageKey, bytes/,
     "Raw-file storage should begin immediately after byte validation, before duplicate-import reconciliation."
   );
+  assert.match(
+    processRouteSource,
+    /export const preferredRegion = "sin1"/,
+    "The database-heavy import processor must run in Singapore with Clover's database."
+  );
   assert.doesNotMatch(
     processRouteSource,
     /const reusableRawImport = await prisma\.importFile\.findFirst/,
