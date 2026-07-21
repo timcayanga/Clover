@@ -2009,18 +2009,31 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
     const options = createPdfJsLoadOptions(data, pdfPassword, baseUrl);
     const loadingTask = pdfjs.getDocument(options as any);
     const pdf = await loadingTask.promise;
-    const pages: string[] = [];
+    const pages = new Array<string>(pdf.numPages);
+    let nextPageIndex = 0;
+    // PDF.js can read independent text layers concurrently. Bound the work so
+    // a long statement does not monopolize a serverless invocation, while
+    // avoiding the avoidable page-by-page wait on normal SOAs.
+    const readerCount = Math.min(4, pdf.numPages);
+    await Promise.all(
+      Array.from({ length: readerCount }, async () => {
+        while (nextPageIndex < pdf.numPages) {
+          const pageIndex = nextPageIndex;
+          nextPageIndex += 1;
+          const page = await pdf.getPage(pageIndex + 1);
+          const content = await page.getTextContent();
+          const simpleText = buildSimplePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
+          const layoutAwareText = buildLayoutAwarePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
+          pages[pageIndex] = pickBetterPdfTextLayerCandidate(simpleText, layoutAwareText);
+        }
+      })
+    );
 
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-      const page = await pdf.getPage(pageNumber);
-      const content = await page.getTextContent();
-      const simpleText = buildSimplePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
-      const layoutAwareText = buildLayoutAwarePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
-      const text = pickBetterPdfTextLayerCandidate(simpleText, layoutAwareText);
-      pages.push(text);
+    try {
+      return pages.join("\n");
+    } finally {
+      await pdf.destroy().catch(() => null);
     }
-
-    return pages.join("\n");
   };
 
   return readPdfText(password);
