@@ -122,6 +122,7 @@ const ImportFilesModal = dynamic(
 );
 
 const IMPORT_ACTIVITY_DATA_SETTLE_WINDOW_MS = 2 * 60 * 1000;
+const RECENT_TRANSACTION_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 const SYNCING_EMPTY_STATE_REFRESH_DELAY_MS = 250;
 const WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS = 2_500;
 
@@ -1420,6 +1421,22 @@ const hasRecentWorkspaceImportEvidence = (
   }
 
   return activity.status === "active" || importActivityHasCompletedRows(activity);
+};
+
+const getImportActivityExpectedRows = (activity: ImportActivitySnapshot | null) => {
+  if (!activity?.summary || activity.status === "error") {
+    return 0;
+  }
+
+  const summaryRows = Number(activity.summary.rowsImported ?? 0);
+  const accountSummaryRows = Array.isArray(activity.summary.accountSummaries)
+    ? activity.summary.accountSummaries.reduce((total, accountSummary) => total + Number(accountSummary.rowsImported ?? 0), 0)
+    : 0;
+
+  return Math.max(
+    Number.isFinite(summaryRows) ? summaryRows : 0,
+    Number.isFinite(accountSummaryRows) ? accountSummaryRows : 0
+  );
 };
 
 const isCanceledWorkspaceImport = (
@@ -2792,7 +2809,8 @@ function TransactionsPageContent() {
       const fetchedTransactions = Array.isArray(payload?.transactions)
         ? payload.transactions.filter((transaction) => !deletedAccountIds.has(transaction.accountId))
         : [];
-      const cachedWorkspaceTransactions = getCachedTransactionsWorkspace(workspaceId)?.transactions as Transaction[] | undefined;
+      const cachedWorkspaceSnapshot = getCachedTransactionsWorkspace(workspaceId);
+      const cachedWorkspaceTransactions = cachedWorkspaceSnapshot?.transactions as Transaction[] | undefined;
       const visibleCachedWorkspaceTransactions = (cachedWorkspaceTransactions ?? []).filter(
         (transaction) => !deletedAccountIds.has(transaction.accountId)
       );
@@ -2825,15 +2843,23 @@ function TransactionsPageContent() {
             ? summaryPayload.totalCount
             : fetchedTransactions.length;
       const hasRecentImportEvidence = hasRecentWorkspaceImportEvidence(importActivitySnapshot, workspaceId);
+      const cachedTotalCount = Number(cachedWorkspaceSnapshot?.totalCount ?? cachedWorkspaceSnapshot?.summary?.totalCount ?? 0);
+      const hasRecentCachedTotalCount =
+        cachedTotalCount > exactServerTotalCount &&
+        Number.isFinite(Number(cachedWorkspaceSnapshot?.updatedAt)) &&
+        Date.now() - Number(cachedWorkspaceSnapshot?.updatedAt) <= RECENT_TRANSACTION_CACHE_MAX_AGE_MS;
       const shouldPreserveKnownTransactionsWhileImportSettles =
         !hasServerSideFilters &&
         stableBaseTransactions.length > 0 &&
-        hasRecentImportEvidence &&
         (
-          (fetchedTransactions.length === 0 && exactServerTotalCount === 0) ||
-          (fetchedTransactions.length > 0 &&
-            mergeImportedWorkspaceTransactions(stableBaseTransactions, fetchedTransactions).length < stableBaseTransactions.length &&
-            exactServerTotalCount <= stableBaseTransactions.length)
+          (hasRecentImportEvidence &&
+            (
+              (fetchedTransactions.length === 0 && exactServerTotalCount === 0) ||
+              (fetchedTransactions.length > 0 &&
+                mergeImportedWorkspaceTransactions(stableBaseTransactions, fetchedTransactions).length < stableBaseTransactions.length &&
+                exactServerTotalCount <= stableBaseTransactions.length)
+            )) ||
+          (options?.background && hasRecentCachedTotalCount)
         );
       const shouldPatchExistingTransactions = Boolean(options?.append || !hasFreshTransactions);
       const baseTransactions = shouldPatchExistingTransactions ? stableBaseTransactions : [];
@@ -4068,7 +4094,7 @@ function TransactionsPageContent() {
     }
 
     const currentActivity = readImportActivity();
-    if (currentActivity?.status !== "active") {
+    if (!currentActivity || (currentActivity.status !== "active" && !importActivityHasCompletedRows(currentActivity))) {
       return;
     }
     const activeImportFileId =
@@ -4088,7 +4114,15 @@ function TransactionsPageContent() {
     const importBatchStillRunning =
       Number(currentActivity.fileTotal ?? 0) > 0 &&
       Number(currentActivity.completedFiles ?? 0) < Number(currentActivity.fileTotal ?? 0);
+    const expectedImportedRows = getImportActivityExpectedRows(currentActivity);
+    const importedRowsStillSettling =
+      hasRecentWorkspaceImportEvidence(currentActivity, selectedWorkspaceId) &&
+      expectedImportedRows > 0 &&
+      transactionsSummary.totalCount < expectedImportedRows;
     if (importBatchStillRunning && !hasVisibleCurrentImportTransactions) {
+      return;
+    }
+    if (importedRowsStillSettling) {
       return;
     }
 
@@ -4098,7 +4132,50 @@ function TransactionsPageContent() {
     if ((finalizingNeedsReview && finalizingTransactionCount > 0) || hasVisibleCurrentImportTransactions || hasVisibleImportedTransactions) {
       clearImportActivity();
     }
-  }, [finalizingNeedsReview, finalizingTransactionCount, visibleTransactions]);
+  }, [finalizingNeedsReview, finalizingTransactionCount, selectedWorkspaceId, transactionsSummary.totalCount, visibleTransactions]);
+  useEffect(() => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    const refreshWhileImportSettles = () => {
+      const currentActivity = readImportActivity();
+      if (!currentActivity || !hasRecentWorkspaceImportEvidence(currentActivity, selectedWorkspaceId)) {
+        return false;
+      }
+
+      const expectedImportedRows = getImportActivityExpectedRows(currentActivity);
+      const importBatchStillRunning =
+        currentActivity.status === "active" &&
+        Number(currentActivity.fileTotal ?? 0) > 0 &&
+        Number(currentActivity.completedFiles ?? 0) < Number(currentActivity.fileTotal ?? 0);
+      const totalStillBehindImport = expectedImportedRows > 0 && transactionsSummary.totalCount < expectedImportedRows;
+      if (!importBatchStillRunning && !totalStillBehindImport) {
+        return false;
+      }
+
+      void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
+      void loadTransactionsPage(selectedWorkspaceId, {
+        background: true,
+        pageOverride: transactionsPage,
+        pageSizeOverride: transactionsPageSize,
+        summaryMode: "light",
+      });
+      return true;
+    };
+
+    if (!refreshWhileImportSettles()) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (!refreshWhileImportSettles()) {
+        window.clearInterval(intervalId);
+      }
+    }, 1_800);
+
+    return () => window.clearInterval(intervalId);
+  }, [selectedWorkspaceId, transactionsPage, transactionsPageSize, transactionsSummary.totalCount]);
   const showFinalizingNotice = finalizingTransactionCount > 0 && !finalizingNoticeDismissed;
   const dismissFinalizingStatusNotice = () => {
     if (finalizingNeedsReview) {
