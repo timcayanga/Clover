@@ -16,7 +16,7 @@ const section = (source: string, start: string, end: string) => {
 };
 
 const main = async () => {
-  const [modalSource, processRouteSource, progressRouteSource, confirmRouteSource, workerSource, importQueueSource, importProcessorSource, importFileTextSource, statusSnapshotSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource, pageDropSource, globalImportActivitySource] = await Promise.all([
+  const [modalSource, processRouteSource, progressRouteSource, confirmRouteSource, workerSource, importQueueSource, importProcessorSource, importFileTextSource, statusSnapshotSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource, pageDropSource, globalImportActivitySource, vercelConfigSource] = await Promise.all([
     readFile(join(webRoot, "components/import-files-modal.tsx"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/process/route.ts"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/progress/route.ts"), "utf8"),
@@ -32,6 +32,7 @@ const main = async () => {
     readFile(join(webRoot, "app/transactions/page.tsx"), "utf8"),
     readFile(join(webRoot, "components/page-file-drop-zone.tsx"), "utf8"),
     readFile(join(webRoot, "components/global-import-activity.tsx"), "utf8"),
+    readFile(join(webRoot, "vercel.json"), "utf8"),
   ]);
   const localPreparseSource = section(
     modalSource,
@@ -52,6 +53,11 @@ const main = async () => {
   assert.match(modalSource, /startedImportMonitorKeys\.has\(monitorKey\)/);
   assert.match(modalSource, /const settledVisible = await waitForSettledVisibility\(/);
   assert.match(modalSource, /progressLabel: "Imported successfully"/);
+  assert.match(
+    modalSource,
+    /progressFloor: Number\(itemsRef\.current\.find\(\(entry\) => entry\.id === itemId\)\?\.progress \?\? IMPORT_PROGRESS\.uploading\)/,
+    "Live import polling must advance from the last visible stage, not force every server phase into one percentage."
+  );
   assert.match(
     globalImportActivitySource,
     /if \(activity\.status === "done"\) \{[\s\S]{0,700}<ImportUploadDock[\s\S]{0,300}tone="success"/,
@@ -241,6 +247,11 @@ const main = async () => {
     processRouteSource,
     /export const preferredRegion = "sin1"/,
     "The database-heavy import processor must run in Singapore with Clover's database."
+  );
+  assert.deepEqual(
+    JSON.parse(vercelConfigSource).regions,
+    ["sin1"],
+    "Vercel project configuration must place generated functions in Singapore, not only rely on route metadata."
   );
   assert.doesNotMatch(
     processRouteSource,

@@ -5056,12 +5056,11 @@ export function ImportFilesModal({
                 visibleImportComplete: Boolean(payload.visibleImportComplete),
                 hasStructuredReceiptVisibility: Boolean(payload.receiptTransaction),
                 processingAttempt: importFile?.processingAttempt ?? null,
-                progressFloor:
-                  processingPhase === "reconciling" || processingPhase === "staged" || processingPhase === "finalizing"
-                    ? IMPORT_PROGRESS.finalizing
-                    : processingPhase === "uploading"
-                      ? IMPORT_PROGRESS.uploading
-                      : IMPORT_PROGRESS.parsing,
+                // Preserve only progress the user has actually seen. The
+                // durable server phase below supplies the next meaningful
+                // band (read, identify, save) instead of collapsing every
+                // in-flight update into one parsing percentage.
+                progressFloor: Number(itemsRef.current.find((entry) => entry.id === itemId)?.progress ?? IMPORT_PROGRESS.uploading),
               });
 
               if (statusDecision.kind === "visible") {
