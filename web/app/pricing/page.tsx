@@ -95,11 +95,8 @@ export default async function PricingPage() {
             </p>
             <ul className="pricing-card__list">
               <PlanFeatureItem label="Manual transaction tracking" />
-              <PlanFeatureItem label="Up to 3 Profiles, including Personal" />
+              <PlanFeatureItem label="No profile, account, upload, or transaction row caps for now" />
               <PlanFeatureItem label="Receipt scanning" />
-              <PlanFeatureItem label="5 non-cash accounts" />
-              <PlanFeatureItem label="10 monthly uploads total" />
-              <PlanFeatureItem label="1,000 transaction rows total" />
               <PlanFeatureItem label="Basic investment tracking" />
               <PlanFeatureItem label="Basic reports and Adviser guidance" />
               <PlanFeatureItem label="Basic goal tracking" />
@@ -125,11 +122,8 @@ export default async function PricingPage() {
             </p>
             <ul className="pricing-card__list">
               <PlanFeatureItem label="Manual transaction tracking" />
-              <PlanFeatureItem label="Up to 10 Profiles, including Personal" />
-              <PlanFeatureItem label="20 non-cash accounts" />
+              <PlanFeatureItem label="No profile, account, upload, or transaction row caps for now" />
               <PlanFeatureItem label="Receipt scanning" />
-              <PlanFeatureItem label="100 monthly uploads total" />
-              <PlanFeatureItem label="Unlimited transaction rows" />
               <PlanFeatureItem label="Full investment portfolio tools" />
               <PlanFeatureItem label="Advanced reports and Adviser guidance" />
               <PlanFeatureItem label="Enhanced goal tracking and recommendations" />

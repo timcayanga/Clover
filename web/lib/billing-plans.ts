@@ -38,7 +38,7 @@ export const BILLING_COPY = {
   free: {
     label: "Free",
     headline: "Start free and upgrade when you need more room.",
-    detail: "Free is the default Clover plan. It keeps the core workflow open while you stay within the smaller account, upload, and row limits.",
+    detail: "Free is the default Clover plan. The current core workflow is available without account, upload, or transaction row caps.",
   },
   pro: {
     label: "Pro",

@@ -43,11 +43,19 @@ type EffectiveUserLimitsOptions = {
 
 const UNLIMITED_SYNTHETIC_USER_IDS = new Set(["staging-guest", "local-admin"]);
 
+// Keep this rollout switch centralized so temporary unlimited access can be
+// restored to the plan defaults without changing every feature gate.
+export const PLAN_LIMITS_TEMPORARILY_DISABLED = true;
+
 export const getPlanDefaultLimits = (planTier: PlanTier): UserLimits => PLAN_DEFAULT_LIMITS[planTier];
 
 export const getPlanProfileLimit = (planTier: PlanTier): number => PLAN_PROFILE_LIMITS[planTier];
 
 export const getEffectiveProfileLimit = (user: ProfileLimitSource): number | null => {
+  if (PLAN_LIMITS_TEMPORARILY_DISABLED) {
+    return null;
+  }
+
   if (user.clerkUserId && UNLIMITED_SYNTHETIC_USER_IDS.has(user.clerkUserId)) {
     return null;
   }
@@ -60,6 +68,14 @@ export const getEffectiveProfileLimit = (user: ProfileLimitSource): number | nul
 };
 
 export const getEffectiveUserLimits = (user: UserLimitsLike, options: EffectiveUserLimitsOptions = {}): UserLimits => {
+  if (PLAN_LIMITS_TEMPORARILY_DISABLED) {
+    return {
+      accountLimit: null,
+      monthlyUploadLimit: null,
+      transactionLimit: null,
+    };
+  }
+
   if (user.clerkUserId && UNLIMITED_SYNTHETIC_USER_IDS.has(user.clerkUserId)) {
     return {
       accountLimit: null,

@@ -252,11 +252,6 @@ export const FEATURE_PAGE_MAP = new Map(FEATURE_PAGES.map((page) => [page.slug, 
 
 export const PRODUCT_LINKS: PublicNavLink[] = [
   {
-    label: "Pricing",
-    href: "/pricing",
-    description: "Compare Free and Pro, including monthly and annual billing.",
-  },
-  {
     label: "Help",
     href: "/help",
     description: "Find setup, import, budgeting, and troubleshooting guidance.",

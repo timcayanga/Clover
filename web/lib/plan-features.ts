@@ -10,12 +10,10 @@ export const PLAN_FEATURES: Record<PlanTier, { title: string; headline: string; 
   free: {
     title: "Free",
     headline: "Clover keeps the core workflow open on Free.",
-    copy: "Free is best for getting organized, testing the product, and staying within a smaller set of limits.",
+    copy: "Free is the default Clover plan, with unlimited room for the current core workflow while access is being expanded.",
     bullets: [
       "Manual transaction tracking",
-      "5 non-cash accounts",
-      "10 monthly uploads",
-      "1,000 transaction rows",
+      "No account, upload, or transaction row caps for now",
       "Basic investment tracking",
       "Basic reports and Adviser guidance",
       "Basic goal tracking",
@@ -27,8 +25,7 @@ export const PLAN_FEATURES: Record<PlanTier, { title: string; headline: string; 
     copy: "Pro is designed for broader account coverage, heavier importing, and richer analysis across goals, reports, Adviser guidance, recommendations, and investing.",
     bullets: [
       "Manual transaction tracking",
-      "20 non-cash accounts",
-      "100 monthly uploads",
+      "No account, upload, or transaction row caps for now",
       "Unlimited transaction rows",
       "Full investment portfolio tools",
       "Advanced reports and Adviser guidance",
