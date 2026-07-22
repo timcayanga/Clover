@@ -255,8 +255,15 @@ const main = async () => {
   );
   assert.match(
     processRouteSource,
-    /const shouldProcessStatementAfterResponse =\s*shouldQueueStatementImageAfterUpload && !shouldPreferSampleFallback && !hasReusableCachedDocRecord/,
-    "Trained screenshot layouts and cached parsed images must avoid the post-response queue handoff so repeat uploads reach visible rows quickly."
+    /const shouldQueueStatementImageAfterUpload =\s*localDev && isStatementImageUpload/,
+    "Production statement screenshots must stay on the durable inline request path."
+  );
+  const statusRouteSource = await readFile(join(webRoot, "app/api/imports/[importId]/status/route.ts"), "utf8");
+  const staleStatementImageQueueSource = section(statusRouteSource, "if (staleStatementImageQueue)", "const staleStatementImageEmptyDone");
+  assert.doesNotMatch(
+    staleStatementImageQueueSource,
+    /after\(async \(\) =>/,
+    "A stranded screenshot must be recovered by the status request, not another best-effort callback."
   );
   const confirmationSource = section(importProcessorSource, "export const confirmImportFile", "if (isDocumentImport)");
   assert.match(

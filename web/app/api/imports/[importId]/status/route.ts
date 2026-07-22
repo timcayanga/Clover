@@ -152,17 +152,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         processingPhase: "reading_account_details",
         processingMessage: "Starting screenshot import...",
       });
-      after(async () => {
-        try {
-          const { getConfiguredPdfJsBaseUrl } = await import("@/lib/import-file-text.server");
-          const { processImportFileText } = await import("@/workers/import-processor");
-          await processImportFileText(importId, {
-            actorUserId: userId,
-            qaSource: "import_processing",
-            importMode: isRecoverableImageImportMode(importMode) ? importMode : "statement",
-            pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
-          });
-        } catch {
+      // This is a recovery path for a stranded import. Run it in the status
+      // request itself: another post-response callback could strand the same
+      // file forever at 70% when Vercel does not schedule it.
+      try {
+        const { getConfiguredPdfJsBaseUrl } = await import("@/lib/import-file-text.server");
+        const { processImportFileText } = await import("@/workers/import-processor");
+        await processImportFileText(importId, {
+          actorUserId: userId,
+          qaSource: "import_processing",
+          importMode: isRecoverableImageImportMode(importMode) ? importMode : "statement",
+          pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
+        });
+      } catch {
           const refreshedRows = await prisma.transaction
             .count({
               where: {
@@ -188,8 +190,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
               confirmedTransactionsCount: 0,
             }).catch(() => null);
           }
-        }
-      });
+      }
       const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
         importFile: (await fetchImportFileCompat(importId)) ?? importFile,
         promoteFailedVisibleImport: true,

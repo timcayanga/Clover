@@ -2067,7 +2067,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const trainedReceiptFixture = getTrainedReceiptFixture(effectiveFileName) ?? getTrainedReceiptFixture(formFileName);
       const isStatementImageUpload = isImageUpload && (!importMode || importMode === "statement");
       const hasClientExtractedStatementImageText = isStatementImageUpload && formExtractedText.trim().length > 0;
-      const shouldQueueStatementImageAfterUpload = isStatementImageUpload && !forceInlineProcessing && !hasClientExtractedStatementImageText;
+      // Vercel's post-response `after()` work is not a durable import queue.
+      // A statement image must remain on the request path in production so its
+      // visible rows cannot be stranded at a progress stage when that callback
+      // is never scheduled. Local development retains its dedicated worker.
+      const shouldQueueStatementImageAfterUpload =
+        localDev && isStatementImageUpload && !forceInlineProcessing && !hasClientExtractedStatementImageText;
       const shouldDeferRawUploadForKnownBpiScreenshot =
         knownBpiMobileScreenshot && isStatementImageUpload && Boolean(sampleFallbackText);
       const shouldBypassCachedExtractionForKnownBpiScreenshot =
