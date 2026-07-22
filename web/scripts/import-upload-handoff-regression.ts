@@ -234,6 +234,16 @@ const main = async () => {
     "Multi-account import summaries must update the Accounts UI immediately while the authoritative refresh runs in the background."
   );
   assert.match(
+    accountsPageSource,
+    /const completedImportRefreshKeyRef = useRef<string \| null>\(null\);/,
+    "Accounts must retain a per-import refresh key to prevent duplicate hydration work."
+  );
+  assert.match(
+    accountsPageSource,
+    /getCompletedImportActivitySummary\(importActivitySnapshot\)[\s\S]{0,1000}void loadWorkspaceData\(selectedWorkspaceId, \{ silent: true, awaitHydration: true \}\);/,
+    "Accounts must rehydrate from the completed import activity event without requiring a manual page reload."
+  );
+  assert.match(
     transactionsPageSource,
     /nextIsEmpty && currentHasValue && mergedTransactionsWithImports\.length > 0\)/,
     "Visible transactions must not be paired with an empty cash-flow summary."

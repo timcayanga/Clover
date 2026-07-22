@@ -36,6 +36,7 @@
     "qa:gsave-uno-process": "tsx scripts/gsave-uno-process-route-regression.ts",
     "qa:gcash-mobile-screenshot": "tsx scripts/gcash-mobile-screenshot-regression.ts",
     "qa:gcrypto-screenshot-import": "tsx scripts/gcrypto-screenshot-import-regression.ts",
+    "qa:pdax-screenshot": "tsx scripts/pdax-screenshot-regression.ts",
     "qa:gstocks-screenshot-import": "tsx scripts/gstocks-screenshot-import-regression.ts",
     "qa:gotrade-screenshots": "tsx scripts/gotrade-screenshot-regression.ts",
     "qa:gotyme-directions": "tsx scripts/gotyme-transaction-direction-regression.ts",

@@ -480,7 +480,16 @@ export const resolveMobileWalletIdentityFromParsedRows = (rows: ParsedImportRow[
       };
     }
 
-    if (/(gcrypto|pdax)/i.test(identityText) && /mobile_screenshot|transaction_screenshot/i.test(identityText)) {
+    if (/pdax/i.test(identityText) && /portfolio_screenshot|wallet_history_screenshot/i.test(identityText)) {
+      return {
+        accountName: "PDAX Portfolio",
+        institution: "PDAX",
+        accountType: "investment",
+        accountNumber: null,
+      };
+    }
+
+    if (/gcrypto/i.test(identityText) && /mobile_screenshot|transaction_screenshot/i.test(identityText)) {
       return {
         accountName: "GCrypto",
         institution: "GCrypto",

@@ -1839,7 +1839,8 @@ const institutionPatterns: Array<{ name: string; pattern: RegExp }> = [
   { name: "UNO Digital Bank", pattern: /\b(UNO\s+DIGITAL\s+BANK|UNO\s+BANK)\b/i },
   { name: "AB Capital Securities", pattern: /\b(AB\s+CAPITAL\s+SECURITIES|AB\s+CAPITAL|INVESTATRADE)\b/i },
   { name: "ATRAM", pattern: /\bATRAM\b/i },
-  { name: "GCrypto", pattern: /\b(GCRYPTO|G\s*CRYPTO|PDAX)\b/i },
+  { name: "GCrypto", pattern: /\b(GCRYPTO|G\s*CRYPTO)\b/i },
+  { name: "PDAX", pattern: /\bPDAX\b/i },
   { name: "GoTyme", pattern: /\bGO\s*TYME|GOTYME\b/i },
   { name: "GCash", pattern: /\bGCASH\b/i },
   { name: "Wise", pattern: /\bWISE\b/i },
@@ -11298,7 +11299,7 @@ const pdaxDateTimePattern = new RegExp(
 const parsePdaxAmount = (value: string | null | undefined) => {
   if (!value) return null;
   const normalized = value.replace(/[£#]/g, "₱").replace(/[^0-9,.-]/g, "");
-  const match = normalized.match(/[-+]?[0-9][0-9,]*(?:\\.[0-9]+)?/);
+  const match = normalized.match(/[-+]?[0-9][0-9,]*(?:\.[0-9]+)?/);
   return parseMoney(match?.[0] ?? null);
 };
 
@@ -11320,8 +11321,12 @@ const parsePdaxDateTime = (value: string | null | undefined) => {
 
 const pdaxScreenshotMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = normalizeWhitespace(text);
-  const hasPortfolio = /\\bPortfolio\\b/i.test(normalized) && /\\bBalances\\b/i.test(normalized) && /\\bMy\\s+assets\\b/i.test(normalized);
-  const hasWalletHistory = /\\bWallet\\s+History\\b/i.test(normalized) && /\\b(?:Fiat|Crypto\\s+transfers|Others)\\b/i.test(normalized);
+  const hasPdaxBrand = /\bPDAX\b/i.test(normalized);
+  const hasPortfolio =
+    hasPdaxBrand &&
+    /\bPortfolio\b/i.test(normalized) &&
+    /\b(?:Balances|My\s+assets|Hide\s+zero\s+balance)\b/i.test(normalized);
+  const hasWalletHistory = /\bWallet\s+History\b/i.test(normalized) && /\b(?:Fiat|Crypto\s+transfers|Others)\b/i.test(normalized);
   if (!hasPortfolio && !hasWalletHistory) return null;
 
   const accountType: ImportedAccountType = hasPortfolio && !hasWalletHistory ? "investment" : "wallet";
@@ -11342,19 +11347,33 @@ const pdaxScreenshotMetadata = (text: string): DetectedStatementMetadata | null 
 };
 
 const parsePdaxPortfolioSnapshotRows = (text: string, metadata: DetectedStatementMetadata) => {
-  const lines = text.split(/\\r?\\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const lines = text.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
   const rows: ParsedImportRow[] = [];
   const bucketBalances: Record<string, number> = {};
-  for (let index = 0; index < lines.length; index += 1) {
-    const bucketMatch = lines[index]?.match(/^(PHP|Crypto|Bonds|Gold)\\s+(?:[₱£#$]?\\s*)?([0-9][0-9,]*\\.\\d{2})$/i);
-    if (bucketMatch) bucketBalances[bucketMatch[1].toLowerCase()] = parsePdaxAmount(bucketMatch[2]) ?? 0;
+  const readBucketBalance = (index: number) => {
+    const currentLine = lines[index] ?? "";
+    const [bucketCandidate, ...inlineAmountParts] = currentLine.split(" ");
+    const bucket = /^(PHP|Crypto|Bonds|Gold)$/i.test(bucketCandidate ?? "") ? bucketCandidate ?? null : null;
+    if (!bucket) return null;
 
-    const assetMatch = lines[index]?.match(/^([A-Z]{2,8})\\s+([0-9][0-9,]*\\.\\d{2})(?:\\s+\\([^)]*\\))?$/);
+    const inlineAmount = inlineAmountParts.join(" ").trim();
+    return {
+      bucket,
+      balance: parsePdaxAmount(inlineAmount || lines[index + 1] || null),
+    };
+  };
+  for (let index = 0; index < lines.length; index += 1) {
+    const bucketEntry = readBucketBalance(index);
+    if (bucketEntry?.balance !== null && bucketEntry?.balance !== undefined) {
+      bucketBalances[bucketEntry.bucket.toLowerCase()] = bucketEntry.balance;
+    }
+
+    const assetMatch = lines[index]?.match(/^([A-Z]{2,8})\s+([0-9][0-9,]*\.\d{2})(?:\s+\([^)]*\))?$/);
     if (!assetMatch) continue;
     const symbol = assetMatch[1].toUpperCase();
     const marketValue = parsePdaxAmount(assetMatch[2]);
     const quantityLine = lines[index + 1] ?? "";
-    const quantityMatch = quantityLine.match(/^(.*?)(?:\\s+)([0-9]+(?:\\.[0-9]+)?)$/);
+    const quantityMatch = quantityLine.match(/^(.*?)(?:\s+)([0-9]+(?:\.[0-9]+)?)$/);
     const assetName = quantityMatch?.[1]?.trim() ?? "";
     const quantity = parsePdaxAmount(quantityMatch?.[2] ?? null);
     if (!assetName || marketValue === null || quantity === null) continue;
@@ -11367,7 +11386,7 @@ const parsePdaxPortfolioSnapshotRows = (text: string, metadata: DetectedStatemen
       merchantClean: summarizeMerchantText(`${assetName} snapshot`, "PDAX"),
       description: `${assetName} portfolio snapshot`,
       categoryName: "Investments",
-      accountName: assetName,
+      accountName: metadata.accountName ?? "PDAX Portfolio",
       institution: "PDAX",
       type: "transfer",
       confidence: 94,
@@ -11379,7 +11398,7 @@ const parsePdaxPortfolioSnapshotRows = (text: string, metadata: DetectedStatemen
         source: "pdax_portfolio_screenshot",
         documentType: "portfolio",
         sourceRowIndex: index,
-        accountName: assetName,
+        accountName: metadata.accountName ?? "PDAX Portfolio",
         accountType: "investment",
         balance: marketValue,
         statementEndingBalance: marketValue,
@@ -11392,14 +11411,89 @@ const parsePdaxPortfolioSnapshotRows = (text: string, metadata: DetectedStatemen
       },
     });
   }
+
+  const explicitHoldingTotal = rows.reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
+
+  // A portfolio overview can show only high-level buckets. Keep these as
+  // portfolio evidence, never as an OCR-concatenated fake asset name.
+  for (const [bucket, balance] of Object.entries(bucketBalances)) {
+    if (balance === 0) continue;
+    const bucketLabel = bucket === "php" ? "PHP wallet" : `${bucket[0]?.toUpperCase() ?? ""}${bucket.slice(1)} balance`;
+    rows.push({
+      date: new Date().toISOString(),
+      amount: balance.toFixed(2),
+      currency: "PHP",
+      merchantRaw: `PDAX ${bucketLabel}`,
+      merchantClean: `PDAX ${bucketLabel}`,
+      description: `PDAX ${bucketLabel} portfolio snapshot`,
+      categoryName: "Investments",
+      accountName: metadata.accountName ?? "PDAX Portfolio",
+      institution: "PDAX",
+      type: "transfer",
+      confidence: 92,
+      parserConfidence: 94,
+      categoryConfidence: 92,
+      rawPayload: {
+        bank: "PDAX",
+        kind: "account_snapshot_marker",
+        source: "pdax_portfolio_screenshot",
+        documentType: "portfolio",
+        sourceRowIndex: lines.length + rows.length,
+        accountName: metadata.accountName ?? "PDAX Portfolio",
+        accountType: "investment",
+        balance,
+        statementEndingBalance: balance,
+        portfolioBucket: bucket,
+        portfolioBalances: bucketBalances,
+      },
+    });
+  }
+
+  const bucketPortfolioTotal = Object.values(bucketBalances).reduce((sum, balance) => sum + balance, 0);
+  const portfolioTotal = bucketPortfolioTotal > 0 ? bucketPortfolioTotal : explicitHoldingTotal;
+  if (rows.length === 0) {
+    rows.push({
+      date: new Date().toISOString(),
+      amount: "0.00",
+      currency: "PHP",
+      merchantRaw: "PDAX portfolio snapshot",
+      merchantClean: "PDAX portfolio snapshot",
+      description: "PDAX portfolio snapshot",
+      categoryName: "Investments",
+      accountName: metadata.accountName ?? "PDAX Portfolio",
+      institution: "PDAX",
+      type: "transfer",
+      confidence: 82,
+      parserConfidence: 86,
+      categoryConfidence: 92,
+      rawPayload: {
+        bank: "PDAX",
+        kind: "account_snapshot_marker",
+        source: "pdax_portfolio_screenshot",
+        documentType: "portfolio",
+        accountName: metadata.accountName ?? "PDAX Portfolio",
+        accountType: "investment",
+        balance: portfolioTotal,
+        statementEndingBalance: portfolioTotal,
+        portfolioBalances: bucketBalances,
+      },
+    });
+  }
+
+  rows.forEach((row) => {
+    if (row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)) {
+      row.rawPayload.statementEndingBalance = portfolioTotal;
+      row.rawPayload.portfolioBalances = bucketBalances;
+    }
+  });
   return rows;
 };
 
 const parsePdaxWalletRows = (text: string, metadata: DetectedStatementMetadata) => {
-  const lines = text.split(/\\r?\\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const lines = text.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
   const rows: ParsedImportRow[] = [];
   const seen = new Set<string>();
-  const directionPattern = /^(Cash\\s+(?:In|Out))\\b/i;
+  const directionPattern = /^(Cash\s+(?:In|Out))\b/i;
   const statusPattern = /^(Successful|Pending|Failed)$/i;
   for (let index = 0; index < lines.length; index += 1) {
     const directionMatch = lines[index]?.match(directionPattern);
@@ -11459,12 +11553,12 @@ const parsePdaxWalletRows = (text: string, metadata: DetectedStatementMetadata) 
 };
 
 const parsePdaxOtherRows = (text: string, metadata: DetectedStatementMetadata) => {
-  const lines = text.split(/\\r?\\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const lines = text.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
   const rows: ParsedImportRow[] = [];
   const seen = new Set<string>();
   for (let index = 0; index < lines.length; index += 1) {
     const description = lines[index] ?? "";
-    if (!/^(PDAX\\s+Employee\\s+De\\s+Minimis|Rewards)$/i.test(description)) continue;
+    if (!/^(PDAX\s+Employee\s+De\s+Minimis|Rewards)$/i.test(description)) continue;
     const dateInfo = parsePdaxDateTime(lines[index + 1] ?? "");
     const amount = parsePdaxAmount(lines[index - 1] ?? "") ?? parsePdaxAmount(lines[index + 2] ?? "");
     if (!dateInfo || amount === null) continue;
@@ -11504,9 +11598,9 @@ const parsePdaxOtherRows = (text: string, metadata: DetectedStatementMetadata) =
 const parsePdaxScreenshotImportText = (text: string) => {
   const metadata = pdaxScreenshotMetadata(text);
   if (!metadata) return null;
-  const portfolioRows = /\\bPortfolio\\b/i.test(text) ? parsePdaxPortfolioSnapshotRows(text, metadata) : [];
-  const walletRows = /\\bFiat\\b/i.test(text) ? parsePdaxWalletRows(text, metadata) : [];
-  const otherRows = /\\bOthers\\b/i.test(text) ? parsePdaxOtherRows(text, metadata) : [];
+  const portfolioRows = metadata.accountType === "investment" ? parsePdaxPortfolioSnapshotRows(text, metadata) : [];
+  const walletRows = metadata.accountType === "wallet" && /\bFiat\b/i.test(text) ? parsePdaxWalletRows(text, metadata) : [];
+  const otherRows = metadata.accountType === "wallet" && /\bOthers\b/i.test(text) ? parsePdaxOtherRows(text, metadata) : [];
   const rows = [...portfolioRows, ...walletRows, ...otherRows];
   if (rows.length === 0) return null;
   const dates = rows.map((row) => row.date).filter(Boolean).sort();

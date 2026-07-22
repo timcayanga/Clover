@@ -5905,11 +5905,11 @@ const getMobileScreenshotPayloadKind = (rawPayload: Prisma.JsonValue | null | un
   if (/bpi/i.test(identityText) && /mobile_screenshot/i.test(identityText)) {
     return "bpi";
   }
-  if (/gcrypto|pdax/i.test(identityText) && /mobile_screenshot|transaction_screenshot/i.test(identityText)) {
-    return "gcrypto";
-  }
   if (/pdax/i.test(identityText) && /mobile_screenshot|wallet_history_screenshot|portfolio_screenshot/i.test(identityText)) {
     return "pdax";
+  }
+  if (/gcrypto/i.test(identityText) && /mobile_screenshot|transaction_screenshot/i.test(identityText)) {
+    return "gcrypto";
   }
   if (/gfunds|atram|ryse/i.test(identityText) && /mobile_screenshot|transaction_screenshot/i.test(identityText)) {
     return "gfunds";

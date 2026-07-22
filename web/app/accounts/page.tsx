@@ -1246,6 +1246,7 @@ function AccountsPageContent() {
   const addRef = useRef<HTMLDivElement>(null);
   const balanceInputRef = useRef<HTMLInputElement>(null);
   const workspaceLoadSeqRef = useRef(0);
+  const completedImportRefreshKeyRef = useRef<string | null>(null);
   const workspaceHydrationVersionRef = useRef(new Map<string, number>());
   const deletedAccountIdsRef = useRef(new Set<string>());
   const initialWorkspaceId = typeof window === "undefined" ? "" : readSelectedWorkspaceId();
@@ -1920,6 +1921,24 @@ function AccountsPageContent() {
       setImportActivitySnapshot(readImportActivity());
     });
   }, []);
+
+  useEffect(() => {
+    const completedSummary = getCompletedImportActivitySummary(importActivitySnapshot);
+    if (!selectedWorkspaceId || !completedSummary || importActivitySnapshot?.workspaceId !== selectedWorkspaceId) {
+      return;
+    }
+
+    const refreshKey = `${importActivitySnapshot.updatedAt}:${completedSummary.accountId ?? completedSummary.optimisticAccountId ?? ""}`;
+    if (completedImportRefreshKeyRef.current === refreshKey) {
+      return;
+    }
+
+    completedImportRefreshKeyRef.current = refreshKey;
+    // Import completion can arrive from a global uploader or race the account
+    // write. Rehydrate once from the authoritative endpoint so new snapshot
+    // accounts are visible without a manual page reload.
+    void loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true });
+  }, [importActivitySnapshot, loadWorkspaceData, selectedWorkspaceId]);
 
   useEffect(() => {
     if (searchParams?.get("import") === "1") {
