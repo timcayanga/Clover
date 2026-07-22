@@ -112,7 +112,7 @@ export default async function HomePage() {
 
           <div className="landing-hero__actions">
             {!accountState.signedIn ? (
-              <LandingSignupModal enabled={authEnabled}>Create your free account</LandingSignupModal>
+              <LandingSignupModal enabled={authEnabled}>Organize my finances for free</LandingSignupModal>
             ) : null}
             <LandingAccountCta accountState={accountState} />
           </div>
@@ -312,7 +312,7 @@ export default async function HomePage() {
           </div>
           <div className="landing-cta__actions">
             {!accountState.signedIn ? (
-              <LandingSignupModal enabled={authEnabled}>Create your free account</LandingSignupModal>
+              <LandingSignupModal enabled={authEnabled}>Organize my finances for free</LandingSignupModal>
             ) : null}
             <LandingAccountCta accountState={accountState} />
           </div>
