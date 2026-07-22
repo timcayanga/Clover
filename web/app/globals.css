@@ -41229,10 +41229,34 @@ body[data-split-bill-modal-open="true"] .app-shell {
 }
 
 .landing-page .landing-nav {
-  position: sticky;
-  top: 0;
-  z-index: 20;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 1000;
   margin-bottom: 0;
+}
+
+.landing-account-cta {
+  gap: 8px;
+}
+
+.landing-account-cta__avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex: 0 0 auto;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.landing-account-cta__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .landing-page .landing-hero {

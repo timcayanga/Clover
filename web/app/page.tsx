@@ -7,6 +7,7 @@ import { LandingCloverBloom } from "../components/landing-clover-bloom";
 import { LandingNav } from "../components/landing-nav";
 import { LandingStoryReveal } from "../components/landing-story-reveal";
 import { MarketingFooter } from "../components/marketing-footer";
+import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
 import { resolvePublicAccountState } from "@/lib/public-account-state";
 
 function LandingImage({
@@ -55,6 +56,31 @@ function FeatureSection({
   );
 }
 
+function LandingAccountCta({ accountState }: { accountState: Awaited<ReturnType<typeof resolvePublicAccountState>> }) {
+  if (!accountState.signedIn) {
+    return (
+      <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>
+        Log in
+      </Link>
+    );
+  }
+
+  const displayName = accountState.displayName ?? "Account";
+
+  return (
+    <Link className="button button-secondary button-pill landing-account-cta" href="/home" prefetch={false}>
+      <span
+        className="landing-account-cta__avatar"
+        aria-hidden="true"
+        style={accountState.avatarUrl ? undefined : getAvatarBackgroundStyle(displayName)}
+      >
+        {accountState.avatarUrl ? <img src={accountState.avatarUrl} alt="" /> : <span>{getAvatarInitials(displayName)}</span>}
+      </span>
+      <span>Log in, {displayName}</span>
+    </Link>
+  );
+}
+
 export default async function HomePage() {
   const accountState = await resolvePublicAccountState();
 
@@ -83,12 +109,12 @@ export default async function HomePage() {
           </div>
 
           <div className="landing-hero__actions">
-            <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>
-              Organize my finances for free
-            </Link>
-            <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>
-              Log in
-            </Link>
+            {!accountState.signedIn ? (
+              <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>
+                Organize my finances for free
+              </Link>
+            ) : null}
+            <LandingAccountCta accountState={accountState} />
           </div>
 
           <div className="landing-hero__outcomes" aria-label="What Clover organizes">
@@ -285,12 +311,12 @@ export default async function HomePage() {
             <h2>Ready to make clearer money decisions?</h2>
           </div>
           <div className="landing-cta__actions">
-            <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>
-              Organize my finances for free
-            </Link>
-            <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>
-              Log in
-            </Link>
+            {!accountState.signedIn ? (
+              <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>
+                Organize my finances for free
+              </Link>
+            ) : null}
+            <LandingAccountCta accountState={accountState} />
           </div>
         </div>
       </LandingStoryReveal>
