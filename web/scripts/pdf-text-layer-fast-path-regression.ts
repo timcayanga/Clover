@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  buildLayoutAwarePdfTextFromContentItems,
   ensurePdfJsTextPolyfills,
   pdfTextLayerLooksSufficientForParsing,
 } from "@/lib/import-file-text.server";
@@ -91,5 +92,27 @@ assert.equal(
   false,
   "Sparse summary text must still receive the OCR fallback."
 );
+
+const characterSpacedBpiText = buildLayoutAwarePdfTextFromContentItems([
+  { str: "B A N K", transform: [0, 0, 0, 0, 10, 700], width: 30 },
+  { str: "O F", transform: [0, 0, 0, 0, 45, 700], width: 15 },
+  { str: "T H E", transform: [0, 0, 0, 0, 65, 700], width: 22 },
+  { str: "P H I L I P P I N E", transform: [0, 0, 0, 0, 92, 700], width: 65 },
+  { str: "I S L A N D S", transform: [0, 0, 0, 0, 162, 700], width: 45 },
+  { str: "O c t", transform: [0, 0, 0, 0, 10, 680], width: 14 },
+  { str: "0 8", transform: [0, 0, 0, 0, 28, 680], width: 10 },
+  { str: "I n s t a P a y", transform: [0, 0, 0, 0, 45, 680], width: 48 },
+  { str: "T r a n s f e r", transform: [0, 0, 0, 0, 98, 680], width: 48 },
+  { str: "1 0 . 0 0", transform: [0, 0, 0, 0, 180, 680], width: 30 },
+  { str: "1 0 0 . 0 0", transform: [0, 0, 0, 0, 220, 680], width: 35 },
+  { str: "O c t", transform: [0, 0, 0, 0, 10, 660], width: 14 },
+  { str: "0 9", transform: [0, 0, 0, 0, 28, 660], width: 10 },
+  { str: "B i l l s", transform: [0, 0, 0, 0, 45, 660], width: 24 },
+  { str: "P a y m e n t", transform: [0, 0, 0, 0, 74, 660], width: 42 },
+  { str: "2 0 . 0 0", transform: [0, 0, 0, 0, 180, 660], width: 30 },
+  { str: "8 0 . 0 0", transform: [0, 0, 0, 0, 220, 660], width: 30 },
+]);
+
+assert.match(characterSpacedBpiText, /Oct 08 InstaPay Transfer 10\.00 100\.00/);
 
 console.log("PDF text-layer fast-path regression passed.");

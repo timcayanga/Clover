@@ -5152,7 +5152,7 @@ const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null =>
   const extractedAccountName = extractAccountHolderNameFromLines(lines, accountLineIndex);
   const isNoisyBpiAccountName =
     extractedAccountName !== null &&
-    /(?:REFERENCE\s+NO|BANK\s+CERTIFICATION|VISA\s+PURPOSES|ATM|DEPOSIT|WITHDRAWAL|TRANSFER|TRANSACTIONS?|BALANCE|SUMMARY|ACCOUNT|CARD|CREDIT|DEBIT)/i.test(
+    /(?:REFERENCE\s+NO|BANK\s+CERTIFICATION|VISA\s+PURPOSES|FORBES\s+PARK\s+SAVINGS|SAVINGS\s*BET|ATM|DEPOSIT|WITHDRAWAL|TRANSFER|TRANSACTIONS?|BALANCE|SUMMARY|ACCOUNT|CARD|CREDIT|DEBIT)/i.test(
       extractedAccountName
     );
   const accountName =

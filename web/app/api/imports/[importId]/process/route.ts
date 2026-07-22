@@ -2326,6 +2326,20 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       if (shouldPreflightPdf && !preflightText && !extractedText.trim()) {
         stage = "reading statement metadata";
+        // PDF text extraction happens before the inline processor can report
+        // its own phase. Surface this real server-side transition immediately
+        // so the progress UI does not remain at the upload stage throughout a
+        // slower, first-seen statement.
+        void updateImportFileCompat(importId, {
+          status: "processing",
+          processingPhase: "reading_account_details",
+          processingMessage: "Reading statement details...",
+        }).catch((error) => {
+          console.warn("Unable to update PDF preflight progress", {
+            importId,
+            error: summarizeErrorForLog(error),
+          });
+        });
         try {
           preflightText = await readImportedStatementTextWithCache(
             {
@@ -2546,6 +2560,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       stage = "reading statement metadata";
       if (!extractedText) {
+        void updateImportFileCompat(importId, {
+          status: "processing",
+          processingPhase: "reading_account_details",
+          processingMessage: "Reading statement details...",
+        }).catch((error) => {
+          console.warn("Unable to update statement read progress", {
+            importId,
+            error: summarizeErrorForLog(error),
+          });
+        });
         try {
           preflightText ??= await readImportedStatementTextWithCache(
             {

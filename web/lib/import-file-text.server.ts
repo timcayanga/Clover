@@ -2039,10 +2039,30 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
   return readPdfText(password);
 };
 
+const normalizePdfTextContentItem = (value: unknown) => {
+  const normalized = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+  if (!normalized) {
+    return "";
+  }
+
+  // Some text-native statements encode each visible word as a single PDF
+  // glyph group with spaces between every character (for example,
+  // `I n s t a P a y`). Preserve the gaps between groups/columns, but repair
+  // the group itself so deterministic statement parsers can consume it. This
+  // avoids a rendered OCR pass when the original PDF already contains a
+  // complete, trustworthy ledger.
+  const tokens = normalized.split(" ");
+  const singleCharacterTokens = tokens.filter((token) => /^[A-Za-z0-9.,:/#&+\-]$/.test(token)).length;
+  const isSeparatedNumericPair = tokens.length === 2 && tokens.every((token) => /^[0-9.,:/+\-]$/.test(token));
+  return (tokens.length >= 3 && singleCharacterTokens / tokens.length >= 0.8) || isSeparatedNumericPair
+    ? tokens.join("")
+    : normalized;
+};
+
 export const buildLayoutAwarePdfTextFromContentItems = (items: PdfTextContentItemLike[]) => {
   const normalizedItems = items
     .map((item) => {
-      const text = typeof item.str === "string" ? item.str.replace(/\s+/g, " ").trim() : "";
+      const text = normalizePdfTextContentItem(item.str);
       const x = Number(item.transform?.[4] ?? 0);
       const y = Number(item.transform?.[5] ?? 0);
       const width = Number(item.width ?? 0);
@@ -2129,14 +2149,15 @@ const buildSimplePdfTextFromContentItems = (items: PdfTextContentItemLike[]) => 
   const lines = new Map<number, { x: number; text: string }[]>();
 
   for (const item of items) {
-    if (typeof item.str !== "string" || !item.str.trim()) {
+    const text = normalizePdfTextContentItem(item.str);
+    if (!text) {
       continue;
     }
 
     const y = Math.round(Number(item.transform?.[5] ?? 0));
     const x = Number(item.transform?.[4] ?? 0);
     const row = lines.get(y) ?? [];
-    row.push({ x, text: item.str.trim() });
+    row.push({ x, text });
     lines.set(y, row);
   }
 
