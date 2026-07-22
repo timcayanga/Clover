@@ -16,10 +16,9 @@ const section = (source: string, start: string, end: string) => {
 };
 
 const main = async () => {
-  const [modalSource, processRouteSource, resumeRouteSource, progressRouteSource, confirmRouteSource, workerSource, importQueueSource, importProcessorSource, importFileTextSource, statusSnapshotSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource, pageDropSource, globalImportActivitySource, vercelConfigSource] = await Promise.all([
+  const [modalSource, processRouteSource, progressRouteSource, confirmRouteSource, workerSource, importQueueSource, importProcessorSource, importFileTextSource, statusSnapshotSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource, pageDropSource, globalImportActivitySource, vercelConfigSource] = await Promise.all([
     readFile(join(webRoot, "components/import-files-modal.tsx"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/process/route.ts"), "utf8"),
-    readFile(join(webRoot, "app/api/imports/[importId]/resume/route.ts"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/progress/route.ts"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/confirm/route.ts"), "utf8"),
     readFile(join(webRoot, "workers/imports-worker.ts"), "utf8"),
@@ -61,26 +60,6 @@ const main = async () => {
     modalSource,
     /progress: IMPORT_PROGRESS\.uploading,[\s\S]{0,200}detail: "Password accepted\. Clover is opening the statement\."/,
     "A password retry must replace any stale completion activity with an active upload stage."
-  );
-  assert.match(
-    modalSource,
-    /await handleResumeImport\(itemId, \{ password: item\.password\.trim\(\) \}\);/,
-    "A password unlock should reuse the stored source instead of uploading the encrypted PDF again."
-  );
-  assert.match(
-    modalSource,
-    /body: options\?\.password \? JSON\.stringify\(\{ password: options\.password \}\) : undefined/,
-    "The password should be sent only to the resume request."
-  );
-  assert.match(
-    resumeRouteSource,
-    /const passwordUnlock = importFile\.processingPhase === "password_required" && Boolean\(password\);/,
-    "The resume route must explicitly support a password-unlock handoff."
-  );
-  assert.match(
-    resumeRouteSource,
-    /after\(async \(\) => \{[\s\S]{0,500}processInline\("password_unlocked", password\)/,
-    "Password resumes should return quickly while the stored source is parsed with live progress updates."
   );
   assert.doesNotMatch(
     modalSource,

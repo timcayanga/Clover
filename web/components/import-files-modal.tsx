@@ -7346,11 +7346,6 @@ export function ImportFilesModal({
       errorMessage: null,
     });
 
-    if (item?.importFileId && item.password.trim()) {
-      await handleResumeImport(itemId, { password: item.password.trim() });
-      return;
-    }
-
     const remainingLockedFiles = items.filter((item) => item.id !== itemId && item.status === "needs_password");
     if (remainingLockedFiles.length > 0) {
       setMessage("Password saved. Enter the next password to continue.");
@@ -7362,7 +7357,7 @@ export function ImportFilesModal({
     scheduleQueuedImport();
   };
 
-  const handleResumeImport = async (itemId: string, options?: { password?: string }) => {
+  const handleResumeImport = async (itemId: string) => {
     const item = items.find((entry) => entry.id === itemId);
     if (!item?.importFileId) {
       setMessage("No stalled import was found to resume.");
@@ -7382,7 +7377,6 @@ export function ImportFilesModal({
       const response = await fetch(`/api/imports/${item.importFileId}/resume`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: options?.password ? JSON.stringify({ password: options.password }) : undefined,
       });
       const payload = await response.json().catch(() => ({}));
 
