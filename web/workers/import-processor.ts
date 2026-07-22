@@ -1361,13 +1361,11 @@ const isGcryptoActivityHistoryMetadata = (params: {
   const institution = String(params.metadata?.institution ?? "").trim().toLowerCase();
   const accountName = String(params.metadata?.accountName ?? "").trim().toLowerCase();
   const text = String(params.text ?? "").trim().toLowerCase();
-  const fileName = String(params.fileName ?? "").trim().toLowerCase();
-  const looksLikeKnownGcryptoFile = /^img_142[789]\.png$/.test(fileName);
   const looksLikeGcryptoHistoryText =
     text.includes("gcrypto") &&
     (text.includes("transaction history") || text.includes("past transactions") || text.includes("powered by pdax"));
 
-  return (institution === "gcrypto" || accountName === "gcrypto" || looksLikeKnownGcryptoFile) && looksLikeGcryptoHistoryText;
+  return (institution === "gcrypto" || accountName === "gcrypto") && looksLikeGcryptoHistoryText;
 };
 
 const sanitizeCachedStatementMetadata = (params: {
@@ -1375,6 +1373,28 @@ const sanitizeCachedStatementMetadata = (params: {
   text: string;
   fileName: string;
 }) => {
+  const normalizedText = String(params.text ?? "").toLowerCase();
+  const explicitGcashWalletHistory =
+    /\bgcash\b/.test(normalizedText) &&
+    !/\bgcrypto\b/.test(normalizedText) &&
+    /\btransaction\s+history\b/.test(normalizedText);
+  if (explicitGcashWalletHistory) {
+    // Repair legacy cache metadata created while generic IMG filenames could
+    // synthesize a GCrypto label. Visible GCash evidence is authoritative.
+    return {
+      ...params.metadata,
+      institution: "GCash",
+      accountName: "GCash",
+      accountNumber: null,
+      accountType: "wallet" as const,
+      openingBalance: null,
+      endingBalance: null,
+      totalAmountDue: null,
+      paymentDueDate: null,
+      confidence: Math.max(Number(params.metadata.confidence ?? 0), 90),
+    };
+  }
+
   if (isGcryptoActivityHistoryMetadata(params)) {
     return {
       ...params.metadata,

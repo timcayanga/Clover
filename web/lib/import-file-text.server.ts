@@ -202,11 +202,6 @@ const KNOWN_GSTOCKS_SCREENSHOT_FILES = new Set([
   "img_1425.png",
   "img_1426.png",
 ]);
-const KNOWN_GCRYPTO_SCREENSHOT_FILES = new Set([
-  "img_1427.png",
-  "img_1428.png",
-  "img_1429.png",
-]);
 const KNOWN_SECURITY_BANK_1852_FINGERPRINT = "18ca15fe2325e18d05384ca2e19c97c4a3d14f13e746375c18c0031d5e98448f";
 const KNOWN_SECURITY_BANK_1852_TEXT = [
   "SECURITY BANK",
@@ -241,10 +236,6 @@ export const resolveKnownStatementImageFallbackText = (params: {
   if (KNOWN_GSTOCKS_SCREENSHOT_FILES.has(normalizedImageFileName)) {
     return "GStocks";
   }
-  if (KNOWN_GCRYPTO_SCREENSHOT_FILES.has(normalizedImageFileName)) {
-    return "GCrypto Transaction History";
-  }
-
   return (
     buildGfundsScreenshotFallbackText({
       fileName: params.fileName,

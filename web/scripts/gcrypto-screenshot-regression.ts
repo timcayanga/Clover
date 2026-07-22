@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { detectStatementMetadata, parseImportText } from "@/lib/import-parser";
 import { getAccountCardName } from "@/lib/account-display";
+import { resolveKnownStatementImageFallbackText } from "@/lib/import-file-text.server";
 import {
   deriveStatementFallbackAccountName,
   resolveMobileWalletIdentityFromParsedRows,
@@ -120,6 +121,15 @@ assert.equal(
   filenameCollisionMetadata?.institution,
   "GCash",
   "A generic filename that matches a curated GCrypto sample must not override visible GCash evidence."
+);
+assert.equal(
+  resolveKnownStatementImageFallbackText({
+    fileName: "IMG_1429.PNG",
+    fileType: "image/png",
+    importMode: "statement",
+  }),
+  null,
+  "A generic filename must not synthesize GCrypto text before image evidence is read."
 );
 
 assert.equal(allRows.length, 11, "The training screenshots should expose 11 fully visible rows before cross-file dedupe.");
