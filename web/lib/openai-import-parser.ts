@@ -2877,6 +2877,7 @@ export const transcribeImportImagesWithOpenAI = async (params: {
   model: string;
   promptVersion: string;
 } | null> => {
+  const transcriptionStartedAt = Date.now();
   const env = getEnv();
   const apiKey = (env as { OPENAI_API_KEY?: string }).OPENAI_API_KEY?.trim();
   if (!apiKey || params.pageImages.length === 0) {
@@ -3094,10 +3095,26 @@ export const transcribeImportImagesWithOpenAI = async (params: {
       }
       bestTranscript = parsed;
       if (!openAITranscriptLooksWeak(parsed) || candidateModel === strongModel) {
+        console.info("[import-performance] image transcription completed", {
+          model: parsed.model,
+          pageImageCount: pageImagesToSend.length,
+          difficulty: inferredDifficulty,
+          importMode: promptImportMode,
+          durationMs: Date.now() - transcriptionStartedAt,
+          escalatedToStrongModel: candidateModel === strongModel && !shouldPrioritizeStrongTranscriptModel,
+        });
         return parsed;
       }
     }
 
+    console.info("[import-performance] image transcription completed", {
+      model: bestTranscript?.model ?? null,
+      pageImageCount: pageImagesToSend.length,
+      difficulty: inferredDifficulty,
+      importMode: promptImportMode,
+      durationMs: Date.now() - transcriptionStartedAt,
+      escalatedToStrongModel: Boolean(bestTranscript?.model === strongModel && !shouldPrioritizeStrongTranscriptModel),
+    });
     return bestTranscript;
   } catch (error) {
     console.warn("OpenAI image transcription threw", error);
