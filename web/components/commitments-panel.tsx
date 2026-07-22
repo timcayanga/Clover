@@ -123,6 +123,17 @@ const formatDate = (value: string | null) => {
   return Number.isNaN(parsed.getTime()) ? value : dateFormatter.format(parsed);
 };
 
+const getRecurringSuggestionIdentity = (pattern: RecurringPatternSummary) => {
+  const title = (pattern.merchantClean ?? pattern.merchantRaw)
+    .trim()
+    .toLowerCase()
+    .replace(/\b(subscription|subscr(?:iption)?|premium|monthly|annual|membership|billspay)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return `${pattern.currency.trim().toUpperCase() || "PHP"}::${title}`;
+};
+
 const toDateInputValue = (value: string | null) => {
   if (!value) {
     return "";
@@ -361,15 +372,29 @@ export function CommitmentsPanel({
   const actionablePlannedPaymentSuggestions = plannedPaymentSuggestions.filter(
     (suggestion) => suggestion.sourceKind !== "recurring_transaction"
   );
-  const suggestedRecurringPatterns = recurringPatterns.filter(
-    (pattern) =>
-      !dismissedPatternIds.has(pattern.id) &&
-      !visibleCommitments.some((commitment) => {
+  const suggestedRecurringPatterns = useMemo(() => {
+    const deduped = new Map<string, RecurringPatternSummary>();
+    for (const pattern of recurringPatterns) {
+      if (dismissedPatternIds.has(pattern.id)) {
+        continue;
+      }
+      const alreadyAdded = visibleCommitments.some((commitment) => {
         const commitmentTitle = `${commitment.title} ${commitment.counterparty ?? ""}`.trim().toLowerCase();
         const patternName = (pattern.merchantClean ?? pattern.merchantRaw).trim().toLowerCase();
         return commitmentTitle.includes(patternName) || patternName.includes(commitment.title.trim().toLowerCase());
-      })
-  );
+      });
+      if (alreadyAdded) {
+        continue;
+      }
+
+      const key = getRecurringSuggestionIdentity(pattern);
+      const existing = deduped.get(key);
+      if (!existing || pattern.confidence > existing.confidence || pattern.transactionCount > existing.transactionCount) {
+        deduped.set(key, pattern);
+      }
+    }
+    return Array.from(deduped.values());
+  }, [dismissedPatternIds, recurringPatterns, visibleCommitments]);
   const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === accountId) ?? null,

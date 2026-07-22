@@ -1125,6 +1125,7 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
 
     const existingPatterns = await tx.recurringPattern.findMany({
       where: { workspaceId },
+      orderBy: { updatedAt: "desc" },
       select: {
         id: true,
         accountId: true,
@@ -1133,6 +1134,23 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
         merchantRaw: true,
         rawPayload: true,
       },
+    });
+
+    const seenActivePatternFamilies = new Set<string>();
+    const duplicatePatternIds = existingPatterns.flatMap((pattern) => {
+      if (isDismissedRecurringPattern(pattern.rawPayload)) {
+        return [];
+      }
+
+      const familyKey = [
+        (pattern.currency ?? "PHP").trim().toUpperCase() || "PHP",
+        buildRecurringMerchantFamilySignature(pattern.merchantClean ?? pattern.merchantRaw ?? ""),
+      ].join("::");
+      if (!familyKey.endsWith("::") && seenActivePatternFamilies.has(familyKey)) {
+        return [pattern.id];
+      }
+      seenActivePatternFamilies.add(familyKey);
+      return [];
     });
 
     const activeSuppressionKeys = new Set(patterns.map((pattern) => pattern.suppressionKey));
@@ -1167,11 +1185,12 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
       })
       .map((pattern) => pattern.id);
 
-    if (stalePatternIds.length > 0) {
+    const patternIdsToDelete = [...new Set([...stalePatternIds, ...duplicatePatternIds])];
+    if (patternIdsToDelete.length > 0) {
       await tx.recurringPattern.deleteMany({
         where: {
           id: {
-            in: stalePatternIds,
+            in: patternIdsToDelete,
           },
         },
       });

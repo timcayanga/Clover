@@ -1,6 +1,6 @@
 import { classifyMerchant, buildMerchantFamilySignature, guessCategoryFallback } from "@/lib/data-engine";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
-import { detectRecurringPatterns } from "@/lib/recurring-detection";
+import { buildRecurringMerchantFamilySignature, detectRecurringPatterns } from "@/lib/recurring-detection";
 
 const assert = (condition: unknown, message: string) => {
   if (!condition) {
@@ -65,6 +65,10 @@ const runMerchantFamilyChecks = () => {
 
   assert(spotifyVariant.categoryName === "Bills & Utilities", "Expected Spotify PayPal variant to inherit Bills & Utilities");
   assert(linkedInVariant.categoryName === "Bills & Utilities", "Expected LinkedIn PayPal variant to inherit Bills & Utilities");
+  assert(
+    buildRecurringMerchantFamilySignature("LinkedIn Premium Subscription") === buildRecurringMerchantFamilySignature("LinkedIn"),
+    "Expected LinkedIn descriptor variants to share one recurring family"
+  );
   assert(starbucksVariant.categoryName === "Food & Dining", "Expected family-signature rule to rescue noisy Starbucks SOA variants");
   assert(starbucksVariant.normalizedName === "Starbucks", "Expected family-signature rule to preserve the clean Starbucks merchant label");
   assert(buildMerchantFamilySignature("PAYPAL*SPOTIFY*P 402 EBB") === "spotify ebb" || buildMerchantFamilySignature("PAYPAL*SPOTIFY*P 402 EBB").includes("spotify"), "Expected Spotify family signature to keep spotify core");
