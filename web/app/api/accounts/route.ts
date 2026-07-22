@@ -855,6 +855,53 @@ const cleanupFilenameUploadedAccountPlaceholders = async (workspaceId: string) =
   }).catch(() => null);
 };
 
+const cleanupPdaxPortfolioBucketHoldings = async (workspaceId: string) => {
+  if (!(await hasCompatibleTable("InvestmentHolding")) || !(await hasCompatibleTable("InvestmentSnapshot"))) {
+    return;
+  }
+
+  // Older backup-parser runs could convert PDAX overview buckets into
+  // holdings. These are derived import artifacts, not user-confirmed assets.
+  const bucketNames = new Set(["php", "php wallet", "crypto", "bonds", "gold"]);
+  const bucketNameCandidates = ["PHP", "PHP wallet", "Crypto", "Bonds", "Gold", ...Array.from(bucketNames)];
+  const candidates = await prisma.investmentHolding.findMany({
+    where: {
+      workspaceId,
+      assetName: { in: bucketNameCandidates },
+    },
+    select: {
+      id: true,
+      assetName: true,
+      assetSymbol: true,
+      quantity: true,
+      rawPayload: true,
+      investmentSnapshot: {
+        select: {
+          portfolioName: true,
+        },
+      },
+    },
+  }).catch(() => []);
+
+  const staleIds = candidates
+    .filter((holding) => /\bPDAX\b/i.test(holding.investmentSnapshot.portfolioName ?? ""))
+    .filter((holding) => !holding.assetSymbol?.trim() && holding.quantity === null)
+    .filter((holding) => {
+      const payload =
+        holding.rawPayload && typeof holding.rawPayload === "object" && !Array.isArray(holding.rawPayload)
+          ? (holding.rawPayload as Record<string, unknown>)
+          : null;
+      return payload?.source === "openai" && bucketNames.has(holding.assetName.trim().toLowerCase());
+    })
+    .map((holding) => holding.id);
+
+  if (staleIds.length > 0) {
+    await prisma.investmentHolding.deleteMany({
+      where: { workspaceId, id: { in: staleIds } },
+    }).catch(() => null);
+  }
+};
+
 const collapseDuplicateUploadedAccountsByIdentity = async (workspaceId: string, compatibleColumns: Set<string>) => {
   if (!compatibleColumns.has("accountNumber")) {
     return;
@@ -1087,6 +1134,12 @@ export async function GET(request: Request) {
     if (shouldCleanupImportedAccounts) {
       await cleanupFilenameUploadedAccountPlaceholders(workspaceId).catch((error) => {
         console.warn("[accounts] unable to clean up filename imported account placeholders", {
+          workspaceId,
+          error,
+        });
+      });
+      await cleanupPdaxPortfolioBucketHoldings(workspaceId).catch((error) => {
+        console.warn("[accounts] unable to clean up stale PDAX portfolio bucket holdings", {
           workspaceId,
           error,
         });
