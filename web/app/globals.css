@@ -22642,20 +22642,72 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   gap: 12px;
 }
 
-.institution-detail-hero__brand h1 {
-  margin: 4px 0 2px;
-  font-size: 1.8rem;
-  letter-spacing: -0.04em;
+.institution-detail-hero__photo-button {
+  position: relative;
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  cursor: pointer;
 }
 
-.institution-detail-hero__brand span {
-  color: var(--muted);
-  font-size: 0.92rem;
+.institution-detail-hero__photo-button > span:last-child {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  padding: 3px 6px;
+  border: 1px solid rgba(3, 168, 192, 0.2);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--teal-700);
+  font-size: 0.58rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.institution-detail-hero__photo-input {
+  display: none;
+}
+
+.institution-detail-hero__name-button {
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  cursor: pointer;
+}
+
+.institution-detail-hero__name-button:hover,
+.institution-detail-hero__name-button:focus-visible {
+  color: var(--teal-700);
+}
+
+.institution-detail-hero__name-editor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.institution-detail-hero__name-editor input {
+  width: min(320px, 45vw);
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid rgba(3, 168, 192, 0.35);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 750;
 }
 
 .institution-detail-hero__metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -22764,6 +22816,39 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   margin-left: 8px;
 }
 
+.institution-assets-table__row:hover td {
+  background: rgba(3, 168, 192, 0.035);
+}
+
+.institution-assets-table__chevron-cell {
+  width: 44px;
+  text-align: right !important;
+}
+
+.institution-assets-table__chevron {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.institution-assets-table__chevron:hover,
+.institution-assets-table__chevron:focus-visible {
+  background: rgba(3, 168, 192, 0.1);
+  color: var(--teal-700);
+}
+
+.institution-assets-table__chevron svg {
+  width: 18px;
+  height: 18px;
+}
+
 .institution-asset-editor {
   display: grid;
   gap: 14px;
@@ -22784,6 +22869,66 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.institution-asset-drawer-backdrop {
+  justify-content: flex-end;
+  align-items: stretch;
+  padding: 0;
+}
+
+.institution-asset-drawer {
+  display: flex;
+  width: min(560px, 94vw);
+  height: 100%;
+  padding: 24px;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+  border-radius: 24px 0 0 24px;
+  animation: institution-asset-drawer-in 180ms ease-out both;
+}
+
+.institution-asset-drawer__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.institution-asset-drawer__head h2 {
+  margin: 4px 0 0;
+  font-size: 1.35rem;
+  letter-spacing: -0.035em;
+}
+
+.institution-asset-drawer__form {
+  align-content: start;
+}
+
+.institution-asset-drawer__form .institution-asset-editor__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.institution-detail-delete {
+  display: flex;
+  justify-content: flex-end;
+  padding: 2px 4px 18px;
+}
+
+.institution-detail-delete .delete-confirm-card {
+  width: min(460px, 100%);
+}
+
+@keyframes institution-asset-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .accounts-detail__headline {
@@ -28726,6 +28871,30 @@ button.accounts-detail__transaction-head-cell {
 
   .institution-detail-hero__metrics,
   .institution-asset-editor__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .institution-detail-hero__metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .institution-detail-hero__name-editor {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .institution-detail-hero__name-editor input {
+    width: 100%;
+    flex: 1 0 100%;
+  }
+
+  .institution-asset-drawer {
+    width: 100%;
+    padding: 20px;
+    border-radius: 20px 0 0 20px;
+  }
+
+  .institution-asset-drawer__form .institution-asset-editor__grid {
     grid-template-columns: 1fr;
   }
 

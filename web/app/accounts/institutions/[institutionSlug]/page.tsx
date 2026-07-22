@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
@@ -107,6 +107,9 @@ type TradeDraft = {
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 
 const formatMoney = (value: number, currency: string) => formatCurrencyAmount(value, currency);
+
+const institutionPhotoStorageKey = (workspaceId: string, institution: string, currency: string) =>
+  `clover.investment-institution-photo.v1:${workspaceId}:${currency}:${institution.trim().toLowerCase()}`;
 
 const formatTradeDate = (value: string) =>
   new Date(value).toLocaleDateString("en-PH", {
@@ -279,6 +282,8 @@ export default function InvestmentInstitutionDetailPage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [institutionDraft, setInstitutionDraft] = useState(routeInstitution);
+  const [editingInstitutionName, setEditingInstitutionName] = useState(false);
+  const [customInstitutionPhoto, setCustomInstitutionPhoto] = useState<string | null>(null);
   const [savingInstitution, setSavingInstitution] = useState(false);
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
   const [assetDraft, setAssetDraft] = useState<AssetDraft | null>(null);
@@ -289,6 +294,7 @@ export default function InvestmentInstitutionDetailPage() {
   const [deletingTradeId, setDeletingTradeId] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingInstitution, setDeletingInstitution] = useState(false);
+  const institutionPhotoInputRef = useRef<HTMLInputElement | null>(null);
 
   const matchesInstitution = (account: Account) =>
     account.type === "investment" &&
@@ -327,7 +333,18 @@ export default function InvestmentInstitutionDetailPage() {
 
   useEffect(() => {
     setInstitutionDraft(routeInstitution);
+    setEditingInstitutionName(false);
   }, [routeInstitution]);
+
+  useEffect(() => {
+    if (!workspaceId || typeof window === "undefined") {
+      return;
+    }
+
+    setCustomInstitutionPhoto(
+      window.localStorage.getItem(institutionPhotoStorageKey(workspaceId, routeInstitution, routeCurrency))
+    );
+  }, [routeCurrency, routeInstitution, workspaceId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -476,13 +493,24 @@ export default function InvestmentInstitutionDetailPage() {
   );
 
   const institutionBrand = useMemo(
-    () =>
-      getAccountBrand({
+    () => {
+      const brand = getAccountBrand({
         institution: routeInstitution,
         name: routeInstitution,
         type: "investment",
-      }),
-    [routeInstitution]
+      });
+
+      return customInstitutionPhoto
+        ? {
+            ...brand,
+            logoSrc: customInstitutionPhoto,
+            logoSrcs: [customInstitutionPhoto],
+            logoFit: "cover" as const,
+            logoPadding: undefined,
+          }
+        : brand;
+    },
+    [customInstitutionPhoto, routeInstitution]
   );
 
   const editingAsset = useMemo(
@@ -529,23 +557,6 @@ export default function InvestmentInstitutionDetailPage() {
     }
     return map;
   }, [accounts, transactions]);
-
-  const tradeNetFlow = useMemo(
-    () =>
-      transactions.reduce((sum, transaction) => {
-        const amount = parseAmount(transaction.amount);
-        if (transaction.type === "income") {
-          return sum + Math.abs(amount);
-        }
-
-        if (transaction.type === "expense") {
-          return sum - Math.abs(amount);
-        }
-
-        return sum;
-      }, 0),
-    [transactions]
-  );
 
   const openAssetEditor = (account: Account) => {
     setEditingAssetId(account.id);
@@ -603,6 +614,13 @@ export default function InvestmentInstitutionDetailPage() {
       setAccounts(updatedAccounts);
       syncWorkspaceCache(updatedAccounts, transactions);
       setMessage(`Institution updated to "${nextInstitution}".`);
+      setEditingInstitutionName(false);
+      if (customInstitutionPhoto && typeof window !== "undefined") {
+        window.localStorage.setItem(
+          institutionPhotoStorageKey(workspaceId, nextInstitution, routeCurrency),
+          customInstitutionPhoto
+        );
+      }
       router.replace(
         getInvestmentInstitutionPath({
           institution: nextInstitution,
@@ -614,6 +632,42 @@ export default function InvestmentInstitutionDetailPage() {
     } finally {
       setSavingInstitution(false);
     }
+  };
+
+  const updateInstitutionPhoto = (file: File | null) => {
+    if (!file || !workspaceId) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setMessage("Choose an image file for the institution photo.");
+      return;
+    }
+
+    if (file.size > 1_500_000) {
+      setMessage("Choose an institution photo smaller than 1.5 MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        setMessage("Unable to read this institution photo.");
+        return;
+      }
+
+      try {
+        window.localStorage.setItem(
+          institutionPhotoStorageKey(workspaceId, routeInstitution, routeCurrency),
+          reader.result
+        );
+        setCustomInstitutionPhoto(reader.result);
+        setMessage("Institution photo updated.");
+      } catch {
+        setMessage("This photo is too large to save. Try a smaller image.");
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const saveAsset = async (event: FormEvent<HTMLFormElement>) => {
@@ -797,7 +851,16 @@ export default function InvestmentInstitutionDetailPage() {
   }
 
   return (
-    <CloverShell active="accounts" title={routeInstitution || "Institution"} hideCompactBarCopyOnMobile>
+    <CloverShell
+      active="accounts"
+      title={routeInstitution || "Institution"}
+      actions={
+        <button className="button button-secondary button-small" type="button" onClick={() => router.push("/accounts")}>
+          Back to Accounts
+        </button>
+      }
+      hideCompactBarCopyOnMobile
+    >
       <div
         className="institution-detail-page"
         style={
@@ -810,27 +873,61 @@ export default function InvestmentInstitutionDetailPage() {
         <section className="institution-detail-hero glass">
           <div className="institution-detail-hero__head">
             <div className="institution-detail-hero__brand">
-              <AccountBrandMark accountBrand={institutionBrand} label={routeInstitution} />
+              <button
+                className="institution-detail-hero__photo-button"
+                type="button"
+                onClick={() => institutionPhotoInputRef.current?.click()}
+                aria-label={`Change ${routeInstitution} photo`}
+              >
+                <AccountBrandMark accountBrand={institutionBrand} label={routeInstitution} />
+                <span aria-hidden="true">Edit</span>
+              </button>
+              <input
+                ref={institutionPhotoInputRef}
+                className="institution-detail-hero__photo-input"
+                type="file"
+                accept="image/*"
+                onChange={(event) => {
+                  updateInstitutionPhoto(event.target.files?.[0] ?? null);
+                  event.target.value = "";
+                }}
+              />
               <div>
-                <p className="eyebrow">Investment institution</p>
-                <h1>{routeInstitution}</h1>
-                <span>{transactions.length} trade{transactions.length === 1 ? "" : "s"}</span>
+                {editingInstitutionName ? (
+                  <form className="institution-detail-hero__name-editor" onSubmit={saveInstitution}>
+                    <input
+                      autoFocus
+                      value={institutionDraft}
+                      onChange={(event) => setInstitutionDraft(event.target.value)}
+                      aria-label="Institution name"
+                    />
+                    <button className="button button-primary button-small" type="submit" disabled={savingInstitution}>
+                      {savingInstitution ? "Saving..." : "Save"}
+                    </button>
+                    <button
+                      className="button button-secondary button-small"
+                      type="button"
+                      onClick={() => {
+                        setInstitutionDraft(routeInstitution);
+                        setEditingInstitutionName(false);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    className="institution-detail-hero__name-button"
+                    type="button"
+                    onClick={() => setEditingInstitutionName(true)}
+                    aria-label={`Edit ${routeInstitution} name`}
+                  >
+                    {routeInstitution}
+                  </button>
+                )}
               </div>
             </div>
-            <button className="button button-secondary button-small" type="button" onClick={() => router.push("/accounts")}>
-              Back to Accounts
-            </button>
           </div>
-
-          <form className="institution-detail-hero__editor" onSubmit={saveInstitution}>
-            <label className="settings-field">
-              <span>Institution name</span>
-              <input value={institutionDraft} onChange={(event) => setInstitutionDraft(event.target.value)} />
-            </label>
-            <button className="button button-secondary button-small" type="submit" disabled={savingInstitution}>
-              {savingInstitution ? "Saving..." : "Save name"}
-            </button>
-          </form>
 
           <div className="institution-detail-hero__metrics">
             <article className="institution-detail-metric">
@@ -840,10 +937,6 @@ export default function InvestmentInstitutionDetailPage() {
             <article className="institution-detail-metric">
               <span>Holdings</span>
               <strong>{accounts.length}</strong>
-            </article>
-            <article className="institution-detail-metric">
-              <span>Trade flow</span>
-              <strong>{formatMoney(tradeNetFlow, routeCurrency)}</strong>
             </article>
           </div>
         </section>
@@ -867,22 +960,26 @@ export default function InvestmentInstitutionDetailPage() {
                     <th>Subtype</th>
                     <th>Key detail</th>
                     <th>Value</th>
-                    <th>Actions</th>
+                    <th aria-label="Open asset details" />
                   </tr>
                 </thead>
                 <tbody>
                   {sortedAccounts.map((account) => (
-                    <tr key={account.id}>
+                    <tr key={account.id} className="institution-assets-table__row">
                       <td>{accountAssetNameMap.get(account.id) ?? account.name}</td>
                       <td>{getInvestmentSubtypeLabel(account.investmentSubtype)}</td>
                       <td>{getInstitutionAssetDetail(account)}</td>
                       <td>{formatMoney(Math.abs(parseAmount(account.balance)), account.currency)}</td>
-                      <td className="institution-assets-table__actions">
-                        <button className="button button-secondary button-small" type="button" onClick={() => openAssetEditor(account)}>
-                          Edit
-                        </button>
-                        <button className="button button-secondary button-small" type="button" onClick={() => router.push(getAccountPath(account))}>
-                          Open asset
+                      <td className="institution-assets-table__chevron-cell">
+                        <button
+                          className="institution-assets-table__chevron"
+                          type="button"
+                          onClick={() => openAssetEditor(account)}
+                          aria-label={`Open ${accountAssetNameMap.get(account.id) ?? account.name} details`}
+                        >
+                          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="m9 18 6-6-6-6" />
+                          </svg>
                         </button>
                       </td>
                     </tr>
@@ -894,14 +991,39 @@ export default function InvestmentInstitutionDetailPage() {
         </section>
 
         {editingAsset && assetDraft ? (
-          <section className="institution-detail-panel glass">
-            <div className="institution-detail-panel__head">
-              <div>
-                <p className="eyebrow">Edit holding</p>
-                <h2>{editingAsset.name}</h2>
+          <div
+            className="modal-backdrop institution-asset-drawer-backdrop"
+            role="presentation"
+            onClick={() => {
+              setEditingAssetId(null);
+              setAssetDraft(null);
+            }}
+          >
+            <aside
+              className="institution-asset-drawer glass"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="institution-asset-drawer-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="institution-asset-drawer__head">
+                <div>
+                  <p className="eyebrow">Asset details</p>
+                  <h2 id="institution-asset-drawer-title">{accountAssetNameMap.get(editingAsset.id) ?? editingAsset.name}</h2>
+                </div>
+                <button
+                  className="icon-button"
+                  type="button"
+                  onClick={() => {
+                    setEditingAssetId(null);
+                    setAssetDraft(null);
+                  }}
+                  aria-label="Close asset details"
+                >
+                  ×
+                </button>
               </div>
-            </div>
-            <form className="institution-asset-editor" onSubmit={saveAsset}>
+              <form className="institution-asset-editor institution-asset-drawer__form" onSubmit={saveAsset}>
               <label className="settings-field">
                 <span>Asset name</span>
                 <input
@@ -956,6 +1078,9 @@ export default function InvestmentInstitutionDetailPage() {
               </div>
 
               <div className="institution-asset-editor__actions">
+                <button className="button button-secondary button-small" type="button" onClick={() => router.push(getAccountPath(editingAsset))}>
+                  Open full asset
+                </button>
                 <button
                   className="button button-secondary button-small"
                   type="button"
@@ -970,8 +1095,9 @@ export default function InvestmentInstitutionDetailPage() {
                   {savingAssetId === editingAsset.id ? "Saving..." : "Save holding"}
                 </button>
               </div>
-            </form>
-          </section>
+              </form>
+            </aside>
+          </div>
         ) : null}
 
         <section className="institution-detail-panel glass">
@@ -1112,16 +1238,7 @@ export default function InvestmentInstitutionDetailPage() {
           )}
         </section>
 
-        <section className="institution-detail-panel glass">
-          <div className="institution-detail-panel__head">
-            <div>
-              <p className="eyebrow">Delete institution</p>
-              <h2>Remove {routeInstitution}</h2>
-            </div>
-          </div>
-          <p className="institution-detail-delete-copy">
-            This will remove the institution and all of its linked investment assets in {routeCurrency}.
-          </p>
+        <div className="institution-detail-delete">
           {deleteConfirmOpen ? (
             <div className="delete-confirm-card">
               <p>Delete <strong>{routeInstitution}</strong> and all {accounts.length} linked asset{accounts.length === 1 ? "" : "s"}?</p>
@@ -1139,7 +1256,7 @@ export default function InvestmentInstitutionDetailPage() {
               Delete institution
             </button>
           )}
-        </section>
+        </div>
 
         {message ? <p className="page-message">{message}</p> : null}
       </div>
