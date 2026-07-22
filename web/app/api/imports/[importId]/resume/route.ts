@@ -7,9 +7,9 @@ import { enqueueImportProcessing } from "@/lib/import-queue";
 import { ensureImportProcessingWorker } from "@/lib/import-worker-runtime";
 import { getImportEnrichmentJobByImportFileId } from "@/lib/import-enrichment-jobs";
 import { prisma } from "@/lib/prisma";
-import { getConfiguredPdfJsBaseUrl } from "@/lib/import-file-text.server";
+import { getConfiguredPdfJsBaseUrl, isPdfPasswordError } from "@/lib/import-file-text.server";
 import { importProcessingLooksActive } from "@/lib/import-resume-policy";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +18,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     const { importId } = await params;
     const localDev = await isLocalDevHost();
     const { userId } = localDev ? { userId: "local-admin" } : await requireAuth();
+    const body = await _request.json().catch(() => ({}));
+    const password = typeof body?.password === "string" && body.password.trim() ? body.password : undefined;
 
     const importFile = await fetchImportFileCompat(importId);
     if (!importFile) {
@@ -133,7 +135,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
     }
 
-    if (!telemetry.canResume) {
+    const passwordUnlock = importFile.processingPhase === "password_required" && Boolean(password);
+    if (!telemetry.canResume && !passwordUnlock) {
       return NextResponse.json(
         {
           error: "This import cannot be resumed right now.",
@@ -148,7 +151,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     }
 
     const hasCheckpointedRows = parsedRowsCount > 0 || checkpointRowCount > 0 || statementCheckpoint?.status === "reconciled";
-    const processInline = async (resumeStrategy: string) => {
+    const processInline = async (resumeStrategy: string, resumePassword?: string) => {
       await updateImportFileCompat(importId, {
         status: "processing",
         processingPhase: "reading_account_details",
@@ -158,6 +161,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       const { processImportFileText } = await import("@/workers/import-processor");
       const result = await processImportFileText(importId, {
+        password: resumePassword,
         actorUserId: userId,
         qaSource: "import_processing",
         pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
@@ -197,6 +201,54 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         resumeReason: nextTelemetry.resumeReason,
       });
     };
+
+    if (passwordUnlock) {
+      await updateImportFileCompat(importId, {
+        status: "processing",
+        processingPhase: "reading_account_details",
+        processingMessage: `Opening ${importFile.fileName} with the provided password...`,
+        processingCurrentScore: null,
+      });
+
+      after(async () => {
+        try {
+          await processInline("password_unlocked", password);
+        } catch (error) {
+          const passwordMessage = "This password could not open the file. Please check it and try again.";
+          await updateImportFileCompat(importId, {
+            status: "failed",
+            processingPhase: isPdfPasswordError(error) ? "password_required" : "failed",
+            processingMessage: isPdfPasswordError(error) ? passwordMessage : "Clover could not resume this import. Please try again.",
+          }).catch(() => null);
+          console.error("Password import resume failed", { importId, error });
+        }
+      });
+
+      const nextTelemetry = buildImportTelemetrySnapshot({
+        status: "processing",
+        processingPhase: "reading_account_details",
+        processingMessage: `Opening ${importFile.fileName} with the provided password...`,
+        parsedRowsCount,
+        confirmedTransactionsCount,
+        confirmationStatus: "processing",
+        checkpointStatus: statementCheckpoint?.status ?? null,
+        workflowStage: "reading_account_details",
+      });
+
+      return NextResponse.json({
+        ok: true,
+        queued: true,
+        skipped: false,
+        resumeStrategy: "password_unlocked",
+        importFileId: importId,
+        accountId: importFile.accountId ?? null,
+        telemetryPhase: nextTelemetry.phase,
+        telemetryLabel: nextTelemetry.phaseLabel,
+        telemetryMessage: nextTelemetry.message,
+        canResume: nextTelemetry.canResume,
+        resumeReason: nextTelemetry.resumeReason,
+      }, { status: 202 });
+    }
 
     if (hasCheckpointedRows) {
       await updateImportFileCompat(importId, {
