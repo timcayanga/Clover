@@ -67,4 +67,24 @@ assert.equal(holdingRows[0]?.institution, "PDAX");
 assert.equal((holdingRows[0]?.rawPayload as Record<string, unknown>)?.investmentSymbol, "BTC");
 assert.equal((holdingRows[0]?.rawPayload as Record<string, unknown>)?.statementEndingBalance, 120);
 
+const pdaxLogoOmittedOcrText = `
+Portfolio
+PHP
+0.45
+Crypto Bonds Gold O Hide zero balance
+`.trim();
+const logoOmittedMetadata = detectStatementMetadata(pdaxLogoOmittedOcrText, "untrained-portfolio.png");
+assert.equal(logoOmittedMetadata?.institution, "PDAX", "The PDAX portfolio layout must survive a missed logo OCR read.");
+assert.equal(logoOmittedMetadata?.accountName, "PDAX Portfolio");
+const logoOmittedRows = parseImportText(pdaxLogoOmittedOcrText, "untrained-portfolio.png", "image/png");
+assert.equal(logoOmittedRows.length, 1, "Only the visible PHP bucket should be imported.");
+assert.equal(logoOmittedRows[0]?.institution, "PDAX");
+assert.equal(logoOmittedRows[0]?.accountName, "PDAX Portfolio");
+assert.equal(logoOmittedRows[0]?.amount, "0.45");
+assert.doesNotMatch(
+  `${logoOmittedRows[0]?.accountName} ${logoOmittedRows[0]?.description}`,
+  /crypto bonds gold.*hide zero balance/i,
+  "Portfolio UI labels must not become an account or asset name when the logo is omitted."
+);
+
 console.log("[PASS] PDAX portfolio screenshots retain canonical identity and safe snapshot holdings.");

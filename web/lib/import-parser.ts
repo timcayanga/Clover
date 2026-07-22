@@ -1125,6 +1125,19 @@ const isGenericMetadataPlaceholder = (value?: string | null) =>
     normalizeWhitespace(value ?? "")
   );
 
+// OCR frequently merges the navigation/filter labels on portfolio screens
+// into one apparently valid title (for example, "Crypto Bonds Gold Hide zero
+// balance"). Those labels are never an institution, account, or holding.
+const isGenericPortfolioUiLabel = (value?: string | null) => {
+  const normalized = normalizeWhitespace(value ?? "").replace(/[|•]/g, " ").trim();
+  if (!normalized) return false;
+
+  const tokenCount = ["portfolio", "crypto", "bonds", "gold", "hide zero", "balance", "my assets"]
+    .filter((token) => new RegExp(`\\b${token.replace(" ", "\\s+")}\\b`, "i").test(normalized))
+    .length;
+  return tokenCount >= 2 && !/\\b(?:bitcoin|ethereum|solana|ripple|fund|stock|shares?|units?)\\b/i.test(normalized);
+};
+
 const isLikelyWalletAccountNumber = (value: string | null | undefined) => {
   const digits = (value ?? "").replace(/\D/g, "");
   return digits.length === 11 && digits.startsWith("09");
@@ -1215,10 +1228,16 @@ const parseGenericScreenshotStatementMetadata = (text: string, fileName = ""): D
   const institutionFromText = sanitizeBankNameLabel(detectInstitutionFromSignals(normalizedText, { fileName }));
   const sanitizedInferredInstitutionLine = sanitizeBankNameLabel(inferredInstitutionLine);
   const sanitizedTitleLineFallback = sanitizeBankNameLabel(titleLineFallback);
+  const safeInferredInstitutionLine = isGenericPortfolioUiLabel(sanitizedInferredInstitutionLine)
+    ? null
+    : sanitizedInferredInstitutionLine;
+  const safeTitleLineFallback = isGenericPortfolioUiLabel(sanitizedTitleLineFallback)
+    ? null
+    : sanitizedTitleLineFallback;
   const investmentLikeTitleFallback =
-    sanitizedTitleLineFallback &&
-    /\b(?:crypto|fund|stocks?|broker|trading|investment|portfolio)\b/i.test(sanitizedTitleLineFallback)
-      ? sanitizedTitleLineFallback
+    safeTitleLineFallback &&
+    /\b(?:crypto|fund|stocks?|broker|trading|investment|portfolio)\b/i.test(safeTitleLineFallback)
+      ? safeTitleLineFallback
       : null;
   const pdaxOnlyInstitutionFallback =
     (institutionFromLines === "GCrypto" || institutionFromText === "GCrypto") &&
@@ -1232,8 +1251,8 @@ const parseGenericScreenshotStatementMetadata = (text: string, fileName = ""): D
     canonicalInstitutionFromKnownSignals ??
     (investmentLikeTitleFallback && pdaxOnlyInstitutionFallback ? investmentLikeTitleFallback : null) ??
     institutionFromText ??
-    sanitizedInferredInstitutionLine ??
-    sanitizedTitleLineFallback;
+    safeInferredInstitutionLine ??
+    safeTitleLineFallback;
   const accountLabelCandidate =
     nonNoiseLines.find(
       (line) =>
@@ -1262,8 +1281,9 @@ const parseGenericScreenshotStatementMetadata = (text: string, fileName = ""): D
       normalizedText.match(/\b(?:available|current|total|outstanding)\s+balance\b[\s:PHP₱-]*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null
     ) ??
     parseMoney(normalizedText.match(/\bamount due\b[\s:PHP₱-]*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+  const cleanedAccountLabelCandidate = cleanAccountHolderDisplayName(accountLabelCandidate);
   const provisionalAccountName =
-    cleanAccountHolderDisplayName(accountLabelCandidate) ??
+    (isGenericPortfolioUiLabel(cleanedAccountLabelCandidate) ? null : cleanedAccountLabelCandidate) ??
     (institution
       ? accountNumber
         ? formatSimpleBankAccountName(institution, accountNumber)
@@ -11321,9 +11341,16 @@ const parsePdaxDateTime = (value: string | null | undefined) => {
 
 const pdaxScreenshotMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = normalizeWhitespace(text);
-  const hasPdaxBrand = /\bPDAX\b/i.test(normalized);
+  const hasPdaxBrand = /\bP\s*D\s*A\s*X\b/i.test(normalized);
+  // PDAX's logo is often omitted by OCR. Its portfolio screen still has a
+  // stable, distinctive bucket/filter layout, which is safer evidence than
+  // allowing the generic investment fallback to invent an account name.
+  const hasPdaxPortfolioLayout =
+    /\bPortfolio\b/i.test(normalized) &&
+    ["PHP", "Crypto", "Bonds", "Gold"].filter((bucket) => new RegExp(`\\b${bucket}\\b`, "i").test(normalized)).length >= 3 &&
+    /\bHide\s+zero\s+balance\b/i.test(normalized);
   const hasPortfolio =
-    hasPdaxBrand &&
+    (hasPdaxBrand || hasPdaxPortfolioLayout) &&
     /\bPortfolio\b/i.test(normalized) &&
     /\b(?:Balances|My\s+assets|Hide\s+zero\s+balance)\b/i.test(normalized);
   const hasWalletHistory = /\bWallet\s+History\b/i.test(normalized) && /\b(?:Fiat|Crypto\s+transfers|Others)\b/i.test(normalized);
