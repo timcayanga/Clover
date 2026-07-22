@@ -7186,6 +7186,7 @@ export const processImportFileText = async (
   });
   let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
   let pdfFileDataBase64: string | null = null;
+  let usedFastOnlyImageTranscript = false;
   const loadFallbackAssets = async () => {
     if (!storageKey) {
       throw new Error("Missing imported file.");
@@ -7379,7 +7380,9 @@ export const processImportFileText = async (
       pageImages,
       importMode,
       timeoutMs: 25_000,
+      strategy: "fast_only",
     }).catch(() => null);
+    usedFastOnlyImageTranscript = Boolean(transcript?.transcript.trim());
 
     if (transcript?.transcript.trim()) {
       text = normalizeStatementImageOcrText(transcript.transcript);
@@ -7927,6 +7930,7 @@ export const processImportFileText = async (
       pageImages,
       importMode,
       timeoutMs: 25_000,
+      strategy: usedFastOnlyImageTranscript ? "strong_only" : "quality_fallback",
     }).catch(() => null);
 
     if (transcript?.transcript.trim()) {

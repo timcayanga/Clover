@@ -2882,6 +2882,7 @@ export const transcribeImportImagesWithOpenAI = async (params: {
   pageImages: Array<{ page: number; dataUrl: string }>;
   importMode?: ImportMode | null;
   timeoutMs?: number | null;
+  strategy?: "quality_fallback" | "fast_only" | "strong_only";
 }): Promise<{
   documentType: "statement" | "receipt" | "notes" | "portfolio" | "account_detail";
   transcript: string;
@@ -2967,10 +2968,15 @@ export const transcribeImportImagesWithOpenAI = async (params: {
     promptImportMode,
     pageImageCount: pageImagesToSend.length,
   });
+  const transcriptionStrategy = params.strategy ?? "quality_fallback";
   const modelCandidates = dedupeOpenAIImportModels([
-    ...(shouldPrioritizeStrongTranscriptModel
-      ? [strongModel, imageModel, ocrModel]
-      : [imageModel, ocrModel, strongModel]),
+    ...(transcriptionStrategy === "strong_only"
+      ? [strongModel]
+      : transcriptionStrategy === "fast_only"
+        ? [imageModel, ocrModel]
+        : shouldPrioritizeStrongTranscriptModel
+          ? [strongModel, imageModel, ocrModel]
+          : [imageModel, ocrModel, strongModel]),
     OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK,
   ]);
   const controller = new AbortController();
@@ -3106,7 +3112,7 @@ export const transcribeImportImagesWithOpenAI = async (params: {
         continue;
       }
       bestTranscript = parsed;
-      if (!openAITranscriptLooksWeak(parsed) || candidateModel === strongModel) {
+      if (transcriptionStrategy === "fast_only" || !openAITranscriptLooksWeak(parsed) || candidateModel === strongModel) {
         console.info("[import-performance] image transcription completed", {
           model: parsed.model,
           pageImageCount: pageImagesToSend.length,
