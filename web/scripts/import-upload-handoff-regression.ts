@@ -240,8 +240,13 @@ const main = async () => {
   );
   assert.match(
     accountsPageSource,
-    /void refreshAll\(\)[\s\S]{0,900}setMessage\("Import complete\. Accounts and Transactions are updated\."\)/,
-    "Multi-account import summaries must update the Accounts UI immediately while the authoritative refresh runs in the background."
+    /const refreshImportWorkspace = async \(\) =>[\s\S]{0,1000}void refreshImportWorkspace\(\)\.finally[\s\S]{0,500}setMessage\("Import complete\. Accounts and Transactions are updated\."\)/,
+    "Regular import summaries must refresh authoritatively in the background after updating Accounts immediately."
+  );
+  assert.match(
+    accountsPageSource,
+    /requiresSnapshotVisibilityRefresh[\s\S]{0,1400}await refreshImportWorkspace\(\)/,
+    "Account-only snapshots must wait for the Accounts card refresh before reporting import success."
   );
   assert.match(
     accountsPageSource,

@@ -4569,20 +4569,33 @@ function AccountsPageContent() {
           }
 
           setImportRefreshInFlight(true);
+          const requiresSnapshotVisibilityRefresh =
+            previewTransactions.length === 0 &&
+            (summary.accountType === "investment" || summary.accountType === "bank" || summary.accountType === "wallet");
           // Keep the import handoff non-blocking: a multi-account snapshot
           // emits one settled summary per detected account. The local cache is
           // already updated above, while this authoritative refresh converges
           // in the background instead of serially delaying later accounts.
-          void refreshAll()
-            .then(async () => {
-              if (Number(settledSummary.rowsImported ?? 0) > 0 && previewTransactions.length === 0) {
-                await new Promise((resolve) => window.setTimeout(resolve, 900));
-                await refreshAll();
-              }
-            })
-            .finally(() => {
+          const refreshImportWorkspace = async () => {
+            await refreshAll();
+            if (Number(settledSummary.rowsImported ?? 0) > 0 && previewTransactions.length === 0) {
+              await new Promise((resolve) => window.setTimeout(resolve, 900));
+              await refreshAll();
+            }
+          };
+          if (requiresSnapshotVisibilityRefresh) {
+            // A snapshot has no transaction row to prove visibility. Do not
+            // let its modal report 100% until Accounts has adopted the card.
+            try {
+              await refreshImportWorkspace();
+            } finally {
+              setImportRefreshInFlight(false);
+            }
+          } else {
+            void refreshImportWorkspace().finally(() => {
               setImportRefreshInFlight(false);
             });
+          }
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}
       />

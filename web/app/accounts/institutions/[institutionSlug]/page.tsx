@@ -183,7 +183,19 @@ const isGenericInvestmentAssetLabel = (name: string | null | undefined, institut
     return true;
   }
 
-  return new Set(["gfunds investments", "gfunds", "atram investments", "atram"]).has(normalizedName);
+  return new Set([
+    "gfunds investments",
+    "gfunds",
+    "atram investments",
+    "atram",
+    // Portfolio buckets describe an aggregate, not a holding. In particular,
+    // a PDAX Crypto bucket must never relabel the PDAX portfolio asset.
+    "php",
+    "php wallet",
+    "crypto",
+    "bonds",
+    "gold",
+  ]).has(normalizedName);
 };
 
 const readTransactionAssetName = (transaction: Transaction) => {
@@ -192,28 +204,31 @@ const readTransactionAssetName = (transaction: Transaction) => {
       ? (transaction.rawPayload as Record<string, unknown>)
       : null;
   const rawAssetName = typeof rawPayload?.assetName === "string" ? rawPayload.assetName.trim() : "";
-  if (rawAssetName) {
+  if (rawAssetName && !isGenericInvestmentAssetLabel(rawAssetName, transaction.institution)) {
     return rawAssetName;
   }
 
   const rawFundName = typeof rawPayload?.fundName === "string" ? rawPayload.fundName.trim() : "";
-  if (rawFundName) {
+  if (rawFundName && !isGenericInvestmentAssetLabel(rawFundName, transaction.institution)) {
     return rawFundName;
   }
 
   const description = transaction.description?.trim() ?? "";
   const trailingStatusMatch = description.match(/^(.+?)\s*-\s*(?:buy|sell)\s+order\s+completed$/i);
-  if (trailingStatusMatch?.[1]?.trim()) {
+  if (trailingStatusMatch?.[1]?.trim() && !isGenericInvestmentAssetLabel(trailingStatusMatch[1], transaction.institution)) {
     return trailingStatusMatch[1].trim();
   }
   const descriptionMatch = description.match(/^(?:buy|sell|withdraw)\s*-\s*(.+?)(?:\s+\(|$)/i);
-  if (descriptionMatch?.[1]?.trim()) {
+  if (descriptionMatch?.[1]?.trim() && !isGenericInvestmentAssetLabel(descriptionMatch[1], transaction.institution)) {
     return descriptionMatch[1].trim();
   }
 
   const merchantText = transaction.merchantRaw?.trim() ?? "";
   const merchantMatch = merchantText.match(/^(?:buy|sell|withdraw)\s+(.+)$/i);
-  return merchantMatch?.[1]?.trim() || null;
+  const merchantAssetName = merchantMatch?.[1]?.trim() || null;
+  return merchantAssetName && !isGenericInvestmentAssetLabel(merchantAssetName, transaction.institution)
+    ? merchantAssetName
+    : null;
 };
 
 const buildAssetDraft = (account: Account): AssetDraft => ({
