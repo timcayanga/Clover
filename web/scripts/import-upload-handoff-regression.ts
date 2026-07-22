@@ -250,6 +250,16 @@ const main = async () => {
   );
   assert.match(
     accountsPageSource,
+    /optimistic-import-\$\{\[summary\.fileName, summary\.institution \?\? "", summary\.accountName, summary\.accountNumber \?\? ""\]/,
+    "An account-only import must retain a temporary card when its canonical account ID is still pending."
+  );
+  assert.match(
+    modalSource,
+    /seedImportedWorkspaceCaches\(workspaceId, queuedVisibleSummary\)/,
+    "The global import flow must publish visible account summaries into the workspace cache."
+  );
+  assert.match(
+    accountsPageSource,
     /const completedImportRefreshKeyRef = useRef<string \| null>\(null\);/,
     "Accounts must retain a per-import refresh key to prevent duplicate hydration work."
   );

@@ -171,13 +171,24 @@ export const buildResolvedOptimisticUploadSummary = (params: {
 };
 
 export const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) => {
-  const accountId = summary.accountId ?? summary.optimisticAccountId ?? null;
-  if (!accountId || !summary.accountName) {
+  if (!summary.accountName) {
     return null;
   }
   if (isFilenameOnlyScreenshotSummary(summary.fileName, summary)) {
     return null;
   }
+
+  // Preserve a parsed account identity during the brief interval before an
+  // account-only import has its persisted ID. The Accounts page reconciles it
+  // by identity once the server publishes the canonical account.
+  const accountId =
+    summary.accountId ??
+    summary.optimisticAccountId ??
+    `optimistic-import-${[summary.fileName, summary.institution ?? "", summary.accountName, summary.accountNumber ?? ""]
+      .join("-")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")}`;
 
   const normalizedAccountName = formatUploadAccountDisplayName(
     summary.accountName,

@@ -191,10 +191,20 @@ type UploadAccountLoadingContext = {
 };
 
 const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account | null => {
-  const optimisticAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
-  if (!optimisticAccountId || !summary.accountName) {
+  if (!summary.accountName) {
     return null;
   }
+  // Account-only screenshots can finish parsing before the worker returns its
+  // canonical account ID. Keep a stable temporary card in that short gap so
+  // the UI never reports a completed import that is invisible until refresh.
+  const optimisticAccountId =
+    summary.accountId ??
+    summary.optimisticAccountId ??
+    `optimistic-import-${[summary.fileName, summary.institution ?? "", summary.accountName, summary.accountNumber ?? ""]
+      .join("-")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")}`;
   const transactionCount = Math.max(
     Number(summary.rowsImported ?? 0) || 0,
     Array.isArray(summary.previewTransactions) ? summary.previewTransactions.length : 0
