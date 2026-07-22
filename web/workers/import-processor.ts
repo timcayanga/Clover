@@ -11057,6 +11057,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     const firstGroupRow = group.rows[0] ?? {};
     const groupRows = group.rows as EnrichedParsedImportRow[];
     const groupEndingBalance = getImportAccountBalanceFromParsedRows(groupRows);
+    const groupIsSnapshotOnly = groupRows.length > 0 && groupRows.every(isSnapshotOnlyParsedRow);
     const groupCurrency = readRowAccountCurrency(firstGroupRow);
     const groupLooksWiseAccount = rowLooksWiseAccount(firstGroupRow);
     const groupHasDedicatedWisePdfIdentity = groupRows.length > 0 && groupRows.every(isDedicatedWisePdfStatementRow);
@@ -11089,6 +11090,22 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     });
     if (!groupAccount) {
       throw new Error("Account not found");
+    }
+
+    // Account overview screenshots sometimes show an account identifier without
+    // a balance. The import has nevertheless completed for that account; use a
+    // zero default only when no prior imported balance exists, rather than
+    // leaving an indeterminate card in a permanent loading state.
+    if (
+      groupIsSnapshotOnly &&
+      groupEndingBalance === null &&
+      groupAccount.source === "upload" &&
+      snapshotBalanceToString(groupAccount.balance) === null
+    ) {
+      await prisma.account.update({
+        where: { id: groupAccount.id },
+        data: { balance: "0" },
+      });
     }
 
     accountByGroupKey.set(group.key, groupAccount);
@@ -11133,6 +11150,9 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       );
     });
     const groupBalance = getImportAccountBalanceFromParsedRows(group.rows as EnrichedParsedImportRow[]);
+    const groupIsSnapshotOnly = group.rows.length > 0 && group.rows.every(isSnapshotOnlyParsedRow);
+    const publishedGroupBalance =
+      groupBalance ?? (groupIsSnapshotOnly ? 0 : snapshotBalanceToString(groupAccount.balance));
     const existingSummary = accountSummaryById.get(groupAccount.id);
     accountSummaryById.set(groupAccount.id, {
       accountId: groupAccount.id,
@@ -11140,7 +11160,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       institution: groupAccount.institution,
       accountNumber: groupAccount.accountNumber,
       accountType: groupAccount.type,
-      balance: groupBalance !== null ? groupBalance.toString() : snapshotBalanceToString(groupAccount.balance),
+      balance: publishedGroupBalance !== null ? publishedGroupBalance.toString() : null,
       rowsImported: (existingSummary?.rowsImported ?? 0) + visibleGroupRows.length,
     });
   }

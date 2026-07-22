@@ -2272,14 +2272,14 @@ function AccountsPageContent() {
     [reconciledAccounts, selectedCurrency]
   );
 
-  const hasMeaningfulBalance = (value: string | null | undefined) => {
+  const hasResolvedBalance = (value: string | null | undefined) => {
     const normalized = typeof value === "string" ? value.trim() : "";
     if (!normalized) {
       return false;
     }
 
     const numeric = Number(normalized);
-    return Number.isFinite(numeric) && numeric !== 0;
+    return Number.isFinite(numeric);
   };
 
   const getUploadAccountLoadingContext = (account: Account): UploadAccountLoadingContext => {
@@ -2306,7 +2306,7 @@ function AccountsPageContent() {
         ? String(latestCheckpoint.endingBalance)
         : null;
     const stableBalance = stableAccountBalancesRef.current.get(account.id) ?? null;
-    const hasVisibleBalance = hasMeaningfulBalance(account.balance);
+    const hasVisibleBalance = hasResolvedBalance(account.balance);
     const hasApiConfirmedTransactions = Number(account.transactionCount ?? 0) > 0;
     const hasLoadedTransactions = Boolean(
       hasApiConfirmedTransactions ||
@@ -2315,15 +2315,15 @@ function AccountsPageContent() {
         (typeof latestCheckpoint?.rowCount === "number" && latestCheckpoint.rowCount > 0) ||
         matchingImportSummaryHasRows
     );
-    const displayedBalance = hasMeaningfulBalance(checkpointBalance)
+    const displayedBalance = hasResolvedBalance(checkpointBalance)
       ? checkpointBalance
-      : hasMeaningfulBalance(account.balance)
+      : hasResolvedBalance(account.balance)
         ? account.balance
         : stableBalance;
     const isLoading = Boolean(
       account.source === "upload" &&
         !hasVisibleBalance &&
-        !hasMeaningfulBalance(checkpointBalance) &&
+        !hasResolvedBalance(checkpointBalance) &&
         !stableBalance &&
         !hasLoadedTransactions
     );
@@ -2355,11 +2355,11 @@ function AccountsPageContent() {
         : null;
     const stableBalance = stableAccountBalancesRef.current.get(account.id) ?? null;
 
-    if (hasMeaningfulBalance(checkpointBalance)) {
+    if (hasResolvedBalance(checkpointBalance)) {
       return checkpointBalance;
     }
 
-    if (hasMeaningfulBalance(account.balance)) {
+    if (hasResolvedBalance(account.balance)) {
       return account.balance;
     }
 
@@ -4541,15 +4541,20 @@ function AccountsPageContent() {
           }
 
           setImportRefreshInFlight(true);
-          try {
-            await refreshAll();
-            if (Number(settledSummary.rowsImported ?? 0) > 0 && previewTransactions.length === 0) {
-              await new Promise((resolve) => window.setTimeout(resolve, 900));
-              await refreshAll();
-            }
-          } finally {
-            setImportRefreshInFlight(false);
-          }
+          // Keep the import handoff non-blocking: a multi-account snapshot
+          // emits one settled summary per detected account. The local cache is
+          // already updated above, while this authoritative refresh converges
+          // in the background instead of serially delaying later accounts.
+          void refreshAll()
+            .then(async () => {
+              if (Number(settledSummary.rowsImported ?? 0) > 0 && previewTransactions.length === 0) {
+                await new Promise((resolve) => window.setTimeout(resolve, 900));
+                await refreshAll();
+              }
+            })
+            .finally(() => {
+              setImportRefreshInFlight(false);
+            });
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}
       />

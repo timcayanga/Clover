@@ -219,6 +219,21 @@ const main = async () => {
     "Import finalization must write the confirmed account identity back to its checkpoint metadata."
   );
   assert.match(
+    importProcessorSource,
+    /groupIsSnapshotOnly[\s\S]{0,500}groupEndingBalance === null[\s\S]{0,450}data: \{ balance: "0" \}/,
+    "A newly detected snapshot account without a visible balance must settle at zero instead of remaining indeterminate."
+  );
+  assert.match(
+    accountsPageSource,
+    /const hasResolvedBalance[\s\S]{0,220}return Number\.isFinite\(numeric\);/,
+    "A confirmed zero balance must be treated as a settled account value, not loading."
+  );
+  assert.match(
+    accountsPageSource,
+    /void refreshAll\(\)[\s\S]{0,900}setMessage\("Import complete\. Accounts and Transactions are updated\."\)/,
+    "Multi-account import summaries must update the Accounts UI immediately while the authoritative refresh runs in the background."
+  );
+  assert.match(
     transactionsPageSource,
     /nextIsEmpty && currentHasValue && mergedTransactionsWithImports\.length > 0\)/,
     "Visible transactions must not be paired with an empty cash-flow summary."
