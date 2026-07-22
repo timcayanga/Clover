@@ -22458,18 +22458,29 @@ const isWiseMobileUiLine = (line: string) =>
 
 const looksLikeWiseMobileScreenshotText = (text: string) => {
   const lines = splitStatementLines(text);
+  // Vision transcription often preserves the Wise filter controls but joins
+  // them onto one line. Treat the distinctive control set as one layout
+  // signature so it cannot fall through to a generic wallet parser that may
+  // invent a competing institution.
+  const compactText = normalizeWhitespace(text);
+  const hasIncludesHidden = /\bIncludes hidden\b/i.test(compactText);
+  const hasTypeControl = /\bType\b/i.test(compactText);
+  const hasCurrencyControl = /\bCurrency\b/i.test(compactText);
+  const hasDirectionControl = /\bDirection\b/i.test(compactText);
+  const hasSearchControl = /\bSearch\b/i.test(compactText);
   const uiScore =
-    Number(lines.some((line) => /^Includes hidden$/i.test(line))) +
-    Number(lines.some((line) => /^Currency$/i.test(line))) +
-    Number(lines.some((line) => /^Direction$/i.test(line))) +
-    Number(lines.some((line) => /^Search/i.test(line)));
+    Number(hasIncludesHidden) +
+    Number(hasTypeControl) +
+    Number(hasCurrencyControl) +
+    Number(hasDirectionControl) +
+    Number(hasSearchControl);
   const amountCurrencies = new Set(
     lines
       .map((line) => extractWiseMobileAmountFromLine(line)?.currency ?? null)
       .filter((currency): currency is string => Boolean(currency))
   );
   const hasWiseActivityLanguage = lines.some((line) => wiseMobileStatusPattern.test(line)) || /\bTo\s+PHP\b/i.test(text);
-  const hasSearchLanguage = lines.some((line) => /\bSearch\b/i.test(line));
+  const hasSearchLanguage = hasSearchControl;
   const hasVisibleDate = lines.some((line) => wiseMobileDatePattern.test(line));
   return amountCurrencies.size >= 1 &&
     (uiScore >= 2 || (hasWiseActivityLanguage && hasVisibleDate) || (uiScore >= 1 && hasVisibleDate) || (hasSearchLanguage && hasVisibleDate));

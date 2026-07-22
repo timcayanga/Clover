@@ -28,6 +28,24 @@ const checks = [
   { fileName: "IMG_1336.PNG", minimumRows: 3 },
 ] as const;
 
+const collapsedWiseVisionTranscript = [
+  "Search Includes hidden Type Currency Direction",
+  "Oct 22, 2025",
+  "Woolworths Metro",
+  "26.50 AUD",
+  "1,008.99 PHP",
+].join("\n");
+
+const collapsedWiseMetadata = detectStatementMetadataFromText(collapsedWiseVisionTranscript, "upload.png");
+const collapsedWiseRows = parseImportText(collapsedWiseVisionTranscript, "upload.png", "image/png", {
+  institution: collapsedWiseMetadata.institution,
+  accountName: collapsedWiseMetadata.accountName,
+  accountNumber: collapsedWiseMetadata.accountNumber,
+});
+assert.equal(collapsedWiseMetadata.institution, "Wise", "Collapsed Wise filter controls should still identify Wise.");
+assert.equal(collapsedWiseMetadata.accountName, "Wise", "Collapsed Wise filter controls should retain the Wise account.");
+assert.equal(collapsedWiseRows[0]?.date, "2025-10-22", "Visible Wise date headers must retain their source year.");
+
 const readImageText = async (path: string) => {
   const bytes = await readFile(path);
   return readUploadedFileText({
