@@ -6252,7 +6252,11 @@ export function ImportFilesModal({
         });
         window.setTimeout(closeVisibleImportModalIfPrimaryDataReady, 0);
       } else {
-        void monitorQueuedImportAndConfirm(itemId, importFileId, null, {
+        // A screenshot can have parsed rows before Clover has enough identity
+        // information to select an account. Do not mark it done here: that
+        // produced a false 100% success while no transaction was visible.
+        // The monitor resolves the account and owns the terminal outcome.
+        await monitorQueuedImportAndConfirm(itemId, importFileId, null, {
           fileName: item.file.name,
           fallbackAccountName:
             deriveStatementFallbackAccountName(
@@ -6278,34 +6282,20 @@ export function ImportFilesModal({
           initialBalance: optimisticPreviewSummary ? (optimisticPreviewSummary as UploadInsightsSummary).balance : null,
           password: item.password.trim() || undefined,
         }, {
-          backgroundOnly: true,
-        }).finally(() => router.refresh());
-        updateItem(itemId, {
-          status: "done",
-          confirmationState: "confirmed",
-          error: null,
-          importFileId,
-          targetAccountId: publishableOptimisticPreviewSummary?.accountId ?? null,
-          importedRows:
-            Number(processPayload?.imported ?? 0) ||
-            Number(publishableOptimisticPreviewSummary?.rowsImported ?? 0) ||
-            0,
-          progress: 100,
-          progressLabel: "Done",
+          backgroundOnly: false,
         });
-        publishImportActivity({
-          workspaceId,
-          surface: importActivitySurfaceRef.current,
-          status: "done",
-          fileName: item.file.name,
-          fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
-          fileTotal: items.length,
-          completedFiles: completedFileCount + 1,
-          progress: 100,
-          detail: "All set",
+        router.refresh();
+        const reconciledItem = itemsRef.current.find((entry) => entry.id === itemId);
+        return {
+          status:
+            reconciledItem?.status === "error"
+              ? "error"
+              : reconciledItem?.status === "done" || reconciledItem?.confirmationState === "confirmed"
+                ? "done"
+                : "staged",
+          importedRows: reconciledItem?.importedRows ?? (Number(processPayload?.imported ?? 0) || null),
           summary: publishableOptimisticPreviewSummary,
-          errorMessage: null,
-        });
+        };
       }
 
         return {

@@ -111,6 +111,11 @@ const main = async () => {
   );
   assert.match(
     modalSource,
+    /await monitorQueuedImportAndConfirm\(itemId, importFileId, null,[\s\S]{0,10000}backgroundOnly: false/,
+    "An import without an account ID must stay in foreground reconciliation until the monitor verifies visible rows."
+  );
+  assert.match(
+    modalSource,
     /\) : showImportProgressDock \? \(\s*<ImportUploadDock/,
     "Queued uploads must render the progress dock instead of the selected-account file-picker card."
   );

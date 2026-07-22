@@ -104,13 +104,23 @@ const allRows = samples.flatMap((sample) => {
   return rows;
 });
 
-const weakFileTypeRows = parseImportText("", "IMG_1429.PNG", "unknown", {
+const weakFileTypeRows = parseImportText(samples[2].text, "IMG_1429.PNG", "unknown", {
   institution: "GCrypto",
   accountName: "GCrypto",
   accountNumber: null,
 });
-assert.equal(weakFileTypeRows.length, 3, "IMG_1429.PNG should still parse from the deterministic GCrypto screenshot fallback when fileType is weak.");
+assert.equal(weakFileTypeRows.length, 3, "A GCrypto transcript should still parse deterministically when fileType is weak.");
 assert.ok(weakFileTypeRows.every((row) => row.accountName === "GCrypto"), "Weak-fileType GCrypto rows should stay attached to the canonical GCrypto account.");
+
+const filenameCollisionMetadata = detectStatementMetadata(
+  `GCash\nTransaction History\nToday\nSend Money\n- PHP 250.00`,
+  "IMG_1429.PNG"
+);
+assert.equal(
+  filenameCollisionMetadata?.institution,
+  "GCash",
+  "A generic filename that matches a curated GCrypto sample must not override visible GCash evidence."
+);
 
 assert.equal(allRows.length, 11, "The training screenshots should expose 11 fully visible rows before cross-file dedupe.");
 

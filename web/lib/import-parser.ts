@@ -11930,13 +11930,16 @@ const isLikelyImageImportSource = (fileName: string, fileType: string) => {
 const gcryptoScreenshotMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
   const normalized = normalizeWhitespace(text);
   const compact = normalized.replace(/\s+/g, " ");
+  // Phone exports reuse names such as IMG_1427.PNG. A filename is training
+  // context, never identity evidence; otherwise an unrelated GCash image can
+  // be routed to the GCrypto parser solely because its generic filename
+  // collides with a curated sample.
   const looksLikeGcryptoScreenshot =
-    isKnownGcryptoScreenshotFile(fileName) ||
-    (/\bGCrypto\b/i.test(compact) &&
-      /\bTransaction History\b/i.test(compact) &&
-      /\bPast Transactions\b/i.test(compact) &&
-      /\b(?:Buy|Sell|Withdraw)\b/i.test(compact) &&
-      /\b(?:Bitcoin|Ripple|Stellar|Solana|The Graph|Trading Wallet|PDAX)\b/i.test(compact));
+    /\bGCrypto\b/i.test(compact) &&
+    /\bTransaction History\b/i.test(compact) &&
+    /\bPast Transactions\b/i.test(compact) &&
+    /\b(?:Buy|Sell|Withdraw)\b/i.test(compact) &&
+    /\b(?:Bitcoin|Ripple|Stellar|Solana|The Graph|Trading Wallet|PDAX)\b/i.test(compact);
 
   if (!looksLikeGcryptoScreenshot) {
     return null;
@@ -11958,6 +11961,7 @@ const gcryptoScreenshotMetadata = (text: string, fileName = ""): DetectedStateme
 };
 
 const knownGcryptoMobileScreenshotRows = (
+  text: string,
   fileName: string,
   fileType: string
 ): ParsedImportRow[] | null => {
@@ -11965,8 +11969,8 @@ const knownGcryptoMobileScreenshotRows = (
     return null;
   }
 
-  const metadata = gcryptoScreenshotMetadata("", fileName);
-  if (!metadata) {
+  const metadata = gcryptoScreenshotMetadata(text, fileName);
+  if (!metadata || !isKnownGcryptoScreenshotFile(fileName)) {
     return null;
   }
 
@@ -12161,7 +12165,7 @@ const parseGcryptoTransactionHistoryImportText = (text: string, fileName: string
     return null;
   }
 
-  const knownRows = knownGcryptoMobileScreenshotRows(fileName, fileType);
+  const knownRows = knownGcryptoMobileScreenshotRows(text, fileName, fileType);
   if (knownRows && knownRows.length > 0) {
     const sortedDates = knownRows.map((row) => row.date).filter((value): value is string => Boolean(value)).sort();
     return {
