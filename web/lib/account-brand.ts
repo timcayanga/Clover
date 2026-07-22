@@ -407,8 +407,10 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
       label: "PDAX",
       logoSrcs: philippinesLogoWithVariants("pdax"),
       fallbackIconSrc: investmentIcon,
-      accent: "#1E4D8F",
-      background: "linear-gradient(135deg, rgba(30, 77, 143, 0.16), rgba(176, 230, 176, 0.08))",
+      // Match PDAX's lime-green brand rather than treating it like a blue
+      // securities account. This applies equally to imported portfolios.
+      accent: "#9ACD32",
+      background: "linear-gradient(145deg, #b5dc61 0%, #9acd32 48%, #7eb52a 100%)",
     }),
   },
   {

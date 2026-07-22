@@ -224,6 +224,16 @@ const main = async () => {
     "A newly detected snapshot account without a visible balance must settle at zero instead of remaining indeterminate."
   );
   assert.match(
+    importProcessorSource,
+    /isDeterministicPdaxPortfolioSnapshot[\s\S]{0,6000}replaceInvestmentHoldingsCompat/,
+    "A PDAX portfolio bucket must not be persisted as a fake investment holding."
+  );
+  assert.match(
+    importProcessorSource,
+    /Portfolio buckets \(PHP, Crypto, Bonds, Gold\) are totals, not[\s\S]{0,700}if \(!symbol \|\| !assetName \|\| quantity === null \|\| marketValue === null\)/,
+    "PDAX snapshot buckets require a visible instrument symbol, name, quantity, and value before becoming holdings."
+  );
+  assert.match(
     accountsPageSource,
     /const hasResolvedBalance[\s\S]{0,220}return Number\.isFinite\(numeric\);/,
     "A confirmed zero balance must be treated as a settled account value, not loading."

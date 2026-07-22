@@ -9474,14 +9474,72 @@ export const processImportFileText = async (
       } as Prisma.InputJsonValue,
     });
 
-    if (investmentSnapshot && openAiParsed?.holdings?.length) {
-      await replaceInvestmentHoldingsCompat({
-        workspaceId: String(importFile.workspaceId),
-        investmentSnapshotId: investmentSnapshot.id,
-        documentImportId: documentImportRecord.id,
-        accountId: linkedImportAccountId,
-        holdings: openAiParsed.holdings.map((holding, index) => ({
-          rowIndex: index + 1,
+    const isDeterministicPdaxPortfolioSnapshot =
+      /\bPDAX\b/i.test(`${resolvedMetadata.institution ?? ""} ${resolvedMetadata.accountName ?? ""}`) &&
+      rows.some((row) => {
+        const payload = row.rawPayload;
+        return (
+          payload &&
+          typeof payload === "object" &&
+          !Array.isArray(payload) &&
+          (payload as Record<string, unknown>).source === "pdax_portfolio_screenshot"
+        );
+      });
+    const deterministicPdaxHoldings = isDeterministicPdaxPortfolioSnapshot
+      ? rows.flatMap((row) => {
+          const payload =
+            row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+              ? (row.rawPayload as Record<string, unknown>)
+              : null;
+          const symbol = typeof payload?.investmentSymbol === "string" ? payload.investmentSymbol.trim() : "";
+          const quantity = typeof payload?.quantity === "number" ? payload.quantity : null;
+          const marketValue = typeof payload?.marketValue === "number" ? payload.marketValue : null;
+          const assetName = String(row.description ?? "").replace(/\s+portfolio snapshot$/i, "").trim();
+
+          // Portfolio buckets (PHP, Crypto, Bonds, Gold) are totals, not
+          // assets. Persist a holding only when the screenshot visibly names
+          // and quantifies a specific instrument.
+          if (!symbol || !assetName || quantity === null || marketValue === null) {
+            return [];
+          }
+
+          return [
+            {
+              assetName,
+              assetSymbol: symbol,
+              assetType: typeof payload?.investmentSubtype === "string" ? payload.investmentSubtype : "crypto",
+              quantity,
+              marketValue,
+              currency: row.currency ?? resolvedMetadata.currency ?? "PHP",
+              confidence: row.confidence ?? 0,
+              rawPayload: {
+                source: "pdax_portfolio_screenshot",
+                parserEvidence: payload?.sourceText ?? null,
+              } as Prisma.InputJsonValue,
+            },
+          ];
+        })
+      : null;
+    type PersistedInvestmentHolding = {
+      assetName: string;
+      assetSymbol?: string | null;
+      assetType?: string | null;
+      quantity?: string | number | null;
+      unitPrice?: string | number | null;
+      costBasis?: string | number | null;
+      marketValue?: string | number | null;
+      currentValue?: string | number | null;
+      gainLossValue?: string | number | null;
+      gainLossPercent?: string | number | null;
+      currency?: string | null;
+      status?: string | null;
+      confidence?: number;
+      rawPayload?: Prisma.InputJsonValue | null;
+      source: "openai" | "pdax_portfolio_screenshot";
+    };
+    const investmentHoldings: PersistedInvestmentHolding[] = isDeterministicPdaxPortfolioSnapshot
+      ? (deterministicPdaxHoldings ?? []).map((holding) => ({ ...holding, source: "pdax_portfolio_screenshot" as const }))
+      : (openAiParsed?.holdings ?? []).map((holding) => ({
           assetName: holding.asset_name,
           assetSymbol: holding.asset_symbol,
           assetType: holding.asset_type,
@@ -9492,12 +9550,37 @@ export const processImportFileText = async (
           currentValue: holding.current_value,
           gainLossValue: holding.gain_loss_value,
           gainLossPercent: holding.gain_loss_percent,
-          currency: holding.currency ?? resolvedMetadata.currency ?? "PHP",
+          currency: holding.currency,
           status: holding.status,
           confidence: holding.confidence_score,
+          rawPayload: holding.parser_evidence as Prisma.InputJsonValue,
+          source: "openai" as const,
+        }));
+
+    if (investmentSnapshot && (isDeterministicPdaxPortfolioSnapshot || investmentHoldings.length > 0)) {
+      await replaceInvestmentHoldingsCompat({
+        workspaceId: String(importFile.workspaceId),
+        investmentSnapshotId: investmentSnapshot.id,
+        documentImportId: documentImportRecord.id,
+        accountId: linkedImportAccountId,
+        holdings: investmentHoldings.map((holding, index) => ({
+          rowIndex: index + 1,
+          assetName: holding.assetName,
+          assetSymbol: holding.assetSymbol,
+          assetType: holding.assetType,
+          quantity: holding.quantity,
+          unitPrice: holding.unitPrice,
+          costBasis: holding.costBasis,
+          marketValue: holding.marketValue,
+          currentValue: holding.currentValue,
+          gainLossValue: holding.gainLossValue,
+          gainLossPercent: holding.gainLossPercent,
+          currency: holding.currency ?? resolvedMetadata.currency ?? "PHP",
+          status: holding.status,
+          confidence: holding.confidence,
           rawPayload: {
-            parserEvidence: holding.parser_evidence,
-            source: "openai",
+            parserEvidence: holding.rawPayload ?? null,
+            source: holding.source,
             documentType: effectiveImportMode,
           } as Prisma.InputJsonValue,
         })),
