@@ -1725,9 +1725,18 @@ function AccountsPageContent() {
       if (!options?.silent) {
         void (async () => {
           try {
-            await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}&repairImportedAccounts=1&cleanupImportedAccounts=1&maintenance=1`, {
+            const maintenanceResponse = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}&repairImportedAccounts=1&cleanupImportedAccounts=1&maintenance=1`, {
               cache: "no-store",
             });
+            const maintenancePayload = maintenanceResponse.ok
+              ? await maintenanceResponse.json().catch(() => null)
+              : null;
+            if (
+              workspaceLoadSeqRef.current === loadSeq &&
+              Number(maintenancePayload?.maintenance?.removedStalePdaxBucketHoldings ?? 0) > 0
+            ) {
+              void loadWorkspaceData(workspaceId, { silent: true, awaitHydration: true });
+            }
           } catch {
             // Imported-account maintenance is best-effort and should never block opening Accounts.
           }

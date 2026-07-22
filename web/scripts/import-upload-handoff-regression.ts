@@ -250,6 +250,11 @@ const main = async () => {
   );
   assert.match(
     accountsPageSource,
+    /removedStalePdaxBucketHoldings[\s\S]{0,700}void loadWorkspaceData\(workspaceId, \{ silent: true, awaitHydration: true \}\);/,
+    "Accounts must adopt a maintenance repair that removes stale PDAX portfolio buckets without a manual reload."
+  );
+  assert.match(
+    accountsPageSource,
     /getCompletedImportActivitySummary\(importActivitySnapshot\)[\s\S]{0,1000}void loadWorkspaceData\(selectedWorkspaceId, \{ silent: true, awaitHydration: true \}\);/,
     "Accounts must rehydrate from the completed import activity event without requiring a manual page reload."
   );

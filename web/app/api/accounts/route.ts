@@ -857,7 +857,7 @@ const cleanupFilenameUploadedAccountPlaceholders = async (workspaceId: string) =
 
 const cleanupPdaxPortfolioBucketHoldings = async (workspaceId: string) => {
   if (!(await hasCompatibleTable("InvestmentHolding")) || !(await hasCompatibleTable("InvestmentSnapshot"))) {
-    return;
+    return 0;
   }
 
   // Older backup-parser runs could convert PDAX overview buckets into
@@ -885,7 +885,6 @@ const cleanupPdaxPortfolioBucketHoldings = async (workspaceId: string) => {
 
   const staleIds = candidates
     .filter((holding) => /\bPDAX\b/i.test(holding.investmentSnapshot.portfolioName ?? ""))
-    .filter((holding) => !holding.assetSymbol?.trim() && holding.quantity === null)
     .filter((holding) => {
       const payload =
         holding.rawPayload && typeof holding.rawPayload === "object" && !Array.isArray(holding.rawPayload)
@@ -900,6 +899,8 @@ const cleanupPdaxPortfolioBucketHoldings = async (workspaceId: string) => {
       where: { workspaceId, id: { in: staleIds } },
     }).catch(() => null);
   }
+
+  return staleIds.length;
 };
 
 const collapseDuplicateUploadedAccountsByIdentity = async (workspaceId: string, compatibleColumns: Set<string>) => {
@@ -1131,6 +1132,7 @@ export async function GET(request: Request) {
     const shouldCleanupImportedAccounts = ["1", "true"].includes(
       (searchParams.get("cleanupImportedAccounts") ?? "").trim().toLowerCase()
     );
+    let removedStalePdaxBucketHoldings = 0;
     if (shouldCleanupImportedAccounts) {
       await cleanupFilenameUploadedAccountPlaceholders(workspaceId).catch((error) => {
         console.warn("[accounts] unable to clean up filename imported account placeholders", {
@@ -1138,11 +1140,12 @@ export async function GET(request: Request) {
           error,
         });
       });
-      await cleanupPdaxPortfolioBucketHoldings(workspaceId).catch((error) => {
+      removedStalePdaxBucketHoldings = await cleanupPdaxPortfolioBucketHoldings(workspaceId).catch((error) => {
         console.warn("[accounts] unable to clean up stale PDAX portfolio bucket holdings", {
           workspaceId,
           error,
         });
+        return 0;
       });
       await cleanupEmptyGenericUploadedAccountPlaceholders(workspaceId, compatibleColumns).catch((error) => {
         console.warn("[accounts] unable to clean up empty generic imported account placeholders", {
@@ -1537,6 +1540,9 @@ export async function GET(request: Request) {
       ),
       accountRules,
       statementCheckpoints,
+      maintenance: shouldCleanupImportedAccounts
+        ? { removedStalePdaxBucketHoldings }
+        : undefined,
     });
   } catch (error) {
     if (isTransientDataError(error)) {
