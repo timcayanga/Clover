@@ -34,6 +34,7 @@
     "qa:hsbc-pdf": "tsx scripts/hsbc-pdf-regression.ts",
     "qa:gsave-uno-screenshots": "tsx scripts/gsave-uno-screenshot-regression.ts",
     "qa:gsave-uno-process": "tsx scripts/gsave-uno-process-route-regression.ts",
+    "qa:gcash-mobile-screenshot": "tsx scripts/gcash-mobile-screenshot-regression.ts",
     "qa:gcrypto-screenshot-import": "tsx scripts/gcrypto-screenshot-import-regression.ts",
     "qa:gstocks-screenshot-import": "tsx scripts/gstocks-screenshot-import-regression.ts",
     "qa:gotrade-screenshots": "tsx scripts/gotrade-screenshot-regression.ts",

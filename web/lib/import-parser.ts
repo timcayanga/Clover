@@ -8876,10 +8876,14 @@ const parseMobileScreenshotAsOfDate = (text: string) => {
 
 const gcashMobileScreenshotMetadata = (text: string): DetectedStatementMetadata | null => {
   const compact = normalizeWhitespace(text.replace(/\u00a0/g, " "));
+  const hasMobileLedgerShape =
+    new RegExp(`\\b${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}\\b`, "i").test(compact) &&
+    /\b\d{1,2}:\d{2}\s*[AP]M\b/i.test(compact) &&
+    /[+-]\s*(?:₱|PHP|P)?\s*\d[\d,]*\.\d{2}\b/i.test(compact);
   const hasGcashMobileShell =
     /\bTransaction\s+History\b/i.test(compact) &&
     /\bAs\s+of\s+/i.test(compact) &&
-    /\b(?:QR|Transactions|Profile|Inbox)\b/i.test(compact) &&
+    hasMobileLedgerShape &&
     /\b(?:Online\s+Payment\s+-\s+Web\s+Pay|Cashin\s+from|Pay\s+via\s+Scanned\s+QR|DOTr-MRT3|Send\s+Money)\b/i.test(compact);
   if (!hasGcashMobileShell) {
     return null;
@@ -8956,12 +8960,16 @@ const parseGcashMobileScreenshotImportText = (text: string) => {
     if (!match?.[1] || !match[2]) {
       return;
     }
-    const signedAmount = parseMoney(match[2]);
+    // `parseMoney` accepts negative debits but a leading plus sign is a
+    // mobile-ledger direction marker rather than a numeric token it parses.
+    // Preserve that credit direction while parsing the numeric amount.
+    const explicitCredit = /^\s*\+/.test(match[2]);
+    const signedAmount = parseMoney(match[2].replace(/^\s*\+\s*/, ""));
     if (signedAmount === null) {
       return;
     }
     const description = normalizeWhitespace(match[1]);
-    const type: TransactionType = signedAmount >= 0 ? "income" : "expense";
+    const type: TransactionType = explicitCredit || signedAmount >= 0 ? "income" : "expense";
     const merchantClean = summarizeMerchantText(description, "GCash");
     const categoryName =
       /cashin\s+from/i.test(description)
@@ -9035,7 +9043,11 @@ const parseGcashMobileScreenshotImportText = (text: string) => {
     }
 
     const inlineTrailingAmount = line.match(signedAmountTailPattern);
-    if (inlineTrailingAmount && currentDate && !isAmountLine(line)) {
+    // A mobile row is normally split as `time` then `description + amount`.
+    // `pushSplitRow` has already captured that pair with its visible time, so
+    // do not add a second, time-less copy when scanning the description line.
+    const followsTimeLine = isTimeLine(lines[index - 1] ?? "");
+    if (inlineTrailingAmount && currentDate && !isAmountLine(line) && !followsTimeLine) {
       pushRow("", line);
       continue;
     }
@@ -22849,6 +22861,15 @@ const filterSharedScreenshotParsedRows = (
         : typeof rawPayload?.statementEndingBalance === "number"
           ? rawPayload.statementEndingBalance
           : null;
+    // Actions such as “Send Money” can also appear in a screenshot's static
+    // navigation. A dated, signed mobile ledger row with a visible time is
+    // financial evidence, however, and must not be discarded as UI chrome.
+    const hasStructuredTransactionEvidence =
+      Boolean(row.date) &&
+      amountValue !== null &&
+      (typeof rawPayload?.timeText === "string" ||
+        typeof rawPayload?.signedAmountText === "string" ||
+        (typeof rawPayload?.kind === "string" && /transaction/i.test(rawPayload.kind)));
     const placeholderRow =
       Boolean(merchantCandidate && /^not applicable$/i.test(merchantCandidate)) ||
       Boolean(descriptionCandidate && /^not applicable$/i.test(descriptionCandidate));
@@ -22867,8 +22888,9 @@ const filterSharedScreenshotParsedRows = (
     }
 
     if (
-      (merchantCandidate && isLikelyScreenshotUiArtifactText(merchantCandidate)) ||
-      (descriptionCandidate && isLikelyScreenshotUiArtifactText(descriptionCandidate))
+      ((merchantCandidate && isLikelyScreenshotUiArtifactText(merchantCandidate)) ||
+        (descriptionCandidate && isLikelyScreenshotUiArtifactText(descriptionCandidate))) &&
+      !hasStructuredTransactionEvidence
     ) {
       return false;
     }
@@ -23506,14 +23528,14 @@ export const parseImportText = (
     return filterSharedScreenshotParsedRows(wiseMobileParsed.rows, text, fileName, context);
   }
 
-  const gcashParsed = parseGcashImportText(text);
-  if (gcashParsed && gcashParsed.rows.length > 0) {
-    return gcashParsed.rows;
-  }
-
   const gcashMobileParsed = parseGcashMobileScreenshotImportText(text);
   if (gcashMobileParsed && gcashMobileParsed.rows.length > 0) {
     return filterSharedScreenshotParsedRows(gcashMobileParsed.rows, text, fileName, context);
+  }
+
+  const gcashParsed = parseGcashImportText(text);
+  if (gcashParsed && gcashParsed.rows.length > 0) {
+    return gcashParsed.rows;
   }
 
   const mayaMobileParsed = parseMayaMobileScreenshotImportText(text);
