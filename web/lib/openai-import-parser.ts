@@ -2855,6 +2855,14 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   }
 };
 
+export const shouldPrioritizeStrongImageTranscriptModel = (params: {
+  inferredDifficulty: "easy" | "medium" | "hard";
+  promptImportMode: ImportMode | null;
+  pageImageCount: number;
+}) =>
+  params.inferredDifficulty === "hard" ||
+  (params.promptImportMode === "statement" && params.pageImageCount > 1);
+
 export const transcribeImportImagesWithOpenAI = async (params: {
   fileName?: string | null;
   fileType?: string | null;
@@ -2925,12 +2933,6 @@ export const transcribeImportImagesWithOpenAI = async (params: {
     OPENAI_IMPORT_STRONG_MODEL_FALLBACK,
     "strong OCR model",
   );
-  const modelCandidates = dedupeOpenAIImportModels([
-    ...(inferredDifficulty === "hard" || promptImportMode === "statement"
-      ? [strongModel, imageModel, ocrModel]
-      : [imageModel, ocrModel, strongModel]),
-    OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK,
-  ]);
   const pageImageLimit =
     params.importMode === "statement"
       ? inferredDifficulty === "hard"
@@ -2942,6 +2944,22 @@ export const transcribeImportImagesWithOpenAI = async (params: {
   const pageImagesToSend = await compactVisionPageImages(
     selectRepresentativeVisionPages(params.pageImages, pageImageLimit)
   );
+  // A single mobile-bank screenshot is normally a compact, regular layout.
+  // Starting every statement with the strongest model made those otherwise
+  // deterministic-ready imports wait on the slowest available vision call.
+  // Keep the stronger model first for genuinely hard or multi-page documents,
+  // then retain it as the existing quality-gated fallback for fast transcripts.
+  const shouldPrioritizeStrongTranscriptModel = shouldPrioritizeStrongImageTranscriptModel({
+    inferredDifficulty,
+    promptImportMode,
+    pageImageCount: pageImagesToSend.length,
+  });
+  const modelCandidates = dedupeOpenAIImportModels([
+    ...(shouldPrioritizeStrongTranscriptModel
+      ? [strongModel, imageModel, ocrModel]
+      : [imageModel, ocrModel, strongModel]),
+    OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK,
+  ]);
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),

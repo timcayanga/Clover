@@ -5,6 +5,37 @@ import {
   shouldPreferDirectImageStatementVisionPath,
   shouldAttemptGenericScreenshotTranscriptRepair,
 } from "@/workers/import-processor";
+import { shouldPrioritizeStrongImageTranscriptModel } from "@/lib/openai-import-parser";
+
+assert.equal(
+  shouldPrioritizeStrongImageTranscriptModel({
+    inferredDifficulty: "medium",
+    promptImportMode: "statement",
+    pageImageCount: 1,
+  }),
+  false,
+  "A regular one-screen statement should use the fast vision model before escalating."
+);
+
+assert.equal(
+  shouldPrioritizeStrongImageTranscriptModel({
+    inferredDifficulty: "hard",
+    promptImportMode: "statement",
+    pageImageCount: 1,
+  }),
+  true,
+  "A hard screenshot should retain strong-model-first transcription."
+);
+
+assert.equal(
+  shouldPrioritizeStrongImageTranscriptModel({
+    inferredDifficulty: "medium",
+    promptImportMode: "statement",
+    pageImageCount: 2,
+  }),
+  true,
+  "A multi-page statement should retain strong-model-first transcription."
+);
 
 const noisyGenericRows = [
   {
