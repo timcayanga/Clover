@@ -5,6 +5,7 @@ import Script from "next/script";
 import { LandingClarityEngine } from "../components/landing-clarity-engine";
 import { LandingCloverBloom } from "../components/landing-clover-bloom";
 import { LandingNav } from "../components/landing-nav";
+import { LandingSignupModal } from "../components/landing-signup-modal";
 import { LandingStoryReveal } from "../components/landing-story-reveal";
 import { MarketingFooter } from "../components/marketing-footer";
 import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
@@ -76,13 +77,14 @@ function LandingAccountCta({ accountState }: { accountState: Awaited<ReturnType<
       >
         {accountState.avatarUrl ? <img src={accountState.avatarUrl} alt="" /> : <span>{getAvatarInitials(displayName)}</span>}
       </span>
-      <span>Log in, {displayName}</span>
+      <span>Open Clover</span>
     </Link>
   );
 }
 
 export default async function HomePage() {
   const accountState = await resolvePublicAccountState();
+  const authEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? process.env.CLERK_PUBLISHABLE_KEY);
 
   return (
     <main className="landing-page landing-page--snap">
@@ -110,9 +112,7 @@ export default async function HomePage() {
 
           <div className="landing-hero__actions">
             {!accountState.signedIn ? (
-              <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>
-                Organize my finances for free
-              </Link>
+              <LandingSignupModal enabled={authEnabled}>Create your free account</LandingSignupModal>
             ) : null}
             <LandingAccountCta accountState={accountState} />
           </div>
@@ -312,9 +312,7 @@ export default async function HomePage() {
           </div>
           <div className="landing-cta__actions">
             {!accountState.signedIn ? (
-              <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>
-                Organize my finances for free
-              </Link>
+              <LandingSignupModal enabled={authEnabled}>Create your free account</LandingSignupModal>
             ) : null}
             <LandingAccountCta accountState={accountState} />
           </div>
