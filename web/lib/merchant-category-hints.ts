@@ -16,8 +16,8 @@ const SPECIFIC_MERCHANT_CATEGORY_HINTS: Array<{
 }> = [
   {
     category: "Food & Dining",
-    lower: /velveteen\s+house|kineya\s+don\s+don\s+tei|don\s+don\s+tei|soi\s+chicken|tartufo\s+ristorante|single\s+origin|kaokee|pickup\s+coffee|cha\s+tuk\s+chak|chatukchak|wasabi(?:_|\s)|jack(?:'?s|\s+s)\s+gelato|flat\s+iron|grain\s*&?\s*hop|damascena|sumup\s*\*?al\s+chile/,
-    compact: /velveteenhouse|kineyadondondtei|dondondtei|soichicken|tartuforistorante|singleorigin|kaokee|pickupcoffee|chatukchak|wasabi|jacksgelato|flatiron|grainhop|damascena|sumupalchile/,
+    lower: /velveteen\s+house|kineya\s+don\s+don\s+tei|don\s+don\s+tei|soi\s+chicken|tartufo\s+ristorante|single\s+origin|kaokee|pickup\s+coffee|cha\s+tuk\s+chak|chatukchak|wasabi(?:_|\s)|jack(?:'?s|\s+s)\s+gelato|flat\s+iron|grain\s*&?\s*hop|damascena|sumup\s*\*?al\s+chile|pancake\s+house|naixue/,
+    compact: /velveteenhouse|kineyadondondtei|dondondtei|soichicken|tartuforistorante|singleorigin|kaokee|pickupcoffee|chatukchak|wasabi|jacksgelato|flatiron|grainhop|damascena|sumupalchile|pancakehouse|naixue/,
   },
   {
     category: "Travel & Lifestyle",
@@ -48,8 +48,8 @@ const SPECIFIC_MERCHANT_CATEGORY_HINTS: Array<{
   },
   {
     category: "Transport",
-    lower: /grabcar|grab\s+car|move\s+it|angkas|joyride|uber|taxi|trainpal|skybus|autopay\s+parking|opera\s+house\s+parking|mall\s+parking|shell|petron|caltex|seaoil|mrt-?3|dotr\s+mrt\s*3|jetstar|cebu\s+air|cebuair|parking/,
-    compact: /grabcar|moveit|angkas|joyride|uber|taxi|trainpal|skybus|autopayparking|operahouseparking|mallparking|shell|petron|caltex|seaoil|mrt3|dotrmrt3|jetstar|cebuair|parking/,
+    lower: /grabcar|grab\s+car|move\s+it|angkas|joyride|didi(?:\s+tianjin)?|uber|taxi|trainpal|skybus|autopay\s+parking|opera\s+house\s+parking|mall\s+parking|shell|petron|caltex|seaoil|mrt-?3|dotr\s+mrt\s*3|jetstar|cebu\s+air|cebuair|parking/,
+    compact: /grabcar|moveit|angkas|joyride|didi(?:tianjin)?|uber|taxi|trainpal|skybus|autopayparking|operahouseparking|mallparking|shell|petron|caltex|seaoil|mrt3|dotrmrt3|jetstar|cebuair|parking/,
   },
   {
     category: "Travel & Lifestyle",
@@ -126,8 +126,8 @@ export const getStrongMerchantCategoryHint = (value: string): string | null => {
 
   if (
     matchesCategoryHint(value, {
-      lower: /transport\s+for\s+nsw|metro\s+de\s+(?:malaga|barcelona)|skybus|parking|airport|rail|trainpal|hk\s+airport|liberty\s+oil|fuel|petrol|gas\s+station|autopay\s+parking|toll|expressway|opera\s+house\s+parking|mall\s+parking|grab(?:\s+car)?|grabcar|move\s+it|angkas|joyride|taxi|uber|bus|train|mrt|lrt|ride/,
-      compact: /transportfornsw|skybus|parking|airport|rail|trainpal|hkairport|libertyoil|fuel|petrol|gasstation|autopayparking|toll|expressway|operahouseparking|mallparking|grab|grabcar|moveit|angkas|joyride|taxi|uber|bus|train|mrt|lrt|ride|shell|petron|caltex|seaoil/,
+      lower: /transport\s+for\s+nsw|metro\s+de\s+(?:malaga|barcelona)|skybus|parking|airport|rail|trainpal|hk\s+airport|liberty\s+oil|fuel|petrol|gas\s+station|autopay\s+parking|toll|expressway|opera\s+house\s+parking|mall\s+parking|grab(?:\s+car)?|grabcar|move\s+it|angkas|joyride|didi(?:\s+tianjin)?|taxi|uber|bus|train|mrt|lrt|ride/,
+      compact: /transportfornsw|skybus|parking|airport|rail|trainpal|hkairport|libertyoil|fuel|petrol|gasstation|autopayparking|toll|expressway|operahouseparking|mallparking|grab|grabcar|moveit|angkas|joyride|didi(?:tianjin)?|taxi|uber|bus|train|mrt|lrt|ride|shell|petron|caltex|seaoil/,
     })
   ) {
     return "Transport";
@@ -279,8 +279,8 @@ export const getSharedMerchantCategoryHint = (value: string): string | null => {
 
   if (
     matchesCategoryHint(value, {
-      lower: /transport\s+for\s+nsw|metro\s+de\s+(?:malaga|barcelona)|skybus|parking|airport|rail|trainpal|hk\s+airport|liberty\s+oil|fuel|petrol|gas\s+station|autopay\s+parking|toll|expressway|opera\s+house\s+parking|mall\s+parking|grab(?:\s+car)?|grabcar|move\s+it|angkas|joyride|taxi|uber|bus|train|mrt|lrt|ride/,
-      compact: /transportfornsw|skybus|parking|airport|rail|trainpal|hkairport|libertyoil|fuel|petrol|gasstation|autopayparking|toll|expressway|operahouseparking|mallparking|grab|grabcar|moveit|angkas|joyride|taxi|uber|bus|train|mrt|lrt|ride|shell|petron|caltex|seaoil/,
+      lower: /transport\s+for\s+nsw|metro\s+de\s+(?:malaga|barcelona)|skybus|parking|airport|rail|trainpal|hk\s+airport|liberty\s+oil|fuel|petrol|gas\s+station|autopay\s+parking|toll|expressway|opera\s+house\s+parking|mall\s+parking|grab(?:\s+car)?|grabcar|move\s+it|angkas|joyride|didi(?:\s+tianjin)?|taxi|uber|bus|train|mrt|lrt|ride/,
+      compact: /transportfornsw|skybus|parking|airport|rail|trainpal|hkairport|libertyoil|fuel|petrol|gasstation|autopayparking|toll|expressway|operahouseparking|mallparking|grab|grabcar|moveit|angkas|joyride|didi(?:tianjin)?|taxi|uber|bus|train|mrt|lrt|ride|shell|petron|caltex|seaoil/,
     })
   ) {
     return "Transport";

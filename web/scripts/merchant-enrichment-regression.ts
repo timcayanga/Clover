@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { classifyMerchant } from "@/lib/data-engine";
 import { applyDeterministicMerchantRescue } from "@/lib/merchant-enrichment";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 
@@ -24,6 +25,9 @@ const main = () => {
     ["GADC 705 SLP SOK MAKATI CITY PH", "Food & Dining", "McDonald's"],
     ["GADC SHLEMERALD KC1 PASIG PH", "Food & Dining", "McDonald's"],
     ["DHL-DUTY COLLECTION MAKATI CITY", "Shopping", "DHL Duty Collection"],
+    ["DIDI TIANJIN CH", "Transport", "DiDi"],
+    ["EFTPAY*NAIXUE HONG KONG KWAI CHUNG HK", "Food & Dining", "Naixue"],
+    ["PANCAKE HOUSE OPAL PASIG PH", "Food & Dining", "Pancake House"],
   ] as const;
 
   for (const [merchantRaw, categoryName, expectedMerchant] of cases) {
@@ -37,6 +41,17 @@ const main = () => {
     assert.equal(result.merchantClean, expectedMerchant, `${merchantRaw} should normalize to ${expectedMerchant}`);
     assert.equal(result.applied, true);
   }
+
+  const didiTransferMisclassification = classifyMerchant({
+    merchantText: "Didi Tianjin CH",
+    categoryName: "Transfers",
+    institution: "RCBC",
+    type: "transfer",
+    merchantRules: [],
+    trainingSignals: [],
+  });
+  assert.equal(didiTransferMisclassification.categoryName, "Transport");
+  assert.equal(didiTransferMisclassification.preferredType, "expense");
 
   const confirmedLike = applyDeterministicMerchantRescue({ merchantRaw: "Custom source", merchantClean: "Confirmed Merchant", categoryName: "Shopping", type: "expense" });
   assert.equal(confirmedLike.merchantClean, "Confirmed Merchant");

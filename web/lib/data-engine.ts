@@ -4018,8 +4018,14 @@ export const classifyMerchant = (params: {
   const tokens = tokenizeMerchant(categoryText || params.merchantText);
   const hardcodedOverride = getHardcodedCategoryOverride(categoryText || params.merchantText);
   const providedCategory = params.categoryName?.trim();
+  const strongMerchantCategory = getStrongMerchantCategoryHint(categoryText || params.merchantText);
+  const parsedTransferContradictedByMerchant =
+    providedCategory?.toLowerCase() === "transfers" &&
+    Boolean(strongMerchantCategory && strongMerchantCategory !== "Transfers");
   const heuristicCategory =
-    providedCategory && providedCategory.toLowerCase() !== "other" ? providedCategory : guessCategoryFallback(categoryText || params.merchantText, params.type);
+    providedCategory && providedCategory.toLowerCase() !== "other" && !parsedTransferContradictedByMerchant
+      ? providedCategory
+      : strongMerchantCategory ?? guessCategoryFallback(categoryText || params.merchantText, params.type);
   const rescuedHeuristic = rescueHeuristicCategory({
     merchantText: params.merchantText,
     categoryText,

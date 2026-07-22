@@ -60,6 +60,7 @@ const PREFERRED_MERCHANT_TOKEN_CASE: Record<string, string> = {
   chatgpt: "ChatGPT",
   cimb: "CIMB",
   discordnitro: "Discord Nitro",
+  didi: "DiDi",
   dunkindonuts: "Dunkin Donuts",
   gcash: "GCash",
   googleone: "Google One",
@@ -837,6 +838,18 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
     },
   ],
   RCBC: [
+    {
+      patterns: [/\bdidi(?:\s+tianjin)?\b/i],
+      replacement: "DiDi",
+    },
+    {
+      patterns: [/\beftpay\*?\s*naixue\b/i, /\bnaixue\b/i],
+      replacement: "Naixue",
+    },
+    {
+      patterns: [/\bpancake\s+house\b/i],
+      replacement: "Pancake House",
+    },
     {
       patterns: [/15-?ppass/i],
       replacement: "Priority Pass",
@@ -2590,6 +2603,8 @@ const stripTrailingStatementNoise = (value: string) => {
 const GENERIC_PAYMENT_RAIL_REPLACEMENTS = new Set(["PayPal", "Grab", "GCash", "Maya", "Apple Pay", "Google Pay"]);
 
 const COMPACT_MERCHANT_CONTAINS_RULES: Array<{ needle: string; replacement: string }> = [
+  { needle: "didi", replacement: "DiDi" },
+  { needle: "naixue", replacement: "Naixue" },
   { needle: "mlbb", replacement: "MLBB Top Up" },
   { needle: "dairyqueen", replacement: "Dairy Queen" },
   { needle: "dunkin", replacement: "Dunkin" },

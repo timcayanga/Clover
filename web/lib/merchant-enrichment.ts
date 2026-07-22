@@ -35,7 +35,13 @@ export const applyDeterministicMerchantRescue = (input: MerchantEnrichmentInput)
   const hintSource = [raw, clean, description].filter(Boolean).join(" ");
   const hint = hintSource ? getStrongMerchantCategoryHint([hintSource, normalizedCandidate].filter(Boolean).join(" ")) : null;
   const currentCategory = nonEmpty(input.categoryName);
-  const categoryName = hint && (!currentCategory || currentCategory.toLowerCase() === "other") ? hint : currentCategory;
+  // Imported rows are not confirmed data. A strong merchant identity is more
+  // reliable than a parser's generic transfer guess (for example, "DiDi
+  // Tianjin" is ride-hailing, not a person-to-person transfer).
+  const categoryName =
+    hint && (!currentCategory || currentCategory.toLowerCase() === "other" || currentCategory.toLowerCase() === "transfers")
+      ? hint
+      : currentCategory;
   const type =
     categoryName === "Transfers"
       ? "transfer"
