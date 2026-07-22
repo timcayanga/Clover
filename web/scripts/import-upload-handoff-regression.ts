@@ -96,6 +96,16 @@ const main = async () => {
   );
   assert.match(
     modalSource,
+    /const showImportProgressDock = items\.length > 0 && progressSessionActive && !activePasswordItem/,
+    "Once a file is queued, the file picker must yield to the dedicated progress surface."
+  );
+  assert.match(
+    modalSource,
+    /\) : showImportProgressDock \? \(\s*<ImportUploadDock/,
+    "Queued uploads must render the progress dock instead of the selected-account file-picker card."
+  );
+  assert.match(
+    modalSource,
     /setLaunchInBackground\(backgroundOnly\);[\s\S]{0,180}importActivitySurfaceRef\.current = backgroundOnly \? "background" : "modal"/,
     "Starting an ordinary upload must not force it into the background."
   );

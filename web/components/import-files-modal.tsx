@@ -6695,6 +6695,10 @@ export function ImportFilesModal({
   // The compact dock is reserved for imports the caller intentionally sends to
   // the background, so a completed import cannot silently disappear.
   const showCompactProgress = launchInBackground && compactProgressUnlocked && progressSessionActive;
+  // Once a file has entered the queue, the file picker is no longer useful and
+  // obscures the only progress the user needs to see. Keep the password prompt
+  // as its own explicit interruption; every other upload uses one progress UI.
+  const showImportProgressDock = items.length > 0 && progressSessionActive && !activePasswordItem;
   const targetDisplayProgress = showCompactProgress ? Math.max(overallProgress, activityProgressFloor) : 0;
   const shouldLockPageInteraction =
     open && !backgroundOnly && !launchInBackground && Boolean(activePasswordItem);
@@ -6896,24 +6900,24 @@ export function ImportFilesModal({
     }
 
     const body = document.body;
-    if (open && (backgroundOnly || launchInBackground || showCompactProgress)) {
+    if (open && (backgroundOnly || launchInBackground || showImportProgressDock)) {
       delete body.dataset.cloverImportModalLocks;
       delete body.dataset.cloverImportModalOpen;
     }
-  }, [backgroundOnly, launchInBackground, open, shouldLockPageInteraction, showCompactProgress]);
+  }, [backgroundOnly, launchInBackground, open, shouldLockPageInteraction, showImportProgressDock]);
 
   useEffect(() => {
     if (typeof document === "undefined") {
       return;
     }
 
-    if (!open || backgroundOnly || launchInBackground || showCompactProgress) {
+    if (!open || backgroundOnly || launchInBackground || showImportProgressDock) {
       clearImportInteractionLocks();
     }
-  }, [backgroundOnly, launchInBackground, open, showCompactProgress]);
+  }, [backgroundOnly, launchInBackground, open, showImportProgressDock]);
 
   useEffect(() => {
-    if (typeof document === "undefined" || !open || backgroundOnly || launchInBackground || showCompactProgress) {
+    if (typeof document === "undefined" || !open || backgroundOnly || launchInBackground || showImportProgressDock) {
       return;
     }
 
@@ -6934,7 +6938,7 @@ export function ImportFilesModal({
       delete body.dataset.cloverImportModalVisibleCount;
       delete body.dataset.cloverImportModalVisible;
     };
-  }, [backgroundOnly, launchInBackground, open, showCompactProgress]);
+  }, [backgroundOnly, launchInBackground, open, showImportProgressDock]);
 
   useEffect(() => {
     if (!open || !workspaceId) {
@@ -7609,7 +7613,7 @@ export function ImportFilesModal({
         }
         onUnlock={(id) => void handleRetry(id)}
       />
-    ) : showCompactProgress ? (
+    ) : showImportProgressDock ? (
       <ImportUploadDock
         open
         tone={currentErrorItem ? "error" : hasCompletedBatch ? "success" : "default"}
