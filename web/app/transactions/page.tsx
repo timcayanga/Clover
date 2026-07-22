@@ -2659,6 +2659,7 @@ function TransactionsPageContent() {
       pageSizeOverride?: number;
       summaryMode?: "light" | "full";
       prefetchOnly?: boolean;
+      preserveKnownTotal?: boolean;
     }
   ) => {
     const requestId = options?.prefetchOnly ? transactionsLoadRequestRef.current : ++transactionsLoadRequestRef.current;
@@ -2899,7 +2900,7 @@ function TransactionsPageContent() {
         mergedTransactionsWithImports.length > 0 ? mergedTransactionsWithImports : fetchedTransactions
       );
       const nextCurrencyCodes = responseCurrencyCodes.length > 0 ? responseCurrencyCodes : workspaceCurrencyCodesFromData;
-      const displayedTotalCount =
+      const serverDisplayedTotalCount =
         hasServerSideFilters
           ? exactServerTotalCount
           : fetchedTransactions.length > 0 && mergedTransactionsWithImports.length < fetchedTransactions.length
@@ -2909,6 +2910,10 @@ function TransactionsPageContent() {
               : typeof summaryPayload?.totalCount === "number"
                 ? Math.max(summaryPayload.totalCount, mergedTransactionsWithImports.length)
                 : mergedTransactionsWithImports.length;
+      const displayedTotalCount =
+        !hasServerSideFilters && options?.preserveKnownTotal
+          ? Math.max(transactionsSummary.totalCount, serverDisplayedTotalCount)
+          : serverDisplayedTotalCount;
       if (shouldPreserveKnownTransactionsWhileImportSettles) {
         const fallbackCurrencyCodes =
           responseCurrencyCodes.length > 0
@@ -2950,6 +2955,7 @@ function TransactionsPageContent() {
               pageOverride: options?.pageOverride ?? transactionsPage,
               pageSizeOverride: options?.pageSizeOverride ?? transactionsPageSize,
               summaryMode: options?.summaryMode ?? "light",
+              preserveKnownTotal: options?.preserveKnownTotal,
             });
           }, 1800);
         }
@@ -3063,6 +3069,7 @@ function TransactionsPageContent() {
           pageOverride: options?.pageOverride ?? transactionsPage,
           pageSizeOverride: options?.pageSizeOverride ?? transactionsPageSize,
           summaryMode: "full",
+          preserveKnownTotal: options?.preserveKnownTotal,
         });
 
         if (!options?.append && !compactViewport && !hasServerSideFilters && requestPage === 1 && Number(requestPageSize) <= 25) {
@@ -3527,7 +3534,7 @@ function TransactionsPageContent() {
       return;
     }
 
-    void loadTransactionsPage(selectedWorkspaceId);
+    void loadTransactionsPage(selectedWorkspaceId, { preserveKnownTotal: true });
   }, [
     selectedWorkspaceId,
     currencyFilter,
