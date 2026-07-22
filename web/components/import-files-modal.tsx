@@ -19,7 +19,7 @@ import {
   isImageImportFile,
   resolveCashAccountOption,
 } from "@/lib/import-file-helpers";
-import { extractTextFromFile } from "@/lib/import-file-text";
+import { extractTextFromFile, probeFilePasswordProtection } from "@/lib/import-file-text";
 import { postFileWithProgress } from "@/lib/import-file-post";
 import { validateImportFile } from "@/lib/import-file-validation";
 import { type ImportImageMode } from "@/lib/import-image-mode";
@@ -1168,7 +1168,8 @@ export function ImportFilesModal({
         localPreparseStartedRef.current.has(item.id) ||
         item.confirmationState === "confirmed" ||
         item.status === "done" ||
-        item.status === "error"
+        item.status === "error" ||
+        item.status === "needs_password"
       ) {
         continue;
       }
@@ -1569,7 +1570,31 @@ export function ImportFilesModal({
         workspaceReady: Boolean(workspaceId),
         instanceId: importModalInstanceIdRef.current,
       });
-      scheduleQueuedImport();
+      const pdfAdditions = additions.filter((item) => item.file.name.toLowerCase().endsWith(".pdf"));
+      if (pdfAdditions.length === 0) {
+        scheduleQueuedImport();
+      } else {
+        // Probe encrypted PDFs before dispatching their upload request. This is
+        // metadata-only, so protected files can prompt immediately without
+        // waiting for the server to upload and preflight the full document.
+        void Promise.all(
+          pdfAdditions.map(async (item) => {
+            const isPasswordProtected = await probeFilePasswordProtection(item.file);
+            if (!isPasswordProtected) {
+              return;
+            }
+
+            const currentItem = itemsRef.current.find((entry) => entry.id === item.id);
+            if (!currentItem || currentItem.status !== "pending" || currentItem.password.trim()) {
+              return;
+            }
+
+            requestPasswordForItem(item.id);
+          })
+        ).finally(() => {
+          scheduleQueuedImport();
+        });
+      }
       if (shouldLaunchInBackground) {
         setLaunchInBackground(true);
         importActivitySurfaceRef.current = "background";
@@ -3936,7 +3961,13 @@ export function ImportFilesModal({
     }
 
     const item = itemsRef.current.find((entry) => entry.id === itemId);
-    if (!item || item.confirmationState === "confirmed" || item.status === "done" || item.status === "error") {
+    if (
+      !item ||
+      item.confirmationState === "confirmed" ||
+      item.status === "done" ||
+      item.status === "error" ||
+      item.status === "needs_password"
+    ) {
       return;
     }
 

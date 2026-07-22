@@ -24,6 +24,7 @@ const isPdfPasswordError = (error: unknown) => {
 
 const PDF_PASSWORD_PROBE = "__clover_password_probe__";
 const CLIENT_PDF_TEXT_EXTRACTION_TIMEOUT_MS = 12_000;
+const CLIENT_PDF_PASSWORD_PROBE_TIMEOUT_MS = 4_000;
 
 const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number) => {
   let timeoutId: number | null = null;
@@ -39,6 +40,34 @@ const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number) => {
     if (timeoutId !== null) {
       window.clearTimeout(timeoutId);
     }
+  }
+};
+
+export const probeFilePasswordProtection = async (file: File) => {
+  if (!file.name.toLowerCase().endsWith(".pdf")) {
+    return false;
+  }
+
+  try {
+    const { pdfjs } = await import("@/lib/pdfjs");
+    const data = new Uint8Array(await file.arrayBuffer());
+    const loadingTask = pdfjs.getDocument({
+      data,
+      password: PDF_PASSWORD_PROBE,
+      standardFontDataUrl: pdfjsStandardFontDataUrl,
+    } as any);
+
+    try {
+      const pdf = await withTimeout(loadingTask.promise, CLIENT_PDF_PASSWORD_PROBE_TIMEOUT_MS);
+      await pdf.destroy();
+      return false;
+    } catch (error) {
+      await loadingTask.destroy().catch(() => undefined);
+      return isPdfPasswordError(error);
+    }
+  } catch {
+    // The server remains authoritative if the browser cannot run PDF.js.
+    return false;
   }
 };
 
