@@ -2272,6 +2272,8 @@ export function ImportFilesModal({
         const finalizationNeedsReview = Boolean(payload.finalizationNeedsReview);
         const processingPhase = typeof importFile?.processingPhase === "string" ? importFile.processingPhase : null;
         const processingMessage = typeof importFile?.processingMessage === "string" ? importFile.processingMessage : null;
+        const passwordRequired =
+          processingPhase === "password_required" || /password-protected|password required/i.test(processingMessage ?? "");
         const statusAccountId =
           typeof importFile?.accountId === "string" && importFile.accountId.trim() && !importFile.accountId.startsWith("optimistic-")
             ? importFile.accountId.trim()
@@ -2375,6 +2377,14 @@ export function ImportFilesModal({
           confirmedTransactionsCount === 0 &&
           Date.now() - startedAt < VISUAL_IMPORT_REPAIR_GRACE_MS;
 
+        // Password-required is terminal for this attempt. Check it before any
+        // optimistic visibility or recovery path so preliminary metadata cannot
+        // hide the password prompt.
+        if (passwordRequired) {
+          requestPasswordForItem(itemId, Boolean(itemsRef.current.find((item) => item.id === itemId)?.password.trim()));
+          return;
+        }
+
         if (processingPhase === "account_match_needs_confirmation") {
           closeImportAfterError(
             itemId,
@@ -2412,11 +2422,6 @@ export function ImportFilesModal({
         }
 
         if (importFile?.status === "failed" && parsedRowsCount === 0 && confirmedTransactionsCount === 0) {
-          if (processingPhase === "password_required" || /password-protected|password required/i.test(processingMessage ?? "")) {
-            requestPasswordForItem(itemId);
-            return;
-          }
-
           if (visualRepairGraceActive) {
             emitItemUpdate({
               status: "importing",
@@ -5043,6 +5048,16 @@ export function ImportFilesModal({
               const processingMessage = typeof importFile?.processingMessage === "string" ? importFile.processingMessage : null;
               const parsedRowsCount = Number(payload.parsedRowsCount ?? 0);
               const confirmedTransactionsCount = Number(payload.confirmedTransactionsCount ?? 0);
+              const passwordRequired =
+                processingPhase === "password_required" || /password-protected|password required/i.test(processingMessage ?? "");
+              if (passwordRequired) {
+                inFlightStatusMonitorStopped = true;
+                requestPasswordForItem(
+                  itemId,
+                  Boolean(itemsRef.current.find((item) => item.id === itemId)?.password.trim())
+                );
+                break;
+              }
               const statusDecision = resolveImportModalStatusDecision({
                 importMode: itemImportMode,
                 status: typeof importFile?.status === "string" ? importFile.status : null,
