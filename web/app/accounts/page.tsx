@@ -2951,7 +2951,10 @@ function AccountsPageContent() {
         : typeof latestCheckpointMetadata?.uploadBankHint === "string"
           ? latestCheckpointMetadata.uploadBankHint
         : null;
-    const resolvedBankLabel = checkpointInstitution ?? relatedTransactionInstitution ?? row.institution ?? null;
+    // Checkpoints begin with provisional parser metadata. Once an account and
+    // transactions are persisted, their identity is authoritative; otherwise
+    // an old provisional label can rename a correct account card after refresh.
+    const resolvedBankLabel = row.institution ?? relatedTransactionInstitution ?? checkpointInstitution ?? null;
     const checkpointAccountName =
       typeof latestCheckpointMetadata?.accountName === "string"
         ? latestCheckpointMetadata.accountName

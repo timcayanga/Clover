@@ -11489,6 +11489,14 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         status: checkpointStatus,
         mismatchReason,
         sourceMetadata: mergeCheckpointSourceMetadata(statementCheckpoint.sourceMetadata, {
+          // The preliminary image transcript can be less reliable than the
+          // confirmed account selected from persisted parsed rows. Persist the
+          // confirmed identity so later account-card hydration cannot revive a
+          // stale parser label (for example GCrypto after GCash was confirmed).
+          accountName: account.name,
+          institution: account.institution,
+          accountNumber: account.accountNumber,
+          accountType: account.type,
           workflowStage: checkpointStatus === "reconciled" ? "complete" : checkpointStatus === "mismatch" ? "repair_needed" : "reconciling",
           publishedVisibleImportComplete: accountSummaries.length > 0,
           publishedAccountSummaries: accountSummaries,

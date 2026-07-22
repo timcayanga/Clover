@@ -16,7 +16,7 @@ const section = (source: string, start: string, end: string) => {
 };
 
 const main = async () => {
-  const [modalSource, processRouteSource, progressRouteSource, confirmRouteSource, workerSource, importQueueSource, importProcessorSource, importFileTextSource, statusSnapshotSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource, pageDropSource, globalImportActivitySource, vercelConfigSource] = await Promise.all([
+  const [modalSource, processRouteSource, progressRouteSource, confirmRouteSource, workerSource, importQueueSource, importProcessorSource, importFileTextSource, statusSnapshotSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource, accountsPageSource, pageDropSource, globalImportActivitySource, vercelConfigSource] = await Promise.all([
     readFile(join(webRoot, "components/import-files-modal.tsx"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/process/route.ts"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/progress/route.ts"), "utf8"),
@@ -30,6 +30,7 @@ const main = async () => {
     readFile(join(webRoot, "lib/import-file-post.ts"), "utf8"),
     readFile(join(webRoot, "lib/import-visibility-rules.ts"), "utf8"),
     readFile(join(webRoot, "app/transactions/page.tsx"), "utf8"),
+    readFile(join(webRoot, "app/accounts/page.tsx"), "utf8"),
     readFile(join(webRoot, "components/page-file-drop-zone.tsx"), "utf8"),
     readFile(join(webRoot, "components/global-import-activity.tsx"), "utf8"),
     readFile(join(webRoot, "vercel.json"), "utf8"),
@@ -206,6 +207,16 @@ const main = async () => {
     transactionsPageSource,
     /await Promise\.all\(\[\s*loadWorkspaceMetadata[\s\S]{0,500}loadTransactionsPage/,
     "Post-import settlement must avoid sequential database retry bursts."
+  );
+  assert.match(
+    accountsPageSource,
+    /const resolvedBankLabel = row\.institution \?\? relatedTransactionInstitution \?\? checkpointInstitution \?\? null/,
+    "An Accounts card must prefer its confirmed account identity over provisional checkpoint metadata."
+  );
+  assert.match(
+    importProcessorSource,
+    /accountName: account\.name,[\s\S]{0,250}institution: account\.institution,[\s\S]{0,250}accountType: account\.type,[\s\S]{0,700}publishedAccountSummaries/,
+    "Import finalization must write the confirmed account identity back to its checkpoint metadata."
   );
   assert.match(
     transactionsPageSource,
