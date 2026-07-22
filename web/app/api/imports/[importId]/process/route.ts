@@ -2632,7 +2632,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         (shouldProcessInline || forceInlineProcessing || Boolean(cachedDocTextInfo)) &&
         (!shouldQueueDocumentUpload || Boolean(cachedDocTextInfo));
 
-      const shouldProcessStatementAfterResponse = shouldQueueStatementImageAfterUpload;
+      // A trained screenshot fallback or durable parsed-image cache is already
+      // a proven deterministic layout. Do not add the post-response queue
+      // handoff before confirming it: that path hides the fast result behind a
+      // second request and is the main source of avoidable latency for repeat
+      // screenshot imports. Unknown screenshots still use the safer deferred
+      // route so their backup reader remains available.
+      const shouldProcessStatementAfterResponse =
+        shouldQueueStatementImageAfterUpload && !shouldPreferSampleFallback && !hasReusableCachedDocRecord;
 
       if (shouldProcessStatementAfterResponse) {
         return queueBackgroundProcessingAfterUpload(uploadPromise, processingBankName || null, {

@@ -255,6 +255,11 @@ const main = async () => {
   );
   assert.match(
     processRouteSource,
+    /const shouldProcessStatementAfterResponse =\s*shouldQueueStatementImageAfterUpload && !shouldPreferSampleFallback && !hasReusableCachedDocRecord/,
+    "Trained screenshot layouts and cached parsed images must avoid the post-response queue handoff so repeat uploads reach visible rows quickly."
+  );
+  assert.match(
+    processRouteSource,
     /if \(importId && isTransientDatabaseCapacityError\(error\)\) \{[\s\S]{0,1200}if \(!localDev\) \{[\s\S]{0,1200}status: "failed"[\s\S]{0,1200}code: "I-107"/,
     "A serverless database-capacity error must become a retryable failure, not an unconsumed queued_retry job."
   );
