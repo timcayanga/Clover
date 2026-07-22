@@ -6687,6 +6687,9 @@ export function ImportFilesModal({
   const displayedCompletedFileCount = Math.max(progressSettledFileCount, activityCompletedFileCount);
   const activityProgressFloor = Math.max(0, Math.min(100, Number(activitySnapshotForDisplay?.progress ?? 0)));
   const hasCompletedBatch = items.length > 0 && items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
+  const completedImportSummary = hasCompletedBatch
+    ? activitySnapshotForDisplay?.summary ?? buildVisibleImportSummary(items)
+    : null;
   const progressSessionActive = busy || Boolean(activeItem) || hasCompletedBatch || Boolean(currentErrorItem);
   // Standard uploads stay in the modal until there is an explicit outcome.
   // The compact dock is reserved for imports the caller intentionally sends to
@@ -7609,7 +7612,7 @@ export function ImportFilesModal({
     ) : showCompactProgress ? (
       <ImportUploadDock
         open
-        tone={currentErrorItem ? "error" : "default"}
+        tone={currentErrorItem ? "error" : hasCompletedBatch ? "success" : "default"}
         fileName={currentErrorItem?.file.name ?? activitySnapshotForDisplay?.fileName ?? activeProgressItem?.file.name ?? null}
         fileIndex={
           currentErrorItem
@@ -7624,6 +7627,7 @@ export function ImportFilesModal({
         fileTotal={items.length}
         completedFiles={displayedCompletedFileCount}
         progress={Math.max(displayedOverallProgress, activityProgressFloor)}
+        summary={completedImportSummary}
         detail={
           (currentErrorItem ? compactErrorSpec?.message ?? currentErrorItem.errorTitle ?? "Clover could not finish this import." : null) ??
           (activityProgressFloor > displayedOverallProgress && activitySnapshotForDisplay?.detail

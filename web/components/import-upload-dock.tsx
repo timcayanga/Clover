@@ -158,7 +158,9 @@ export function ImportUploadDock({
   const statusDetail =
     tone === "error"
       ? detail
-      : resultHeadline || (activeMilestone ? `✓ ${activeMilestone}` : detail);
+      : isComplete && tone === "success"
+        ? resultHeadline || "Your import is now visible in Clover."
+        : resultHeadline || (activeMilestone ? `✓ ${activeMilestone}` : detail);
 
   return (
     <div className={`import-upload-dock import-upload-dock--${tone}`} role={tone === "error" ? "alert" : "status"} aria-live={tone === "error" ? "assertive" : "polite"}>
@@ -166,7 +168,13 @@ export function ImportUploadDock({
         <div className="import-upload-dock__header">
           <div className="import-upload-dock__copy">
             <p className="eyebrow">Import progress</p>
-            {tone === "error" && errorTitle ? <strong>{errorTitle}</strong> : fileLabel ? <strong>{fileLabel}</strong> : null}
+            {tone === "error" && errorTitle ? (
+              <strong>{errorTitle}</strong>
+            ) : isComplete && tone === "success" ? (
+              <strong>Import complete</strong>
+            ) : fileLabel ? (
+              <strong>{fileLabel}</strong>
+            ) : null}
             {displayFileName ? <p className="import-upload-dock__file-name" title={fileName ?? undefined}>{displayFileName}</p> : null}
             <p className="import-upload-dock__message">{statusDetail}</p>
             {tone === "error" && timingSummary ? <p className="import-upload-dock__phase">{timingSummary}</p> : null}

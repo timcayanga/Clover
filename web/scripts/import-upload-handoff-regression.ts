@@ -119,6 +119,16 @@ const main = async () => {
     /primaryVisibilityCompletedRef\.current = true;[\s\S]{0,300}scheduleSuccessfulImportAutoClose\(\)/,
     "The successful auto-close timer must start only after the visibility contract completes."
   );
+  assert.match(
+    modalSource,
+    /tone=\{currentErrorItem \? "error" : hasCompletedBatch \? "success" : "default"\}[\s\S]{0,1400}summary=\{completedImportSummary\}/,
+    "A completed foreground import must render an explicit success dock with its result summary before it auto-closes."
+  );
+  assert.match(
+    await readFile(join(webRoot, "components/import-upload-dock.tsx"), "utf8"),
+    /isComplete && tone === "success"[\s\S]{0,300}<strong>Import complete<\/strong>/,
+    "The completed dock must say Import complete rather than relying on 100% alone."
+  );
   assert.doesNotMatch(
     modalSource,
     /if \(\(backgroundOnly \|\| launchInBackground\) && !activePasswordItem\) \{\s*return null;/,
