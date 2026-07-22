@@ -464,7 +464,6 @@ export function ImportFilesModal({
       item.confirmationState === "confirmed" ||
       item.status === "done" ||
       item.status === "error" ||
-      item.status === "needs_password" ||
       hasVisibleImportData(item, localPreparseSummaryByItemIdRef.current.get(item.id))
     ).length;
     const snapshotSettlesCurrentFile =
@@ -493,7 +492,6 @@ export function ImportFilesModal({
         snapshotItem.confirmationState === "confirmed" ||
         snapshotItem.status === "done" ||
         snapshotItem.status === "error" ||
-        snapshotItem.status === "needs_password" ||
         hasVisibleImportData(snapshotItem, localPreparseSummaryByItemIdRef.current.get(snapshotItem.id))
       );
     const normalizedCompletedFiles = Math.min(
@@ -510,7 +508,6 @@ export function ImportFilesModal({
         liveActiveItem.confirmationState === "confirmed" ||
         liveActiveItem.status === "done" ||
         liveActiveItem.status === "error" ||
-        liveActiveItem.status === "needs_password" ||
         hasVisibleImportData(liveActiveItem, localPreparseSummaryByItemIdRef.current.get(liveActiveItem.id))
       )
         ? liveActiveItem.progress / 100
@@ -1666,6 +1663,10 @@ export function ImportFilesModal({
     if (!currentItem) {
       return;
     }
+
+    // A password prompt ends this monitor attempt. The unlocked retry must be
+    // allowed to begin a fresh observer for the same import file.
+    startedImportMonitorKeys.delete(`${importModalInstanceIdRef.current}:${workspaceId}:${currentItem.importFileId ?? ""}`);
 
     const passwordMessage = wrongPassword
       ? `Wrong password for ${currentItem.file.name}.`
@@ -6636,7 +6637,6 @@ export function ImportFilesModal({
     item.confirmationState === "confirmed" ||
     item.status === "done" ||
     item.status === "error" ||
-    item.status === "needs_password" ||
     hasVisibleImportData(item, localPreparseSummaryByItemIdRef.current.get(item.id));
   const progressSettledFileCount = items.filter(isSettledForProgress).length;
   const activeProgressContribution =
@@ -7293,12 +7293,26 @@ export function ImportFilesModal({
 
     updateItem(itemId, {
       status: "pending",
+      confirmationState: "pending",
       error: null,
       errorCode: null,
       errorTitle: null,
       errorNextSteps: null,
       progress: 0,
       progressLabel: "Preparing file",
+    });
+    publishImportActivity({
+      workspaceId,
+      surface: importActivitySurfaceRef.current,
+      status: "active",
+      fileName: item?.file.name ?? null,
+      fileIndex: item ? itemsRef.current.findIndex((entry) => entry.id === itemId) + 1 : 0,
+      fileTotal: itemsRef.current.length,
+      completedFiles: completedFileCount,
+      progress: IMPORT_PROGRESS.uploading,
+      detail: "Password accepted. Clover is opening the statement.",
+      summary: null,
+      errorMessage: null,
     });
 
     const remainingLockedFiles = items.filter((item) => item.id !== itemId && item.status === "needs_password");

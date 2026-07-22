@@ -51,6 +51,21 @@ const main = async () => {
   assert.match(modalSource, /scheduleQueuedImport\(150\)/);
   assert.match(modalSource, /canonical_import_adopted/);
   assert.match(modalSource, /startedImportMonitorKeys\.has\(monitorKey\)/);
+  assert.match(
+    modalSource,
+    /startedImportMonitorKeys\.delete\(`\$\{importModalInstanceIdRef\.current\}:\$\{workspaceId\}:\$\{currentItem\.importFileId \?\? ""\}`\)/,
+    "Unlocking a password-protected file must start a fresh status monitor."
+  );
+  assert.match(
+    modalSource,
+    /progress: IMPORT_PROGRESS\.uploading,[\s\S]{0,200}detail: "Password accepted\. Clover is opening the statement\."/,
+    "A password retry must replace any stale completion activity with an active upload stage."
+  );
+  assert.doesNotMatch(
+    modalSource,
+    /item\.status === "needs_password" \|\|\s*hasVisibleImportData\(item, localPreparseSummaryByItemIdRef\.current\.get\(item\.id\)\)/,
+    "Waiting for a password is not a completed import and must never contribute 100% progress."
+  );
   assert.match(modalSource, /const settledVisible = await waitForSettledVisibility\(/);
   assert.match(modalSource, /progressLabel: "Imported successfully"/);
   assert.match(
