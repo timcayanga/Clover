@@ -6686,6 +6686,10 @@ export function ImportFilesModal({
   );
   const displayedCompletedFileCount = Math.max(progressSettledFileCount, activityCompletedFileCount);
   const activityProgressFloor = Math.max(0, Math.min(100, Number(activitySnapshotForDisplay?.progress ?? 0)));
+  // `displayedOverallProgress` is intentionally animated only for the compact
+  // background surface. A foreground upload must render the durable item
+  // progress directly; otherwise its dock is reset to 0% for the whole import.
+  const visibleOverallProgress = Math.max(overallProgress, activityProgressFloor);
   const hasCompletedBatch = items.length > 0 && items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
   const completedImportSummary = hasCompletedBatch
     ? activitySnapshotForDisplay?.summary ?? buildVisibleImportSummary(items)
@@ -6980,7 +6984,7 @@ export function ImportFilesModal({
         : displayedCompletedFileCount,
       fileTotal: items.length,
       completedFiles: displayedCompletedFileCount,
-      progress: Math.max(displayedOverallProgress, activityProgressFloor),
+      progress: visibleOverallProgress,
       detail: nextDetail,
       summary: nextStatus === "done" ? previousSummary : null,
       errorCode: activeErrorItem?.errorCode ?? (validationNotice ? lastImportActivityRef.current?.errorCode ?? null : null),
@@ -7003,7 +7007,7 @@ export function ImportFilesModal({
 
     lastImportActivityRef.current = nextSnapshot;
     setImportActivity(nextSnapshot);
-  }, [activeProgressItem, activityProgressFloor, activitySnapshotForDisplay, busy, completedFileCount, displayedCompletedFileCount, displayedOverallProgress, items, message, open, progressSettledFileCount, validationNotice, workspaceId]);
+  }, [activeProgressItem, activityProgressFloor, activitySnapshotForDisplay, busy, completedFileCount, displayedCompletedFileCount, items, message, open, progressSettledFileCount, validationNotice, visibleOverallProgress, workspaceId]);
   useEffect(() => {
     if (!open || passwordItems.length === 0) {
       setSelectedPasswordItemId(null);
@@ -7630,11 +7634,11 @@ export function ImportFilesModal({
         }
         fileTotal={items.length}
         completedFiles={displayedCompletedFileCount}
-        progress={Math.max(displayedOverallProgress, activityProgressFloor)}
+        progress={visibleOverallProgress}
         summary={completedImportSummary}
         detail={
           (currentErrorItem ? compactErrorSpec?.message ?? currentErrorItem.errorTitle ?? "Clover could not finish this import." : null) ??
-          (activityProgressFloor > displayedOverallProgress && activitySnapshotForDisplay?.detail
+          (activityProgressFloor > overallProgress && activitySnapshotForDisplay?.detail
             ? activitySnapshotForDisplay.detail
             : null) ??
           ((!activeProgressItem && hasCompletedBatch && message)

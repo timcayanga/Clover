@@ -101,6 +101,16 @@ const main = async () => {
   );
   assert.match(
     modalSource,
+    /const visibleOverallProgress = Math\.max\(overallProgress, activityProgressFloor\);/,
+    "Foreground uploads must render their durable item progress instead of the background-only animated value."
+  );
+  assert.match(
+    modalSource,
+    /<ImportUploadDock[\s\S]{0,1000}progress=\{visibleOverallProgress\}/,
+    "The visible upload dock must receive real foreground progress, not a reset 0% display value."
+  );
+  assert.match(
+    modalSource,
     /\) : showImportProgressDock \? \(\s*<ImportUploadDock/,
     "Queued uploads must render the progress dock instead of the selected-account file-picker card."
   );
