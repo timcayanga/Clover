@@ -258,6 +258,17 @@ const main = async () => {
     /const shouldProcessStatementAfterResponse =\s*shouldQueueStatementImageAfterUpload && !shouldPreferSampleFallback && !hasReusableCachedDocRecord/,
     "Trained screenshot layouts and cached parsed images must avoid the post-response queue handoff so repeat uploads reach visible rows quickly."
   );
+  const confirmationSource = section(importProcessorSource, "export const confirmImportFile", "if (isDocumentImport)");
+  assert.match(
+    confirmationSource,
+    /planLimits\?\.transactionLimit != null/,
+    "Unlimited workspaces must not calculate transaction usage on the visible import-confirmation path."
+  );
+  assert.doesNotMatch(
+    confirmationSource,
+    /Promise\.all\(\[[\s\S]{0,240}getWorkspaceOwnerPlanUsage/,
+    "The transaction-usage aggregate must not run in parallel for every confirmation."
+  );
   assert.match(
     processRouteSource,
     /if \(importId && isTransientDatabaseCapacityError\(error\)\) \{[\s\S]{0,1200}if \(!localDev\) \{[\s\S]{0,1200}status: "failed"[\s\S]{0,1200}code: "I-107"/,

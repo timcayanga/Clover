@@ -10307,11 +10307,18 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           where: { importFileId },
         })
       : null)();
-  const [planLimits, planUsage, documentCheckpointRecord] = await Promise.all([
+  const [planLimits, documentCheckpointRecord] = await Promise.all([
     getWorkspaceOwnerLimits(String(importFile.workspaceId)),
-    getWorkspaceOwnerPlanUsage(String(importFile.workspaceId)),
     documentCheckpointPromise,
   ]);
+  // Unlimited workspaces do not need an aggregate transaction count before a
+  // statement can be confirmed. That count is a relatively expensive database
+  // read on every screenshot import and was on the visible critical path even
+  // when there was no limit to enforce.
+  const planUsage =
+    planLimits?.transactionLimit != null
+      ? await getWorkspaceOwnerPlanUsage(String(importFile.workspaceId))
+      : null;
   const planReadyAt = Date.now();
   const importMode = readCheckpointImportMode(documentCheckpointRecord?.sourceMetadata) ?? "statement";
   const imageImport = isImageImportFile(String(importFile.fileType ?? ""), String(importFile.fileName ?? ""));
