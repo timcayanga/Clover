@@ -150,7 +150,7 @@ const runRecurringChecks = () => {
     },
   ]);
 
-  const gymPattern = patterns.find((pattern) => pattern.canonicalTitle === "Gym Membership");
+  const gymPattern = patterns.find((pattern) => pattern.canonicalTitle === "Anytime Fitness");
   assert(gymPattern?.frequency === "monthly", "Expected gym membership to be detected as monthly recurring");
 
   const merchantVariantPatterns = detectRecurringPatterns([
@@ -326,6 +326,145 @@ const runRecurringChecks = () => {
 
   const youtubePattern = fxSubscriptionPatterns.find((pattern) => pattern.canonicalTitle === "YouTube");
   assert(youtubePattern?.frequency === "monthly", "Expected FX-shifted subscription charges across two months to become recurring");
+
+  const knownSubscriptionPatterns = detectRecurringPatterns([
+    {
+      id: "known-1",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-01-02"),
+      amount: 1149.32,
+      currency: "PHP",
+      type: "expense",
+      merchantRaw: "OPENAI CHATGPT SUBSCRIPTION DUBLIN IRL 88291",
+      merchantClean: "OpenAI ChatGPT Subscription",
+      description: "OPENAI CHATGPT SUBSCRIPTION DUBLIN IRL 88291",
+      category: { name: "Subscriptions" },
+      account: { id: "a", name: "RCBC 1014", institution: "RCBC" },
+      importFile: null,
+    },
+    {
+      id: "known-2",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-02-02"),
+      amount: 1178.91,
+      currency: "PHP",
+      type: "expense",
+      merchantRaw: "OPENAI*CHATGPT SUBSCR 99218",
+      merchantClean: "OpenAI ChatGPT Subscription",
+      description: "OPENAI*CHATGPT SUBSCR 99218",
+      category: { name: "Subscriptions" },
+      account: { id: "a", name: "RCBC 1014", institution: "RCBC" },
+      importFile: null,
+    },
+    {
+      id: "linkedin-1",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-01-11"),
+      amount: 1699,
+      currency: "PHP",
+      type: "expense",
+      merchantRaw: "LINKEDIN PREMIUM 81102",
+      merchantClean: "LinkedIn",
+      description: "LINKEDIN PREMIUM 81102",
+      category: { name: "Subscriptions" },
+      account: { id: "a", name: "RCBC 1014", institution: "RCBC" },
+      importFile: null,
+    },
+    {
+      id: "linkedin-2",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-02-11"),
+      amount: 1721.45,
+      currency: "PHP",
+      type: "expense",
+      merchantRaw: "LINKEDIN SUBSCRIPTION 91822",
+      merchantClean: "LinkedIn",
+      description: "LINKEDIN SUBSCRIPTION 91822",
+      category: { name: "Subscriptions" },
+      account: { id: "a", name: "RCBC 1014", institution: "RCBC" },
+      importFile: null,
+    },
+  ]);
+
+  assert(
+    knownSubscriptionPatterns.some((pattern) => pattern.canonicalTitle === "OpenAI ChatGPT Subscription"),
+    "Expected recurring suggestions to preserve the normalized Transactions title"
+  );
+  assert(knownSubscriptionPatterns.some((pattern) => pattern.canonicalTitle === "LinkedIn"), "Expected LinkedIn to qualify after two months");
+
+  const globePatterns = detectRecurringPatterns([
+    {
+      id: "globe-1",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-01-06"),
+      amount: 1799,
+      currency: "PHP",
+      type: "expense",
+      merchantRaw: "GLOBE-BILLSPAY TAGUIG CITY PH",
+      merchantClean: "Globe",
+      description: "GLOBE-BILLSPAY TAGUIG CITY PH",
+      category: { name: "Bills & Utilities" },
+      account: { id: "a", name: "RCBC 1014", institution: "RCBC" },
+      importFile: null,
+    },
+    {
+      id: "globe-2",
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date("2026-02-05"),
+      amount: 1942.18,
+      currency: "PHP",
+      type: "expense",
+      merchantRaw: "GLOBE BILLSPAY TAGUIG CITY PH 12102",
+      merchantClean: "Globe",
+      description: "GLOBE BILLSPAY TAGUIG CITY PH 12102",
+      category: { name: "Bills & Utilities" },
+      account: { id: "a", name: "RCBC 1014", institution: "RCBC" },
+      importFile: null,
+    },
+  ]);
+
+  assert(globePatterns.some((pattern) => pattern.canonicalTitle === "Globe"), "Expected variable Globe bills to qualify after two months");
+
+  const everydayMerchantPatterns = detectRecurringPatterns([
+    ...["2026-01-24", "2026-02-24", "2026-03-24"].map((date, index) => ({
+      id: `grab-${index}`,
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date(date),
+      amount: 289.3,
+      currency: "PHP",
+      type: "expense" as const,
+      merchantRaw: `GRAB 1795 00 ${index}`,
+      merchantClean: "Grab",
+      description: `GRAB 1795 00 ${index}`,
+      category: { name: "Food & Dining" },
+      account: { id: "a", name: "RCBC 1014", institution: "RCBC" },
+      importFile: null,
+    })),
+    ...["2026-01-18", "2026-02-18", "2026-03-18"].map((date, index) => ({
+      id: `tobys-${index}`,
+      workspaceId: "w",
+      accountId: "a",
+      date: new Date(date),
+      amount: 210,
+      currency: "PHP",
+      type: "expense" as const,
+      merchantRaw: `TOBY'S ESTATE ${index}`,
+      merchantClean: "Toby's Estate",
+      description: `TOBY'S ESTATE ${index}`,
+      category: { name: "Food & Dining" },
+      account: { id: "a", name: "RCBC 1014", institution: "RCBC" },
+      importFile: null,
+    })),
+  ]);
+
+  assert(everydayMerchantPatterns.length === 0, "Expected repeated Grab and cafe purchases to stay out of recurring suggestions");
 
   const monthEndBillPatterns = detectRecurringPatterns([
     {

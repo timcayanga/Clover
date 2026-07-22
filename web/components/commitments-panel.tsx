@@ -105,12 +105,6 @@ const reasonBadgeStyle: CSSProperties = {
   background: "rgba(3, 168, 192, 0.08)",
 };
 
-const confidenceTierLabel: Record<"high" | "medium" | "low", string> = {
-  high: "High confidence",
-  medium: "Needs review",
-  low: "Weak signal",
-};
-
 const formatCurrency = (value: string | null) => {
   if (!value) {
     return "No amount set";
@@ -127,19 +121,6 @@ const formatDate = (value: string | null) => {
 
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : dateFormatter.format(parsed);
-};
-
-const getDaysUntilDate = (value: string | null) => {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return Math.ceil((parsed.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
 };
 
 const toDateInputValue = (value: string | null) => {
@@ -279,6 +260,7 @@ export function CommitmentsPanel({
   const [isSaving, setIsSaving] = useState(false);
   const [confirmingPatternId, setConfirmingPatternId] = useState<string | null>(null);
   const [dismissingPatternId, setDismissingPatternId] = useState<string | null>(null);
+  const [dismissedPatternIds, setDismissedPatternIds] = useState<Set<string>>(() => new Set());
   const [reviewingSuggestion, setReviewingSuggestion] = useState<{
     id: string;
     sourceKind: "recurring_pattern" | PlannedPaymentSuggestion["sourceKind"];
@@ -376,8 +358,12 @@ export function CommitmentsPanel({
   }, [initialKind, showAddModal]);
 
   const recentTransactions = transactions.slice(0, 24);
+  const actionablePlannedPaymentSuggestions = plannedPaymentSuggestions.filter(
+    (suggestion) => suggestion.sourceKind !== "recurring_transaction"
+  );
   const suggestedRecurringPatterns = recurringPatterns.filter(
     (pattern) =>
+      !dismissedPatternIds.has(pattern.id) &&
       !visibleCommitments.some((commitment) => {
         const commitmentTitle = `${commitment.title} ${commitment.counterparty ?? ""}`.trim().toLowerCase();
         const patternName = (pattern.merchantClean ?? pattern.merchantRaw).trim().toLowerCase();
@@ -712,6 +698,7 @@ export function CommitmentsPanel({
 
   const handleDismissPattern = (patternId: string) => {
     setDismissingPatternId(patternId);
+    setDismissedPatternIds((current) => new Set(current).add(patternId));
     void fetch(`/api/recurring-patterns/${patternId}/dismiss`, {
       method: "POST",
     })
@@ -729,11 +716,50 @@ export function CommitmentsPanel({
         router.refresh();
       })
       .catch((error: unknown) => {
+        setDismissedPatternIds((current) => {
+          const next = new Set(current);
+          next.delete(patternId);
+          return next;
+        });
         const message = error instanceof Error ? error.message : "Unable to hide recurring suggestion";
         window.alert(message);
       })
       .finally(() => {
         setDismissingPatternId(null);
+      });
+  };
+
+  const handleQuickAddPattern = (pattern: RecurringPatternSummary) => {
+    setConfirmingPatternId(pattern.id);
+    void fetch(`/api/recurring-patterns/${pattern.id}/confirm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+      .then(async (response) => {
+        const payload = (await response.json().catch(() => null)) as { commitment?: FinancialCommitmentSummary; error?: string } | null;
+        if (!response.ok) {
+          throw new Error(payload?.error ?? "Unable to add recurring item");
+        }
+
+        if (payload?.commitment) {
+          setVisibleCommitments((current) => [payload.commitment as FinancialCommitmentSummary, ...current]);
+        }
+        setDismissedPatternIds((current) => new Set(current).add(pattern.id));
+        capturePostHogClientEvent("recurring_item_confirmed", {
+          workspace_id: workspaceId,
+          source_kind: "recurring_pattern",
+          recurrence: pattern.frequency ?? "monthly",
+          has_amount: Boolean(pattern.amount),
+        });
+        router.refresh();
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "Unable to add recurring item";
+        window.alert(message);
+      })
+      .finally(() => {
+        setConfirmingPatternId(null);
       });
   };
 
@@ -892,11 +918,11 @@ export function CommitmentsPanel({
         <article className="panel recurring-overview-card recurring-overview-card--list">
           <div className="recurring-overview-card__heading">
             <p className="eyebrow">Needs attention</p>
-            <span>{plannedPaymentSuggestions.length + suggestedRecurringPatterns.length}</span>
+            <span>{actionablePlannedPaymentSuggestions.length + suggestedRecurringPatterns.length}</span>
           </div>
-          {plannedPaymentSuggestions.length > 0 || suggestedRecurringPatterns.length > 0 ? (
+          {actionablePlannedPaymentSuggestions.length > 0 || suggestedRecurringPatterns.length > 0 ? (
             <div className="recurring-overview-list">
-              {plannedPaymentSuggestions.slice(0, 2).map((suggestion) => (
+              {actionablePlannedPaymentSuggestions.slice(0, 2).map((suggestion) => (
                 <div key={suggestion.id} className="recurring-overview-list__item">
                   <span>
                     <strong>{suggestion.title}</strong>
@@ -907,11 +933,11 @@ export function CommitmentsPanel({
                   </button>
                 </div>
               ))}
-              {plannedPaymentSuggestions.length < 2 ? suggestedRecurringPatterns.slice(0, 2).map((pattern) => (
+              {actionablePlannedPaymentSuggestions.length < 2 ? suggestedRecurringPatterns.slice(0, 2).map((pattern) => (
                 <div key={pattern.id} className="recurring-overview-list__item">
                   <span>
                     <strong>{pattern.merchantClean ?? pattern.merchantRaw}</strong>
-                    <small>{pattern.confidence}% confidence</small>
+                    <small>{formatDate(pattern.nextExpectedDate)}</small>
                   </span>
                   <button className="button button-secondary button-small" type="button" onClick={() => openPatternReview(pattern)}>
                     Review
@@ -925,132 +951,42 @@ export function CommitmentsPanel({
         </article>
       </section>
 
-      {plannedPaymentSuggestions.length > 0 ? (
-        <article className="panel commitments-suggestions-panel">
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-            <div>
-              <p className="eyebrow">Planned payments</p>
-              <h3 style={{ margin: 0 }}>Clover found potential recurring and upcoming payments</h3>
-            </div>
-            <span className="button button-secondary button-small">
-              {plannedPaymentSuggestions.length} suggestion{plannedPaymentSuggestions.length === 1 ? "" : "s"}
-            </span>
-          </div>
-          <div style={{ display: "grid", gap: 10 }}>
-            {plannedPaymentSuggestions.slice(0, 6).map((suggestion) => (
-              <article key={suggestion.id} className="notification-item" style={{ alignItems: "flex-start" }}>
-                <div className="notification-item__main" style={{ gap: 4 }}>
-                  <p className="notification-item__tone">
-                    {suggestion.sourceLabel}
-                    {suggestion.confidence ? ` · ${confidenceTierLabel[suggestion.confidenceTier]} · ${suggestion.confidence}% confidence` : ""}
-                  </p>
-                  <h4>{suggestion.title}</h4>
-                  <p>
-                    {formatCurrency(suggestion.amount)}
-                    {suggestion.accountName ? ` · ${suggestion.accountName}` : ""}
-                    {suggestion.sourceDetail ? ` · ${suggestion.sourceDetail}` : ""}
-                    {suggestion.sourceFileName ? ` · ${suggestion.sourceFileName}` : ""}
-                  </p>
-                  {(() => {
-                    const daysUntil = getDaysUntilDate(suggestion.dueDate);
-                    if (daysUntil === null || daysUntil < 0 || daysUntil > 7) {
-                      return null;
-                    }
-
-                    return (
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <span style={{ ...reasonBadgeStyle, color: "var(--warn)", borderColor: "rgba(245, 158, 11, 0.18)", background: "rgba(245, 158, 11, 0.10)" }}>
-                          {daysUntil === 0 ? "Due today" : daysUntil === 1 ? "Due tomorrow" : `Due in ${daysUntil} days`}
-                        </span>
-                      </div>
-                    );
-                  })()}
-                  {suggestion.reasonTags.length > 0 ? (
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {suggestion.reasonTags.map((tag) => (
-                        <span key={tag} style={reasonBadgeStyle}>
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                  {suggestion.reasonSummary ? (
-                    <p className="panel-muted">
-                      <strong style={{ color: "var(--foreground)" }}>Why Clover suggested this:</strong> {suggestion.reasonSummary}
-                    </p>
-                  ) : null}
-                  {suggestion.notes ? <p className="panel-muted">{suggestion.notes}</p> : null}
-                </div>
-                <div className="notification-item__time" style={{ minWidth: 170, display: "grid", gap: 8 }}>
-                  <button
-                    type="button"
-                    className="button button-primary button-small"
-                    onClick={() => openPlannedPaymentReview(suggestion)}
-                    disabled={confirmingPatternId === suggestion.id}
-                  >
-                    {confirmingPatternId === suggestion.id ? "Adding..." : "Review and add"}
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        </article>
-      ) : null}
-
       {suggestedRecurringPatterns.length > 0 ? (
         <article className="panel commitments-suggestions-panel">
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-            <div>
-              <p className="eyebrow">Suggested recurring</p>
-              <h3 style={{ margin: 0 }}>Clover found possible subscriptions and bills</h3>
-            </div>
-            <span className="button button-secondary button-small">{suggestedRecurringPatterns.length} suggestion{suggestedRecurringPatterns.length === 1 ? "" : "s"}</span>
+          <div>
+            <p className="eyebrow">Potential recurring payments</p>
+            <h3 style={{ margin: 0 }}>Clover found possible subscriptions and bills</h3>
           </div>
-          <div style={{ display: "grid", gap: 10 }}>
+          <div className="recurring-suggestion-list">
             {suggestedRecurringPatterns.slice(0, 6).map((pattern) => (
-              <article key={pattern.id} className="notification-item" style={{ alignItems: "flex-start" }}>
-                <div className="notification-item__main" style={{ gap: 4 }}>
-                  <p className="notification-item__tone">
-                    {pattern.frequency ? commitmentRecurrenceLabels[pattern.frequency as keyof typeof commitmentRecurrenceLabels] ?? pattern.frequency : "Recurring"} · {confidenceTierLabel[pattern.confidenceTier]} · {pattern.confidence}% confidence
-                  </p>
+              <article key={pattern.id} className="recurring-suggestion-row">
+                <div className="recurring-suggestion-row__main">
                   <h4>{pattern.merchantClean ?? pattern.merchantRaw}</h4>
-                  <p>
-                    {formatCurrency(pattern.amount)}
-                    {pattern.account ? ` · ${pattern.account.name}` : ""}
-                    {pattern.transactionCount > 1 ? ` · seen ${pattern.transactionCount} times` : ""}
-                    {pattern.nextExpectedDate ? ` · next ${formatDate(pattern.nextExpectedDate)}` : ""}
-                  </p>
-                  {pattern.reasonTags.length > 0 ? (
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {pattern.reasonTags.map((tag) => (
-                        <span key={tag} style={reasonBadgeStyle}>
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                  {pattern.reasonSummary ? (
-                    <p className="panel-muted">
-                      <strong style={{ color: "var(--foreground)" }}>Why Clover suggested this:</strong> {pattern.reasonSummary}
-                    </p>
+                  <p>{formatDate(pattern.nextExpectedDate)}</p>
+                  {pattern.accountCount > 1 && pattern.distinctMonthCount > 1 ? (
+                    <small>Seen across {pattern.accountCount} accounts and {pattern.distinctMonthCount} months</small>
+                  ) : pattern.distinctMonthCount > 1 ? (
+                    <small>Seen across {pattern.distinctMonthCount} months</small>
                   ) : null}
                 </div>
-                <div className="notification-item__time" style={{ minWidth: 170, display: "grid", gap: 8 }}>
+                <div className="recurring-suggestion-row__actions">
                   <button
                     type="button"
                     className="button button-primary button-small"
-                    onClick={() => openPatternReview(pattern)}
+                    onClick={() => handleQuickAddPattern(pattern)}
                     disabled={confirmingPatternId === pattern.id}
                   >
-                    {confirmingPatternId === pattern.id ? "Adding..." : "Review and add"}
+                    {confirmingPatternId === pattern.id ? "Adding..." : "Add"}
                   </button>
                   <button
                     type="button"
-                    className="button button-secondary button-small"
+                    className="recurring-suggestion-row__dismiss"
                     onClick={() => handleDismissPattern(pattern.id)}
                     disabled={dismissingPatternId === pattern.id}
+                    aria-label={`Delete ${pattern.merchantClean ?? pattern.merchantRaw} suggestion`}
+                    title="Delete suggestion"
                   >
-                    {dismissingPatternId === pattern.id ? "Hiding..." : "Not recurring"}
+                    <span aria-hidden="true">×</span>
                   </button>
                 </div>
               </article>

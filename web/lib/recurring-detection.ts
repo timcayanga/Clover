@@ -81,6 +81,10 @@ const recurringPositiveTransferPattern =
 const recurringCreditLikeExclusionPattern =
   /\b(salary|payroll|bonus|interest earned|interest applied|interest credited|incoming credit|received money|cash deposit|deposit|received gcash|gcash received|refund|reversal|credit memo)\b/i;
 const recurringCategoryRescueSet = new Set(["bills & utilities", "insurance", "loans", "housing", "education", "subscriptions", "health & wellness"]);
+const recurringStrongCategorySet = new Set(["insurance", "loans", "subscriptions"]);
+const recurringDiscretionaryCategorySet = new Set(["food & dining", "shopping", "travel & lifestyle", "entertainment", "transport"]);
+const recurringDiscretionaryMerchantPattern =
+  /\b(grab|toby'?s\s+estate|coffee|cafe|restaurant|bistro|bakery|starbucks|jollibee|mcdonald'?s|foodpanda)\b/i;
 
 const recurringMerchantAliases = [
   { pattern: /\bopenai\b.*\b(chatgpt|subscr(?:iption)?)\b|\bchatgpt\b/i, label: "OpenAI ChatGPT" },
@@ -419,6 +423,16 @@ const scoreRecurringLabelCandidate = (value: string) => {
 };
 
 const selectPreferredRecurringLabel = (transaction: Pick<RecurringSourceTransaction, "merchantRaw" | "merchantClean" | "description">) => {
+  const normalizedMerchant = transaction.merchantClean?.trim() ?? "";
+  if (
+    normalizedMerchant &&
+    normalizeRecurringMerchantKey(normalizedMerchant) &&
+    !recurringNoiseTitlePattern.test(normalizedMerchant) &&
+    !recurringCanonicalNoisePattern.test(normalizedMerchant)
+  ) {
+    return normalizedMerchant;
+  }
+
   const candidates = [transaction.merchantClean, transaction.merchantRaw, transaction.description]
     .map((value) => (value ?? "").trim())
     .filter(Boolean);
@@ -561,15 +575,33 @@ const buildPatternFromTransactions = (
     .join(" ");
   const categoryNames = new Set(candidateTransactions.map((transaction) => transaction.category?.name?.toLowerCase() ?? ""));
   const hasKeywordSignal = recurringKeywordPattern.test(textBlob) || categoryNames.has("bills & utilities");
+  const hasDirectObligationSignal =
+    recurringRescuePattern.test(textBlob) ||
+    recurringMerchantAliases.some((alias) => alias.pattern.test(textBlob)) ||
+    Array.from(categoryNames).some((categoryName) => recurringStrongCategorySet.has(categoryName));
+  const looksDiscretionary =
+    recurringDiscretionaryMerchantPattern.test(textBlob) ||
+    Array.from(categoryNames).some((categoryName) => recurringDiscretionaryCategorySet.has(categoryName));
   const amountTolerance = Math.max(20, typicalAmount * (hasKeywordSignal ? 0.28 : 0.18));
   const stableAmountCount = amounts.filter((amount) => Math.abs(amount - typicalAmount) <= amountTolerance).length;
   const amountStability = stableAmountCount / Math.max(amounts.length, 1);
   const preferredMerchantLabels = candidateTransactions.map((transaction) => selectPreferredRecurringLabel(transaction)).filter(Boolean);
+  const normalizedMerchantTitles = candidateTransactions
+    .map((transaction) => transaction.merchantClean?.trim() ?? "")
+    .filter((value) => Boolean(value) && !recurringNoiseTitlePattern.test(value) && !recurringCanonicalNoisePattern.test(value));
+  const normalizedMerchantTitle = Array.from(
+    normalizedMerchantTitles.reduce((counts, value) => {
+      counts.set(value, (counts.get(value) ?? 0) + 1);
+      return counts;
+    }, new Map<string, number>()).entries()
+  ).sort((left, right) => right[1] - left[1])[0]?.[0];
   const canonicalTitle =
+    normalizedMerchantTitle ||
     canonicalizeRecurringMerchant(
       preferredMerchantLabels
         .find((value) => Boolean(value && canonicalizeRecurringMerchant(value).length > 0)) ?? candidateTransactions[0]?.merchantRaw ?? ""
-    ) || normalizeRecurringMerchantKey(candidateTransactions[0]?.merchantRaw ?? "");
+    ) ||
+    normalizeRecurringMerchantKey(candidateTransactions[0]?.merchantRaw ?? "");
   if (!canonicalTitle) {
     return null;
   }
@@ -607,6 +639,12 @@ const buildPatternFromTransactions = (
     distinctMonthCount >= 2;
 
   if (!cadence.frequency || !cadence.nextExpectedDate) {
+    return null;
+  }
+
+  // Timing and a similar amount are not enough for everyday merchants. Two-month
+  // suggestions need an explicit subscription, bill, loan, utility, or known-biller signal.
+  if (!hasDirectObligationSignal && (looksDiscretionary || distinctMonthCount < 3)) {
     return null;
   }
 
@@ -730,6 +768,8 @@ const buildPatternFromTransactions = (
       amountStability,
       distinctMonthCount,
       hasKeywordSignal,
+      hasDirectObligationSignal,
+      looksDiscretionary,
       hasVariableAmountSignal,
       looksTransferLike,
       canonicalTitle,

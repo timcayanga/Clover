@@ -48,6 +48,8 @@ export type RecurringPatternSummary = {
   lastSeenDate: string | null;
   nextExpectedDate: string | null;
   transactionCount: number;
+  distinctMonthCount: number;
+  accountCount: number;
   confidenceTier: "high" | "medium" | "low";
   confidence: number;
   reasonSummary: string | null;
@@ -304,6 +306,22 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
     lastSeenDate: pattern.lastSeenDate?.toISOString() ?? null,
     nextExpectedDate: pattern.nextExpectedDate?.toISOString() ?? null,
     transactionCount: pattern.transactionCount,
+    distinctMonthCount:
+      pattern.rawPayload &&
+      typeof pattern.rawPayload === "object" &&
+      !Array.isArray(pattern.rawPayload) &&
+      typeof (pattern.rawPayload as Record<string, unknown>).distinctMonthCount === "number"
+        ? (pattern.rawPayload as Record<string, number>).distinctMonthCount
+        : 0,
+    accountCount:
+      pattern.rawPayload &&
+      typeof pattern.rawPayload === "object" &&
+      !Array.isArray(pattern.rawPayload) &&
+      typeof (pattern.rawPayload as Record<string, unknown>).accountCount === "number"
+        ? (pattern.rawPayload as Record<string, number>).accountCount
+        : pattern.account
+          ? 1
+          : 0,
     confidenceTier: getRecurringConfidenceTier(pattern.confidence),
     confidence: pattern.confidence,
     reasonSummary:
