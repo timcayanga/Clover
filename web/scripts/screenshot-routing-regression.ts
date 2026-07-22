@@ -5,7 +5,22 @@ import {
   shouldPreferDirectImageStatementVisionPath,
   shouldAttemptGenericScreenshotTranscriptRepair,
 } from "@/workers/import-processor";
-import { shouldPrioritizeStrongImageTranscriptModel } from "@/lib/openai-import-parser";
+import { inferOpenAIImportDifficulty, shouldPrioritizeStrongImageTranscriptModel } from "@/lib/openai-import-parser";
+
+assert.equal(
+  inferOpenAIImportDifficulty({
+    fileName: "Screenshot 2026-07-22.png",
+    fileType: "image/png",
+    text: "",
+    detectedMetadata: null,
+    parsedRows: [],
+    importMode: "statement",
+    pageImagesCount: 1,
+    documentFamily: "generic_document",
+  }),
+  "medium",
+  "A new one-screen statement should try fast transcription before escalating."
+);
 
 assert.equal(
   shouldPrioritizeStrongImageTranscriptModel({

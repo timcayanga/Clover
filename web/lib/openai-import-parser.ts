@@ -1753,7 +1753,7 @@ const inferOpenAIDocumentFamily = (params: {
   return "generic_document" satisfies OpenAIDocumentFamily;
 };
 
-const inferOpenAIImportDifficulty = (params: {
+export const inferOpenAIImportDifficulty = (params: {
   fileName?: string | null;
   fileType?: string | null;
   text?: string | null;
@@ -1777,11 +1777,23 @@ const inferOpenAIImportDifficulty = (params: {
   const weakText = normalizedText.length < 120;
   const veryWeakText = normalizedText.length < 50;
   const sparseRows = parsedRowsCount === 0;
+  // New single-screen statements have no OCR or institution hint before the
+  // first transcription. That absence is expected, not evidence that the
+  // screenshot is difficult. Try the fast model first and retain the strong
+  // model through the transcript quality gate when the first read is weak.
+  const isSingleUnknownStatementScreenshot =
+    params.importMode === "statement" &&
+    isImageLike &&
+    pageImagesCount === 1 &&
+    sparseRows &&
+    veryWeakText &&
+    metadataConfidence < 55 &&
+    documentFamily === "generic_document";
 
   if (
-    veryWeakText ||
-    (isImageLike && weakText && sparseRows) ||
-    (isImageLike && metadataConfidence < 55) ||
+    (!isSingleUnknownStatementScreenshot && veryWeakText) ||
+    (isImageLike && weakText && sparseRows && !isSingleUnknownStatementScreenshot) ||
+    (isImageLike && metadataConfidence < 55 && !isSingleUnknownStatementScreenshot) ||
     (params.importMode === "receipt" && weakText) ||
     (documentFamily === "wallet_screenshot" && weakText) ||
     (documentFamily === "investment_history" && weakText) ||
