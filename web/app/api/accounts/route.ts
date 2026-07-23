@@ -987,6 +987,50 @@ const repairPdaxPortfolioAccountsFromParsedRows = async (workspaceId: string) =>
     }
   }
 
+  // ParsedTransaction rows can be replaced by an older retry or cleanup. The
+  // extraction cache is the preserved, immutable parse result for that upload,
+  // so it is the last safe source for restoring a missing snapshot account.
+  // In particular, this restores PDAX's non-transactional PHP Wallet without
+  // inventing a balance from the investment positions.
+  const cachedParses = await prisma.importFileExtractionCache.findMany({
+    where: { workspaceId },
+    orderBy: { updatedAt: "desc" },
+    take: 80,
+    select: { parsedRows: true },
+  }).catch(() => []);
+  for (const cachedParse of cachedParses) {
+    const parsedRows = Array.isArray(cachedParse.parsedRows)
+      ? cachedParse.parsedRows
+      : cachedParse.parsedRows && typeof cachedParse.parsedRows === "object" && !Array.isArray(cachedParse.parsedRows)
+        ? (cachedParse.parsedRows as Record<string, unknown>).rows
+        : null;
+    if (!Array.isArray(parsedRows)) {
+      continue;
+    }
+    for (const row of parsedRows) {
+      if (!row || typeof row !== "object" || Array.isArray(row)) {
+        continue;
+      }
+      const parsedRow = row as Record<string, unknown>;
+      const rawPayload =
+        parsedRow.rawPayload && typeof parsedRow.rawPayload === "object" && !Array.isArray(parsedRow.rawPayload)
+          ? (parsedRow.rawPayload as Record<string, unknown>)
+          : parsedRow;
+      const expected = readPdaxPortfolioAccount(
+        {
+          ...rawPayload,
+          accountName: rawPayload.accountName ?? parsedRow.accountName,
+          accountType: rawPayload.accountType ?? parsedRow.accountType,
+          statementEndingBalance: rawPayload.statementEndingBalance ?? rawPayload.balance ?? parsedRow.balance,
+        },
+        { requireScreenshotSource: true }
+      );
+      if (expected && !expectedAccounts.has(expected.name)) {
+        expectedAccounts.set(expected.name, expected);
+      }
+    }
+  }
+
   let repaired = 0;
   for (const [name, expected] of expectedAccounts) {
     const existingAccount = await prisma.account.findFirst({

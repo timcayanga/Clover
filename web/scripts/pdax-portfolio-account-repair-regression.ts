@@ -28,6 +28,17 @@ const walletFromPublishedSummary = readPublishedPdaxPortfolioAccount({
 assert.equal(walletFromPublishedSummary?.balance, 7969.73);
 assert.equal(walletFromPublishedSummary?.type, "wallet");
 
+const walletFromCachedParse = readPdaxPortfolioAccount(
+  {
+    source: "pdax_portfolio_screenshot",
+    accountName: "Wallet",
+    accountType: "wallet",
+    balance: "7,969.73",
+  },
+  { requireScreenshotSource: true }
+);
+assert.equal(walletFromCachedParse?.balance, 7969.73, "A cached deterministic parse must remain sufficient to restore Wallet.");
+
 assert.equal(
   readPdaxPortfolioAccount(
     { source: "pdax_portfolio_screenshot", accountName: "Crypto Balance", accountType: "investment", balance: 97155.46 },

@@ -2411,6 +2411,14 @@ function AccountsPageContent() {
   };
 
   const getDisplayedAccountBalance = (account: Account) => {
+    // Market investments are revalued from their current holdings. A statement
+    // checkpoint is historical evidence and must never override that current
+    // value on Accounts; doing so makes the institution card disagree with its
+    // own Holdings page until another refresh arrives.
+    if (getEffectiveAccountType(account) === "investment" && hasResolvedBalance(account.balance)) {
+      return account.balance;
+    }
+
     const latestCheckpoint = getLatestCheckpointForAccount(account, statementCheckpoints);
     const checkpointBalance =
       latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
