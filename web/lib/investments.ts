@@ -6,6 +6,7 @@ export const INVESTMENT_SUBTYPES = [
   "uitf",
   "reit",
   "crypto",
+  "real_world_asset",
   "bond",
   "time_deposit",
   "other",
@@ -83,6 +84,12 @@ const CLASSIFICATION_RULES: Array<{
     confidence: 95,
     label: "UITF wording",
     pattern: /\b(uitf|unit investment trust fund)\b/,
+  },
+  {
+    subtype: "real_world_asset",
+    confidence: 94,
+    label: "real-world asset wording",
+    pattern: /\b(real[ -]?world asset|rwa|tokeni[sz]ed gold|\bgold\b)\b/,
   },
   {
     subtype: "crypto",
@@ -171,6 +178,8 @@ export const getInvestmentSubtypeLabel = (value: string | null | undefined) => {
       return "REIT";
     case "crypto":
       return "Crypto";
+    case "real_world_asset":
+      return "Real-world asset";
     case "bond":
       return "Bond";
     case "time_deposit":
@@ -192,6 +201,8 @@ export const getInvestmentSubtypeDescription = (value: string | null | undefined
     case "reit":
     case "crypto":
       return "Track units, purchase value, and current value.";
+    case "real_world_asset":
+      return "Track the asset reference, purchase value, and current value.";
     case "bond":
       return "Track principal, dates, rates, and maturity value.";
     case "time_deposit":
@@ -256,9 +267,13 @@ export const getInvestmentFieldConfigs = (subtype: string | null | undefined): I
     ];
   }
 
-  if (subtype === "other") {
+  if (subtype === "other" || subtype === "real_world_asset") {
     return [
-      { key: "investmentSymbol", label: "Reference", placeholder: "Example: Bond fund A" },
+      {
+        key: "investmentSymbol",
+        label: "Reference",
+        placeholder: subtype === "real_world_asset" ? "Example: GOLD" : "Example: Bond fund A",
+      },
       { key: "investmentCostBasis", label: "Purchase value", placeholder: "0.00", inputMode: "decimal" },
     ];
   }

@@ -11418,7 +11418,9 @@ const parsePdaxPortfolioSnapshotRows = (text: string, metadata: DetectedStatemen
       merchantClean: summarizeMerchantText(`${assetName} snapshot`, "PDAX"),
       description: `${assetName} portfolio snapshot`,
       categoryName: "Investments",
-      accountName: `PDAX ${symbol}`,
+      // The institution is stored independently. Keep the account name to the
+      // visible asset label so the Holdings UI reads simply "BTC" or "XRP".
+      accountName: symbol,
       institution: "PDAX",
       type: "transfer",
       confidence: 94,
@@ -11430,7 +11432,7 @@ const parsePdaxPortfolioSnapshotRows = (text: string, metadata: DetectedStatemen
         source: "pdax_portfolio_screenshot",
         documentType: "portfolio",
         sourceRowIndex: index,
-        accountName: `PDAX ${symbol}`,
+        accountName: symbol,
         accountType: "investment",
         balance: marketValue,
         statementEndingBalance: marketValue,
@@ -11461,7 +11463,8 @@ const parsePdaxPortfolioSnapshotRows = (text: string, metadata: DetectedStatemen
     const isPhpWallet = bucket === "php";
     const isGoldRwa = bucket === "gold";
     const bucketLabel = isPhpWallet ? "PHP wallet" : isGoldRwa ? "Gold RWA" : `${bucket[0]?.toUpperCase() ?? ""}${bucket.slice(1)} balance`;
-    const accountName = isPhpWallet ? "PDAX Wallet" : isGoldRwa ? "PDAX Gold RWA" : `PDAX ${bucketLabel}`;
+    // Institution context is rendered separately from the holding name.
+    const accountName = isPhpWallet ? "Wallet" : isGoldRwa ? "Gold" : bucketLabel;
     const accountType: ImportedAccountType = isPhpWallet ? "wallet" : "investment";
     rows.push({
       date: new Date().toISOString(),
@@ -11488,7 +11491,7 @@ const parsePdaxPortfolioSnapshotRows = (text: string, metadata: DetectedStatemen
         balance,
         statementEndingBalance: balance,
         portfolioBucket: bucket,
-        ...(isGoldRwa ? { assetName: "Gold RWA", investmentSubtype: "other" } : {}),
+        ...(isGoldRwa ? { assetName: "Gold", investmentSubtype: "real_world_asset" } : {}),
         portfolioBalances: bucketBalances,
       },
     });

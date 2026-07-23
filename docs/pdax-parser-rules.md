@@ -6,9 +6,9 @@ These rules cover PDAX portfolio, fiat wallet history, and `Others` rewards scre
 
 ## Deterministic Rules
 
-- Parse visible crypto holdings as separate investment snapshot markers with symbol, PHP market value, and quantity (for example, `PDAX BTC` and `PDAX XRP`).
-- Create `PDAX Wallet` as a wallet account from the visible PHP balance.
-- Create `PDAX Gold RWA` from a visible Gold balance when no more-specific gold holding row is shown.
+- Parse visible crypto holdings as separate investment snapshot markers with symbol, PHP market value, and quantity (for example, `BTC` and `XRP`); store PDAX as their institution rather than prefixing the asset name.
+- Create `Wallet` as a PDAX wallet account from the visible PHP balance.
+- Create `Gold` with the `Real-world asset` investment subtype from a visible Gold balance when no more-specific gold holding row is shown.
 - When detailed crypto rows reconcile to the visible Crypto bucket, do not create an additional aggregate Crypto account.
 - Skip cropped holdings when a complete asset name, market value, or quantity is not visible.
 - Parse Fiat `Cash In` and `Cash Out` entries as PHP income/expense transfers, preserving the provider description and status.
