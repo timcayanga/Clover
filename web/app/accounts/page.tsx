@@ -1608,7 +1608,7 @@ function AccountsPageContent() {
     }
   };
 
-  const loadWorkspaceData = async (workspaceId: string, options?: { silent?: boolean; awaitHydration?: boolean }) => {
+  const loadWorkspaceData = async (workspaceId: string, options?: { silent?: boolean; awaitHydration?: boolean; forceFresh?: boolean }) => {
     const loadSeq = ++workspaceLoadSeqRef.current;
     let fetchedAccounts: Account[] = [];
     let visibleFetchedAccounts: Account[] = [];
@@ -1640,7 +1640,11 @@ function AccountsPageContent() {
 
     try {
       const accountsResponse = await fetchJsonOnce<{ accounts?: Account[]; accountRules?: AccountRule[]; statementCheckpoints?: StatementCheckpoint[] }>({
-        key: `accounts:data:${workspaceId}`,
+        // An import may finish while the initial workspace request is still in
+        // flight. Give the completion handoff its own request so it cannot
+        // reuse that pre-import response and leave new snapshot accounts
+        // invisible until the user reloads.
+        key: options?.forceFresh ? `accounts:data:${workspaceId}:import:${loadSeq}` : `accounts:data:${workspaceId}`,
         route: "accounts.data",
         workspaceId,
         detail: options?.awaitHydration ? "awaitHydration" : options?.silent ? "silent" : "foreground",
@@ -2910,7 +2914,7 @@ function AccountsPageContent() {
 
   const refreshAll = async () => {
     if (!selectedWorkspaceId) return;
-    await loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true });
+    await loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true, forceFresh: true });
     setMessage(`Workspace "${selectedWorkspace?.name ?? "selected"}" refreshed.`);
   };
 

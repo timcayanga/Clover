@@ -7563,6 +7563,21 @@ export const processImportFileText = async (
           accountNumber: metadataForParse.accountNumber,
         });
   let parsedRows = parsedRowsAfterFallback.length > 0 ? parsedRowsAfterFallback : parsedRowsInitial;
+  // PDAX portfolio screenshots are already structured snapshot data once the
+  // local parser has identified their buckets and visible holdings. A vision
+  // backup can describe the Crypto total, but cannot safely replace the
+  // concrete BTC/XRP rows with that aggregate.
+  const hasLocalDeterministicPdaxPortfolioSnapshot =
+    parsedRows.length > 0 &&
+    parsedRows.every((row) => {
+      const payload = row.rawPayload;
+      return (
+        payload &&
+        typeof payload === "object" &&
+        !Array.isArray(payload) &&
+        (payload as Record<string, unknown>).source === "pdax_portfolio_screenshot"
+      );
+    });
   let effectiveImportMode = inferStructuredDocumentImportModeFromParsedRows(importMode, parsedRows, metadataForParse);
   if (effectiveImportMode !== "statement") {
     isDocumentImport = true;
@@ -8320,7 +8335,9 @@ export const processImportFileText = async (
   let openAiParsed: Awaited<ReturnType<typeof parseImportTextWithOpenAIFallback>> | null = null;
   let openAiMetadata: typeof metadataForParse | null = null;
   const shouldRunOpenAiFallback =
-    !skipVisualBackupParser && (!canUseFastImageParse || shouldForceBackupForSuspiciousParse || shouldUseVisionFallback);
+    !skipVisualBackupParser &&
+    !hasLocalDeterministicPdaxPortfolioSnapshot &&
+    (!canUseFastImageParse || shouldForceBackupForSuspiciousParse || shouldUseVisionFallback);
   const shouldRaceBackupAgainstLocal =
     importMode === "statement" &&
     parserRoutingDecision.decision === "backup_preferred" &&
@@ -8886,7 +8903,8 @@ export const processImportFileText = async (
     parsedRowsAreSnapshotOnlyStatement && (openAiParsed?.rows.length ?? 0) === 0;
   const shouldAdoptOpenAiStatementParse =
     importMode !== "statement" ||
-    (!shouldPreferLocalSnapshotOnlyStatementParse &&
+    (!hasLocalDeterministicPdaxPortfolioSnapshot &&
+      !shouldPreferLocalSnapshotOnlyStatementParse &&
       !hasDeterministicBpiMobileScreenshotRows &&
       (!deterministicStatementParseLooksStrong || openAiStatementRowsAreCompetitive));
   const useOpenAiParse =
@@ -8923,7 +8941,9 @@ export const processImportFileText = async (
     (
       knownBpiMobileScreenshotFallbackRows.length > 0
         ? knownBpiMobileScreenshotFallbackRows
-        : useOpenAiParse && openAiParsed
+        : hasLocalDeterministicPdaxPortfolioSnapshot
+          ? parsedRows
+          : useOpenAiParse && openAiParsed
           ? openAiParsed.rows
           : parsedRows
     ) as Array<Record<string, unknown>>,
