@@ -99,6 +99,12 @@ assert.equal(
   false,
   "A Crypto bucket that reconciles to BTC and XRP must not create a duplicate aggregate account."
 );
+const goldRow = portfolioAssetRows.find((row) => row.accountName === "Gold");
+assert.equal(
+  (goldRow?.rawPayload as Record<string, unknown>)?.investmentSubtype,
+  "real_world_asset",
+  "The PDAX Gold balance must retain the dedicated Real-world asset subtype."
+);
 
 const pdaxLogoOmittedOcrText = `
 Portfolio

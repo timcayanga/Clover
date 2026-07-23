@@ -903,6 +903,38 @@ const cleanupPdaxPortfolioBucketHoldings = async (workspaceId: string) => {
   return staleIds.length;
 };
 
+const repairGeneratedPdaxPortfolioAssetLabels = async (workspaceId: string) => {
+  // These are exact labels emitted by earlier deterministic PDAX screenshot
+  // parsers. Repair only upload-created matches so a user-edited account is
+  // never renamed or reclassified.
+  const repairs = [
+    { from: "PDAX BTC", to: "BTC", subtype: "crypto" },
+    { from: "PDAX XRP", to: "XRP", subtype: "crypto" },
+    { from: "PDAX Gold RWA", to: "Gold", subtype: "real_world_asset" },
+    { from: "PDAX Wallet", to: "Wallet", subtype: null },
+  ] as const;
+
+  let repaired = 0;
+  for (const repair of repairs) {
+    const result = await prisma.account.updateMany({
+      where: {
+        workspaceId,
+        source: "upload",
+        institution: "PDAX",
+        name: repair.from,
+        ...(repair.subtype === null ? { type: "wallet" } : { type: "investment" }),
+      },
+      data: {
+        name: repair.to,
+        ...(repair.subtype === null ? {} : { investmentSubtype: repair.subtype }),
+      },
+    }).catch(() => ({ count: 0 }));
+    repaired += result.count;
+  }
+
+  return repaired;
+};
+
 const collapseDuplicateUploadedAccountsByIdentity = async (workspaceId: string, compatibleColumns: Set<string>) => {
   if (!compatibleColumns.has("accountNumber")) {
     return;
@@ -1133,6 +1165,7 @@ export async function GET(request: Request) {
       (searchParams.get("cleanupImportedAccounts") ?? "").trim().toLowerCase()
     );
     let removedStalePdaxBucketHoldings = 0;
+    let repairedPdaxPortfolioAssetLabels = 0;
     if (shouldCleanupImportedAccounts) {
       await cleanupFilenameUploadedAccountPlaceholders(workspaceId).catch((error) => {
         console.warn("[accounts] unable to clean up filename imported account placeholders", {
@@ -1142,6 +1175,13 @@ export async function GET(request: Request) {
       });
       removedStalePdaxBucketHoldings = await cleanupPdaxPortfolioBucketHoldings(workspaceId).catch((error) => {
         console.warn("[accounts] unable to clean up stale PDAX portfolio bucket holdings", {
+          workspaceId,
+          error,
+        });
+        return 0;
+      });
+      repairedPdaxPortfolioAssetLabels = await repairGeneratedPdaxPortfolioAssetLabels(workspaceId).catch((error) => {
+        console.warn("[accounts] unable to repair generated PDAX portfolio asset labels", {
           workspaceId,
           error,
         });
@@ -1541,7 +1581,7 @@ export async function GET(request: Request) {
       accountRules,
       statementCheckpoints,
       maintenance: shouldCleanupImportedAccounts
-        ? { removedStalePdaxBucketHoldings }
+        ? { removedStalePdaxBucketHoldings, repairedPdaxPortfolioAssetLabels }
         : undefined,
     });
   } catch (error) {

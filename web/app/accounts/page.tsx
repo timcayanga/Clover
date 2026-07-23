@@ -639,9 +639,24 @@ const getAccountCardEyebrow = (account: Account) => {
   }).label;
 };
 
+const getInvestmentInstitutionPreviewLabel = (account: Account) => {
+  const symbol = account.investmentSymbol?.trim();
+  if (symbol) {
+    return symbol;
+  }
+
+  // The provider is already the card title. Keep imported PDAX assets concise
+  // in the card preview, including accounts created before the parser rename.
+  const name = account.name.trim();
+  if (/^pdax\s+gold(?:\s+rwa)?$/i.test(name)) {
+    return "Gold";
+  }
+  return name.replace(/^pdax\s+/i, "");
+};
+
 const getInvestmentInstitutionPreview = (accounts: Account[]) =>
   accounts
-    .map((account) => account.investmentSymbol?.trim() || account.name.trim())
+    .map(getInvestmentInstitutionPreviewLabel)
     .filter(Boolean)
     .slice(0, 4)
     .join(", ");
@@ -1743,7 +1758,8 @@ function AccountsPageContent() {
               : null;
             if (
               workspaceLoadSeqRef.current === loadSeq &&
-              Number(maintenancePayload?.maintenance?.removedStalePdaxBucketHoldings ?? 0) > 0
+              (Number(maintenancePayload?.maintenance?.removedStalePdaxBucketHoldings ?? 0) > 0 ||
+                Number(maintenancePayload?.maintenance?.repairedPdaxPortfolioAssetLabels ?? 0) > 0)
             ) {
               void loadWorkspaceData(workspaceId, { silent: true, awaitHydration: true });
             }
@@ -2963,6 +2979,7 @@ function AccountsPageContent() {
           key={key}
           accountBrand={accountBrand}
           name={row.institution}
+          accountNumber={getInvestmentInstitutionPreview(row.accounts)}
           amount={formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}
           onOpen={() => openInvestmentInstitution(row)}
           openLabel={`Open ${row.institution} investment institution`}
