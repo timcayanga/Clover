@@ -1,14 +1,12 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import Script from "next/script";
 import { LandingClarityEngine } from "../components/landing-clarity-engine";
 import { LandingCloverBloom } from "../components/landing-clover-bloom";
+import { LandingCtaActions } from "../components/landing-cta-actions";
 import { LandingNav } from "../components/landing-nav";
-import { LandingSignupModal } from "../components/landing-signup-modal";
 import { LandingStoryReveal } from "../components/landing-story-reveal";
 import { MarketingFooter } from "../components/marketing-footer";
-import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
 import { resolvePublicAccountState } from "@/lib/public-account-state";
 
 function LandingImage({
@@ -57,31 +55,6 @@ function FeatureSection({
   );
 }
 
-function LandingAccountCta({ accountState }: { accountState: Awaited<ReturnType<typeof resolvePublicAccountState>> }) {
-  if (!accountState.signedIn) {
-    return (
-      <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>
-        Log in
-      </Link>
-    );
-  }
-
-  const displayName = accountState.displayName ?? "Account";
-
-  return (
-    <Link className="button button-secondary button-pill landing-account-cta" href="/home" prefetch={false}>
-      <span
-        className="landing-account-cta__avatar"
-        aria-hidden="true"
-        style={accountState.avatarUrl ? undefined : getAvatarBackgroundStyle(displayName)}
-      >
-        {accountState.avatarUrl ? <img src={accountState.avatarUrl} alt="" /> : <span>{getAvatarInitials(displayName)}</span>}
-      </span>
-      <span>Open Clover</span>
-    </Link>
-  );
-}
-
 export default async function HomePage() {
   const accountState = await resolvePublicAccountState();
   const authEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? process.env.CLERK_PUBLISHABLE_KEY);
@@ -111,10 +84,7 @@ export default async function HomePage() {
           </div>
 
           <div className="landing-hero__actions">
-            {!accountState.signedIn ? (
-              <LandingSignupModal enabled={authEnabled}>Organize my finances for free</LandingSignupModal>
-            ) : null}
-            <LandingAccountCta accountState={accountState} />
+            <LandingCtaActions accountState={accountState} authEnabled={authEnabled} />
           </div>
 
           <div className="landing-hero__outcomes" aria-label="What Clover organizes">
@@ -311,10 +281,7 @@ export default async function HomePage() {
             <h2>Ready to make clearer money decisions?</h2>
           </div>
           <div className="landing-cta__actions">
-            {!accountState.signedIn ? (
-              <LandingSignupModal enabled={authEnabled}>Organize my finances for free</LandingSignupModal>
-            ) : null}
-            <LandingAccountCta accountState={accountState} />
+            <LandingCtaActions accountState={accountState} authEnabled={authEnabled} />
           </div>
         </div>
       </LandingStoryReveal>
