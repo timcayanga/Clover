@@ -11215,6 +11215,14 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   for (const group of multiAccountImport ? parsedAccountGroups : parsedAccountGroups.slice(0, 1)) {
     const firstGroupRow = group.rows[0] ?? {};
     const groupRows = group.rows as EnrichedParsedImportRow[];
+    const groupSnapshotPayload =
+      firstGroupRow.rawPayload && typeof firstGroupRow.rawPayload === "object" && !Array.isArray(firstGroupRow.rawPayload)
+        ? (firstGroupRow.rawPayload as Record<string, unknown>)
+        : null;
+    const groupAccountType =
+      groupSnapshotPayload?.accountType === "wallet" || groupSnapshotPayload?.accountType === "investment"
+        ? groupSnapshotPayload.accountType
+        : baseStatementMetadata.accountType;
     const groupEndingBalance = getImportAccountBalanceFromParsedRows(groupRows);
     const groupIsSnapshotOnly = groupRows.length > 0 && groupRows.every(isSnapshotOnlyParsedRow);
     const groupCurrency = readRowAccountCurrency(firstGroupRow);
@@ -11230,7 +11238,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           groupLooksWiseAccount && !groupHasDedicatedWisePdfIdentity
             ? null
             : readRowAccountNumber(firstGroupRow) ?? baseStatementMetadata.accountNumber,
-        accountType: groupLooksWiseAccount ? "wallet" : baseStatementMetadata.accountType,
+        accountType: groupLooksWiseAccount ? "wallet" : groupAccountType,
         currency:
           groupCurrency ??
           (typeof firstGroupRow.currency === "string" && firstGroupRow.currency.trim()

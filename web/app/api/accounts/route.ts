@@ -935,40 +935,66 @@ const repairGeneratedPdaxPortfolioAssetLabels = async (workspaceId: string) => {
   return repaired;
 };
 
-const repairPdaxWalletBalancesFromParsedRows = async (workspaceId: string) => {
-  // Snapshot imports retain a raw PHP bucket row. Use that deterministic
-  // evidence to repair only upload-created PDAX Wallet balances that an older
-  // multi-account finalization path could overwrite with the final Gold row.
+const repairPdaxPortfolioAccountsFromParsedRows = async (workspaceId: string) => {
+  // Snapshot imports retain one deterministic raw row per visible PDAX group.
+  // Earlier multi-account finalization leaked the portfolio type and final
+  // balance across those groups; repair only upload-created exact matches.
   const parsedRows = await prisma.parsedTransaction.findMany({
     where: { workspaceId, institution: "PDAX" },
-    select: { rawPayload: true },
+    select: { accountName: true, rawPayload: true },
   }).catch(() => []);
-  const walletBalance = parsedRows
-    .map((row) => (row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
-      ? (row.rawPayload as Record<string, unknown>)
-      : null))
-    .find((payload) =>
-      payload?.source === "pdax_portfolio_screenshot" &&
-      payload.portfolioBucket === "php" &&
-      typeof payload.statementEndingBalance === "number" &&
-      Number.isFinite(payload.statementEndingBalance)
-    )?.statementEndingBalance;
-
-  if (typeof walletBalance !== "number") {
-    return 0;
+  const expectedAccounts = new Map<string, { balance: number; type: "wallet" | "investment"; subtype: string | null }>();
+  for (const row of parsedRows) {
+    const payload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    const accountName = typeof payload?.accountName === "string" ? payload.accountName.trim() : row.accountName?.trim() ?? "";
+    const balance = typeof payload?.statementEndingBalance === "number" ? payload.statementEndingBalance : null;
+    const type = payload?.accountType === "wallet" ? "wallet" : payload?.accountType === "investment" ? "investment" : null;
+    if (
+      payload?.source !== "pdax_portfolio_screenshot" ||
+      !["Wallet", "BTC", "XRP", "Gold"].includes(accountName) ||
+      balance === null ||
+      !Number.isFinite(balance) ||
+      type === null
+    ) {
+      continue;
+    }
+    expectedAccounts.set(accountName, {
+      balance,
+      type,
+      subtype: typeof payload.investmentSubtype === "string" ? payload.investmentSubtype : null,
+    });
   }
 
-  const repaired = await prisma.account.updateMany({
-    where: {
-      workspaceId,
-      source: "upload",
-      institution: "PDAX",
-      name: "Wallet",
-      type: "wallet",
-    },
-    data: { balance: walletBalance.toString() },
-  }).catch(() => ({ count: 0 }));
-  return repaired.count;
+  let repaired = 0;
+  for (const [name, expected] of expectedAccounts) {
+    const result = await prisma.account.updateMany({
+      where: { workspaceId, source: "upload", institution: "PDAX", name },
+      data: {
+        type: expected.type,
+        balance: expected.balance.toString(),
+        ...(expected.type === "wallet"
+          ? {
+              investmentSubtype: null,
+              investmentSymbol: null,
+              investmentQuantity: null,
+              investmentCostBasis: null,
+              investmentPrincipal: null,
+              investmentStartDate: null,
+              investmentMaturityDate: null,
+              investmentInterestRate: null,
+              investmentMaturityValue: null,
+            }
+          : expected.subtype
+            ? { investmentSubtype: expected.subtype }
+            : {}),
+      },
+    }).catch(() => ({ count: 0 }));
+    repaired += result.count;
+  }
+  return repaired;
 };
 
 const repairMalformedPdaxActionControlAccount = async (workspaceId: string) => {
@@ -1256,7 +1282,7 @@ export async function GET(request: Request) {
     let removedStalePdaxBucketHoldings = 0;
     let repairedPdaxPortfolioAssetLabels = 0;
     let repairedMalformedPdaxActionControlAccounts = 0;
-    let repairedPdaxWalletBalances = 0;
+    let repairedPdaxPortfolioAccounts = 0;
     if (shouldCleanupImportedAccounts) {
       await cleanupFilenameUploadedAccountPlaceholders(workspaceId).catch((error) => {
         console.warn("[accounts] unable to clean up filename imported account placeholders", {
@@ -1278,8 +1304,8 @@ export async function GET(request: Request) {
         });
         return 0;
       });
-      repairedPdaxWalletBalances = await repairPdaxWalletBalancesFromParsedRows(workspaceId).catch((error) => {
-        console.warn("[accounts] unable to repair PDAX wallet balance from parsed evidence", {
+      repairedPdaxPortfolioAccounts = await repairPdaxPortfolioAccountsFromParsedRows(workspaceId).catch((error) => {
+        console.warn("[accounts] unable to repair PDAX portfolio accounts from parsed evidence", {
           workspaceId,
           error,
         });
@@ -1690,7 +1716,7 @@ export async function GET(request: Request) {
             removedStalePdaxBucketHoldings,
             repairedPdaxPortfolioAssetLabels,
             repairedMalformedPdaxActionControlAccounts,
-            repairedPdaxWalletBalances,
+            repairedPdaxPortfolioAccounts,
           }
         : undefined,
     });
