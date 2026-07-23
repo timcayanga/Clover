@@ -4663,6 +4663,22 @@ export function ImportFilesModal({
           confirmedTransactionsCount > 0;
 
         if (receiptSummary && receiptHasStructuredVisibility) {
+          const receiptImportedRows = Math.max(
+            1,
+            Number(receiptSummary.rowsImported ?? 0),
+            Number(confirmedTransactionsCount ?? 0)
+          );
+          const settledVisible = await waitForSettledVisibility(
+            itemId,
+            importFileId,
+            receiptSummary.accountId ?? receiptAccountId ?? null,
+            receiptImportedRows,
+            receiptSummary.balance ?? null,
+            "Receipt confirmation succeeded before its transaction became visible"
+          );
+          if (!settledVisible) {
+            return { completed: false, summary: receiptSummary };
+          }
           updateItem(itemId, {
             status: "done",
             confirmationState: "confirmed",
@@ -4687,6 +4703,14 @@ export function ImportFilesModal({
             summary: deliverSummary ? receiptSummary : null,
             errorMessage: null,
           });
+          window.setTimeout(closeVisibleImportModalIfPrimaryDataReady, 0);
+          if (
+            itemsRef.current.length > 0 &&
+            itemsRef.current.every((entry) => entry.status === "done" || entry.confirmationState === "confirmed")
+          ) {
+            primaryVisibilityCompletedRef.current = true;
+            scheduleSuccessfulImportAutoClose();
+          }
           if (keepWatchingAfterVisible && !payload.receiptTransaction && importStatus !== "done") {
             void monitorQueuedDocumentImport(itemId, importFileId, importMode, fileName, {
               deliverSummary: false,

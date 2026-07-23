@@ -184,16 +184,8 @@ const waitWithStatusStream = async (params: {
 };
 
 export const waitForImportSettledVisibility = async (params: SettledVisibilityParams) => {
-  // Statement confirmation returns only after its transaction/account commit.
-  // The caller has already seeded that committed summary into client state, so
-  // an additional account/feed poll only delays a truthful UI result. Images
-  // and account-only imports still use the stricter visibility checks below.
-  if (params.importedRows > 0 && params.importFileId) {
-    return true;
-  }
-
   const accountId = params.accountId && !params.accountId.startsWith("optimistic-") ? params.accountId : null;
-  if (!accountId) {
+  if (!accountId && !params.importFileId) {
     return true;
   }
 
@@ -207,7 +199,7 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
   // Receipts and account-only imports can use the status stream. Statement rows
   // use the lightweight progress endpoint below so an older statement does not
   // wait for its rows to appear on page 1 of a date-sorted account feed.
-  if (params.importedRows <= 0) {
+  if (accountId && params.importedRows <= 0) {
     const streamResult = await waitWithStatusStream({
       accountId,
       importFileId: params.importFileId ?? null,
@@ -223,7 +215,7 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
 
   while (Date.now() - startedAt < timeoutMs) {
     try {
-      const accountResponsePromise = fetchAccountPayload(accountId);
+      const accountResponsePromise = accountId ? fetchAccountPayload(accountId) : Promise.resolve(null);
       const statusResponsePromise =
         params.importedRows > 0 && params.importFileId
           ? fetch(`/api/imports/${encodeURIComponent(params.importFileId)}/progress`, {
@@ -246,7 +238,7 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
         transactionsResponsePromise ?? Promise.resolve(null),
       ]);
 
-      if (!accountLooksSettled({
+      if (accountId && !accountLooksSettled({
         account: accountPayload?.account ?? null,
         accountId,
         // Row-backed imports can legitimately change an existing account whose

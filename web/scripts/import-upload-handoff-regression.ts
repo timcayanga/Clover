@@ -163,6 +163,11 @@ const main = async () => {
   assert.match(settledVisibilitySource, /\/progress`/);
   assert.doesNotMatch(
     settledVisibilitySource,
+    /if \(params\.importedRows > 0 && params\.importFileId\) \{\s*return true;\s*\}/,
+    "A row-backed receipt must not report visible before its committed import status confirms it."
+  );
+  assert.doesNotMatch(
+    settledVisibilitySource,
     /transaction\?\.importFileId === params\.importFileId/,
     "Historical statement imports must not wait for their rows to appear on page 1 of a date-sorted account feed."
   );
@@ -191,6 +196,11 @@ const main = async () => {
     modalSource,
     /progressLabel: "Saving transactions"[\s\S]{0,600}Clover is saving transactions to your workspace\./,
     "The modal must not report 100% before the transactions are durable and visible."
+  );
+  assert.match(
+    modalSource,
+    /const receiptImportedRows = Math\.max\([\s\S]{0,900}await waitForSettledVisibility\(/,
+    "Receipt completion must wait for its committed transaction before publishing 100%."
   );
   const duplicateSource = section(modalSource, "if (processPayload?.duplicate)", "capturePostHogClientEvent(\"import_parsed_successfully\"");
   assert.doesNotMatch(duplicateSource, /incomeTotal:\s*0/);
