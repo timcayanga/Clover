@@ -1068,6 +1068,7 @@ const refreshPdaxCryptoMarketValues = async (workspaceId: string) => {
   const quotes = await getLiveCryptoPhpPrices(
     positions.map((position) => String(position.investmentSymbol ?? ""))
   );
+  const updates: Prisma.PrismaPromise<unknown>[] = [];
   let refreshed = 0;
   for (const position of positions) {
     const symbol = String(position.investmentSymbol ?? "").trim().toUpperCase();
@@ -1078,7 +1079,10 @@ const refreshPdaxCryptoMarketValues = async (workspaceId: string) => {
     }
 
     const currentValue = Number((quantity * unitPrice).toFixed(2));
-    await prisma.$transaction([
+    // Publish every position from one quote set together. Updating BTC and XRP
+    // in separate transactions lets Accounts render a transient mixed-price
+    // portfolio that cannot match the institution page.
+    updates.push(
       prisma.account.update({ where: { id: position.id }, data: { balance: currentValue.toString() } }),
       prisma.investmentHolding.updateMany({
         where: { workspaceId, accountId: position.id, assetSymbol: symbol },
@@ -1086,11 +1090,20 @@ const refreshPdaxCryptoMarketValues = async (workspaceId: string) => {
           unitPrice: unitPrice.toString(),
           currentValue: currentValue.toString(),
         },
-      }),
-    ]).catch((error) => {
-      console.warn("[accounts] unable to refresh PDAX crypto market value", { workspaceId, accountId: position.id, symbol, error });
-    });
+      })
+    );
     refreshed += 1;
+  }
+
+  if (updates.length === 0) {
+    return 0;
+  }
+
+  try {
+    await prisma.$transaction(updates);
+  } catch (error) {
+    console.warn("[accounts] unable to atomically refresh PDAX crypto market values", { workspaceId, error });
+    return 0;
   }
   return refreshed;
 };

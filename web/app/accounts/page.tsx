@@ -718,7 +718,10 @@ const shouldKeepSeparateInvestmentCard = (account: Account) => {
   return /\bgsave\b/i.test(`${account.institution ?? ""} ${account.name}`);
 };
 
-const buildInvestmentInstitutionCards = (accounts: Account[]): Array<Account | InvestmentInstitutionCard> => {
+const buildInvestmentInstitutionCards = (
+  accounts: Account[],
+  readBalance: (account: Account) => string | null | undefined = (account) => account.balance
+): Array<Account | InvestmentInstitutionCard> => {
   const groups = new Map<string, InvestmentInstitutionCard>();
   const separateCards: Account[] = [];
 
@@ -732,7 +735,7 @@ const buildInvestmentInstitutionCards = (accounts: Account[]): Array<Account | I
     const currency = formatCurrencyCode(account.currency);
     const key = `${institution.toLowerCase()}::${currency}`;
     const current = groups.get(key);
-    const nextBalance = (parseAmount(current?.balance) ?? 0) + Math.abs(parseAmount(account.balance));
+    const nextBalance = (parseAmount(current?.balance) ?? 0) + Math.abs(parseAmount(readBalance(account)));
     const nextUpdatedAt =
       current && new Date(current.updatedAt).getTime() > new Date(account.updatedAt).getTime()
         ? current.updatedAt
@@ -2623,7 +2626,8 @@ function AccountsPageContent() {
         tone: "assets",
         itemLabel: "institution",
         rows: buildInvestmentInstitutionCards(
-          visibleAccounts.filter((account) => getEffectiveAccountType(account) === "investment")
+          visibleAccounts.filter((account) => getEffectiveAccountType(account) === "investment"),
+          getDisplayedAccountBalance
         ),
       },
       {
