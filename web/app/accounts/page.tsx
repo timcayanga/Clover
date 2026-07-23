@@ -16,6 +16,7 @@ import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { prefersLiveInvestmentBalance } from "@/lib/investment-balance";
+import { requiresAccountVisibilityRetry } from "@/lib/import-visibility-refresh";
 import { getAccountCardName, getAccountDisplayName, formatUploadAccountDisplayName } from "@/lib/account-display";
 import { getAccountPath, getInvestmentInstitutionPath } from "@/lib/account-path";
 import { countNonCashAccounts } from "@/lib/account-limit-count";
@@ -1981,9 +1982,18 @@ function AccountsPageContent() {
 
     completedImportRefreshKeyRef.current = refreshKey;
     // Import completion can arrive from a global uploader or race the account
-    // write. Rehydrate once from the authoritative endpoint so new snapshot
-    // accounts are visible without a manual page reload.
-    void loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true });
+    // write. Use a new request key, then retry once because an account-only
+    // snapshot can commit immediately after the first completion event.
+    // This is deliberately independent of the modal so background imports
+    // also render their accounts without a manual page reload.
+    void loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true, forceFresh: true });
+    const retry = window.setTimeout(() => {
+      void loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true, forceFresh: true });
+    }, 650);
+
+    return () => {
+      window.clearTimeout(retry);
+    };
   }, [importActivitySnapshot, loadWorkspaceData, selectedWorkspaceId]);
 
   useEffect(() => {
@@ -4616,17 +4626,21 @@ function AccountsPageContent() {
           }
 
           setImportRefreshInFlight(true);
-          const requiresSnapshotVisibilityRefresh =
-            previewTransactions.length === 0 &&
-            (summary.accountType === "investment" || summary.accountType === "bank" || summary.accountType === "wallet");
+          const requiresSnapshotVisibilityRefresh = requiresAccountVisibilityRetry(
+            summary.accountType,
+            previewTransactions.length
+          );
           // Keep the import handoff non-blocking: a multi-account snapshot
           // emits one settled summary per detected account. The local cache is
           // already updated above, while this authoritative refresh converges
           // in the background instead of serially delaying later accounts.
           const refreshImportWorkspace = async () => {
             await refreshAll();
-            if (Number(settledSummary.rowsImported ?? 0) > 0 && previewTransactions.length === 0) {
-              await new Promise((resolve) => window.setTimeout(resolve, 900));
+            if (requiresSnapshotVisibilityRefresh) {
+              // Portfolio and account-only captures legitimately have no
+              // transaction rows. Their first post-confirmation read can race
+              // the account write, so retry before publishing 100% success.
+              await new Promise((resolve) => window.setTimeout(resolve, 500));
               await refreshAll();
             }
           };
