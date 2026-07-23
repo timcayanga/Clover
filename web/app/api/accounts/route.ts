@@ -995,7 +995,10 @@ const repairPdaxPortfolioAccountsFromParsedRows = async (workspaceId: string) =>
   const cachedParses = await prisma.importFileExtractionCache.findMany({
     where: { workspaceId },
     orderBy: { updatedAt: "desc" },
-    take: 80,
+    // Imports are intentionally retained as learning material. A portfolio
+    // screenshot may predate many transaction statements, so a small recent
+    // window can miss the only durable Wallet evidence.
+    take: 500,
     select: { parsedRows: true },
   }).catch(() => []);
   for (const cachedParse of cachedParses) {
@@ -1038,25 +1041,34 @@ const repairPdaxPortfolioAccountsFromParsedRows = async (workspaceId: string) =>
       select: { id: true, source: true },
     }).catch(() => null);
     if (!existingAccount) {
-      await prisma.account.create({
-        data: {
+      try {
+        await prisma.account.create({
+          data: {
+            workspaceId,
+            source: "upload",
+            institution: "PDAX",
+            name,
+            type: expected.type,
+            currency: "PHP",
+            balance: expected.balance.toString(),
+            ...(expected.type === "investment"
+              ? {
+                  investmentSubtype: expected.subtype,
+                  investmentSymbol: expected.symbol,
+                  investmentQuantity: expected.quantity === null ? null : expected.quantity.toString(),
+                }
+              : {}),
+          },
+        });
+        repaired += 1;
+      } catch (error) {
+        console.warn("[accounts] unable to materialize PDAX portfolio account from preserved evidence", {
           workspaceId,
-          source: "upload",
-          institution: "PDAX",
           name,
           type: expected.type,
-          currency: "PHP",
-          balance: expected.balance.toString(),
-          ...(expected.type === "investment"
-            ? {
-                investmentSubtype: expected.subtype,
-                investmentSymbol: expected.symbol,
-                investmentQuantity: expected.quantity === null ? null : expected.quantity.toString(),
-              }
-            : {}),
-        },
-      }).catch(() => null);
-      repaired += 1;
+          error: summarizeErrorForLog(error),
+        });
+      }
       continue;
     }
     if (existingAccount.source !== "upload") {
