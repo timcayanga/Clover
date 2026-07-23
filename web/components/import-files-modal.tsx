@@ -4444,7 +4444,7 @@ export function ImportFilesModal({
   ): Promise<{ completed: boolean; summary: UploadInsightsSummary | null }> => {
     const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
     const startedAt = Date.now();
-    const MAX_WAIT_MS = importMode === "receipt" ? 240_000 : importMode === "statement" ? 120_000 : 20_000;
+    const MAX_WAIT_MS = importMode === "receipt" || importMode === "notes" ? 240_000 : importMode === "statement" ? 120_000 : 20_000;
     const timeoutDurationLabel =
       MAX_WAIT_MS >= 60_000
         ? `${Math.round(MAX_WAIT_MS / 60_000)} minute${Math.round(MAX_WAIT_MS / 60_000) === 1 ? "" : "s"}`
@@ -4847,7 +4847,22 @@ export function ImportFilesModal({
         continue;
       }
 
-      if (importStatus === "done" && statusDecision.kind === "visible") {
+      // Notes can persist their transactions before the document's background
+      // finalization marks the file done. Visibility is the user-facing
+      // completion contract, so do not hold this modal at 70% for that work.
+      if (statusDecision.kind === "visible" && (importStatus === "done" || importMode === "notes")) {
+        const importedRows = Math.max(1, confirmedTransactionsCount, parsedRowsCount);
+        const settledVisible = await waitForSettledVisibility(
+          itemId,
+          importFileId,
+          typeof importFile?.accountId === "string" && importFile.accountId.trim() ? importFile.accountId.trim() : null,
+          importedRows,
+          null,
+          "Notes transaction was saved before the import modal completed"
+        );
+        if (!settledVisible) {
+          return { completed: false, summary: null };
+        }
         updateItem(itemId, {
           status: "done",
           confirmationState: "confirmed",
@@ -4868,6 +4883,14 @@ export function ImportFilesModal({
           summary: null,
           errorMessage: null,
         });
+        window.setTimeout(closeVisibleImportModalIfPrimaryDataReady, 0);
+        if (
+          itemsRef.current.length > 0 &&
+          itemsRef.current.every((entry) => entry.status === "done" || entry.confirmationState === "confirmed")
+        ) {
+          primaryVisibilityCompletedRef.current = true;
+          scheduleSuccessfulImportAutoClose();
+        }
         router.refresh();
         return { completed: true, summary: null };
       }
