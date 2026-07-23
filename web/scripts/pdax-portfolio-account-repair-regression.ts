@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readPdaxPortfolioAccount, readPublishedPdaxPortfolioAccount } from "@/lib/pdax-portfolio-accounts";
+import { formatUploadAccountDisplayName } from "@/lib/account-display";
 
 const walletFromParsedEvidence = readPdaxPortfolioAccount(
   {
@@ -38,6 +39,11 @@ const walletFromCachedParse = readPdaxPortfolioAccount(
   { requireScreenshotSource: true }
 );
 assert.equal(walletFromCachedParse?.balance, 7969.73, "A cached deterministic parse must remain sufficient to restore Wallet.");
+assert.equal(
+  formatUploadAccountDisplayName("Wallet", "PDAX", null, "wallet"),
+  "Wallet",
+  "PDAX Wallet must not be renamed to the generic provider label and filtered from Accounts."
+);
 
 assert.equal(
   readPdaxPortfolioAccount(

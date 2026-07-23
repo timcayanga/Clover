@@ -106,6 +106,19 @@ export const formatUploadAccountDisplayName = (
     return "Cash";
   }
 
+  // PDAX portfolio screenshots expose a PHP wallet alongside investment
+  // holdings. "Wallet" is its real account identity, not a generic provider
+  // placeholder. Preserving it also prevents response cleanup from mistaking
+  // the account for an empty generic PDAX upload.
+  if (
+    type === "wallet" &&
+    safeInstitution === "PDAX" &&
+    safeName &&
+    /^wallet$/i.test(safeName)
+  ) {
+    return "Wallet";
+  }
+
   if (wiseWalletName) {
     return wiseWalletName;
   }
