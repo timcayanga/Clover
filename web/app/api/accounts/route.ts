@@ -1050,6 +1050,35 @@ const repairMalformedPdaxActionControlAccount = async (workspaceId: string) => {
   return repaired.count;
 };
 
+const cleanupMalformedPdaxPortfolioOverviewAccount = async (workspaceId: string) => {
+  // The fast screenshot fallback once promoted the literal overview heading
+  // "Balances" into an investment account. It has no financial meaning. Only
+  // remove upload-created, transactionless matches so user-confirmed accounts
+  // and any financial history are never touched.
+  const candidates = await prisma.account.findMany({
+    where: {
+      workspaceId,
+      source: "upload",
+      type: "investment",
+      accountNumber: null,
+      name: { equals: "Balances", mode: "insensitive" },
+      transactions: { none: {} },
+    },
+    select: { id: true },
+  }).catch(() => []);
+  const accountIds = candidates.map((account) => account.id);
+  if (accountIds.length === 0) {
+    return 0;
+  }
+
+  await prisma.investmentHolding.deleteMany({ where: { workspaceId, accountId: { in: accountIds } } }).catch(() => null);
+  await prisma.investmentSnapshot.deleteMany({ where: { workspaceId, accountId: { in: accountIds } } }).catch(() => null);
+  const result = await prisma.account.deleteMany({
+    where: { workspaceId, id: { in: accountIds }, source: "upload", type: "investment" },
+  }).catch(() => ({ count: 0 }));
+  return result.count;
+};
+
 const collapseDuplicateUploadedAccountsByIdentity = async (workspaceId: string, compatibleColumns: Set<string>) => {
   if (!compatibleColumns.has("accountNumber")) {
     return;
@@ -1283,6 +1312,7 @@ export async function GET(request: Request) {
     let repairedPdaxPortfolioAssetLabels = 0;
     let repairedMalformedPdaxActionControlAccounts = 0;
     let repairedPdaxPortfolioAccounts = 0;
+    let removedMalformedPdaxPortfolioOverviewAccounts = 0;
     if (shouldCleanupImportedAccounts) {
       await cleanupFilenameUploadedAccountPlaceholders(workspaceId).catch((error) => {
         console.warn("[accounts] unable to clean up filename imported account placeholders", {
@@ -1313,6 +1343,13 @@ export async function GET(request: Request) {
       });
       repairedMalformedPdaxActionControlAccounts = await repairMalformedPdaxActionControlAccount(workspaceId).catch((error) => {
         console.warn("[accounts] unable to repair malformed PDAX action-control account", {
+          workspaceId,
+          error,
+        });
+        return 0;
+      });
+      removedMalformedPdaxPortfolioOverviewAccounts = await cleanupMalformedPdaxPortfolioOverviewAccount(workspaceId).catch((error) => {
+        console.warn("[accounts] unable to remove malformed PDAX portfolio overview account", {
           workspaceId,
           error,
         });
@@ -1717,6 +1754,7 @@ export async function GET(request: Request) {
             repairedPdaxPortfolioAssetLabels,
             repairedMalformedPdaxActionControlAccounts,
             repairedPdaxPortfolioAccounts,
+            removedMalformedPdaxPortfolioOverviewAccounts,
           }
         : undefined,
     });
