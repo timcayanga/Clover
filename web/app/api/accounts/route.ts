@@ -862,8 +862,8 @@ const cleanupPdaxPortfolioBucketHoldings = async (workspaceId: string) => {
 
   // Older backup-parser runs could convert PDAX overview buckets into
   // holdings. These are derived import artifacts, not user-confirmed assets.
-  const bucketNames = new Set(["php", "php wallet", "crypto", "bonds", "gold"]);
-  const bucketNameCandidates = ["PHP", "PHP wallet", "Crypto", "Bonds", "Gold", ...Array.from(bucketNames)];
+  const bucketNames = new Set(["php", "php wallet", "crypto", "crypto balance", "bonds", "gold"]);
+  const bucketNameCandidates = ["PHP", "PHP wallet", "Crypto", "Crypto balance", "Bonds", "Gold", ...Array.from(bucketNames)];
   const candidates = await prisma.investmentHolding.findMany({
     where: {
       workspaceId,

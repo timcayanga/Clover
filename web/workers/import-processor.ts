@@ -8367,7 +8367,8 @@ export const processImportFileText = async (
       detectedMetadata: metadataForParse,
       pageImages,
       importMode: "portfolio",
-      timeoutMs: 30_000,
+      timeoutMs: 45_000,
+      strategy: "strong_only",
     }).catch(() => null);
     if (transcript?.transcript.trim()) {
       const transcriptRows = parseImportText(
