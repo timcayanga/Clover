@@ -90,6 +90,7 @@ import { coerceTransactionTypeFromCategoryName, isTransferCategoryName, toIntern
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { inferInvestmentClassification } from "@/lib/investments";
+import { getLiveCryptoPhpPrices } from "@/lib/crypto-market-prices";
 import { shouldLoadReceiptVisionAssets, shouldUseReceiptPreviewFastPath } from "@/lib/import-visual-recovery";
 import { isProtectedTransactionReviewStatus } from "@/lib/data-engine-safety";
 import { applyImportValidationToRows, validateParsedImportRows } from "@/lib/data-engine-validation";
@@ -7406,6 +7407,60 @@ export const processImportFileText = async (
 
     if (transcript?.transcript.trim()) {
       text = normalizeStatementImageOcrText(transcript.transcript);
+
+      // The fast visual transcript is ideal for most screenshots, but its
+      // overview of a PDAX portfolio can collapse visible BTC/XRP positions
+      // into one "Crypto Balance" bucket. Once PDAX is positively identified,
+      // recover the original OCR text and keep the deterministic parser as
+      // the source of truth. This is deliberately scoped so other screenshot
+      // imports keep their fast path.
+      const looksLikePdaxPortfolio = /\bpdax\b/i.test(text) && /\bportfolio\b|\bbalances\b|\bmy assets\b/i.test(text);
+      if (looksLikePdaxPortfolio && storageKey) {
+        try {
+          const deterministicTextCache = await readImportedFileTextWithCacheInfo(
+            {
+              storageKey,
+              fileType,
+              fileName,
+              workspaceId: String(importFile.workspaceId),
+              importMode,
+              sourceBytes: options.sourceBytes ?? null,
+            },
+            options.password,
+            options.pdfJsBaseUrl
+          );
+          const deterministicText = normalizeStatementImageOcrText(deterministicTextCache.text);
+          const deterministicPdaxRows = parseImportText(deterministicText, fileName, fileType, {
+            institution: "PDAX",
+            accountName: "PDAX",
+            accountNumber: null,
+          });
+          const detailedHoldingCount = deterministicPdaxRows.filter((row) => {
+            const payload = row.rawPayload;
+            return (
+              payload &&
+              typeof payload === "object" &&
+              !Array.isArray(payload) &&
+              (payload as Record<string, unknown>).source === "pdax_portfolio_screenshot" &&
+              typeof (payload as Record<string, unknown>).investmentSymbol === "string"
+            );
+          }).length;
+          if (detailedHoldingCount > 0) {
+            text = deterministicText;
+            textCacheInfo = deterministicTextCache;
+            usedFastOnlyImageTranscript = false;
+            console.info("[pdax-import] using deterministic portfolio OCR", {
+              importFileId,
+              detailedHoldingCount,
+            });
+          }
+        } catch (error) {
+          console.warn("[pdax-import] deterministic portfolio OCR unavailable; retaining visual transcript", {
+            importFileId,
+            error,
+          });
+        }
+      }
     }
   }
 
@@ -7563,6 +7618,49 @@ export const processImportFileText = async (
           accountNumber: metadataForParse.accountNumber,
         });
   let parsedRows = parsedRowsAfterFallback.length > 0 ? parsedRowsAfterFallback : parsedRowsInitial;
+  const pdaxCryptoPositions = parsedRows.flatMap((row) => {
+    const payload = row.rawPayload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return [];
+    }
+    const record = payload as Record<string, unknown>;
+    const symbol = typeof record.investmentSymbol === "string" ? record.investmentSymbol.trim().toUpperCase() : "";
+    const quantity = typeof record.quantity === "number" ? record.quantity : Number(record.quantity);
+    return record.source === "pdax_portfolio_screenshot" && symbol && Number.isFinite(quantity) && quantity > 0
+      ? [{ symbol, quantity }]
+      : [];
+  });
+  if (pdaxCryptoPositions.length > 0) {
+    const livePhpPrices = await getLiveCryptoPhpPrices(pdaxCryptoPositions.map((position) => position.symbol));
+    if (Object.keys(livePhpPrices).length > 0) {
+      parsedRows = parsedRows.map((row) => {
+        const payload = row.rawPayload;
+        if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+          return row;
+        }
+        const record = payload as Record<string, unknown>;
+        const symbol = typeof record.investmentSymbol === "string" ? record.investmentSymbol.trim().toUpperCase() : "";
+        const quantity = typeof record.quantity === "number" ? record.quantity : Number(record.quantity);
+        const liveUnitPrice = livePhpPrices[symbol];
+        if (record.source !== "pdax_portfolio_screenshot" || !Number.isFinite(quantity) || !liveUnitPrice) {
+          return row;
+        }
+        const liveMarketValue = Number((quantity * liveUnitPrice).toFixed(2));
+        return {
+          ...row,
+          amount: liveMarketValue.toFixed(2),
+          rawPayload: {
+            ...record,
+            statementMarketValue: record.marketValue,
+            marketValue: liveMarketValue,
+            liveUnitPrice,
+            valuationSource: "live_php_quote",
+            valuationQuotedAt: new Date().toISOString(),
+          },
+        };
+      });
+    }
+  }
   // PDAX portfolio screenshots are already structured snapshot data once the
   // local parser has identified their buckets and visible holdings. A vision
   // backup can describe the Crypto total, but cannot safely replace the
