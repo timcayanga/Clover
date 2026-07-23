@@ -15,6 +15,18 @@ assert.equal(
 
 assert.equal(
   resolveParsedTransactionCategoryName({
+    categoryName: "Shopping",
+    type: "expense",
+    merchantRaw: "Handwritten lunch",
+    description: "Lunch with adobo, rice, and lemonade",
+    rawPayload: { notes: "adobo rice lemonade" },
+  }),
+  "Food & Dining",
+  "Specific food evidence must override a generic Shopping label for unconfirmed handwritten notes."
+);
+
+assert.equal(
+  resolveParsedTransactionCategoryName({
     categoryName: "Bills & Utilities",
     type: "expense",
     merchantRaw: "Electricity bill",

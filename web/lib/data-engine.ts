@@ -3304,7 +3304,11 @@ export const resolveParsedTransactionCategoryName = (params: {
   rawPayload?: unknown;
 }) => {
   const categoryName = params.categoryName?.trim() || defaultCategoryForType(params.type ?? "expense");
-  if (categoryName !== "Bills & Utilities") {
+  // Parsed notes can be assigned a generic shopping/bills category by the
+  // vision model even when their title or itemized evidence is clearly food.
+  // This path is used only while creating unconfirmed parsed rows; confirmed
+  // user categories are never reclassified here.
+  if (categoryName !== "Bills & Utilities" && categoryName !== "Shopping") {
     return categoryName;
   }
 
@@ -3323,9 +3327,9 @@ export const resolveParsedTransactionCategoryName = (params: {
     .join(" ");
   const evidenceCategory = evidence ? guessCategoryFallback(evidence, params.type ?? "expense") : null;
 
-  // OpenAI can label an informal food note as a generic bill when its title
-  // includes "bill". Specific food evidence in the title, note, or parsed
-  // line text is stronger and should win before confirmation.
+  // OpenAI can label an informal food note as a generic bill or shopping item
+  // when the note uses broad wording. Specific food evidence in the title,
+  // note, or parsed line text is stronger and should win before confirmation.
   return evidenceCategory === "Food & Dining" ? evidenceCategory : categoryName;
 };
 
