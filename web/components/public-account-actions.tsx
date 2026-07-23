@@ -14,6 +14,10 @@ export function PublicAccountActions({ variant = "desktop", accountState }: Publ
   const { isLoaded, isSignedIn, user } = useUser();
   const resolvedSignedIn = isLoaded ? isSignedIn : accountState?.signedIn ?? false;
 
+  if (!isLoaded && !accountState?.signedIn) {
+    return <span className={`landing-account-actions--loading landing-account-actions--loading-${variant}`} aria-hidden="true" />;
+  }
+
   if (resolvedSignedIn) {
     const displayName = accountState?.displayName ?? user?.firstName ?? user?.emailAddresses[0]?.emailAddress?.split("@")[0] ?? "Account";
     const avatar = accountState?.avatarUrl ?? user?.imageUrl ?? null;

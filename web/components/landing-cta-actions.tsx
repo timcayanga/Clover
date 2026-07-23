@@ -15,6 +15,10 @@ export function LandingCtaActions({ accountState, authEnabled }: LandingCtaActio
   const { isLoaded, isSignedIn, user } = useUser();
   const signedIn = isLoaded ? Boolean(isSignedIn) : accountState.signedIn;
 
+  if (!isLoaded && !accountState.signedIn) {
+    return <span className="landing-cta-actions__loading" aria-hidden="true" />;
+  }
+
   if (!signedIn) {
     return (
       <>

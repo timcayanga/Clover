@@ -41429,6 +41429,39 @@ body[data-split-bill-modal-open="true"] .app-shell {
   gap: 8px;
 }
 
+.landing-cta-actions__loading {
+  display: inline-block;
+  width: 236px;
+  min-height: 42px;
+  border-radius: 999px;
+  background: linear-gradient(100deg, rgba(3, 168, 192, 0.1), rgba(110, 231, 183, 0.26), rgba(3, 168, 192, 0.1));
+  background-size: 220% 100%;
+  animation: landing-auth-loading 1.1s ease-in-out infinite;
+}
+
+.landing-account-actions--loading {
+  display: inline-block;
+  border-radius: 999px;
+  background: linear-gradient(100deg, rgba(3, 168, 192, 0.08), rgba(110, 231, 183, 0.2), rgba(3, 168, 192, 0.08));
+  background-size: 220% 100%;
+  animation: landing-auth-loading 1.1s ease-in-out infinite;
+}
+
+.landing-account-actions--loading-desktop {
+  width: 136px;
+  height: 36px;
+}
+
+.landing-account-actions--loading-mobile {
+  width: 72px;
+  height: 36px;
+}
+
+@keyframes landing-auth-loading {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
 .landing-account-cta__avatar {
   width: 24px;
   height: 24px;
@@ -41540,6 +41573,10 @@ body[data-split-bill-modal-open="true"] .app-shell {
 }
 
 @media (max-width: 720px) {
+  .landing-cta-actions__loading {
+    width: min(236px, 100%);
+  }
+
   .landing-signup-modal {
     align-items: end;
     padding: 12px;
