@@ -935,6 +935,59 @@ const repairGeneratedPdaxPortfolioAssetLabels = async (workspaceId: string) => {
   return repaired;
 };
 
+const repairMalformedPdaxActionControlAccount = async (workspaceId: string) => {
+  // A short-lived generic screenshot fallback could promote PDAX's four
+  // portfolio action buttons into an investment account. The exact combined
+  // label is impossible as a user-supplied financial account name, and these
+  // rows are upload-created, so it is safe to repair without touching any
+  // confirmed account.
+  const actionControlLabel = /^(?:cash\s+in|cash\s+out|deposit|send)(?:\s+(?:cash\s+in|cash\s+out|deposit|send)){1,3}$/i;
+  const candidates = await prisma.account.findMany({
+    where: {
+      workspaceId,
+      source: "upload",
+      accountNumber: null,
+      type: "investment",
+    },
+    select: { id: true, name: true, institution: true },
+  }).catch(() => []);
+  const accountIds = candidates
+    .filter((account) => actionControlLabel.test(account.name.trim()) || actionControlLabel.test((account.institution ?? "").trim()))
+    .map((account) => account.id);
+
+  if (accountIds.length === 0) {
+    return 0;
+  }
+
+  // The generic snapshot holding is as invalid as the account label. Remove
+  // it before converting the retained visible PHP balance into the PDAX wallet.
+  await prisma.investmentHolding.deleteMany({
+    where: { workspaceId, accountId: { in: accountIds } },
+  }).catch(() => null);
+  await prisma.investmentSnapshot.deleteMany({
+    where: { workspaceId, accountId: { in: accountIds } },
+  }).catch(() => null);
+  const repaired = await prisma.account.updateMany({
+    where: { workspaceId, id: { in: accountIds }, source: "upload" },
+    data: {
+      name: "Wallet",
+      institution: "PDAX",
+      type: "wallet",
+      investmentSubtype: null,
+      investmentSymbol: null,
+      investmentQuantity: null,
+      investmentCostBasis: null,
+      investmentPrincipal: null,
+      investmentStartDate: null,
+      investmentMaturityDate: null,
+      investmentInterestRate: null,
+      investmentMaturityValue: null,
+    },
+  }).catch(() => ({ count: 0 }));
+
+  return repaired.count;
+};
+
 const collapseDuplicateUploadedAccountsByIdentity = async (workspaceId: string, compatibleColumns: Set<string>) => {
   if (!compatibleColumns.has("accountNumber")) {
     return;
@@ -1166,6 +1219,7 @@ export async function GET(request: Request) {
     );
     let removedStalePdaxBucketHoldings = 0;
     let repairedPdaxPortfolioAssetLabels = 0;
+    let repairedMalformedPdaxActionControlAccounts = 0;
     if (shouldCleanupImportedAccounts) {
       await cleanupFilenameUploadedAccountPlaceholders(workspaceId).catch((error) => {
         console.warn("[accounts] unable to clean up filename imported account placeholders", {
@@ -1182,6 +1236,13 @@ export async function GET(request: Request) {
       });
       repairedPdaxPortfolioAssetLabels = await repairGeneratedPdaxPortfolioAssetLabels(workspaceId).catch((error) => {
         console.warn("[accounts] unable to repair generated PDAX portfolio asset labels", {
+          workspaceId,
+          error,
+        });
+        return 0;
+      });
+      repairedMalformedPdaxActionControlAccounts = await repairMalformedPdaxActionControlAccount(workspaceId).catch((error) => {
+        console.warn("[accounts] unable to repair malformed PDAX action-control account", {
           workspaceId,
           error,
         });
@@ -1581,7 +1642,7 @@ export async function GET(request: Request) {
       accountRules,
       statementCheckpoints,
       maintenance: shouldCleanupImportedAccounts
-        ? { removedStalePdaxBucketHoldings, repairedPdaxPortfolioAssetLabels }
+        ? { removedStalePdaxBucketHoldings, repairedPdaxPortfolioAssetLabels, repairedMalformedPdaxActionControlAccounts }
         : undefined,
     });
   } catch (error) {

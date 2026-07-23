@@ -11349,10 +11349,22 @@ const pdaxScreenshotMetadata = (text: string): DetectedStatementMetadata | null 
     /\bPortfolio\b/i.test(normalized) &&
     ["PHP", "Crypto", "Bonds", "Gold"].filter((bucket) => new RegExp(`\\b${bucket}\\b`, "i").test(normalized)).length >= 3 &&
     /\bHide\s+zero\s+balance\b/i.test(normalized);
-  const hasPortfolio =
-    (hasPdaxBrand || hasPdaxPortfolioLayout) &&
+  // On small or low-quality captures the PDAX wordmark and the lower balance
+  // buckets can be omitted by OCR, while its four portfolio controls remain.
+  // That combination plus a visible PHP bucket is distinctive enough to keep
+  // the capture on the PDAX path instead of letting a generic parser turn the
+  // controls into an investment name.
+  const hasPdaxPortfolioActionLayout =
     /\bPortfolio\b/i.test(normalized) &&
-    /\b(?:Balances|My\s+assets|Hide\s+zero\s+balance)\b/i.test(normalized);
+    /\bCash\s+in\b/i.test(normalized) &&
+    /\bCash\s+out\b/i.test(normalized) &&
+    /\bDeposit\b/i.test(normalized) &&
+    /\bSend\b/i.test(normalized) &&
+    /\bPHP\b/i.test(normalized);
+  const hasPortfolio =
+    (hasPdaxBrand || hasPdaxPortfolioLayout || hasPdaxPortfolioActionLayout) &&
+    /\bPortfolio\b/i.test(normalized) &&
+    /\b(?:Balances|My\s+assets|Hide\s+zero\s+balance|Cash\s+in)\b/i.test(normalized);
   const hasWalletHistory = /\bWallet\s+History\b/i.test(normalized) && /\b(?:Fiat|Crypto\s+transfers|Others)\b/i.test(normalized);
   if (!hasPortfolio && !hasWalletHistory) return null;
 

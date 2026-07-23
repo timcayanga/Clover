@@ -126,4 +126,27 @@ assert.doesNotMatch(
   "Portfolio UI labels must not become an account or asset name when the logo is omitted."
 );
 
+const pdaxActionControlsOcrText = `
+Portfolio
+Cash in Cash out Deposit Send
+PHP
+0.45
+`.trim();
+const actionControlsMetadata = detectStatementMetadata(pdaxActionControlsOcrText, "low-quality-pdax.png");
+assert.equal(
+  actionControlsMetadata?.institution,
+  "PDAX",
+  "PDAX's distinctive portfolio controls must route a cropped portfolio screenshot away from the generic parser."
+);
+const actionControlsRows = parseImportText(pdaxActionControlsOcrText, "low-quality-pdax.png", "image/png");
+assert.equal(actionControlsRows.length, 1, "The visible PHP balance should still be retained as one safe snapshot.");
+assert.equal(actionControlsRows[0]?.accountName, "Wallet");
+assert.equal(actionControlsRows[0]?.institution, "PDAX");
+assert.equal((actionControlsRows[0]?.rawPayload as Record<string, unknown>)?.accountType, "wallet");
+assert.doesNotMatch(
+  `${actionControlsRows[0]?.accountName} ${actionControlsRows[0]?.description}`,
+  /cash in|cash out|deposit send/i,
+  "PDAX action controls must never become an account or asset name."
+);
+
 console.log("[PASS] PDAX portfolio screenshots retain canonical identity and safe snapshot holdings.");
