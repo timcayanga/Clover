@@ -11294,11 +11294,29 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   const hasMultipleInvestmentAccountGroups =
     nonDefaultParsedAccountGroups.length > 1 &&
     (baseStatementMetadata.accountType === "investment" || /\bgfunds\b|\batram\b|\bgcrypto\b|\bpdax\b/i.test(investmentInstitutionHint));
+  // PDAX portfolio OCR can be recovered after the initial screenshot metadata
+  // was produced. Its raw rows explicitly identify Wallet, BTC, XRP, and
+  // Gold, so never collapse those records just because the fast transcript
+  // missed the PDAX wordmark.
+  const hasDeterministicPdaxPortfolioGroups =
+    nonDefaultParsedAccountGroups.length > 1 &&
+    nonDefaultParsedAccountGroups.every((group) =>
+      group.rows.every((row) => {
+        const payload = row.rawPayload;
+        return (
+          payload &&
+          typeof payload === "object" &&
+          !Array.isArray(payload) &&
+          (payload as Record<string, unknown>).source === "pdax_portfolio_screenshot"
+        );
+      })
+    );
   const multiAccountImport =
     (nonDefaultParsedAccountGroups.length > 1 &&
       parsedAccountGroups.some((group) => group.rows.some((row) => Boolean(readRowAccountNumber(row))))) ||
     hasMultipleWiseWalletAccountGroups ||
-    hasMultipleInvestmentAccountGroups;
+    hasMultipleInvestmentAccountGroups ||
+    hasDeterministicPdaxPortfolioGroups;
   // Start the workspace snapshot before account resolution so it can serve
   // both identity matching and later transaction matching in one read.
   const compatibleAccountColumnsPromise = getCompatibleAccountColumns();

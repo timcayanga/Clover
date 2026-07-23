@@ -943,7 +943,10 @@ const repairPdaxPortfolioAccountsFromParsedRows = async (workspaceId: string) =>
     where: { workspaceId, institution: "PDAX" },
     select: { accountName: true, rawPayload: true },
   }).catch(() => []);
-  const expectedAccounts = new Map<string, { balance: number; type: "wallet" | "investment"; subtype: string | null }>();
+  const expectedAccounts = new Map<
+    string,
+    { balance: number; type: "wallet" | "investment"; subtype: string | null; symbol: string | null; quantity: number | null }
+  >();
   for (const row of parsedRows) {
     const payload =
       row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
@@ -965,11 +968,42 @@ const repairPdaxPortfolioAccountsFromParsedRows = async (workspaceId: string) =>
       balance,
       type,
       subtype: typeof payload.investmentSubtype === "string" ? payload.investmentSubtype : null,
+      symbol: typeof payload.investmentSymbol === "string" ? payload.investmentSymbol : null,
+      quantity: typeof payload.quantity === "number" && Number.isFinite(payload.quantity) ? payload.quantity : null,
     });
   }
 
   let repaired = 0;
   for (const [name, expected] of expectedAccounts) {
+    const existingAccount = await prisma.account.findFirst({
+      where: { workspaceId, institution: "PDAX", name },
+      select: { id: true, source: true },
+    }).catch(() => null);
+    if (!existingAccount) {
+      await prisma.account.create({
+        data: {
+          workspaceId,
+          source: "upload",
+          institution: "PDAX",
+          name,
+          type: expected.type,
+          currency: "PHP",
+          balance: expected.balance.toString(),
+          ...(expected.type === "investment"
+            ? {
+                investmentSubtype: expected.subtype,
+                investmentSymbol: expected.symbol,
+                investmentQuantity: expected.quantity === null ? null : expected.quantity.toString(),
+              }
+            : {}),
+        },
+      }).catch(() => null);
+      repaired += 1;
+      continue;
+    }
+    if (existingAccount.source !== "upload") {
+      continue;
+    }
     const result = await prisma.account.updateMany({
       where: { workspaceId, source: "upload", institution: "PDAX", name },
       data: {
@@ -988,7 +1022,11 @@ const repairPdaxPortfolioAccountsFromParsedRows = async (workspaceId: string) =>
               investmentMaturityValue: null,
             }
           : expected.subtype
-            ? { investmentSubtype: expected.subtype }
+            ? {
+                investmentSubtype: expected.subtype,
+                investmentSymbol: expected.symbol,
+                investmentQuantity: expected.quantity === null ? null : expected.quantity.toString(),
+              }
             : {}),
       },
     }).catch(() => ({ count: 0 }));
