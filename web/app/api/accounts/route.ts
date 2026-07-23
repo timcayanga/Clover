@@ -28,6 +28,7 @@ import {
   isUnauthorizedDataError,
 } from "@/lib/transient-data";
 import { summarizeErrorForLog } from "@/lib/security-logging";
+import { getLiveCryptoPhpPrices } from "@/lib/crypto-market-prices";
 
 export const dynamic = "force-dynamic";
 
@@ -1035,6 +1036,52 @@ const repairPdaxPortfolioAccountsFromParsedRows = async (workspaceId: string) =>
   return repaired;
 };
 
+const refreshPdaxCryptoMarketValues = async (workspaceId: string) => {
+  const positions = await prisma.account.findMany({
+    where: {
+      workspaceId,
+      source: "upload",
+      institution: "PDAX",
+      type: "investment",
+      investmentSymbol: { in: ["BTC", "XRP"] },
+      investmentQuantity: { not: null },
+    },
+    select: { id: true, investmentSymbol: true, investmentQuantity: true },
+  }).catch(() => []);
+  if (positions.length === 0) {
+    return 0;
+  }
+
+  const quotes = await getLiveCryptoPhpPrices(
+    positions.map((position) => String(position.investmentSymbol ?? ""))
+  );
+  let refreshed = 0;
+  for (const position of positions) {
+    const symbol = String(position.investmentSymbol ?? "").trim().toUpperCase();
+    const quantity = Number(position.investmentQuantity?.toString() ?? "");
+    const unitPrice = quotes[symbol];
+    if (!symbol || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitPrice) || unitPrice <= 0) {
+      continue;
+    }
+
+    const currentValue = Number((quantity * unitPrice).toFixed(2));
+    await prisma.$transaction([
+      prisma.account.update({ where: { id: position.id }, data: { balance: currentValue.toString() } }),
+      prisma.investmentHolding.updateMany({
+        where: { workspaceId, accountId: position.id, assetSymbol: symbol },
+        data: {
+          unitPrice: unitPrice.toString(),
+          currentValue: currentValue.toString(),
+        },
+      }),
+    ]).catch((error) => {
+      console.warn("[accounts] unable to refresh PDAX crypto market value", { workspaceId, accountId: position.id, symbol, error });
+    });
+    refreshed += 1;
+  }
+  return refreshed;
+};
+
 const repairMalformedPdaxActionControlAccount = async (workspaceId: string) => {
   // A short-lived generic screenshot fallback could promote PDAX's four
   // portfolio action buttons into an investment account. The exact combined
@@ -1350,6 +1397,7 @@ export async function GET(request: Request) {
     let repairedPdaxPortfolioAssetLabels = 0;
     let repairedMalformedPdaxActionControlAccounts = 0;
     let repairedPdaxPortfolioAccounts = 0;
+    let refreshedPdaxCryptoMarketValues = 0;
     let removedMalformedPdaxPortfolioOverviewAccounts = 0;
     if (shouldCleanupImportedAccounts) {
       await cleanupFilenameUploadedAccountPlaceholders(workspaceId).catch((error) => {
@@ -1377,6 +1425,10 @@ export async function GET(request: Request) {
           workspaceId,
           error,
         });
+        return 0;
+      });
+      refreshedPdaxCryptoMarketValues = await refreshPdaxCryptoMarketValues(workspaceId).catch((error) => {
+        console.warn("[accounts] unable to refresh PDAX crypto market values", { workspaceId, error });
         return 0;
       });
       repairedMalformedPdaxActionControlAccounts = await repairMalformedPdaxActionControlAccount(workspaceId).catch((error) => {
@@ -1792,6 +1844,7 @@ export async function GET(request: Request) {
             repairedPdaxPortfolioAssetLabels,
             repairedMalformedPdaxActionControlAccounts,
             repairedPdaxPortfolioAccounts,
+            refreshedPdaxCryptoMarketValues,
             removedMalformedPdaxPortfolioOverviewAccounts,
           }
         : undefined,

@@ -7,6 +7,7 @@ These rules cover PDAX portfolio, fiat wallet history, and `Others` rewards scre
 ## Deterministic Rules
 
 - Parse visible crypto holdings as separate investment snapshot markers with symbol, PHP market value, and quantity (for example, `BTC` and `XRP`); store PDAX as their institution rather than prefixing the asset name.
+- Preserve the screenshot market value as statement evidence, then derive BTC/XRP `currentValue` from their visible quantity and a fresh PHP spot quote. Revalue these positions during Accounts maintenance; do not invent a live Gold value when the screenshot does not expose Gold units.
 - Create `Wallet` as a PDAX wallet account from the visible PHP balance.
 - Create `Gold` with the `Real-world asset` investment subtype from a visible Gold balance when no more-specific gold holding row is shown.
 - When detailed crypto rows reconcile to the visible Crypto bucket, do not create an additional aggregate Crypto account.
