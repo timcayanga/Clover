@@ -24,6 +24,7 @@ import {
   type ImportActivitySnapshot,
 } from "@/lib/import-activity";
 import { formatImportResultHeadline } from "@/lib/import-result-summary";
+import { publishImportedSummary } from "@/lib/imported-summary-events";
 import {
   getGuidanceMenuPreset,
   isGuidanceMenuVisibility,
@@ -1906,7 +1907,12 @@ export function CloverShell({
           initialFiles={quickAddSeedFiles}
           onInitialFilesConsumed={() => setQuickAddSeedFiles(null)}
           onClose={closeQuickAddModal}
-          onImported={async () => {
+          onImported={async (summary) => {
+            // The shell uploader can be opened from any page. Publish its
+            // confirmed summary so client pages (especially Transactions) can
+            // refresh their local data immediately instead of waiting for a
+            // manual reload.
+            publishImportedSummary(searchWorkspaceId, summary);
             router.refresh();
           }}
         />

@@ -100,6 +100,11 @@ const main = async () => {
     /const showImportProgressDock = items\.length > 0 && progressSessionActive && !activePasswordItem/,
     "Once a file is queued, the file picker must yield to the dedicated progress surface."
   );
+  assert.doesNotMatch(
+    modalSource,
+    /useEffect\(\(\) => \{\s*if \(typeof document === "undefined" \|\| !open \|\| backgroundOnly \|\| launchInBackground \|\| showImportProgressDock\)/,
+    "The active import dock must keep the global legacy dock suppressed."
+  );
   assert.match(
     modalSource,
     /const visibleOverallProgress = Math\.max\(overallProgress, activityProgressFloor\);/,
