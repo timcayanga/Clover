@@ -3295,6 +3295,40 @@ export const insertTransactionManyCompat = async (params: {
   return params.records;
 };
 
+export const resolveParsedTransactionCategoryName = (params: {
+  categoryName?: string | null;
+  type?: TransactionType | null;
+  merchantRaw?: string | null;
+  merchantClean?: string | null;
+  description?: string | null;
+  rawPayload?: unknown;
+}) => {
+  const categoryName = params.categoryName?.trim() || defaultCategoryForType(params.type ?? "expense");
+  if (categoryName !== "Bills & Utilities") {
+    return categoryName;
+  }
+
+  const rawPayload =
+    params.rawPayload && typeof params.rawPayload === "object" && !Array.isArray(params.rawPayload)
+      ? (params.rawPayload as Record<string, unknown>)
+      : null;
+  const evidence = [
+    params.merchantRaw,
+    params.merchantClean,
+    params.description,
+    typeof rawPayload?.notes === "string" ? rawPayload.notes : null,
+    typeof rawPayload?.sourceLine === "string" ? rawPayload.sourceLine : null,
+  ]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join(" ");
+  const evidenceCategory = evidence ? guessCategoryFallback(evidence, params.type ?? "expense") : null;
+
+  // OpenAI can label an informal food note as a generic bill when its title
+  // includes "bill". Specific food evidence in the title, note, or parsed
+  // line text is stronger and should win before confirmation.
+  return evidenceCategory === "Food & Dining" ? evidenceCategory : categoryName;
+};
+
 export const buildParsedTransactionInsertData = async (params: {
   importFileId: string;
   workspaceId: string;
@@ -3324,6 +3358,14 @@ export const buildParsedTransactionInsertData = async (params: {
         row.currency ?? params.metadata.currency ?? "PHP",
         row.accountName ?? params.metadata.accountName ?? null
       ) ?? "PHP";
+    const categoryName = resolveParsedTransactionCategoryName({
+      categoryName: row.categoryName,
+      type: row.type ?? "expense",
+      merchantRaw: row.merchantRaw,
+      merchantClean: row.merchantClean,
+      description: row.description,
+      rawPayload: row.rawPayload,
+    });
 
     const record: Record<string, unknown> = {};
     if (columns.has("id")) record.id = crypto.randomUUID();
@@ -3338,7 +3380,7 @@ export const buildParsedTransactionInsertData = async (params: {
     if (columns.has("merchantRaw")) record.merchantRaw = row.merchantRaw ?? null;
     if (columns.has("merchantClean")) record.merchantClean = row.merchantClean ?? row.merchantRaw ?? null;
     if (columns.has("type")) record.type = row.type ?? "expense";
-    if (columns.has("categoryName")) record.categoryName = row.categoryName ?? defaultCategoryForType(row.type ?? "expense");
+    if (columns.has("categoryName")) record.categoryName = categoryName;
     if (columns.has("confidence")) record.confidence = row.confidence ?? 0;
     if (columns.has("categoryReason")) record.categoryReason = row.categoryReason ?? null;
     if (columns.has("parserVersion")) record.parserVersion = row.parserVersion ?? DATA_ENGINE_VERSION;
