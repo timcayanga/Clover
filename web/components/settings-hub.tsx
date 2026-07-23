@@ -23,6 +23,7 @@ import { clearAllWorkspaceCaches } from "@/lib/workspace-cache";
 import { persistSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
 import type { BillingInterval } from "@/lib/billing-plans";
 import { signOutToLanding } from "@/lib/sign-out";
+import { readAccountIdentityCache, writeAccountIdentityCache } from "@/lib/account-identity-cache";
 
 const SettingsCategoriesPanel = dynamic(
   () => import("@/components/settings-categories-panel").then((module) => module.SettingsCategoriesPanel),
@@ -161,7 +162,6 @@ type SettingsHubProps = {
   disableWorkspaceBootstrap?: boolean;
 };
 
-const SETTINGS_ACCOUNT_IDENTITY_CACHE_KEY = "clover.settings.account-identity.v1";
 const SETTINGS_NOTIFICATIONS_KEY = "clover.settings.notifications.v1";
 const SETTINGS_IMPORTS_KEY = "clover.settings.imports.v1";
 const SETTINGS_REGIONAL_KEY = "clover.settings.regional.v1";
@@ -190,13 +190,6 @@ const FALLBACK_TIME_ZONES = [
   "Pacific/Auckland",
 ] as const;
 
-type SettingsAccountIdentityCache = {
-  firstName?: string | null;
-  lastName?: string | null;
-  email?: string;
-  imageUrl?: string | null;
-};
-
 type GuidancePresetLevel = "learning" | "comfortable" | "very-comfortable";
 type GuidanceLevel = GuidancePresetLevel | "custom";
 
@@ -217,24 +210,6 @@ const guidanceOptions: Array<{ value: GuidancePresetLevel; label: string; helper
     helper: "Keep Clover streamlined, with metrics and controls close at hand.",
   },
 ];
-
-const readStoredAccountIdentity = (): SettingsAccountIdentityCache | null => {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const raw = window.localStorage.getItem(SETTINGS_ACCOUNT_IDENTITY_CACHE_KEY);
-    if (!raw) {
-      return null;
-    }
-
-    const parsed = JSON.parse(raw) as SettingsAccountIdentityCache;
-    return parsed && typeof parsed === "object" ? parsed : null;
-  } catch {
-    return null;
-  }
-};
 
 const readStoredJsonValue = <T,>(key: string, fallback: T): T => {
   if (typeof window === "undefined") {
@@ -364,21 +339,9 @@ function SettingsToggleRow({
   );
 }
 
-const writeStoredAccountIdentity = (identity: SettingsAccountIdentityCache) => {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(SETTINGS_ACCOUNT_IDENTITY_CACHE_KEY, JSON.stringify(identity));
-  } catch {
-    // Ignore storage failures; the live Clerk/API values still populate the form.
-  }
-};
-
 function SettingsIcon({ src }: { src: string }) {
   const nextSrc = src.includes("notifications.png") ? `${src}?v=20260709` : src;
-  return <img aria-hidden="true" src={nextSrc} alt="" className="settings-hub__menu-icon" />;
+  return <img aria-hidden="true" src={nextSrc} alt="" className="settings-hub__menu-icon" loading="eager" decoding="async" />;
 }
 
 const sectionCopy: Record<
@@ -485,7 +448,7 @@ export function SettingsHub({
   const [selectedProfileId, setSelectedProfileId] = useState(initialSelectedProfileId);
   const [firstName, setFirstName] = useState<string | null>(initialFirstName);
   const [lastName, setLastName] = useState<string | null>(initialLastName);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(initialAvatarUrl ?? null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(() => initialAvatarUrl ?? readAccountIdentityCache()?.imageUrl ?? user?.imageUrl ?? null);
   const [email, setEmail] = useState(initialEmail);
   const [planTier, setPlanTier] = useState<"free" | "pro">(initialPlanTier);
   const [paypalClientId, setPaypalClientId] = useState<string | null>(initialPaypalClientId ?? null);
@@ -591,7 +554,7 @@ export function SettingsHub({
   }, []);
 
   useEffect(() => {
-    const cachedIdentity = readStoredAccountIdentity();
+    const cachedIdentity = readAccountIdentityCache();
     if (!cachedIdentity) {
       return;
     }
@@ -616,9 +579,9 @@ export function SettingsHub({
     const clerkLastName = user.lastName ?? null;
     const clerkEmail = user.primaryEmailAddress?.emailAddress ?? email;
     const clerkImageUrl = user.imageUrl ?? avatarUrl;
-    const cachedIdentity = readStoredAccountIdentity();
+    const cachedIdentity = readAccountIdentityCache();
 
-    writeStoredAccountIdentity({
+    writeAccountIdentityCache({
       firstName: clerkFirstName ?? cachedIdentity?.firstName ?? null,
       lastName: clerkLastName ?? cachedIdentity?.lastName ?? null,
       email: clerkEmail,
@@ -681,12 +644,13 @@ export function SettingsHub({
         setFirstName(payload.firstName ?? initialFirstName);
         setLastName(payload.lastName ?? initialLastName);
         setEmail(payload.email ?? initialEmail);
-        setAvatarUrl(payload.imageUrl ?? initialAvatarUrl ?? null);
-        writeStoredAccountIdentity({
+        const cachedAvatarUrl = readAccountIdentityCache()?.imageUrl ?? null;
+        setAvatarUrl(payload.imageUrl ?? initialAvatarUrl ?? cachedAvatarUrl);
+        writeAccountIdentityCache({
           firstName: payload.firstName ?? initialFirstName,
           lastName: payload.lastName ?? initialLastName,
           email: payload.email ?? initialEmail,
-          imageUrl: payload.imageUrl ?? initialAvatarUrl ?? null,
+          imageUrl: payload.imageUrl ?? initialAvatarUrl ?? cachedAvatarUrl,
         });
         setPlanTier(payload.planTier ?? "free");
         setPaypalClientId(payload.paypalClientId ?? null);
@@ -703,7 +667,7 @@ export function SettingsHub({
           setFirstName(initialFirstName);
           setLastName(initialLastName);
           setEmail(initialEmail);
-          setAvatarUrl(initialAvatarUrl ?? null);
+          setAvatarUrl(initialAvatarUrl ?? readAccountIdentityCache()?.imageUrl ?? null);
           setPlanTier(initialPlanTier);
           setPaypalClientId(initialPaypalClientId ?? null);
           setPaypalMonthlyPlanId(initialPaypalMonthlyPlanId ?? null);
@@ -774,13 +738,14 @@ export function SettingsHub({
       setActiveProfileId(payload.selectedProfileId ?? nextWorkspaceId);
       setFirstName(payload.firstName ?? initialFirstName);
       setLastName(payload.lastName ?? initialLastName);
-      setAvatarUrl(payload.imageUrl ?? null);
+      const cachedAvatarUrl = readAccountIdentityCache()?.imageUrl ?? null;
+      setAvatarUrl(payload.imageUrl ?? cachedAvatarUrl);
       setEmail(payload.email ?? email);
-      writeStoredAccountIdentity({
+      writeAccountIdentityCache({
         firstName: payload.firstName ?? initialFirstName,
         lastName: payload.lastName ?? initialLastName,
         email: payload.email ?? email,
-        imageUrl: payload.imageUrl ?? null,
+        imageUrl: payload.imageUrl ?? cachedAvatarUrl,
       });
       setPlanTier(payload.planTier ?? "free");
       setPaypalClientId(payload.paypalClientId ?? null);
@@ -1195,7 +1160,7 @@ export function SettingsHub({
         setFirstName(payload.firstName ?? null);
         setLastName(payload.lastName ?? null);
         accountNameDraftDirtyRef.current = false;
-        writeStoredAccountIdentity({
+        writeAccountIdentityCache({
           firstName: payload.firstName ?? null,
           lastName: payload.lastName ?? null,
           email,

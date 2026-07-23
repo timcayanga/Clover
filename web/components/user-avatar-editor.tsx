@@ -59,7 +59,7 @@ export function UserAvatarEditor({ displayName, avatarUrl }: UserAvatarEditorPro
     <div className="user-avatar-editor">
       <div className="user-avatar-editor__preview">
         {avatarUrl ? (
-          <img className="user-avatar-editor__image" src={avatarUrl} alt="" />
+          <img className="user-avatar-editor__image" src={avatarUrl} alt="" loading="eager" fetchPriority="high" decoding="async" />
         ) : (
           <img className="user-avatar-editor__image user-avatar-editor__image--fallback" src="/assets/3d%20icons/account.png" alt="" />
         )}

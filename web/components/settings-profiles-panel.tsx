@@ -88,7 +88,7 @@ export function SettingsProfilesPanel({
               <div className="settings-profile-summary settings-profile-summary--with-avatar">
                 <span className="settings-profile-summary__avatar" aria-hidden="true">
                   {profileAvatar ? (
-                    <img src={profileAvatar} alt="" />
+                    <img src={profileAvatar} alt="" loading="eager" fetchPriority="high" decoding="async" />
                   ) : (
                     <img className="settings-profile-summary__avatar-icon" src="/assets/3d%20icons/account.png" alt="" />
                   )}

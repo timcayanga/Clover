@@ -7410,11 +7410,13 @@ export const processImportFileText = async (
 
       // The fast visual transcript is ideal for most screenshots, but its
       // overview of a PDAX portfolio can collapse visible BTC/XRP positions
-      // into one "Crypto Balance" bucket. Once PDAX is positively identified,
-      // recover the original OCR text and keep the deterministic parser as
-      // the source of truth. This is deliberately scoped so other screenshot
-      // imports keep their fast path.
-      const looksLikePdaxPortfolio = /\bpdax\b/i.test(text) && /\bportfolio\b|\bbalances\b|\bmy assets\b/i.test(text);
+      // into one "Crypto Balance" bucket. Its wordmark is not always picked
+      // up by fast vision, so recognize the distinctive Portfolio/Balances
+      // layout too. The deterministic parser must still find named holdings
+      // before it replaces the fast result, keeping other screenshots fast.
+      const looksLikePdaxPortfolio =
+        (/\bpdax\b/i.test(text) && /\bportfolio\b|\bbalances\b|\bmy assets\b/i.test(text)) ||
+        (/\bbalances\b/i.test(text) && /\bcrypto\b/i.test(text));
       if (looksLikePdaxPortfolio && storageKey) {
         try {
           const deterministicTextCache = await readImportedFileTextWithCacheInfo(

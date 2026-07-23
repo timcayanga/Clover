@@ -10,6 +10,7 @@ import { clearAllWorkspaceCaches, clearLegacyWorkspaceCaches } from "@/lib/works
 import { DashboardManualTransactionModal } from "@/components/dashboard-top-actions";
 import { ImportFilesModal } from "@/components/import-files-modal";
 import { signOutToLanding } from "@/lib/sign-out";
+import { readAccountIdentityCache, writeAccountIdentityCache } from "@/lib/account-identity-cache";
 import {
   getErrorMessage,
   isChunkLoadErrorMessage,
@@ -770,6 +771,7 @@ export function CloverShell({
   const [reviewQueueCount, setReviewQueueCount] = useState(0);
   const [circleInvitations, setCircleInvitations] = useState<ShellCircleInvitation[]>([]);
   const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(() => readDismissedNotifications());
+  const [cachedProfileImage] = useState<string | null>(() => readAccountIdentityCache()?.imageUrl ?? null);
   const [previousPathname, setPreviousPathname] = useState<string | null>(null);
   const quickAddAccounts = useMemo(
     () =>
@@ -783,7 +785,7 @@ export function CloverShell({
     [searchAccounts]
   );
   const displayName = user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Account";
-  const profileImage = user?.imageUrl ?? null;
+  const profileImage = user?.imageUrl ?? cachedProfileImage;
   const isProfileActive = active === "profile" || pathname?.startsWith("/profile");
   const isMoreActive = active === "more" || pathname?.startsWith("/more");
   const isNotificationsActive = openMenu === "notifications";
@@ -809,6 +811,20 @@ export function CloverShell({
     setIsSidebarOpen(false);
     setNotificationsPopoverStyle(null);
   };
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const cachedIdentity = readAccountIdentityCache();
+    writeAccountIdentityCache({
+      firstName: user.firstName ?? cachedIdentity?.firstName ?? null,
+      lastName: user.lastName ?? cachedIdentity?.lastName ?? null,
+      email: user.primaryEmailAddress?.emailAddress ?? cachedIdentity?.email,
+      imageUrl: user.imageUrl ?? cachedIdentity?.imageUrl ?? null,
+    });
+  }, [user]);
 
   const handleNotificationsToggle = () => {
     if (openMenu === "notifications") {
@@ -1635,7 +1651,15 @@ export function CloverShell({
             }
           >
             {profileImage ? (
-              <img className="sidebar-profile__photo" src={profileImage} alt="" aria-hidden="true" />
+                <img
+                  className="sidebar-profile__photo"
+                  src={profileImage}
+                  alt=""
+                  aria-hidden="true"
+                  loading="eager"
+                  fetchPriority="high"
+                  decoding="async"
+                />
             ) : (
               <span className="sidebar-profile__avatar" aria-hidden="true">
                 <img src="/assets/3d%20icons/menu/account.png" alt="" width={96} height={96} loading="eager" decoding="async" className="sidebar-profile__avatar-icon" />
