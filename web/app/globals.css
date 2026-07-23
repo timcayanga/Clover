@@ -13510,19 +13510,20 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   height: 100%;
   object-fit: contain;
   display: block;
-  filter: brightness(0) saturate(100%) invert(34%) sepia(86%) saturate(1837%) hue-rotate(162deg) brightness(98%) contrast(98%);
+  filter: grayscale(0.72) saturate(0.58) opacity(0.62);
+  transition: filter 180ms ease, transform 180ms ease;
 }
 
 .onboarding-option--experience-beginner .onboarding-option__icon img {
-  width: 72%;
-  height: 72%;
+  width: 100%;
+  height: 100%;
 }
 
 .onboarding-option--experience-comfortable .onboarding-option__icon img,
 .onboarding-option--experience-advanced .onboarding-option__icon img,
 .onboarding-option--start-account .onboarding-option__icon img {
-  width: 62%;
-  height: 62%;
+  width: 100%;
+  height: 100%;
 }
 
 .onboarding-option--goal .onboarding-option__icon img {
@@ -13543,7 +13544,8 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 }
 
 .onboarding-option.is-selected .onboarding-option__icon img {
-  filter: brightness(0) invert(1);
+  filter: none;
+  transform: scale(1.03);
 }
 
 .onboarding-option__title {
