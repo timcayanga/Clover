@@ -10301,7 +10301,7 @@ export const processImportFileText = async (
 
     const shouldMarkDone =
       isDocumentImport
-        ? Boolean(documentImportRecord)
+        ? Boolean(documentImportRecord) && (effectiveImportMode !== "notes" || rows.length > 0)
         : qaRunResult.evaluation.score >= AUTO_REPARSE_SCORE_TARGET ||
           canFinalizeWithWarnings ||
           canFinalizeStableScreenshotImport;

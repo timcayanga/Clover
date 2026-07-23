@@ -1945,13 +1945,9 @@ const buildOpenAIInputPayload = (params: {
     `Document-family guidance: ${buildOpenAIDocumentFamilyGuidance(documentFamily)}`,
     GENERIC_PARSER_GUIDANCE,
     GENERIC_NORMALIZATION_GUIDANCE,
-    // Handwritten and digital notes do not benefit from bank-statement examples.
-    // Omitting them keeps the vision request small while the notes-specific
-    // instructions below preserve the extraction contract.
-    ...(params.importMode === "notes" ? [] : ["Generic few-shot examples:", GENERIC_FEW_SHOT_EXAMPLES]),
-    ...(params.importMode === "statement"
-      ? ["For credit card statements, capture payment due date and total amount due whenever the statement shows them."]
-      : []),
+    "Generic few-shot examples:",
+    GENERIC_FEW_SHOT_EXAMPLES,
+    "For credit card statements, capture payment due date and total amount due whenever the statement shows them.",
     ...(params.importMode === "receipt"
       ? [
           "This input is a receipt, invoice, e-receipt, order confirmation, ticket receipt, manual receipt photo, or receipt-like PDF/email screenshot.",
@@ -2370,10 +2366,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         },
         body: JSON.stringify({
           model: selectedModel,
-          max_output_tokens: params.importMode === "notes"
-            ? 1_800
-            : isReceiptMode
-              ? 2_500
+          max_output_tokens: isReceiptMode
+            ? 2_500
             : inferredDocumentFamily === "generic_document"
               ? 3_000
             : pdfFileDataBase64
