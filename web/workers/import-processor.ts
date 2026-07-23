@@ -7578,6 +7578,29 @@ export const processImportFileText = async (
         (payload as Record<string, unknown>).source === "pdax_portfolio_screenshot"
       );
     });
+  const countPdaxPortfolioHoldingRows = (rows: Array<Record<string, unknown>>) =>
+    rows.filter((row) => {
+      const payload = row.rawPayload;
+      return (
+        payload &&
+        typeof payload === "object" &&
+        !Array.isArray(payload) &&
+        (payload as Record<string, unknown>).source === "pdax_portfolio_screenshot" &&
+        typeof (payload as Record<string, unknown>).investmentSymbol === "string"
+      );
+    }).length;
+  let needsPdaxHoldingTranscript =
+    hasLocalDeterministicPdaxPortfolioSnapshot &&
+    parsedRows.some((row) => {
+      const payload = row.rawPayload;
+      return (
+        payload &&
+        typeof payload === "object" &&
+        !Array.isArray(payload) &&
+        (payload as Record<string, unknown>).portfolioBucket === "crypto"
+      );
+    }) &&
+    countPdaxPortfolioHoldingRows(parsedRows as Array<Record<string, unknown>>) === 0;
   let effectiveImportMode = inferStructuredDocumentImportModeFromParsedRows(importMode, parsedRows, metadataForParse);
   if (effectiveImportMode !== "statement") {
     isDocumentImport = true;
@@ -8296,7 +8319,7 @@ export const processImportFileText = async (
           : "Double-checking this file with Clover backup parser.",
     }).catch(() => null);
   }
-  if ((shouldUseVisionFallback || shouldLoadReceiptBackupAssets) && !pageImages && !pdfFileDataBase64) {
+  if ((shouldUseVisionFallback || shouldLoadReceiptBackupAssets || needsPdaxHoldingTranscript) && !pageImages && !pdfFileDataBase64) {
     try {
       if (fallbackAssetPrefetchPromise) {
         const prefetchedAssets = await fallbackAssetPrefetchPromise;
@@ -8330,6 +8353,38 @@ export const processImportFileText = async (
         error,
       });
       pageImages = null;
+    }
+  }
+  if (needsPdaxHoldingTranscript && pageImages?.length) {
+    await updateImportFileCompat(importFileId, {
+      status: "processing",
+      processingPhase: "identifying_transactions",
+      processingMessage: "Reading detailed PDAX holdings...",
+    }).catch(() => null);
+    const transcript = await transcribeImportImagesWithOpenAI({
+      fileName,
+      fileType,
+      detectedMetadata: metadataForParse,
+      pageImages,
+      importMode: "portfolio",
+      timeoutMs: 30_000,
+    }).catch(() => null);
+    if (transcript?.transcript.trim()) {
+      const transcriptRows = parseImportText(
+        normalizeStatementImageOcrText(transcript.transcript),
+        fileName,
+        fileType,
+        {
+          institution: "PDAX",
+          accountName: metadataForParse.accountName ?? "PDAX Portfolio",
+          accountNumber: metadataForParse.accountNumber,
+        }
+      );
+      if (countPdaxPortfolioHoldingRows(transcriptRows as Array<Record<string, unknown>>) > 0) {
+        parsedRows = transcriptRows;
+        effectiveImportMode = inferStructuredDocumentImportModeFromParsedRows(importMode, parsedRows, metadataForParse);
+        needsPdaxHoldingTranscript = false;
+      }
     }
   }
   let openAiParsed: Awaited<ReturnType<typeof parseImportTextWithOpenAIFallback>> | null = null;
