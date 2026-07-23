@@ -29,6 +29,7 @@ import {
 } from "@/lib/transient-data";
 import { summarizeErrorForLog } from "@/lib/security-logging";
 import { getLiveCryptoPhpPrices } from "@/lib/crypto-market-prices";
+import { prefersLiveInvestmentBalance } from "@/lib/investment-balance";
 import { readPdaxPortfolioAccount, readPublishedPdaxPortfolioAccount, type PdaxPortfolioAccount } from "@/lib/pdax-portfolio-accounts";
 
 export const dynamic = "force-dynamic";
@@ -1901,7 +1902,11 @@ export async function GET(request: Request) {
         name: effectiveAccountName,
         institution: effectiveInstitution,
         accountNumber: effectiveAccountNumber,
-        balance: checkpointBalance ?? account.balance,
+        // A portfolio checkpoint preserves the screenshot value at import
+        // time. Do not publish it as the current balance: it can overwrite a
+        // freshly revalued BTC/XRP holding and make Accounts disagree with the
+        // institution Holdings total.
+        balance: prefersLiveInvestmentBalance(account.type) ? account.balance : checkpointBalance ?? account.balance,
       };
     });
     const responseAccounts = accountsWithCheckpointBackfill.filter(

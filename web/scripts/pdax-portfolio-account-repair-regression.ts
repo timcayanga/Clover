@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readPdaxPortfolioAccount, readPublishedPdaxPortfolioAccount } from "@/lib/pdax-portfolio-accounts";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
+import { prefersLiveInvestmentBalance } from "@/lib/investment-balance";
 
 const walletFromParsedEvidence = readPdaxPortfolioAccount(
   {
@@ -44,6 +45,13 @@ assert.equal(
   "Wallet",
   "PDAX Wallet must not be renamed to the generic provider label and filtered from Accounts."
 );
+
+assert.equal(
+  prefersLiveInvestmentBalance("investment"),
+  true,
+  "A historical PDAX screenshot checkpoint must not replace the current BTC/XRP holding value."
+);
+assert.equal(prefersLiveInvestmentBalance("wallet"), false);
 
 assert.equal(
   readPdaxPortfolioAccount(

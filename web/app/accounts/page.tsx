@@ -15,6 +15,7 @@ import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
 import { deriveReconciledBalance } from "@/lib/account-balance";
+import { prefersLiveInvestmentBalance } from "@/lib/investment-balance";
 import { getAccountCardName, getAccountDisplayName, formatUploadAccountDisplayName } from "@/lib/account-display";
 import { getAccountPath, getInvestmentInstitutionPath } from "@/lib/account-path";
 import { countNonCashAccounts } from "@/lib/account-limit-count";
@@ -1489,6 +1490,7 @@ function AccountsPageContent() {
                         const effectiveType = getEffectiveAccountType(account);
                         const accountCheckpoints = latestCheckpoint ? [latestCheckpoint] : [];
                         const checkpointBalance =
+                          !prefersLiveInvestmentBalance(effectiveType) &&
                           latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
                             ? String(latestCheckpoint.endingBalance)
                             : null;
@@ -2415,7 +2417,7 @@ function AccountsPageContent() {
     // checkpoint is historical evidence and must never override that current
     // value on Accounts; doing so makes the institution card disagree with its
     // own Holdings page until another refresh arrives.
-    if (getEffectiveAccountType(account) === "investment" && hasResolvedBalance(account.balance)) {
+    if (prefersLiveInvestmentBalance(getEffectiveAccountType(account)) && hasResolvedBalance(account.balance)) {
       return account.balance;
     }
 
