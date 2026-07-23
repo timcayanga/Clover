@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { analyticsOnceKey, PostHogEvent } from "@/components/posthog-analytics";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
-import { getFinancialExperienceDefinition, getFinancialExperienceProfile, type FinancialExperienceLevel } from "@/lib/goals";
+import { getFinancialExperienceDefinition, type FinancialExperienceLevel } from "@/lib/goals";
 import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
 
 const ImportFilesModal = dynamic(
@@ -89,14 +89,13 @@ export function OnboardingForm({
   );
   const [step, setStep] = useState<OnboardingStep>(upgradeForPro ? "upgrade" : "experience");
   const [message, setMessage] = useState(
-    upgradeForPro ? "Choose Pro now or continue with Clover Free. You can upgrade later." : "How comfortable are you with financial management?",
+    upgradeForPro ? "Choose Pro now or continue with Clover Free. You can upgrade later." : null,
   );
   const [isPending, startTransition] = useTransition();
   const [importOpen, setImportOpen] = useState(false);
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
   const [selectedUpgradeInterval, setSelectedUpgradeInterval] = useState<"monthly" | "annual">(upgradeInterval);
 
-  const selectedExperienceProfile = getFinancialExperienceProfile(experience);
   const selectedExperienceDefinition = getFinancialExperienceDefinition(experience);
 
   const upgradePlanId = selectedUpgradeInterval === "annual" ? paypalAnnualPlanId : paypalMonthlyPlanId;
@@ -155,8 +154,6 @@ export function OnboardingForm({
   const experienceStep = (
     <>
       <h3>How comfortable are you with financial management?</h3>
-      <p className="onboarding-card__copy">{selectedExperienceProfile.onboardingLead}</p>
-
       <div className="onboarding-grid onboarding-grid--experience" role="list" aria-label="Financial experience">
         {EXPERIENCE_OPTIONS.map((option) => (
           <button
@@ -171,7 +168,7 @@ export function OnboardingForm({
             aria-pressed={experience === option.value}
           >
             <span className="onboarding-option__icon" aria-hidden="true">
-              <img src={encodeURI(option.icon)} alt="" />
+            <img src={option.icon} alt="" loading="eager" decoding="async" />
             </span>
             <span className="onboarding-option__content">
               <span className="onboarding-option__title-row">
@@ -351,7 +348,7 @@ export function OnboardingForm({
       <section className="glass onboarding-card">
         <div className="onboarding-icon-preload" aria-hidden="true">
           {EXPERIENCE_OPTIONS.map((option) => (
-            <img key={option.value} src={encodeURI(option.icon)} alt="" width={1} height={1} loading="eager" decoding="async" />
+            <img key={option.value} src={option.icon} alt="" width={1} height={1} loading="eager" decoding="async" />
           ))}
         </div>
         <div className="onboarding-card__brand" aria-label="Clover">
