@@ -22918,12 +22918,20 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .institution-detail-delete .delete-confirm-card {
+  display: grid;
   width: min(460px, 100%);
+  gap: 12px;
   justify-items: center;
   text-align: center;
 }
 
+.institution-detail-delete .delete-confirm-card p {
+  margin: 0;
+}
+
 .institution-detail-delete .delete-confirm-card__actions {
+  display: flex;
+  gap: 10px;
   justify-content: center;
 }
 

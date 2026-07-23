@@ -12,7 +12,6 @@ import {
   getInvestmentFieldConfigs,
   getInvestmentSubtypeLabel,
   INVESTMENT_SUBTYPES,
-  isMarketInvestmentSubtype,
   type InvestmentSubtype,
 } from "@/lib/investments";
 import {
@@ -140,34 +139,6 @@ const parseNullableDateInput = (value: string) => {
 
 const getInstitutionDisplayName = (account: Account) =>
   account.institution?.trim() || account.name.trim() || "Investment institution";
-
-const getInstitutionAssetDetail = (account: Account) => {
-  if (isMarketInvestmentSubtype(account.investmentSubtype)) {
-    return account.investmentQuantity || "Not set";
-  }
-
-  if (account.investmentSubtype === "time_deposit") {
-    if (account.investmentMaturityDate) {
-      return `Matures ${formatTradeDate(account.investmentMaturityDate)}`;
-    }
-    if (account.investmentInterestRate) {
-      return `${account.investmentInterestRate}% rate`;
-    }
-    return "Not set";
-  }
-
-  if (account.investmentSubtype === "bond") {
-    if (account.investmentInterestRate) {
-      return `${account.investmentInterestRate}% rate`;
-    }
-    if (account.investmentMaturityDate) {
-      return `Matures ${formatTradeDate(account.investmentMaturityDate)}`;
-    }
-    return account.investmentPrincipal || "Not set";
-  }
-
-  return account.investmentSymbol || "Not set";
-};
 
 const normalizeInvestmentLabel = (value: string | null | undefined) =>
   String(value ?? "")
@@ -388,7 +359,6 @@ export default function InvestmentInstitutionDetailPage() {
       if (!workspaceId) {
         if (!cancelled) {
           setLoading(false);
-          setMessage("Select a workspace first.");
         }
         return;
       }
@@ -820,23 +790,31 @@ export default function InvestmentInstitutionDetailPage() {
   };
 
   const deleteInstitution = async () => {
-    if (!workspaceId || accounts.length === 0) {
+    if (accounts.length === 0 || deletingInstitution) {
       return;
     }
 
     setDeletingInstitution(true);
+    setMessage("");
     try {
-      accounts.forEach((account) => applyOptimisticWorkspaceAccountDeletion(workspaceId, account.id));
-      const responses = await Promise.all(
+      const results = await Promise.all(
         accounts.map((account) =>
           fetch(`/api/accounts/${account.id}`, {
             method: "DELETE",
-          })
+          }).then(async (response) => ({
+            response,
+            error: response.ok ? null : ((await response.json().catch(() => null)) as { error?: string } | null)?.error,
+          }))
         )
       );
-      const failed = responses.find((response) => !response.ok);
+      const failed = results.find(({ response }) => !response.ok);
       if (failed) {
-        throw new Error("Unable to delete this institution.");
+        throw new Error(failed.error || "Unable to delete this institution.");
+      }
+
+      const cacheWorkspaceId = workspaceId || accounts[0]?.workspaceId || "";
+      if (cacheWorkspaceId) {
+        accounts.forEach((account) => applyOptimisticWorkspaceAccountDeletion(cacheWorkspaceId, account.id));
       }
       syncWorkspaceCache([], []);
       router.replace("/accounts");
@@ -958,7 +936,6 @@ export default function InvestmentInstitutionDetailPage() {
                   <tr>
                     <th>Asset</th>
                     <th>Subtype</th>
-                    <th>Key detail</th>
                     <th>Value</th>
                     <th aria-label="Open asset details" />
                   </tr>
@@ -968,7 +945,6 @@ export default function InvestmentInstitutionDetailPage() {
                     <tr key={account.id} className="institution-assets-table__row">
                       <td>{accountAssetNameMap.get(account.id) ?? account.name}</td>
                       <td>{getInvestmentSubtypeLabel(account.investmentSubtype)}</td>
-                      <td>{getInstitutionAssetDetail(account)}</td>
                       <td>{formatMoney(Math.abs(parseAmount(account.balance)), account.currency)}</td>
                       <td className="institution-assets-table__chevron-cell">
                         <button
