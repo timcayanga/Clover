@@ -8,7 +8,7 @@ import { z } from "zod";
 export const dynamic = "force-dynamic";
 
 const confirmSchema = z.object({
-  accountId: z.string().min(1),
+  accountId: z.string().min(1).nullable().optional(),
 });
 
 export async function POST(request: Request, { params }: { params: Promise<{ importId: string }> }) {
@@ -54,7 +54,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ imp
     // from starting a second parser/account-resolution pass that only waits on
     // the same database lock. The client polls this endpoint until the worker
     // records its durable result.
-    if (importFile.status === "queued" || importFile.status === "processing") {
+    const recreatingDeletedAccount = importFile.processingPhase === "account_match_needs_confirmation";
+    if ((importFile.status === "queued" || importFile.status === "processing") && !recreatingDeletedAccount) {
       return NextResponse.json(
         {
           ok: true,
@@ -71,7 +72,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ imp
     }
 
     const { confirmImportFile } = await import("@/workers/import-processor");
-    const result = await confirmImportFile(importId, payload.accountId);
+    // Uploading the statement is an explicit request to restore its account.
+    // Resume a tombstoned-account import here so the worker can materialize
+    // the complete parsed account set rather than the client creating a
+    // generic placeholder account while it waits.
+    const result = await confirmImportFile(importId, payload.accountId ?? null, {
+      allowDeletedAccountRecreation: recreatingDeletedAccount,
+    });
     return NextResponse.json({ ok: true, result });
   } catch (error) {
     return NextResponse.json(

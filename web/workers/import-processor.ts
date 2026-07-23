@@ -4827,6 +4827,7 @@ const resolveConfirmationAccount = async (params: {
     accountLimit: number | null;
   } | null;
   planAccountCount?: number | null;
+  allowDeletedAccountRecreation?: boolean;
   workspaceAccounts?: Prisma.AccountGetPayload<{
     select: ReturnType<typeof getCompatibleAccountSelect>;
   }>[];
@@ -5485,7 +5486,7 @@ const resolveConfirmationAccount = async (params: {
     currency: inferredCurrency,
     source: "upload",
   });
-  if (deletedAccountMatch) {
+  if (deletedAccountMatch && !params.allowDeletedAccountRecreation) {
     console.info("[import-account-match] statement matched a deleted account tombstone", {
       workspaceId,
       importFileId: params.importFile.id,
@@ -10576,7 +10577,11 @@ const extractHumanReadableDescription = (rawPayload: Prisma.InputJsonValue | nul
   return null;
 };
 
-export const confirmImportFile = async (importFileId: string, accountId?: string | null): Promise<ConfirmImportResult> => {
+export const confirmImportFile = async (
+  importFileId: string,
+  accountId?: string | null,
+  options?: { allowDeletedAccountRecreation?: boolean }
+): Promise<ConfirmImportResult> => {
   const startedAt = Date.now();
   const importFile = await fetchImportFileCompat(importFileId);
 
@@ -11371,6 +11376,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         planUsage?.accountCount === null || planUsage?.accountCount === undefined
           ? null
           : planUsage.accountCount + resolvedAccountSequence,
+      allowDeletedAccountRecreation: Boolean(options?.allowDeletedAccountRecreation),
       workspaceAccounts: workspaceAccountCandidates,
     });
     if (!groupAccount) {
