@@ -1955,6 +1955,7 @@ export function ImportFilesModal({
         const accountBalance = typeof confirmed.result?.accountBalance === "string" ? confirmed.result.accountBalance : null;
         lastKnownAccountBalance = accountBalance;
         const insightSummary = confirmed.result?.insightSummary ?? null;
+        const confirmedAccountSummaries = normalizeServerAccountSummaries(confirmed.result?.accountSummaries);
         const resolvedAccountType = (
           summaryContext.accountType ??
           accounts.find((account) => account.id === resolvedAccountId)?.type ??
@@ -1978,6 +1979,7 @@ export function ImportFilesModal({
           // them with the parser's preliminary classification.
           previewTransactions: [],
           insightMetrics: insightSummary,
+          accountSummaries: confirmedAccountSummaries.length > 0 ? confirmedAccountSummaries : undefined,
           optimistic: false,
         });
         seedImportedWorkspaceCaches(workspaceId, summary);

@@ -1763,7 +1763,8 @@ function AccountsPageContent() {
             if (
               workspaceLoadSeqRef.current === loadSeq &&
               (Number(maintenancePayload?.maintenance?.removedStalePdaxBucketHoldings ?? 0) > 0 ||
-                Number(maintenancePayload?.maintenance?.repairedPdaxPortfolioAssetLabels ?? 0) > 0)
+                Number(maintenancePayload?.maintenance?.repairedPdaxPortfolioAssetLabels ?? 0) > 0 ||
+                Number(maintenancePayload?.maintenance?.repairedPdaxPortfolioAccounts ?? 0) > 0)
             ) {
               void loadWorkspaceData(workspaceId, { silent: true, awaitHydration: true });
             }

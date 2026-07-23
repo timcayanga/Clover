@@ -7656,6 +7656,10 @@ export const processImportFileText = async (
             ...record,
             statementMarketValue: record.marketValue,
             marketValue: liveMarketValue,
+            // The source screenshot remains in statementMarketValue. The
+            // account and holding views should instead use the same current
+            // quote that was derived from the imported unit quantity.
+            statementEndingBalance: liveMarketValue,
             liveUnitPrice,
             valuationSource: "live_php_quote",
             valuationQuotedAt: new Date().toISOString(),
@@ -9686,7 +9690,9 @@ export const processImportFileText = async (
               assetSymbol: symbol,
               assetType: typeof payload?.investmentSubtype === "string" ? payload.investmentSubtype : "crypto",
               quantity,
+              unitPrice: typeof payload?.liveUnitPrice === "number" ? payload.liveUnitPrice : null,
               marketValue,
+              currentValue: marketValue,
               currency: row.currency ?? resolvedMetadata.currency ?? "PHP",
               confidence: row.confidence ?? 0,
               rawPayload: {
@@ -11237,9 +11243,18 @@ export const confirmImportFile = async (
   const readRowAccountNumber = (row: Record<string, unknown>) =>
     (typeof row.accountNumber === "string" && row.accountNumber.trim() ? row.accountNumber.trim() : null) ??
     readRowPayloadText(row, "accountNumber");
-  const readRowAccountName = (row: Record<string, unknown>) =>
-    (typeof row.accountName === "string" && row.accountName.trim() ? row.accountName.trim() : null) ??
-    readRowPayloadText(row, "accountName");
+  const readRowAccountName = (row: Record<string, unknown>) => {
+    const deterministicPdaxAccountName = readRowPayloadText(row, "accountName");
+    const rawPayload = row.rawPayload;
+    const isDeterministicPdaxPortfolioRow =
+      rawPayload &&
+      typeof rawPayload === "object" &&
+      !Array.isArray(rawPayload) &&
+      (rawPayload as Record<string, unknown>).source === "pdax_portfolio_screenshot";
+    return isDeterministicPdaxPortfolioRow
+      ? deterministicPdaxAccountName ?? (typeof row.accountName === "string" && row.accountName.trim() ? row.accountName.trim() : null)
+      : (typeof row.accountName === "string" && row.accountName.trim() ? row.accountName.trim() : null) ?? deterministicPdaxAccountName;
+  };
   const readRowInstitution = (row: Record<string, unknown>) =>
     (typeof row.institution === "string" && row.institution.trim() ? row.institution.trim() : null) ??
     baseStatementMetadata.institution;

@@ -221,6 +221,28 @@ export const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) =>
 };
 
 export const seedImportedWorkspaceCaches = (workspaceId: string, summary: UploadInsightsSummary) => {
+  // A portfolio snapshot can materialize several durable accounts in one
+  // confirmation. Seed every returned identity before reporting completion so
+  // Accounts never briefly shows only the worker's primary account.
+  const accountSummaries = summary.accountSummaries ?? [];
+  if (accountSummaries.length > 1) {
+    for (const accountSummary of accountSummaries) {
+      seedImportedWorkspaceCaches(workspaceId, {
+        ...summary,
+        accountId: accountSummary.accountId,
+        accountName: accountSummary.accountName,
+        institution: accountSummary.institution,
+        accountNumber: accountSummary.accountNumber,
+        accountType: accountSummary.accountType,
+        balance: accountSummary.balance,
+        rowsImported: accountSummary.rowsImported,
+        accountSummaries: undefined,
+        optimistic: false,
+        optimisticAccountId: null,
+        previewTransactions: [],
+      });
+    }
+  }
   const importedAccount = buildImportedWorkspaceAccount(summary);
   if (importedAccount) {
     const currentAccount = getCachedAccountsWorkspace(workspaceId)?.accounts.find((entry) => {
