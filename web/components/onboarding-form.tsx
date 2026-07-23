@@ -29,19 +29,19 @@ const EXPERIENCE_OPTIONS: ExperienceOption[] = [
     value: "beginner",
     title: "Still learning",
     description: "Keep the language simple and show me what matters first.",
-    icon: "/assets/3d%20icons/beginner.png?v=20260723",
+    icon: "/assets/3d%20icons/beginner.png?v=20260724",
   },
   {
     value: "comfortable",
     title: "Comfortable",
     description: "I understand budgets, statements, and general money tracking.",
-    icon: "/assets/3d%20icons/intermediate.png?v=20260723",
+    icon: "/assets/3d%20icons/intermediate.png?v=20260724",
   },
   {
     value: "advanced",
     title: "Very comfortable",
     description: "Give me the numbers, trends, and short explanations.",
-    icon: "/assets/3d%20icons/advanced.png?v=20260723",
+    icon: "/assets/3d%20icons/advanced.png?v=20260724",
   },
 ];
 

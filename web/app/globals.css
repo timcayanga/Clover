@@ -13510,8 +13510,9 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   height: 100%;
   object-fit: contain;
   display: block;
-  filter: grayscale(0.72) saturate(0.58) opacity(0.62);
-  transition: filter 180ms ease, transform 180ms ease;
+  filter: grayscale(0.45);
+  opacity: 0.64;
+  transition: filter 180ms ease, opacity 180ms ease, transform 180ms ease;
 }
 
 .onboarding-option--experience-beginner .onboarding-option__icon img {
@@ -13544,7 +13545,8 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 }
 
 .onboarding-option.is-selected .onboarding-option__icon img {
-  filter: none;
+  filter: none !important;
+  opacity: 1;
   transform: scale(1.03);
 }
 
