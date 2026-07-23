@@ -13153,6 +13153,15 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   border-radius: 30px;
 }
 
+.onboarding-icon-preload {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .onboarding-card__brand {
   display: flex;
   justify-content: center;

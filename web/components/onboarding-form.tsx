@@ -29,19 +29,19 @@ const EXPERIENCE_OPTIONS: ExperienceOption[] = [
     value: "beginner",
     title: "Still learning",
     description: "Keep the language simple and show me what matters first.",
-    icon: "/onboarding-icons/beginner.png",
+    icon: "/assets/3d%20icons/beginner.png?v=20260723",
   },
   {
     value: "comfortable",
     title: "Comfortable",
     description: "I understand budgets, statements, and general money tracking.",
-    icon: "/onboarding-icons/intermediate.png",
+    icon: "/assets/3d%20icons/intermediate.png?v=20260723",
   },
   {
     value: "advanced",
     title: "Very comfortable",
     description: "Give me the numbers, trends, and short explanations.",
-    icon: "/onboarding-icons/advanced.png",
+    icon: "/assets/3d%20icons/advanced.png?v=20260723",
   },
 ];
 
@@ -349,6 +349,11 @@ export function OnboardingForm({
         }}
       />
       <section className="glass onboarding-card">
+        <div className="onboarding-icon-preload" aria-hidden="true">
+          {EXPERIENCE_OPTIONS.map((option) => (
+            <img key={option.value} src={encodeURI(option.icon)} alt="" width={1} height={1} loading="eager" decoding="async" />
+          ))}
+        </div>
         <div className="onboarding-card__brand" aria-label="Clover">
           <img className="onboarding-card__mark" src="/clover-mark.svg" alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
         </div>

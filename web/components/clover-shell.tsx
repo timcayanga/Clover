@@ -326,13 +326,13 @@ type IconName =
   | "sign-out";
 
 const MENU_ICON_SRC: Partial<Record<IconName, string>> = {
-  dashboard: "/assets/3d%20icons/menu/home.png",
+  dashboard: "/assets/3d%20icons/home.png?v=20260723",
   accounts: "/assets/3d%20icons/menu/bank-account.png",
   investments: "/assets/3d%20icons/menu/investments.png",
   "split-bill": "/assets/3d%20icons/menu/split-bills.png",
-  circles: "/assets/3d%20icons/menu/profiles.png",
-  transactions: "/assets/3d%20icons/menu/transactions.png",
-  recurring: "/assets/3d%20icons/menu/recurring.png",
+  circles: "/assets/3d%20icons/circles.png?v=20260723",
+  transactions: "/assets/3d%20icons/transactions.png?v=20260723",
+  recurring: "/assets/3d%20icons/recurring.png?v=20260723",
   reports: "/assets/3d%20icons/menu/reports.png",
   adviser: "/assets/3d%20icons/menu/adviser.png",
   budgeting: "/assets/3d%20icons/menu/budgeting.png",

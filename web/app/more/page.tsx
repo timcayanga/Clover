@@ -18,12 +18,12 @@ type MoreSection = {
 type PageIconName = "dashboard" | "adviser" | "accounts" | "transactions" | "recurring" | "circles" | "investments" | "goals" | "budgeting" | "notifications" | "settings" | "help";
 
 const MORE_ICON_SRC: Record<PageIconName, string> = {
-  dashboard: "/assets/3d%20icons/menu/home.png",
+  dashboard: "/assets/3d%20icons/home.png?v=20260723",
   adviser: "/assets/3d%20icons/menu/adviser.png",
   accounts: "/assets/3d%20icons/menu/bank-account.png",
-  transactions: "/assets/3d%20icons/menu/transactions.png",
-  recurring: "/assets/3d%20icons/menu/recurring.png",
-  circles: "/assets/3d%20icons/menu/profiles.png",
+  transactions: "/assets/3d%20icons/transactions.png?v=20260723",
+  recurring: "/assets/3d%20icons/recurring.png?v=20260723",
+  circles: "/assets/3d%20icons/circles.png?v=20260723",
   investments: "/assets/3d%20icons/menu/investments.png",
   goals: "/assets/icons/goals.png",
   budgeting: "/assets/3d%20icons/menu/budgeting.png",
