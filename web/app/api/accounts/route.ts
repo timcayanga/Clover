@@ -29,6 +29,7 @@ import {
 } from "@/lib/transient-data";
 import { summarizeErrorForLog } from "@/lib/security-logging";
 import { getLiveCryptoPhpPrices } from "@/lib/crypto-market-prices";
+import { readPdaxPortfolioAccount, readPublishedPdaxPortfolioAccount, type PdaxPortfolioAccount } from "@/lib/pdax-portfolio-accounts";
 
 export const dynamic = "force-dynamic";
 
@@ -944,34 +945,46 @@ const repairPdaxPortfolioAccountsFromParsedRows = async (workspaceId: string) =>
     where: { workspaceId, institution: "PDAX" },
     select: { accountName: true, rawPayload: true },
   }).catch(() => []);
-  const expectedAccounts = new Map<
-    string,
-    { balance: number; type: "wallet" | "investment"; subtype: string | null; symbol: string | null; quantity: number | null }
-  >();
+  const expectedAccounts = new Map<string, PdaxPortfolioAccount>();
   for (const row of parsedRows) {
     const payload =
       row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
         ? (row.rawPayload as Record<string, unknown>)
         : null;
-    const accountName = typeof payload?.accountName === "string" ? payload.accountName.trim() : row.accountName?.trim() ?? "";
-    const balance = typeof payload?.statementEndingBalance === "number" ? payload.statementEndingBalance : null;
-    const type = payload?.accountType === "wallet" ? "wallet" : payload?.accountType === "investment" ? "investment" : null;
-    if (
-      payload?.source !== "pdax_portfolio_screenshot" ||
-      !["Wallet", "BTC", "XRP", "Gold"].includes(accountName) ||
-      balance === null ||
-      !Number.isFinite(balance) ||
-      type === null
-    ) {
+    if (!payload) {
       continue;
     }
-    expectedAccounts.set(accountName, {
-      balance,
-      type,
-      subtype: typeof payload.investmentSubtype === "string" ? payload.investmentSubtype : null,
-      symbol: typeof payload.investmentSymbol === "string" ? payload.investmentSymbol : null,
-      quantity: typeof payload.quantity === "number" && Number.isFinite(payload.quantity) ? payload.quantity : null,
-    });
+    const expected = readPdaxPortfolioAccount(payload, { requireScreenshotSource: true });
+    if (expected) {
+      expectedAccounts.set(expected.name, expected);
+    }
+  }
+
+  // Parsed rows are retained for normal imports. If an old cleanup already
+  // removed a snapshot marker, the settled checkpoint still contains the
+  // exact account summaries that were published at confirmation. Use that
+  // durable evidence to restore the non-transactional Wallet as well.
+  if (await hasCompatibleTable("AccountStatementCheckpoint")) {
+    const checkpoints = await prisma.accountStatementCheckpoint.findMany({
+      where: { workspaceId },
+      select: { sourceMetadata: true },
+    }).catch(() => []);
+    for (const checkpoint of checkpoints) {
+      const metadata =
+        checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
+          ? (checkpoint.sourceMetadata as Record<string, unknown>)
+          : null;
+      const summaries = Array.isArray(metadata?.publishedAccountSummaries) ? metadata.publishedAccountSummaries : [];
+      for (const summary of summaries) {
+        if (!summary || typeof summary !== "object" || Array.isArray(summary)) {
+          continue;
+        }
+        const expected = readPublishedPdaxPortfolioAccount(summary as Record<string, unknown>);
+        if (expected && !expectedAccounts.has(expected.name)) {
+          expectedAccounts.set(expected.name, expected);
+        }
+      }
+    }
   }
 
   let repaired = 0;
