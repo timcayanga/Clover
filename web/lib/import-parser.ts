@@ -11377,6 +11377,7 @@ const parsePdaxPortfolioSnapshotRows = (text: string, metadata: DetectedStatemen
   const lines = text.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
   const rows: ParsedImportRow[] = [];
   const bucketBalances: Record<string, number> = {};
+  const parsedHoldings: Array<{ symbol: string; assetName: string; quantity: number; marketValue: number; sourceRowIndex: number }> = [];
   const readBucketBalance = (index: number) => {
     const currentLine = lines[index] ?? "";
     const [bucketCandidate, ...inlineAmountParts] = currentLine.split(" ");
@@ -11395,7 +11396,10 @@ const parsePdaxPortfolioSnapshotRows = (text: string, metadata: DetectedStatemen
       bucketBalances[bucketEntry.bucket.toLowerCase()] = bucketEntry.balance;
     }
 
-    const assetMatch = lines[index]?.match(/^([A-Z]{2,8})\s+([0-9][0-9,]*\.\d{2})(?:\s+\([^)]*\))?$/);
+    // Mobile OCR often prefixes an asset line with an icon artifact (for
+    // example "(53) BTC" or "[x] XRP"). Match the actual ticker anywhere
+    // before its PHP value rather than requiring the line to begin with it.
+    const assetMatch = lines[index]?.match(/(?:^|\s)([A-Z]{2,8})\s+([0-9][0-9,]*\.\d{2})(?:\s+\([^)]*\))?$/);
     if (!assetMatch) continue;
     const symbol = assetMatch[1].toUpperCase();
     const marketValue = parsePdaxAmount(assetMatch[2]);
@@ -11405,6 +11409,7 @@ const parsePdaxPortfolioSnapshotRows = (text: string, metadata: DetectedStatemen
     const quantity = parsePdaxAmount(quantityMatch?.[2] ?? null);
     if (!assetName || marketValue === null || quantity === null) continue;
 
+    parsedHoldings.push({ symbol, assetName, quantity, marketValue, sourceRowIndex: index });
     rows.push({
       date: new Date().toISOString(),
       amount: marketValue.toFixed(2),
@@ -11413,7 +11418,7 @@ const parsePdaxPortfolioSnapshotRows = (text: string, metadata: DetectedStatemen
       merchantClean: summarizeMerchantText(`${assetName} snapshot`, "PDAX"),
       description: `${assetName} portfolio snapshot`,
       categoryName: "Investments",
-      accountName: metadata.accountName ?? "PDAX Portfolio",
+      accountName: `PDAX ${symbol}`,
       institution: "PDAX",
       type: "transfer",
       confidence: 94,
@@ -11425,12 +11430,13 @@ const parsePdaxPortfolioSnapshotRows = (text: string, metadata: DetectedStatemen
         source: "pdax_portfolio_screenshot",
         documentType: "portfolio",
         sourceRowIndex: index,
-        accountName: metadata.accountName ?? "PDAX Portfolio",
+        accountName: `PDAX ${symbol}`,
         accountType: "investment",
         balance: marketValue,
         statementEndingBalance: marketValue,
         investmentSubtype: "crypto",
         investmentSymbol: symbol,
+        assetName,
         quantity,
         marketValue,
         portfolioBalances: bucketBalances,
@@ -11439,13 +11445,24 @@ const parsePdaxPortfolioSnapshotRows = (text: string, metadata: DetectedStatemen
     });
   }
 
-  const explicitHoldingTotal = rows.reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
+  const explicitHoldingTotal = parsedHoldings.reduce((sum, holding) => sum + holding.marketValue, 0);
+  const cryptoHoldingTotal = parsedHoldings.reduce((sum, holding) => sum + holding.marketValue, 0);
 
   // A portfolio overview can show only high-level buckets. Keep these as
   // portfolio evidence, never as an OCR-concatenated fake asset name.
   for (const [bucket, balance] of Object.entries(bucketBalances)) {
     if (balance === 0) continue;
-    const bucketLabel = bucket === "php" ? "PHP wallet" : `${bucket[0]?.toUpperCase() ?? ""}${bucket.slice(1)} balance`;
+    // When the visible individual rows reconcile to the Crypto bucket, those
+    // rows are the source of truth. Do not also create a synthetic Crypto
+    // account that duplicates their value.
+    if (bucket === "crypto" && parsedHoldings.length > 0 && Math.abs(cryptoHoldingTotal - balance) <= 0.02) {
+      continue;
+    }
+    const isPhpWallet = bucket === "php";
+    const isGoldRwa = bucket === "gold";
+    const bucketLabel = isPhpWallet ? "PHP wallet" : isGoldRwa ? "Gold RWA" : `${bucket[0]?.toUpperCase() ?? ""}${bucket.slice(1)} balance`;
+    const accountName = isPhpWallet ? "PDAX Wallet" : isGoldRwa ? "PDAX Gold RWA" : `PDAX ${bucketLabel}`;
+    const accountType: ImportedAccountType = isPhpWallet ? "wallet" : "investment";
     rows.push({
       date: new Date().toISOString(),
       amount: balance.toFixed(2),
@@ -11453,8 +11470,8 @@ const parsePdaxPortfolioSnapshotRows = (text: string, metadata: DetectedStatemen
       merchantRaw: `PDAX ${bucketLabel}`,
       merchantClean: `PDAX ${bucketLabel}`,
       description: `PDAX ${bucketLabel} portfolio snapshot`,
-      categoryName: "Investments",
-      accountName: metadata.accountName ?? "PDAX Portfolio",
+      categoryName: isPhpWallet ? "Transfers" : "Investments",
+      accountName,
       institution: "PDAX",
       type: "transfer",
       confidence: 92,
@@ -11466,11 +11483,12 @@ const parsePdaxPortfolioSnapshotRows = (text: string, metadata: DetectedStatemen
         source: "pdax_portfolio_screenshot",
         documentType: "portfolio",
         sourceRowIndex: lines.length + rows.length,
-        accountName: metadata.accountName ?? "PDAX Portfolio",
-        accountType: "investment",
+        accountName,
+        accountType,
         balance,
         statementEndingBalance: balance,
         portfolioBucket: bucket,
+        ...(isGoldRwa ? { assetName: "Gold RWA", investmentSubtype: "other" } : {}),
         portfolioBalances: bucketBalances,
       },
     });
@@ -11509,7 +11527,10 @@ const parsePdaxPortfolioSnapshotRows = (text: string, metadata: DetectedStatemen
 
   rows.forEach((row) => {
     if (row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)) {
-      row.rawPayload.statementEndingBalance = portfolioTotal;
+      // Each generated account must receive its own balance; assigning the
+      // full portfolio total to every group inflated the downstream cards.
+      row.rawPayload.statementEndingBalance =
+        typeof row.rawPayload.balance === "number" ? row.rawPayload.balance : portfolioTotal;
       row.rawPayload.portfolioBalances = bucketBalances;
     }
   });

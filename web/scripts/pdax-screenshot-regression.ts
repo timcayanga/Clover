@@ -28,10 +28,11 @@ assert.equal(metadata?.accountType, "investment");
 
 const rows = parseImportText(pdaxPortfolioText, "untrained-pdax.png", "image/png");
 assert.equal(rows.length, 1, "Only the visible non-zero PDAX bucket should become a snapshot marker.");
-assert.ok(rows.every((row) => row.institution === "PDAX" && row.accountName === "PDAX Portfolio"));
+assert.ok(rows.every((row) => row.institution === "PDAX" && row.accountName === "PDAX Wallet"));
 assert.ok(rows.every((row) => row.rawPayload?.kind === "account_snapshot_marker"));
 assert.equal(rows[0]?.amount, "0.45");
 assert.equal((rows[0]?.rawPayload as Record<string, unknown>)?.portfolioBucket, "php");
+assert.equal((rows[0]?.rawPayload as Record<string, unknown>)?.accountType, "wallet");
 assert.equal((rows[0]?.rawPayload as Record<string, unknown>)?.statementEndingBalance, 0.45);
 assert.doesNotMatch(
   String(rows[0]?.description ?? ""),
@@ -46,9 +47,9 @@ assert.deepEqual(resolveMobileWalletIdentityFromParsedRows(rows), {
   accountNumber: null,
 });
 assert.deepEqual(resolveStatementIdentityFromParsedRows(rows), {
-  accountName: "PDAX Portfolio",
+  accountName: "PDAX Wallet",
   institution: "PDAX",
-  accountType: "investment",
+  accountType: "wallet",
   accountNumber: null,
 });
 
@@ -57,15 +58,47 @@ PDAX
 Portfolio
 Balances
 My assets
-BTC 120.00
+(53) BTC 120.00 (+0.11%)
 Bitcoin 0.002
 `.trim();
 const holdingRows = parseImportText(pdaxHoldingText, "untrained-pdax-holding.png", "image/png");
 assert.equal(holdingRows.length, 1, "A complete visible PDAX holding should be retained.");
-assert.equal(holdingRows[0]?.accountName, "PDAX Portfolio");
+assert.equal(holdingRows[0]?.accountName, "PDAX BTC");
 assert.equal(holdingRows[0]?.institution, "PDAX");
 assert.equal((holdingRows[0]?.rawPayload as Record<string, unknown>)?.investmentSymbol, "BTC");
 assert.equal((holdingRows[0]?.rawPayload as Record<string, unknown>)?.statementEndingBalance, 120);
+
+const pdaxPortfolioWithAssetsText = `
+PDAX
+Portfolio
+Balances
+PHP 7,969.73
+Crypto 97,155.46
+Bonds 0.00
+Gold 22,542.46
+My assets
+Crypto Bonds Gold Hide zero balance
+(53) BTC 86,511.42 (+0.11%)
+Bitcoin SegWit 0.018005
+[x] XRP 10,644.04 (-0.45%)
+Ripple 125.492000
+`.trim();
+const portfolioAssetRows = parseImportText(pdaxPortfolioWithAssetsText, "IMG_1377.PNG", "image/png");
+assert.deepEqual(
+  portfolioAssetRows.map((row) => [row.accountName, row.amount]),
+  [
+    ["PDAX BTC", "86511.42"],
+    ["PDAX XRP", "10644.04"],
+    ["PDAX Wallet", "7969.73"],
+    ["PDAX Gold RWA", "22542.46"],
+  ],
+  "PDAX must split its PHP wallet, reconciled crypto holdings, and Gold RWA position into their actual accounts."
+);
+assert.equal(
+  portfolioAssetRows.some((row) => row.accountName === "PDAX Crypto balance"),
+  false,
+  "A Crypto bucket that reconciles to BTC and XRP must not create a duplicate aggregate account."
+);
 
 const pdaxLogoOmittedOcrText = `
 Portfolio
@@ -79,7 +112,7 @@ assert.equal(logoOmittedMetadata?.accountName, "PDAX Portfolio");
 const logoOmittedRows = parseImportText(pdaxLogoOmittedOcrText, "untrained-portfolio.png", "image/png");
 assert.equal(logoOmittedRows.length, 1, "Only the visible PHP bucket should be imported.");
 assert.equal(logoOmittedRows[0]?.institution, "PDAX");
-assert.equal(logoOmittedRows[0]?.accountName, "PDAX Portfolio");
+assert.equal(logoOmittedRows[0]?.accountName, "PDAX Wallet");
 assert.equal(logoOmittedRows[0]?.amount, "0.45");
 assert.doesNotMatch(
   `${logoOmittedRows[0]?.accountName} ${logoOmittedRows[0]?.description}`,
