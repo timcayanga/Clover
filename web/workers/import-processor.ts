@@ -11769,12 +11769,14 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     : snapshotOnlySingleGroupBalance !== null
       ? snapshotOnlySingleGroupBalance.toString()
       : statementEndingBalance ?? latestExplicitStatementBalance ?? fallbackReconciledBalance;
+  const shouldPersistDeterministicPdaxGroupBalances =
+    multiAccountImport && parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "pdax_portfolio_screenshot");
   if (
     shouldRunDestructiveMultiAccountCleanup({
       multiAccountImport,
       visibleTransactionsCount: candidateVisibleTransactionsCount,
       parsedRows,
-    })
+    }) || shouldPersistDeterministicPdaxGroupBalances
   ) {
     for (const group of parsedAccountGroups) {
       const groupAccount = accountByGroupKey.get(group.key);

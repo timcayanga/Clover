@@ -935,6 +935,42 @@ const repairGeneratedPdaxPortfolioAssetLabels = async (workspaceId: string) => {
   return repaired;
 };
 
+const repairPdaxWalletBalancesFromParsedRows = async (workspaceId: string) => {
+  // Snapshot imports retain a raw PHP bucket row. Use that deterministic
+  // evidence to repair only upload-created PDAX Wallet balances that an older
+  // multi-account finalization path could overwrite with the final Gold row.
+  const parsedRows = await prisma.parsedTransaction.findMany({
+    where: { workspaceId, institution: "PDAX" },
+    select: { rawPayload: true },
+  }).catch(() => []);
+  const walletBalance = parsedRows
+    .map((row) => (row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+      ? (row.rawPayload as Record<string, unknown>)
+      : null))
+    .find((payload) =>
+      payload?.source === "pdax_portfolio_screenshot" &&
+      payload.portfolioBucket === "php" &&
+      typeof payload.statementEndingBalance === "number" &&
+      Number.isFinite(payload.statementEndingBalance)
+    )?.statementEndingBalance;
+
+  if (typeof walletBalance !== "number") {
+    return 0;
+  }
+
+  const repaired = await prisma.account.updateMany({
+    where: {
+      workspaceId,
+      source: "upload",
+      institution: "PDAX",
+      name: "Wallet",
+      type: "wallet",
+    },
+    data: { balance: walletBalance.toString() },
+  }).catch(() => ({ count: 0 }));
+  return repaired.count;
+};
+
 const repairMalformedPdaxActionControlAccount = async (workspaceId: string) => {
   // A short-lived generic screenshot fallback could promote PDAX's four
   // portfolio action buttons into an investment account. The exact combined
@@ -1220,6 +1256,7 @@ export async function GET(request: Request) {
     let removedStalePdaxBucketHoldings = 0;
     let repairedPdaxPortfolioAssetLabels = 0;
     let repairedMalformedPdaxActionControlAccounts = 0;
+    let repairedPdaxWalletBalances = 0;
     if (shouldCleanupImportedAccounts) {
       await cleanupFilenameUploadedAccountPlaceholders(workspaceId).catch((error) => {
         console.warn("[accounts] unable to clean up filename imported account placeholders", {
@@ -1236,6 +1273,13 @@ export async function GET(request: Request) {
       });
       repairedPdaxPortfolioAssetLabels = await repairGeneratedPdaxPortfolioAssetLabels(workspaceId).catch((error) => {
         console.warn("[accounts] unable to repair generated PDAX portfolio asset labels", {
+          workspaceId,
+          error,
+        });
+        return 0;
+      });
+      repairedPdaxWalletBalances = await repairPdaxWalletBalancesFromParsedRows(workspaceId).catch((error) => {
+        console.warn("[accounts] unable to repair PDAX wallet balance from parsed evidence", {
           workspaceId,
           error,
         });
@@ -1642,7 +1686,12 @@ export async function GET(request: Request) {
       accountRules,
       statementCheckpoints,
       maintenance: shouldCleanupImportedAccounts
-        ? { removedStalePdaxBucketHoldings, repairedPdaxPortfolioAssetLabels, repairedMalformedPdaxActionControlAccounts }
+        ? {
+            removedStalePdaxBucketHoldings,
+            repairedPdaxPortfolioAssetLabels,
+            repairedMalformedPdaxActionControlAccounts,
+            repairedPdaxWalletBalances,
+          }
         : undefined,
     });
   } catch (error) {
