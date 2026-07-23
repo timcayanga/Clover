@@ -190,12 +190,15 @@ export const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) =>
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "")}`;
 
-  const normalizedAccountName = formatUploadAccountDisplayName(
-    summary.accountName,
-    summary.institution,
-    summary.accountNumber ?? null,
-    summary.accountType ?? null
-  );
+  const normalizedAccountName =
+    summary.institution === "PDAX" && summary.accountType === "wallet" && /^wallet$/i.test(summary.accountName.trim())
+      ? "Wallet"
+      : formatUploadAccountDisplayName(
+          summary.accountName,
+          summary.institution,
+          summary.accountNumber ?? null,
+          summary.accountType ?? null
+        );
   const accountType =
     summary.accountType ??
     inferAccountTypeFromStatement(summary.institution, normalizedAccountName, "bank");
