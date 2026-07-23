@@ -356,7 +356,7 @@ export function OnboardingForm({
         </div>
 
         {step === "upgrade" ? upgradeStep : step === "experience" ? experienceStep : uploadStep}
-        {message ? <p className="onboarding-card__message">{message}</p> : null}
+        {message && step !== "experience" ? <p className="onboarding-card__message">{message}</p> : null}
       </section>
 
       <ImportFilesModal
