@@ -5455,6 +5455,71 @@ export function ImportFilesModal({
           null;
         const duplicateRowsImported = Number(processPayload?.confirmedTransactionsCount ?? processPayload?.imported ?? 0) || 0;
         const duplicateMessage = formatDuplicateImportMessage(item.file.name, guessedIdentity?.accountName ?? null);
+        // A duplicate can adopt an earlier import that is still processing.
+        // Never mark this upload done merely because that canonical import was
+        // found: the user-facing transaction may not exist yet. Follow the
+        // canonical status stream and let its visibility gate complete the UI.
+        if (processPayload?.queued) {
+          const duplicateIdentity =
+            resolveStatementIdentityFromMetadata(processPayload?.metadata) ??
+            (guessedIdentity
+              ? {
+                  ...guessedIdentity,
+                  accountNumber: null,
+                  accountType: inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank"),
+                }
+              : null);
+          const duplicateAccountType =
+            duplicateIdentity?.accountType ??
+            inferAccountTypeFromStatement(duplicateIdentity?.institution, duplicateIdentity?.accountName, "bank");
+          updateItem(itemId, {
+            status: "importing",
+            confirmationState: "pending",
+            error: null,
+            importFileId,
+            targetAccountId: duplicateAccountId,
+            importedRows: 0,
+            progress: IMPORT_PROGRESS.parsing,
+            progressLabel: "Finishing matching import",
+          });
+          publishImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "active",
+            fileName: item.file.name,
+            fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount,
+            progress: IMPORT_PROGRESS.parsing,
+            detail: "Clover is finishing the matching import before showing your transactions.",
+            summary: null,
+            errorMessage: null,
+          });
+          await monitorQueuedImportAndConfirm(itemId, importFileId, duplicateAccountId, {
+            fileName: item.file.name,
+            fallbackAccountName:
+              deriveStatementFallbackAccountName(
+                item.file.name,
+                duplicateIdentity?.institution ?? null,
+                duplicateIdentity?.accountNumber ?? null,
+                duplicateIdentity
+                  ? inferAccountTypeFromStatement(duplicateIdentity.institution, duplicateIdentity.accountName, "bank")
+                  : null,
+              ) ?? "Imported statement",
+            guessedAccountName: duplicateIdentity?.accountName ?? null,
+            guessedInstitution: duplicateIdentity?.institution ?? null,
+            guessedAccountNumber: duplicateIdentity?.accountNumber ?? null,
+            guessedAccountType: duplicateAccountType,
+            accountName: duplicateIdentity?.accountName ?? null,
+            institution: duplicateIdentity?.institution ?? null,
+            accountNumber: duplicateIdentity?.accountNumber ?? null,
+            accountType: duplicateAccountType,
+            optimisticAccountId: item.optimisticAccountId ?? null,
+            initialBalance: null,
+            password: item.password.trim() || undefined,
+          });
+          return { status: "done", importedRows: 0, summary: null };
+        }
         updateItem(itemId, {
           status: "done",
           confirmationState: "confirmed",
