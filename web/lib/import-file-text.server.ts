@@ -11,6 +11,7 @@ import {
 import { buildGsaveScreenshotFallbackText } from "@/lib/gsave-screenshot-samples";
 import { buildGfundsScreenshotFallbackText } from "@/lib/gfunds-screenshot-samples";
 import { assessReceiptPreviewQuality, parseReceiptText } from "@/lib/split-bill";
+import { decodeStructuredDelimitedBytes } from "@/lib/structured-delimited-decoder";
 
 class SimpleDOMMatrix {
   a: number;
@@ -933,6 +934,17 @@ const shouldAvoidPdfRenderForServerless = (fileName?: string | null) => {
     lower.includes("china bank") ||
     lower.includes("china-bank") ||
     lower.includes("chinabank")
+  );
+};
+
+export const shouldPreferPdfTextLayerWithoutStatementGate = (
+  fileName?: string | null,
+  importMode?: string | null
+) => {
+  const lower = String(fileName ?? "").toLowerCase();
+  return (
+    String(importMode ?? "").toLowerCase() === "receipt" ||
+    /\b(?:receipt|invoice|voucher|e[\s_-]*ticket|electronic[\s_-]*ticket|itinerary|booking[\s_-]*confirmation)\b/i.test(lower)
   );
 };
 
@@ -2428,14 +2440,16 @@ export const readUploadedFileText = async (
 
   if (
     lowerName.endsWith(".csv") ||
-    lowerType.includes("csv")
+    lowerName.endsWith(".tsv") ||
+    lowerType.includes("csv") ||
+    lowerType.includes("tab-separated-values")
   ) {
-    if (typeof file.text === "function") {
-      return file.text();
+    if (typeof file.arrayBuffer === "function") {
+      return decodeStructuredDelimitedBytes(new Uint8Array(await file.arrayBuffer()));
     }
 
-    if (typeof file.arrayBuffer === "function") {
-      return new TextDecoder().decode(new Uint8Array(await file.arrayBuffer()));
+    if (typeof file.text === "function") {
+      return file.text();
     }
 
     throw new Error("Unable to read imported file.");
@@ -2485,7 +2499,7 @@ export const readUploadedFileText = async (
     });
   }
 
-  throw new Error("Only PDF, CSV, and common image files are supported.");
+  throw new Error("Only PDF, CSV, TSV, and common image files are supported.");
 };
 
 export const readImportedFileTextWithCacheInfo = async (
@@ -2651,9 +2665,10 @@ export const readImportedFileTextWithCacheInfo = async (
   const extraction = (async () => {
     if (
       lowerName.endsWith(".csv") ||
-      /csv/.test(lowerName)
+      lowerName.endsWith(".tsv") ||
+      /csv|tab-separated-values/.test(`${lowerName} ${params.fileType}`)
     ) {
-      return new TextDecoder().decode(bytes);
+      return decodeStructuredDelimitedBytes(bytes);
     }
 
     if (isImageImportFileName(params.fileType, params.fileName)) {
@@ -2678,6 +2693,21 @@ export const readImportedFileTextWithCacheInfo = async (
     }
 
     try {
+      if (
+        shouldAvoidPdfRenderForServerless(params.fileName) ||
+        shouldPreferPdfTextLayerWithoutStatementGate(params.fileName, params.importMode)
+      ) {
+        const textLayer = await extractTextFromPdfBytes(bytes, password, pdfJsBaseUrl);
+        // Receipts, vouchers, and known text-native statement exports already
+        // contain the authoritative document text. Avoid the statement-shaped
+        // sufficiency gate here: receipts such as airline e-tickets do not
+        // contain repeated transaction rows, so that gate incorrectly sends a
+        // complete text layer through a 30-60 second rendered OCR pass. Keep
+        // the OCR fallback for scanned PDFs whose text layer is actually empty.
+        if (textLayer.trim()) {
+          return textLayer;
+        }
+      }
       if (shouldPreferPdfOcrFirst(params.fileName)) {
         return await extractTextFromPdfBytesWithRenderFirstFallback(bytes, password, pdfJsBaseUrl, aggressiveProfile);
       }

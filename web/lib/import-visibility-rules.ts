@@ -188,7 +188,7 @@ export const isServerHeavyStatementBatchItem = (item: VisibilityQueueItem) => {
   const lowerName = item.file.name.toLowerCase();
   return (
     mode === "statement" &&
-    (lowerName.endsWith(".pdf") || lowerName.endsWith(".csv")) &&
+    (lowerName.endsWith(".pdf") || /\.(?:csv|tsv)$/.test(lowerName)) &&
     (shouldSkipClientStatementPreparse(item.file.name) || shouldRequireVisibleRowsForImport(item.file.name))
   );
 };

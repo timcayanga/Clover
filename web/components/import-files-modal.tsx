@@ -1463,7 +1463,7 @@ export function ImportFilesModal({
         if (validationError) {
           if (validationError === "Uploaded files must be 2 MB or smaller.") {
             validationIssues.push(`${file.name} is larger than 2 MB.`);
-          } else if (validationError === "Only PDF, CSV, and common image files are supported.") {
+          } else if (validationError === "Only PDF, CSV, TSV, and common image files are supported.") {
             validationIssues.push(`${file.name} has an invalid file extension.`);
           } else {
             validationIssues.push(`${file.name} could not be added.`);
@@ -1475,8 +1475,8 @@ export function ImportFilesModal({
           return [];
         }
 
-        if (selectedImportMode !== "statement" && file.name.toLowerCase().endsWith(".csv")) {
-          validationIssues.push(`${file.name} is a CSV file, so it should be uploaded as a statement instead.`);
+        if (selectedImportMode !== "statement" && /\.(?:csv|tsv)$/i.test(file.name)) {
+          validationIssues.push(`${file.name} is a delimited data file, so it should be uploaded as a statement instead.`);
           return [];
         }
 
@@ -5033,7 +5033,7 @@ export function ImportFilesModal({
         !/\.(?:png|jpe?g|webp|heic|heif|gif|bmp|avif)$/i.test(lowerFileName);
       const shouldSkipLocalStatementPreparse =
         itemImportMode === "statement" &&
-        (lowerFileName.endsWith(".pdf") || lowerFileName.endsWith(".csv")) &&
+        (lowerFileName.endsWith(".pdf") || /\.(?:csv|tsv)$/.test(lowerFileName)) &&
         shouldSkipClientStatementPreparse(item.file.name);
       let extractedTextForUpload = localPreparseTextByItemIdRef.current.get(itemId);
       if (!extractedTextForUpload && knownBpiScreenshot) {
@@ -7124,7 +7124,7 @@ export function ImportFilesModal({
       const lowerName = item.file.name.toLowerCase();
       return (
         mode === "statement" &&
-        (lowerName.endsWith(".pdf") || lowerName.endsWith(".csv")) &&
+        (lowerName.endsWith(".pdf") || /\.(?:csv|tsv)$/.test(lowerName)) &&
         !shouldSkipClientStatementPreparse(item.file.name)
       );
     });
@@ -7693,7 +7693,7 @@ export function ImportFilesModal({
             ref={fileInputRef}
             className="hidden-file-input"
             type="file"
-            accept=".csv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
+            accept=".csv,.tsv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
             multiple
             onChange={handleInputChange}
           />

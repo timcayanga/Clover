@@ -6858,7 +6858,7 @@ function TransactionsPageContent() {
         ref={addFileInputRef}
         className="hidden-file-input"
         type="file"
-        accept=".csv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
+        accept=".csv,.tsv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
         multiple
         onChange={handleMobileFileChange}
         aria-hidden="true"
@@ -6923,7 +6923,7 @@ function TransactionsPageContent() {
         ref={addFileInputRef}
         className="hidden-file-input"
         type="file"
-        accept=".csv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
+        accept=".csv,.tsv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
         multiple
         onChange={handleMobileFileChange}
         aria-hidden="true"

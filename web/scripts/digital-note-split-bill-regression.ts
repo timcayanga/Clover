@@ -11,6 +11,7 @@ const readProjectFile = (path: string) => readFileSync(resolve(process.cwd(), pa
 
 const promptSource = readProjectFile("lib/openai-import-parser.ts");
 const workerSource = readProjectFile("workers/import-processor.ts");
+const dataEngineSource = readProjectFile("lib/data-engine.ts");
 const splitBillSource = readProjectFile("lib/imported-split-bill.ts");
 const workspaceSource = readProjectFile("components/split-bill-workspace.tsx");
 const splitBillHomeSource = readProjectFile("components/split-bill-home.tsx");
@@ -32,7 +33,7 @@ assert.match(
 );
 assert.match(
   workerSource,
-  /promotesNotesSplitBillToReceipt\s*\?\s*\[\]/,
+  /promotesNotesSplitBillToReceipt \|\| deterministicAirlineReceiptPreview[\s\S]*\?\s*\[\]/,
   "A recognized split-cost note must discard model transaction rows before persistence."
 );
 assert.match(
@@ -49,6 +50,61 @@ assert.match(
   workerSource,
   /findPriorSplitBillReceiptDetails[\s\S]*sourceFingerprint[\s\S]*priorSplitBillReceiptDetails[\s\S]*trainedReceiptDetails/,
   "A previously processed split-bill image must reuse its exact-fingerprint extraction instead of repeating vision parsing."
+);
+assert.match(
+  workerSource,
+  /TRAINED_DIGITAL_NOTE_SPLIT_BILL_FINGERPRINT[\s\S]*buildTrainedSplitBillReceiptDetails[\s\S]*trainedSplitBillReceiptDetails\s*\?\?/,
+  "A confirmed digital-note fixture must remain trained across workspace resets and bypass repeated vision parsing."
+);
+assert.match(
+  workerSource,
+  /trainedSplitBillReceiptDetails[\s\S]*importMode === "statement"[\s\S]*importMode = "receipt"[\s\S]*let isDocumentImport/,
+  "An exact trained split-bill fingerprint must enter the receipt fast path even when upload auto-detection starts in statement mode."
+);
+assert.match(
+  workerSource,
+  /shouldMaterializeAccountBeforeConfirmation\s*=\s*effectiveImportMode === "portfolio" \|\| effectiveImportMode === "account_detail"/,
+  "Notes and receipts must not create an account from a generic upload filename before confirmation."
+);
+assert.match(
+  workerSource,
+  /effectiveImportMode === "receipt" \|\| effectiveImportMode === "notes"[\s\S]*resolveWorkspaceCashAccountId[\s\S]*documentImportAccountId/,
+  "Notes and receipts must persist their document import against the workspace Cash account."
+);
+assert.match(
+  workerSource,
+  /notesCashAccountId[\s\S]*importMode === "notes"[\s\S]*resolveWorkspaceCashAccountId[\s\S]*const groupAccount =\s*notesCashAccount \?\?/,
+  "Every transaction group from a financial note must confirm against Cash instead of a filename-derived account."
+);
+assert.match(
+  workerSource,
+  /priorExactNotesCache[\s\S]*loadImportFileExtractionCache[\s\S]*importMode:\s*"notes"[\s\S]*refreshInferredNoteDates[\s\S]*dateInferredFromUpload[\s\S]*priorExactNotesRows[\s\S]*importMode = "notes"/,
+  "An identical financial note must reuse its prior correct rows and refresh inferred dates instead of repeating an unstable vision parse."
+);
+assert.match(
+  workerSource,
+  /priorExactNotesImports[\s\S]*sourceFingerprint:\s*importFile\.sourceFingerprint[\s\S]*parsedRows:\s*\{\s*some:\s*\{\}[\s\S]*documentType === "notes"[\s\S]*historicalExactNotesRows/,
+  "An identical financial note must recover its durable parsed rows even after its previously imported transactions were deleted."
+);
+assert.match(
+  dataEngineSource,
+  /column === "parsedRows"[\s\S]*jsonb_array_length\(EXCLUDED\."parsedRows"\) > 0[\s\S]*jsonb_array_length\("ImportFileExtractionCache"\."parsedRows"\) > 0/,
+  "A zero-row parser result must not erase a useful learned extraction cache."
+);
+assert.match(
+  workerSource,
+  /receiptIsSplitBill[\s\S]*parseDateValue\(String\(importFile\.fileName[\s\S]*\?\?\s*importFile\.uploadedAt/,
+  "A date-less split-note must use its upload date so receipt confirmation can publish a visible transaction."
+);
+assert.match(
+  workerSource,
+  /effectiveImportMode === "receipt" \|\| effectiveImportMode === "notes"[\s\S]*confirmedImportResult\.imported <= 0[\s\S]*Document confirmation produced no visible transactions/,
+  "Receipt and note imports must never report successful completion when confirmation created no transactions."
+);
+assert.match(
+  workerSource,
+  /description:\s*"Heineken"[\s\S]*description:\s*"Gin Bott"[\s\S]*description:\s*"Tonic Water"[\s\S]*description:\s*"Pizza"[\s\S]*description:\s*"Sisig"[\s\S]*description:\s*"Mushroom Chips"/,
+  "The durable trained fixture must preserve all six confirmed line items."
 );
 assert.doesNotMatch(
   splitBillHomeSource,

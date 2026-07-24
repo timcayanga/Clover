@@ -1,7 +1,7 @@
 import type { TransactionType } from "@prisma/client";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 import { getSharedMerchantCategoryHint, getStrongMerchantCategoryHint } from "@/lib/merchant-category-hints";
-import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
+import { inferBankNameFromText, normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import {
   isLikelyScreenshotDateFragment,
   isLikelyScreenshotUiArtifactText,
@@ -323,6 +323,1308 @@ const splitLine = (line: string, delimiter: string) => {
 
   cells.push(current.trim());
   return cells;
+};
+
+const normalizeNetWorthSnapshotLabel = (value: string) =>
+  normalizeWhitespace(value)
+    .replace(/[()/_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+export const isLikelyNetWorthSnapshotCsvFileName = (fileName?: string | null, fileType?: string | null) => {
+  const normalizedName = String(fileName ?? "").toLowerCase();
+  const normalizedType = String(fileType ?? "").toLowerCase();
+  return (
+    (normalizedName.endsWith(".csv") || /(?:^|[;/\s])csv(?:$|[;/\s])/.test(normalizedType)) &&
+    /\bnet[\s_-]*worth(?:[\s_-]*calculator)?\b/.test(normalizedName)
+  );
+};
+
+const resolveNetWorthSnapshotAccount = (
+  rawLabel: string,
+  groupLabel: string
+): {
+  accountName: string;
+  institution: string | null;
+  accountType: ImportedAccountType;
+  currency: string;
+} | null => {
+  const normalized = normalizeNetWorthSnapshotLabel(rawLabel || groupLabel);
+  const normalizedGroup = normalizeNetWorthSnapshotLabel(groupLabel);
+  if (!normalized) return null;
+
+  if (normalized === "php" && normalizedGroup.includes("physical cash")) {
+    return { accountName: "Cash", institution: null, accountType: "cash", currency: "PHP" };
+  }
+  if (normalized === "usd" && normalizedGroup.includes("physical cash")) {
+    return { accountName: "Cash USD", institution: null, accountType: "cash", currency: "USD" };
+  }
+  if (normalized.includes("accounts receivable") || normalizedGroup.includes("accounts receivable")) {
+    return { accountName: "Accounts Receivable", institution: null, accountType: "receivable", currency: "PHP" };
+  }
+
+  const institutionMappings: Array<{
+    pattern: RegExp;
+    institution: string;
+    accountType: ImportedAccountType;
+    accountName?: (label: string) => string;
+  }> = [
+    {
+      pattern: /^bpi supplemental$/,
+      institution: "BPI",
+      accountType: "bank",
+      accountName: () => "BPI Supplemental",
+    },
+    {
+      pattern: /^bpi personal ateneo$/,
+      institution: "BPI",
+      accountType: "bank",
+      accountName: () => "BPI Personal / Ateneo",
+    },
+    { pattern: /^bpi time deposit$/, institution: "BPI", accountType: "investment" },
+    { pattern: /^bpi\b/, institution: "BPI", accountType: "bank" },
+    { pattern: /^rcbc\b/, institution: "RCBC", accountType: "bank" },
+    { pattern: /^gcash wallet$/, institution: "GCash", accountType: "wallet", accountName: () => "GCash" },
+    { pattern: /^maya\b/, institution: "Maya", accountType: "wallet" },
+    { pattern: /^wise\b/, institution: "Wise", accountType: "wallet" },
+    { pattern: /^unionbank\b/, institution: "UnionBank", accountType: "bank" },
+    { pattern: /^hsbc savings$/, institution: "HSBC", accountType: "bank" },
+    { pattern: /^hsbc\b/, institution: "HSBC", accountType: "bank" },
+    { pattern: /^gfunds\b/, institution: "GCash", accountType: "investment", accountName: () => "GFunds" },
+    {
+      pattern: /^gstocks philippines$/,
+      institution: "GCash",
+      accountType: "investment",
+      accountName: () => "GStocks Philippines",
+    },
+    {
+      pattern: /^gsave uno$/,
+      institution: "UNO Digital Bank",
+      accountType: "bank",
+      accountName: () => "GSave (UNO)",
+    },
+    { pattern: /^gcrypto\b/, institution: "GCash", accountType: "investment", accountName: () => "GCrypto" },
+    { pattern: /^pdax\b/, institution: "PDAX", accountType: "investment" },
+    { pattern: /^gotrade\b/, institution: "GoTrade", accountType: "investment" },
+  ];
+  const mapping = institutionMappings.find((candidate) => candidate.pattern.test(normalized));
+  if (!mapping) return null;
+
+  return {
+    accountName: mapping.accountName?.(rawLabel) ?? normalizeWhitespace(rawLabel),
+    institution: mapping.institution,
+    accountType: mapping.accountType,
+    currency: "PHP",
+  };
+};
+
+export const parseNetWorthSnapshotCsv = (
+  text: string,
+  fileName = "",
+  fileType = ""
+): ParsedImportRow[] | null => {
+  const csvLike =
+    isLikelyNetWorthSnapshotCsvFileName(fileName, fileType) ||
+    /(?:^|[;/\s])csv(?:$|[;/\s])/i.test(fileType) ||
+    fileName.toLowerCase().endsWith(".csv");
+  if (!csvLike) return null;
+
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length < 3) return null;
+
+  const groupHeaders = splitLine(lines[0] ?? "", ",");
+  const accountHeaders = splitLine(lines[1] ?? "", ",");
+  const normalizedGroupHeaders = groupHeaders.map(normalizeNetWorthSnapshotLabel);
+  const normalizedAccountHeaders = accountHeaders.map(normalizeNetWorthSnapshotLabel);
+  const hasSnapshotShape =
+    normalizedGroupHeaders[0] === "date" &&
+    normalizedGroupHeaders.includes("php total") &&
+    normalizedGroupHeaders.includes("savings total") &&
+    normalizedGroupHeaders.includes("investments total") &&
+    normalizedAccountHeaders.some((header) => /^(?:bpi|rcbc|gcash|maya|wise|unionbank|hsbc|pdax|gotrade)\b/.test(header));
+  if (!hasSnapshotShape) return null;
+
+  const dataRows = lines
+    .slice(2)
+    .map((line) => splitLine(line, ","))
+    .map((values) => ({ values, date: parseDateValue(values[0] ?? null) }))
+    .filter((entry): entry is { values: string[]; date: Date } => Boolean(entry.date))
+    .sort((left, right) => left.date.getTime() - right.date.getTime());
+  const latest = dataRows.at(-1);
+  if (!latest) return [];
+
+  let carriedGroupHeader = "";
+  const descriptors = accountHeaders
+    .map((rawAccountLabel, index) => {
+      const explicitGroupHeader = groupHeaders[index] ?? "";
+      if (explicitGroupHeader) carriedGroupHeader = explicitGroupHeader;
+      if (index < 9) return null;
+
+      const groupLabel = explicitGroupHeader || carriedGroupHeader;
+      const rawLabel = rawAccountLabel || groupLabel;
+      const identity = resolveNetWorthSnapshotAccount(rawLabel, groupLabel);
+      if (!identity) return null;
+      return { index, rawLabel, groupLabel, ...identity };
+    })
+    .filter(Boolean) as Array<{
+      index: number;
+      rawLabel: string;
+      groupLabel: string;
+      accountName: string;
+      institution: string | null;
+      accountType: ImportedAccountType;
+      currency: string;
+    }>;
+
+  const latestDate = latest.date.toISOString().slice(0, 10);
+
+  return descriptors.flatMap((descriptor) => {
+    const balance = parseMoney(latest.values[descriptor.index] ?? null);
+    if (balance === null) return [];
+    const balanceHistory = dataRows
+      .map(({ values, date }) => ({
+        date: date.toISOString().slice(0, 10),
+        balance: parseMoney(values[descriptor.index] ?? null),
+      }))
+      .filter((entry) => entry.balance !== null);
+    return [
+      {
+        date: latestDate,
+        amount: "0",
+        currency: descriptor.currency,
+        merchantRaw: descriptor.accountName,
+        merchantClean: descriptor.accountName,
+        description: `${descriptor.accountName} balance as of ${latestDate}`,
+        accountName: descriptor.accountName,
+        institution: descriptor.institution,
+        type: "income",
+        confidence: 100,
+        parserConfidence: 100,
+        categoryConfidence: 100,
+        rawPayload: {
+          kind: "account_snapshot_marker",
+          source: "net_worth_snapshot_csv",
+          documentType: "account_detail",
+          balance,
+          accountName: descriptor.accountName,
+          institutionRaw: descriptor.institution,
+          accountType: descriptor.accountType,
+          accountCurrency: descriptor.currency,
+          snapshotDate: latestDate,
+          sourceColumn: descriptor.index + 1,
+          sourceHeader: descriptor.rawLabel,
+          sourceGroup: descriptor.groupLabel,
+          balanceHistory,
+        },
+      } satisfies ParsedImportRow,
+    ];
+  });
+};
+
+type StructuredDelimitedTable = {
+  delimiter: string;
+  headerIndex: number;
+  headers: string[];
+  canonicalHeaders: string[];
+  rows: string[][];
+  preambleRows: string[][];
+  preambleMetadata: Record<string, string>;
+};
+
+const structuredDelimitedFilePattern = /\.(?:csv|tsv)$/i;
+const structuredDelimitedMimePattern = /(?:csv|tab-separated-values)/i;
+
+const isStructuredDelimitedFile = (fileName?: string | null, fileType?: string | null) =>
+  structuredDelimitedFilePattern.test(String(fileName ?? "")) ||
+  structuredDelimitedMimePattern.test(String(fileType ?? ""));
+
+const parseDelimitedRows = (input: string, delimiter: string) => {
+  const text = input.replace(/^\uFEFF/, "").replace(/\u0000/g, "");
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === '"') {
+      if (inQuotes && text[index + 1] === '"') {
+        current += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (char === delimiter && !inQuotes) {
+      row.push(current.trim());
+      current = "";
+      continue;
+    }
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && text[index + 1] === "\n") index += 1;
+      row.push(current.trim());
+      if (row.some((cell) => cell.length > 0)) rows.push(row);
+      row = [];
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+
+  row.push(current.trim());
+  if (row.some((cell) => cell.length > 0)) rows.push(row);
+  return rows;
+};
+
+const detectStructuredDelimiter = (text: string, fileName = "") => {
+  const separatorDirective = text.replace(/^\uFEFF/, "").match(/^\s*sep=(.)\s*(?:\r?\n|$)/i)?.[1];
+  if (separatorDirective) return separatorDirective;
+  if (/\.tsv$/i.test(fileName)) return "\t";
+
+  const candidates = [",", "\t", ";", "|"];
+  const sample = text.split(/\r?\n/).filter((line) => line.trim()).slice(0, 12).join("\n");
+  let best = { delimiter: ",", score: -1 };
+  for (const delimiter of candidates) {
+    const widths = parseDelimitedRows(sample, delimiter)
+      .map((row) => row.length)
+      .filter((width) => width > 1);
+    if (widths.length === 0) continue;
+    const frequency = new Map<number, number>();
+    widths.forEach((width) => frequency.set(width, (frequency.get(width) ?? 0) + 1));
+    const [modeWidth, modeCount] =
+      Array.from(frequency.entries()).sort((left, right) => right[1] - left[1] || right[0] - left[0])[0] ?? [0, 0];
+    const consistency = modeCount / widths.length;
+    const score = consistency * 100 + Math.min(modeWidth, 30) + widths.length;
+    if (score > best.score) best = { delimiter, score };
+  }
+  return best.delimiter;
+};
+
+const normalizeStructuredHeader = (value: string) =>
+  normalizeWhitespace(value)
+    .replace(/^\uFEFF/, "")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase();
+
+const canonicalStructuredHeader = (value: string) => {
+  const rawHeader = normalizeWhitespace(value).toLowerCase();
+  const header = normalizeStructuredHeader(value);
+  if (!header) return "";
+  if (
+    /\b(?:original|foreign)\s+amount\b/.test(rawHeader) ||
+    (/\b(?:original|foreign|transaction)\s+currency\b/.test(rawHeader) && /\bamount\b/.test(rawHeader)) ||
+    /\bamount\s+in\s+(?:original|foreign)\b/.test(rawHeader)
+  ) return "original_amount";
+  if (/\b(?:original|foreign|transaction)\s+(?:currency|ccy)\b/.test(rawHeader)) return "original_currency";
+  if (/^(?:date|date_time|datetime|transaction_date|transaction_datetime|booking_date|value_date|effective_date|completed_date|created_at|occurred_at|settled_at|timestamp)$/.test(header)) return "date";
+  if (/^(?:posted|posted_at|posted_date|posting_date|posting_datetime|processed_at|processed_date|settlement_date|cleared_date)$/.test(header)) return "posted_date";
+  if (/^(?:transaction|description|transaction_description|original_description|transaction_name|details|transaction_details|activity|remarks|narrative|transaction_narrative|particulars|memo|note|notes)$/.test(header)) return "description";
+  if (/^(?:merchant|merchant_name|payee|counterparty|beneficiary|vendor|vendor_name|name|label)$/.test(header)) return "merchant";
+  if (/^(?:amount|transaction_amount|transaction_value|transaction_total|billing_amount|billed_amount|principal_amount|net_amount|gross_amount|value|local_amount|base_amount|home_amount|settlement_amount)$/.test(header)) return "amount";
+  if (/^(?:debit|debit_amount|debit_amt|debit_value|withdraw|withdrawn|withdrawal|withdrawal_amount|withdrawal_amt|withdrawals|money_out|money_spent|paid|paid_out|spent|outflow|charge)$/.test(header)) return "debit";
+  if (/^(?:credit|credit_amount|credit_amt|credit_value|deposit|deposit_amount|deposit_amt|deposits|money_in|paid_in|received|received_amount|inflow)$/.test(header)) return "credit";
+  if (/^(?:balance|running_balance|ledger_balance|current_balance|available_balance|closing_balance|ending_balance)$/.test(header)) return "balance";
+  if (/^(?:currency|currency_code|ccy|curr)$/.test(header)) return "currency";
+  if (/^(?:type|transaction_type|direction|debit_credit|debit_credit_indicator|credit_debit_indicator|dr_cr|dr_cr_indicator|indicator|flow)$/.test(header)) return "type";
+  if (/^(?:status|state|transaction_status|payment_status|booking_status|clearing_status)$/.test(header)) return "status";
+  if (/^(?:fee|fees|fee_amount|service_fee|transaction_fee|charges)$/.test(header)) return "fee";
+  if (/^(?:category|category_name|classification)$/.test(header)) return "category";
+  if (/^(?:account|account_name|account_label|account_title|source_account|wallet|portfolio)$/.test(header)) return "account_name";
+  if (/^(?:account_number|account_no|account_id|masked_account|iban|card_number|card_no)$/.test(header)) return "account_number";
+  if (/^(?:institution|bank|bank_name|provider|financial_institution)$/.test(header)) return "institution";
+  if (/^(?:account_type|product_type)$/.test(header)) return "account_type";
+  if (/^(?:reference|reference_number|reference_no|transaction_id|receipt_number|trace_number|confirmation_number|id|check_number|cheque_number)$/.test(header)) return "reference";
+  if (/^(?:as_of|as_of_date|snapshot_date|balance_date)$/.test(header)) return "snapshot_date";
+  return header;
+};
+
+const canonicalStructuredMetadataKey = (value: string) => {
+  const header = normalizeStructuredHeader(value);
+  if (/^(?:institution|bank|bank_name|provider|financial_institution)$/.test(header)) return "institution";
+  if (/^(?:account|account_name|account_label|wallet|portfolio|product)$/.test(header)) return "account_name";
+  if (/^(?:account_number|account_no|account_id|iban|card_number|card_no)$/.test(header)) return "account_number";
+  if (/^(?:account_type|product_type)$/.test(header)) return "account_type";
+  if (/^(?:currency|currency_code|ccy|curr)$/.test(header)) return "currency";
+  if (/^(?:as_of|as_of_date|snapshot_date|balance_date|report_date)$/.test(header)) return "snapshot_date";
+  return "";
+};
+
+const extractStructuredPreambleMetadata = (rows: string[][]) => {
+  const metadata: Record<string, string> = {};
+  rows.forEach((row) => {
+    const nonEmpty = row.map((cell) => normalizeWhitespace(cell)).filter(Boolean);
+    if (nonEmpty.length === 0) return;
+
+    let rawKey = nonEmpty[0] ?? "";
+    let rawValue = nonEmpty.slice(1).join(" ");
+    const inline = rawKey.match(/^([^:=]{2,40})\s*[:=]\s*(.+)$/);
+    if (inline) {
+      rawKey = inline[1] ?? "";
+      rawValue = inline[2] ?? "";
+    }
+    const key = canonicalStructuredMetadataKey(rawKey);
+    if (key && rawValue && !metadata[key]) metadata[key] = rawValue;
+  });
+  return metadata;
+};
+
+const scoreStructuredHeaderRow = (headers: string[]) => {
+  const canonical = new Set(headers.map(canonicalStructuredHeader));
+  const hasDate = canonical.has("date") || canonical.has("posted_date");
+  const hasTransactionAmount = canonical.has("amount") || canonical.has("debit") || canonical.has("credit");
+  const hasDescription = canonical.has("description") || canonical.has("merchant");
+  const transactionScore = (hasDate ? 5 : 0) + (hasTransactionAmount ? 5 : 0) + (hasDescription ? 3 : 0) +
+    (canonical.has("currency") ? 1 : 0) + (canonical.has("type") ? 1 : 0) + (canonical.has("balance") ? 1 : 0);
+  const snapshotScore =
+    (canonical.has("account_name") ? 5 : 0) +
+    (canonical.has("balance") ? 5 : 0) +
+    (canonical.has("institution") ? 2 : 0) +
+    (canonical.has("currency") ? 1 : 0) +
+    (canonical.has("account_type") ? 1 : 0) +
+    (canonical.has("snapshot_date") || hasDate ? 1 : 0);
+  return { transactionScore, snapshotScore, hasDate, hasTransactionAmount, hasDescription };
+};
+
+const readStructuredDelimitedTable = (
+  text: string,
+  fileName: string,
+  fileType: string
+): StructuredDelimitedTable | null => {
+  if (!isStructuredDelimitedFile(fileName, fileType)) return null;
+  const delimiter = detectStructuredDelimiter(text, fileName);
+  const withoutDirective = text.replace(/^\uFEFF?\s*sep=.\s*\r?\n/i, "");
+  const rows = parseDelimitedRows(withoutDirective, delimiter);
+  if (rows.length < 2) return null;
+
+  const candidates = rows.slice(0, 12).map((headers, headerIndex) => ({
+    headerIndex,
+    headers,
+    ...scoreStructuredHeaderRow(headers),
+    wideSnapshotScore: headers.map(canonicalStructuredHeader).some((header) => header === "date" || header === "snapshot_date")
+      ? 5
+      : 0,
+  }));
+  const best = candidates.sort(
+    (left, right) =>
+      Math.max(right.transactionScore, right.snapshotScore, right.wideSnapshotScore) -
+        Math.max(left.transactionScore, left.snapshotScore, left.wideSnapshotScore) ||
+      left.headerIndex - right.headerIndex
+  )[0];
+  if (!best || Math.max(best.transactionScore, best.snapshotScore, best.wideSnapshotScore) < 5) return null;
+
+  const canonicalHeaders = best.headers.map(canonicalStructuredHeader);
+  const preambleRows = rows.slice(0, best.headerIndex);
+  return {
+    delimiter,
+    headerIndex: best.headerIndex,
+    headers: best.headers,
+    canonicalHeaders,
+    rows: rows.slice(best.headerIndex + 1),
+    preambleRows,
+    preambleMetadata: extractStructuredPreambleMetadata(preambleRows),
+  };
+};
+
+const readStructuredCell = (table: StructuredDelimitedTable, row: string[], key: string) => {
+  for (let index = 0; index < table.canonicalHeaders.length; index += 1) {
+    if (table.canonicalHeaders[index] !== key) continue;
+    const value = row[index] ?? "";
+    if (normalizeWhitespace(value)) return value;
+  }
+  return "";
+};
+
+type StructuredDateOrder = "day_first" | "month_first" | null;
+
+const inferStructuredDateOrder = (table: StructuredDelimitedTable, dateKey: "date" | "posted_date" | "snapshot_date") => {
+  const headerIndex = table.canonicalHeaders.indexOf(dateKey);
+  const rawHeader = headerIndex >= 0 ? table.headers[headerIndex] ?? "" : "";
+  if (/\bdd\W*mm\W*(?:yy|yyyy)\b/i.test(rawHeader)) return "day_first" as const;
+  if (/\bmm\W*dd\W*(?:yy|yyyy)\b/i.test(rawHeader)) return "month_first" as const;
+
+  let dayFirstEvidence = 0;
+  let monthFirstEvidence = 0;
+  table.rows.forEach((row) => {
+    const value = readStructuredCell(table, row, dateKey);
+    const match = normalizeWhitespace(value).match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})(?:\D|$)/);
+    if (!match) return;
+    const first = Number(match[1]);
+    const second = Number(match[2]);
+    if (first > 12 && second >= 1 && second <= 12) dayFirstEvidence += 1;
+    if (second > 12 && first >= 1 && first <= 12) monthFirstEvidence += 1;
+  });
+  if (dayFirstEvidence > 0 && monthFirstEvidence === 0) return "day_first" as const;
+  if (monthFirstEvidence > 0 && dayFirstEvidence === 0) return "month_first" as const;
+  return null;
+};
+
+const parseStructuredDate = (
+  value?: string | null,
+  countryCode?: string | null,
+  dateOrder: StructuredDateOrder = null
+) => {
+  const normalized = normalizeWhitespace(String(value ?? ""));
+  if (!normalized) return null;
+  if (/^\d{5}(?:\.\d+)?$/.test(normalized)) {
+    const serial = Number(normalized);
+    if (serial >= 20_000 && serial <= 80_000) {
+      return new Date(Date.UTC(1899, 11, 30) + serial * 86_400_000);
+    }
+  }
+  const numericDate = normalized.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})(?:\D.*)?$/);
+  if (numericDate && dateOrder) {
+    const first = Number(numericDate[1]);
+    const second = Number(numericDate[2]);
+    const rawYear = Number(numericDate[3]);
+    const year = rawYear < 100 ? (rawYear >= 70 ? 1900 + rawYear : 2000 + rawYear) : rawYear;
+    const month = dateOrder === "day_first" ? second : first;
+    const day = dateOrder === "day_first" ? first : second;
+    const parsed = new Date(Date.UTC(year, month - 1, day));
+    if (
+      parsed.getUTCFullYear() === year &&
+      parsed.getUTCMonth() === month - 1 &&
+      parsed.getUTCDate() === day
+    ) {
+      return parsed;
+    }
+    return null;
+  }
+  return parseRegionalDateValue(normalized, countryCode ?? null) ?? parseDateValue(normalized);
+};
+
+const isRepeatedStructuredHeaderRow = (table: StructuredDelimitedTable, row: string[]) => {
+  const canonical = row.slice(0, table.headers.length).map(canonicalStructuredHeader);
+  return canonical.length > 0 &&
+    canonical.every((header, index) => header === table.canonicalHeaders[index]);
+};
+
+const extractStructuredSectionMetadata = (row: string[]) => {
+  const nonEmpty = row.map((cell) => normalizeWhitespace(cell)).filter(Boolean);
+  if (nonEmpty.length === 0 || nonEmpty.length > 2) return null;
+  const metadata = extractStructuredPreambleMetadata([row]);
+  return Object.keys(metadata).length > 0 ? metadata : null;
+};
+
+const normalizeStructuredAccountType = (value?: string | null): ImportedAccountType | null => {
+  const normalized = normalizeStructuredHeader(String(value ?? ""));
+  const supported = new Set<ImportedAccountType>([
+    "bank",
+    "wallet",
+    "credit_card",
+    "cash",
+    "investment",
+    "loan",
+    "mortgage",
+    "line_of_credit",
+    "receivable",
+    "payable",
+    "bnpl",
+    "prepaid",
+    "insurance",
+    "other",
+  ]);
+  if (supported.has(normalized as ImportedAccountType)) return normalized as ImportedAccountType;
+  if (/credit.*card|card/.test(normalized)) return "credit_card";
+  if (/broker|portfolio|stock|crypto|fund|investment/.test(normalized)) return "investment";
+  if (/e_?wallet|wallet/.test(normalized)) return "wallet";
+  if (/checking|savings|deposit/.test(normalized)) return "bank";
+  return null;
+};
+
+const inferStructuredInstitution = (value?: string | null) => {
+  const inferred = inferBankNameFromText(value);
+  return inferred && inferred !== "Unknown" ? inferred : null;
+};
+
+type StructuredDirectionEvidence =
+  | "debit_column"
+  | "credit_column"
+  | "explicit_type"
+  | "amount_sign"
+  | "running_balance_delta"
+  | "credit_card_default"
+  | "description_hint"
+  | "conservative_default";
+
+const structuredDirectionType = (
+  rawType: string,
+  description: string,
+  amountText: string,
+  amount: number,
+  accountType: ImportedAccountType | null,
+  balanceDelta: number | null,
+  hasDebit: boolean,
+  hasCredit: boolean
+): { type: TransactionType; evidence: StructuredDirectionEvidence } => {
+  if (hasDebit) return { type: "expense", evidence: "debit_column" };
+  if (hasCredit) return { type: "income", evidence: "credit_column" };
+
+  const normalizedType = normalizeWhitespace(rawType).toLowerCase();
+  if (/\b(?:credit|cr|income|deposit|inflow|money in|paid in|received)\b/.test(normalizedType)) {
+    return { type: "income", evidence: "explicit_type" };
+  }
+  if (/\b(?:debit|dr|expense|withdrawal|outflow|money out|paid out|purchase|payment|fee|charge)\b/.test(normalizedType)) {
+    return { type: "expense", evidence: "explicit_type" };
+  }
+  if (/\btransfer\b/.test(normalizedType)) {
+    if (/\b(?:to|out|sent|send|withdrawal)\b/.test(normalizedType)) return { type: "expense", evidence: "explicit_type" };
+    if (/\b(?:from|in|received|receive|deposit)\b/.test(normalizedType)) return { type: "income", evidence: "explicit_type" };
+    return { type: "transfer", evidence: "explicit_type" };
+  }
+  if (/\bcr\.?\s*$/i.test(amountText)) return { type: "income", evidence: "amount_sign" };
+  if (/\bdr\.?\s*$/i.test(amountText)) return { type: "expense", evidence: "amount_sign" };
+  if (/^\s*-/.test(amountText) || amount < 0) return { type: "expense", evidence: "amount_sign" };
+  if (/^\s*\+/.test(amountText)) return { type: "income", evidence: "amount_sign" };
+
+  if (balanceDelta !== null) {
+    const tolerance = Math.max(0.02, Math.abs(amount) * 0.0001);
+    if (Math.abs(balanceDelta - Math.abs(amount)) <= tolerance) {
+      return { type: "income", evidence: "running_balance_delta" };
+    }
+    if (Math.abs(balanceDelta + Math.abs(amount)) <= tolerance) {
+      return { type: "expense", evidence: "running_balance_delta" };
+    }
+  }
+
+  if (accountType === "credit_card") return { type: "expense", evidence: "credit_card_default" };
+  const normalizedDescription = description.toLowerCase();
+  if (/\b(?:salary|payroll|interest earned|dividend|refund|reversal|cashback|received)\b/.test(normalizedDescription)) {
+    return { type: "income", evidence: "description_hint" };
+  }
+  if (/\btransfer\b/.test(normalizedDescription)) {
+    if (/\b(?:to|out|sent|send|withdrawal)\b/.test(normalizedDescription)) {
+      return { type: "expense", evidence: "description_hint" };
+    }
+    if (/\b(?:from|in|received|receive|deposit)\b/.test(normalizedDescription)) {
+      return { type: "income", evidence: "description_hint" };
+    }
+    return { type: "transfer", evidence: "description_hint" };
+  }
+  return { type: "expense", evidence: "conservative_default" };
+};
+
+export const parseStructuredTransactionCsv = (
+  text: string,
+  fileName: string,
+  fileType: string,
+  context: ImportParseContext = {}
+): ParsedImportRow[] | null => {
+  const table = readStructuredDelimitedTable(text, fileName, fileType);
+  if (!table) return null;
+  const headerScore = scoreStructuredHeaderRow(table.headers);
+  if (!headerScore.hasDate || !headerScore.hasTransactionAmount || !headerScore.hasDescription || headerScore.transactionScore < 13) {
+    return null;
+  }
+
+  const metadata = table.preambleMetadata;
+  const metadataInstitution = metadata.institution || context.institution || "";
+  const metadataAccountName = metadata.account_name || context.accountName || "";
+  const contextCorpus = resolveTransactionContext({ institution: metadataInstitution, accountName: metadataAccountName });
+  const dateKey = table.canonicalHeaders.includes("date") ? "date" : "posted_date";
+  const dateOrder = inferStructuredDateOrder(table, dateKey);
+  let activeMetadata = { ...metadata };
+  const candidates: Array<{
+    sourceRow: string[];
+    sourceRowIndex: number;
+    parsedDate: Date;
+    description: string;
+    debit: number | null;
+    credit: number | null;
+    signedAmount: number | null;
+    debitText: string;
+    creditText: string;
+    amountText: string;
+    hasDebit: boolean;
+    hasCredit: boolean;
+    accountName: string;
+    accountNumber: string;
+    institutionRaw: string;
+    institution: string | null;
+    accountType: ImportedAccountType | null;
+    amountValue: number;
+    rawType: string;
+    merchantRaw: string;
+    currency: string | null;
+    runningBalance: number | null;
+    categoryRaw: string;
+    reference: string;
+    status: string;
+    fee: number | null;
+    originalAmount: number | null;
+    originalCurrency: string | null;
+    rowMetadata: Record<string, string>;
+    balanceDelta: number | null;
+    continuationSourceRows: string[][];
+    continuationSourceRowIndexes: number[];
+  }> = [];
+
+  table.rows.forEach((sourceRow, sourceRowIndex) => {
+    if (isRepeatedStructuredHeaderRow(table, sourceRow)) return;
+    const sectionMetadata = extractStructuredSectionMetadata(sourceRow);
+    if (sectionMetadata) {
+      activeMetadata = { ...activeMetadata, ...sectionMetadata };
+      return;
+    }
+
+    const rawDate = readStructuredCell(table, sourceRow, "date") || readStructuredCell(table, sourceRow, "posted_date");
+    const rowInstitution = activeMetadata.institution || metadataInstitution;
+    const rowAccountName = activeMetadata.account_name || metadataAccountName;
+    const rowContext = resolveTransactionContext({ institution: rowInstitution, accountName: rowAccountName });
+    const parsedDate = parseStructuredDate(rawDate, rowContext.countryCode || contextCorpus.countryCode, dateOrder);
+    const description = normalizeWhitespace(
+      readStructuredCell(table, sourceRow, "description") ||
+      readStructuredCell(table, sourceRow, "merchant") ||
+      readStructuredCell(table, sourceRow, "reference")
+    );
+    if (!parsedDate) {
+      const hasContinuationAmount = ["amount", "debit", "credit", "balance", "fee"].some(
+        (key) => parseMoney(readStructuredCell(table, sourceRow, key)) !== null
+      );
+      const previous = candidates.at(-1);
+      if (
+        previous &&
+        previous.sourceRowIndex === sourceRowIndex - 1 &&
+        description &&
+        !hasContinuationAmount
+      ) {
+        previous.description = normalizeWhitespace(`${previous.description} ${description}`);
+        previous.merchantRaw = normalizeWhitespace(`${previous.merchantRaw} ${description}`);
+        previous.continuationSourceRows.push(sourceRow);
+        previous.continuationSourceRowIndexes.push(sourceRowIndex);
+      }
+      return;
+    }
+    if (!description || /^(?:total|subtotal|opening balance|closing balance|ending balance)$/i.test(description)) return;
+    const status = normalizeWhitespace(readStructuredCell(table, sourceRow, "status"));
+    if (/\b(?:pending|processing|authorized|authorization|scheduled|upcoming|on hold|held|failed|declined|rejected|cancelled|canceled|void|voided|expired|reversed)\b/i.test(status)) return;
+
+    const debitText = readStructuredCell(table, sourceRow, "debit");
+    const creditText = readStructuredCell(table, sourceRow, "credit");
+    const amountText = readStructuredCell(table, sourceRow, "amount");
+    const debit = parseMoney(debitText);
+    const credit = parseMoney(creditText);
+    const signedAmount = parseMoney(amountText);
+    const hasDebit = debit !== null && debit !== 0;
+    const hasCredit = credit !== null && credit !== 0;
+    if ((hasDebit && hasCredit) || (!hasDebit && !hasCredit && signedAmount === null)) return;
+
+    const accountName = normalizeWhitespace(readStructuredCell(table, sourceRow, "account_name") || rowAccountName);
+    const accountNumber = normalizeWhitespace(
+      readStructuredCell(table, sourceRow, "account_number") ||
+        activeMetadata.account_number ||
+        metadata.account_number ||
+        context.accountNumber ||
+        ""
+    );
+    const institutionRaw = normalizeWhitespace(readStructuredCell(table, sourceRow, "institution") || rowInstitution);
+    const institution = sanitizeBankNameLabel(
+      institutionRaw || inferStructuredInstitution(accountName) || context.institution || null
+    );
+    const accountType =
+      normalizeStructuredAccountType(
+        readStructuredCell(table, sourceRow, "account_type") ||
+          activeMetadata.account_type ||
+          metadata.account_type
+      ) ??
+      inferAccountTypeFromStatement(institution, accountName, "bank");
+    const amountValue = hasDebit ? Math.abs(debit) : hasCredit ? Math.abs(credit) : Math.abs(signedAmount ?? 0);
+    if (!Number.isFinite(amountValue) || amountValue <= 0) return;
+
+    const rawType = hasDebit ? "debit" : hasCredit ? "credit" : readStructuredCell(table, sourceRow, "type");
+    const merchantRaw = normalizeWhitespace(readStructuredCell(table, sourceRow, "merchant") || description);
+    const currencyText = normalizeWhitespace(
+      readStructuredCell(table, sourceRow, "currency") ||
+        activeMetadata.currency ||
+        metadata.currency ||
+        ""
+    );
+    const currency =
+      normalizeInstitutionCurrency(
+        institution,
+        currencyText || detectCurrencyFromText(`${amountText} ${debitText} ${creditText} ${table.headers.join(" ")}`)
+      ) ?? null;
+    const runningBalance = parseMoney(readStructuredCell(table, sourceRow, "balance"));
+    const originalCurrency =
+      normalizeCurrencyCode(readStructuredCell(table, sourceRow, "original_currency")) ??
+      normalizeCurrencyCode(detectCurrencyFromText(readStructuredCell(table, sourceRow, "original_amount")));
+    candidates.push({
+      sourceRow,
+      sourceRowIndex,
+      parsedDate,
+      description,
+      debit,
+      credit,
+      signedAmount,
+      debitText,
+      creditText,
+      amountText,
+      hasDebit,
+      hasCredit,
+      accountName,
+      accountNumber,
+      institutionRaw,
+      institution,
+      accountType,
+      amountValue,
+      rawType,
+      merchantRaw,
+      currency,
+      runningBalance,
+      categoryRaw: normalizeWhitespace(readStructuredCell(table, sourceRow, "category")),
+      reference: normalizeWhitespace(readStructuredCell(table, sourceRow, "reference")),
+      status,
+      fee: parseMoney(readStructuredCell(table, sourceRow, "fee")),
+      originalAmount: parseMoney(readStructuredCell(table, sourceRow, "original_amount")),
+      originalCurrency,
+      rowMetadata: { ...activeMetadata },
+      balanceDelta: null,
+      continuationSourceRows: [],
+      continuationSourceRowIndexes: [],
+    });
+  });
+
+  const groupedCandidates = new Map<string, typeof candidates>();
+  candidates.forEach((candidate) => {
+    const key = [
+      candidate.institution ?? "",
+      candidate.accountName,
+      candidate.accountNumber,
+      candidate.currency ?? "",
+    ].join("|").toLowerCase();
+    const group = groupedCandidates.get(key) ?? [];
+    group.push(candidate);
+    groupedCandidates.set(key, group);
+  });
+  groupedCandidates.forEach((group) => {
+    const dated = group.filter((candidate) => candidate.runningBalance !== null);
+    if (dated.length < 2) return;
+    const chronologicalAscending =
+      dated[dated.length - 1]!.parsedDate.getTime() >= dated[0]!.parsedDate.getTime();
+    group.forEach((candidate, index) => {
+      if (candidate.runningBalance === null) return;
+      const comparison = chronologicalAscending ? group[index - 1] : group[index + 1];
+      if (!comparison || comparison.runningBalance === null) return;
+      candidate.balanceDelta = candidate.runningBalance - comparison.runningBalance;
+    });
+  });
+
+  const rows: ParsedImportRow[] = [];
+  const seenReferences = new Set<string>();
+  candidates.forEach((candidate) => {
+    const direction = structuredDirectionType(
+      candidate.rawType,
+      candidate.description,
+      candidate.amountText,
+      candidate.signedAmount ?? candidate.amountValue,
+      candidate.accountType,
+      candidate.balanceDelta,
+      candidate.hasDebit,
+      candidate.hasCredit
+    );
+    const expectedBalanceDelta =
+      direction.type === "income"
+        ? candidate.amountValue
+        : direction.type === "expense"
+          ? -candidate.amountValue
+          : null;
+    const balanceTolerance = Math.max(0.02, candidate.amountValue * 0.0001);
+    const balanceReconciliation =
+      candidate.balanceDelta === null || expectedBalanceDelta === null
+        ? "unavailable"
+        : Math.abs(candidate.balanceDelta - expectedBalanceDelta) <= balanceTolerance
+          ? "matched"
+          : "mismatch";
+    const dedupeReference = candidate.reference.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+    if (dedupeReference.length >= 3) {
+      const dedupeKey = [
+        dedupeReference,
+        candidate.parsedDate.toISOString().slice(0, 10),
+        candidate.amountValue.toFixed(2),
+        direction.type,
+        candidate.institution ?? "",
+        candidate.accountName,
+        candidate.accountNumber,
+      ].join("|").toLowerCase();
+      if (seenReferences.has(dedupeKey)) return;
+      seenReferences.add(dedupeKey);
+    }
+
+    const categoryName = candidate.categoryRaw ||
+      guessCategoryName(`${candidate.merchantRaw} ${candidate.description}`, direction.type);
+    rows.push({
+      date: candidate.parsedDate.toISOString().slice(0, 10),
+      amount: candidate.amountValue.toFixed(2),
+      currency: candidate.currency,
+      merchantRaw: humanizeMerchantText(candidate.merchantRaw),
+      merchantClean: summarizeMerchantText(candidate.merchantRaw, candidate.institution),
+      description: candidate.description,
+      categoryName,
+      accountName: candidate.accountName || undefined,
+      accountNumber: candidate.accountNumber || undefined,
+      institution: candidate.institution ?? undefined,
+      type: direction.type,
+      confidence: candidate.currency ? 96 : 92,
+      parserConfidence: 98,
+      categoryConfidence: candidate.categoryRaw ? 100 : 72,
+      rawPayload: {
+        source: "structured_transaction_csv",
+        sourceRowIndex: table.headerIndex + candidate.sourceRowIndex + 2,
+        continuationSourceRowIndexes: candidate.continuationSourceRowIndexes.map(
+          (sourceRowIndex) => table.headerIndex + sourceRowIndex + 2
+        ),
+        continuationSourceRows: candidate.continuationSourceRows,
+        delimiter: table.delimiter === "\t" ? "tab" : table.delimiter,
+        originalHeaders: table.headers,
+        preambleMetadata: metadata,
+        sectionMetadata: candidate.rowMetadata,
+        debit: candidate.debit,
+        credit: candidate.credit,
+        signedAmount: candidate.signedAmount,
+        fee: candidate.fee,
+        originalAmount: candidate.originalAmount,
+        originalCurrency: candidate.originalCurrency,
+        status: candidate.status || null,
+        balance: candidate.runningBalance,
+        balanceDelta: candidate.balanceDelta,
+        balanceReconciliation,
+        directionEvidence: direction.evidence,
+        accountName: candidate.accountName || null,
+        accountNumber: candidate.accountNumber || null,
+        institutionRaw: candidate.institutionRaw || candidate.institution,
+        accountType: candidate.accountType,
+        accountCurrency: candidate.currency,
+        reference: candidate.reference || null,
+      },
+    });
+  });
+
+  return rows;
+};
+
+export const parseGenericAccountSnapshotCsv = (
+  text: string,
+  fileName: string,
+  fileType: string,
+  context: ImportParseContext = {}
+): ParsedImportRow[] | null => {
+  const table = readStructuredDelimitedTable(text, fileName, fileType);
+  if (!table) return null;
+  const canonical = new Set(table.canonicalHeaders);
+  const headerScore = scoreStructuredHeaderRow(table.headers);
+  if (
+    headerScore.snapshotScore < 10 ||
+    !canonical.has("account_name") ||
+    !canonical.has("balance") ||
+    canonical.has("amount") ||
+    canonical.has("debit") ||
+    canonical.has("credit")
+  ) {
+    return null;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const snapshotDateKey = table.canonicalHeaders.includes("snapshot_date") ? "snapshot_date" : "date";
+  const snapshotDateOrder = inferStructuredDateOrder(table, snapshotDateKey);
+  const candidates = table.rows.flatMap((sourceRow, sourceRowIndex) => {
+    if (isRepeatedStructuredHeaderRow(table, sourceRow)) return [];
+    const accountName = normalizeWhitespace(readStructuredCell(table, sourceRow, "account_name"));
+    const balance = parseMoney(readStructuredCell(table, sourceRow, "balance"));
+    if (
+      !accountName ||
+      balance === null ||
+      /^(?:grand\s+)?(?:total|subtotal|net worth|total assets|total liabilities)$/i.test(accountName)
+    ) {
+      return [];
+    }
+
+    const institutionRaw = normalizeWhitespace(
+      readStructuredCell(table, sourceRow, "institution") || table.preambleMetadata.institution || context.institution || ""
+    );
+    const institution = sanitizeBankNameLabel(institutionRaw || inferStructuredInstitution(accountName) || null);
+    const accountType =
+      normalizeStructuredAccountType(
+        readStructuredCell(table, sourceRow, "account_type") || table.preambleMetadata.account_type
+      ) ??
+      inferAccountTypeFromStatement(institution, accountName, "bank");
+    const currency =
+      normalizeInstitutionCurrency(
+        institution,
+        readStructuredCell(table, sourceRow, "currency") ||
+          table.preambleMetadata.currency ||
+          detectCurrencyFromText(`${readStructuredCell(table, sourceRow, "balance")} ${table.headers.join(" ")}`)
+      ) ?? "PHP";
+    const snapshotDate =
+      parseStructuredDate(
+        readStructuredCell(table, sourceRow, "snapshot_date") || readStructuredCell(table, sourceRow, "date"),
+        resolveTransactionContext({ institution, accountName }).countryCode,
+        snapshotDateOrder
+      )?.toISOString().slice(0, 10) ?? today;
+    const accountNumber = normalizeWhitespace(readStructuredCell(table, sourceRow, "account_number"));
+
+    return [{
+      accountName,
+      balance,
+      institutionRaw,
+      institution,
+      accountType,
+      currency,
+      snapshotDate,
+      accountNumber,
+      sourceRowIndex: table.headerIndex + sourceRowIndex + 2,
+    }];
+  });
+
+  const accountGroups = new Map<string, typeof candidates>();
+  candidates.forEach((candidate) => {
+    const institutionIdentity = normalizeStructuredHeader(candidate.institution ?? "");
+    const identity = candidate.accountNumber
+      ? `number:${institutionIdentity || normalizeStructuredHeader(candidate.accountName)}:${normalizeStructuredHeader(candidate.accountNumber)}`
+      : [
+          "label",
+          institutionIdentity,
+          normalizeStructuredHeader(candidate.accountName),
+          candidate.accountType,
+          candidate.currency,
+        ].join(":");
+    const group = accountGroups.get(identity) ?? [];
+    group.push(candidate);
+    accountGroups.set(identity, group);
+  });
+
+  return Array.from(accountGroups.values()).map((group) => {
+    const ordered = [...group].sort(
+      (left, right) =>
+        left.snapshotDate.localeCompare(right.snapshotDate) ||
+        left.sourceRowIndex - right.sourceRowIndex
+    );
+    const latest = ordered.at(-1)!;
+    const balanceHistoryByDate = new Map<string, { date: string; balance: number; sourceRowIndex: number }>();
+    ordered.forEach((candidate) => {
+      balanceHistoryByDate.set(candidate.snapshotDate, {
+        date: candidate.snapshotDate,
+        balance: candidate.balance,
+        sourceRowIndex: candidate.sourceRowIndex,
+      });
+    });
+    const balanceHistory = Array.from(balanceHistoryByDate.values()).sort(
+      (left, right) => left.date.localeCompare(right.date) || left.sourceRowIndex - right.sourceRowIndex
+    );
+
+    return {
+      date: latest.snapshotDate,
+      amount: "0",
+      currency: latest.currency,
+      merchantRaw: latest.accountName,
+      merchantClean: latest.accountName,
+      description: `${latest.accountName} balance as of ${latest.snapshotDate}`,
+      accountName: latest.accountName,
+      accountNumber: latest.accountNumber || undefined,
+      institution: latest.institution ?? undefined,
+      type: "income" as const,
+      confidence: 98,
+      parserConfidence: 100,
+      categoryConfidence: 100,
+      rawPayload: {
+        kind: "account_snapshot_marker",
+        source: "account_snapshot_csv",
+        documentType: "account_detail",
+        sourceRowIndex: latest.sourceRowIndex,
+        sourceRowIndexes: ordered.map((candidate) => candidate.sourceRowIndex),
+        preambleMetadata: table.preambleMetadata,
+        balance: latest.balance,
+        balanceHistory,
+        accountName: latest.accountName,
+        accountNumber: latest.accountNumber || null,
+        institutionRaw: latest.institutionRaw || latest.institution,
+        accountType: latest.accountType,
+        accountCurrency: latest.currency,
+        snapshotDate: latest.snapshotDate,
+      },
+    } satisfies ParsedImportRow;
+  });
+};
+
+const wideSnapshotAggregateHeaderPattern =
+  /\b(?:total|subtotal|net worth|assets?|liabilities?|equity|change|gain|loss|return|growth|percent|percentage|notes?|comments?)\b/i;
+const wideSnapshotReservedCanonicalHeaders = new Set([
+  "amount",
+  "balance",
+  "debit",
+  "credit",
+  "description",
+  "merchant",
+  "currency",
+  "type",
+  "status",
+  "fee",
+  "category",
+  "account_name",
+  "account_number",
+  "institution",
+  "account_type",
+  "reference",
+  "original_amount",
+  "original_currency",
+  "posted_date",
+]);
+
+export const parseWideAccountSnapshotCsv = (
+  text: string,
+  fileName: string,
+  fileType: string,
+  context: ImportParseContext = {}
+): ParsedImportRow[] | null => {
+  const table = readStructuredDelimitedTable(text, fileName, fileType);
+  if (!table) return null;
+  const dateIndex = table.canonicalHeaders.findIndex((header) => header === "date" || header === "snapshot_date");
+  const wideDateKey = table.canonicalHeaders[dateIndex] === "snapshot_date" ? "snapshot_date" : "date";
+  const wideDateOrder = inferStructuredDateOrder(table, wideDateKey);
+  const canonical = new Set(table.canonicalHeaders);
+  if (
+    dateIndex < 0 ||
+    canonical.has("amount") ||
+    canonical.has("debit") ||
+    canonical.has("credit") ||
+    canonical.has("description") ||
+    canonical.has("merchant")
+  ) {
+    return null;
+  }
+
+  const datedRows = table.rows
+    .map((sourceRow) => ({
+      sourceRow,
+      date: parseStructuredDate(
+        sourceRow[dateIndex],
+        resolveTransactionContext({
+          institution: table.preambleMetadata.institution || context.institution,
+          accountName: table.preambleMetadata.account_name || context.accountName,
+        }).countryCode,
+        wideDateOrder
+      ),
+    }))
+    .filter((entry): entry is { sourceRow: string[]; date: Date } => Boolean(entry.date))
+    .sort((left, right) => left.date.getTime() - right.date.getTime());
+  if (datedRows.length < 2) return null;
+
+  const descriptors = table.headers
+    .map((rawHeader, index) => {
+      const accountName = normalizeWhitespace(rawHeader);
+      if (
+        index === dateIndex ||
+        !accountName ||
+        wideSnapshotAggregateHeaderPattern.test(accountName) ||
+        canonicalStructuredHeader(accountName) === "snapshot_date" ||
+        wideSnapshotReservedCanonicalHeaders.has(canonicalStructuredHeader(accountName))
+      ) {
+        return null;
+      }
+      const parsedValues = datedRows.map(({ sourceRow }) => parseMoney(sourceRow[index] ?? null));
+      const validValues = parsedValues.filter((value): value is number => value !== null);
+      if (validValues.length < Math.max(2, Math.ceil(datedRows.length * 0.6))) return null;
+
+      const institution = sanitizeBankNameLabel(
+        inferStructuredInstitution(table.preambleMetadata.institution) ||
+          inferStructuredInstitution(accountName) ||
+          context.institution ||
+          null
+      );
+      const accountType =
+        normalizeStructuredAccountType(table.preambleMetadata.account_type) ??
+        inferAccountTypeFromStatement(institution, accountName, "bank");
+      const currency =
+        normalizeInstitutionCurrency(
+          institution,
+          table.preambleMetadata.currency || detectCurrencyFromText(accountName)
+        ) ?? "PHP";
+      return { index, accountName, institution, accountType, currency, parsedValues };
+    })
+    .filter(Boolean) as Array<{
+      index: number;
+      accountName: string;
+      institution: string | null;
+      accountType: ImportedAccountType;
+      currency: string;
+      parsedValues: Array<number | null>;
+    }>;
+  if (descriptors.length < 1) return null;
+
+  const latest = datedRows.at(-1)!;
+  const snapshotDate = latest.date.toISOString().slice(0, 10);
+  return descriptors.flatMap((descriptor) => {
+    const latestValue = descriptor.parsedValues.at(-1);
+    if (latestValue === null || latestValue === undefined) return [];
+    const balanceHistory = datedRows.flatMap((entry, index) => {
+      const balance = descriptor.parsedValues[index];
+      return balance === null || balance === undefined
+        ? []
+        : [{ date: entry.date.toISOString().slice(0, 10), balance }];
+    });
+    return [{
+      date: snapshotDate,
+      amount: "0",
+      currency: descriptor.currency,
+      merchantRaw: descriptor.accountName,
+      merchantClean: descriptor.accountName,
+      description: `${descriptor.accountName} balance as of ${snapshotDate}`,
+      accountName: descriptor.accountName,
+      institution: descriptor.institution ?? undefined,
+      type: "income" as const,
+      confidence: 96,
+      parserConfidence: 98,
+      categoryConfidence: 100,
+      rawPayload: {
+        kind: "account_snapshot_marker",
+        source: "wide_account_snapshot_csv",
+        documentType: "account_detail",
+        sourceColumn: descriptor.index + 1,
+        sourceHeader: table.headers[descriptor.index],
+        preambleMetadata: table.preambleMetadata,
+        balance: latestValue,
+        balanceHistory,
+        accountName: descriptor.accountName,
+        institutionRaw: descriptor.institution,
+        accountType: descriptor.accountType,
+        accountCurrency: descriptor.currency,
+        snapshotDate,
+      },
+    } satisfies ParsedImportRow];
+  });
+};
+
+const serializeStructuredDelimitedRows = (rows: string[][], delimiter: string) =>
+  rows
+    .map((row) =>
+      row
+        .map((cell) => {
+          const value = String(cell ?? "");
+          return /["\r\n]/.test(value) || value.includes(delimiter)
+            ? `"${value.replace(/"/g, '""')}"`
+            : value;
+        })
+        .join(delimiter)
+    )
+    .join("\n");
+
+const findStructuredTableSections = (text: string, fileName: string) => {
+  const delimiter = detectStructuredDelimiter(text, fileName);
+  const withoutDirective = text.replace(/^\uFEFF?\s*sep=.\s*\r?\n/i, "");
+  const rows = parseDelimitedRows(withoutDirective, delimiter);
+  const candidates: Array<{
+    headerIndex: number;
+    kind: "transactions" | "accounts";
+    signature: string;
+  }> = [];
+  rows.forEach((headers, headerIndex) => {
+    const score = scoreStructuredHeaderRow(headers);
+    const canonicalHeaders = headers.map(canonicalStructuredHeader);
+    const canonical = new Set(canonicalHeaders);
+    const signature = canonicalHeaders.join("|");
+    if (score.hasDate && score.hasTransactionAmount && score.hasDescription && score.transactionScore >= 13) {
+      candidates.push({ headerIndex, kind: "transactions", signature });
+      return;
+    }
+    if (
+      score.snapshotScore >= 10 &&
+      canonical.has("account_name") &&
+      canonical.has("balance") &&
+      !canonical.has("amount") &&
+      !canonical.has("debit") &&
+      !canonical.has("credit")
+    ) {
+      candidates.push({ headerIndex, kind: "accounts", signature });
+    }
+  });
+  if (
+    candidates.length < 2 ||
+    new Set(candidates.map((candidate) => `${candidate.kind}:${candidate.signature}`)).size < 2
+  ) {
+    return null;
+  }
+
+  const firstHeaderIndex = candidates[0]!.headerIndex;
+  const globalPreamble = rows.slice(0, firstHeaderIndex);
+  return candidates.map((candidate, sectionIndex) => {
+    const nextHeaderIndex = candidates[sectionIndex + 1]?.headerIndex ?? rows.length;
+    const localPreamble: string[][] = [];
+    for (let index = candidate.headerIndex - 1; index >= firstHeaderIndex; index -= 1) {
+      const row = rows[index]!;
+      if (!extractStructuredSectionMetadata(row)) break;
+      localPreamble.unshift(row);
+    }
+    const sectionRows = [
+      ...globalPreamble,
+      ...localPreamble,
+      ...rows.slice(candidate.headerIndex, nextHeaderIndex),
+    ];
+    return {
+      text: serializeStructuredDelimitedRows(sectionRows, delimiter),
+      sectionIndex,
+      sourceHeaderRow: candidate.headerIndex + 1,
+      sourceRowOffset: candidate.headerIndex - localPreamble.length - globalPreamble.length,
+      kind: candidate.kind,
+    };
+  });
+};
+
+const parseSingleStructuredDelimitedImport = (
+  text: string,
+  fileName: string,
+  fileType: string,
+  context: ImportParseContext
+) => {
+  if (!isStructuredDelimitedFile(fileName, fileType)) return null;
+  const table = readStructuredDelimitedTable(text, fileName, fileType);
+  if (!table) return [];
+  const transactionRows = parseStructuredTransactionCsv(text, fileName, fileType, context);
+  if (transactionRows !== null) return transactionRows;
+  const snapshotRows = parseGenericAccountSnapshotCsv(text, fileName, fileType, context);
+  if (snapshotRows !== null) return snapshotRows;
+  const wideSnapshotRows = parseWideAccountSnapshotCsv(text, fileName, fileType, context);
+  return wideSnapshotRows ?? [];
+};
+
+const parseStructuredDelimitedImport = (
+  text: string,
+  fileName: string,
+  fileType: string,
+  context: ImportParseContext
+) => {
+  if (!isStructuredDelimitedFile(fileName, fileType)) return null;
+  const sections = findStructuredTableSections(text, fileName);
+  if (!sections) return parseSingleStructuredDelimitedImport(text, fileName, fileType, context);
+
+  return sections.flatMap((section) =>
+    (parseSingleStructuredDelimitedImport(section.text, fileName, fileType, context) ?? []).map((row) => {
+      const sourceRowIndex =
+        typeof row.rawPayload?.sourceRowIndex === "number"
+          ? row.rawPayload.sourceRowIndex + section.sourceRowOffset
+          : null;
+      const sourceRowIndexes = Array.isArray(row.rawPayload?.sourceRowIndexes)
+        ? row.rawPayload.sourceRowIndexes.map((value) =>
+            typeof value === "number" ? value + section.sourceRowOffset : value
+          )
+        : null;
+      return {
+        ...row,
+        rawPayload: {
+          ...(row.rawPayload ?? {}),
+          ...(sourceRowIndex === null ? {} : { sourceRowIndex }),
+          ...(sourceRowIndexes === null ? {} : { sourceRowIndexes }),
+          sourceSectionIndex: section.sectionIndex,
+          sourceSectionKind: section.kind,
+          sourceHeaderRow: section.sourceHeaderRow,
+        },
+      };
+    })
+  );
 };
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -21852,6 +23154,15 @@ export const parseImportTextGenericOnly = (
   fileType: string,
   context: ImportParseContext = {}
 ) => {
+  const netWorthSnapshotRows = parseNetWorthSnapshotCsv(text, fileName, fileType);
+  if (netWorthSnapshotRows) {
+    return netWorthSnapshotRows;
+  }
+  const structuredDelimitedRows = parseStructuredDelimitedImport(text, fileName, fileType, context);
+  if (structuredDelimitedRows) {
+    return structuredDelimitedRows;
+  }
+
   const hsbcParsed = parseHsbcScreenshotImportText(text, fileName);
   if (hsbcParsed && hsbcParsed.rows.length > 0) {
     return filterSharedScreenshotParsedRows(hsbcParsed.rows, text, fileName, context);
@@ -23551,6 +24862,15 @@ export const parseImportText = (
   fileType: string,
   context: ImportParseContext = {}
 ): ParsedImportRow[] => {
+  const netWorthSnapshotRows = parseNetWorthSnapshotCsv(text, fileName, fileType);
+  if (netWorthSnapshotRows) {
+    return netWorthSnapshotRows;
+  }
+  const structuredDelimitedRows = parseStructuredDelimitedImport(text, fileName, fileType, context);
+  if (structuredDelimitedRows) {
+    return structuredDelimitedRows;
+  }
+
   const wisePdfStatement = parseWisePdfStatement(text);
   if (wisePdfStatement) {
     return wisePdfStatement.rows;

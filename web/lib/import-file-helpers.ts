@@ -18,6 +18,7 @@ export const fileTypeLabel = (file: Pick<FileLike, "name" | "type">) => {
   const lowerName = file.name.toLowerCase();
   if (lowerName.endsWith(".pdf") || file.type === "application/pdf") return "PDF";
   if (lowerName.endsWith(".csv")) return "CSV";
+  if (lowerName.endsWith(".tsv")) return "TSV";
   if (
     lowerName.endsWith(".jpg") ||
     lowerName.endsWith(".jpeg") ||

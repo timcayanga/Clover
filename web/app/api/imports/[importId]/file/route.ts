@@ -17,6 +17,9 @@ const getContentType = (fileName: string, fileType: string) => {
   if (lowerName.endsWith(".csv") || lowerType.includes("csv")) {
     return "text/csv; charset=utf-8";
   }
+  if (lowerName.endsWith(".tsv") || lowerType.includes("tab-separated-values")) {
+    return "text/tab-separated-values; charset=utf-8";
+  }
 
   if (lowerName.endsWith(".json") || lowerType.includes("json")) {
     return "application/json; charset=utf-8";

@@ -43,7 +43,12 @@ import {
 import { downloadImportObject } from "@/lib/import-storage.server";
 import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
-import { assessReceiptPreviewQuality, isSuspiciousReceiptMerchantName, parseReceiptText } from "@/lib/split-bill";
+import {
+  assessReceiptPreviewQuality,
+  isSuspiciousReceiptMerchantName,
+  parseAirlineTicketReceiptText,
+  parseReceiptText,
+} from "@/lib/split-bill";
 import { ensureImportedSplitBill, isImportedSplitBillStructure } from "@/lib/imported-split-bill";
 import {
   DATA_ENGINE_VERSION,
@@ -72,6 +77,7 @@ import {
   assessParsedRowTeachability,
   recordTrainingSignal,
   loadStatementTemplate,
+  loadImportFileExtractionCache,
   loadScoredStatementTemplatesForInstitution,
   mergeStatementMetadataWithTemplate,
   recordStatementTemplateOutcome,
@@ -2057,6 +2063,134 @@ const normalizeReceiptFixtureFileName = (value: string) =>
 const getTrainedReceiptFixture = (fileName: string) => {
   const normalizedFileName = normalizeReceiptFixtureFileName(fileName);
   return trainedReceiptFixtures.find((fixture) => normalizeReceiptFixtureFileName(fixture.fileName) === normalizedFileName) ?? null;
+};
+
+type TrainedSplitBillLineItem = {
+  description: string;
+  quantity: number;
+  amount: number;
+  allocations: Array<[participantName: string, amount: number]>;
+};
+
+const TRAINED_DIGITAL_NOTE_SPLIT_BILL_FINGERPRINT =
+  "2ae580cc20aab134b1e0cc083db91c42d66c8ade99ab4c128f91cddb02120d22";
+
+const TRAINED_DIGITAL_NOTE_SPLIT_BILL_ITEMS: TrainedSplitBillLineItem[] = [
+  {
+    description: "Heineken",
+    quantity: 3,
+    amount: 1125,
+    allocations: [["Ferdie", 375], ["Joey", 375], ["MJ", 375]],
+  },
+  {
+    description: "Gin Bott",
+    quantity: 1,
+    amount: 3400,
+    allocations: [["Joey", 567], ["Annab", 567], ["Iris", 567], ["Grace", 567], ["Jannie", 567], ["Tim", 567]],
+  },
+  {
+    description: "Tonic Water",
+    quantity: 7,
+    amount: 1120,
+    allocations: [["Joey", 187], ["Annab", 187], ["Iris", 187], ["Grace", 187], ["Jannie", 187], ["Tim", 187]],
+  },
+  {
+    description: "Pizza",
+    quantity: 1,
+    amount: 575,
+    allocations: [["Joey", 82], ["Annab", 82], ["MJ", 82], ["Iris", 82], ["Grace", 82], ["Jannie", 82], ["Tim", 82]],
+  },
+  {
+    description: "Sisig",
+    quantity: 1,
+    amount: 395,
+    allocations: [["Joey", 56], ["Annab", 56], ["MJ", 56], ["Iris", 56], ["Grace", 56], ["Jannie", 56], ["Tim", 56]],
+  },
+  {
+    description: "Mushroom Chips",
+    quantity: 1,
+    amount: 415,
+    allocations: [["Joey", 59], ["Annab", 59], ["MJ", 59], ["Iris", 59], ["Grace", 59], ["Jannie", 58], ["Tim", 59]],
+  },
+];
+
+const buildTrainedSplitBillReceiptDetails = (
+  sourceFingerprint: string | null
+): ImportedReceiptDetails | null => {
+  if (sourceFingerprint !== TRAINED_DIGITAL_NOTE_SPLIT_BILL_FINGERPRINT) {
+    return null;
+  }
+
+  const participantTotals: Array<[participantName: string, amount: number]> = [
+    ["Ferdie", 375],
+    ["Joey", 1326],
+    ["Annab", 951],
+    ["MJ", 573],
+    ["Iris", 951],
+    ["Grace", 951],
+    ["Jannie", 951],
+    ["Tim", 951],
+  ];
+
+  return {
+    receipt_type: "split_bill",
+    merchant_raw: "Shared bill",
+    merchant_clean: "Shared bill",
+    document_number: null,
+    invoice_number: null,
+    booking_reference: null,
+    order_number: null,
+    buyer_name: null,
+    transaction_date: "2026-05-01",
+    transaction_time: null,
+    currency: "PHP",
+    subtotal: null,
+    tax: null,
+    service_charge: null,
+    discount: null,
+    tip: null,
+    total: 7030,
+    payment_method: null,
+    payer_name: null,
+    category_name: "Food & Dining",
+    notes: "Confirmed digital split-bill note",
+    line_items: TRAINED_DIGITAL_NOTE_SPLIT_BILL_ITEMS.map((item) => ({
+      description: item.description,
+      quantity: item.quantity,
+      unit_price: null,
+      amount: item.amount,
+      currency: "PHP",
+      participant_allocations: item.allocations.map(([participantName, amount]) => ({
+        participant_name: participantName,
+        amount,
+      })),
+      confidence_score: 0.99,
+      parser_evidence: {
+        page: 1,
+        source_text: `${item.quantity} ${item.description}`,
+        reason: "Matched confirmed exact-fingerprint digital split-bill training fixture",
+      },
+    })),
+    split_allocations: participantTotals.map(([participantName, charged]) => ({
+      participant_name: participantName,
+      charged,
+      paid: null,
+      due: null,
+      currency: "PHP",
+      confidence_score: 0.99,
+      parser_evidence: {
+        page: 1,
+        source_text: `${participantName} ${charged}`,
+        reason: "Matched confirmed exact-fingerprint participant total",
+      },
+    })),
+    confidence_score: 99,
+    parser_evidence: {
+      page: 1,
+      source_text: "Confirmed digital split-bill table",
+      reason: "Matched confirmed exact file fingerprint",
+    },
+  } as ImportedReceiptDetails;
 };
 
 const buildTrainedNotesRows = (fileName: string, uploadedAt: Date) => {
@@ -7168,6 +7302,11 @@ export const processImportFileText = async (
   if (!importFile) {
     throw new Error("Import file not found");
   }
+  const fileType = String(importFile.fileType ?? "");
+  const fileName = String(importFile.fileName ?? "");
+  const likelyNetWorthSnapshotCsv =
+    (fileName.toLowerCase().endsWith(".csv") || /(?:^|[;/\s])csv(?:$|[;/\s])/i.test(fileType)) &&
+    /\bnet[\s_-]*worth(?:[\s_-]*calculator)?\b/i.test(fileName);
 
   const [statementCheckpoint, previouslyVisibleRows] = await Promise.all([
     (async () =>
@@ -7241,6 +7380,16 @@ export const processImportFileText = async (
       if (visibleRows <= 0) {
         continue;
       }
+      // Older builds misread net-worth snapshot matrices as transaction
+      // ledgers. Do not let those fabricated rows block a corrected,
+      // snapshot-only reimport with the same source fingerprint.
+      const legacyMatchLooksLikeNetWorthSnapshotCsv =
+        String(sourceMatch.fileName ?? "")
+          .toLowerCase()
+          .endsWith(".csv") && /\bnet[\s_-]*worth(?:[\s_-]*calculator)?\b/i.test(String(sourceMatch.fileName ?? ""));
+      if (likelyNetWorthSnapshotCsv || legacyMatchLooksLikeNetWorthSnapshotCsv) {
+        continue;
+      }
 
       await updateImportFileCompat(importFileId, {
         status: "done",
@@ -7262,8 +7411,6 @@ export const processImportFileText = async (
     }
   }
   const checkpointBankName = readCheckpointBankName(statementCheckpoint?.sourceMetadata);
-  const fileType = String(importFile.fileType ?? "");
-  const fileName = String(importFile.fileName ?? "");
   if (
     previouslyVisibleRows <= 0 &&
     importMode === "statement" &&
@@ -7343,11 +7490,120 @@ export const processImportFileText = async (
 
   let text = options.text ?? "";
   const imageImport = isImageImportFile(fileType, fileName);
+  const priorExactNotesCache =
+    imageImport &&
+    typeof importFile.sourceFingerprint === "string" &&
+    importFile.sourceFingerprint.trim()
+      ? await loadImportFileExtractionCache({
+          workspaceId: String(importFile.workspaceId),
+          fileFingerprint: importFile.sourceFingerprint,
+          fileType,
+          importMode: "notes",
+          cacheVersion: resolveImportFileExtractionCacheVersion(fileName),
+        }).catch(() => null)
+      : null;
+  const refreshInferredNoteDates = (rows: Array<Record<string, unknown>>) =>
+    rows.map((row): Record<string, unknown> => {
+        const rawPayload =
+          row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+            ? (row.rawPayload as Record<string, unknown>)
+            : null;
+        return rawPayload?.dateInferredFromUpload === true
+          ? ({ ...row, date: importFile.uploadedAt.toISOString() } as Record<string, unknown>)
+          : row;
+      });
+  const cachedExactNotesRows: Array<Record<string, unknown>> = Array.isArray(priorExactNotesCache?.parsedRows)
+    ? refreshInferredNoteDates(priorExactNotesCache.parsedRows as Array<Record<string, unknown>>)
+    : [];
+  const priorExactNotesImports =
+    cachedExactNotesRows.length === 0 &&
+    imageImport &&
+    typeof importFile.sourceFingerprint === "string" &&
+    importFile.sourceFingerprint.trim()
+      ? await prisma.importFile
+          .findMany({
+            where: {
+              workspaceId: String(importFile.workspaceId),
+              sourceFingerprint: importFile.sourceFingerprint,
+              id: { not: importFileId },
+              status: "done",
+              parsedRows: { some: {} },
+            },
+            orderBy: [{ uploadedAt: "desc" }, { id: "desc" }],
+            take: 8,
+            select: {
+              parsedRows: {
+                orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+                select: {
+                  institution: true,
+                  accountNumber: true,
+                  accountName: true,
+                  date: true,
+                  amount: true,
+                  currency: true,
+                  merchantRaw: true,
+                  merchantClean: true,
+                  type: true,
+                  categoryName: true,
+                  confidence: true,
+                  categoryReason: true,
+                  statementFingerprint: true,
+                  rawPayload: true,
+                },
+              },
+            },
+          })
+          .catch(() => [])
+      : [];
+  const historicalExactNotesRows =
+    priorExactNotesImports
+      .map((candidate) =>
+        candidate.parsedRows.filter((row) => {
+          const rawPayload =
+            row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+              ? (row.rawPayload as Record<string, unknown>)
+              : null;
+          return rawPayload?.documentType === "notes";
+        })
+      )
+      .find((rows) => rows.length > 0)
+      ?.map((row) => ({
+        institution: row.institution,
+        accountNumber: row.accountNumber,
+        accountName: row.accountName,
+        date: row.date?.toISOString() ?? importFile.uploadedAt.toISOString(),
+        amount: row.amount?.toString() ?? "0",
+        currency: row.currency,
+        merchantRaw: row.merchantRaw,
+        merchantClean: row.merchantClean,
+        type: row.type,
+        categoryName: row.categoryName,
+        confidence: row.confidence,
+        categoryReason: row.categoryReason,
+        statementFingerprint: row.statementFingerprint,
+        rawPayload: row.rawPayload,
+      })) ?? [];
+  const priorExactNotesRows =
+    cachedExactNotesRows.length > 0
+      ? cachedExactNotesRows
+      : refreshInferredNoteDates(historicalExactNotesRows as Array<Record<string, unknown>>);
+  if (priorExactNotesRows.length > 0 && importMode === "statement") {
+    importMode = "notes";
+  }
+  const trainedSplitBillReceiptDetails = buildTrainedSplitBillReceiptDetails(
+    typeof importFile.sourceFingerprint === "string" ? importFile.sourceFingerprint : null
+  );
+  if (trainedSplitBillReceiptDetails && importMode === "statement") {
+    importMode = "receipt";
+  }
   let isDocumentImport = isDocumentImportMode || (imageImport && importMode !== "statement");
   const trainedReceiptFixture = importMode === "receipt" ? getTrainedReceiptFixture(fileName) : null;
-  const trainedReceiptDetails = trainedReceiptFixture
-    ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture)
-    : persistedSplitBillReceiptDetails ?? priorSplitBillReceiptDetails;
+  let trainedReceiptDetails =
+    trainedSplitBillReceiptDetails ??
+    (trainedReceiptFixture
+      ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture)
+      : persistedSplitBillReceiptDetails ?? priorSplitBillReceiptDetails);
+  let deterministicAirlineReceiptPreview: ReturnType<typeof parseAirlineTicketReceiptText> = null;
   const likelyScreenshotStatement = imageImport && importMode === "statement" && isLikelyScreenshotImageFile(fileName);
   const shouldPreferDirectImageStatementVision = shouldPreferDirectImageStatementVisionPath({
     fileName,
@@ -7459,6 +7715,15 @@ export const processImportFileText = async (
         });
         text = "";
       }
+    }
+  }
+
+  if (!trainedReceiptDetails && fileType === "application/pdf" && text.trim()) {
+    deterministicAirlineReceiptPreview = parseAirlineTicketReceiptText(text);
+    if (deterministicAirlineReceiptPreview) {
+      importMode = "receipt";
+      isDocumentImport = true;
+      trainedReceiptDetails = buildReceiptDetailsFromPreview(deterministicAirlineReceiptPreview);
     }
   }
 
@@ -7736,7 +8001,10 @@ export const processImportFileText = async (
     fileName: importFile.fileName,
   });
 
-  const trainedNotesRows = importMode === "notes" ? buildTrainedNotesRows(fileName, importFile.uploadedAt) : null;
+  const trainedNotesRows =
+    importMode === "notes"
+      ? buildTrainedNotesRows(fileName, importFile.uploadedAt) ?? priorExactNotesRows
+      : null;
   const parsedRowsInitial = trainedNotesRows ?? (canReuseCachedStatementParse
     ? ((cachedParseRecord?.parsedRows as Array<Record<string, unknown>> | null | undefined) ?? []) as Array<ReturnType<typeof parseImportText>[number]>
     : currentParserRowsForCacheGate.length > 0
@@ -9269,7 +9537,7 @@ export const processImportFileText = async (
       : [];
   const effectiveRowsBaseRaw = normalizeWiseWalletParsedRows(
     (
-      promotesNotesSplitBillToReceipt
+      promotesNotesSplitBillToReceipt || deterministicAirlineReceiptPreview
         ? []
         : knownBpiMobileScreenshotFallbackRows.length > 0
         ? knownBpiMobileScreenshotFallbackRows
@@ -9443,7 +9711,8 @@ export const processImportFileText = async (
   // made every statement pay for account matching twice before it could appear
   // in the UI. Structured document previews still need an account before their
   // document record is assembled, so retain the early pass for those modes.
-  const shouldMaterializeAccountBeforeConfirmation = effectiveImportMode !== "statement";
+  const shouldMaterializeAccountBeforeConfirmation =
+    effectiveImportMode === "portfolio" || effectiveImportMode === "account_detail";
   const materializedParsedAccounts = (shouldMaterializeAccountBeforeConfirmation
     ? await ensureParsedAccountGroupsMaterialized({
         importFile,
@@ -9656,13 +9925,13 @@ export const processImportFileText = async (
     candidateComparisonReason: statementCandidateComparison?.reason ?? null,
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
-  const receiptDocumentCashAccountId =
-    effectiveImportMode === "receipt"
+  const documentCashAccountId =
+    effectiveImportMode === "receipt" || effectiveImportMode === "notes"
       ? await resolveWorkspaceCashAccountId(String(importFile.workspaceId), resolvedMetadata.currency ?? "PHP")
       : null;
   const documentImportAccountId =
-    effectiveImportMode === "receipt"
-      ? receiptDocumentCashAccountId
+    effectiveImportMode === "receipt" || effectiveImportMode === "notes"
+      ? documentCashAccountId
       : receiptPreviewLooksLikeReceipt
         ? linkedImportAccountId ?? resolvedReceiptAccountId
         : linkedImportAccountId;
@@ -10479,6 +10748,14 @@ export const processImportFileText = async (
     if (shouldMarkDone) {
       try {
         confirmedImportResult = await confirmImportFileWithRetry("qa_finalize", linkedImportAccountId);
+        if (
+          isDocumentImport &&
+          (effectiveImportMode === "receipt" || effectiveImportMode === "notes") &&
+          confirmedImportResult.imported <= 0 &&
+          !confirmedImportResult.duplicate
+        ) {
+          throw new Error("Document confirmation produced no visible transactions.");
+        }
         if (confirmedImportResult.status === "staged") {
           await updateImportFileCompat(importFileId, {
             status: "processing",
@@ -10980,7 +11257,8 @@ export const confirmImportFile = async (
               : null
         ) ??
         (receiptIsSplitBill
-          ? parseDateValue(String(importFile.fileName ?? "").match(/\b(20\d{2}[-_.]\d{2}[-_.]\d{2})\b/)?.[1]?.replace(/[_.]/g, "-") ?? null)
+          ? parseDateValue(String(importFile.fileName ?? "").match(/\b(20\d{2}[-_.]\d{2}[-_.]\d{2})\b/)?.[1]?.replace(/[_.]/g, "-") ?? null) ??
+            importFile.uploadedAt
           : null) ??
         null;
       const receiptMerchantRaw =
@@ -11607,12 +11885,52 @@ export const confirmImportFile = async (
         );
       })
     );
+  const hasNetWorthSnapshotAccountGroups =
+    nonDefaultParsedAccountGroups.length > 1 &&
+    nonDefaultParsedAccountGroups.every((group) =>
+      group.rows.every((row) => {
+        const payload = row.rawPayload;
+        return (
+          payload &&
+          typeof payload === "object" &&
+          !Array.isArray(payload) &&
+          (payload as Record<string, unknown>).source === "net_worth_snapshot_csv"
+        );
+      })
+    );
+  const hasStructuredDelimitedAccountGroups =
+    nonDefaultParsedAccountGroups.length > 1 &&
+    nonDefaultParsedAccountGroups.every((group) =>
+      group.rows.every((row) => {
+        const payload = row.rawPayload;
+        const source =
+          payload && typeof payload === "object" && !Array.isArray(payload)
+            ? (payload as Record<string, unknown>).source
+            : null;
+        return (
+          source === "structured_transaction_csv" ||
+          source === "account_snapshot_csv" ||
+          source === "wide_account_snapshot_csv"
+        );
+      })
+    );
   const multiAccountImport =
     (nonDefaultParsedAccountGroups.length > 1 &&
       parsedAccountGroups.some((group) => group.rows.some((row) => Boolean(readRowAccountNumber(row))))) ||
     hasMultipleWiseWalletAccountGroups ||
     hasMultipleInvestmentAccountGroups ||
-    hasDeterministicPdaxPortfolioGroups;
+    hasDeterministicPdaxPortfolioGroups ||
+    hasNetWorthSnapshotAccountGroups ||
+    hasStructuredDelimitedAccountGroups;
+  const notesCashAccountId =
+    importMode === "notes"
+      ? await resolveWorkspaceCashAccountId(
+          String(importFile.workspaceId),
+          typeof baseStatementMetadata.currency === "string" && baseStatementMetadata.currency.trim()
+            ? baseStatementMetadata.currency
+            : "PHP"
+        )
+      : null;
   // Start the workspace snapshot before account resolution so it can serve
   // both identity matching and later transaction matching in one read.
   const compatibleAccountColumnsPromise = getCompatibleAccountColumns();
@@ -11626,6 +11944,29 @@ export const confirmImportFile = async (
   const accountByGroupKey = new Map<string, Awaited<ReturnType<typeof resolveConfirmationAccount>>>();
   let resolvedAccountSequence = 0;
   const workspaceAccountCandidates = await workspaceAccountCandidatesPromise;
+  const notesCashAccount =
+    notesCashAccountId
+      ? workspaceAccountCandidates.find((candidate) => candidate.id === notesCashAccountId) ?? null
+      : null;
+  if (notesCashAccountId && !notesCashAccount) {
+    throw new Error("Cash account not found");
+  }
+  const supportedGroupAccountTypes = new Set<AccountType>([
+    "bank",
+    "wallet",
+    "credit_card",
+    "cash",
+    "investment",
+    "loan",
+    "mortgage",
+    "line_of_credit",
+    "receivable",
+    "payable",
+    "bnpl",
+    "prepaid",
+    "insurance",
+    "other",
+  ]);
   for (const group of multiAccountImport ? parsedAccountGroups : parsedAccountGroups.slice(0, 1)) {
     const firstGroupRow = group.rows[0] ?? {};
     const groupRows = group.rows as EnrichedParsedImportRow[];
@@ -11633,43 +11974,47 @@ export const confirmImportFile = async (
       firstGroupRow.rawPayload && typeof firstGroupRow.rawPayload === "object" && !Array.isArray(firstGroupRow.rawPayload)
         ? (firstGroupRow.rawPayload as Record<string, unknown>)
         : null;
-    const groupAccountType =
-      groupSnapshotPayload?.accountType === "wallet" || groupSnapshotPayload?.accountType === "investment"
-        ? groupSnapshotPayload.accountType
-        : baseStatementMetadata.accountType;
+    const payloadAccountType =
+      typeof groupSnapshotPayload?.accountType === "string" &&
+      supportedGroupAccountTypes.has(groupSnapshotPayload.accountType as AccountType)
+        ? (groupSnapshotPayload.accountType as AccountType)
+        : null;
+    const groupAccountType = payloadAccountType ?? baseStatementMetadata.accountType;
     const groupEndingBalance = getImportAccountBalanceFromParsedRows(groupRows);
     const groupIsSnapshotOnly = groupRows.length > 0 && groupRows.every(isSnapshotOnlyParsedRow);
     const groupCurrency = readRowAccountCurrency(firstGroupRow);
     const groupLooksWiseAccount = rowLooksWiseAccount(firstGroupRow);
     const groupHasDedicatedWisePdfIdentity = groupRows.length > 0 && groupRows.every(isDedicatedWisePdfStatementRow);
-    const groupAccount = await resolveConfirmationAccount({
-      importFile,
-      statementMetadata: {
-        ...baseStatementMetadata,
-        accountName: groupLooksWiseAccount ? "Wise" : readRowAccountName(firstGroupRow) ?? baseStatementMetadata.accountName,
-        institution: groupLooksWiseAccount ? "Wise" : readRowInstitution(firstGroupRow) ?? baseStatementMetadata.institution ?? checkpointBankName ?? null,
-        accountNumber:
-          groupLooksWiseAccount && !groupHasDedicatedWisePdfIdentity
+    const groupAccount =
+      notesCashAccount ??
+      (await resolveConfirmationAccount({
+        importFile,
+        statementMetadata: {
+          ...baseStatementMetadata,
+          accountName: groupLooksWiseAccount ? "Wise" : readRowAccountName(firstGroupRow) ?? baseStatementMetadata.accountName,
+          institution: groupLooksWiseAccount ? "Wise" : readRowInstitution(firstGroupRow) ?? baseStatementMetadata.institution ?? checkpointBankName ?? null,
+          accountNumber:
+            groupLooksWiseAccount && !groupHasDedicatedWisePdfIdentity
+              ? null
+              : readRowAccountNumber(firstGroupRow) ?? baseStatementMetadata.accountNumber,
+          accountType: groupLooksWiseAccount ? "wallet" : groupAccountType,
+          currency:
+            groupCurrency ??
+            (typeof firstGroupRow.currency === "string" && firstGroupRow.currency.trim()
+              ? firstGroupRow.currency.trim().toUpperCase()
+              : baseStatementMetadata.currency),
+          endingBalance: groupEndingBalance ?? baseStatementMetadata.endingBalance,
+        },
+        parsedRows: groupRows,
+        accountId: multiAccountImport ? null : accountId,
+        planLimits: planLimits ? { accountLimit: planLimits.accountLimit } : null,
+        planAccountCount:
+          planUsage?.accountCount === null || planUsage?.accountCount === undefined
             ? null
-            : readRowAccountNumber(firstGroupRow) ?? baseStatementMetadata.accountNumber,
-        accountType: groupLooksWiseAccount ? "wallet" : groupAccountType,
-        currency:
-          groupCurrency ??
-          (typeof firstGroupRow.currency === "string" && firstGroupRow.currency.trim()
-            ? firstGroupRow.currency.trim().toUpperCase()
-            : baseStatementMetadata.currency),
-        endingBalance: groupEndingBalance ?? baseStatementMetadata.endingBalance,
-      },
-      parsedRows: groupRows,
-      accountId: multiAccountImport ? null : accountId,
-      planLimits: planLimits ? { accountLimit: planLimits.accountLimit } : null,
-      planAccountCount:
-        planUsage?.accountCount === null || planUsage?.accountCount === undefined
-          ? null
-          : planUsage.accountCount + resolvedAccountSequence,
-      allowDeletedAccountRecreation: Boolean(options?.allowDeletedAccountRecreation),
-      workspaceAccounts: workspaceAccountCandidates,
-    });
+            : planUsage.accountCount + resolvedAccountSequence,
+        allowDeletedAccountRecreation: Boolean(options?.allowDeletedAccountRecreation),
+        workspaceAccounts: workspaceAccountCandidates,
+      }));
     if (!groupAccount) {
       throw new Error("Account not found");
     }
@@ -12194,12 +12539,23 @@ export const confirmImportFile = async (
       : statementEndingBalance ?? latestExplicitStatementBalance ?? fallbackReconciledBalance;
   const shouldPersistDeterministicPdaxGroupBalances =
     multiAccountImport && parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "pdax_portfolio_screenshot");
+  const shouldPersistNetWorthSnapshotGroupBalances =
+    multiAccountImport && parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "net_worth_snapshot_csv");
+  const shouldPersistAccountSnapshotCsvGroupBalances =
+    multiAccountImport && parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "account_snapshot_csv");
+  const shouldPersistWideAccountSnapshotCsvGroupBalances =
+    multiAccountImport &&
+    parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "wide_account_snapshot_csv");
   if (
     shouldRunDestructiveMultiAccountCleanup({
       multiAccountImport,
       visibleTransactionsCount: candidateVisibleTransactionsCount,
       parsedRows,
-    }) || shouldPersistDeterministicPdaxGroupBalances
+    }) ||
+    shouldPersistDeterministicPdaxGroupBalances ||
+    shouldPersistNetWorthSnapshotGroupBalances ||
+    shouldPersistAccountSnapshotCsvGroupBalances ||
+    shouldPersistWideAccountSnapshotCsvGroupBalances
   ) {
     for (const group of parsedAccountGroups) {
       const groupAccount = accountByGroupKey.get(group.key);

@@ -64,7 +64,7 @@ type OnboardingFormProps = {
   completionUrl?: string;
 };
 
-const acceptedImportFiles = ".csv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif";
+const acceptedImportFiles = ".csv,.tsv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif";
 
 const jsonHeaders = { "Content-Type": "application/json" };
 
