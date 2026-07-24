@@ -77,6 +77,7 @@ import {
   assessParsedRowTeachability,
   recordTrainingSignal,
   loadStatementTemplate,
+  loadImportFileExtractionCache,
   loadScoredStatementTemplatesForInstitution,
   mergeStatementMetadataWithTemplate,
   recordStatementTemplateOutcome,
@@ -7476,6 +7477,32 @@ export const processImportFileText = async (
 
   let text = options.text ?? "";
   const imageImport = isImageImportFile(fileType, fileName);
+  const priorExactNotesCache =
+    imageImport &&
+    typeof importFile.sourceFingerprint === "string" &&
+    importFile.sourceFingerprint.trim()
+      ? await loadImportFileExtractionCache({
+          workspaceId: String(importFile.workspaceId),
+          fileFingerprint: importFile.sourceFingerprint,
+          fileType,
+          importMode: "notes",
+          cacheVersion: resolveImportFileExtractionCacheVersion(fileName),
+        }).catch(() => null)
+      : null;
+  const priorExactNotesRows: Array<Record<string, unknown>> = Array.isArray(priorExactNotesCache?.parsedRows)
+    ? (priorExactNotesCache.parsedRows as Array<Record<string, unknown>>).map((row): Record<string, unknown> => {
+        const rawPayload =
+          row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+            ? (row.rawPayload as Record<string, unknown>)
+            : null;
+        return rawPayload?.dateInferredFromUpload === true
+          ? ({ ...row, date: importFile.uploadedAt.toISOString() } as Record<string, unknown>)
+          : row;
+      })
+    : [];
+  if (priorExactNotesRows.length > 0 && importMode === "statement") {
+    importMode = "notes";
+  }
   const trainedSplitBillReceiptDetails = buildTrainedSplitBillReceiptDetails(
     typeof importFile.sourceFingerprint === "string" ? importFile.sourceFingerprint : null
   );
@@ -7887,7 +7914,10 @@ export const processImportFileText = async (
     fileName: importFile.fileName,
   });
 
-  const trainedNotesRows = importMode === "notes" ? buildTrainedNotesRows(fileName, importFile.uploadedAt) : null;
+  const trainedNotesRows =
+    importMode === "notes"
+      ? buildTrainedNotesRows(fileName, importFile.uploadedAt) ?? priorExactNotesRows
+      : null;
   const parsedRowsInitial = trainedNotesRows ?? (canReuseCachedStatementParse
     ? ((cachedParseRecord?.parsedRows as Array<Record<string, unknown>> | null | undefined) ?? []) as Array<ReturnType<typeof parseImportText>[number]>
     : currentParserRowsForCacheGate.length > 0
@@ -10631,6 +10661,14 @@ export const processImportFileText = async (
     if (shouldMarkDone) {
       try {
         confirmedImportResult = await confirmImportFileWithRetry("qa_finalize", linkedImportAccountId);
+        if (
+          isDocumentImport &&
+          (effectiveImportMode === "receipt" || effectiveImportMode === "notes") &&
+          confirmedImportResult.imported <= 0 &&
+          !confirmedImportResult.duplicate
+        ) {
+          throw new Error("Document confirmation produced no visible transactions.");
+        }
         if (confirmedImportResult.status === "staged") {
           await updateImportFileCompat(importFileId, {
             status: "processing",
@@ -11132,7 +11170,8 @@ export const confirmImportFile = async (
               : null
         ) ??
         (receiptIsSplitBill
-          ? parseDateValue(String(importFile.fileName ?? "").match(/\b(20\d{2}[-_.]\d{2}[-_.]\d{2})\b/)?.[1]?.replace(/[_.]/g, "-") ?? null)
+          ? parseDateValue(String(importFile.fileName ?? "").match(/\b(20\d{2}[-_.]\d{2}[-_.]\d{2})\b/)?.[1]?.replace(/[_.]/g, "-") ?? null) ??
+            importFile.uploadedAt
           : null) ??
         null;
       const receiptMerchantRaw =

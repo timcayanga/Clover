@@ -77,6 +77,21 @@ assert.match(
 );
 assert.match(
   workerSource,
+  /priorExactNotesCache[\s\S]*loadImportFileExtractionCache[\s\S]*importMode:\s*"notes"[\s\S]*priorExactNotesRows[\s\S]*dateInferredFromUpload[\s\S]*importMode = "notes"/,
+  "An identical financial note must reuse its prior correct rows and refresh inferred dates instead of repeating an unstable vision parse."
+);
+assert.match(
+  workerSource,
+  /receiptIsSplitBill[\s\S]*parseDateValue\(String\(importFile\.fileName[\s\S]*\?\?\s*importFile\.uploadedAt/,
+  "A date-less split-note must use its upload date so receipt confirmation can publish a visible transaction."
+);
+assert.match(
+  workerSource,
+  /effectiveImportMode === "receipt" \|\| effectiveImportMode === "notes"[\s\S]*confirmedImportResult\.imported <= 0[\s\S]*Document confirmation produced no visible transactions/,
+  "Receipt and note imports must never report successful completion when confirmation created no transactions."
+);
+assert.match(
+  workerSource,
   /description:\s*"Heineken"[\s\S]*description:\s*"Gin Bott"[\s\S]*description:\s*"Tonic Water"[\s\S]*description:\s*"Pizza"[\s\S]*description:\s*"Sisig"[\s\S]*description:\s*"Mushroom Chips"/,
   "The durable trained fixture must preserve all six confirmed line items."
 );
