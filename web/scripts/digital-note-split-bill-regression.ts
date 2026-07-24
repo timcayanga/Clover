@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { isImportedSplitBillStructure } from "@/lib/imported-split-bill";
 
 const readProjectFile = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
@@ -31,8 +32,18 @@ assert.match(
 );
 assert.match(
   workerSource,
-  /await import\("@\/lib\/imported-split-bill"\)[\s\S]*ensureImportedSplitBill/,
+  /import \{ ensureImportedSplitBill, isImportedSplitBillStructure \} from "@\/lib\/imported-split-bill"[\s\S]*await ensureImportedSplitBill/,
   "Receipt confirmation must create the linked Split Bills record before completing."
+);
+assert.match(
+  workerSource,
+  /readPersistedSplitBillReceiptDetails[\s\S]*persistedSplitBillReceiptDetails[\s\S]*trainedReceiptDetails/,
+  "A retry must reuse a structurally valid saved split-bill extraction instead of downgrading it to OCR rows."
+);
+assert.match(
+  workerSource,
+  /imported_rows: confirmedImportResult\.imported[\s\S]*imported: confirmedImportResult\.imported/,
+  "Document completion must report the transaction count that confirmation actually published."
 );
 assert.match(
   splitBillSource,
@@ -57,6 +68,27 @@ assert.equal(shareTotal, 7029, "The regression fixture should preserve the sourc
 assert.ok(
   Math.abs(declaredTotal - shareTotal) <= 1,
   "The source table should reconcile within the documented rounding tolerance."
+);
+assert.equal(
+  isImportedSplitBillStructure({
+    total: declaredTotal,
+    lineItems: ["Heineken", "Gin", "Tonic Water", "Pizza", "Sisig", "Mushroom Chips"],
+    allocations: [
+      { participant_name: "Ferdie", charged: 375 },
+      { participant_name: "Joey", charged: 1326 },
+    ],
+  }),
+  true,
+  "Split-cost notes must be recognized from their financial structure regardless of the model's receipt_type label."
+);
+assert.equal(
+  isImportedSplitBillStructure({
+    total: declaredTotal,
+    lineItems: ["Heineken"],
+    allocations: [{ participant_name: "Ferdie", charged: 375 }],
+  }),
+  false,
+  "A single allocation must not be promoted to a group split bill."
 );
 
 console.log("Digital-note split-bill regression passed.");

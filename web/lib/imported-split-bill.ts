@@ -15,6 +15,33 @@ type ImportedAllocation = {
   due: number | null;
 };
 
+export const isImportedSplitBillStructure = (params: {
+  total: number | string | null | undefined;
+  lineItems: unknown[];
+  allocations: Array<{
+    participantName?: string | null;
+    participant_name?: string | null;
+    charged?: number | string | null;
+    paid?: number | string | null;
+    due?: number | string | null;
+  }>;
+}) => {
+  const total = Number(params.total);
+  if (!Number.isFinite(total) || total <= 0 || params.lineItems.length === 0) {
+    return false;
+  }
+
+  const validParticipantCount = params.allocations.filter((allocation) => {
+    const participantName = String(allocation.participantName ?? allocation.participant_name ?? "").trim();
+    const shareCandidates = [allocation.charged, allocation.due, allocation.paid]
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    return Boolean(participantName) && shareCandidates.length > 0;
+  }).length;
+
+  return validParticipantCount >= 2;
+};
+
 export const ensureImportedSplitBill = async (params: {
   workspaceId: string;
   transactionId: string;

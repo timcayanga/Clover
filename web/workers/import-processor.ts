@@ -44,6 +44,7 @@ import { downloadImportObject } from "@/lib/import-storage.server";
 import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
 import { assessReceiptPreviewQuality, isSuspiciousReceiptMerchantName, parseReceiptText } from "@/lib/split-bill";
+import { ensureImportedSplitBill, isImportedSplitBillStructure } from "@/lib/imported-split-bill";
 import {
   DATA_ENGINE_VERSION,
   applyDataQaReviewLearning,
@@ -111,6 +112,47 @@ import {
   updateRunningImportEnrichmentJobProgress,
   upsertImportEnrichmentJob,
 } from "@/lib/import-enrichment-jobs";
+
+type OpenAIImportParseResult = NonNullable<Awaited<ReturnType<typeof parseImportTextWithOpenAIFallback>>>;
+type ImportedReceiptDetails = NonNullable<OpenAIImportParseResult["receiptDetails"]>;
+
+const readPersistedSplitBillReceiptDetails = (rawPayload: unknown): ImportedReceiptDetails | null => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  const candidate =
+    payload.receiptDetails && typeof payload.receiptDetails === "object" && !Array.isArray(payload.receiptDetails)
+      ? (payload.receiptDetails as Record<string, unknown>)
+      : payload.receipt_details && typeof payload.receipt_details === "object" && !Array.isArray(payload.receipt_details)
+        ? (payload.receipt_details as Record<string, unknown>)
+        : null;
+  if (!candidate) {
+    return null;
+  }
+
+  const lineItems = Array.isArray(candidate.line_items) ? candidate.line_items : [];
+  const allocations = Array.isArray(candidate.split_allocations)
+    ? (candidate.split_allocations as Array<{
+        participant_name?: string | null;
+        charged?: number | string | null;
+        paid?: number | string | null;
+        due?: number | string | null;
+      }>)
+    : [];
+  if (
+    !isImportedSplitBillStructure({
+      total: typeof candidate.total === "number" || typeof candidate.total === "string" ? candidate.total : null,
+      lineItems,
+      allocations,
+    })
+  ) {
+    return null;
+  }
+
+  return candidate as ImportedReceiptDetails;
+};
 
 const POST_VISIBLE_IMPORT_DELAY_MS = 5_000;
 
@@ -7075,6 +7117,27 @@ export const processImportFileText = async (
   let importMode = options.importMode ?? readCheckpointImportMode(statementCheckpoint?.sourceMetadata) ?? "statement";
   const isDocumentImportMode =
     importMode === "receipt" || importMode === "portfolio" || importMode === "account_detail" || importMode === "notes";
+  const persistedSplitBillReceiptDetails =
+    previouslyVisibleRows === 0 &&
+    (importMode === "receipt" || importMode === "notes") &&
+    (await hasCompatibleTable("DocumentImport")) &&
+    (await hasCompatibleTable("ReceiptDocument"))
+      ? await prisma.documentImport
+          .findUnique({
+            where: { importFileId },
+            select: {
+              receiptDocument: {
+                select: {
+                  rawPayload: true,
+                },
+              },
+            },
+          })
+          .then((documentImport) =>
+            readPersistedSplitBillReceiptDetails(documentImport?.receiptDocument?.rawPayload ?? null)
+          )
+          .catch(() => null)
+      : null;
   if (
     !options.allowDuplicateStatement &&
     previouslyVisibleRows === 0 &&
@@ -7201,7 +7264,9 @@ export const processImportFileText = async (
   const imageImport = isImageImportFile(fileType, fileName);
   let isDocumentImport = isDocumentImportMode || (imageImport && importMode !== "statement");
   const trainedReceiptFixture = importMode === "receipt" ? getTrainedReceiptFixture(fileName) : null;
-  const trainedReceiptDetails = trainedReceiptFixture ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture) : null;
+  const trainedReceiptDetails = trainedReceiptFixture
+    ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture)
+    : persistedSplitBillReceiptDetails;
   const likelyScreenshotStatement = imageImport && importMode === "statement" && isLikelyScreenshotImageFile(fileName);
   const shouldPreferDirectImageStatementVision = shouldPreferDirectImageStatementVisionPath({
     fileName,
@@ -8631,16 +8696,14 @@ export const processImportFileText = async (
         : null;
   const promotesNotesSplitBillToReceipt =
     effectiveImportMode === "notes" &&
-    receiptDetails?.receipt_type?.trim().toLowerCase().replace(/[\s-]+/g, "_") === "split_bill" &&
-    receiptDetails.total !== null &&
-    receiptDetails.line_items.length > 0 &&
-    receiptDetails.split_allocations.filter(
-      (allocation) =>
-        allocation.participant_name.trim() &&
-        [allocation.charged, allocation.paid, allocation.due].some(
-          (value) => typeof value === "number" && Number.isFinite(value) && value > 0
-        )
-    ).length >= 2;
+    Boolean(
+      receiptDetails &&
+        isImportedSplitBillStructure({
+          total: receiptDetails.total,
+          lineItems: receiptDetails.line_items,
+          allocations: receiptDetails.split_allocations,
+        })
+    );
   if (promotesNotesSplitBillToReceipt) {
     importMode = "receipt";
     effectiveImportMode = "receipt";
@@ -10384,11 +10447,11 @@ export const processImportFileText = async (
           emitImportProcessingEvent("import_processing_completed", {
             processing_status: "done",
             processing_phase: "complete",
-            imported_rows: rows.length,
+            imported_rows: confirmedImportResult.imported,
           });
 
           return {
-            imported: rows.length,
+            imported: confirmedImportResult.imported,
             duplicate: false,
             metadata: resolvedMetadata,
             accountId: confirmedImportResult.accountId ?? null,
@@ -10746,12 +10809,6 @@ export const confirmImportFile = async (
               }>)
             : []
       );
-      const receiptType =
-        typeof receiptDetailsRecord?.receipt_type === "string"
-          ? receiptDetailsRecord.receipt_type.trim().toLowerCase().replace(/[\s-]+/g, "_")
-          : typeof receiptDetailsRecord?.receiptType === "string"
-            ? receiptDetailsRecord.receiptType.trim().toLowerCase().replace(/[\s-]+/g, "_")
-            : "";
       const receiptSplitAllocations = (
         Array.isArray(receiptDetailsRecord?.split_allocations)
           ? receiptDetailsRecord.split_allocations
@@ -10819,6 +10876,11 @@ export const confirmImportFile = async (
           : typeof receiptDetailsRecord?.total === "number"
             ? receiptDetailsRecord.total.toString()
             : null;
+      const receiptIsSplitBill = isImportedSplitBillStructure({
+        total: receiptAmount,
+        lineItems: receiptLineItems,
+        allocations: receiptSplitAllocations,
+      });
       const receiptDate =
         receiptDocument?.transactionDate ??
         parseDateValue(
@@ -10828,7 +10890,7 @@ export const confirmImportFile = async (
               ? receiptDetailsRecord.transactionDate
               : null
         ) ??
-        (receiptType === "split_bill"
+        (receiptIsSplitBill
           ? parseDateValue(String(importFile.fileName ?? "").match(/\b(20\d{2}[-_.]\d{2}[-_.]\d{2})\b/)?.[1]?.replace(/[_.]/g, "-") ?? null)
           : null) ??
         null;
@@ -10840,8 +10902,10 @@ export const confirmImportFile = async (
             : typeof receiptDetailsRecord?.merchantRaw === "string" && receiptDetailsRecord.merchantRaw.trim()
               ? receiptDetailsRecord.merchantRaw.trim()
               : typeof receiptDocument?.merchantClean === "string" && receiptDocument.merchantClean.trim()
-                ? receiptDocument.merchantClean.trim()
-                : "Receipt";
+              ? receiptDocument.merchantClean.trim()
+                : receiptIsSplitBill
+                  ? "Shared bill"
+                  : "Receipt";
       const receiptMerchantClean =
         typeof receiptDocument?.merchantClean === "string" && receiptDocument.merchantClean.trim()
           ? receiptDocument.merchantClean.trim()
@@ -11148,14 +11212,13 @@ export const confirmImportFile = async (
       }
 
       if (
-        receiptType === "split_bill" &&
+        receiptIsSplitBill &&
         createdTransactionId &&
         receiptDate &&
         receiptAmount !== null &&
         receiptLineItems.length > 0 &&
         receiptSplitAllocations.length >= 2
       ) {
-        const { ensureImportedSplitBill } = await import("@/lib/imported-split-bill");
         await ensureImportedSplitBill({
           workspaceId: String(importFile.workspaceId),
           transactionId: createdTransactionId,
