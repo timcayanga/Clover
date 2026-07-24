@@ -17171,18 +17171,23 @@ body[data-clover-page-modal] .modal-card {
 }
 
 .modal-backdrop--transactions-confirm {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
   z-index: 4200;
   place-items: center;
+  padding: 24px;
 }
 
 .modal-backdrop--transactions-confirm .transactions-confirm-modal {
-  width: min(760px, calc(100vw - 276px));
-  max-width: calc(100vw - 276px);
+  width: min(520px, calc(100vw - 48px));
+  max-width: calc(100vw - 48px);
   margin: 0 auto;
 }
 
 .modal-backdrop--transactions-confirm .modal-actions {
-  justify-content: flex-start;
+  justify-content: flex-end;
 }
 
 .modal-backdrop--soft {
@@ -30997,6 +31002,12 @@ button.accounts-detail__transaction-head-cell {
   .modal-backdrop--transactions-confirm .transactions-confirm-modal {
     width: min(100%, calc(100vw - 24px));
     max-width: calc(100vw - 24px);
+    border-radius: 24px;
+  }
+
+  .modal-backdrop--transactions-confirm {
+    align-items: center;
+    padding: 16px 12px calc(16px + env(safe-area-inset-bottom));
   }
 
   .modal-backdrop--centered-mobile {

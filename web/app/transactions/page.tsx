@@ -7195,57 +7195,60 @@ function TransactionsPageContent() {
             </div>
           ) : null}
 
-          {bulkDeleteConfirmOpen ? (
-            <div
-              className="modal-backdrop modal-backdrop--transactions-content modal-backdrop--transactions-confirm"
-              role="presentation"
-              onClick={() => setBulkDeleteConfirmOpen(false)}
-            >
-              <section
-                className="modal-card glass transactions-confirm-modal"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="bulk-delete-title"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="modal-head">
-                  <div>
-                    <p className="eyebrow">Delete transactions</p>
-                    <h4 id="bulk-delete-title">
-                      Delete {selectedTransactionIds.length} selected transaction{selectedTransactionIds.length === 1 ? "" : "s"}?
-                    </h4>
-                    <p className="modal-copy">This cannot be undone.</p>
-                  </div>
-                  <button
-                    className="icon-button"
-                    type="button"
-                    onClick={() => setBulkDeleteConfirmOpen(false)}
-                    aria-label="Close delete confirmation"
+          {bulkDeleteConfirmOpen && typeof document !== "undefined"
+            ? createPortal(
+                <div
+                  className="modal-backdrop modal-backdrop--transactions-confirm"
+                  role="presentation"
+                  onClick={() => setBulkDeleteConfirmOpen(false)}
+                >
+                  <section
+                    className="modal-card glass transactions-confirm-modal"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="bulk-delete-title"
+                    onClick={(event) => event.stopPropagation()}
                   >
-                    ×
-                  </button>
-                </div>
-                <div className="modal-actions">
-                  <button
-                    className="button button-secondary"
-                    type="button"
-                    onClick={() => setBulkDeleteConfirmOpen(false)}
-                    disabled={isSaving}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="button button-danger"
-                    type="button"
-                    onClick={() => void deleteSelectedTransactions()}
-                    disabled={isSaving}
-                  >
-                    {isSaving ? "Deleting..." : "Delete"}
-                  </button>
-                </div>
-              </section>
-            </div>
-          ) : null}
+                    <div className="modal-head">
+                      <div>
+                        <p className="eyebrow">Delete transactions</p>
+                        <h4 id="bulk-delete-title">
+                          Delete {selectedTransactionIds.length} selected transaction{selectedTransactionIds.length === 1 ? "" : "s"}?
+                        </h4>
+                        <p className="modal-copy">This cannot be undone.</p>
+                      </div>
+                      <button
+                        className="icon-button"
+                        type="button"
+                        onClick={() => setBulkDeleteConfirmOpen(false)}
+                        aria-label="Close delete confirmation"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div className="modal-actions">
+                      <button
+                        className="button button-secondary"
+                        type="button"
+                        onClick={() => setBulkDeleteConfirmOpen(false)}
+                        disabled={isSaving}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="button button-danger"
+                        type="button"
+                        onClick={() => void deleteSelectedTransactions()}
+                        disabled={isSaving}
+                      >
+                        {isSaving ? "Deleting..." : "Delete"}
+                      </button>
+                    </div>
+                  </section>
+                </div>,
+                document.body
+              )
+            : null}
 
           {headerMenuPanel}
 
