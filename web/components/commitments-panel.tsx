@@ -9,6 +9,7 @@ import {
   commitmentRecurrenceLabels,
   commitmentRecurrenceOptions,
   commitmentStatusLabels,
+  commitmentStatusOptions,
   type FinancialCommitmentSummary,
 } from "@/lib/commitments";
 import type { RecurringPatternSummary } from "@/lib/recurring-page";
@@ -63,6 +64,7 @@ const dateFormatter = new Intl.DateTimeFormat("en-PH", {
 
 type CommitmentKind = "planned_payment" | "debt" | "receivable" | "reminder";
 type CommitmentFormKind = CommitmentKind;
+type EditableCommitmentField = "title" | "counterparty" | "dueDate" | "recurrence" | "amount" | "accountId" | "status";
 
 type CommitmentFormCopy = {
   eyebrow: string;
@@ -314,6 +316,9 @@ export function CommitmentsPanel({
   const [transactionId, setTransactionId] = useState("");
   const [manualMoreOpen, setManualMoreOpen] = useState(false);
   const [visibleCommitments, setVisibleCommitments] = useState(commitments);
+  const [editingCell, setEditingCell] = useState<{ commitmentId: string; field: EditableCommitmentField } | null>(null);
+  const [editingValue, setEditingValue] = useState("");
+  const [savingCommitmentId, setSavingCommitmentId] = useState<string | null>(null);
   const overviewStats = useMemo(() => {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
@@ -558,6 +563,7 @@ export function CommitmentsPanel({
           throw new Error(payload?.error ?? "Unable to delete commitment");
         }
 
+        setVisibleCommitments((current) => current.filter((commitment) => commitment.id !== commitmentId));
         router.refresh();
       })
       .catch((error: unknown) => {
@@ -567,6 +573,102 @@ export function CommitmentsPanel({
       .finally(() => {
         setIsSaving(false);
       });
+  };
+
+  const getEditableValue = (commitment: FinancialCommitmentSummary, field: EditableCommitmentField) => {
+    switch (field) {
+      case "title":
+        return commitment.title;
+      case "counterparty":
+        return commitment.counterparty ?? "";
+      case "dueDate":
+        return toDateInputValue(getCommitmentDateValue(commitment));
+      case "recurrence":
+        return commitment.recurrence;
+      case "amount":
+        return commitment.amount ?? "";
+      case "accountId":
+        return commitment.accountId ?? "";
+      case "status":
+        return commitment.status;
+    }
+  };
+
+  const beginCellEdit = (commitment: FinancialCommitmentSummary, field: EditableCommitmentField) => {
+    if (savingCommitmentId) {
+      return;
+    }
+
+    setEditingCell({ commitmentId: commitment.id, field });
+    setEditingValue(getEditableValue(commitment, field));
+  };
+
+  const cancelCellEdit = () => {
+    setEditingCell(null);
+    setEditingValue("");
+  };
+
+  const saveCommitmentField = async (
+    commitment: FinancialCommitmentSummary,
+    field: EditableCommitmentField,
+    nextValue: string
+  ) => {
+    const normalizedValue = nextValue.trim();
+    if (field === "title" && !normalizedValue) {
+      cancelCellEdit();
+      return;
+    }
+
+    if (normalizedValue === getEditableValue(commitment, field)) {
+      cancelCellEdit();
+      return;
+    }
+
+    setSavingCommitmentId(commitment.id);
+    try {
+      const response = await fetch(`/api/commitments/${commitment.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          [field]: normalizedValue || null,
+          ...(field === "dueDate" ? { nextDueDate: normalizedValue || null } : {}),
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        commitment?: FinancialCommitmentSummary;
+        error?: string;
+      } | null;
+
+      if (!response.ok || !payload?.commitment) {
+        throw new Error(payload?.error ?? "Unable to update recurring item");
+      }
+
+      setVisibleCommitments((current) =>
+        current.map((item) => (item.id === commitment.id ? payload.commitment as FinancialCommitmentSummary : item))
+      );
+      cancelCellEdit();
+      router.refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to update recurring item";
+      window.alert(message);
+    } finally {
+      setSavingCommitmentId(null);
+    }
+  };
+
+  const handleEditorKeyDown = (
+    event: React.KeyboardEvent<HTMLInputElement>,
+    commitment: FinancialCommitmentSummary,
+    field: EditableCommitmentField
+  ) => {
+    if (event.key === "Escape") {
+      cancelCellEdit();
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.currentTarget.blur();
+    }
   };
 
   const openSuggestionReview = (suggestion: {
@@ -826,6 +928,11 @@ export function CommitmentsPanel({
   const renderRecurringTable = () => {
     const tabLabel = activeTab === "planned" ? "planned payment" : activeTab === "debt" ? "debt or loan" : activeTab === "owed" ? "money owed" : "installment";
     const hasRows = tabCommitments.length > 0 || tabSuggestions.length > 0;
+    const showsPerson = activeTab === "debt" || activeTab === "owed";
+    const personHeading = activeTab === "debt" ? "Owed To" : "Owed From";
+    const columnCount = showsPerson ? 8 : 7;
+    const isEditing = (commitmentId: string, field: EditableCommitmentField) =>
+      editingCell?.commitmentId === commitmentId && editingCell.field === field;
 
     return (
       <article className="panel commitments-detail-panel">
@@ -834,17 +941,19 @@ export function CommitmentsPanel({
             <thead>
               <tr>
                 <th>Description</th>
+                {showsPerson ? <th>{personHeading}</th> : null}
                 <th>Due Date</th>
                 <th>Type</th>
                 <th>Amount</th>
                 <th>Account</th>
                 <th>Status</th>
+                <th aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
               {!hasRows ? (
                 <tr>
-                  <td colSpan={6} className="commitments-table__empty">
+                  <td colSpan={columnCount} className="commitments-table__empty">
                     <strong>No {tabLabel}s yet</strong>
                     <span>Add one to start tracking it here.</span>
                     <button className="button button-primary button-small" type="button" onClick={openRecurringAdd}>
@@ -859,6 +968,7 @@ export function CommitmentsPanel({
                     <strong>{suggestion.title}</strong>
                     <span className="commitments-table__secondary">{suggestion.sourceLabel}</span>
                   </td>
+                  {showsPerson ? <td>{suggestion.counterparty ?? "Add person"}</td> : null}
                   <td>{formatDate(suggestion.dueDate)}</td>
                   <td>{suggestion.recurrence === "once" ? "One-time" : commitmentRecurrenceLabels[suggestion.recurrence]}</td>
                   <td>{formatCurrency(suggestion.amount)}</td>
@@ -868,21 +978,176 @@ export function CommitmentsPanel({
                       Review and add
                     </button>
                   </td>
+                  <td />
                 </tr>
               ))}
               {tabCommitments.map((commitment) => (
-                <tr key={commitment.id}>
+                <tr key={commitment.id} className="commitments-table__row">
                   <td>
-                    <strong>{commitment.title}</strong>
-                    <span className="commitments-table__secondary">{commitment.counterparty ?? commitmentStatusLabels[commitment.status]}</span>
+                    {isEditing(commitment.id, "title") ? (
+                      <input
+                        autoFocus
+                        className="commitments-table__editor commitments-table__editor--text"
+                        value={editingValue}
+                        onChange={(event) => setEditingValue(event.target.value)}
+                        onBlur={() => void saveCommitmentField(commitment, "title", editingValue)}
+                        onKeyDown={(event) => handleEditorKeyDown(event, commitment, "title")}
+                        aria-label="Edit description"
+                      />
+                    ) : (
+                      <button
+                        className="commitments-table__editable commitments-table__editable--primary"
+                        type="button"
+                        onClick={() => beginCellEdit(commitment, "title")}
+                      >
+                        {commitment.title}
+                      </button>
+                    )}
+                    {!showsPerson && commitment.counterparty ? (
+                      <span className="commitments-table__secondary">{commitment.counterparty}</span>
+                    ) : null}
                   </td>
-                  <td>{formatDate(getCommitmentDateValue(commitment))}</td>
-                  <td>{commitment.recurrence === "once" ? "One-time" : commitmentRecurrenceLabels[commitment.recurrence]}</td>
-                  <td>{formatCurrency(commitment.amount)}</td>
-                  <td>{commitment.account?.name ?? "Not linked"}</td>
+                  {showsPerson ? (
+                    <td>
+                      {isEditing(commitment.id, "counterparty") ? (
+                        <input
+                          autoFocus
+                          className="commitments-table__editor commitments-table__editor--text"
+                          value={editingValue}
+                          onChange={(event) => setEditingValue(event.target.value)}
+                          onBlur={() => void saveCommitmentField(commitment, "counterparty", editingValue)}
+                          onKeyDown={(event) => handleEditorKeyDown(event, commitment, "counterparty")}
+                          placeholder="Add person"
+                          aria-label={`Edit ${personHeading.toLowerCase()}`}
+                        />
+                      ) : (
+                        <button
+                          className={`commitments-table__editable${commitment.counterparty ? "" : " is-placeholder"}`}
+                          type="button"
+                          onClick={() => beginCellEdit(commitment, "counterparty")}
+                        >
+                          {commitment.counterparty ?? "Add person"}
+                        </button>
+                      )}
+                    </td>
+                  ) : null}
                   <td>
-                    <button className="button button-secondary button-small" type="button" onClick={() => handleDelete(commitment.id)} disabled={isSaving}>
-                      Delete
+                    {isEditing(commitment.id, "dueDate") ? (
+                      <input
+                        autoFocus
+                        className="commitments-table__editor"
+                        type="date"
+                        value={editingValue}
+                        onChange={(event) => setEditingValue(event.target.value)}
+                        onBlur={() => void saveCommitmentField(commitment, "dueDate", editingValue)}
+                        onKeyDown={(event) => handleEditorKeyDown(event, commitment, "dueDate")}
+                        aria-label="Edit due date"
+                      />
+                    ) : (
+                      <button className="commitments-table__editable" type="button" onClick={() => beginCellEdit(commitment, "dueDate")}>
+                        {formatDate(getCommitmentDateValue(commitment))}
+                      </button>
+                    )}
+                  </td>
+                  <td>
+                    {isEditing(commitment.id, "recurrence") ? (
+                      <select
+                        autoFocus
+                        className="commitments-table__editor"
+                        value={editingValue}
+                        onChange={(event) => {
+                          setEditingValue(event.target.value);
+                          void saveCommitmentField(commitment, "recurrence", event.target.value);
+                        }}
+                        aria-label="Edit recurring type"
+                      >
+                        {commitmentRecurrenceOptions.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <button className="commitments-table__editable" type="button" onClick={() => beginCellEdit(commitment, "recurrence")}>
+                        {commitment.recurrence === "once" ? "One-time" : commitmentRecurrenceLabels[commitment.recurrence]}
+                      </button>
+                    )}
+                  </td>
+                  <td>
+                    {isEditing(commitment.id, "amount") ? (
+                      <input
+                        autoFocus
+                        className="commitments-table__editor commitments-table__editor--amount"
+                        inputMode="decimal"
+                        value={editingValue}
+                        onChange={(event) => setEditingValue(event.target.value)}
+                        onBlur={() => void saveCommitmentField(commitment, "amount", editingValue)}
+                        onKeyDown={(event) => handleEditorKeyDown(event, commitment, "amount")}
+                        aria-label="Edit amount"
+                      />
+                    ) : (
+                      <button className="commitments-table__editable" type="button" onClick={() => beginCellEdit(commitment, "amount")}>
+                        {formatCurrency(commitment.amount)}
+                      </button>
+                    )}
+                  </td>
+                  <td>
+                    {isEditing(commitment.id, "accountId") ? (
+                      <select
+                        autoFocus
+                        className="commitments-table__editor"
+                        value={editingValue}
+                        onChange={(event) => {
+                          setEditingValue(event.target.value);
+                          void saveCommitmentField(commitment, "accountId", event.target.value);
+                        }}
+                        aria-label="Edit linked account"
+                      >
+                        <option value="">Not linked</option>
+                        {[...accounts]
+                          .sort((left, right) => left.name.localeCompare(right.name))
+                          .map((account) => (
+                            <option key={account.id} value={account.id}>
+                              {account.name}{account.institution ? ` · ${account.institution}` : ""}
+                            </option>
+                          ))}
+                      </select>
+                    ) : (
+                      <button className="commitments-table__editable" type="button" onClick={() => beginCellEdit(commitment, "accountId")}>
+                        {commitment.account?.name ?? "Not linked"}
+                      </button>
+                    )}
+                  </td>
+                  <td>
+                    {isEditing(commitment.id, "status") ? (
+                      <select
+                        autoFocus
+                        className="commitments-table__editor"
+                        value={editingValue}
+                        onChange={(event) => {
+                          setEditingValue(event.target.value);
+                          void saveCommitmentField(commitment, "status", event.target.value);
+                        }}
+                        aria-label="Edit status"
+                      >
+                        {commitmentStatusOptions.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <button className="commitments-table__editable" type="button" onClick={() => beginCellEdit(commitment, "status")}>
+                        {commitmentStatusLabels[commitment.status]}
+                      </button>
+                    )}
+                  </td>
+                  <td className="commitments-table__actions">
+                    <button
+                      className="commitments-table__delete"
+                      type="button"
+                      onClick={() => handleDelete(commitment.id)}
+                      disabled={isSaving || savingCommitmentId === commitment.id}
+                      aria-label={`Delete ${commitment.title}`}
+                      title="Delete"
+                    >
+                      <span aria-hidden="true">×</span>
                     </button>
                   </td>
                 </tr>

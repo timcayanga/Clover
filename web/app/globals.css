@@ -5572,7 +5572,13 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .commitments-table th,
 .commitments-table td {
+  font-size: 14px;
   vertical-align: middle;
+}
+
+.commitments-table th {
+  font-weight: 400;
+  letter-spacing: 0.04em;
 }
 
 .commitments-table td strong,
@@ -5605,6 +5611,101 @@ body.transactions-manual-open .shell-quick-add-button {
   color: var(--muted);
   font-size: 12px;
   margin-top: 3px;
+}
+
+.commitments-table__editable {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: text;
+  display: inline;
+  font: inherit;
+  line-height: 1.35;
+  margin: 0;
+  max-width: 100%;
+  padding: 0;
+  text-align: left;
+}
+
+.commitments-table__editable:hover,
+.commitments-table__editable:focus-visible {
+  color: var(--accent);
+  outline: none;
+}
+
+.commitments-table__editable--primary {
+  font-weight: 700;
+}
+
+.commitments-table__editable.is-placeholder {
+  color: var(--muted);
+}
+
+.commitments-table__editor {
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  height: 28px;
+  line-height: 1.35;
+  max-width: 170px;
+  min-width: 0;
+  outline: none;
+  padding: 2px 0;
+  width: 100%;
+}
+
+.commitments-table__editor--text {
+  min-width: 120px;
+}
+
+.commitments-table__editor--amount {
+  max-width: 110px;
+}
+
+.commitments-table__actions {
+  padding-left: 4px !important;
+  padding-right: 8px !important;
+  text-align: right !important;
+  width: 34px;
+}
+
+.commitments-table__delete {
+  align-items: center;
+  appearance: none;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 20px;
+  height: 28px;
+  justify-content: center;
+  opacity: 0;
+  padding: 0;
+  transition: opacity 140ms ease, background 140ms ease;
+  width: 28px;
+}
+
+.commitments-table__row:hover .commitments-table__delete,
+.commitments-table__delete:focus-visible {
+  opacity: 1;
+}
+
+.commitments-table__delete:hover,
+.commitments-table__delete:focus-visible {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  outline: none;
+}
+
+@media (hover: none) {
+  .commitments-table__delete {
+    opacity: 0.72;
+  }
 }
 
 .commitments-summary-grid .panel {

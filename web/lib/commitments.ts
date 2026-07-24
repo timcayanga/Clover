@@ -66,9 +66,9 @@ export const commitmentRecurrenceLabels: Record<CommitmentRecurrence, string> = 
 };
 
 export const commitmentStatusLabels: Record<CommitmentStatus, string> = {
-  active: "Active",
+  active: "Open",
   paused: "Paused",
-  resolved: "Resolved",
+  resolved: "Fulfilled",
 };
 
 export const commitmentKindOptions = Object.entries(commitmentKindLabels).map(([value, label]) => ({
