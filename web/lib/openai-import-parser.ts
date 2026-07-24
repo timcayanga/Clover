@@ -2014,6 +2014,27 @@ const buildOpenAIInputPayload = (params: {
   ].join("\n");
 };
 
+// Cold, one-page images have no reliable local text or institution identity.
+// Sending statement-specific examples and bank rules in that case costs a
+// sizeable portion of the first vision request without improving extraction.
+// Keep the same strict response schema and server-side validation, but give
+// the model the focused instructions it needs to classify a receipt, note, or
+// unfamiliar financial image quickly.
+const buildCompactGenericImageInputPayload = (params: {
+  fileName?: string | null;
+  fileType?: string | null;
+}) =>
+  [
+    "Parse this one-page financial image for Clover.",
+    `File name: ${params.fileName ?? "unknown"}`,
+    `File type: ${params.fileType ?? "unknown"}`,
+    "Classify it as statement, receipt, notes, portfolio, or account_detail from visible evidence.",
+    "Extract only clearly visible, trackable financial records. Do not invent data or use phone UI text as a record.",
+    "For a handwritten or digital financial note, create one conservative transaction for each clearly labeled paid, payable, due, final, net-total, or allocated amount. Do not create subtotal, fee, discount, or intermediate arithmetic rows.",
+    "Preserve raw names and supporting evidence. Use null for unavailable account, receipt, or holdings details. Set review_required when any material field is uncertain.",
+    "Return only valid JSON matching the supplied schema.",
+  ].join("\n");
+
 const buildImageTranscriptionInputPayload = (params: {
   fileName?: string | null;
   fileType?: string | null;
@@ -2271,20 +2292,30 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       ? params.fileDataBase64
       : null;
 
-  const userPrompt = buildOpenAIInputPayload({
-    fileName: params.fileName ?? null,
-    fileType: params.fileType ?? null,
-    detectedMetadata: params.detectedMetadata,
-    parsedRows: params.parsedRows,
-    text: inputText,
-    pageImages: pageImagesToSend,
-    fileDataBase64: pdfFileDataBase64,
-    importMode: promptImportMode,
-  });
   const isImageStatementMode =
     (params.importMode ?? "statement") === "statement" &&
     pageImagesToSend.length > 0 &&
     !pdfFileDataBase64;
+  const isSinglePageGenericImage =
+    inferredDocumentFamily === "generic_document" &&
+    isImageStatementMode &&
+    pageImagesToSend.length === 1;
+
+  const userPrompt = isSinglePageGenericImage && inputText.trim().length === 0
+    ? buildCompactGenericImageInputPayload({
+        fileName: params.fileName ?? null,
+        fileType: params.fileType ?? null,
+      })
+    : buildOpenAIInputPayload({
+        fileName: params.fileName ?? null,
+        fileType: params.fileType ?? null,
+        detectedMetadata: params.detectedMetadata,
+        parsedRows: params.parsedRows,
+        text: inputText,
+        pageImages: pageImagesToSend,
+        fileDataBase64: pdfFileDataBase64,
+        importMode: promptImportMode,
+      });
   const systemPrompt = buildOpenAIBackupSystemPrompt(promptImportMode, pageImagesToSend.length > 0, Boolean(pdfFileDataBase64));
   const fastModel = resolveOpenAIImportModel(
     (env as { OPENAI_IMPORT_PARSER_MODEL?: string }).OPENAI_IMPORT_PARSER_MODEL,
@@ -2335,10 +2366,6 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         : [model, textModel, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
   );
   const fallbackChain = modelFallbackChain;
-  const isSinglePageGenericImage =
-    inferredDocumentFamily === "generic_document" &&
-    isImageStatementMode &&
-    pageImagesToSend.length === 1;
   // A one-page generic image (receipt, financial note, or unfamiliar phone
   // capture) needs a compact structured result, not a statement-sized output
   // budget. Keeping this below the general 3k cap reduces cold vision latency
