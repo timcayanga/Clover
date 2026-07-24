@@ -281,11 +281,16 @@ const desktopNavSections = [
     ],
   },
   {
-    label: "Manage",
+    label: "Money",
     items: [
       { href: "/accounts", label: "Accounts", key: "accounts" as const },
       { href: "/transactions", label: "Transactions", key: "transactions" as const },
       { href: "/recurring", label: "Recurring", key: "recurring" as const },
+    ],
+  },
+  {
+    label: "Together",
+    items: [
       { href: "/circles", label: "Circles", key: "circles" as const },
       { href: "/split-bill", label: "Split Bills", key: "split-bill" as const },
     ],
