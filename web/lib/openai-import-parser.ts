@@ -1704,7 +1704,7 @@ const inferOpenAIDocumentFamily = (params: {
     /gcrypto|gfunds|fund|portfolio|holdings|asset details|trading wallet|spot wallet|spot order|buy order|sell order|redeem|subscription|navpu|units|shares|market value|btc|eth|usdt|crypto/i.test(
       combinedText,
     );
-  const genericImageFileName = /(?:^|[\\/])(?:img|image|photo|screenshot|screen\s*shot|dsc|pxl|\d{4}-\d{2}-\d{2})[^\\/]*\.(?:jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(
+  const genericImageFileName = /(?:^|[\\/])(?:img|image|photo|screenshot|screen\s*shot|dsc|pxl|\d{4}-\d{2}-\d{2}|\d{9,13})[^\\/]*\.(?:jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(
     String(params.fileName ?? "")
   );
   const hasStatementEvidence = Boolean(

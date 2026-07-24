@@ -12,6 +12,11 @@ assert.match(
 );
 assert.match(
   parserSource,
+  /genericImageFileName = \/[\s\S]*?\\d\{9,13\}[\s\S]*?webp/,
+  "Unix-timestamp camera filenames such as 1686710083.webp must use the generic visual route."
+);
+assert.match(
+  parserSource,
   /const isSinglePageGenericImage =[\s\S]*?isVisualImageImport[\s\S]*?pageImagesToSend\.length === 1/,
   "The compact route must apply to a one-page generic receipt image, not only statement mode."
 );
