@@ -1545,6 +1545,23 @@ body.transactions-manual-open .shell-quick-add-button {
     font-weight: 400;
     letter-spacing: 0.04em;
     text-transform: none;
+    line-height: 1;
+  }
+
+  .sidebar .sidebar-nav .nav-link {
+    height: 30px;
+    min-height: 30px;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .sidebar .sidebar-nav__section {
+    gap: 0;
+  }
+
+  .sidebar .sidebar-nav__section + .sidebar-nav__section {
+    margin-top: 1px;
+    padding-top: 1px;
   }
 
   .sidebar-nav {
