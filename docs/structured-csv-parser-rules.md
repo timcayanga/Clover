@@ -10,6 +10,7 @@ Use these rules for delimited financial exports (`.csv` and `.tsv`) that are not
 - Search the first 12 rows for the most likely header so report titles and export metadata can precede the table.
 - Read recognized institution, account, account-number, account-type, currency, and snapshot-date metadata from key/value preamble rows.
 - Carry section-level account metadata forward in multi-account exports and ignore repeated header rows.
+- Parse distinct account-summary and transaction-ledger tables from the same file, preserving a source section index and header row for auditability.
 - Strip UTF byte-order marks and null characters, and preserve quoted delimiters, escaped quotes, and quoted multiline descriptions.
 - A recognized but ambiguous delimited file must fail closed. Do not pass it to heuristic line parsing.
 
@@ -51,7 +52,7 @@ An account inventory needs:
 
 Rules:
 
-- Create one `account_snapshot_marker` per valid account row.
+- Create one `account_snapshot_marker` per account identity. When the same account appears across dated rows, use the latest balance and preserve the complete balance history.
 - Preserve account type, institution, currency, account number, balance, and snapshot date.
 - Ignore total/subtotal rows.
 - Use the upload date only when no snapshot date is provided.
@@ -63,7 +64,7 @@ Rules:
 A wide balance-history table has:
 
 1. A date or snapshot-date column.
-2. At least two numeric account columns.
+2. At least one named numeric account column. A generic `Balance` column by itself is not an account identity.
 3. At least two valid dated rows.
 4. No transaction description, merchant, amount, debit, or credit columns.
 

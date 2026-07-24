@@ -1204,11 +1204,17 @@ export const parseGenericAccountSnapshotCsv = (
   const today = new Date().toISOString().slice(0, 10);
   const snapshotDateKey = table.canonicalHeaders.includes("snapshot_date") ? "snapshot_date" : "date";
   const snapshotDateOrder = inferStructuredDateOrder(table, snapshotDateKey);
-  const rows = table.rows.flatMap((sourceRow, sourceRowIndex) => {
+  const candidates = table.rows.flatMap((sourceRow, sourceRowIndex) => {
     if (isRepeatedStructuredHeaderRow(table, sourceRow)) return [];
     const accountName = normalizeWhitespace(readStructuredCell(table, sourceRow, "account_name"));
     const balance = parseMoney(readStructuredCell(table, sourceRow, "balance"));
-    if (!accountName || balance === null || /^total$/i.test(accountName)) return [];
+    if (
+      !accountName ||
+      balance === null ||
+      /^(?:grand\s+)?(?:total|subtotal|net worth|total assets|total liabilities)$/i.test(accountName)
+    ) {
+      return [];
+    }
 
     const institutionRaw = normalizeWhitespace(
       readStructuredCell(table, sourceRow, "institution") || table.preambleMetadata.institution || context.institution || ""
@@ -1234,44 +1240,112 @@ export const parseGenericAccountSnapshotCsv = (
       )?.toISOString().slice(0, 10) ?? today;
     const accountNumber = normalizeWhitespace(readStructuredCell(table, sourceRow, "account_number"));
 
-    return [
-      {
-        date: snapshotDate,
-        amount: "0",
-        currency,
-        merchantRaw: accountName,
-        merchantClean: accountName,
-        description: `${accountName} balance as of ${snapshotDate}`,
-        accountName,
-        accountNumber: accountNumber || undefined,
-        institution: institution ?? undefined,
-        type: "income" as const,
-        confidence: 98,
-        parserConfidence: 100,
-        categoryConfidence: 100,
-        rawPayload: {
-          kind: "account_snapshot_marker",
-          source: "account_snapshot_csv",
-          documentType: "account_detail",
-          sourceRowIndex: table.headerIndex + sourceRowIndex + 2,
-          preambleMetadata: table.preambleMetadata,
-          balance,
-          accountName,
-          accountNumber: accountNumber || null,
-          institutionRaw: institutionRaw || institution,
-          accountType,
-          accountCurrency: currency,
-          snapshotDate,
-        },
-      } satisfies ParsedImportRow,
-    ];
+    return [{
+      accountName,
+      balance,
+      institutionRaw,
+      institution,
+      accountType,
+      currency,
+      snapshotDate,
+      accountNumber,
+      sourceRowIndex: table.headerIndex + sourceRowIndex + 2,
+    }];
   });
 
-  return rows;
+  const accountGroups = new Map<string, typeof candidates>();
+  candidates.forEach((candidate) => {
+    const institutionIdentity = normalizeStructuredHeader(candidate.institution ?? "");
+    const identity = candidate.accountNumber
+      ? `number:${institutionIdentity || normalizeStructuredHeader(candidate.accountName)}:${normalizeStructuredHeader(candidate.accountNumber)}`
+      : [
+          "label",
+          institutionIdentity,
+          normalizeStructuredHeader(candidate.accountName),
+          candidate.accountType,
+          candidate.currency,
+        ].join(":");
+    const group = accountGroups.get(identity) ?? [];
+    group.push(candidate);
+    accountGroups.set(identity, group);
+  });
+
+  return Array.from(accountGroups.values()).map((group) => {
+    const ordered = [...group].sort(
+      (left, right) =>
+        left.snapshotDate.localeCompare(right.snapshotDate) ||
+        left.sourceRowIndex - right.sourceRowIndex
+    );
+    const latest = ordered.at(-1)!;
+    const balanceHistoryByDate = new Map<string, { date: string; balance: number; sourceRowIndex: number }>();
+    ordered.forEach((candidate) => {
+      balanceHistoryByDate.set(candidate.snapshotDate, {
+        date: candidate.snapshotDate,
+        balance: candidate.balance,
+        sourceRowIndex: candidate.sourceRowIndex,
+      });
+    });
+    const balanceHistory = Array.from(balanceHistoryByDate.values()).sort(
+      (left, right) => left.date.localeCompare(right.date) || left.sourceRowIndex - right.sourceRowIndex
+    );
+
+    return {
+      date: latest.snapshotDate,
+      amount: "0",
+      currency: latest.currency,
+      merchantRaw: latest.accountName,
+      merchantClean: latest.accountName,
+      description: `${latest.accountName} balance as of ${latest.snapshotDate}`,
+      accountName: latest.accountName,
+      accountNumber: latest.accountNumber || undefined,
+      institution: latest.institution ?? undefined,
+      type: "income" as const,
+      confidence: 98,
+      parserConfidence: 100,
+      categoryConfidence: 100,
+      rawPayload: {
+        kind: "account_snapshot_marker",
+        source: "account_snapshot_csv",
+        documentType: "account_detail",
+        sourceRowIndex: latest.sourceRowIndex,
+        sourceRowIndexes: ordered.map((candidate) => candidate.sourceRowIndex),
+        preambleMetadata: table.preambleMetadata,
+        balance: latest.balance,
+        balanceHistory,
+        accountName: latest.accountName,
+        accountNumber: latest.accountNumber || null,
+        institutionRaw: latest.institutionRaw || latest.institution,
+        accountType: latest.accountType,
+        accountCurrency: latest.currency,
+        snapshotDate: latest.snapshotDate,
+      },
+    } satisfies ParsedImportRow;
+  });
 };
 
 const wideSnapshotAggregateHeaderPattern =
   /\b(?:total|subtotal|net worth|assets?|liabilities?|equity|change|gain|loss|return|growth|percent|percentage|notes?|comments?)\b/i;
+const wideSnapshotReservedCanonicalHeaders = new Set([
+  "amount",
+  "balance",
+  "debit",
+  "credit",
+  "description",
+  "merchant",
+  "currency",
+  "type",
+  "status",
+  "fee",
+  "category",
+  "account_name",
+  "account_number",
+  "institution",
+  "account_type",
+  "reference",
+  "original_amount",
+  "original_currency",
+  "posted_date",
+]);
 
 export const parseWideAccountSnapshotCsv = (
   text: string,
@@ -1319,7 +1393,8 @@ export const parseWideAccountSnapshotCsv = (
         index === dateIndex ||
         !accountName ||
         wideSnapshotAggregateHeaderPattern.test(accountName) ||
-        canonicalStructuredHeader(accountName) === "snapshot_date"
+        canonicalStructuredHeader(accountName) === "snapshot_date" ||
+        wideSnapshotReservedCanonicalHeaders.has(canonicalStructuredHeader(accountName))
       ) {
         return null;
       }
@@ -1351,7 +1426,7 @@ export const parseWideAccountSnapshotCsv = (
       currency: string;
       parsedValues: Array<number | null>;
     }>;
-  if (descriptors.length < 2) return null;
+  if (descriptors.length < 1) return null;
 
   const latest = datedRows.at(-1)!;
   const snapshotDate = latest.date.toISOString().slice(0, 10);
@@ -1396,7 +1471,82 @@ export const parseWideAccountSnapshotCsv = (
   });
 };
 
-const parseStructuredDelimitedImport = (
+const serializeStructuredDelimitedRows = (rows: string[][], delimiter: string) =>
+  rows
+    .map((row) =>
+      row
+        .map((cell) => {
+          const value = String(cell ?? "");
+          return /["\r\n]/.test(value) || value.includes(delimiter)
+            ? `"${value.replace(/"/g, '""')}"`
+            : value;
+        })
+        .join(delimiter)
+    )
+    .join("\n");
+
+const findStructuredTableSections = (text: string, fileName: string) => {
+  const delimiter = detectStructuredDelimiter(text, fileName);
+  const withoutDirective = text.replace(/^\uFEFF?\s*sep=.\s*\r?\n/i, "");
+  const rows = parseDelimitedRows(withoutDirective, delimiter);
+  const candidates: Array<{
+    headerIndex: number;
+    kind: "transactions" | "accounts";
+    signature: string;
+  }> = [];
+  rows.forEach((headers, headerIndex) => {
+    const score = scoreStructuredHeaderRow(headers);
+    const canonicalHeaders = headers.map(canonicalStructuredHeader);
+    const canonical = new Set(canonicalHeaders);
+    const signature = canonicalHeaders.join("|");
+    if (score.hasDate && score.hasTransactionAmount && score.hasDescription && score.transactionScore >= 13) {
+      candidates.push({ headerIndex, kind: "transactions", signature });
+      return;
+    }
+    if (
+      score.snapshotScore >= 10 &&
+      canonical.has("account_name") &&
+      canonical.has("balance") &&
+      !canonical.has("amount") &&
+      !canonical.has("debit") &&
+      !canonical.has("credit")
+    ) {
+      candidates.push({ headerIndex, kind: "accounts", signature });
+    }
+  });
+  if (
+    candidates.length < 2 ||
+    new Set(candidates.map((candidate) => `${candidate.kind}:${candidate.signature}`)).size < 2
+  ) {
+    return null;
+  }
+
+  const firstHeaderIndex = candidates[0]!.headerIndex;
+  const globalPreamble = rows.slice(0, firstHeaderIndex);
+  return candidates.map((candidate, sectionIndex) => {
+    const nextHeaderIndex = candidates[sectionIndex + 1]?.headerIndex ?? rows.length;
+    const localPreamble: string[][] = [];
+    for (let index = candidate.headerIndex - 1; index >= firstHeaderIndex; index -= 1) {
+      const row = rows[index]!;
+      if (!extractStructuredSectionMetadata(row)) break;
+      localPreamble.unshift(row);
+    }
+    const sectionRows = [
+      ...globalPreamble,
+      ...localPreamble,
+      ...rows.slice(candidate.headerIndex, nextHeaderIndex),
+    ];
+    return {
+      text: serializeStructuredDelimitedRows(sectionRows, delimiter),
+      sectionIndex,
+      sourceHeaderRow: candidate.headerIndex + 1,
+      sourceRowOffset: candidate.headerIndex - localPreamble.length - globalPreamble.length,
+      kind: candidate.kind,
+    };
+  });
+};
+
+const parseSingleStructuredDelimitedImport = (
   text: string,
   fileName: string,
   fileType: string,
@@ -1411,6 +1561,42 @@ const parseStructuredDelimitedImport = (
   if (snapshotRows !== null) return snapshotRows;
   const wideSnapshotRows = parseWideAccountSnapshotCsv(text, fileName, fileType, context);
   return wideSnapshotRows ?? [];
+};
+
+const parseStructuredDelimitedImport = (
+  text: string,
+  fileName: string,
+  fileType: string,
+  context: ImportParseContext
+) => {
+  if (!isStructuredDelimitedFile(fileName, fileType)) return null;
+  const sections = findStructuredTableSections(text, fileName);
+  if (!sections) return parseSingleStructuredDelimitedImport(text, fileName, fileType, context);
+
+  return sections.flatMap((section) =>
+    (parseSingleStructuredDelimitedImport(section.text, fileName, fileType, context) ?? []).map((row) => {
+      const sourceRowIndex =
+        typeof row.rawPayload?.sourceRowIndex === "number"
+          ? row.rawPayload.sourceRowIndex + section.sourceRowOffset
+          : null;
+      const sourceRowIndexes = Array.isArray(row.rawPayload?.sourceRowIndexes)
+        ? row.rawPayload.sourceRowIndexes.map((value) =>
+            typeof value === "number" ? value + section.sourceRowOffset : value
+          )
+        : null;
+      return {
+        ...row,
+        rawPayload: {
+          ...(row.rawPayload ?? {}),
+          ...(sourceRowIndex === null ? {} : { sourceRowIndex }),
+          ...(sourceRowIndexes === null ? {} : { sourceRowIndexes }),
+          sourceSectionIndex: section.sectionIndex,
+          sourceSectionKind: section.kind,
+          sourceHeaderRow: section.sourceHeaderRow,
+        },
+      };
+    })
+  );
 };
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();

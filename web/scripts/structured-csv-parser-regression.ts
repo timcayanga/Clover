@@ -215,6 +215,21 @@ assert.equal(accountRows.find((row) => row.accountName === "Cash USD")?.currency
 assert.equal(accountRows.find((row) => row.accountName === "Accounts Receivable")?.rawPayload?.accountType, "receivable");
 assert.equal(parseImportText(accountInventoryCsv, "accounts.csv", "text/csv").length, 4);
 
+const longBalanceHistoryCsv = [
+  "Snapshot Date,Institution,Account Name,Account Type,Currency,Balance,Account Number",
+  "2026-05-31,BPI,Payroll,Savings,PHP,10000.00,1234",
+  "2026-06-30,BPI,Payroll,Savings,PHP,12000.00,1234",
+  "2026-07-24,BPI,Payroll,Savings,PHP,11500.00,1234",
+  "2026-07-24,BPI,Total Assets,,PHP,11500.00,",
+].join("\n");
+const longBalanceRows = parseGenericAccountSnapshotCsv(longBalanceHistoryCsv, "long-history.csv", "text/csv");
+assert.ok(longBalanceRows);
+assert.equal(longBalanceRows.length, 1, "Repeated snapshots of one account must consolidate into one account marker.");
+assert.equal(longBalanceRows[0]?.rawPayload?.balance, 11500);
+assert.equal((longBalanceRows[0]?.rawPayload?.balanceHistory as unknown[])?.length, 3);
+assert.deepEqual(longBalanceRows[0]?.rawPayload?.sourceRowIndexes, [2, 3, 4]);
+assert.equal(parseImportText(longBalanceHistoryCsv, "long-history.csv", "text/csv").length, 1);
+
 const wideBalanceHistoryCsv = [
   "Institution,Personal Finance Export",
   "Currency,PHP",
@@ -231,6 +246,63 @@ assert.equal(wideBalanceRows[0]?.rawPayload?.balance, 11500);
 assert.equal((wideBalanceRows[0]?.rawPayload?.balanceHistory as unknown[])?.length, 3);
 assert.equal(wideBalanceRows[1]?.rawPayload?.accountType, "wallet");
 assert.equal(parseImportText(wideBalanceHistoryCsv, "balance-history.csv", "text/csv").length, 2);
+
+const singleAccountHistoryCsv = [
+  "Date,BPI Savings",
+  "2026-05-31,10000.00",
+  "2026-06-30,12500.00",
+  "2026-07-24,11900.00",
+].join("\n");
+const singleAccountHistoryRows = parseWideAccountSnapshotCsv(
+  singleAccountHistoryCsv,
+  "single-account-history.csv",
+  "text/csv"
+);
+assert.ok(singleAccountHistoryRows);
+assert.equal(singleAccountHistoryRows.length, 1);
+assert.equal(singleAccountHistoryRows[0]?.accountName, "BPI Savings");
+assert.equal(singleAccountHistoryRows[0]?.rawPayload?.balance, 11900);
+assert.equal((singleAccountHistoryRows[0]?.rawPayload?.balanceHistory as unknown[])?.length, 3);
+
+const mixedFinancialTablesCsv = [
+  "Institution,BPI",
+  "Account Name,Balance,Currency,Account Type,Account Number",
+  "BPI Payroll,12500.00,PHP,Savings,1234",
+  "BPI Credit Card,3000.00,PHP,Credit Card,5678",
+  "",
+  "Date,Description,Debit,Credit,Account Name,Reference",
+  "2026-07-20,Coffee,125.00,,BPI Payroll,TX-001",
+  "2026-07-21,Salary,,50000.00,BPI Payroll,TX-002",
+].join("\n");
+const mixedFinancialRows = parseImportText(mixedFinancialTablesCsv, "mixed-financial-export.csv", "text/csv");
+assert.equal(mixedFinancialRows.length, 4, "Account summaries and transactions in one CSV must both be imported.");
+assert.equal(
+  mixedFinancialRows.filter((row) => row.rawPayload?.kind === "account_snapshot_marker").length,
+  2
+);
+assert.equal(
+  mixedFinancialRows.filter((row) => row.rawPayload?.source === "structured_transaction_csv").length,
+  2
+);
+assert.deepEqual(
+  [...new Set(mixedFinancialRows.map((row) => row.rawPayload?.sourceSectionKind))].sort(),
+  ["accounts", "transactions"]
+);
+assert.deepEqual(
+  mixedFinancialRows.map((row) => row.rawPayload?.sourceRowIndex),
+  [3, 4, 6, 7],
+  "Mixed-table rows must retain their original one-based non-empty row provenance."
+);
+
+const mixedLedgerSchemasCsv = [
+  "Date,Description,Amount,Account",
+  "2026-07-20,Coffee,-125.00,BPI Payroll",
+  "Posted Date,Merchant,Debit,Credit,Account",
+  "2026-07-21,Airline,5000.00,,BPI Card",
+].join("\n");
+const mixedLedgerRows = parseImportText(mixedLedgerSchemasCsv, "mixed-ledgers.csv", "text/csv");
+assert.equal(mixedLedgerRows.length, 2, "Different transaction schemas in one CSV must each be parsed.");
+assert.deepEqual(mixedLedgerRows.map((row) => row.accountName), ["BPI Payroll", "BPI Card"]);
 
 const utf16Text = "Date\tDescription\tAmount\n2026-07-20\tCafé\t-125.00";
 const utf16Bytes = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(utf16Text, "utf16le")]);
@@ -292,5 +364,5 @@ assert.match(
 );
 
 console.log(
-  "[PASS] Structured CSV parser covers encodings, TSV, sections, statuses, locale dates, alternate schemas, reconciliation, and fail-closed behavior."
+  "[PASS] Structured CSV parser covers encodings, TSV, mixed tables, histories, sections, statuses, locale dates, reconciliation, and fail-closed behavior."
 );
