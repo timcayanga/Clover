@@ -43,6 +43,7 @@
     "qa:gotrade-screenshots": "tsx scripts/gotrade-screenshot-regression.ts",
     "qa:gotyme-directions": "tsx scripts/gotyme-transaction-direction-regression.ts",
     "qa:imported-accounts": "tsx scripts/imported-account-ui-regression.ts",
+    "qa:digital-note-split-bill": "tsx scripts/digital-note-split-bill-regression.ts",
     "qa:parser-routing": "tsx scripts/parser-routing-regression.ts",
     "qa:import-quality": "tsx scripts/import-quality-regression.ts",
     "qa:merchant-enrichment": "tsx scripts/merchant-enrichment-regression.ts",

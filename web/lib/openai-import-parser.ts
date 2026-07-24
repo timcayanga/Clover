@@ -1670,12 +1670,14 @@ export const buildOpenAIBackupSystemPrompt = (importMode: ImportMode | null | un
               ? [
                   "Treat this as a notes or informal transaction list first.",
                   "Prefer conservative extraction with lower confidence when fields are incomplete.",
-                  "For split-cost tables with people as columns, return one review transaction per person's bottom final amount and leave the date null when absent.",
+                  "For split-cost tables with items as rows and people as columns, return transactions: [] and populate receipt_details as a split_bill.",
+                  "Put the verified bill total and menu rows in receipt_details.line_items. Put one participant in split_allocations for each bottom-column total, using charged for the person's share; do not mark paid or due unless explicitly shown.",
+                  "Use Shared bill when no merchant is visible, leave the date null when absent, and never infer an account from the filename.",
                 ]
               : [
                   "Classify the financial document from its visible content instead of assuming it is a bank statement.",
                   "Receipts and financial notes are valid Clover inputs even without an account number or ledger layout.",
-                  "For a split-cost notes table with people as columns, return one review transaction per person's bottom final amount; do not reject it merely because it is not a bank statement.",
+                  "For a split-cost notes table with people as columns, return transactions: [] and put the total, item rows, and participant shares in receipt_details; do not reject it merely because it is not a bank statement.",
                 ];
 
   const inputGuidance =
@@ -1969,7 +1971,9 @@ const buildOpenAIInputPayload = (params: {
     ...(params.importMode === "notes"
       ? [
           "This input is a notes-app screenshot of a transaction list. The layout may be informal, so prefer conservative extraction and lower confidence when fields are partial.",
-          "For split-cost tables with people as columns, create one review transaction per person's bottom final amount. Do not create rows for subtotal, fee, discount, or intermediate arithmetic lines; leave date null when absent.",
+          "For a split-cost table with items as rows and people as columns, return transactions: [] and populate receipt_details with receipt_type split_bill.",
+          "Put the verified table total and each menu row in receipt_details.line_items. Put one participant in split_allocations per bottom-column total, using charged for that person's share; keep paid and due null unless the table explicitly proves them.",
+          "Use Shared bill when no merchant is visible, leave the date null when absent, and never infer an account from the filename.",
         ]
       : []),
     ...(params.importMode === "portfolio"
@@ -2003,7 +2007,9 @@ const buildOpenAIInputPayload = (params: {
           "If the image is a crypto, fund, or investment transaction-history screenshot, preserve asset identity, quantity, order/reference IDs, status labels, and wallet or trading-wallet context. Do not invent holdings or balances when the screen only shows activity rows.",
           "If the document is a portfolio or account-detail page that shows holdings or positions, extract those into holdings instead of transaction rows.",
           "If the document is a receipt, portfolio screen, or account detail screen, keep the transaction array empty unless the page clearly shows true ledger rows.",
-          "If it is a financial notes image, create conservative transaction rows for each clearly labeled paid, payable, due, final, net-total, or allocated amount that Clover can track. A split-cost table with people as columns and a final or net total per person is trackable financial data: create one review transaction per person's final amount. When the last row is an unlabeled arithmetic result beneath subtotal, fee, and discount rows, use that bottom result—not the earlier gross total—as each person's final amount. Keep date null when none is visible, set review_required true, and do not turn subtotal, fee, discount, or intermediate arithmetic rows into extra transactions.",
+          "If it is a financial notes image, create conservative transaction rows for each clearly labeled paid, payable, due, final, or net-total amount that Clover can track.",
+          "Exception: when the note is a split-cost table with items as rows and people as columns, return transactions: [] and populate receipt_details as a split_bill. Put the verified bill total and menu rows in receipt_details.line_items, and put each person's bottom-column share in split_allocations.charged. Do not create one transaction per participant or per menu item.",
+          "Keep date null when none is visible, set review_required true, and do not turn subtotal, fee, discount, participant shares, or intermediate arithmetic rows into extra transactions.",
           "Use the account number and balance shown in the page image, not any earlier summary-like number unless it is the final ending balance.",
           "",
         ]
@@ -2413,7 +2419,12 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     return userContent;
   };
 
-  const callOpenAI = async (selectedModel: string, pageImages: Array<{ page: number; dataUrl: string }>, timeoutMs: number) => {
+  const callOpenAI = async (
+    selectedModel: string,
+    pageImages: Array<{ page: number; dataUrl: string }>,
+    timeoutMs: number,
+    systemInstructions = systemPrompt
+  ) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -2429,7 +2440,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
           input: [
             {
               role: "system",
-              content: [{ type: "input_text", text: systemPrompt }],
+              content: [{ type: "input_text", text: systemInstructions }],
             },
             {
               role: "user",
@@ -2599,13 +2610,13 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     }
 
     const selectedModel = attemptedResult.model;
-    const payload = (await attemptedResult.response.json()) as Record<string, unknown>;
-    const outputText = extractOutputText(payload);
+    let payload = (await attemptedResult.response.json()) as Record<string, unknown>;
+    let outputText = extractOutputText(payload);
     if (!outputText) {
       return null;
     }
 
-    const parsedJson = parseStructuredJsonText(outputText);
+    let parsedJson = parseStructuredJsonText(outputText);
     if (!parsedJson) {
       console.warn("OpenAI import fallback returned unparseable JSON", {
         sample: outputText.slice(0, 500),
@@ -2628,7 +2639,40 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         },
       };
     }
-    const validation = importedStatementSchema.safeParse(parsedJson);
+    let validation = importedStatementSchema.safeParse(parsedJson);
+    const splitBillDetailsMissingDespiteDetection =
+      params.importMode === "notes" &&
+      validation.success &&
+      validation.data.receipt_details === null &&
+      validation.data.transactions.length === 0 &&
+      /\b(?:split[- ]?bill|shared bill|split-cost|participant totals?)\b/i.test(outputText);
+    if (splitBillDetailsMissingDespiteDetection) {
+      const repairTimeoutMs = getRemainingOpenAIImportAttemptTimeout({
+        deadlineMs: fallbackDeadlineMs,
+        requestedTimeoutMs: retryTimeoutMs,
+      });
+      const repairResponse =
+        repairTimeoutMs === null
+          ? null
+          : await callOpenAI(
+              selectedModel,
+              pageImagesToSend,
+              repairTimeoutMs,
+              `${systemPrompt} CRITICAL REPAIR: You already recognized the image as a split-cost or shared-bill table. receipt_details MUST be a non-null object with receipt_type split_bill, total set to the visible grand total, every visible menu row in line_items, and every participant bottom-column total in split_allocations.charged. transactions MUST remain empty. Do not claim that details were captured while returning receipt_details null.`
+            );
+      if (repairResponse?.ok) {
+        const repairPayload = (await repairResponse.json()) as Record<string, unknown>;
+        const repairOutputText = extractOutputText(repairPayload);
+        const repairParsedJson = repairOutputText ? parseStructuredJsonText(repairOutputText) : null;
+        const repairValidation = repairParsedJson ? importedStatementSchema.safeParse(repairParsedJson) : null;
+        if (repairOutputText && repairParsedJson && repairValidation?.success) {
+          payload = repairPayload;
+          outputText = repairOutputText;
+          parsedJson = repairParsedJson;
+          validation = repairValidation;
+        }
+      }
+    }
     const schemaValidated = validation.success;
     const validationSummary = schemaValidated ? "valid" : validation.error.issues.slice(0, 5).map((issue) => issue.message).join("; ");
     if (!schemaValidated) {

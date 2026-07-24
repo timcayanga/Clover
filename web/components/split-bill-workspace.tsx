@@ -1232,7 +1232,7 @@ export function SplitBillWorkspace({
 
   return (
     <CloverShell
-      active="circles"
+      active="split-bill"
       title="Split Bills"
       actions={
         <SplitBillPageActions
