@@ -7489,8 +7489,8 @@ export const processImportFileText = async (
           cacheVersion: resolveImportFileExtractionCacheVersion(fileName),
         }).catch(() => null)
       : null;
-  const priorExactNotesRows: Array<Record<string, unknown>> = Array.isArray(priorExactNotesCache?.parsedRows)
-    ? (priorExactNotesCache.parsedRows as Array<Record<string, unknown>>).map((row): Record<string, unknown> => {
+  const refreshInferredNoteDates = (rows: Array<Record<string, unknown>>) =>
+    rows.map((row): Record<string, unknown> => {
         const rawPayload =
           row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
             ? (row.rawPayload as Record<string, unknown>)
@@ -7498,8 +7498,82 @@ export const processImportFileText = async (
         return rawPayload?.dateInferredFromUpload === true
           ? ({ ...row, date: importFile.uploadedAt.toISOString() } as Record<string, unknown>)
           : row;
-      })
+      });
+  const cachedExactNotesRows: Array<Record<string, unknown>> = Array.isArray(priorExactNotesCache?.parsedRows)
+    ? refreshInferredNoteDates(priorExactNotesCache.parsedRows as Array<Record<string, unknown>>)
     : [];
+  const priorExactNotesImports =
+    cachedExactNotesRows.length === 0 &&
+    imageImport &&
+    typeof importFile.sourceFingerprint === "string" &&
+    importFile.sourceFingerprint.trim()
+      ? await prisma.importFile
+          .findMany({
+            where: {
+              workspaceId: String(importFile.workspaceId),
+              sourceFingerprint: importFile.sourceFingerprint,
+              id: { not: importFileId },
+              status: "done",
+              parsedRows: { some: {} },
+            },
+            orderBy: [{ uploadedAt: "desc" }, { id: "desc" }],
+            take: 8,
+            select: {
+              parsedRows: {
+                orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+                select: {
+                  institution: true,
+                  accountNumber: true,
+                  accountName: true,
+                  date: true,
+                  amount: true,
+                  currency: true,
+                  merchantRaw: true,
+                  merchantClean: true,
+                  type: true,
+                  categoryName: true,
+                  confidence: true,
+                  categoryReason: true,
+                  statementFingerprint: true,
+                  rawPayload: true,
+                },
+              },
+            },
+          })
+          .catch(() => [])
+      : [];
+  const historicalExactNotesRows =
+    priorExactNotesImports
+      .map((candidate) =>
+        candidate.parsedRows.filter((row) => {
+          const rawPayload =
+            row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+              ? (row.rawPayload as Record<string, unknown>)
+              : null;
+          return rawPayload?.documentType === "notes";
+        })
+      )
+      .find((rows) => rows.length > 0)
+      ?.map((row) => ({
+        institution: row.institution,
+        accountNumber: row.accountNumber,
+        accountName: row.accountName,
+        date: row.date?.toISOString() ?? importFile.uploadedAt.toISOString(),
+        amount: row.amount?.toString() ?? "0",
+        currency: row.currency,
+        merchantRaw: row.merchantRaw,
+        merchantClean: row.merchantClean,
+        type: row.type,
+        categoryName: row.categoryName,
+        confidence: row.confidence,
+        categoryReason: row.categoryReason,
+        statementFingerprint: row.statementFingerprint,
+        rawPayload: row.rawPayload,
+      })) ?? [];
+  const priorExactNotesRows =
+    cachedExactNotesRows.length > 0
+      ? cachedExactNotesRows
+      : refreshInferredNoteDates(historicalExactNotesRows as Array<Record<string, unknown>>);
   if (priorExactNotesRows.length > 0 && importMode === "statement") {
     importMode = "notes";
   }

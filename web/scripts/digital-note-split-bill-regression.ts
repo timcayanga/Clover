@@ -11,6 +11,7 @@ const readProjectFile = (path: string) => readFileSync(resolve(process.cwd(), pa
 
 const promptSource = readProjectFile("lib/openai-import-parser.ts");
 const workerSource = readProjectFile("workers/import-processor.ts");
+const dataEngineSource = readProjectFile("lib/data-engine.ts");
 const splitBillSource = readProjectFile("lib/imported-split-bill.ts");
 const workspaceSource = readProjectFile("components/split-bill-workspace.tsx");
 const splitBillHomeSource = readProjectFile("components/split-bill-home.tsx");
@@ -77,8 +78,18 @@ assert.match(
 );
 assert.match(
   workerSource,
-  /priorExactNotesCache[\s\S]*loadImportFileExtractionCache[\s\S]*importMode:\s*"notes"[\s\S]*priorExactNotesRows[\s\S]*dateInferredFromUpload[\s\S]*importMode = "notes"/,
+  /priorExactNotesCache[\s\S]*loadImportFileExtractionCache[\s\S]*importMode:\s*"notes"[\s\S]*refreshInferredNoteDates[\s\S]*dateInferredFromUpload[\s\S]*priorExactNotesRows[\s\S]*importMode = "notes"/,
   "An identical financial note must reuse its prior correct rows and refresh inferred dates instead of repeating an unstable vision parse."
+);
+assert.match(
+  workerSource,
+  /priorExactNotesImports[\s\S]*sourceFingerprint:\s*importFile\.sourceFingerprint[\s\S]*parsedRows:\s*\{\s*some:\s*\{\}[\s\S]*documentType === "notes"[\s\S]*historicalExactNotesRows/,
+  "An identical financial note must recover its durable parsed rows even after its previously imported transactions were deleted."
+);
+assert.match(
+  dataEngineSource,
+  /column === "parsedRows"[\s\S]*jsonb_array_length\(EXCLUDED\."parsedRows"\) > 0[\s\S]*jsonb_array_length\("ImportFileExtractionCache"\."parsedRows"\) > 0/,
+  "A zero-row parser result must not erase a useful learned extraction cache."
 );
 assert.match(
   workerSource,

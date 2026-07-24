@@ -2547,7 +2547,19 @@ export const upsertImportFileExtractionCache = async (params: {
       (column) => !["id", "workspaceId", "fileFingerprint", "fileType", "importMode", "cacheVersion", "createdAt"].includes(column)
     );
     const updateClause = updateColumns
-      .map((column, index) => `"${column}" = EXCLUDED."${column}"`)
+      .map((column) =>
+        column === "parsedRows"
+          ? `"parsedRows" = CASE
+              WHEN jsonb_typeof(EXCLUDED."parsedRows") = 'array'
+                AND jsonb_array_length(EXCLUDED."parsedRows") > 0
+                THEN EXCLUDED."parsedRows"
+              WHEN jsonb_typeof("ImportFileExtractionCache"."parsedRows") = 'array'
+                AND jsonb_array_length("ImportFileExtractionCache"."parsedRows") > 0
+                THEN "ImportFileExtractionCache"."parsedRows"
+              ELSE EXCLUDED."parsedRows"
+            END`
+          : `"${column}" = EXCLUDED."${column}"`
+      )
       .join(", ");
 
     await prisma.$executeRawUnsafe(
