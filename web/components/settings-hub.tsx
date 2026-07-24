@@ -119,6 +119,9 @@ type SecuritySessionSummary = {
   status: string;
   lastActiveAt: string | null;
   isCurrent: boolean;
+  browserName: string | null;
+  deviceType: string | null;
+  location: string | null;
 };
 
 type DataDeleteScope = "transactions" | "accounts" | "all";
@@ -284,6 +287,19 @@ const getTimeZoneOptions = () => {
 };
 
 const formatTimeZoneLabel = (value: string) => (value === "GMT" || value === "UTC" ? value : value.replaceAll("_", " / "));
+
+const formatSettingsDate = (value: string, format: RegionalPreferences["dateFormat"]) => {
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) {
+    return value;
+  }
+
+  if (format === "YYYY-MM-DD") {
+    return `${year}-${month}-${day}`;
+  }
+
+  return format === "DD/MM/YYYY" ? `${day}/${month}/${year}` : `${month}/${day}/${year}`;
+};
 
 const formatRelativeSessionTime = (value: string | null) => {
   if (!value) {
@@ -1039,17 +1055,23 @@ export function SettingsHub({
     }
 
     setSecuritySessions(
-      (deviceSessions ?? []).map((entry) => ({
-        id: entry.id,
-        status: entry.status,
-        lastActiveAt:
-          typeof entry.lastActiveAt === "number"
-            ? new Date(entry.lastActiveAt).toISOString()
-            : typeof entry.expireAt === "number"
-              ? new Date(entry.expireAt).toISOString()
-              : null,
-        isCurrent: entry.id === session?.id,
-      }))
+      (deviceSessions ?? []).map((entry) => {
+        const activity = (entry as unknown as { latestActivity?: { browserName?: string; deviceType?: string; city?: string; country?: string } }).latestActivity;
+        return {
+          id: entry.id,
+          status: entry.status,
+          lastActiveAt:
+            typeof entry.lastActiveAt === "number"
+              ? new Date(entry.lastActiveAt).toISOString()
+              : typeof entry.expireAt === "number"
+                ? new Date(entry.expireAt).toISOString()
+                : null,
+          isCurrent: entry.id === session?.id,
+          browserName: activity?.browserName ?? null,
+          deviceType: activity?.deviceType ?? null,
+          location: [activity?.city, activity?.country].filter(Boolean).join(", ") || null,
+        };
+      })
     );
     setSecurityLoading(false);
     setSecurityMessage(null);
@@ -1084,39 +1106,40 @@ export function SettingsHub({
     downloadBlob(blob, fileName);
   };
 
-  const handleSignOutOtherDevices = () => {
-    if (!user || !session?.id) {
-      setSecurityMessage("No additional sessions found.");
+  const handleSignOutSession = (sessionId: string) => {
+    if (!user || sessionId === session?.id) {
       return;
     }
 
     startTransition(async () => {
-      setSecurityMessage(null);
-
       try {
         const sessions = await user.getSessions();
-        const otherSessions = sessions.filter((entry) => entry.id !== session.id);
-
-        if (!otherSessions.length) {
-          setSecurityMessage("No other signed-in devices were found.");
+        const target = sessions.find((entry) => entry.id === sessionId);
+        if (!target) {
           return;
         }
 
-        await Promise.all(otherSessions.map((entry) => (entry as unknown as { revoke: () => Promise<void> }).revoke()));
-        const refreshedSessions = await user.getSessions();
-        setSecuritySessions(
-          refreshedSessions.map((entry) => ({
-            id: entry.id,
-            status: entry.status,
-            lastActiveAt:
-              (typeof entry.lastActiveAt === "number" ? new Date(entry.lastActiveAt).toISOString() : null) ??
-              (typeof entry.expireAt === "number" ? new Date(entry.expireAt).toISOString() : null),
-            isCurrent: entry.id === session.id,
-          }))
-        );
-        setSecurityMessage("Signed out of other devices.");
+        await (target as unknown as { revoke: () => Promise<void> }).revoke();
+        setSecuritySessions((current) => current.filter((entry) => entry.id !== sessionId));
+        setSecurityMessage("Device signed out.");
       } catch (error) {
-        setSecurityMessage(error instanceof Error ? error.message : "Unable to sign out other devices.");
+        setSecurityMessage(error instanceof Error ? error.message : "Unable to sign out this device.");
+      }
+    });
+  };
+
+  const handleSignOutAllDevices = () => {
+    if (!user) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const sessions = await user.getSessions();
+        await Promise.all(sessions.map((entry) => (entry as unknown as { revoke: () => Promise<void> }).revoke()));
+        await handleSafeSignOut();
+      } catch (error) {
+        setSecurityMessage(error instanceof Error ? error.message : "Unable to sign out all devices.");
       }
     });
   };
@@ -1371,7 +1394,6 @@ export function SettingsHub({
           phase: "success",
           deletedCount: null,
         });
-        setStatusMessage("All Clover data was deleted successfully.");
         return;
       }
 
@@ -1870,48 +1892,40 @@ export function SettingsHub({
               </div>
             </div>
 
-            <div className="settings-preference-grid">
-              <article className="settings-action-card settings-preference-card">
-                <div className="settings-preference-card__head">
-                  <h5>Active Sessions</h5>
-                </div>
-                <div className="settings-session-list">
-                  {securitySessions.length ? (
-                    securitySessions.map((entry) => (
-                      <div key={entry.id} className="settings-session-item">
-                        <strong>{entry.isCurrent ? "Current device" : "Signed-in device"}</strong>
-                        <span>{formatRelativeSessionTime(entry.lastActiveAt)}</span>
+            <div className="settings-security-card settings-action-card">
+              <div className="settings-preference-card__head">
+                <h5>Active Sessions</h5>
+              </div>
+              <div className="settings-session-list">
+                {securitySessions.length ? (
+                  securitySessions.map((entry) => (
+                    <div key={entry.id} className="settings-session-item">
+                      <div className="settings-session-item__copy">
+                        <strong>{entry.isCurrent ? "Current device" : entry.browserName || entry.deviceType || "Signed-in device"}</strong>
+                        <span>
+                          {[entry.deviceType, entry.browserName, entry.location].filter(Boolean).join(" · ") || "Device activity"} · {formatRelativeSessionTime(entry.lastActiveAt)}
+                        </span>
                       </div>
-                    ))
-                  ) : (
-                    <div className="settings-session-item">
-                      <strong>{securityLoading ? "Loading..." : "Current device"}</strong>
-                      <span>{securityLoading ? "Fetching active sessions" : "This device is active."}</span>
+                      {!entry.isCurrent ? (
+                        <button type="button" className="button button-secondary button-small" disabled={isPending} onClick={() => handleSignOutSession(entry.id)}>
+                          Sign out
+                        </button>
+                      ) : null}
                     </div>
-                  )}
-                </div>
-              </article>
-
-              <article className="settings-action-card settings-preference-card">
-                <div className="settings-preference-card__head">
-                  <h5>Sign Out Other Devices</h5>
-                </div>
-                <p>End all other active sessions and keep only this device signed in.</p>
-                <div className="settings-action-card__row">
-                  <button
-                    type="button"
-                    className="button button-secondary button-small"
-                    disabled={isPending || securityLoading}
-                    onClick={handleSignOutOtherDevices}
-                  >
-                    Sign out other devices
-                  </button>
-                  <button type="button" className="button button-secondary button-small" onClick={handleSafeSignOut}>
-                    Sign out here
-                  </button>
-                </div>
-                {securityMessage ? <p className="settings-helper">{securityMessage}</p> : null}
-              </article>
+                  ))
+                ) : (
+                  <div className="settings-session-item">
+                    <strong>{securityLoading ? "Loading..." : "Current device"}</strong>
+                    <span>{securityLoading ? "Fetching active sessions" : "This browser is active."}</span>
+                  </div>
+                )}
+              </div>
+              <div className="settings-security-card__footer">
+                <button type="button" className="button button-danger button-small" disabled={isPending || securityLoading} onClick={handleSignOutAllDevices}>
+                  Sign out all devices
+                </button>
+              </div>
+              {securityMessage ? <p className="settings-helper">{securityMessage}</p> : null}
             </div>
           </section>
         ) : null}
@@ -2017,6 +2031,24 @@ export function SettingsHub({
                   </select>
                 </label>
                 <label className="settings-inline-field">
+                  <span>Number format</span>
+                  <select
+                    value={regionalPreferences.numberFormat}
+                    onChange={(event) =>
+                      setRegionalPreferences((current) => ({
+                        ...current,
+                        numberFormat: event.target.value as RegionalPreferences["numberFormat"],
+                      }))
+                    }
+                  >
+                    <option value="1,234.56">1,234.56</option>
+                    <option value="1.234,56">1.234,56</option>
+                  </select>
+                </label>
+              </article>
+
+              <article className="settings-action-card settings-preference-card">
+                <label className="settings-inline-field">
                   <span>Date format</span>
                   <select
                     value={regionalPreferences.dateFormat}
@@ -2030,24 +2062,6 @@ export function SettingsHub({
                     <option value="MM/DD/YYYY">MM/DD/YYYY</option>
                     <option value="DD/MM/YYYY">DD/MM/YYYY</option>
                     <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-                  </select>
-                </label>
-              </article>
-
-              <article className="settings-action-card settings-preference-card">
-                <label className="settings-inline-field">
-                  <span>Number format</span>
-                  <select
-                    value={regionalPreferences.numberFormat}
-                    onChange={(event) =>
-                      setRegionalPreferences((current) => ({
-                        ...current,
-                        numberFormat: event.target.value as RegionalPreferences["numberFormat"],
-                      }))
-                    }
-                  >
-                    <option value="1,234.56">1,234.56</option>
-                    <option value="1.234,56">1.234,56</option>
                   </select>
                 </label>
                 <label className="settings-inline-field">
@@ -2134,15 +2148,9 @@ export function SettingsHub({
               <div className="settings-guidance-menu-wrap">
                 <div className="settings-guidance-menu-head">
                   <h6>Menu visibility</h6>
+                  <span>Show</span>
                 </div>
                 <table className="settings-guidance-menu-table">
-                  <caption className="sr-only">Choose which Clover areas appear in the main menu</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Main menu</th>
-                      <th scope="col">Show</th>
-                    </tr>
-                  </thead>
                   <tbody>
                     {guidanceMenuItems.map((item) => {
                       const isVisible = guidanceMenuVisibility[item.key];
@@ -2151,7 +2159,6 @@ export function SettingsHub({
                         <tr key={item.key}>
                           <th scope="row">
                             <span>{item.label}</span>
-                            {isVisible ? <small>{item.description}</small> : null}
                           </th>
                           <td>
                             <label className="settings-guidance-checkbox">
@@ -2274,7 +2281,7 @@ export function SettingsHub({
                               <path d="M7.5 3.5v4M16.5 3.5v4M4 9.5h16" />
                             </svg>
                             <span className="settings-date-control__value">
-                              {historyCutoff.split("-").reverse().join("/")}
+                              {formatSettingsDate(historyCutoff, regionalPreferences.dateFormat)}
                             </span>
                             <input
                               type="date"
@@ -2372,7 +2379,16 @@ export function SettingsHub({
         {activeSection === "categories" ? (
           workspaceReady ? (
             <SettingsCategoriesPanel workspaceId={workspaceId} />
-          ) : null
+          ) : (
+            <section className="settings-section settings-section--swap" role="tabpanel">
+              <div className="settings-section__intro settings-section__intro--single">
+                <div>
+                  <h4>Categories</h4>
+                  <p className="settings-helper">Loading your Personal workspace categories...</p>
+                </div>
+              </div>
+            </section>
+          )
         ) : null}
 
         {activeSection === "plan" ? (
