@@ -24390,6 +24390,7 @@ button.accounts-detail__transaction-head-cell {
 }
 
 .accounts-add-fields__row--amount {
+  --accounts-add-money-control-height: 44px;
   display: flex;
   align-items: flex-end;
 }
@@ -24419,6 +24420,8 @@ button.accounts-detail__transaction-head-cell {
 .accounts-add-fields__balance input {
   min-width: 0;
   width: 100%;
+  min-height: var(--accounts-add-money-control-height);
+  height: var(--accounts-add-money-control-height);
 }
 
 .accounts-add-fields__currency {
@@ -24428,8 +24431,8 @@ button.accounts-detail__transaction-head-cell {
 
 .accounts-add-fields__currency .currency-selector__button {
   width: 100%;
-  min-height: 42px;
-  height: 42px;
+  min-height: var(--accounts-add-money-control-height);
+  height: var(--accounts-add-money-control-height);
 }
 
 .accounts-add-fields__currency .currency-selector__menu {
