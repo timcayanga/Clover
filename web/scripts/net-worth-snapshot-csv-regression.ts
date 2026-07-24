@@ -27,12 +27,24 @@ assert.equal(byName.get("BPI Supplemental")?.institution, "BPI");
 assert.equal(byName.get("BPI Personal / Ateneo")?.rawPayload?.balance, 1020);
 assert.equal(byName.get("GCash")?.rawPayload?.accountType, "wallet");
 assert.equal(byName.get("PDAX")?.rawPayload?.accountType, "investment");
+assert.equal(byName.get("GFunds")?.institution, "GFunds");
+assert.equal(byName.get("GStocks Philippines")?.institution, "GStocks Philippines");
+assert.equal(byName.get("GCrypto")?.institution, "GCrypto");
+assert.equal(byName.get("BPI Time Deposit")?.institution, "BPI Time Deposit");
 assert.equal(byName.get("Cash")?.rawPayload?.accountType, "cash");
 assert.equal(byName.get("Cash")?.institution, "Cash", "PHP cash must reuse the workspace's default Cash account.");
 assert.equal(byName.get("Cash USD")?.currency, "USD");
 assert.equal(byName.get("Accounts Receivable")?.rawPayload?.accountType, "receivable");
 assert.equal(byName.has("PHP Total"), false, "Summary totals must not become accounts.");
 assert.equal(byName.has("Savings Total"), false, "Section totals must not become accounts.");
+assert.ok(
+  rows.every((row) => row.date === "2026-03-24" && row.rawPayload?.snapshotDate === "2026-03-24"),
+  "Every balance must use the latest snapshot date."
+);
+assert.ok(
+  rows.every((row) => row.rawPayload?.documentType === "account_inventory"),
+  "A multi-account balance matrix must not be promoted to one account-detail document."
+);
 assert.equal(
   (byName.get("BPI Supplemental")?.rawPayload?.balanceHistory as unknown[])?.length,
   2,
@@ -58,7 +70,17 @@ const main = async () => {
   assert.match(
     workerSource,
     /\[net-worth-csv\] unable to remove legacy fabricated transaction rows/,
-    "Corrected reimports must clean up only unconfirmed transactions fabricated by an older parser."
+    "Corrected reimports must clean up transactions fabricated by an older parser."
+  );
+  assert.match(
+    workerSource,
+    /legacyInvestmentSnapshots/,
+    "Corrected reimports must remove the legacy consolidated investment snapshot."
+  );
+  assert.match(
+    workerSource,
+    /rawPayload\?\.source === "net_worth_snapshot_csv"/,
+    "Multi-account inventories must stay on the account-group confirmation path."
   );
   assert.match(workerSource, /readParsedRowAccountType/, "Worker must honor cash and receivable account types.");
   assert.match(

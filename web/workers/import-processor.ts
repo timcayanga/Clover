@@ -333,6 +333,28 @@ const inferStructuredDocumentImportModeFromParsedRows = (
     return requestedMode;
   }
 
+  // A multi-account balance inventory is not one account-detail document.
+  // Promoting it to account_detail creates one synthetic investment snapshot
+  // and groups every investment marker under whichever account wins the
+  // document-level fallback (often "Unknown"). Keep it on the statement path;
+  // confirmation already materializes every account group independently.
+  if (
+    markerRows.length > 1 &&
+    markerRows.every((row) => {
+      const rawPayload =
+        row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+          ? (row.rawPayload as Record<string, unknown>)
+          : null;
+      return (
+        rawPayload?.source === "net_worth_snapshot_csv" ||
+        rawPayload?.source === "account_snapshot_csv" ||
+        rawPayload?.source === "wide_account_snapshot_csv"
+      );
+    })
+  ) {
+    return requestedMode;
+  }
+
   const visibleTransactionRows = parsedRows.filter((row) => {
     const rawPayload = row.rawPayload;
     return !(
@@ -7460,9 +7482,6 @@ export const processImportFileText = async (
 
     for (const sourceMatch of completedSourceMatches) {
       const visibleRows = await countTransactionsByImportFileCompat(sourceMatch.id).catch(() => 0);
-      if (visibleRows <= 0) {
-        continue;
-      }
       // Older builds misread net-worth snapshot matrices as transaction
       // ledgers. Do not let those fabricated rows block a corrected,
       // snapshot-only reimport with the same source fingerprint.
@@ -7472,13 +7491,13 @@ export const processImportFileText = async (
           .endsWith(".csv") && /\bnet[\s_-]*worth(?:[\s_-]*calculator)?\b/i.test(String(sourceMatch.fileName ?? ""));
       if (likelyNetWorthSnapshotCsv || legacyMatchLooksLikeNetWorthSnapshotCsv) {
         // Older generic CSV builds materialized every balance-history cell as
-        // a transaction. A deterministic snapshot re-import is authoritative
-        // for this exact source file, so remove only the old auto-generated
-        // rows while preserving anything the user confirmed or edited.
+        // a transaction and then auto-confirmed the rows because parser
+        // confidence was high. This file is an account inventory, so a
+        // deterministic re-import is authoritative: none of its source rows
+        // are transactions, regardless of their old automatic review status.
         await prisma.transaction.deleteMany({
           where: {
             deletedAt: null,
-            reviewStatus: { notIn: ["confirmed", "edited", "rejected"] },
             OR: [
               { importFileId: sourceMatch.id },
               {
@@ -7496,6 +7515,73 @@ export const processImportFileText = async (
             error,
           });
         });
+
+        // Earlier builds also promoted the whole inventory to one
+        // account-detail document. That produced a consolidated investment
+        // snapshot/card (usually "Unknown" or "GCash") containing holdings
+        // that actually represent separate institutions. Remove only the
+        // document snapshot tied to this exact legacy import, then remove its
+        // now-empty uploaded account if it has no other financial activity.
+        const legacyInvestmentSnapshots = await prisma.investmentSnapshot.findMany({
+          where: {
+            workspaceId: String(importFile.workspaceId),
+            documentImport: {
+              importFileId: sourceMatch.id,
+            },
+          },
+          select: {
+            id: true,
+            accountId: true,
+          },
+        }).catch(() => []);
+        const legacyInvestmentSnapshotIds = legacyInvestmentSnapshots.map((snapshot) => snapshot.id);
+        const legacyConsolidatedAccountIds = Array.from(
+          new Set(
+            legacyInvestmentSnapshots
+              .map((snapshot) => snapshot.accountId)
+              .filter((candidate): candidate is string => Boolean(candidate))
+          )
+        );
+        if (legacyInvestmentSnapshotIds.length > 0) {
+          await prisma.investmentSnapshot.deleteMany({
+            where: {
+              id: { in: legacyInvestmentSnapshotIds },
+              workspaceId: String(importFile.workspaceId),
+            },
+          }).catch((error) => {
+            console.warn("[net-worth-csv] unable to remove legacy consolidated investment snapshots", {
+              importFileId,
+              legacyImportFileId: sourceMatch.id,
+              legacyInvestmentSnapshotIds,
+              error,
+            });
+          });
+        }
+        if (legacyConsolidatedAccountIds.length > 0) {
+          await prisma.account.deleteMany({
+            where: {
+              id: { in: legacyConsolidatedAccountIds },
+              workspaceId: String(importFile.workspaceId),
+              source: "upload",
+              type: "investment",
+              transactions: { none: {} },
+              investmentSnapshots: { none: {} },
+              investmentHoldings: { none: {} },
+              investmentPurchases: { none: {} },
+              investmentDividends: { none: {} },
+            },
+          }).catch((error) => {
+            console.warn("[net-worth-csv] unable to remove legacy consolidated investment accounts", {
+              importFileId,
+              legacyImportFileId: sourceMatch.id,
+              legacyConsolidatedAccountIds,
+              error,
+            });
+          });
+        }
+        continue;
+      }
+      if (visibleRows <= 0) {
         continue;
       }
 
