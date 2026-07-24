@@ -2335,6 +2335,29 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         : [model, textModel, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]
   );
   const fallbackChain = modelFallbackChain;
+  const isSinglePageGenericImage =
+    inferredDocumentFamily === "generic_document" &&
+    isImageStatementMode &&
+    pageImagesToSend.length === 1;
+  // A one-page generic image (receipt, financial note, or unfamiliar phone
+  // capture) needs a compact structured result, not a statement-sized output
+  // budget. Keeping this below the general 3k cap reduces cold vision latency
+  // while leaving multi-page and known-statement quality paths unchanged.
+  const maxOutputTokens = isSinglePageGenericImage
+    ? 2_400
+    : isReceiptMode
+      ? 2_500
+      : inferredDocumentFamily === "generic_document"
+        ? 3_000
+        : pdfFileDataBase64
+          ? 6_000
+          : isImageStatementMode
+            ? 8_000
+            : pageImagesToSend.length > 0
+              ? params.text.trim().length === 0
+                ? 6_000
+                : 2_500
+              : 4_000;
   const buildUserContent = (pageImages: Array<{ page: number; dataUrl: string }>) => {
     const userContent: Array<Record<string, unknown>> = [{ type: "input_text", text: userPrompt }];
     if (pdfFileDataBase64) {
@@ -2366,19 +2389,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         },
         body: JSON.stringify({
           model: selectedModel,
-          max_output_tokens: isReceiptMode
-            ? 2_500
-            : inferredDocumentFamily === "generic_document"
-              ? 3_000
-            : pdfFileDataBase64
-              ? 6_000
-              : isImageStatementMode
-                ? 8_000
-              : pageImages.length > 0
-                ? params.text.trim().length === 0
-                  ? 6_000
-                  : 2_500
-                : 4_000,
+          max_output_tokens: maxOutputTokens,
           input: [
             {
               role: "system",
