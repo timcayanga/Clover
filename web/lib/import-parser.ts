@@ -355,10 +355,10 @@ const resolveNetWorthSnapshotAccount = (
   if (!normalized) return null;
 
   if (normalized === "php" && normalizedGroup.includes("physical cash")) {
-    return { accountName: "Cash", institution: null, accountType: "cash", currency: "PHP" };
+    return { accountName: "Cash", institution: "Cash", accountType: "cash", currency: "PHP" };
   }
   if (normalized === "usd" && normalizedGroup.includes("physical cash")) {
-    return { accountName: "Cash USD", institution: null, accountType: "cash", currency: "USD" };
+    return { accountName: "Cash USD", institution: "Cash", accountType: "cash", currency: "USD" };
   }
   if (normalized.includes("accounts receivable") || normalizedGroup.includes("accounts receivable")) {
     return { accountName: "Accounts Receivable", institution: null, accountType: "receivable", currency: "PHP" };

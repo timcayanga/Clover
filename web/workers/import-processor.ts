@@ -4375,6 +4375,49 @@ const groupParsedRowsByAccount = (
   return Array.from(grouped.entries()).map(([key, groupRows]) => ({ key, rows: groupRows }));
 };
 
+const supportedImportedAccountTypes = new Set<AccountType>([
+  "bank",
+  "wallet",
+  "credit_card",
+  "cash",
+  "investment",
+  "loan",
+  "mortgage",
+  "line_of_credit",
+  "receivable",
+  "payable",
+  "bnpl",
+  "prepaid",
+  "insurance",
+  "other",
+]);
+
+const readParsedRowAccountType = (row: Record<string, unknown>): AccountType | null => {
+  const directType = typeof row.accountType === "string" ? row.accountType.trim() : "";
+  const rawPayload =
+    row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+      ? (row.rawPayload as Record<string, unknown>)
+      : null;
+  const payloadType = typeof rawPayload?.accountType === "string" ? rawPayload.accountType.trim() : "";
+  const candidate = directType || payloadType;
+  return supportedImportedAccountTypes.has(candidate as AccountType) ? (candidate as AccountType) : null;
+};
+
+const parsedRowsAreAccountSnapshotInventory = (rows: Array<Record<string, unknown>>) =>
+  rows.length > 0 &&
+  rows.every((row) => {
+    const rawPayload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    return (
+      rawPayload?.kind === "account_snapshot_marker" &&
+      (rawPayload.source === "net_worth_snapshot_csv" ||
+        rawPayload.source === "account_snapshot_csv" ||
+        rawPayload.source === "wide_account_snapshot_csv")
+    );
+  });
+
 const hasMultipleParsedAccountNumbers = (rows: Array<Record<string, unknown>>) =>
   new Set(rows.map(readParsedRowAccountNumber).filter((value): value is string => Boolean(value))).size > 1;
 
@@ -4962,14 +5005,20 @@ const ensureParsedAccountGroupsMaterialized = async (params: {
     const institution = readParsedRowInstitution(firstRow, fallbackInstitution);
     const groupRows = group.rows as EnrichedParsedImportRow[];
     const groupEndingBalance = getImportAccountBalanceFromParsedRows(groupRows);
+    const groupAccountType = readParsedRowAccountType(firstRow);
+    const groupCurrency =
+      readParsedRowAccountCurrency(firstRow) ??
+      (typeof params.metadata?.currency === "string" ? params.metadata.currency : null);
     const account = await resolveConfirmationAccount({
       importFile: params.importFile,
       statementMetadata: {
         accountName,
         institution,
         accountNumber,
-        accountType: typeof params.metadata?.accountType === "string" ? params.metadata.accountType : null,
-        currency: typeof params.metadata?.currency === "string" ? params.metadata.currency : null,
+        accountType:
+          groupAccountType ??
+          (typeof params.metadata?.accountType === "string" ? params.metadata.accountType : null),
+        currency: groupCurrency,
         openingBalance: typeof params.metadata?.openingBalance === "number" ? params.metadata.openingBalance : null,
         endingBalance: groupEndingBalance ?? (typeof params.metadata?.endingBalance === "number" ? params.metadata.endingBalance : null),
       },
@@ -5402,6 +5451,9 @@ const resolveConfirmationAccount = async (params: {
       ? getMobileScreenshotWalletIdentity(mobileScreenshotIdentityRow.rawPayload as Prisma.JsonValue)
       : null;
   const fileName = String(params.importFile.fileName ?? "");
+  const accountSnapshotInventory = parsedRowsAreAccountSnapshotInventory(
+    params.parsedRows as Array<Record<string, unknown>>
+  );
   const metadataIdentity = resolveStatementIdentityFromMetadata(params.statementMetadata);
   const parsedRowIdentity = resolveStatementIdentityFromParsedRows(params.parsedRows as Array<Record<string, unknown>>, {
     fileName,
@@ -5411,7 +5463,7 @@ const resolveConfirmationAccount = async (params: {
     Boolean(parsedRowIdentity?.accountName || parsedRowIdentity?.institution || parsedRowIdentity?.accountNumber);
   const preferredIdentity = shouldPreferParsedScreenshotIdentity ? parsedRowIdentity : metadataIdentity;
   const fallbackIdentity = shouldPreferParsedScreenshotIdentity ? metadataIdentity : parsedRowIdentity;
-  const fileNameInstitutionFallback = isGenericMobileScreenshotFileName(fileName)
+  const fileNameInstitutionFallback = isGenericMobileScreenshotFileName(fileName) || accountSnapshotInventory
     ? null
     : sanitizeBankNameLabel(normalizeBankName(fileName));
   const inferredInstitution =
@@ -5611,6 +5663,37 @@ const resolveConfirmationAccount = async (params: {
       currency: inferredCurrency,
       balance: inferredBalance,
       clearBalance: Boolean(mobileScreenshotWalletIdentity) || shouldClearImportedBalanceForActivityOnlyInvestment,
+      creditLimit: inferredCreditLimit,
+      ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
+    });
+
+    await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
+    return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
+  }
+
+  const normalizedSnapshotName = String(inferredAccountName ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+  const normalizedSnapshotInstitution = String(inferredInstitution ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+  const existingSnapshotAccountWithStaleType =
+    accountSnapshotInventory && normalizedSnapshotName
+      ? workspaceAccounts
+          .filter((account) => account.source === "upload")
+          .filter((account) => account.currency === (inferredCurrency ?? account.currency))
+          .filter((account) => account.name.replace(/\s+/g, " ").trim().toLowerCase() === normalizedSnapshotName)
+          .filter(
+            (account) =>
+              String(account.institution ?? "").replace(/\s+/g, " ").trim().toLowerCase() === normalizedSnapshotInstitution
+          )
+          .sort(sortImportedAccountsByFreshness)[0] ?? null
+      : null;
+  if (existingSnapshotAccountWithStaleType) {
+    const updatedAccount = await updateAccountIdentity(existingSnapshotAccountWithStaleType, {
+      name: inferredAccountName,
+      institution: inferredInstitution,
+      accountNumber: inferredAccountNumber,
+      type: accountIdentityType,
+      source: "upload",
+      currency: inferredCurrency,
+      balance: inferredBalance,
       creditLimit: inferredCreditLimit,
       ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
     });
@@ -7388,6 +7471,31 @@ export const processImportFileText = async (
           .toLowerCase()
           .endsWith(".csv") && /\bnet[\s_-]*worth(?:[\s_-]*calculator)?\b/i.test(String(sourceMatch.fileName ?? ""));
       if (likelyNetWorthSnapshotCsv || legacyMatchLooksLikeNetWorthSnapshotCsv) {
+        // Older generic CSV builds materialized every balance-history cell as
+        // a transaction. A deterministic snapshot re-import is authoritative
+        // for this exact source file, so remove only the old auto-generated
+        // rows while preserving anything the user confirmed or edited.
+        await prisma.transaction.deleteMany({
+          where: {
+            deletedAt: null,
+            reviewStatus: { notIn: ["confirmed", "edited", "rejected"] },
+            OR: [
+              { importFileId: sourceMatch.id },
+              {
+                rawPayload: {
+                  path: ["sourceImportFileId"],
+                  equals: sourceMatch.id,
+                },
+              },
+            ],
+          },
+        }).catch((error) => {
+          console.warn("[net-worth-csv] unable to remove legacy fabricated transaction rows", {
+            importFileId,
+            legacyImportFileId: sourceMatch.id,
+            error,
+          });
+        });
         continue;
       }
 
@@ -11951,34 +12059,10 @@ export const confirmImportFile = async (
   if (notesCashAccountId && !notesCashAccount) {
     throw new Error("Cash account not found");
   }
-  const supportedGroupAccountTypes = new Set<AccountType>([
-    "bank",
-    "wallet",
-    "credit_card",
-    "cash",
-    "investment",
-    "loan",
-    "mortgage",
-    "line_of_credit",
-    "receivable",
-    "payable",
-    "bnpl",
-    "prepaid",
-    "insurance",
-    "other",
-  ]);
   for (const group of multiAccountImport ? parsedAccountGroups : parsedAccountGroups.slice(0, 1)) {
     const firstGroupRow = group.rows[0] ?? {};
     const groupRows = group.rows as EnrichedParsedImportRow[];
-    const groupSnapshotPayload =
-      firstGroupRow.rawPayload && typeof firstGroupRow.rawPayload === "object" && !Array.isArray(firstGroupRow.rawPayload)
-        ? (firstGroupRow.rawPayload as Record<string, unknown>)
-        : null;
-    const payloadAccountType =
-      typeof groupSnapshotPayload?.accountType === "string" &&
-      supportedGroupAccountTypes.has(groupSnapshotPayload.accountType as AccountType)
-        ? (groupSnapshotPayload.accountType as AccountType)
-        : null;
+    const payloadAccountType = readParsedRowAccountType(firstGroupRow);
     const groupAccountType = payloadAccountType ?? baseStatementMetadata.accountType;
     const groupEndingBalance = getImportAccountBalanceFromParsedRows(groupRows);
     const groupIsSnapshotOnly = groupRows.length > 0 && groupRows.every(isSnapshotOnlyParsedRow);

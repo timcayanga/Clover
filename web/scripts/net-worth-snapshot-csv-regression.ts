@@ -28,6 +28,7 @@ assert.equal(byName.get("BPI Personal / Ateneo")?.rawPayload?.balance, 1020);
 assert.equal(byName.get("GCash")?.rawPayload?.accountType, "wallet");
 assert.equal(byName.get("PDAX")?.rawPayload?.accountType, "investment");
 assert.equal(byName.get("Cash")?.rawPayload?.accountType, "cash");
+assert.equal(byName.get("Cash")?.institution, "Cash", "PHP cash must reuse the workspace's default Cash account.");
 assert.equal(byName.get("Cash USD")?.currency, "USD");
 assert.equal(byName.get("Accounts Receivable")?.rawPayload?.accountType, "receivable");
 assert.equal(byName.has("PHP Total"), false, "Summary totals must not become accounts.");
@@ -54,7 +55,34 @@ const main = async () => {
     /likelyNetWorthSnapshotCsv \|\| legacyMatchLooksLikeNetWorthSnapshotCsv/,
     "A legacy bad transaction parse must not block corrected reimport."
   );
-  assert.match(workerSource, /supportedGroupAccountTypes/, "Worker must honor cash and receivable account types.");
+  assert.match(
+    workerSource,
+    /\[net-worth-csv\] unable to remove legacy fabricated transaction rows/,
+    "Corrected reimports must clean up only unconfirmed transactions fabricated by an older parser."
+  );
+  assert.match(workerSource, /readParsedRowAccountType/, "Worker must honor cash and receivable account types.");
+  assert.match(
+    workerSource,
+    /const groupAccountType = readParsedRowAccountType\(firstRow\)/,
+    "Early account materialization must honor each snapshot column's account type."
+  );
+  assert.match(
+    workerSource,
+    /isGenericMobileScreenshotFileName\(fileName\) \|\| accountSnapshotInventory/,
+    "Snapshot inventories must not infer an institution from the CSV filename."
+  );
+  assert.match(
+    workerSource,
+    /existingSnapshotAccountWithStaleType/,
+    "A corrected snapshot import must repair an older account card that was created with the wrong type."
+  );
+
+  const modalSource = await readFile(join(process.cwd(), "components/import-files-modal.tsx"), "utf8");
+  assert.match(
+    modalSource,
+    /const rowAccountType = readRowAccountType\(row\)/,
+    "Optimistic multi-account previews must keep each snapshot account type."
+  );
 
   console.log("[PASS] Net-worth snapshot CSV routes to 19 accounts and zero transactions.");
 };
