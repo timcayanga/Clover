@@ -464,6 +464,7 @@ const resolveNetWorthSnapshotAccount = (
     /^(?:php|usd)?\s*(?:grand\s+)?(?:total|subtotal|net worth|assets?|liabilities?|equity|gain|loss|change)$/i.test(
       accountName
     ) ||
+    /^liquid\s+cash$/i.test(accountName) ||
     /\btotal$/i.test(accountName)
   ) {
     return null;

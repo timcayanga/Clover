@@ -5154,6 +5154,9 @@ const resolveConfirmationAccount = async (params: {
 }) => {
   const workspaceId = String(params.importFile.workspaceId);
   const compatibleAccountColumns = await getCompatibleAccountColumns();
+  const accountSnapshotInventory = parsedRowsAreAccountSnapshotInventory(
+    params.parsedRows as Array<Record<string, unknown>>
+  );
   const normalizeImportedInvestmentDate = (value: unknown) => {
     if (value instanceof Date && !Number.isNaN(value.getTime())) {
       return value;
@@ -5342,12 +5345,18 @@ const resolveConfirmationAccount = async (params: {
     }
   ) => {
     const data: Record<string, unknown> = {};
-    const displayName = formatUploadAccountDisplayName(
-      next.name ?? account.name,
-      next.institution ?? account.institution,
-      next.accountNumber ?? account.accountNumber,
-      next.type ?? account.type
-    );
+    const explicitInventoryName =
+      accountSnapshotInventory && typeof next.name === "string" && next.name.trim()
+        ? next.name.trim()
+        : null;
+    const displayName =
+      explicitInventoryName ??
+      formatUploadAccountDisplayName(
+        next.name ?? account.name,
+        next.institution ?? account.institution,
+        next.accountNumber ?? account.accountNumber,
+        next.type ?? account.type
+      );
     if (displayName.trim() && displayName.trim() !== account.name) {
       data.name = displayName.trim();
     }
@@ -5473,9 +5482,6 @@ const resolveConfirmationAccount = async (params: {
       ? getMobileScreenshotWalletIdentity(mobileScreenshotIdentityRow.rawPayload as Prisma.JsonValue)
       : null;
   const fileName = String(params.importFile.fileName ?? "");
-  const accountSnapshotInventory = parsedRowsAreAccountSnapshotInventory(
-    params.parsedRows as Array<Record<string, unknown>>
-  );
   const ensureDefaultCashAccountForImport = async (currency: string) => {
     // A deterministic account inventory includes its own Cash rows. Re-running
     // the default-account upsert once per column adds avoidable database
@@ -5886,7 +5892,10 @@ const resolveConfirmationAccount = async (params: {
     const compatibleAccountColumns = await getCompatibleAccountColumns();
       const accountData = {
         workspaceId,
-        name: formatUploadAccountDisplayName(inferredAccountName, inferredInstitution, inferredAccountNumber, accountIdentityType),
+        name:
+          accountSnapshotInventory && inferredAccountName
+            ? inferredAccountName
+            : formatUploadAccountDisplayName(inferredAccountName, inferredInstitution, inferredAccountNumber, accountIdentityType),
         institution: inferredInstitution,
         ...(compatibleAccountColumns.has("accountNumber") && inferredAccountNumber
           ? { accountNumber: inferredAccountNumber }

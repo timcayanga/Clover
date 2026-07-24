@@ -1656,6 +1656,26 @@ export async function GET(request: Request) {
         .map((checkpoint) => checkpoint.accountId)
         .filter((accountId): accountId is string => typeof accountId === "string" && accountId.trim().length > 0)
     );
+    const publishedInventoryAccountIds = new Set(
+      statementCheckpoints.flatMap((checkpoint) => {
+        const sourceMetadata =
+          checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
+            ? (checkpoint.sourceMetadata as Record<string, unknown>)
+            : null;
+        const publishedAccountSummaries = Array.isArray(sourceMetadata?.publishedAccountSummaries)
+          ? sourceMetadata.publishedAccountSummaries
+          : [];
+
+        return publishedAccountSummaries.flatMap((summary) => {
+          if (!summary || typeof summary !== "object" || Array.isArray(summary)) {
+            return [];
+          }
+
+          const accountId = (summary as Record<string, unknown>).accountId;
+          return typeof accountId === "string" && accountId.trim() ? [accountId.trim()] : [];
+        });
+      })
+    );
     const checkpointAccountNumbers = new Set(
       statementCheckpoints
         .map((checkpoint) => {
@@ -1681,7 +1701,7 @@ export async function GET(request: Request) {
       }
 
       const transactionCount = transactionCountByAccountId.get(account.id) ?? 0;
-      if (transactionCount > 0 || checkpointAccountIds.has(account.id)) {
+      if (transactionCount > 0 || checkpointAccountIds.has(account.id) || publishedInventoryAccountIds.has(account.id)) {
         return false;
       }
 
@@ -1713,7 +1733,7 @@ export async function GET(request: Request) {
       }
 
       const transactionCount = transactionCountByAccountId.get(account.id) ?? 0;
-      if (transactionCount > 0 || checkpointAccountIds.has(account.id)) {
+      if (transactionCount > 0 || checkpointAccountIds.has(account.id) || publishedInventoryAccountIds.has(account.id)) {
         return false;
       }
 

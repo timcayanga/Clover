@@ -3035,6 +3035,9 @@ export function ImportFilesModal({
         if (hasSettledRows) {
           triggerImportEnrichment(importFileId);
           if (statusAccountSummaries.length > 1) {
+            const statusIsAccountInventory =
+              confirmedTransactionsCount === 0 &&
+              statusAccountSummaries.every((summary) => Number(summary.rowsImported ?? 0) === 0);
             const finalizedSummaries: UploadInsightsSummary[] = [];
             for (const accountSummary of statusAccountSummaries) {
               const summaryAccountName = accountSummary.accountName ?? resolvedAccountDisplayName;
@@ -3042,17 +3045,19 @@ export function ImportFilesModal({
                 accountSummary.institution ?? processingIdentity?.institution ?? summaryContext.institution ?? null;
               const summaryAccountType =
                 accountSummary.accountType ?? processingIdentity?.accountType ?? summaryContext.accountType ?? null;
-              const summaryPreviewTransactions = await loadOrGetKnownPreviewTransactions({
-                workspaceId,
-                importFileId,
-                accountId: accountSummary.accountId,
-                optimisticAccountId: summaryContext.optimisticAccountId,
-                accountName: summaryAccountName,
-                institution: summaryInstitution,
-                accountNumber: accountSummary.accountNumber,
-                accountType: summaryAccountType,
-                previewTransactions: summaryContext.previewTransactions,
-              });
+              const summaryPreviewTransactions = statusIsAccountInventory
+                ? []
+                : await loadOrGetKnownPreviewTransactions({
+                    workspaceId,
+                    importFileId,
+                    accountId: accountSummary.accountId,
+                    optimisticAccountId: summaryContext.optimisticAccountId,
+                    accountName: summaryAccountName,
+                    institution: summaryInstitution,
+                    accountNumber: accountSummary.accountNumber,
+                    accountType: summaryAccountType,
+                    previewTransactions: summaryContext.previewTransactions,
+                  });
               const accountFinalizedSummary = buildResolvedOptimisticUploadSummary({
                 accounts,
                 workspaceId,
@@ -3064,8 +3069,10 @@ export function ImportFilesModal({
                 accountNumber: accountSummary.accountNumber,
                 accountType: summaryAccountType,
                 currency: accountSummary.currency,
-                optimisticAccountId: summaryContext.optimisticAccountId,
-                balanceSources: [accountSummary.balance, stableOptimisticBalance],
+                optimisticAccountId: statusIsAccountInventory ? null : summaryContext.optimisticAccountId,
+                balanceSources: statusIsAccountInventory
+                  ? [accountSummary.balance]
+                  : [accountSummary.balance, stableOptimisticBalance],
                 previewTransactions: summaryPreviewTransactions,
                 accountSummaries: [accountSummary],
                 optimistic: false,
@@ -3073,10 +3080,24 @@ export function ImportFilesModal({
 
               finalizedSummaries.push(accountFinalizedSummary);
               seedImportedWorkspaceCaches(workspaceId, accountFinalizedSummary);
-              await Promise.resolve(onImported(accountFinalizedSummary));
+              if (!statusIsAccountInventory) {
+                await Promise.resolve(onImported(accountFinalizedSummary));
+              }
             }
 
             const combinedFinalizedSummary = combineUploadInsightsSummaries(finalizedSummaries);
+            if (statusIsAccountInventory && combinedFinalizedSummary) {
+              // A balance inventory is one atomic workspace update. Publishing
+              // accounts serially makes Accounts revalidate after every card,
+              // can overwrite the next cache seed, and eventually triggers the
+              // import visibility timeout.
+              await Promise.resolve(
+                onImported({
+                  ...combinedFinalizedSummary,
+                  fileName: summaryContext.fileName,
+                })
+              );
+            }
             if (backgroundOnly) {
               return;
             }

@@ -10,8 +10,8 @@ import { matchesImportedAccountIdentity, pruneImportedAccountPlaceholders } from
 const csv = [
   "Date,PHP Total,USD Total,Gain / Loss,Liquid Cash,Savings Total,Investments Total,Physical Cash Total,AR Total,Savings,,,,,,,,Investments,,,,,,,,Physical Cash,,Accounts Receivable",
   ",,,,,,,,,BPI (Supplemental),BPI (Personal / Ateneo),RCBC,GCash Wallet,Maya,Wise,UnionBank,HSBC,GFunds,GStocks Philippines,GSave (UNO),GCrypto,PDAX,GoTrade,BPI Time Deposit,HSBC Savings,PHP,USD,",
-  '1/1/2026,"₱9,999.00","$999.00",1%,,"₱5,000.00","₱4,000.00","₱900.00","₱99.00","₱10.00","₱20.00","₱30.00","₱40.00","₱50.00","₱60.00","₱70.00","₱80.00","₱90.00","₱100.00","₱110.00","₱120.00","₱130.00","₱140.00","₱150.00","₱160.00","₱170.00","$180.00","₱190.00"',
-  '3/24/2026,"₱99,999.00","$9,999.00",2%,,"₱50,000.00","₱40,000.00","₱9,000.00","₱990.00","₱1,010.00","₱1,020.00","₱1,030.00","₱1,040.00","₱1,050.00","₱1,060.00","₱1,070.00","₱1,080.00","₱1,090.00","₱1,100.00","₱1,110.00","₱1,120.00","₱1,130.00","₱1,140.00","₱1,150.00","₱1,160.00","₱1,170.00","$1,180.00","₱1,190.00"',
+  '1/1/2026,"₱9,999.00","$999.00",1%,"₱5,999.00","₱5,000.00","₱4,000.00","₱900.00","₱99.00","₱10.00","₱20.00","₱30.00","₱40.00","₱50.00","₱60.00","₱70.00","₱80.00","₱90.00","₱100.00","₱110.00","₱120.00","₱130.00","₱140.00","₱150.00","₱160.00","₱170.00","$180.00","₱190.00"',
+  '3/24/2026,"₱99,999.00","$9,999.00",2%,"₱59,999.00","₱50,000.00","₱40,000.00","₱9,000.00","₱990.00","₱1,010.00","₱1,020.00","₱1,030.00","₱1,040.00","₱1,050.00","₱1,060.00","₱1,070.00","₱1,080.00","₱1,090.00","₱1,100.00","₱1,110.00","₱1,120.00","₱1,130.00","₱1,140.00","₱1,150.00","₱1,160.00","₱1,170.00","$1,180.00","₱1,190.00"',
 ].join("\n");
 
 const fileName = "Net Worth Calculator - Net Worth Calculator.csv";
@@ -80,6 +80,7 @@ assert.equal(
 assert.equal(byName.get("Accounts Receivable")?.rawPayload?.accountType, "receivable");
 assert.equal(byName.has("PHP Total"), false, "Summary totals must not become accounts.");
 assert.equal(byName.has("Savings Total"), false, "Section totals must not become accounts.");
+assert.equal(byName.has("Liquid Cash"), false, "Liquid Cash is an aggregate total, not a separate account.");
 assert.ok(
   rows.every((row) => row.date === "2026-03-24" && row.rawPayload?.snapshotDate === "2026-03-24"),
   "Every balance must use the latest snapshot date."
@@ -260,6 +261,11 @@ const main = async () => {
   );
   assert.match(
     workerSource,
+    /const explicitInventoryName =[\s\S]{0,350}accountSnapshotInventory[\s\S]{0,350}next\.name\.trim\(\)/,
+    "Account inventories must preserve explicit labels instead of merging distinct accounts under a generic institution name."
+  );
+  assert.match(
+    workerSource,
     /\[net-worth-csv\] account inventory confirmed/,
     "Inventory confirmation must log parsed, resolved, and published account counts."
   );
@@ -280,11 +286,37 @@ const main = async () => {
     /await Promise\.resolve\(onImported\(combinedSummary\)\)/,
     "The client must publish a completed account inventory atomically."
   );
+  assert.match(
+    modalSource,
+    /const statusIsAccountInventory =[\s\S]{0,250}confirmedTransactionsCount === 0[\s\S]{0,300}statusAccountSummaries\.every/,
+    "A polled multi-account completion must recognize a transaction-free account inventory."
+  );
+  assert.match(
+    modalSource,
+    /statusIsAccountInventory && combinedFinalizedSummary[\s\S]{0,700}onImported\(\{[\s\S]{0,250}combinedFinalizedSummary/,
+    "A polled account inventory must publish all account cards in one UI transition."
+  );
+  assert.match(
+    modalSource,
+    /balanceSources: statusIsAccountInventory[\s\S]{0,150}\? \[accountSummary\.balance\]/,
+    "A local preview balance must not leak into another account in a multi-account inventory."
+  );
   const accountsPageSource = await readFile(join(process.cwd(), "app/accounts/page.tsx"), "utf8");
   assert.match(
     accountsPageSource,
     /const optimisticAccounts = importedAccountSummaries/,
     "Accounts must publish every account summary from a multi-account import without waiting for a reload."
+  );
+  const accountsRouteSource = await readFile(join(process.cwd(), "app/api/accounts/route.ts"), "utf8");
+  assert.match(
+    accountsRouteSource,
+    /const publishedInventoryAccountIds = new Set\([\s\S]{0,900}publishedAccountSummaries/,
+    "Accounts must recognize every account explicitly published by an account-inventory checkpoint."
+  );
+  assert.match(
+    accountsRouteSource,
+    /checkpointAccountIds\.has\(account\.id\) \|\| publishedInventoryAccountIds\.has\(account\.id\)/,
+    "A zero-transaction inventory account without an account number must not be hidden as a temporary parser placeholder."
   );
   const processRouteSource = await readFile(join(process.cwd(), "app/api/imports/[importId]/process/route.ts"), "utf8");
   assert.match(
