@@ -1395,7 +1395,12 @@ function AccountsPageContent() {
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
-  const [importActivitySnapshot, setImportActivitySnapshot] = useState(() => readImportActivity());
+  // Browser storage is restored by the subscription effect after mount. Do
+  // not read it in the state initializer: the server cannot see that value,
+  // and a recently completed import would otherwise change the first client
+  // render and abort hydration before the refresh listener can attach.
+  const [importActivitySnapshot, setImportActivitySnapshot] =
+    useState<ReturnType<typeof readImportActivity>>(null);
   const [importRefreshInFlight, setImportRefreshInFlight] = useState(false);
   const [hasCompletedInitialAccountPaint, setHasCompletedInitialAccountPaint] = useState(false);
   const stableAccountBalancesRef = useRef(new Map<string, string>());

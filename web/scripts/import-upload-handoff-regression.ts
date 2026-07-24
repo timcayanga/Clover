@@ -309,6 +309,11 @@ const main = async () => {
     "Accounts must react to imports completed through Clover's global uploader."
   );
   assert.match(
+    accountsPageSource,
+    /useState<ReturnType<typeof readImportActivity>>\(null\)/,
+    "Accounts must restore browser import activity after mount so the server and first client render remain hydration-safe."
+  );
+  assert.match(
     transactionsPageSource,
     /nextIsEmpty && currentHasValue && mergedTransactionsWithImports\.length > 0\)/,
     "Visible transactions must not be paired with an empty cash-flow summary."
