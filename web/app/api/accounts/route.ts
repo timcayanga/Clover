@@ -1935,14 +1935,28 @@ export async function GET(request: Request) {
         !looksLikeReceiptImageFilenameAccount(account) &&
         !looksLikeGenericImageFilenameAccount(account)
     );
+    const serializedResponseAccounts = responseAccounts.map((account) => ({
+      ...serializeAccount({
+        ...account,
+        transactionCount: transactionCountByAccountId.get(account.id) ?? 0,
+      }),
+      // Account-inventory imports intentionally have no transactions. Carry
+      // their publication evidence to the browser so cache cleanup never
+      // mistakes a legitimate zero-balance account for a transient parser
+      // placeholder.
+      publishedImportInventory: publishedInventoryAccountIds.has(account.id),
+    }));
+
+    console.info("[accounts-api] response summary", {
+      userId,
+      workspaceId,
+      persistedAccountCount: accounts.length,
+      publishedInventoryAccountCount: publishedInventoryAccountIds.size,
+      visibleAccountCount: serializedResponseAccounts.length,
+    });
 
     return NextResponse.json({
-      accounts: responseAccounts.map((account) =>
-        serializeAccount({
-          ...account,
-          transactionCount: transactionCountByAccountId.get(account.id) ?? 0,
-        })
-      ),
+      accounts: serializedResponseAccounts,
       accountRules,
       statementCheckpoints,
       maintenance: shouldCleanupImportedAccounts

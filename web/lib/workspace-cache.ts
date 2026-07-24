@@ -311,6 +311,10 @@ const getImportedAccountInstitutionShadowKey = (account: CachedRecord | Imported
   canonicalImportedInstitutionKey(readImportedAccountText(account, "name"));
 
 const isTransientImportedAccountPlaceholder = (account: CachedRecord) => {
+  if (account.publishedImportInventory === true) {
+    return false;
+  }
+
   if (readImportedAccountText(account, "source") !== "upload" || hasImportedAccountNumber(account.accountNumber)) {
     return false;
   }
@@ -352,6 +356,10 @@ const pruneGenericImportedAccountPlaceholders = <T extends CachedRecord>(account
 };
 
 const isOrphanImportedAccountPlaceholder = (account: CachedRecord) => {
+  if (account.publishedImportInventory === true) {
+    return false;
+  }
+
   if (typeof account.id === "string" && account.id.startsWith("optimistic-")) {
     return false;
   }

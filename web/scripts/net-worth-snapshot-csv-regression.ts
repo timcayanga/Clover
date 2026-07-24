@@ -71,12 +71,13 @@ assert.equal(
       type: "bank",
       currency: "PHP",
       source: "upload",
-      balance: "61824.11",
+      balance: "0",
       transactionCount: 0,
+      publishedImportInventory: true,
     },
   ]).length,
   1,
-  "A balance-only bank account is authoritative inventory, not a transient parser placeholder."
+  "A published zero-balance bank account is authoritative inventory, not a transient parser placeholder."
 );
 assert.equal(byName.get("Accounts Receivable")?.rawPayload?.accountType, "receivable");
 assert.deepEqual(

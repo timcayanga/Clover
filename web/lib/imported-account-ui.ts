@@ -23,6 +23,7 @@ export type ImportedAccountLike<TType extends SupportedAccountType = SupportedAc
   currency: string;
   source?: string | null;
   balance?: string | null;
+  publishedImportInventory?: boolean;
 };
 
 export type ImportedTransactionLike<TType extends SupportedAccountType = SupportedAccountType> = {
@@ -80,7 +81,13 @@ export const isGenericUploadedAccountShadowed = <
   );
 };
 
-export const isTransientUploadedAccountPlaceholder = (account: Pick<ImportedAccountLike, "source" | "accountNumber" | "type">) => {
+export const isTransientUploadedAccountPlaceholder = (
+  account: Pick<ImportedAccountLike, "source" | "accountNumber" | "type" | "publishedImportInventory">
+) => {
+  if (account.publishedImportInventory) {
+    return false;
+  }
+
   if (account.source !== "upload" || getImportedAccountLastFour(account.accountNumber)) {
     return false;
   }

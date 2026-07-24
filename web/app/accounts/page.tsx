@@ -143,6 +143,7 @@ type Account = {
   currency: string;
   source: string;
   balance: string | null;
+  publishedImportInventory?: boolean;
   transactionCount?: number | null;
   favorite?: boolean;
   updatedAt: string;
@@ -1297,34 +1298,22 @@ function AccountsPageContent() {
   const completedImportRefreshKeyRef = useRef<string | null>(null);
   const workspaceHydrationVersionRef = useRef(new Map<string, number>());
   const deletedAccountIdsRef = useRef(new Set<string>());
-  const initialWorkspaceId = typeof window === "undefined" ? "" : readSelectedWorkspaceId();
+  // Keep the server and first browser render identical. Workspace selection
+  // and its cached snapshot are restored after mount; reading localStorage
+  // here caused a hydration failure that could strand Accounts on an empty
+  // fallback state even though the API returned imported accounts.
+  const initialWorkspaceId = "";
   const deletingAccountIdFromQuery = searchParams?.get("deletingAccountId");
   const deletingWorkspaceIdFromQuery = searchParams?.get("deletingWorkspaceId");
-  const initialCachedWorkspace = initialWorkspaceId ? getCachedWorkspaceHydration(initialWorkspaceId) : null;
-  const initialDeletedWorkspaceAccountIds = new Set(getDeletedWorkspaceAccountIds(initialWorkspaceId));
-  const initialDeletingWorkspaceAccountIds = new Set(getDeletingWorkspaceAccountIds(initialWorkspaceId));
-  const initialCachedAccounts = ((initialCachedWorkspace?.accounts as Account[] | undefined) ?? []).filter(
-    (account) => !initialDeletedWorkspaceAccountIds.has(account.id) && !initialDeletingWorkspaceAccountIds.has(account.id)
-  );
-  const initialCachedTransactions = ((initialCachedWorkspace?.transactions as Transaction[] | undefined) ?? []).filter(
-    (transaction) =>
-      !initialDeletedWorkspaceAccountIds.has(transaction.accountId) && !initialDeletingWorkspaceAccountIds.has(transaction.accountId)
-  );
-  const initialCachedStatementCheckpoints = (
-    (initialCachedWorkspace?.statementCheckpoints as StatementCheckpoint[] | undefined) ?? []
-  ).filter(
-    (checkpoint) =>
-      !checkpoint.accountId ||
-      (!initialDeletedWorkspaceAccountIds.has(checkpoint.accountId) && !initialDeletingWorkspaceAccountIds.has(checkpoint.accountId))
-  );
+  const initialCachedAccounts: Account[] = [];
+  const initialCachedTransactions: Transaction[] = [];
+  const initialCachedStatementCheckpoints: StatementCheckpoint[] = [];
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(initialWorkspaceId);
   const [selectedCurrency, setSelectedCurrency] = useState("PHP");
   const [accounts, setAccounts] = useState<Account[]>(initialCachedAccounts);
-  const [accountRules, setAccountRules] = useState<AccountRule[]>(
-    (initialCachedWorkspace?.accountRules as AccountRule[] | undefined) ?? []
-  );
+  const [accountRules, setAccountRules] = useState<AccountRule[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>(initialCachedTransactions);
   const [statementCheckpoints, setStatementCheckpoints] = useState<StatementCheckpoint[]>(initialCachedStatementCheckpoints);
   const [drawerTransactions, setDrawerTransactions] = useState<Transaction[]>([]);
@@ -1334,7 +1323,7 @@ function AccountsPageContent() {
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [accountsLoadFailed, setAccountsLoadFailed] = useState(false);
   const [accountsHydrationPending, setAccountsHydrationPending] = useState(false);
-  const [hasInitialWorkspaceDataLoaded, setHasInitialWorkspaceDataLoaded] = useState(Boolean(initialCachedWorkspace));
+  const [hasInitialWorkspaceDataLoaded, setHasInitialWorkspaceDataLoaded] = useState(false);
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
   const [planUsage, setPlanUsage] = useState<PlanUsage | null>(null);
@@ -1977,8 +1966,12 @@ function AccountsPageContent() {
   }, []);
 
   useEffect(() => {
+    if (workspacesLoading || !selectedWorkspaceId) {
+      return;
+    }
+
     persistSelectedWorkspaceId(selectedWorkspaceId);
-  }, [selectedWorkspaceId]);
+  }, [selectedWorkspaceId, workspacesLoading]);
 
   useEffect(() => {
     setImportActivitySnapshot(readImportActivity());

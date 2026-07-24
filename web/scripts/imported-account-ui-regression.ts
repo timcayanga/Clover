@@ -3,6 +3,7 @@ import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import {
   mergeFetchedTransactionsPreservingImported,
   mergeOptimisticImportedAccount,
+  isTransientUploadedAccountPlaceholder,
   uploadSummaryCanDismissImportUi,
   uploadSummaryMatchesImportedAccount,
   type ImportedAccountLike,
@@ -105,6 +106,15 @@ const main = () => {
     source: "upload",
     balance: "0",
   };
+
+  assert.equal(
+    isTransientUploadedAccountPlaceholder({
+      ...genericPlaceholder,
+      publishedImportInventory: true,
+    }),
+    false,
+    "Published account-inventory rows must survive client placeholder cleanup even with no transactions or balance."
+  );
 
   const mergedWithoutPlaceholder = mergeOptimisticImportedAccount([genericPlaceholder], numberedUploadAccount);
   assert.equal(
