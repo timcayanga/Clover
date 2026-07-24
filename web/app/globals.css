@@ -35094,6 +35094,7 @@ body:has(.pricing-page) {
 
 .settings-section {
   display: grid;
+  align-content: start;
   gap: 20px;
   width: 100%;
   min-width: 0;
@@ -35395,7 +35396,7 @@ body:has(.pricing-page) {
 }
 
 .settings-guidance-card {
-  gap: 18px;
+  gap: 12px;
 }
 
 .settings-guidance-card__head {
@@ -35412,14 +35413,16 @@ body:has(.pricing-page) {
 .settings-guidance-options {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  align-items: start;
+  gap: 8px;
 }
 
 .settings-guidance-option {
   display: grid;
-  gap: 5px;
+  align-content: start;
+  gap: 2px;
   min-width: 0;
-  padding: 13px 14px;
+  padding: 8px 11px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.58);
@@ -35464,7 +35467,7 @@ body:has(.pricing-page) {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 9px 12px 5px;
+  padding: 6px 10px 4px;
 }
 
 .settings-guidance-menu-head h6 {
@@ -35489,7 +35492,7 @@ body:has(.pricing-page) {
 
 .settings-guidance-menu-table th,
 .settings-guidance-menu-table td {
-  padding: 6px 12px;
+  padding: 3px 10px;
   border-top: 1px solid rgba(15, 23, 42, 0.07);
   text-align: left;
   vertical-align: middle;
@@ -35534,6 +35537,8 @@ body:has(.pricing-page) {
 .settings-guidance-checkbox input {
   width: 18px;
   height: 18px;
+  min-height: 18px;
+  padding: 0;
   margin: 0;
   accent-color: var(--accent);
   cursor: pointer;
@@ -35912,8 +35917,8 @@ body:has(.pricing-page) {
   justify-content: space-between;
   gap: 12px;
   min-width: 0;
-  min-height: 42px;
-  padding: 7px 0;
+  min-height: 34px;
+  padding: 3px 0;
   border-bottom: 1px solid rgba(15, 23, 42, 0.08);
 }
 
@@ -35974,6 +35979,7 @@ body:has(.pricing-page) {
 
 .settings-security-card {
   gap: 12px;
+  width: 100%;
 }
 
 .settings-session-list {
@@ -36013,6 +36019,20 @@ body:has(.pricing-page) {
   font-size: 13px;
 }
 
+.settings-session-current {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  margin-left: 8px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(3, 168, 192, 0.1);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
 .settings-session-item__copy span {
   color: var(--muted);
   font-size: 12px;
@@ -36023,6 +36043,12 @@ body:has(.pricing-page) {
   justify-content: flex-end;
   padding-top: 8px;
   border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.settings-session-action.button-small {
+  min-height: 30px;
+  padding-inline: 11px;
+  font-size: 12px;
 }
 
 .settings-data-shell {
@@ -37342,7 +37368,7 @@ html[data-helper-text="hidden"] .settings-helper {
 
   .settings-guidance-menu-table th,
   .settings-guidance-menu-table td {
-    padding: 6px 10px;
+    padding: 3px 8px;
   }
 
   .settings-hub {

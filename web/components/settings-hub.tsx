@@ -119,8 +119,11 @@ type SecuritySessionSummary = {
   status: string;
   lastActiveAt: string | null;
   isCurrent: boolean;
+  deviceLabel: string;
   browserName: string | null;
+  browserVersion: string | null;
   deviceType: string | null;
+  ipAddress: string | null;
   location: string | null;
 };
 
@@ -303,12 +306,12 @@ const formatSettingsDate = (value: string, format: RegionalPreferences["dateForm
 
 const formatRelativeSessionTime = (value: string | null) => {
   if (!value) {
-    return "No recent activity";
+    return "Activity time unavailable";
   }
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return "No recent activity";
+    return "Activity time unavailable";
   }
 
   const diffMs = Date.now() - date.getTime();
@@ -324,6 +327,53 @@ const formatRelativeSessionTime = (value: string | null) => {
 
   const diffDays = Math.round(diffHours / 24);
   return `Active ${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+};
+
+const getCurrentDeviceLabel = () => {
+  if (typeof navigator === "undefined") {
+    return "Current device";
+  }
+
+  const userAgent = navigator.userAgent;
+  const platform = navigator.platform;
+  if (/iPad/i.test(userAgent) || (platform === "MacIntel" && navigator.maxTouchPoints > 1)) {
+    return "iPad";
+  }
+  if (/iPhone/i.test(userAgent)) {
+    return "iPhone";
+  }
+  if (/Android/i.test(userAgent)) {
+    return /Mobile/i.test(userAgent) ? "Android phone" : "Android tablet";
+  }
+  if (/Mac/i.test(platform)) {
+    return "Mac";
+  }
+  if (/Win/i.test(platform)) {
+    return "Windows PC";
+  }
+  if (/Linux/i.test(platform)) {
+    return "Linux computer";
+  }
+
+  return "Current device";
+};
+
+const formatSessionDeviceLabel = ({
+  deviceType,
+  isMobile,
+  isCurrent,
+}: {
+  deviceType?: string;
+  isMobile?: boolean;
+  isCurrent: boolean;
+}) => {
+  if (isCurrent) {
+    return getCurrentDeviceLabel();
+  }
+  if (deviceType?.trim()) {
+    return deviceType;
+  }
+  return isMobile ? "Mobile device" : "Computer";
 };
 
 function SettingsToggleRow({
@@ -1056,19 +1106,28 @@ export function SettingsHub({
 
     setSecuritySessions(
       (deviceSessions ?? []).map((entry) => {
-        const activity = (entry as unknown as { latestActivity?: { browserName?: string; deviceType?: string; city?: string; country?: string } }).latestActivity;
+        const activity = entry.latestActivity;
+        const isCurrent = entry.id === session?.id;
+        const lastActiveAt =
+          entry.lastActiveAt instanceof Date
+            ? entry.lastActiveAt.toISOString()
+            : typeof entry.lastActiveAt === "number"
+              ? new Date(entry.lastActiveAt).toISOString()
+              : null;
         return {
           id: entry.id,
           status: entry.status,
-          lastActiveAt:
-            typeof entry.lastActiveAt === "number"
-              ? new Date(entry.lastActiveAt).toISOString()
-              : typeof entry.expireAt === "number"
-                ? new Date(entry.expireAt).toISOString()
-                : null,
-          isCurrent: entry.id === session?.id,
+          lastActiveAt,
+          isCurrent,
+          deviceLabel: formatSessionDeviceLabel({
+            deviceType: activity?.deviceType,
+            isMobile: activity?.isMobile,
+            isCurrent,
+          }),
           browserName: activity?.browserName ?? null,
+          browserVersion: activity?.browserVersion ?? null,
           deviceType: activity?.deviceType ?? null,
+          ipAddress: activity?.ipAddress ?? null,
           location: [activity?.city, activity?.country].filter(Boolean).join(", ") || null,
         };
       })
@@ -1901,13 +1960,23 @@ export function SettingsHub({
                   securitySessions.map((entry) => (
                     <div key={entry.id} className="settings-session-item">
                       <div className="settings-session-item__copy">
-                        <strong>{entry.isCurrent ? "Current device" : entry.browserName || entry.deviceType || "Signed-in device"}</strong>
+                        <strong>
+                          {entry.deviceLabel}
+                          {entry.isCurrent ? <span className="settings-session-current">Current</span> : null}
+                        </strong>
                         <span>
-                          {[entry.deviceType, entry.browserName, entry.location].filter(Boolean).join(" · ") || "Device activity"} · {formatRelativeSessionTime(entry.lastActiveAt)}
+                          {[
+                            [entry.browserName, entry.browserVersion].filter(Boolean).join(" "),
+                            entry.location,
+                            entry.ipAddress,
+                            entry.lastActiveAt ? formatRelativeSessionTime(entry.lastActiveAt) : entry.isCurrent ? "Active now" : "Activity time unavailable",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
                         </span>
                       </div>
                       {!entry.isCurrent ? (
-                        <button type="button" className="button button-secondary button-small" disabled={isPending} onClick={() => handleSignOutSession(entry.id)}>
+                        <button type="button" className="button button-secondary button-small settings-session-action" disabled={isPending} onClick={() => handleSignOutSession(entry.id)}>
                           Sign out
                         </button>
                       ) : null}
@@ -1915,14 +1984,14 @@ export function SettingsHub({
                   ))
                 ) : (
                   <div className="settings-session-item">
-                    <strong>{securityLoading ? "Loading..." : "Current device"}</strong>
-                    <span>{securityLoading ? "Fetching active sessions" : "This browser is active."}</span>
+                    <strong>{securityLoading ? "Loading..." : getCurrentDeviceLabel()}</strong>
+                    <span>{securityLoading ? "Fetching active sessions" : "Active now"}</span>
                   </div>
                 )}
               </div>
               <div className="settings-security-card__footer">
-                <button type="button" className="button button-danger button-small" disabled={isPending || securityLoading} onClick={handleSignOutAllDevices}>
-                  Sign out all devices
+                <button type="button" className="button button-danger button-small settings-session-action" disabled={isPending || securityLoading} onClick={handleSignOutAllDevices}>
+                  Sign out of all devices
                 </button>
               </div>
               {securityMessage ? <p className="settings-helper">{securityMessage}</p> : null}
@@ -2139,7 +2208,7 @@ export function SettingsHub({
                         }}
                       />
                       <strong>{option.label}</strong>
-                      <span>{option.helper}</span>
+                      {isSelected ? <span>{option.helper}</span> : null}
                     </label>
                   );
                 })}
