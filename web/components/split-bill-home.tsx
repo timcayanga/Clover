@@ -87,7 +87,7 @@ const addCurrencyTotal = (totals: Map<string, number>, currency: string, amount:
 
 export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBill, onOpenGroup, onOpenPerson }: SplitBillHomeProps) {
   const [showAllBills, setShowAllBills] = useState(false);
-  const [billSearch, setBillSearch] = useState("");
+  const [showAllPeople, setShowAllPeople] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "settled">("all");
   const isBlankState = bills.length === 0;
   const duePaymentRequests = useMemo(() => {
@@ -156,26 +156,18 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
     };
   }, [bills, currentUserName]);
 
-  const filteredBills = useMemo(() => {
-    const query = billSearch.trim().toLowerCase();
-    return bills.filter((bill) => {
-      const isSettled = bill.settlementStatus === "settled";
-      const matchesStatus =
-        statusFilter === "all" ||
-        (statusFilter === "settled" && isSettled) ||
-        (statusFilter === "open" && !isSettled);
-      const searchBlob = [
-        bill.title,
-        bill.group?.name ?? "",
-        bill.merchantName ?? "",
-        bill.participants.map((participant) => participant.name).join(" "),
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return matchesStatus && (!query || searchBlob.includes(query));
-    });
-  }, [billSearch, bills, statusFilter]);
+  const filteredBills = useMemo(
+    () =>
+      bills.filter((bill) => {
+        const isSettled = bill.settlementStatus === "settled";
+        return (
+          statusFilter === "all" ||
+          (statusFilter === "settled" && isSettled) ||
+          (statusFilter === "open" && !isSettled)
+        );
+      }),
+    [bills, statusFilter]
+  );
 
   const recentBills = showAllBills ? filteredBills : filteredBills.slice(0, 4);
   const hasHiddenBills = filteredBills.length > 4;
@@ -211,10 +203,43 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
     });
   }, [bills, groups]);
 
+  const peopleWithBalances = useMemo(
+    () =>
+      people.map((person) => {
+        const totals = new Map<string, number>();
+
+        bills.forEach((bill) => {
+          bill.settlement.transfers.forEach((transfer) => {
+            const currency = normalizeCurrencyCode(bill.currency);
+            if (transfer.fromParticipantName === person.name) {
+              addCurrencyTotal(totals, currency, -transfer.amount);
+            }
+            if (transfer.toParticipantName === person.name) {
+              addCurrencyTotal(totals, currency, transfer.amount);
+            }
+          });
+        });
+
+        const activeTotals = Array.from(totals.entries()).filter(([, amount]) => Math.abs(amount) > 0.005);
+        if (activeTotals.length !== 1) {
+          return { ...person, balanceLabel: activeTotals.length > 1 ? "Multiple currencies" : "Settled" };
+        }
+
+        const [currency, amount] = activeTotals[0];
+        return {
+          ...person,
+          balanceLabel: `${amount < 0 ? "Owes" : "Owed"} ${formatSplitBillAmount(Math.abs(amount), currency)}`,
+        };
+      }),
+    [bills, people]
+  );
+  const visiblePeople = showAllPeople ? peopleWithBalances : peopleWithBalances.slice(0, 6);
+  const hasHiddenPeople = peopleWithBalances.length > 6;
+
   return (
     <div className="split-bill-home">
       {!isBlankState && (
-        <section className="split-bill-pulse panel glass" aria-label="Split Bills balance summary">
+        <section className="split-bill-pulse" aria-label="Split Bills balance summary">
           <div className="split-bill-pulse__metrics">
             <article>
               <span>You owe</span>
@@ -252,34 +277,6 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
             <h2>Bills</h2>
           </div>
         </div>
-        <div className="split-bill-filter-bar">
-          <input
-            className="settings-input split-bill-filter-bar__search"
-            value={billSearch}
-            onChange={(event) => {
-              setBillSearch(event.target.value);
-              setShowAllBills(false);
-            }}
-            placeholder="Search bills, people, or groups"
-            aria-label="Search split bills"
-          />
-          <div className="split-bill-filter-bar__chips" aria-label="Filter split bills by status">
-            {(["all", "open", "settled"] as const).map((filter) => (
-              <button
-                key={filter}
-                className={`split-bill-filter-bar__chip${statusFilter === filter ? " is-selected" : ""}`}
-                type="button"
-                onClick={() => {
-                  setStatusFilter(filter);
-                  setShowAllBills(false);
-                }}
-              >
-                {filter === "all" ? "All" : filter === "open" ? "Open" : "Settled"}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {isBlankState ? (
           <section className="split-bill-empty-cta split-bill-panel__empty-cta" aria-label="Start splitting bills">
             <img src="/assets/3d%20icons/split%20bills.png" alt="" aria-hidden="true" />
@@ -300,7 +297,21 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
                 <span role="columnheader">Date</span>
                 <span role="columnheader">People</span>
                 <span role="columnheader">Total</span>
-                <span role="columnheader">Status</span>
+                <label className="split-bill-table__status-filter">
+                  <span className="sr-only">Filter bills by status</span>
+                  <select
+                    value={statusFilter}
+                    onChange={(event) => {
+                      setStatusFilter(event.target.value as "all" | "open" | "settled");
+                      setShowAllBills(false);
+                    }}
+                    aria-label="Filter bills by status"
+                  >
+                    <option value="all">Status</option>
+                    <option value="open">Open</option>
+                    <option value="settled">Settled</option>
+                  </select>
+                </label>
                 <span role="columnheader" aria-hidden="true" />
               </div>
               {recentBills.length > 0 ? (
@@ -320,11 +331,22 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
                       <div role="cell">{formatDate(bill.billDate)}</div>
                       <div role="cell" className="split-bill-table__chips">
                         {bill.participants.length > 0 ? (
-                          bill.participants.map((participant) => (
-                            <span key={participant.id} className="split-bill-table__chip" title={participant.name}>
-                              <SplitBillEntityAvatar name={participant.name} avatarUrl={null} sizeClass="split-bill-person-avatar--small" />
-                            </span>
-                          ))
+                          <>
+                            {bill.participants.slice(0, 5).map((participant) => (
+                              <SplitBillEntityAvatar
+                                key={participant.id}
+                                name={participant.name}
+                                avatarUrl={null}
+                                sizeClass="split-bill-person-avatar--small"
+                                className="split-bill-person-avatar split-bill-table__avatar"
+                              />
+                            ))}
+                            {bill.participants.length > 5 ? (
+                              <span className="split-bill-table__avatar split-bill-table__avatar-more" title={`${bill.participants.length - 5} more people`}>
+                                +{bill.participants.length - 5}
+                              </span>
+                            ) : null}
+                          </>
                         ) : (
                           <span className="split-bill-subtle-empty">No people yet</span>
                         )}
@@ -342,7 +364,7 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
                   );
                 })
               ) : (
-                <div className="split-bill-table__empty-state">No bills match this view.</div>
+                <div className="split-bill-table__empty-state">No bills in this status.</div>
               )}
             </div>
             <div className="split-bill-table__footer">
@@ -364,11 +386,14 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
             </div>
 
             <div className="split-bill-mobile-home__people">
-              {people.length > 0 ? (
-                people.map((person) => (
+              {visiblePeople.length > 0 ? (
+                visiblePeople.map((person) => (
                   <button key={person.id} type="button" className="split-bill-mobile-home__person-button" onClick={() => onOpenPerson(person.id)}>
                     <SplitBillEntityAvatar name={person.name} avatarUrl={person.avatarUrl} />
-                    <span>{person.name}</span>
+                    <span className="split-bill-home__person-copy">
+                      <strong>{person.name}</strong>
+                      <small>{person.balanceLabel}</small>
+                    </span>
                   </button>
                 ))
               ) : (
@@ -376,6 +401,11 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
               )}
             </div>
             <div className="split-bill-mobile-home__footer">
+              {hasHiddenPeople ? (
+                <button className="button button-secondary button-small" type="button" onClick={() => setShowAllPeople((current) => !current)}>
+                  {showAllPeople ? "Show fewer" : "View all people"}
+                </button>
+              ) : null}
               <button className="button button-secondary button-small" type="button" onClick={() => window.dispatchEvent(new Event("clover:open-split-bill-people"))}>
                 Add person
               </button>
@@ -466,11 +496,14 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
           </div>
 
           <div className="split-bill-home__people-list">
-            {people.length > 0 ? (
-                people.map((person) => (
+            {visiblePeople.length > 0 ? (
+                visiblePeople.map((person) => (
                   <button key={person.id} type="button" className="split-bill-home__person-button" onClick={() => onOpenPerson(person.id)}>
                     <SplitBillEntityAvatar name={person.name} avatarUrl={person.avatarUrl} />
-                    <span>{person.name}</span>
+                    <span className="split-bill-home__person-copy">
+                      <strong>{person.name}</strong>
+                      <small>{person.balanceLabel}</small>
+                    </span>
                   </button>
                 ))
             ) : (
@@ -478,6 +511,11 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
             )}
           </div>
           <div className="split-bill-home__bottom-actions">
+            {hasHiddenPeople ? (
+              <button className="button button-secondary button-small" type="button" onClick={() => setShowAllPeople((current) => !current)}>
+                {showAllPeople ? "Show fewer" : "View all people"}
+              </button>
+            ) : null}
             <button className="button button-secondary button-small" type="button" onClick={() => window.dispatchEvent(new Event("clover:open-split-bill-people"))}>
               Add person
             </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
@@ -361,6 +361,7 @@ export function SplitBillWorkspace({
   const [billEditError, setBillEditError] = useState<string | null>(null);
   const [isSavingBillEdit, setIsSavingBillEdit] = useState(false);
   const [groupShareUrl, setGroupShareUrl] = useState<string | null>(null);
+  const consumedBillQueryRef = useRef<string | null>(null);
 
   const selectedBill = selected?.kind === "bill" ? bills.find((bill) => bill.id === selected.id) ?? null : null;
   const selectedGroup = selected?.kind === "group" ? groups.find((group) => group.id === selected.id) ?? null : null;
@@ -373,7 +374,10 @@ export function SplitBillWorkspace({
   const selectedGroupActivity = selectedGroup ? getRecentActivityForBills(selectedGroupBills) : [];
   const selectedPersonActivity = selectedPerson ? getRecentActivityForBills(selectedPersonBills) : [];
 
-  const openBill = (billId: string) => setSelected({ kind: "bill", id: billId });
+  const openBill = (billId: string) => {
+    window.history.replaceState(window.history.state, "", "/split-bill");
+    setSelected({ kind: "bill", id: billId });
+  };
   const openGroup = (groupId: string) => setSelected({ kind: "group", id: groupId });
   const openPerson = (personId: string) => setSelected({ kind: "person", id: personId });
 
@@ -760,7 +764,12 @@ export function SplitBillWorkspace({
   }, [selectedBill, selectedGroup, selectedPerson]);
 
   const selectedDetailKind = selected?.kind ?? null;
-  const closeDetail = () => setSelected(null);
+  const closeDetail = () => {
+    if (selected?.kind === "bill") {
+      window.history.replaceState(window.history.state, "", "/split-bill");
+    }
+    setSelected(null);
+  };
 
   useEffect(() => {
     setDetailTab("overview");
@@ -782,7 +791,7 @@ export function SplitBillWorkspace({
     }
 
     setSelectedBillDraft(draft);
-    setIsEditingBill(false);
+    setIsEditingBill(true);
     setBillEditError(null);
     setIsSavingBillEdit(false);
   }, [currentUserName, selectedBill]);
@@ -792,8 +801,10 @@ export function SplitBillWorkspace({
       return;
     }
     const billId = searchParams.get("bill");
-    if (billId && selected?.kind !== "bill" && bills.some((entry) => entry.id === billId)) {
+    if (billId && consumedBillQueryRef.current !== billId && bills.some((entry) => entry.id === billId)) {
+      consumedBillQueryRef.current = billId;
       setSelected({ kind: "bill", id: billId });
+      window.history.replaceState(window.history.state, "", "/split-bill");
       return;
     }
 
@@ -817,11 +828,6 @@ export function SplitBillWorkspace({
     });
   };
 
-  const startEditingSelectedBill = () => {
-    setIsEditingBill(true);
-    setBillEditError(null);
-  };
-
   const cancelEditingSelectedBill = () => {
     if (!selectedBill) {
       setIsEditingBill(false);
@@ -830,7 +836,7 @@ export function SplitBillWorkspace({
     }
 
     setSelectedBillDraft(buildBillEditorDraft(selectedBill));
-    setIsEditingBill(false);
+    setIsEditingBill(true);
     setBillEditError(null);
   };
 
@@ -1009,7 +1015,7 @@ export function SplitBillWorkspace({
 
       setBills((current) => current.map((entry) => (entry.id === selectedBill.id ? payload.bill! : entry)));
       setSelectedBillDraft(buildBillEditorDraft(payload.bill));
-      setIsEditingBill(false);
+      setIsEditingBill(true);
       setSelected({ kind: "bill", id: payload.bill.id });
     } catch (error) {
       setBillEditError(error instanceof Error ? error.message : "Unable to save split bill");
@@ -1376,32 +1382,14 @@ export function SplitBillWorkspace({
                 <div className="split-bill-detail-modal__summary">
                   <span>Total</span>
                   <strong>{selectedBill.total ? formatSplitBillAmount(Number(selectedBill.total), selectedBill.currency) : "No total"}</strong>
-                  <span className="split-bill-detail-modal__summary-status">
-                    {selectedBill.settlementStatus === "open"
-                      ? `${selectedBill.settlement.transfers.length} open transfer${selectedBill.settlement.transfers.length === 1 ? "" : "s"}`
-                      : formatSplitBillSettlementStatus(selectedBill.settlementStatus)}
-                  </span>
                 </div>
                 <div className="split-bill-detail-modal__summary-actions">
-                  {isEditingBill ? (
-                    <>
-                      <button className="button button-primary button-small" type="button" onClick={() => void saveSelectedBillDraft()} disabled={isSavingBillEdit}>
-                        {isSavingBillEdit ? "Saving..." : "Save changes"}
-                      </button>
-                      <button className="button button-secondary button-small" type="button" onClick={cancelEditingSelectedBill}>
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button className="button button-secondary button-small" type="button" onClick={startEditingSelectedBill}>
-                        Edit bill
-                      </button>
-                      <button className="button button-secondary button-small" type="button" onClick={() => window.print()}>
-                        Print summary
-                      </button>
-                    </>
-                  )}
+                  <button className="button button-primary button-small" type="button" onClick={() => void saveSelectedBillDraft()} disabled={isSavingBillEdit}>
+                    {isSavingBillEdit ? "Saving..." : "Save changes"}
+                  </button>
+                  <button className="button button-secondary button-small" type="button" onClick={cancelEditingSelectedBill}>
+                    Reset changes
+                  </button>
                 </div>
                 {selectedBill.sourceType === "receipt" && (selectedBill.receiptConfidence < 80 || !selectedBill.total) ? (
                   <div className="split-bill-receipt-quality" role="status">
@@ -1546,6 +1534,33 @@ export function SplitBillWorkspace({
                     {renderBillItemsTable(selectedBill, true)}
 
                     {billEditError ? <p className="split-bill-editor__error">{billEditError}</p> : null}
+                    <div className="split-bill-detail-modal__list">
+                      <div className="split-bill-detail-modal__list-row">
+                        <strong>Contributions</strong>
+                        <span>{formatPaymentContributions(selectedBill)}</span>
+                      </div>
+                      <div className="split-bill-detail-modal__list-row">
+                        <strong>Settlement</strong>
+                        <span>{formatSettlementTransfers(selectedBill)}</span>
+                      </div>
+                    </div>
+                    <SplitBillPaymentTools
+                      bill={selectedBill}
+                      onBillUpdated={(updatedBill) => setBills((current) => current.map((entry) => (entry.id === updatedBill.id ? updatedBill : entry)))}
+                    />
+                    <div className="split-bill-activity">
+                      <strong>Activity</strong>
+                      {(selectedBill.activity ?? []).length > 0 ? (
+                        (selectedBill.activity ?? []).slice(0, 6).map((activity) => (
+                          <div key={activity.id} className="split-bill-activity__row">
+                            <span>{activity.message}</span>
+                            <small>{formatActivityTime(activity.createdAt)}</small>
+                          </div>
+                        ))
+                      ) : (
+                        <span className="split-bill-subtle-empty">No activity yet</span>
+                      )}
+                    </div>
                   </>
                 ) : (
                   <>
@@ -1609,6 +1624,14 @@ export function SplitBillWorkspace({
                     </div>
                   </>
                 )}
+                <div className="split-bill-detail-modal__actions">
+                  <button className="button button-secondary button-small" type="button" onClick={() => window.print()}>
+                    Print summary
+                  </button>
+                  <button className="button button-danger button-small" type="button" onClick={() => void removeBill(selectedBill.id)}>
+                    Delete bill
+                  </button>
+                </div>
               </div>
             ) : null}
 
