@@ -343,6 +343,26 @@ const main = async () => {
     /checkpointAccountIds\.has\(account\.id\) \|\| publishedInventoryAccountIds\.has\(account\.id\)/,
     "A zero-transaction inventory account without an account number must not be hidden as a temporary parser placeholder."
   );
+  const recurringPageSource = await readFile(join(process.cwd(), "lib/recurring-page.ts"), "utf8");
+  assert.match(
+    recurringPageSource,
+    /syncReceivableAccountCommitments\(workspaceId\)/,
+    "The Recurring page must backfill receivable accounts created by earlier inventory imports."
+  );
+  const receivableSyncSource = await readFile(
+    join(process.cwd(), "lib/imported-receivables.server.ts"),
+    "utf8"
+  );
+  assert.match(
+    receivableSyncSource,
+    /existing\.source !== "account_inventory_import"[\s\S]{0,250}continue/,
+    "Receivable backfill must never overwrite a user-created recurring item."
+  );
+  assert.match(
+    receivableSyncSource,
+    /else if \(amount > 0\)[\s\S]{0,900}kind: "receivable"/,
+    "A positive imported Accounts Receivable balance must appear in Recurring without requiring another upload."
+  );
   const processRouteSource = await readFile(join(process.cwd(), "app/api/imports/[importId]/process/route.ts"), "utf8");
   assert.match(
     processRouteSource,

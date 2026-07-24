@@ -6,6 +6,7 @@ import { serializeFinancialCommitment, type FinancialCommitmentSummary } from "@
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
 import { getPlannedPaymentSuggestions, getRecurringConfidenceTier, type PlannedPaymentSuggestion } from "@/lib/planned-payment-suggestions";
+import { syncReceivableAccountCommitments } from "@/lib/imported-receivables.server";
 
 export type RecurringPageAccount = {
   id: string;
@@ -146,6 +147,11 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
   if (hasRecurringPatternTable) {
     await withRecurringEnrichmentTimeout(syncWorkspaceRecurringPatterns(workspaceId), [], "patterns");
   }
+  await withRecurringEnrichmentTimeout(
+    syncReceivableAccountCommitments(workspaceId),
+    0,
+    "receivable accounts"
+  );
 
   const [reminders, accounts, transactions, commitments, recurringPatterns, plannedPaymentSuggestions] = await Promise.all([
     withRecurringEnrichmentTimeout(getUpcomingStatementReminders(workspaceId), [], "statement reminders"),
