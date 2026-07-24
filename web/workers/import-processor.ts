@@ -11907,7 +11907,11 @@ export const confirmImportFile = async (
           payload && typeof payload === "object" && !Array.isArray(payload)
             ? (payload as Record<string, unknown>).source
             : null;
-        return source === "structured_transaction_csv" || source === "account_snapshot_csv";
+        return (
+          source === "structured_transaction_csv" ||
+          source === "account_snapshot_csv" ||
+          source === "wide_account_snapshot_csv"
+        );
       })
     );
   const multiAccountImport =
@@ -12539,6 +12543,9 @@ export const confirmImportFile = async (
     multiAccountImport && parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "net_worth_snapshot_csv");
   const shouldPersistAccountSnapshotCsvGroupBalances =
     multiAccountImport && parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "account_snapshot_csv");
+  const shouldPersistWideAccountSnapshotCsvGroupBalances =
+    multiAccountImport &&
+    parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "wide_account_snapshot_csv");
   if (
     shouldRunDestructiveMultiAccountCleanup({
       multiAccountImport,
@@ -12547,7 +12554,8 @@ export const confirmImportFile = async (
     }) ||
     shouldPersistDeterministicPdaxGroupBalances ||
     shouldPersistNetWorthSnapshotGroupBalances ||
-    shouldPersistAccountSnapshotCsvGroupBalances
+    shouldPersistAccountSnapshotCsvGroupBalances ||
+    shouldPersistWideAccountSnapshotCsvGroupBalances
   ) {
     for (const group of parsedAccountGroups) {
       const groupAccount = accountByGroupKey.get(group.key);

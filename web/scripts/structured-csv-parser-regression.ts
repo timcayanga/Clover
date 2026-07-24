@@ -5,6 +5,7 @@ import {
   parseGenericAccountSnapshotCsv,
   parseImportText,
   parseStructuredTransactionCsv,
+  parseWideAccountSnapshotCsv,
 } from "@/lib/import-parser";
 
 const signedCsv = [
@@ -85,6 +86,76 @@ const excelSerialRows = parseStructuredTransactionCsv(excelSerialCsv, "excel-exp
 assert.ok(excelSerialRows);
 assert.match(excelSerialRows[0]?.date ?? "", /^2026-/);
 
+const metadataCsv = [
+  "Bank,UnionBank",
+  "Account Name,Payroll 3912",
+  "Account Number,3912",
+  "Currency,PHP",
+  "Date,Description,Amount,Reference",
+  "2026-07-20,Coffee,-125.00,TX-001",
+].join("\n");
+const metadataRows = parseStructuredTransactionCsv(metadataCsv, "preamble.csv", "text/csv");
+assert.ok(metadataRows);
+assert.equal(metadataRows[0]?.institution, "UnionBank");
+assert.equal(metadataRows[0]?.accountName, "Payroll 3912");
+assert.equal(metadataRows[0]?.accountNumber, "3912");
+assert.equal(metadataRows[0]?.currency, "PHP");
+assert.deepEqual(metadataRows[0]?.rawPayload?.preambleMetadata, {
+  institution: "UnionBank",
+  account_name: "Payroll 3912",
+  account_number: "3912",
+  currency: "PHP",
+});
+
+const ascendingBalanceCsv = [
+  "Date,Description,Amount,Running Balance,Account",
+  "2026-07-01,Opening credit,100.00,1100.00,Main",
+  "2026-07-02,Groceries,25.00,1075.00,Main",
+  "2026-07-03,Adjustment,50.00,1125.00,Main",
+].join("\n");
+const ascendingBalanceRows = parseStructuredTransactionCsv(ascendingBalanceCsv, "ascending.csv", "text/csv");
+assert.ok(ascendingBalanceRows);
+assert.equal(ascendingBalanceRows[1]?.type, "expense");
+assert.equal(ascendingBalanceRows[1]?.rawPayload?.directionEvidence, "running_balance_delta");
+assert.equal(ascendingBalanceRows[2]?.type, "income");
+assert.equal(ascendingBalanceRows[2]?.rawPayload?.balanceDelta, 50);
+
+const descendingBalanceCsv = [
+  "Date,Description,Amount,Running Balance,Account",
+  "2026-07-03,Adjustment,50.00,1125.00,Main",
+  "2026-07-02,Groceries,25.00,1075.00,Main",
+  "2026-07-01,Opening credit,100.00,1100.00,Main",
+].join("\n");
+const descendingBalanceRows = parseStructuredTransactionCsv(descendingBalanceCsv, "descending.csv", "text/csv");
+assert.ok(descendingBalanceRows);
+assert.equal(descendingBalanceRows[0]?.type, "income", "Descending exports should compare a row with the older balance below it.");
+assert.equal(descendingBalanceRows[1]?.type, "expense");
+
+const explicitDirectionCsv = [
+  "Date,Description,Amount,Direction,Running Balance",
+  "2026-07-01,Manual correction,25.00,Credit,975.00",
+  "2026-07-02,Next row,25.00,Debit,1000.00",
+].join("\n");
+const explicitDirectionRows = parseStructuredTransactionCsv(explicitDirectionCsv, "explicit.csv", "text/csv");
+assert.ok(explicitDirectionRows);
+assert.equal(explicitDirectionRows[0]?.type, "income", "Explicit direction must override a conflicting balance delta.");
+assert.equal(explicitDirectionRows[0]?.rawPayload?.directionEvidence, "explicit_type");
+
+const duplicateReferenceCsv = [
+  "Date,Description,Amount,Direction,Reference,Account",
+  "2026-07-01,Coffee,100.00,Debit,ABC-123,Main",
+  "2026-07-01,Coffee,100.00,Debit,ABC-123,Main",
+  "2026-07-01,Coffee,100.00,Debit,,Main",
+  "2026-07-01,Coffee,100.00,Debit,,Main",
+].join("\n");
+const duplicateReferenceRows = parseStructuredTransactionCsv(duplicateReferenceCsv, "duplicates.csv", "text/csv");
+assert.ok(duplicateReferenceRows);
+assert.equal(
+  duplicateReferenceRows.length,
+  3,
+  "Only rows sharing a stable transaction reference should be suppressed; legitimate repeated cash-like rows must remain."
+);
+
 const accountInventoryCsv = [
   "As of Date,Institution,Account Name,Account Type,Currency,Balance,Account Number",
   "2026-07-24,BPI,Payroll,Savings,PHP,\"12,345.67\",1234",
@@ -101,6 +172,23 @@ assert.equal(accountRows.find((row) => row.accountName === "Daily Wallet")?.rawP
 assert.equal(accountRows.find((row) => row.accountName === "Cash USD")?.currency, "USD");
 assert.equal(accountRows.find((row) => row.accountName === "Accounts Receivable")?.rawPayload?.accountType, "receivable");
 assert.equal(parseImportText(accountInventoryCsv, "accounts.csv", "text/csv").length, 4);
+
+const wideBalanceHistoryCsv = [
+  "Institution,Personal Finance Export",
+  "Currency,PHP",
+  "Snapshot Date,BPI Payroll,GCash Wallet,Total Assets,Monthly Change",
+  '2026-05-31,"10,000.00",500.00,"10,500.00",',
+  '2026-06-30,"12,000.00",750.00,"12,750.00","2,250.00"',
+  '2026-07-24,"11,500.00",900.00,"12,400.00",-350.00',
+].join("\n");
+const wideBalanceRows = parseWideAccountSnapshotCsv(wideBalanceHistoryCsv, "balance-history.csv", "text/csv");
+assert.ok(wideBalanceRows);
+assert.equal(wideBalanceRows.length, 2);
+assert.deepEqual(wideBalanceRows.map((row) => row.accountName), ["BPI Payroll", "GCash Wallet"]);
+assert.equal(wideBalanceRows[0]?.rawPayload?.balance, 11500);
+assert.equal((wideBalanceRows[0]?.rawPayload?.balanceHistory as unknown[])?.length, 3);
+assert.equal(wideBalanceRows[1]?.rawPayload?.accountType, "wallet");
+assert.equal(parseImportText(wideBalanceHistoryCsv, "balance-history.csv", "text/csv").length, 2);
 
 const ambiguousBalanceTable = [
   "Date,Balance",
@@ -133,5 +221,12 @@ assert.deepEqual(
 const workerSource = readFileSync(join(process.cwd(), "workers/import-processor.ts"), "utf8");
 assert.match(workerSource, /hasStructuredDelimitedAccountGroups/, "Multi-account CSV exports must retain distinct account groups.");
 assert.match(workerSource, /shouldPersistAccountSnapshotCsvGroupBalances/, "Account inventory balances must be persisted per account.");
+assert.match(
+  workerSource,
+  /shouldPersistWideAccountSnapshotCsvGroupBalances/,
+  "Wide account-history balances must be persisted per account."
+);
 
-console.log("[PASS] Structured CSV parser covers delimiters, schemas, directions, dates, accounts, and fail-closed behavior.");
+console.log(
+  "[PASS] Structured CSV parser covers delimiters, preambles, balance reconciliation, deduplication, histories, accounts, and fail-closed behavior."
+);
