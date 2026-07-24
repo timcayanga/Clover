@@ -10827,7 +10827,7 @@ export const confirmImportFile = async (
         }
 
         if (
-          /\b(adobo|pares|kare|salmon|lemonade|fizz|tonic|pasta|burger|noodle|rice|meal|dish|grill|steak|sushi|ramen|coffee|latte|dessert)\b/.test(
+          /\b(adobo|pares|kare|salmon|lemonade|fizz|tonic|pasta|burger|noodle|rice|meal|dish|grill|steak|sushi|ramen|coffee|latte|dessert|tapsilogan|tapsilog|sisig|longsilog|pancit|bangus|porkchop|pork\s*chop)\b/.test(
             lineItemText
           )
         ) {

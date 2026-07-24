@@ -1715,18 +1715,25 @@ const inferOpenAIDocumentFamily = (params: {
       )
   );
 
-  if (params.importMode === "receipt" || /sent via gcash|sent via maya|wallet transfer|express send|ref\.?\s*no/i.test(combinedText)) {
+  if (params.importMode === "receipt") {
     if (/gcash|maya|wise|wallet/i.test(combinedText)) {
       return "wallet_screenshot" satisfies OpenAIDocumentFamily;
-    }
-    if (/invoice|tax invoice|sales invoice|official receipt/i.test(combinedText)) {
-      return "tax_invoice" satisfies OpenAIDocumentFamily;
     }
     if (/ticket|booking|itinerary|electronic ticket/i.test(combinedText)) {
       return "travel_ticket" satisfies OpenAIDocumentFamily;
     }
-    if (/subtotal|vat|service charge|table:|cashier|guest|amount due/i.test(combinedText)) {
-      return "restaurant_receipt" satisfies OpenAIDocumentFamily;
+    // Receipt photos are often cold, noisy, and named only with a camera
+    // timestamp. Keep them on the compact visual route rather than promoting
+    // incidental OCR terms (such as "official receipt") to a slower,
+    // statement-sized schema. The receipt-specific system prompt and server
+    // validation still govern the extraction, and stronger models remain in
+    // the fallback chain if the compact result is unusable.
+    return "generic_document" satisfies OpenAIDocumentFamily;
+  }
+
+  if (/sent via gcash|sent via maya|wallet transfer|express send|ref\.?\s*no/i.test(combinedText)) {
+    if (/gcash|maya|wise|wallet/i.test(combinedText)) {
+      return "wallet_screenshot" satisfies OpenAIDocumentFamily;
     }
   }
 
@@ -2292,13 +2299,15 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       ? params.fileDataBase64
       : null;
 
-  const isImageStatementMode =
-    (params.importMode ?? "statement") === "statement" &&
+  const isVisualImageImport =
     pageImagesToSend.length > 0 &&
     !pdfFileDataBase64;
+  const isImageStatementMode =
+    (params.importMode ?? "statement") === "statement" &&
+    isVisualImageImport;
   const isSinglePageGenericImage =
     inferredDocumentFamily === "generic_document" &&
-    isImageStatementMode &&
+    isVisualImageImport &&
     pageImagesToSend.length === 1;
 
   const userPrompt = isSinglePageGenericImage && inputText.trim().length === 0
