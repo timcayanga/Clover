@@ -69,8 +69,15 @@ import {
 import type { InstitutionSuggestion } from "@/lib/institution-suggestions";
 import type { UserLimits } from "@/lib/user-limits";
 import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
-import { clearImportActivity, getCompletedImportActivitySummary, readImportActivity, subscribeImportActivity } from "@/lib/import-activity";
+import {
+  clearImportActivity,
+  getCompletedImportActivitySummary,
+  importActivityIsComplete,
+  readImportActivity,
+  subscribeImportActivity,
+} from "@/lib/import-activity";
 import { importActivityHasCompletedRows } from "@/lib/import-activity";
+import { subscribeImportedSummary } from "@/lib/imported-summary-events";
 import {
   mergeAccountsWithOptimisticImports as mergeAccountsWithOptimisticImportsShared,
   mergeImportedPreviewTransactions,
@@ -1989,12 +1996,18 @@ function AccountsPageContent() {
   }, []);
 
   useEffect(() => {
-    const completedSummary = getCompletedImportActivitySummary(importActivitySnapshot);
-    if (!selectedWorkspaceId || !completedSummary || importActivitySnapshot?.workspaceId !== selectedWorkspaceId) {
+    if (
+      !selectedWorkspaceId ||
+      importActivitySnapshot?.workspaceId !== selectedWorkspaceId ||
+      !importActivityIsComplete(importActivitySnapshot)
+    ) {
       return;
     }
 
-    const refreshKey = `${importActivitySnapshot.updatedAt}:${completedSummary.accountId ?? completedSummary.optimisticAccountId ?? ""}`;
+    const refreshKey = [
+      importActivitySnapshot.importFileId ?? importActivitySnapshot.fileName ?? "import",
+      importActivitySnapshot.updatedAt,
+    ].join(":");
     if (completedImportRefreshKeyRef.current === refreshKey) {
       return;
     }
@@ -2014,6 +2027,30 @@ function AccountsPageContent() {
       window.clearTimeout(retry);
     };
   }, [importActivitySnapshot, loadWorkspaceData, selectedWorkspaceId]);
+
+  useEffect(() => {
+    return subscribeImportedSummary(({ workspaceId }) => {
+      if (!selectedWorkspaceId || workspaceId !== selectedWorkspaceId) {
+        return;
+      }
+
+      // The global uploader can finish while Accounts remains mounted. A
+      // server-component refresh alone preserves this page's client state, so
+      // explicitly replace it from the authoritative account inventory.
+      void loadWorkspaceData(selectedWorkspaceId, {
+        silent: true,
+        awaitHydration: true,
+        forceFresh: true,
+      });
+      window.setTimeout(() => {
+        void loadWorkspaceData(selectedWorkspaceId, {
+          silent: true,
+          awaitHydration: true,
+          forceFresh: true,
+        });
+      }, 650);
+    });
+  }, [loadWorkspaceData, selectedWorkspaceId]);
 
   useEffect(() => {
     if (searchParams?.get("import") === "1") {
@@ -4708,6 +4745,10 @@ function AccountsPageContent() {
               setImportRefreshInFlight(false);
             });
           }
+          // Invalidate prefetched server pages such as Recurring after an
+          // account inventory changes. Accounts itself is refreshed above
+          // because router.refresh() preserves this client component's state.
+          router.refresh();
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}
       />

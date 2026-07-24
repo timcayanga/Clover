@@ -300,8 +300,13 @@ const main = async () => {
   );
   assert.match(
     accountsPageSource,
-    /getCompletedImportActivitySummary\(importActivitySnapshot\)[\s\S]{0,1200}void loadWorkspaceData\(selectedWorkspaceId, \{ silent: true, awaitHydration: true[^}]*\}\);/,
-    "Accounts must rehydrate from the completed import activity event without requiring a manual page reload."
+    /importActivityIsComplete\(importActivitySnapshot\)[\s\S]{0,1400}forceFresh: true/,
+    "Accounts must rehydrate from completed imports, including zero-transaction account inventories, without a manual page reload."
+  );
+  assert.match(
+    accountsPageSource,
+    /subscribeImportedSummary\(\(\{ workspaceId \}\)[\s\S]{0,1000}forceFresh: true/,
+    "Accounts must react to imports completed through Clover's global uploader."
   );
   assert.match(
     transactionsPageSource,

@@ -146,7 +146,27 @@ export const importActivityHasCompletedRows = (activity: ImportActivitySnapshot 
   }
 
   const rowsImported = Number(activity.summary.rowsImported ?? 0);
-  if (!Number.isFinite(rowsImported) || rowsImported <= 0) {
+  const hasImportedAccount =
+    Boolean(activity.summary.accountId) ||
+    Boolean(
+      activity.summary.accountSummaries?.some(
+        (account) => Boolean(account.accountId)
+      )
+    );
+  if ((!Number.isFinite(rowsImported) || rowsImported <= 0) && !hasImportedAccount) {
+    return false;
+  }
+
+  const completedFiles = Number(activity.completedFiles ?? 0);
+  const fileTotal = Number(activity.fileTotal ?? 0);
+  const progress = Number(activity.progress ?? 0);
+  const fileBatchComplete = fileTotal > 0 && completedFiles >= fileTotal;
+
+  return activity.status === "done" || fileBatchComplete || progress >= 100;
+};
+
+export const importActivityIsComplete = (activity: ImportActivitySnapshot | null) => {
+  if (!activity || activity.status === "error") {
     return false;
   }
 
