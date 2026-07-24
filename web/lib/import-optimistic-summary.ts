@@ -93,6 +93,7 @@ export const buildResolvedOptimisticUploadSummary = (params: {
   accountName: string | null;
   institution: string | null;
   accountType: UploadAccountType;
+  currency?: string | null;
   optimisticAccountId: string | null;
   accountNumber?: string | null;
   balanceSources?: Array<unknown>;
@@ -140,6 +141,7 @@ export const buildResolvedOptimisticUploadSummary = (params: {
 
   const baseSummary = {
     ...summary,
+    currency: params.currency ?? summary.currency ?? null,
     accountSummaries: params.accountSummaries ?? summary.accountSummaries,
     optimistic: params.optimistic ?? summary.optimistic,
   };

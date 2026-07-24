@@ -136,6 +136,11 @@ const main = async () => {
     /existingSnapshotAccountWithStaleType/,
     "A corrected snapshot import must repair an older account card that was created with the wrong type."
   );
+  assert.match(
+    workerSource,
+    /\[net-worth-csv\] account inventory confirmed/,
+    "Inventory confirmation must log parsed, resolved, and published account counts."
+  );
 
   const modalSource = await readFile(join(process.cwd(), "components/import-files-modal.tsx"), "utf8");
   assert.match(
@@ -148,6 +153,18 @@ const main = async () => {
     accountsPageSource,
     /const optimisticAccounts = importedAccountSummaries/,
     "Accounts must publish every account summary from a multi-account import without waiting for a reload."
+  );
+  const processRouteSource = await readFile(join(process.cwd(), "app/api/imports/[importId]/process/route.ts"), "utf8");
+  assert.match(
+    processRouteSource,
+    /mergeImportResponseAccountSummaries\(\s*result\.accountSummaries,\s*statusSnapshot\?\.accountSummaries\s*\)/,
+    "A partial status snapshot must not replace a richer confirmation result."
+  );
+  const statusSnapshotSource = await readFile(join(process.cwd(), "lib/import-status-snapshot.ts"), "utf8");
+  assert.match(
+    statusSnapshotSource,
+    /mergePublishedAccountSummaries\(\s*readPublishedAccountSummaries\(statementCheckpoint\?\.sourceMetadata\),\s*computedAccountSummaries\s*\)/,
+    "Status polling must retain every account summary already published by confirmation."
   );
 
   console.log("[PASS] Net-worth snapshot CSV routes to 19 accounts and zero transactions.");

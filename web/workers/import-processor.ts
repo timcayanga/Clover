@@ -12276,6 +12276,16 @@ export const confirmImportFile = async (
     });
   }
   const accountSummaries = Array.from(accountSummaryById.values());
+  if (hasNetWorthSnapshotAccountGroups) {
+    console.info("[net-worth-csv] account inventory confirmed", {
+      importFileId,
+      parsedRowCount: parsedRows.length,
+      parsedAccountGroupCount: parsedAccountGroups.length,
+      resolvedAccountCount: resolvedAccounts.length,
+      accountSummaryCount: accountSummaries.length,
+      accountSummaryInstitutions: accountSummaries.map((summary) => summary.institution ?? summary.accountName),
+    });
+  }
   const resolvedAccountIdentityKeys = new Set(
     resolvedAccounts.map((entry) => normalizeImportedAccountKey(entry.name, entry.institution, entry.accountNumber, entry.type))
   );

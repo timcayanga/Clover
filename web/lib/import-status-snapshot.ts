@@ -22,6 +22,52 @@ type ImportAccountSummary = {
   rowsImported: number;
 };
 
+const readPublishedAccountSummaries = (sourceMetadata: unknown): ImportAccountSummary[] => {
+  if (!sourceMetadata || typeof sourceMetadata !== "object" || Array.isArray(sourceMetadata)) {
+    return [];
+  }
+  const metadata = sourceMetadata as Record<string, unknown>;
+  if (metadata.publishedVisibleImportComplete !== true || !Array.isArray(metadata.publishedAccountSummaries)) {
+    return [];
+  }
+
+  return metadata.publishedAccountSummaries.flatMap((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return [];
+    }
+    const summary = value as Record<string, unknown>;
+    const accountId = typeof summary.accountId === "string" && summary.accountId.trim() ? summary.accountId.trim() : null;
+    if (!accountId) {
+      return [];
+    }
+    return [{
+      accountId,
+      accountName: typeof summary.accountName === "string" ? summary.accountName : null,
+      institution: typeof summary.institution === "string" ? summary.institution : null,
+      accountNumber: typeof summary.accountNumber === "string" ? summary.accountNumber : null,
+      accountType: typeof summary.accountType === "string" ? (summary.accountType as AccountType) : null,
+      currency: typeof summary.currency === "string" ? summary.currency : null,
+      balance:
+        typeof summary.balance === "string" || typeof summary.balance === "number"
+          ? String(summary.balance)
+          : null,
+      rowsImported: Number(summary.rowsImported ?? 0) || 0,
+    }];
+  });
+};
+
+const mergePublishedAccountSummaries = (
+  publishedSummaries: ImportAccountSummary[],
+  computedSummaries: ImportAccountSummary[]
+) => {
+  const merged = new Map(publishedSummaries.map((summary) => [summary.accountId, summary] as const));
+  for (const summary of computedSummaries) {
+    const published = merged.get(summary.accountId);
+    merged.set(summary.accountId, published ? { ...published, ...summary } : summary);
+  }
+  return Array.from(merged.values());
+};
+
 export type ImportStatusSnapshot = {
   importFile: {
     id: string;
@@ -625,7 +671,7 @@ export const loadImportStatusSnapshot = async (
     receiptHasVisibleDocument && visibleTransactionAccountSummaries.length === 0
       ? await buildReceiptDocumentAccountSummary(receiptDocument)
       : [];
-  const accountSummaries =
+  const computedAccountSummaries =
     visibleTransactionAccountSummaries.length > 0
       ? visibleTransactionAccountSummaries
       : snapshotInventoryAccountSummaries.length > 0
@@ -633,6 +679,10 @@ export const loadImportStatusSnapshot = async (
       : receiptDocumentAccountSummaries.length > 0
         ? receiptDocumentAccountSummaries
       : checkpointAccountSummaries;
+  const accountSummaries = mergePublishedAccountSummaries(
+    readPublishedAccountSummaries(statementCheckpoint?.sourceMetadata),
+    computedAccountSummaries
+  );
   const resolvedAccountId =
     importFile.accountId ??
     receiptTransaction?.accountId ??

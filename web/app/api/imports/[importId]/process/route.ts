@@ -64,6 +64,32 @@ export const maxDuration = 300;
 // multiplying inter-region latency across the parse-and-confirm pipeline.
 export const preferredRegion = "sin1";
 
+type ImportResponseAccountSummary = {
+  accountId: string;
+  accountName?: string | null;
+  institution?: string | null;
+  accountNumber?: string | null;
+  accountType?: string | null;
+  currency?: string | null;
+  balance?: string | null;
+  rowsImported?: number;
+};
+
+const mergeImportResponseAccountSummaries = <T extends ImportResponseAccountSummary>(
+  confirmedSummaries: T[] | null | undefined,
+  snapshotSummaries: T[] | null | undefined
+) => {
+  const merged = new Map<string, T>();
+  for (const summary of confirmedSummaries ?? []) {
+    merged.set(summary.accountId, summary);
+  }
+  for (const summary of snapshotSummaries ?? []) {
+    const confirmed = merged.get(summary.accountId);
+    merged.set(summary.accountId, confirmed ? { ...summary, ...confirmed } : summary);
+  }
+  return Array.from(merged.values());
+};
+
 const isImportPasswordError = (error: unknown, message: string) => {
   const name = error && typeof error === "object" && "name" in error ? String((error as { name?: unknown }).name ?? "") : "";
   return /passwordexception|password\s*(?:required|incorrect|invalid)|password-protected|encrypted\s+(?:pdf|file)/i.test(
@@ -1302,8 +1328,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           { status: 202 }
         );
       }
-      const accountSummaries =
-        statusSnapshot?.accountSummaries?.length ? statusSnapshot.accountSummaries : result.accountSummaries ?? [];
+      const accountSummaries = mergeImportResponseAccountSummaries(
+        result.accountSummaries,
+        statusSnapshot?.accountSummaries
+      );
       const responseAccountId =
         result.accountId ??
         statusSnapshot?.importFile.accountId ??
@@ -2720,8 +2748,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             { status: 202 }
           );
         }
-        const accountSummaries =
-          statusSnapshot?.accountSummaries?.length ? statusSnapshot.accountSummaries : result.accountSummaries ?? [];
+        const accountSummaries = mergeImportResponseAccountSummaries(
+          result.accountSummaries,
+          statusSnapshot?.accountSummaries
+        );
         const responseAccountId =
           result.accountId ??
           statusSnapshot?.importFile.accountId ??
@@ -2872,8 +2902,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             importFile: (await fetchImportFileCompat(importId)) ?? importFile,
             promoteFailedVisibleImport: true,
           });
-      const accountSummaries =
-        statusSnapshot?.accountSummaries?.length ? statusSnapshot.accountSummaries : result.accountSummaries ?? [];
+      const accountSummaries = mergeImportResponseAccountSummaries(
+        result.accountSummaries,
+        statusSnapshot?.accountSummaries
+      );
       const responseAccountId =
         result.accountId ??
         statusSnapshot?.importFile.accountId ??
