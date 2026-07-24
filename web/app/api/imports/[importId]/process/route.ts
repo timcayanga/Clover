@@ -1907,23 +1907,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         });
         let canonicalImport: (typeof canonicalCandidates)[number] | null = null;
         let canonicalVisibleRows = 0;
-        const completedCounterCandidate = canonicalCandidates.find(
-          (candidate) =>
-            candidate.id !== importId &&
-            candidate.status === "done" &&
-            Number(candidate.confirmedTransactionsCount ?? 0) > 0
-        );
-        if (completedCounterCandidate) {
-          canonicalImport = completedCounterCandidate;
-          canonicalVisibleRows = Number(completedCounterCandidate.confirmedTransactionsCount ?? 0);
-        }
         for (const candidate of canonicalCandidates) {
           if (canonicalImport || candidate.id === importId || candidate.status !== "done") {
             continue;
           }
-          // Counters can lag behind compatibility-linked transactions. Verify
-          // the actual visible rows so a completed import stays authoritative
-          // even when its denormalized counters are stale.
+          // A completed import is reusable only when its actual transaction
+          // rows are visible. confirmedTransactionsCount is a denormalized
+          // progress counter and can remain non-zero after a failed cleanup;
+          // using it as proof here causes false 100% duplicate imports.
           const visibleRows = await countTransactionsByImportFileCompat(candidate.id).catch(() => 0);
           if (visibleRows > 0) {
             canonicalImport = candidate;
