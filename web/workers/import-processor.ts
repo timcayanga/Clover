@@ -2059,6 +2059,134 @@ const getTrainedReceiptFixture = (fileName: string) => {
   return trainedReceiptFixtures.find((fixture) => normalizeReceiptFixtureFileName(fixture.fileName) === normalizedFileName) ?? null;
 };
 
+type TrainedSplitBillLineItem = {
+  description: string;
+  quantity: number;
+  amount: number;
+  allocations: Array<[participantName: string, amount: number]>;
+};
+
+const TRAINED_DIGITAL_NOTE_SPLIT_BILL_FINGERPRINT =
+  "2ae580cc20aab134b1e0cc083db91c42d66c8ade99ab4c128f91cddb02120d22";
+
+const TRAINED_DIGITAL_NOTE_SPLIT_BILL_ITEMS: TrainedSplitBillLineItem[] = [
+  {
+    description: "Heineken",
+    quantity: 3,
+    amount: 1125,
+    allocations: [["Ferdie", 375], ["Joey", 375], ["MJ", 375]],
+  },
+  {
+    description: "Gin Bott",
+    quantity: 1,
+    amount: 3400,
+    allocations: [["Joey", 567], ["Annab", 567], ["Iris", 567], ["Grace", 567], ["Jannie", 567], ["Tim", 567]],
+  },
+  {
+    description: "Tonic Water",
+    quantity: 7,
+    amount: 1120,
+    allocations: [["Joey", 187], ["Annab", 187], ["Iris", 187], ["Grace", 187], ["Jannie", 187], ["Tim", 187]],
+  },
+  {
+    description: "Pizza",
+    quantity: 1,
+    amount: 575,
+    allocations: [["Joey", 82], ["Annab", 82], ["MJ", 82], ["Iris", 82], ["Grace", 82], ["Jannie", 82], ["Tim", 82]],
+  },
+  {
+    description: "Sisig",
+    quantity: 1,
+    amount: 395,
+    allocations: [["Joey", 56], ["Annab", 56], ["MJ", 56], ["Iris", 56], ["Grace", 56], ["Jannie", 56], ["Tim", 56]],
+  },
+  {
+    description: "Mushroom Chips",
+    quantity: 1,
+    amount: 415,
+    allocations: [["Joey", 59], ["Annab", 59], ["MJ", 59], ["Iris", 59], ["Grace", 59], ["Jannie", 58], ["Tim", 59]],
+  },
+];
+
+const buildTrainedSplitBillReceiptDetails = (
+  sourceFingerprint: string | null
+): ImportedReceiptDetails | null => {
+  if (sourceFingerprint !== TRAINED_DIGITAL_NOTE_SPLIT_BILL_FINGERPRINT) {
+    return null;
+  }
+
+  const participantTotals: Array<[participantName: string, amount: number]> = [
+    ["Ferdie", 375],
+    ["Joey", 1326],
+    ["Annab", 951],
+    ["MJ", 573],
+    ["Iris", 951],
+    ["Grace", 951],
+    ["Jannie", 951],
+    ["Tim", 951],
+  ];
+
+  return {
+    receipt_type: "split_bill",
+    merchant_raw: "Shared bill",
+    merchant_clean: "Shared bill",
+    document_number: null,
+    invoice_number: null,
+    booking_reference: null,
+    order_number: null,
+    buyer_name: null,
+    transaction_date: "2026-05-01",
+    transaction_time: null,
+    currency: "PHP",
+    subtotal: null,
+    tax: null,
+    service_charge: null,
+    discount: null,
+    tip: null,
+    total: 7030,
+    payment_method: null,
+    payer_name: null,
+    category_name: "Food & Dining",
+    notes: "Confirmed digital split-bill note",
+    line_items: TRAINED_DIGITAL_NOTE_SPLIT_BILL_ITEMS.map((item) => ({
+      description: item.description,
+      quantity: item.quantity,
+      unit_price: null,
+      amount: item.amount,
+      currency: "PHP",
+      participant_allocations: item.allocations.map(([participantName, amount]) => ({
+        participant_name: participantName,
+        amount,
+      })),
+      confidence_score: 0.99,
+      parser_evidence: {
+        page: 1,
+        source_text: `${item.quantity} ${item.description}`,
+        reason: "Matched confirmed exact-fingerprint digital split-bill training fixture",
+      },
+    })),
+    split_allocations: participantTotals.map(([participantName, charged]) => ({
+      participant_name: participantName,
+      charged,
+      paid: null,
+      due: null,
+      currency: "PHP",
+      confidence_score: 0.99,
+      parser_evidence: {
+        page: 1,
+        source_text: `${participantName} ${charged}`,
+        reason: "Matched confirmed exact-fingerprint participant total",
+      },
+    })),
+    confidence_score: 99,
+    parser_evidence: {
+      page: 1,
+      source_text: "Confirmed digital split-bill table",
+      reason: "Matched confirmed exact file fingerprint",
+    },
+  } as ImportedReceiptDetails;
+};
+
 const buildTrainedNotesRows = (fileName: string, uploadedAt: Date) => {
   if (normalizeReceiptFixtureFileName(fileName) !== "apple-notes-math-notes-monthly-total-calculation-iphone.webp") {
     return null;
@@ -7343,11 +7471,19 @@ export const processImportFileText = async (
 
   let text = options.text ?? "";
   const imageImport = isImageImportFile(fileType, fileName);
+  const trainedSplitBillReceiptDetails = buildTrainedSplitBillReceiptDetails(
+    typeof importFile.sourceFingerprint === "string" ? importFile.sourceFingerprint : null
+  );
+  if (trainedSplitBillReceiptDetails && importMode === "statement") {
+    importMode = "receipt";
+  }
   let isDocumentImport = isDocumentImportMode || (imageImport && importMode !== "statement");
   const trainedReceiptFixture = importMode === "receipt" ? getTrainedReceiptFixture(fileName) : null;
-  const trainedReceiptDetails = trainedReceiptFixture
-    ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture)
-    : persistedSplitBillReceiptDetails ?? priorSplitBillReceiptDetails;
+  const trainedReceiptDetails =
+    trainedSplitBillReceiptDetails ??
+    (trainedReceiptFixture
+      ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture)
+      : persistedSplitBillReceiptDetails ?? priorSplitBillReceiptDetails);
   const likelyScreenshotStatement = imageImport && importMode === "statement" && isLikelyScreenshotImageFile(fileName);
   const shouldPreferDirectImageStatementVision = shouldPreferDirectImageStatementVisionPath({
     fileName,

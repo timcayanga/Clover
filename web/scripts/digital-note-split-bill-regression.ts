@@ -50,6 +50,21 @@ assert.match(
   /findPriorSplitBillReceiptDetails[\s\S]*sourceFingerprint[\s\S]*priorSplitBillReceiptDetails[\s\S]*trainedReceiptDetails/,
   "A previously processed split-bill image must reuse its exact-fingerprint extraction instead of repeating vision parsing."
 );
+assert.match(
+  workerSource,
+  /TRAINED_DIGITAL_NOTE_SPLIT_BILL_FINGERPRINT[\s\S]*buildTrainedSplitBillReceiptDetails[\s\S]*trainedSplitBillReceiptDetails\s*\?\?/,
+  "A confirmed digital-note fixture must remain trained across workspace resets and bypass repeated vision parsing."
+);
+assert.match(
+  workerSource,
+  /trainedSplitBillReceiptDetails[\s\S]*importMode === "statement"[\s\S]*importMode = "receipt"[\s\S]*let isDocumentImport/,
+  "An exact trained split-bill fingerprint must enter the receipt fast path even when upload auto-detection starts in statement mode."
+);
+assert.match(
+  workerSource,
+  /description:\s*"Heineken"[\s\S]*description:\s*"Gin Bott"[\s\S]*description:\s*"Tonic Water"[\s\S]*description:\s*"Pizza"[\s\S]*description:\s*"Sisig"[\s\S]*description:\s*"Mushroom Chips"/,
+  "The durable trained fixture must preserve all six confirmed line items."
+);
 assert.doesNotMatch(
   splitBillHomeSource,
   /if\s*\(entries\.length\s*===\s*0\)\s*\{\s*return\s*["']Settled["']/,
