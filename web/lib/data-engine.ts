@@ -5313,6 +5313,22 @@ export const enrichParsedRowsWithTraining = async (params: {
       !Array.isArray(rowWithInstitution.rawPayload)
         ? (rowWithInstitution.rawPayload as Record<string, unknown>)
         : null;
+    const originalParserCategoryName = typeof row.categoryName === "string" ? row.categoryName.trim() : "";
+    // Keep the category used by the final Transaction in sync with the parsed
+    // record. Otherwise a vision-model "Shopping" label can be persisted as
+    // Food & Dining, then overwritten by the stale in-memory value during the
+    // visible transaction handoff.
+    const parserCategoryName = resolveParsedTransactionCategoryName({
+      categoryName: originalParserCategoryName,
+      type: row.type ?? "expense",
+      merchantRaw: row.merchantRaw ?? null,
+      merchantClean: row.merchantClean ?? null,
+      description: row.description ?? null,
+      rawPayload,
+    });
+    const parserCategoryWasCorrected =
+      Boolean(originalParserCategoryName) &&
+      normalizeMerchantText(originalParserCategoryName) !== normalizeMerchantText(parserCategoryName);
     const categoryText = [
       row.merchantRaw,
       row.merchantClean,
@@ -5357,7 +5373,7 @@ export const enrichParsedRowsWithTraining = async (params: {
           categoryText,
           institution: rowWithInstitution.institution ?? null,
           type: row.type ?? "expense",
-          categoryName: row.categoryName ?? null,
+          categoryName: parserCategoryName,
           merchantRules,
           trainingSignals,
           negativeSignals,
@@ -5383,7 +5399,6 @@ export const enrichParsedRowsWithTraining = async (params: {
       ? deterministicNormalizedName
       : learnedNormalizedName || deterministicNormalizedName;
     const accountName = row.accountName ?? null;
-    const parserCategoryName = typeof row.categoryName === "string" ? row.categoryName.trim() : "";
     const parserSuppliedConcreteCategory = Boolean(parserCategoryName) && parserCategoryName.toLowerCase() !== "other";
     const protectedParserCategory = isProtectedParserCategory({
       institution: rowWithInstitution.institution ?? null,
@@ -5405,6 +5420,7 @@ export const enrichParsedRowsWithTraining = async (params: {
       (isDeterministicLearningSource(learnedCategorySource) ||
         (isExactLearningReason(learnedCategoryReason) && normalizeConfidenceScore(learned.confidence) >= 85));
     const shouldKeepParserCategory =
+      parserCategoryWasCorrected ||
       protectedParserCategory ||
       (learnedConflictsWithParser && !isDeterministicLearningSource(learnedCategorySource)) ||
       (!parserSuppliedConcreteCategory &&
@@ -5413,7 +5429,7 @@ export const enrichParsedRowsWithTraining = async (params: {
         !learnedCanSafelyReplaceOther);
     const categoryName = shouldKeepParserCategory
       ? parserCategoryName
-      : learned.categoryName || row.categoryName || defaultCategoryForType(learned.preferredType ?? row.type ?? "expense");
+      : learned.categoryName || parserCategoryName || defaultCategoryForType(learned.preferredType ?? row.type ?? "expense");
     const nextType = coerceTransactionTypeFromCategoryName(
       categoryName,
       shouldKeepParserCategory ? row.type ?? "expense" : learned.preferredType ?? row.type ?? "expense"
