@@ -9594,7 +9594,8 @@ export const processImportFileText = async (
   // made every statement pay for account matching twice before it could appear
   // in the UI. Structured document previews still need an account before their
   // document record is assembled, so retain the early pass for those modes.
-  const shouldMaterializeAccountBeforeConfirmation = effectiveImportMode !== "statement";
+  const shouldMaterializeAccountBeforeConfirmation =
+    effectiveImportMode === "portfolio" || effectiveImportMode === "account_detail";
   const materializedParsedAccounts = (shouldMaterializeAccountBeforeConfirmation
     ? await ensureParsedAccountGroupsMaterialized({
         importFile,
@@ -9807,13 +9808,13 @@ export const processImportFileText = async (
     candidateComparisonReason: statementCandidateComparison?.reason ?? null,
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
-  const receiptDocumentCashAccountId =
-    effectiveImportMode === "receipt"
+  const documentCashAccountId =
+    effectiveImportMode === "receipt" || effectiveImportMode === "notes"
       ? await resolveWorkspaceCashAccountId(String(importFile.workspaceId), resolvedMetadata.currency ?? "PHP")
       : null;
   const documentImportAccountId =
-    effectiveImportMode === "receipt"
-      ? receiptDocumentCashAccountId
+    effectiveImportMode === "receipt" || effectiveImportMode === "notes"
+      ? documentCashAccountId
       : receiptPreviewLooksLikeReceipt
         ? linkedImportAccountId ?? resolvedReceiptAccountId
         : linkedImportAccountId;
@@ -11764,6 +11765,15 @@ export const confirmImportFile = async (
     hasMultipleWiseWalletAccountGroups ||
     hasMultipleInvestmentAccountGroups ||
     hasDeterministicPdaxPortfolioGroups;
+  const notesCashAccountId =
+    importMode === "notes"
+      ? await resolveWorkspaceCashAccountId(
+          String(importFile.workspaceId),
+          typeof baseStatementMetadata.currency === "string" && baseStatementMetadata.currency.trim()
+            ? baseStatementMetadata.currency
+            : "PHP"
+        )
+      : null;
   // Start the workspace snapshot before account resolution so it can serve
   // both identity matching and later transaction matching in one read.
   const compatibleAccountColumnsPromise = getCompatibleAccountColumns();
@@ -11777,6 +11787,13 @@ export const confirmImportFile = async (
   const accountByGroupKey = new Map<string, Awaited<ReturnType<typeof resolveConfirmationAccount>>>();
   let resolvedAccountSequence = 0;
   const workspaceAccountCandidates = await workspaceAccountCandidatesPromise;
+  const notesCashAccount =
+    notesCashAccountId
+      ? workspaceAccountCandidates.find((candidate) => candidate.id === notesCashAccountId) ?? null
+      : null;
+  if (notesCashAccountId && !notesCashAccount) {
+    throw new Error("Cash account not found");
+  }
   for (const group of multiAccountImport ? parsedAccountGroups : parsedAccountGroups.slice(0, 1)) {
     const firstGroupRow = group.rows[0] ?? {};
     const groupRows = group.rows as EnrichedParsedImportRow[];
@@ -11793,34 +11810,36 @@ export const confirmImportFile = async (
     const groupCurrency = readRowAccountCurrency(firstGroupRow);
     const groupLooksWiseAccount = rowLooksWiseAccount(firstGroupRow);
     const groupHasDedicatedWisePdfIdentity = groupRows.length > 0 && groupRows.every(isDedicatedWisePdfStatementRow);
-    const groupAccount = await resolveConfirmationAccount({
-      importFile,
-      statementMetadata: {
-        ...baseStatementMetadata,
-        accountName: groupLooksWiseAccount ? "Wise" : readRowAccountName(firstGroupRow) ?? baseStatementMetadata.accountName,
-        institution: groupLooksWiseAccount ? "Wise" : readRowInstitution(firstGroupRow) ?? baseStatementMetadata.institution ?? checkpointBankName ?? null,
-        accountNumber:
-          groupLooksWiseAccount && !groupHasDedicatedWisePdfIdentity
+    const groupAccount =
+      notesCashAccount ??
+      (await resolveConfirmationAccount({
+        importFile,
+        statementMetadata: {
+          ...baseStatementMetadata,
+          accountName: groupLooksWiseAccount ? "Wise" : readRowAccountName(firstGroupRow) ?? baseStatementMetadata.accountName,
+          institution: groupLooksWiseAccount ? "Wise" : readRowInstitution(firstGroupRow) ?? baseStatementMetadata.institution ?? checkpointBankName ?? null,
+          accountNumber:
+            groupLooksWiseAccount && !groupHasDedicatedWisePdfIdentity
+              ? null
+              : readRowAccountNumber(firstGroupRow) ?? baseStatementMetadata.accountNumber,
+          accountType: groupLooksWiseAccount ? "wallet" : groupAccountType,
+          currency:
+            groupCurrency ??
+            (typeof firstGroupRow.currency === "string" && firstGroupRow.currency.trim()
+              ? firstGroupRow.currency.trim().toUpperCase()
+              : baseStatementMetadata.currency),
+          endingBalance: groupEndingBalance ?? baseStatementMetadata.endingBalance,
+        },
+        parsedRows: groupRows,
+        accountId: multiAccountImport ? null : accountId,
+        planLimits: planLimits ? { accountLimit: planLimits.accountLimit } : null,
+        planAccountCount:
+          planUsage?.accountCount === null || planUsage?.accountCount === undefined
             ? null
-            : readRowAccountNumber(firstGroupRow) ?? baseStatementMetadata.accountNumber,
-        accountType: groupLooksWiseAccount ? "wallet" : groupAccountType,
-        currency:
-          groupCurrency ??
-          (typeof firstGroupRow.currency === "string" && firstGroupRow.currency.trim()
-            ? firstGroupRow.currency.trim().toUpperCase()
-            : baseStatementMetadata.currency),
-        endingBalance: groupEndingBalance ?? baseStatementMetadata.endingBalance,
-      },
-      parsedRows: groupRows,
-      accountId: multiAccountImport ? null : accountId,
-      planLimits: planLimits ? { accountLimit: planLimits.accountLimit } : null,
-      planAccountCount:
-        planUsage?.accountCount === null || planUsage?.accountCount === undefined
-          ? null
-          : planUsage.accountCount + resolvedAccountSequence,
-      allowDeletedAccountRecreation: Boolean(options?.allowDeletedAccountRecreation),
-      workspaceAccounts: workspaceAccountCandidates,
-    });
+            : planUsage.accountCount + resolvedAccountSequence,
+        allowDeletedAccountRecreation: Boolean(options?.allowDeletedAccountRecreation),
+        workspaceAccounts: workspaceAccountCandidates,
+      }));
     if (!groupAccount) {
       throw new Error("Account not found");
     }

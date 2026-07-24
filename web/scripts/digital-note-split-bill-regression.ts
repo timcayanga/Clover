@@ -62,6 +62,21 @@ assert.match(
 );
 assert.match(
   workerSource,
+  /shouldMaterializeAccountBeforeConfirmation\s*=\s*effectiveImportMode === "portfolio" \|\| effectiveImportMode === "account_detail"/,
+  "Notes and receipts must not create an account from a generic upload filename before confirmation."
+);
+assert.match(
+  workerSource,
+  /effectiveImportMode === "receipt" \|\| effectiveImportMode === "notes"[\s\S]*resolveWorkspaceCashAccountId[\s\S]*documentImportAccountId/,
+  "Notes and receipts must persist their document import against the workspace Cash account."
+);
+assert.match(
+  workerSource,
+  /notesCashAccountId[\s\S]*importMode === "notes"[\s\S]*resolveWorkspaceCashAccountId[\s\S]*const groupAccount =\s*notesCashAccount \?\?/,
+  "Every transaction group from a financial note must confirm against Cash instead of a filename-derived account."
+);
+assert.match(
+  workerSource,
   /description:\s*"Heineken"[\s\S]*description:\s*"Gin Bott"[\s\S]*description:\s*"Tonic Water"[\s\S]*description:\s*"Pizza"[\s\S]*description:\s*"Sisig"[\s\S]*description:\s*"Mushroom Chips"/,
   "The durable trained fixture must preserve all six confirmed line items."
 );
