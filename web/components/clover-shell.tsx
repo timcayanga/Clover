@@ -287,6 +287,7 @@ const desktopNavSections = [
       { href: "/transactions", label: "Transactions", key: "transactions" as const },
       { href: "/recurring", label: "Recurring", key: "recurring" as const },
       { href: "/circles", label: "Circles", key: "circles" as const },
+      { href: "/split-bill", label: "Split Bills", key: "split-bill" as const },
     ],
   },
   {
@@ -330,7 +331,7 @@ const MENU_ICON_SRC: Partial<Record<IconName, string>> = {
   dashboard: "/assets/3d%20icons/home.png?v=20260723",
   accounts: "/assets/3d%20icons/menu/bank-account.png",
   investments: "/assets/3d%20icons/menu/investments.png",
-  "split-bill": "/assets/3d%20icons/menu/split-bills.png",
+  "split-bill": "/assets/3d%20icons/menu/split-bills.png?v=20260724",
   circles: "/assets/3d%20icons/circles.png?v=20260723",
   transactions: "/assets/3d%20icons/transactions.png?v=20260723",
   recurring: "/assets/3d%20icons/recurring.png?v=20260723",
