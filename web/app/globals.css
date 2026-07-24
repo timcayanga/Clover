@@ -34871,7 +34871,7 @@ body:has(.pricing-page) {
 
 .settings-hub__menu {
   position: sticky;
-  top: 24px;
+  top: 0;
   align-self: start;
   display: grid;
   align-content: start;
@@ -35192,6 +35192,9 @@ body:has(.pricing-page) {
 
 .settings-profile-create__toggle {
   justify-self: start;
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 11px;
 }
 
 .settings-clerk-frame {

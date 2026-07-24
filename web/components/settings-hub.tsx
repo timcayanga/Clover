@@ -1333,12 +1333,27 @@ export function SettingsHub({
         persistSelectedWorkspaceId("");
         syncSelectedWorkspaceCookie();
         clearAllWorkspaceCaches();
-        setWorkspaceId("");
-        setWorkspaceName("Settings");
-        setSelectedProfileId("");
-        setActiveProfileId("");
-        setProfileList([]);
-        setProfilesLoaded(false);
+        // The server reseeds Personal after a full wipe. Reload that profile now
+        // so Settings never renders an empty profile list after the reset.
+        const profilesResponse = await fetch("/api/workspaces", { cache: "no-store" });
+        const profilesPayload = (await profilesResponse.json().catch(() => ({}))) as {
+          workspaces?: ProfileSummary[];
+          error?: string;
+        };
+        if (!profilesResponse.ok || !profilesPayload.workspaces?.length) {
+          throw new Error(profilesPayload.error ?? "Personal profile was not restored.");
+        }
+
+        const restoredProfiles = normalizeProfileList(profilesPayload.workspaces);
+        const restoredPersonal = restoredProfiles.find((profile) => profile.type === "personal") ?? restoredProfiles[0];
+        persistSelectedWorkspaceId(restoredPersonal.id);
+        syncSelectedWorkspaceCookie();
+        setWorkspaceId(restoredPersonal.id);
+        setWorkspaceName(restoredPersonal.name || "Personal");
+        setSelectedProfileId(restoredPersonal.id);
+        setActiveProfileId(restoredPersonal.id);
+        setProfileList(restoredProfiles);
+        setProfilesLoaded(true);
         setProfilesLoading(false);
         setProfileListMessage(null);
         setBillingSubscription(null);
