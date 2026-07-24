@@ -4138,6 +4138,33 @@ export function ImportFilesModal({
             rawPayload?.statementEndingBalance ?? rawPayload?.balance ?? rawPayload?.endingBalance ?? null
           );
         };
+        const readRowAccountType = (row: Record<string, unknown>) => {
+          const directType = typeof row.accountType === "string" ? row.accountType.trim() : "";
+          const rawPayload =
+            row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+              ? (row.rawPayload as Record<string, unknown>)
+              : null;
+          const payloadType = typeof rawPayload?.accountType === "string" ? rawPayload.accountType.trim() : "";
+          const candidate = directType || payloadType;
+          return [
+            "bank",
+            "wallet",
+            "credit_card",
+            "cash",
+            "investment",
+            "loan",
+            "mortgage",
+            "line_of_credit",
+            "receivable",
+            "payable",
+            "bnpl",
+            "prepaid",
+            "insurance",
+            "other",
+          ].includes(candidate)
+            ? (candidate as UploadInsightsSummary["accountType"])
+            : null;
+        };
         const isAccountSnapshotMarker = (row: Record<string, unknown>) => {
           const rawPayload =
             row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
@@ -4151,6 +4178,7 @@ export function ImportFilesModal({
             accountName: string | null;
             institution: string | null;
             accountNumber: string | null;
+            accountType: UploadInsightsSummary["accountType"] | null;
             rows: typeof parsedRows;
           }
         >();
@@ -4159,6 +4187,7 @@ export function ImportFilesModal({
           const rowAccountName = readRowString(row, "accountName");
           const rowInstitution = readRowString(row, "institution");
           const rowAccountNumber = readRowString(row, "accountNumber");
+          const rowAccountType = readRowAccountType(row);
           if (!rowAccountName && !rowInstitution && !rowAccountNumber) {
             continue;
           }
@@ -4178,6 +4207,7 @@ export function ImportFilesModal({
             accountName: rowAccountName,
             institution: rowInstitution,
             accountNumber: rowAccountNumber,
+            accountType: rowAccountType,
             rows: [row as (typeof parsedRows)[number]],
           });
         }
@@ -4188,11 +4218,13 @@ export function ImportFilesModal({
 
           for (const group of groupedRows.values()) {
             const previewRows = group.rows.filter((row) => !isAccountSnapshotMarker(row as Record<string, unknown>));
-            const accountType = inferAccountTypeFromStatement(
-              group.institution,
-              group.accountName,
-              "bank"
-            ) as UploadInsightsSummary["accountType"];
+            const accountType =
+              group.accountType ??
+              (inferAccountTypeFromStatement(
+                group.institution,
+                group.accountName,
+                "bank"
+              ) as UploadInsightsSummary["accountType"]);
             const resolvedAccountId = resolveLocalAccountId(
               group.accountName,
               group.institution,

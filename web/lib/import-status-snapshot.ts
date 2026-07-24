@@ -8,6 +8,7 @@ import {
   updateImportFileCompat,
 } from "@/lib/data-engine";
 import { getImportEnrichmentJobByImportFileId, MAX_IMPORT_ENRICHMENT_ATTEMPTS } from "@/lib/import-enrichment-jobs";
+import { findBestImportedAccountMatch } from "@/lib/workspace-cache";
 import type { AccountType } from "@/lib/domain-types";
 
 type ImportAccountSummary = {
@@ -154,6 +155,108 @@ const loadVisibleImportAccountSummaries = async (importFileId: string): Promise<
       rowsImported: group._count._all,
     };
   }).sort((left, right) =>
+    (left.accountName ?? left.accountId).localeCompare(right.accountName ?? right.accountId)
+  );
+};
+
+const supportedSnapshotAccountTypes = new Set<AccountType>([
+  "bank",
+  "wallet",
+  "credit_card",
+  "cash",
+  "investment",
+  "loan",
+  "mortgage",
+  "line_of_credit",
+  "receivable",
+  "payable",
+  "bnpl",
+  "prepaid",
+  "insurance",
+  "other",
+]);
+
+const loadSnapshotInventoryAccountSummaries = async (
+  importFileId: string,
+  workspaceId: string
+): Promise<ImportAccountSummary[]> => {
+  const markerRows = await prisma.parsedTransaction.findMany({
+    where: {
+      importFileId,
+      rawPayload: {
+        path: ["kind"],
+        equals: "account_snapshot_marker",
+      },
+    },
+    select: {
+      accountName: true,
+      institution: true,
+      accountNumber: true,
+      currency: true,
+      rawPayload: true,
+    },
+  }).catch(() => []);
+  if (markerRows.length < 2) return [];
+
+  const accounts = await prisma.account.findMany({
+    where: { workspaceId },
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      accountNumber: true,
+      type: true,
+      currency: true,
+      balance: true,
+    },
+  }).catch(() => []);
+  const summaries = new Map<string, ImportAccountSummary>();
+
+  for (const marker of markerRows) {
+    const payload =
+      marker.rawPayload && typeof marker.rawPayload === "object" && !Array.isArray(marker.rawPayload)
+        ? (marker.rawPayload as Record<string, unknown>)
+        : null;
+    const accountName =
+      marker.accountName ??
+      (typeof payload?.accountName === "string" && payload.accountName.trim() ? payload.accountName.trim() : null);
+    const institution =
+      marker.institution ??
+      (typeof payload?.institutionRaw === "string" && payload.institutionRaw.trim()
+        ? payload.institutionRaw.trim()
+        : null);
+    const accountNumber =
+      marker.accountNumber ??
+      (typeof payload?.accountNumber === "string" && payload.accountNumber.trim() ? payload.accountNumber.trim() : null);
+    const rawAccountType = typeof payload?.accountType === "string" ? payload.accountType.trim() : "";
+    const accountType = supportedSnapshotAccountTypes.has(rawAccountType as AccountType)
+      ? (rawAccountType as AccountType)
+      : null;
+    const currency =
+      typeof payload?.accountCurrency === "string" && payload.accountCurrency.trim()
+        ? payload.accountCurrency.trim().toUpperCase()
+        : marker.currency;
+    const account = findBestImportedAccountMatch(accounts, {
+      name: accountName,
+      institution,
+      accountNumber,
+      type: accountType,
+      currency,
+    });
+    if (!account) continue;
+
+    summaries.set(account.id, {
+      accountId: account.id,
+      accountName: account.name,
+      institution: account.institution,
+      accountNumber: account.accountNumber,
+      accountType: account.type as AccountType,
+      balance: account.balance?.toString() ?? null,
+      rowsImported: 0,
+    });
+  }
+
+  return Array.from(summaries.values()).sort((left, right) =>
     (left.accountName ?? left.accountId).localeCompare(right.accountName ?? right.accountId)
   );
 };
@@ -499,9 +602,12 @@ export const loadImportStatusSnapshot = async (
     confirmedTransactionsCount > 0 || hasConfirmedRows || accountDetailOnlyImport || receiptHasVisibleTransaction;
   const hasVisibleImportData =
     visibleImportComplete || parsedRowsCount > 0 || checkpointRowCount > 0 || receiptHasVisibleDocument;
-  const [checkpointAccountSummaries, visibleTransactionAccountSummaries] = await Promise.all([
+  const [checkpointAccountSummaries, snapshotInventoryAccountSummaries, visibleTransactionAccountSummaries] = await Promise.all([
     hasVisibleImportData
       ? buildCheckpointAccountSummary(statementCheckpoint, importFile.accountId ?? null)
+      : Promise.resolve([]),
+    parsedRowsCount > 1 && confirmedTransactionsCount === 0
+      ? loadSnapshotInventoryAccountSummaries(importFileId, String(importFile.workspaceId))
       : Promise.resolve([]),
     confirmedTransactionsCount > 0 || hasConfirmedRows || receiptHasVisibleTransaction
       ? loadVisibleImportAccountSummaries(importFileId)
@@ -514,6 +620,8 @@ export const loadImportStatusSnapshot = async (
   const accountSummaries =
     visibleTransactionAccountSummaries.length > 0
       ? visibleTransactionAccountSummaries
+      : snapshotInventoryAccountSummaries.length > 0
+        ? snapshotInventoryAccountSummaries
       : receiptDocumentAccountSummaries.length > 0
         ? receiptDocumentAccountSummaries
       : checkpointAccountSummaries;
