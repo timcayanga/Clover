@@ -12,11 +12,12 @@ const IMAGE_IMPORT_CONTENT_TYPES = new Set([
 
 // Clover uploads support structured documents and common image files.
 // The same accepted formats are used by public imports and training/sample tooling.
-export const PUBLIC_IMPORT_EXTENSIONS = [".pdf", ".csv", ...IMAGE_IMPORT_EXTENSIONS] as const;
+export const PUBLIC_IMPORT_EXTENSIONS = [".pdf", ".csv", ".tsv", ...IMAGE_IMPORT_EXTENSIONS] as const;
 export const PUBLIC_IMPORT_CONTENT_TYPES = new Set([
   "application/pdf",
   "text/csv",
   "application/csv",
+  "text/tab-separated-values",
   ...IMAGE_IMPORT_CONTENT_TYPES,
 ]);
 

@@ -614,18 +614,27 @@ const normalizeStructuredHeader = (value: string) =>
     .toLowerCase();
 
 const canonicalStructuredHeader = (value: string) => {
+  const rawHeader = normalizeWhitespace(value).toLowerCase();
   const header = normalizeStructuredHeader(value);
   if (!header) return "";
-  if (/^(?:date|date_time|datetime|transaction_date|transaction_datetime|booking_date|value_date|effective_date|timestamp|time)$/.test(header)) return "date";
-  if (/^(?:posted|posted_at|posted_date|posting_date|posting_datetime)$/.test(header)) return "posted_date";
-  if (/^(?:transaction|description|transaction_description|details|transaction_details|narrative|particulars|memo|note|notes)$/.test(header)) return "description";
+  if (
+    /\b(?:original|foreign)\s+amount\b/.test(rawHeader) ||
+    (/\b(?:original|foreign|transaction)\s+currency\b/.test(rawHeader) && /\bamount\b/.test(rawHeader)) ||
+    /\bamount\s+in\s+(?:original|foreign)\b/.test(rawHeader)
+  ) return "original_amount";
+  if (/\b(?:original|foreign|transaction)\s+(?:currency|ccy)\b/.test(rawHeader)) return "original_currency";
+  if (/^(?:date|date_time|datetime|transaction_date|transaction_datetime|booking_date|value_date|effective_date|completed_date|created_at|occurred_at|settled_at|timestamp|time)$/.test(header)) return "date";
+  if (/^(?:posted|posted_at|posted_date|posting_date|posting_datetime|processed_at|processed_date)$/.test(header)) return "posted_date";
+  if (/^(?:transaction|description|transaction_description|original_description|transaction_name|details|transaction_details|activity|remarks|narrative|particulars|memo|note|notes)$/.test(header)) return "description";
   if (/^(?:merchant|merchant_name|payee|counterparty|beneficiary|name|label)$/.test(header)) return "merchant";
-  if (/^(?:amount|transaction_amount|net_amount|gross_amount|value|local_amount)$/.test(header)) return "amount";
-  if (/^(?:debit|debit_amount|withdrawal|withdrawal_amount|withdrawals|money_out|paid_out|outflow|charge)$/.test(header)) return "debit";
-  if (/^(?:credit|credit_amount|deposit|deposit_amount|deposits|money_in|paid_in|inflow)$/.test(header)) return "credit";
+  if (/^(?:amount|transaction_amount|transaction_value|net_amount|gross_amount|value|local_amount|base_amount|home_amount|settlement_amount)$/.test(header)) return "amount";
+  if (/^(?:debit|debit_amount|withdraw|withdrawn|withdrawal|withdrawal_amount|withdrawals|money_out|paid|paid_out|spent|outflow|charge)$/.test(header)) return "debit";
+  if (/^(?:credit|credit_amount|deposit|deposit_amount|deposits|money_in|paid_in|received|received_amount|inflow)$/.test(header)) return "credit";
   if (/^(?:balance|running_balance|available_balance|closing_balance|ending_balance)$/.test(header)) return "balance";
   if (/^(?:currency|currency_code|ccy|curr)$/.test(header)) return "currency";
   if (/^(?:type|transaction_type|direction|debit_credit|dr_cr|flow)$/.test(header)) return "type";
+  if (/^(?:status|state|transaction_status|payment_status|booking_status)$/.test(header)) return "status";
+  if (/^(?:fee|fees|fee_amount|service_fee|transaction_fee|charges)$/.test(header)) return "fee";
   if (/^(?:category|category_name|classification)$/.test(header)) return "category";
   if (/^(?:account|account_name|account_label|wallet|portfolio)$/.test(header)) return "account_name";
   if (/^(?:account_number|account_no|account_id|iban|card_number|card_no)$/.test(header)) return "account_number";
@@ -724,11 +733,43 @@ const readStructuredDelimitedTable = (
 };
 
 const readStructuredCell = (table: StructuredDelimitedTable, row: string[], key: string) => {
-  const index = table.canonicalHeaders.indexOf(key);
-  return index >= 0 ? row[index] ?? "" : "";
+  for (let index = 0; index < table.canonicalHeaders.length; index += 1) {
+    if (table.canonicalHeaders[index] !== key) continue;
+    const value = row[index] ?? "";
+    if (normalizeWhitespace(value)) return value;
+  }
+  return "";
 };
 
-const parseStructuredDate = (value?: string | null, countryCode?: string | null) => {
+type StructuredDateOrder = "day_first" | "month_first" | null;
+
+const inferStructuredDateOrder = (table: StructuredDelimitedTable, dateKey: "date" | "posted_date" | "snapshot_date") => {
+  const headerIndex = table.canonicalHeaders.indexOf(dateKey);
+  const rawHeader = headerIndex >= 0 ? table.headers[headerIndex] ?? "" : "";
+  if (/\bdd\W*mm\W*(?:yy|yyyy)\b/i.test(rawHeader)) return "day_first" as const;
+  if (/\bmm\W*dd\W*(?:yy|yyyy)\b/i.test(rawHeader)) return "month_first" as const;
+
+  let dayFirstEvidence = 0;
+  let monthFirstEvidence = 0;
+  table.rows.forEach((row) => {
+    const value = readStructuredCell(table, row, dateKey);
+    const match = normalizeWhitespace(value).match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})(?:\D|$)/);
+    if (!match) return;
+    const first = Number(match[1]);
+    const second = Number(match[2]);
+    if (first > 12 && second >= 1 && second <= 12) dayFirstEvidence += 1;
+    if (second > 12 && first >= 1 && first <= 12) monthFirstEvidence += 1;
+  });
+  if (dayFirstEvidence > 0 && monthFirstEvidence === 0) return "day_first" as const;
+  if (monthFirstEvidence > 0 && dayFirstEvidence === 0) return "month_first" as const;
+  return null;
+};
+
+const parseStructuredDate = (
+  value?: string | null,
+  countryCode?: string | null,
+  dateOrder: StructuredDateOrder = null
+) => {
   const normalized = normalizeWhitespace(String(value ?? ""));
   if (!normalized) return null;
   if (/^\d{5}(?:\.\d+)?$/.test(normalized)) {
@@ -737,7 +778,38 @@ const parseStructuredDate = (value?: string | null, countryCode?: string | null)
       return new Date(Date.UTC(1899, 11, 30) + serial * 86_400_000);
     }
   }
+  const numericDate = normalized.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})(?:\D.*)?$/);
+  if (numericDate && dateOrder) {
+    const first = Number(numericDate[1]);
+    const second = Number(numericDate[2]);
+    const rawYear = Number(numericDate[3]);
+    const year = rawYear < 100 ? (rawYear >= 70 ? 1900 + rawYear : 2000 + rawYear) : rawYear;
+    const month = dateOrder === "day_first" ? second : first;
+    const day = dateOrder === "day_first" ? first : second;
+    const parsed = new Date(Date.UTC(year, month - 1, day));
+    if (
+      parsed.getUTCFullYear() === year &&
+      parsed.getUTCMonth() === month - 1 &&
+      parsed.getUTCDate() === day
+    ) {
+      return parsed;
+    }
+    return null;
+  }
   return parseRegionalDateValue(normalized, countryCode ?? null) ?? parseDateValue(normalized);
+};
+
+const isRepeatedStructuredHeaderRow = (table: StructuredDelimitedTable, row: string[]) => {
+  const canonical = row.slice(0, table.headers.length).map(canonicalStructuredHeader);
+  return canonical.length > 0 &&
+    canonical.every((header, index) => header === table.canonicalHeaders[index]);
+};
+
+const extractStructuredSectionMetadata = (row: string[]) => {
+  const nonEmpty = row.map((cell) => normalizeWhitespace(cell)).filter(Boolean);
+  if (nonEmpty.length === 0 || nonEmpty.length > 2) return null;
+  const metadata = extractStructuredPreambleMetadata([row]);
+  return Object.keys(metadata).length > 0 ? metadata : null;
 };
 
 const normalizeStructuredAccountType = (value?: string | null): ImportedAccountType | null => {
@@ -853,6 +925,9 @@ export const parseStructuredTransactionCsv = (
   const metadataInstitution = metadata.institution || context.institution || "";
   const metadataAccountName = metadata.account_name || context.accountName || "";
   const contextCorpus = resolveTransactionContext({ institution: metadataInstitution, accountName: metadataAccountName });
+  const dateKey = table.canonicalHeaders.includes("date") ? "date" : "posted_date";
+  const dateOrder = inferStructuredDateOrder(table, dateKey);
+  let activeMetadata = { ...metadata };
   const candidates: Array<{
     sourceRow: string[];
     sourceRowIndex: number;
@@ -878,18 +953,35 @@ export const parseStructuredTransactionCsv = (
     runningBalance: number | null;
     categoryRaw: string;
     reference: string;
+    status: string;
+    fee: number | null;
+    originalAmount: number | null;
+    originalCurrency: string | null;
+    rowMetadata: Record<string, string>;
     balanceDelta: number | null;
   }> = [];
 
   table.rows.forEach((sourceRow, sourceRowIndex) => {
+    if (isRepeatedStructuredHeaderRow(table, sourceRow)) return;
+    const sectionMetadata = extractStructuredSectionMetadata(sourceRow);
+    if (sectionMetadata) {
+      activeMetadata = { ...activeMetadata, ...sectionMetadata };
+      return;
+    }
+
     const rawDate = readStructuredCell(table, sourceRow, "date") || readStructuredCell(table, sourceRow, "posted_date");
-    const parsedDate = parseStructuredDate(rawDate, contextCorpus.countryCode);
+    const rowInstitution = activeMetadata.institution || metadataInstitution;
+    const rowAccountName = activeMetadata.account_name || metadataAccountName;
+    const rowContext = resolveTransactionContext({ institution: rowInstitution, accountName: rowAccountName });
+    const parsedDate = parseStructuredDate(rawDate, rowContext.countryCode || contextCorpus.countryCode, dateOrder);
     const description = normalizeWhitespace(
       readStructuredCell(table, sourceRow, "description") ||
       readStructuredCell(table, sourceRow, "merchant") ||
       readStructuredCell(table, sourceRow, "reference")
     );
     if (!parsedDate || !description || /^(?:total|subtotal|opening balance|closing balance|ending balance)$/i.test(description)) return;
+    const status = normalizeWhitespace(readStructuredCell(table, sourceRow, "status"));
+    if (/\b(?:pending|processing|failed|declined|rejected|cancelled|canceled|void|voided|expired|reversed)\b/i.test(status)) return;
 
     const debitText = readStructuredCell(table, sourceRow, "debit");
     const creditText = readStructuredCell(table, sourceRow, "credit");
@@ -901,29 +993,45 @@ export const parseStructuredTransactionCsv = (
     const hasCredit = credit !== null && credit !== 0;
     if ((hasDebit && hasCredit) || (!hasDebit && !hasCredit && signedAmount === null)) return;
 
-    const accountName = normalizeWhitespace(readStructuredCell(table, sourceRow, "account_name") || metadataAccountName);
+    const accountName = normalizeWhitespace(readStructuredCell(table, sourceRow, "account_name") || rowAccountName);
     const accountNumber = normalizeWhitespace(
-      readStructuredCell(table, sourceRow, "account_number") || metadata.account_number || context.accountNumber || ""
+      readStructuredCell(table, sourceRow, "account_number") ||
+        activeMetadata.account_number ||
+        metadata.account_number ||
+        context.accountNumber ||
+        ""
     );
-    const institutionRaw = normalizeWhitespace(readStructuredCell(table, sourceRow, "institution") || metadataInstitution);
+    const institutionRaw = normalizeWhitespace(readStructuredCell(table, sourceRow, "institution") || rowInstitution);
     const institution = sanitizeBankNameLabel(
       institutionRaw || inferStructuredInstitution(accountName) || context.institution || null
     );
     const accountType =
-      normalizeStructuredAccountType(readStructuredCell(table, sourceRow, "account_type") || metadata.account_type) ??
+      normalizeStructuredAccountType(
+        readStructuredCell(table, sourceRow, "account_type") ||
+          activeMetadata.account_type ||
+          metadata.account_type
+      ) ??
       inferAccountTypeFromStatement(institution, accountName, "bank");
     const amountValue = hasDebit ? Math.abs(debit) : hasCredit ? Math.abs(credit) : Math.abs(signedAmount ?? 0);
     if (!Number.isFinite(amountValue) || amountValue <= 0) return;
 
     const rawType = hasDebit ? "debit" : hasCredit ? "credit" : readStructuredCell(table, sourceRow, "type");
     const merchantRaw = normalizeWhitespace(readStructuredCell(table, sourceRow, "merchant") || description);
-    const currencyText = normalizeWhitespace(readStructuredCell(table, sourceRow, "currency") || metadata.currency || "");
+    const currencyText = normalizeWhitespace(
+      readStructuredCell(table, sourceRow, "currency") ||
+        activeMetadata.currency ||
+        metadata.currency ||
+        ""
+    );
     const currency =
       normalizeInstitutionCurrency(
         institution,
         currencyText || detectCurrencyFromText(`${amountText} ${debitText} ${creditText} ${table.headers.join(" ")}`)
       ) ?? null;
     const runningBalance = parseMoney(readStructuredCell(table, sourceRow, "balance"));
+    const originalCurrency =
+      normalizeCurrencyCode(readStructuredCell(table, sourceRow, "original_currency")) ??
+      normalizeCurrencyCode(detectCurrencyFromText(readStructuredCell(table, sourceRow, "original_amount")));
     candidates.push({
       sourceRow,
       sourceRowIndex,
@@ -949,6 +1057,11 @@ export const parseStructuredTransactionCsv = (
       runningBalance,
       categoryRaw: normalizeWhitespace(readStructuredCell(table, sourceRow, "category")),
       reference: normalizeWhitespace(readStructuredCell(table, sourceRow, "reference")),
+      status,
+      fee: parseMoney(readStructuredCell(table, sourceRow, "fee")),
+      originalAmount: parseMoney(readStructuredCell(table, sourceRow, "original_amount")),
+      originalCurrency,
+      rowMetadata: { ...activeMetadata },
       balanceDelta: null,
     });
   });
@@ -991,6 +1104,19 @@ export const parseStructuredTransactionCsv = (
       candidate.hasDebit,
       candidate.hasCredit
     );
+    const expectedBalanceDelta =
+      direction.type === "income"
+        ? candidate.amountValue
+        : direction.type === "expense"
+          ? -candidate.amountValue
+          : null;
+    const balanceTolerance = Math.max(0.02, candidate.amountValue * 0.0001);
+    const balanceReconciliation =
+      candidate.balanceDelta === null || expectedBalanceDelta === null
+        ? "unavailable"
+        : Math.abs(candidate.balanceDelta - expectedBalanceDelta) <= balanceTolerance
+          ? "matched"
+          : "mismatch";
     const dedupeReference = candidate.reference.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
     if (dedupeReference.length >= 3) {
       const dedupeKey = [
@@ -1029,11 +1155,17 @@ export const parseStructuredTransactionCsv = (
         delimiter: table.delimiter === "\t" ? "tab" : table.delimiter,
         originalHeaders: table.headers,
         preambleMetadata: metadata,
+        sectionMetadata: candidate.rowMetadata,
         debit: candidate.debit,
         credit: candidate.credit,
         signedAmount: candidate.signedAmount,
+        fee: candidate.fee,
+        originalAmount: candidate.originalAmount,
+        originalCurrency: candidate.originalCurrency,
+        status: candidate.status || null,
         balance: candidate.runningBalance,
         balanceDelta: candidate.balanceDelta,
+        balanceReconciliation,
         directionEvidence: direction.evidence,
         accountName: candidate.accountName || null,
         accountNumber: candidate.accountNumber || null,
@@ -1070,7 +1202,10 @@ export const parseGenericAccountSnapshotCsv = (
   }
 
   const today = new Date().toISOString().slice(0, 10);
+  const snapshotDateKey = table.canonicalHeaders.includes("snapshot_date") ? "snapshot_date" : "date";
+  const snapshotDateOrder = inferStructuredDateOrder(table, snapshotDateKey);
   const rows = table.rows.flatMap((sourceRow, sourceRowIndex) => {
+    if (isRepeatedStructuredHeaderRow(table, sourceRow)) return [];
     const accountName = normalizeWhitespace(readStructuredCell(table, sourceRow, "account_name"));
     const balance = parseMoney(readStructuredCell(table, sourceRow, "balance"));
     if (!accountName || balance === null || /^total$/i.test(accountName)) return [];
@@ -1094,7 +1229,8 @@ export const parseGenericAccountSnapshotCsv = (
     const snapshotDate =
       parseStructuredDate(
         readStructuredCell(table, sourceRow, "snapshot_date") || readStructuredCell(table, sourceRow, "date"),
-        resolveTransactionContext({ institution, accountName }).countryCode
+        resolveTransactionContext({ institution, accountName }).countryCode,
+        snapshotDateOrder
       )?.toISOString().slice(0, 10) ?? today;
     const accountNumber = normalizeWhitespace(readStructuredCell(table, sourceRow, "account_number"));
 
@@ -1146,6 +1282,8 @@ export const parseWideAccountSnapshotCsv = (
   const table = readStructuredDelimitedTable(text, fileName, fileType);
   if (!table) return null;
   const dateIndex = table.canonicalHeaders.findIndex((header) => header === "date" || header === "snapshot_date");
+  const wideDateKey = table.canonicalHeaders[dateIndex] === "snapshot_date" ? "snapshot_date" : "date";
+  const wideDateOrder = inferStructuredDateOrder(table, wideDateKey);
   const canonical = new Set(table.canonicalHeaders);
   if (
     dateIndex < 0 ||
@@ -1166,7 +1304,8 @@ export const parseWideAccountSnapshotCsv = (
         resolveTransactionContext({
           institution: table.preambleMetadata.institution || context.institution,
           accountName: table.preambleMetadata.account_name || context.accountName,
-        }).countryCode
+        }).countryCode,
+        wideDateOrder
       ),
     }))
     .filter((entry): entry is { sourceRow: string[]; date: Date } => Boolean(entry.date))

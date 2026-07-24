@@ -1,6 +1,7 @@
 "use client";
 
 import { pdfjsStandardFontDataUrl } from "@/lib/pdfjs-config";
+import { decodeStructuredDelimitedBytes } from "@/lib/structured-delimited-decoder";
 
 type ProgressCallback = (progress: {
   pageNumber: number;
@@ -78,8 +79,8 @@ export const extractTextFromFile = async (
 ) => {
   const lowerName = file.name.toLowerCase();
 
-  if (lowerName.endsWith(".csv")) {
-    return file.text();
+  if (/\.(?:csv|tsv)$/.test(lowerName)) {
+    return decodeStructuredDelimitedBytes(new Uint8Array(await file.arrayBuffer()));
   }
 
   if (isImageFileName(lowerName)) {
@@ -157,5 +158,5 @@ export const extractTextFromFile = async (
     }
   }
 
-  throw new Error("Only PDF, CSV, and common image files are supported.");
+  throw new Error("Only PDF, CSV, TSV, and common image files are supported.");
 };

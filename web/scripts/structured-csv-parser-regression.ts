@@ -7,6 +7,8 @@ import {
   parseStructuredTransactionCsv,
   parseWideAccountSnapshotCsv,
 } from "@/lib/import-parser";
+import { decodeStructuredDelimitedBytes } from "@/lib/structured-delimited-decoder";
+import { isSupportedImportFile, validateImportFileBytes } from "@/lib/import-file-validation";
 
 const signedCsv = [
   "\uFEFFDate,Description,Amount,Currency,Account Name,Institution,Category",
@@ -107,6 +109,46 @@ assert.deepEqual(metadataRows[0]?.rawPayload?.preambleMetadata, {
   currency: "PHP",
 });
 
+const multiSectionCsv = [
+  "Bank,BPI",
+  "Date (DD/MM/YYYY),Original Description,Transaction Value,Direction,Status,Fee",
+  "Account Name,BPI Payroll",
+  "13/07/2026,Salary,50000.00,Credit,Completed,0",
+  "14/07/2026,Coffee,125.00,Debit,Pending,5.00",
+  "Date (DD/MM/YYYY),Original Description,Transaction Value,Direction,Status,Fee",
+  "Account Name,BPI Savings",
+  "03/07/2026,Interest,25.00,Credit,Posted,0",
+  "14/07/2026,Rejected transfer,1000.00,Debit,Failed,0",
+].join("\n");
+const multiSectionRows = parseStructuredTransactionCsv(multiSectionCsv, "multi-account.csv", "text/csv");
+assert.ok(multiSectionRows);
+assert.equal(multiSectionRows.length, 2, "Pending and failed rows must not become settled transactions.");
+assert.equal(multiSectionRows[0]?.accountName, "BPI Payroll");
+assert.equal(multiSectionRows[1]?.accountName, "BPI Savings");
+assert.equal(multiSectionRows[1]?.date, "2026-07-03", "The DD/MM header must resolve ambiguous dates deterministically.");
+assert.equal(multiSectionRows[0]?.rawPayload?.status, "Completed");
+assert.equal(multiSectionRows[0]?.rawPayload?.sectionMetadata?.account_name, "BPI Payroll");
+
+const inferredDayFirstCsv = [
+  "Date,Remarks,Amount,Direction",
+  "13/06/2026,Unambiguous date,10.00,Debit",
+  "03/07/2026,Ambiguous date,20.00,Debit",
+].join("\n");
+const inferredDayFirstRows = parseStructuredTransactionCsv(inferredDayFirstCsv, "regional.csv", "text/csv");
+assert.ok(inferredDayFirstRows);
+assert.equal(inferredDayFirstRows[1]?.date, "2026-07-03");
+
+const enrichedExportCsv = [
+  "Completed Date,Activity,Settlement Amount,Flow,Booking Status,Transaction Fee,Foreign Amount,Foreign Currency",
+  "2026-07-20,Hotel booking,5000.00,Debit,Settled,125.00,75.00,USD",
+].join("\n");
+const enrichedExportRows = parseStructuredTransactionCsv(enrichedExportCsv, "fintech-export.csv", "text/csv");
+assert.ok(enrichedExportRows);
+assert.equal(enrichedExportRows.length, 1);
+assert.equal(enrichedExportRows[0]?.rawPayload?.fee, 125);
+assert.equal(enrichedExportRows[0]?.rawPayload?.originalAmount, 75);
+assert.equal(enrichedExportRows[0]?.rawPayload?.originalCurrency, "USD");
+
 const ascendingBalanceCsv = [
   "Date,Description,Amount,Running Balance,Account",
   "2026-07-01,Opening credit,100.00,1100.00,Main",
@@ -190,6 +232,28 @@ assert.equal((wideBalanceRows[0]?.rawPayload?.balanceHistory as unknown[])?.leng
 assert.equal(wideBalanceRows[1]?.rawPayload?.accountType, "wallet");
 assert.equal(parseImportText(wideBalanceHistoryCsv, "balance-history.csv", "text/csv").length, 2);
 
+const utf16Text = "Date\tDescription\tAmount\n2026-07-20\tCafé\t-125.00";
+const utf16Bytes = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(utf16Text, "utf16le")]);
+assert.equal(decodeStructuredDelimitedBytes(utf16Bytes), utf16Text);
+const windows1252Bytes = Uint8Array.from(Buffer.from("Date,Description,Amount\n2026-07-20,Caf\xe9,-125.00", "latin1"));
+assert.match(decodeStructuredDelimitedBytes(windows1252Bytes), /Café/);
+const decodedTsvRows = parseStructuredTransactionCsv(
+  decodeStructuredDelimitedBytes(utf16Bytes),
+  "legacy-export.tsv",
+  "text/tab-separated-values"
+);
+assert.ok(decodedTsvRows);
+assert.equal(decodedTsvRows[0]?.merchantRaw, "Café");
+assert.equal(isSupportedImportFile("legacy-export.tsv", "text/tab-separated-values"), true);
+assert.equal(
+  validateImportFileBytes({
+    fileName: "legacy-export.tsv",
+    contentType: "text/tab-separated-values",
+    bytes: utf16Bytes,
+  }),
+  null
+);
+
 const ambiguousBalanceTable = [
   "Date,Balance",
   "2026-07-01,1000.00",
@@ -228,5 +292,5 @@ assert.match(
 );
 
 console.log(
-  "[PASS] Structured CSV parser covers delimiters, preambles, balance reconciliation, deduplication, histories, accounts, and fail-closed behavior."
+  "[PASS] Structured CSV parser covers encodings, TSV, sections, statuses, locale dates, alternate schemas, reconciliation, and fail-closed behavior."
 );

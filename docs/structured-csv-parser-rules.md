@@ -6,8 +6,10 @@ Use these rules for delimited financial exports (`.csv` and `.tsv`) that are not
 
 - Prefer schema-based parsing before institution-specific text or AI fallback.
 - Recognize comma, tab, semicolon, and pipe delimiters, including Excel `sep=` directives.
+- Accept `.csv` and `.tsv` uploads and decode UTF-8, UTF-16 LE/BE, BOM-prefixed, and Windows-1252 exports before parsing.
 - Search the first 12 rows for the most likely header so report titles and export metadata can precede the table.
 - Read recognized institution, account, account-number, account-type, currency, and snapshot-date metadata from key/value preamble rows.
+- Carry section-level account metadata forward in multi-account exports and ignore repeated header rows.
 - Strip UTF byte-order marks and null characters, and preserve quoted delimiters, escaped quotes, and quoted multiline descriptions.
 - A recognized but ambiguous delimited file must fail closed. Do not pass it to heuristic line parsing.
 
@@ -33,6 +35,9 @@ Rules:
 - Preserve source categories when present; otherwise use Clover category inference.
 - Preserve row-level account name, account number, institution, currency, running balance, reference, original headers, and source row index.
 - Apply preamble account metadata only when the transaction row does not provide a more specific value.
+- Skip pending, processing, failed, declined, rejected, cancelled, voided, expired, and reversed rows; preserve the source status for auditability.
+- Preserve separate fee, original/foreign amount, and original/foreign currency fields without replacing the settled transaction amount.
+- Infer day-first or month-first order from explicit header formats and unambiguous dates, then apply that order consistently to ambiguous dates.
 - Suppress an exact repeated row only when the file supplies the same stable transaction reference, date, amount, direction, and account identity. Do not collapse repeated same-day/same-amount rows that have no reference.
 - Keep distinct row-level accounts as distinct Clover accounts.
 
@@ -77,4 +82,5 @@ Rules:
 - Do not overwrite confirmed transaction data during re-import.
 - Keep original headers and row provenance in the raw payload for auditability.
 - Preserve parsed preamble metadata, balance deltas, direction evidence, and balance history in the raw payload.
+- Record whether each usable running-balance movement matches the inferred transaction direction and amount.
 - Schema-valid rows receive high parser confidence; inferred categories retain lower category confidence until confirmed or learned.

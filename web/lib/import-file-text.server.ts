@@ -11,6 +11,7 @@ import {
 import { buildGsaveScreenshotFallbackText } from "@/lib/gsave-screenshot-samples";
 import { buildGfundsScreenshotFallbackText } from "@/lib/gfunds-screenshot-samples";
 import { assessReceiptPreviewQuality, parseReceiptText } from "@/lib/split-bill";
+import { decodeStructuredDelimitedBytes } from "@/lib/structured-delimited-decoder";
 
 class SimpleDOMMatrix {
   a: number;
@@ -2439,14 +2440,16 @@ export const readUploadedFileText = async (
 
   if (
     lowerName.endsWith(".csv") ||
-    lowerType.includes("csv")
+    lowerName.endsWith(".tsv") ||
+    lowerType.includes("csv") ||
+    lowerType.includes("tab-separated-values")
   ) {
-    if (typeof file.text === "function") {
-      return file.text();
+    if (typeof file.arrayBuffer === "function") {
+      return decodeStructuredDelimitedBytes(new Uint8Array(await file.arrayBuffer()));
     }
 
-    if (typeof file.arrayBuffer === "function") {
-      return new TextDecoder().decode(new Uint8Array(await file.arrayBuffer()));
+    if (typeof file.text === "function") {
+      return file.text();
     }
 
     throw new Error("Unable to read imported file.");
@@ -2496,7 +2499,7 @@ export const readUploadedFileText = async (
     });
   }
 
-  throw new Error("Only PDF, CSV, and common image files are supported.");
+  throw new Error("Only PDF, CSV, TSV, and common image files are supported.");
 };
 
 export const readImportedFileTextWithCacheInfo = async (
@@ -2662,9 +2665,10 @@ export const readImportedFileTextWithCacheInfo = async (
   const extraction = (async () => {
     if (
       lowerName.endsWith(".csv") ||
-      /csv/.test(lowerName)
+      lowerName.endsWith(".tsv") ||
+      /csv|tab-separated-values/.test(`${lowerName} ${params.fileType}`)
     ) {
-      return new TextDecoder().decode(bytes);
+      return decodeStructuredDelimitedBytes(bytes);
     }
 
     if (isImageImportFileName(params.fileType, params.fileName)) {

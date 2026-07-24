@@ -53,8 +53,8 @@ export const validateImportFile = (params: {
 
   if (!isSupportedImportFile(params.fileName, params.contentType, { importMode: params.importMode ?? null })) {
     return params.importMode
-      ? "Only PDF, CSV, and common image files are supported for this import mode."
-      : "Only PDF, CSV, and common image files are supported.";
+      ? "Only PDF, CSV, TSV, and common image files are supported for this import mode."
+      : "Only PDF, CSV, TSV, and common image files are supported.";
   }
 
   return null;
@@ -67,8 +67,8 @@ export const validateImportFileMetadata = (params: { fileName: string; contentTy
 
   if (!isSupportedImportFile(params.fileName, params.contentType, { importMode: params.importMode ?? null })) {
     return params.importMode
-      ? "Only PDF, CSV, and common image files are supported for this import mode."
-      : "Only PDF, CSV, and common image files are supported.";
+      ? "Only PDF, CSV, TSV, and common image files are supported for this import mode."
+      : "Only PDF, CSV, TSV, and common image files are supported.";
   }
 
   return null;
@@ -85,7 +85,10 @@ export const validateImportFileBytes = (params: {
   const isPdf = name.endsWith(".pdf") || params.contentType === "application/pdf";
   const isPng = name.endsWith(".png") || params.contentType === "image/png";
   const isJpeg = /\.jpe?g$/.test(name) || params.contentType === "image/jpeg";
-  const isCsv = /\.csv$/.test(name) || params.contentType === "text/csv";
+  const isCsv =
+    /\.(?:csv|tsv)$/.test(name) ||
+    params.contentType === "text/csv" ||
+    params.contentType === "text/tab-separated-values";
 
   if (isPdf && !startsWith([0x25, 0x50, 0x44, 0x46])) return "The uploaded file is not a valid PDF.";
   if (isPng && !startsWith([0x89, 0x50, 0x4e, 0x47])) return "The uploaded file is not a valid PNG image.";
