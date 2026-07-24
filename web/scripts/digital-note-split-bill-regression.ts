@@ -13,6 +13,7 @@ const promptSource = readProjectFile("lib/openai-import-parser.ts");
 const workerSource = readProjectFile("workers/import-processor.ts");
 const splitBillSource = readProjectFile("lib/imported-split-bill.ts");
 const workspaceSource = readProjectFile("components/split-bill-workspace.tsx");
+const splitBillHomeSource = readProjectFile("components/split-bill-home.tsx");
 
 assert.match(
   promptSource,
@@ -43,6 +44,16 @@ assert.match(
   workerSource,
   /readPersistedSplitBillReceiptDetails[\s\S]*persistedSplitBillReceiptDetails[\s\S]*trainedReceiptDetails/,
   "A retry must reuse a structurally valid saved split-bill extraction instead of downgrading it to OCR rows."
+);
+assert.match(
+  workerSource,
+  /findPriorSplitBillReceiptDetails[\s\S]*sourceFingerprint[\s\S]*priorSplitBillReceiptDetails[\s\S]*trainedReceiptDetails/,
+  "A previously processed split-bill image must reuse its exact-fingerprint extraction instead of repeating vision parsing."
+);
+assert.doesNotMatch(
+  splitBillHomeSource,
+  /if\s*\(entries\.length\s*===\s*0\)\s*\{\s*return\s*["']Settled["']/,
+  "A zero personal balance must render as currency; 'Settled' is reserved for a bill's settlement status."
 );
 assert.match(
   workerSource,

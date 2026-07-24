@@ -66,11 +66,11 @@ const groupBillsByCurrency = (items: SplitBillSerializedBill[]) =>
     return acc;
   }, {});
 
-const formatCurrencyTotals = (totals: Map<string, number>) => {
+const formatCurrencyTotals = (totals: Map<string, number>, fallbackCurrency = "PHP") => {
   const entries = Array.from(totals.entries()).filter(([, amount]) => Math.abs(amount) > 0.005);
 
   if (entries.length === 0) {
-    return "Settled";
+    return formatSplitBillAmount(0, fallbackCurrency);
   }
 
   if (entries.length > 1) {
@@ -112,6 +112,7 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
   const balancePulse = useMemo(() => {
     const owes = new Map<string, number>();
     const isOwed = new Map<string, number>();
+    const fallbackCurrency = normalizeCurrencyCode(bills[0]?.currency ?? "PHP");
     const openBills = bills.filter((bill) => bill.settlementStatus !== "settled");
     const nextTransfer = bills
       .flatMap((bill) =>
@@ -147,8 +148,8 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
     }
 
     return {
-      owesLabel: formatCurrencyTotals(owes),
-      isOwedLabel: formatCurrencyTotals(isOwed),
+      owesLabel: formatCurrencyTotals(owes, fallbackCurrency),
+      isOwedLabel: formatCurrencyTotals(isOwed, fallbackCurrency),
       settledCount: bills.filter((bill) => bill.settlementStatus === "settled").length,
       openCount: openBills.length,
       nextTransfer,

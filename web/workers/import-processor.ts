@@ -154,6 +154,50 @@ const readPersistedSplitBillReceiptDetails = (rawPayload: unknown): ImportedRece
   return candidate as ImportedReceiptDetails;
 };
 
+const findPriorSplitBillReceiptDetails = async (params: {
+  workspaceId: string;
+  importFileId: string;
+  sourceFingerprint: string | null;
+}): Promise<ImportedReceiptDetails | null> => {
+  if (!params.sourceFingerprint) {
+    return null;
+  }
+
+  const priorImport = await prisma.importFile
+    .findFirst({
+      where: {
+        workspaceId: params.workspaceId,
+        id: { not: params.importFileId },
+        sourceFingerprint: params.sourceFingerprint,
+        status: "done",
+        documentImport: {
+          is: {
+            receiptDocument: {
+              isNot: null,
+            },
+          },
+        },
+      },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      select: {
+        documentImport: {
+          select: {
+            receiptDocument: {
+              select: {
+                rawPayload: true,
+              },
+            },
+          },
+        },
+      },
+    })
+    .catch(() => null);
+
+  return readPersistedSplitBillReceiptDetails(
+    priorImport?.documentImport?.receiptDocument?.rawPayload ?? null
+  );
+};
+
 const POST_VISIBLE_IMPORT_DELAY_MS = 5_000;
 
 const schedulePostVisibleImportWork = (
@@ -7162,6 +7206,19 @@ export const processImportFileText = async (
           )
           .catch(() => null)
       : null;
+  const priorSplitBillReceiptDetails =
+    !persistedSplitBillReceiptDetails &&
+    previouslyVisibleRows === 0 &&
+    (importMode === "receipt" || importMode === "notes")
+      ? await findPriorSplitBillReceiptDetails({
+          workspaceId: String(importFile.workspaceId),
+          importFileId,
+          sourceFingerprint:
+            typeof importFile.sourceFingerprint === "string" && importFile.sourceFingerprint.trim()
+              ? importFile.sourceFingerprint
+              : null,
+        })
+      : null;
   if (
     !options.allowDuplicateStatement &&
     previouslyVisibleRows === 0 &&
@@ -7290,7 +7347,7 @@ export const processImportFileText = async (
   const trainedReceiptFixture = importMode === "receipt" ? getTrainedReceiptFixture(fileName) : null;
   const trainedReceiptDetails = trainedReceiptFixture
     ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture)
-    : persistedSplitBillReceiptDetails;
+    : persistedSplitBillReceiptDetails ?? priorSplitBillReceiptDetails;
   const likelyScreenshotStatement = imageImport && importMode === "statement" && isLikelyScreenshotImageFile(fileName);
   const shouldPreferDirectImageStatementVision = shouldPreferDirectImageStatementVisionPath({
     fileName,
