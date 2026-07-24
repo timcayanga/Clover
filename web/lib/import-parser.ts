@@ -341,6 +341,35 @@ export const isLikelyNetWorthSnapshotCsvFileName = (fileName?: string | null, fi
   );
 };
 
+const inferNetWorthSnapshotGroupAccountType = (normalizedGroup: string): ImportedAccountType | null =>
+  /accounts?\s+receivable|\bar\b/.test(normalizedGroup)
+    ? "receivable"
+    : /accounts?\s+payable|\bap\b/.test(normalizedGroup)
+      ? "payable"
+      : /credit\s*cards?/.test(normalizedGroup)
+        ? "credit_card"
+        : /mortgages?/.test(normalizedGroup)
+          ? "mortgage"
+          : /lines?\s+of\s+credit/.test(normalizedGroup)
+            ? "line_of_credit"
+            : /\bbnpl\b|buy\s+now\s+pay\s+later/.test(normalizedGroup)
+              ? "bnpl"
+              : /loans?|debts?|liabilities?/.test(normalizedGroup)
+                ? "loan"
+                : /insurance/.test(normalizedGroup)
+                  ? "insurance"
+                  : /investments?|tracked\s+assets?|brokerage|stocks?|funds?|crypto|bonds?|gold|portfolio/.test(
+                        normalizedGroup
+                      )
+                    ? "investment"
+                    : /wallets?|e\s*wallet/.test(normalizedGroup)
+                      ? "wallet"
+                      : /physical\s+cash|\bcash\b/.test(normalizedGroup)
+                        ? "cash"
+                        : /savings?|checking|banks?|deposits?/.test(normalizedGroup)
+                          ? "bank"
+                          : null;
+
 const resolveNetWorthSnapshotAccount = (
   rawLabel: string,
   groupLabel: string
@@ -362,6 +391,9 @@ const resolveNetWorthSnapshotAccount = (
   }
   if (normalized.includes("accounts receivable") || normalizedGroup.includes("accounts receivable")) {
     return { accountName: "Accounts Receivable", institution: null, accountType: "receivable", currency: "PHP" };
+  }
+  if (!normalizeWhitespace(rawLabel)) {
+    return null;
   }
 
   const institutionMappings: Array<{
@@ -409,13 +441,54 @@ const resolveNetWorthSnapshotAccount = (
     { pattern: /^gotrade\b/, institution: "GoTrade", accountType: "investment" },
   ];
   const mapping = institutionMappings.find((candidate) => candidate.pattern.test(normalized));
-  if (!mapping) return null;
+  if (mapping) {
+    const sectionAccountType = inferNetWorthSnapshotGroupAccountType(normalizedGroup);
+    const shouldHonorSectionType =
+      sectionAccountType !== null &&
+      sectionAccountType !== "bank";
+    return {
+      accountName: mapping.accountName?.(rawLabel) ?? normalizeWhitespace(rawLabel),
+      institution: mapping.institution,
+      accountType: shouldHonorSectionType ? sectionAccountType : mapping.accountType,
+      currency: "PHP",
+    };
+  }
 
+  // Net-worth workbooks are personal and often contain institutions Clover
+  // has never seen before. Once the two-row balance-matrix shape has been
+  // proven, preserve those columns using their section semantics instead of
+  // silently dropping every account outside the hard-coded institution list.
+  const accountName = normalizeWhitespace(rawLabel || groupLabel);
+  if (
+    !accountName ||
+    /^(?:php|usd)?\s*(?:grand\s+)?(?:total|subtotal|net worth|assets?|liabilities?|equity|gain|loss|change)$/i.test(
+      accountName
+    ) ||
+    /\btotal$/i.test(accountName)
+  ) {
+    return null;
+  }
+
+  const accountType = inferNetWorthSnapshotGroupAccountType(normalizedGroup);
+  if (!accountType) return null;
+
+  const explicitCurrency = /\bUSD\b|\bdollar\b/i.test(`${rawLabel} ${groupLabel}`)
+    ? "USD"
+    : /\bGBP\b|\bpound\b/i.test(`${rawLabel} ${groupLabel}`)
+      ? "GBP"
+      : /\bEUR\b|\beuro\b/i.test(`${rawLabel} ${groupLabel}`)
+        ? "EUR"
+        : "PHP";
+  const inferredBankName = inferBankNameFromText(accountName);
+  const inferredInstitution = inferredBankName && inferredBankName !== "Unknown" ? inferredBankName : null;
   return {
-    accountName: mapping.accountName?.(rawLabel) ?? normalizeWhitespace(rawLabel),
-    institution: mapping.institution,
-    accountType: mapping.accountType,
-    currency: "PHP",
+    accountName,
+    institution:
+      accountType === "cash" || accountType === "receivable" || accountType === "payable"
+        ? null
+        : inferredInstitution ?? accountName,
+    accountType,
+    currency: explicitCurrency,
   };
 };
 
@@ -445,7 +518,8 @@ export const parseNetWorthSnapshotCsv = (
     normalizedGroupHeaders.includes("php total") &&
     normalizedGroupHeaders.includes("savings total") &&
     normalizedGroupHeaders.includes("investments total") &&
-    normalizedAccountHeaders.some((header) => /^(?:bpi|rcbc|gcash|maya|wise|unionbank|hsbc|pdax|gotrade)\b/.test(header));
+    (normalizedAccountHeaders.some((header) => /^(?:bpi|rcbc|gcash|maya|wise|unionbank|hsbc|pdax|gotrade)\b/.test(header)) ||
+      normalizedAccountHeaders.filter(Boolean).length >= 2);
   if (!hasSnapshotShape) return null;
 
   const dataRows = lines
@@ -462,7 +536,6 @@ export const parseNetWorthSnapshotCsv = (
     .map((rawAccountLabel, index) => {
       const explicitGroupHeader = groupHeaders[index] ?? "";
       if (explicitGroupHeader) carriedGroupHeader = explicitGroupHeader;
-      if (index < 9) return null;
 
       const groupLabel = explicitGroupHeader || carriedGroupHeader;
       const rawLabel = rawAccountLabel || groupLabel;
@@ -483,14 +556,15 @@ export const parseNetWorthSnapshotCsv = (
   const latestDate = latest.date.toISOString().slice(0, 10);
 
   return descriptors.flatMap((descriptor) => {
-    const balance = parseMoney(latest.values[descriptor.index] ?? null);
-    if (balance === null) return [];
-    const balanceHistory = dataRows
-      .map(({ values, date }) => ({
-        date: date.toISOString().slice(0, 10),
-        balance: parseMoney(values[descriptor.index] ?? null),
-      }))
-      .filter((entry) => entry.balance !== null);
+    const balanceHistory = dataRows.flatMap(({ values, date }) => {
+      const balance = parseMoney(values[descriptor.index] ?? null);
+      return balance === null
+        ? []
+        : [{ date: date.toISOString().slice(0, 10), balance }];
+    });
+    const latestKnownBalance = balanceHistory.at(-1);
+    if (!latestKnownBalance) return [];
+    const balanceCarriedForward = latestKnownBalance.date !== latestDate;
     return [
       {
         date: latestDate,
@@ -498,23 +572,25 @@ export const parseNetWorthSnapshotCsv = (
         currency: descriptor.currency,
         merchantRaw: descriptor.accountName,
         merchantClean: descriptor.accountName,
-        description: `${descriptor.accountName} balance as of ${latestDate}`,
+        description: `${descriptor.accountName} balance as of ${latestKnownBalance.date}`,
         accountName: descriptor.accountName,
         institution: descriptor.institution,
         type: "income",
-        confidence: 100,
+        confidence: balanceCarriedForward ? 96 : 100,
         parserConfidence: 100,
         categoryConfidence: 100,
         rawPayload: {
           kind: "account_snapshot_marker",
           source: "net_worth_snapshot_csv",
           documentType: "account_inventory",
-          balance,
+          balance: latestKnownBalance.balance,
           accountName: descriptor.accountName,
           institutionRaw: descriptor.institution,
           accountType: descriptor.accountType,
           accountCurrency: descriptor.currency,
           snapshotDate: latestDate,
+          balanceAsOfDate: latestKnownBalance.date,
+          balanceCarriedForward,
           sourceColumn: descriptor.index + 1,
           sourceHeader: descriptor.rawLabel,
           sourceGroup: descriptor.groupLabel,
@@ -1298,7 +1374,9 @@ export const parseGenericAccountSnapshotCsv = (
     accountGroups.set(identity, group);
   });
 
-  return Array.from(accountGroups.values()).map((group) => {
+  const snapshotAccountGroups = Array.from(accountGroups.values());
+  const accountInventory = snapshotAccountGroups.length > 1;
+  return snapshotAccountGroups.map((group) => {
     const ordered = [...group].sort(
       (left, right) =>
         left.snapshotDate.localeCompare(right.snapshotDate) ||
@@ -1334,7 +1412,7 @@ export const parseGenericAccountSnapshotCsv = (
       rawPayload: {
         kind: "account_snapshot_marker",
         source: "account_snapshot_csv",
-        documentType: "account_detail",
+        documentType: accountInventory ? "account_inventory" : "account_detail",
         sourceRowIndex: latest.sourceRowIndex,
         sourceRowIndexes: ordered.map((candidate) => candidate.sourceRowIndex),
         preambleMetadata: table.preambleMetadata,
@@ -1412,7 +1490,7 @@ export const parseWideAccountSnapshotCsv = (
     }))
     .filter((entry): entry is { sourceRow: string[]; date: Date } => Boolean(entry.date))
     .sort((left, right) => left.date.getTime() - right.date.getTime());
-  if (datedRows.length < 2) return null;
+  if (datedRows.length < 1) return null;
 
   const descriptors = table.headers
     .map((rawHeader, index) => {
@@ -1428,7 +1506,9 @@ export const parseWideAccountSnapshotCsv = (
       }
       const parsedValues = datedRows.map(({ sourceRow }) => parseMoney(sourceRow[index] ?? null));
       const validValues = parsedValues.filter((value): value is number => value !== null);
-      if (validValues.length < Math.max(2, Math.ceil(datedRows.length * 0.6))) return null;
+      const requiredValidValues =
+        datedRows.length === 1 ? 1 : Math.max(2, Math.ceil(datedRows.length * 0.6));
+      if (validValues.length < requiredValidValues) return null;
 
       const institution = sanitizeBankNameLabel(
         inferStructuredInstitution(table.preambleMetadata.institution) ||
@@ -1454,46 +1534,52 @@ export const parseWideAccountSnapshotCsv = (
       currency: string;
       parsedValues: Array<number | null>;
     }>;
-  if (descriptors.length < 1) return null;
+  // A single-date file is safe only when it clearly represents multiple
+  // account columns. This admits common "current balances" exports without
+  // turning an arbitrary dated metric into an account.
+  if (descriptors.length < (datedRows.length === 1 ? 2 : 1)) return null;
 
   const latest = datedRows.at(-1)!;
   const snapshotDate = latest.date.toISOString().slice(0, 10);
   return descriptors.flatMap((descriptor) => {
-    const latestValue = descriptor.parsedValues.at(-1);
-    if (latestValue === null || latestValue === undefined) return [];
     const balanceHistory = datedRows.flatMap((entry, index) => {
       const balance = descriptor.parsedValues[index];
       return balance === null || balance === undefined
         ? []
         : [{ date: entry.date.toISOString().slice(0, 10), balance }];
     });
+    const latestKnownBalance = balanceHistory.at(-1);
+    if (!latestKnownBalance) return [];
+    const balanceCarriedForward = latestKnownBalance.date !== snapshotDate;
     return [{
       date: snapshotDate,
       amount: "0",
       currency: descriptor.currency,
       merchantRaw: descriptor.accountName,
       merchantClean: descriptor.accountName,
-      description: `${descriptor.accountName} balance as of ${snapshotDate}`,
+      description: `${descriptor.accountName} balance as of ${latestKnownBalance.date}`,
       accountName: descriptor.accountName,
       institution: descriptor.institution ?? undefined,
       type: "income" as const,
-      confidence: 96,
+      confidence: balanceCarriedForward ? 92 : 96,
       parserConfidence: 98,
       categoryConfidence: 100,
       rawPayload: {
         kind: "account_snapshot_marker",
         source: "wide_account_snapshot_csv",
-        documentType: "account_detail",
+        documentType: descriptors.length > 1 ? "account_inventory" : "account_detail",
         sourceColumn: descriptor.index + 1,
         sourceHeader: table.headers[descriptor.index],
         preambleMetadata: table.preambleMetadata,
-        balance: latestValue,
+        balance: latestKnownBalance.balance,
         balanceHistory,
         accountName: descriptor.accountName,
         institutionRaw: descriptor.institution,
         accountType: descriptor.accountType,
         accountCurrency: descriptor.currency,
         snapshotDate,
+        balanceAsOfDate: latestKnownBalance.date,
+        balanceCarriedForward,
       },
     } satisfies ParsedImportRow];
   });

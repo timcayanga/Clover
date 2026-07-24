@@ -68,6 +68,16 @@ const main = async () => {
     "Waiting for a password is not a completed import and must never contribute 100% progress."
   );
   assert.match(modalSource, /const settledVisible = await waitForSettledVisibility\(/);
+  assert.match(
+    modalSource,
+    /const accountOnlyImport = importedRows <= 0;[\s\S]{0,300}accountOnlyImport \? "Making accounts visible" : "Making transactions visible"/,
+    "Balance-only imports must report account visibility instead of waiting on nonexistent transactions."
+  );
+  assert.match(
+    modalSource,
+    /accountOnlyImport[\s\S]{0,300}"Clover saved the balances, but the accounts are taking longer than expected to appear\./,
+    "Balance-only visibility timeouts must explain that account publication is delayed."
+  );
   assert.match(modalSource, /progressLabel: "Imported successfully"/);
   assert.match(
     modalSource,
@@ -166,10 +176,15 @@ const main = async () => {
     "A visible import launched in the background must render its progress dock instead of disappearing."
   );
   assert.match(settledVisibilitySource, /\/progress`/);
-  assert.doesNotMatch(
+  assert.match(
     settledVisibilitySource,
     /if \(params\.importedRows > 0 && params\.importFileId\) \{\s*return true;\s*\}/,
-    "A row-backed receipt must not report visible before its committed import status confirms it."
+    "A row-backed import returned by process/confirm must use that durable response as its visibility boundary."
+  );
+  assert.match(
+    settledVisibilitySource,
+    /if \(accountId && params\.importedRows <= 0\) \{[\s\S]{0,400}waitWithStatusStream/,
+    "An account-only import must still verify that its account and expected balance were published."
   );
   assert.doesNotMatch(
     settledVisibilitySource,
@@ -471,8 +486,8 @@ const main = async () => {
   );
   assert.match(
     importProcessorSource,
-    /const shouldMaterializeAccountBeforeConfirmation = effectiveImportMode !== "statement"/,
-    "Statements should materialize their account once, inside confirmation, instead of paying for account matching twice."
+    /const shouldMaterializeAccountBeforeConfirmation =\s*effectiveImportMode === "portfolio" \|\| effectiveImportMode === "account_detail"/,
+    "Only account-document imports should materialize accounts before confirmation; statements should not pay for account matching twice."
   );
   assert.match(importProcessorSource, /textCacheInfo\?\.fileFingerprint[\s\S]{0,180}importFile\.sourceFingerprint/);
   assert.doesNotMatch(
