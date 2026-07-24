@@ -40842,6 +40842,60 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   color: var(--accent);
 }
 
+.split-bill-detail-modal__checkmark--amount {
+  width: auto;
+  min-width: 64px;
+  height: auto;
+  padding: 5px 8px;
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.split-bill-detail-modal__allocation-summary {
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+}
+
+.split-bill-detail-modal__allocation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.split-bill-detail-modal__allocation-grid article,
+.split-bill-detail-modal__allocation-transfers {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.split-bill-detail-modal__allocation-grid span,
+.split-bill-detail-modal__allocation-transfers span {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.split-bill-detail-modal__allocation-grid .is-positive {
+  color: #087f5b;
+}
+
+.split-bill-detail-modal__allocation-grid .is-negative {
+  color: #c2413a;
+}
+
+.split-bill-detail-modal__group-allocation {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
 .split-bill-detail-modal__table-empty {
   text-align: center;
   color: var(--text-secondary);

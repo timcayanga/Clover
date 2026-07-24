@@ -2,7 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { SplitBillActionButtons } from "@/components/split-bill-action-buttons";
-import { formatSplitBillAmount, normalizeCurrencyCode, type SplitBillSerializedBill } from "@/lib/split-bill";
+import {
+  formatSplitBillAmount,
+  formatSplitBillSettlementStatus,
+  normalizeCurrencyCode,
+  type SplitBillSerializedBill,
+} from "@/lib/split-bill";
 import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
 import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
 
@@ -23,11 +28,32 @@ const formatDate = (value: string) =>
     year: "numeric",
   });
 
-const buildRowStatus = (transfers: SplitBillSerializedBill["settlement"]["transfers"]) =>
-  transfers.length > 0 ? `${transfers.length} transfer${transfers.length === 1 ? "" : "s"}` : "Settled";
+const isSamePersonName = (left: string, right: string) => {
+  const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
+  const leftName = normalize(left);
+  const rightName = normalize(right);
+  if (!leftName || !rightName) return false;
+  if (leftName === rightName) return true;
+  const leftParts = leftName.split(" ");
+  const rightParts = rightName.split(" ");
+  return leftParts[0] === rightParts[0] && (leftParts.length === 1 || rightParts.length === 1);
+};
 
-const buildGroupStatus = (items: SplitBillSerializedBill[]) =>
-  items.length > 0 && items.every((bill) => bill.settlement.transfers.length === 0) ? "Fully Settled" : null;
+const buildRowStatus = (bill: SplitBillSerializedBill) =>
+  bill.settlementStatus === "open" && bill.settlement.transfers.length > 0
+    ? `${bill.settlement.transfers.length} transfer${bill.settlement.transfers.length === 1 ? "" : "s"}`
+    : formatSplitBillSettlementStatus(bill.settlementStatus);
+
+const buildGroupStatus = (items: SplitBillSerializedBill[]) => {
+  if (items.length === 0) return null;
+  if (items.every((bill) => bill.settlementStatus === "settled")) return "Fully settled";
+  const openStates = Array.from(
+    new Set(items.filter((bill) => bill.settlementStatus !== "settled").map((bill) => bill.settlementStatus))
+  );
+  return openStates.length === 1
+    ? formatSplitBillSettlementStatus(openStates[0]!)
+    : `${items.filter((bill) => bill.settlementStatus !== "settled").length} open bills`;
+};
 
 const sumBillTotals = (items: SplitBillSerializedBill[]) =>
   items.reduce((sum, bill) => sum + (bill.total ? Number(bill.total) || 0 : 0), 0);
@@ -86,7 +112,7 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
   const balancePulse = useMemo(() => {
     const owes = new Map<string, number>();
     const isOwed = new Map<string, number>();
-    const openBills = bills.filter((bill) => bill.settlement.transfers.length > 0);
+    const openBills = bills.filter((bill) => bill.settlementStatus !== "settled");
     const nextTransfer = bills
       .flatMap((bill) =>
         bill.settlement.transfers.map((transfer) => ({
@@ -97,20 +123,24 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
           billDate: bill.billDate,
         }))
       )
-      .filter((transfer) => transfer.fromParticipantName === currentUserName || transfer.toParticipantName === currentUserName)
+      .filter(
+        (transfer) =>
+          isSamePersonName(transfer.fromParticipantName, currentUserName) ||
+          isSamePersonName(transfer.toParticipantName, currentUserName)
+      )
       .sort((left, right) => {
-        const leftPriority = left.fromParticipantName === currentUserName ? 0 : 1;
-        const rightPriority = right.fromParticipantName === currentUserName ? 0 : 1;
+        const leftPriority = isSamePersonName(left.fromParticipantName, currentUserName) ? 0 : 1;
+        const rightPriority = isSamePersonName(right.fromParticipantName, currentUserName) ? 0 : 1;
         return leftPriority - rightPriority || new Date(right.billDate).getTime() - new Date(left.billDate).getTime();
       })[0];
 
     for (const bill of bills) {
       for (const transfer of bill.settlement.transfers) {
         const currency = normalizeCurrencyCode(bill.currency);
-        if (transfer.fromParticipantName === currentUserName) {
+        if (isSamePersonName(transfer.fromParticipantName, currentUserName)) {
           addCurrencyTotal(owes, currency, transfer.amount);
         }
-        if (transfer.toParticipantName === currentUserName) {
+        if (isSamePersonName(transfer.toParticipantName, currentUserName)) {
           addCurrencyTotal(isOwed, currency, transfer.amount);
         }
       }
@@ -119,7 +149,7 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
     return {
       owesLabel: formatCurrencyTotals(owes),
       isOwedLabel: formatCurrencyTotals(isOwed),
-      settledCount: bills.filter((bill) => bill.settlement.transfers.length === 0).length,
+      settledCount: bills.filter((bill) => bill.settlementStatus === "settled").length,
       openCount: openBills.length,
       nextTransfer,
     };
@@ -128,7 +158,7 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
   const filteredBills = useMemo(() => {
     const query = billSearch.trim().toLowerCase();
     return bills.filter((bill) => {
-      const isSettled = bill.settlement.transfers.length === 0;
+      const isSettled = bill.settlementStatus === "settled";
       const matchesStatus =
         statusFilter === "all" ||
         (statusFilter === "settled" && isSettled) ||
@@ -274,7 +304,7 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
               </div>
               {recentBills.length > 0 ? (
                 recentBills.map((bill) => {
-                  const status = buildRowStatus(bill.settlement.transfers);
+                  const status = buildRowStatus(bill);
                   const sourceLabel = bill.sourceType === "receipt" ? "Receipt" : "Manual";
 
                   return (
@@ -300,7 +330,7 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
                       </div>
                       <div role="cell">{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</div>
                       <div role="cell">
-                        <span className={`split-bill-status-pill${bill.settlement.transfers.length === 0 ? " is-settled" : ""}`}>{status}</span>
+                        <span className={`split-bill-status-pill${bill.settlementStatus === "settled" ? " is-settled" : ""}`}>{status}</span>
                       </div>
                       <div role="cell" className="split-bill-table__row-action">
                         <button className="split-bill-table__chevron" type="button" aria-label={`View ${bill.title}`} onClick={() => onOpenBill(bill.id)}>

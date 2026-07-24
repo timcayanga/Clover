@@ -225,7 +225,7 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
       const transactionsResponsePromise =
         params.importedRows > 0 && !params.importFileId
           ? fetch(
-              `/api/accounts/${encodeURIComponent(accountId)}/transactions?page=1&pageSize=${Math.min(Math.max(params.importedRows, 25), 500)}`,
+              `/api/accounts/${encodeURIComponent(accountId ?? "")}/transactions?page=1&pageSize=${Math.min(Math.max(params.importedRows, 25), 500)}`,
               {
                 cache: "no-store",
               }

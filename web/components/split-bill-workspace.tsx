@@ -9,6 +9,7 @@ import { SplitBillPageActions } from "@/components/split-bill-page-actions";
 import { SplitBillPaymentTools } from "@/components/split-bill-payment-tools";
 import {
   formatSplitBillAmount,
+  formatSplitBillSettlementStatus,
   mergeSplitBillItemSplitMetadata,
   parseAmountValue,
   splitBillDraftFromSerializedBill,
@@ -57,6 +58,17 @@ const getPersonInitials = (name: string) =>
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("") || "?"
+
+const isSamePersonName = (left: string, right: string) => {
+  const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
+  const leftName = normalize(left);
+  const rightName = normalize(right);
+  if (!leftName || !rightName) return false;
+  if (leftName === rightName) return true;
+  const leftParts = leftName.split(" ");
+  const rightParts = rightName.split(" ");
+  return leftParts[0] === rightParts[0] && (leftParts.length === 1 || rightParts.length === 1);
+};
 
 const ensureDraftDefaults = (draft: SplitBillDraft): SplitBillDraft => {
   const next = draft.id ? draft : { ...draft, id: createSplitBillDraftId() };
@@ -135,7 +147,9 @@ const formatPaymentContributions = (bill: SplitBillSerializedBill) => {
 
 const formatSettlementTransfers = (bill: SplitBillSerializedBill) => {
   if (bill.settlement.transfers.length === 0) {
-    return bill.payments.length > 0 ? "No open transfers" : "No payments recorded";
+    return bill.settlementStatus === "settled"
+      ? "Settled"
+      : formatSplitBillSettlementStatus(bill.settlementStatus);
   }
 
   return bill.settlement.transfers
@@ -173,7 +187,7 @@ const getSettlementProgress = (bill: SplitBillSerializedBill) => {
 
   if (total <= 0.005) {
     return {
-      percent: 100,
+      percent: bill.settlementStatus === "settled" ? 100 : 0,
       remaining,
       recorded,
     };
@@ -190,15 +204,15 @@ const getPersonBalanceSummary = (bills: SplitBillSerializedBill[], personName: s
   const summary = bills.reduce(
     (totals, bill) => {
       for (const transfer of bill.settlement.transfers) {
-        if (transfer.fromParticipantName === personName) {
+        if (isSamePersonName(transfer.fromParticipantName, personName)) {
           totals.owes += transfer.amount;
         }
-        if (transfer.toParticipantName === personName) {
+        if (isSamePersonName(transfer.toParticipantName, personName)) {
           totals.isOwed += transfer.amount;
         }
       }
 
-      if (bill.settlement.transfers.length === 0) {
+      if (bill.settlementStatus === "settled") {
         totals.settledBills += 1;
       }
 
@@ -533,6 +547,33 @@ export function SplitBillWorkspace({
     setBills((current) => current.map((entry) => (entry.id === billId ? payload.bill! : entry)));
   };
 
+  const confirmImportedPayer = async (billId: string) => {
+    const bill = await loadFullSplitBill(billId);
+    if (!bill) return;
+    const payerName =
+      bill.payments
+        .map((payment) => bill.participants.find((participant) => participant.id === payment.participantId)?.name)
+        .find(Boolean) ?? null;
+    if (!payerName || !window.confirm(`Confirm that ${payerName} paid this bill?`)) return;
+
+    const updatePayload = buildBillUpdatePayload(bill, bill.participants);
+    updatePayload.rawPayload = {
+      ...(updatePayload.rawPayload ?? {}),
+      payerKnown: true,
+      payerName,
+      payerReviewRequired: false,
+      payerSource: "user_confirmed",
+    };
+    const response = await fetch(`/api/split-bills/${bill.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updatePayload),
+    });
+    const payload = (await response.json()) as { bill?: SplitBillSerializedBill };
+    if (!response.ok || !payload.bill) return;
+    setBills((current) => current.map((entry) => (entry.id === bill.id ? payload.bill! : entry)));
+  };
+
   const recordTransferSettlementAmount = async (bill: SplitBillSerializedBill, transfer: SplitBillTransferRow, amount: number, note: string) => {
     const response = await fetch(`/api/split-bills/${bill.id}/transfer-settlements`, {
       method: "POST",
@@ -622,9 +663,17 @@ export function SplitBillWorkspace({
 
     if (transfers.length === 0) {
       const recordedSettlements = formatRecordedTransferSettlements(bill);
+      const isSettled = bill.settlementStatus === "settled";
       return (
-        <div className="split-bill-detail-modal__settlement-panel split-bill-detail-modal__settlement-panel--settled">
-          <strong>{bill.settlement.transfers.length === 0 ? "No open transfers" : "No open transfer for this person"}</strong>
+        <div className={`split-bill-detail-modal__settlement-panel${isSettled ? " split-bill-detail-modal__settlement-panel--settled" : ""}`}>
+          <strong>
+            {participantName && bill.settlement.transfers.length > 0
+              ? "No open transfer for this person"
+              : formatSplitBillSettlementStatus(bill.settlementStatus)}
+          </strong>
+          {!isSettled && bill.settlementStatus === "awaiting_payer" ? (
+            <span>Choose who paid before Clover calculates who owes whom.</span>
+          ) : null}
           {recordedSettlements && bill.settlement.transfers.length === 0 ? <span>{recordedSettlements}</span> : null}
         </div>
       );
@@ -1055,7 +1104,7 @@ export function SplitBillWorkspace({
         ? bill.settlement.transfers.some(
             (transfer) => transfer.fromParticipantName === participantName || transfer.toParticipantName === participantName
           )
-        : bill.settlement.transfers.length > 0
+        : bill.settlementStatus !== "settled"
     );
 
     return (
@@ -1092,7 +1141,11 @@ export function SplitBillWorkspace({
                   </span>
                 ))
               ) : (
-                <span>No group settlement needed.</span>
+                <span>
+                  {openBills.length > 0
+                    ? openBills.map((bill) => formatSplitBillSettlementStatus(bill.settlementStatus)).join(" · ")
+                    : "No group settlement needed."}
+                </span>
               )}
             </div>
           </div>
@@ -1179,6 +1232,10 @@ export function SplitBillWorkspace({
                   </td>
                   {participants.map((participant) => {
                     const checked = item.participantIds.includes(participant.id ?? "");
+                    const allocation = item.allocations?.find(
+                      (entry) => entry.participantId === participant.id
+                    );
+                    const allocationAmount = parseAmountValue(allocation?.value);
                     return (
                       <td key={participant.id} className="split-bill-detail-modal__check-cell">
                         {editable ? (
@@ -1191,7 +1248,17 @@ export function SplitBillWorkspace({
                             />
                           </label>
                         ) : (
-                          <span className={`split-bill-detail-modal__checkmark${checked ? " is-checked" : ""}`}>{checked ? "✓" : ""}</span>
+                          <span
+                            className={`split-bill-detail-modal__checkmark${checked ? " is-checked" : ""}${
+                              allocationAmount !== null ? " split-bill-detail-modal__checkmark--amount" : ""
+                            }`}
+                          >
+                            {allocationAmount !== null
+                              ? formatSplitBillAmount(allocationAmount, bill.currency)
+                              : checked
+                                ? "✓"
+                                : ""}
+                          </span>
                         )}
                       </td>
                     );
@@ -1210,6 +1277,40 @@ export function SplitBillWorkspace({
       </div>
     );
   };
+
+  const renderParticipantAllocationSummary = (bill: SplitBillSerializedBill) => (
+    <div className="split-bill-detail-modal__allocation-summary">
+      <div className="split-bill-detail-modal__section-head">
+        <strong>People and balances</strong>
+      </div>
+      <div className="split-bill-detail-modal__allocation-grid">
+        {bill.settlement.participants.map((participant) => (
+          <article key={participant.id}>
+            <strong>{participant.name}</strong>
+            <span>Paid {formatSplitBillAmount(participant.paid, bill.currency)}</span>
+            <span>Share {formatSplitBillAmount(participant.owed, bill.currency)}</span>
+            <span className={participant.balance >= 0 ? "is-positive" : "is-negative"}>
+              {participant.balance >= 0 ? "Is owed" : "Owes"}{" "}
+              {formatSplitBillAmount(Math.abs(participant.balance), bill.currency)}
+            </span>
+          </article>
+        ))}
+      </div>
+      <div className="split-bill-detail-modal__allocation-transfers">
+        <strong>Who pays whom</strong>
+        {bill.settlement.transfers.length > 0 ? (
+          bill.settlement.transfers.map((transfer) => (
+            <span key={`${transfer.fromParticipantId}-${transfer.toParticipantId}`}>
+              {transfer.fromParticipantName} pays {transfer.toParticipantName}{" "}
+              {formatSplitBillAmount(transfer.amount, bill.currency)}
+            </span>
+          ))
+        ) : (
+          <span>{formatSplitBillSettlementStatus(bill.settlementStatus)}</span>
+        )}
+      </div>
+    </div>
+  );
 
   useEffect(() => {
     const createdBill = sessionStorage.getItem("split-bill:created-bill");
@@ -1276,11 +1377,9 @@ export function SplitBillWorkspace({
                   <span>Total</span>
                   <strong>{selectedBill.total ? formatSplitBillAmount(Number(selectedBill.total), selectedBill.currency) : "No total"}</strong>
                   <span className="split-bill-detail-modal__summary-status">
-                    {selectedBill.settlement.transfers.length === 0
-                      ? selectedBill.payments.length > 0
-                        ? "No open transfers"
-                        : "Awaiting allocation"
-                      : `${selectedBill.settlement.transfers.length} open transfer${selectedBill.settlement.transfers.length === 1 ? "" : "s"}`}
+                    {selectedBill.settlementStatus === "open"
+                      ? `${selectedBill.settlement.transfers.length} open transfer${selectedBill.settlement.transfers.length === 1 ? "" : "s"}`
+                      : formatSplitBillSettlementStatus(selectedBill.settlementStatus)}
                   </span>
                 </div>
                 <div className="split-bill-detail-modal__summary-actions">
@@ -1475,11 +1574,21 @@ export function SplitBillWorkspace({
                         <span>{formatSettlementTransfers(selectedBill)}</span>
                       </div>
                     </div>
+                    {selectedBill.settlementStatus === "needs_payer_confirmation" ? (
+                      <button
+                        className="button button-primary button-small"
+                        type="button"
+                        onClick={() => void confirmImportedPayer(selectedBill.id)}
+                      >
+                        Confirm who paid
+                      </button>
+                    ) : null}
                     <SplitBillPaymentTools
                       bill={selectedBill}
                       onBillUpdated={(updatedBill) => setBills((current) => current.map((entry) => (entry.id === updatedBill.id ? updatedBill : entry)))}
                     />
                     {renderBillItemsTable(selectedBill, false)}
+                    {renderParticipantAllocationSummary(selectedBill)}
                     <div className="split-bill-activity">
                       <strong>Activity</strong>
                       {(selectedBill.activity ?? []).length > 0 ? (
@@ -1533,9 +1642,25 @@ export function SplitBillWorkspace({
                       <span>
                         {selectedGroupSimplifiedTransfers.length > 0
                           ? `${selectedGroupSimplifiedTransfers[0].fromName} pays ${selectedGroupSimplifiedTransfers[0].toName} ${formatSplitBillAmount(selectedGroupSimplifiedTransfers[0].amount, selectedGroupSimplifiedTransfers[0].currency)}`
-                          : "This group is settled."}
+                          : selectedGroupBills.every((bill) => bill.settlementStatus === "settled")
+                            ? "This group is settled."
+                            : selectedGroupBills
+                                .map((bill) => formatSplitBillSettlementStatus(bill.settlementStatus))
+                                .join(" · ")}
                       </span>
                     </div>
+                    {selectedGroupBills.map((bill) => (
+                      <section key={bill.id} className="split-bill-detail-modal__group-allocation">
+                        <div className="split-bill-detail-modal__section-head">
+                          <strong>{bill.title} allocation</strong>
+                          <button className="button button-secondary button-small" type="button" onClick={() => openBill(bill.id)}>
+                            Open bill
+                          </button>
+                        </div>
+                        {renderBillItemsTable(bill, false)}
+                        {renderParticipantAllocationSummary(bill)}
+                      </section>
+                    ))}
                   </>
                 ) : null}
                 {detailTab === "bills" ? renderBillRows(selectedGroupBills) : null}

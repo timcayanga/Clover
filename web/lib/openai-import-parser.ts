@@ -369,6 +369,10 @@ type OpenAIParsedReceiptLineItem = {
   unit_price: number | null;
   amount: number | null;
   currency: string | null;
+  participant_allocations: Array<{
+    participant_name: string;
+    amount: number;
+  }>;
   confidence_score: number;
   parser_evidence: {
     page: number | null;
@@ -410,6 +414,7 @@ type OpenAIParsedReceiptDetails = {
   tip: number | null;
   total: number | null;
   payment_method: string | null;
+  payer_name: string | null;
   line_items: OpenAIParsedReceiptLineItem[];
   split_allocations: OpenAIParsedReceiptSplitAllocation[];
   confidence_score: number;
@@ -487,6 +492,7 @@ const importedStatementSchema = z.object({
       tip: z.number().nullable().optional().default(null),
       total: z.number().nullable().optional().default(null),
       payment_method: z.string().nullable().optional().default(null),
+      payer_name: z.string().nullable().optional().default(null),
       line_items: z
         .array(
           z.object({
@@ -495,6 +501,14 @@ const importedStatementSchema = z.object({
             unit_price: z.number().nullable().optional().default(null),
             amount: z.number().nullable().optional().default(null),
             currency: z.string().nullable().optional().default(null),
+            participant_allocations: z
+              .array(
+                z.object({
+                  participant_name: z.string(),
+                  amount: z.number(),
+                })
+              )
+              .default([]),
             confidence_score: z.number().min(0).max(100),
             parser_evidence: z.object({
               page: z.number().nullable().optional().default(null),
@@ -686,6 +700,7 @@ const openAIJsonSchema = {
             tip: { type: ["number", "null"] },
             total: { type: ["number", "null"] },
             payment_method: { type: ["string", "null"] },
+            payer_name: { type: ["string", "null"] },
             line_items: {
               type: "array",
               default: [],
@@ -698,6 +713,19 @@ const openAIJsonSchema = {
                   unit_price: { type: ["number", "null"] },
                   amount: { type: ["number", "null"] },
                   currency: { type: ["string", "null"] },
+                  participant_allocations: {
+                    type: "array",
+                    default: [],
+                    items: {
+                      type: "object",
+                      additionalProperties: false,
+                      properties: {
+                        participant_name: { type: "string" },
+                        amount: { type: "number" },
+                      },
+                      required: ["participant_name", "amount"],
+                    },
+                  },
                   confidence_score: { type: "number" },
                   parser_evidence: {
                     type: "object",
@@ -710,7 +738,7 @@ const openAIJsonSchema = {
                     required: ["page", "source_text", "reason"],
                   },
                 },
-                required: ["description", "quantity", "unit_price", "amount", "currency", "confidence_score", "parser_evidence"],
+                required: ["description", "quantity", "unit_price", "amount", "currency", "participant_allocations", "confidence_score", "parser_evidence"],
               },
             },
             split_allocations: {
@@ -771,6 +799,7 @@ const openAIJsonSchema = {
             "tip",
             "total",
             "payment_method",
+            "payer_name",
             "line_items",
             "split_allocations",
             "confidence_score",
@@ -1671,7 +1700,8 @@ export const buildOpenAIBackupSystemPrompt = (importMode: ImportMode | null | un
                   "Treat this as a notes or informal transaction list first.",
                   "Prefer conservative extraction with lower confidence when fields are incomplete.",
                   "For split-cost tables with items as rows and people as columns, return transactions: [] and populate receipt_details as a split_bill.",
-                  "Put the verified bill total and menu rows in receipt_details.line_items. Put one participant in split_allocations for each bottom-column total, using charged for the person's share; do not mark paid or due unless explicitly shown.",
+                  "Put the verified bill total and menu rows in receipt_details.line_items. For every non-empty person cell in an item row, add participant_name and the exact visible cell amount to that line item's participant_allocations. Put one participant in split_allocations for each bottom-column total, using charged for the person's share; do not mark paid or due unless explicitly shown.",
+                  "Set payer_name only when the table explicitly identifies who paid; otherwise keep it null.",
                   "Use Shared bill when no merchant is visible, leave the date null when absent, and never infer an account from the filename.",
                 ]
               : [
@@ -1972,7 +2002,8 @@ const buildOpenAIInputPayload = (params: {
       ? [
           "This input is a notes-app screenshot of a transaction list. The layout may be informal, so prefer conservative extraction and lower confidence when fields are partial.",
           "For a split-cost table with items as rows and people as columns, return transactions: [] and populate receipt_details with receipt_type split_bill.",
-          "Put the verified table total and each menu row in receipt_details.line_items. Put one participant in split_allocations per bottom-column total, using charged for that person's share; keep paid and due null unless the table explicitly proves them.",
+          "Put the verified table total and each menu row in receipt_details.line_items. For every non-empty person cell in an item row, add participant_name and the exact visible cell amount to that line item's participant_allocations. Put one participant in split_allocations per bottom-column total, using charged for that person's share; keep paid and due null unless the table explicitly proves them.",
+          "Set payer_name only when the note explicitly identifies who paid; otherwise keep it null.",
           "Use Shared bill when no merchant is visible, leave the date null when absent, and never infer an account from the filename.",
         ]
       : []),
@@ -2008,7 +2039,7 @@ const buildOpenAIInputPayload = (params: {
           "If the document is a portfolio or account-detail page that shows holdings or positions, extract those into holdings instead of transaction rows.",
           "If the document is a receipt, portfolio screen, or account detail screen, keep the transaction array empty unless the page clearly shows true ledger rows.",
           "If it is a financial notes image, create conservative transaction rows for each clearly labeled paid, payable, due, final, or net-total amount that Clover can track.",
-          "Exception: when the note is a split-cost table with items as rows and people as columns, return transactions: [] and populate receipt_details as a split_bill. Put the verified bill total and menu rows in receipt_details.line_items, and put each person's bottom-column share in split_allocations.charged. Do not create one transaction per participant or per menu item.",
+          "Exception: when the note is a split-cost table with items as rows and people as columns, return transactions: [] and populate receipt_details as a split_bill. Put the verified bill total and menu rows in receipt_details.line_items. For every non-empty person cell in an item row, add participant_name and the exact visible cell amount to that line item's participant_allocations. Put each person's bottom-column share in split_allocations.charged. Do not create one transaction per participant or per menu item.",
           "Keep date null when none is visible, set review_required true, and do not turn subtotal, fee, discount, participant shares, or intermediate arithmetic rows into extra transactions.",
           "Use the account number and balance shown in the page image, not any earlier summary-like number unless it is the final ending balance.",
           "",
@@ -2658,7 +2689,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
               selectedModel,
               pageImagesToSend,
               repairTimeoutMs,
-              `${systemPrompt} CRITICAL REPAIR: You already recognized the image as a split-cost or shared-bill table. receipt_details MUST be a non-null object with receipt_type split_bill, total set to the visible grand total, every visible menu row in line_items, and every participant bottom-column total in split_allocations.charged. transactions MUST remain empty. Do not claim that details were captured while returning receipt_details null.`
+              `${systemPrompt} CRITICAL REPAIR: You already recognized the image as a split-cost or shared-bill table. receipt_details MUST be a non-null object with receipt_type split_bill, total set to the visible grand total, every visible menu row in line_items, every non-empty person cell represented in that line item's participant_allocations, and every participant bottom-column total in split_allocations.charged. Keep payer_name null unless the payer is explicit. transactions MUST remain empty. Do not claim that details were captured while returning receipt_details null.`
             );
       if (repairResponse?.ok) {
         const repairPayload = (await repairResponse.json()) as Record<string, unknown>;

@@ -6,6 +6,10 @@ type ImportedLineItem = {
   description: string;
   amount: number | null;
   quantity?: number | null;
+  participantAllocations?: Array<{
+    participantName: string;
+    amount: number;
+  }>;
 };
 
 type ImportedAllocation = {
@@ -52,6 +56,7 @@ export const ensureImportedSplitBill = async (params: {
   fileName: string;
   lineItems: ImportedLineItem[];
   allocations: ImportedAllocation[];
+  payerName?: string | null;
   confidence: number;
 }) => {
   const allocations = params.allocations
@@ -71,7 +76,15 @@ export const ensureImportedSplitBill = async (params: {
 
   const workspace = await prisma.workspace.findUnique({
     where: { id: params.workspaceId },
-    select: { userId: true },
+    select: {
+      userId: true,
+      user: {
+        select: {
+          firstName: true,
+          lastName: true,
+        },
+      },
+    },
   });
   if (!workspace) return null;
 
@@ -94,6 +107,28 @@ export const ensureImportedSplitBill = async (params: {
       name: allocation.participantName,
       share: allocation.share,
     }));
+    const participantByName = new Map(
+      participantRows.map((participant) => [participant.name.trim().toLowerCase(), participant] as const)
+    );
+    const explicitPayerName = String(params.payerName ?? "").trim();
+    const ownerFirstName = String(workspace.user.firstName ?? "").trim();
+    const ownerFullName = [workspace.user.firstName, workspace.user.lastName].filter(Boolean).join(" ").trim();
+    const payerCandidates = [
+      explicitPayerName,
+      ownerFullName,
+      ownerFirstName,
+    ]
+      .filter(Boolean)
+      .map((name) => name.toLowerCase());
+    const payerParticipant =
+      payerCandidates
+        .map((candidate) => participantByName.get(candidate))
+        .find((participant): participant is (typeof participantRows)[number] => Boolean(participant)) ?? null;
+    const payerWasExplicit = Boolean(
+      explicitPayerName &&
+      payerParticipant &&
+      payerParticipant.name.trim().toLowerCase() === explicitPayerName.toLowerCase()
+    );
     await tx.splitBillGroupMember.createMany({
       data: participantRows.map((participant, index) => ({
         groupId: group.id,
@@ -126,15 +161,20 @@ export const ensureImportedSplitBill = async (params: {
         sourceType: "receipt",
         merchantName: params.merchantName || "Shared bill",
         receiptFileName: params.fileName,
-        receiptConfidence: Math.max(0, Math.min(100, Math.round(params.confidence))),
+        receiptConfidence: Math.max(
+          0,
+          Math.min(100, Math.round(params.confidence > 0 && params.confidence <= 1 ? params.confidence * 100 : params.confidence))
+        ),
         total: new Prisma.Decimal(params.total),
         rawPayload: {
           source: "digital_note_split_bill",
           declaredTotal: params.total,
           participantShareTotal: shareTotal,
           reconciliationDifference: Number((params.total - shareTotal).toFixed(2)),
-          payerKnown: false,
-          payerReviewRequired: true,
+          payerKnown: Boolean(payerParticipant),
+          payerName: payerParticipant?.name ?? null,
+          payerSource: payerWasExplicit ? "document" : payerParticipant ? "clover_account_owner" : null,
+          payerReviewRequired: Boolean(payerParticipant && !payerWasExplicit) || !payerParticipant,
           lineItems: params.lineItems,
           participantShares: participantRows.map((participant) => ({
             participantName: participant.name,
@@ -151,28 +191,103 @@ export const ensureImportedSplitBill = async (params: {
         name: participant.name,
       })),
     });
-    const shareItems = participantRows.map((participant, index) => ({
-      id: randomUUID(),
-      participantId: participant.id,
-      description: `${participant.name} share`,
-      amount: participant.share,
-      sortOrder: index,
-    }));
-    await tx.splitBillItem.createMany({
-      data: shareItems.map((item) => ({
-        id: item.id,
-        billId: bill.id,
-        description: item.description,
-        amount: new Prisma.Decimal(item.amount),
-        sortOrder: item.sortOrder,
-      })),
+    const hasExactItemAllocations = params.lineItems.some((item) => (item.participantAllocations ?? []).length > 0);
+    const normalizedLineItems = params.lineItems
+      .filter((item) => item.description.trim() && item.amount !== null && Number.isFinite(item.amount))
+      .map((item, index) => {
+        const itemId = randomUUID();
+        const exactAllocations = (item.participantAllocations ?? []).flatMap((allocation) => {
+          const participant = participantByName.get(allocation.participantName.trim().toLowerCase());
+          return participant && Number.isFinite(allocation.amount) && allocation.amount > 0
+            ? [{ participantId: participant.id, value: Number(allocation.amount.toFixed(2)) }]
+            : [];
+        });
+        const proportionalAllocations =
+          exactAllocations.length > 0 || shareTotal <= 0
+            ? []
+            : participantRows.map((participant) => ({
+                participantId: participant.id,
+                value: Number((((item.amount ?? 0) * participant.share) / shareTotal).toFixed(2)),
+              }));
+        return {
+          id: itemId,
+          description: `${item.quantity && item.quantity > 1 ? `${item.quantity} × ` : ""}${item.description.trim()}`,
+          amount: item.amount ?? 0,
+          sortOrder: index,
+          allocations: exactAllocations.length > 0 ? exactAllocations : proportionalAllocations,
+          hasDocumentAllocations: exactAllocations.length > 0,
+        };
+      });
+    const splitBillItemSplits = Object.fromEntries(
+      normalizedLineItems.map((item) => [
+        item.id,
+        {
+          splitMethod: "exact",
+          allocations: item.allocations.map((allocation) => ({
+            participantId: allocation.participantId,
+            value: allocation.value.toFixed(2),
+          })),
+        },
+      ])
+    );
+    await tx.splitBill.update({
+      where: { id: bill.id },
+      data: {
+        rawPayload: {
+          source: "digital_note_split_bill",
+          declaredTotal: params.total,
+          participantShareTotal: shareTotal,
+          reconciliationDifference: Number((params.total - shareTotal).toFixed(2)),
+          payerKnown: Boolean(payerParticipant),
+          payerName: payerParticipant?.name ?? null,
+          payerSource: payerWasExplicit ? "document" : payerParticipant ? "clover_account_owner" : null,
+          payerReviewRequired: Boolean(payerParticipant && !payerWasExplicit) || !payerParticipant,
+          itemAllocationSource: hasExactItemAllocations
+            ? normalizedLineItems.every((item) => item.hasDocumentAllocations)
+              ? "document_cells"
+              : "document_cells_with_estimated_gaps"
+            : "estimated_from_participant_totals",
+          lineItems: params.lineItems,
+          participantShares: participantRows.map((participant) => ({
+            participantName: participant.name,
+            charged: participant.share,
+          })),
+          splitBillItemSplits,
+        } as Prisma.InputJsonValue,
+      },
     });
-    await tx.splitBillItemParticipant.createMany({
-      data: shareItems.map((item) => ({
-        itemId: item.id,
-        participantId: item.participantId,
-      })),
-    });
+    if (normalizedLineItems.length > 0) {
+      await tx.splitBillItem.createMany({
+        data: normalizedLineItems.map((item) => ({
+          id: item.id,
+          billId: bill.id,
+          description: item.description,
+          amount: new Prisma.Decimal(item.amount),
+          sortOrder: item.sortOrder,
+        })),
+      });
+      const itemParticipants = normalizedLineItems.flatMap((item) =>
+        item.allocations.map((allocation) => ({
+          itemId: item.id,
+          participantId: allocation.participantId,
+        }))
+      );
+      if (itemParticipants.length > 0) {
+        await tx.splitBillItemParticipant.createMany({ data: itemParticipants });
+      }
+    }
+    if (payerParticipant) {
+      await tx.splitBillPayment.create({
+        data: {
+          billId: bill.id,
+          participantId: payerParticipant.id,
+          amount: new Prisma.Decimal(params.total),
+          note: payerWasExplicit
+            ? "Payer shown in imported document"
+            : "Payer inferred from the Clover account owner; review recommended",
+        },
+      });
+    }
     return bill;
   });
 };

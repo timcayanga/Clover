@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { isImportedSplitBillStructure } from "@/lib/imported-split-bill";
+import {
+  buildSplitBillSettlement,
+  getSplitBillSettlementStatus,
+} from "@/lib/split-bill";
 
 const readProjectFile = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
@@ -52,8 +56,28 @@ assert.match(
 );
 assert.match(
   splitBillSource,
-  /payerKnown:\s*false[\s\S]*payerReviewRequired:\s*true/,
-  "Participant shares must not be treated as payments when the payer is absent."
+  /payerSource:\s*payerWasExplicit\s*\?\s*"document"\s*:\s*payerParticipant\s*\?\s*"clover_account_owner"/,
+  "Imported split bills should infer the Clover account owner as payer while preserving review state."
+);
+assert.match(
+  promptSource,
+  /participant_allocations[\s\S]*participant_name[\s\S]*amount/,
+  "Digital-note extraction must preserve each non-empty item/person table cell."
+);
+assert.match(
+  promptSource,
+  /payer_name/,
+  "Digital-note extraction must return an explicit payer only when the source identifies one."
+);
+assert.match(
+  workspaceSource,
+  /People and balances[\s\S]*Who pays whom/,
+  "Bill details must expose per-person shares and settlement transfers."
+);
+assert.match(
+  workspaceSource,
+  /isSamePersonName[\s\S]*leftParts\[0\] === rightParts\[0\]/,
+  "Imported first-name columns must match the Clover account owner's full name in balance summaries."
 );
 assert.match(
   workspaceSource,
@@ -89,6 +113,60 @@ assert.equal(
   }),
   false,
   "A single allocation must not be promoted to a group split bill."
+);
+
+const participants = [
+  { id: "ferdie", name: "Ferdie" },
+  { id: "tim", name: "Tim" },
+];
+const awaitingPayerSettlement = buildSplitBillSettlement({
+  participants,
+  items: [{
+    amount: "100",
+    participantIds: ["ferdie", "tim"],
+    splitMethod: "exact",
+    allocations: [
+      { participantId: "ferdie", value: "60" },
+      { participantId: "tim", value: "40" },
+    ],
+  }],
+  payments: [],
+});
+assert.equal(
+  getSplitBillSettlementStatus({ settlement: awaitingPayerSettlement, rawPayload: {} }),
+  "awaiting_payer",
+  "A fully allocated bill with no payer must not be marked settled."
+);
+
+const inferredPayerSettlement = buildSplitBillSettlement({
+  participants,
+  items: [{
+    amount: "100",
+    participantIds: ["ferdie", "tim"],
+    splitMethod: "exact",
+    allocations: [
+      { participantId: "ferdie", value: "60" },
+      { participantId: "tim", value: "40" },
+    ],
+  }],
+  payments: [{ participantId: "tim", amount: "100" }],
+});
+assert.deepEqual(
+  inferredPayerSettlement.transfers.map((transfer) => ({
+    from: transfer.fromParticipantName,
+    to: transfer.toParticipantName,
+    amount: transfer.amount,
+  })),
+  [{ from: "Ferdie", to: "Tim", amount: 60 }],
+  "Clover should calculate the exact person-to-payer transfer."
+);
+assert.equal(
+  getSplitBillSettlementStatus({
+    settlement: inferredPayerSettlement,
+    rawPayload: { payerReviewRequired: true },
+  }),
+  "needs_payer_confirmation",
+  "An inferred payer must remain open for confirmation."
 );
 
 console.log("Digital-note split-bill regression passed.");

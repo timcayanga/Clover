@@ -160,6 +160,21 @@ export type SplitBillSettlement = {
   totalOwed: number;
 };
 
+export type SplitBillSettlementStatus =
+  | "awaiting_allocation"
+  | "awaiting_payer"
+  | "needs_payer_confirmation"
+  | "open"
+  | "settled";
+
+export const formatSplitBillSettlementStatus = (status: SplitBillSettlementStatus) => {
+  if (status === "awaiting_allocation") return "Awaiting allocation";
+  if (status === "awaiting_payer") return "Choose who paid";
+  if (status === "needs_payer_confirmation") return "Confirm payer";
+  if (status === "open") return "Open";
+  return "Settled";
+};
+
 export type SplitBillTransferSettlementRecord = {
   id: string;
   billId: string;
@@ -257,6 +272,7 @@ export type SplitBillSerializedBill = {
     status: "requested" | "payment_reported" | "paid" | "declined";
   }>;
   settlement: SplitBillSettlement;
+  settlementStatus: SplitBillSettlementStatus;
 };
 
 type SplitBillReceiptSummary = {
@@ -2802,6 +2818,65 @@ const normalizeSplitBillItemAllocations = (value: unknown): SplitBillItemAllocat
   });
 };
 
+const getImportedParticipantShareSettlementItems = (
+  rawPayload: Record<string, unknown> | null | undefined,
+  participants: Array<{ id: string; name: string }>
+) => {
+  if (!rawPayload || rawPayload.source !== "digital_note_split_bill" || !Array.isArray(rawPayload.participantShares)) {
+    return [];
+  }
+
+  const participantIdByName = new Map(
+    participants.map((participant) => [participant.name.trim().toLowerCase(), participant.id] as const)
+  );
+  const allocations = rawPayload.participantShares.flatMap((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      return [];
+    }
+    const record = entry as Record<string, unknown>;
+    const participantName = typeof record.participantName === "string" ? record.participantName.trim() : "";
+    const participantId = participantIdByName.get(participantName.toLowerCase());
+    const value =
+      typeof record.charged === "string" || typeof record.charged === "number"
+        ? parseAmountValue(record.charged)
+        : null;
+    return participantId && value !== null && value > 0
+      ? [{ participantId, value: value.toFixed(2) }]
+      : [];
+  });
+  const total = allocations.reduce((sum, allocation) => sum + (parseAmountValue(allocation.value) ?? 0), 0);
+  return allocations.length > 0
+    ? [{
+        amount: total,
+        participantIds: allocations.map((allocation) => allocation.participantId),
+        splitMethod: "exact" as const,
+        allocations,
+      }]
+    : [];
+};
+
+export const getSplitBillSettlementStatus = (params: {
+  settlement: SplitBillSettlement;
+  rawPayload: Record<string, unknown> | null | undefined;
+}): SplitBillSettlementStatus => {
+  if (params.settlement.totalOwed <= 0.005) {
+    return "awaiting_allocation";
+  }
+  if (params.settlement.totalPaid <= 0.005) {
+    return "awaiting_payer";
+  }
+  const payerReviewRequired = params.rawPayload?.payerReviewRequired === true;
+  if (payerReviewRequired) {
+    return "needs_payer_confirmation";
+  }
+  if (params.settlement.transfers.length > 0) {
+    return "open";
+  }
+  return Math.abs(params.settlement.totalPaid - params.settlement.totalOwed) <= 0.01
+    ? "settled"
+    : "open";
+};
+
 export const getSplitBillActivity = (rawPayload: Record<string, unknown> | null | undefined): SplitBillActivityRecord[] => {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
     return [];
@@ -3247,15 +3322,22 @@ export const serializeSplitBillRecord = (bill: {
     const splitMethod = itemSplitMetadata[itemId]?.splitMethod;
     return isSplitBillSplitMethod(splitMethod) ? splitMethod : "equal";
   };
+  const importedParticipantShareItems = getImportedParticipantShareSettlementItems(
+    bill.rawPayload,
+    bill.participants
+  );
   const settlement = applyTransferSettlementsToSettlement(
     buildSplitBillSettlement({
       participants: bill.participants,
-      items: bill.items.map((item) => ({
-        amount: item.amount.toString(),
-        participantIds: item.participants.map((entry) => entry.participantId),
-        splitMethod: getItemSplitMethod(item.id),
-        allocations: normalizeSplitBillItemAllocations(itemSplitMetadata[item.id]?.allocations),
-      })),
+      items:
+        importedParticipantShareItems.length > 0
+          ? importedParticipantShareItems
+          : bill.items.map((item) => ({
+              amount: item.amount.toString(),
+              participantIds: item.participants.map((entry) => entry.participantId),
+              splitMethod: getItemSplitMethod(item.id),
+              allocations: normalizeSplitBillItemAllocations(itemSplitMetadata[item.id]?.allocations),
+            })),
       payments: bill.payments.map((payment) => ({
         participantId: payment.participantId,
         amount: payment.amount.toString(),
@@ -3272,6 +3354,10 @@ export const serializeSplitBillRecord = (bill: {
     }),
     transferSettlements
   );
+  const settlementStatus = getSplitBillSettlementStatus({
+    settlement,
+    rawPayload: bill.rawPayload,
+  });
 
   return {
     id: bill.id,
@@ -3351,5 +3437,6 @@ export const serializeSplitBillRecord = (bill: {
     })),
     activity: getSplitBillActivity(bill.rawPayload),
     settlement,
+    settlementStatus,
   };
 };

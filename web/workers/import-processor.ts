@@ -1733,6 +1733,10 @@ type NormalizedReceiptLineItem = {
   unitPrice: number | null;
   amount: number | null;
   currency: string | null;
+  participantAllocations: Array<{
+    participantName: string;
+    amount: number;
+  }>;
   confidenceScore: number;
   parserEvidence: {
     page: number | null;
@@ -1748,6 +1752,10 @@ const normalizeReceiptLineItems = (
     unit_price?: number | null;
     amount?: number | null;
     currency?: string | null;
+    participant_allocations?: Array<{
+      participant_name?: string | null;
+      amount?: number | null;
+    }> | null;
     confidence_score?: number | null;
     parser_evidence?: {
       page?: number | null;
@@ -1774,6 +1782,19 @@ const normalizeReceiptLineItems = (
         unitPrice: typeof item.unit_price === "number" && Number.isFinite(item.unit_price) ? item.unit_price : null,
         amount: typeof item.amount === "number" && Number.isFinite(item.amount) ? item.amount : null,
         currency: typeof item.currency === "string" && item.currency.trim() ? item.currency.trim() : null,
+        participantAllocations: Array.isArray(item.participant_allocations)
+          ? item.participant_allocations.flatMap((allocation) => {
+              const participantName =
+                typeof allocation.participant_name === "string" ? allocation.participant_name.trim() : "";
+              const amount =
+                typeof allocation.amount === "number" && Number.isFinite(allocation.amount)
+                  ? allocation.amount
+                  : null;
+              return participantName && amount !== null && amount > 0
+                ? [{ participantName, amount }]
+                : [];
+            })
+          : [],
         confidenceScore:
           typeof item.confidence_score === "number" && Number.isFinite(item.confidence_score) ? item.confidence_score : 0,
         parserEvidence: {
@@ -1810,12 +1831,14 @@ const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptT
   tip: preview.tip !== null ? Number(preview.tip) : null,
   total: preview.total !== null ? Number(preview.total) : null,
   payment_method: preview.paymentMethod ?? null,
+  payer_name: preview.receiptPayerName ?? null,
   line_items: preview.items.map((item) => ({
     description: item.description,
     quantity: item.quantity ?? null,
     unit_price: item.unitPrice !== null ? Number(item.unitPrice) : null,
     amount: Number(item.amount),
     currency: preview.currency ?? null,
+    participant_allocations: [],
     confidence_score: Math.max(0, Math.min(100, Math.round(preview.confidence))),
     parser_evidence: {
       page: null,
@@ -2039,6 +2062,7 @@ const buildReceiptDetailsFromTrainingFixture = (fixture: TrainedReceiptFixture) 
   tip: null,
   total: fixture.amount,
   payment_method: fixture.paymentChannel,
+  payer_name: null,
   category_name: fixture.categoryName,
   notes: fixture.notes,
   line_items: [],
@@ -10786,6 +10810,10 @@ export const confirmImportFile = async (
               unit_price?: number | null;
               amount?: number | null;
               currency?: string | null;
+              participant_allocations?: Array<{
+                participant_name?: string | null;
+                amount?: number | null;
+              }> | null;
               confidence_score?: number | null;
               parser_evidence?: {
                 page?: number | null;
@@ -10800,6 +10828,10 @@ export const confirmImportFile = async (
                 unit_price?: number | null;
                 amount?: number | null;
                 currency?: string | null;
+                participant_allocations?: Array<{
+                  participant_name?: string | null;
+                  amount?: number | null;
+                }> | null;
                 confidence_score?: number | null;
                 parser_evidence?: {
                   page?: number | null;
@@ -11052,6 +11084,7 @@ export const confirmImportFile = async (
                   unitPrice: item.unitPrice,
                   amount: item.amount,
                   currency: receiptCurrency,
+                  participantAllocations: item.participantAllocations,
                   confidenceScore: item.confidenceScore,
                   parserEvidence: item.parserEvidence,
                 })),
@@ -11061,6 +11094,10 @@ export const confirmImportFile = async (
                   unit_price: item.unitPrice,
                   amount: item.amount,
                   currency: receiptCurrency,
+                  participant_allocations: item.participantAllocations.map((allocation) => ({
+                    participant_name: allocation.participantName,
+                    amount: allocation.amount,
+                  })),
                   confidence_score: item.confidenceScore,
                   parser_evidence: {
                     page: item.parserEvidence.page,
@@ -11183,6 +11220,7 @@ export const confirmImportFile = async (
                 unitPrice: item.unitPrice,
                 amount: item.amount,
                 currency: receiptCurrency,
+                participantAllocations: item.participantAllocations,
                 confidenceScore: item.confidenceScore,
                 parserEvidence: item.parserEvidence,
               })),
@@ -11192,6 +11230,10 @@ export const confirmImportFile = async (
                 unit_price: item.unitPrice,
                 amount: item.amount,
                 currency: receiptCurrency,
+                participant_allocations: item.participantAllocations.map((allocation) => ({
+                  participant_name: allocation.participantName,
+                  amount: allocation.amount,
+                })),
                 confidence_score: item.confidenceScore,
                 parser_evidence: {
                   page: item.parserEvidence.page,
@@ -11231,8 +11273,15 @@ export const confirmImportFile = async (
             description: item.description,
             quantity: item.quantity,
             amount: item.amount,
+            participantAllocations: item.participantAllocations,
           })),
           allocations: receiptSplitAllocations,
+          payerName:
+            typeof receiptDetailsRecord?.payer_name === "string"
+              ? receiptDetailsRecord.payer_name
+              : typeof receiptDetailsRecord?.payerName === "string"
+                ? receiptDetailsRecord.payerName
+                : null,
           confidence:
             Number(receiptDetailsRecord?.confidence_score ?? receiptDetailsRecord?.confidenceScore ?? 95) || 95,
         });
