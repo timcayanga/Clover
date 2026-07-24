@@ -12,6 +12,7 @@ import {
   normalizeInstitutionCurrency,
   parseAmountValue,
   parseDateValue,
+  parseNetWorthSnapshotCsv,
   type ParsedImportRow,
 } from "@/lib/import-parser";
 import { sanitizeBankNameLabel } from "@/lib/data-qa-banks";
@@ -1833,6 +1834,34 @@ const extractTrailingMoneyFromText = (text: string) => {
 };
 
 export const detectStatementMetadataFromText = (text: string, fileName = ""): StatementMetadataSnapshot => {
+  const netWorthSnapshotRows = parseNetWorthSnapshotCsv(
+    text,
+    fileName,
+    fileName.toLowerCase().endsWith(".csv") ? "text/csv" : ""
+  );
+  if (netWorthSnapshotRows) {
+    const snapshotDate =
+      netWorthSnapshotRows
+        .map((row) => parseDateValue(row.date ?? null))
+        .filter((date): date is Date => Boolean(date))
+        .sort((left, right) => left.getTime() - right.getTime())
+        .at(-1) ?? null;
+    return {
+      institution: null,
+      accountNumber: null,
+      accountName: "Multiple Accounts",
+      accountType: "other",
+      currency: "PHP",
+      openingBalance: null,
+      endingBalance: null,
+      paymentDueDate: null,
+      totalAmountDue: null,
+      startDate: snapshotDate?.toISOString() ?? null,
+      endDate: snapshotDate?.toISOString() ?? null,
+      confidence: 100,
+    };
+  }
+
   const metadata = detectStatementMetadata(text, fileName);
   // Some Metrobank online PDFs preserve the MB-Online-MSOA filename but lose
   // the bank masthead during extraction. Prefer that durable filename signal

@@ -325,6 +325,206 @@ const splitLine = (line: string, delimiter: string) => {
   return cells;
 };
 
+const normalizeNetWorthSnapshotLabel = (value: string) =>
+  normalizeWhitespace(value)
+    .replace(/[()/_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+export const isLikelyNetWorthSnapshotCsvFileName = (fileName?: string | null, fileType?: string | null) => {
+  const normalizedName = String(fileName ?? "").toLowerCase();
+  const normalizedType = String(fileType ?? "").toLowerCase();
+  return (
+    (normalizedName.endsWith(".csv") || /(?:^|[;/\s])csv(?:$|[;/\s])/.test(normalizedType)) &&
+    /\bnet[\s_-]*worth(?:[\s_-]*calculator)?\b/.test(normalizedName)
+  );
+};
+
+const resolveNetWorthSnapshotAccount = (
+  rawLabel: string,
+  groupLabel: string
+): {
+  accountName: string;
+  institution: string | null;
+  accountType: ImportedAccountType;
+  currency: string;
+} | null => {
+  const normalized = normalizeNetWorthSnapshotLabel(rawLabel || groupLabel);
+  const normalizedGroup = normalizeNetWorthSnapshotLabel(groupLabel);
+  if (!normalized) return null;
+
+  if (normalized === "php" && normalizedGroup.includes("physical cash")) {
+    return { accountName: "Cash", institution: null, accountType: "cash", currency: "PHP" };
+  }
+  if (normalized === "usd" && normalizedGroup.includes("physical cash")) {
+    return { accountName: "Cash USD", institution: null, accountType: "cash", currency: "USD" };
+  }
+  if (normalized.includes("accounts receivable") || normalizedGroup.includes("accounts receivable")) {
+    return { accountName: "Accounts Receivable", institution: null, accountType: "receivable", currency: "PHP" };
+  }
+
+  const institutionMappings: Array<{
+    pattern: RegExp;
+    institution: string;
+    accountType: ImportedAccountType;
+    accountName?: (label: string) => string;
+  }> = [
+    {
+      pattern: /^bpi supplemental$/,
+      institution: "BPI",
+      accountType: "bank",
+      accountName: () => "BPI Supplemental",
+    },
+    {
+      pattern: /^bpi personal ateneo$/,
+      institution: "BPI",
+      accountType: "bank",
+      accountName: () => "BPI Personal / Ateneo",
+    },
+    { pattern: /^bpi time deposit$/, institution: "BPI", accountType: "investment" },
+    { pattern: /^bpi\b/, institution: "BPI", accountType: "bank" },
+    { pattern: /^rcbc\b/, institution: "RCBC", accountType: "bank" },
+    { pattern: /^gcash wallet$/, institution: "GCash", accountType: "wallet", accountName: () => "GCash" },
+    { pattern: /^maya\b/, institution: "Maya", accountType: "wallet" },
+    { pattern: /^wise\b/, institution: "Wise", accountType: "wallet" },
+    { pattern: /^unionbank\b/, institution: "UnionBank", accountType: "bank" },
+    { pattern: /^hsbc savings$/, institution: "HSBC", accountType: "bank" },
+    { pattern: /^hsbc\b/, institution: "HSBC", accountType: "bank" },
+    { pattern: /^gfunds\b/, institution: "GCash", accountType: "investment", accountName: () => "GFunds" },
+    {
+      pattern: /^gstocks philippines$/,
+      institution: "GCash",
+      accountType: "investment",
+      accountName: () => "GStocks Philippines",
+    },
+    {
+      pattern: /^gsave uno$/,
+      institution: "UNO Digital Bank",
+      accountType: "bank",
+      accountName: () => "GSave (UNO)",
+    },
+    { pattern: /^gcrypto\b/, institution: "GCash", accountType: "investment", accountName: () => "GCrypto" },
+    { pattern: /^pdax\b/, institution: "PDAX", accountType: "investment" },
+    { pattern: /^gotrade\b/, institution: "GoTrade", accountType: "investment" },
+  ];
+  const mapping = institutionMappings.find((candidate) => candidate.pattern.test(normalized));
+  if (!mapping) return null;
+
+  return {
+    accountName: mapping.accountName?.(rawLabel) ?? normalizeWhitespace(rawLabel),
+    institution: mapping.institution,
+    accountType: mapping.accountType,
+    currency: "PHP",
+  };
+};
+
+export const parseNetWorthSnapshotCsv = (
+  text: string,
+  fileName = "",
+  fileType = ""
+): ParsedImportRow[] | null => {
+  const csvLike =
+    isLikelyNetWorthSnapshotCsvFileName(fileName, fileType) ||
+    /(?:^|[;/\s])csv(?:$|[;/\s])/i.test(fileType) ||
+    fileName.toLowerCase().endsWith(".csv");
+  if (!csvLike) return null;
+
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length < 3) return null;
+
+  const groupHeaders = splitLine(lines[0] ?? "", ",");
+  const accountHeaders = splitLine(lines[1] ?? "", ",");
+  const normalizedGroupHeaders = groupHeaders.map(normalizeNetWorthSnapshotLabel);
+  const normalizedAccountHeaders = accountHeaders.map(normalizeNetWorthSnapshotLabel);
+  const hasSnapshotShape =
+    normalizedGroupHeaders[0] === "date" &&
+    normalizedGroupHeaders.includes("php total") &&
+    normalizedGroupHeaders.includes("savings total") &&
+    normalizedGroupHeaders.includes("investments total") &&
+    normalizedAccountHeaders.some((header) => /^(?:bpi|rcbc|gcash|maya|wise|unionbank|hsbc|pdax|gotrade)\b/.test(header));
+  if (!hasSnapshotShape) return null;
+
+  const dataRows = lines
+    .slice(2)
+    .map((line) => splitLine(line, ","))
+    .map((values) => ({ values, date: parseDateValue(values[0] ?? null) }))
+    .filter((entry): entry is { values: string[]; date: Date } => Boolean(entry.date))
+    .sort((left, right) => left.date.getTime() - right.date.getTime());
+  const latest = dataRows.at(-1);
+  if (!latest) return [];
+
+  let carriedGroupHeader = "";
+  const descriptors = accountHeaders
+    .map((rawAccountLabel, index) => {
+      const explicitGroupHeader = groupHeaders[index] ?? "";
+      if (explicitGroupHeader) carriedGroupHeader = explicitGroupHeader;
+      if (index < 9) return null;
+
+      const groupLabel = explicitGroupHeader || carriedGroupHeader;
+      const rawLabel = rawAccountLabel || groupLabel;
+      const identity = resolveNetWorthSnapshotAccount(rawLabel, groupLabel);
+      if (!identity) return null;
+      return { index, rawLabel, groupLabel, ...identity };
+    })
+    .filter(Boolean) as Array<{
+      index: number;
+      rawLabel: string;
+      groupLabel: string;
+      accountName: string;
+      institution: string | null;
+      accountType: ImportedAccountType;
+      currency: string;
+    }>;
+
+  const latestDate = latest.date.toISOString().slice(0, 10);
+
+  return descriptors.flatMap((descriptor) => {
+    const balance = parseMoney(latest.values[descriptor.index] ?? null);
+    if (balance === null) return [];
+    const balanceHistory = dataRows
+      .map(({ values, date }) => ({
+        date: date.toISOString().slice(0, 10),
+        balance: parseMoney(values[descriptor.index] ?? null),
+      }))
+      .filter((entry) => entry.balance !== null);
+    return [
+      {
+        date: latestDate,
+        amount: "0",
+        currency: descriptor.currency,
+        merchantRaw: descriptor.accountName,
+        merchantClean: descriptor.accountName,
+        description: `${descriptor.accountName} balance as of ${latestDate}`,
+        accountName: descriptor.accountName,
+        institution: descriptor.institution,
+        type: "income",
+        confidence: 100,
+        parserConfidence: 100,
+        categoryConfidence: 100,
+        rawPayload: {
+          kind: "account_snapshot_marker",
+          source: "net_worth_snapshot_csv",
+          documentType: "account_detail",
+          balance,
+          accountName: descriptor.accountName,
+          institutionRaw: descriptor.institution,
+          accountType: descriptor.accountType,
+          accountCurrency: descriptor.currency,
+          snapshotDate: latestDate,
+          sourceColumn: descriptor.index + 1,
+          sourceHeader: descriptor.rawLabel,
+          sourceGroup: descriptor.groupLabel,
+          balanceHistory,
+        },
+      } satisfies ParsedImportRow,
+    ];
+  });
+};
+
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 
 const splitStatementLines = (text: string) =>
@@ -21852,6 +22052,11 @@ export const parseImportTextGenericOnly = (
   fileType: string,
   context: ImportParseContext = {}
 ) => {
+  const netWorthSnapshotRows = parseNetWorthSnapshotCsv(text, fileName, fileType);
+  if (netWorthSnapshotRows) {
+    return netWorthSnapshotRows;
+  }
+
   const hsbcParsed = parseHsbcScreenshotImportText(text, fileName);
   if (hsbcParsed && hsbcParsed.rows.length > 0) {
     return filterSharedScreenshotParsedRows(hsbcParsed.rows, text, fileName, context);
@@ -23551,6 +23756,11 @@ export const parseImportText = (
   fileType: string,
   context: ImportParseContext = {}
 ): ParsedImportRow[] => {
+  const netWorthSnapshotRows = parseNetWorthSnapshotCsv(text, fileName, fileType);
+  if (netWorthSnapshotRows) {
+    return netWorthSnapshotRows;
+  }
+
   const wisePdfStatement = parseWisePdfStatement(text);
   if (wisePdfStatement) {
     return wisePdfStatement.rows;

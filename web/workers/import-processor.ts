@@ -7302,6 +7302,11 @@ export const processImportFileText = async (
   if (!importFile) {
     throw new Error("Import file not found");
   }
+  const fileType = String(importFile.fileType ?? "");
+  const fileName = String(importFile.fileName ?? "");
+  const likelyNetWorthSnapshotCsv =
+    (fileName.toLowerCase().endsWith(".csv") || /(?:^|[;/\s])csv(?:$|[;/\s])/i.test(fileType)) &&
+    /\bnet[\s_-]*worth(?:[\s_-]*calculator)?\b/i.test(fileName);
 
   const [statementCheckpoint, previouslyVisibleRows] = await Promise.all([
     (async () =>
@@ -7375,6 +7380,16 @@ export const processImportFileText = async (
       if (visibleRows <= 0) {
         continue;
       }
+      // Older builds misread net-worth snapshot matrices as transaction
+      // ledgers. Do not let those fabricated rows block a corrected,
+      // snapshot-only reimport with the same source fingerprint.
+      const legacyMatchLooksLikeNetWorthSnapshotCsv =
+        String(sourceMatch.fileName ?? "")
+          .toLowerCase()
+          .endsWith(".csv") && /\bnet[\s_-]*worth(?:[\s_-]*calculator)?\b/i.test(String(sourceMatch.fileName ?? ""));
+      if (likelyNetWorthSnapshotCsv || legacyMatchLooksLikeNetWorthSnapshotCsv) {
+        continue;
+      }
 
       await updateImportFileCompat(importFileId, {
         status: "done",
@@ -7396,8 +7411,6 @@ export const processImportFileText = async (
     }
   }
   const checkpointBankName = readCheckpointBankName(statementCheckpoint?.sourceMetadata);
-  const fileType = String(importFile.fileType ?? "");
-  const fileName = String(importFile.fileName ?? "");
   if (
     previouslyVisibleRows <= 0 &&
     importMode === "statement" &&
@@ -11872,12 +11885,26 @@ export const confirmImportFile = async (
         );
       })
     );
+  const hasNetWorthSnapshotAccountGroups =
+    nonDefaultParsedAccountGroups.length > 1 &&
+    nonDefaultParsedAccountGroups.every((group) =>
+      group.rows.every((row) => {
+        const payload = row.rawPayload;
+        return (
+          payload &&
+          typeof payload === "object" &&
+          !Array.isArray(payload) &&
+          (payload as Record<string, unknown>).source === "net_worth_snapshot_csv"
+        );
+      })
+    );
   const multiAccountImport =
     (nonDefaultParsedAccountGroups.length > 1 &&
       parsedAccountGroups.some((group) => group.rows.some((row) => Boolean(readRowAccountNumber(row))))) ||
     hasMultipleWiseWalletAccountGroups ||
     hasMultipleInvestmentAccountGroups ||
-    hasDeterministicPdaxPortfolioGroups;
+    hasDeterministicPdaxPortfolioGroups ||
+    hasNetWorthSnapshotAccountGroups;
   const notesCashAccountId =
     importMode === "notes"
       ? await resolveWorkspaceCashAccountId(
@@ -11907,6 +11934,22 @@ export const confirmImportFile = async (
   if (notesCashAccountId && !notesCashAccount) {
     throw new Error("Cash account not found");
   }
+  const supportedGroupAccountTypes = new Set<AccountType>([
+    "bank",
+    "wallet",
+    "credit_card",
+    "cash",
+    "investment",
+    "loan",
+    "mortgage",
+    "line_of_credit",
+    "receivable",
+    "payable",
+    "bnpl",
+    "prepaid",
+    "insurance",
+    "other",
+  ]);
   for (const group of multiAccountImport ? parsedAccountGroups : parsedAccountGroups.slice(0, 1)) {
     const firstGroupRow = group.rows[0] ?? {};
     const groupRows = group.rows as EnrichedParsedImportRow[];
@@ -11914,10 +11957,12 @@ export const confirmImportFile = async (
       firstGroupRow.rawPayload && typeof firstGroupRow.rawPayload === "object" && !Array.isArray(firstGroupRow.rawPayload)
         ? (firstGroupRow.rawPayload as Record<string, unknown>)
         : null;
-    const groupAccountType =
-      groupSnapshotPayload?.accountType === "wallet" || groupSnapshotPayload?.accountType === "investment"
-        ? groupSnapshotPayload.accountType
-        : baseStatementMetadata.accountType;
+    const payloadAccountType =
+      typeof groupSnapshotPayload?.accountType === "string" &&
+      supportedGroupAccountTypes.has(groupSnapshotPayload.accountType as AccountType)
+        ? (groupSnapshotPayload.accountType as AccountType)
+        : null;
+    const groupAccountType = payloadAccountType ?? baseStatementMetadata.accountType;
     const groupEndingBalance = getImportAccountBalanceFromParsedRows(groupRows);
     const groupIsSnapshotOnly = groupRows.length > 0 && groupRows.every(isSnapshotOnlyParsedRow);
     const groupCurrency = readRowAccountCurrency(firstGroupRow);
@@ -12477,12 +12522,16 @@ export const confirmImportFile = async (
       : statementEndingBalance ?? latestExplicitStatementBalance ?? fallbackReconciledBalance;
   const shouldPersistDeterministicPdaxGroupBalances =
     multiAccountImport && parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "pdax_portfolio_screenshot");
+  const shouldPersistNetWorthSnapshotGroupBalances =
+    multiAccountImport && parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "net_worth_snapshot_csv");
   if (
     shouldRunDestructiveMultiAccountCleanup({
       multiAccountImport,
       visibleTransactionsCount: candidateVisibleTransactionsCount,
       parsedRows,
-    }) || shouldPersistDeterministicPdaxGroupBalances
+    }) ||
+    shouldPersistDeterministicPdaxGroupBalances ||
+    shouldPersistNetWorthSnapshotGroupBalances
   ) {
     for (const group of parsedAccountGroups) {
       const groupAccount = accountByGroupKey.get(group.key);
