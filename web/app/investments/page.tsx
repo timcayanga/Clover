@@ -117,6 +117,7 @@ type InvestmentSnapshot = {
   gainLossValue: string | null;
   gainLossPercent: string | null;
   confidence: number;
+  updatedAt: string;
   account: {
     id: string;
     name: string;
@@ -237,7 +238,42 @@ const isGenericInvestmentAssetLabel = (name: string | null | undefined, institut
     return true;
   }
 
-  return new Set(["gfunds investments", "gfunds", "atram investments", "atram"]).has(normalizedName);
+  return new Set([
+    "gfunds investments",
+    "gfunds",
+    "atram investments",
+    "atram",
+    "pdax portfolio",
+    "pdax",
+    "gotrade",
+    "gstocks philippines",
+    "gsave (uno)",
+  ]).has(normalizedName);
+};
+
+const isInstitutionOnlySnapshotHolding = (
+  holding: InvestmentSnapshotHolding,
+  snapshot: InvestmentSnapshot,
+  account: Account
+) => {
+  const holdingName = normalizeInvestmentLabel(holding.assetName);
+  if (!holdingName) {
+    return true;
+  }
+
+  const institutionLabels = [
+    account.institution,
+    snapshot.documentImport?.institution,
+    snapshot.portfolioName,
+    isGenericInvestmentAssetLabel(account.name, account.institution) ? account.name : null,
+  ]
+    .map(normalizeInvestmentLabel)
+    .filter(Boolean);
+
+  return (
+    institutionLabels.includes(holdingName) ||
+    new Set(["portfolio", "investment", "investments", "holdings", "assets"]).has(holdingName)
+  );
 };
 
 const extractInvestmentAssetNameFromTransaction = (transaction: InvestmentTransaction) => {
@@ -640,6 +676,7 @@ export default function InvestmentsPage() {
   const [transactions, setTransactions] = useState<InvestmentTransaction[]>(
     Array.isArray(initialCachedWorkspace?.transactions) ? (initialCachedWorkspace.transactions as InvestmentTransaction[]) : []
   );
+  const [investmentSnapshots, setInvestmentSnapshots] = useState<InvestmentSnapshot[]>([]);
   const [loading, setLoading] = useState(!initialCachedWorkspace);
   const [hasLoaded, setHasLoaded] = useState(Boolean(initialCachedWorkspace));
   const [message, setMessage] = useState("");
@@ -745,6 +782,7 @@ export default function InvestmentsPage() {
         if (!cancelled) {
           setAccounts([]);
           setTransactions([]);
+          setInvestmentSnapshots([]);
           setLoading(false);
           setHasLoaded(true);
         }
@@ -752,6 +790,9 @@ export default function InvestmentsPage() {
       }
 
       const cachedWorkspace = getCachedInvestmentWorkspace(selectedWorkspaceId);
+      if (!cancelled) {
+        setInvestmentSnapshots([]);
+      }
       if (!cancelled && cachedWorkspace.cachedSnapshot) {
         setAccounts(cachedWorkspace.accounts);
         setTransactions(Array.isArray(cachedWorkspace.cachedSnapshot.transactions) ? (cachedWorkspace.cachedSnapshot.transactions as InvestmentTransaction[]) : []);
@@ -779,12 +820,16 @@ export default function InvestmentsPage() {
         }
 
         const nextAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
+        const nextInvestmentSnapshots = Array.isArray(payload.investmentSnapshots)
+          ? (payload.investmentSnapshots as InvestmentSnapshot[])
+          : [];
         const transactionPayload = transactionsResponse.ok ? await transactionsResponse.json() : null;
         const nextTransactions = Array.isArray(transactionPayload?.transactions)
           ? (transactionPayload.transactions as InvestmentTransaction[])
           : cachedWorkspace.cachedSnapshot?.transactions ?? [];
         setAccounts(nextAccounts);
         setTransactions(nextTransactions as InvestmentTransaction[]);
+        setInvestmentSnapshots(nextInvestmentSnapshots);
         persistAccountsWorkspaceCache(selectedWorkspaceId, {
           accounts: nextAccounts,
           accountRules: cachedWorkspace.cachedSnapshot?.accountRules ?? [],
@@ -865,6 +910,23 @@ export default function InvestmentsPage() {
 
   const portfolioSourceRows = useMemo<PortfolioDisplayRow[]>(() => {
     const rows: PortfolioDisplayRow[] = [];
+    const latestSnapshotByAccountId = new Map<string, InvestmentSnapshot>();
+    const latestSnapshotByInstitution = new Map<string, InvestmentSnapshot>();
+    const usedSnapshotIds = new Set<string>();
+
+    for (const snapshot of investmentSnapshots) {
+      const accountId = snapshot.account?.id;
+      if (accountId && !latestSnapshotByAccountId.has(accountId)) {
+        latestSnapshotByAccountId.set(accountId, snapshot);
+      }
+
+      const institution = normalizeInvestmentLabel(
+        snapshot.account?.institution ?? snapshot.documentImport?.institution
+      );
+      if (institution && !latestSnapshotByInstitution.has(institution)) {
+        latestSnapshotByInstitution.set(institution, snapshot);
+      }
+    }
 
     for (const account of investmentAccounts) {
       const matchingTransactions = investmentTransactions.filter((transaction) => transaction.accountId === account.id);
@@ -875,6 +937,71 @@ export default function InvestmentsPage() {
       const currentValue = parseNullableAmount(account.balance);
       const purchaseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
       const gainLoss = currentValue === null || purchaseValue === null ? null : currentValue - purchaseValue;
+      const matchingSnapshot =
+        latestSnapshotByAccountId.get(account.id) ??
+        (isGeneric && account.institution
+          ? latestSnapshotByInstitution.get(normalizeInvestmentLabel(account.institution))
+          : undefined);
+      const snapshotHoldings =
+        matchingSnapshot?.holdings.filter(
+          (holding) => !isInstitutionOnlySnapshotHolding(holding, matchingSnapshot, account)
+        ) ?? [];
+
+      if (matchingSnapshot && snapshotHoldings.length > 0) {
+        if (!usedSnapshotIds.has(matchingSnapshot.id)) {
+          usedSnapshotIds.add(matchingSnapshot.id);
+          for (const holding of snapshotHoldings) {
+            const holdingCurrentValue = parseNullableAmount(holding.currentValue ?? holding.marketValue);
+            const holdingPurchaseValue = parseNullableAmount(holding.costBasis);
+            const recordedGainLoss = parseNullableAmount(holding.gainLossValue);
+            const holdingGainLoss =
+              recordedGainLoss ??
+              (holdingCurrentValue !== null && holdingPurchaseValue !== null
+                ? holdingCurrentValue - holdingPurchaseValue
+                : null);
+            const classification = inferInvestmentClassification({
+              assetType: holding.assetType,
+              name: holding.assetName,
+              symbol: holding.assetSymbol,
+              institution: account.institution ?? matchingSnapshot.documentImport?.institution,
+            });
+
+            rows.push({
+              key: `holding:${holding.id}`,
+              accountId: matchingSnapshot.account?.id ?? account.id,
+              assetId: holding.id,
+              name: holding.assetName,
+              institution: account.institution ?? matchingSnapshot.documentImport?.institution ?? null,
+              subtype: classification.subtype,
+              symbol: holding.assetSymbol,
+              detail: holding.quantity,
+              currentValue: holdingCurrentValue,
+              purchaseValue: holdingPurchaseValue,
+              gainLoss: holdingGainLoss,
+              currency: holding.currency || matchingSnapshot.currency || account.currency,
+              classification,
+            });
+          }
+        }
+        continue;
+      }
+
+      const accountAssetIdentity = normalizeInvestmentLabel(account.investmentSymbol ?? account.name);
+      const duplicatesSnapshotHolding = rows.some(
+        (row) =>
+          normalizeInvestmentLabel(row.institution) === normalizeInvestmentLabel(account.institution) &&
+          normalizeInvestmentLabel(row.symbol ?? row.name) === accountAssetIdentity
+      );
+      if (duplicatesSnapshotHolding) {
+        continue;
+      }
+
+      // Imported provider-level shells are useful for account navigation but
+      // are not assets. Keep them out of Portfolio until individual holdings
+      // are available from preserved snapshot evidence.
+      if (isGeneric && account.source !== "manual") {
+        continue;
+      }
 
       if (!isGeneric || distinctAssetNames.length <= 1) {
         const preferredAssetName = distinctAssetNames[0] ?? account.name;
@@ -930,7 +1057,7 @@ export default function InvestmentsPage() {
     }
 
     return rows;
-  }, [investmentAccounts, investmentTransactions]);
+  }, [investmentAccounts, investmentSnapshots, investmentTransactions]);
 
   const visibleInvestmentAccounts = useMemo(() => {
     const search = normalizeInvestmentSearchText(investmentSearch);
@@ -1943,7 +2070,6 @@ export default function InvestmentsPage() {
                             />
                             <div>
                               <strong>{row.name}</strong>
-                              <span>{row.institution ?? ""}</span>
                             </div>
                           </button>
                         </div>

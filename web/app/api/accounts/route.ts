@@ -133,6 +133,101 @@ const serializeAccount = <T extends {
   updatedAt: account.updatedAt.toISOString(),
 });
 
+const loadInvestmentSnapshotsForWorkspace = async (workspaceId: string) => {
+  if (!(await hasCompatibleTable("InvestmentSnapshot")) || !(await hasCompatibleTable("InvestmentHolding"))) {
+    return [];
+  }
+
+  const snapshots = await prisma.investmentSnapshot.findMany({
+    where: {
+      workspaceId,
+      holdings: { some: {} },
+    },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    take: 200,
+    select: {
+      id: true,
+      snapshotDate: true,
+      portfolioName: true,
+      currency: true,
+      totalValue: true,
+      costBasis: true,
+      gainLossValue: true,
+      gainLossPercent: true,
+      confidence: true,
+      updatedAt: true,
+      account: {
+        select: {
+          id: true,
+          name: true,
+          institution: true,
+          type: true,
+        },
+      },
+      documentImport: {
+        select: {
+          id: true,
+          documentFamily: true,
+          documentSubtype: true,
+          institution: true,
+          accountName: true,
+          accountNumber: true,
+          currency: true,
+          pageCount: true,
+          confidence: true,
+          createdAt: true,
+        },
+      },
+      holdings: {
+        orderBy: [{ rowIndex: "asc" }, { createdAt: "asc" }],
+        select: {
+          id: true,
+          rowIndex: true,
+          assetName: true,
+          assetSymbol: true,
+          assetType: true,
+          quantity: true,
+          unitPrice: true,
+          costBasis: true,
+          marketValue: true,
+          currentValue: true,
+          gainLossValue: true,
+          gainLossPercent: true,
+          currency: true,
+          status: true,
+          confidence: true,
+        },
+      },
+    },
+  }).catch(() => []);
+
+  return snapshots.map((snapshot) => ({
+    ...snapshot,
+    snapshotDate: snapshot.snapshotDate?.toISOString() ?? null,
+    totalValue: snapshot.totalValue?.toString() ?? null,
+    costBasis: snapshot.costBasis?.toString() ?? null,
+    gainLossValue: snapshot.gainLossValue?.toString() ?? null,
+    gainLossPercent: snapshot.gainLossPercent?.toString() ?? null,
+    updatedAt: snapshot.updatedAt.toISOString(),
+    documentImport: snapshot.documentImport
+      ? {
+          ...snapshot.documentImport,
+          createdAt: snapshot.documentImport.createdAt.toISOString(),
+        }
+      : null,
+    holdings: snapshot.holdings.map((holding) => ({
+      ...holding,
+      quantity: holding.quantity?.toString() ?? null,
+      unitPrice: holding.unitPrice?.toString() ?? null,
+      costBasis: holding.costBasis?.toString() ?? null,
+      marketValue: holding.marketValue?.toString() ?? null,
+      currentValue: holding.currentValue?.toString() ?? null,
+      gainLossValue: holding.gainLossValue?.toString() ?? null,
+      gainLossPercent: holding.gainLossPercent?.toString() ?? null,
+    })),
+  }));
+};
+
 const normalizeAccountIdentityKey = (accountName?: string | null, institution?: string | null, accountNumber?: string | null) => {
   const digits = String(accountNumber ?? "").replace(/\D/g, "");
   const accountNumberKey = digits.length >= 4 ? digits.slice(-4) : "";
@@ -1548,7 +1643,7 @@ export async function GET(request: Request) {
       });
     }
 
-    const [accounts, accountRules, statementCheckpoints] = await Promise.all([
+    const [accounts, accountRules, statementCheckpoints, investmentSnapshots] = await Promise.all([
       prisma.account.findMany({
         where: { workspaceId },
         orderBy: { createdAt: "desc" },
@@ -1633,6 +1728,7 @@ export async function GET(request: Request) {
         sourceMetadata: checkpoint.sourceMetadata ?? null,
       }));
       })(),
+      loadInvestmentSnapshotsForWorkspace(workspaceId),
     ]);
     const accountIds = accounts.map((account) => account.id);
     const transactionCounts = accountIds.length
@@ -1964,6 +2060,7 @@ export async function GET(request: Request) {
       accounts: serializedResponseAccounts,
       accountRules,
       statementCheckpoints,
+      investmentSnapshots,
       maintenance: shouldCleanupImportedAccounts
         ? {
             removedStalePdaxBucketHoldings,
