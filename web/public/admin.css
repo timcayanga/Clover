@@ -21718,8 +21718,10 @@ input.transaction-inline-edit--amount::placeholder {
 
 .settings-hub__menu {
   position: sticky;
-  top: 24px;
+  top: 0;
+  align-self: start;
   display: grid;
+  align-content: start;
   gap: 0;
   padding: 10px;
   max-height: calc(100vh - 48px);
