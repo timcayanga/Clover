@@ -98,6 +98,7 @@ import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { inferInvestmentClassification } from "@/lib/investments";
 import { getLiveCryptoPhpPrices } from "@/lib/crypto-market-prices";
+import { buildImportedReceivableCommitmentCandidate } from "@/lib/imported-receivables";
 import { shouldLoadReceiptVisionAssets, shouldUseReceiptPreviewFastPath } from "@/lib/import-visual-recovery";
 import { isProtectedTransactionReviewStatus } from "@/lib/data-engine-safety";
 import { applyImportValidationToRows, validateParsedImportRows } from "@/lib/data-engine-validation";
@@ -12777,6 +12778,64 @@ export const confirmImportFile = async (
 
     // Keep checkpoint opening balances for reconciliation without synthesizing an
     // extra transaction row. Live imports stay aligned with the parser fixtures.
+  }
+
+  if (hasNetWorthSnapshotAccountGroups) {
+    for (const group of parsedAccountGroups) {
+      const groupAccount = accountByGroupKey.get(group.key);
+      if (!groupAccount || groupAccount.type !== "receivable") {
+        continue;
+      }
+
+      const receivable = buildImportedReceivableCommitmentCandidate(group.rows);
+      if (!receivable) {
+        continue;
+      }
+
+      const existingImportedReceivable = await tx.financialCommitment.findFirst({
+        where: {
+          workspaceId: String(importFile.workspaceId),
+          kind: "receivable",
+          accountId: groupAccount.id,
+          source: "account_inventory_import",
+        },
+        orderBy: { createdAt: "desc" },
+        select: { id: true },
+      });
+      const receivableData = {
+        title: receivable.title,
+        counterparty: null,
+        amount: receivable.amount.toFixed(2),
+        currency: receivable.currency,
+        dueDate: null,
+        recurrence: "once" as const,
+        nextDueDate: null,
+        notes: receivable.balanceAsOfDate
+          ? `Imported account balance as of ${receivable.balanceAsOfDate}.`
+          : "Imported account balance.",
+        accountId: groupAccount.id,
+        transactionId: null,
+        statementCheckpointId: statementCheckpoint?.id ?? null,
+        status: receivable.status,
+        source: "account_inventory_import",
+        confidence: receivable.confidence,
+      };
+
+      if (existingImportedReceivable) {
+        await tx.financialCommitment.update({
+          where: { id: existingImportedReceivable.id },
+          data: receivableData,
+        });
+      } else {
+        await tx.financialCommitment.create({
+          data: {
+            workspaceId: String(importFile.workspaceId),
+            kind: "receivable",
+            ...receivableData,
+          },
+        });
+      }
+    }
   }
 
   statementRow = parsedRows.find((row) => typeof row.accountName === "string" && row.accountName.trim()) ?? parsedRows[0] ?? null;

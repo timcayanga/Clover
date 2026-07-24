@@ -5,6 +5,7 @@ import { parseImportText, parseNetWorthSnapshotCsv } from "@/lib/import-parser";
 import { detectStatementMetadataFromText } from "@/lib/data-engine";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { normalizeImportedAccountKey } from "@/lib/imported-account-identity";
+import { buildImportedReceivableCommitmentCandidate } from "@/lib/imported-receivables";
 import { matchesImportedAccountIdentity, pruneImportedAccountPlaceholders } from "@/lib/workspace-cache";
 
 const csv = [
@@ -78,6 +79,20 @@ assert.equal(
   "A balance-only bank account is authoritative inventory, not a transient parser placeholder."
 );
 assert.equal(byName.get("Accounts Receivable")?.rawPayload?.accountType, "receivable");
+assert.deepEqual(
+  buildImportedReceivableCommitmentCandidate(
+    rows.filter((row) => row.accountName === "Accounts Receivable")
+  ),
+  {
+    title: "Accounts Receivable",
+    amount: 1190,
+    currency: "PHP",
+    balanceAsOfDate: "2026-03-24",
+    confidence: 100,
+    status: "active",
+  },
+  "An imported receivable balance should become a linked Recurring receivable without creating a transaction."
+);
 assert.equal(byName.has("PHP Total"), false, "Summary totals must not become accounts.");
 assert.equal(byName.has("Savings Total"), false, "Section totals must not become accounts.");
 assert.equal(byName.has("Liquid Cash"), false, "Liquid Cash is an aggregate total, not a separate account.");
@@ -263,6 +278,16 @@ const main = async () => {
     workerSource,
     /const explicitInventoryName =[\s\S]{0,350}accountSnapshotInventory[\s\S]{0,350}next\.name\.trim\(\)/,
     "Account inventories must preserve explicit labels instead of merging distinct accounts under a generic institution name."
+  );
+  assert.match(
+    workerSource,
+    /buildImportedReceivableCommitmentCandidate[\s\S]{0,2500}source: "account_inventory_import"/,
+    "Account-inventory receivables must be published to the Recurring page as traceable commitments."
+  );
+  assert.match(
+    workerSource,
+    /existingImportedReceivable[\s\S]{0,1800}financialCommitment\.update[\s\S]{0,1800}financialCommitment\.create/,
+    "Re-importing an account inventory must update its receivable commitment instead of duplicating it."
   );
   assert.match(
     workerSource,
