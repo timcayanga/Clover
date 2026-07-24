@@ -1294,7 +1294,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const canUseCommittedStatementResult =
         (importMode ?? "statement") === "statement" &&
         result.status === "done" &&
-        Number(result.confirmedTransactionsCount ?? result.imported ?? 0) > 0;
+        (Number(result.confirmedTransactionsCount ?? result.imported ?? 0) > 0 ||
+          Number(result.accountSummaries?.length ?? 0) > 0);
       const statusSnapshot = canUseCommittedStatementResult
         ? null
         : await loadImportStatusSnapshot(importId, {
@@ -1343,6 +1344,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           : Number(result.confirmedTransactionsCount ?? 0),
         Number(statusSnapshot?.confirmedTransactionsCount ?? 0)
       );
+      const committedAccountInventoryComplete =
+        result.status === "done" && visibleRows === 0 && accountSummaries.length > 0;
 
       return NextResponse.json({
         ok: true,
@@ -1361,8 +1364,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           (result.status === "done" ? result.imported : 0),
         insightSummary: result.insightSummary ?? null,
         accountBalance: result.accountBalance ?? null,
-        visibleImportComplete: statusSnapshot?.visibleImportComplete ?? visibleRows > 0,
-        finalizationInBackground: result.status === "done" && visibleRows > 0,
+        visibleImportComplete:
+          statusSnapshot?.visibleImportComplete ?? (visibleRows > 0 || committedAccountInventoryComplete),
+        finalizationInBackground:
+          result.status === "done" && visibleRows > 0 && !committedAccountInventoryComplete,
         receiptDocument: statusSnapshot?.receiptDocument ?? null,
         receiptTransaction: statusSnapshot?.receiptTransaction ?? null,
       });
@@ -2714,7 +2719,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         const canUseCommittedStatementResult =
           (importMode ?? "statement") === "statement" &&
           result.status === "done" &&
-          Number(result.confirmedTransactionsCount ?? result.imported ?? 0) > 0;
+          (Number(result.confirmedTransactionsCount ?? result.imported ?? 0) > 0 ||
+            Number(result.accountSummaries?.length ?? 0) > 0);
         const statusSnapshot = canUseCommittedStatementResult
           ? null
           : await loadImportStatusSnapshot(importId, {
@@ -2763,6 +2769,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             : Number(result.confirmedTransactionsCount ?? 0),
           Number(statusSnapshot?.confirmedTransactionsCount ?? 0)
         );
+        const committedAccountInventoryComplete =
+          result.status === "done" && visibleRows === 0 && accountSummaries.length > 0;
 
         return NextResponse.json({
           ok: true,
@@ -2781,8 +2789,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             (result.status === "done" ? result.imported : 0),
           insightSummary: result.insightSummary ?? null,
           accountBalance: result.accountBalance ?? null,
-          visibleImportComplete: statusSnapshot?.visibleImportComplete ?? visibleRows > 0,
-          finalizationInBackground: result.status === "done" && visibleRows > 0,
+          visibleImportComplete:
+            statusSnapshot?.visibleImportComplete ?? (visibleRows > 0 || committedAccountInventoryComplete),
+          finalizationInBackground:
+            result.status === "done" && visibleRows > 0 && !committedAccountInventoryComplete,
           receiptDocument: statusSnapshot?.receiptDocument ?? null,
           receiptTransaction: statusSnapshot?.receiptTransaction ?? null,
         });
@@ -2895,7 +2905,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const canUseCommittedStatementResult =
         (importMode ?? "statement") === "statement" &&
         result.status === "done" &&
-        Number(result.confirmedTransactionsCount ?? result.imported ?? 0) > 0;
+        (Number(result.confirmedTransactionsCount ?? result.imported ?? 0) > 0 ||
+          Number(result.accountSummaries?.length ?? 0) > 0);
       const statusSnapshot = canUseCommittedStatementResult
         ? null
         : await loadImportStatusSnapshot(importId, {
@@ -2917,6 +2928,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           : Number(result.confirmedTransactionsCount ?? 0),
         Number(statusSnapshot?.confirmedTransactionsCount ?? 0)
       );
+      const committedAccountInventoryComplete =
+        result.status === "done" && visibleRows === 0 && accountSummaries.length > 0;
 
       return NextResponse.json({
         ok: true,
@@ -2935,8 +2948,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           (result.status === "done" ? result.imported : 0),
         insightSummary: result.insightSummary ?? null,
         accountBalance: result.accountBalance ?? null,
-        visibleImportComplete: statusSnapshot?.visibleImportComplete ?? visibleRows > 0,
-        finalizationInBackground: result.status === "done" && visibleRows > 0,
+        visibleImportComplete:
+          statusSnapshot?.visibleImportComplete ?? (visibleRows > 0 || committedAccountInventoryComplete),
+        finalizationInBackground:
+          result.status === "done" && visibleRows > 0 && !committedAccountInventoryComplete,
         receiptDocument: statusSnapshot?.receiptDocument ?? null,
         receiptTransaction: statusSnapshot?.receiptTransaction ?? null,
       });

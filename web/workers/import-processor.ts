@@ -7492,8 +7492,129 @@ export const processImportFileText = async (
       take: 12,
     });
 
-    for (const sourceMatch of completedSourceMatches) {
-      const visibleRows = await countTransactionsByImportFileCompat(sourceMatch.id).catch(() => 0);
+    // Re-importing a corrected account-inventory CSV used to inspect and
+    // repair every historical match serially. With several prior test uploads,
+    // those network round trips could consume most of the import's latency
+    // before the deterministic parser even ran. The identical fingerprint is
+    // sufficient evidence that all of these rows belong to the same snapshot,
+    // so repair them in one bounded pass.
+    if (likelyNetWorthSnapshotCsv && completedSourceMatches.length > 0) {
+      const legacyImportFileIds = completedSourceMatches.map((sourceMatch) => sourceMatch.id);
+      const legacyInvestmentSnapshots = await prisma.investmentSnapshot
+        .findMany({
+          where: {
+            workspaceId: String(importFile.workspaceId),
+            documentImport: {
+              importFileId: { in: legacyImportFileIds },
+            },
+          },
+          select: {
+            id: true,
+            accountId: true,
+          },
+        })
+        .catch(() => []);
+      const legacyInvestmentSnapshotIds = legacyInvestmentSnapshots.map((snapshot) => snapshot.id);
+      const legacyConsolidatedAccountIds = Array.from(
+        new Set(
+          legacyInvestmentSnapshots
+            .map((snapshot) => snapshot.accountId)
+            .filter((candidate): candidate is string => Boolean(candidate))
+        )
+      );
+
+      await Promise.all([
+        prisma.transaction
+          .deleteMany({
+            where: {
+              deletedAt: null,
+              importFileId: { in: legacyImportFileIds },
+            },
+          })
+          .catch((error) => {
+            console.warn("[net-worth-csv] unable to remove legacy fabricated transaction rows", {
+              importFileId,
+              legacyImportFileIds,
+              error,
+            });
+          }),
+        // Some early imports only recorded the source import in rawPayload.
+        // Keep these repairs concurrent instead of placing one round trip per
+        // historical import on the visible path.
+        ...legacyImportFileIds.map((legacyImportFileId) =>
+          prisma.transaction
+            .deleteMany({
+              where: {
+                deletedAt: null,
+                rawPayload: {
+                  path: ["sourceImportFileId"],
+                  equals: legacyImportFileId,
+                },
+              },
+            })
+            .catch((error) => {
+              console.warn("[net-worth-csv] unable to remove legacy raw-payload transaction rows", {
+                importFileId,
+                legacyImportFileId,
+                error,
+              });
+            })
+        ),
+        legacyInvestmentSnapshotIds.length > 0
+          ? prisma.investmentSnapshot
+              .deleteMany({
+                where: {
+                  id: { in: legacyInvestmentSnapshotIds },
+                  workspaceId: String(importFile.workspaceId),
+                },
+              })
+              .catch((error) => {
+                console.warn("[net-worth-csv] unable to remove legacy consolidated investment snapshots", {
+                  importFileId,
+                  legacyImportFileIds,
+                  legacyInvestmentSnapshotIds,
+                  error,
+                });
+              })
+          : Promise.resolve(),
+      ]);
+
+      if (legacyConsolidatedAccountIds.length > 0) {
+        await prisma.account
+          .deleteMany({
+            where: {
+              id: { in: legacyConsolidatedAccountIds },
+              workspaceId: String(importFile.workspaceId),
+              source: "upload",
+              type: "investment",
+              transactions: { none: {} },
+              investmentSnapshots: { none: {} },
+              investmentHoldings: { none: {} },
+              investmentPurchases: { none: {} },
+              investmentDividends: { none: {} },
+            },
+          })
+          .catch((error) => {
+            console.warn("[net-worth-csv] unable to remove legacy consolidated investment accounts", {
+              importFileId,
+              legacyImportFileIds,
+              legacyConsolidatedAccountIds,
+              error,
+            });
+          });
+      }
+    }
+
+    const completedSourceMatchesWithVisibleRows = likelyNetWorthSnapshotCsv
+      ? []
+      : await Promise.all(
+          completedSourceMatches.map(async (sourceMatch) => ({
+            sourceMatch,
+            visibleRows: await countTransactionsByImportFileCompat(sourceMatch.id).catch(() => 0),
+          }))
+        );
+
+    for (const { sourceMatch, visibleRows } of completedSourceMatchesWithVisibleRows) {
       // Older builds misread net-worth snapshot matrices as transaction
       // ledgers. Do not let those fabricated rows block a corrected,
       // snapshot-only reimport with the same source fingerprint.

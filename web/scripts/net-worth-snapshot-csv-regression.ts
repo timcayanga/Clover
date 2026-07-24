@@ -112,6 +112,16 @@ const main = async () => {
   );
   assert.match(
     workerSource,
+    /const legacyImportFileIds = completedSourceMatches\.map/,
+    "Repeated inventory imports must repair historical matches in one bounded pass."
+  );
+  assert.match(
+    workerSource,
+    /completedSourceMatchesWithVisibleRows = likelyNetWorthSnapshotCsv\s*\?\s*\[\]/,
+    "A deterministic account inventory must not issue one transaction-count query per prior upload."
+  );
+  assert.match(
+    workerSource,
     /legacyInvestmentSnapshots/,
     "Corrected reimports must remove the legacy consolidated investment snapshot."
   );
@@ -148,6 +158,16 @@ const main = async () => {
     /const rowAccountType = readRowAccountType\(row\)/,
     "Optimistic multi-account previews must keep each snapshot account type."
   );
+  assert.match(
+    modalSource,
+    /const isAccountInventorySnapshot =/,
+    "The client must recognize a zero-transaction multi-account inventory response."
+  );
+  assert.match(
+    modalSource,
+    /await Promise\.resolve\(onImported\(combinedSummary\)\)/,
+    "The client must publish a completed account inventory atomically."
+  );
   const accountsPageSource = await readFile(join(process.cwd(), "app/accounts/page.tsx"), "utf8");
   assert.match(
     accountsPageSource,
@@ -159,6 +179,11 @@ const main = async () => {
     processRouteSource,
     /mergeImportResponseAccountSummaries\(\s*result\.accountSummaries,\s*statusSnapshot\?\.accountSummaries\s*\)/,
     "A partial status snapshot must not replace a richer confirmation result."
+  );
+  assert.match(
+    processRouteSource,
+    /visibleRows > 0 \|\| committedAccountInventoryComplete/,
+    "An account-only import must be visibly complete even when it creates no transactions."
   );
   const statusSnapshotSource = await readFile(join(process.cwd(), "lib/import-status-snapshot.ts"), "utf8");
   assert.match(

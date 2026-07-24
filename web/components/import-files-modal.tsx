@@ -5613,6 +5613,10 @@ export function ImportFilesModal({
           : null;
       const serverAccountSummaries = normalizeServerAccountSummaries(processPayload?.accountSummaries);
       if (serverAccountSummaries.length > 1) {
+        const isAccountInventorySnapshot =
+          Boolean(processPayload?.visibleImportComplete) &&
+          Number(processPayload?.confirmedTransactionsCount ?? processPayload?.imported ?? 0) === 0 &&
+          serverAccountSummaries.every((summary) => Number(summary.rowsImported ?? 0) === 0);
         const confirmedInsightSummary =
           processPayload?.insightSummary ??
           {
@@ -5634,16 +5638,18 @@ export function ImportFilesModal({
             statementIdentity?.accountType ??
             statementAccountType ??
             inferAccountTypeFromStatement(confirmedInstitution, confirmedAccountName, "bank");
-          const confirmedPreviewTransactions = await loadOrGetKnownPreviewTransactions({
-            workspaceId,
-            importFileId,
-            accountId: accountSummary.accountId,
-            optimisticAccountId: item.optimisticAccountId ?? null,
-            accountName: confirmedAccountName ?? null,
-            institution: confirmedInstitution,
-            accountNumber: accountSummary.accountNumber,
-            accountType: confirmedAccountType,
-          });
+          const confirmedPreviewTransactions = isAccountInventorySnapshot
+            ? []
+            : await loadOrGetKnownPreviewTransactions({
+                workspaceId,
+                importFileId,
+                accountId: accountSummary.accountId,
+                optimisticAccountId: item.optimisticAccountId ?? null,
+                accountName: confirmedAccountName ?? null,
+                institution: confirmedInstitution,
+                accountNumber: accountSummary.accountNumber,
+                accountType: confirmedAccountType,
+              });
           const settledRows = Math.max(Number(accountSummary.rowsImported ?? 0), confirmedPreviewTransactions.length);
           const accountUploadSummary = buildResolvedOptimisticUploadSummary({
             accounts,
@@ -5666,10 +5672,26 @@ export function ImportFilesModal({
 
           seedImportedWorkspaceCaches(workspaceId, accountUploadSummary);
           emittedSummaries.push(accountUploadSummary);
-          await Promise.resolve(onImported(accountUploadSummary));
+          if (!isAccountInventorySnapshot) {
+            await Promise.resolve(onImported(accountUploadSummary));
+          }
         }
 
-        const combinedSummary = combineUploadInsightsSummaries(emittedSummaries);
+        const combinedSummaryBase = combineUploadInsightsSummaries(emittedSummaries);
+        const combinedSummary =
+          combinedSummaryBase && isAccountInventorySnapshot
+            ? {
+                ...combinedSummaryBase,
+                fileName: item.file.name,
+              }
+            : combinedSummaryBase;
+        if (combinedSummary && isAccountInventorySnapshot) {
+          // Publish the entire account inventory in one state transition. A
+          // per-account callback caused React revalidation to race the next
+          // callback, which made the Accounts page briefly—or sometimes
+          // persistently—show only the first institution.
+          await Promise.resolve(onImported(combinedSummary));
+        }
         const settledRows = emittedSummaries.reduce((total, summary) => total + Number(summary.rowsImported ?? 0), 0);
         updateItem(itemId, {
           status: "done",
