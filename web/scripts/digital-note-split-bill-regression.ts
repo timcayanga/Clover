@@ -80,6 +80,11 @@ assert.match(
   "Imported first-name columns must match the Clover account owner's full name in balance summaries."
 );
 assert.match(
+  readProjectFile("lib/split-bill.ts"),
+  /reconciliationDifference[\s\S]*payerParticipantId[\s\S]*toFixed\(2\)/,
+  "A one-peso source-table reconciliation difference should fall to the payer for consistent settlement totals."
+);
+assert.match(
   workspaceSource,
   /<CloverShell[\s\S]*active="split-bill"[\s\S]*title="Split Bills"/,
   "The Split Bills route must highlight Split Bills, not Circles."

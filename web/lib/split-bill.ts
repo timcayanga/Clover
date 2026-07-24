@@ -2829,7 +2829,7 @@ const getImportedParticipantShareSettlementItems = (
   const participantIdByName = new Map(
     participants.map((participant) => [participant.name.trim().toLowerCase(), participant.id] as const)
   );
-  const allocations = rawPayload.participantShares.flatMap((entry) => {
+  const sourceAllocations = rawPayload.participantShares.flatMap((entry) => {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
       return [];
     }
@@ -2844,6 +2844,29 @@ const getImportedParticipantShareSettlementItems = (
       ? [{ participantId, value: value.toFixed(2) }]
       : [];
   });
+  const sourceTotal = sourceAllocations.reduce(
+    (sum, allocation) => sum + (parseAmountValue(allocation.value) ?? 0),
+    0
+  );
+  const declaredTotal =
+    typeof rawPayload.declaredTotal === "string" || typeof rawPayload.declaredTotal === "number"
+      ? parseAmountValue(rawPayload.declaredTotal)
+      : null;
+  const payerName = typeof rawPayload.payerName === "string" ? rawPayload.payerName.trim().toLowerCase() : "";
+  const payerParticipantId = payerName ? participantIdByName.get(payerName) : null;
+  const reconciliationDifference =
+    declaredTotal !== null ? Number((declaredTotal - sourceTotal).toFixed(2)) : 0;
+  const allocations =
+    payerParticipantId && Math.abs(reconciliationDifference) > 0 && Math.abs(reconciliationDifference) <= 1
+      ? sourceAllocations.map((allocation) =>
+          allocation.participantId === payerParticipantId
+            ? {
+                ...allocation,
+                value: ((parseAmountValue(allocation.value) ?? 0) + reconciliationDifference).toFixed(2),
+              }
+            : allocation
+        )
+      : sourceAllocations;
   const total = allocations.reduce((sum, allocation) => sum + (parseAmountValue(allocation.value) ?? 0), 0);
   return allocations.length > 0
     ? [{
