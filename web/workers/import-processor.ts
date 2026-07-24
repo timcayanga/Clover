@@ -11898,13 +11898,26 @@ export const confirmImportFile = async (
         );
       })
     );
+  const hasStructuredDelimitedAccountGroups =
+    nonDefaultParsedAccountGroups.length > 1 &&
+    nonDefaultParsedAccountGroups.every((group) =>
+      group.rows.every((row) => {
+        const payload = row.rawPayload;
+        const source =
+          payload && typeof payload === "object" && !Array.isArray(payload)
+            ? (payload as Record<string, unknown>).source
+            : null;
+        return source === "structured_transaction_csv" || source === "account_snapshot_csv";
+      })
+    );
   const multiAccountImport =
     (nonDefaultParsedAccountGroups.length > 1 &&
       parsedAccountGroups.some((group) => group.rows.some((row) => Boolean(readRowAccountNumber(row))))) ||
     hasMultipleWiseWalletAccountGroups ||
     hasMultipleInvestmentAccountGroups ||
     hasDeterministicPdaxPortfolioGroups ||
-    hasNetWorthSnapshotAccountGroups;
+    hasNetWorthSnapshotAccountGroups ||
+    hasStructuredDelimitedAccountGroups;
   const notesCashAccountId =
     importMode === "notes"
       ? await resolveWorkspaceCashAccountId(
@@ -12524,6 +12537,8 @@ export const confirmImportFile = async (
     multiAccountImport && parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "pdax_portfolio_screenshot");
   const shouldPersistNetWorthSnapshotGroupBalances =
     multiAccountImport && parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "net_worth_snapshot_csv");
+  const shouldPersistAccountSnapshotCsvGroupBalances =
+    multiAccountImport && parsedRows.every((row) => (row.rawPayload as Record<string, unknown> | null)?.source === "account_snapshot_csv");
   if (
     shouldRunDestructiveMultiAccountCleanup({
       multiAccountImport,
@@ -12531,7 +12546,8 @@ export const confirmImportFile = async (
       parsedRows,
     }) ||
     shouldPersistDeterministicPdaxGroupBalances ||
-    shouldPersistNetWorthSnapshotGroupBalances
+    shouldPersistNetWorthSnapshotGroupBalances ||
+    shouldPersistAccountSnapshotCsvGroupBalances
   ) {
     for (const group of parsedAccountGroups) {
       const groupAccount = accountByGroupKey.get(group.key);

@@ -27,6 +27,7 @@
     "qa:bpi-import-worker-enrichment": "tsx scripts/bpi-import-worker-enrichment-regression.ts",
     "qa:cimb-multi-account": "tsx scripts/cimb-multi-account-import-regression.ts",
     "qa:net-worth-csv": "tsx scripts/net-worth-snapshot-csv-regression.ts",
+    "qa:structured-csv": "tsx scripts/structured-csv-parser-regression.ts",
     "qa:chinabank-deep": "tsx scripts/chinabank-deep-qa.ts",
     "qa:chinabank-process": "tsx scripts/chinabank-process-route-regression.ts",
     "qa:ucpb-process": "tsx scripts/ucpb-process-route-regression.ts",

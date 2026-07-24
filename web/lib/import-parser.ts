@@ -1,7 +1,7 @@
 import type { TransactionType } from "@prisma/client";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 import { getSharedMerchantCategoryHint, getStrongMerchantCategoryHint } from "@/lib/merchant-category-hints";
-import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
+import { inferBankNameFromText, normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import {
   isLikelyScreenshotDateFragment,
   isLikelyScreenshotUiArtifactText,
@@ -523,6 +523,432 @@ export const parseNetWorthSnapshotCsv = (
       } satisfies ParsedImportRow,
     ];
   });
+};
+
+type StructuredDelimitedTable = {
+  delimiter: string;
+  headerIndex: number;
+  headers: string[];
+  canonicalHeaders: string[];
+  rows: string[][];
+};
+
+const structuredDelimitedFilePattern = /\.(?:csv|tsv)$/i;
+const structuredDelimitedMimePattern = /(?:csv|tab-separated-values)/i;
+
+const isStructuredDelimitedFile = (fileName?: string | null, fileType?: string | null) =>
+  structuredDelimitedFilePattern.test(String(fileName ?? "")) ||
+  structuredDelimitedMimePattern.test(String(fileType ?? ""));
+
+const parseDelimitedRows = (input: string, delimiter: string) => {
+  const text = input.replace(/^\uFEFF/, "").replace(/\u0000/g, "");
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === '"') {
+      if (inQuotes && text[index + 1] === '"') {
+        current += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (char === delimiter && !inQuotes) {
+      row.push(current.trim());
+      current = "";
+      continue;
+    }
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && text[index + 1] === "\n") index += 1;
+      row.push(current.trim());
+      if (row.some((cell) => cell.length > 0)) rows.push(row);
+      row = [];
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+
+  row.push(current.trim());
+  if (row.some((cell) => cell.length > 0)) rows.push(row);
+  return rows;
+};
+
+const detectStructuredDelimiter = (text: string, fileName = "") => {
+  const separatorDirective = text.replace(/^\uFEFF/, "").match(/^\s*sep=(.)\s*(?:\r?\n|$)/i)?.[1];
+  if (separatorDirective) return separatorDirective;
+  if (/\.tsv$/i.test(fileName)) return "\t";
+
+  const candidates = [",", "\t", ";", "|"];
+  const sample = text.split(/\r?\n/).filter((line) => line.trim()).slice(0, 12).join("\n");
+  let best = { delimiter: ",", score: -1 };
+  for (const delimiter of candidates) {
+    const widths = parseDelimitedRows(sample, delimiter)
+      .map((row) => row.length)
+      .filter((width) => width > 1);
+    if (widths.length === 0) continue;
+    const frequency = new Map<number, number>();
+    widths.forEach((width) => frequency.set(width, (frequency.get(width) ?? 0) + 1));
+    const [modeWidth, modeCount] =
+      Array.from(frequency.entries()).sort((left, right) => right[1] - left[1] || right[0] - left[0])[0] ?? [0, 0];
+    const consistency = modeCount / widths.length;
+    const score = consistency * 100 + Math.min(modeWidth, 30) + widths.length;
+    if (score > best.score) best = { delimiter, score };
+  }
+  return best.delimiter;
+};
+
+const normalizeStructuredHeader = (value: string) =>
+  normalizeWhitespace(value)
+    .replace(/^\uFEFF/, "")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase();
+
+const canonicalStructuredHeader = (value: string) => {
+  const header = normalizeStructuredHeader(value);
+  if (!header) return "";
+  if (/^(?:date|date_time|datetime|transaction_date|transaction_datetime|booking_date|value_date|effective_date|timestamp|time)$/.test(header)) return "date";
+  if (/^(?:posted|posted_at|posted_date|posting_date|posting_datetime)$/.test(header)) return "posted_date";
+  if (/^(?:transaction|description|transaction_description|details|transaction_details|narrative|particulars|memo|note|notes)$/.test(header)) return "description";
+  if (/^(?:merchant|merchant_name|payee|counterparty|beneficiary|name|label)$/.test(header)) return "merchant";
+  if (/^(?:amount|transaction_amount|net_amount|gross_amount|value|local_amount)$/.test(header)) return "amount";
+  if (/^(?:debit|debit_amount|withdrawal|withdrawal_amount|withdrawals|money_out|paid_out|outflow|charge)$/.test(header)) return "debit";
+  if (/^(?:credit|credit_amount|deposit|deposit_amount|deposits|money_in|paid_in|inflow)$/.test(header)) return "credit";
+  if (/^(?:balance|running_balance|available_balance|closing_balance|ending_balance)$/.test(header)) return "balance";
+  if (/^(?:currency|currency_code|ccy|curr)$/.test(header)) return "currency";
+  if (/^(?:type|transaction_type|direction|debit_credit|dr_cr|flow)$/.test(header)) return "type";
+  if (/^(?:category|category_name|classification)$/.test(header)) return "category";
+  if (/^(?:account|account_name|account_label|wallet|portfolio)$/.test(header)) return "account_name";
+  if (/^(?:account_number|account_no|account_id|iban|card_number|card_no)$/.test(header)) return "account_number";
+  if (/^(?:institution|bank|bank_name|provider|financial_institution)$/.test(header)) return "institution";
+  if (/^(?:account_type|product_type)$/.test(header)) return "account_type";
+  if (/^(?:reference|reference_number|reference_no|transaction_id|id|check_number|cheque_number)$/.test(header)) return "reference";
+  if (/^(?:as_of|as_of_date|snapshot_date|balance_date)$/.test(header)) return "snapshot_date";
+  return header;
+};
+
+const scoreStructuredHeaderRow = (headers: string[]) => {
+  const canonical = new Set(headers.map(canonicalStructuredHeader));
+  const hasDate = canonical.has("date") || canonical.has("posted_date");
+  const hasTransactionAmount = canonical.has("amount") || canonical.has("debit") || canonical.has("credit");
+  const hasDescription = canonical.has("description") || canonical.has("merchant");
+  const transactionScore = (hasDate ? 5 : 0) + (hasTransactionAmount ? 5 : 0) + (hasDescription ? 3 : 0) +
+    (canonical.has("currency") ? 1 : 0) + (canonical.has("type") ? 1 : 0) + (canonical.has("balance") ? 1 : 0);
+  const snapshotScore =
+    (canonical.has("account_name") ? 5 : 0) +
+    (canonical.has("balance") ? 5 : 0) +
+    (canonical.has("institution") ? 2 : 0) +
+    (canonical.has("currency") ? 1 : 0) +
+    (canonical.has("account_type") ? 1 : 0) +
+    (canonical.has("snapshot_date") || hasDate ? 1 : 0);
+  return { transactionScore, snapshotScore, hasDate, hasTransactionAmount, hasDescription };
+};
+
+const readStructuredDelimitedTable = (
+  text: string,
+  fileName: string,
+  fileType: string
+): StructuredDelimitedTable | null => {
+  if (!isStructuredDelimitedFile(fileName, fileType)) return null;
+  const delimiter = detectStructuredDelimiter(text, fileName);
+  const withoutDirective = text.replace(/^\uFEFF?\s*sep=.\s*\r?\n/i, "");
+  const rows = parseDelimitedRows(withoutDirective, delimiter);
+  if (rows.length < 2) return null;
+
+  const candidates = rows.slice(0, 12).map((headers, headerIndex) => ({
+    headerIndex,
+    headers,
+    ...scoreStructuredHeaderRow(headers),
+  }));
+  const best = candidates.sort(
+    (left, right) =>
+      Math.max(right.transactionScore, right.snapshotScore) - Math.max(left.transactionScore, left.snapshotScore) ||
+      left.headerIndex - right.headerIndex
+  )[0];
+  if (!best || Math.max(best.transactionScore, best.snapshotScore) < 5) return null;
+
+  const canonicalHeaders = best.headers.map(canonicalStructuredHeader);
+  return {
+    delimiter,
+    headerIndex: best.headerIndex,
+    headers: best.headers,
+    canonicalHeaders,
+    rows: rows.slice(best.headerIndex + 1),
+  };
+};
+
+const readStructuredCell = (table: StructuredDelimitedTable, row: string[], key: string) => {
+  const index = table.canonicalHeaders.indexOf(key);
+  return index >= 0 ? row[index] ?? "" : "";
+};
+
+const parseStructuredDate = (value?: string | null, countryCode?: string | null) => {
+  const normalized = normalizeWhitespace(String(value ?? ""));
+  if (!normalized) return null;
+  if (/^\d{5}(?:\.\d+)?$/.test(normalized)) {
+    const serial = Number(normalized);
+    if (serial >= 20_000 && serial <= 80_000) {
+      return new Date(Date.UTC(1899, 11, 30) + serial * 86_400_000);
+    }
+  }
+  return parseRegionalDateValue(normalized, countryCode ?? null) ?? parseDateValue(normalized);
+};
+
+const normalizeStructuredAccountType = (value?: string | null): ImportedAccountType | null => {
+  const normalized = normalizeStructuredHeader(String(value ?? ""));
+  const supported = new Set<ImportedAccountType>([
+    "bank",
+    "wallet",
+    "credit_card",
+    "cash",
+    "investment",
+    "loan",
+    "mortgage",
+    "line_of_credit",
+    "receivable",
+    "payable",
+    "bnpl",
+    "prepaid",
+    "insurance",
+    "other",
+  ]);
+  if (supported.has(normalized as ImportedAccountType)) return normalized as ImportedAccountType;
+  if (/credit.*card|card/.test(normalized)) return "credit_card";
+  if (/broker|portfolio|stock|crypto|fund|investment/.test(normalized)) return "investment";
+  if (/e_?wallet|wallet/.test(normalized)) return "wallet";
+  if (/checking|savings|deposit/.test(normalized)) return "bank";
+  return null;
+};
+
+const inferStructuredInstitution = (value?: string | null) => {
+  const inferred = inferBankNameFromText(value);
+  return inferred && inferred !== "Unknown" ? inferred : null;
+};
+
+const structuredDirectionType = (
+  rawType: string,
+  description: string,
+  amountText: string,
+  amount: number,
+  accountType: ImportedAccountType | null
+): TransactionType => {
+  const normalized = normalizeWhitespace(`${rawType} ${description}`).toLowerCase();
+  if (/\b(?:credit|cr|income|deposit|inflow|money in|paid in|received|refund|reversal|cashback|salary|payroll)\b/.test(normalized)) {
+    return "income";
+  }
+  if (/\b(?:debit|dr|expense|withdrawal|outflow|money out|paid out|purchase|payment|fee|charge)\b/.test(normalized)) {
+    return "expense";
+  }
+  if (/\btransfer\b/.test(normalized)) {
+    if (/\b(?:to|out|sent|send|withdrawal)\b/.test(normalized)) return "expense";
+    if (/\b(?:from|in|received|receive|deposit)\b/.test(normalized)) return "income";
+    return "transfer";
+  }
+  if (/^\s*-/.test(amountText) || amount < 0) return "expense";
+  if (/^\s*\+/.test(amountText)) return "income";
+  if (accountType === "credit_card") return "expense";
+  if (/\b(?:salary|payroll|interest earned|dividend|refund|cashback)\b/.test(description.toLowerCase())) return "income";
+  return "expense";
+};
+
+export const parseStructuredTransactionCsv = (
+  text: string,
+  fileName: string,
+  fileType: string,
+  context: ImportParseContext = {}
+): ParsedImportRow[] | null => {
+  const table = readStructuredDelimitedTable(text, fileName, fileType);
+  if (!table) return null;
+  const headerScore = scoreStructuredHeaderRow(table.headers);
+  if (!headerScore.hasDate || !headerScore.hasTransactionAmount || !headerScore.hasDescription || headerScore.transactionScore < 13) {
+    return null;
+  }
+
+  const contextCorpus = resolveTransactionContext({ institution: context.institution, accountName: context.accountName });
+  const rows: ParsedImportRow[] = [];
+  table.rows.forEach((sourceRow, sourceRowIndex) => {
+    const rawDate = readStructuredCell(table, sourceRow, "date") || readStructuredCell(table, sourceRow, "posted_date");
+    const parsedDate = parseStructuredDate(rawDate, contextCorpus.countryCode);
+    const description = normalizeWhitespace(
+      readStructuredCell(table, sourceRow, "description") ||
+      readStructuredCell(table, sourceRow, "merchant") ||
+      readStructuredCell(table, sourceRow, "reference")
+    );
+    if (!parsedDate || !description || /^(?:total|subtotal|opening balance|closing balance|ending balance)$/i.test(description)) return;
+
+    const debitText = readStructuredCell(table, sourceRow, "debit");
+    const creditText = readStructuredCell(table, sourceRow, "credit");
+    const amountText = readStructuredCell(table, sourceRow, "amount");
+    const debit = parseMoney(debitText);
+    const credit = parseMoney(creditText);
+    const signedAmount = parseMoney(amountText);
+    const hasDebit = debit !== null && debit !== 0;
+    const hasCredit = credit !== null && credit !== 0;
+    if ((hasDebit && hasCredit) || (!hasDebit && !hasCredit && signedAmount === null)) return;
+
+    const accountName = normalizeWhitespace(readStructuredCell(table, sourceRow, "account_name") || context.accountName || "");
+    const accountNumber = normalizeWhitespace(readStructuredCell(table, sourceRow, "account_number") || context.accountNumber || "");
+    const institutionRaw = normalizeWhitespace(readStructuredCell(table, sourceRow, "institution") || context.institution || "");
+    const institution = sanitizeBankNameLabel(
+      institutionRaw || inferStructuredInstitution(accountName) || context.institution || null
+    );
+    const accountType =
+      normalizeStructuredAccountType(readStructuredCell(table, sourceRow, "account_type")) ??
+      inferAccountTypeFromStatement(institution, accountName, "bank");
+    const amountValue = hasDebit ? Math.abs(debit) : hasCredit ? Math.abs(credit) : Math.abs(signedAmount ?? 0);
+    if (!Number.isFinite(amountValue) || amountValue <= 0) return;
+
+    const rawType = hasDebit ? "debit" : hasCredit ? "credit" : readStructuredCell(table, sourceRow, "type");
+    const type = structuredDirectionType(rawType, description, amountText, signedAmount ?? amountValue, accountType);
+    const merchantRaw = normalizeWhitespace(readStructuredCell(table, sourceRow, "merchant") || description);
+    const currencyText = normalizeWhitespace(readStructuredCell(table, sourceRow, "currency"));
+    const currency =
+      normalizeInstitutionCurrency(
+        institution,
+        currencyText || detectCurrencyFromText(`${amountText} ${debitText} ${creditText} ${table.headers.join(" ")}`)
+      ) ?? null;
+    const runningBalance = parseMoney(readStructuredCell(table, sourceRow, "balance"));
+    const categoryName =
+      normalizeWhitespace(readStructuredCell(table, sourceRow, "category")) ||
+      guessCategoryName(`${merchantRaw} ${description}`, type);
+
+    rows.push({
+      date: parsedDate.toISOString().slice(0, 10),
+      amount: amountValue.toFixed(2),
+      currency,
+      merchantRaw: humanizeMerchantText(merchantRaw),
+      merchantClean: summarizeMerchantText(merchantRaw, institution),
+      description,
+      categoryName,
+      accountName: accountName || undefined,
+      accountNumber: accountNumber || undefined,
+      institution: institution ?? undefined,
+      type,
+      confidence: currency ? 96 : 92,
+      parserConfidence: 98,
+      categoryConfidence: readStructuredCell(table, sourceRow, "category") ? 100 : 72,
+      rawPayload: {
+        source: "structured_transaction_csv",
+        sourceRowIndex: table.headerIndex + sourceRowIndex + 2,
+        delimiter: table.delimiter === "\t" ? "tab" : table.delimiter,
+        originalHeaders: table.headers,
+        debit,
+        credit,
+        signedAmount,
+        balance: runningBalance,
+        accountName: accountName || null,
+        accountNumber: accountNumber || null,
+        institutionRaw: institutionRaw || institution,
+        accountType,
+        accountCurrency: currency,
+        reference: readStructuredCell(table, sourceRow, "reference") || null,
+      },
+    });
+  });
+
+  return rows;
+};
+
+export const parseGenericAccountSnapshotCsv = (
+  text: string,
+  fileName: string,
+  fileType: string,
+  context: ImportParseContext = {}
+): ParsedImportRow[] | null => {
+  const table = readStructuredDelimitedTable(text, fileName, fileType);
+  if (!table) return null;
+  const canonical = new Set(table.canonicalHeaders);
+  const headerScore = scoreStructuredHeaderRow(table.headers);
+  if (
+    headerScore.snapshotScore < 10 ||
+    !canonical.has("account_name") ||
+    !canonical.has("balance") ||
+    canonical.has("amount") ||
+    canonical.has("debit") ||
+    canonical.has("credit")
+  ) {
+    return null;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = table.rows.flatMap((sourceRow, sourceRowIndex) => {
+    const accountName = normalizeWhitespace(readStructuredCell(table, sourceRow, "account_name"));
+    const balance = parseMoney(readStructuredCell(table, sourceRow, "balance"));
+    if (!accountName || balance === null || /^total$/i.test(accountName)) return [];
+
+    const institutionRaw = normalizeWhitespace(readStructuredCell(table, sourceRow, "institution") || context.institution || "");
+    const institution = sanitizeBankNameLabel(institutionRaw || inferStructuredInstitution(accountName) || null);
+    const accountType =
+      normalizeStructuredAccountType(readStructuredCell(table, sourceRow, "account_type")) ??
+      inferAccountTypeFromStatement(institution, accountName, "bank");
+    const currency =
+      normalizeInstitutionCurrency(
+        institution,
+        readStructuredCell(table, sourceRow, "currency") ||
+          detectCurrencyFromText(`${readStructuredCell(table, sourceRow, "balance")} ${table.headers.join(" ")}`)
+      ) ?? "PHP";
+    const snapshotDate =
+      parseStructuredDate(
+        readStructuredCell(table, sourceRow, "snapshot_date") || readStructuredCell(table, sourceRow, "date"),
+        resolveTransactionContext({ institution, accountName }).countryCode
+      )?.toISOString().slice(0, 10) ?? today;
+    const accountNumber = normalizeWhitespace(readStructuredCell(table, sourceRow, "account_number"));
+
+    return [
+      {
+        date: snapshotDate,
+        amount: "0",
+        currency,
+        merchantRaw: accountName,
+        merchantClean: accountName,
+        description: `${accountName} balance as of ${snapshotDate}`,
+        accountName,
+        accountNumber: accountNumber || undefined,
+        institution: institution ?? undefined,
+        type: "income" as const,
+        confidence: 98,
+        parserConfidence: 100,
+        categoryConfidence: 100,
+        rawPayload: {
+          kind: "account_snapshot_marker",
+          source: "account_snapshot_csv",
+          documentType: "account_detail",
+          sourceRowIndex: table.headerIndex + sourceRowIndex + 2,
+          balance,
+          accountName,
+          accountNumber: accountNumber || null,
+          institutionRaw: institutionRaw || institution,
+          accountType,
+          accountCurrency: currency,
+          snapshotDate,
+        },
+      } satisfies ParsedImportRow,
+    ];
+  });
+
+  return rows;
+};
+
+const parseStructuredDelimitedImport = (
+  text: string,
+  fileName: string,
+  fileType: string,
+  context: ImportParseContext
+) => {
+  if (!isStructuredDelimitedFile(fileName, fileType)) return null;
+  const table = readStructuredDelimitedTable(text, fileName, fileType);
+  if (!table) return [];
+  const transactionRows = parseStructuredTransactionCsv(text, fileName, fileType, context);
+  if (transactionRows !== null) return transactionRows;
+  const snapshotRows = parseGenericAccountSnapshotCsv(text, fileName, fileType, context);
+  return snapshotRows ?? [];
 };
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -22056,6 +22482,10 @@ export const parseImportTextGenericOnly = (
   if (netWorthSnapshotRows) {
     return netWorthSnapshotRows;
   }
+  const structuredDelimitedRows = parseStructuredDelimitedImport(text, fileName, fileType, context);
+  if (structuredDelimitedRows) {
+    return structuredDelimitedRows;
+  }
 
   const hsbcParsed = parseHsbcScreenshotImportText(text, fileName);
   if (hsbcParsed && hsbcParsed.rows.length > 0) {
@@ -23759,6 +24189,10 @@ export const parseImportText = (
   const netWorthSnapshotRows = parseNetWorthSnapshotCsv(text, fileName, fileType);
   if (netWorthSnapshotRows) {
     return netWorthSnapshotRows;
+  }
+  const structuredDelimitedRows = parseStructuredDelimitedImport(text, fileName, fileType, context);
+  if (structuredDelimitedRows) {
+    return structuredDelimitedRows;
   }
 
   const wisePdfStatement = parseWisePdfStatement(text);
