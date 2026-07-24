@@ -253,21 +253,13 @@ const formatTransactionAccountDisplayName = (
   return accountLabel;
 };
 
-const formatEditableSignedAmount = (transaction: { amount: string; type: "income" | "expense" | "transfer" }, effectiveType: "income" | "expense" | "transfer") => {
+const formatEditableAmount = (transaction: { amount: string }) => {
   const amount = Math.abs(Number(transaction.amount));
   if (!Number.isFinite(amount)) {
     return transaction.amount;
   }
 
-  if (effectiveType === "expense") {
-    return `-${amount}`;
-  }
-
-  if (effectiveType === "income") {
-    return `${amount}`;
-  }
-
-  return transaction.amount;
+  return `${amount}`;
 };
 
 const matchesImportedAccountIdentity = (left: Account, right: Account) => {
@@ -829,7 +821,7 @@ function InlineEditableCell({
   }, [editing]);
 
   const openEditor = () => {
-    setDraft(value);
+    setDraft(kind === "date" ? displayValue : value);
     setEditing(true);
   };
 
@@ -839,7 +831,15 @@ function InlineEditableCell({
   };
 
   const commit = async (nextValue = draft) => {
-    const normalized = kind === "text" ? nextValue.trim() : nextValue;
+    const normalized =
+      kind === "text"
+        ? nextValue.trim()
+        : kind === "date"
+          ? parseInlineDate(nextValue)
+          : nextValue;
+    if (normalized === null) {
+      return;
+    }
     if (normalized === value) {
       setEditing(false);
       return;
@@ -859,7 +859,10 @@ function InlineEditableCell({
     const optionForValue = options.find((option) => option.value === value);
     const displayOptions = optionForValue
       ? options.map((option) =>
-          option.value === value && normalizedDisplayValue && option.label !== normalizedDisplayValue
+          option.value === value &&
+          normalizedDisplayValue &&
+          option.label !== normalizedDisplayValue &&
+          !option.label.startsWith(`${normalizedDisplayValue} ·`)
             ? { ...option, label: normalizedDisplayValue }
             : option
         )
@@ -907,7 +910,8 @@ function InlineEditableCell({
         className={className}
         value={draft}
         aria-label={ariaLabel}
-        type={kind}
+        type={kind === "date" ? "text" : kind}
+        placeholder={kind === "date" ? "Jul 24, 2026" : undefined}
         onChange={(event) => setDraft(event.target.value)}
         onBlur={() => {
           void commit();
@@ -940,6 +944,23 @@ const formatDate = (value: string) =>
     month: "short",
     year: "numeric",
   });
+
+const parseInlineDate = (value: string) => {
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  const parsed = new Date(`${trimmed} 12:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 const MOBILE_TRANSACTIONS_BATCH_SIZE = 12;
 
@@ -2392,10 +2413,15 @@ function TransactionsPageContent() {
   );
   const getAccountOptionsForTransaction = useCallback(
     (transaction: Transaction) => {
-      const options = accounts.map((account) => ({
-        value: account.id,
-        label: formatTransactionAccountName(account),
-      }));
+      const hasMultipleCurrencies = new Set(accounts.map((account) => formatCurrencyCode(account.currency))).size > 1;
+      const options = accounts
+        .map((account) => ({
+          value: account.id,
+          label: `${formatTransactionAccountName(account)}${
+            hasMultipleCurrencies ? ` · ${formatCurrencyCode(account.currency)}` : ""
+          }`,
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base", numeric: true }));
 
       if (options.some((option) => option.value === transaction.accountId)) {
         return options;
@@ -4453,6 +4479,8 @@ function TransactionsPageContent() {
   const selectedTransactionReviewChips = selectedTransaction
     ? getTransactionReviewChips(selectedTransaction, selectedTransactionWarningReason)
     : [];
+  const selectedTransactionPrimaryReviewChips = selectedTransactionReviewChips.filter((chip) => chip.label !== "High confidence");
+  const selectedTransactionConfidenceChips = selectedTransactionReviewChips.filter((chip) => chip.label === "High confidence");
   const getDisplayCategoryNameForTransaction = useCallback(
     (transaction: Transaction) => {
       const categoryValue = transaction.categoryId ?? otherCategoryId;
@@ -5700,19 +5728,7 @@ function TransactionsPageContent() {
         return;
       }
 
-      const currentDisplayType = getTransactionDisplayType(
-        transaction,
-        accountNumberById.get(transaction.accountId) ?? null,
-        workspaceAccountNumbers
-      );
       payload.amount = Math.abs(parsedAmount).toString();
-      if (trimmedValue.startsWith("-")) {
-        payload.type = "expense";
-        payload.isTransfer = false;
-      } else if (currentDisplayType !== "transfer") {
-        payload.type = "income";
-        payload.isTransfer = false;
-      }
     }
 
     if (Object.keys(payload).length === 0) {
@@ -7179,62 +7195,6 @@ function TransactionsPageContent() {
             </div>
           ) : null}
 
-          {hasSelectedTransactions ? (
-            <div className="transactions-status-line transactions-selection-bar" role="status" aria-live="polite">
-              <div className="transactions-status-line__meta">
-                <span className="pill pill-neutral">{selectedTransactionIds.length} selected</span>
-              </div>
-              <div className="transactions-status-line__meta">
-                <div className="transactions-selection-menu" ref={selectionActionsMenuRef}>
-                  <button
-                    className="button button-secondary button-small transactions-action-button transactions-selection-menu__toggle"
-                    type="button"
-                    onClick={() => setSelectionMenuOpen((current) => !current)}
-                    aria-expanded={selectionMenuOpen}
-                    aria-label="Selected transactions actions"
-                  >
-                    <span>Actions</span>
-                    <span className="button-icon" aria-hidden="true">
-                      <ActionIcon name="chevron-down" />
-                    </span>
-                  </button>
-                  {selectionMenuOpen ? (
-                    <div className="transactions-selection-menu__panel">
-                      <button
-                        className="transactions-selection-menu__item"
-                        type="button"
-                        onClick={() => {
-                          setSelectionMenuOpen(false);
-                          openBulkEdit();
-                        }}
-                      >
-                        Bulk edit
-                      </button>
-                      <button
-                        className="transactions-selection-menu__item transactions-selection-menu__item--danger"
-                        type="button"
-                        onClick={() => {
-                          setSelectionMenuOpen(false);
-                          setBulkDeleteConfirmOpen(true);
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-                <button
-                  className="button button-secondary button-small transactions-action-button"
-                  type="button"
-                  onClick={clearSelection}
-                  disabled={isSaving || isApplyingHistory}
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-          ) : null}
-
           {bulkDeleteConfirmOpen ? (
             <div
               className="modal-backdrop modal-backdrop--transactions-content modal-backdrop--transactions-confirm"
@@ -7500,8 +7460,15 @@ function TransactionsPageContent() {
                       />
                     </div>
                     <div className={`transaction-amount-cell ${amountToneClass}`}>
+                      <span
+                        className="transaction-amount-type-marker"
+                        title={effectiveType === "income" ? "Income" : effectiveType === "transfer" ? "Transfer" : "Expense"}
+                        aria-hidden="true"
+                      >
+                        {effectiveType === "income" ? "+" : effectiveType === "transfer" ? "↔" : "−"}
+                      </span>
                       <InlineEditableCell
-                        value={formatEditableSignedAmount(transaction, effectiveType)}
+                        value={formatEditableAmount(transaction)}
                         displayValue={formatTransactionAmount(amount, transaction.currency)}
                         ariaLabel={`Edit amount for ${transaction.merchantRaw}`}
                         kind="number"
@@ -7727,7 +7694,52 @@ function TransactionsPageContent() {
           {!isCompactViewport ? (
             <div className="transactions-footer" style={{ ...transactionsFooterStyle, marginTop: "auto" }}>
               <div className="table-footer__summary">
-                {totalTransactionCountForDisplay > 0 ? (
+                {hasSelectedTransactions ? (
+                  <>
+                    <span className="pill pill-neutral transactions-selected-count" role="status" aria-live="polite">
+                      {selectedTransactionIds.length} selected
+                    </span>
+                    <div className="transactions-selection-menu transactions-selection-menu--footer" ref={selectionActionsMenuRef}>
+                      <button
+                        className="button button-secondary button-small transactions-action-button transactions-selection-menu__toggle"
+                        type="button"
+                        onClick={() => setSelectionMenuOpen((current) => !current)}
+                        aria-expanded={selectionMenuOpen}
+                        aria-label="Selected transactions actions"
+                      >
+                        <span>Actions</span>
+                        <span className="button-icon" aria-hidden="true">
+                          <ActionIcon name="chevron-down" />
+                        </span>
+                      </button>
+                      {selectionMenuOpen ? (
+                        <div className="transactions-selection-menu__panel">
+                          <button
+                            className="transactions-selection-menu__item"
+                            type="button"
+                            onClick={() => {
+                              setSelectionMenuOpen(false);
+                              openBulkEdit();
+                            }}
+                          >
+                            Bulk edit
+                          </button>
+                          <button
+                            className="transactions-selection-menu__item transactions-selection-menu__item--danger"
+                            type="button"
+                            onClick={() => {
+                              setSelectionMenuOpen(false);
+                              setBulkDeleteConfirmOpen(true);
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </>
+                ) : null}
+                {!hasSelectedTransactions && totalTransactionCountForDisplay > 0 ? (
                   <span className="pill pill-subtle">Showing {currentPageLabel}</span>
                 ) : null}
                 {warningTransactionCount > 0 ? (
@@ -8392,9 +8404,9 @@ function TransactionsPageContent() {
               </button>
             </div>
 
-            {selectedTransactionReviewChips.length > 0 ? (
+            {selectedTransactionPrimaryReviewChips.length > 0 ? (
               <div className="transaction-drawer-review-status" aria-label="Transaction review context">
-                {selectedTransactionReviewChips.map((chip) => (
+                {selectedTransactionPrimaryReviewChips.map((chip) => (
                   <span
                     key={chip.label}
                     className={`transaction-drawer-review-status__chip transaction-drawer-review-status__chip--${chip.tone}`}
@@ -8471,7 +8483,7 @@ function TransactionsPageContent() {
                       )
                     }
                   >
-                    <option value="debit">Expenses</option>
+                    <option value="debit">Expense</option>
                     <option value="credit">Income</option>
                   </select>
                 </div>
@@ -8667,44 +8679,28 @@ function TransactionsPageContent() {
 
                 <div className="transaction-drawer-more__row">
                   <span>Confidence score</span>
-                  <strong>{selectedTransactionConfidenceScore ?? 0}%</strong>
+                  <span className="transaction-drawer-more__confidence">
+                    {selectedTransactionConfidenceChips.map((chip) => (
+                      <span
+                        key={chip.label}
+                        className={`transaction-drawer-review-status__chip transaction-drawer-review-status__chip--${chip.tone}`}
+                      >
+                        {chip.label}
+                      </span>
+                    ))}
+                    <strong>{selectedTransactionConfidenceScore ?? 0}%</strong>
+                  </span>
                 </div>
                 <p>Based on Clover's merchant, account, category, duplicate, and parser checks.</p>
               </div>
             </details>
 
-            <div className="form-actions detail-actions">
-              <div className="detail-actions__left">
-                {selectedTransaction.splitBill ? (
-                  <Link className="button button-secondary" href={`/split-bill?bill=${selectedTransaction.splitBill.id}`} prefetch={false}>
-                    Open In Split Bills
-                  </Link>
-                ) : (
-                  <button
-                    className="button button-secondary"
-                    type="button"
-                    onClick={() => {
-                      setTransactionSplitBillError(null);
-                      setTransactionSplitBillOpen((current) => !current);
-                    }}
-                  >
-                    {transactionSplitBillOpen ? "Hide Split Bills" : "Add To Split Bills"}
-                  </button>
-                )}
-              </div>
-              {!selectedTransactionWarningReason && !transactionDeleteConfirmOpen ? (
-                <button
-                  className="button button-danger"
-                  type="button"
-                  onClick={() => setTransactionDeleteConfirmOpen(true)}
-                >
-                  Delete Transaction
-                </button>
-              ) : null}
+            <div className={`form-actions detail-actions${transactionDeleteConfirmOpen ? " is-confirming-delete" : ""}`}>
               {transactionDeleteConfirmOpen ? (
-                <div className="detail-warning-box transaction-delete-confirm">
+                <div className="detail-warning-box transaction-delete-confirm" role="alert">
                   <p>
-                    <strong>Delete transaction:</strong> This cannot be undone.
+                    <strong>Delete transaction?</strong>
+                    <span>This cannot be undone.</span>
                   </p>
                   <div className="detail-warning-actions detail-warning-actions--compact">
                     <button
@@ -8716,11 +8712,41 @@ function TransactionsPageContent() {
                       Cancel
                     </button>
                     <button className="button button-danger button-small" type="button" onClick={() => void confirmDeleteTransaction()} disabled={isSaving}>
-                      {isSaving ? "Deleting..." : "Delete transaction"}
+                      {isSaving ? "Deleting..." : "Delete"}
                     </button>
                   </div>
                 </div>
-              ) : null}
+              ) : (
+                <>
+                  <div className="detail-actions__left">
+                    {selectedTransaction.splitBill ? (
+                      <Link className="button button-secondary" href={`/split-bill?bill=${selectedTransaction.splitBill.id}`} prefetch={false}>
+                        Open In Split Bills
+                      </Link>
+                    ) : (
+                      <button
+                        className="button button-secondary"
+                        type="button"
+                        onClick={() => {
+                          setTransactionSplitBillError(null);
+                          setTransactionSplitBillOpen((current) => !current);
+                        }}
+                      >
+                        {transactionSplitBillOpen ? "Hide Split Bills" : "Add To Split Bills"}
+                      </button>
+                    )}
+                  </div>
+                  {!selectedTransactionWarningReason ? (
+                    <button
+                      className="button button-danger"
+                      type="button"
+                      onClick={() => setTransactionDeleteConfirmOpen(true)}
+                    >
+                      Delete Transaction
+                    </button>
+                  ) : null}
+                </>
+              )}
             </div>
 
             {(transactionSplitBillError || (transactionSplitBillOpen && !selectedTransaction.splitBill)) ? (

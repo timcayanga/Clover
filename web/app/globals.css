@@ -15514,9 +15514,16 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 }
 
 .transaction-select-cell input {
-  width: 18px;
-  height: 18px;
-  min-height: 18px;
+  width: 14px;
+  height: 14px;
+  min-height: 14px;
+  margin: 0;
+}
+
+.line-item-header-cell--select-all input {
+  width: 14px;
+  height: 14px;
+  min-height: 14px;
   margin: 0;
 }
 
@@ -15678,19 +15685,20 @@ button.transaction-inline-edit--name:focus-visible {
 
 input.transaction-inline-edit,
 select.transaction-inline-edit {
-  min-height: 36px;
-  padding: 0 10px;
-  border: 1px solid var(--stroke);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  height: 28px;
+  min-height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  box-shadow: none;
 }
 
 input.transaction-inline-edit:focus,
 select.transaction-inline-edit:focus {
   outline: none;
-  border-color: rgba(3, 168, 192, 0.55);
-  box-shadow: 0 0 0 3px rgba(3, 168, 192, 0.12);
+  background: rgba(3, 168, 192, 0.07);
+  box-shadow: inset 0 -1px 0 rgba(3, 168, 192, 0.52);
 }
 
 .transaction-inline-edit--date,
@@ -15819,9 +15827,28 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transaction-amount-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
   text-align: right;
   font-weight: 700;
   letter-spacing: -0.02em;
+}
+
+.transaction-amount-type-marker {
+  flex: 0 0 auto;
+  min-width: 10px;
+  color: currentColor;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.transaction-amount-cell .transaction-inline-edit--amount {
+  min-width: 0;
+  width: auto;
+  flex: 1 1 auto;
 }
 
 .transaction-amount-cell.positive {
@@ -16114,6 +16141,13 @@ input.transaction-inline-edit--amount::placeholder {
   white-space: nowrap;
 }
 
+.transactions-pagination__nav .transactions-action-button,
+.table-footer__summary > .pill,
+.transactions-selection-menu--footer .transactions-selection-menu__toggle {
+  height: 32px;
+  min-height: 32px;
+}
+
 .transactions-pagination__page.is-active {
   background: rgba(3, 168, 192, 0.12);
   border-color: rgba(3, 168, 192, 0.28);
@@ -16139,7 +16173,8 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-pagination__size select {
-  min-height: 28px;
+  height: 32px;
+  min-height: 32px;
   padding: 0 10px;
   border-radius: 999px;
   border: 1px solid var(--stroke);
@@ -16208,8 +16243,13 @@ input.transaction-inline-edit--amount::placeholder {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-height: 32px;
   flex-wrap: nowrap;
   white-space: nowrap;
+}
+
+.transactions-selected-count {
+  flex: 0 0 auto;
 }
 
 .transactions-footer-snapshot {
@@ -16505,7 +16545,7 @@ input.transaction-inline-edit--amount::placeholder {
 .transaction-drawer-select__icon .accounts-brand-mark {
   width: 24px;
   height: 24px;
-  border-radius: 999px;
+  border-radius: 8px;
   overflow: hidden;
 }
 
@@ -16557,6 +16597,12 @@ input.transaction-inline-edit--amount::placeholder {
 .transaction-drawer-form__amount-field {
   display: grid;
   gap: 6px;
+}
+
+.transaction-drawer-form__amount-field > .transaction-drawer-field-label {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 400;
 }
 
 .transaction-drawer-form__money-row {
@@ -16632,19 +16678,21 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transaction-drawer-receipt-table__row input {
   min-width: 0;
-  min-height: 36px;
+  height: 30px;
+  min-height: 30px;
   padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  border: 0 !important;
+  border-radius: 6px;
+  background: transparent !important;
   font-size: 0.9rem;
-  box-shadow: none;
+  line-height: 30px;
+  box-shadow: none !important;
 }
 
 .transaction-drawer-receipt-table__row input:hover,
 .transaction-drawer-receipt-table__row input:focus {
-  background: transparent;
-  box-shadow: inset 0 -1px 0 rgba(3, 168, 192, 0.46);
+  background: rgba(3, 168, 192, 0.06) !important;
+  box-shadow: none !important;
   outline: none;
 }
 
@@ -16682,6 +16730,7 @@ input.transaction-inline-edit--amount::placeholder {
 .detail-actions {
   align-items: stretch;
   justify-content: space-between;
+  min-height: 44px;
 }
 
 .detail-actions__left {
@@ -16695,7 +16744,26 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .detail-actions .transaction-delete-confirm {
-  flex: 1 1 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+}
+
+.transaction-delete-confirm p {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  margin: 0;
+}
+
+.transaction-delete-confirm p span {
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 .detail-warning-box--compact {
@@ -16748,6 +16816,19 @@ input.transaction-inline-edit--amount::placeholder {
 .transaction-drawer-more__row strong {
   color: var(--ink);
   font-size: 1rem;
+}
+
+.transaction-drawer-more__confidence {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.transaction-drawer-more__confidence .transaction-drawer-review-status__chip {
+  min-height: 24px;
+  padding: 3px 8px;
+  font-size: 0.68rem;
 }
 
 .transaction-drawer-more__body p {
@@ -19132,6 +19213,11 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   border: 1px solid rgba(3, 168, 192, 0.16);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: var(--shadow-soft);
+}
+
+.transactions-selection-menu--footer .transactions-selection-menu__panel {
+  top: auto;
+  bottom: calc(100% + 6px);
 }
 
 .transactions-selection-menu__item {
