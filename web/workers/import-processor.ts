@@ -7373,7 +7373,11 @@ export const processImportFileText = async (
     });
   }
 
-  if (likelyScreenshotStatement && !text.trim() && pageImages?.length) {
+  // Generic cold image uploads are routed to the direct structured-vision
+  // parser below. Do not first run a full OCR pass here: that serializes two
+  // model requests for the same image and adds roughly one vision round trip
+  // before a receipt, note, or unfamiliar screenshot can become visible.
+  if (likelyScreenshotStatement && !shouldPreferDirectImageStatementVision && !text.trim() && pageImages?.length) {
     await updateImportFileCompat(importFileId, {
       status: "processing",
       processingPhase: autoRerunAttempt > 0 ? "auto_rerunning" : "reading_account_details",
