@@ -1382,7 +1382,7 @@ function AccountsPageContent() {
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
   const [importActivitySnapshot, setImportActivitySnapshot] = useState(() => readImportActivity());
   const [importRefreshInFlight, setImportRefreshInFlight] = useState(false);
-  const [hasCompletedInitialAccountPaint, setHasCompletedInitialAccountPaint] = useState(Boolean(initialCachedWorkspace));
+  const [hasCompletedInitialAccountPaint, setHasCompletedInitialAccountPaint] = useState(false);
   const stableAccountBalancesRef = useRef(new Map<string, string>());
   const accountLoadingSinceRef = useRef(new Map<string, number>());
   const pageLoadingSinceRef = useRef<number>(Date.now());
