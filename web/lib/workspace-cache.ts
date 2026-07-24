@@ -1372,6 +1372,50 @@ export const clearDeletingWorkspaceAccount = (workspaceId: string, accountId: st
   } satisfies DeletingAccountsWorkspaceCacheState);
 };
 
+export const clearRepublishedWorkspaceAccountDeletionMarkers = (
+  workspaceId: string,
+  accountIds: Iterable<string>
+) => {
+  if (!workspaceId) {
+    return;
+  }
+
+  const restoredIds = new Set(Array.from(accountIds).filter(Boolean));
+  if (restoredIds.size === 0) {
+    return;
+  }
+
+  const deletedCache = readDeletedAccountsWorkspaceCache();
+  const deletedIds = deletedCache?.snapshots[workspaceId] ?? [];
+  const nextDeletedIds = deletedIds.filter((id) => !restoredIds.has(id));
+  if (nextDeletedIds.length !== deletedIds.length) {
+    const nextSnapshots = { ...(deletedCache?.snapshots ?? {}) };
+    if (nextDeletedIds.length === 0) {
+      delete nextSnapshots[workspaceId];
+    } else {
+      nextSnapshots[workspaceId] = nextDeletedIds;
+    }
+    writeJsonCache(deletedAccountsWorkspaceCacheKey, {
+      snapshots: nextSnapshots,
+    } satisfies DeletedAccountsWorkspaceCacheState);
+  }
+
+  const deletingCache = readDeletingAccountsWorkspaceCache();
+  const deletingIds = deletingCache?.snapshots[workspaceId] ?? [];
+  const nextDeletingIds = deletingIds.filter((id) => !restoredIds.has(id));
+  if (nextDeletingIds.length !== deletingIds.length) {
+    const nextSnapshots = { ...(deletingCache?.snapshots ?? {}) };
+    if (nextDeletingIds.length === 0) {
+      delete nextSnapshots[workspaceId];
+    } else {
+      nextSnapshots[workspaceId] = nextDeletingIds;
+    }
+    writeJsonCache(deletingAccountsWorkspaceCacheKey, {
+      snapshots: nextSnapshots,
+    } satisfies DeletingAccountsWorkspaceCacheState);
+  }
+};
+
 const getWorkspaceAccountDeletionIds = (workspaceId: string) =>
   new Set([...getDeletedWorkspaceAccountIds(workspaceId), ...getDeletingWorkspaceAccountIds(workspaceId)]);
 

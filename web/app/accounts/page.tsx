@@ -38,6 +38,7 @@ import {
   markDeletedWorkspaceAccount,
   markDeletingWorkspaceAccount,
   clearDeletingWorkspaceAccount,
+  clearRepublishedWorkspaceAccountDeletionMarkers,
   normalizeImportedAccountKey,
   matchesImportedAccountIdentity as isImportedAccountIdentityMatch,
   deletingAccountsWorkspaceCacheKey,
@@ -1694,15 +1695,33 @@ function AccountsPageContent() {
         fetchedAccounts = Array.isArray(payload?.accounts)
           ? (payload.accounts as Account[]).filter((account) => isWorkspaceAccount(account, workspaceId))
           : [];
+        const republishedInventoryAccountIds =
+          hasRecentWorkspaceImportEvidence(workspaceId, importActivitySnapshot)
+            ? fetchedAccounts
+                .filter((account) => account.publishedImportInventory === true)
+                .map((account) => account.id)
+            : [];
+        // A completed import can republish an account that was previously
+        // deleted or left behind by an interrupted optimistic deletion. The
+        // fresh server result is authoritative for those explicit inventory
+        // rows, so stale browser tombstones must no longer hide their cards.
+        clearRepublishedWorkspaceAccountDeletionMarkers(workspaceId, republishedInventoryAccountIds);
+        deletedAccountIdsRef.current = new Set(getDeletedWorkspaceAccountIds(workspaceId));
+        deletingAccountIdsRef.current = new Set(getDeletingWorkspaceAccountIds(workspaceId));
         const cachedWorkspaceAccounts = getCachedAccountsWorkspace(workspaceId)?.accounts as Account[] | undefined;
-        visibleFetchedAccounts = fetchedAccounts.filter((account) => !deletedAccountIdsRef.current.has(account.id));
+        visibleFetchedAccounts = fetchedAccounts.filter(
+          (account) =>
+            !deletedAccountIdsRef.current.has(account.id) &&
+            !deletingAccountIdsRef.current.has(account.id)
+        );
         visibleCachedWorkspaceAccounts = (cachedWorkspaceAccounts ?? []).filter(
-          (account) => isWorkspaceAccount(account, workspaceId) && !deletedAccountIdsRef.current.has(account.id)
+          (account) =>
+            isWorkspaceAccount(account, workspaceId) &&
+            !deletedAccountIdsRef.current.has(account.id) &&
+            !deletingAccountIdsRef.current.has(account.id)
         );
         shouldAwaitBackgroundBeforeCompletingInitialLoad =
           !options?.silent && visibleFetchedAccounts.length === 0 && visibleCachedWorkspaceAccounts.length === 0;
-        deletedAccountIdsRef.current = new Set(getDeletedWorkspaceAccountIds(workspaceId));
-        deletingAccountIdsRef.current = new Set(getDeletingWorkspaceAccountIds(workspaceId));
         setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
         setAccounts((current) =>
           mergeAccountsWithOptimisticImports(

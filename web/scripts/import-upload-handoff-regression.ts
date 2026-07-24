@@ -314,6 +314,11 @@ const main = async () => {
     "Accounts must restore browser import activity after mount so the server and first client render remain hydration-safe."
   );
   assert.match(
+    accountsPageSource,
+    /clearRepublishedWorkspaceAccountDeletionMarkers\(workspaceId, republishedInventoryAccountIds\)/,
+    "A completed inventory import must clear stale browser deletion markers for accounts the server explicitly republished."
+  );
+  assert.match(
     transactionsPageSource,
     /nextIsEmpty && currentHasValue && mergedTransactionsWithImports\.length > 0\)/,
     "Visible transactions must not be paired with an empty cash-flow summary."
