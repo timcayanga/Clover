@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useUser } from "@clerk/nextjs";
 import { SplitBillActionButtons } from "@/components/split-bill-action-buttons";
 import {
   formatSplitBillAmount,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/split-bill";
 import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
 import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
+import { readAccountIdentityCache } from "@/lib/account-identity-cache";
 
 type SplitBillHomeProps = {
   bills: SplitBillSerializedBill[];
@@ -86,6 +88,8 @@ const addCurrencyTotal = (totals: Map<string, number>, currency: string, amount:
 };
 
 export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBill, onOpenGroup, onOpenPerson }: SplitBillHomeProps) {
+  const { user } = useUser();
+  const [cachedProfileImage] = useState(() => readAccountIdentityCache()?.imageUrl ?? null);
   const [showAllBills, setShowAllBills] = useState(false);
   const [showAllPeople, setShowAllPeople] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "settled">("all");
@@ -235,6 +239,7 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
   );
   const visiblePeople = showAllPeople ? peopleWithBalances : peopleWithBalances.slice(0, 6);
   const hasHiddenPeople = peopleWithBalances.length > 6;
+  const currentUserAvatarUrl = user?.imageUrl ?? cachedProfileImage;
 
   return (
     <div className="split-bill-home">
@@ -387,13 +392,21 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
 
             <div className="split-bill-mobile-home__people">
               {visiblePeople.length > 0 ? (
+                <div className="split-bill-home__people-header" aria-hidden="true">
+                  <span />
+                  <span>Name</span>
+                  <span>Balance</span>
+                </div>
+              ) : null}
+              {visiblePeople.length > 0 ? (
                 visiblePeople.map((person) => (
                   <button key={person.id} type="button" className="split-bill-mobile-home__person-button" onClick={() => onOpenPerson(person.id)}>
-                    <SplitBillEntityAvatar name={person.name} avatarUrl={person.avatarUrl} />
-                    <span className="split-bill-home__person-copy">
-                      <strong>{person.name}</strong>
-                      <small>{person.balanceLabel}</small>
-                    </span>
+                    <SplitBillEntityAvatar
+                      name={person.name}
+                      avatarUrl={isSamePersonName(person.name, currentUserName) ? currentUserAvatarUrl : person.avatarUrl}
+                    />
+                    <strong className="split-bill-home__person-name">{person.name}</strong>
+                    <small className="split-bill-home__person-balance">{person.balanceLabel}</small>
                   </button>
                 ))
               ) : (
@@ -497,13 +510,21 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
 
           <div className="split-bill-home__people-list">
             {visiblePeople.length > 0 ? (
+              <div className="split-bill-home__people-header" aria-hidden="true">
+                <span />
+                <span>Name</span>
+                <span>Balance</span>
+              </div>
+            ) : null}
+            {visiblePeople.length > 0 ? (
                 visiblePeople.map((person) => (
                   <button key={person.id} type="button" className="split-bill-home__person-button" onClick={() => onOpenPerson(person.id)}>
-                    <SplitBillEntityAvatar name={person.name} avatarUrl={person.avatarUrl} />
-                    <span className="split-bill-home__person-copy">
-                      <strong>{person.name}</strong>
-                      <small>{person.balanceLabel}</small>
-                    </span>
+                    <SplitBillEntityAvatar
+                      name={person.name}
+                      avatarUrl={isSamePersonName(person.name, currentUserName) ? currentUserAvatarUrl : person.avatarUrl}
+                    />
+                    <strong className="split-bill-home__person-name">{person.name}</strong>
+                    <small className="split-bill-home__person-balance">{person.balanceLabel}</small>
                   </button>
                 ))
             ) : (

@@ -6,6 +6,17 @@ const avatarBackgrounds = [
   "linear-gradient(135deg, rgba(15, 23, 42, 0.16), rgba(3, 168, 192, 0.84))",
 ] as const;
 
+const brightAvatarBackgrounds = [
+  "linear-gradient(135deg, #ff3d68, #ff7b54)",
+  "linear-gradient(135deg, #ff7a00, #ffc400)",
+  "linear-gradient(135deg, #84cc16, #16a34a)",
+  "linear-gradient(135deg, #00c2a8, #00a8e8)",
+  "linear-gradient(135deg, #0096ff, #4361ee)",
+  "linear-gradient(135deg, #5f43e9, #9333ea)",
+  "linear-gradient(135deg, #c026d3, #f72585)",
+  "linear-gradient(135deg, #ef4444, #f97316)",
+] as const;
+
 const hashString = (value: string) =>
   value.split("").reduce((hash, char) => {
     const next = (hash << 5) - hash + char.charCodeAt(0);
@@ -26,4 +37,8 @@ export const getAvatarInitials = (value: string, maxLength = 2) => {
 
 export const getAvatarBackgroundStyle = (value: string) => ({
   background: avatarBackgrounds[Math.abs(hashString(value.trim() || value)) % avatarBackgrounds.length],
+});
+
+export const getBrightAvatarBackgroundStyle = (value: string) => ({
+  background: brightAvatarBackgrounds[Math.abs(hashString(value.trim() || value)) % brightAvatarBackgrounds.length],
 });
