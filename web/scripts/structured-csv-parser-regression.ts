@@ -149,6 +149,60 @@ assert.equal(enrichedExportRows[0]?.rawPayload?.fee, 125);
 assert.equal(enrichedExportRows[0]?.rawPayload?.originalAmount, 75);
 assert.equal(enrichedExportRows[0]?.rawPayload?.originalCurrency, "USD");
 
+const accountingExportCsv = [
+  "Settlement Date,Transaction Narrative,Billing Amount,CR/DR Indicator,Ledger Balance,Vendor Name,Masked Account,Trace Number,Clearing Status",
+  "2026-07-20,Invoice payment,\"1,250.00\",DR,\"8,750.00\",Utility Co,****1234,TRACE-1,Posted",
+  "2026-07-21,Refund,\"250.00\",CR,\"9,000.00\",Utility Co,****1234,TRACE-2,Settled",
+  "2026-07-22,Card authorization,\"500.00\",DR,\"8,500.00\",Hotel,****1234,TRACE-3,Authorized",
+].join("\n");
+const accountingExportRows = parseStructuredTransactionCsv(accountingExportCsv, "accounting-export.csv", "text/csv");
+assert.ok(accountingExportRows);
+assert.equal(accountingExportRows.length, 2, "Authorized but unsettled rows must not be imported.");
+assert.deepEqual(accountingExportRows.map((row) => row.type), ["expense", "income"]);
+assert.equal(accountingExportRows[0]?.amount, "1250.00");
+assert.equal(accountingExportRows[0]?.accountNumber, "****1234");
+assert.equal(accountingExportRows[1]?.rawPayload?.reference, "TRACE-2");
+
+const amountSuffixCsv = [
+  "Date,Description,Amount",
+  "2026-07-20,Interest,25.00 CR",
+  "2026-07-21,Service fee,10.00 DR",
+].join("\n");
+const amountSuffixRows = parseStructuredTransactionCsv(amountSuffixCsv, "amount-suffix.csv", "text/csv");
+assert.ok(amountSuffixRows);
+assert.deepEqual(amountSuffixRows.map((row) => row.type), ["income", "expense"]);
+
+const continuationCsv = [
+  "Date,Description,Debit,Credit,Account",
+  "2026-07-20,POS PURCHASE,125.00,,BPI Payroll",
+  ",MERCHANT LOCATION MAKATI,,,",
+  "2026-07-21,SALARY,,50000.00,BPI Payroll",
+].join("\n");
+const continuationRows = parseStructuredTransactionCsv(continuationCsv, "wrapped-description.csv", "text/csv");
+assert.ok(continuationRows);
+assert.equal(continuationRows.length, 2);
+assert.equal(continuationRows[0]?.description, "POS PURCHASE MERCHANT LOCATION MAKATI");
+assert.deepEqual(continuationRows[0]?.rawPayload?.continuationSourceRowIndexes, [3]);
+
+const skippedContinuationCsv = [
+  "Date,Description,Amount,Status",
+  "2026-07-20,Settled purchase,-125.00,Posted",
+  "2026-07-21,Pending purchase,-500.00,Pending",
+  ",PENDING MERCHANT DETAIL,,",
+].join("\n");
+const skippedContinuationRows = parseStructuredTransactionCsv(
+  skippedContinuationCsv,
+  "pending-continuation.csv",
+  "text/csv"
+);
+assert.ok(skippedContinuationRows);
+assert.equal(skippedContinuationRows.length, 1);
+assert.equal(
+  skippedContinuationRows[0]?.description,
+  "Settled purchase",
+  "A continuation after a skipped row must not attach to an earlier settled transaction."
+);
+
 const ascendingBalanceCsv = [
   "Date,Description,Amount,Running Balance,Account",
   "2026-07-01,Opening credit,100.00,1100.00,Main",
@@ -340,6 +394,16 @@ assert.deepEqual(
   parseImportText(ambiguousBalanceTable, "balances.csv", "text/csv"),
   [],
   "Ambiguous CSV files must fail closed instead of falling through to heuristic line parsing."
+);
+
+const timeOnlyTable = [
+  "Time,Description,Amount",
+  "10:30,Coffee,-125.00",
+].join("\n");
+assert.equal(
+  parseStructuredTransactionCsv(timeOnlyTable, "time-only.csv", "text/csv"),
+  null,
+  "A time-only table must not be treated as a dated transaction ledger."
 );
 
 const invalidRows = [

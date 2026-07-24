@@ -38,6 +38,9 @@ Rules:
 - Apply preamble account metadata only when the transaction row does not provide a more specific value.
 - Skip pending, processing, failed, declined, rejected, cancelled, voided, expired, and reversed rows; preserve the source status for auditability.
 - Preserve separate fee, original/foreign amount, and original/foreign currency fields without replacing the settled transaction amount.
+- Recognize common bookkeeping aliases such as billing amount, ledger balance, settlement date, vendor, masked account, trace number, and CR/DR indicator.
+- Treat `CR`/`DR` amount suffixes and indicator columns as explicit direction evidence.
+- Append a description-only row to the immediately preceding valid transaction when it has no date or financial values, preserving the continuation row in the raw payload.
 - Infer day-first or month-first order from explicit header formats and unambiguous dates, then apply that order consistently to ambiguous dates.
 - Suppress an exact repeated row only when the file supplies the same stable transaction reference, date, amount, direction, and account identity. Do not collapse repeated same-day/same-amount rows that have no reference.
 - Keep distinct row-level accounts as distinct Clover accounts.
@@ -79,6 +82,7 @@ Rules:
 ## Safety and confidence
 
 - Never infer transactions from a date-and-balance-only table.
+- Never treat a time-only table as a dated transaction ledger.
 - Never use aggregate totals as transaction amounts.
 - Do not overwrite confirmed transaction data during re-import.
 - Keep original headers and row provenance in the raw payload for auditability.

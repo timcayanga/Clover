@@ -623,24 +623,24 @@ const canonicalStructuredHeader = (value: string) => {
     /\bamount\s+in\s+(?:original|foreign)\b/.test(rawHeader)
   ) return "original_amount";
   if (/\b(?:original|foreign|transaction)\s+(?:currency|ccy)\b/.test(rawHeader)) return "original_currency";
-  if (/^(?:date|date_time|datetime|transaction_date|transaction_datetime|booking_date|value_date|effective_date|completed_date|created_at|occurred_at|settled_at|timestamp|time)$/.test(header)) return "date";
-  if (/^(?:posted|posted_at|posted_date|posting_date|posting_datetime|processed_at|processed_date)$/.test(header)) return "posted_date";
-  if (/^(?:transaction|description|transaction_description|original_description|transaction_name|details|transaction_details|activity|remarks|narrative|particulars|memo|note|notes)$/.test(header)) return "description";
-  if (/^(?:merchant|merchant_name|payee|counterparty|beneficiary|name|label)$/.test(header)) return "merchant";
-  if (/^(?:amount|transaction_amount|transaction_value|net_amount|gross_amount|value|local_amount|base_amount|home_amount|settlement_amount)$/.test(header)) return "amount";
-  if (/^(?:debit|debit_amount|withdraw|withdrawn|withdrawal|withdrawal_amount|withdrawals|money_out|paid|paid_out|spent|outflow|charge)$/.test(header)) return "debit";
-  if (/^(?:credit|credit_amount|deposit|deposit_amount|deposits|money_in|paid_in|received|received_amount|inflow)$/.test(header)) return "credit";
-  if (/^(?:balance|running_balance|available_balance|closing_balance|ending_balance)$/.test(header)) return "balance";
+  if (/^(?:date|date_time|datetime|transaction_date|transaction_datetime|booking_date|value_date|effective_date|completed_date|created_at|occurred_at|settled_at|timestamp)$/.test(header)) return "date";
+  if (/^(?:posted|posted_at|posted_date|posting_date|posting_datetime|processed_at|processed_date|settlement_date|cleared_date)$/.test(header)) return "posted_date";
+  if (/^(?:transaction|description|transaction_description|original_description|transaction_name|details|transaction_details|activity|remarks|narrative|transaction_narrative|particulars|memo|note|notes)$/.test(header)) return "description";
+  if (/^(?:merchant|merchant_name|payee|counterparty|beneficiary|vendor|vendor_name|name|label)$/.test(header)) return "merchant";
+  if (/^(?:amount|transaction_amount|transaction_value|transaction_total|billing_amount|billed_amount|principal_amount|net_amount|gross_amount|value|local_amount|base_amount|home_amount|settlement_amount)$/.test(header)) return "amount";
+  if (/^(?:debit|debit_amount|debit_amt|debit_value|withdraw|withdrawn|withdrawal|withdrawal_amount|withdrawal_amt|withdrawals|money_out|money_spent|paid|paid_out|spent|outflow|charge)$/.test(header)) return "debit";
+  if (/^(?:credit|credit_amount|credit_amt|credit_value|deposit|deposit_amount|deposit_amt|deposits|money_in|paid_in|received|received_amount|inflow)$/.test(header)) return "credit";
+  if (/^(?:balance|running_balance|ledger_balance|current_balance|available_balance|closing_balance|ending_balance)$/.test(header)) return "balance";
   if (/^(?:currency|currency_code|ccy|curr)$/.test(header)) return "currency";
-  if (/^(?:type|transaction_type|direction|debit_credit|dr_cr|flow)$/.test(header)) return "type";
-  if (/^(?:status|state|transaction_status|payment_status|booking_status)$/.test(header)) return "status";
+  if (/^(?:type|transaction_type|direction|debit_credit|debit_credit_indicator|credit_debit_indicator|dr_cr|dr_cr_indicator|indicator|flow)$/.test(header)) return "type";
+  if (/^(?:status|state|transaction_status|payment_status|booking_status|clearing_status)$/.test(header)) return "status";
   if (/^(?:fee|fees|fee_amount|service_fee|transaction_fee|charges)$/.test(header)) return "fee";
   if (/^(?:category|category_name|classification)$/.test(header)) return "category";
-  if (/^(?:account|account_name|account_label|wallet|portfolio)$/.test(header)) return "account_name";
-  if (/^(?:account_number|account_no|account_id|iban|card_number|card_no)$/.test(header)) return "account_number";
+  if (/^(?:account|account_name|account_label|account_title|source_account|wallet|portfolio)$/.test(header)) return "account_name";
+  if (/^(?:account_number|account_no|account_id|masked_account|iban|card_number|card_no)$/.test(header)) return "account_number";
   if (/^(?:institution|bank|bank_name|provider|financial_institution)$/.test(header)) return "institution";
   if (/^(?:account_type|product_type)$/.test(header)) return "account_type";
-  if (/^(?:reference|reference_number|reference_no|transaction_id|id|check_number|cheque_number)$/.test(header)) return "reference";
+  if (/^(?:reference|reference_number|reference_no|transaction_id|receipt_number|trace_number|confirmation_number|id|check_number|cheque_number)$/.test(header)) return "reference";
   if (/^(?:as_of|as_of_date|snapshot_date|balance_date)$/.test(header)) return "snapshot_date";
   return header;
 };
@@ -878,6 +878,8 @@ const structuredDirectionType = (
     if (/\b(?:from|in|received|receive|deposit)\b/.test(normalizedType)) return { type: "income", evidence: "explicit_type" };
     return { type: "transfer", evidence: "explicit_type" };
   }
+  if (/\bcr\.?\s*$/i.test(amountText)) return { type: "income", evidence: "amount_sign" };
+  if (/\bdr\.?\s*$/i.test(amountText)) return { type: "expense", evidence: "amount_sign" };
   if (/^\s*-/.test(amountText) || amount < 0) return { type: "expense", evidence: "amount_sign" };
   if (/^\s*\+/.test(amountText)) return { type: "income", evidence: "amount_sign" };
 
@@ -959,6 +961,8 @@ export const parseStructuredTransactionCsv = (
     originalCurrency: string | null;
     rowMetadata: Record<string, string>;
     balanceDelta: number | null;
+    continuationSourceRows: string[][];
+    continuationSourceRowIndexes: number[];
   }> = [];
 
   table.rows.forEach((sourceRow, sourceRowIndex) => {
@@ -979,9 +983,27 @@ export const parseStructuredTransactionCsv = (
       readStructuredCell(table, sourceRow, "merchant") ||
       readStructuredCell(table, sourceRow, "reference")
     );
-    if (!parsedDate || !description || /^(?:total|subtotal|opening balance|closing balance|ending balance)$/i.test(description)) return;
+    if (!parsedDate) {
+      const hasContinuationAmount = ["amount", "debit", "credit", "balance", "fee"].some(
+        (key) => parseMoney(readStructuredCell(table, sourceRow, key)) !== null
+      );
+      const previous = candidates.at(-1);
+      if (
+        previous &&
+        previous.sourceRowIndex === sourceRowIndex - 1 &&
+        description &&
+        !hasContinuationAmount
+      ) {
+        previous.description = normalizeWhitespace(`${previous.description} ${description}`);
+        previous.merchantRaw = normalizeWhitespace(`${previous.merchantRaw} ${description}`);
+        previous.continuationSourceRows.push(sourceRow);
+        previous.continuationSourceRowIndexes.push(sourceRowIndex);
+      }
+      return;
+    }
+    if (!description || /^(?:total|subtotal|opening balance|closing balance|ending balance)$/i.test(description)) return;
     const status = normalizeWhitespace(readStructuredCell(table, sourceRow, "status"));
-    if (/\b(?:pending|processing|failed|declined|rejected|cancelled|canceled|void|voided|expired|reversed)\b/i.test(status)) return;
+    if (/\b(?:pending|processing|authorized|authorization|scheduled|upcoming|on hold|held|failed|declined|rejected|cancelled|canceled|void|voided|expired|reversed)\b/i.test(status)) return;
 
     const debitText = readStructuredCell(table, sourceRow, "debit");
     const creditText = readStructuredCell(table, sourceRow, "credit");
@@ -1063,6 +1085,8 @@ export const parseStructuredTransactionCsv = (
       originalCurrency,
       rowMetadata: { ...activeMetadata },
       balanceDelta: null,
+      continuationSourceRows: [],
+      continuationSourceRowIndexes: [],
     });
   });
 
@@ -1152,6 +1176,10 @@ export const parseStructuredTransactionCsv = (
       rawPayload: {
         source: "structured_transaction_csv",
         sourceRowIndex: table.headerIndex + candidate.sourceRowIndex + 2,
+        continuationSourceRowIndexes: candidate.continuationSourceRowIndexes.map(
+          (sourceRowIndex) => table.headerIndex + sourceRowIndex + 2
+        ),
+        continuationSourceRows: candidate.continuationSourceRows,
         delimiter: table.delimiter === "\t" ? "tab" : table.delimiter,
         originalHeaders: table.headers,
         preambleMetadata: metadata,
