@@ -556,14 +556,15 @@ export const parseNetWorthSnapshotCsv = (
   const latestDate = latest.date.toISOString().slice(0, 10);
 
   return descriptors.flatMap((descriptor) => {
-    const balance = parseMoney(latest.values[descriptor.index] ?? null);
-    if (balance === null) return [];
-    const balanceHistory = dataRows
-      .map(({ values, date }) => ({
-        date: date.toISOString().slice(0, 10),
-        balance: parseMoney(values[descriptor.index] ?? null),
-      }))
-      .filter((entry) => entry.balance !== null);
+    const balanceHistory = dataRows.flatMap(({ values, date }) => {
+      const balance = parseMoney(values[descriptor.index] ?? null);
+      return balance === null
+        ? []
+        : [{ date: date.toISOString().slice(0, 10), balance }];
+    });
+    const latestKnownBalance = balanceHistory.at(-1);
+    if (!latestKnownBalance) return [];
+    const balanceCarriedForward = latestKnownBalance.date !== latestDate;
     return [
       {
         date: latestDate,
@@ -571,23 +572,25 @@ export const parseNetWorthSnapshotCsv = (
         currency: descriptor.currency,
         merchantRaw: descriptor.accountName,
         merchantClean: descriptor.accountName,
-        description: `${descriptor.accountName} balance as of ${latestDate}`,
+        description: `${descriptor.accountName} balance as of ${latestKnownBalance.date}`,
         accountName: descriptor.accountName,
         institution: descriptor.institution,
         type: "income",
-        confidence: 100,
+        confidence: balanceCarriedForward ? 96 : 100,
         parserConfidence: 100,
         categoryConfidence: 100,
         rawPayload: {
           kind: "account_snapshot_marker",
           source: "net_worth_snapshot_csv",
           documentType: "account_inventory",
-          balance,
+          balance: latestKnownBalance.balance,
           accountName: descriptor.accountName,
           institutionRaw: descriptor.institution,
           accountType: descriptor.accountType,
           accountCurrency: descriptor.currency,
           snapshotDate: latestDate,
+          balanceAsOfDate: latestKnownBalance.date,
+          balanceCarriedForward,
           sourceColumn: descriptor.index + 1,
           sourceHeader: descriptor.rawLabel,
           sourceGroup: descriptor.groupLabel,
@@ -1371,7 +1374,9 @@ export const parseGenericAccountSnapshotCsv = (
     accountGroups.set(identity, group);
   });
 
-  return Array.from(accountGroups.values()).map((group) => {
+  const snapshotAccountGroups = Array.from(accountGroups.values());
+  const accountInventory = snapshotAccountGroups.length > 1;
+  return snapshotAccountGroups.map((group) => {
     const ordered = [...group].sort(
       (left, right) =>
         left.snapshotDate.localeCompare(right.snapshotDate) ||
@@ -1407,7 +1412,7 @@ export const parseGenericAccountSnapshotCsv = (
       rawPayload: {
         kind: "account_snapshot_marker",
         source: "account_snapshot_csv",
-        documentType: "account_detail",
+        documentType: accountInventory ? "account_inventory" : "account_detail",
         sourceRowIndex: latest.sourceRowIndex,
         sourceRowIndexes: ordered.map((candidate) => candidate.sourceRowIndex),
         preambleMetadata: table.preambleMetadata,
@@ -1537,41 +1542,44 @@ export const parseWideAccountSnapshotCsv = (
   const latest = datedRows.at(-1)!;
   const snapshotDate = latest.date.toISOString().slice(0, 10);
   return descriptors.flatMap((descriptor) => {
-    const latestValue = descriptor.parsedValues.at(-1);
-    if (latestValue === null || latestValue === undefined) return [];
     const balanceHistory = datedRows.flatMap((entry, index) => {
       const balance = descriptor.parsedValues[index];
       return balance === null || balance === undefined
         ? []
         : [{ date: entry.date.toISOString().slice(0, 10), balance }];
     });
+    const latestKnownBalance = balanceHistory.at(-1);
+    if (!latestKnownBalance) return [];
+    const balanceCarriedForward = latestKnownBalance.date !== snapshotDate;
     return [{
       date: snapshotDate,
       amount: "0",
       currency: descriptor.currency,
       merchantRaw: descriptor.accountName,
       merchantClean: descriptor.accountName,
-      description: `${descriptor.accountName} balance as of ${snapshotDate}`,
+      description: `${descriptor.accountName} balance as of ${latestKnownBalance.date}`,
       accountName: descriptor.accountName,
       institution: descriptor.institution ?? undefined,
       type: "income" as const,
-      confidence: 96,
+      confidence: balanceCarriedForward ? 92 : 96,
       parserConfidence: 98,
       categoryConfidence: 100,
       rawPayload: {
         kind: "account_snapshot_marker",
         source: "wide_account_snapshot_csv",
-        documentType: "account_detail",
+        documentType: descriptors.length > 1 ? "account_inventory" : "account_detail",
         sourceColumn: descriptor.index + 1,
         sourceHeader: table.headers[descriptor.index],
         preambleMetadata: table.preambleMetadata,
-        balance: latestValue,
+        balance: latestKnownBalance.balance,
         balanceHistory,
         accountName: descriptor.accountName,
         institutionRaw: descriptor.institution,
         accountType: descriptor.accountType,
         accountCurrency: descriptor.currency,
         snapshotDate,
+        balanceAsOfDate: latestKnownBalance.date,
+        balanceCarriedForward,
       },
     } satisfies ParsedImportRow];
   });

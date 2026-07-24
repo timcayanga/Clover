@@ -189,6 +189,14 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
     return true;
   }
 
+  // A process/confirm response with committed rows is already the durable
+  // visibility boundary. Imported workspace caches are seeded before this
+  // helper runs, so polling the same status again only delays the success UI.
+  // Account-only imports still verify the published account and balance below.
+  if (params.importedRows > 0 && params.importFileId) {
+    return true;
+  }
+
   const expectedBalance = toBalanceString(params.expectedBalance);
   const timeoutMs = params.timeoutMs ?? 10_000;
   const startedAt = Date.now();

@@ -2152,6 +2152,11 @@ export function ImportFilesModal({
     expectedBalance: string | null,
     warningMessage: string
   ) => {
+    const accountOnlyImport = importedRows <= 0;
+    const visibilityLabel = accountOnlyImport ? "Making accounts visible" : "Making transactions visible";
+    const visibilityMessage = accountOnlyImport
+      ? "Clover saved the balances and is making the accounts visible in your workspace."
+      : "Clover saved the import and is making the transactions visible in your workspace.";
     updateItem(itemId, {
       status: "importing",
       confirmationState: "staged",
@@ -2159,9 +2164,9 @@ export function ImportFilesModal({
       targetAccountId: accountId,
       importedRows,
       progress: 99,
-      progressLabel: "Making transactions visible",
+      progressLabel: visibilityLabel,
     });
-    setMessage("Clover saved the import and is making the transactions visible in your workspace.");
+    setMessage(visibilityMessage);
     publishImportActivity({
       workspaceId,
       surface: importActivitySurfaceRef.current,
@@ -2172,7 +2177,7 @@ export function ImportFilesModal({
       fileTotal: itemsRef.current.length,
       completedFiles: completedFileCount,
       progress: 99,
-      detail: "Clover saved the import and is making the transactions visible.",
+      detail: visibilityMessage,
       summary: null,
       errorMessage: null,
     });
@@ -2194,7 +2199,9 @@ export function ImportFilesModal({
       itemId,
       "confirm",
       itemsRef.current.find((item) => item.id === itemId)?.file.name ?? "this file",
-      "Clover saved the file, but the transactions are taking longer than expected to appear. Nothing was discarded. Keep this window open and retry this import status in a moment."
+      accountOnlyImport
+        ? "Clover saved the balances, but the accounts are taking longer than expected to appear. Nothing was discarded. Keep this window open and retry this import status in a moment."
+        : "Clover saved the file, but the transactions are taking longer than expected to appear. Nothing was discarded. Keep this window open and retry this import status in a moment."
     );
     return false;
   };
