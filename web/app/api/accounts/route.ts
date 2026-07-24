@@ -1838,16 +1838,20 @@ export async function GET(request: Request) {
     };
     const accountsWithCheckpointBackfill = visibleAccounts.map((account) => {
       const latestCheckpoint = latestCheckpointForAccount(account);
-      const checkpointPublishedSummary =
+      const checkpointPublishedSummaries =
         latestCheckpoint?.sourceMetadata &&
         typeof latestCheckpoint.sourceMetadata === "object" &&
         !Array.isArray(latestCheckpoint.sourceMetadata) &&
         Array.isArray((latestCheckpoint.sourceMetadata as Record<string, unknown>).publishedAccountSummaries)
-          ? findPublishedSummaryForAccount(
-              account,
-              (latestCheckpoint.sourceMetadata as Record<string, unknown>).publishedAccountSummaries as Array<Record<string, unknown>>
-            )
-          : null;
+          ? ((latestCheckpoint.sourceMetadata as Record<string, unknown>).publishedAccountSummaries as Array<Record<string, unknown>>)
+          : [];
+      const exactCheckpointPublishedSummary =
+        checkpointPublishedSummaries.find((summary) => String(summary.accountId ?? "").trim() === account.id) ?? null;
+      const checkpointPublishedSummary =
+        exactCheckpointPublishedSummary ??
+        (publishedInventoryAccountIds.has(account.id)
+          ? null
+          : findPublishedSummaryForAccount(account, checkpointPublishedSummaries));
       const checkpointAccountName =
         checkpointPublishedSummary && typeof checkpointPublishedSummary.accountName === "string"
           ? String(checkpointPublishedSummary.accountName).trim()
@@ -1888,8 +1892,9 @@ export async function GET(request: Request) {
       const checkpointBalance =
         checkpointPublishedSummary && typeof checkpointPublishedSummary.balance === "string"
           ? checkpointPublishedSummary.balance
-          :
-        latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
+          : latestCheckpoint?.accountId === account.id &&
+              latestCheckpoint?.endingBalance !== null &&
+              latestCheckpoint?.endingBalance !== undefined
           ? latestCheckpoint.endingBalance.toString()
           : null;
       const effectiveAccountNumber = account.accountNumber ?? checkpointAccountNumber ?? null;

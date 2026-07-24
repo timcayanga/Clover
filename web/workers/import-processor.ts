@@ -5496,6 +5496,35 @@ const resolveConfirmationAccount = async (params: {
   const parsedRowIdentity = resolveStatementIdentityFromParsedRows(params.parsedRows as Array<Record<string, unknown>>, {
     fileName,
   });
+  const inventoryIdentityRow = accountSnapshotInventory
+    ? (params.parsedRows as Array<Record<string, unknown>>).find((row) => {
+        const rawPayload =
+          row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+            ? (row.rawPayload as Record<string, unknown>)
+            : null;
+        return rawPayload?.kind === "account_snapshot_marker";
+      }) ?? null
+    : null;
+  const inventoryIdentityPayload =
+    inventoryIdentityRow?.rawPayload &&
+    typeof inventoryIdentityRow.rawPayload === "object" &&
+    !Array.isArray(inventoryIdentityRow.rawPayload)
+      ? (inventoryIdentityRow.rawPayload as Record<string, unknown>)
+      : null;
+  const inventoryAccountName =
+    typeof inventoryIdentityPayload?.accountName === "string" && inventoryIdentityPayload.accountName.trim()
+      ? inventoryIdentityPayload.accountName.trim()
+      : typeof inventoryIdentityRow?.accountName === "string" && inventoryIdentityRow.accountName.trim()
+        ? inventoryIdentityRow.accountName.trim()
+        : null;
+  const inventoryInstitution =
+    typeof inventoryIdentityPayload?.institutionRaw === "string" && inventoryIdentityPayload.institutionRaw.trim()
+      ? inventoryIdentityPayload.institutionRaw.trim()
+      : typeof inventoryIdentityRow?.institution === "string" && inventoryIdentityRow.institution.trim()
+        ? inventoryIdentityRow.institution.trim()
+        : null;
+  const inventoryAccountType = readParsedRowAccountType(inventoryIdentityRow ?? {});
+  const inventoryCurrency = readParsedRowAccountCurrency(inventoryIdentityRow ?? {});
   const shouldPreferParsedScreenshotIdentity =
     isLikelyScreenshotImageFile(fileName) &&
     Boolean(parsedRowIdentity?.accountName || parsedRowIdentity?.institution || parsedRowIdentity?.accountNumber);
@@ -5506,6 +5535,7 @@ const resolveConfirmationAccount = async (params: {
     : sanitizeBankNameLabel(normalizeBankName(fileName));
   const inferredInstitution =
     mobileScreenshotWalletIdentity?.institution ??
+    inventoryInstitution ??
     sanitizeBankNameLabel(preferredIdentity?.institution) ??
     sanitizeBankNameLabel(fallbackIdentity?.institution) ??
     fileNameInstitutionFallback;
@@ -5535,6 +5565,7 @@ const resolveConfirmationAccount = async (params: {
   ];
   const inferredAccountType: AccountType | null =
     mobileScreenshotWalletIdentity?.accountType ??
+    inventoryAccountType ??
     (typeof preferredIdentity?.accountType === "string" &&
     supportedImportAccountTypes.includes(preferredIdentity.accountType as AccountType)
       ? (preferredIdentity.accountType as AccountType)
@@ -5547,6 +5578,7 @@ const resolveConfirmationAccount = async (params: {
           : null);
   const inferredAccountName =
     mobileScreenshotWalletIdentity?.accountName ??
+    inventoryAccountName ??
     sanitizeBankNameLabel(preferredIdentity?.accountName) ??
     sanitizeBankNameLabel(fallbackIdentity?.accountName) ??
     (inferredInstitution
@@ -5559,9 +5591,10 @@ const resolveConfirmationAccount = async (params: {
       : null);
   const inferredCurrency = normalizeInstitutionCurrency(
     inferredInstitution,
-    typeof params.statementMetadata?.currency === "string" && params.statementMetadata.currency.trim()
+    inventoryCurrency ??
+      (typeof params.statementMetadata?.currency === "string" && params.statementMetadata.currency.trim()
       ? params.statementMetadata.currency.trim().toUpperCase()
-      : null,
+      : null),
     inferredAccountName
   );
   const parsedTrailingBalance = getImportAccountBalanceFromParsedRows(params.parsedRows as EnrichedParsedImportRow[]);
