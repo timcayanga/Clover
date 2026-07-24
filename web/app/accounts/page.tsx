@@ -1071,6 +1071,14 @@ const getLatestCheckpointForAccount = (
   account: Account,
   statementCheckpoints: StatementCheckpoint[]
 ) => {
+  // A published account inventory carries one authoritative balance per
+  // account in the Accounts API. Its shared document checkpoint represents
+  // the whole file, so applying that single ending balance to an individual
+  // card can copy another column's value onto it.
+  if (account.publishedImportInventory) {
+    return null;
+  }
+
   let latestCheckpoint: StatementCheckpoint | null = null;
   let latestTime = -1;
   const identityKey = normalizeImportedAccountKey(
