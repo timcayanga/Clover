@@ -657,8 +657,19 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
       label: "GoTrade",
       logoSrcs: philippinesLogoWithVariants("gotrade"),
       fallbackIconSrc: investmentIcon,
-      accent: "#16D3D3",
-      background: "linear-gradient(135deg, rgba(22, 211, 211, 0.18), rgba(22, 211, 211, 0.06))",
+      accent: "#31D0A2",
+      background: "linear-gradient(145deg, #31D0A2 0%, #65E4BD 52%, #28C895 100%)",
+      foreground: "#0f172a",
+    }),
+  },
+  {
+    match: /\bGSTOCKS(?:\s+PHILIPPINES)?\b|\bGCASH\s+GSTOCKS\b/i,
+    brand: makeBrand({
+      label: "GStocks Philippines",
+      logoSrcs: philippinesLogoWithVariants("gcash"),
+      fallbackIconSrc: investmentIcon,
+      accent: "#1479E7",
+      background: "linear-gradient(145deg, #0F66CC 0%, #2389F2 52%, #126FD8 100%)",
     }),
   },
   {

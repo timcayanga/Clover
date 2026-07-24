@@ -626,6 +626,24 @@ const removeDuplicateCardAccountSuffix = (name: string, accountNumber: string | 
   return withoutSuffix || cleanedName;
 };
 
+const normalizeAccountCardLabel = (value: string | null | undefined) =>
+  String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+
+const areEquivalentAccountCardLabels = (first: string | null | undefined, second: string | null | undefined) => {
+  const normalizedFirst = normalizeAccountCardLabel(first);
+  return Boolean(normalizedFirst) && normalizedFirst === normalizeAccountCardLabel(second);
+};
+
+const isRedundantInvestmentCardReference = (
+  accountNumber: string | null | undefined,
+  labels: Array<string | null | undefined>
+) => {
+  const reference = String(accountNumber ?? "").trim();
+  return Boolean(reference) && !/\d/.test(reference) && labels.some((label) => areEquivalentAccountCardLabels(reference, label));
+};
+
 const getCurrencyCodes = (accounts: Array<{ currency: string }>) =>
   Array.from(new Set(accounts.map((account) => formatCurrencyCode(account.currency))));
 
@@ -3067,12 +3085,17 @@ function AccountsPageContent() {
       type: getEffectiveAccountType(row),
     });
     const balanceValue = Math.abs(parseAmount(loadingContext.displayedBalance));
-    const accountCardNumber = formatDisambiguatedCardAccountNumber(fallbackAccountNumber, {
+    const formattedAccountCardNumber = formatDisambiguatedCardAccountNumber(fallbackAccountNumber, {
       showDigitCount: collidingMaskedAccountNumberKeys.has(getMaskedAccountNumberCollisionKey(row) ?? ""),
     });
-    const accountCardName = accountCardNumber
+    const accountCardName = formattedAccountCardNumber
       ? removeDuplicateCardAccountSuffix(rawAccountCardName, fallbackAccountNumber)
       : rawAccountCardName;
+    const accountCardNumber =
+      getEffectiveAccountType(row) === "investment" &&
+      isRedundantInvestmentCardReference(fallbackAccountNumber, [accountCardName, row.name, row.institution, accountBrand.label])
+        ? null
+        : formattedAccountCardNumber;
 
     return (
       <FinancialAccountCard
@@ -3132,6 +3155,10 @@ function AccountsPageContent() {
       type: getEffectiveAccountType(row),
     });
     const accountDisplayName = getAccountDisplayName(row);
+    const accountEyebrow = getAccountCardEyebrow(row);
+    const showAccountEyebrow =
+      getEffectiveAccountType(row) !== "investment" ||
+      !areEquivalentAccountCardLabels(accountDisplayName, accountEyebrow);
     const loadingContext = getUploadAccountLoadingContext(row);
 
     return (
@@ -3145,7 +3172,7 @@ function AccountsPageContent() {
           <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
           <span>
             <strong>{accountDisplayName}</strong>
-            <small>{getAccountCardEyebrow(row)}</small>
+            {showAccountEyebrow ? <small>{accountEyebrow}</small> : null}
           </span>
         </span>
         <span className="accounts-mobile-list-row__end">
