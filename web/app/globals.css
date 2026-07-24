@@ -22243,8 +22243,6 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
       color-mix(in srgb, var(--card-accent) 76%, #060f19 24%) 100%
     );
   box-shadow:
-    0 18px 36px rgba(8, 15, 26, 0.2),
-    0 34px 80px color-mix(in srgb, var(--card-accent) 24%, transparent),
     0 6px 0 rgba(255, 255, 255, 0.05) inset,
     0 -10px 22px rgba(255, 255, 255, 0.05) inset;
   color: #ffffff;
@@ -22306,8 +22304,6 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 .financial-account-card.is-interactive:focus-within {
   transform: translateY(-3px);
   box-shadow:
-    0 24px 44px rgba(8, 15, 26, 0.24),
-    0 42px 96px color-mix(in srgb, var(--card-accent) 28%, transparent),
     0 6px 0 rgba(255, 255, 255, 0.05) inset,
     0 -10px 22px rgba(255, 255, 255, 0.05) inset;
 }
@@ -30756,8 +30752,8 @@ button.accounts-detail__transaction-head-cell {
 
   .accounts-mobile-featured__rail .financial-account-card {
     box-shadow:
-      0 20px 40px rgba(8, 15, 26, 0.16),
-      0 28px 56px color-mix(in srgb, var(--card-accent) 18%, transparent);
+      0 6px 0 rgba(255, 255, 255, 0.05) inset,
+      0 -10px 22px rgba(255, 255, 255, 0.05) inset;
   }
 
   .accounts-account-card__head {
