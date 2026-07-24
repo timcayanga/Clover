@@ -17,6 +17,7 @@ type ImportAccountSummary = {
   institution: string | null;
   accountNumber: string | null;
   accountType: AccountType | null;
+  currency: string | null;
   balance: string | null;
   rowsImported: number;
 };
@@ -138,6 +139,7 @@ const loadVisibleImportAccountSummaries = async (importFileId: string): Promise<
       institution: true,
       accountNumber: true,
       type: true,
+      currency: true,
       balance: true,
     },
   }).catch(() => []);
@@ -151,6 +153,7 @@ const loadVisibleImportAccountSummaries = async (importFileId: string): Promise<
       institution: account?.institution ?? null,
       accountNumber: account?.accountNumber ?? null,
       accountType: (account?.type ?? null) as AccountType | null,
+      currency: account?.currency ?? null,
       balance: account?.balance?.toString() ?? null,
       rowsImported: group._count._all,
     };
@@ -251,6 +254,7 @@ const loadSnapshotInventoryAccountSummaries = async (
       institution: account.institution,
       accountNumber: account.accountNumber,
       accountType: account.type as AccountType,
+      currency: account.currency,
       balance: account.balance?.toString() ?? null,
       rowsImported: 0,
     });
@@ -279,6 +283,7 @@ const buildCheckpointAccountSummary = async (
           institution: true,
           accountNumber: true,
           type: true,
+          currency: true,
           balance: true,
         },
       }).catch(() => null)
@@ -316,6 +321,7 @@ const buildCheckpointAccountSummary = async (
       institution,
       accountNumber,
       accountType,
+      currency: accountRecord?.currency ?? null,
       balance,
       rowsImported: 0,
     },
@@ -344,6 +350,7 @@ const buildReceiptDocumentAccountSummary = async (
           institution: true,
           accountNumber: true,
           type: true,
+          currency: true,
           balance: true,
         },
       }).catch(() => null)
@@ -401,6 +408,7 @@ const buildReceiptDocumentAccountSummary = async (
       institution,
       accountNumber,
       accountType,
+      currency: accountRecord?.currency ?? receiptDocument.currency ?? null,
       balance,
       rowsImported: 0,
     },

@@ -150,6 +150,7 @@ export const normalizeServerAccountSummaries = (value: unknown): NonNullable<Upl
           typeof record.accountType === "string" && record.accountType.trim()
             ? (record.accountType as UploadInsightsSummary["accountType"])
             : null,
+        currency: typeof record.currency === "string" && record.currency.trim() ? record.currency.trim().toUpperCase() : null,
         balance: toBalanceString(record.balance),
         rowsImported: Number(record.rowsImported ?? 0) || 0,
       };

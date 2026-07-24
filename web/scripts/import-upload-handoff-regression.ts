@@ -285,7 +285,7 @@ const main = async () => {
   );
   assert.match(
     accountsPageSource,
-    /getCompletedImportActivitySummary\(importActivitySnapshot\)[\s\S]{0,1000}void loadWorkspaceData\(selectedWorkspaceId, \{ silent: true, awaitHydration: true \}\);/,
+    /getCompletedImportActivitySummary\(importActivitySnapshot\)[\s\S]{0,1200}void loadWorkspaceData\(selectedWorkspaceId, \{ silent: true, awaitHydration: true[^}]*\}\);/,
     "Accounts must rehydrate from the completed import activity event without requiring a manual page reload."
   );
   assert.match(

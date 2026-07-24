@@ -12,6 +12,7 @@ export type UploadInsightsSummary = {
   institution: string | null;
   accountNumber?: string | null;
   accountType?: AccountType | null;
+  currency?: string | null;
   balance: string | null;
   accountSummaries?: Array<{
     accountId: string;
@@ -19,6 +20,7 @@ export type UploadInsightsSummary = {
     institution: string | null;
     accountNumber: string | null;
     accountType: AccountType | null;
+    currency: string | null;
     balance: string | null;
     rowsImported: number;
   }>;

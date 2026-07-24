@@ -5476,6 +5476,15 @@ const resolveConfirmationAccount = async (params: {
   const accountSnapshotInventory = parsedRowsAreAccountSnapshotInventory(
     params.parsedRows as Array<Record<string, unknown>>
   );
+  const ensureDefaultCashAccountForImport = async (currency: string) => {
+    // A deterministic account inventory includes its own Cash rows. Re-running
+    // the default-account upsert once per column adds avoidable database
+    // round-trips to a transaction-free CSV and can race the explicit PHP/USD
+    // cash identities.
+    if (!accountSnapshotInventory) {
+      await ensureWorkspaceCashAccount(workspaceId, currency);
+    }
+  };
   const metadataIdentity = resolveStatementIdentityFromMetadata(params.statementMetadata);
   const parsedRowIdentity = resolveStatementIdentityFromParsedRows(params.parsedRows as Array<Record<string, unknown>>, {
     fileName,
@@ -5599,6 +5608,7 @@ const resolveConfirmationAccount = async (params: {
       institution: inferredInstitution,
       accountNumber: inferredAccountNumber,
       type: accountIdentityType,
+      currency: inferredCurrency,
     });
   const accountHasNoAccountNumber = (account: (typeof workspaceAccounts)[number]) =>
     !String(account.accountNumber ?? "").replace(/\D/g, "");
@@ -5653,6 +5663,7 @@ const resolveConfirmationAccount = async (params: {
                   institution: inferredInstitution,
                   accountNumber: inferredAccountNumber,
                   type: accountIdentityType,
+                  currency: inferredCurrency,
                 }
               )));
     const accountToUpdate = canonicalIdentityAccount ?? directAccount;
@@ -5669,7 +5680,7 @@ const resolveConfirmationAccount = async (params: {
       ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
     });
 
-    await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
+    await ensureDefaultCashAccountForImport(updatedAccount.currency ?? inferredCurrency ?? "PHP");
     return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
   }
 
@@ -5689,7 +5700,7 @@ const resolveConfirmationAccount = async (params: {
       ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
     });
 
-    await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
+    await ensureDefaultCashAccountForImport(updatedAccount.currency ?? inferredCurrency ?? "PHP");
     return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
   }
 
@@ -5720,7 +5731,7 @@ const resolveConfirmationAccount = async (params: {
       ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
     });
 
-    await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
+    await ensureDefaultCashAccountForImport(updatedAccount.currency ?? inferredCurrency ?? "PHP");
     return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
   }
 
@@ -5744,7 +5755,7 @@ const resolveConfirmationAccount = async (params: {
       ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
     });
 
-    await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
+    await ensureDefaultCashAccountForImport(updatedAccount.currency ?? inferredCurrency ?? "PHP");
     return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
   }
 
@@ -5762,7 +5773,7 @@ const resolveConfirmationAccount = async (params: {
       ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
     });
 
-    await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
+    await ensureDefaultCashAccountForImport(updatedAccount.currency ?? inferredCurrency ?? "PHP");
     return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
   }
 
@@ -5773,6 +5784,7 @@ const resolveConfirmationAccount = async (params: {
         institution: inferredInstitution,
         accountNumber: inferredAccountNumber,
         type: accountIdentityType,
+        currency: inferredCurrency,
       });
   const existingSameInstitutionSingleCardCandidate =
     hasInferredAccountNumber ||
@@ -5810,7 +5822,7 @@ const resolveConfirmationAccount = async (params: {
       ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
     });
 
-    await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
+    await ensureDefaultCashAccountForImport(updatedAccount.currency ?? inferredCurrency ?? "PHP");
     return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
   }
 
@@ -5828,7 +5840,7 @@ const resolveConfirmationAccount = async (params: {
       ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
     });
 
-    await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
+    await ensureDefaultCashAccountForImport(updatedAccount.currency ?? inferredCurrency ?? "PHP");
     return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
   }
 
@@ -5971,7 +5983,7 @@ const resolveConfirmationAccount = async (params: {
         });
       });
 
-      await ensureWorkspaceCashAccount(workspaceId, createdAccount.currency ?? inferredCurrency ?? "PHP");
+      await ensureDefaultCashAccountForImport(createdAccount.currency ?? inferredCurrency ?? "PHP");
       return collapseDuplicateUploadedAccountsForAccount(createdAccount);
     } catch (error) {
       if (Object.prototype.hasOwnProperty.call(accountData, "accountNumber") && isMissingAccountNumberColumnError(error)) {
@@ -5980,7 +5992,7 @@ const resolveConfirmationAccount = async (params: {
           select: getCompatibleAccountSelect(compatibleAccountColumns),
         });
 
-        await ensureWorkspaceCashAccount(workspaceId, createdAccount.currency ?? inferredCurrency ?? "PHP");
+        await ensureDefaultCashAccountForImport(createdAccount.currency ?? inferredCurrency ?? "PHP");
         return collapseDuplicateUploadedAccountsForAccount(createdAccount);
       }
 
@@ -12226,6 +12238,7 @@ export const confirmImportFile = async (
       institution: string | null;
       accountNumber: string | null;
       accountType: AccountType | null;
+      currency: string | null;
       balance: string | null;
       rowsImported: number;
     }
@@ -12257,6 +12270,7 @@ export const confirmImportFile = async (
       institution: groupAccount.institution,
       accountNumber: groupAccount.accountNumber,
       accountType: groupAccount.type,
+      currency: groupAccount.currency,
       balance: publishedGroupBalance !== null ? publishedGroupBalance.toString() : null,
       rowsImported: (existingSummary?.rowsImported ?? 0) + visibleGroupRows.length,
     });

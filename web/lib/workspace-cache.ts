@@ -3,6 +3,7 @@ import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import {
   isWiseWalletWithoutVisibleAccountNumber,
+  normalizeImportedCurrencyCode,
   normalizeImportedAccountKey,
   type ImportedAccountIdentityLike,
 } from "@/lib/imported-account-identity";
@@ -319,6 +320,12 @@ const isTransientImportedAccountPlaceholder = (account: CachedRecord) => {
     return false;
   }
 
+  const balanceText = String(account.balance ?? "").trim();
+  const numericBalance = balanceText ? Number(balanceText.replace(/[^0-9.-]/g, "")) : Number.NaN;
+  if (Number.isFinite(numericBalance) && numericBalance !== 0) {
+    return false;
+  }
+
   const type = normalizeWhitespace(String(account.type ?? "")).toLowerCase();
   return type === "bank" || type === "credit_card" || type === "line_of_credit";
 };
@@ -426,6 +433,16 @@ export const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityL
   const rightInstitution = canonicalImportedInstitutionKey(right.institution);
   const leftType = normalizeWhitespace(String(left.type ?? "")).toLowerCase();
   const rightType = normalizeWhitespace(String(right.type ?? "")).toLowerCase();
+  const leftCurrency = normalizeImportedCurrencyCode(left.currency);
+  const rightCurrency = normalizeImportedCurrencyCode(right.currency);
+  const currencyScopedIdentity =
+    leftType === "cash" ||
+    rightType === "cash" ||
+    isWiseWalletWithoutVisibleAccountNumber(left) ||
+    isWiseWalletWithoutVisibleAccountNumber(right);
+  if (currencyScopedIdentity && leftCurrency && rightCurrency && leftCurrency !== rightCurrency) {
+    return 0;
+  }
   const leftAccountDigits = String(left.accountNumber ?? "").replace(/\D/g, "");
   const rightAccountDigits = String(right.accountNumber ?? "").replace(/\D/g, "");
   const hasExactAccountNumberMatch = Boolean(leftAccountDigits && rightAccountDigits && leftAccountDigits === rightAccountDigits);

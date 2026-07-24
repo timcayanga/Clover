@@ -3,6 +3,9 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseImportText, parseNetWorthSnapshotCsv } from "@/lib/import-parser";
 import { detectStatementMetadataFromText } from "@/lib/data-engine";
+import { formatUploadAccountDisplayName } from "@/lib/account-display";
+import { normalizeImportedAccountKey } from "@/lib/imported-account-identity";
+import { matchesImportedAccountIdentity, pruneImportedAccountPlaceholders } from "@/lib/workspace-cache";
 
 const csv = [
   "Date,PHP Total,USD Total,Gain / Loss,Liquid Cash,Savings Total,Investments Total,Physical Cash Total,AR Total,Savings,,,,,,,,Investments,,,,,,,,Physical Cash,,Accounts Receivable",
@@ -34,6 +37,41 @@ assert.equal(byName.get("BPI Time Deposit")?.institution, "BPI Time Deposit");
 assert.equal(byName.get("Cash")?.rawPayload?.accountType, "cash");
 assert.equal(byName.get("Cash")?.institution, "Cash", "PHP cash must reuse the workspace's default Cash account.");
 assert.equal(byName.get("Cash USD")?.currency, "USD");
+assert.equal(
+  formatUploadAccountDisplayName("Cash USD", "Cash", null, "cash"),
+  "Cash USD",
+  "A foreign-currency cash balance must not be relabeled as the PHP Cash account."
+);
+assert.notEqual(
+  normalizeImportedAccountKey("Cash", "Cash", null, "cash", "PHP"),
+  normalizeImportedAccountKey("Cash USD", "Cash", null, "cash", "USD"),
+  "Cash identities must be scoped by currency."
+);
+assert.equal(
+  matchesImportedAccountIdentity(
+    { name: "Cash", institution: "Cash", type: "cash", currency: "PHP" },
+    { name: "Cash USD", institution: "Cash", type: "cash", currency: "USD" }
+  ),
+  false,
+  "A USD cash snapshot must never update the PHP cash balance."
+);
+assert.equal(
+  pruneImportedAccountPlaceholders([
+    {
+      id: "rcbc-inventory",
+      name: "RCBC",
+      institution: "RCBC",
+      accountNumber: null,
+      type: "bank",
+      currency: "PHP",
+      source: "upload",
+      balance: "61824.11",
+      transactionCount: 0,
+    },
+  ]).length,
+  1,
+  "A balance-only bank account is authoritative inventory, not a transient parser placeholder."
+);
 assert.equal(byName.get("Accounts Receivable")?.rawPayload?.accountType, "receivable");
 assert.equal(byName.has("PHP Total"), false, "Summary totals must not become accounts.");
 assert.equal(byName.has("Savings Total"), false, "Section totals must not become accounts.");
@@ -104,6 +142,12 @@ const main = async () => {
     modalSource,
     /const rowAccountType = readRowAccountType\(row\)/,
     "Optimistic multi-account previews must keep each snapshot account type."
+  );
+  const accountsPageSource = await readFile(join(process.cwd(), "app/accounts/page.tsx"), "utf8");
+  assert.match(
+    accountsPageSource,
+    /const optimisticAccounts = importedAccountSummaries/,
+    "Accounts must publish every account summary from a multi-account import without waiting for a reload."
   );
 
   console.log("[PASS] Net-worth snapshot CSV routes to 19 accounts and zero transactions.");

@@ -76,16 +76,19 @@ export const normalizeImportedAccountKey = (
   accountType?: string | null,
   currency?: string | null
 ) => {
+  const normalizedType = normalizeWhitespace(String(accountType ?? "")).toLowerCase();
   const identityCore =
     normalizeAccountNumberIdentityDigits(accountNumber) ??
     getImportedAccountLastFour(accountName) ??
     normalizeWhitespace(String(accountName ?? ""));
-  const currencyScope = isWiseWalletWithoutVisibleAccountNumber({
-    name: accountName,
-    institution,
-    accountNumber,
-    type: accountType,
-  })
+  const currencyScope =
+    normalizedType === "cash" ||
+    isWiseWalletWithoutVisibleAccountNumber({
+      name: accountName,
+      institution,
+      accountNumber,
+      type: accountType,
+    })
     ? normalizeImportedCurrencyCode(currency)
     : null;
 

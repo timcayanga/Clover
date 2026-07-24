@@ -233,7 +233,7 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     investmentInterestRate: null,
     investmentMaturityValue: null,
     type: summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
-    currency: summary.previewTransactions?.[0]?.currency ?? "PHP",
+    currency: summary.currency ?? summary.previewTransactions?.[0]?.currency ?? "PHP",
     source: "upload",
     balance: summary.balance,
     transactionCount,
@@ -4522,22 +4522,35 @@ function AccountsPageContent() {
           setImportBackgroundOnly(false);
         }}
       onImported={async (summary) => {
-          const optimisticAccount = buildOptimisticImportedAccount(summary);
+          const importedAccountSummaries =
+            summary.accountSummaries && summary.accountSummaries.length > 1
+              ? summary.accountSummaries.map((accountSummary) => ({
+                  ...summary,
+                  accountId: accountSummary.accountId,
+                  accountName: accountSummary.accountName,
+                  institution: accountSummary.institution,
+                  accountNumber: accountSummary.accountNumber,
+                  accountType: accountSummary.accountType,
+                  currency: accountSummary.currency,
+                  balance: accountSummary.balance,
+                  rowsImported: accountSummary.rowsImported,
+                  accountSummaries: undefined,
+                  optimistic: false,
+                  optimisticAccountId: null,
+                  previewTransactions: [],
+                }))
+              : [summary];
+          const optimisticAccounts = importedAccountSummaries
+            .map(buildOptimisticImportedAccount)
+            .filter((account): account is Account => Boolean(account));
           const previewTransactions = summary.previewTransactions ?? [];
-          const importedAccountKey = getImportedAccountKey(
-            summary.accountName,
-            summary.institution,
-            summary.accountNumber ?? null,
-            summary.accountType ?? null,
-            previewTransactions[0]?.currency ?? null
-          );
           const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
           let nextAccountsSnapshot: Account[] | null = null;
           let nextTransactionsSnapshot: Transaction[] | null = null;
 
           flushSync(() => {
             setAccountsLoading(false);
-            if (optimisticAccount) {
+            if (optimisticAccounts.length > 0) {
               setAccounts((current) =>
                 (nextAccountsSnapshot = current.filter((account) => {
                   if (summary.optimisticAccountId && account.id === summary.optimisticAccountId) {
@@ -4545,9 +4558,16 @@ function AccountsPageContent() {
                   }
 
                   if (account.source === "upload") {
-                    return (
-                      getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency) !==
-                        importedAccountKey
+                    return !optimisticAccounts.some(
+                      (importedAccount) =>
+                        getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency) ===
+                        getImportedAccountKey(
+                          importedAccount.name,
+                          importedAccount.institution,
+                          importedAccount.accountNumber,
+                          importedAccount.type,
+                          importedAccount.currency
+                        )
                     );
                   }
 
@@ -4579,9 +4599,12 @@ function AccountsPageContent() {
               });
             }
 
-            if (optimisticAccount) {
+            if (optimisticAccounts.length > 0) {
               setAccounts((current) => {
-                const next = mergeOptimisticImportedAccount(current, optimisticAccount);
+                const next = optimisticAccounts.reduce(
+                  (accountsSoFar, importedAccount) => mergeOptimisticImportedAccount(accountsSoFar, importedAccount),
+                  current
+                );
                 nextAccountsSnapshot = next;
                 return next;
               });

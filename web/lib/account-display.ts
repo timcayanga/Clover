@@ -103,7 +103,8 @@ export const formatUploadAccountDisplayName = (
   });
 
   if (type === "cash" || resolvedLabel.toLowerCase() === "cash") {
-    return "Cash";
+    const explicitCurrency = safeName?.match(/\b([A-Z]{3})$/i)?.[1]?.toUpperCase() ?? null;
+    return explicitCurrency && explicitCurrency !== "PHP" ? `Cash ${explicitCurrency}` : "Cash";
   }
 
   // PDAX portfolio screenshots expose a PHP wallet alongside investment
