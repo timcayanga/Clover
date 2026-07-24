@@ -43,7 +43,12 @@ import {
 import { downloadImportObject } from "@/lib/import-storage.server";
 import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
-import { assessReceiptPreviewQuality, isSuspiciousReceiptMerchantName, parseReceiptText } from "@/lib/split-bill";
+import {
+  assessReceiptPreviewQuality,
+  isSuspiciousReceiptMerchantName,
+  parseAirlineTicketReceiptText,
+  parseReceiptText,
+} from "@/lib/split-bill";
 import { ensureImportedSplitBill, isImportedSplitBillStructure } from "@/lib/imported-split-bill";
 import {
   DATA_ENGINE_VERSION,
@@ -7479,11 +7484,12 @@ export const processImportFileText = async (
   }
   let isDocumentImport = isDocumentImportMode || (imageImport && importMode !== "statement");
   const trainedReceiptFixture = importMode === "receipt" ? getTrainedReceiptFixture(fileName) : null;
-  const trainedReceiptDetails =
+  let trainedReceiptDetails =
     trainedSplitBillReceiptDetails ??
     (trainedReceiptFixture
       ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture)
       : persistedSplitBillReceiptDetails ?? priorSplitBillReceiptDetails);
+  let deterministicAirlineReceiptPreview: ReturnType<typeof parseAirlineTicketReceiptText> = null;
   const likelyScreenshotStatement = imageImport && importMode === "statement" && isLikelyScreenshotImageFile(fileName);
   const shouldPreferDirectImageStatementVision = shouldPreferDirectImageStatementVisionPath({
     fileName,
@@ -7595,6 +7601,15 @@ export const processImportFileText = async (
         });
         text = "";
       }
+    }
+  }
+
+  if (!trainedReceiptDetails && fileType === "application/pdf" && text.trim()) {
+    deterministicAirlineReceiptPreview = parseAirlineTicketReceiptText(text);
+    if (deterministicAirlineReceiptPreview) {
+      importMode = "receipt";
+      isDocumentImport = true;
+      trainedReceiptDetails = buildReceiptDetailsFromPreview(deterministicAirlineReceiptPreview);
     }
   }
 
@@ -9405,7 +9420,7 @@ export const processImportFileText = async (
       : [];
   const effectiveRowsBaseRaw = normalizeWiseWalletParsedRows(
     (
-      promotesNotesSplitBillToReceipt
+      promotesNotesSplitBillToReceipt || deterministicAirlineReceiptPreview
         ? []
         : knownBpiMobileScreenshotFallbackRows.length > 0
         ? knownBpiMobileScreenshotFallbackRows

@@ -32,7 +32,7 @@ assert.match(
 );
 assert.match(
   workerSource,
-  /promotesNotesSplitBillToReceipt\s*\?\s*\[\]/,
+  /promotesNotesSplitBillToReceipt \|\| deterministicAirlineReceiptPreview[\s\S]*\?\s*\[\]/,
   "A recognized split-cost note must discard model transaction rows before persistence."
 );
 assert.match(

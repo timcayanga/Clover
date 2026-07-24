@@ -2313,6 +2313,124 @@ export const assessReceiptPreviewQuality = (preview: ReceiptPreviewResult): Rece
   };
 };
 
+const parseCompactAirlineDate = (text: string) => {
+  const match = text.match(/\bDate:\s*(\d{1,2})([A-Za-z]{3})(\d{4})\b/i);
+  if (!match) {
+    return null;
+  }
+
+  const month = monthIndexByAbbr[match[2].toUpperCase()];
+  const day = Number(match[1]);
+  const year = Number(match[3]);
+  if (month === undefined || !Number.isInteger(day) || day < 1 || day > 31 || !Number.isInteger(year)) {
+    return null;
+  }
+
+  return new Date(Date.UTC(year, month, day, 12)).toISOString();
+};
+
+const parsePhpAmountMatch = (value: string | undefined) => {
+  if (!value) {
+    return null;
+  }
+  const amount = Number(value.replace(/,/g, ""));
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+};
+
+export const parseAirlineTicketReceiptText = (receiptText: string): ReceiptPreviewResult | null => {
+  const normalized = receiptText.replace(/\u00a0/g, " ").replace(/\r/g, "");
+  if (
+    !/\bELECTRONIC TICKET RECEIPT\b/i.test(normalized) ||
+    !/\b(?:booking ref|ticket number)\s*:/i.test(normalized) ||
+    !/\b(?:from\s+to\s+flight|operated by|marketed by)\b/i.test(normalized)
+  ) {
+    return null;
+  }
+
+  const documentSections = normalized.split(/\bELECTRONIC MISCELLANEOUS DOCUMENT RECEIPT(?:\s*\(EMD\))?/i);
+  const ticketSection = documentSections[0] ?? normalized;
+  const ticketTotalMatches = Array.from(
+    ticketSection.matchAll(/\bTotal Amount:\s*(?:PHP\s*)?([\d,]+(?:\.\d{1,2})?)\b/gi)
+  );
+  const ticketTotal = parsePhpAmountMatch(ticketTotalMatches.at(-1)?.[1]);
+  if (ticketTotal === null) {
+    return null;
+  }
+
+  const flightNumbers = Array.from(new Set(Array.from(ticketSection.matchAll(/\b([A-Z]{2}\d{2,4})\b/g), (match) => match[1])));
+  const items: ReceiptPreviewItem[] = [
+    {
+      description: "Round-trip flight booking",
+      amount: ticketTotal.toFixed(2),
+      quantity: 1,
+      unitPrice: ticketTotal.toFixed(2),
+    },
+  ];
+
+  for (const section of documentSections.slice(1)) {
+    const fareMatch = section.match(/\bFare:\s*PHP\s*([\d,]+(?:\.\d{1,2})?)\b/i);
+    const fare = parsePhpAmountMatch(fareMatch?.[1]);
+    if (fare === null) {
+      continue;
+    }
+
+    const serviceMatch = section.match(/\b\d+\s+([A-Za-z][A-Za-z ]{2,50}?)\s+\d{1,2}[A-Za-z]{3}\d{4}\b/);
+    const flightMatch = section.match(/\bFlight:\s*([A-Z]{2}\d{2,4})\b/i);
+    const service = serviceMatch?.[1]?.trim() || "Airline service";
+    items.push({
+      description: flightMatch?.[1] ? `${service} ${flightMatch[1].toUpperCase()}` : service,
+      amount: fare.toFixed(2),
+      quantity: 1,
+      unitPrice: fare.toFixed(2),
+    });
+  }
+
+  const total = items.reduce((sum, item) => sum + (parseAmountValue(item.amount) ?? 0), 0);
+  const operatedBy = Array.from(normalized.matchAll(/\b(?:Operated|Marketed) by:\s*([A-Z][A-Z ]{3,60})/gi))
+    .map((match) => match[1].trim())
+    .find(Boolean);
+  const issuingOffice = normalized.match(/\bIssuing office:\s*\n?\s*([A-Z][A-Z ]{3,60}?)(?:\s+CONTACT CENTER)?\s*,?\s*(?:\n|MANILA|PHILIPPINES)/i)?.[1];
+  const merchantName =
+    sanitizeReceiptMerchantName(operatedBy ?? issuingOffice ?? "") ??
+    "Airline booking";
+  const bookingReference = normalized.match(/\bBooking ref:\s*([A-Z0-9-]{4,})\b/i)?.[1] ?? null;
+  const documentNumber =
+    normalized.match(/\bTicket number:\s*([0-9][0-9 ]{5,})\b/i)?.[1]?.replace(/\s+/g, "") ?? null;
+  const receiptAccountMatch = detectReceiptAccountMatchFromText(normalized);
+  const paymentMethod = detectReceiptPaymentMethodFromText(
+    normalized.split(/\n/).map((line) => normalizeWhitespace(line)).filter(Boolean),
+    receiptAccountMatch
+  );
+
+  return {
+    receiptText: normalized.trim(),
+    receiptType: "travel_ticket",
+    merchantName,
+    billDate: parseCompactAirlineDate(normalized),
+    documentNumber,
+    invoiceNumber: null,
+    bookingReference,
+    currency: "PHP",
+    currencyMentions: ["PHP"],
+    currencyWarning: null,
+    paymentMethod,
+    receiptPayerName: null,
+    subtotal: total.toFixed(2),
+    serviceCharge: null,
+    tax: null,
+    tip: null,
+    rounding: null,
+    discount: null,
+    total: total.toFixed(2),
+    items,
+    participants: [],
+    splitAllocations: [],
+    receiptAccountMatch,
+    confidence: 96,
+    requiresReview: false,
+  };
+};
+
 export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   const normalized = receiptText.replace(/\u00a0/g, " ");
   const { lines, fragmentJoins } = mergeFragmentLines(
