@@ -349,6 +349,11 @@ const MENU_ICON_SRC: Partial<Record<IconName, string>> = {
 };
 
 const PRELOADED_MENU_ICON_NAMES: IconName[] = [
+  "dashboard",
+  "accounts",
+  "transactions",
+  "recurring",
+  "adviser",
   "notifications",
   "settings",
   "sign-out",
