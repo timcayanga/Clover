@@ -33,6 +33,11 @@ assert.equal(byName.get("PDAX")?.rawPayload?.accountType, "investment");
 assert.equal(byName.get("GFunds")?.institution, "GFunds");
 assert.equal(byName.get("GStocks Philippines")?.institution, "GStocks Philippines");
 assert.equal(byName.get("GCrypto")?.institution, "GCrypto");
+assert.equal(
+  byName.get("GSave (UNO)")?.rawPayload?.accountType,
+  "investment",
+  "An account explicitly listed in the Investments section must not become a tracked bank asset."
+);
 assert.equal(byName.get("BPI Time Deposit")?.institution, "BPI Time Deposit");
 assert.equal(byName.get("Cash")?.rawPayload?.accountType, "cash");
 assert.equal(byName.get("Cash")?.institution, "Cash", "PHP cash must reuse the workspace's default Cash account.");
@@ -95,6 +100,63 @@ assert.equal(metadata.accountName, "Multiple Accounts");
 assert.equal(metadata.accountType, "other");
 assert.equal(metadata.endingBalance, null, "Summary totals must not be treated as one account balance.");
 assert.equal(metadata.confidence, 100);
+
+const unfamiliarInstitutionCsv = [
+  "Date,PHP Total,USD Total,Gain / Loss,Liquid Cash,Savings Total,Investments Total,Physical Cash Total,AR Total,Savings,Investments,Credit Cards,Mortgages",
+  ",,,,,,,,,New Rural Cooperative,Acme Brokerage USD,Metro Rewards Card,Home Loan",
+  '1/1/2026,"₱20,000.00","$1,000.00",0%,,"₱5,000.00","₱10,000.00","₱1,000.00","₱4,000.00","₱5,000.00","$100.00","₱2,000.00","₱3,000.00"',
+  '3/24/2026,"₱24,000.00","$1,500.00",0%,,"₱6,000.00","₱12,000.00","₱1,000.00","₱5,000.00","₱6,000.00","$150.00","₱2,500.00","₱3,500.00"',
+].join("\n");
+const unfamiliarRows = parseNetWorthSnapshotCsv(
+  unfamiliarInstitutionCsv,
+  "Personal Balance History.csv",
+  "text/csv"
+);
+assert.ok(unfamiliarRows, "A proven net-worth matrix must not depend on a trained filename or institution list.");
+assert.deepEqual(
+  unfamiliarRows.map((row) => row.accountName),
+  ["New Rural Cooperative", "Acme Brokerage USD", "Metro Rewards Card", "Home Loan"]
+);
+assert.deepEqual(
+  unfamiliarRows.map((row) => row.rawPayload?.accountType),
+  ["bank", "investment", "credit_card", "mortgage"]
+);
+assert.equal(
+  unfamiliarRows.find((row) => row.accountName === "Acme Brokerage USD")?.currency,
+  "USD",
+  "Foreign-currency account columns must retain their currency."
+);
+assert.ok(
+  unfamiliarRows.every((row) => row.rawPayload?.snapshotDate === "2026-03-24"),
+  "Unfamiliar institutions must still use the latest balance date."
+);
+
+const currentBalanceExport = [
+  "As of Date,BPI Savings,Maya Wallet,Brokerage Portfolio",
+  '2026-03-24,"₱6,000.00","₱1,500.00","₱12,000.00"',
+].join("\n");
+const currentBalanceRows = parseImportText(
+  currentBalanceExport,
+  "Current Account Balances.csv",
+  "text/csv"
+);
+assert.equal(
+  currentBalanceRows.length,
+  3,
+  "A one-date, multi-account current-balance export must create account markers."
+);
+assert.ok(
+  currentBalanceRows.every(
+    (row) =>
+      row.rawPayload?.kind === "account_snapshot_marker" &&
+      row.rawPayload?.source === "wide_account_snapshot_csv"
+  ),
+  "Current-balance columns must never be emitted as transactions."
+);
+assert.deepEqual(
+  currentBalanceRows.map((row) => row.rawPayload?.accountType),
+  ["bank", "wallet", "investment"]
+);
 
 const main = async () => {
   const workerSource = await readFile(join(process.cwd(), "workers/import-processor.ts"), "utf8");
