@@ -936,6 +936,17 @@ const shouldAvoidPdfRenderForServerless = (fileName?: string | null) => {
   );
 };
 
+export const shouldPreferPdfTextLayerWithoutStatementGate = (
+  fileName?: string | null,
+  importMode?: string | null
+) => {
+  const lower = String(fileName ?? "").toLowerCase();
+  return (
+    String(importMode ?? "").toLowerCase() === "receipt" ||
+    /\b(?:receipt|invoice|voucher|e[\s_-]*ticket|electronic[\s_-]*ticket|itinerary|booking[\s_-]*confirmation)\b/i.test(lower)
+  );
+};
+
 const shouldUseAggressivePdfOcrProfile = (fileName?: string | null) => {
   const lower = String(fileName ?? "").toLowerCase();
   return (
@@ -2678,6 +2689,21 @@ export const readImportedFileTextWithCacheInfo = async (
     }
 
     try {
+      if (
+        shouldAvoidPdfRenderForServerless(params.fileName) ||
+        shouldPreferPdfTextLayerWithoutStatementGate(params.fileName, params.importMode)
+      ) {
+        const textLayer = await extractTextFromPdfBytes(bytes, password, pdfJsBaseUrl);
+        // Receipts, vouchers, and known text-native statement exports already
+        // contain the authoritative document text. Avoid the statement-shaped
+        // sufficiency gate here: receipts such as airline e-tickets do not
+        // contain repeated transaction rows, so that gate incorrectly sends a
+        // complete text layer through a 30-60 second rendered OCR pass. Keep
+        // the OCR fallback for scanned PDFs whose text layer is actually empty.
+        if (textLayer.trim()) {
+          return textLayer;
+        }
+      }
       if (shouldPreferPdfOcrFirst(params.fileName)) {
         return await extractTextFromPdfBytesWithRenderFirstFallback(bytes, password, pdfJsBaseUrl, aggressiveProfile);
       }

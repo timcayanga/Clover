@@ -57,6 +57,7 @@ assert.deepEqual(
 assert.equal(assessReceiptPreviewQuality(preview).reliableForFastPath, true);
 
 const workerSource = readFileSync(resolve(process.cwd(), "workers/import-processor.ts"), "utf8");
+const fileTextSource = readFileSync(resolve(process.cwd(), "lib/import-file-text.server.ts"), "utf8");
 assert.match(
   workerSource,
   /parseAirlineTicketReceiptText\(text\)[\s\S]*importMode = "receipt"[\s\S]*trainedReceiptDetails = buildReceiptDetailsFromPreview/,
@@ -66,6 +67,11 @@ assert.match(
   workerSource,
   /promotesNotesSplitBillToReceipt \|\| deterministicAirlineReceiptPreview[\s\S]*\? \[\]/,
   "Airline document fragments must be suppressed instead of becoming transactions."
+);
+assert.match(
+  fileTextSource,
+  /shouldPreferPdfTextLayerWithoutStatementGate[\s\S]*electronic\[\\s_-\]\*ticket[\s\S]*const textLayer = await extractTextFromPdfBytes[\s\S]*if \(textLayer\.trim\(\)\)/,
+  "Text-native airline receipts must bypass rendered OCR while scanned PDFs retain the OCR fallback."
 );
 
 console.log("Airline ticket receipt regression passed.");
