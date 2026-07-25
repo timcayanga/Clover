@@ -334,6 +334,16 @@ const main = async () => {
     "Imported preview rows should update transaction cards in the same UI commit."
   );
   assert.match(
+    modalSource,
+    /const emittedSummaries = await Promise\.all\(serverAccountSummaries\.map\(async \(accountSummary\) =>/,
+    "Multi-account workbook previews should hydrate concurrently instead of adding one serial request per account."
+  );
+  assert.match(
+    modalSource,
+    /for \(const accountUploadSummary of emittedSummaries\)[\s\S]{0,800}await Promise\.resolve\(onImported\(combinedSummary\)\)/,
+    "A multi-account workbook should publish one coherent Accounts and Transactions update."
+  );
+  assert.match(
     transactionsPageSource,
     /The visible table is intentionally paged\.[\s\S]{0,650}getCachedTransactionsWorkspace\(selectedWorkspaceId \?\? ""\)\?\.summary\?\.totalCount/,
     "Optimistic preview rows must preserve the known workspace total until the authoritative page refresh arrives."

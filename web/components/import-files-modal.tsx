@@ -5662,8 +5662,11 @@ export function ImportFilesModal({
             topMerchantName: null,
             topMerchantCount: null,
           };
-        const emittedSummaries: UploadInsightsSummary[] = [];
-        for (const accountSummary of serverAccountSummaries) {
+        // A workbook can resolve into many accounts. Hydrate their previews in
+        // parallel: doing one preview request per account serially kept the
+        // modal at 90% for roughly one additional second per worksheet/account
+        // even though every transaction was already committed.
+        const emittedSummaries = await Promise.all(serverAccountSummaries.map(async (accountSummary) => {
           const confirmedAccountName = accountSummary.accountName ?? statementIdentity?.accountName ?? guessedIdentity?.accountName ?? item.file.name;
           const confirmedInstitution = accountSummary.institution ?? statementIdentity?.institution ?? guessedIdentity?.institution ?? null;
           const confirmedAccountType =
@@ -5703,26 +5706,24 @@ export function ImportFilesModal({
             optimistic: false,
           });
 
-          seedImportedWorkspaceCaches(workspaceId, accountUploadSummary);
-          emittedSummaries.push(accountUploadSummary);
-          if (!isAccountInventorySnapshot) {
-            await Promise.resolve(onImported(accountUploadSummary));
-          }
-        }
+          return accountUploadSummary;
+        }));
 
         const combinedSummaryBase = combineUploadInsightsSummaries(emittedSummaries);
-        const combinedSummary =
-          combinedSummaryBase && isAccountInventorySnapshot
-            ? {
-                ...combinedSummaryBase,
-                fileName: item.file.name,
-              }
-            : combinedSummaryBase;
-        if (combinedSummary && isAccountInventorySnapshot) {
-          // Publish the entire account inventory in one state transition. A
-          // per-account callback caused React revalidation to race the next
-          // callback, which made the Accounts page briefly—or sometimes
-          // persistently—show only the first institution.
+        const combinedSummary = combinedSummaryBase
+          ? {
+              ...combinedSummaryBase,
+              // This is one workbook, not one uploaded file per account.
+              fileName: item.file.name,
+            }
+          : null;
+        for (const accountUploadSummary of emittedSummaries) {
+          seedImportedWorkspaceCaches(workspaceId, accountUploadSummary);
+        }
+        if (combinedSummary) {
+          // Publish every account and transaction preview in one state
+          // transition. Besides avoiding revalidation races, this lets the
+          // Accounts and Transactions pages update together before 100%.
           await Promise.resolve(onImported(combinedSummary));
         }
         const settledRows = emittedSummaries.reduce((total, summary) => total + Number(summary.rowsImported ?? 0), 0);
