@@ -45495,3 +45495,16 @@ body:has(.landing-page) {
     min-height: 230px;
   }
 }
+
+/* Phone navigation is fully available from the bottom bar and More page. */
+@media (max-width: 760px) {
+  .topbar .shell-menu-button,
+  .shell-compact-bar .shell-menu-button {
+    display: none !important;
+  }
+
+  .shell-bottom-nav__icon .menu-icon-3d--adviser {
+    width: 30px;
+    height: 30px;
+  }
+}
