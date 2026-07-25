@@ -43606,10 +43606,15 @@ html[data-theme="dark"] .investments-portfolio-table__row--head {
 }
 
 .content--investments .report-donut__meta {
-  gap: 1px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1px 8px;
+  align-items: baseline;
+  min-width: 0;
 }
 
 .content--investments .report-donut__meta strong {
+  grid-column: 1 / -1;
   font-size: 12px;
   line-height: 1.15;
 }
@@ -43617,6 +43622,12 @@ html[data-theme="dark"] .investments-portfolio-table__row--head {
 .content--investments .report-donut__meta span {
   font-size: 10px;
   line-height: 1.15;
+  white-space: nowrap;
+}
+
+.content--investments .report-donut__meta span:last-child {
+  grid-column: 2;
+  text-align: right;
 }
 
 .content--investments .investments-insights-grid {
@@ -43680,6 +43691,7 @@ html[data-theme="dark"] .investments-portfolio-table__row--head {
   margin: 0;
   line-height: 1.55;
   white-space: pre-line;
+  font-size: 0.75rem;
 }
 
 .adviser-chat__message--user {

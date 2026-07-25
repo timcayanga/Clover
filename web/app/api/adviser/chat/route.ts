@@ -2190,6 +2190,9 @@ export async function POST(request: Request) {
         latestQuestionLower
       );
     const latestHasExplicitTheme = /goal|target|track|progress|save|invest|portfolio|dividend|gain|loss|snapshot|stock|transaction|spend|merchant|bill|recurr|due|loan|balance|cash flow|budget|owe|payment|pressure|account|afford|purchase|phone|car|travel|safe to spend|payday/.test(latestQuestionLower);
+    const asksForSuggestedGoal =
+      !goalValue
+      && /suggest.*goal|what goal|which goal|realistic.*goal|goal.*realistic|set.*goal|savings goal/.test(latestQuestionLower);
     const themeSource = latestHasExplicitTheme ? latestQuestionLower : recentUserContext;
     const inferredQuestionTheme = (
       asksForOverallMoneyOverview
@@ -2231,7 +2234,7 @@ export async function POST(request: Request) {
       if (/goal progress|progress.*goal|how am i doing.*goal|on track.*goal/.test(latestQuestionLower)) {
         return "Route this request to get_goal_progress and state clearly when no goal has been set.";
       }
-      if (!goalValue && /suggest.*goal|what goal|which goal|realistic.*goal|goal.*realistic|set.*goal|savings goal/.test(latestQuestionLower)) {
+      if (asksForSuggestedGoal) {
         return "Route this request to get_goal_progress, recommend the supplied suggested goal with its concrete amount or tracking period, and present the ready-made one-click goal action.";
       }
       if (/what changed|what is new|what's new|since i last|since my last|deserve.*attention|changed recently/.test(latestQuestionLower)) {
@@ -3269,7 +3272,11 @@ export async function POST(request: Request) {
       modelInput = [...modelInput, ...output, ...toolOutputs];
     }
 
-    const reply = extractOutputText(payload) || "I could not generate a response right now.";
+    const generatedReply = extractOutputText(payload) || "I could not generate a response right now.";
+    const reply =
+      asksForSuggestedGoal && suggestedGoal
+        ? `A practical place to start is ${suggestedGoal.title.toLowerCase()}.\n\n${suggestedGoal.explanation}\n\nUse the button below to create it now. You can adjust it later as Clover learns from more transactions.`
+        : generatedReply;
     if (actions.length === 0 && fallbackActions.length > 0) {
       actions.push(...fallbackActions);
     }
@@ -3287,7 +3294,7 @@ export async function POST(request: Request) {
         console.error("Adviser upstream stream failed", error instanceof Error ? error.message : error);
       }
 
-      const responseStream = upstreamResponse?.ok && upstreamResponse.body
+      const responseStream = !asksForSuggestedGoal && upstreamResponse?.ok && upstreamResponse.body
         ? new ReadableStream<Uint8Array>({
             async start(controller) {
               const reader = upstreamResponse.body!.getReader();
