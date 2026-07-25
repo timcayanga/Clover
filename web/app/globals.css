@@ -42711,15 +42711,15 @@ body[data-split-bill-modal-open="true"] .app-shell {
   min-width: 0;
   table-layout: fixed;
   border-collapse: separate;
-  border-spacing: 0 10px;
+  border-spacing: 0 7px;
   color: var(--muted);
-  font-size: clamp(14px, 1.4vw, 17px);
-  line-height: 1.45;
+  font-size: clamp(13px, 1.15vw, 15px);
+  line-height: 1.35;
   text-align: left;
 }
 
 .landing-bridge__table th {
-  padding: 0 24px 9px;
+  padding: 0 18px 6px;
   color: #71808d;
   font-size: 11px;
   font-weight: 700;
@@ -42733,7 +42733,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
 }
 
 .landing-bridge__table td {
-  padding: 21px 24px;
+  padding: 14px 18px;
   border-top: 1px solid rgba(15, 23, 42, 0.08);
   border-bottom: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(255, 255, 255, 0.72);
@@ -44419,7 +44419,8 @@ body:has(.landing-page) {
 
   .landing-bridge__table {
     min-width: 0;
-    font-size: 13px;
+    font-size: 12px;
+    line-height: 1.3;
   }
 
   .landing-bridge__table th {
@@ -44428,7 +44429,7 @@ body:has(.landing-page) {
   }
 
   .landing-bridge__table td {
-    padding: 15px 12px;
+    padding: 11px 10px;
   }
 
   .landing-feature .landing-feature__copy,
