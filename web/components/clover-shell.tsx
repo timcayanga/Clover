@@ -1,7 +1,18 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { formatCurrencyAmount } from "@/lib/currency-format";
@@ -1442,6 +1453,25 @@ export function CloverShell({
     router.push(href);
   };
 
+  const handleNavigationLinkClick = (
+    event: ReactMouseEvent<HTMLAnchorElement>,
+    href: string,
+  ) => {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    navigateTo(href);
+  };
+
   const prefetchNavTarget = (href: string) => {
     if (!shouldPrefetchNavHref(href)) {
       return;
@@ -1558,16 +1588,13 @@ export function CloverShell({
       />
       <aside className="sidebar" aria-label="Primary">
         <div className="sidebar-header">
-          <button
-            type="button"
+          <Link
+            href="/home"
+            prefetch={false}
             aria-label="Clover home"
             aria-current={pathname === "/home" ? "page" : undefined}
             className="sidebar-brand-link sidebar-brand-link--centered"
-            onClick={() => {
-              if (pathname !== "/home") {
-                navigateTo("/home");
-              }
-            }}
+            onClick={(event) => handleNavigationLinkClick(event, "/home")}
           >
             <img
               src="/clover-mark.svg"
@@ -1584,7 +1611,7 @@ export function CloverShell({
               loading="eager"
               fetchPriority="high"
             />
-          </button>
+          </Link>
         </div>
 
         <nav className="sidebar-nav" aria-label="Primary" id="primary-navigation">
@@ -1592,20 +1619,13 @@ export function CloverShell({
             <div key={section.label} className="sidebar-nav__section">
               <p className="sidebar-nav__section-label">{section.label}</p>
               {section.items.map((item) => (
-                <button
+                <Link
                   key={item.key}
+                  href={item.href}
+                  prefetch={false}
                   className={`nav-link ${active === item.key ? "is-active" : ""}`}
                   aria-current={active === item.key ? "page" : undefined}
-                  type="button"
-                  onMouseDown={(event) => {
-                    if (event.button !== 0) {
-                      return;
-                    }
-
-                    event.preventDefault();
-                    navigateTo(item.href);
-                  }}
-                  onClick={() => navigateTo(item.href)}
+                  onClick={(event) => handleNavigationLinkClick(event, item.href)}
                   onMouseEnter={() => prefetchNavTarget(item.href)}
                   onTouchStart={() => prefetchNavTarget(item.href)}
                 >
@@ -1613,25 +1633,18 @@ export function CloverShell({
                     <MenuIcon name={item.key} />
                   </span>
                   {item.label}
-                </button>
+                </Link>
               ))}
             </div>
           ))}
           {hasHiddenDesktopNavItems ? (
             <div className="sidebar-nav__section sidebar-nav__section--more">
-              <button
+              <Link
+                href="/more"
+                prefetch={false}
                 className={`nav-link ${isMoreActive ? "is-active" : ""}`}
                 aria-current={isMoreActive ? "page" : undefined}
-                type="button"
-                onMouseDown={(event) => {
-                  if (event.button !== 0) {
-                    return;
-                  }
-
-                  event.preventDefault();
-                  navigateTo("/more");
-                }}
-                onClick={() => navigateTo("/more")}
+                onClick={(event) => handleNavigationLinkClick(event, "/more")}
                 onMouseEnter={() => prefetchNavTarget("/more")}
                 onTouchStart={() => prefetchNavTarget("/more")}
               >
@@ -1639,7 +1652,7 @@ export function CloverShell({
                   <MenuIcon name="more" />
                 </span>
                 More
-              </button>
+              </Link>
             </div>
           ) : null}
         </nav>
@@ -1690,25 +1703,18 @@ export function CloverShell({
           >
             <MenuIcon name="notifications" />
           </button>
-          <button
+          <Link
+            href="/help"
+            prefetch={false}
             className={`sidebar-icon-button sidebar-footer__help${pathname?.startsWith("/help") ? " is-active" : ""}`}
-            type="button"
             aria-label="Help"
             aria-current={pathname?.startsWith("/help") ? "page" : undefined}
-            onMouseDown={(event) => {
-              if (event.button !== 0) {
-                return;
-              }
-
-              event.preventDefault();
-              navigateTo("/help");
-            }}
-            onClick={() => navigateTo("/help")}
+            onClick={(event) => handleNavigationLinkClick(event, "/help")}
             onMouseEnter={() => prefetchNavTarget("/help")}
             onTouchStart={() => prefetchNavTarget("/help")}
           >
             <MenuIcon name="help" />
-          </button>
+          </Link>
 
           {isProfileMenuOpen ? (
             <div ref={profilePopoverRef} className="sidebar-popover sidebar-popover--profile" role="menu" aria-label="Account menu">
@@ -1716,18 +1722,11 @@ export function CloverShell({
                 <span className="sidebar-popover__title">{displayName}</span>
               </div>
               <div className="sidebar-popover__links sidebar-popover__links--bare">
-                <button
+                <Link
+                  href="/settings"
+                  prefetch={false}
                   className="sidebar-popover__link sidebar-popover__button sidebar-popover__link--bare"
-                  type="button"
-                  onMouseDown={(event) => {
-                    if (event.button !== 0) {
-                      return;
-                    }
-
-                    event.preventDefault();
-                    navigateTo("/settings");
-                  }}
-                  onClick={() => navigateTo("/settings")}
+                  onClick={(event) => handleNavigationLinkClick(event, "/settings")}
                   onMouseEnter={() => prefetchNavTarget("/settings")}
                   onTouchStart={() => prefetchNavTarget("/settings")}
                   role="menuitem"
@@ -1736,7 +1735,7 @@ export function CloverShell({
                     <MenuIcon name="settings" />
                   </span>
                   <span>Settings</span>
-                </button>
+                </Link>
                 <div className="sidebar-popover__separator" aria-hidden="true" />
                 <button
                   className="sidebar-popover__link sidebar-popover__button sidebar-popover__button--danger sidebar-popover__link--bare"
@@ -1780,18 +1779,19 @@ export function CloverShell({
                     className="sidebar-popover__item sidebar-popover__notification"
                     role="none"
                   >
-                    <button
-                      type="button"
+                    <Link
+                      href={notification.href}
+                      prefetch={false}
                       className="sidebar-popover__notification-main"
                       role="menuitem"
-                      onClick={() => navigateTo(notification.href)}
+                      onClick={(event) => handleNavigationLinkClick(event, notification.href)}
                       onMouseEnter={() => prefetchNavTarget(notification.href)}
                       onTouchStart={() => prefetchNavTarget(notification.href)}
                     >
                       <span className="sidebar-popover__notification-tone">{notification.tone}</span>
                       <span className="sidebar-popover__notification-title">{notification.title}</span>
                       <span className="sidebar-popover__notification-detail">{notification.detail}</span>
-                    </button>
+                    </Link>
                     <button
                       type="button"
                       className="sidebar-popover__notification-dismiss"
@@ -1930,19 +1930,12 @@ export function CloverShell({
       ) : null}
 
       <nav className="shell-bottom-nav glass" aria-label="Primary mobile navigation">
-        <button
+        <Link
+          href="/home"
+          prefetch={false}
           className={`shell-bottom-nav__item${active === "dashboard" || pathname?.startsWith("/home") ? " is-active" : ""}`}
           aria-current={active === "dashboard" || pathname?.startsWith("/home") ? "page" : undefined}
-          type="button"
-          onMouseDown={(event) => {
-            if (event.button !== 0) {
-              return;
-            }
-
-            event.preventDefault();
-            navigateTo("/home");
-          }}
-          onClick={() => navigateTo("/home")}
+          onClick={(event) => handleNavigationLinkClick(event, "/home")}
           onMouseEnter={() => prefetchNavTarget("/home")}
           onTouchStart={() => prefetchNavTarget("/home")}
         >
@@ -1950,20 +1943,13 @@ export function CloverShell({
             <MenuIcon name="dashboard" />
           </span>
           <span className="shell-bottom-nav__label">Home</span>
-        </button>
-        <button
+        </Link>
+        <Link
+          href="/transactions"
+          prefetch={false}
           className={`shell-bottom-nav__item${active === "transactions" || pathname?.startsWith("/transactions") ? " is-active" : ""}`}
           aria-current={active === "transactions" || pathname?.startsWith("/transactions") ? "page" : undefined}
-          type="button"
-          onMouseDown={(event) => {
-            if (event.button !== 0) {
-              return;
-            }
-
-            event.preventDefault();
-            navigateTo("/transactions");
-          }}
-          onClick={() => navigateTo("/transactions")}
+          onClick={(event) => handleNavigationLinkClick(event, "/transactions")}
           onMouseEnter={() => prefetchNavTarget("/transactions")}
           onTouchStart={() => prefetchNavTarget("/transactions")}
         >
@@ -1971,7 +1957,7 @@ export function CloverShell({
             <MenuIcon name="transactions" />
           </span>
           <span className="shell-bottom-nav__label">Transactions</span>
-        </button>
+        </Link>
         <button
           ref={quickAddButtonRef}
           className="shell-bottom-nav__add"
@@ -1982,19 +1968,12 @@ export function CloverShell({
         >
           <MenuIcon name="plus" />
         </button>
-        <button
+        <Link
+          href="/adviser"
+          prefetch={false}
           className={`shell-bottom-nav__item${active === "adviser" || pathname?.startsWith("/adviser") ? " is-active" : ""}`}
           aria-current={active === "adviser" || pathname?.startsWith("/adviser") ? "page" : undefined}
-          type="button"
-          onMouseDown={(event) => {
-            if (event.button !== 0) {
-              return;
-            }
-
-            event.preventDefault();
-            navigateTo("/adviser");
-          }}
-          onClick={() => navigateTo("/adviser")}
+          onClick={(event) => handleNavigationLinkClick(event, "/adviser")}
           onMouseEnter={() => prefetchNavTarget("/adviser")}
           onTouchStart={() => prefetchNavTarget("/adviser")}
         >
@@ -2002,20 +1981,13 @@ export function CloverShell({
             <MenuIcon name="adviser" />
           </span>
           <span className="shell-bottom-nav__label">Adviser</span>
-        </button>
-        <button
+        </Link>
+        <Link
+          href="/more"
+          prefetch={false}
           className={`shell-bottom-nav__item${isMoreActive ? " is-active" : ""}`}
           aria-current={isMoreActive ? "page" : undefined}
-          type="button"
-          onMouseDown={(event) => {
-            if (event.button !== 0) {
-              return;
-            }
-
-            event.preventDefault();
-            navigateTo("/more");
-          }}
-          onClick={() => navigateTo("/more")}
+          onClick={(event) => handleNavigationLinkClick(event, "/more")}
           onMouseEnter={() => prefetchNavTarget("/more")}
           onTouchStart={() => prefetchNavTarget("/more")}
         >
@@ -2023,7 +1995,7 @@ export function CloverShell({
             <MenuIcon name="more" />
           </span>
           <span className="shell-bottom-nav__label">More</span>
-        </button>
+        </Link>
       </nav>
 
       <main
