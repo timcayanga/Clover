@@ -20,7 +20,11 @@ export const buildOptimisticPreviewTransactions = (
           ? (row.rawPayload as Record<string, unknown>)
           : null;
       const rowKind = typeof rawPayload?.kind === "string" ? rawPayload.kind.trim().toLowerCase() : "";
-      if (rowKind === "account_snapshot_marker" || rowKind === "opening_balance") {
+      if (
+        rowKind === "account_snapshot_marker" ||
+        rowKind === "opening_balance" ||
+        rowKind === "receivable_commitment_marker"
+      ) {
         return null;
       }
 

@@ -106,6 +106,142 @@ const main = async () => {
     );
   }
 
+  const sideBySideLedgerRows = [
+    ["Expenses", "", "", "", "Income"],
+    ["Date", "Type", "Purpose", "Name", "Amount", "", "Date", "Type", "Name", "Amount"],
+    [
+      new Date("2026-07-20T00:00:00.000Z"),
+      "Food & Dining",
+      "Personal",
+      "Coffee Shop",
+      245.5,
+      "",
+      new Date("2026-07-21T00:00:00.000Z"),
+      "Salary",
+      "Payroll",
+      50_000,
+    ],
+    [
+      new Date("2026-07-22T00:00:00.000Z"),
+      "Transport",
+      "Personal",
+      "Train",
+      75,
+      "",
+      new Date("2026-07-23T00:00:00.000Z"),
+      "Reimbursement",
+      "Taxi refund",
+      300,
+    ],
+  ];
+  const receivableRows = [
+    [
+      "Date Paid",
+      "Type",
+      "Purpose",
+      "Name",
+      "Payee",
+      "Amount",
+      "Date Received",
+      "Amount Paid",
+      "Amount Pending",
+      "Comment",
+    ],
+    [
+      new Date("2026-07-01T00:00:00.000Z"),
+      "Travel",
+      "Friends",
+      "Airline share",
+      "Alex",
+      10_000,
+      "",
+      2_500,
+      7_500,
+      "Awaiting balance",
+    ],
+    [
+      new Date("2026-07-02T00:00:00.000Z"),
+      "Entertainment",
+      "Friends",
+      "Concert ticket",
+      "Sam",
+      5_000,
+      new Date("2026-07-10T00:00:00.000Z"),
+      5_000,
+      0,
+      "",
+    ],
+  ];
+  for (const format of formats) {
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(accountRows), "Accounts");
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(sideBySideLedgerRows), "July 2026");
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(receivableRows), "Accounts Receivable");
+    const bytes = new Uint8Array(XLSX.write(workbook, { type: "buffer", bookType: format.bookType }));
+    const extractedText = await decodeSpreadsheetWorkbookBytes(bytes);
+    assert.match(extractedText, /__CLOVER_WORKSHEET__,0,Accounts/);
+    assert.match(extractedText, /__CLOVER_WORKSHEET__,1,July 2026/);
+    const parsedRows = parseImportText(
+      extractedText,
+      `Mixed Personal Finance.${format.extension}`,
+      format.mime
+    );
+    const snapshots = parsedRows.filter((row) => row.rawPayload?.kind === "account_snapshot_marker");
+    const transactions = parsedRows.filter(
+      (row) => row.rawPayload?.source === "structured_transaction_csv"
+    );
+    const receivables = parsedRows.filter(
+      (row) => row.rawPayload?.kind === "receivable_commitment_marker"
+    );
+    assert.equal(snapshots.length, 3, `${format.extension} should retain every account snapshot`);
+    assert.equal(transactions.length, 4, `${format.extension} should parse both horizontal ledgers`);
+    assert.equal(receivables.length, 2, `${format.extension} should route itemized receivables`);
+    assert.deepEqual(
+      transactions.map((row) => ({
+        name: row.merchantClean,
+        amount: row.amount,
+        type: row.type,
+        category: row.categoryName,
+        account: row.accountName,
+      })),
+      [
+        { name: "Coffee Shop", amount: "245.50", type: "expense", category: "Food & Dining", account: "Cash" },
+        { name: "Train", amount: "75.00", type: "expense", category: "Transport", account: "Cash" },
+        { name: "Payroll", amount: "50000.00", type: "income", category: "Salary", account: "Cash" },
+        { name: "Taxi", amount: "300.00", type: "income", category: "Reimbursement", account: "Cash" },
+      ]
+    );
+    assert.deepEqual(
+      receivables.map((row) => ({
+        title: row.rawPayload?.title,
+        pending: row.rawPayload?.amountPending,
+        worksheet: row.rawPayload?.worksheetName,
+      })),
+      [
+        { title: "Airline share", pending: 7_500, worksheet: "Accounts Receivable" },
+        { title: "Concert ticket", pending: 0, worksheet: "Accounts Receivable" },
+      ]
+    );
+    assert.ok(
+      parsedRows.every(
+        (row) =>
+          typeof row.rawPayload?.worksheetName === "string" &&
+          typeof row.rawPayload?.worksheetIndex === "number"
+      ),
+      `${format.extension} should preserve worksheet provenance`
+    );
+    assert.equal(
+      buildOptimisticPreviewTransactions(parsedRows as unknown as Array<Record<string, unknown>>, {
+        importFileId: `mixed-${format.extension}`,
+        accountId: "cash",
+        accountName: "Cash",
+        institution: "Cash",
+      }).length,
+      4,
+      `${format.extension} optimistic previews must exclude account and receivable markers`
+    );
+  }
+
   assert.match(
     validateImportFileBytes({
       fileName: "fake.xlsx",

@@ -8,6 +8,9 @@ Use these rules for structured financial exports (`.csv`, `.tsv`, `.xlsx`, `.xls
 - Recognize comma, tab, semicolon, and pipe delimiters, including Excel `sep=` directives.
 - Accept `.csv` and `.tsv` uploads and decode UTF-8, UTF-16 LE/BE, BOM-prefixed, and Windows-1252 exports before parsing.
 - Decode Excel and OpenDocument workbooks on the server, preserve cached formula results, and route each readable worksheet through the same deterministic schema parser. Never attempt to interpret the binary, ZIP/XML, or OLE payload as plain text.
+- Preserve worksheet boundaries, names, indexes, source rows, and source columns in the audit payload. A successful account-inventory sheet must not prevent transaction or receivable sheets in the same workbook from being parsed.
+- Detect independent tables arranged side-by-side on a worksheet. Parse each table in its own column range instead of combining duplicate `Date`, `Type`, `Name`, or `Amount` headers.
+- When a worksheet explicitly labels adjacent tables as `Expenses` and `Income`, treat a generic `Type` column as the source category and use the table label as transaction direction.
 - Search the first 12 rows for the most likely header so report titles and export metadata can precede the table.
 - Read recognized institution, account, account-number, account-type, currency, and snapshot-date metadata from key/value preamble rows.
 - Carry section-level account metadata forward in multi-account exports and ignore repeated header rows.
@@ -45,6 +48,7 @@ Rules:
 - Infer day-first or month-first order from explicit header formats and unambiguous dates, then apply that order consistently to ambiguous dates.
 - Suppress an exact repeated row only when the file supplies the same stable transaction reference, date, amount, direction, and account identity. Do not collapse repeated same-day/same-amount rows that have no reference.
 - Keep distinct row-level accounts as distinct Clover accounts.
+- When a workbook ledger has no account identity in the row, table metadata, or worksheet name, use the existing default cash account instead of creating an account from the workbook filename or date-like worksheet name.
 
 ## Account inventories and balance snapshots
 
@@ -64,6 +68,14 @@ Rules:
 - Use the upload date only when no snapshot date is provided.
 - Persist each account balance independently and expose all account summaries when the import reaches 100%.
 - Do not create transactions from account inventory rows.
+
+## Receivable worksheets
+
+- Recognize itemized Accounts Receivable tables with an original amount, payee/counterparty, amount paid, and amount pending.
+- Route each item to Recurring as a one-time receivable commitment. Open balances remain active; fully paid balances remain resolved.
+- Link itemized receivables to the imported Accounts Receivable account without creating spending or income transactions.
+- Preserve the original amount, paid amount, pending amount, source worksheet, source row, dates, purpose, category, and comments.
+- When itemized receivables exist, do not also create a duplicate aggregate recurring commitment from the account balance.
 
 ## Wide balance-history tables
 

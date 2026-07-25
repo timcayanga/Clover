@@ -40,6 +40,8 @@ type MatrixCase = {
   expectedAmount?: number;
   expectedAmounts?: number[];
   exactTransactions?: number;
+  expectedAccounts?: number;
+  expectedCommitments?: number;
   maximumMs?: number;
 };
 
@@ -135,6 +137,18 @@ const cases: MatrixCase[] = [
     fileType: "image/webp",
     minimumTransactions: 1,
     expectedAmount: 2_344,
+  },
+  {
+    label: "multi-sheet XLSX accounts transactions and receivables",
+    path: "/Users/TimCayanga1/Downloads/Net Worth Calculator.xlsx",
+    mode: "statement",
+    fileType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    minimumTransactions: 814,
+    exactTransactions: 814,
+    expectedInstitution: /Cash/i,
+    expectedAccountType: "cash",
+    expectedAccounts: 18,
+    expectedCommitments: 12,
   },
   {
     label: "auto-detected receipt photo dropped as statement",
@@ -483,6 +497,25 @@ const main = async () => {
         });
         console.error(JSON.stringify({ label: matrixCase.label, elapsedMs, diagnostics }, null, 2));
         throw error;
+      }
+      if (matrixCase.expectedAccounts != null) {
+        assert.equal(
+          await prisma.account.count({ where: { workspaceId: workspace.id } }),
+          matrixCase.expectedAccounts,
+          `${matrixCase.label}: unexpected account count.`
+        );
+      }
+      if (matrixCase.expectedCommitments != null) {
+        assert.equal(
+          await prisma.financialCommitment.count({
+            where: {
+              workspaceId: workspace.id,
+              source: "structured_workbook_receivable",
+            },
+          }),
+          matrixCase.expectedCommitments,
+          `${matrixCase.label}: itemized receivables were not published to Recurring.`
+        );
       }
       let downstream;
       const statusApiMs = await verifyVisibleStatusHandoff(posted.importId, quality.count, matrixCase.label);

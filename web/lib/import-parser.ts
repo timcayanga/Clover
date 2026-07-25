@@ -1012,6 +1012,15 @@ export const parseStructuredTransactionCsv = (
   const metadataInstitution = metadata.institution || context.institution || "";
   const metadataAccountName = metadata.account_name || context.accountName || "";
   const contextCorpus = resolveTransactionContext({ institution: metadataInstitution, accountName: metadataAccountName });
+  const rowContextCache = new Map<string, ReturnType<typeof resolveTransactionContext>>();
+  const resolveRowContext = (institution: string, accountName: string) => {
+    const key = `${institution}\u0000${accountName}`;
+    const cached = rowContextCache.get(key);
+    if (cached) return cached;
+    const resolved = resolveTransactionContext({ institution, accountName });
+    rowContextCache.set(key, resolved);
+    return resolved;
+  };
   const dateKey = table.canonicalHeaders.includes("date") ? "date" : "posted_date";
   const dateOrder = inferStructuredDateOrder(table, dateKey);
   let activeMetadata = { ...metadata };
@@ -1061,7 +1070,7 @@ export const parseStructuredTransactionCsv = (
     const rawDate = readStructuredCell(table, sourceRow, "date") || readStructuredCell(table, sourceRow, "posted_date");
     const rowInstitution = activeMetadata.institution || metadataInstitution;
     const rowAccountName = activeMetadata.account_name || metadataAccountName;
-    const rowContext = resolveTransactionContext({ institution: rowInstitution, accountName: rowAccountName });
+    const rowContext = resolveRowContext(rowInstitution, rowAccountName);
     const parsedDate = parseStructuredDate(rawDate, rowContext.countryCode || contextCorpus.countryCode, dateOrder);
     const description = normalizeWhitespace(
       readStructuredCell(table, sourceRow, "description") ||
@@ -1719,6 +1728,296 @@ const parseStructuredDelimitedImport = (
         },
       };
     })
+  );
+};
+
+const spreadsheetWorksheetMarker = "__CLOVER_WORKSHEET__";
+
+type StructuredWorkbookWorksheet = {
+  sheetIndex: number;
+  sheetName: string;
+  rows: string[][];
+};
+
+const splitStructuredWorkbookWorksheets = (text: string): StructuredWorkbookWorksheet[] | null => {
+  const rows = parseDelimitedRows(text, ",");
+  if (!rows.some((row) => row[0] === spreadsheetWorksheetMarker)) return null;
+
+  const worksheets: StructuredWorkbookWorksheet[] = [];
+  let current: StructuredWorkbookWorksheet | null = null;
+  for (const row of rows) {
+    if (row[0] === spreadsheetWorksheetMarker) {
+      if (current && current.rows.length > 0) worksheets.push(current);
+      current = {
+        sheetIndex: Number.isFinite(Number(row[1])) ? Number(row[1]) : worksheets.length,
+        sheetName: normalizeWhitespace(row[2] ?? "") || `Sheet ${worksheets.length + 1}`,
+        rows: [],
+      };
+      continue;
+    }
+    if (current) current.rows.push(row);
+  }
+  if (current && current.rows.length > 0) worksheets.push(current);
+  return worksheets;
+};
+
+type StructuredWorkbookTableRegion = {
+  headerIndex: number;
+  startColumn: number;
+  endColumn: number;
+  kind: "transactions" | "accounts";
+  direction: "income" | "expense" | null;
+};
+
+const findStructuredWorkbookTableRegions = (rows: string[][]): StructuredWorkbookTableRegion[] => {
+  const candidates: StructuredWorkbookTableRegion[] = [];
+  rows.forEach((row, headerIndex) => {
+    const nonEmptyRanges: Array<{ start: number; end: number }> = [];
+    let start = -1;
+    for (let columnIndex = 0; columnIndex <= row.length; columnIndex += 1) {
+      const populated = columnIndex < row.length && Boolean(normalizeWhitespace(row[columnIndex] ?? ""));
+      if (populated && start < 0) start = columnIndex;
+      if (!populated && start >= 0) {
+        nonEmptyRanges.push({ start, end: columnIndex - 1 });
+        start = -1;
+      }
+    }
+
+    nonEmptyRanges.forEach(({ start: startColumn, end: endColumn }) => {
+      const headers = row.slice(startColumn, endColumn + 1);
+      const score = scoreStructuredHeaderRow(headers);
+      const canonical = new Set(headers.map(canonicalStructuredHeader));
+      const sectionContext = rows
+        .slice(Math.max(0, headerIndex - 2), headerIndex)
+        .map((candidate) => {
+          const aligned = normalizeWhitespace(candidate[startColumn] ?? "");
+          if (aligned) return aligned;
+          return candidate
+            .slice(Math.max(0, startColumn - 3), startColumn)
+            .reverse()
+            .map((value) => normalizeWhitespace(value))
+            .find(Boolean) ?? "";
+        })
+        .filter(Boolean)
+        .join(" ");
+      const direction = /\bincome\b/i.test(sectionContext)
+        ? "income"
+        : /\bexpenses?\b|\bspending\b/i.test(sectionContext)
+          ? "expense"
+          : null;
+
+      if (score.hasDate && score.hasTransactionAmount && score.hasDescription && score.transactionScore >= 13) {
+        candidates.push({ headerIndex, startColumn, endColumn, kind: "transactions", direction });
+        return;
+      }
+      if (
+        score.snapshotScore >= 10 &&
+        canonical.has("account_name") &&
+        canonical.has("balance") &&
+        !canonical.has("amount") &&
+        !canonical.has("debit") &&
+        !canonical.has("credit")
+      ) {
+        candidates.push({ headerIndex, startColumn, endColumn, kind: "accounts", direction: null });
+      }
+    });
+  });
+
+  return candidates.filter((candidate, index) => {
+    return !candidates.some(
+      (other, otherIndex) =>
+        otherIndex < index &&
+        other.headerIndex === candidate.headerIndex &&
+        other.startColumn === candidate.startColumn &&
+        other.endColumn === candidate.endColumn &&
+        other.kind === candidate.kind
+    );
+  });
+};
+
+const parseStructuredWorkbookReceivables = (
+  worksheet: StructuredWorkbookWorksheet
+): ParsedImportRow[] | null => {
+  const headerIndex = worksheet.rows.slice(0, 12).findIndex((row) => {
+    const headers = new Set(row.map(normalizeStructuredHeader));
+    return (
+      headers.has("date_paid") &&
+      headers.has("name") &&
+      headers.has("payee") &&
+      headers.has("amount") &&
+      headers.has("amount_pending")
+    );
+  });
+  if (headerIndex < 0) return null;
+
+  const headers = worksheet.rows[headerIndex]!.map(normalizeStructuredHeader);
+  const read = (row: string[], key: string) => {
+    const index = headers.indexOf(key);
+    return index >= 0 ? normalizeWhitespace(row[index] ?? "") : "";
+  };
+
+  return worksheet.rows.slice(headerIndex + 1).flatMap((row, localRowIndex) => {
+    const title = read(row, "name");
+    const counterparty = read(row, "payee");
+    const originalAmount = parseMoney(read(row, "amount"));
+    const amountPaid = parseMoney(read(row, "amount_paid")) ?? 0;
+    const explicitPending = parseMoney(read(row, "amount_pending"));
+    const trackedDate = parseStructuredDate(read(row, "date_paid"), "PH", "month_first");
+    const receivedDate = parseStructuredDate(read(row, "date_received"), "PH", "month_first");
+    if (!title || originalAmount === null || !trackedDate) return [];
+    const amountPending = Math.max(0, explicitPending ?? originalAmount - amountPaid);
+    const categoryName = read(row, "type") || "Other";
+    const sourceRowIndex = headerIndex + localRowIndex + 2;
+
+    return [{
+      date: trackedDate?.toISOString().slice(0, 10),
+      amount: "0",
+      currency: "PHP",
+      merchantRaw: title,
+      merchantClean: title,
+      description: counterparty ? `${title} — ${counterparty}` : title,
+      categoryName,
+      accountName: "Accounts Receivable",
+      institution: null,
+      type: "income" as const,
+      confidence: 98,
+      parserConfidence: 100,
+      categoryConfidence: 100,
+      rawPayload: {
+        kind: "receivable_commitment_marker",
+        source: "structured_workbook_receivable",
+        documentType: "receivable_detail",
+        accountName: "Accounts Receivable",
+        accountType: "receivable",
+        accountCurrency: "PHP",
+        title,
+        counterparty: counterparty || null,
+        originalAmount,
+        amountPaid,
+        amountPending,
+        trackedDate: trackedDate?.toISOString().slice(0, 10) ?? null,
+        receivedDate: receivedDate?.toISOString().slice(0, 10) ?? null,
+        purpose: read(row, "purpose") || null,
+        categoryName,
+        comment: read(row, "comment") || null,
+        sourceRowIndex,
+      },
+    } satisfies ParsedImportRow];
+  });
+};
+
+const parseStructuredWorkbookWorksheet = (
+  worksheet: StructuredWorkbookWorksheet,
+  context: ImportParseContext
+): ParsedImportRow[] => {
+  const worksheetText = serializeStructuredDelimitedRows(worksheet.rows, ",");
+  const worksheetFileName = `${worksheet.sheetName}.csv`;
+  const netWorthRows = parseNetWorthSnapshotCsv(worksheetText, worksheetFileName, "text/csv");
+  if (netWorthRows) return netWorthRows;
+
+  const receivableRows = parseStructuredWorkbookReceivables(worksheet);
+  if (receivableRows) return receivableRows;
+
+  const regions = findStructuredWorkbookTableRegions(worksheet.rows);
+  if (regions.length === 0) {
+    return parseStructuredDelimitedImport(worksheetText, worksheetFileName, "text/csv", context) ?? [];
+  }
+
+  return regions.flatMap((region, regionIndex) => {
+    const nextOverlappingHeader = regions
+      .filter(
+        (candidate) =>
+          candidate.headerIndex > region.headerIndex &&
+          candidate.startColumn <= region.endColumn &&
+          candidate.endColumn >= region.startColumn
+      )
+      .sort((left, right) => left.headerIndex - right.headerIndex)[0];
+    const endRow = nextOverlappingHeader?.headerIndex ?? worksheet.rows.length;
+    const regionRows = worksheet.rows
+      .slice(region.headerIndex, endRow)
+      .map((row) => row.slice(region.startColumn, region.endColumn + 1));
+
+    if (region.kind === "transactions" && region.direction) {
+      const typeColumn = regionRows[0]?.findIndex((header) => canonicalStructuredHeader(header) === "type") ?? -1;
+      const hasCategoryColumn = regionRows[0]?.some((header) => canonicalStructuredHeader(header) === "category");
+      if (typeColumn >= 0 && !hasCategoryColumn) regionRows[0]![typeColumn] = "Category";
+      regionRows[0]!.push("Direction");
+      regionRows.slice(1).forEach((row) => row.push(region.direction === "income" ? "Credit" : "Debit"));
+    }
+
+    const regionText = serializeStructuredDelimitedRows(regionRows, ",");
+    const regionHeaders = new Set((regionRows[0] ?? []).map(canonicalStructuredHeader));
+    const hasExplicitAccountColumn =
+      regionHeaders.has("account") ||
+      regionHeaders.has("account_name") ||
+      regionHeaders.has("account_number") ||
+      regionHeaders.has("institution") ||
+      regionHeaders.has("bank");
+    const hasExplicitCurrencyColumn =
+      regionHeaders.has("currency") ||
+      regionHeaders.has("currency_code") ||
+      regionHeaders.has("original_currency");
+    return (parseSingleStructuredDelimitedImport(regionText, worksheetFileName, "text/csv", context) ?? []).map(
+      (row) => {
+        const rawPayload = row.rawPayload ?? {};
+        const isTransaction = rawPayload.source === "structured_transaction_csv";
+        const sourceRowIndex =
+          typeof rawPayload.sourceRowIndex === "number"
+            ? rawPayload.sourceRowIndex + region.headerIndex
+            : null;
+        return {
+          ...row,
+          ...(isTransaction && !hasExplicitAccountColumn
+            ? {
+                accountName: "Cash",
+                accountNumber: undefined,
+                institution: "Cash",
+                ...(!hasExplicitCurrencyColumn ? { currency: "PHP" } : {}),
+              }
+            : {}),
+          rawPayload: {
+            ...rawPayload,
+            ...(isTransaction && !hasExplicitAccountColumn
+              ? {
+                  accountName: "Cash",
+                  accountNumber: null,
+                  institutionRaw: "Cash",
+                  accountType: "cash",
+                  accountCurrency: hasExplicitCurrencyColumn ? row.currency ?? "PHP" : "PHP",
+                }
+              : {}),
+            ...(sourceRowIndex === null ? {} : { sourceRowIndex }),
+            sourceSectionIndex: regionIndex,
+            sourceSectionKind: region.kind,
+            sourceHeaderRow: region.headerIndex + 1,
+            sourceStartColumn: region.startColumn + 1,
+            sourceEndColumn: region.endColumn + 1,
+          },
+        } satisfies ParsedImportRow;
+      }
+    );
+  });
+};
+
+const parseStructuredWorkbookImport = (
+  text: string,
+  fileName: string,
+  fileType: string,
+  context: ImportParseContext
+): ParsedImportRow[] | null => {
+  if (!isStructuredDelimitedFile(fileName, fileType)) return null;
+  const worksheets = splitStructuredWorkbookWorksheets(text);
+  if (!worksheets) return null;
+
+  return worksheets.flatMap((worksheet) =>
+    parseStructuredWorkbookWorksheet(worksheet, context).map((row) => ({
+      ...row,
+      rawPayload: {
+        ...(row.rawPayload ?? {}),
+        worksheetName: worksheet.sheetName,
+        worksheetIndex: worksheet.sheetIndex,
+      },
+    }))
   );
 };
 
@@ -23249,6 +23548,10 @@ export const parseImportTextGenericOnly = (
   fileType: string,
   context: ImportParseContext = {}
 ) => {
+  const structuredWorkbookRows = parseStructuredWorkbookImport(text, fileName, fileType, context);
+  if (structuredWorkbookRows) {
+    return structuredWorkbookRows;
+  }
   const netWorthSnapshotRows = parseNetWorthSnapshotCsv(text, fileName, fileType);
   if (netWorthSnapshotRows) {
     return netWorthSnapshotRows;
@@ -24957,6 +25260,10 @@ export const parseImportText = (
   fileType: string,
   context: ImportParseContext = {}
 ): ParsedImportRow[] => {
+  const structuredWorkbookRows = parseStructuredWorkbookImport(text, fileName, fileType, context);
+  if (structuredWorkbookRows) {
+    return structuredWorkbookRows;
+  }
   const netWorthSnapshotRows = parseNetWorthSnapshotCsv(text, fileName, fileType);
   if (netWorthSnapshotRows) {
     return netWorthSnapshotRows;

@@ -27,7 +27,7 @@ import { deriveTravelEpisodes, resolveTransactionContext } from "@/lib/context-c
 import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 
 export const DATA_ENGINE_VERSION = "v2";
-export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v11";
+export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v12";
 export const resolveImportFileExtractionCacheVersion = (fileName?: string | null) =>
   /bank[\s_-]*cert|bankstatementandbankcert/i.test(String(fileName ?? ""))
     ? "v12-pdf-text-first"
@@ -3382,21 +3382,42 @@ export const buildParsedTransactionInsertData = async (params: {
   statementFingerprint: string;
 }) => {
   const columns = new Set(await getCompatibleParsedTransactionColumns());
-  const travelEpisodes = deriveTravelEpisodes(
-    params.rows.map((row) => ({
-      date: row.date,
-      merchantRaw: row.merchantRaw,
-      merchantClean: row.merchantClean,
-      description: row.description,
-      currency: row.currency,
-    }))
-  );
+  const hasStructuredWorkbookRows = params.rows.some((row) => {
+    const payload = row.rawPayload;
+    return (
+      payload &&
+      typeof payload === "object" &&
+      !Array.isArray(payload) &&
+      typeof (payload as Record<string, unknown>).worksheetName === "string"
+    );
+  });
+  // Travel inference performs corpus matching per transaction. A workbook can
+  // contain hundreds of historical rows and already provides deterministic
+  // worksheet/table context, so defer travel inference rather than blocking
+  // the visible-row audit write.
+  const travelEpisodes = hasStructuredWorkbookRows
+    ? new Map<number, ReturnType<typeof deriveTravelEpisodes> extends Map<number, infer T> ? T : never>()
+    : deriveTravelEpisodes(
+        params.rows.map((row) => ({
+          date: row.date,
+          merchantRaw: row.merchantRaw,
+          merchantClean: row.merchantClean,
+          description: row.description,
+          currency: row.currency,
+        }))
+      );
+  const structuredWorkbookContextCache = new Map<string, ReturnType<typeof resolveTransactionContext>>();
 
   return params.rows.flatMap((row, index) => {
     const amount = parseAmountValue(row.amount ?? null);
     if (amount === null) {
       return [];
     }
+    const rowRawPayload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    const isStructuredWorkbookRow = typeof rowRawPayload?.worksheetName === "string";
     const currency =
       normalizeInstitutionCurrency(
         params.metadata.institution,
@@ -3416,8 +3437,13 @@ export const buildParsedTransactionInsertData = async (params: {
     if (columns.has("id")) record.id = crypto.randomUUID();
     if (columns.has("importFileId")) record.importFileId = params.importFileId;
     if (columns.has("workspaceId")) record.workspaceId = params.workspaceId;
-    if (columns.has("institution")) record.institution = params.metadata.institution;
-    if (columns.has("accountNumber")) record.accountNumber = row.accountNumber ?? params.metadata.accountNumber;
+    if (columns.has("institution")) record.institution = row.institution ?? params.metadata.institution;
+    if (columns.has("accountNumber")) {
+      record.accountNumber = isStructuredWorkbookRow
+        ? row.accountNumber ??
+          (typeof rowRawPayload?.accountNumber === "string" ? rowRawPayload.accountNumber : null)
+        : row.accountNumber ?? params.metadata.accountNumber;
+    }
     if (columns.has("accountName")) record.accountName = row.accountName ?? null;
     if (columns.has("date")) record.date = parseDateValue(row.date ?? null);
     if (columns.has("amount")) record.amount = amount;
@@ -3445,14 +3471,31 @@ export const buildParsedTransactionInsertData = async (params: {
     if (columns.has("duplicateConfidence")) record.duplicateConfidence = row.duplicateConfidence ?? 0;
     if (columns.has("transferConfidence")) record.transferConfidence = row.transferConfidence ?? 0;
     if (columns.has("normalizedPayload")) {
-      const context = resolveTransactionContext({
-        institution: params.metadata.institution,
-        accountName: row.accountName ?? params.metadata.accountName,
-        merchantRaw: row.merchantRaw,
-        merchantClean: row.merchantClean,
-        description: row.description,
-        currency,
-      });
+      const context = isStructuredWorkbookRow
+        ? (() => {
+            const key = [
+              params.metadata.institution ?? "",
+              row.accountName ?? params.metadata.accountName ?? "",
+              currency,
+            ].join(":");
+            const cached = structuredWorkbookContextCache.get(key);
+            if (cached) return cached;
+            const resolved = resolveTransactionContext({
+              institution: params.metadata.institution,
+              accountName: row.accountName ?? params.metadata.accountName,
+              currency,
+            });
+            structuredWorkbookContextCache.set(key, resolved);
+            return resolved;
+          })()
+        : resolveTransactionContext({
+            institution: params.metadata.institution,
+            accountName: row.accountName ?? params.metadata.accountName,
+            merchantRaw: row.merchantRaw,
+            merchantClean: row.merchantClean,
+            description: row.description,
+            currency,
+          });
       const travelEpisode = travelEpisodes.get(index);
       const existingNormalizedPayload =
         row.normalizedPayload && typeof row.normalizedPayload === "object" && !Array.isArray(row.normalizedPayload)

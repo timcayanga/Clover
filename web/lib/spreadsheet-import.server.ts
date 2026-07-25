@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 const MAX_WORKBOOK_SHEETS = 32;
 const MAX_WORKSHEET_ROWS = 25_000;
 const MAX_WORKSHEET_COLUMNS = 512;
+export const SPREADSHEET_WORKSHEET_MARKER = "__CLOVER_WORKSHEET__";
 
 const formatDate = (value: Date) => {
   const year = value.getUTCFullYear();
@@ -53,7 +54,10 @@ const escapeCsvCell = (value: string) =>
 export const decodeSpreadsheetWorkbookBytes = async (bytes: Uint8Array) => {
   const workbook = XLSX.read(bytes, {
     type: "array",
-    cellDates: true,
+    // Keep spreadsheet dates as serials. Converting to JavaScript Date here
+    // makes a calendar date depend on the server timezone and can shift it by
+    // one day before parsing.
+    cellDates: false,
     cellFormula: true,
     cellNF: true,
     cellText: false,
@@ -62,8 +66,8 @@ export const decodeSpreadsheetWorkbookBytes = async (bytes: Uint8Array) => {
     throw new Error(`Spreadsheet imports support up to ${MAX_WORKBOOK_SHEETS} worksheets per workbook.`);
   }
 
-  const sheetRows: string[][][] = [];
-  for (const sheetName of workbook.SheetNames) {
+  const sheetRows: Array<{ sheetIndex: number; sheetName: string; rows: string[][] }> = [];
+  for (const [sheetIndex, sheetName] of workbook.SheetNames.entries()) {
     const worksheet = workbook.Sheets[sheetName];
     if (!worksheet) continue;
     const reference = worksheet["!ref"];
@@ -102,7 +106,7 @@ export const decodeSpreadsheetWorkbookBytes = async (bytes: Uint8Array) => {
       while (row.length > 0 && row[row.length - 1] === "") row.pop();
       if (row.some(Boolean)) normalizedRows.push(row);
     }
-    if (normalizedRows.length > 0) sheetRows.push(normalizedRows);
+    if (normalizedRows.length > 0) sheetRows.push({ sheetIndex, sheetName, rows: normalizedRows });
   }
 
   if (sheetRows.length === 0) {
@@ -110,7 +114,10 @@ export const decodeSpreadsheetWorkbookBytes = async (bytes: Uint8Array) => {
   }
 
   return sheetRows
-    .flatMap((rows, index) => (index === 0 ? rows : [[], ...rows]))
+    .flatMap(({ sheetIndex, sheetName, rows }) => [
+      [SPREADSHEET_WORKSHEET_MARKER, String(sheetIndex), sheetName],
+      ...rows,
+    ])
     .map((row) => row.map(escapeCsvCell).join(","))
     .join("\n");
 };

@@ -363,7 +363,8 @@ const inferStructuredDocumentImportModeFromParsedRows = (
       typeof rawPayload === "object" &&
       !Array.isArray(rawPayload) &&
       ((rawPayload as Record<string, unknown>).kind === "account_snapshot_marker" ||
-        (rawPayload as Record<string, unknown>).kind === "opening_balance")
+        (rawPayload as Record<string, unknown>).kind === "opening_balance" ||
+        (rawPayload as Record<string, unknown>).kind === "receivable_commitment_marker")
     );
   });
   if (visibleTransactionRows.length > 0) {
@@ -399,7 +400,11 @@ const isSnapshotOnlyParsedRow = (row: { rawPayload?: unknown }) => {
     row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
       ? (row.rawPayload as Record<string, unknown>)
       : null;
-  return rawPayload?.kind === "account_snapshot_marker" || rawPayload?.kind === "opening_balance";
+  return (
+    rawPayload?.kind === "account_snapshot_marker" ||
+    rawPayload?.kind === "opening_balance" ||
+    rawPayload?.kind === "receivable_commitment_marker"
+  );
 };
 
 const isGcryptoActivityHistoryRowSet = (rows: Array<{ rawPayload?: unknown }>) =>
@@ -8496,6 +8501,17 @@ export const processImportFileText = async (
           accountNumber: metadataForParse.accountNumber,
         });
   let parsedRows = parsedRowsAfterFallback.length > 0 ? parsedRowsAfterFallback : parsedRowsInitial;
+  const hasStructuredWorkbookRows =
+    parsedRows.length > 0 &&
+    parsedRows.some((row) => {
+      const payload = row.rawPayload;
+      return (
+        payload &&
+        typeof payload === "object" &&
+        !Array.isArray(payload) &&
+        typeof (payload as Record<string, unknown>).worksheetName === "string"
+      );
+    });
   const pdaxCryptoPositions = parsedRows.flatMap((row) => {
     const payload = row.rawPayload;
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -8677,7 +8693,8 @@ export const processImportFileText = async (
     hasTemplateMemory,
     trainedReceiptDetails: Boolean(trainedReceiptDetails),
     canReuseCachedStatementParse,
-    hasReliableDeterministicStatementParse: preliminaryHasStrongWisePdfDeterministicParse,
+    hasReliableDeterministicStatementParse:
+      preliminaryHasStrongWisePdfDeterministicParse || hasStructuredWorkbookRows,
     imageStatementParseLooksUsable: preliminaryImageStatementParseLooksUsable,
     textForParse,
     parsedRowsLength: parsedRows.length,
@@ -8695,6 +8712,7 @@ export const processImportFileText = async (
   });
   const shouldPrioritizeBackupEarly =
     !skipVisualBackupParser &&
+    !hasStructuredWorkbookRows &&
     (preliminaryParserRoutingDecision.decision === "backup_required" ||
       preliminaryParserRoutingDecision.decision === "backup_preferred");
   const preliminaryWiseImageStatement =
@@ -9186,6 +9204,7 @@ export const processImportFileText = async (
     rows: parsedRows as Array<Record<string, unknown>>,
   });
   const hasReliableDeterministicStatementParse =
+    hasStructuredWorkbookRows ||
     hasStrongWiseDeterministicParse ||
     hasKnownUnionBankSampleRows ||
     (importMode === "statement" &&
@@ -9372,6 +9391,7 @@ export const processImportFileText = async (
   let openAiMetadata: typeof metadataForParse | null = null;
   const shouldRunOpenAiFallback =
     !skipVisualBackupParser &&
+    !hasStructuredWorkbookRows &&
     !hasLocalDeterministicPdaxPortfolioSnapshot &&
     (!canUseFastImageParse || shouldForceBackupForSuspiciousParse || shouldUseVisionFallback);
   const shouldRaceBackupAgainstLocal =
@@ -12362,7 +12382,9 @@ export const confirmImportFile = async (
         return (
           source === "structured_transaction_csv" ||
           source === "account_snapshot_csv" ||
-          source === "wide_account_snapshot_csv"
+          source === "wide_account_snapshot_csv" ||
+          source === "net_worth_snapshot_csv" ||
+          source === "structured_workbook_receivable"
         );
       })
     );
@@ -12413,6 +12435,17 @@ export const confirmImportFile = async (
     const groupCurrency = readRowAccountCurrency(firstGroupRow);
     const groupLooksWiseAccount = rowLooksWiseAccount(firstGroupRow);
     const groupHasDedicatedWisePdfIdentity = groupRows.length > 0 && groupRows.every(isDedicatedWisePdfStatementRow);
+    const groupIsStructuredWorkbook =
+      groupRows.length > 0 &&
+      groupRows.every((row) => {
+        const payload = row.rawPayload;
+        return (
+          payload &&
+          typeof payload === "object" &&
+          !Array.isArray(payload) &&
+          typeof (payload as Record<string, unknown>).worksheetName === "string"
+        );
+      });
     const groupAccount =
       notesCashAccount ??
       (await resolveConfirmationAccount({
@@ -12424,7 +12457,8 @@ export const confirmImportFile = async (
           accountNumber:
             groupLooksWiseAccount && !groupHasDedicatedWisePdfIdentity
               ? null
-              : readRowAccountNumber(firstGroupRow) ?? baseStatementMetadata.accountNumber,
+              : readRowAccountNumber(firstGroupRow) ??
+                (groupIsStructuredWorkbook ? null : baseStatementMetadata.accountNumber),
           accountType: groupLooksWiseAccount ? "wallet" : groupAccountType,
           currency:
             groupCurrency ??
@@ -12502,7 +12536,8 @@ export const confirmImportFile = async (
         typeof rawPayload === "object" &&
         !Array.isArray(rawPayload) &&
         ((rawPayload as Record<string, unknown>).kind === "opening_balance" ||
-          (rawPayload as Record<string, unknown>).kind === "account_snapshot_marker")
+          (rawPayload as Record<string, unknown>).kind === "account_snapshot_marker" ||
+          (rawPayload as Record<string, unknown>).kind === "receivable_commitment_marker")
       );
     });
     const groupBalance = getImportAccountBalanceFromParsedRows(group.rows as EnrichedParsedImportRow[]);
@@ -12910,10 +12945,21 @@ export const confirmImportFile = async (
     // extra transaction row. Live imports stay aligned with the parser fixtures.
   }
 
-  if (hasNetWorthSnapshotAccountGroups) {
+  if (hasNetWorthSnapshotAccountGroups || hasStructuredDelimitedAccountGroups) {
     for (const group of parsedAccountGroups) {
       const groupAccount = accountByGroupKey.get(group.key);
       if (!groupAccount || groupAccount.type !== "receivable") {
+        continue;
+      }
+      if (
+        group.rows.some(
+          (row) =>
+            row.rawPayload &&
+            typeof row.rawPayload === "object" &&
+            !Array.isArray(row.rawPayload) &&
+            (row.rawPayload as Record<string, unknown>).kind === "receivable_commitment_marker"
+        )
+      ) {
         continue;
       }
 
@@ -12965,6 +13011,98 @@ export const confirmImportFile = async (
           },
         });
       }
+    }
+  }
+
+  for (const row of parsedRows as Array<Record<string, unknown>>) {
+    const payload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    if (payload?.kind !== "receivable_commitment_marker") {
+      continue;
+    }
+
+    const receivableAccount = rowAccountFor(row);
+    const title =
+      typeof payload.title === "string" && payload.title.trim()
+        ? payload.title.trim()
+        : typeof row.merchantClean === "string" && row.merchantClean.trim()
+          ? row.merchantClean.trim()
+          : "Accounts Receivable";
+    const counterparty =
+      typeof payload.counterparty === "string" && payload.counterparty.trim()
+        ? payload.counterparty.trim()
+        : null;
+    const amountPending = Math.max(0, Number(payload.amountPending ?? 0) || 0);
+    const originalAmount = Math.max(0, Number(payload.originalAmount ?? 0) || 0);
+    const amountPaid = Math.max(0, Number(payload.amountPaid ?? 0) || 0);
+    const trackedDate =
+      typeof payload.trackedDate === "string" && payload.trackedDate.trim()
+        ? payload.trackedDate.trim()
+        : null;
+    const sourceRowIndex =
+      typeof payload.sourceRowIndex === "number" ? payload.sourceRowIndex : null;
+    const worksheetName =
+      typeof payload.worksheetName === "string" && payload.worksheetName.trim()
+        ? payload.worksheetName.trim()
+        : "worksheet";
+    const notes = [
+      `Imported from ${worksheetName}${sourceRowIndex ? ` row ${sourceRowIndex}` : ""}.`,
+      `Original amount: ${originalAmount.toFixed(2)}; paid: ${amountPaid.toFixed(2)}.`,
+      trackedDate ? `Tracked since ${trackedDate}.` : null,
+      typeof payload.comment === "string" && payload.comment.trim() ? payload.comment.trim() : null,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const existingDetailedReceivable = await tx.financialCommitment.findFirst({
+      where: {
+        workspaceId: String(importFile.workspaceId),
+        kind: "receivable",
+        accountId: receivableAccount.id,
+        source: "structured_workbook_receivable",
+        title,
+        counterparty,
+        notes,
+      },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    });
+    const receivableData = {
+      title,
+      counterparty,
+      amount: amountPending.toFixed(2),
+      currency:
+        typeof row.currency === "string" && row.currency.trim()
+          ? row.currency.trim().toUpperCase()
+          : "PHP",
+      dueDate: null,
+      recurrence: "once" as const,
+      nextDueDate: null,
+      notes,
+      accountId: receivableAccount.id,
+      transactionId: null,
+      statementCheckpointId: statementCheckpoint?.id ?? null,
+      status: amountPending > 0 ? ("active" as const) : ("resolved" as const),
+      source: "structured_workbook_receivable",
+      confidence:
+        typeof row.confidence === "number"
+          ? Math.max(0, Math.min(100, Math.round(row.confidence)))
+          : 98,
+    };
+    if (existingDetailedReceivable) {
+      await tx.financialCommitment.update({
+        where: { id: existingDetailedReceivable.id },
+        data: receivableData,
+      });
+    } else {
+      await tx.financialCommitment.create({
+        data: {
+          workspaceId: String(importFile.workspaceId),
+          kind: "receivable",
+          ...receivableData,
+        },
+      });
     }
   }
 
@@ -13037,7 +13175,11 @@ export const confirmImportFile = async (
     }
 
     const kind = (row.rawPayload as Record<string, unknown>).kind;
-    return kind !== "opening_balance" && kind !== "account_snapshot_marker";
+    return (
+      kind !== "opening_balance" &&
+      kind !== "account_snapshot_marker" &&
+      kind !== "receivable_commitment_marker"
+    );
   }).length;
   const snapshotOnlySingleGroupBalance =
     candidateVisibleTransactionsCount === 0 &&
@@ -13201,6 +13343,12 @@ export const confirmImportFile = async (
         !Array.isArray(row.rawPayload) &&
         (row.rawPayload as Record<string, unknown>).kind === "account_snapshot_marker"
     );
+    const rowIsReceivableCommitmentMarker = Boolean(
+      typeof row.rawPayload === "object" &&
+        row.rawPayload !== null &&
+        !Array.isArray(row.rawPayload) &&
+        (row.rawPayload as Record<string, unknown>).kind === "receivable_commitment_marker"
+    );
     const parsedTransactionDate =
       (row.date instanceof Date && !Number.isNaN(row.date.getTime())
         ? row.date
@@ -13228,7 +13376,7 @@ export const confirmImportFile = async (
       /wise/i.test(rowWiseIdentityText) &&
       (rowWiseDocumentText.includes("statement") || rowWiseDocumentText.includes("wise_mobile_screenshot"));
 
-    if (rowIsOpeningBalance || rowIsAccountSnapshotMarker) {
+    if (rowIsOpeningBalance || rowIsAccountSnapshotMarker || rowIsReceivableCommitmentMarker) {
       continue;
     }
 
@@ -13860,6 +14008,32 @@ export const confirmImportFile = async (
       (rawPayload as Record<string, unknown>).source === "openai"
     );
   }) as EnrichedParsedImportRow[];
+  // Large workbooks can contain hundreds of repeated ledger descriptions.
+  // Learning one durable signal per merchant/category/direction is sufficient
+  // and avoids flooding the database pool immediately after rows become
+  // visible. User-confirmed edits still create their own authoritative signals.
+  const postVisibleTrainingSignals = Array.from(
+    trainingSignals.reduce((signals, entry) => {
+      const key = [
+        entry.merchantText.trim().toLowerCase(),
+        entry.categoryName.trim().toLowerCase(),
+        entry.type,
+      ].join(":");
+      const existing = signals.get(key);
+      if (
+        !existing ||
+        entry.teachabilityScore > existing.teachabilityScore ||
+        (entry.teachabilityScore === existing.teachabilityScore && entry.confidence > existing.confidence)
+      ) {
+        signals.set(key, entry);
+      }
+      return signals;
+    }, new Map<string, (typeof trainingSignals)[number]>()).values()
+  ).slice(0, 200);
+  // Per-row analytics is useful for small statements, but hundreds of network
+  // calls from a workbook compete with the first UI refresh. Keep a bounded
+  // representative sample; aggregate import metrics are emitted separately.
+  const postVisibleAnalyticsTransactions = preparedTransactions.slice(0, 100);
   const analyticsDistinctId = String(importFile.workspaceId ?? "import-worker");
   schedulePostVisibleImportWork(`finalize:${importFileId}`, async () => {
     await prisma.trainingSignal.deleteMany({
@@ -13881,7 +14055,7 @@ export const confirmImportFile = async (
       console.warn("Unable to sync recurring patterns after import confirmation", { importFileId, error });
     });
 
-    await runWithConcurrency(trainingSignals, 4, async (entry) => {
+    await runWithConcurrency(postVisibleTrainingSignals, 4, async (entry) => {
       await recordTrainingSignal({
         workspaceId: importFile.workspaceId,
         importFileId,
@@ -13956,7 +14130,7 @@ export const confirmImportFile = async (
       });
     }
 
-    await runWithConcurrency(preparedTransactions, 4, async (entry) => {
+    await runWithConcurrency(postVisibleAnalyticsTransactions, 4, async (entry) => {
       const insertRow = entry.insertRow as {
         currency?: unknown;
         reviewStatus?: unknown;

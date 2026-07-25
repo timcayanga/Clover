@@ -162,6 +162,10 @@ const looksLikeGenericCameraFileName = (value?: string | null) => {
   return /^(?:img|dsc|pxl|image|screenshot)[-_ ]?\d+\.(?:png|jpe?g|webp|heic|heif|gif|bmp|avif)$/i.test(fileName);
 };
 
+const isSpreadsheetUploadFile = (fileName?: string | null, fileType?: string | null) =>
+  /\.(?:xlsx|xls|xlsm|xlsb|ods)$/i.test(fileName ?? "") ||
+  /(?:spreadsheetml|ms-excel|opendocument\.spreadsheet)/i.test(fileType ?? "");
+
 const detectLimitError = (message: string | null | undefined) => {
   if (!message) {
     return null;
@@ -2120,6 +2124,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         bytes.length <= 10_000_000 &&
         !shouldAvoidPdfPreflight;
       const canProcessImageFromRequestBytes = isImageUpload && bytes.length <= 10_000_000;
+      const canProcessSpreadsheetFromRequestBytes =
+        isSpreadsheetUploadFile(effectiveFileName, effectiveFileType) &&
+        bytes.length <= 10_000_000;
 
       if (trainedReceiptFixture) {
         await uploadBankHintPromise.catch((error) => {
@@ -2204,11 +2211,29 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               });
             });
           }
-        } else if (canExtractPdfFromRequestBytes || canProcessImageFromRequestBytes) {
+        } else if (
+          canExtractPdfFromRequestBytes ||
+          canProcessImageFromRequestBytes ||
+          canProcessSpreadsheetFromRequestBytes
+        ) {
           // The request already contains the complete file. Let durable storage
           // and parsing run concurrently instead of uploading and immediately
           // downloading the same bytes again.
           await uploadBankHintPromise;
+          if (canProcessSpreadsheetFromRequestBytes) {
+            // Workbook decoding and confirmation can safely use the immutable
+            // request bytes. Keep the raw audit-file upload alive after the
+            // response without making visible rows wait on object-storage
+            // latency.
+            after(async () => {
+              await uploadPromise.catch((error) => {
+                console.warn("Unable to finish spreadsheet raw file upload", {
+                  importId,
+                  error: summarizeErrorForLog(error),
+                });
+              });
+            });
+          }
         } else {
           await Promise.all([uploadPromise, uploadBankHintPromise]);
         }
@@ -2377,7 +2402,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               fileName: effectiveFileName,
               workspaceId: String(importFile.workspaceId),
               importMode,
-              sourceBytes: canExtractPdfFromRequestBytes ? bytes : null,
+              sourceBytes:
+                canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes
+                  ? bytes
+                  : null,
             },
             password,
             pdfJsBaseUrl,
@@ -2607,7 +2635,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               fileName: effectiveFileName,
               workspaceId: String(importFile.workspaceId),
               importMode,
-              sourceBytes: canExtractPdfFromRequestBytes ? bytes : null,
+              sourceBytes:
+                canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes
+                  ? bytes
+                  : null,
             },
             password,
             pdfJsBaseUrl,
@@ -2647,9 +2678,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         hasExtractedText;
       const shouldProcessInlineStatementImage =
         isStatementImageUpload && bytes.length <= 10_000_000;
+      const shouldProcessInlineSpreadsheet = canProcessSpreadsheetFromRequestBytes;
       const shouldProcessInline =
         shouldProcessInlineKnownBpiScreenshot ||
         shouldProcessInlineStatementImage ||
+        shouldProcessInlineSpreadsheet ||
         (!shouldQueueDocumentUpload &&
           !isPdfUpload(effectiveFileName, effectiveFileType) &&
           ((hasExtractedText && parsedMetadataConfidence >= 95 && bytes.length <= 8_000_000) ||
@@ -2704,11 +2737,19 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           allowDuplicateStatement,
           importMode,
           pdfJsBaseUrl,
-          sourceBytes: canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes ? bytes : null,
+          sourceBytes:
+            canProcessImageFromRequestBytes ||
+            canExtractPdfFromRequestBytes ||
+            canProcessSpreadsheetFromRequestBytes
+              ? bytes
+              : null,
           // The processor awaits this promise immediately before its first
           // persistence write. That retains the raw-file audit guarantee while
           // allowing storage, PDF extraction, and local parsing to overlap.
-          rawFileReady: canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes ? uploadPromise : null,
+          rawFileReady:
+            canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes
+              ? uploadPromise
+              : null,
           skipVisualBackupParser: shouldPreferSampleFallback && Boolean(sampleFallbackText),
           statementMetadataOverride: processingBankName
             ? {

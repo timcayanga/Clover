@@ -472,8 +472,18 @@ const main = async () => {
   );
   assert.match(
     processRouteSource,
-    /rawFileReady: canProcessImageFromRequestBytes \|\| canExtractPdfFromRequestBytes \? uploadPromise : null/,
+    /rawFileReady:\s*canProcessImageFromRequestBytes \|\| canExtractPdfFromRequestBytes\s*\? uploadPromise\s*:\s*null/,
     "Request-byte PDFs should overlap storage and parsing, with the worker preserving the raw-file write boundary."
+  );
+  assert.match(
+    processRouteSource,
+    /const shouldProcessInlineSpreadsheet = canProcessSpreadsheetFromRequestBytes/,
+    "Spreadsheet request bytes should use the deterministic inline path instead of a second background handoff."
+  );
+  assert.match(
+    processRouteSource,
+    /Unable to finish spreadsheet raw file upload/,
+    "Spreadsheet parsing may run from immutable request bytes, but the raw workbook upload must remain scheduled for audit."
   );
   assert.match(processRouteSource, /await uploadPromise;[\s\S]{0,500}processingMessage: canonicalStillProcessing/);
   assert.match(importProcessorSource, /sourceFingerprint: importFile\.sourceFingerprint/);
