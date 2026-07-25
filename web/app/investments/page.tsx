@@ -543,7 +543,7 @@ function PortfolioInlineEdit({
     }
   };
 
-  if (kind === "select") {
+  if (kind === "select" && editing) {
     return (
       <select
         ref={(node) => {
@@ -557,9 +557,17 @@ function PortfolioInlineEdit({
           const nextValue = event.target.value;
           setDraft(nextValue);
           if (nextValue !== value) {
-            void onCommit(nextValue).catch(() => setDraft(value));
+            void onCommit(nextValue)
+              .then(() => setEditing(false))
+              .catch(() => {
+                setDraft(value);
+                setEditing(false);
+              });
+          } else {
+            setEditing(false);
           }
         }}
+        onBlur={() => setEditing(false)}
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -743,8 +751,8 @@ const buildInvestmentGroups = (rows: Account[]): InvestmentGroup[] => {
 };
 
 const INVESTMENT_SORT_OPTIONS: Array<{ key: InvestmentSortKey; label: string }> = [
-  { key: "value_desc", label: "Current value: high to low" },
-  { key: "value_asc", label: "Current value: low to high" },
+  { key: "value_desc", label: "Estimated value: high to low" },
+  { key: "value_asc", label: "Estimated value: low to high" },
   { key: "name_asc", label: "Name: A to Z" },
   { key: "gain_desc", label: "Gain / loss: high to low" },
   { key: "gain_asc", label: "Gain / loss: low to high" },
@@ -784,6 +792,12 @@ function InvestmentInsightDonut({
   const circumference = 2 * Math.PI * radius;
   let offset = 0;
   const activeSlice = slices.find((slice) => slice.key === activeSliceKey) ?? null;
+  const centerValueSize =
+    centerValue.length > 16
+      ? "report-donut__center-value--tight"
+      : centerValue.length > 11
+        ? "report-donut__center-value--compact"
+        : "";
 
   return (
     <div className={`report-donut${className ? ` ${className}` : ""}`}>
@@ -814,7 +828,7 @@ function InvestmentInsightDonut({
             : null}
         </svg>
         <div className="report-donut__center">
-          <strong>{centerValue}</strong>
+          <strong className={centerValueSize} title={centerValue}>{centerValue}</strong>
           {centerLabel ? <span>{centerLabel}</span> : null}
         </div>
         {activeSlice ? (
@@ -2509,7 +2523,7 @@ export default function InvestmentsPage() {
                     <span role="columnheader">Type</span>
                     <span role="columnheader">Symbol</span>
                     <span role="columnheader">Units</span>
-                    <span role="columnheader">Current value</span>
+                    <span role="columnheader">Estimated value</span>
                     <span role="columnheader">Gain / loss</span>
                     <span role="columnheader" aria-label="Open details" />
                   </div>
@@ -2578,7 +2592,7 @@ export default function InvestmentsPage() {
                           <PortfolioInlineEdit
                             value={row.currentValue?.toString() ?? ""}
                             displayValue={row.currentValue === null ? "" : formatInvestmentAmount(row.currentValue, row.currency)}
-                            ariaLabel={`Edit current value for ${row.name}`}
+                            ariaLabel={`Edit estimated value for ${row.name}`}
                             kind="number"
                             className="investments-portfolio-inline-edit--amount"
                             onCommit={(value) => commitPortfolioRowField(row, "currentValue", value)}
@@ -2689,7 +2703,7 @@ export default function InvestmentsPage() {
                   </div>
                 </div>
                 <div className="investments-allocation__summary">
-                  <span>Total value</span>
+                  <span>Estimated value</span>
                   <strong>{formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)}</strong>
                 </div>
               </div>
@@ -2805,8 +2819,8 @@ export default function InvestmentsPage() {
 
         {selectedTab === "portfolio" ? (
           <div className="investments-portfolio-summary-row">
-            <div className="investments-portfolio-table__total" aria-label="Portfolio total value">
-              <span>Total value</span>
+            <div className="investments-portfolio-table__total" aria-label="Portfolio estimated value">
+              <span>Estimated value</span>
               <strong>{formatInvestmentAggregate(portfolioTableTotals.currentValue, visiblePortfolioRows)}</strong>
             </div>
           </div>

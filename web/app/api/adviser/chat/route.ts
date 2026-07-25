@@ -2102,7 +2102,10 @@ export async function POST(request: Request) {
       "A goal is optional context, never a prerequisite for giving a useful balance, cash-flow, portfolio, or investment-readiness answer.",
       "If data is stale or historical, say so plainly and avoid implying it reflects today.",
       "If you can, mention the exact source of the signal, the relevant period, and one practical next step.",
-      "Keep the answer short: lead with the direct answer, then give the key numbers or reason, then one practical next step. Use bullets when comparing amounts or obligations.",
+      "Keep the answer under 140 words. Lead with the direct answer, then use two to four short paragraphs or bullets, and end with one concrete next step.",
+      "Never compress several balances, caveats, and recommendations into one dense paragraph. Put each important number or idea on its own line.",
+      "Use everyday language. Avoid technical phrases such as planning context, reserve readiness, suitability context, baseline model, signal quality, or recorded value unless the user explicitly asks for methodology.",
+      "Base the next step on the user's actual transactions, bills, balances, or portfolio. If transaction history is missing, say that plainly and ask the user to add or review recent transactions before treating cash as available to invest.",
       "For calculations, separate what is available, what is protected, what is estimated, and what remains. Never hide uncertainty inside a single confident number.",
       "For follow-up questions, use the previous conversation context and do not repeat the same explanation unless a new number or caveat changes it.",
       "Treat short follow-ups such as 'what about next month?', 'how much more?', 'why?', or 'do that' as continuations of the recent conversation. Preserve the prior topic, numbers, and requested action instead of resetting to a generic overview.",
@@ -2110,7 +2113,7 @@ export async function POST(request: Request) {
       "If the user asks whether they can afford a purchase but does not provide a price, ask for the price and, if relevant, the date they need it by. Do not invent a price or give a yes/no answer without one.",
       "If the user asks what to invest in, do not name a specific security as a personalized recommendation. Explain the missing suitability details and offer high-level educational categories only after checking investment readiness.",
       "Never expose internal personas, confidence scores, theme scores, tool names, implementation labels, or phrases such as 'Clover surfaced'. Write in plain, friendly language.",
-      "Do not tell the user only to open another page. Answer the question first from the available data, then offer one relevant CTA when a drill-down would help.",
+      "Do not tell the user only to open another page. Answer the question first from the available data, then offer at most one relevant CTA when a drill-down would help.",
       "If the user asks how to set up a goal, budget, transaction, account, investment, or split bill, explain the next step and use a confirmation action only when they explicitly ask Clover to create or edit it.",
       answerFeedbackGuidance,
       "Do not pretend to be a financial advisor. Keep guidance educational and contextual.",
@@ -2233,7 +2236,9 @@ export async function POST(request: Request) {
       question: latestQuestion,
     }).catch(() => null);
 
-    const strongestFallbackSignal = explainabilityBundle[0] ?? null;
+    const topCategorySpend = topCategoryName
+      ? currentSummary.expenseCategories.get(topCategoryName) ?? 0
+      : 0;
     const fallbackNextStep =
       inferredQuestionTheme === "goals" && goalLabel
         ? `Open Goals and check whether ${goalLabel.toLowerCase()} still matches your latest cash-flow pace.`
@@ -2258,7 +2263,7 @@ export async function POST(request: Request) {
 
       if (inferredQuestionTheme === "investments") {
         return hasInvestmentPortfolio
-          ? `Your recorded investments total ${investmentPortfolioValueLabel} across ${currentInvestmentAccounts.length || 1} visible holding${currentInvestmentAccounts.length === 1 ? "" : "s"}. Before adding more, compare that mix with your available cash of ${formatCurrency(spendableAccountBalance, displayCurrency)} and near-term obligations. ${fallbackNextStep}`
+          ? `Your investments total ${investmentPortfolioValueLabel} across ${currentInvestmentAccounts.length || 1} visible holding${currentInvestmentAccounts.length === 1 ? "" : "s"}.\n\nAvailable cash: ${formatCurrency(spendableAccountBalance, displayCurrency)}.\n\n${allTransactions.length > 0 ? fallbackNextStep : "Clover does not have recent transaction activity to estimate a safe monthly contribution yet. Add or review recent transactions before treating the full cash balance as investable."}`
           : `I can help you narrow the next investment category, but I first need a portfolio balance or holding plus your time horizon and comfort with losses.`;
       }
 
@@ -2269,7 +2274,21 @@ export async function POST(request: Request) {
       if (inferredQuestionTheme === "cashflow") {
         if (asksForOverallMoneyOverview) {
           const upcomingPressure = recurringAmountPressure + commitmentAmountPressure + splitBillSettlementPressure;
-          return `Your current picture is ${formatCurrency(spendableAccountBalance, displayCurrency)} in available cash, ${investmentPortfolioValueLabel} in recorded investments, and ${formatCurrency(liabilityAccountBalance, displayCurrency)} owed. In the ${dataFreshnessLabel}, income was ${formatCurrency(currentSummary.income, displayCurrency)} and spending was ${formatCurrency(currentSpend, displayCurrency)}. Known near-term pressure is ${formatCurrency(upcomingPressure, displayCurrency)}. Focus first on keeping that amount protected before adding new spending or investments.`;
+          const activityLine =
+            allTransactions.length > 0
+              ? `${dataFreshnessLabel}: ${formatCurrency(currentSummary.income, displayCurrency)} income and ${formatCurrency(currentSpend, displayCurrency)} spending.`
+              : "No recent transaction activity is available, so Clover cannot estimate your usual monthly spending yet.";
+          const pressureLine =
+            upcomingPressure > 0
+              ? `Upcoming bills and commitments: ${formatCurrency(upcomingPressure, displayCurrency)}.`
+              : "No upcoming bills or commitments are currently recorded.";
+          const focusLine =
+            upcomingPressure > 0
+              ? `Next: set aside ${formatCurrency(upcomingPressure, displayCurrency)} before moving money elsewhere.`
+              : topCategoryName && topCategorySpend > 0
+                ? `Next: review the largest ${topCategoryName} transactions, which total ${formatCurrency(topCategorySpend, displayCurrency)} in this window.`
+                : "Next: add or review recent transactions so Clover can estimate what portion of your cash is genuinely free to spend or invest.";
+          return `Cash: ${formatCurrency(spendableAccountBalance, displayCurrency)}\nInvestments: ${investmentPortfolioValueLabel}\nAmount owed: ${formatCurrency(liabilityAccountBalance, displayCurrency)}\n\n${activityLine}\n${pressureLine}\n\n${focusLine}`;
         }
         return workspace.accounts.length > 0
           ? `Clover can see ${formatCurrency(spendableAccountBalance, displayCurrency)} in available cash across ${workspace.accounts.length} account${workspace.accounts.length === 1 ? "" : "s"}. ${recurringDueSoon.length > 0 ? `${recurringDueSoon.length} recurring payment${recurringDueSoon.length === 1 ? " is" : "s are"} coming up, so protect those before moving money. ` : ""}${fallbackNextStep}`
@@ -2502,6 +2521,27 @@ export async function POST(request: Request) {
               href: "/recurring",
             }]
           : [];
+    const selectPrimaryAdviserAction = (candidates: AdviserAction[]) => {
+      if (candidates.length <= 1) {
+        return candidates.slice(0, 1);
+      }
+
+      const confirmation = candidates.find((action) => action.kind === "confirm");
+      if (confirmation) {
+        return [confirmation];
+      }
+
+      const upcomingPressure = recurringAmountPressure + commitmentAmountPressure + splitBillSettlementPressure;
+      const preferredTypes =
+        inferredQuestionTheme === "investments"
+          ? ["open_investment_readiness", "open_investment_plan", "open_investments"]
+          : inferredQuestionTheme === "behavior"
+            ? ["find_transactions", "open_data_quality", "open_changes_report"]
+            : asksForOverallMoneyOverview && upcomingPressure <= 0
+              ? ["open_accounts", "open_cashflow", "open_budgeting"]
+              : ["open_cashflow", "open_recurring", "open_accounts", "open_split_bills", "open_budgeting"];
+      return [preferredTypes.map((type) => candidates.find((action) => action.type === type)).find(Boolean) ?? candidates[0]];
+    };
     if (asksAboutSpecificPurchase && !includesPurchaseAmount) {
       return NextResponse.json({
         reply: "I can check that safely, but I need the purchase price first. If timing matters, tell me the date you need it by or how long you want your cash to last. I will compare it with your available cash, known obligations, and a reasonable buffer.",
@@ -2737,14 +2777,14 @@ export async function POST(request: Request) {
         });
       } catch (error) {
         console.error("Adviser model request failed", error instanceof Error ? error.message : error);
-        return NextResponse.json({ reply: fallbackReply, actions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
+        return NextResponse.json({ reply: fallbackReply, actions: selectPrimaryAdviserAction(actions.length > 0 ? actions : fallbackActions), suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
       } finally {
         clearTimeout(timeout);
       }
 
       if (!response.ok) {
         console.error("Adviser model request returned an error", response.status);
-        return NextResponse.json({ reply: fallbackReply, actions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
+        return NextResponse.json({ reply: fallbackReply, actions: selectPrimaryAdviserAction(actions.length > 0 ? actions : fallbackActions), suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
       }
 
       payload = (await response.json()) as Record<string, unknown>;
@@ -3144,6 +3184,7 @@ export async function POST(request: Request) {
     if (actions.length === 0 && fallbackActions.length > 0) {
       actions.push(...fallbackActions);
     }
+    const responseActions = selectPrimaryAdviserAction(actions);
     if (streamRequested) {
       const encoder = new TextEncoder();
       let upstreamResponse: Response | null = null;
@@ -3183,7 +3224,7 @@ export async function POST(request: Request) {
                   }
                   if (done) break;
                 }
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions, suggestions: suggestedQuestions, grounding })}\n\n`));
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions: responseActions, suggestions: suggestedQuestions, grounding })}\n\n`));
                 controller.close();
               } catch (error) {
                 console.error("Adviser upstream stream read failed", error instanceof Error ? error.message : error);
@@ -3197,7 +3238,7 @@ export async function POST(request: Request) {
               let index = 0;
               const emit = () => {
                 if (index >= chunks.length) {
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions, suggestions: suggestedQuestions, grounding })}\n\n`));
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions: responseActions, suggestions: suggestedQuestions, grounding })}\n\n`));
                   controller.close();
                   return;
                 }
@@ -3216,7 +3257,7 @@ export async function POST(request: Request) {
         },
       });
     }
-    return NextResponse.json({ reply, actions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding });
+    return NextResponse.json({ reply, actions: responseActions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to generate an Adviser response.";
     return NextResponse.json({ error: message }, { status: 400 });

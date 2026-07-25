@@ -88,13 +88,6 @@ const inferFeedbackGroup = (question: string) => {
   return "cashflow";
 };
 
-const actionDetails = (action: AdviserAction) =>
-  Object.entries(action.payload ?? {})
-    .filter(([key, value]) => key !== "workspaceId" && value !== null && value !== undefined && value !== "")
-    .slice(0, 5)
-    .map(([key, value]) => `${key.replace(/[A-Z]/g, (letter) => ` ${letter.toLowerCase()}`)}: ${Array.isArray(value) ? value.join(", ") : String(value)}`)
-    .join(" • ");
-
 export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -162,6 +155,7 @@ export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
 
     setError(null);
     setIsSending(true);
+    setActions([]);
     capturePostHogClientEvent("adviser_question_asked", {
       prompt_source: prompts.some((prompt) => prompt.prompt === trimmed) ? "suggested_prompt" : "custom",
       message_length_bucket: trimmed.length < 40 ? "short" : trimmed.length < 160 ? "medium" : "long",
@@ -236,7 +230,7 @@ export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
         if (streamedSuggestions.length > 0) {
           setSuggestedPrompts(streamedSuggestions);
         }
-        setActions((current) => [...current, ...streamedActions]);
+        setActions(streamedActions.slice(0, 1));
         window.setTimeout(scrollToBottom, 0);
         return;
       }
@@ -264,7 +258,7 @@ export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
       const reply = payload.reply?.trim() || "I could not generate a response just now.";
 
       setMessages((current) => [...current, { role: "assistant", content: reply }]);
-      setActions((current) => [...current, ...(payload.actions ?? [])]);
+      setActions((payload.actions ?? []).slice(0, 1));
       window.setTimeout(scrollToBottom, 0);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to get a response from Adviser.");
@@ -314,6 +308,17 @@ export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     await sendMessage(input);
+  };
+
+  const sendSuggestedPrompt = (prompt: AdviserPrompt) => {
+    trackAdviserInteraction({
+      kind: "prompt",
+      group: prompt.group,
+      itemId: prompt.id,
+      label: prompt.label,
+      pathname: window.location.pathname,
+    });
+    void sendMessage(prompt.prompt);
   };
 
   const startNewConversation = () => {
@@ -396,16 +401,7 @@ export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
             type="button"
             className="adviser-chat__prompt"
             disabled={hasReachedLimit || isSending}
-            onClick={() => {
-              trackAdviserInteraction({
-                kind: "prompt",
-                group: prompt.group,
-                itemId: prompt.id,
-                label: prompt.label,
-                pathname: window.location.pathname,
-              });
-              void sendMessage(prompt.prompt);
-            }}
+            onClick={() => sendSuggestedPrompt(prompt)}
           >
             <span className="adviser-chat__prompt-emoji" aria-hidden="true">{getPromptEmoji(prompt.group)}</span>
             <span>{prompt.label}</span>
@@ -458,16 +454,17 @@ export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
       ) : null}
 
       {actions.length > 0 ? (
-        <div className="adviser-chat__thread" aria-label="Clover actions">
-          {actions.map((action) => (
-            <article key={action.id} className="adviser-chat__message adviser-chat__message--assistant">
-              <strong>{action.label}</strong>
-              <p>{action.description}</p>
-              {action.kind === "confirm" && actionDetails(action) ? <p>{actionDetails(action)}</p> : null}
-              <button type="button" className="button button-primary button-small" disabled={pendingActionId === action.id} onClick={() => void completeAction(action)}>
-                {pendingActionId === action.id ? "Saving" : action.kind === "confirm" ? "Confirm" : "Open"}
-              </button>
-            </article>
+        <div className="adviser-chat__actions" aria-label="Suggested action">
+          {actions.slice(0, 1).map((action) => (
+            <button
+              key={action.id}
+              type="button"
+              className="button button-primary button-small adviser-chat__action"
+              disabled={pendingActionId === action.id}
+              onClick={() => void completeAction(action)}
+            >
+              {pendingActionId === action.id ? "Saving..." : action.label}
+            </button>
           ))}
         </div>
       ) : null}
@@ -475,6 +472,22 @@ export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
         <label className="sr-only" htmlFor="adviser-chat-input">
           Ask Clover anything
         </label>
+        {messages.length > 0 && visiblePrompts.length > 0 ? (
+          <div className="adviser-chat__bottom-prompts" aria-label="Suggested follow-up questions">
+            {visiblePrompts.slice(0, 3).map((prompt) => (
+              <button
+                key={`bottom-${prompt.id}`}
+                type="button"
+                className="adviser-chat__prompt"
+                disabled={hasReachedLimit || isSending}
+                onClick={() => sendSuggestedPrompt(prompt)}
+              >
+                <span className="adviser-chat__prompt-emoji" aria-hidden="true">{getPromptEmoji(prompt.group)}</span>
+                <span>{prompt.label}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div className="adviser-chat__composer-bar">
           <input
             id="adviser-chat-input"
