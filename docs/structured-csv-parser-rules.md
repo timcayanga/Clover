@@ -56,6 +56,8 @@ An account inventory needs:
 Rules:
 
 - Create one `account_snapshot_marker` per account identity. When the same account appears across dated rows, use the latest balance and preserve the complete balance history.
+- Re-importing the same snapshot updates the matching account balance in place. Stable matching uses explicit account identity first and a unique institution/type/currency/balance match only to repair legacy generic cards; it must not create another account set.
+- Investment account snapshots with a current balance remain visible in the Investments portfolio even when the file does not include security-level holdings.
 - Preserve account type, institution, currency, account number, balance, and snapshot date.
 - Ignore total/subtotal rows.
 - Use the upload date only when no snapshot date is provided.

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { parseImportText, parseNetWorthSnapshotCsv } from "@/lib/import-parser";
 import { detectStatementMetadataFromText } from "@/lib/data-engine";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
+import { getAccountBrand } from "@/lib/account-brand";
 import { normalizeImportedAccountKey } from "@/lib/imported-account-identity";
 import { buildImportedReceivableCommitmentCandidate } from "@/lib/imported-receivables";
 import { matchesImportedAccountIdentity, pruneImportedAccountPlaceholders } from "@/lib/workspace-cache";
@@ -38,6 +39,26 @@ assert.equal(
   byName.get("GSave (UNO)")?.rawPayload?.accountType,
   "investment",
   "An account explicitly listed in the Investments section must not become a tracked bank asset."
+);
+assert.equal(
+  byName.get("GSave (UNO)")?.institution,
+  "GSave",
+  "GSave must remain the displayed institution instead of becoming a generic UNO Digital Bank card."
+);
+assert.equal(
+  byName.get("GSave (UNO)")?.rawPayload?.providerInstitution,
+  "UNO Digital Bank",
+  "The UNO provider relationship should remain traceable without replacing the GSave identity."
+);
+const gsaveUnoBrand = getAccountBrand({
+  institution: "GSave",
+  name: "GSave (UNO)",
+  type: "investment",
+});
+assert.equal(gsaveUnoBrand.label, "GSave");
+assert.ok(
+  gsaveUnoBrand.logoSrcs.some((source) => /uno bank/i.test(source)),
+  "An UNO-backed GSave product should use the real UNO provider logo."
 );
 assert.equal(byName.get("BPI Time Deposit")?.institution, "BPI Time Deposit");
 assert.equal(byName.get("Cash")?.rawPayload?.accountType, "cash");
@@ -277,6 +298,11 @@ const main = async () => {
   );
   assert.match(
     workerSource,
+    /stableSnapshotCandidates[\s\S]{0,2200}snapshotBalanceMatches/,
+    "Repeated inventories must reuse a uniquely matching prior snapshot card, including legacy generic labels."
+  );
+  assert.match(
+    workerSource,
     /const explicitInventoryName =[\s\S]{0,350}accountSnapshotInventory[\s\S]{0,350}next\.name\.trim\(\)/,
     "Account inventories must preserve explicit labels instead of merging distinct accounts under a generic institution name."
   );
@@ -332,6 +358,12 @@ const main = async () => {
     accountsPageSource,
     /const optimisticAccounts = importedAccountSummaries/,
     "Accounts must publish every account summary from a multi-account import without waiting for a reload."
+  );
+  const investmentsPageSource = await readFile(join(process.cwd(), "app/investments/page.tsx"), "utf8");
+  assert.match(
+    investmentsPageSource,
+    /isGeneric && account\.source !== "manual" && currentValue === null/,
+    "Valued investment-inventory accounts must be visible in Portfolio even without holding rows."
   );
   const accountsRouteSource = await readFile(join(process.cwd(), "app/api/accounts/route.ts"), "utf8");
   assert.match(

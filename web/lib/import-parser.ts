@@ -432,7 +432,7 @@ const resolveNetWorthSnapshotAccount = (
     },
     {
       pattern: /^gsave uno$/,
-      institution: "UNO Digital Bank",
+      institution: "GSave",
       accountType: "bank",
       accountName: () => "GSave (UNO)",
     },
@@ -587,6 +587,9 @@ export const parseNetWorthSnapshotCsv = (
           balance: latestKnownBalance.balance,
           accountName: descriptor.accountName,
           institutionRaw: descriptor.institution,
+          ...(descriptor.accountName === "GSave (UNO)"
+            ? { providerInstitution: "UNO Digital Bank" }
+            : {}),
           accountType: descriptor.accountType,
           accountCurrency: descriptor.currency,
           snapshotDate: latestDate,

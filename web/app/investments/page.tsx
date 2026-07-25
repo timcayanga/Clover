@@ -996,10 +996,10 @@ export default function InvestmentsPage() {
         continue;
       }
 
-      // Imported provider-level shells are useful for account navigation but
-      // are not assets. Keep them out of Portfolio until individual holdings
-      // are available from preserved snapshot evidence.
-      if (isGeneric && account.source !== "manual") {
+      // A provider shell with no valuation evidence is navigation-only.
+      // Account-inventory CSVs intentionally publish one current balance per
+      // investment institution and must remain visible even without holdings.
+      if (isGeneric && account.source !== "manual" && currentValue === null) {
         continue;
       }
 

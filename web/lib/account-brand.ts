@@ -978,7 +978,10 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
   if (isGSaveBackedUnoAccount) {
     const unoBrand = BANK_BRANDS.find((entry) => entry.brand.label === "Uno Bank")?.brand;
     if (unoBrand) {
-      return unoBrand;
+      return {
+        ...unoBrand,
+        label: "GSave",
+      };
     }
   }
 

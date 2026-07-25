@@ -5674,6 +5674,69 @@ const resolveConfirmationAccount = async (params: {
           .filter((account) => accountNumberDigits(account.accountNumber) === accountNumberDigits(inferredAccountNumber))
           .sort(sortImportedAccountsByFreshness)[0] ?? null
       : null;
+  const normalizeSnapshotIdentityText = (value: unknown) =>
+    String(value ?? "")
+      .replace(/\u00a0/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  const normalizedSnapshotName = normalizeSnapshotIdentityText(inferredAccountName);
+  const normalizedSnapshotInstitution = normalizeSnapshotIdentityText(inferredInstitution);
+  const snapshotInstitutionMatches = (account: (typeof workspaceAccounts)[number]) => {
+    const candidateInstitution = normalizeSnapshotIdentityText(account.institution);
+    if (candidateInstitution === normalizedSnapshotInstitution) {
+      return true;
+    }
+
+    const combined = normalizeSnapshotIdentityText(`${account.name ?? ""} ${account.institution ?? ""}`);
+    return (
+      /\bgsave\b/.test(normalizedSnapshotName) &&
+      /\bgsave\b/.test(combined) &&
+      /\buno\b/.test(combined)
+    );
+  };
+  const snapshotBalanceMatches = (account: (typeof workspaceAccounts)[number]) => {
+    if (inferredBalance === null || account.balance === null || account.balance === undefined) {
+      return false;
+    }
+
+    const candidateBalance = Number(account.balance.toString());
+    return Number.isFinite(candidateBalance) && Math.abs(candidateBalance - inferredBalance) <= 0.005;
+  };
+  const stableSnapshotCandidates = accountSnapshotInventory
+    ? workspaceAccounts
+        .filter((account) => account.source === "upload" || account.type === "cash")
+        .filter((account) => account.currency === (inferredCurrency ?? account.currency))
+        .filter((account) => {
+          const exactName =
+            Boolean(normalizedSnapshotName) &&
+            normalizeSnapshotIdentityText(account.name) === normalizedSnapshotName;
+          const compatibleType = account.type === accountIdentityType;
+          return (
+            exactName ||
+            (compatibleType && snapshotInstitutionMatches(account) && snapshotBalanceMatches(account)) ||
+            (accountIdentityType === "receivable" && compatibleType && snapshotBalanceMatches(account))
+          );
+        })
+        .map((account) => ({
+          account,
+          score:
+            (normalizeSnapshotIdentityText(account.name) === normalizedSnapshotName ? 4 : 0) +
+            (snapshotInstitutionMatches(account) ? 2 : 0) +
+            (account.type === accountIdentityType ? 2 : 0) +
+            (snapshotBalanceMatches(account) ? 1 : 0),
+        }))
+        .sort(
+          (left, right) =>
+            right.score - left.score ||
+            sortImportedAccountsByFreshness(left.account, right.account)
+        )
+    : [];
+  const stableSnapshotAccount =
+    stableSnapshotCandidates[0] &&
+    (!stableSnapshotCandidates[1] || stableSnapshotCandidates[0].score > stableSnapshotCandidates[1].score)
+      ? stableSnapshotCandidates[0].account
+      : null;
 
   const providedAccountId = typeof params.accountId === "string" && params.accountId.trim() ? params.accountId.trim() : null;
   const isOptimisticId = providedAccountId ? providedAccountId.startsWith("optimistic-") : false;
@@ -5744,17 +5807,32 @@ const resolveConfirmationAccount = async (params: {
     return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
   }
 
-  const normalizedSnapshotName = String(inferredAccountName ?? "").replace(/\s+/g, " ").trim().toLowerCase();
-  const normalizedSnapshotInstitution = String(inferredInstitution ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+  if (stableSnapshotAccount) {
+    const updatedAccount = await updateAccountIdentity(stableSnapshotAccount, {
+      name: inferredAccountName,
+      institution: inferredInstitution,
+      accountNumber: inferredAccountNumber,
+      type: accountIdentityType,
+      source: "upload",
+      currency: inferredCurrency,
+      balance: inferredBalance,
+      creditLimit: inferredCreditLimit,
+      ...(accountIdentityType === "investment" ? importedInvestmentDetails : {}),
+    });
+
+    await ensureDefaultCashAccountForImport(updatedAccount.currency ?? inferredCurrency ?? "PHP");
+    return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
+  }
+
   const existingSnapshotAccountWithStaleType =
     accountSnapshotInventory && normalizedSnapshotName
       ? workspaceAccounts
           .filter((account) => account.source === "upload")
           .filter((account) => account.currency === (inferredCurrency ?? account.currency))
-          .filter((account) => account.name.replace(/\s+/g, " ").trim().toLowerCase() === normalizedSnapshotName)
+          .filter((account) => normalizeSnapshotIdentityText(account.name) === normalizedSnapshotName)
           .filter(
             (account) =>
-              String(account.institution ?? "").replace(/\s+/g, " ").trim().toLowerCase() === normalizedSnapshotInstitution
+              normalizeSnapshotIdentityText(account.institution) === normalizedSnapshotInstitution
           )
           .sort(sortImportedAccountsByFreshness)[0] ?? null
       : null;
