@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { flushSync } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CloverShell, useCloverChrome } from "@/components/clover-shell";
+import { ContextualAskClover } from "@/components/contextual-ask-clover";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { AccountBrandMark } from "@/components/account-brand-mark";
@@ -3759,6 +3760,7 @@ function AccountsPageContent() {
     <CloverShell
       active="accounts"
       title="Accounts"
+      titleAddon={<ContextualAskClover context="accounts" planTier={planTier} />}
       actions={accountsShellActions}
       >
       <div className="accounts-page">

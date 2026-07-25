@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CommitmentsPanel } from "@/components/commitments-panel";
+import { ContextualAskClover } from "@/components/contextual-ask-clover";
 
 type RecurringPageClientProps = {
   workspaceId: string;
@@ -12,6 +13,7 @@ type RecurringPageClientProps = {
   plannedPaymentSuggestions: Parameters<typeof CommitmentsPanel>[0]["plannedPaymentSuggestions"];
   accounts: Parameters<typeof CommitmentsPanel>[0]["accounts"];
   transactions: Parameters<typeof CommitmentsPanel>[0]["transactions"];
+  planTier: "free" | "pro";
   initialTab?: RecurringTab;
   initialAddOpen?: boolean;
 };
@@ -59,6 +61,7 @@ export function RecurringPageClient({
   plannedPaymentSuggestions,
   accounts,
   transactions,
+  planTier,
   initialTab = "overview",
   initialAddOpen = false,
 }: RecurringPageClientProps) {
@@ -127,20 +130,23 @@ export function RecurringPageClient({
       active="recurring"
       title="Recurring"
       titleAddon={
-        <nav className="investments-tabs recurring-tabs--top" aria-label="Recurring sections">
-          {recurringTabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={`investments-tab${activeTab === tab.id ? " is-active" : ""}`}
-              aria-current={activeTab === tab.id ? "page" : undefined}
-              onClick={() => selectTab(tab.id)}
-            >
-              <span className="recurring-tab-label recurring-tab-label--desktop">{tab.label}</span>
-              <span className="recurring-tab-label recurring-tab-label--mobile">{tab.mobileLabel}</span>
-            </button>
-          ))}
-        </nav>
+        <div className="recurring-title-tools">
+          <ContextualAskClover context="recurring" planTier={planTier} />
+          <nav className="investments-tabs recurring-tabs--top" aria-label="Recurring sections">
+            {recurringTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`investments-tab${activeTab === tab.id ? " is-active" : ""}`}
+                aria-current={activeTab === tab.id ? "page" : undefined}
+                onClick={() => selectTab(tab.id)}
+              >
+                <span className="recurring-tab-label recurring-tab-label--desktop">{tab.label}</span>
+                <span className="recurring-tab-label recurring-tab-label--mobile">{tab.mobileLabel}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
       }
       actions={
         <button

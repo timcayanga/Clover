@@ -6,7 +6,7 @@ import Link from "next/link";
 import { trackAdviserInteraction } from "@/lib/adviser-interactions";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 
-type AdviserPrompt = {
+export type AdviserPrompt = {
   id: string;
   group: string;
   label: string;
@@ -67,6 +67,7 @@ type AdviserAction = {
 type AdviserChatProps = {
   prompts: AdviserPrompt[];
   isPro: boolean;
+  storageKey?: string;
 };
 
 const adviserChatStorageKey = "clover-adviser-chat-session-v1";
@@ -88,7 +89,7 @@ const inferFeedbackGroup = (question: string) => {
   return "cashflow";
 };
 
-export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
+export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey }: AdviserChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -108,7 +109,7 @@ export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
 
   useEffect(() => {
     try {
-      const stored = window.sessionStorage.getItem(adviserChatStorageKey);
+      const stored = window.sessionStorage.getItem(storageKey);
       if (stored) {
         const parsed = JSON.parse(stored) as { messages?: ChatMessage[]; suggestions?: AdviserPrompt[]; grounding?: AdviserGrounding };
         if (Array.isArray(parsed.messages)) {
@@ -126,7 +127,7 @@ export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
     } finally {
       setIsHydrated(true);
     }
-  }, []);
+  }, [storageKey]);
 
   useEffect(() => {
     if (!isHydrated) {
@@ -135,13 +136,13 @@ export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
 
     try {
       window.sessionStorage.setItem(
-        adviserChatStorageKey,
+        storageKey,
         JSON.stringify({ messages: messages.slice(-10), suggestions: suggestedPrompts.slice(0, 6), grounding })
       );
     } catch {
       // Session persistence is helpful but never required for chat.
     }
-  }, [grounding, isHydrated, messages, suggestedPrompts]);
+  }, [grounding, isHydrated, messages, storageKey, suggestedPrompts]);
 
   const scrollToBottom = () => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -329,7 +330,7 @@ export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
     setGrounding(null);
     setError(null);
     try {
-      window.sessionStorage.removeItem(adviserChatStorageKey);
+      window.sessionStorage.removeItem(storageKey);
     } catch {
       // Ignore storage failures; the visible conversation is still cleared.
     }
