@@ -634,6 +634,20 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio }: I
     [range, submittedSymbol, usePhLiveChart]
   );
   const chartIsLoading = loading && !usePhLiveChart;
+  const selectedPortfolioAsset = trackablePortfolioAssets.find(
+    (account) => normalizeMarketSymbol(account.investmentSymbol ?? "") === submittedSymbol
+  ) ?? null;
+  const missingTickerCount = trackablePortfolioAssets.filter((account) => !account.investmentSymbol?.trim()).length;
+  const rangeHigh = displayPoints.length > 0 ? Math.max(...displayPoints.map((point) => point.value)) : null;
+  const rangeLow = displayPoints.length > 0 ? Math.min(...displayPoints.map((point) => point.value)) : null;
+  const latestVolume = displayPoints[displayPoints.length - 1]?.volume ?? null;
+  const externalMarketUrl = submittedSymbol
+    ? submittedMarket === "crypto"
+      ? `https://finance.yahoo.com/quote/${encodeURIComponent(`${submittedSymbol}-USD`)}`
+      : submittedMarket === "ph"
+        ? `https://www.tradingview.com/symbols/PSE-${encodeURIComponent(submittedSymbol)}/`
+        : `https://finance.yahoo.com/quote/${encodeURIComponent(submittedSymbol)}`
+    : null;
 
   return (
     <section className="investments-market glass">
@@ -997,6 +1011,71 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio }: I
           </div>
         )}
       </div>
+
+      <section className="investments-market-insights" aria-label="Market insights">
+        <div className="investments-market-insights__head">
+          <div>
+            <p className="eyebrow">Market Insights</p>
+            <h3>{submittedSymbol ? `${submittedSymbol} at a glance` : "Portfolio watchlist"}</h3>
+          </div>
+          <div className="investments-market-insights__links">
+            {externalMarketUrl ? (
+              <a href={externalMarketUrl} target="_blank" rel="noreferrer">
+                Open market page
+              </a>
+            ) : null}
+            {onOpenPortfolio ? (
+              <button type="button" onClick={onOpenPortfolio}>
+                Review portfolio
+              </button>
+            ) : null}
+          </div>
+        </div>
+        {submittedSymbol && displayPoints.length > 1 ? (
+          <div className="investments-market-insights__grid">
+            <article>
+              <span>Price direction</span>
+              <strong className={priceChangePercent !== null && priceChangePercent >= 0 ? "is-positive" : "is-negative"}>
+                {priceChangePercent === null ? "Not enough data" : `${priceChangePercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(priceChangePercent))}`}
+              </strong>
+              <small>Across the selected {range} range</small>
+            </article>
+            <article>
+              <span>Trading range</span>
+              <strong>{rangeLow === null || rangeHigh === null ? "—" : `${formatAmount(rangeLow)} – ${formatAmount(rangeHigh)}`}</strong>
+              <small>Lowest to highest visible price</small>
+            </article>
+            <article>
+              <span>Latest activity</span>
+              <strong>{latestVolume === null ? "Not available" : volumeFormatter.format(latestVolume)}</strong>
+              <small>{latestVolume === null ? "Volume is not supplied for this market" : "Latest recorded volume"}</small>
+            </article>
+            <article>
+              <span>Portfolio connection</span>
+              <strong>{selectedPortfolioAsset?.name ?? "Watchlist only"}</strong>
+              <small>{selectedPortfolioAsset ? "This ticker is in your portfolio" : "Add it to a holding if you own it"}</small>
+            </article>
+          </div>
+        ) : (
+          <div className="investments-market-insights__grid">
+            <article>
+              <span>Largest trackable holding</span>
+              <strong>{trackablePortfolioAssets[0]?.name ?? "No tracked market assets"}</strong>
+              <small>{trackablePortfolioAssets[0]?.investmentSymbol?.trim() || "Add a ticker to follow its movement"}</small>
+            </article>
+            <article>
+              <span>Tickers ready</span>
+              <strong>{trackablePortfolioAssets.length - missingTickerCount}</strong>
+              <small>Portfolio assets Clover can compare with market data</small>
+            </article>
+            <article>
+              <span>Needs attention</span>
+              <strong>{missingTickerCount}</strong>
+              <small>{missingTickerCount === 1 ? "Holding is missing a ticker" : "Holdings are missing tickers"}</small>
+            </article>
+          </div>
+        )}
+      </section>
 
       <p className="investments-market__disclaimer panel-muted">
         Market prices can differ by broker or exchange. Use Clover as a ballpark estimate and rely on the actual platform price for final decisions.

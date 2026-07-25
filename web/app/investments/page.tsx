@@ -812,21 +812,54 @@ function InvestmentInsightDonut({
   const [activeSliceKey, setActiveSliceKey] = useState<string | null>(null);
   const positiveSlices = slices.filter((slice) => slice.value > 0);
   const total = positiveSlices.reduce((sum, slice) => sum + slice.value, 0);
-  const radius = 82;
-  const circumference = 2 * Math.PI * radius;
-  let offset = 0;
+  const radius = 78;
+  const centerX = 170;
+  const centerY = 118;
+  let angle = -Math.PI / 2;
   const activeSlice = slices.find((slice) => slice.key === activeSliceKey) ?? null;
-  const centerValueSize =
-    centerValue.length > 16
-      ? "report-donut__center-value--tight"
-      : centerValue.length > 11
-        ? "report-donut__center-value--compact"
-        : "";
+  const sliceGeometry = positiveSlices.map((slice, index) => {
+    const startAngle = angle;
+    const endAngle = angle + (slice.value / total) * Math.PI * 2;
+    const midAngle = (startAngle + endAngle) / 2;
+    angle = endAngle;
+    return { slice, index, startAngle, endAngle, midAngle };
+  });
+  const labelPositions = (side: "left" | "right") => {
+    const candidates = sliceGeometry
+      .filter(({ midAngle }) => (Math.cos(midAngle) < 0 ? "left" : "right") === side)
+      .map((item) => ({ ...item, y: centerY + Math.sin(item.midAngle) * (radius + 34) }))
+      .sort((left, right) => left.y - right.y);
+    const minimumGap = 32;
+    candidates.forEach((item, index) => {
+      if (index > 0) {
+        item.y = Math.max(item.y, candidates[index - 1].y + minimumGap);
+      }
+    });
+    const overflow = candidates.at(-1)?.y ?? 0;
+    if (overflow > 220) {
+      const shift = overflow - 220;
+      candidates.forEach((item) => {
+        item.y -= shift;
+      });
+    }
+    return candidates;
+  };
+  const positionedLabels = [...labelPositions("left"), ...labelPositions("right")];
+  const polarPoint = (pointAngle: number, pointRadius: number) => ({
+    x: centerX + Math.cos(pointAngle) * pointRadius,
+    y: centerY + Math.sin(pointAngle) * pointRadius,
+  });
+  const piePath = (startAngle: number, endAngle: number) => {
+    const start = polarPoint(startAngle, radius);
+    const end = polarPoint(endAngle, radius);
+    const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+    return `M ${centerX} ${centerY} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 1 ${end.x} ${end.y} Z`;
+  };
 
   return (
     <div className={`report-donut${className ? ` ${className}` : ""}`}>
       <div className="report-donut__chart" role="img" aria-label={ariaLabel}>
-        <svg viewBox="0 0 240 240" aria-hidden="true">
+        <svg viewBox="0 0 340 240" aria-hidden="true">
           <defs>
             {positiveSlices.map((slice, index) => (
               <linearGradient
@@ -843,22 +876,14 @@ function InvestmentInsightDonut({
               </linearGradient>
             ))}
           </defs>
-          <circle cx="120" cy="120" r={radius} className="report-donut__track" />
           {total > 0
-            ? positiveSlices.map((slice, index) => {
-                const segmentLength = (slice.value / total) * circumference;
-                const segmentOffset = offset;
-                offset += segmentLength;
+            ? sliceGeometry.map(({ slice, index, startAngle, endAngle }) => {
                 return (
-                  <circle
+                  <path
                     key={slice.key}
-                    cx="120"
-                    cy="120"
-                    r={radius}
                     className={`report-donut__segment${activeSliceKey === slice.key ? " is-active" : ""}${activeSliceKey && activeSliceKey !== slice.key ? " is-muted" : ""}${onSliceSelect ? " is-clickable" : ""}`}
-                    stroke={`url(#${gradientPrefix}-slice-${index})`}
-                    strokeDasharray={`${segmentLength} ${circumference}`}
-                    strokeDashoffset={-segmentOffset}
+                    d={piePath(startAngle, endAngle)}
+                    fill={`url(#${gradientPrefix}-slice-${index})`}
                     onMouseEnter={() => setActiveSliceKey(slice.key)}
                     onMouseLeave={() => setActiveSliceKey(null)}
                     onClick={() => onSliceSelect?.(slice)}
@@ -866,11 +891,31 @@ function InvestmentInsightDonut({
                 );
               })
             : null}
+          {positionedLabels.map(({ slice, midAngle, y }) => {
+            const side = Math.cos(midAngle) < 0 ? "left" : "right";
+            const edge = polarPoint(midAngle, radius);
+            const elbow = polarPoint(midAngle, radius + 15);
+            const labelX = side === "left" ? 12 : 328;
+            const lineEndX = side === "left" ? 62 : 278;
+            const anchor = side === "left" ? "start" : "end";
+            return (
+              <g
+                key={`${slice.key}-label`}
+                className={`report-donut__callout${activeSliceKey === slice.key ? " is-active" : ""}${activeSliceKey && activeSliceKey !== slice.key ? " is-muted" : ""}`}
+                onMouseEnter={() => setActiveSliceKey(slice.key)}
+                onMouseLeave={() => setActiveSliceKey(null)}
+                onClick={() => onSliceSelect?.(slice)}
+              >
+                <path d={`M ${edge.x} ${edge.y} L ${elbow.x} ${elbow.y} L ${lineEndX} ${y}`} fill="none" stroke={slice.color} />
+                <circle cx={lineEndX} cy={y} r="2.5" fill={slice.color} />
+                <text x={labelX} y={y - 3} textAnchor={anchor}>{slice.label}</text>
+                <text className="report-donut__callout-percent" x={labelX} y={y + 12} textAnchor={anchor}>
+                  {wholePercentFormatter.format(slice.value / total)}
+                </text>
+              </g>
+            );
+          })}
         </svg>
-        <div className="report-donut__center">
-          <strong className={centerValueSize} title={centerValue}>{centerValue}</strong>
-          {centerLabel ? <span>{centerLabel}</span> : null}
-        </div>
         {activeSlice ? (
           <div className="report-donut__tooltip" role="status">
             <strong>{activeSlice.label}</strong>
@@ -879,27 +924,9 @@ function InvestmentInsightDonut({
           </div>
         ) : null}
       </div>
-      <div className="report-donut__legend">
-        {slices.map((slice) => (
-          <button
-            key={slice.key}
-            className={`report-donut__legend-item${activeSliceKey === slice.key ? " is-active" : ""}${activeSliceKey && activeSliceKey !== slice.key ? " is-muted" : ""}`}
-            type="button"
-            aria-label={`${slice.label}: ${slice.valueLabel}, ${slice.detailLabel}`}
-            onMouseEnter={() => setActiveSliceKey(slice.key)}
-            onMouseLeave={() => setActiveSliceKey(null)}
-            onFocus={() => setActiveSliceKey(slice.key)}
-            onBlur={() => setActiveSliceKey(null)}
-            onClick={() => onSliceSelect?.(slice)}
-          >
-            <span className="report-donut__swatch" style={{ background: slice.color }} />
-            <div className="report-donut__meta">
-              <strong>{slice.label}</strong>
-              <span>{slice.detailLabel}</span>
-              <span>{slice.valueLabel}</span>
-            </div>
-          </button>
-        ))}
+      <div className="report-donut__total">
+        <span>{centerLabel || "Total"}</span>
+        <strong title={centerValue}>{centerValue}</strong>
       </div>
     </div>
   );
@@ -1569,6 +1596,68 @@ export default function InvestmentsPage() {
       }),
     [canAggregateSelectedCurrency, selectedCurrencyInvestmentAccounts]
   );
+  const portfolioRoi = portfolioTotals.purchaseValue > 0
+    ? portfolioTotals.gainLoss / portfolioTotals.purchaseValue
+    : null;
+  const portfolioRisk = useMemo(() => {
+    const riskWeights: Record<InvestmentSubtype, number> = {
+      savings: 0.08,
+      time_deposit: 0.12,
+      bond: 0.28,
+      mutual_fund: 0.46,
+      money_market_fund: 0.22,
+      uitf: 0.48,
+      etf: 0.52,
+      reit: 0.58,
+      stock: 0.72,
+      crypto: 0.96,
+      real_world_asset: 0.62,
+      other: 0.5,
+    };
+    const totalValue = portfolioAllocation.reduce((sum, group) => sum + group.currentValue, 0);
+    if (totalValue <= 0) {
+      return { label: "—", score: null };
+    }
+    const weightedRisk = portfolioAllocation.reduce(
+      (sum, group) => sum + (group.currentValue / totalValue) * riskWeights[group.subtype ?? "other"],
+      0
+    );
+    const largestShare = Math.max(...portfolioAllocation.map((group) => group.share), 0);
+    const score = Math.min(1, weightedRisk + Math.max(0, largestShare - 0.5) * 0.25);
+    return {
+      score,
+      label: score < 0.34 ? "Low" : score < 0.68 ? "Medium" : "High",
+    };
+  }, [portfolioAllocation]);
+  const projectedPortfolioGrowth = useMemo(() => {
+    const planningRates: Record<InvestmentSubtype, number> = {
+      savings: 0.025,
+      time_deposit: 0.045,
+      bond: 0.05,
+      mutual_fund: 0.065,
+      money_market_fund: 0.04,
+      uitf: 0.065,
+      etf: 0.075,
+      reit: 0.07,
+      stock: 0.085,
+      crypto: 0.12,
+      real_world_asset: 0.06,
+      other: 0.04,
+    };
+    const visibleValue = accountPerformance.reduce((sum, item) => sum + Math.max(0, item.currentValue), 0);
+    if (visibleValue <= 0) {
+      return null;
+    }
+    return accountPerformance.reduce((sum, item) => {
+      const subtype = inferInvestmentSubtypeFromAccount(item.account);
+      const recordedReturn = item.returnPercent === null
+        ? null
+        : Math.max(-0.05, Math.min(0.2, item.returnPercent));
+      const planningRate = planningRates[subtype];
+      const blendedRate = recordedReturn === null ? planningRate : planningRate * 0.65 + recordedReturn * 0.35;
+      return sum + (Math.max(0, item.currentValue) / visibleValue) * blendedRate;
+    }, 0);
+  }, [accountPerformance]);
 
   const topHoldings = useMemo(
     () =>
@@ -2387,6 +2476,31 @@ export default function InvestmentsPage() {
           />
         ) : selectedTab === "overview" ? (
           <>
+            <section className="investments-growth-hero glass">
+              <div className="investments-allocation__head">
+                <div className="investments-allocation__head-title">
+                  <div className="investments-allocation__title-row">
+                    <h5>Investment Growth</h5>
+                    <InfoTip label="Tracks the total recorded portfolio value across dated investment statements and snapshots for the selected currency." />
+                  </div>
+                </div>
+                {investmentGrowthPoints.length > 1 ? (
+                  <div className="investments-growth-hero__change">
+                    <span>Recorded change</span>
+                    <strong>
+                      {formatInvestmentAmount(
+                        investmentGrowthPoints[investmentGrowthPoints.length - 1].value - investmentGrowthPoints[0].value,
+                        selectedCurrencyCodes[0] ?? "PHP"
+                      )}
+                    </strong>
+                  </div>
+                ) : null}
+              </div>
+              <InvestmentGrowthChart
+                points={investmentGrowthPoints}
+                currency={selectedCurrencyCodes[0] ?? "PHP"}
+              />
+            </section>
             <section className="investments-overview-metrics" aria-label="Portfolio totals">
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
                 <button className="accounts-overview-card__info" type="button" aria-label="How estimated value is calculated">
@@ -2405,13 +2519,13 @@ export default function InvestmentsPage() {
                 </strong>
               </article>
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
-                <button className="accounts-overview-card__info" type="button" aria-label="How P&L is calculated">
+                <button className="accounts-overview-card__info" type="button" aria-label="How total returns are calculated">
                   i
                   <span className="accounts-overview-card__info-tooltip" role="tooltip">
-                    Gain or loss for the visible holdings in the selected currency view.
+                    Recorded gain or loss for visible holdings with an available purchase value.
                   </span>
                 </button>
-                <p className="eyebrow">P&amp;L</p>
+                <p className="eyebrow">Total returns</p>
                 <strong className={`accounts-overview-card__amount ${portfolioTotals.gainLoss > 0 ? "is-good" : portfolioTotals.gainLoss < 0 ? "is-danger" : "is-neutral"}`}>
                   {hasVisibleCurrencySelection && canAggregateSelectedCurrency
                     ? formatInvestmentAggregate(portfolioTotals.gainLoss, selectedCurrencyInvestmentAccounts)
@@ -2419,11 +2533,30 @@ export default function InvestmentsPage() {
                       ? "Select a currency"
                       : "—"}
                 </strong>
-                <span className="investments-overview-card__subvalue">
-                  {hasVisibleCurrencySelection && canAggregateSelectedCurrency && portfolioTotals.purchaseValue > 0
-                    ? percentFormatter.format(portfolioTotals.gainLoss / portfolioTotals.purchaseValue)
-                    : "—"}
-                </span>
+              </article>
+              <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
+                <button className="accounts-overview-card__info" type="button" aria-label="How portfolio risk is estimated">
+                  i
+                  <span className="accounts-overview-card__info-tooltip" role="tooltip">
+                    A portfolio-level indicator based on the mix of asset types and concentration in the largest category.
+                  </span>
+                </button>
+                <p className="eyebrow">Risk level</p>
+                <strong className={`accounts-overview-card__amount investments-risk-level investments-risk-level--${portfolioRisk.label.toLowerCase()}`}>
+                  {portfolioRisk.label}
+                </strong>
+              </article>
+              <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
+                <button className="accounts-overview-card__info" type="button" aria-label="How ROI is calculated">
+                  i
+                  <span className="accounts-overview-card__info-tooltip" role="tooltip">
+                    Total recorded return divided by the available purchase value for visible holdings.
+                  </span>
+                </button>
+                <p className="eyebrow">ROI percentage</p>
+                <strong className={`accounts-overview-card__amount ${portfolioRoi === null ? "is-neutral" : portfolioRoi > 0 ? "is-good" : portfolioRoi < 0 ? "is-danger" : "is-neutral"}`}>
+                  {portfolioRoi === null ? "—" : percentFormatter.format(portfolioRoi)}
+                </strong>
               </article>
             </section>
             {hasVisibleCurrencySelection && !canAggregateSelectedCurrency ? (
@@ -2750,19 +2883,21 @@ export default function InvestmentsPage() {
                 <span>{worstGainHolding?.account.name ?? "No portfolio assets yet"}</span>
               </article>
             </div>
-            <article className="investments-insights-panel investments-insights-panel--wide glass">
+            <article className="investments-projected-growth glass">
               <div className="investments-allocation__head">
                 <div className="investments-allocation__head-title">
                   <div className="investments-allocation__title-row">
-                    <h5>Investments Over Time</h5>
-                    <InfoTip label="Uses dated investment snapshots and imported statements for the selected currency." />
+                    <h5>Projected Growth Rate</h5>
+                    <InfoTip label="A planning estimate blended from the visible asset mix and bounded recorded returns. It is not a guaranteed return or live analyst forecast." />
                   </div>
                 </div>
+                <strong className="investments-projected-growth__value">
+                  {projectedPortfolioGrowth === null ? "—" : `${percentFormatter.format(projectedPortfolioGrowth)} yearly`}
+                </strong>
               </div>
-              <InvestmentGrowthChart
-                points={investmentGrowthPoints}
-                currency={selectedCurrencyCodes[0] ?? "PHP"}
-              />
+              <p>
+                Clover blends conservative asset-type assumptions with available recorded performance. Update tickers, units, and purchase values to improve this estimate.
+              </p>
             </article>
             <article className="investments-allocation glass">
               <div className="investments-allocation__head">
