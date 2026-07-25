@@ -420,32 +420,6 @@ export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
           </button>
         ) : null}
       </div>
-      <form className="adviser-chat__composer" onSubmit={handleSubmit}>
-        <label className="sr-only" htmlFor="adviser-chat-input">
-          Ask Clover anything
-        </label>
-        <div className="adviser-chat__composer-bar">
-          <input
-            id="adviser-chat-input"
-            type="text"
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            placeholder="Ask Clover a question about your money..."
-            disabled={hasReachedLimit}
-          />
-          <button type="submit" className="button button-primary button-small" disabled={hasReachedLimit || isSending || input.trim().length === 0}>
-            {isSending ? "Sending" : "Send"}
-          </button>
-          {isSending || error ? <span className="adviser-chat__status">{isSending ? "Thinking..." : error}</span> : null}
-        </div>
-      </form>
-      {grounding ? (
-        <p className="adviser-chat__status">
-          Using {grounding.transactionCount.toLocaleString()} transaction{grounding.transactionCount === 1 ? "" : "s"} across {grounding.accountCount} account{grounding.accountCount === 1 ? "" : "s"}; {grounding.freshness ?? `history through ${new Date(grounding.historyThrough).toLocaleDateString()}`}.
-          {grounding.confidenceLabel ? ` Confidence: ${grounding.confidenceLabel}.` : ""}
-        </p>
-      ) : null}
-
       {messages.length > 0 ? (
         <div className="adviser-chat__thread" role="log" aria-live="polite" aria-relevant="additions text">
           {messages.map((message, index) => (
@@ -453,7 +427,6 @@ export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
               key={`${message.role}-${index}`}
               className={`adviser-chat__message adviser-chat__message--${message.role}`}
             >
-              <span>{message.role === "user" ? "You" : "Clover"}</span>
               <p>{message.content}</p>
               {message.role === "assistant" && message.content.trim() ? (
                 <div className="adviser-chat__feedback" aria-label="Rate this answer">
@@ -488,7 +461,6 @@ export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
         <div className="adviser-chat__thread" aria-label="Clover actions">
           {actions.map((action) => (
             <article key={action.id} className="adviser-chat__message adviser-chat__message--assistant">
-              <span>{action.kind === "confirm" ? "Confirmation" : "Clover"}</span>
               <strong>{action.label}</strong>
               <p>{action.description}</p>
               {action.kind === "confirm" && actionDetails(action) ? <p>{actionDetails(action)}</p> : null}
@@ -499,6 +471,25 @@ export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
           ))}
         </div>
       ) : null}
+      <form className="adviser-chat__composer" onSubmit={handleSubmit}>
+        <label className="sr-only" htmlFor="adviser-chat-input">
+          Ask Clover anything
+        </label>
+        <div className="adviser-chat__composer-bar">
+          <input
+            id="adviser-chat-input"
+            type="text"
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder="Ask about your money..."
+            disabled={hasReachedLimit}
+          />
+          <button type="submit" className="button button-primary button-small" disabled={hasReachedLimit || isSending || input.trim().length === 0}>
+            {isSending ? "Sending" : "Send"}
+          </button>
+          {isSending || error ? <span className="adviser-chat__status">{isSending ? "Thinking..." : error}</span> : null}
+        </div>
+      </form>
     </div>
   );
 }

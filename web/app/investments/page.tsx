@@ -768,17 +768,22 @@ function InvestmentInsightDonut({
   centerLabel,
   slices,
   className,
+  onSliceSelect,
 }: {
   ariaLabel: string;
   centerValue: string;
   centerLabel: string;
   slices: InvestmentAnalysisSlice[];
   className?: string;
+  onSliceSelect?: (slice: InvestmentAnalysisSlice) => void;
 }) {
-  const total = slices.reduce((sum, slice) => sum + slice.value, 0);
+  const [activeSliceKey, setActiveSliceKey] = useState<string | null>(null);
+  const positiveSlices = slices.filter((slice) => slice.value > 0);
+  const total = positiveSlices.reduce((sum, slice) => sum + slice.value, 0);
   const radius = 82;
   const circumference = 2 * Math.PI * radius;
   let offset = 0;
+  const activeSlice = slices.find((slice) => slice.key === activeSliceKey) ?? null;
 
   return (
     <div className={`report-donut${className ? ` ${className}` : ""}`}>
@@ -786,7 +791,7 @@ function InvestmentInsightDonut({
         <svg viewBox="0 0 240 240" aria-hidden="true">
           <circle cx="120" cy="120" r={radius} className="report-donut__track" />
           {total > 0
-            ? slices.map((slice) => {
+            ? positiveSlices.map((slice) => {
                 const segmentLength = (slice.value / total) * circumference;
                 const segmentOffset = offset;
                 offset += segmentLength;
@@ -796,10 +801,13 @@ function InvestmentInsightDonut({
                     cx="120"
                     cy="120"
                     r={radius}
-                    className="report-donut__segment"
+                    className={`report-donut__segment${activeSliceKey === slice.key ? " is-active" : ""}${activeSliceKey && activeSliceKey !== slice.key ? " is-muted" : ""}${onSliceSelect ? " is-clickable" : ""}`}
                     stroke={slice.color}
                     strokeDasharray={`${segmentLength} ${circumference}`}
                     strokeDashoffset={-segmentOffset}
+                    onMouseEnter={() => setActiveSliceKey(slice.key)}
+                    onMouseLeave={() => setActiveSliceKey(null)}
+                    onClick={() => onSliceSelect?.(slice)}
                   />
                 );
               })
@@ -809,17 +817,34 @@ function InvestmentInsightDonut({
           <strong>{centerValue}</strong>
           {centerLabel ? <span>{centerLabel}</span> : null}
         </div>
+        {activeSlice ? (
+          <div className="report-donut__tooltip" role="status">
+            <strong>{activeSlice.label}</strong>
+            <span>{activeSlice.valueLabel}</span>
+            <small>{activeSlice.detailLabel}</small>
+          </div>
+        ) : null}
       </div>
       <div className="report-donut__legend">
         {slices.map((slice) => (
-          <div key={slice.key} className="report-donut__legend-item">
+          <button
+            key={slice.key}
+            className={`report-donut__legend-item${activeSliceKey === slice.key ? " is-active" : ""}${activeSliceKey && activeSliceKey !== slice.key ? " is-muted" : ""}`}
+            type="button"
+            aria-label={`${slice.label}: ${slice.valueLabel}, ${slice.detailLabel}`}
+            onMouseEnter={() => setActiveSliceKey(slice.key)}
+            onMouseLeave={() => setActiveSliceKey(null)}
+            onFocus={() => setActiveSliceKey(slice.key)}
+            onBlur={() => setActiveSliceKey(null)}
+            onClick={() => onSliceSelect?.(slice)}
+          >
             <span className="report-donut__swatch" style={{ background: slice.color }} />
             <div className="report-donut__meta">
               <strong>{slice.label}</strong>
               <span>{slice.detailLabel}</span>
               <span>{slice.valueLabel}</span>
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -1528,7 +1553,6 @@ export default function InvestmentsPage() {
         account,
         value: parseNullableAmount(account.balance) ?? 0,
       }))
-      .filter((item) => item.value > 0)
       .sort((left, right) => right.value - left.value || left.account.name.localeCompare(right.account.name));
 
     const primaryAccounts = sortedAccounts.slice(0, 6);
@@ -2286,13 +2310,13 @@ export default function InvestmentsPage() {
           <>
             <section className="investments-overview-metrics" aria-label="Portfolio totals">
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
-                <button className="accounts-overview-card__info" type="button" aria-label="How Current Value is calculated">
+                <button className="accounts-overview-card__info" type="button" aria-label="How estimated value is calculated">
                   i
                   <span className="accounts-overview-card__info-tooltip" role="tooltip">
                     The total value of the visible investment holdings for the selected currency view.
                   </span>
                 </button>
-                <p className="eyebrow">Current Value</p>
+                <p className="eyebrow">Estimated value</p>
                 <strong className="accounts-overview-card__amount is-good">
                   {hasVisibleCurrencySelection && canAggregateSelectedCurrency
                     ? formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)
@@ -2300,9 +2324,6 @@ export default function InvestmentsPage() {
                       ? "Select a currency"
                       : "—"}
                 </strong>
-                <span className="investments-overview-card__subvalue">
-                  Add ticker and units to compare market prices; portfolio totals use recorded values
-                </span>
               </article>
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
                 <button className="accounts-overview-card__info" type="button" aria-label="How P&L is calculated">
@@ -2368,6 +2389,7 @@ export default function InvestmentsPage() {
                         centerValue={hasVisibleCurrencySelection ? formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts) : "—"}
                         centerLabel=""
                         slices={allocationAnalysisSlices}
+                        onSliceSelect={(slice) => setSelectedOverviewMixKey(slice.key)}
                       />
                     </article>
                     <article className="investments-overview-mix-panel">
@@ -2392,6 +2414,15 @@ export default function InvestmentsPage() {
                           centerValue={formatInvestmentAggregate(selectedOverviewMixGroup.currentValue, selectedOverviewMixGroup.accounts)}
                           centerLabel=""
                           slices={overviewAssetMixSlices}
+                          onSliceSelect={(slice) => {
+                            const row = portfolioSourceRows.find((item) => item.accountId === slice.key || item.key === slice.key);
+                            if (row) {
+                              openInvestmentAsset(row);
+                            } else {
+                              setInvestmentSubtypeFilter(selectedOverviewMixGroup.key as InvestmentSubtype);
+                              selectInvestmentTab("portfolio");
+                            }
+                          }}
                         />
                       ) : (
                         <div className="investments-portfolio-table__empty investments-overview-mix-panel__empty">
@@ -2504,9 +2535,6 @@ export default function InvestmentsPage() {
                               className="investments-portfolio-inline-edit--name"
                               onCommit={(value) => commitPortfolioRowField(row, "name", value)}
                             />
-                            <span className="investments-portfolio-table__row-kind">
-                              {row.source === "account" ? "Institution total" : "Asset"}
-                            </span>
                           </div>
                         </div>
                         <div className="investments-portfolio-table__cell investments-portfolio-table__institution">
@@ -2524,11 +2552,6 @@ export default function InvestmentsPage() {
                             }))}
                             onCommit={(value) => commitPortfolioRowField(row, "subtype", value)}
                           />
-                          {row.classification.source === "inferred" ? (
-                            <small className="investments-classification-badge" title={row.classification.reason}>
-                              Suggested · {row.classification.confidence}%
-                            </small>
-                          ) : null}
                         </div>
                         <div className="investments-portfolio-table__cell">
                           <PortfolioInlineEdit
@@ -2682,6 +2705,10 @@ export default function InvestmentsPage() {
                   centerLabel="Visible value"
                   slices={allocationAnalysisSlices}
                   className="investments-analysis-donut"
+                  onSliceSelect={(slice) => {
+                    setInvestmentSubtypeFilter(slice.key as InvestmentSubtype);
+                    selectInvestmentTab("portfolio");
+                  }}
                 />
               ) : (
                 <EmptyDataCta
@@ -2728,6 +2755,14 @@ export default function InvestmentsPage() {
                   centerLabel="Top positions"
                   slices={topHoldingAnalysisSlices}
                   className="investments-analysis-donut"
+                  onSliceSelect={(slice) => {
+                    const row = portfolioSourceRows.find((item) => item.accountId === slice.key || item.key === slice.key);
+                    if (row) {
+                      openInvestmentAsset(row);
+                    } else {
+                      selectInvestmentTab("portfolio");
+                    }
+                  }}
                 />
               ) : (
                 <EmptyDataCta

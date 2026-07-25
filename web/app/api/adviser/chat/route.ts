@@ -144,9 +144,13 @@ type AdviserThresholdProfile = {
 type AdviserChatAccountSource = {
   id: string;
   name: string;
+  institution: string | null;
   type: string;
   currency: string | null;
   balance: unknown;
+  investmentSubtype: string | null;
+  investmentSymbol: string | null;
+  investmentQuantity: unknown;
   transactions: Array<{
     amount: unknown;
     type: "income" | "expense" | "transfer";
@@ -904,9 +908,13 @@ export async function POST(request: Request) {
                 select: {
                   id: true,
                   name: true,
+                  institution: true,
                   type: true,
                   currency: true,
                   balance: true,
+                  investmentSubtype: true,
+                  investmentSymbol: true,
+                  investmentQuantity: true,
                   transactions: {
                     where: { isExcluded: false },
                     select: {
@@ -950,9 +958,13 @@ export async function POST(request: Request) {
               select: {
                 id: true,
                 name: true,
+                institution: true,
                 type: true,
                 currency: true,
                 balance: true,
+                investmentSubtype: true,
+                investmentSymbol: true,
+                investmentQuantity: true,
                 transactions: {
                   where: { isExcluded: false },
                   select: {
@@ -1008,9 +1020,13 @@ export async function POST(request: Request) {
     const chatAccounts = (workspace.accounts as AdviserChatAccountSource[]).map((account) => ({
       id: account.id,
       name: account.name,
+      institution: account.institution,
       type: account.type,
       currency: account.currency,
       balance: reconcileChatAccountBalance(account),
+      investmentSubtype: account.investmentSubtype,
+      investmentSymbol: account.investmentSymbol,
+      investmentQuantity: Number(account.investmentQuantity ?? 0),
     }));
 
     const nextSevenDays = new Date(now);
@@ -1452,6 +1468,35 @@ export async function POST(request: Request) {
       latestInvestmentSnapshot.currency === previousInvestmentSnapshot.currency
         ? Number(latestInvestmentSnapshot.totalValue ?? 0) - Number(previousInvestmentSnapshot.totalValue ?? 0)
         : null;
+    const currentInvestmentAccounts = chatAccounts.filter(
+      (account) => account.type === "investment" || Boolean(account.investmentSubtype)
+    );
+    const investmentValueByCurrency = currentInvestmentAccounts.reduce((totals, account) => {
+      const currency = formatCurrencyCode(account.currency);
+      totals.set(currency, (totals.get(currency) ?? 0) + account.balance);
+      return totals;
+    }, new Map<string, number>());
+    const investmentPortfolioValueLabel =
+      investmentValueByCurrency.size > 0
+        ? Array.from(investmentValueByCurrency.entries())
+            .map(([currency, value]) => formatCurrency(value, currency))
+            .join(" + ")
+        : latestInvestmentSnapshot
+          ? formatCurrency(Number(latestInvestmentSnapshot.totalValue ?? 0), latestInvestmentSnapshot.currency)
+          : "none";
+    const hasInvestmentPortfolio = currentInvestmentAccounts.length > 0 || Boolean(latestInvestmentSnapshot);
+    const investmentPortfolioDetails = currentInvestmentAccounts
+      .slice()
+      .sort((left, right) => Math.abs(right.balance) - Math.abs(left.balance))
+      .slice(0, 12)
+      .map((account) => {
+        const metadata = [
+          account.investmentSubtype || "investment",
+          account.investmentSymbol ? `ticker ${account.investmentSymbol}` : null,
+          account.investmentQuantity > 0 ? `${account.investmentQuantity} units` : null,
+        ].filter(Boolean);
+        return `${account.name}${account.institution ? ` at ${account.institution}` : ""}: ${formatCurrency(account.balance, account.currency)} (${metadata.join(", ")})`;
+      });
 
     const liquidBalance = accountAnalysisAccounts
       .filter((account) => ["bank", "wallet", "cash"].includes(account.type))
@@ -2028,7 +2073,6 @@ export async function POST(request: Request) {
       `Answer feedback by topic: ${Object.entries(adviserFeedback.byGroup).map(([group, feedback]) => `${group} ${feedback.helpful} helpful/${feedback.notHelpful} not helpful`).join("; ") || "none"}`,
       `Recent Adviser questions: ${recentAdviserQuestions.join(" | ") || "none"}`,
       `Preference profile: cashflow ${Math.round(userPreferenceAffinity.cashflow)}, behavior ${Math.round(userPreferenceAffinity.behavior)}, goals ${Math.round(userPreferenceAffinity.goals)}, investments ${Math.round(userPreferenceAffinity.investments)}, cleanup ${Math.round(userPreferenceAffinity.cleanup)}`,
-      `Financial persona: ${financialPersona.label} - ${financialPersona.summary}`,
       `Narrative: ${adviserNarrative}`,
       `Thresholds: cash buffer ${formatCurrency(thresholdProfile.cashBuffer)}, recurring pressure ${formatCurrency(thresholdProfile.recurringPressure)}, split pressure ${formatCurrency(thresholdProfile.splitPressure)}, spend spike ${Math.round(thresholdProfile.spendSpikePercent)}%, income drop ${Math.round(thresholdProfile.incomeDropPercent)}%, concentration ${Math.round(thresholdProfile.concentrationShare * 100)}%`,
       `Forecast: ${forecastSignal ? `${forecastSignal.title} (${Math.round(forecastSignal.score)})` : "none"}; anomaly: ${anomalySignal ? `${anomalySignal.title} (${Math.round(anomalySignal.score)})` : "none"}`,
@@ -2040,7 +2084,8 @@ export async function POST(request: Request) {
       `Commitments due soon: ${commitmentsDueSoon.map((item) => `${item.title}${item.due ? ` (${item.due})` : ""}${item.amount > 0 ? ` ${formatCurrency(item.amount, displayCurrency)}` : ""}`).join("; ") || "none"}`,
       `Planned payments: ${plannedPaymentSuggestions.slice(0, 12).map((item) => `${item.title}${item.dueDate ? ` (${item.dueDate.slice(0, 10)})` : ""}${item.amount ? ` ${formatCurrency(Number(item.amount), item.currency || displayCurrency)}` : ""}`).join("; ") || "none"}`,
       `Split bills open: ${openSplitBills.map((item) => `${item.title} (${formatCurrency(item.outstanding)})`).join("; ") || "none"}`,
-      `Latest investment snapshot: ${latestInvestmentSnapshot ? `${formatCurrency(Number(latestInvestmentSnapshot.totalValue ?? 0), latestInvestmentSnapshot.currency)}${investmentDelta === null ? "" : `, change ${formatSignedCurrency(investmentDelta, latestInvestmentSnapshot.currency)}`}` : "none"}`,
+      `Current investment portfolio: ${investmentPortfolioValueLabel}; ${currentInvestmentAccounts.length} investment account${currentInvestmentAccounts.length === 1 ? "" : "s"}; ${investmentPortfolioDetails.join(" | ") || "no current account detail"}`,
+      `Historical investment snapshot: ${latestInvestmentSnapshot ? `${formatCurrency(Number(latestInvestmentSnapshot.totalValue ?? 0), latestInvestmentSnapshot.currency)}${investmentDelta === null ? "" : `, change ${formatSignedCurrency(investmentDelta, latestInvestmentSnapshot.currency)}`}` : "none"}`,
       `Liquid balance: ${formatCurrency(liquidBalance, displayCurrency)}`,
       `Account concentration: ${largestAccountBalance && largestAccountBalance.name ? `${largestAccountBalance.name} ${formatPercent(largestAccountShare * 100)}` : "none"}`,
       `Goal: ${goalValue ?? "none"} (${goalProgress.bandLabel})`,
@@ -2053,6 +2098,8 @@ export async function POST(request: Request) {
       "Use the workspace context to answer the user's question clearly and directly.",
       "Prefer concrete data over generic advice.",
       "If transactions are sparse, lean on account balances, recurring items, commitments, split bills, and long-term history before giving a weak answer.",
+      "Treat current investment accounts, holdings, balances, tickers, and units as valid portfolio context even when there is no separate historical investment snapshot.",
+      "A goal is optional context, never a prerequisite for giving a useful balance, cash-flow, portfolio, or investment-readiness answer.",
       "If data is stale or historical, say so plainly and avoid implying it reflects today.",
       "If you can, mention the exact source of the signal, the relevant period, and one practical next step.",
       "Keep the answer short: lead with the direct answer, then give the key numbers or reason, then one practical next step. Use bullets when comparing amounts or obligations.",
@@ -2062,6 +2109,8 @@ export async function POST(request: Request) {
       "When the user asks a broad question, choose the most useful interpretation from the data and state the assumption in one short sentence rather than asking a vague clarifying question.",
       "If the user asks whether they can afford a purchase but does not provide a price, ask for the price and, if relevant, the date they need it by. Do not invent a price or give a yes/no answer without one.",
       "If the user asks what to invest in, do not name a specific security as a personalized recommendation. Explain the missing suitability details and offer high-level educational categories only after checking investment readiness.",
+      "Never expose internal personas, confidence scores, theme scores, tool names, implementation labels, or phrases such as 'Clover surfaced'. Write in plain, friendly language.",
+      "Do not tell the user only to open another page. Answer the question first from the available data, then offer one relevant CTA when a drill-down would help.",
       "If the user asks how to set up a goal, budget, transaction, account, investment, or split bill, explain the next step and use a confirmation action only when they explicitly ask Clover to create or edit it.",
       answerFeedbackGuidance,
       "Do not pretend to be a financial advisor. Keep guidance educational and contextual.",
@@ -2179,8 +2228,8 @@ export async function POST(request: Request) {
     const fallbackNextStep =
       inferredQuestionTheme === "goals" && goalLabel
         ? `Open Goals and check whether ${goalLabel.toLowerCase()} still matches your latest cash-flow pace.`
-        : inferredQuestionTheme === "investments" && latestInvestmentSnapshot
-          ? "Open Investments and review the latest snapshot before making any decision."
+        : inferredQuestionTheme === "investments" && hasInvestmentPortfolio
+          ? "Review your portfolio mix and available cash before deciding how much to add."
           : inferredQuestionTheme === "behavior" && topCategoryName
             ? `Open Transactions filtered to ${topCategoryName} and review the largest items first.`
             : inferredQuestionTheme === "cashflow" && recurringDueSoon.length > 0
@@ -2189,7 +2238,7 @@ export async function POST(request: Request) {
                 ? "Open Accounts and compare available cash with the obligations Clover can see."
                 : openSplitBills.length > 0
                   ? "Open Split Bills and settle the largest open balance first."
-                  : "Open Transactions and review the clearest driver Clover surfaced.";
+                  : "Review the largest recent change that affects your question.";
 
     const fallbackReply = (() => {
       if (inferredQuestionTheme === "goals") {
@@ -2199,13 +2248,13 @@ export async function POST(request: Request) {
       }
 
       if (inferredQuestionTheme === "investments") {
-        return latestInvestmentSnapshot
-          ? `Your latest investment snapshot is available${latestInvestmentSnapshot.snapshotDate ? ` from ${toShortDateLabel(latestInvestmentSnapshot.snapshotDate)}` : ""}. Review its value and change before making a decision. ${fallbackNextStep}`
-          : `Clover does not have an investment snapshot to analyze yet. I can still help you think through readiness, cash reserves, time horizon, and comfort with losses before discussing options. ${fallbackNextStep}`;
+        return hasInvestmentPortfolio
+          ? `Your recorded investments total ${investmentPortfolioValueLabel} across ${currentInvestmentAccounts.length || 1} visible holding${currentInvestmentAccounts.length === 1 ? "" : "s"}. Before adding more, compare that mix with your available cash of ${formatCurrency(spendableAccountBalance, displayCurrency)} and near-term obligations. ${fallbackNextStep}`
+          : `I can help you narrow the next investment category, but I first need a portfolio balance or holding plus your time horizon and comfort with losses.`;
       }
 
       if (inferredQuestionTheme === "behavior") {
-        return `Based on your ${dataFreshnessLabel}, ${topCategoryName ? `${topCategoryName} is the main spending driver` : "spending is fairly spread out"}${spendDelta !== null ? ` and spending is ${formatPercent(spendDelta)} versus baseline` : ""}. ${strongestFallbackSignal ? `The strongest signal is ${strongestFallbackSignal}. ` : ""}${fallbackNextStep}`;
+        return `Based on your ${dataFreshnessLabel}, ${topCategoryName ? `${topCategoryName} is the main spending driver` : "spending is fairly spread out"}${spendDelta !== null ? ` and spending is ${formatPercent(spendDelta)} versus baseline` : ""}. ${fallbackNextStep}`;
       }
 
       if (inferredQuestionTheme === "cashflow") {
@@ -2402,7 +2451,7 @@ export async function POST(request: Request) {
       mode: groundingMode,
       recurringCount: recurringPatterns.length,
       budgetCount: budgets.length,
-      investmentSnapshotAvailable: Boolean(latestInvestmentSnapshot),
+      investmentSnapshotAvailable: hasInvestmentPortfolio,
     };
     const usageForResponse = () => ({
       plan: user.planTier,
@@ -2411,6 +2460,26 @@ export async function POST(request: Request) {
       remaining: Math.max(0, limit - usageCount - 1),
       resetsAt: resetsAt.toISOString(),
     }) satisfies AdviserUsage;
+    const fallbackActions: AdviserAction[] =
+      inferredQuestionTheme === "investments" && hasInvestmentPortfolio
+        ? [{
+            id: "fallback-investments",
+            kind: "navigate",
+            type: "open_investments",
+            label: "Review portfolio mix",
+            description: "See the holdings and concentration behind this answer.",
+            href: "/investments",
+          }]
+        : inferredQuestionTheme === "cashflow" && recurringDueSoon.length > 0
+          ? [{
+              id: "fallback-recurring",
+              kind: "navigate",
+              type: "open_recurring",
+              label: "Review upcoming payments",
+              description: "See the payments creating near-term pressure.",
+              href: "/recurring",
+            }]
+          : [];
     if (asksAboutSpecificPurchase && !includesPurchaseAmount) {
       return NextResponse.json({
         reply: "I can check that safely, but I need the purchase price first. If timing matters, tell me the date you need it by or how long you want your cash to last. I will compare it with your available cash, known obligations, and a reasonable buffer.",
@@ -2422,7 +2491,7 @@ export async function POST(request: Request) {
       });
     }
     if (!env.OPENAI_API_KEY) {
-      return NextResponse.json({ reply: fallbackReply, actions: [], suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
+      return NextResponse.json({ reply: fallbackReply, actions: fallbackActions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
     }
 
     const model = env.OPENAI_ADVISER_MODEL?.trim() || "gpt-4.1";
@@ -2876,6 +2945,11 @@ export async function POST(request: Request) {
           actions.push({ id: `split-${actions.length + 1}`, kind: "navigate", type: "open_split_bills", label: "Open Split Bills", description: "Review open shared expenses and settlement status.", href: "/split-bills" });
         } else if (call.name === "get_investment_summary") {
           result = {
+            currentPortfolio: {
+              value: investmentPortfolioValueLabel,
+              accountCount: currentInvestmentAccounts.length,
+              holdings: investmentPortfolioDetails,
+            },
             latestSnapshot: latestInvestmentSnapshot
               ? {
                   value: Number(latestInvestmentSnapshot.totalValue ?? 0),
@@ -2886,7 +2960,7 @@ export async function POST(request: Request) {
               : null,
             guidance: "Use this data for education and portfolio review. Do not make a personalized security recommendation without suitability information.",
           };
-          actions.push({ id: `investments-${actions.length + 1}`, kind: "navigate", type: "open_investments", label: "Open Investments", description: "Review holdings and snapshots in Clover.", href: "/investments" });
+          actions.push({ id: `investments-${actions.length + 1}`, kind: "navigate", type: "open_investments", label: "Review portfolio mix", description: "See the holdings and concentration behind this answer.", href: "/investments" });
         } else if (call.name === "get_budget_status") {
           const budgetStatuses = budgets.map((budget) => {
             const categoryName = budget.category?.name ?? null;
@@ -2931,13 +3005,15 @@ export async function POST(request: Request) {
         } else if (call.name === "get_investment_readiness") {
           const reserveReady = spendableAccountBalance >= Math.max(0, baselineSpend);
           const surplusReady = longTermAverageNet > 0;
-          const hasInvestmentData = Boolean(latestInvestmentSnapshot);
+          const hasInvestmentData = hasInvestmentPortfolio;
           result = {
             readiness: reserveReady && surplusReady ? "planning_context_available" : "build_context_first",
             signals: {
               reserveReady,
               positiveHistoricalSurplus: surplusReady,
               existingInvestmentData: hasInvestmentData,
+              currentPortfolioValue: investmentPortfolioValueLabel,
+              currentHoldings: investmentPortfolioDetails,
               latestInvestmentSnapshot: latestInvestmentSnapshot?.snapshotDate?.toISOString() ?? null,
             },
             missingSuitabilityContext: [
@@ -2949,7 +3025,7 @@ export async function POST(request: Request) {
             guidance: "Clover can explain investment concepts and compare options at a high level, but it should not choose a security or give personalized investment advice without suitability details.",
             href: "/investments",
           };
-          actions.push({ id: `investment-readiness-${actions.length + 1}`, kind: "navigate", type: "open_investment_readiness", label: "Review Investments", description: "Review your investment context before choosing an approach.", href: "/investments" });
+          actions.push({ id: `investment-readiness-${actions.length + 1}`, kind: "navigate", type: "open_investment_readiness", label: "Check portfolio gaps", description: "Review your current mix before choosing the next investment category.", href: "/investments" });
         } else if (call.name === "find_data_quality_issues") {
           const duplicateGroups = new Map<string, typeof allTransactions>();
           for (const transaction of allTransactions) {
@@ -3043,6 +3119,9 @@ export async function POST(request: Request) {
     }
 
     const reply = extractOutputText(payload) || "I could not generate a response right now.";
+    if (actions.length === 0 && fallbackActions.length > 0) {
+      actions.push(...fallbackActions);
+    }
     if (streamRequested) {
       const encoder = new TextEncoder();
       let upstreamResponse: Response | null = null;
