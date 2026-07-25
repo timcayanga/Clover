@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { CloverShell } from "@/components/clover-shell";
@@ -153,6 +153,10 @@ const getCachedInvestmentWorkspace = (workspaceId: string) => {
 const percentFormatter = new Intl.NumberFormat("en-US", {
   style: "percent",
   maximumFractionDigits: 2,
+});
+const wholePercentFormatter = new Intl.NumberFormat("en-US", {
+  style: "percent",
+  maximumFractionDigits: 0,
 });
 
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
@@ -400,7 +404,7 @@ type PortfolioDisplayRow = {
   classification: InvestmentClassification;
 };
 
-type PortfolioEditableField = "name" | "subtype" | "symbol" | "detail" | "currentValue";
+type PortfolioEditableField = "name" | "institution" | "subtype" | "symbol" | "detail" | "currentValue";
 type PortfolioView = "all" | "assets" | "institutions";
 
 const investmentAdviserPrompts = [
@@ -614,7 +618,7 @@ function PortfolioInlineEdit({
       title={displayValue || "Click to edit"}
       onClick={() => setEditing(true)}
     >
-      {displayValue || "Not set"}
+      {displayValue || "\u00A0"}
     </button>
   );
 }
@@ -770,6 +774,25 @@ const INVESTMENT_ANALYSIS_COLORS = [
   "#3a86ff",
 ] as const;
 
+const blendInvestmentColor = (hex: string, target = "#ffffff", amount = 0.24) => {
+  const normalize = (value: string) => value.replace("#", "");
+  const source = normalize(hex);
+  const destination = normalize(target);
+  if (source.length !== 6 || destination.length !== 6) {
+    return hex;
+  }
+
+  const channel = (offset: number) =>
+    Math.round(
+      Number.parseInt(source.slice(offset, offset + 2), 16) * (1 - amount) +
+      Number.parseInt(destination.slice(offset, offset + 2), 16) * amount
+    )
+      .toString(16)
+      .padStart(2, "0");
+
+  return `#${channel(0)}${channel(2)}${channel(4)}`;
+};
+
 function InvestmentInsightDonut({
   ariaLabel,
   centerValue,
@@ -785,6 +808,7 @@ function InvestmentInsightDonut({
   className?: string;
   onSliceSelect?: (slice: InvestmentAnalysisSlice) => void;
 }) {
+  const gradientPrefix = useId().replace(/:/g, "");
   const [activeSliceKey, setActiveSliceKey] = useState<string | null>(null);
   const positiveSlices = slices.filter((slice) => slice.value > 0);
   const total = positiveSlices.reduce((sum, slice) => sum + slice.value, 0);
@@ -803,9 +827,25 @@ function InvestmentInsightDonut({
     <div className={`report-donut${className ? ` ${className}` : ""}`}>
       <div className="report-donut__chart" role="img" aria-label={ariaLabel}>
         <svg viewBox="0 0 240 240" aria-hidden="true">
+          <defs>
+            {positiveSlices.map((slice, index) => (
+              <linearGradient
+                key={slice.key}
+                id={`${gradientPrefix}-slice-${index}`}
+                x1="25"
+                y1="25"
+                x2="215"
+                y2="215"
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop offset="0%" stopColor={blendInvestmentColor(slice.color)} />
+                <stop offset="100%" stopColor={slice.color} />
+              </linearGradient>
+            ))}
+          </defs>
           <circle cx="120" cy="120" r={radius} className="report-donut__track" />
           {total > 0
-            ? positiveSlices.map((slice) => {
+            ? positiveSlices.map((slice, index) => {
                 const segmentLength = (slice.value / total) * circumference;
                 const segmentOffset = offset;
                 offset += segmentLength;
@@ -816,7 +856,7 @@ function InvestmentInsightDonut({
                     cy="120"
                     r={radius}
                     className={`report-donut__segment${activeSliceKey === slice.key ? " is-active" : ""}${activeSliceKey && activeSliceKey !== slice.key ? " is-muted" : ""}${onSliceSelect ? " is-clickable" : ""}`}
-                    stroke={slice.color}
+                    stroke={`url(#${gradientPrefix}-slice-${index})`}
                     strokeDasharray={`${segmentLength} ${circumference}`}
                     strokeDashoffset={-segmentOffset}
                     onMouseEnter={() => setActiveSliceKey(slice.key)}
@@ -1546,7 +1586,7 @@ export default function InvestmentsPage() {
         label: group.label,
         value: group.currentValue,
         valueLabel: formatInvestmentAggregate(group.currentValue, group.accounts),
-        detailLabel: `${group.share > 0 ? percentFormatter.format(group.share) : "0%"} · ${group.accounts.length} account${group.accounts.length === 1 ? "" : "s"}`,
+        detailLabel: `${group.share > 0 ? `${Math.round(group.share * 100)}%` : "0%"} · ${group.accounts.length} account${group.accounts.length === 1 ? "" : "s"}`,
         color: INVESTMENT_ANALYSIS_COLORS[index % INVESTMENT_ANALYSIS_COLORS.length],
       })),
     [portfolioAllocation]
@@ -1605,7 +1645,7 @@ export default function InvestmentsPage() {
         ? item.account.investmentSubtype
           ? getInvestmentSubtypeLabel(item.account.investmentSubtype)
           : "Other"
-        : `${item.returnPercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(item.returnPercent))} return`,
+        : `${item.returnPercent >= 0 ? "+" : "-"}${wholePercentFormatter.format(Math.abs(item.returnPercent))} return`,
       color: INVESTMENT_ANALYSIS_COLORS[index % INVESTMENT_ANALYSIS_COLORS.length],
     }));
 
@@ -1953,6 +1993,31 @@ export default function InvestmentsPage() {
   ) => {
     if (field === "name") {
       await patchPortfolioRow(row, { assetName: value });
+      return;
+    }
+    if (field === "institution") {
+      const account = accounts.find((item) => item.id === row.accountId);
+      if (!account || !selectedWorkspaceId) {
+        throw new Error("Investment account not found.");
+      }
+
+      const response = await fetch(`/api/accounts/${account.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: selectedWorkspaceId,
+          type: "investment",
+          source: account.source,
+          institution: value.trim() || null,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.account) {
+        throw new Error(payload.error ?? "Unable to update the investment institution.");
+      }
+      setAccounts((current) =>
+        current.map((item) => (item.id === account.id ? (payload.account as Account) : item))
+      );
       return;
     }
     if (field === "subtype") {
@@ -2552,7 +2617,12 @@ export default function InvestmentsPage() {
                           </div>
                         </div>
                         <div className="investments-portfolio-table__cell investments-portfolio-table__institution">
-                          {row.institution ?? ""}
+                          <PortfolioInlineEdit
+                            value={row.institution ?? ""}
+                            displayValue={row.institution ?? ""}
+                            ariaLabel={`Edit institution for ${row.name}`}
+                            onCommit={(value) => commitPortfolioRowField(row, "institution", value)}
+                          />
                         </div>
                         <div className="investments-portfolio-table__cell">
                           <PortfolioInlineEdit

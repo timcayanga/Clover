@@ -21348,6 +21348,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   display: grid;
   gap: 2px;
   min-width: 0;
+  padding-inline: 6px;
   color: var(--text);
   font-size: 12px;
 }
@@ -21424,9 +21425,10 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .investments-portfolio-inline-edit {
-  width: 100%;
+  width: calc(100% + 12px);
   min-width: 0;
   min-height: 28px;
+  margin-inline: -6px;
   padding: 3px 6px;
   border: 0;
   border-radius: 8px;
@@ -43572,13 +43574,13 @@ html[data-theme="dark"] .investments-portfolio-table__row--head {
 }
 
 .content--investments .report-donut__legend {
-  gap: 5px;
+  gap: 1px;
 }
 
 .content--investments .report-donut__legend-item {
   width: 100%;
   min-height: 0;
-  padding: 7px 8px;
+  padding: 4px 6px;
   border: 1px solid transparent;
   border-radius: 11px;
   background: transparent;
@@ -43598,21 +43600,23 @@ html[data-theme="dark"] .investments-portfolio-table__row--head {
 }
 
 .content--investments .report-donut__swatch {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 8%, transparent);
 }
 
 .content--investments .report-donut__meta {
-  gap: 0;
+  gap: 1px;
 }
 
 .content--investments .report-donut__meta strong {
-  font-size: 10px;
+  font-size: 12px;
+  line-height: 1.15;
 }
 
 .content--investments .report-donut__meta span {
-  font-size: 9px;
-  line-height: 1.3;
+  font-size: 10px;
+  line-height: 1.15;
 }
 
 .content--investments .investments-insights-grid {
@@ -43632,6 +43636,26 @@ html[data-theme="dark"] .investments-portfolio-table__row--head {
   align-self: start;
 }
 
+.content--investments .report-donut__track {
+  filter: drop-shadow(0 8px 14px rgba(15, 23, 42, 0.08));
+}
+
+.content--investments .report-donut__chart::after {
+  content: "";
+  position: absolute;
+  inset: 25%;
+  z-index: 0;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 50%;
+  box-shadow: inset 0 10px 24px rgba(15, 23, 42, 0.035);
+  pointer-events: none;
+}
+
+.content--investments .report-donut__center,
+.content--investments .report-donut__tooltip {
+  z-index: 2;
+}
+
 .adviser-chat {
   min-height: 0;
 }
@@ -43649,7 +43673,7 @@ html[data-theme="dark"] .investments-portfolio-table__row--head {
   border: 0;
   border-radius: 0;
   background: transparent;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
 }
 
 .adviser-chat__message p {
@@ -43714,12 +43738,12 @@ html[data-theme="dark"] .adviser-chat__message--assistant {
   flex: 0 0 auto;
   min-height: 30px;
   padding: 5px 9px;
-  font-size: 0.7rem;
+  font-size: 0.64rem;
   white-space: nowrap;
 }
 
 .adviser-chat__bottom-prompts .adviser-chat__prompt-emoji {
-  font-size: 0.76rem;
+  font-size: 0.7rem;
 }
 
 .adviser-chat__composer {
@@ -43734,7 +43758,7 @@ html[data-theme="dark"] .adviser-chat__message--assistant {
 .adviser-chat__composer-bar input {
   min-height: 40px;
   border-radius: 13px;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
 }
 
 .investments-adviser-panel .adviser-chat__thread {
@@ -43761,6 +43785,20 @@ html[data-theme="dark"] .investments-portfolio-table__row--head {
   justify-self: stretch;
   justify-items: start;
   text-align: left;
+}
+
+.investments-portfolio-table__row--head > span {
+  padding-inline: 6px;
+}
+
+.adviser-chat__prompt-row .adviser-chat__prompt {
+  min-height: 28px;
+  padding: 6px 9px;
+  font-size: 0.68rem;
+}
+
+.adviser-chat__prompt-row .adviser-chat__prompt-emoji {
+  font-size: 0.74rem;
 }
 
 @media (min-width: 961px) {

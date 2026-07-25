@@ -1385,6 +1385,36 @@ export async function POST(request: Request) {
     const goalLabel = goalValue ? goalValue.replace(/_/g, " ") : null;
     const goalProgressLabel = goalLabel ? goalProgress.bandLabel : "Set a Goal";
     const adviserPreferences = normalizeAdviserPreferences(user.adviserPreferences);
+    const suggestedGoal = (() => {
+      if (goalValue) {
+        return null;
+      }
+
+      const monthlyIncome =
+        longTermAverageIncome > 0
+          ? longTermAverageIncome
+          : currentSummary.income > 0
+            ? currentSummary.income
+            : null;
+      if (monthlyIncome) {
+        const targetAmount = Math.max(500, Math.round((monthlyIncome * 0.2) / 100) * 100);
+        return {
+          key: "save_more",
+          title: "Save more",
+          targetAmount,
+          explanation: `Set aside ${formatCurrency(targetAmount, displayCurrency)} each month, about 20% of the income Clover can see.`,
+          actionLabel: `Create ${formatCurrency(targetAmount, displayCurrency)} monthly goal`,
+        };
+      }
+
+      return {
+        key: "track_spending",
+        title: "Track spending",
+        targetAmount: null,
+        explanation: "Track spending for one month first so Clover can recommend a savings amount from real income and expenses.",
+        actionLabel: "Create Track spending goal",
+      };
+    })();
 
     const topCategories = Array.from(currentSummary.expenseCategories.entries())
       .sort((left, right) => right[1] - left[1])
@@ -2089,6 +2119,7 @@ export async function POST(request: Request) {
       `Liquid balance: ${formatCurrency(liquidBalance, displayCurrency)}`,
       `Account concentration: ${largestAccountBalance && largestAccountBalance.name ? `${largestAccountBalance.name} ${formatPercent(largestAccountShare * 100)}` : "none"}`,
       `Goal: ${goalValue ?? "none"} (${goalProgress.bandLabel})`,
+      `Suggested goal when none is active: ${suggestedGoal ? `${suggestedGoal.title}; ${suggestedGoal.explanation}` : "not needed"}`,
       `Active budgets: ${budgets.map((budget) => `${budget.name} ${formatCurrency(Number(budget.targetAmount), budget.currency)}${budget.category?.name ? ` for ${budget.category.name}` : ""}`).join("; ") || "none"}`,
       `Recent transaction references: ${allTransactions.slice(0, 20).map((transaction) => `${transaction.id} ${transaction.merchantClean ?? transaction.merchantRaw} ${formatCurrency(Math.abs(Number(transaction.amount)), displayCurrency)} ${toShortDateLabel(transaction.date)}`).join(" | ") || "none"}`,
     ].join("\n");
@@ -2101,10 +2132,12 @@ export async function POST(request: Request) {
       "Treat current investment accounts, holdings, balances, tickers, and units as valid portfolio context even when there is no separate historical investment snapshot.",
       "A goal is optional context, never a prerequisite for giving a useful balance, cash-flow, portfolio, or investment-readiness answer.",
       "Do not recommend creating a goal merely because no goal exists. When recent transaction history is missing, make reviewing or importing recent transactions the next step so Clover can estimate spending and genuinely available cash.",
+      "When the user explicitly asks Clover to suggest a goal and no goal exists, recommend the supplied suggested goal in concrete terms and offer its ready-made one-click goal action. Do not ask for inputs Clover has already derived.",
       "If data is stale or historical, say so plainly and avoid implying it reflects today.",
       "If you can, mention the exact source of the signal, the relevant period, and one practical next step.",
       "Keep the answer under 140 words. Lead with the direct answer, then use two to four short paragraphs or bullets, and end with one concrete next step.",
       "Never compress several balances, caveats, and recommendations into one dense paragraph. Put each important number or idea on its own line.",
+      "Use plain text only. Do not add Markdown heading or bold markers because the chat already handles its own typography.",
       "Use everyday language. Avoid technical phrases such as planning context, reserve readiness, suitability context, baseline model, signal quality, or recorded value unless the user explicitly asks for methodology.",
       "Base the next step on the user's actual transactions, bills, balances, or portfolio. If transaction history is missing, say that plainly and ask the user to add or review recent transactions before treating cash as available to invest.",
       "For calculations, separate what is available, what is protected, what is estimated, and what remains. Never hide uncertainty inside a single confident number.",
@@ -2198,6 +2231,9 @@ export async function POST(request: Request) {
       if (/goal progress|progress.*goal|how am i doing.*goal|on track.*goal/.test(latestQuestionLower)) {
         return "Route this request to get_goal_progress and state clearly when no goal has been set.";
       }
+      if (!goalValue && /suggest.*goal|what goal|which goal|realistic.*goal|goal.*realistic|set.*goal|savings goal/.test(latestQuestionLower)) {
+        return "Route this request to get_goal_progress, recommend the supplied suggested goal with its concrete amount or tracking period, and present the ready-made one-click goal action.";
+      }
       if (/what changed|what is new|what's new|since i last|since my last|deserve.*attention|changed recently/.test(latestQuestionLower)) {
         return "Route this request to get_adviser_changes and compare the latest window with the previous available window.";
       }
@@ -2259,7 +2295,9 @@ export async function POST(request: Request) {
       if (inferredQuestionTheme === "goals") {
         return goalLabel
           ? `Your ${goalLabel.toLowerCase()} goal is currently ${goalProgressLabel.toLowerCase()} based on your ${dataFreshnessLabel}. ${fallbackNextStep}`
-          : `You do not have an active goal set yet. Clover can help you choose a realistic target from your available income and spending history. ${fallbackNextStep}`;
+          : suggestedGoal
+            ? `Start with: ${suggestedGoal.title}.\n\n${suggestedGoal.explanation}\n\nYou can create it now and adjust it later as Clover learns from more transactions.`
+            : `You do not have an active goal set yet. Clover can help you choose a realistic target from your available income and spending history. ${fallbackNextStep}`;
       }
 
       if (inferredQuestionTheme === "investments") {
@@ -2494,7 +2532,28 @@ export async function POST(request: Request) {
       resetsAt: resetsAt.toISOString(),
     }) satisfies AdviserUsage;
     const fallbackActions: AdviserAction[] =
-      inferredQuestionTheme === "investments" && hasInvestmentPortfolio
+      inferredQuestionTheme === "goals" && !goalValue && suggestedGoal
+        ? [{
+            id: `suggested-goal-${suggestedGoal.key}-${suggestedGoal.targetAmount ?? "no-target"}`,
+            kind: "confirm",
+            type: "set_goal",
+            label: suggestedGoal.actionLabel,
+            description: suggestedGoal.explanation,
+            payload: {
+              workspaceId: workspace.id,
+              goal: suggestedGoal.key,
+              targetAmount: suggestedGoal.targetAmount,
+              goalPlan: {
+                goalKey: suggestedGoal.key,
+                targetMode: "amount",
+                cadence: "monthly",
+                targetAmount: suggestedGoal.targetAmount,
+                targetPercent: null,
+                purpose: null,
+              },
+            },
+          }]
+        : inferredQuestionTheme === "investments" && hasInvestmentPortfolio
         ? [{
             id: "fallback-investments",
             kind: "navigate",
@@ -2532,6 +2591,10 @@ export async function POST(request: Request) {
             }]
           : [];
     const selectPrimaryAdviserAction = (candidates: AdviserAction[]) => {
+      if (inferredQuestionTheme === "goals" && !goalValue && suggestedGoal) {
+        return fallbackActions.slice(0, 1);
+      }
+
       if (asksForOverallMoneyOverview && allTransactions.length === 0) {
         return [fallbackActions.find((action) => action.type === "find_transactions") ?? {
           id: "overview-transactions",
@@ -2987,9 +3050,14 @@ export async function POST(request: Request) {
             status: goalProgressLabel,
             targetAmount: goalTargetAmount,
             progress: goalProgress,
-            nextStep: goalValue ? "Review the goal's progress and update its target if needed." : "Set a goal in Clover before measuring progress.",
+            suggestedGoal,
+            nextStep: goalValue
+              ? "Review the goal's progress and update its target if needed."
+              : suggestedGoal?.explanation ?? "Set a goal in Clover before measuring progress.",
           };
-          actions.push({ id: `goal-${actions.length + 1}`, kind: "navigate", type: "open_goal", label: "Open Goals", description: "Review the goal and its progress in Clover.", href: "/goals" });
+          if (goalValue) {
+            actions.push({ id: `goal-${actions.length + 1}`, kind: "navigate", type: "open_goal", label: "Open Goals", description: "Review the goal and its progress in Clover.", href: "/goals" });
+          }
         } else if (call.name === "find_transactions") {
           const query = String(args.query ?? "").trim().toLowerCase();
           const limit = Math.max(1, Math.min(10, Number(args.limit ?? 5)));
