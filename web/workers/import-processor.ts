@@ -8053,8 +8053,11 @@ export const processImportFileText = async (
   if (trainedSplitBillReceiptDetails && importMode === "statement") {
     importMode = "receipt";
   }
+  const trainedReceiptFixture = getTrainedReceiptFixture(fileName);
+  if (trainedReceiptFixture && imageImport && importMode === "statement") {
+    importMode = "receipt";
+  }
   let isDocumentImport = isDocumentImportMode || (imageImport && importMode !== "statement");
-  const trainedReceiptFixture = importMode === "receipt" ? getTrainedReceiptFixture(fileName) : null;
   let trainedReceiptDetails =
     trainedSplitBillReceiptDetails ??
     (trainedReceiptFixture
@@ -9285,6 +9288,21 @@ export const processImportFileText = async (
       (receiptPreview.billDate || receiptPreview.items.length > 0) &&
       (receiptPreviewQuality?.score ?? 0) >= 4
   );
+  const strongReceiptTextStructure =
+    /\btotal\s+amount\b/i.test(textForParse) &&
+    /\b(?:gross\s+sales|service\s+charge|vat(?:able)?\s+sales|u\.?\s*cost|qty)\b/i.test(textForParse);
+  const autoDetectedReceiptPreview =
+    imageImport &&
+    importMode === "statement" &&
+    (
+      receiptPreviewCanSkipBackup ||
+      (receiptPreviewLooksLikeReceipt && receiptPreviewHasReviewableDetails) ||
+      (strongReceiptTextStructure && Boolean(receiptPreview?.total))
+    );
+  if (autoDetectedReceiptPreview) {
+    effectiveImportMode = "receipt";
+    isDocumentImport = true;
+  }
   const canUseFastImageParse =
     canReuseCachedStatementParse ||
     hasReliableDeterministicStatementParse ||
@@ -9293,6 +9311,7 @@ export const processImportFileText = async (
       hasDeterministicBpiMobileScreenshotRows &&
       !hasSuspiciousLegacyScreenshotDates(parsedRows as Array<Record<string, unknown>>)) ||
     Boolean(trainedReceiptDetails) ||
+    autoDetectedReceiptPreview ||
     (imageImport &&
     !shouldForceBackupForSuspiciousParse &&
     ((importMode === "receipt" && receiptPreviewCanSkipBackup) ||
@@ -9512,7 +9531,7 @@ export const processImportFileText = async (
       openAiParsed.receiptDetails.line_items.length > 0 ||
       openAiParsed.receiptDetails.split_allocations.length > 0)
       ? openAiParsed.receiptDetails
-      : receiptPreviewIsUsable || receiptPreviewHasReviewableDetails
+      : receiptPreviewIsUsable || receiptPreviewHasReviewableDetails || autoDetectedReceiptPreview
         ? receiptPreviewDetails
         : null;
   const promotesNotesSplitBillToReceipt =
@@ -10683,10 +10702,18 @@ export const processImportFileText = async (
     }
   }
 
-  // Template learning and checkpoint persistence are independent. Start the
-  // template write now so its database round-trip overlaps the required
-  // checkpoint write below instead of delaying visible transactions.
-  const templateUpsertPromise = upsertStatementTemplate({
+  const structuredWorkbookImport = rows.some((row) => {
+    const rawPayload = row.rawPayload;
+    return Boolean(
+      rawPayload &&
+      typeof rawPayload === "object" &&
+      !Array.isArray(rawPayload) &&
+      typeof (rawPayload as Record<string, unknown>).worksheetName === "string"
+    );
+  });
+  const deferTemplateLearning = structuredWorkbookImport || rows.length >= 250;
+  const runTemplateLearning = async () => {
+    const template = await upsertStatementTemplate({
       workspaceId: importFile.workspaceId,
       fingerprint: statementFingerprint,
       metadata: resolvedMetadata,
@@ -10733,51 +10760,59 @@ export const processImportFileText = async (
               ? rows.at(-1)?.merchantRaw
               : null,
       } as Prisma.InputJsonValue,
-    }).catch((error) => {
-    console.warn("Statement template upsert failed; continuing import", {
-      importFileId,
-      error,
     });
-    return null;
-  });
-
-  void templateUpsertPromise.then((template) => {
     if (!template || unsupervisedLearningSnapshot.clusterCount <= 0) {
       return;
     }
 
-    void promoteUnsupervisedLearningClustersForWorkspace({
+    const result = await promoteUnsupervisedLearningClustersForWorkspace({
       workspaceId: importFile.workspaceId,
-    })
-      .then((result) => {
-        void recordUnsupervisedLearningAuditForTemplate({
-          workspaceId: importFile.workspaceId,
-          fingerprint: template.fingerprint,
-          importFileId,
-          audit: result.audit,
-        }).catch((error) => {
-          console.warn("Unsupervised learning audit persistence failed; continuing import", {
-            importFileId,
-            workspaceId: importFile.workspaceId,
-            error,
-          });
-        });
-        if (result.audit.candidateCount > 0 || result.audit.promotedCount > 0 || result.audit.suspendedCount > 0) {
-          console.info("Unsupervised learning audit", {
-            importFileId,
-            workspaceId: importFile.workspaceId,
-            audit: result.audit,
-          });
-        }
-      })
-      .catch((error) => {
-        console.warn("Unsupervised learning promotion failed; continuing import", {
+    });
+    await recordUnsupervisedLearningAuditForTemplate({
+      workspaceId: importFile.workspaceId,
+      fingerprint: template.fingerprint,
+      importFileId,
+      audit: result.audit,
+    }).catch((error) => {
+      console.warn("Unsupervised learning audit persistence failed; continuing import", {
+        importFileId,
+        workspaceId: importFile.workspaceId,
+        error,
+      });
+    });
+    if (result.audit.candidateCount > 0 || result.audit.promotedCount > 0 || result.audit.suspendedCount > 0) {
+      console.info("Unsupervised learning audit", {
+        importFileId,
+        workspaceId: importFile.workspaceId,
+        audit: result.audit,
+      });
+    }
+  };
+
+  if (deferTemplateLearning) {
+    // Large imports and workbooks can contain hundreds of rows. Template
+    // promotion is durable learning, but it is not required to make this
+    // upload visible.
+    // Delay it long enough that it cannot contend with confirmation for the
+    // database pool or make the UI wait at 70%.
+    schedulePostVisibleImportWork(`template-learning:${importFileId}`, async () => {
+      await runTemplateLearning().catch((error) => {
+        console.warn("Deferred statement template learning failed; continuing import", {
           importFileId,
           workspaceId: importFile.workspaceId,
           error,
         });
       });
-  });
+    }, 30_000);
+  } else {
+    void runTemplateLearning().catch((error) => {
+      console.warn("Statement template learning failed; continuing import", {
+        importFileId,
+        workspaceId: importFile.workspaceId,
+        error,
+      });
+    });
+  }
 
   if (await hasCompatibleTable("AccountStatementCheckpoint")) {
     try {
@@ -12151,6 +12186,16 @@ export const confirmImportFile = async (
     };
   }
   const parsedRowsReadyAt = Date.now();
+  const structuredWorkbookConfirmation = parsedRows.some((row) => {
+    const rawPayload = row.rawPayload;
+    return Boolean(
+      rawPayload &&
+      typeof rawPayload === "object" &&
+      !Array.isArray(rawPayload) &&
+      typeof (rawPayload as Record<string, unknown>).worksheetName === "string"
+    );
+  });
+  const highVolumeConfirmation = structuredWorkbookConfirmation || parsedRows.length >= 250;
 
   const statementCheckpointRecord = (await hasCompatibleTable("AccountStatementCheckpoint"))
     ? await prisma.accountStatementCheckpoint.findUnique({
@@ -12416,7 +12461,6 @@ export const confirmImportFile = async (
   );
   const compatibleImportFileColumnsPromise = getCompatibleImportFileColumns();
   const accountByGroupKey = new Map<string, Awaited<ReturnType<typeof resolveConfirmationAccount>>>();
-  let resolvedAccountSequence = 0;
   const workspaceAccountCandidates = await workspaceAccountCandidatesPromise;
   const notesCashAccount =
     notesCashAccountId
@@ -12425,7 +12469,8 @@ export const confirmImportFile = async (
   if (notesCashAccountId && !notesCashAccount) {
     throw new Error("Cash account not found");
   }
-  for (const group of multiAccountImport ? parsedAccountGroups : parsedAccountGroups.slice(0, 1)) {
+  const confirmationAccountGroups = multiAccountImport ? parsedAccountGroups : parsedAccountGroups.slice(0, 1);
+  await runWithConcurrency(confirmationAccountGroups, 3, async (group, groupIndex) => {
     const firstGroupRow = group.rows[0] ?? {};
     const groupRows = group.rows as EnrichedParsedImportRow[];
     const payloadAccountType = readParsedRowAccountType(firstGroupRow);
@@ -12473,7 +12518,7 @@ export const confirmImportFile = async (
         planAccountCount:
           planUsage?.accountCount === null || planUsage?.accountCount === undefined
             ? null
-            : planUsage.accountCount + resolvedAccountSequence,
+            : planUsage.accountCount + groupIndex,
         allowDeletedAccountRecreation: Boolean(options?.allowDeletedAccountRecreation),
         workspaceAccounts: workspaceAccountCandidates,
       }));
@@ -12498,8 +12543,7 @@ export const confirmImportFile = async (
     }
 
     accountByGroupKey.set(group.key, groupAccount);
-    resolvedAccountSequence += 1;
-  }
+  });
   const account = accountByGroupKey.get(parsedAccountGroups[0]?.key ?? "__default__") ?? accountByGroupKey.values().next().value ?? null;
   if (!account) {
     throw new Error("Account not found");
@@ -12601,72 +12645,54 @@ export const confirmImportFile = async (
       },
     })),
   ];
-  // The statement lock below still decides which confirmation may commit.
-  // These rows are read-only inputs, so starting them before that lock removes
-  // two round trips from the user-visible transaction without weakening
-  // duplicate prevention.
-  const existingImportTransactionsPromise = prisma.transaction.findMany({
-    where: {
-      deletedAt: null,
-      workspaceId: String(importFile.workspaceId),
-      OR: [
-        {
-          accountId: { in: matchingAccountIdsForImport },
-          OR: existingImportTransactionMatchClauses,
-        },
-        ...statementFingerprints.map((fingerprint) => ({
-          rawPayload: {
-            path: ["sourceStatementFingerprint"],
-            equals: fingerprint,
-          },
-        })),
-      ],
-    },
-    select: {
-      id: true,
-      accountId: true,
-      rawPayload: true,
-      date: true,
-      amount: true,
-      currency: true,
-      type: true,
-      merchantRaw: true,
-      merchantClean: true,
-      description: true,
-      reviewStatus: true,
-    },
-  });
-  const previousStatementCheckpointPromise = documentCheckpointRecord?.statementStartDate
-    ? prisma.accountStatementCheckpoint.findFirst({
-        where: {
-          accountId: resolvedAccountId,
-          statementEndDate: { lt: documentCheckpointRecord.statementStartDate },
-          status: { in: ["reconciled", "mismatch"] },
-        },
-        orderBy: [{ statementEndDate: "desc" }, { createdAt: "desc" }],
-      })
-    : Promise.resolve(null);
   // These reads inform matching and categorization but do not mutate the
-  // imported statement. Start them before the statement-specific lock so a
-  // slow pooled database round trip overlaps the lock/account work instead of
-  // extending the visible confirmation transaction.
+  // imported statement. Run them as one sequential speculative stream so they
+  // overlap account setup without exhausting the small serverless pool needed
+  // by the visibility-critical confirmation transaction.
   const confirmationReadSnapshotStartedAt = Date.now();
-  const confirmationReadSnapshotPromise = Promise.all([
-    prisma.category.findMany({
-      where: { workspaceId: importFile.workspaceId },
-    }),
-    prisma.account.findMany({
-      where: { workspaceId: importFile.workspaceId },
+  const confirmationInputsPromise = (async () => {
+    const existingImportTransactions = await prisma.transaction.findMany({
+      where: {
+        deletedAt: null,
+        workspaceId: String(importFile.workspaceId),
+        OR: [
+          {
+            accountId: { in: matchingAccountIdsForImport },
+            OR: existingImportTransactionMatchClauses,
+          },
+          ...statementFingerprints.map((fingerprint) => ({
+            rawPayload: {
+              path: ["sourceStatementFingerprint"],
+              equals: fingerprint,
+            },
+          })),
+        ],
+      },
       select: {
         id: true,
-        name: true,
-        institution: true,
-        accountNumber: true,
-        type: true,
+        accountId: true,
+        rawPayload: true,
+        date: true,
+        amount: true,
         currency: true,
+        type: true,
+        merchantRaw: true,
+        merchantClean: true,
+        description: true,
+        reviewStatus: true,
       },
-    }),
-    prisma.transaction.findMany({
+    });
+    const previousStatementCheckpoint = documentCheckpointRecord?.statementStartDate
+      ? await prisma.accountStatementCheckpoint.findFirst({
+          where: {
+            accountId: resolvedAccountId,
+            statementEndDate: { lt: documentCheckpointRecord.statementStartDate },
+            status: { in: ["reconciled", "mismatch"] },
+          },
+          orderBy: [{ statementEndDate: "desc" }, { createdAt: "desc" }],
+        })
+      : null;
+    const existingRowsForAccount = await prisma.transaction.findMany({
       where: {
         accountId: { in: matchingAccountIdsForImport },
         deletedAt: null,
@@ -12683,8 +12709,34 @@ export const confirmImportFile = async (
         description: true,
         rawPayload: true,
       },
-    }),
-  ]);
+    });
+    const existingCategories = await prisma.category.findMany({
+      where: { workspaceId: importFile.workspaceId },
+    });
+    const workspaceAccountsForTransferMatching = await prisma.account.findMany({
+      where: { workspaceId: importFile.workspaceId },
+      select: {
+        id: true,
+        name: true,
+        institution: true,
+        accountNumber: true,
+        type: true,
+        currency: true,
+      },
+    });
+    return {
+      existingImportTransactions,
+      previousStatementCheckpoint,
+      snapshot: [existingCategories, workspaceAccountsForTransferMatching, existingRowsForAccount] as const,
+    };
+  })();
+  const existingImportTransactionsPromise = confirmationInputsPromise.then(
+    (inputs) => inputs.existingImportTransactions
+  );
+  const previousStatementCheckpointPromise = confirmationInputsPromise.then(
+    (inputs) => inputs.previousStatementCheckpoint
+  );
+  const confirmationReadSnapshotPromise = confirmationInputsPromise.then((inputs) => inputs.snapshot);
   const confirmationReadSnapshotReadyAtPromise = confirmationReadSnapshotPromise.then(() => Date.now());
 
   let statementRow: Record<string, unknown> | null = null;
@@ -12749,8 +12801,11 @@ export const confirmImportFile = async (
   };
 
   let confirmationLockAcquiredAt: number | null = null;
+  const confirmationTransactionRequestedAt = Date.now();
+  let confirmationTransactionCallbackStartedAt: number | null = null;
   let confirmationReadSnapshotReadyAt: number | null = null;
   const confirmationResult = await prisma.$transaction(async (tx) => {
+    confirmationTransactionCallbackStartedAt = Date.now();
     const confirmationLockKey = [
       "import-confirm",
       String(importFile.workspaceId),
@@ -13678,7 +13733,7 @@ export const confirmImportFile = async (
       }
     }
 
-    for (const batch of chunkArray(preparedTransactions, 250)) {
+    for (const batch of chunkArray(preparedTransactions, highVolumeConfirmation ? 500 : 250)) {
       await tx.transaction.createMany({
         data: batch.map((entry) => {
           const { categoryName: _categoryName, ...transactionRow } = entry.insertRow as Record<string, unknown>;
@@ -14029,11 +14084,11 @@ export const confirmImportFile = async (
       }
       return signals;
     }, new Map<string, (typeof trainingSignals)[number]>()).values()
-  ).slice(0, 200);
+  ).slice(0, highVolumeConfirmation ? 50 : 200);
   // Per-row analytics is useful for small statements, but hundreds of network
   // calls from a workbook compete with the first UI refresh. Keep a bounded
   // representative sample; aggregate import metrics are emitted separately.
-  const postVisibleAnalyticsTransactions = preparedTransactions.slice(0, 100);
+  const postVisibleAnalyticsTransactions = preparedTransactions.slice(0, highVolumeConfirmation ? 25 : 100);
   const analyticsDistinctId = String(importFile.workspaceId ?? "import-worker");
   schedulePostVisibleImportWork(`finalize:${importFileId}`, async () => {
     await prisma.trainingSignal.deleteMany({
@@ -14165,6 +14220,14 @@ export const confirmImportFile = async (
     planUsageMs: planReadyAt - startedAt,
     parsedRowsWaitMs: parsedRowsReadyAt - planReadyAt,
     confirmationTransactionMs: transactionCommittedAt - parsedRowsReadyAt,
+    confirmationPreTransactionMs: confirmationTransactionRequestedAt - parsedRowsReadyAt,
+    confirmationPoolWaitMs: confirmationTransactionCallbackStartedAt
+      ? confirmationTransactionCallbackStartedAt - confirmationTransactionRequestedAt
+      : null,
+    confirmationAdvisoryLockWaitMs:
+      confirmationTransactionCallbackStartedAt && confirmationLockAcquiredAt
+        ? confirmationLockAcquiredAt - confirmationTransactionCallbackStartedAt
+        : null,
     confirmationReadSnapshotMs: confirmationReadSnapshotReadyAt
       ? confirmationReadSnapshotReadyAt - confirmationReadSnapshotStartedAt
       : null,

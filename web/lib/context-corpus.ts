@@ -733,6 +733,18 @@ const normalizeCompactText = (value: unknown) => normalizeText(value).replace(/\
 
 type AliasMatchMode = "boundary" | "compact";
 
+const transactionContextCache = new Map<string, TransactionContext>();
+const maxTransactionContextCacheEntries = 512;
+
+const cacheTransactionContext = (key: string, context: TransactionContext) => {
+  if (transactionContextCache.size >= maxTransactionContextCacheEntries && !transactionContextCache.has(key)) {
+    const oldestKey = transactionContextCache.keys().next().value;
+    if (typeof oldestKey === "string") transactionContextCache.delete(oldestKey);
+  }
+  transactionContextCache.set(key, context);
+  return context;
+};
+
 const findAliasMatch = (text: string, alias: string): AliasMatchMode | null => {
   const normalizedAlias = normalizeText(alias);
   if (!normalizedAlias) return null;
@@ -758,6 +770,9 @@ export const resolveTransactionContext = (params: {
     .filter(Boolean)
     .join(" ");
   const explicitCurrency = String(params.currency ?? "").trim().toUpperCase() || null;
+  const cacheKey = `${text}\u0000${explicitCurrency ?? ""}`;
+  const cachedContext = transactionContextCache.get(cacheKey);
+  if (cachedContext) return cachedContext;
   const matches = entries
     .map((entry) => ({
       entry,
@@ -776,7 +791,7 @@ export const resolveTransactionContext = (params: {
     });
 
   if (matches.length === 0) {
-    return {
+    return cacheTransactionContext(cacheKey, {
       corpusVersion: CONTEXT_CORPUS_VERSION,
       countryCode: null,
       regionCode: null,
@@ -798,7 +813,7 @@ export const resolveTransactionContext = (params: {
       signals: explicitCurrency ? [{ id: "explicit-currency", kind: "currency", value: explicitCurrency, confidence: 55, evidence: `currency:${explicitCurrency}`, source: "curated", reviewStatus: "active" }] : [],
       confidence: explicitCurrency ? 55 : 0,
       evidence: explicitCurrency ? [`currency:${explicitCurrency}`] : [],
-    };
+    });
   }
 
   const matched = matches[0].entry;
@@ -831,7 +846,7 @@ export const resolveTransactionContext = (params: {
   const baseConfidence = ambiguous ? Math.min(74, matched.confidence) : matched.confidence;
   const parsingProfile = getRegionalProfile(resolvedCountry);
   const coverageTier = strongestMatches.some(({ entry }) => entry.coverage === "descriptor_variant") ? "descriptor_variant" : "canonical";
-  return {
+  return cacheTransactionContext(cacheKey, {
     corpusVersion: CONTEXT_CORPUS_VERSION,
     countryCode: resolvedCountry,
     regionCode: resolvedRegion,
@@ -869,7 +884,7 @@ export const resolveTransactionContext = (params: {
     signals,
     confidence: Math.min(99, baseConfidence + (explicitCurrency && sameCurrency ? 1 : 0)),
     evidence,
-  };
+  });
 };
 
 export const getRegionalParsingProfile = (countryCode?: string | null) => {

@@ -104,3 +104,13 @@ Rules:
 - Preserve parsed preamble metadata, balance deltas, direction evidence, and balance history in the raw payload.
 - Record whether each usable running-balance movement matches the inferred transaction direction and amount.
 - Schema-valid rows receive high parser confidence; inferred categories retain lower category confidence until confirmed or learned.
+
+## Performance and visibility
+
+- Decode and inspect all supported workbook sheets in one local deterministic pass before considering an AI fallback.
+- Reject obvious data rows before running full header scoring so large ledgers do not repeatedly execute schema detection.
+- Resolve independent account groups concurrently with bounded database concurrency and publish every account summary in the same confirmation result.
+- Batch high-volume transaction inserts while keeping raw row provenance intact.
+- Reuse identical transaction-context inference within one runtime instead of rescanning the context corpus for every row.
+- Make accounts, transactions, and receivables durable before template promotion, analytics, QA, or representative training signals run.
+- Large imports may sample redundant learning and analytics events; confirmed user edits remain authoritative and are never sampled away.

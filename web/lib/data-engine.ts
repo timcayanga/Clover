@@ -3268,16 +3268,27 @@ const buildTransactionInsertRecord = async (params: TransactionInsertParams, col
   if (columnSet.has("transferConfidence")) record.transferConfidence = params.transferConfidence ?? 0;
   if (columnSet.has("rawPayload")) record.rawPayload = params.rawPayload ?? null;
   if (columnSet.has("normalizedPayload")) {
-    const context = resolveTransactionContext({
-      merchantRaw: params.merchantRaw,
-      merchantClean: params.merchantClean,
-      description: params.description,
-      currency: params.currency,
-    });
     const existingNormalizedPayload =
       params.normalizedPayload && typeof params.normalizedPayload === "object" && !Array.isArray(params.normalizedPayload)
         ? (params.normalizedPayload as Record<string, unknown>)
         : {};
+    const existingContext =
+      existingNormalizedPayload.context &&
+      typeof existingNormalizedPayload.context === "object" &&
+      !Array.isArray(existingNormalizedPayload.context)
+        ? existingNormalizedPayload.context
+        : null;
+    // Parsed-row staging already records the context used for normalization.
+    // Reuse that audited result during confirmation instead of rescanning the
+    // full context corpus for every row in a large statement or workbook.
+    const context =
+      existingContext ??
+      resolveTransactionContext({
+        merchantRaw: params.merchantRaw,
+        merchantClean: params.merchantClean,
+        description: params.description,
+        currency: params.currency,
+      });
     record.normalizedPayload = {
       ...existingNormalizedPayload,
       context,

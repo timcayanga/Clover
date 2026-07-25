@@ -1769,9 +1769,37 @@ type StructuredWorkbookTableRegion = {
   direction: "income" | "expense" | null;
 };
 
+const structuredWorkbookHeaderProbePatterns = {
+  date: /^(?:date|date_time|datetime|transaction_date|transaction_datetime|booking_date|value_date|effective_date|completed_date|created_at|occurred_at|settled_at|timestamp|posted|posted_at|posted_date|posting_date|posting_datetime|processed_at|processed_date|settlement_date|cleared_date|as_of|as_of_date|snapshot_date|balance_date)$/,
+  amount: /^(?:amount|transaction_amount|transaction_value|transaction_total|billing_amount|billed_amount|principal_amount|net_amount|gross_amount|value|local_amount|base_amount|home_amount|settlement_amount|debit|debit_amount|debit_amt|debit_value|withdraw|withdrawn|withdrawal|withdrawal_amount|withdrawal_amt|withdrawals|money_out|money_spent|paid|paid_out|spent|outflow|charge|credit|credit_amount|credit_amt|credit_value|deposit|deposit_amount|deposit_amt|deposits|money_in|paid_in|received|received_amount|inflow)$/,
+  description: /^(?:transaction|description|transaction_description|original_description|transaction_name|details|transaction_details|activity|remarks|narrative|transaction_narrative|particulars|memo|note|notes|merchant|merchant_name|payee|counterparty|beneficiary|vendor|vendor_name|name|label)$/,
+  account: /^(?:account|account_name|account_label|account_title|source_account|wallet|portfolio)$/,
+  balance: /^(?:balance|running_balance|ledger_balance|current_balance|available_balance|closing_balance|ending_balance)$/,
+};
+
+const couldBeStructuredWorkbookHeaderRow = (row: string[]) => {
+  const normalizedHeaders = row.map(normalizeStructuredHeader).filter(Boolean);
+  if (normalizedHeaders.length < 2) return false;
+  const has = (pattern: RegExp) => normalizedHeaders.some((header) => pattern.test(header));
+  return (
+    (has(structuredWorkbookHeaderProbePatterns.date) &&
+      has(structuredWorkbookHeaderProbePatterns.amount) &&
+      has(structuredWorkbookHeaderProbePatterns.description)) ||
+    (has(structuredWorkbookHeaderProbePatterns.account) &&
+      has(structuredWorkbookHeaderProbePatterns.balance))
+  );
+};
+
 const findStructuredWorkbookTableRegions = (rows: string[][]): StructuredWorkbookTableRegion[] => {
   const candidates: StructuredWorkbookTableRegion[] = [];
   rows.forEach((row, headerIndex) => {
+    // Most workbook rows are transaction data. Avoid running the much broader
+    // canonical-header scorer (and its institution/category regexes) unless a
+    // row first has the minimum lexical shape of a supported table header.
+    // This preserves tables that begin deep in a worksheet while making parse
+    // cost scale with the number of tables instead of the number of records.
+    if (!couldBeStructuredWorkbookHeaderRow(row)) return;
+
     const nonEmptyRanges: Array<{ start: number; end: number }> = [];
     let start = -1;
     for (let columnIndex = 0; columnIndex <= row.length; columnIndex += 1) {
