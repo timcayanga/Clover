@@ -11131,6 +11131,127 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 10px;
 }
 
+.transactions-column-menu {
+  gap: 7px;
+  padding: 10px;
+  border-radius: 14px;
+  max-height: min(68vh, 480px);
+}
+
+.transactions-column-menu--amount {
+  max-width: calc(100vw - 16px);
+}
+
+.transactions-column-menu__close {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+}
+
+.transactions-column-menu__section {
+  gap: 7px;
+}
+
+.transactions-column-menu__sort {
+  gap: 6px;
+  padding-right: 34px;
+}
+
+.transactions-column-menu__sort--amount {
+  display: flex;
+}
+
+.transactions-column-menu__options,
+.transactions-column-menu .transactions-filter-group__options {
+  gap: 5px;
+}
+
+.transactions-column-menu .transactions-column-menu__button {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.transactions-column-menu__sort--amount .transactions-column-menu__button {
+  width: auto;
+}
+
+.transactions-column-menu__fields,
+.transactions-column-menu__fields--amount-range {
+  gap: 6px;
+}
+
+.transactions-column-menu__field input {
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  border-radius: 10px;
+  padding: 0 8px;
+  font-size: 0.76rem;
+}
+
+.transactions-column-menu .transactions-filter-group {
+  grid-column: auto;
+  gap: 6px;
+}
+
+.transactions-column-menu .transactions-filter-group__label {
+  font-size: 0.72rem;
+}
+
+.transactions-column-menu .transactions-filter-group__clear {
+  font-size: 0.68rem;
+}
+
+.transactions-column-menu .transactions-filter-pill {
+  min-height: 25px;
+  padding-inline: 8px;
+  font-size: 0.68rem;
+}
+
+.transactions-amount-type-grid {
+  display: flex;
+  gap: 6px;
+}
+
+.transactions-amount-type-chip {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  padding: 0;
+  width: 34px;
+}
+
+.transactions-amount-type-chip span {
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.transactions-amount-type-chip:nth-child(1).is-selected {
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.transactions-amount-type-chip:nth-child(2).is-selected {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+}
+
+.transactions-amount-type-chip:nth-child(3).is-selected {
+  border-color: rgba(3, 168, 192, 0.45);
+  background: rgba(3, 168, 192, 0.1);
+  color: var(--accent-strong);
+}
+
 .transactions-filter-pill {
   min-height: 28px;
   padding-inline: 9px;

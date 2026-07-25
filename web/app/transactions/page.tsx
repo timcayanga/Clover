@@ -2208,6 +2208,10 @@ function TransactionsPageContent() {
   const [currencyFilter, setCurrencyFilter] = useState("");
   const [sortField, setSortField] = useState<TransactionSortField>("date");
   const [sortDirection, setSortDirection] = useState<TransactionSortDirection>("desc");
+  const [activeHeaderSort, setActiveHeaderSort] = useState<{
+    field: TransactionSortField;
+    direction: TransactionSortDirection;
+  } | null>(null);
   const [amountMin, setAmountMin] = useState("");
   const [amountMax, setAmountMax] = useState("");
   const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
@@ -4953,7 +4957,8 @@ function TransactionsPageContent() {
 
   const openHeaderMenu = (field: TransactionSortField, event: ReactMouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
-    const menuWidth = field === "category" ? 380 : field === "amount" ? 400 : field === "date" ? 460 : 320;
+    const desiredWidth = field === "name" ? 236 : field === "amount" ? 360 : field === "date" ? 380 : 332;
+    const menuWidth = Math.min(desiredWidth, window.innerWidth - 16);
     const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8));
     setAddMenuOpen(false);
     setSelectionMenuOpen(false);
@@ -4966,18 +4971,17 @@ function TransactionsPageContent() {
     }));
   };
 
-  const clearAllTransactionFilters = () => {
-    setQuery("");
-    setCurrencyFilter("");
-    setCategoryFilters([]);
-    setAccountFilters([]);
-    setTypeFilters([]);
-    setDateFilterMode("ltd");
-    setDateFilterAnchor(todayIso);
-    setCustomStart("");
-    setCustomEnd("");
-    setAmountMin("");
-    setAmountMax("");
+  const toggleHeaderSort = (field: TransactionSortField, direction: TransactionSortDirection) => {
+    if (activeHeaderSort?.field === field && activeHeaderSort.direction === direction) {
+      setActiveHeaderSort(null);
+      setSortField("date");
+      setSortDirection("desc");
+      return;
+    }
+
+    setActiveHeaderSort({ field, direction });
+    setSortField(field);
+    setSortDirection(direction);
   };
 
   const openManualAdd = async () => {
@@ -6469,10 +6473,10 @@ function TransactionsPageContent() {
           : headerMenuOpen === "amount"
             ? "Sort by amount"
             : "";
-  const amountTypeOptions: Array<{ value: TransactionTypeFilter; label: string; amount: number }> = [
-    { value: "debit", label: "Expenses", amount: displayedTransactionsSummary.spending },
-    { value: "credit", label: "Income", amount: displayedTransactionsSummary.income },
-    { value: "transfer", label: "Transfers", amount: displayedTransactionsSummary.transfers },
+  const amountTypeOptions: Array<{ value: TransactionTypeFilter; label: string; icon: string }> = [
+    { value: "debit", label: "Expense", icon: "−" },
+    { value: "credit", label: "Income", icon: "+" },
+    { value: "transfer", label: "Transfer", icon: "↔" },
   ];
   const headerMenuPanel = headerMenuOpen && headerMenuPosition ? (
     <div
@@ -6486,15 +6490,14 @@ function TransactionsPageContent() {
       role="dialog"
       aria-label={headerMenuTitle}
     >
-      <div className="transactions-column-menu__head">
-        <div>
-          <p className="eyebrow">Transactions</p>
-          <h4>{headerMenuTitle}</h4>
-        </div>
-        <button className="icon-button" type="button" onClick={closeHeaderMenu} aria-label={`Close ${headerMenuTitle.toLowerCase()}`}>
-          ×
-        </button>
-      </div>
+      <button
+        className="icon-button transactions-column-menu__close"
+        type="button"
+        onClick={closeHeaderMenu}
+        aria-label={`Close ${headerMenuTitle.toLowerCase()}`}
+      >
+        ×
+      </button>
 
       {headerMenuOpen === "name" ? (
         <div className="transactions-column-menu__section">
@@ -6507,18 +6510,15 @@ function TransactionsPageContent() {
                 key={direction}
                 type="button"
                 className={`button button-secondary button-small transactions-column-menu__button ${
-                  sortField === "name" && sortDirection === direction ? "is-active" : ""
+                  activeHeaderSort?.field === "name" && activeHeaderSort.direction === direction ? "is-active" : ""
                 }`}
-                onClick={() => {
-                  setSortField("name");
-                  setSortDirection(direction as TransactionSortDirection);
-                }}
+                aria-pressed={activeHeaderSort?.field === "name" && activeHeaderSort.direction === direction}
+                onClick={() => toggleHeaderSort("name", direction as TransactionSortDirection)}
               >
                 {label}
               </button>
             ))}
           </div>
-          <div className="transactions-column-menu__hint">Sort names alphabetically.</div>
         </div>
       ) : null}
 
@@ -6533,12 +6533,10 @@ function TransactionsPageContent() {
                 key={direction}
                 type="button"
                 className={`button button-secondary button-small transactions-column-menu__button ${
-                  sortField === "date" && sortDirection === direction ? "is-active" : ""
+                  activeHeaderSort?.field === "date" && activeHeaderSort.direction === direction ? "is-active" : ""
                 }`}
-                onClick={() => {
-                  setSortField("date");
-                  setSortDirection(direction as TransactionSortDirection);
-                }}
+                aria-pressed={activeHeaderSort?.field === "date" && activeHeaderSort.direction === direction}
+                onClick={() => toggleHeaderSort("date", direction as TransactionSortDirection)}
               >
                 {label}
               </button>
@@ -6558,9 +6556,10 @@ function TransactionsPageContent() {
                 key={mode}
                 type="button"
                 className={`pill pill-interactive transactions-filter-pill ${
-                  dateFilterMode === mode ? "pill-is-selected" : ""
+                  dateFilterMode !== "ltd" && dateFilterMode === mode ? "pill-is-selected" : ""
                 }`}
-                onClick={() => applyDateFilterMode(mode as DateFilterMode)}
+                aria-pressed={dateFilterMode !== "ltd" && dateFilterMode === mode}
+                onClick={() => applyDateFilterMode(dateFilterMode === mode ? "ltd" : (mode as DateFilterMode))}
               >
                 {label}
               </button>
@@ -6576,7 +6575,6 @@ function TransactionsPageContent() {
               <input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} />
             </label>
           </div>
-          <div className="transactions-column-menu__hint">Use the start and end dates to filter the table inline.</div>
         </div>
       ) : null}
 
@@ -6591,12 +6589,10 @@ function TransactionsPageContent() {
                 key={direction}
                 type="button"
                 className={`button button-secondary button-small transactions-column-menu__button ${
-                  sortField === "account" && sortDirection === direction ? "is-active" : ""
+                  activeHeaderSort?.field === "account" && activeHeaderSort.direction === direction ? "is-active" : ""
                 }`}
-                onClick={() => {
-                  setSortField("account");
-                  setSortDirection(direction as TransactionSortDirection);
-                }}
+                aria-pressed={activeHeaderSort?.field === "account" && activeHeaderSort.direction === direction}
+                onClick={() => toggleHeaderSort("account", direction as TransactionSortDirection)}
               >
                 {label}
               </button>
@@ -6623,12 +6619,10 @@ function TransactionsPageContent() {
                 key={direction}
                 type="button"
                 className={`button button-secondary button-small transactions-column-menu__button ${
-                  sortField === "category" && sortDirection === direction ? "is-active" : ""
+                  activeHeaderSort?.field === "category" && activeHeaderSort.direction === direction ? "is-active" : ""
                 }`}
-                onClick={() => {
-                  setSortField("category");
-                  setSortDirection(direction as TransactionSortDirection);
-                }}
+                aria-pressed={activeHeaderSort?.field === "category" && activeHeaderSort.direction === direction}
+                onClick={() => toggleHeaderSort("category", direction as TransactionSortDirection)}
               >
                 {label}
               </button>
@@ -6658,26 +6652,16 @@ function TransactionsPageContent() {
                 key={direction}
                 type="button"
                 className={`button button-secondary button-small transactions-column-menu__button ${
-                  sortField === "amount" && sortDirection === direction ? "is-active" : ""
+                  activeHeaderSort?.field === "amount" && activeHeaderSort.direction === direction ? "is-active" : ""
                 }`}
-                onClick={() => {
-                  setSortField("amount");
-                  setSortDirection(direction as TransactionSortDirection);
-                }}
+                aria-pressed={activeHeaderSort?.field === "amount" && activeHeaderSort.direction === direction}
+                onClick={() => toggleHeaderSort("amount", direction as TransactionSortDirection)}
               >
                 {label}
               </button>
             ))}
           </div>
           <div className="transactions-filter-group transactions-filter-group--amount" role="group" aria-label="Show amounts for">
-            <div className="transactions-filter-group__head">
-              <span className="transactions-filter-group__label">Show amounts for</span>
-              {typeFilters.length ? (
-                <button className="transactions-filter-group__clear" type="button" onClick={() => setTypeFilters([])}>
-                  Clear
-                </button>
-              ) : null}
-            </div>
             <div className="transactions-amount-type-grid">
               {amountTypeOptions.map((option) => {
                 const isSelected = typeFilters.includes(option.value);
@@ -6687,10 +6671,11 @@ function TransactionsPageContent() {
                     className={`transactions-amount-type-chip ${isSelected ? "is-selected" : ""}`}
                     type="button"
                     aria-pressed={isSelected}
+                    aria-label={`Filter ${option.label.toLowerCase()} transactions`}
+                    title={option.label}
                     onClick={() => setTypeFilters((current) => toggleTypedFilterValue(current, option.value))}
                   >
-                    <span>{option.label}</span>
-                    <strong>{formatTransactionAggregate(option.amount, visibleTransactions)}</strong>
+                    <span aria-hidden="true">{option.icon}</span>
                   </button>
                 );
               })}
@@ -6717,44 +6702,9 @@ function TransactionsPageContent() {
                 placeholder="0.00"
               />
             </label>
-            <div className="transactions-column-menu__hint transactions-column-menu__hint--amount-range">
-              Filter amounts by a specific range.
-            </div>
           </div>
         </div>
       ) : null}
-
-      <div className="form-actions form-actions--compact">
-        <button
-          className="button button-secondary"
-          type="button"
-          onClick={() => {
-            if (headerMenuOpen === "date") {
-              setDateFilterMode("ltd");
-              setDateFilterAnchor(todayIso);
-              setCustomStart("");
-              setCustomEnd("");
-            } else if (headerMenuOpen === "account") {
-              setAccountFilters([]);
-            } else if (headerMenuOpen === "category") {
-              setCategoryFilters([]);
-            } else if (headerMenuOpen === "amount") {
-              setAmountMin("");
-              setAmountMax("");
-              setTypeFilters([]);
-            } else if (headerMenuOpen === "name") {
-              setSortField("date");
-              setSortDirection("desc");
-            }
-            closeHeaderMenu();
-          }}
-        >
-          Reset
-        </button>
-        <button className="button button-primary" type="button" onClick={closeHeaderMenu}>
-          Done
-        </button>
-      </div>
     </div>
   ) : null;
   const isWorkspaceSelectionSettling = !hasLoadedWorkspaceList || (!selectedWorkspaceId && workspaces.length > 0);
@@ -7049,10 +6999,6 @@ function TransactionsPageContent() {
       {filterOpen ? (
             <div className="transactions-inline-filters glass">
               <div className="transactions-inline-filters__head">
-                <div>
-                  <span className="transactions-context-strip__label">Filters</span>
-                  <p className="transactions-inline-filters__copy">Refine the list without leaving Transactions.</p>
-                </div>
                 <button className="icon-button" type="button" onClick={toggleFiltersPanel} aria-label="Close filters">
                   ×
                 </button>
@@ -7078,48 +7024,14 @@ function TransactionsPageContent() {
                 <MultiSelectFilterGroup
                   label="Types"
                   options={[
-                    { value: "debit", label: "Debit" },
-                    { value: "credit", label: "Credit" },
+                    { value: "debit", label: "Expense" },
+                    { value: "credit", label: "Income" },
                     { value: "transfer", label: "Transfer" },
                   ]}
                   selected={typeFilters}
                   onToggle={(value) => setTypeFilters((current) => toggleTypedFilterValue(current, value as TransactionTypeFilter))}
                   onClear={() => setTypeFilters([])}
                 />
-              </div>
-              <div className="form-actions">
-                <button
-                  className="button button-secondary"
-                  type="button"
-                  onClick={() => {
-                    clearAllTransactionFilters();
-                    capturePostHogClientEvent("report_filtered", {
-                      workspace_id: selectedWorkspaceId || null,
-                      view: "transactions",
-                      action: "filters_reset",
-                    });
-                  }}
-                >
-                  Reset
-                </button>
-                <button
-                  className="button button-primary"
-                  type="button"
-                  onClick={() => {
-                    capturePostHogClientEvent("report_filtered", {
-                      workspace_id: selectedWorkspaceId || null,
-                      view: "transactions",
-                      action: "filters_applied",
-                      filter_type_count: typeFilters.length,
-                      filter_category_count: categoryFilters.length,
-                      filter_account_count: accountFilters.length,
-                      query_length: query.trim().length,
-                    });
-                    setFilterOpen(false);
-                  }}
-                >
-                  Done
-                </button>
               </div>
             </div>
           ) : null}
