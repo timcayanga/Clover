@@ -2100,6 +2100,7 @@ export async function POST(request: Request) {
       "If transactions are sparse, lean on account balances, recurring items, commitments, split bills, and long-term history before giving a weak answer.",
       "Treat current investment accounts, holdings, balances, tickers, and units as valid portfolio context even when there is no separate historical investment snapshot.",
       "A goal is optional context, never a prerequisite for giving a useful balance, cash-flow, portfolio, or investment-readiness answer.",
+      "Do not recommend creating a goal merely because no goal exists. When recent transaction history is missing, make reviewing or importing recent transactions the next step so Clover can estimate spending and genuinely available cash.",
       "If data is stale or historical, say so plainly and avoid implying it reflects today.",
       "If you can, mention the exact source of the signal, the relevant period, and one practical next step.",
       "Keep the answer under 140 words. Lead with the direct answer, then use two to four short paragraphs or bullets, and end with one concrete next step.",
@@ -2502,6 +2503,15 @@ export async function POST(request: Request) {
             description: "See the holdings and concentration behind this answer.",
             href: "/investments",
           }]
+        : asksForOverallMoneyOverview && allTransactions.length === 0
+          ? [{
+              id: "fallback-transactions",
+              kind: "navigate",
+              type: "find_transactions",
+              label: "Review recent transactions",
+              description: "Add or review recent activity so Clover can estimate spending and available cash.",
+              href: "/transactions",
+            }]
         : asksForOverallMoneyOverview
           ? [{
               id: "fallback-accounts",
@@ -2522,6 +2532,17 @@ export async function POST(request: Request) {
             }]
           : [];
     const selectPrimaryAdviserAction = (candidates: AdviserAction[]) => {
+      if (asksForOverallMoneyOverview && allTransactions.length === 0) {
+        return [fallbackActions.find((action) => action.type === "find_transactions") ?? {
+          id: "overview-transactions",
+          kind: "navigate",
+          type: "find_transactions",
+          label: "Review recent transactions",
+          description: "Add or review recent activity so Clover can estimate spending and available cash.",
+          href: "/transactions",
+        }];
+      }
+
       if (candidates.length <= 1) {
         return candidates.slice(0, 1);
       }
