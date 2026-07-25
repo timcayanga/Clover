@@ -884,7 +884,7 @@ function InvestmentInsightDonut({
                     key={slice.key}
                     className={`report-donut__segment${activeSliceKey === slice.key ? " is-active" : ""}${activeSliceKey && activeSliceKey !== slice.key ? " is-muted" : ""}${onSliceSelect ? " is-clickable" : ""}`}
                     d={piePath(startAngle, endAngle)}
-                    fill={`url(#${gradientPrefix}-slice-${index})`}
+                    style={{ fill: `url(#${gradientPrefix}-slice-${index})` }}
                     onMouseEnter={() => setActiveSliceKey(slice.key)}
                     onMouseLeave={() => setActiveSliceKey(null)}
                     onClick={() => onSliceSelect?.(slice)}
