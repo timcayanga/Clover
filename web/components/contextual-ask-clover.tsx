@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AdviserChat, type AdviserPrompt } from "@/components/adviser-chat";
+import { hasFullFeatureAccess } from "@/lib/beta-access";
 
 type AskCloverContext = "accounts" | "transactions" | "recurring";
 type PlanTier = "free" | "pro" | "unknown";
@@ -233,7 +234,7 @@ export function ContextualAskClover({ context, planTier = "unknown" }: Contextua
                   ) : (
                     <AdviserChat
                       prompts={copy.prompts}
-                      isPro={resolvedPlanTier === "pro"}
+                      isPro={hasFullFeatureAccess(resolvedPlanTier)}
                       storageKey={`clover-adviser-chat-${context}-v1`}
                     />
                   )}

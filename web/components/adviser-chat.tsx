@@ -38,6 +38,7 @@ type AdviserUsage = {
   limit: number;
   remaining: number;
   resetsAt: string;
+  unlimited?: boolean;
 };
 
 type AdviserGrounding = {
@@ -104,7 +105,7 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const visiblePrompts = useMemo(() => (suggestedPrompts.length > 0 ? suggestedPrompts : prompts).slice(0, 6), [prompts, suggestedPrompts]);
-  const hasReachedLimit = usage !== null && usage.remaining <= 0;
+  const hasReachedLimit = usage !== null && !usage.unlimited && usage.remaining <= 0;
   const resetLabel = usage ? new Date(usage.resetsAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null;
 
   useEffect(() => {
@@ -395,7 +396,7 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
           </button>
         ) : null}
       </div>
-      {usage ? (
+      {usage && !usage.unlimited ? (
         <p className="adviser-chat__status">
           {hasReachedLimit
             ? `Your Adviser questions refresh on ${resetLabel}.`

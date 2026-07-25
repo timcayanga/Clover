@@ -27,6 +27,7 @@ import { ReportsRangeMenu } from "@/components/reports-range-menu";
 import { ReportsSection as ReportsSectionPanel, ReportsTabsProvider, ReportsTopTabs } from "@/components/reports-tabs";
 import { ReportsStream } from "@/app/reports/page";
 import { PlanUpgradeCallout } from "@/components/plan-upgrade-callout";
+import { hasFullFeatureAccess } from "@/lib/beta-access";
 
 export const dynamic = "force-dynamic";
 
@@ -3305,12 +3306,13 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
   );
 
   const reportSections = ["overview", "spending", "trends", "advanced"] as const;
+  const hasCompleteAccess = hasFullFeatureAccess(user.planTier);
 
   return (
     <ReportsTabsProvider
       initialSection="overview"
       availableSections={[...reportSections]}
-      lockedSections={user.planTier === "free" ? ["advanced"] : []}
+      lockedSections={hasCompleteAccess ? [] : ["advanced"]}
     >
       <CloverShell
         active="adviser"
@@ -3366,13 +3368,13 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
         />
 
         <section className="adviser-section adviser-section--questions glass">
-          <AdviserChat prompts={promptSuggestions} isPro={user.planTier === "pro"} />
+          <AdviserChat prompts={promptSuggestions} isPro={hasCompleteAccess} />
         </section>
 
       </section>
       </ReportsSectionPanel>
       <ReportsStream active="adviser" searchParams={resolvedSearchParams} />
-      {user.planTier === "free" ? (
+      {!hasCompleteAccess ? (
         <ReportsSectionPanel section="advanced">
           <PlanUpgradeCallout
             planTier="free"

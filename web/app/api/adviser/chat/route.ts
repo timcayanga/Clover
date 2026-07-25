@@ -16,6 +16,7 @@ import { deriveReconciledBalance } from "@/lib/account-balance";
 import { assertRateLimit } from "@/lib/rate-limit";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
 import { normalizeAdviserPreferences } from "@/lib/adviser-preferences";
+import { ADVISER_LIMITS_ENABLED, BETA_FULL_ACCESS_ENABLED } from "@/lib/beta-access";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,7 @@ type AdviserUsage = {
   limit: number;
   remaining: number;
   resetsAt: string;
+  unlimited?: boolean;
 };
 
 type AdviserSuggestedQuestion = {
@@ -844,27 +846,31 @@ export async function POST(request: Request) {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const resetsAt = getNextMonthStart(now);
     const limit = ADVISER_CHAT_LIMITS[user.planTier];
-    const usageCount = await prisma.auditLog.count({
-      where: {
-        actorUserId: user.id,
-        action: "adviser.chat_asked",
-        createdAt: { gte: monthStart },
-      },
-    });
+    const usageCount = ADVISER_LIMITS_ENABLED
+      ? await prisma.auditLog.count({
+          where: {
+            actorUserId: user.id,
+            action: "adviser.chat_asked",
+            createdAt: { gte: monthStart },
+          },
+        })
+      : 0;
 
-    try {
-      assertRateLimit(`adviser-chat:${user.id}`, user.planTier === "pro" ? 30 : 8, 60 * 1000);
-    } catch {
-      return NextResponse.json(
-        {
-          error: "Clover needs a short pause before the next question.",
-          usage: { plan: user.planTier, used: usageCount, limit, remaining: Math.max(0, limit - usageCount), resetsAt: resetsAt.toISOString() } satisfies AdviserUsage,
-        },
-        { status: 429 }
-      );
+    if (ADVISER_LIMITS_ENABLED) {
+      try {
+        assertRateLimit(`adviser-chat:${user.id}`, user.planTier === "pro" ? 30 : 8, 60 * 1000);
+      } catch {
+        return NextResponse.json(
+          {
+            error: "Clover needs a short pause before the next question.",
+            usage: { plan: user.planTier, used: usageCount, limit, remaining: Math.max(0, limit - usageCount), resetsAt: resetsAt.toISOString() } satisfies AdviserUsage,
+          },
+          { status: 429 }
+        );
+      }
     }
 
-    if (usageCount >= limit) {
+    if (ADVISER_LIMITS_ENABLED && usageCount >= limit) {
       return NextResponse.json(
         {
           error: user.planTier === "free" ? "You have used this month's Adviser preview questions. Upgrade to Pro for more room." : "You have reached this month's Adviser Chat limit.",
@@ -2533,6 +2539,7 @@ export async function POST(request: Request) {
       limit,
       remaining: Math.max(0, limit - usageCount - 1),
       resetsAt: resetsAt.toISOString(),
+      unlimited: BETA_FULL_ACCESS_ENABLED,
     }) satisfies AdviserUsage;
     const fallbackActions: AdviserAction[] =
       inferredQuestionTheme === "goals" && !goalValue && suggestedGoal

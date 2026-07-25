@@ -25,6 +25,7 @@ import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
 import { buildVisibleWorkspaceTransactionWhere } from "@/lib/transaction-query";
+import { hasFullFeatureAccess } from "@/lib/beta-access";
 
 const ReportsReviewQueue = nextDynamic(() => import("@/components/reports-review-queue").then((module) => module.ReportsReviewQueue), {
   loading: () => (
@@ -374,7 +375,7 @@ export async function ReportsStream({
     where: { clerkUserId: session.userId },
   });
   const user = existingUser ?? (await getOrCreateCurrentUser(session.userId));
-  const isPro = user.planTier === "pro";
+  const isPro = hasFullFeatureAccess(user.planTier);
   const initialSection = isPro || requestedSection !== "advanced" ? requestedSection : "overview";
   const sectionTabs: ReportsSection[] = isPro ? ["overview", "spending", "trends", "advanced"] : ["overview", "spending", "trends"];
   const needsSpendingData = true;
@@ -2355,7 +2356,7 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
   const selectedRange = normalizeReportsRange(resolvedSearchParams?.range);
   const selectedRangeLabel = reportsRangeLabels[selectedRange];
   const requestedSection = normalizeReportsSection(resolvedSearchParams?.section);
-  const isPro = user.planTier === "pro";
+  const isPro = hasFullFeatureAccess(user.planTier);
   const sectionTabs: ReportsSection[] = isPro ? ["overview", "spending", "trends", "advanced"] : ["overview", "spending", "trends"];
   const initialSection = isPro || requestedSection !== "advanced" ? requestedSection : "overview";
 
