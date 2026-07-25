@@ -3745,6 +3745,7 @@ function AccountsPageContent() {
         menuAlignment="end"
         showChevron={false}
       />
+      <ContextualAskClover context="accounts" planTier={planTier} />
       <button className="button button-secondary button-small accounts-toolbar-add" type="button" onClick={openAddAccount}>
         <ActionIcon name="plus" />
         <span>Add account</span>
@@ -3760,7 +3761,6 @@ function AccountsPageContent() {
     <CloverShell
       active="accounts"
       title="Accounts"
-      titleAddon={<ContextualAskClover context="accounts" planTier={planTier} />}
       actions={accountsShellActions}
       >
       <div className="accounts-page">

@@ -1028,8 +1028,8 @@ body.dashboard-modal-open .app-shell {
 }
 
 .menu-icon-3d--adviser {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
 }
 
 .nav-link__badge {
@@ -2908,13 +2908,6 @@ body.transactions-manual-open .shell-quick-add-button {
   min-width: 0;
 }
 
-.recurring-title-tools {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
 .contextual-ask-clover {
   position: relative;
   display: inline-flex;
@@ -2925,8 +2918,8 @@ body.transactions-manual-open .shell-quick-add-button {
 .contextual-ask-clover__trigger {
   position: relative;
   display: inline-grid;
-  width: 25px;
-  height: 25px;
+  width: 36px;
+  height: 36px;
   place-items: center;
   border: 0;
   padding: 0;
@@ -2936,8 +2929,8 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .contextual-ask-clover__icon {
-  width: 25px;
-  height: 25px;
+  width: 34px;
+  height: 34px;
   object-fit: contain;
   transition: transform 160ms ease, filter 160ms ease;
 }

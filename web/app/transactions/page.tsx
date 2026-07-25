@@ -6844,6 +6844,7 @@ function TransactionsPageContent() {
         tabIndex={-1}
       />
 
+      <ContextualAskClover context="transactions" planTier={planTier} />
       <button
         className="button button-secondary button-small accounts-toolbar-add transactions-toolbar-add transactions-toolbar-add--compact"
         type="button"
@@ -6883,6 +6884,7 @@ function TransactionsPageContent() {
         showChevron={false}
       />
 
+      <ContextualAskClover context="transactions" planTier={planTier} />
       <input
         ref={addFileInputRef}
         className="hidden-file-input"
@@ -6985,7 +6987,6 @@ function TransactionsPageContent() {
     <CloverShell
       active="transactions"
       title="Transactions"
-      titleAddon={<ContextualAskClover context="transactions" planTier={planTier} />}
       actions={transactionsShellActions}
     >
       <PageFileDropZone

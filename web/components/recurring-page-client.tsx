@@ -130,43 +130,43 @@ export function RecurringPageClient({
       active="recurring"
       title="Recurring"
       titleAddon={
-        <div className="recurring-title-tools">
-          <ContextualAskClover context="recurring" planTier={planTier} />
-          <nav className="investments-tabs recurring-tabs--top" aria-label="Recurring sections">
-            {recurringTabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                className={`investments-tab${activeTab === tab.id ? " is-active" : ""}`}
-                aria-current={activeTab === tab.id ? "page" : undefined}
-                onClick={() => selectTab(tab.id)}
-              >
-                <span className="recurring-tab-label recurring-tab-label--desktop">{tab.label}</span>
-                <span className="recurring-tab-label recurring-tab-label--mobile">{tab.mobileLabel}</span>
-              </button>
-            ))}
-          </nav>
-        </div>
+        <nav className="investments-tabs recurring-tabs--top" aria-label="Recurring sections">
+          {recurringTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`investments-tab${activeTab === tab.id ? " is-active" : ""}`}
+              aria-current={activeTab === tab.id ? "page" : undefined}
+              onClick={() => selectTab(tab.id)}
+            >
+              <span className="recurring-tab-label recurring-tab-label--desktop">{tab.label}</span>
+              <span className="recurring-tab-label recurring-tab-label--mobile">{tab.mobileLabel}</span>
+            </button>
+          ))}
+        </nav>
       }
       actions={
-        <button
-          type="button"
-          className="button button-primary button-small recurring-topbar-add transactions-action-button"
-          onClick={openAddModal}
-        >
-          <span className="button-icon" aria-hidden="true" style={addButtonIconStyle}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={addButtonSvgStyle}>
-              <path d="M12 5v14" />
-              <path d="M5 12h14" />
-            </svg>
-          </span>
-          <span>Add Recurring</span>
-          <span className="button-icon" aria-hidden="true" style={addButtonIconStyle}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={addButtonSvgStyle}>
-              <path d="M8 10l4 4 4-4" />
-            </svg>
-          </span>
-        </button>
+        <>
+          <ContextualAskClover context="recurring" planTier={planTier} />
+          <button
+            type="button"
+            className="button button-primary button-small recurring-topbar-add transactions-action-button"
+            onClick={openAddModal}
+          >
+            <span className="button-icon" aria-hidden="true" style={addButtonIconStyle}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={addButtonSvgStyle}>
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+            </span>
+            <span>Add Recurring</span>
+            <span className="button-icon" aria-hidden="true" style={addButtonIconStyle}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={addButtonSvgStyle}>
+                <path d="M8 10l4 4 4-4" />
+              </svg>
+            </span>
+          </button>
+        </>
       }
     >
       <div className="recurring-page__stack">
