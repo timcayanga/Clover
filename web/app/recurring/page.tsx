@@ -9,6 +9,7 @@ import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page
 import { isTransientDataError } from "@/lib/transient-data";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { TransientDataRecovery } from "@/components/transient-data-recovery";
+import { ContextualAskClover } from "@/components/contextual-ask-clover";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export const metadata = {
 
 function RecurringUnavailableState() {
   return (
-    <CloverShell active="recurring" title="Recurring">
+    <CloverShell active="recurring" title="Recurring" actions={<ContextualAskClover context="recurring" />}>
       <section className="recurring-page">
         <TransientDataRecovery eyebrow="Recurring" pageLabel="Recurring" transactionHref="/transactions?manual=1" transactionLabel="Add a transaction" />
       </section>
@@ -57,6 +58,7 @@ export default async function RecurringPage({
         plannedPaymentSuggestions={plannedPaymentSuggestions}
         accounts={workspaceAccounts}
         transactions={recentTransactions}
+        planTier={user.planTier}
         initialTab={initialTab}
         initialAddOpen={showAddModal}
       />

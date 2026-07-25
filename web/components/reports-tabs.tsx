@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { AnimatedTabs } from "@/components/animated-tabs";
+import { BETA_FULL_ACCESS_ENABLED } from "@/lib/beta-access";
 
 type ReportsSection = "overview" | "spending" | "trends" | "advanced";
 
@@ -88,7 +89,7 @@ export function ReportsTopTabs() {
       tabs={availableSections.map((section) => ({
         key: section,
         label: reportsSectionLabels[section],
-        badge: section === "advanced" ? "Pro" : null,
+        badge: section === "advanced" && !BETA_FULL_ACCESS_ENABLED ? "Pro" : null,
         locked: lockedSections.includes(section),
       }))}
     />

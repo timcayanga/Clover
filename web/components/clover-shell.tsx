@@ -352,7 +352,7 @@ const MENU_ICON_SRC: Partial<Record<IconName, string>> = {
   transactions: "/assets/3d%20icons/transactions.png?v=20260723",
   recurring: "/assets/3d%20icons/recurring.png?v=20260723",
   reports: "/assets/3d%20icons/menu/reports.png",
-  adviser: "/assets/3d%20icons/menu/adviser.png",
+  adviser: "/assets/3d%20icons/adviser.png?v=20260725",
   budgeting: "/assets/3d%20icons/menu/budgeting.png",
   goals: "/assets/icons/goals.png",
   more: "/assets/3d%20icons/menu/more.png",

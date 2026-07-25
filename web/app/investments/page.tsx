@@ -15,6 +15,7 @@ import { InfoTip } from "@/components/info-tip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { InvestmentMarketChart } from "@/components/investment-market-chart";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
+import { BETA_FULL_ACCESS_ENABLED, hasFullFeatureAccess } from "@/lib/beta-access";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
 import {
@@ -1812,7 +1813,7 @@ export default function InvestmentsPage() {
       portfolioCurrencyFilter !== "all" ||
       portfolioView !== "all"
   );
-  const canUseProTabs = planTier === "pro";
+  const canUseProTabs = hasFullFeatureAccess(planTier);
   const canAccessSelectedTab = !((selectedTab === "market" || selectedTab === "analysis") && !canUseProTabs);
   const visibleInvestmentTabs = INVESTMENT_TABS;
   const classifiedInvestmentAccounts = useMemo(
@@ -2361,8 +2362,8 @@ export default function InvestmentsPage() {
             label: tab.label,
             icon: tab.icon,
             disabled: false,
-            badge: tab.proOnly ? "PRO" : null,
-            locked: tab.proOnly && planTier === "free",
+            badge: tab.proOnly && !BETA_FULL_ACCESS_ENABLED ? "PRO" : null,
+            locked: tab.proOnly && !canUseProTabs,
             ariaLabel: tab.label,
           }))}
         />
@@ -2419,8 +2420,8 @@ export default function InvestmentsPage() {
               label: tab.label,
               icon: tab.icon,
               disabled: false,
-              badge: tab.proOnly ? "PRO" : null,
-              locked: tab.proOnly && planTier === "free",
+              badge: tab.proOnly && !BETA_FULL_ACCESS_ENABLED ? "PRO" : null,
+              locked: tab.proOnly && !canUseProTabs,
               ariaLabel: tab.label,
             }))}
           />
@@ -3016,7 +3017,7 @@ export default function InvestmentsPage() {
                   </div>
                 </div>
               </div>
-              <AdviserChat prompts={investmentAdviserPrompts} isPro={planTier === "pro"} />
+              <AdviserChat prompts={investmentAdviserPrompts} isPro={canUseProTabs} />
             </article>
           </section>
         )}

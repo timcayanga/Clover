@@ -19,7 +19,7 @@ type PageIconName = "dashboard" | "adviser" | "accounts" | "transactions" | "rec
 
 const MORE_ICON_SRC: Record<PageIconName, string> = {
   dashboard: "/assets/3d%20icons/home.png?v=20260723",
-  adviser: "/assets/3d%20icons/menu/adviser.png",
+  adviser: "/assets/3d%20icons/adviser.png?v=20260725",
   accounts: "/assets/3d%20icons/menu/bank-account.png",
   transactions: "/assets/3d%20icons/transactions.png?v=20260723",
   recurring: "/assets/3d%20icons/recurring.png?v=20260723",

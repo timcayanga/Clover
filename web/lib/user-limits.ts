@@ -1,4 +1,5 @@
 import type { PlanTier } from "@prisma/client";
+import { BETA_FULL_ACCESS_ENABLED } from "@/lib/beta-access";
 
 export type UserLimits = {
   accountLimit: number | null;
@@ -45,7 +46,7 @@ const UNLIMITED_SYNTHETIC_USER_IDS = new Set(["staging-guest", "local-admin"]);
 
 // Keep this rollout switch centralized so temporary unlimited access can be
 // restored to the plan defaults without changing every feature gate.
-export const PLAN_LIMITS_TEMPORARILY_DISABLED = true;
+export const PLAN_LIMITS_TEMPORARILY_DISABLED = BETA_FULL_ACCESS_ENABLED;
 
 export const getPlanDefaultLimits = (planTier: PlanTier): UserLimits => PLAN_DEFAULT_LIMITS[planTier];
 

@@ -17,6 +17,7 @@ import { createPortal, flushSync } from "react-dom";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CloverShell, useCloverChrome } from "@/components/clover-shell";
+import { ContextualAskClover } from "@/components/contextual-ask-clover";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { CurrencySelector } from "@/components/currency-selector";
@@ -6843,6 +6844,7 @@ function TransactionsPageContent() {
         tabIndex={-1}
       />
 
+      <ContextualAskClover context="transactions" planTier={planTier} />
       <button
         className="button button-secondary button-small accounts-toolbar-add transactions-toolbar-add transactions-toolbar-add--compact"
         type="button"
@@ -6882,6 +6884,7 @@ function TransactionsPageContent() {
         showChevron={false}
       />
 
+      <ContextualAskClover context="transactions" planTier={planTier} />
       <input
         ref={addFileInputRef}
         className="hidden-file-input"
