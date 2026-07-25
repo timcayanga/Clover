@@ -386,28 +386,6 @@ export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
 
   return (
     <div className="adviser-chat">
-      {usage ? (
-        <p className="adviser-chat__status">
-          {hasReachedLimit
-            ? `Your Adviser questions refresh on ${resetLabel}.`
-            : `${usage.remaining} Adviser question${usage.remaining === 1 ? "" : "s"} left this month on ${usage.plan === "pro" ? "Pro" : "Free"}.`}
-        </p>
-      ) : null}
-      <p className="adviser-chat__question-lead">Here&apos;s what I&apos;d ask if I were looking at your finances.</p>
-      <div className="adviser-chat__prompt-row" aria-label="Suggested questions">
-        {visiblePrompts.map((prompt) => (
-          <button
-            key={prompt.id}
-            type="button"
-            className="adviser-chat__prompt"
-            disabled={hasReachedLimit || isSending}
-            onClick={() => sendSuggestedPrompt(prompt)}
-          >
-            <span className="adviser-chat__prompt-emoji" aria-hidden="true">{getPromptEmoji(prompt.group)}</span>
-            <span>{prompt.label}</span>
-          </button>
-        ))}
-      </div>
       <div className="adviser-chat__heading-row">
         <p className="eyebrow adviser-chat__ask-label">Ask Clover</p>
         {messages.length > 0 ? (
@@ -416,6 +394,32 @@ export function AdviserChat({ prompts, isPro }: AdviserChatProps) {
           </button>
         ) : null}
       </div>
+      {usage ? (
+        <p className="adviser-chat__status">
+          {hasReachedLimit
+            ? `Your Adviser questions refresh on ${resetLabel}.`
+            : `${usage.remaining} Adviser question${usage.remaining === 1 ? "" : "s"} left this month on ${usage.plan === "pro" ? "Pro" : "Free"}.`}
+        </p>
+      ) : null}
+      {messages.length === 0 ? (
+        <>
+          <p className="adviser-chat__question-lead">Try one of these, or ask in your own words.</p>
+          <div className="adviser-chat__prompt-row" aria-label="Suggested questions">
+            {visiblePrompts.map((prompt) => (
+              <button
+                key={prompt.id}
+                type="button"
+                className="adviser-chat__prompt"
+                disabled={hasReachedLimit || isSending}
+                onClick={() => sendSuggestedPrompt(prompt)}
+              >
+                <span className="adviser-chat__prompt-emoji" aria-hidden="true">{getPromptEmoji(prompt.group)}</span>
+                <span>{prompt.label}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
       {messages.length > 0 ? (
         <div className="adviser-chat__thread" role="log" aria-live="polite" aria-relevant="additions text">
           {messages.map((message, index) => (

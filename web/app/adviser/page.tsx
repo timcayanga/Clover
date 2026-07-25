@@ -1581,6 +1581,27 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
       : null;
 
   const accountAnalysisAccounts = workspaceAccounts.filter((account) => formatCurrencyCode(account.currency) === displayCurrency);
+  const currentInvestmentAccounts = accountAnalysisAccounts.filter(
+    (account) => account.type === "investment" || Boolean(account.investmentSubtype)
+  );
+  const currentInvestmentPortfolioValue = currentInvestmentAccounts.reduce(
+    (sum, account) => sum + Math.max(account.balance ?? 0, 0),
+    0
+  );
+  const largestInvestmentAccount = [...currentInvestmentAccounts].sort(
+    (left, right) => Math.max(right.balance ?? 0, 0) - Math.max(left.balance ?? 0, 0)
+  )[0] ?? null;
+  const largestInvestmentShare =
+    largestInvestmentAccount && currentInvestmentPortfolioValue > 0
+      ? Math.max(largestInvestmentAccount.balance ?? 0, 0) / currentInvestmentPortfolioValue
+      : 0;
+  const hasInvestmentPortfolio = currentInvestmentAccounts.length > 0 || Boolean(latestInvestmentSnapshot);
+  const investmentPortfolioValueLabel =
+    currentInvestmentAccounts.length > 0
+      ? formatCurrency(currentInvestmentPortfolioValue, displayCurrency)
+      : latestInvestmentSnapshot
+        ? formatCurrency(Number(latestInvestmentSnapshot.totalValue ?? 0), latestInvestmentSnapshot.currency)
+        : null;
   const accountBalances = accountAnalysisAccounts.filter((account) => account.balance !== null);
   const spendableAccounts = accountAnalysisAccounts.filter((account) => isSpendableAccountType(account.type));
   const liabilityAccounts = accountAnalysisAccounts.filter((account) => isLiabilityAccountType(account.type));
@@ -1677,8 +1698,20 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
       historyDepthScore,
     ])
   );
-  const currentInvestmentConfidence = latestInvestmentSnapshot
-    ? clamp(average([toCountScore(investmentSnapshots.length, 2), latestInvestmentSnapshot.gainLossValue === null ? 35 : 85, historyDepthScore]))
+  const currentInvestmentConfidence = hasInvestmentPortfolio
+    ? clamp(
+        average([
+          toCountScore(currentInvestmentAccounts.length, 3),
+          latestInvestmentSnapshot ? toCountScore(investmentSnapshots.length, 2) : 55,
+          latestInvestmentSnapshot
+            ? latestInvestmentSnapshot.gainLossValue === null
+              ? 45
+              : 75
+            : 55,
+          currentInvestmentPortfolioValue > 0 || latestInvestmentSnapshot ? 85 : 40,
+          historyDepthScore,
+        ])
+      )
     : 0;
   const currentSplitConfidence = openSplitBillCount > 0
     ? clamp(average([toCountScore(openSplitBillCount, 3), openSplitBillAmount > 0 ? 100 : 0, historyDepthScore]))
@@ -1847,11 +1880,18 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
       trendDirectionScore,
     ])
   );
-  const investmentSignalScore = latestInvestmentSnapshot
+  const investmentSignalScore = hasInvestmentPortfolio
     ? clamp(
         average([
-          investmentDelta === null ? 55 : Math.abs(investmentDelta) / Math.max(Number(latestInvestmentSnapshot.totalValue ?? 1), 1) * 100,
-          latestInvestmentSnapshot.gainLossPercent === null ? 40 : Math.abs(Number(latestInvestmentSnapshot.gainLossPercent)),
+          latestInvestmentSnapshot
+            ? investmentDelta === null
+              ? 55
+              : Math.abs(investmentDelta) / Math.max(Number(latestInvestmentSnapshot.totalValue ?? 1), 1) * 100
+            : toCountScore(currentInvestmentAccounts.length, 4),
+          latestInvestmentSnapshot?.gainLossPercent === null
+            ? 40
+            : Math.abs(Number(latestInvestmentSnapshot?.gainLossPercent ?? 0)),
+          largestInvestmentShare > 0.6 ? clamp(largestInvestmentShare * 100) : 45,
           historyDepthScore,
         ])
       )
@@ -2088,24 +2128,23 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
   const summaryCards = [
     {
       id: "money_left",
-      title: "Money left",
+      title: "Available balance",
       value: formatSignedCurrency(moneyLeftAmount),
       tone: moneyLeftAmount >= 0 ? "positive" : "warning",
-      detail: hasTransactionFlow
-        ? `${formatCurrency(spendableAccountBalance)} reconciled spendable balance; ${formatCurrency(currentSummary.income)} income minus ${formatCurrency(currentSummary.expense)} spending from the ${activeTransactionWindowLabel}; baseline spend ${formatCurrency(baselineSpend)}`
-        : workspaceAccounts.length > 0
-          ? `${workspaceAccounts.length} connected account${workspaceAccounts.length === 1 ? "" : "s"}; ${formatCurrency(spendableAccountBalance)} reconciled spendable balance and ${formatCurrency(liabilityAccountBalance)} in balances owed`
-          : "Based on your current transaction history",
+      detail:
+        workspaceAccounts.length > 0
+          ? `${formatCurrency(spendableAccountBalance)} across reconciled spendable accounts${liabilityAccountBalance > 0 ? `, with ${formatCurrency(liabilityAccountBalance)} in balances owed` : ""}. This is an account balance, not recent cash flow.`
+          : "Add an account balance so Clover can show the money currently available.",
     },
     {
       id: "savings_rate",
-      title: "Savings Rate",
+      title: "Recent savings rate",
       value: currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100),
       tone: currentSavingsRate === null || currentSavingsRate >= 0 ? "positive" : "warning",
       detail:
         currentSavingsRate === null
-          ? "Add more income and spending data to calculate this"
-          : `Based on income and expense mix from the ${activeTransactionWindowLabel}, compared with your historical baseline`,
+          ? "Clover needs enough recorded money in and spending to estimate this without assuming a salary schedule."
+          : `The share of recorded money in that was not spent during the ${activeTransactionWindowLabel}. Identified transfers are excluded.`,
     },
     {
       id: "upcoming_pressure",
@@ -2413,25 +2452,39 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
             score: 0,
           }
         : null,
-      latestInvestmentSnapshot
+      hasInvestmentPortfolio
         ? {
             id: "investment_move",
-            title: "Your investments changed since the last snapshot",
-            summary: "Your latest investment snapshot changed since the last update.",
+            title:
+              investmentDelta !== null
+                ? "Your investments changed since the last update"
+                : "Here is how your investments are currently positioned",
+            summary:
+              investmentDelta !== null
+                ? "Your latest portfolio update shows a change worth understanding."
+                : `${currentInvestmentAccounts.length || 1} visible investment holding${currentInvestmentAccounts.length === 1 ? "" : "s"} can now inform your Adviser guidance.`,
             evidence:
-              investmentDelta === null
-                ? `Latest snapshot: ${formatCurrency(Number(latestInvestmentSnapshot.totalValue ?? 0), latestInvestmentSnapshot.currency)}`
-                : `${formatSignedCurrency(investmentDelta, latestInvestmentSnapshot.currency)} since the prior snapshot`,
-            ctaLabel: "Open investments",
+              investmentDelta !== null && latestInvestmentSnapshot
+                ? `${formatSignedCurrency(investmentDelta, latestInvestmentSnapshot.currency)} since the prior snapshot`
+                : `${investmentPortfolioValueLabel ?? "Portfolio value unavailable"} recorded${largestInvestmentAccount ? `; ${largestInvestmentAccount.name} is the largest position` : ""}`,
+            ctaLabel: "Review portfolio",
             href: "/investments",
             tone: investmentDelta !== null && investmentDelta >= 0 ? "positive" : "neutral",
             group: "investments",
             insightKey: "investment-movement",
             breakdown: {
-              impact: clamp(investmentDelta === null ? 55 : Math.abs(investmentDelta) / Math.max(Number(latestInvestmentSnapshot.totalValue ?? 1), 1) * 100),
-              urgency: clamp(latestInvestmentSnapshot.gainLossPercent === null ? 35 : Math.abs(Number(latestInvestmentSnapshot.gainLossPercent))),
+              impact: clamp(
+                investmentDelta === null
+                  ? 45 + largestInvestmentShare * 35
+                  : Math.abs(investmentDelta) / Math.max(Number(latestInvestmentSnapshot?.totalValue ?? 1), 1) * 100
+              ),
+              urgency: clamp(
+                latestInvestmentSnapshot?.gainLossPercent === null || latestInvestmentSnapshot?.gainLossPercent === undefined
+                  ? 35 + largestInvestmentShare * 25
+                  : Math.abs(Number(latestInvestmentSnapshot.gainLossPercent))
+              ),
               confidence: currentInvestmentConfidence,
-              personalization: clamp(65 + (latestInvestmentSnapshot.account?.name ? 10 : 0)),
+              personalization: clamp(65 + (currentInvestmentAccounts.length > 0 ? 15 : 0)),
               recency: 100,
               actionability: 78,
             },
@@ -2682,22 +2735,32 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
             score: 0,
           }
         : null,
-      latestInvestmentSnapshot
+      hasInvestmentPortfolio
         ? {
             id: "review_investments",
-            title: "Take a quick look at your investments",
-            summary: "Check the latest snapshot before deciding whether anything needs attention.",
-            evidence: latestInvestmentSnapshot.account?.name ? `Latest snapshot from ${latestInvestmentSnapshot.account.name}` : "Latest investment snapshot available",
-            ctaLabel: "Open investments",
+            title: largestInvestmentShare > 0.6 ? "Check how concentrated your investments are" : "Take a quick look at your portfolio mix",
+            summary:
+              largestInvestmentShare > 0.6
+                ? "One position carries a large share of the portfolio Clover can see."
+                : "A short portfolio review can show whether your current mix still fits your plans.",
+            evidence:
+              largestInvestmentAccount && investmentPortfolioValueLabel
+                ? `${largestInvestmentAccount.name} is ${Math.round(largestInvestmentShare * 100)}% of ${investmentPortfolioValueLabel}`
+                : `${investmentPortfolioValueLabel ?? "Investment data"} is available for review`,
+            ctaLabel: "Review portfolio",
             href: "/investments",
             tone: "neutral",
             group: "investments",
             insightKey: "investment-movement",
             breakdown: {
-              impact: clamp(investmentDelta === null ? 55 : Math.abs(investmentDelta) / Math.max(Number(latestInvestmentSnapshot.totalValue ?? 1), 1) * 100),
-              urgency: clamp(latestInvestmentSnapshot.gainLossPercent === null ? 35 : Math.abs(Number(latestInvestmentSnapshot.gainLossPercent))),
+              impact: clamp(
+                investmentDelta === null
+                  ? 45 + largestInvestmentShare * 35
+                  : Math.abs(investmentDelta) / Math.max(Number(latestInvestmentSnapshot?.totalValue ?? 1), 1) * 100
+              ),
+              urgency: clamp(35 + largestInvestmentShare * 30),
               confidence: currentInvestmentConfidence,
-              personalization: clamp(65 + (latestInvestmentSnapshot.account?.name ? 10 : 0)),
+              personalization: clamp(65 + (currentInvestmentAccounts.length > 0 ? 15 : 0)),
               recency: 100,
               actionability: 78,
             },
@@ -3087,19 +3150,30 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
             score: 0,
           }
         : null,
-      latestInvestmentSnapshot
+      hasInvestmentPortfolio
         ? {
             id: "prompt-investments",
-            label: "What changed in investments?",
-            prompt: "What changed in my latest investment snapshot, and what should I pay attention to?",
+            label: investmentDelta !== null ? "What changed in my investments?" : "How is my portfolio positioned?",
+            prompt:
+              investmentDelta !== null
+                ? "What changed in my investments, what is driving it, and what should I review first?"
+                : "Review my current investments together with my cash flow, obligations, budgets, and goals. How is my portfolio positioned, and what should I review first?",
             group: "investments",
             diversityKey: "investments-change",
             insightKey: "investment-movement",
             breakdown: {
-              impact: clamp(investmentDelta === null ? 55 : Math.abs(investmentDelta) / Math.max(Number(latestInvestmentSnapshot.totalValue ?? 1), 1) * 100),
-              urgency: clamp(latestInvestmentSnapshot.gainLossPercent === null ? 35 : Math.abs(Number(latestInvestmentSnapshot.gainLossPercent))),
+              impact: clamp(
+                investmentDelta === null
+                  ? 45 + largestInvestmentShare * 35
+                  : Math.abs(investmentDelta) / Math.max(Number(latestInvestmentSnapshot?.totalValue ?? 1), 1) * 100
+              ),
+              urgency: clamp(
+                latestInvestmentSnapshot?.gainLossPercent === null || latestInvestmentSnapshot?.gainLossPercent === undefined
+                  ? 35 + largestInvestmentShare * 25
+                  : Math.abs(Number(latestInvestmentSnapshot.gainLossPercent))
+              ),
               confidence: currentInvestmentConfidence,
-              personalization: 82,
+              personalization: 94,
               recency: 100,
               actionability: 78,
             },
@@ -3292,7 +3366,6 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
         />
 
         <section className="adviser-section adviser-section--questions glass">
-          <p className="eyebrow">Recommended questions</p>
           <AdviserChat prompts={promptSuggestions} isPro={user.planTier === "pro"} />
         </section>
 
