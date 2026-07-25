@@ -5764,6 +5764,34 @@ function TransactionsPageContent() {
     setMessage("Transaction updated.");
   };
 
+  const commitInlineTypeEdit = async (transaction: Transaction, nextType: Transaction["type"]) => {
+    const currentCategoryName = getDisplayCategoryNameForTransaction(transaction);
+    const normalizedCurrentCategory = normalizeCategoryName(currentCategoryName);
+    let nextCategoryId = transaction.categoryId;
+
+    if (nextType === "transfer") {
+      nextCategoryId =
+        getCategoryIdByName(categories, "Transfers") ||
+        getCategoryIdByName(categories, "Transfer") ||
+        transaction.categoryId;
+    } else if (nextType === "income") {
+      const categorySupportsIncome =
+        coerceTransactionTypeFromCategoryName(currentCategoryName, "income", transaction.amount, false) === "income";
+      if (!categorySupportsIncome) {
+        nextCategoryId = getCategoryIdByName(categories, "Income") || transaction.categoryId;
+      }
+    } else if (normalizedCurrentCategory === "income" || normalizedCurrentCategory === "transfer" || normalizedCurrentCategory === "transfers") {
+      nextCategoryId = otherCategoryId || transaction.categoryId;
+    }
+
+    await updateTransaction(transaction.id, {
+      type: nextType,
+      isTransfer: nextType === "transfer",
+      ...(nextCategoryId !== transaction.categoryId ? { categoryId: nextCategoryId } : {}),
+    });
+    setMessage(`Transaction changed to ${nextType === "transfer" ? "Transfer" : nextType === "income" ? "Income" : "Expense"}.`);
+  };
+
   const applyHistoryEntry = async (entry: TransactionHistoryEntry, direction: "undo" | "redo") => {
     setIsApplyingHistory(true);
     try {
@@ -7364,13 +7392,21 @@ function TransactionsPageContent() {
                       />
                     </div>
                     <div className={`transaction-amount-cell ${amountToneClass}`}>
-                      <span
-                        className="transaction-amount-type-marker"
-                        title={effectiveType === "income" ? "Income" : effectiveType === "transfer" ? "Transfer" : "Expense"}
-                        aria-hidden="true"
+                      <select
+                        className="transaction-amount-type-select"
+                        value={effectiveType}
+                        aria-label={`Change ${transaction.merchantRaw} type`}
+                        title={`Type: ${effectiveType === "income" ? "Income" : effectiveType === "transfer" ? "Transfer" : "Expense"}. Click to change.`}
+                        onChange={(event) => {
+                          void commitInlineTypeEdit(transaction, event.target.value as Transaction["type"]).catch((error) => {
+                            setMessage(error instanceof Error ? error.message : "Unable to update transaction type.");
+                          });
+                        }}
                       >
-                        {effectiveType === "income" ? "+" : effectiveType === "transfer" ? "↔" : "−"}
-                      </span>
+                        <option value="expense">− Expense</option>
+                        <option value="income">+ Income</option>
+                        <option value="transfer">↔ Transfer</option>
+                      </select>
                       <InlineEditableCell
                         value={formatEditableAmount(transaction)}
                         displayValue={formatTransactionAmount(amount, transaction.currency)}
