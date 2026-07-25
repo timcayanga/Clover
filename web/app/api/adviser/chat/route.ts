@@ -2148,10 +2148,16 @@ export async function POST(request: Request) {
       .map((message) => message.content)
       .join(" ")
       .toLowerCase();
+    const asksForOverallMoneyOverview =
+      /overall money picture|money overview|overview of my balances|balances.*spending.*(?:upcoming|pressure|focus)|balances.*upcoming.*focus/.test(
+        latestQuestionLower
+      );
     const latestHasExplicitTheme = /goal|target|track|progress|save|invest|portfolio|dividend|gain|loss|snapshot|stock|transaction|spend|merchant|bill|recurr|due|loan|balance|cash flow|budget|owe|payment|pressure|account|afford|purchase|phone|car|travel|safe to spend|payday/.test(latestQuestionLower);
     const themeSource = latestHasExplicitTheme ? latestQuestionLower : recentUserContext;
     const inferredQuestionTheme = (
-      /goal|target|track|progress|save more|emergency fund|drift/.test(themeSource)
+      asksForOverallMoneyOverview
+        ? "cashflow"
+        : /goal|target|track|progress|save more|emergency fund|drift/.test(themeSource)
         ? "goals"
         : /invest|portfolio|dividend|gain|loss|snapshot|stock/.test(themeSource)
           ? "investments"
@@ -2164,6 +2170,9 @@ export async function POST(request: Request) {
     const asksAboutSpecificPurchase = /can i afford|can we afford|could i afford|can i buy|should i buy|would .* be affordable|affordability|can i travel|can we travel|trip .* budget/.test(latestQuestionLower) && !/how much can i safely spend/.test(latestQuestionLower);
     const includesPurchaseAmount = /(?:₱|php|usd|\$|€|£)\s*[\d,.]+|\b\d+(?:[,.]\d{2})?\s*[km]?\b(?!\s*(?:day|days|month|months|week|weeks|year|years))/i.test(latestQuestionLower);
     const requestRoutingHint = (() => {
+      if (asksForOverallMoneyOverview) {
+        return "Route this request to get_account_summary first, then answer with available cash, investments, liabilities, recent income and spending, upcoming obligations, and one clear focus. A goal is not required.";
+      }
       if (/show|open|view|see|report|statement|chart|graph/.test(latestQuestionLower) && /report|statement|chart|graph/.test(latestQuestionLower)) {
         return "Route this request to open_report so Clover opens an existing Reports view instead of recreating a report in chat.";
       }
@@ -2258,6 +2267,10 @@ export async function POST(request: Request) {
       }
 
       if (inferredQuestionTheme === "cashflow") {
+        if (asksForOverallMoneyOverview) {
+          const upcomingPressure = recurringAmountPressure + commitmentAmountPressure + splitBillSettlementPressure;
+          return `Your current picture is ${formatCurrency(spendableAccountBalance, displayCurrency)} in available cash, ${investmentPortfolioValueLabel} in recorded investments, and ${formatCurrency(liabilityAccountBalance, displayCurrency)} owed. In the ${dataFreshnessLabel}, income was ${formatCurrency(currentSummary.income, displayCurrency)} and spending was ${formatCurrency(currentSpend, displayCurrency)}. Known near-term pressure is ${formatCurrency(upcomingPressure, displayCurrency)}. Focus first on keeping that amount protected before adding new spending or investments.`;
+        }
         return workspace.accounts.length > 0
           ? `Clover can see ${formatCurrency(spendableAccountBalance, displayCurrency)} in available cash across ${workspace.accounts.length} account${workspace.accounts.length === 1 ? "" : "s"}. ${recurringDueSoon.length > 0 ? `${recurringDueSoon.length} recurring payment${recurringDueSoon.length === 1 ? " is" : "s are"} coming up, so protect those before moving money. ` : ""}${fallbackNextStep}`
           : `Clover needs account or transaction data before it can give a grounded cash-flow answer. ${fallbackNextStep}`;
@@ -2470,6 +2483,15 @@ export async function POST(request: Request) {
             description: "See the holdings and concentration behind this answer.",
             href: "/investments",
           }]
+        : asksForOverallMoneyOverview
+          ? [{
+              id: "fallback-accounts",
+              kind: "navigate",
+              type: "open_accounts",
+              label: "Review balances",
+              description: "See the account balances behind this overview.",
+              href: "/accounts",
+            }]
         : inferredQuestionTheme === "cashflow" && recurringDueSoon.length > 0
           ? [{
               id: "fallback-recurring",
