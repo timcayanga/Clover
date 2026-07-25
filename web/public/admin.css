@@ -8974,14 +8974,13 @@ label {
 .line-item-header {
   display: grid;
   grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(130px, 0.95fr) minmax(150px, 1fr) minmax(110px, 0.8fr) 40px 40px;
-  gap: 6px;
+  gap: 10px;
   align-items: center;
-  padding: 2px 2px 1px;
+  padding: 2px 4px 1px;
   color: var(--muted-2);
   border-bottom: 1px solid var(--stroke);
-  font-size: 0.6rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 0.86rem;
+  letter-spacing: 0;
   position: sticky;
   top: 0;
   z-index: 4;
@@ -9000,15 +8999,15 @@ label {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  cursor: default;
+  cursor: pointer;
 }
 
 .line-item-header-cell--name {
-  padding-left: 1px;
+  padding-left: 6px;
 }
 
 .line-item-header-cell--select {
-  width: 26px;
+  width: 100%;
 }
 
 .line-item-header-cell--select-all {
@@ -9016,12 +9015,12 @@ label {
 }
 
 .line-item-header-cell--icon {
-  width: 36px;
+  width: 40px;
 }
 
 .line-item-header-cell--amount {
-  justify-content: flex-end;
-  text-align: right;
+  justify-content: flex-start;
+  text-align: left;
 }
 
 .line-item-header-cell--spacer {
@@ -9255,10 +9254,25 @@ label {
 }
 
 .transaction-select-cell input {
-  width: 18px;
-  height: 18px;
-  min-height: 18px;
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  inline-size: 14px;
+  block-size: 14px;
+  min-height: 14px;
   margin: 0;
+  padding: 0;
+}
+
+.line-item-header-cell--select-all input {
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  inline-size: 14px;
+  block-size: 14px;
+  min-height: 14px;
+  margin: 0;
+  padding: 0;
 }
 
 .transaction-category-icon-cell {
@@ -16792,14 +16806,17 @@ input.transaction-inline-edit--amount::placeholder {
   filter: saturate(1.12) hue-rotate(160deg) brightness(0.98) contrast(1.03);
 }
 
-.transactions-table-wrap--empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.transactions-table-wrap.transactions-table-wrap--empty {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: stretch;
+  justify-content: stretch;
   padding: 0;
 }
 
-.transactions-table-wrap--empty .transactions-empty-state {
+.transactions-table-wrap.transactions-table-wrap--empty .transactions-empty-state {
+  align-self: center;
+  justify-self: center;
   max-width: none;
   margin-inline: 0;
 }

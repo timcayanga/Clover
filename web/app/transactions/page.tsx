@@ -7182,77 +7182,75 @@ function TransactionsPageContent() {
           {headerMenuPanel}
 
           {!isCompactViewport ? (
-            <>
-            <div className="line-item-header" role="row" aria-label="Transaction columns">
-              <label className="line-item-header-cell line-item-header-cell--select line-item-header-cell--select-all">
-                <input
-                  ref={selectAllRef}
-                  type="checkbox"
-                  checked={allVisibleSelected}
-                  onChange={(event) => {
-                    const shouldSelect = event.target.checked;
-                    setSelectedTransactionIds((current) => {
-                      const next = new Set(current);
-                      if (shouldSelect) {
-                        desktopPageTransactionIds.forEach((transactionId) => next.add(transactionId));
-                      } else {
-                        desktopPageTransactionIds.forEach((transactionId) => next.delete(transactionId));
-                      }
-                      return Array.from(next);
-                    });
-                  }}
-                  aria-label="Select all transactions on this page"
-                />
-              </label>
-              <span className="line-item-header-cell line-item-header-cell--icon" aria-hidden="true" />
-              <button
-                className="line-item-header-cell line-item-header-cell--name"
-                type="button"
-                onClick={(event) => openHeaderMenu("name", event)}
-                aria-expanded={headerMenuOpen === "name"}
-              >
-                Name
-              </button>
-              <button
-                className="line-item-header-cell"
-                type="button"
-                onClick={(event) => openHeaderMenu("date", event)}
-                aria-expanded={headerMenuOpen === "date"}
-              >
-                Date
-              </button>
-              <button
-                className="line-item-header-cell"
-                type="button"
-                onClick={(event) => openHeaderMenu("account", event)}
-                aria-expanded={headerMenuOpen === "account"}
-              >
-                Account
-              </button>
-              <button
-                className="line-item-header-cell"
-                type="button"
-                onClick={(event) => openHeaderMenu("category", event)}
-                aria-expanded={headerMenuOpen === "category"}
-              >
-                Category
-              </button>
-              <button
-                className="line-item-header-cell line-item-header-cell--amount"
-                type="button"
-                onClick={(event) => openHeaderMenu("amount", event)}
-                aria-expanded={headerMenuOpen === "amount"}
-              >
-                Amount
-              </button>
-              <span className="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true" />
-              <span className="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true" />
-            </div>
-
             <div
               className={`table-wrap transactions-table-wrap${!hasVisibleTransactions && !showTransactionsLoadingState ? " transactions-table-wrap--empty" : ""}`}
               aria-busy={showTransactionsLoadingState}
             >
+              <div className="line-item-header" role="row" aria-label="Transaction columns">
+                <label className="line-item-header-cell line-item-header-cell--select line-item-header-cell--select-all">
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={(event) => {
+                      const shouldSelect = event.target.checked;
+                      setSelectedTransactionIds((current) => {
+                        const next = new Set(current);
+                        if (shouldSelect) {
+                          desktopPageTransactionIds.forEach((transactionId) => next.add(transactionId));
+                        } else {
+                          desktopPageTransactionIds.forEach((transactionId) => next.delete(transactionId));
+                        }
+                        return Array.from(next);
+                      });
+                    }}
+                    aria-label="Select all transactions on this page"
+                  />
+                </label>
+                <span className="line-item-header-cell line-item-header-cell--icon" aria-hidden="true" />
+                <button
+                  className="line-item-header-cell line-item-header-cell--name"
+                  type="button"
+                  onClick={(event) => openHeaderMenu("name", event)}
+                  aria-expanded={headerMenuOpen === "name"}
+                >
+                  Name
+                </button>
+                <button
+                  className="line-item-header-cell"
+                  type="button"
+                  onClick={(event) => openHeaderMenu("date", event)}
+                  aria-expanded={headerMenuOpen === "date"}
+                >
+                  Date
+                </button>
+                <button
+                  className="line-item-header-cell"
+                  type="button"
+                  onClick={(event) => openHeaderMenu("account", event)}
+                  aria-expanded={headerMenuOpen === "account"}
+                >
+                  Account
+                </button>
+                <button
+                  className="line-item-header-cell"
+                  type="button"
+                  onClick={(event) => openHeaderMenu("category", event)}
+                  aria-expanded={headerMenuOpen === "category"}
+                >
+                  Category
+                </button>
+                <button
+                  className="line-item-header-cell line-item-header-cell--amount"
+                  type="button"
+                  onClick={(event) => openHeaderMenu("amount", event)}
+                  aria-expanded={headerMenuOpen === "amount"}
+                >
+                  Amount
+                </button>
+                <span className="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true" />
+                <span className="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true" />
+              </div>
             {transactionsLoadFailed ? (
               <div className="empty-state transactions-empty-state transactions-empty-state--table">
                 <strong>Couldn&apos;t load transactions.</strong>
@@ -7495,7 +7493,6 @@ function TransactionsPageContent() {
               <div className="empty-state">No transactions match the current filters.</div>
             ) : null}
           </div>
-            </>
           ) : null}
 
           {isCompactViewport ? (

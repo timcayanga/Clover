@@ -15325,7 +15325,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   padding: 2px 4px 1px;
   color: var(--muted-2);
   border-bottom: 1px solid var(--stroke);
-  font-size: 0.84rem;
+  font-size: 0.86rem;
   letter-spacing: 0;
   position: sticky;
   top: 0;
@@ -15349,7 +15349,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 }
 
 .line-item-header-cell--name {
-  padding-left: 1px;
+  padding-left: 6px;
 }
 
 .line-item-header-cell--select {
@@ -16193,6 +16193,8 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 
 .transaction-select-cell input {
   box-sizing: border-box;
+  width: 14px;
+  height: 14px;
   inline-size: 14px;
   block-size: 14px;
   min-height: 14px;
@@ -16202,6 +16204,8 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 
 .line-item-header-cell--select-all input {
   box-sizing: border-box;
+  width: 14px;
+  height: 14px;
   inline-size: 14px;
   block-size: 14px;
   min-height: 14px;
@@ -29438,10 +29442,11 @@ button.accounts-detail__transaction-head-cell {
   filter: saturate(1.12) hue-rotate(160deg) brightness(0.98) contrast(1.03);
 }
 
-.transactions-table-wrap--empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.transactions-table-wrap.transactions-table-wrap--empty {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-items: stretch;
+  justify-content: stretch;
   padding: 0;
 }
 
@@ -29449,7 +29454,9 @@ button.accounts-detail__transaction-head-cell {
   display: flex;
 }
 
-.transactions-table-wrap--empty .transactions-empty-state {
+.transactions-table-wrap.transactions-table-wrap--empty .transactions-empty-state {
+  align-self: center;
+  justify-self: center;
   max-width: none;
   margin-inline: 0;
 }
