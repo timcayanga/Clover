@@ -1,12 +1,13 @@
 # Structured CSV and TSV parser rules
 
-Use these rules for delimited financial exports (`.csv` and `.tsv`) that are not covered by a more specific institution parser.
+Use these rules for structured financial exports (`.csv`, `.tsv`, `.xlsx`, `.xls`, `.xlsm`, `.xlsb`, and `.ods`) that are not covered by a more specific institution parser.
 
 ## Routing
 
 - Prefer schema-based parsing before institution-specific text or AI fallback.
 - Recognize comma, tab, semicolon, and pipe delimiters, including Excel `sep=` directives.
 - Accept `.csv` and `.tsv` uploads and decode UTF-8, UTF-16 LE/BE, BOM-prefixed, and Windows-1252 exports before parsing.
+- Decode Excel and OpenDocument workbooks on the server, preserve cached formula results, and route each readable worksheet through the same deterministic schema parser. Never attempt to interpret the binary, ZIP/XML, or OLE payload as plain text.
 - Search the first 12 rows for the most likely header so report titles and export metadata can precede the table.
 - Read recognized institution, account, account-number, account-type, currency, and snapshot-date metadata from key/value preamble rows.
 - Carry section-level account metadata forward in multi-account exports and ignore repeated header rows.

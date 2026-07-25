@@ -158,5 +158,5 @@ export const extractTextFromFile = async (
     }
   }
 
-  throw new Error("Only PDF, CSV, TSV, and common image files are supported.");
+  throw new Error("Only PDF, CSV, TSV, XLSX, and common image files are supported.");
 };

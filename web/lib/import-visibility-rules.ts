@@ -179,6 +179,7 @@ export const isLikelyLowQualityPnbStatementFile = (fileName: string) => {
 };
 
 export const shouldSkipClientStatementPreparse = (fileName: string) =>
+  /\.(?:xlsx|xls|xlsm|xlsb|ods)$/i.test(fileName) ||
   isNoisyVisibilityBank(fileName) ||
   isExplicitLowQualityUnionBankStatementFilename(fileName) ||
   isLikelyLowQualityPnbStatementFile(fileName);

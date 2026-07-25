@@ -12,6 +12,7 @@ import { buildGsaveScreenshotFallbackText } from "@/lib/gsave-screenshot-samples
 import { buildGfundsScreenshotFallbackText } from "@/lib/gfunds-screenshot-samples";
 import { assessReceiptPreviewQuality, parseReceiptText } from "@/lib/split-bill";
 import { decodeStructuredDelimitedBytes } from "@/lib/structured-delimited-decoder";
+import { decodeSpreadsheetWorkbookBytes } from "@/lib/spreadsheet-import.server";
 
 class SimpleDOMMatrix {
   a: number;
@@ -2455,6 +2456,16 @@ export const readUploadedFileText = async (
     throw new Error("Unable to read imported file.");
   }
 
+  if (
+    /\.(?:xlsx|xls|xlsm|xlsb|ods)$/.test(lowerName) ||
+    /(?:spreadsheetml|ms-excel|opendocument\.spreadsheet)/.test(lowerType)
+  ) {
+    if (typeof file.arrayBuffer !== "function") {
+      throw new Error("Unable to read imported workbook.");
+    }
+    return decodeSpreadsheetWorkbookBytes(new Uint8Array(await file.arrayBuffer()));
+  }
+
   if (lowerName.endsWith(".pdf") || lowerType === "application/pdf") {
     if (typeof file.arrayBuffer !== "function") {
       throw new Error("Unable to read imported file.");
@@ -2499,7 +2510,7 @@ export const readUploadedFileText = async (
     });
   }
 
-  throw new Error("Only PDF, CSV, TSV, and common image files are supported.");
+  throw new Error("Only PDF, CSV, TSV, XLSX, and common image files are supported.");
 };
 
 export const readImportedFileTextWithCacheInfo = async (
@@ -2669,6 +2680,13 @@ export const readImportedFileTextWithCacheInfo = async (
       /csv|tab-separated-values/.test(`${lowerName} ${params.fileType}`)
     ) {
       return decodeStructuredDelimitedBytes(bytes);
+    }
+
+    if (
+      /\.(?:xlsx|xls|xlsm|xlsb|ods)$/.test(lowerName) ||
+      /(?:spreadsheetml|ms-excel|opendocument\.spreadsheet)/.test(params.fileType.toLowerCase())
+    ) {
+      return decodeSpreadsheetWorkbookBytes(bytes);
     }
 
     if (isImageImportFileName(params.fileType, params.fileName)) {

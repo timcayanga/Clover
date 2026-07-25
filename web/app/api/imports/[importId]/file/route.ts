@@ -17,6 +17,11 @@ const getContentType = (fileName: string, fileType: string) => {
   if (lowerName.endsWith(".csv") || lowerType.includes("csv")) {
     return "text/csv; charset=utf-8";
   }
+  if (lowerName.endsWith(".xlsx") || lowerType.includes("spreadsheetml")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  if (lowerName.endsWith(".xlsm") || lowerType.includes("macroenabled.12")) return "application/vnd.ms-excel.sheet.macroEnabled.12";
+  if (lowerName.endsWith(".xlsb") || lowerType.includes("binary.macroenabled.12")) return "application/vnd.ms-excel.sheet.binary.macroEnabled.12";
+  if (lowerName.endsWith(".xls") || lowerType === "application/vnd.ms-excel") return "application/vnd.ms-excel";
+  if (lowerName.endsWith(".ods") || lowerType.includes("opendocument.spreadsheet")) return "application/vnd.oasis.opendocument.spreadsheet";
   if (lowerName.endsWith(".tsv") || lowerType.includes("tab-separated-values")) {
     return "text/tab-separated-values; charset=utf-8";
   }

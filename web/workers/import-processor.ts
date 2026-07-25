@@ -7543,7 +7543,11 @@ export const processImportFileText = async (
   const fileType = String(importFile.fileType ?? "");
   const fileName = String(importFile.fileName ?? "");
   const likelyNetWorthSnapshotCsv =
-    (fileName.toLowerCase().endsWith(".csv") || /(?:^|[;/\s])csv(?:$|[;/\s])/i.test(fileType)) &&
+    (
+      /\.(?:csv|xlsx|xls|xlsm|xlsb|ods)$/i.test(fileName) ||
+      /(?:^|[;/\s])csv(?:$|[;/\s])/i.test(fileType) ||
+      /(?:spreadsheetml|ms-excel|opendocument\.spreadsheet)/i.test(fileType)
+    ) &&
     /\bnet[\s_-]*worth(?:[\s_-]*calculator)?\b/i.test(fileName);
 
   const [statementCheckpoint, previouslyVisibleRows] = await Promise.all([
@@ -7742,7 +7746,7 @@ export const processImportFileText = async (
       const legacyMatchLooksLikeNetWorthSnapshotCsv =
         String(sourceMatch.fileName ?? "")
           .toLowerCase()
-          .endsWith(".csv") && /\bnet[\s_-]*worth(?:[\s_-]*calculator)?\b/i.test(String(sourceMatch.fileName ?? ""));
+          .match(/\.(?:csv|xlsx|xls|xlsm|xlsb|ods)$/) && /\bnet[\s_-]*worth(?:[\s_-]*calculator)?\b/i.test(String(sourceMatch.fileName ?? ""));
       if (likelyNetWorthSnapshotCsv || legacyMatchLooksLikeNetWorthSnapshotCsv) {
         // Older generic CSV builds materialized every balance-history cell as
         // a transaction and then auto-confirmed the rows because parser
@@ -12849,7 +12853,20 @@ export const confirmImportFile = async (
       statementCheckpoint.sourceMetadata && typeof statementCheckpoint.sourceMetadata === "object" && !Array.isArray(statementCheckpoint.sourceMetadata)
         ? (statementCheckpoint.sourceMetadata as Record<string, unknown>)
         : null;
-    if (statementCheckpoint.endingBalance !== null && checkpointSourceMetadata?.balanceReconciled === true) {
+    const isPublishedAccountInventory =
+      accountSummaries.length > 0 &&
+      accountSummaries.every((accountSummary) => Number(accountSummary.rowsImported ?? 0) === 0);
+    const inventoryCheckpointBalance =
+      isPublishedAccountInventory && accountSummaries.length === 1
+        ? accountSummaries[0]?.balance ?? null
+        : null;
+    if (isPublishedAccountInventory) {
+      // Learned spreadsheet templates may retain the previous file's document
+      // balance. Account-inventory rows are authoritative for the current
+      // upload, so never let that stale checkpoint override the published card.
+      checkpointStatus = "pending";
+      mismatchReason = null;
+    } else if (statementCheckpoint.endingBalance !== null && checkpointSourceMetadata?.balanceReconciled === true) {
       checkpointStatus = "reconciled";
     } else if (statementCheckpoint.endingBalance !== null) {
       mismatchReason = "Ending balance was captured, but the transaction rows were not proven to reconcile.";
@@ -12869,6 +12886,7 @@ export const confirmImportFile = async (
       where: { id: statementCheckpoint.id },
       data: {
         accountId: resolvedAccountId,
+        ...(isPublishedAccountInventory ? { endingBalance: inventoryCheckpointBalance } : {}),
         status: checkpointStatus,
         mismatchReason,
         sourceMetadata: mergeCheckpointSourceMetadata(statementCheckpoint.sourceMetadata, {
@@ -12880,6 +12898,7 @@ export const confirmImportFile = async (
           institution: account.institution,
           accountNumber: account.accountNumber,
           accountType: account.type,
+          ...(isPublishedAccountInventory ? { endingBalance: inventoryCheckpointBalance } : {}),
           workflowStage: checkpointStatus === "reconciled" ? "complete" : checkpointStatus === "mismatch" ? "repair_needed" : "reconciling",
           publishedVisibleImportComplete: accountSummaries.length > 0,
           publishedAccountSummaries: accountSummaries,

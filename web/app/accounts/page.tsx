@@ -220,6 +220,11 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     Number(summary.rowsImported ?? 0) || 0,
     Array.isArray(summary.previewTransactions) ? summary.previewTransactions.length : 0
   );
+  const publishedImportInventory = Boolean(
+    summary.accountSummaries?.some(
+      (accountSummary) => accountSummary.accountId === optimisticAccountId && Number(accountSummary.rowsImported ?? 0) === 0
+    )
+  );
   const displayName = formatUploadAccountDisplayName(
     summary.accountName,
     summary.institution,
@@ -246,6 +251,7 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     source: "upload",
     balance: summary.balance,
     transactionCount,
+    publishedImportInventory,
     favorite: false,
     updatedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),

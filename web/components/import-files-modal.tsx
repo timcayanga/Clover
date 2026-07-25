@@ -1463,7 +1463,7 @@ export function ImportFilesModal({
         if (validationError) {
           if (validationError === "Uploaded files must be 2 MB or smaller.") {
             validationIssues.push(`${file.name} is larger than 2 MB.`);
-          } else if (validationError === "Only PDF, CSV, TSV, and common image files are supported.") {
+          } else if (/Only PDF, CSV, TSV, XLSX/.test(validationError)) {
             validationIssues.push(`${file.name} has an invalid file extension.`);
           } else {
             validationIssues.push(`${file.name} could not be added.`);
@@ -1475,8 +1475,8 @@ export function ImportFilesModal({
           return [];
         }
 
-        if (selectedImportMode !== "statement" && /\.(?:csv|tsv)$/i.test(file.name)) {
-          validationIssues.push(`${file.name} is a delimited data file, so it should be uploaded as a statement instead.`);
+        if (selectedImportMode !== "statement" && /\.(?:csv|tsv|xlsx|xls|xlsm|xlsb|ods)$/i.test(file.name)) {
+          validationIssues.push(`${file.name} is a spreadsheet file, so it should be uploaded as a statement instead.`);
           return [];
         }
 
@@ -3034,10 +3034,11 @@ export function ImportFilesModal({
 
         if (hasSettledRows) {
           triggerImportEnrichment(importFileId);
+          const statusIsAccountInventory =
+            confirmedTransactionsCount === 0 &&
+            statusAccountSummaries.length > 0 &&
+            statusAccountSummaries.every((summary) => Number(summary.rowsImported ?? 0) === 0);
           if (statusAccountSummaries.length > 1) {
-            const statusIsAccountInventory =
-              confirmedTransactionsCount === 0 &&
-              statusAccountSummaries.every((summary) => Number(summary.rowsImported ?? 0) === 0);
             const finalizedSummaries: UploadInsightsSummary[] = [];
             for (const accountSummary of statusAccountSummaries) {
               const summaryAccountName = accountSummary.accountName ?? resolvedAccountDisplayName;
@@ -3143,7 +3144,9 @@ export function ImportFilesModal({
                     )
                   : null;
           const fallbackPreviewTransactions =
-            summaryContext.previewTransactions && summaryContext.previewTransactions.length > 0
+            statusIsAccountInventory
+              ? []
+              : summaryContext.previewTransactions && summaryContext.previewTransactions.length > 0
               ? summaryContext.previewTransactions
               : completedAccountId
                 ? await loadOrGetKnownPreviewTransactions({
@@ -3164,15 +3167,17 @@ export function ImportFilesModal({
               workspaceId,
               fileName: summaryContext.fileName,
               importedRows:
-                primaryStatusAccountSummary?.rowsImported ||
-                (confirmedTransactionsCount > 0 ? confirmedTransactionsCount : parsedRowsCount),
+                statusIsAccountInventory
+                  ? 0
+                  : primaryStatusAccountSummary?.rowsImported ||
+                    (confirmedTransactionsCount > 0 ? confirmedTransactionsCount : parsedRowsCount),
               accountId: primaryStatusAccountSummary?.accountId ?? completedAccountId,
               accountName: primaryStatusAccountSummary?.accountName ?? resolvedAccountDisplayName,
               institution: primaryStatusAccountSummary?.institution ?? processingIdentity?.institution ?? summaryContext.institution ?? null,
               accountNumber:
                 primaryStatusAccountSummary?.accountNumber ?? processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null,
               accountType: primaryStatusAccountSummary?.accountType ?? processingIdentity?.accountType ?? summaryContext.accountType ?? null,
-              optimisticAccountId: summaryContext.optimisticAccountId,
+              optimisticAccountId: statusIsAccountInventory ? null : summaryContext.optimisticAccountId,
               balanceSources: [primaryStatusAccountSummary?.balance, stableOptimisticBalance],
               previewTransactions: fallbackPreviewTransactions,
               accountSummaries: statusAccountSummaries.length > 0 ? statusAccountSummaries : undefined,
@@ -7778,11 +7783,11 @@ export function ImportFilesModal({
             ref={fileInputRef}
             className="hidden-file-input"
             type="file"
-            accept=".csv,.tsv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
+            accept=".csv,.tsv,.xlsx,.xls,.xlsm,.xlsb,.ods,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
             multiple
             onChange={handleInputChange}
           />
-          <strong>Drop statements, receipts, and screenshots here</strong>
+          <strong>Drop statements, spreadsheets, receipts, and screenshots here</strong>
           <button className="button button-secondary button-small" type="button" onClick={openFilePicker}>
             Choose files
           </button>
@@ -7792,7 +7797,7 @@ export function ImportFilesModal({
           {validationNotice ? <p className="accounts-import-footer-copy__warning">{validationNotice}</p> : null}
           {message ? <p className="accounts-import-footer-copy__status">{message}</p> : null}
           <p>
-            Accepted files: PDF, CSV, JPG, JPEG, PNG, WEBP, HEIC, and HEIF.
+            Accepted files: PDF, CSV, TSV, XLSX, XLS, XLSM, XLSB, ODS, JPG, JPEG, PNG, WEBP, HEIC, and HEIF.
             <br />
             Password-protected PDFs are supported.
           </p>

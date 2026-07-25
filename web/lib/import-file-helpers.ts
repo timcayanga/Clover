@@ -19,6 +19,7 @@ export const fileTypeLabel = (file: Pick<FileLike, "name" | "type">) => {
   if (lowerName.endsWith(".pdf") || file.type === "application/pdf") return "PDF";
   if (lowerName.endsWith(".csv")) return "CSV";
   if (lowerName.endsWith(".tsv")) return "TSV";
+  if (/\.(?:xlsx|xls|xlsm|xlsb|ods)$/.test(lowerName)) return "Spreadsheet";
   if (
     lowerName.endsWith(".jpg") ||
     lowerName.endsWith(".jpeg") ||

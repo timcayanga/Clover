@@ -208,6 +208,11 @@ export const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) =>
     Number(summary.rowsImported ?? 0) || 0,
     Array.isArray(summary.previewTransactions) ? summary.previewTransactions.length : 0
   );
+  const publishedImportInventory = Boolean(
+    summary.accountSummaries?.some(
+      (accountSummary) => accountSummary.accountId === accountId && Number(accountSummary.rowsImported ?? 0) === 0
+    )
+  );
 
   return {
     id: accountId,
@@ -220,6 +225,7 @@ export const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) =>
     source: "upload",
     balance: summary.balance,
     transactionCount,
+    publishedImportInventory,
     updatedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
   };

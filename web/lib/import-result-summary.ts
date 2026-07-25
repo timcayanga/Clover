@@ -19,6 +19,7 @@ type ImportResultSummaryInput = {
   topCategoryName?: string | null;
   topMerchantName?: string | null;
   previewTransactions?: ImportResultPreviewTransaction[] | null;
+  accountSummaries?: Array<unknown> | null;
 };
 
 const normalizeLabel = (value: unknown) => (typeof value === "string" ? value.trim() : "");
@@ -112,8 +113,13 @@ export const formatImportResultHeadline = (summary: ImportResultSummaryInput | n
   }
 
   const rowCount = getRowCount(summary);
+  const accountCount = Array.isArray(summary.accountSummaries) ? summary.accountSummaries.length : 0;
   const expenseTotal = getExpenseTotal(summary);
   const transactionLabel = `${rowCount.toLocaleString("en-US")} transaction${rowCount === 1 ? "" : "s"}`;
+
+  if (rowCount === 0 && accountCount > 0) {
+    return `${accountCount.toLocaleString("en-US")} account${accountCount === 1 ? "" : "s"} updated`;
+  }
 
   if (expenseTotal > 0) {
     const hasCents = Math.round(expenseTotal * 100) % 100 !== 0;

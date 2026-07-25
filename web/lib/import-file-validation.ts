@@ -1,4 +1,11 @@
-import { PUBLIC_IMPORT_CONTENT_TYPES, PUBLIC_IMPORT_EXTENSIONS, TRAINING_IMAGE_CONTENT_TYPES, TRAINING_IMAGE_EXTENSIONS } from "@/lib/import-format-policies";
+import {
+  PUBLIC_IMPORT_CONTENT_TYPES,
+  PUBLIC_IMPORT_EXTENSIONS,
+  SPREADSHEET_IMPORT_CONTENT_TYPES,
+  SPREADSHEET_IMPORT_EXTENSIONS,
+  TRAINING_IMAGE_CONTENT_TYPES,
+  TRAINING_IMAGE_EXTENSIONS,
+} from "@/lib/import-format-policies";
 import type { ImportImageMode } from "@/lib/import-image-mode";
 
 // Keep uploads small enough for a responsive, serverless import path. Larger
@@ -53,8 +60,8 @@ export const validateImportFile = (params: {
 
   if (!isSupportedImportFile(params.fileName, params.contentType, { importMode: params.importMode ?? null })) {
     return params.importMode
-      ? "Only PDF, CSV, TSV, and common image files are supported for this import mode."
-      : "Only PDF, CSV, TSV, and common image files are supported.";
+      ? "Only PDF, CSV, TSV, XLSX, and common image files are supported for this import mode."
+      : "Only PDF, CSV, TSV, XLSX, and common image files are supported.";
   }
 
   return null;
@@ -67,8 +74,8 @@ export const validateImportFileMetadata = (params: { fileName: string; contentTy
 
   if (!isSupportedImportFile(params.fileName, params.contentType, { importMode: params.importMode ?? null })) {
     return params.importMode
-      ? "Only PDF, CSV, TSV, and common image files are supported for this import mode."
-      : "Only PDF, CSV, TSV, and common image files are supported.";
+      ? "Only PDF, CSV, TSV, XLSX, and common image files are supported for this import mode."
+      : "Only PDF, CSV, TSV, XLSX, and common image files are supported.";
   }
 
   return null;
@@ -89,10 +96,22 @@ export const validateImportFileBytes = (params: {
     /\.(?:csv|tsv)$/.test(name) ||
     params.contentType === "text/csv" ||
     params.contentType === "text/tab-separated-values";
+  const extension = name.slice(name.lastIndexOf("."));
+  const normalizedContentType = String(params.contentType ?? "").toLowerCase();
+  const isSpreadsheet =
+    SPREADSHEET_IMPORT_EXTENSIONS.includes(extension as (typeof SPREADSHEET_IMPORT_EXTENSIONS)[number]) ||
+    SPREADSHEET_IMPORT_CONTENT_TYPES.has(normalizedContentType);
+  const isZipSpreadsheet = /\.(?:xlsx|xlsm|xlsb|ods)$/.test(name);
+  const isOleSpreadsheet = name.endsWith(".xls");
 
   if (isPdf && !startsWith([0x25, 0x50, 0x44, 0x46])) return "The uploaded file is not a valid PDF.";
   if (isPng && !startsWith([0x89, 0x50, 0x4e, 0x47])) return "The uploaded file is not a valid PNG image.";
   if (isJpeg && !startsWith([0xff, 0xd8, 0xff])) return "The uploaded file is not a valid JPEG image.";
   if (isCsv && bytes.length === 0) return "The uploaded CSV file is empty.";
+  if (isZipSpreadsheet && !startsWith([0x50, 0x4b])) return "The uploaded file is not a valid spreadsheet workbook.";
+  if (isOleSpreadsheet && !startsWith([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])) {
+    return "The uploaded file is not a valid spreadsheet workbook.";
+  }
+  if (isSpreadsheet && bytes.length === 0) return "The uploaded spreadsheet workbook is empty.";
   return null;
 };

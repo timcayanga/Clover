@@ -336,7 +336,11 @@ export const isLikelyNetWorthSnapshotCsvFileName = (fileName?: string | null, fi
   const normalizedName = String(fileName ?? "").toLowerCase();
   const normalizedType = String(fileType ?? "").toLowerCase();
   return (
-    (normalizedName.endsWith(".csv") || /(?:^|[;/\s])csv(?:$|[;/\s])/.test(normalizedType)) &&
+    (
+      /\.(?:csv|xlsx|xls|xlsm|xlsb|ods)$/.test(normalizedName) ||
+      /(?:^|[;/\s])csv(?:$|[;/\s])/.test(normalizedType) ||
+      /(?:spreadsheetml|ms-excel|opendocument\.spreadsheet)/.test(normalizedType)
+    ) &&
     /\bnet[\s_-]*worth(?:[\s_-]*calculator)?\b/.test(normalizedName)
   );
 };
@@ -501,7 +505,8 @@ export const parseNetWorthSnapshotCsv = (
   const csvLike =
     isLikelyNetWorthSnapshotCsvFileName(fileName, fileType) ||
     /(?:^|[;/\s])csv(?:$|[;/\s])/i.test(fileType) ||
-    fileName.toLowerCase().endsWith(".csv");
+    /(?:spreadsheetml|ms-excel|opendocument\.spreadsheet)/i.test(fileType) ||
+    /\.(?:csv|xlsx|xls|xlsm|xlsb|ods)$/i.test(fileName);
   if (!csvLike) return null;
 
   const lines = text
@@ -615,8 +620,8 @@ type StructuredDelimitedTable = {
   preambleMetadata: Record<string, string>;
 };
 
-const structuredDelimitedFilePattern = /\.(?:csv|tsv)$/i;
-const structuredDelimitedMimePattern = /(?:csv|tab-separated-values)/i;
+const structuredDelimitedFilePattern = /\.(?:csv|tsv|xlsx|xls|xlsm|xlsb|ods)$/i;
+const structuredDelimitedMimePattern = /(?:csv|tab-separated-values|spreadsheetml|ms-excel|opendocument\.spreadsheet)/i;
 
 const isStructuredDelimitedFile = (fileName?: string | null, fileType?: string | null) =>
   structuredDelimitedFilePattern.test(String(fileName ?? "")) ||
