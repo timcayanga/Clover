@@ -87,7 +87,14 @@ export const coerceTransactionTypeFromCategoryName = (
     return fallback;
   }
 
-  return "expense";
+  // Categories describe purpose, not cash-flow direction. A salary,
+  // reimbursement, sale, refund, gift, or allowance can retain an explicit
+  // credit direction even when the category is not literally named "Income".
+  // Likewise, a transfer candidate must reach the ownership matcher before it
+  // can be classified as internal or external. Falling back to expense here
+  // erased authoritative debit/credit and table-direction evidence from
+  // structured spreadsheet imports.
+  return fallback;
 };
 
 export const resolveFinancialTransactionType = (transaction: {

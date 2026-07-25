@@ -5,6 +5,7 @@ import { validateImportFile, validateImportFileBytes } from "../lib/import-file-
 import { buildImportedWorkspaceAccount } from "../lib/import-optimistic-summary";
 import { buildOptimisticPreviewTransactions } from "../lib/import-preview-transactions";
 import { decodeSpreadsheetWorkbookBytes } from "../lib/spreadsheet-import.server";
+import { coerceTransactionTypeFromCategoryName } from "../lib/transaction-directions";
 
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -210,6 +211,13 @@ const main = async () => {
         { name: "Payroll", amount: "50000.00", type: "income", category: "Salary", account: "Cash" },
         { name: "Taxi", amount: "300.00", type: "income", category: "Reimbursement", account: "Cash" },
       ]
+    );
+    assert.deepEqual(
+      transactions.map((row) =>
+        coerceTransactionTypeFromCategoryName(row.categoryName, row.type ?? "expense")
+      ),
+      ["expense", "expense", "income", "income"],
+      `${format.extension} confirmation must preserve authoritative expense/income table direction`
     );
     assert.deepEqual(
       receivables.map((row) => ({
