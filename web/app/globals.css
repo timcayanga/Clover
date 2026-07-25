@@ -5563,7 +5563,16 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .commitments-table-wrap {
-  margin: 0 -4px;
+  display: grid;
+  align-content: start;
+  margin: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .commitments-table {
@@ -5574,6 +5583,11 @@ body.transactions-manual-open .shell-quick-add-button {
 .commitments-table td {
   font-size: 14px;
   vertical-align: middle;
+}
+
+.commitments-table td {
+  height: 52px;
+  padding-block: 8px;
 }
 
 .commitments-table th {
@@ -5643,19 +5657,36 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .commitments-table__editor {
+  appearance: none;
   border: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   border-radius: 0;
   background: transparent;
   color: var(--text);
   font: inherit;
-  height: 28px;
-  line-height: 1.35;
+  height: 24px;
+  min-height: 0;
+  line-height: 24px;
   max-width: 170px;
   min-width: 0;
   outline: none;
-  padding: 2px 0;
+  padding: 0;
   width: 100%;
+}
+
+.commitments-table__editor:hover,
+.commitments-table__editor:focus,
+.commitments-table__editor:focus-visible {
+  border: 0;
+  border-bottom: 1px solid var(--accent);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+
+.commitments-table__editor[type="date"] {
+  appearance: auto;
 }
 
 .commitments-table__editor--text {
@@ -5718,7 +5749,8 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .commitments-detail-panel {
   display: grid;
-  gap: 16px;
+  gap: 0;
+  min-width: 0;
 }
 
 .recurring-overview-grid {
@@ -38897,7 +38929,6 @@ html[data-theme="dark"] .import-error-toast {
 }
 
 html[data-theme="dark"] .commitments-summary-grid .panel,
-html[data-theme="dark"] .commitments-detail-panel,
 html[data-theme="dark"] .recurring-page__stack > .glass {
   background: rgba(14, 23, 37, 0.94) !important;
   border-color: rgba(148, 163, 184, 0.16) !important;

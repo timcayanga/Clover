@@ -935,8 +935,8 @@ export function CommitmentsPanel({
       editingCell?.commitmentId === commitmentId && editingCell.field === field;
 
     return (
-      <article className="panel commitments-detail-panel">
-        <div className="table-wrap transactions-table-wrap commitments-table-wrap">
+      <article className="commitments-detail-panel">
+        <div className="table-wrap commitments-table-wrap">
           <table className="transactions-table commitments-table">
             <thead>
               <tr>
