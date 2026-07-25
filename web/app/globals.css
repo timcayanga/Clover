@@ -5814,18 +5814,20 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   min-width: 760px;
 }
 
-.commitments-table th,
-.commitments-table td {
-  font-size: 14px;
+.transactions-table.commitments-table th,
+.transactions-table.commitments-table td {
+  font-size: 0.86rem;
+  line-height: 1.25;
+  padding: 4px 12px;
   vertical-align: middle;
 }
 
-.commitments-table td {
-  height: 52px;
-  padding-block: 8px;
+.transactions-table.commitments-table td {
+  height: 44px;
 }
 
-.commitments-table th {
+.transactions-table.commitments-table th {
+  height: 36px;
   font-weight: 400;
   letter-spacing: 0.04em;
 }
@@ -5899,9 +5901,9 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   background: transparent;
   color: var(--text);
   font: inherit;
-  height: 24px;
+  height: 22px;
   min-height: 0;
-  line-height: 24px;
+  line-height: 22px;
   max-width: 170px;
   min-width: 0;
   outline: none;

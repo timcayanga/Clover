@@ -8678,6 +8678,29 @@ label {
   opacity: 0.62;
 }
 
+.transactions-table.commitments-table th,
+.transactions-table.commitments-table td {
+  font-size: 0.86rem;
+  line-height: 1.25;
+  padding: 4px 12px;
+  vertical-align: middle;
+}
+
+.transactions-table.commitments-table td {
+  height: 44px;
+}
+
+.transactions-table.commitments-table th {
+  height: 36px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+
+.commitments-table__editor {
+  height: 22px;
+  line-height: 22px;
+}
+
 .transactions-page {
   display: block;
 }
