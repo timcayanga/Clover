@@ -60,6 +60,7 @@ type TickerSuggestion = {
 
 type InvestmentMarketChartProps = {
   investmentAccounts: InvestmentAccount[];
+  onOpenPortfolio?: () => void;
 };
 
 const isMarketTrackableSubtype = (value: string | null) =>
@@ -263,14 +264,20 @@ const formatRelativeTime = (timestamp: number) => {
   return `${elapsedDays}d ago`;
 };
 
-export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketChartProps) {
-  const defaultMarketAsset = useMemo(
+export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio }: InvestmentMarketChartProps) {
+  const trackablePortfolioAssets = useMemo(
     () =>
       investmentAccounts
-        .filter((account) => isMarketTrackableSubtype(account.investmentSubtype) && Boolean(account.investmentSymbol?.trim()))
+        .filter((account) => isMarketTrackableSubtype(account.investmentSubtype))
         .slice()
-        .sort((left, right) => Number(right.balance ?? 0) - Number(left.balance ?? 0))[0] ?? null,
+        .sort((left, right) => Number(right.balance ?? 0) - Number(left.balance ?? 0)),
     [investmentAccounts]
+  );
+  const defaultMarketAsset = useMemo(
+    () =>
+      trackablePortfolioAssets
+        .filter((account) => Boolean(account.investmentSymbol?.trim()))[0] ?? null,
+    [trackablePortfolioAssets]
   );
   const defaultMarket = defaultMarketAsset ? getMarketForInvestment(defaultMarketAsset) : "us";
   const defaultSymbol = defaultMarketAsset?.investmentSymbol?.trim().toUpperCase() ?? "";
@@ -732,6 +739,35 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
             </select>
           </label>
         </form>
+      </div>
+
+      <div className="investments-market__portfolio-tickers">
+        <span>Your portfolio</span>
+        <div className="investments-market__portfolio-ticker-list">
+          {trackablePortfolioAssets
+            .filter((account) => Boolean(account.investmentSymbol?.trim()))
+            .slice(0, 8)
+            .map((account) => {
+              const symbol = normalizeMarketSymbol(account.investmentSymbol ?? "");
+              const market = getMarketForInvestment(account);
+              return (
+                <button
+                  key={account.id}
+                  type="button"
+                  className={submittedSymbol === symbol ? "is-active" : ""}
+                  onClick={() => submitTicker(symbol, market)}
+                  title={account.name}
+                >
+                  {symbol}
+                </button>
+              );
+            })}
+          {trackablePortfolioAssets.some((account) => !account.investmentSymbol?.trim()) && onOpenPortfolio ? (
+            <button className="investments-market__add-tickers" type="button" onClick={onOpenPortfolio}>
+              + Add missing tickers
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="investments-market__range investments-market__range--compact">

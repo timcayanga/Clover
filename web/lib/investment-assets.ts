@@ -49,10 +49,12 @@ export const getInvestmentAssetBrand = (params: InvestmentAssetBrandInput): Acco
   const isCrypto = params.subtype === "crypto";
   const isRealWorldAsset = params.subtype === "real_world_asset";
   const isFixedIncome = isFixedIncomeInvestmentSubtype(params.subtype);
-  const institutionBrand = params.institution
+  const isGSaveAsset = /\bgsave\b/i.test(params.name ?? "");
+  const brandingInstitution = isGSaveAsset ? "GSave" : params.institution;
+  const institutionBrand = brandingInstitution
     ? getAccountBrand({
-        institution: params.institution,
-        name: params.name ?? null,
+        institution: brandingInstitution,
+        name: isGSaveAsset ? "GSave" : params.name ?? null,
         type: "investment",
       })
     : null;

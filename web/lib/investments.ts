@@ -9,6 +9,7 @@ export const INVESTMENT_SUBTYPES = [
   "real_world_asset",
   "bond",
   "time_deposit",
+  "savings",
   "other",
 ] as const;
 
@@ -66,6 +67,12 @@ const CLASSIFICATION_RULES: Array<{
     confidence: 96,
     label: "time deposit product wording",
     pattern: /\b(time deposit|term deposit|fixed deposit|unoboost|uno boost|certificate of deposit)\b/,
+  },
+  {
+    subtype: "savings",
+    confidence: 94,
+    label: "savings product wording",
+    pattern: /\b(gsave|savings|save up|high yield savings|interest earning account)\b/,
   },
   {
     subtype: "reit",
@@ -184,6 +191,8 @@ export const getInvestmentSubtypeLabel = (value: string | null | undefined) => {
       return "Bond";
     case "time_deposit":
       return "Time deposit";
+    case "savings":
+      return "Savings";
     case "other":
       return "Other investment";
     default:
@@ -207,6 +216,8 @@ export const getInvestmentSubtypeDescription = (value: string | null | undefined
       return "Track principal, dates, rates, and maturity value.";
     case "time_deposit":
       return "Track deposit amount, dates, rates, and maturity value.";
+    case "savings":
+      return "Track the account balance and interest earned.";
     case "other":
       return "Track the most important values for this holding.";
     default:

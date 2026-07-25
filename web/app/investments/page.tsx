@@ -8,6 +8,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { AnimatedTabs } from "@/components/animated-tabs";
+import { AdviserChat } from "@/components/adviser-chat";
 import { PlanUpgradeCallout } from "@/components/plan-upgrade-callout";
 import { CurrencySelector } from "@/components/currency-selector";
 import { InfoTip } from "@/components/info-tip";
@@ -400,6 +401,93 @@ type PortfolioDisplayRow = {
 };
 
 type PortfolioEditableField = "name" | "subtype" | "symbol" | "detail" | "currentValue";
+type PortfolioView = "all" | "assets" | "institutions";
+
+const investmentAdviserPrompts = [
+  {
+    id: "investment-concentration",
+    group: "investments",
+    label: "Where am I overexposed?",
+    prompt: "Review my investments and explain where my portfolio is most concentrated and what I should examine first.",
+  },
+  {
+    id: "investment-performance",
+    group: "investments",
+    label: "What is driving my returns?",
+    prompt: "Review my investment performance and explain which holdings are driving gains or losses.",
+  },
+  {
+    id: "investment-cashflow",
+    group: "investments",
+    label: "Can I invest more safely?",
+    prompt: "Compare my portfolio with my cash flow, recurring obligations, budgets, and goals. Can I safely invest more?",
+  },
+  {
+    id: "investment-next-step",
+    group: "investments",
+    label: "What should I review next?",
+    prompt: "Based on my full Clover data, what is the most important investment decision or data gap I should review next?",
+  },
+];
+
+function InvestmentGrowthChart({
+  points,
+  currency,
+}: {
+  points: Array<{ date: string; value: number }>;
+  currency: string;
+}) {
+  if (points.length < 2) {
+    return (
+      <div className="investments-growth-chart__empty">
+        <strong>Investment history will appear here.</strong>
+        <span>Upload another dated statement or record a new valuation to start the timeline.</span>
+      </div>
+    );
+  }
+
+  const width = 760;
+  const height = 210;
+  const padding = 24;
+  const minValue = Math.min(...points.map((point) => point.value));
+  const maxValue = Math.max(...points.map((point) => point.value));
+  const span = Math.max(maxValue - minValue, 1);
+  const path = points
+    .map((point, index) => {
+      const x = padding + (index / Math.max(points.length - 1, 1)) * (width - padding * 2);
+      const y = padding + (1 - (point.value - minValue) / span) * (height - padding * 2);
+      return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(" ");
+
+  return (
+    <div className="investments-growth-chart">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Investments over time">
+        <defs>
+          <linearGradient id="investment-growth-fill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="rgba(3, 168, 192, 0.22)" />
+            <stop offset="100%" stopColor="rgba(3, 168, 192, 0.01)" />
+          </linearGradient>
+        </defs>
+        <path
+          d={`${path} L ${width - padding} ${height - padding} L ${padding} ${height - padding} Z`}
+          fill="url(#investment-growth-fill)"
+        />
+        <path d={path} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+        {points.map((point, index) => {
+          const x = padding + (index / Math.max(points.length - 1, 1)) * (width - padding * 2);
+          const y = padding + (1 - (point.value - minValue) / span) * (height - padding * 2);
+          return <circle key={`${point.date}-${index}`} cx={x} cy={y} r="4" fill="var(--accent)" />;
+        })}
+      </svg>
+      <div className="investments-growth-chart__labels">
+        <span>{new Date(points[0].date).toLocaleDateString("en-PH", { month: "short", year: "numeric" })}</span>
+        <strong>{formatInvestmentAmount(points[points.length - 1].value, currency)}</strong>
+        <span>{new Date(points[points.length - 1].date).toLocaleDateString("en-PH", { month: "short", year: "numeric" })}</span>
+      </div>
+    </div>
+  );
+}
 
 function PortfolioInlineEdit({
   value,
@@ -522,34 +610,6 @@ function PortfolioInlineEdit({
     </button>
   );
 }
-
-const getInvestmentTableDetail = (account: Account, subtype: InvestmentSubtype | null) => {
-  if (isMarketInvestmentSubtype(subtype)) {
-    return account.investmentQuantity;
-  }
-
-  if (subtype === "time_deposit") {
-    if (account.investmentMaturityDate) {
-      return `Matures ${formatDate(account.investmentMaturityDate)}`;
-    }
-    if (account.investmentInterestRate) {
-      return `${account.investmentInterestRate}% rate`;
-    }
-    return null;
-  }
-
-  if (subtype === "bond") {
-    if (account.investmentInterestRate) {
-      return `${account.investmentInterestRate}% rate`;
-    }
-    if (account.investmentMaturityDate) {
-      return `Matures ${formatDate(account.investmentMaturityDate)}`;
-    }
-    return account.investmentPrincipal ? formatInvestmentAmount(parseAmount(account.investmentPrincipal), account.currency) : null;
-  }
-
-  return account.investmentSymbol;
-};
 
 type InvestmentAnalysisSlice = {
   key: string;
@@ -822,6 +882,7 @@ export default function InvestmentsPage() {
   const [investmentSubtypeFilter, setInvestmentSubtypeFilter] = useState<InvestmentSubtype | "all">("all");
   const [investmentSortKey, setInvestmentSortKey] = useState<InvestmentSortKey>("value_desc");
   const [portfolioCurrencyFilter, setPortfolioCurrencyFilter] = useState("all");
+  const [portfolioView, setPortfolioView] = useState<PortfolioView>("all");
   const [selectedOverviewMixKey, setSelectedOverviewMixKey] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [selectedInvestmentAssetId, setSelectedInvestmentAssetId] = useState<string | null>(null);
@@ -1165,7 +1226,7 @@ export default function InvestmentsPage() {
             account.investmentSymbol && normalizeInvestmentLabel(account.investmentSymbol) !== normalizeInvestmentLabel(account.currency)
               ? account.investmentSymbol
               : null,
-          detail: getInvestmentTableDetail(account, subtype),
+          detail: account.investmentQuantity,
           currentValue,
           purchaseValue,
           gainLoss,
@@ -1259,6 +1320,12 @@ export default function InvestmentsPage() {
       if (investmentSubtypeFilter !== "all" && row.subtype !== investmentSubtypeFilter) {
         return false;
       }
+      if (portfolioView === "assets" && row.source === "account") {
+        return false;
+      }
+      if (portfolioView === "institutions" && row.source !== "account") {
+        return false;
+      }
 
       if (!search) {
         return true;
@@ -1280,7 +1347,7 @@ export default function InvestmentsPage() {
     };
 
     return filtered.slice().sort(sorters[investmentSortKey]);
-  }, [investmentSearch, investmentSortKey, investmentSubtypeFilter, portfolioCurrencyFilter, portfolioSourceRows]);
+  }, [investmentSearch, investmentSortKey, investmentSubtypeFilter, portfolioCurrencyFilter, portfolioSourceRows, portfolioView]);
 
   const portfolioTotals = useMemo(() => {
     return selectedCurrencyInvestmentAccounts.reduce(
@@ -1325,12 +1392,6 @@ export default function InvestmentsPage() {
   const selectedCurrencyCodes = useMemo(() => getCurrencyCodes(selectedCurrencyInvestmentAccounts), [selectedCurrencyInvestmentAccounts]);
   const hasVisibleCurrencySelection = selectedCurrencyInvestmentAccounts.length > 0;
   const canAggregateSelectedCurrency = selectedCurrencyCodes.length <= 1;
-  const latestValuationDate = useMemo(() => {
-    const timestamps = selectedCurrencyInvestmentAccounts
-      .map((account) => new Date(account.updatedAt).getTime())
-      .filter(Number.isFinite);
-    return timestamps.length > 0 ? new Date(Math.max(...timestamps)) : null;
-  }, [selectedCurrencyInvestmentAccounts]);
   const currencyBreakdown = useMemo(
     () =>
       selectedCurrencyCodes.map((currency) => {
@@ -1344,6 +1405,41 @@ export default function InvestmentsPage() {
       }),
     [selectedCurrencyCodes, selectedCurrencyInvestmentAccounts]
   );
+
+  const investmentGrowthPoints = useMemo(() => {
+    if (!canAggregateSelectedCurrency || selectedCurrencyCodes.length !== 1) {
+      return [];
+    }
+
+    const selectedCurrency = selectedCurrencyCodes[0];
+    const events = investmentSnapshots
+      .filter((snapshot) => formatCurrencyCode(snapshot.currency) === selectedCurrency)
+      .map((snapshot) => {
+        const holdingsValue = snapshot.holdings.reduce(
+          (sum, holding) => sum + (parseNullableAmount(holding.currentValue ?? holding.marketValue) ?? 0),
+          0
+        );
+        return {
+          key:
+            snapshot.account?.id ??
+            (normalizeInvestmentLabel(snapshot.account?.institution ?? snapshot.documentImport?.institution) || snapshot.id),
+          date: snapshot.snapshotDate ?? snapshot.updatedAt,
+          value: parseNullableAmount(snapshot.totalValue) ?? holdingsValue,
+        };
+      })
+      .filter((event) => event.value > 0 && Number.isFinite(new Date(event.date).getTime()))
+      .sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime());
+
+    const latestByAccount = new Map<string, number>();
+    const pointsByDate = new Map<string, number>();
+    for (const event of events) {
+      latestByAccount.set(event.key, event.value);
+      const dateKey = new Date(event.date).toISOString().slice(0, 10);
+      pointsByDate.set(dateKey, Array.from(latestByAccount.values()).reduce((sum, value) => sum + value, 0));
+    }
+
+    return Array.from(pointsByDate, ([date, value]) => ({ date, value }));
+  }, [canAggregateSelectedCurrency, investmentSnapshots, selectedCurrencyCodes]);
 
   const investmentGroups = useMemo<InvestmentGroup[]>(
     () => (canAggregateSelectedCurrency ? buildInvestmentGroups(selectedCurrencyInvestmentAccounts) : []),
@@ -1546,7 +1642,8 @@ export default function InvestmentsPage() {
     normalizeInvestmentSearchText(investmentSearch) ||
       investmentSubtypeFilter !== "all" ||
       investmentSortKey !== "value_desc" ||
-      portfolioCurrencyFilter !== "all"
+      portfolioCurrencyFilter !== "all" ||
+      portfolioView !== "all"
   );
   const canUseProTabs = planTier === "pro";
   const canAccessSelectedTab = !((selectedTab === "market" || selectedTab === "analysis") && !canUseProTabs);
@@ -1558,6 +1655,18 @@ export default function InvestmentsPage() {
         investmentSubtype: inferInvestmentSubtypeFromAccount(account),
       })),
     [investmentAccounts]
+  );
+  const marketPortfolioAccounts = useMemo(
+    () =>
+      portfolioSourceRows.map((row) => ({
+        id: row.assetId,
+        name: row.name,
+        investmentSubtype: row.subtype,
+        investmentSymbol: row.symbol,
+        currency: row.currency,
+        balance: row.currentValue?.toString() ?? null,
+      })),
+    [portfolioSourceRows]
   );
   const editingAccount = editingAccountId ? visibleInvestmentAccounts.find((account) => account.id === editingAccountId) ?? accounts.find((account) => account.id === editingAccountId) ?? null : null;
   const selectedPortfolioRow = selectedInvestmentAssetId
@@ -1789,7 +1898,7 @@ export default function InvestmentsPage() {
           current.map((item) => (item.id === account.id ? (payload.account as Account) : item))
         );
       }
-      setMessage("Investment updated.");
+      setMessage("");
     } catch (error) {
       const nextMessage = error instanceof Error ? error.message : "Unable to update investment.";
       setMessage(nextMessage);
@@ -1882,7 +1991,7 @@ export default function InvestmentsPage() {
       } else {
         cancelEditingAccount();
       }
-      setMessage("Investment updated.");
+      setMessage("");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to update investment.");
     } finally {
@@ -2191,7 +2300,9 @@ export default function InvestmentsPage() {
                       ? "Select a currency"
                       : "—"}
                 </strong>
-                <span className="investments-overview-card__subvalue">Recorded value, not a live market quote</span>
+                <span className="investments-overview-card__subvalue">
+                  Add ticker and units to compare market prices; portfolio totals use recorded values
+                </span>
               </article>
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
                 <button className="accounts-overview-card__info" type="button" aria-label="How P&L is calculated">
@@ -2215,19 +2326,14 @@ export default function InvestmentsPage() {
                 </span>
               </article>
             </section>
-            {hasVisibleCurrencySelection ? (
-              <div className={`investments-valuation-note${canAggregateSelectedCurrency ? "" : " is-warning"}`}>
-                <span>{formatValuationFreshness(latestValuationDate)}</span>
-                {canAggregateSelectedCurrency ? (
-                  <span>Values come from saved entries and the latest imports.</span>
-                ) : (
-                  <span>
-                    Clover does not add unlike currencies together. Choose one currency to compare allocation and performance.
-                    {currencyBreakdown.length > 0
-                      ? ` ${currencyBreakdown.map((item) => formatInvestmentAmount(item.value, item.currency)).join(" · ")}`
-                      : ""}
-                  </span>
-                )}
+            {hasVisibleCurrencySelection && !canAggregateSelectedCurrency ? (
+              <div className="investments-valuation-note is-warning">
+                <span>
+                  Clover does not add unlike currencies together. Choose one currency to compare allocation and performance.
+                  {currencyBreakdown.length > 0
+                    ? ` ${currencyBreakdown.map((item) => formatInvestmentAmount(item.value, item.currency)).join(" · ")}`
+                    : ""}
+                </span>
               </div>
             ) : null}
             <section className="investments-allocation investments-allocation--overview glass">
@@ -2345,6 +2451,22 @@ export default function InvestmentsPage() {
                       ))}
                     </select>
                   </label>
+                  <div className="investments-portfolio-view-toggle" role="group" aria-label="Portfolio rows">
+                    {([
+                      ["all", "All"],
+                      ["assets", "Assets"],
+                      ["institutions", "Institutions"],
+                    ] as Array<[PortfolioView, string]>).map(([value, label]) => (
+                      <button
+                        key={value}
+                        className={portfolioView === value ? "is-active" : ""}
+                        type="button"
+                        onClick={() => setPortfolioView(value)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -2352,9 +2474,10 @@ export default function InvestmentsPage() {
                 <div className="investments-portfolio-table__table" role="table" aria-label="Portfolio assets">
                   <div className="investments-portfolio-table__row investments-portfolio-table__row--head" role="row">
                     <span role="columnheader">Asset</span>
+                    <span role="columnheader">Institution</span>
                     <span role="columnheader">Type</span>
                     <span role="columnheader">Symbol</span>
-                    <span role="columnheader">Key detail</span>
+                    <span role="columnheader">Units</span>
                     <span role="columnheader">Current value</span>
                     <span role="columnheader">Gain / loss</span>
                     <span role="columnheader" aria-label="Open details" />
@@ -2373,13 +2496,21 @@ export default function InvestmentsPage() {
                             })}
                             label={row.symbol ?? row.name}
                           />
-                          <PortfolioInlineEdit
-                            value={row.name}
-                            displayValue={row.name}
-                            ariaLabel={`Edit name for ${row.name}`}
-                            className="investments-portfolio-inline-edit--name"
-                            onCommit={(value) => commitPortfolioRowField(row, "name", value)}
-                          />
+                          <div className="investments-portfolio-table__asset-copy">
+                            <PortfolioInlineEdit
+                              value={row.name}
+                              displayValue={row.name}
+                              ariaLabel={`Edit name for ${row.name}`}
+                              className="investments-portfolio-inline-edit--name"
+                              onCommit={(value) => commitPortfolioRowField(row, "name", value)}
+                            />
+                            <span className="investments-portfolio-table__row-kind">
+                              {row.source === "account" ? "Institution total" : "Asset"}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="investments-portfolio-table__cell investments-portfolio-table__institution">
+                          {row.institution ?? ""}
                         </div>
                         <div className="investments-portfolio-table__cell">
                           <PortfolioInlineEdit
@@ -2408,7 +2539,7 @@ export default function InvestmentsPage() {
                           />
                         </div>
                         <div className="investments-portfolio-table__cell">
-                          {isMarketInvestmentSubtype(row.subtype) ? (
+                          {row.source !== "account" || isMarketInvestmentSubtype(row.subtype) ? (
                             <PortfolioInlineEdit
                               value={row.detail ?? ""}
                               displayValue={row.detail ?? ""}
@@ -2417,7 +2548,7 @@ export default function InvestmentsPage() {
                               onCommit={(value) => commitPortfolioRowField(row, "detail", value)}
                             />
                           ) : (
-                            row.detail ?? ""
+                            ""
                           )}
                         </div>
                         <div className="investments-portfolio-table__cell">
@@ -2456,7 +2587,10 @@ export default function InvestmentsPage() {
             </section>
           </>
         ) : selectedTab === "market" ? (
-          <InvestmentMarketChart investmentAccounts={classifiedInvestmentAccounts} />
+          <InvestmentMarketChart
+            investmentAccounts={marketPortfolioAccounts.length > 0 ? marketPortfolioAccounts : classifiedInvestmentAccounts}
+            onOpenPortfolio={() => selectInvestmentTab("portfolio")}
+          />
         ) : (
           <section className="investments-insights-grid">
             {!canAggregateSelectedCurrency && selectedCurrencyInvestmentAccounts.length > 0 ? (
@@ -2509,6 +2643,20 @@ export default function InvestmentsPage() {
                 <span>{worstGainHolding?.account.name ?? "No portfolio assets yet"}</span>
               </article>
             </div>
+            <article className="investments-insights-panel investments-insights-panel--wide glass">
+              <div className="investments-allocation__head">
+                <div className="investments-allocation__head-title">
+                  <div className="investments-allocation__title-row">
+                    <h5>Investments Over Time</h5>
+                    <InfoTip label="Uses dated investment snapshots and imported statements for the selected currency." />
+                  </div>
+                </div>
+              </div>
+              <InvestmentGrowthChart
+                points={investmentGrowthPoints}
+                currency={selectedCurrencyCodes[0] ?? "PHP"}
+              />
+            </article>
             <article className="investments-allocation glass">
               <div className="investments-allocation__head">
                 <div className="investments-allocation__head-title">
@@ -2605,14 +2753,27 @@ export default function InvestmentsPage() {
               )}
 
             </article>
+            <article className="investments-insights-panel investments-insights-panel--wide investments-adviser-panel glass">
+              <div className="investments-allocation__head">
+                <div className="investments-allocation__head-title">
+                  <div className="investments-allocation__title-row">
+                    <h5>Ask Adviser About Your Investments</h5>
+                    <InfoTip label="Adviser considers your portfolio together with the rest of your Clover data." />
+                  </div>
+                </div>
+              </div>
+              <AdviserChat prompts={investmentAdviserPrompts} isPro={planTier === "pro"} />
+            </article>
           </section>
         )}
       </div>
 
         {selectedTab === "portfolio" ? (
-          <div className="investments-portfolio-table__total" aria-label="Portfolio total value">
-            <span>Total value</span>
-            <strong>{formatInvestmentAggregate(portfolioTableTotals.currentValue, visiblePortfolioRows)}</strong>
+          <div className="investments-portfolio-summary-row">
+            <div className="investments-portfolio-table__total" aria-label="Portfolio total value">
+              <span>Total value</span>
+              <strong>{formatInvestmentAggregate(portfolioTableTotals.currentValue, visiblePortfolioRows)}</strong>
+            </div>
           </div>
         ) : null}
 

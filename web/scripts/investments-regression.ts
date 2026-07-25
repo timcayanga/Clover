@@ -7,6 +7,8 @@ const classificationCases = [
   { name: "ATRAM Medium Term Peso Bond Fund", expected: "bond" },
   { name: "Vanguard S&P 500 ETF", expected: "etf" },
   { name: "GSave #UNOboost 1330", institution: "GSave", expected: "time_deposit" },
+  { name: "GSave (UNO)", institution: "UNO Digital Bank", expected: "savings" },
+  { name: "HSBC Savings", institution: "HSBC", expected: "savings" },
   { name: "Bitcoin", institution: "GCrypto", symbol: "BTC", expected: "crypto" },
   { name: "Manila Electric", institution: "GStocks", symbol: "MER", expected: "stock" },
   { name: "Ayala REIT", symbol: "AREIT", expected: "reit" },
@@ -50,4 +52,12 @@ const hsbcBrand = getInvestmentAssetBrand({
 assert.equal(hsbcBrand.logoFit, "contain", "Institution investment marks must show the complete HSBC logo");
 assert.ok(hsbcBrand.logoSrcs.length > 0, "Institution investment marks should retain provider logo candidates");
 
-console.log(`Investment regression passed: ${classificationCases.length + 5} checks.`);
+const gsaveBrand = getInvestmentAssetBrand({
+  name: "GSave (UNO)",
+  institution: "UNO Digital Bank",
+  subtype: "savings",
+  currency: "PHP",
+});
+assert.match(gsaveBrand.logoSrcs.join(" "), /gcash/i, "GSave investment rows should use the GSave/GCash mark");
+
+console.log(`Investment regression passed: ${classificationCases.length + 6} checks.`);
