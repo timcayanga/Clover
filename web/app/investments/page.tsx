@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { CloverShell } from "@/components/clover-shell";
@@ -105,6 +105,7 @@ type InvestmentSnapshotHolding = {
   currency: string;
   status: string | null;
   confidence: number;
+  updatedAt: string;
 };
 
 type InvestmentSnapshot = {
@@ -385,6 +386,7 @@ type PortfolioDisplayRow = {
   key: string;
   accountId: string;
   assetId: string;
+  source: "account" | "holding" | "derived";
   name: string;
   institution: string | null;
   subtype: InvestmentSubtype | null;
@@ -396,6 +398,130 @@ type PortfolioDisplayRow = {
   currency: string;
   classification: InvestmentClassification;
 };
+
+type PortfolioEditableField = "name" | "subtype" | "symbol" | "detail" | "currentValue";
+
+function PortfolioInlineEdit({
+  value,
+  displayValue,
+  ariaLabel,
+  kind = "text",
+  options = [],
+  className = "",
+  onCommit,
+}: {
+  value: string;
+  displayValue: string;
+  ariaLabel: string;
+  kind?: "text" | "number" | "select";
+  options?: Array<{ value: string; label: string }>;
+  className?: string;
+  onCommit: (value: string) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const fieldRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
+
+  useEffect(() => {
+    if (!editing) {
+      setDraft(value);
+    }
+  }, [editing, value]);
+
+  useEffect(() => {
+    if (!editing) {
+      return;
+    }
+
+    fieldRef.current?.focus();
+    if (fieldRef.current instanceof HTMLInputElement) {
+      fieldRef.current.select();
+    }
+  }, [editing]);
+
+  const commit = async (nextValue = draft) => {
+    const normalized = kind === "text" ? nextValue.trim() : nextValue;
+    if (normalized === value) {
+      setEditing(false);
+      return;
+    }
+
+    try {
+      await onCommit(normalized);
+      setEditing(false);
+    } catch {
+      setDraft(value);
+      setEditing(false);
+    }
+  };
+
+  if (kind === "select") {
+    return (
+      <select
+        ref={(node) => {
+          fieldRef.current = node;
+        }}
+        className={`investments-portfolio-inline-edit ${className}`.trim()}
+        value={draft}
+        aria-label={ariaLabel}
+        onFocus={() => setDraft(value)}
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          setDraft(nextValue);
+          if (nextValue !== value) {
+            void onCommit(nextValue).catch(() => setDraft(value));
+          }
+        }}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={(node) => {
+          fieldRef.current = node;
+        }}
+        className={`investments-portfolio-inline-edit ${className}`.trim()}
+        type={kind}
+        inputMode={kind === "number" ? "decimal" : undefined}
+        value={draft}
+        aria-label={ariaLabel}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => void commit()}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            void commit();
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+      />
+    );
+  }
+
+  return (
+    <button
+      className={`investments-portfolio-inline-edit ${className}`.trim()}
+      type="button"
+      aria-label={ariaLabel}
+      title={displayValue || "Click to edit"}
+      onClick={() => setEditing(true)}
+    >
+      {displayValue || "Not set"}
+    </button>
+  );
+}
 
 const getInvestmentTableDetail = (account: Account, subtype: InvestmentSubtype | null) => {
   if (isMarketInvestmentSubtype(subtype)) {
@@ -451,6 +577,16 @@ type InvestmentEditDraft = {
   investmentInterestRate: string;
   investmentMaturityValue: string;
   balance: string;
+  currency: string;
+};
+
+type InvestmentHoldingEditDraft = {
+  assetName: string;
+  assetSymbol: string;
+  assetType: InvestmentSubtype;
+  quantity: string;
+  costBasis: string;
+  currentValue: string;
   currency: string;
 };
 
@@ -679,6 +815,7 @@ export default function InvestmentsPage() {
   const [investmentSnapshots, setInvestmentSnapshots] = useState<InvestmentSnapshot[]>([]);
   const [loading, setLoading] = useState(!initialCachedWorkspace);
   const [hasLoaded, setHasLoaded] = useState(Boolean(initialCachedWorkspace));
+  const [isHydrated, setIsHydrated] = useState(false);
   const [message, setMessage] = useState("");
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [investmentSearch, setInvestmentSearch] = useState(searchQueryFromUrl);
@@ -687,12 +824,13 @@ export default function InvestmentsPage() {
   const [portfolioCurrencyFilter, setPortfolioCurrencyFilter] = useState("all");
   const [selectedOverviewMixKey, setSelectedOverviewMixKey] = useState("");
   const [addOpen, setAddOpen] = useState(false);
-  const [selectedInvestmentAssetId, setSelectedInvestmentAssetId] = useState<string | null>(urlSearchParams.get("asset"));
+  const [selectedInvestmentAssetId, setSelectedInvestmentAssetId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<InvestmentEditDraft | null>(null);
+  const [holdingEditDraft, setHoldingEditDraft] = useState<InvestmentHoldingEditDraft | null>(null);
   const [manualName, setManualName] = useState("");
   const [manualInstitution, setManualInstitution] = useState("");
   const [manualInvestmentSubtype, setManualInvestmentSubtype] = useState<InvestmentSubtype>("stock");
@@ -710,10 +848,14 @@ export default function InvestmentsPage() {
   const [manualBalance, setManualBalance] = useState("");
   const [manualCurrency, setManualCurrency] = useState("PHP");
   const [manualMoreOpen, setManualMoreOpen] = useState(false);
-  const [selectedTab, setSelectedTab] = useState<InvestmentTab>(urlSearchParams.get("asset") ? "portfolio" : requestedTab);
+  const [selectedTab, setSelectedTab] = useState<InvestmentTab>(requestedTab);
 
   useEffect(() => {
     document.title = "Clover | Investments";
+    setIsHydrated(true);
+    if (window.location.pathname === "/investments" && window.location.search) {
+      window.history.replaceState(null, "", "/investments");
+    }
   }, []);
 
   useEffect(() => {
@@ -960,6 +1102,9 @@ export default function InvestmentsPage() {
                 ? holdingCurrentValue - holdingPurchaseValue
                 : null);
             const classification = inferInvestmentClassification({
+              subtype: INVESTMENT_SUBTYPES.includes(holding.assetType as InvestmentSubtype)
+                ? holding.assetType
+                : null,
               assetType: holding.assetType,
               name: holding.assetName,
               symbol: holding.assetSymbol,
@@ -970,6 +1115,7 @@ export default function InvestmentsPage() {
               key: `holding:${holding.id}`,
               accountId: matchingSnapshot.account?.id ?? account.id,
               assetId: holding.id,
+              source: "holding",
               name: holding.assetName,
               institution: account.institution ?? matchingSnapshot.documentImport?.institution ?? null,
               subtype: classification.subtype,
@@ -1011,6 +1157,7 @@ export default function InvestmentsPage() {
           key: account.id,
           accountId: account.id,
           assetId: account.id,
+          source: "account",
           name: preferredAssetName,
           institution: account.institution,
           subtype,
@@ -1042,6 +1189,7 @@ export default function InvestmentsPage() {
           key: `${account.id}:${assetName}`,
           accountId: account.id,
           assetId: `${account.id}:${assetName}`,
+          source: "derived",
           name: assetName,
           institution: account.institution,
           subtype: inferInvestmentSubtypeFromAssetName(assetName) ?? classification.subtype,
@@ -1412,28 +1560,35 @@ export default function InvestmentsPage() {
     [investmentAccounts]
   );
   const editingAccount = editingAccountId ? visibleInvestmentAccounts.find((account) => account.id === editingAccountId) ?? accounts.find((account) => account.id === editingAccountId) ?? null : null;
-  const selectedInvestmentAsset = selectedInvestmentAssetId
-    ? visibleInvestmentAccounts.find((account) => account.id === selectedInvestmentAssetId) ??
-      accounts.find((account) => account.id === selectedInvestmentAssetId) ??
+  const selectedPortfolioRow = selectedInvestmentAssetId
+    ? portfolioSourceRows.find((row) => row.key === selectedInvestmentAssetId) ?? null
+    : null;
+  const selectedSnapshotHolding =
+    selectedPortfolioRow?.source === "holding"
+      ? investmentSnapshots
+          .flatMap((snapshot) => snapshot.holdings)
+          .find((holding) => holding.id === selectedPortfolioRow.assetId) ?? null
+      : null;
+  const selectedInvestmentAsset = selectedPortfolioRow
+    ? visibleInvestmentAccounts.find((account) => account.id === selectedPortfolioRow.accountId) ??
+      accounts.find((account) => account.id === selectedPortfolioRow.accountId) ??
       null
     : null;
   const selectedInvestmentFieldConfigs = editingDraft ? getInvestmentFieldConfigs(editingDraft.investmentSubtype) : [];
-  const selectedInvestmentCurrentValue = selectedInvestmentAsset ? parseNullableAmount(selectedInvestmentAsset.balance) : null;
-  const selectedInvestmentPurchaseValue = selectedInvestmentAsset
-    ? parseNullableAmount(selectedInvestmentAsset.investmentCostBasis ?? selectedInvestmentAsset.investmentPrincipal)
-    : null;
+  const selectedInvestmentCurrentValue = selectedPortfolioRow?.currentValue ?? null;
+  const selectedInvestmentPurchaseValue = selectedPortfolioRow?.purchaseValue ?? null;
   const selectedInvestmentGainLoss =
     selectedInvestmentCurrentValue === null || selectedInvestmentPurchaseValue === null
       ? null
       : selectedInvestmentCurrentValue - selectedInvestmentPurchaseValue;
   const selectedInvestmentReturnPercent = getReturnPercent(selectedInvestmentCurrentValue, selectedInvestmentPurchaseValue);
-  const selectedInvestmentAssetBrand = selectedInvestmentAsset
+  const selectedInvestmentAssetBrand = selectedPortfolioRow
     ? getInvestmentAssetBrand({
-        symbol: selectedInvestmentAsset.investmentSymbol,
-        name: selectedInvestmentAsset.name,
-        subtype: inferInvestmentSubtypeFromAccount(selectedInvestmentAsset),
-        currency: selectedInvestmentAsset.currency,
-        institution: selectedInvestmentAsset.institution,
+        symbol: selectedPortfolioRow.symbol,
+        name: selectedPortfolioRow.name,
+        subtype: selectedPortfolioRow.subtype,
+        currency: selectedPortfolioRow.currency,
+        institution: selectedPortfolioRow.institution,
       })
     : null;
 
@@ -1452,6 +1607,14 @@ export default function InvestmentsPage() {
       <span className="investments-page__add-button-label">Add investment</span>
     </button>
   );
+
+  const selectInvestmentTab = (tab: InvestmentTab) => {
+    setSelectedTab(tab);
+    setSelectedInvestmentAssetId(null);
+    cancelEditingAccount();
+    setHoldingEditDraft(null);
+    window.history.replaceState(null, "", "/investments");
+  };
 
   useEffect(() => {
     const handleOpenAdd = () => {
@@ -1480,43 +1643,192 @@ export default function InvestmentsPage() {
     setEditingDraft(null);
   };
 
-  const openInvestmentAsset = (account: Account) => {
-    setSelectedInvestmentAssetId(account.id);
+  const openInvestmentAsset = (row: PortfolioDisplayRow) => {
+    setSelectedInvestmentAssetId(row.key);
     setSelectedTab("portfolio");
-    beginEditingAccount(account);
-
-    const nextParams = new URLSearchParams(urlSearchParams.toString());
-    nextParams.set("tab", "portfolio");
-    nextParams.set("asset", account.id);
-    window.history.replaceState(null, "", `/investments?${nextParams.toString()}`);
+    const account = accounts.find((item) => item.id === row.accountId);
+    if (row.source === "account" && account) {
+      beginEditingAccount(account);
+      setHoldingEditDraft(null);
+    } else if (row.source === "holding") {
+      setHoldingEditDraft({
+        assetName: row.name,
+        assetSymbol: row.symbol ?? "",
+        assetType: row.subtype ?? "other",
+        quantity: row.detail ?? "",
+        costBasis: row.purchaseValue?.toString() ?? "",
+        currentValue: row.currentValue?.toString() ?? "",
+        currency: row.currency,
+      });
+      cancelEditingAccount();
+    } else {
+      setHoldingEditDraft(null);
+      cancelEditingAccount();
+    }
+    window.history.replaceState(null, "", "/investments");
   };
 
   const closeInvestmentAsset = () => {
     setSelectedInvestmentAssetId(null);
     cancelEditingAccount();
-
-    const nextParams = new URLSearchParams(urlSearchParams.toString());
-    nextParams.delete("asset");
-    const nextQuery = nextParams.toString();
-    window.history.replaceState(null, "", nextQuery ? `/investments?${nextQuery}` : "/investments");
+    setHoldingEditDraft(null);
+    window.history.replaceState(null, "", "/investments");
   };
 
-  const focusInvestmentAssetField = (fieldKey: keyof InvestmentEditDraft) => {
+  const focusInvestmentAssetField = (fieldKey: string) => {
     window.requestAnimationFrame(() => {
       document.querySelector<HTMLElement>(`[data-investment-asset-field="${fieldKey}"]`)?.focus();
     });
   };
 
   useEffect(() => {
-    if (!selectedInvestmentAsset || editingAccountId === selectedInvestmentAsset.id) {
+    if (
+      !selectedPortfolioRow ||
+      selectedPortfolioRow.source !== "account" ||
+      !selectedInvestmentAsset ||
+      editingAccountId === selectedInvestmentAsset.id
+    ) {
       return;
     }
 
     beginEditingAccount(selectedInvestmentAsset);
-  }, [editingAccountId, selectedInvestmentAsset]);
+  }, [editingAccountId, selectedInvestmentAsset, selectedPortfolioRow]);
 
   const updateEditingDraft = (key: keyof InvestmentEditDraft, value: string) => {
     setEditingDraft((current) => (current ? { ...current, [key]: value } : current));
+  };
+
+  const updateHoldingEditDraft = (key: keyof InvestmentHoldingEditDraft, value: string) => {
+    setHoldingEditDraft((current) => (current ? { ...current, [key]: value } : current));
+  };
+
+  const applyUpdatedHolding = (updatedHolding: InvestmentSnapshotHolding) => {
+    setInvestmentSnapshots((current) =>
+      current.map((snapshot) => ({
+        ...snapshot,
+        holdings: snapshot.holdings.map((holding) =>
+          holding.id === updatedHolding.id ? { ...holding, ...updatedHolding } : holding
+        ),
+      }))
+    );
+  };
+
+  const patchPortfolioRow = async (
+    row: PortfolioDisplayRow,
+    updates: Partial<InvestmentHoldingEditDraft>
+  ) => {
+    if (!selectedWorkspaceId) {
+      throw new Error("Select a workspace first.");
+    }
+
+    if (row.source === "derived") {
+      const error = new Error("This imported activity needs a holding record before it can be edited.");
+      setMessage(error.message);
+      throw error;
+    }
+
+    setIsUpdating(true);
+    try {
+      if (row.source === "holding") {
+        const response = await fetch(`/api/investment-holdings/${row.assetId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId: selectedWorkspaceId,
+            ...updates,
+            assetName: updates.assetName?.trim(),
+            assetSymbol:
+              updates.assetSymbol === undefined ? undefined : updates.assetSymbol.trim() || null,
+            quantity:
+              updates.quantity === undefined ? undefined : parseNullableNumberInput(updates.quantity),
+            costBasis:
+              updates.costBasis === undefined ? undefined : parseNullableNumberInput(updates.costBasis),
+            currentValue:
+              updates.currentValue === undefined ? undefined : parseNullableNumberInput(updates.currentValue),
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.holding) {
+          throw new Error(payload.error ?? "Unable to update investment holding.");
+        }
+
+        applyUpdatedHolding(payload.holding as InvestmentSnapshotHolding);
+        setHoldingEditDraft((current) => (current ? { ...current, ...updates } : current));
+      } else {
+        const account = accounts.find((item) => item.id === row.accountId);
+        if (!account) {
+          throw new Error("Investment account not found.");
+        }
+
+        const response = await fetch(`/api/accounts/${account.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId: selectedWorkspaceId,
+            type: "investment",
+            source: account.source,
+            name: updates.assetName,
+            investmentSubtype: updates.assetType,
+            investmentSymbol:
+              updates.assetSymbol === undefined ? undefined : updates.assetSymbol.trim() || null,
+            investmentQuantity:
+              updates.quantity === undefined ? undefined : parseNullableNumberInput(updates.quantity),
+            investmentCostBasis:
+              updates.costBasis === undefined ? undefined : parseNullableNumberInput(updates.costBasis),
+            balance:
+              updates.currentValue === undefined ? undefined : parseNullableNumberInput(updates.currentValue),
+            currency: updates.currency,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.account) {
+          throw new Error(payload.error ?? "Unable to update investment.");
+        }
+
+        setAccounts((current) =>
+          current.map((item) => (item.id === account.id ? (payload.account as Account) : item))
+        );
+      }
+      setMessage("Investment updated.");
+    } catch (error) {
+      const nextMessage = error instanceof Error ? error.message : "Unable to update investment.";
+      setMessage(nextMessage);
+      throw error;
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const commitPortfolioRowField = async (
+    row: PortfolioDisplayRow,
+    field: PortfolioEditableField,
+    value: string
+  ) => {
+    if (field === "name") {
+      await patchPortfolioRow(row, { assetName: value });
+      return;
+    }
+    if (field === "subtype") {
+      await patchPortfolioRow(row, { assetType: value as InvestmentSubtype });
+      return;
+    }
+    if (field === "symbol") {
+      await patchPortfolioRow(row, { assetSymbol: value });
+      return;
+    }
+    if (field === "detail") {
+      await patchPortfolioRow(row, { quantity: value });
+      return;
+    }
+    await patchPortfolioRow(row, { currentValue: value });
+  };
+
+  const saveHoldingEditDraft = async () => {
+    if (!selectedPortfolioRow || selectedPortfolioRow.source !== "holding" || !holdingEditDraft) {
+      return;
+    }
+
+    await patchPortfolioRow(selectedPortfolioRow, holdingEditDraft);
   };
 
   const saveEditingAccount = async () => {
@@ -1730,7 +2042,7 @@ export default function InvestmentsPage() {
     }
   };
 
-  if (!hasLoaded) {
+  if (!isHydrated || !hasLoaded) {
     return <CloverLoadingScreen label="investments" />;
   }
 
@@ -1742,7 +2054,7 @@ export default function InvestmentsPage() {
         <AnimatedTabs
           className="investments-tabs"
           activeKey={selectedTab}
-          onChange={(key) => setSelectedTab(key as InvestmentTab)}
+          onChange={(key) => selectInvestmentTab(key as InvestmentTab)}
           tabs={visibleInvestmentTabs.map((tab) => ({
             key: tab.key,
             label: tab.label,
@@ -1800,7 +2112,7 @@ export default function InvestmentsPage() {
           <AnimatedTabs
             className="investments-tabs investments-tabs--mobile"
             activeKey={selectedTab}
-            onChange={(key) => setSelectedTab(key as InvestmentTab)}
+            onChange={(key) => selectInvestmentTab(key as InvestmentTab)}
             tabs={visibleInvestmentTabs.map((tab) => ({
               key: tab.key,
               label: tab.label,
@@ -2000,19 +2312,21 @@ export default function InvestmentsPage() {
           </>
         ) : selectedTab === "portfolio" ? (
           <>
-            <section className="investments-portfolio-table glass">
+            <section className="investments-portfolio-table">
               <div className="investments-portfolio-table__header">
                 <div className="investments-filters investments-filters--portfolio">
-                  <label className="investments-filters__search">
-                    Search
+                  <label className="investments-filters__search" aria-label="Search portfolio">
+                    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                      <circle cx="8.5" cy="8.5" r="5.25" stroke="currentColor" strokeWidth="1.5" />
+                      <path d="m12.5 12.5 4 4" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
+                    </svg>
                     <input
                       value={investmentSearch}
                       onChange={(event) => setInvestmentSearch(event.target.value)}
-                      placeholder="Search name, institution"
+                      placeholder="Search"
                     />
                   </label>
-                  <label>
-                    Subtype
+                  <label aria-label="Filter by investment type">
                     <select value={investmentSubtypeFilter} onChange={(event) => setInvestmentSubtypeFilter(event.target.value as InvestmentSubtype | "all")}>
                       <option value="all">All subtypes</option>
                       {INVESTMENT_SUBTYPES.map((subtype) => (
@@ -2022,8 +2336,7 @@ export default function InvestmentsPage() {
                       ))}
                     </select>
                   </label>
-                  <label>
-                    Sort by
+                  <label aria-label="Sort portfolio">
                     <select value={investmentSortKey} onChange={(event) => setInvestmentSortKey(event.target.value as InvestmentSortKey)}>
                       {INVESTMENT_SORT_OPTIONS.map((option) => (
                         <option key={option.key} value={option.key}>
@@ -2044,37 +2357,42 @@ export default function InvestmentsPage() {
                     <span role="columnheader">Key detail</span>
                     <span role="columnheader">Current value</span>
                     <span role="columnheader">Gain / loss</span>
+                    <span role="columnheader" aria-label="Open details" />
                   </div>
                   {portfolioTableRows.map((row) => {
                     return (
                       <div key={row.key} className="investments-portfolio-table__row" role="row">
                         <div className="investments-portfolio-table__cell investments-portfolio-table__cell--asset">
-                          <button
-                            className="investments-portfolio-table__asset-button"
-                            type="button"
-                            onClick={() => {
-                              const account = investmentAccounts.find((item) => item.id === row.accountId);
-                              if (account) openInvestmentAsset(account);
-                            }}
-                            aria-label={`Open ${row.name}`}
-                          >
-                            <AccountBrandMark
-                              accountBrand={getInvestmentAssetBrand({
-                                symbol: row.symbol,
-                                name: row.name,
-                                subtype: row.subtype,
-                                currency: row.currency,
-                                institution: row.institution,
-                              })}
-                              label={row.symbol ?? row.name}
-                            />
-                            <div>
-                              <strong>{row.name}</strong>
-                            </div>
-                          </button>
+                          <AccountBrandMark
+                            accountBrand={getInvestmentAssetBrand({
+                              symbol: row.symbol,
+                              name: row.name,
+                              subtype: row.subtype,
+                              currency: row.currency,
+                              institution: row.institution,
+                            })}
+                            label={row.symbol ?? row.name}
+                          />
+                          <PortfolioInlineEdit
+                            value={row.name}
+                            displayValue={row.name}
+                            ariaLabel={`Edit name for ${row.name}`}
+                            className="investments-portfolio-inline-edit--name"
+                            onCommit={(value) => commitPortfolioRowField(row, "name", value)}
+                          />
                         </div>
                         <div className="investments-portfolio-table__cell">
-                          <span>{row.subtype ? getInvestmentSubtypeLabel(row.subtype) : ""}</span>
+                          <PortfolioInlineEdit
+                            value={row.subtype ?? "other"}
+                            displayValue={row.subtype ? getInvestmentSubtypeLabel(row.subtype) : "Other"}
+                            ariaLabel={`Edit type for ${row.name}`}
+                            kind="select"
+                            options={INVESTMENT_SUBTYPES.map((subtype) => ({
+                              value: subtype,
+                              label: getInvestmentSubtypeLabel(subtype),
+                            }))}
+                            onCommit={(value) => commitPortfolioRowField(row, "subtype", value)}
+                          />
                           {row.classification.source === "inferred" ? (
                             <small className="investments-classification-badge" title={row.classification.reason}>
                               Suggested · {row.classification.confidence}%
@@ -2082,17 +2400,49 @@ export default function InvestmentsPage() {
                           ) : null}
                         </div>
                         <div className="investments-portfolio-table__cell">
-                          {row.symbol ?? ""}
+                          <PortfolioInlineEdit
+                            value={row.symbol ?? ""}
+                            displayValue={row.symbol ?? ""}
+                            ariaLabel={`Edit symbol for ${row.name}`}
+                            onCommit={(value) => commitPortfolioRowField(row, "symbol", value)}
+                          />
                         </div>
                         <div className="investments-portfolio-table__cell">
-                          {row.detail ?? ""}
+                          {isMarketInvestmentSubtype(row.subtype) ? (
+                            <PortfolioInlineEdit
+                              value={row.detail ?? ""}
+                              displayValue={row.detail ?? ""}
+                              ariaLabel={`Edit units for ${row.name}`}
+                              kind="number"
+                              onCommit={(value) => commitPortfolioRowField(row, "detail", value)}
+                            />
+                          ) : (
+                            row.detail ?? ""
+                          )}
                         </div>
                         <div className="investments-portfolio-table__cell">
-                          {row.currentValue === null ? "" : formatInvestmentAmount(row.currentValue, row.currency)}
+                          <PortfolioInlineEdit
+                            value={row.currentValue?.toString() ?? ""}
+                            displayValue={row.currentValue === null ? "" : formatInvestmentAmount(row.currentValue, row.currency)}
+                            ariaLabel={`Edit current value for ${row.name}`}
+                            kind="number"
+                            className="investments-portfolio-inline-edit--amount"
+                            onCommit={(value) => commitPortfolioRowField(row, "currentValue", value)}
+                          />
                         </div>
                         <div className={`investments-portfolio-table__cell ${row.gainLoss === null ? "" : row.gainLoss >= 0 ? "is-positive" : "is-negative"}`}>
                           {row.gainLoss === null ? "" : `${row.gainLoss >= 0 ? "+" : "-"}${formatInvestmentAmount(Math.abs(row.gainLoss), row.currency)}`}
                         </div>
+                        <button
+                          className="investments-portfolio-table__chevron"
+                          type="button"
+                          onClick={() => openInvestmentAsset(row)}
+                          aria-label={`Open details for ${row.name}`}
+                        >
+                          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                            <path d="m8 5 5 5-5 5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
+                          </svg>
+                        </button>
                       </div>
                     );
                   })}
@@ -2103,10 +2453,6 @@ export default function InvestmentsPage() {
                   <p>{portfolioSourceRows.length > 0 && (activeInvestmentFilters || portfolioCurrencyFilter !== "all") ? "Try another currency or reset the filters." : "Add an investment to start building your portfolio."}</p>
                 </div>
               )}
-              <div className="investments-portfolio-table__total" aria-label="Portfolio total value">
-                <span>Total value</span>
-                <strong>{formatInvestmentAggregate(portfolioTableTotals.currentValue, visiblePortfolioRows)}</strong>
-              </div>
             </section>
           </>
         ) : selectedTab === "market" ? (
@@ -2263,10 +2609,19 @@ export default function InvestmentsPage() {
         )}
       </div>
 
-        {selectedInvestmentAsset && editingDraft ? (
-          <div className="modal-backdrop modal-backdrop--investments-add" role="presentation" onClick={closeInvestmentAsset}>
+        {selectedTab === "portfolio" ? (
+          <div className="investments-portfolio-table__total" aria-label="Portfolio total value">
+            <span>Total value</span>
+            <strong>{formatInvestmentAggregate(portfolioTableTotals.currentValue, visiblePortfolioRows)}</strong>
+          </div>
+        ) : null}
+
+        {selectedPortfolioRow &&
+        selectedInvestmentAsset &&
+        (editingDraft || holdingEditDraft || selectedPortfolioRow.source === "derived") ? (
+          <div className="modal-backdrop modal-backdrop--investment-detail" role="presentation" onClick={closeInvestmentAsset}>
             <section
-              className="modal-card modal-card--wide investments-asset-detail-modal glass"
+              className="modal-card investments-asset-detail-modal investments-asset-detail-modal--sidepanel glass"
               role="dialog"
               aria-modal="true"
               aria-labelledby="investment-asset-detail-title"
@@ -2275,7 +2630,7 @@ export default function InvestmentsPage() {
               <div className="modal-head">
                 <div>
                   <p className="eyebrow">Asset details</p>
-                  <h4 id="investment-asset-detail-title">{selectedInvestmentAsset.name}</h4>
+                  <h4 id="investment-asset-detail-title">{selectedPortfolioRow.name}</h4>
                 </div>
                 <button className="icon-button" type="button" onClick={closeInvestmentAsset} aria-label="Close asset details">
                   ×
@@ -2287,13 +2642,17 @@ export default function InvestmentsPage() {
                   <AccountBrandMark accountBrand={selectedInvestmentAssetBrand} label={selectedInvestmentAssetBrand.label} />
                 ) : null}
                 <div>
-                  <strong>{selectedInvestmentAsset.name}</strong>
-                  {selectedInvestmentAsset.institution || selectedInvestmentAsset.investmentSymbol ? (
+                  <strong>{selectedPortfolioRow.name}</strong>
+                  {selectedPortfolioRow.institution || selectedPortfolioRow.symbol ? (
                     <span>
-                      {[selectedInvestmentAsset.institution, selectedInvestmentAsset.investmentSymbol].filter(Boolean).join(" · ")}
+                      {[selectedPortfolioRow.institution, selectedPortfolioRow.symbol].filter(Boolean).join(" · ")}
                     </span>
                   ) : null}
-                  <span>{formatValuationFreshness(new Date(selectedInvestmentAsset.updatedAt))}</span>
+                  <span>
+                    {formatValuationFreshness(
+                      new Date(selectedSnapshotHolding?.updatedAt ?? selectedInvestmentAsset.updatedAt)
+                    )}
+                  </span>
                 </div>
               </div>
 
@@ -2302,21 +2661,25 @@ export default function InvestmentsPage() {
                   <button
                     className="status-card accounts-detail__investment-field"
                     type="button"
-                    onClick={() => focusInvestmentAssetField("investmentSubtype")}
+                    onClick={() =>
+                      focusInvestmentAssetField(selectedPortfolioRow.source === "holding" ? "assetType" : "investmentSubtype")
+                    }
                   >
                     <span>Subtype</span>
-                    <strong>{getInvestmentSubtypeLabel(editingDraft.investmentSubtype)}</strong>
+                    <strong>{getInvestmentSubtypeLabel(selectedPortfolioRow.subtype ?? "other")}</strong>
                   </button>
                   <button
                     className="status-card accounts-detail__investment-field"
                     type="button"
-                    onClick={() => focusInvestmentAssetField("balance")}
+                    onClick={() =>
+                      focusInvestmentAssetField(selectedPortfolioRow.source === "holding" ? "currentValue" : "balance")
+                    }
                   >
                     <span>Recorded current value</span>
                     <strong>
                       {selectedInvestmentCurrentValue === null
                         ? "Not set"
-                        : formatInvestmentAmount(selectedInvestmentCurrentValue, selectedInvestmentAsset.currency)}
+                        : formatInvestmentAmount(selectedInvestmentCurrentValue, selectedPortfolioRow.currency)}
                     </strong>
                   </button>
                   <button
@@ -2324,15 +2687,19 @@ export default function InvestmentsPage() {
                     type="button"
                     onClick={() =>
                       focusInvestmentAssetField(
-                        isFixedIncomeInvestmentSubtype(editingDraft.investmentSubtype) ? "investmentPrincipal" : "investmentCostBasis"
+                        selectedPortfolioRow.source === "holding"
+                          ? "costBasis"
+                          : isFixedIncomeInvestmentSubtype(editingDraft?.investmentSubtype ?? "other")
+                            ? "investmentPrincipal"
+                            : "investmentCostBasis"
                       )
                     }
                   >
-                    <span>{getInvestmentPurchaseSummaryLabel(editingDraft.investmentSubtype)}</span>
+                    <span>{getInvestmentPurchaseSummaryLabel(selectedPortfolioRow.subtype ?? "other")}</span>
                     <strong>
                       {selectedInvestmentPurchaseValue === null
                         ? "Not set"
-                        : formatInvestmentAmount(selectedInvestmentPurchaseValue, selectedInvestmentAsset.currency)}
+                        : formatInvestmentAmount(selectedInvestmentPurchaseValue, selectedPortfolioRow.currency)}
                     </strong>
                   </button>
                   <button
@@ -2340,7 +2707,11 @@ export default function InvestmentsPage() {
                     type="button"
                     onClick={() =>
                       focusInvestmentAssetField(
-                        isFixedIncomeInvestmentSubtype(editingDraft.investmentSubtype) ? "investmentPrincipal" : "investmentCostBasis"
+                        selectedPortfolioRow.source === "holding"
+                          ? "costBasis"
+                          : isFixedIncomeInvestmentSubtype(editingDraft?.investmentSubtype ?? "other")
+                            ? "investmentPrincipal"
+                            : "investmentCostBasis"
                       )
                     }
                   >
@@ -2348,7 +2719,7 @@ export default function InvestmentsPage() {
                     <strong>
                       {selectedInvestmentGainLoss === null
                         ? "Not set"
-                        : formatInvestmentAmount(selectedInvestmentGainLoss, selectedInvestmentAsset.currency)}
+                        : formatInvestmentAmount(selectedInvestmentGainLoss, selectedPortfolioRow.currency)}
                     </strong>
                   </button>
                 </div>
@@ -2359,6 +2730,100 @@ export default function InvestmentsPage() {
                 ) : null}
               </section>
 
+              {selectedPortfolioRow.source === "holding" && holdingEditDraft ? (
+                <form
+                  className="accounts-inline-edit investments-asset-detail-modal__form"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void saveHoldingEditDraft();
+                  }}
+                >
+                  <div className="accounts-inline-edit__grid">
+                    <label>
+                      Holding name
+                      <input
+                        data-investment-asset-field="assetName"
+                        value={holdingEditDraft.assetName}
+                        onChange={(event) => updateHoldingEditDraft("assetName", event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Symbol
+                      <input
+                        data-investment-asset-field="assetSymbol"
+                        value={holdingEditDraft.assetSymbol}
+                        onChange={(event) => updateHoldingEditDraft("assetSymbol", event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Investment subtype
+                      <select
+                        data-investment-asset-field="assetType"
+                        value={holdingEditDraft.assetType}
+                        onChange={(event) =>
+                          updateHoldingEditDraft("assetType", event.target.value as InvestmentSubtype)
+                        }
+                      >
+                        {INVESTMENT_SUBTYPES.map((subtype) => (
+                          <option key={subtype} value={subtype}>
+                            {getInvestmentSubtypeLabel(subtype)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Current value
+                      <input
+                        data-investment-asset-field="currentValue"
+                        value={holdingEditDraft.currentValue}
+                        onChange={(event) => updateHoldingEditDraft("currentValue", event.target.value)}
+                        inputMode="decimal"
+                      />
+                    </label>
+                    <label>
+                      Purchase value
+                      <input
+                        data-investment-asset-field="costBasis"
+                        value={holdingEditDraft.costBasis}
+                        onChange={(event) => updateHoldingEditDraft("costBasis", event.target.value)}
+                        inputMode="decimal"
+                      />
+                    </label>
+                    <label>
+                      Units
+                      <input
+                        data-investment-asset-field="quantity"
+                        value={holdingEditDraft.quantity}
+                        onChange={(event) => updateHoldingEditDraft("quantity", event.target.value)}
+                        inputMode="decimal"
+                      />
+                    </label>
+                    <div className="accounts-form-currency-field">
+                      <span className="sr-only">Currency</span>
+                      <CurrencySelector
+                        value={holdingEditDraft.currency}
+                        onChange={(value) => updateHoldingEditDraft("currency", value)}
+                        options={currencyCatalogCodes}
+                        ariaLabel="Select investment currency"
+                        className="accounts-form-currency-field__selector"
+                        buttonClassName="accounts-form-currency-field__button"
+                        menuClassName="accounts-form-currency-field__menu"
+                        optionClassName="accounts-form-currency-field__option"
+                        menuAlignment="end"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="modal-actions investments-asset-detail-modal__actions">
+                    <button className="button button-secondary button-small" type="button" onClick={closeInvestmentAsset} disabled={isUpdating}>
+                      Close
+                    </button>
+                    <button className="button button-primary button-small" type="submit" disabled={isUpdating}>
+                      {isUpdating ? "Saving..." : "Save changes"}
+                    </button>
+                  </div>
+                </form>
+              ) : editingDraft ? (
               <form
                 className="accounts-inline-edit investments-asset-detail-modal__form"
                 onSubmit={(event) => {
@@ -2462,6 +2927,12 @@ export default function InvestmentsPage() {
                   </button>
                 </div>
               </form>
+              ) : (
+                <div className="investments-portfolio-table__empty">
+                  <strong>This activity has not been promoted to an editable holding yet.</strong>
+                  <p>The source transaction remains available in Transactions for editing.</p>
+                </div>
+              )}
             </section>
           </div>
         ) : null}

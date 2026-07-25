@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { getInvestmentAssetLogoCandidates } from "@/lib/investment-assets";
+import { getInvestmentAssetBrand, getInvestmentAssetLogoCandidates } from "@/lib/investment-assets";
 import { inferInvestmentClassification } from "@/lib/investments";
 
 const classificationCases = [
@@ -41,4 +41,13 @@ const logoCandidates = getInvestmentAssetLogoCandidates({
 assert.equal(logoCandidates.length, 1, "Investment assets should use one stable local fallback");
 assert.match(logoCandidates[0] ?? "", /^data:image\/svg\+xml,/);
 
-console.log(`Investment regression passed: ${classificationCases.length + 3} checks.`);
+const hsbcBrand = getInvestmentAssetBrand({
+  name: "HSBC Savings",
+  institution: "HSBC",
+  subtype: "other",
+  currency: "PHP",
+});
+assert.equal(hsbcBrand.logoFit, "contain", "Institution investment marks must show the complete HSBC logo");
+assert.ok(hsbcBrand.logoSrcs.length > 0, "Institution investment marks should retain provider logo candidates");
+
+console.log(`Investment regression passed: ${classificationCases.length + 5} checks.`);

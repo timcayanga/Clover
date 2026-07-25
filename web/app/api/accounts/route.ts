@@ -196,6 +196,7 @@ const loadInvestmentSnapshotsForWorkspace = async (workspaceId: string) => {
           currency: true,
           status: true,
           confidence: true,
+          updatedAt: true,
         },
       },
     },
@@ -224,6 +225,7 @@ const loadInvestmentSnapshotsForWorkspace = async (workspaceId: string) => {
       currentValue: holding.currentValue?.toString() ?? null,
       gainLossValue: holding.gainLossValue?.toString() ?? null,
       gainLossPercent: holding.gainLossPercent?.toString() ?? null,
+      updatedAt: holding.updatedAt.toISOString(),
     })),
   }));
 };

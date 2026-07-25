@@ -72,6 +72,9 @@ export const getInvestmentAssetBrand = (params: InvestmentAssetBrandInput): Acco
     logoSrc: null,
     logoSrcs,
     fallbackIconSrc: assetIconPath,
+    logoBackground: shouldPreferInstitutionLogo ? institutionBrand?.logoBackground : undefined,
+    logoFit: shouldPreferInstitutionLogo ? institutionBrand?.logoFit ?? "contain" : "contain",
+    logoPadding: shouldPreferInstitutionLogo ? institutionBrand?.logoPadding : undefined,
     accent: isCrypto ? "#22c55e" : isRealWorldAsset ? "#d69e2e" : isFixedIncome ? "#2563eb" : "#14b8a6",
     background: isCrypto
       ? "linear-gradient(135deg, rgba(34, 197, 94, 0.16), rgba(14, 165, 233, 0.06))"
