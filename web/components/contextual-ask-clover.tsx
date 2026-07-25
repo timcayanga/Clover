@@ -185,7 +185,7 @@ export function ContextualAskClover({ context, planTier = "unknown" }: Contextua
         onClick={() => setIsOpen((current) => !current)}
       >
         <Image
-          src="/assets/3d%20icons/adviser.png?v=20260725b"
+          src="/assets/3d%20icons/adviser.png?v=20260726a"
           alt=""
           width={96}
           height={96}
@@ -216,7 +216,7 @@ export function ContextualAskClover({ context, planTier = "unknown" }: Contextua
               >
                 <header className="contextual-ask-clover__panel-header">
                   <div className="contextual-ask-clover__panel-title">
-                    <Image src="/assets/3d%20icons/adviser.png?v=20260725b" alt="" width={96} height={96} aria-hidden="true" />
+                    <Image src="/assets/3d%20icons/adviser.png?v=20260726a" alt="" width={96} height={96} aria-hidden="true" />
                     <div>
                       <p className="eyebrow">Ask Clover</p>
                       <h2 id={titleId}>{copy.title}</h2>
