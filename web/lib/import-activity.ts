@@ -38,6 +38,62 @@ export type ImportActivityState = ImportActivitySnapshot;
 
 export const importActivityStorageKey = "clover.import.activity.v2";
 export const importActivityEventName = "clover:import-activity-changed";
+const maxPersistedPreviewTransactions = 25;
+const maxPersistedAccountSummaries = 100;
+const maxPersistedTextLength = 1_000;
+
+let inMemoryImportActivity: ImportActivitySnapshot | null = null;
+
+const truncatePersistedText = (value: string | null, maxLength = maxPersistedTextLength) => {
+  if (!value || value.length <= maxLength) {
+    return value;
+  }
+
+  return value.slice(0, maxLength);
+};
+
+const compactSnapshotForStorage = (
+  snapshot: ImportActivitySnapshot,
+  options: { minimal?: boolean } = {}
+): ImportActivitySnapshot => {
+  const summary = snapshot.summary
+    ? {
+        ...snapshot.summary,
+        fileName: truncatePersistedText(snapshot.summary.fileName, 300) ?? "",
+        accountName: truncatePersistedText(snapshot.summary.accountName, 300),
+        institution: truncatePersistedText(snapshot.summary.institution, 300),
+        accountNumber: truncatePersistedText(snapshot.summary.accountNumber ?? null, 120),
+        accountSummaries: options.minimal
+          ? undefined
+          : snapshot.summary.accountSummaries?.slice(0, maxPersistedAccountSummaries).map((account) => ({
+              ...account,
+              accountName: truncatePersistedText(account.accountName, 300),
+              institution: truncatePersistedText(account.institution, 300),
+              accountNumber: truncatePersistedText(account.accountNumber, 120),
+            })),
+        previewTransactions: options.minimal
+          ? undefined
+          : snapshot.summary.previewTransactions?.slice(0, maxPersistedPreviewTransactions).map((transaction) => ({
+              ...transaction,
+              accountName: truncatePersistedText(transaction.accountName, 300) ?? "",
+              categoryName: truncatePersistedText(transaction.categoryName, 300),
+              merchantRaw: truncatePersistedText(transaction.merchantRaw, 500) ?? "",
+              merchantClean: truncatePersistedText(transaction.merchantClean, 500),
+              description: truncatePersistedText(transaction.description, 500),
+            })),
+      }
+    : null;
+
+  return {
+    ...snapshot,
+    fileName: truncatePersistedText(snapshot.fileName, 300),
+    detail: truncatePersistedText(snapshot.detail) ?? "",
+    summary,
+    errorMessage: truncatePersistedText(snapshot.errorMessage),
+    errorTitle: truncatePersistedText(snapshot.errorTitle, 300),
+    errorNextSteps: snapshot.errorNextSteps?.slice(0, 8).map((step) => truncatePersistedText(step, 500) ?? "") ?? null,
+  };
+};
 
 const getLocalStorage = () => {
   if (typeof window === "undefined") {
@@ -68,12 +124,12 @@ const readSnapshotFromStorage = (storage: Storage | null): ImportActivitySnapsho
     return null;
   }
 
-  const raw = storage.getItem(importActivityStorageKey);
-  if (!raw) {
-    return null;
-  }
-
   try {
+    const raw = storage.getItem(importActivityStorageKey);
+    if (!raw) {
+      return null;
+    }
+
     const parsed = JSON.parse(raw) as Partial<ImportActivitySnapshot>;
     if (!parsed || typeof parsed !== "object") {
       return null;
@@ -137,7 +193,7 @@ const readSnapshotFromStorage = (storage: Storage | null): ImportActivitySnapsho
 };
 
 export const readImportActivity = (): ImportActivitySnapshot | null => {
-  return readSnapshotFromStorage(getLocalStorage()) ?? readSnapshotFromStorage(getSessionStorage());
+  return inMemoryImportActivity ?? readSnapshotFromStorage(getLocalStorage()) ?? readSnapshotFromStorage(getSessionStorage());
 };
 
 export const importActivityHasCompletedRows = (activity: ImportActivitySnapshot | null) => {
@@ -246,12 +302,31 @@ export const getImportActivityTimingSummary = (activity: ImportActivitySnapshot 
 };
 
 const writeSnapshotToStorage = (snapshot: ImportActivitySnapshot) => {
-  const serialized = JSON.stringify(snapshot);
   const localStorageRef = getLocalStorage();
   const sessionStorageRef = getSessionStorage();
+  const compactSnapshot = compactSnapshotForStorage(snapshot);
+  const serialized = JSON.stringify(compactSnapshot);
+  const minimalSerialized = JSON.stringify(compactSnapshotForStorage(snapshot, { minimal: true }));
 
-  localStorageRef?.setItem(importActivityStorageKey, serialized);
-  sessionStorageRef?.setItem(importActivityStorageKey, serialized);
+  for (const storage of [localStorageRef, sessionStorageRef]) {
+    if (!storage) {
+      continue;
+    }
+
+    try {
+      storage.setItem(importActivityStorageKey, serialized);
+    } catch {
+      // A previous import may have filled this origin's storage. Remove only
+      // Clover's activity payload and retry with the summary-only snapshot.
+      try {
+        storage.removeItem(importActivityStorageKey);
+        storage.setItem(importActivityStorageKey, minimalSerialized);
+      } catch {
+        // Import activity persistence is best-effort. The in-memory snapshot
+        // still keeps the current page responsive and fully up to date.
+      }
+    }
+  }
 };
 
 const broadcastImportActivityChange = () => {
@@ -284,6 +359,7 @@ export const setImportActivity = (
     timing: snapshot.timing ?? null,
     updatedAt: "updatedAt" in snapshot && Number.isFinite(Number(snapshot.updatedAt)) ? Number(snapshot.updatedAt) : Date.now(),
   };
+  inMemoryImportActivity = nextSnapshot;
   writeSnapshotToStorage(nextSnapshot);
   broadcastImportActivityChange();
 };
@@ -295,8 +371,14 @@ export const clearImportActivity = () => {
 
   const localStorageRef = getLocalStorage();
   const sessionStorageRef = getSessionStorage();
-  localStorageRef?.removeItem(importActivityStorageKey);
-  sessionStorageRef?.removeItem(importActivityStorageKey);
+  inMemoryImportActivity = null;
+  for (const storage of [localStorageRef, sessionStorageRef]) {
+    try {
+      storage?.removeItem(importActivityStorageKey);
+    } catch {
+      // Storage may be unavailable or full in restricted browser contexts.
+    }
+  }
   broadcastImportActivityChange();
 };
 
@@ -314,6 +396,7 @@ export const subscribeImportActivity = (listener: () => void) => {
       return;
     }
 
+    inMemoryImportActivity = readSnapshotFromStorage(event.storageArea);
     listener();
   };
 

@@ -494,7 +494,7 @@ const main = async () => {
   );
   assert.match(
     importProcessorSource,
-    /const confirmationReadSnapshotPromise = Promise\.all\(\[/,
+    /const confirmationInputsPromise = \(async \(\) => \{[\s\S]{0,7000}const confirmationReadSnapshotPromise = confirmationInputsPromise\.then/,
     "Confirmation should start matching reads before it enters the statement transaction."
   );
   assert.match(
