@@ -1780,6 +1780,87 @@ const pickCategoryAlignedNormalizedName = (params: {
 
 export const defaultCategoryForType = (type: TransactionType) => CATEGORY_FALLBACKS[type];
 
+const normalizeImportedCategoryKey = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+
+const IMPORTED_CATEGORY_ALIASES: Record<string, string> = {
+  "bills and utilities": "Bills & Utilities",
+  bills: "Bills & Utilities",
+  utilities: "Bills & Utilities",
+  utility: "Bills & Utilities",
+  "food and groceries": "Food & Dining",
+  groceries: "Food & Dining",
+  grocery: "Food & Dining",
+  food: "Food & Dining",
+  dining: "Food & Dining",
+  restaurants: "Food & Dining",
+  meals: "Food & Dining",
+  transportation: "Transport",
+  transport: "Transport",
+  "transport and travel": "Travel & Lifestyle",
+  travel: "Travel & Lifestyle",
+  "travel and lifestyle": "Travel & Lifestyle",
+  rent: "Housing",
+  rental: "Housing",
+  mortgage: "Housing",
+  subscriptions: "Subscriptions",
+  subscription: "Subscriptions",
+  "gifts and donations": "Gifts & Donations",
+  gifts: "Gifts & Donations",
+  donations: "Gifts & Donations",
+  charity: "Gifts & Donations",
+  education: "Education",
+  tuition: "Education",
+  school: "Education",
+  shopping: "Shopping",
+  retail: "Shopping",
+  merchandise: "Shopping",
+  "health and wellness": "Health & Wellness",
+  healthcare: "Health & Wellness",
+  medical: "Health & Wellness",
+  pharmacy: "Health & Wellness",
+  "cash and atm": "Cash & ATM",
+  atm: "Cash & ATM",
+  "cash withdrawal": "Cash & ATM",
+  "cash deposit": "Cash & ATM",
+  financial: "Financial",
+  "bank fees": "Financial",
+  fees: "Financial",
+  interest: "Financial",
+  taxes: "Financial",
+  income: "Income",
+  salary: "Income",
+  payroll: "Income",
+  "interest earned": "Income",
+  transfers: "Transfers",
+  transfer: "Transfers",
+  "internal transfer": "Transfers",
+  other: "Other",
+  misc: "Other",
+  miscellaneous: "Other",
+};
+
+/** Maps common statement labels to Clover categories while keeping the source label in rawPayload. */
+export const mapImportedCategoryToCloverCategory = (
+  categoryName: string | null | undefined,
+  type: TransactionType = "expense"
+) => {
+  const sourceCategoryName = categoryName?.trim() ?? "";
+  if (!sourceCategoryName) return "";
+
+  const normalizedSourceCategoryName = normalizeImportedCategoryKey(sourceCategoryName);
+  if (normalizedSourceCategoryName === "reimbursement") {
+    return type === "income" ? "Income" : "Other";
+  }
+
+  return IMPORTED_CATEGORY_ALIASES[normalizedSourceCategoryName] ?? sourceCategoryName;
+};
+
 export const detectInstitutionFromText = (text: string | null | undefined) => {
   const normalized = normalizeWhitespace(String(text ?? ""));
   for (const institution of KNOWN_INSTITUTIONS) {
@@ -3367,7 +3448,9 @@ export const resolveParsedTransactionCategoryName = (params: {
   description?: string | null;
   rawPayload?: unknown;
 }) => {
-  const categoryName = params.categoryName?.trim() || defaultCategoryForType(params.type ?? "expense");
+  const categoryName =
+    mapImportedCategoryToCloverCategory(params.categoryName, params.type ?? "expense") ||
+    defaultCategoryForType(params.type ?? "expense");
   // Parsed notes can be assigned a generic shopping/bills category by the
   // vision model even when their title or itemized evidence is clearly food.
   // This path is used only while creating unconfirmed parsed rows; confirmed
@@ -3484,6 +3567,8 @@ export const buildParsedTransactionInsertData = async (params: {
         ...(row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
           ? (row.rawPayload as Record<string, unknown>)
           : {}),
+        sourceCategoryName: typeof row.categoryName === "string" ? row.categoryName.trim() || null : null,
+        normalizedCategoryName: categoryName,
         sourceRowIndex: index + 1,
       } as Prisma.InputJsonValue;
     }
@@ -5630,6 +5715,11 @@ export const enrichParsedRowsWithTraining = async (params: {
           merchantTokens: learned.merchantTokens,
           categoryReason: shouldKeepParserCategory ? "parser-category-preserved" : learned.categoryReason,
           categorySource: learnedCategorySource,
+          sourceCategoryName: originalParserCategoryName || null,
+          normalizedCategoryName: parserCategoryName,
+          categoryMappingApplied:
+            Boolean(originalParserCategoryName) &&
+            normalizeMerchantText(originalParserCategoryName) !== normalizeMerchantText(parserCategoryName),
           learnedCategoryName: learnedCategoryName || null,
           repairedCategoryName: repairedCategory?.categoryName ?? null,
           repairedCategoryReason: repairedCategory?.reason ?? null,
