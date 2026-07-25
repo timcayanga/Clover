@@ -1829,29 +1829,6 @@ const transactionsLayoutStyle = {
   minHeight: 0,
 } as const;
 
-const transactionsToolbarSearchStyle = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "8px",
-  height: "32px",
-  padding: "0 10px",
-  borderRadius: "999px",
-  border: "1px solid rgba(219, 227, 232, 0.9)",
-  background: "rgba(255, 255, 255, 0.96)",
-  boxShadow: "var(--shadow-soft)",
-  minWidth: "160px",
-  maxWidth: "180px",
-  flex: "0 1 180px",
-} as const;
-
-const transactionsToolbarSearchCompactStyle = {
-  ...transactionsToolbarSearchStyle,
-  width: "min(160px, 34vw)",
-  minWidth: "96px",
-  maxWidth: "160px",
-  flex: "0 1 auto",
-} as const;
-
 const transactionsShellActionsStyle = {
   display: "flex",
   alignItems: "center",
@@ -2182,7 +2159,6 @@ function TransactionsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlSearchParams = useMemo(() => searchParams ?? new URLSearchParams(), [searchParams]);
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const manualNameInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const addMenuPanelRef = useRef<HTMLDivElement>(null);
@@ -2283,22 +2259,14 @@ function TransactionsPageContent() {
   const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
   const [merchantRenameSuggestion, setMerchantRenameSuggestion] = useState<MerchantRenameSuggestion | null>(null);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [importActivitySnapshot, setImportActivitySnapshot] = useState<ImportActivitySnapshot | null>(() => readImportActivity());
   const canceledImportWorkspaceIdsRef = useRef(new Set<string>());
-  const mobileSearchInputRef = useRef<HTMLInputElement | null>(null);
   const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
   const searchText = useMemo(() => normalizeTransactionSearch(query), [query]);
 
   useEffect(() => {
     transactionsRef.current = transactions;
   }, [transactions]);
-  useEffect(() => {
-    if (mobileSearchOpen) {
-      mobileSearchInputRef.current?.focus();
-      mobileSearchInputRef.current?.select();
-    }
-  }, [mobileSearchOpen]);
   useEffect(() => {
     setImportActivitySnapshot(readImportActivity());
     return subscribeImportActivity(() => {
@@ -5158,12 +5126,6 @@ function TransactionsPageContent() {
       }
 
       const key = event.key.toLowerCase();
-      if (key === "/") {
-        event.preventDefault();
-        searchInputRef.current?.focus();
-        return;
-      }
-
       if (key === "f") {
         event.preventDefault();
         toggleFiltersPanel();
@@ -6905,21 +6867,6 @@ function TransactionsPageContent() {
     </div>
   ) : (
     <div className="transactions-shell-actions" style={transactionsShellActionsStyle}>
-      <label className="transactions-toolbar-search" style={transactionsToolbarSearchStyle}>
-        <span className="transactions-toolbar-search__icon" aria-hidden="true">
-          <ActionIcon name="search" />
-        </span>
-        <span className="sr-only">Search transactions</span>
-        <input
-          ref={searchInputRef}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search"
-          aria-label="Search transactions"
-          aria-keyshortcuts="/"
-        />
-      </label>
-
       <CurrencySelector
         value={currencyFilter}
         onChange={(next) => setCurrencyFilter(next && next.toLowerCase() !== "all" ? formatCurrencyCode(next) : "")}
@@ -6996,18 +6943,6 @@ function TransactionsPageContent() {
       </button>
     </div>
   );
-  const transactionsMobileLeadingActions = isCompactViewport ? (
-    <button
-      className="button button-secondary button-small transactions-search-trigger transactions-mobile-search-trigger"
-      type="button"
-      onClick={() => setMobileSearchOpen(true)}
-      aria-label="Search transactions"
-      title="Search transactions"
-    >
-      <ActionIcon name="search" />
-    </button>
-  ) : null;
-
   useEffect(() => {
     if (!selectedWorkspaceId || !isWorkspaceDataReady) {
       return;
@@ -7051,43 +6986,6 @@ function TransactionsPageContent() {
       title="Transactions"
       actions={transactionsShellActions}
     >
-      {mobileSearchOpen && typeof document !== "undefined"
-        ? createPortal(
-            <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={() => setMobileSearchOpen(false)}>
-              <section
-                className="modal-card search-modal glass"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="transactions-mobile-search-title"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="modal-head">
-                  <div>
-                    <p className="eyebrow">Search</p>
-                    <h4 id="transactions-mobile-search-title">Search transactions</h4>
-                  </div>
-                  <button className="icon-button" type="button" onClick={() => setMobileSearchOpen(false)} aria-label="Close search">
-                    ×
-                  </button>
-                </div>
-                <div className="search-modal__body">
-                  <label className="search-modal__field">
-                    <span className="sr-only">Search transactions</span>
-                    <input
-                      ref={mobileSearchInputRef}
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                      placeholder="Search"
-                      aria-label="Search transactions"
-                    />
-                  </label>
-                  <p className="search-modal__hint">Results update in the list below.</p>
-                </div>
-              </section>
-            </div>,
-            document.body
-          )
-        : null}
       <PageFileDropZone
         enabled={true}
         title="Drop statement files anywhere"
