@@ -7469,10 +7469,12 @@ export const processImportFileText = async (
   const autoRerunEnabled = options.qaSource === "import_processing" || options.qaSource === "import_confirmation";
   const skipVisualBackupParser = Boolean(options.skipVisualBackupParser);
   const importFile = await fetchImportFileCompat(importFileId);
+  const updateImportProgress = (data: Partial<Record<string, unknown>>) =>
+    updateImportFileCompat(importFileId, data, { fetchUpdated: false });
   const traceId =
     (importFile && typeof (importFile as { traceId?: unknown }).traceId === "string" && String((importFile as { traceId: string }).traceId).trim()) ||
     crypto.randomUUID();
-  const traceUpdatePromise = updateImportFileCompat(importFileId, { traceId }).catch(() => null);
+  const traceUpdatePromise = updateImportProgress({ traceId }).catch(() => null);
   const emitImportProcessingEvent = (
     event: "import_processing_started" | "import_processing_completed" | "import_processing_stalled",
     properties: Record<string, unknown> = {}
@@ -7520,7 +7522,7 @@ export const processImportFileText = async (
           delayMs,
           error,
         });
-        await updateImportFileCompat(importFileId, {
+        await updateImportProgress({
           status: "processing",
           processingPhase: "reconciling",
           processingMessage:
@@ -7930,7 +7932,7 @@ export const processImportFileText = async (
     };
   }
 
-  await updateImportFileCompat(importFileId, {
+  await updateImportProgress({
     status: "processing",
     processingPhase: autoRerunAttempt > 0 ? "auto_rerunning" : "reading_account_details",
     processingAttempt: autoRerunAttempt,
@@ -8201,18 +8203,28 @@ export const processImportFileText = async (
     importMode === "statement"
       ? freshImageMetadataForCacheGate ?? detectStatementMetadataFromText(text, importFile.fileName)
       : null;
+  // Exact-content cache records already carry the parser/extraction cache
+  // version. Re-running the full deterministic parser just to validate those
+  // rows defeats the cache for PDFs, CSVs, and workbooks. Keep the extra
+  // structural comparison only for image and multi-section CIMB/GSave cases,
+  // where OCR identity can legitimately change without the file bytes changing.
+  const shouldValidateCachedRowsAgainstCurrentParser = imageImport || textHasMultipleCimbAccountSections;
   const currentParserRowsForCacheGate =
-    cachedParsedRows.length > 0 && freshMetadataForParserCacheGate
+    shouldValidateCachedRowsAgainstCurrentParser &&
+    cachedParsedRows.length > 0 &&
+    freshMetadataForParserCacheGate
       ? parseImportText(text, importFile.fileName, importFile.fileType, {
           institution: freshMetadataForParserCacheGate.institution,
           accountName: freshMetadataForParserCacheGate.accountName,
           accountNumber: freshMetadataForParserCacheGate.accountNumber,
         })
       : [];
-  const cachedRowsMatchCurrentParser = cachedParsedRowsMatchCurrentParser(
-    cachedParsedRows,
-    currentParserRowsForCacheGate as Array<Record<string, unknown>>
-  );
+  const cachedRowsMatchCurrentParser =
+    !shouldValidateCachedRowsAgainstCurrentParser ||
+    cachedParsedRowsMatchCurrentParser(
+      cachedParsedRows,
+      currentParserRowsForCacheGate as Array<Record<string, unknown>>
+    );
   const cachedMetadataForCacheGate =
     textCacheInfo?.cacheRecord?.metadata &&
     typeof textCacheInfo.cacheRecord.metadata === "object" &&
@@ -8254,7 +8266,7 @@ export const processImportFileText = async (
   // model requests for the same image and adds roughly one vision round trip
   // before a receipt, note, or unfamiliar screenshot can become visible.
   if (likelyScreenshotStatement && !shouldPreferDirectImageStatementVision && !text.trim() && pageImages?.length) {
-    await updateImportFileCompat(importFileId, {
+    await updateImportProgress({
       status: "processing",
       processingPhase: autoRerunAttempt > 0 ? "auto_rerunning" : "reading_account_details",
       processingMessage: "Reading screenshot text...",
@@ -8836,7 +8848,7 @@ export const processImportFileText = async (
       !hasDeterministicBpiMobileScreenshotRows ||
       hasSuspiciousLegacyScreenshotDates(parsedRows as Array<Record<string, unknown>>));
   if (parsedRowsNeedBpiTranscriptRepair && pageImages?.length) {
-    await updateImportFileCompat(importFileId, {
+    await updateImportProgress({
       status: "processing",
       processingPhase: "identifying_transactions",
       processingMessage: "Reading BPI screenshot transactions...",
@@ -8894,7 +8906,7 @@ export const processImportFileText = async (
     !shouldPrioritizeBackupEarly &&
     (parsedRows.length === 0 || preliminaryGsaveScreenshotSparseParse || !preliminaryImageStatementParseLooksUsable);
   if (shouldRepairGsaveTranscript && pageImages?.length) {
-    await updateImportFileCompat(importFileId, {
+    await updateImportProgress({
       status: "processing",
       processingPhase: "identifying_transactions",
       processingMessage: "Reading GSave screenshot details...",
@@ -8934,7 +8946,7 @@ export const processImportFileText = async (
   let wiseImageTranscriptAttempted = false;
   if (isWiseImageStatement && parsedRows.length === 0 && pageImages?.length && !shouldPrioritizeBackupEarly) {
     wiseImageTranscriptAttempted = true;
-    await updateImportFileCompat(importFileId, {
+    await updateImportProgress({
       status: "processing",
       processingPhase: "identifying_transactions",
       processingMessage: "Reading Wise screenshot transactions...",
@@ -8976,7 +8988,7 @@ export const processImportFileText = async (
     fileName,
   });
   if (shouldRepairGenericScreenshotTranscript && pageImages?.length) {
-    await updateImportFileCompat(importFileId, {
+    await updateImportProgress({
       status: "processing",
       processingPhase: "identifying_transactions",
       processingMessage: "Repairing screenshot text for a new layout...",
@@ -9090,7 +9102,7 @@ export const processImportFileText = async (
       (rawPayload as Record<string, unknown>).kind === "unionbank_known_sample_transaction"
     );
   });
-  await updateImportFileCompat(importFileId, {
+  await updateImportProgress({
     status: "processing",
     processingPhase: autoRerunAttempt > 0 ? "auto_rerunning" : "identifying_transactions",
     processingCurrentScore: null,
@@ -9328,7 +9340,7 @@ export const processImportFileText = async (
     skipVisualBackupParser,
   });
   if (shouldUseVisionFallback || shouldForceBackupForSuspiciousParse) {
-    await updateImportFileCompat(importFileId, {
+    await updateImportProgress({
       status: "processing",
       processingPhase: autoRerunAttempt > 0 ? "auto_rerunning" : "identifying_transactions",
       processingMessage:
@@ -9374,7 +9386,7 @@ export const processImportFileText = async (
     }
   }
   if (needsPdaxHoldingTranscript && pageImages?.length) {
-    await updateImportFileCompat(importFileId, {
+    await updateImportProgress({
       status: "processing",
       processingPhase: "identifying_transactions",
       processingMessage: "Reading detailed PDAX holdings...",
@@ -9422,7 +9434,7 @@ export const processImportFileText = async (
   let backupParserRaceTimedOut = false;
   if (shouldRunOpenAiFallback) {
     if (importMode === "receipt") {
-      await updateImportFileCompat(importFileId, {
+      await updateImportProgress({
         status: "processing",
         processingPhase: "reading_receipt_vision",
         processingMessage: "Reading receipt image...",
@@ -9437,7 +9449,7 @@ export const processImportFileText = async (
       backupParserRaceTimedOut = !racedBackupResult.resolved;
       openAiParsed = racedBackupResult.resolved ? racedBackupResult.value : null;
       if (backupParserRaceTimedOut) {
-        await updateImportFileCompat(importFileId, {
+        await updateImportProgress({
           status: "processing",
           processingPhase: autoRerunAttempt > 0 ? "auto_rerunning" : "identifying_transactions",
           processingMessage: "Running hybrid import. Clover is keeping the faster local result moving while backup parsing continues.",
@@ -10309,7 +10321,7 @@ export const processImportFileText = async (
   // This is progress-only state: do not put a separate database round trip in
   // front of the durable parsed-row write that makes a statement available for
   // confirmation.
-  void updateImportFileCompat(importFileId, {
+  void updateImportProgress({
     status: "processing",
     processingPhase: rows.length > 0 ? "reconciling" : "identifying_transactions",
     processingMessage:
@@ -10330,7 +10342,7 @@ export const processImportFileText = async (
     // The upload route has already stored this fingerprint for normal file
     // imports. Avoid a second write on the statement's visible-row path.
     if (importFile.sourceFingerprint !== extractedTextFileFingerprint) {
-      void updateImportFileCompat(importFileId, {
+      void updateImportProgress({
         sourceFingerprint: extractedTextFileFingerprint,
       }).catch((error) => {
         console.warn("Unable to persist extracted-text fingerprint", { importFileId, error });
@@ -10379,7 +10391,7 @@ export const processImportFileText = async (
     importFileId,
     rows: parsedTransactionData,
   });
-  await updateImportFileCompat(importFileId, {
+  await updateImportProgress({
     parsedRowsCount: rows.length,
   });
   const parsedRowsPersistedAt = Date.now();
@@ -10921,7 +10933,7 @@ export const processImportFileText = async (
   if (!isDocumentImport) {
     try {
       const statementConfirmationStartedAt = Date.now();
-      await updateImportFileCompat(importFileId, {
+      await updateImportProgress({
         status: "processing",
         processingPhase: "reconciling",
         processingMessage: "Clover is matching the visible rows to the account.",
@@ -10938,7 +10950,7 @@ export const processImportFileText = async (
         parserRoute: parserRoutingMetadata.decision,
       });
       if (confirmedImportResult.status === "staged") {
-        await updateImportFileCompat(importFileId, {
+        await updateImportProgress({
           status: "processing",
           processingPhase: "staged",
           processingMessage: "Clover saved the raw rows and is linking them to the account.",
@@ -10957,7 +10969,7 @@ export const processImportFileText = async (
         };
       }
 
-      await updateImportFileCompat(importFileId, {
+      await updateImportProgress({
         status: "done",
         processingPhase: "complete",
         processingMessage: "The file is imported and ready. Clover is cleaning up names and categories in the background.",
