@@ -7549,6 +7549,7 @@ export const processImportFileText = async (
   }
   const fileType = String(importFile.fileType ?? "");
   const fileName = String(importFile.fileName ?? "");
+  const imageImport = isImageImportFile(fileType, fileName);
   const likelyNetWorthSnapshotCsv =
     (
       /\.(?:csv|xlsx|xls|xlsm|xlsb|ods)$/i.test(fileName) ||
@@ -7571,34 +7572,63 @@ export const processImportFileText = async (
     traceUpdatePromise,
   ]);
   let importMode = options.importMode ?? readCheckpointImportMode(statementCheckpoint?.sourceMetadata) ?? "statement";
+  const earlyTextCachePromise =
+    !imageImport &&
+    !options.text &&
+    !(
+      fileType === "application/pdf" &&
+      /landbank|land bank|eastwest|chinabank|china bank/i.test(fileName)
+    ) &&
+    String(importFile.storageKey ?? "")
+      ? readImportedFileTextWithCacheInfo(
+          {
+            storageKey: String(importFile.storageKey),
+            fileType,
+            fileName,
+            workspaceId: String(importFile.workspaceId),
+            importMode,
+            sourceBytes: options.sourceBytes ?? null,
+          },
+          options.password,
+          options.pdfJsBaseUrl
+        )
+          .then((value) => ({ value, error: null as unknown }))
+          .catch((error: unknown) => ({ value: null, error }))
+      : null;
   const isDocumentImportMode =
     importMode === "receipt" || importMode === "portfolio" || importMode === "account_detail" || importMode === "notes";
-  const persistedSplitBillReceiptDetails =
-    previouslyVisibleRows === 0 &&
-    (importMode === "receipt" || importMode === "notes") &&
-    (await hasCompatibleTable("DocumentImport")) &&
-    (await hasCompatibleTable("ReceiptDocument"))
-      ? await prisma.documentImport
-          .findUnique({
-            where: { importFileId },
+  const persistedSplitBillReceiptDetailsPromise = (async () => {
+    if (previouslyVisibleRows !== 0 || (importMode !== "receipt" && importMode !== "notes")) {
+      return null;
+    }
+    const [hasDocumentImportTable, hasReceiptDocumentTable] = await Promise.all([
+      hasCompatibleTable("DocumentImport"),
+      hasCompatibleTable("ReceiptDocument"),
+    ]);
+    if (!hasDocumentImportTable || !hasReceiptDocumentTable) {
+      return null;
+    }
+    return prisma.documentImport
+      .findUnique({
+        where: { importFileId },
+        select: {
+          receiptDocument: {
             select: {
-              receiptDocument: {
-                select: {
-                  rawPayload: true,
-                },
-              },
+              rawPayload: true,
             },
-          })
-          .then((documentImport) =>
-            readPersistedSplitBillReceiptDetails(documentImport?.receiptDocument?.rawPayload ?? null)
-          )
-          .catch(() => null)
-      : null;
-  const priorSplitBillReceiptDetails =
-    !persistedSplitBillReceiptDetails &&
+          },
+        },
+      })
+      .then((documentImport) =>
+        readPersistedSplitBillReceiptDetails(documentImport?.receiptDocument?.rawPayload ?? null)
+      )
+      .catch(() => null);
+  })();
+  const priorSplitBillReceiptDetailsPromise = persistedSplitBillReceiptDetailsPromise.then((persistedDetails) =>
+    !persistedDetails &&
     previouslyVisibleRows === 0 &&
     (importMode === "receipt" || importMode === "notes")
-      ? await findPriorSplitBillReceiptDetails({
+      ? findPriorSplitBillReceiptDetails({
           workspaceId: String(importFile.workspaceId),
           importFileId,
           sourceFingerprint:
@@ -7606,7 +7636,61 @@ export const processImportFileText = async (
               ? importFile.sourceFingerprint
               : null,
         })
-      : null;
+      : null
+  );
+  const priorExactNotesCachePromise =
+    imageImport &&
+    typeof importFile.sourceFingerprint === "string" &&
+    importFile.sourceFingerprint.trim()
+      ? loadImportFileExtractionCache({
+          workspaceId: String(importFile.workspaceId),
+          fileFingerprint: importFile.sourceFingerprint,
+          fileType,
+          importMode: "notes",
+          cacheVersion: resolveImportFileExtractionCacheVersion(fileName),
+        }).catch(() => null)
+      : Promise.resolve(null);
+  const priorExactNotesImportsPromise = priorExactNotesCachePromise.then((cacheRecord) =>
+    (!Array.isArray(cacheRecord?.parsedRows) || cacheRecord.parsedRows.length === 0) &&
+    imageImport &&
+    typeof importFile.sourceFingerprint === "string" &&
+    importFile.sourceFingerprint.trim()
+      ? prisma.importFile
+          .findMany({
+            where: {
+              workspaceId: String(importFile.workspaceId),
+              sourceFingerprint: importFile.sourceFingerprint,
+              id: { not: importFileId },
+              status: "done",
+              parsedRows: { some: {} },
+            },
+            orderBy: [{ uploadedAt: "desc" }, { id: "desc" }],
+            take: 8,
+            select: {
+              parsedRows: {
+                orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+                select: {
+                  institution: true,
+                  accountNumber: true,
+                  accountName: true,
+                  date: true,
+                  amount: true,
+                  currency: true,
+                  merchantRaw: true,
+                  merchantClean: true,
+                  type: true,
+                  categoryName: true,
+                  confidence: true,
+                  categoryReason: true,
+                  statementFingerprint: true,
+                  rawPayload: true,
+                },
+              },
+            },
+          })
+          .catch(() => [])
+      : []
+  );
   if (
     !options.allowDuplicateStatement &&
     previouslyVisibleRows === 0 &&
@@ -7948,19 +8032,17 @@ export const processImportFileText = async (
   });
 
   let text = options.text ?? "";
-  const imageImport = isImageImportFile(fileType, fileName);
-  const priorExactNotesCache =
-    imageImport &&
-    typeof importFile.sourceFingerprint === "string" &&
-    importFile.sourceFingerprint.trim()
-      ? await loadImportFileExtractionCache({
-          workspaceId: String(importFile.workspaceId),
-          fileFingerprint: importFile.sourceFingerprint,
-          fileType,
-          importMode: "notes",
-          cacheVersion: resolveImportFileExtractionCacheVersion(fileName),
-        }).catch(() => null)
-      : null;
+  const [
+    persistedSplitBillReceiptDetails,
+    priorSplitBillReceiptDetails,
+    priorExactNotesCache,
+    priorExactNotesImports,
+  ] = await Promise.all([
+    persistedSplitBillReceiptDetailsPromise,
+    priorSplitBillReceiptDetailsPromise,
+    priorExactNotesCachePromise,
+    priorExactNotesImportsPromise,
+  ]);
   const refreshInferredNoteDates = (rows: Array<Record<string, unknown>>) =>
     rows.map((row): Record<string, unknown> => {
         const rawPayload =
@@ -7974,46 +8056,6 @@ export const processImportFileText = async (
   const cachedExactNotesRows: Array<Record<string, unknown>> = Array.isArray(priorExactNotesCache?.parsedRows)
     ? refreshInferredNoteDates(priorExactNotesCache.parsedRows as Array<Record<string, unknown>>)
     : [];
-  const priorExactNotesImports =
-    cachedExactNotesRows.length === 0 &&
-    imageImport &&
-    typeof importFile.sourceFingerprint === "string" &&
-    importFile.sourceFingerprint.trim()
-      ? await prisma.importFile
-          .findMany({
-            where: {
-              workspaceId: String(importFile.workspaceId),
-              sourceFingerprint: importFile.sourceFingerprint,
-              id: { not: importFileId },
-              status: "done",
-              parsedRows: { some: {} },
-            },
-            orderBy: [{ uploadedAt: "desc" }, { id: "desc" }],
-            take: 8,
-            select: {
-              parsedRows: {
-                orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-                select: {
-                  institution: true,
-                  accountNumber: true,
-                  accountName: true,
-                  date: true,
-                  amount: true,
-                  currency: true,
-                  merchantRaw: true,
-                  merchantClean: true,
-                  type: true,
-                  categoryName: true,
-                  confidence: true,
-                  categoryReason: true,
-                  statementFingerprint: true,
-                  rawPayload: true,
-                },
-              },
-            },
-          })
-          .catch(() => [])
-      : [];
   const historicalExactNotesRows =
     priorExactNotesImports
       .map((candidate) =>
@@ -8154,18 +8196,24 @@ export const processImportFileText = async (
 
     if (!text || !textCacheInfo) {
       try {
-        textCacheInfo = await readImportedFileTextWithCacheInfo(
-          {
-            storageKey,
-            fileType,
-            fileName,
-            workspaceId: String(importFile.workspaceId),
-            importMode,
-            sourceBytes: options.sourceBytes ?? null,
-          },
-          options.password,
-          options.pdfJsBaseUrl
-        );
+        const earlyTextCacheResult = earlyTextCachePromise ? await earlyTextCachePromise : null;
+        if (earlyTextCacheResult?.error) {
+          throw earlyTextCacheResult.error;
+        }
+        textCacheInfo =
+          earlyTextCacheResult?.value ??
+          (await readImportedFileTextWithCacheInfo(
+            {
+              storageKey,
+              fileType,
+              fileName,
+              workspaceId: String(importFile.workspaceId),
+              importMode,
+              sourceBytes: options.sourceBytes ?? null,
+            },
+            options.password,
+            options.pdfJsBaseUrl
+          ));
         text = textCacheInfo.text;
       } catch (error) {
         if (isPdfPasswordError(error)) {
@@ -12482,7 +12530,10 @@ export const confirmImportFile = async (
     throw new Error("Cash account not found");
   }
   const confirmationAccountGroups = multiAccountImport ? parsedAccountGroups : parsedAccountGroups.slice(0, 1);
-  await runWithConcurrency(confirmationAccountGroups, 3, async (group, groupIndex) => {
+  await runWithConcurrency(
+    confirmationAccountGroups,
+    highVolumeConfirmation ? 6 : 3,
+    async (group, groupIndex) => {
     const firstGroupRow = group.rows[0] ?? {};
     const groupRows = group.rows as EnrichedParsedImportRow[];
     const payloadAccountType = readParsedRowAccountType(firstGroupRow);
@@ -12555,7 +12606,8 @@ export const confirmImportFile = async (
     }
 
     accountByGroupKey.set(group.key, groupAccount);
-  });
+    }
+  );
   const account = accountByGroupKey.get(parsedAccountGroups[0]?.key ?? "__default__") ?? accountByGroupKey.values().next().value ?? null;
   if (!account) {
     throw new Error("Account not found");
@@ -13081,6 +13133,23 @@ export const confirmImportFile = async (
     }
   }
 
+  const detailedReceivableCandidates: Array<{
+    matchKey: string;
+    title: string;
+    counterparty: string | null;
+    amount: string;
+    currency: string;
+    dueDate: null;
+    recurrence: "once";
+    nextDueDate: null;
+    notes: string;
+    accountId: string;
+    transactionId: null;
+    statementCheckpointId: string | null;
+    status: "active" | "resolved";
+    source: "structured_workbook_receivable";
+    confidence: number;
+  }> = [];
   for (const row of parsedRows as Array<Record<string, unknown>>) {
     const payload =
       row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
@@ -13122,20 +13191,14 @@ export const confirmImportFile = async (
     ]
       .filter(Boolean)
       .join(" ");
-    const existingDetailedReceivable = await tx.financialCommitment.findFirst({
-      where: {
-        workspaceId: String(importFile.workspaceId),
-        kind: "receivable",
-        accountId: receivableAccount.id,
-        source: "structured_workbook_receivable",
-        title,
-        counterparty,
-        notes,
-      },
-      orderBy: { createdAt: "desc" },
-      select: { id: true },
-    });
-    const receivableData = {
+    const matchKey = [
+      receivableAccount.id,
+      title,
+      counterparty ?? "",
+      notes,
+    ].join("\u0000");
+    detailedReceivableCandidates.push({
+      matchKey,
       title,
       counterparty,
       amount: amountPending.toFixed(2),
@@ -13156,19 +13219,61 @@ export const confirmImportFile = async (
         typeof row.confidence === "number"
           ? Math.max(0, Math.min(100, Math.round(row.confidence)))
           : 98,
-    };
-    if (existingDetailedReceivable) {
+    });
+  }
+  if (detailedReceivableCandidates.length > 0) {
+    const existingDetailedReceivables = await tx.financialCommitment.findMany({
+      where: {
+        workspaceId: String(importFile.workspaceId),
+        kind: "receivable",
+        source: "structured_workbook_receivable",
+        OR: detailedReceivableCandidates.map((candidate) => ({
+          accountId: candidate.accountId,
+          title: candidate.title,
+          counterparty: candidate.counterparty,
+          notes: candidate.notes,
+        })),
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        accountId: true,
+        title: true,
+        counterparty: true,
+        notes: true,
+      },
+    });
+    const existingDetailedReceivableByKey = new Map(
+      existingDetailedReceivables.map((receivable) => [
+        [
+          receivable.accountId ?? "",
+          receivable.title,
+          receivable.counterparty ?? "",
+          receivable.notes ?? "",
+        ].join("\u0000"),
+        receivable,
+      ])
+    );
+    const newDetailedReceivables: Prisma.FinancialCommitmentCreateManyInput[] = [];
+    for (const candidate of detailedReceivableCandidates) {
+      const { matchKey, ...receivableData } = candidate;
+      const existingDetailedReceivable = existingDetailedReceivableByKey.get(matchKey);
+      if (!existingDetailedReceivable) {
+        newDetailedReceivables.push({
+          workspaceId: String(importFile.workspaceId),
+          kind: "receivable",
+          ...receivableData,
+        });
+        continue;
+      }
       await tx.financialCommitment.update({
         where: { id: existingDetailedReceivable.id },
         data: receivableData,
       });
-    } else {
-      await tx.financialCommitment.create({
-        data: {
-          workspaceId: String(importFile.workspaceId),
-          kind: "receivable",
-          ...receivableData,
-        },
+    }
+    if (newDetailedReceivables.length > 0) {
+      await tx.financialCommitment.createMany({
+        data: newDetailedReceivables,
       });
     }
   }
@@ -13279,6 +13384,7 @@ export const confirmImportFile = async (
     shouldPersistAccountSnapshotCsvGroupBalances ||
     shouldPersistWideAccountSnapshotCsvGroupBalances
   ) {
+    const accountBalanceUpdates: Array<{ accountId: string; balance: string }> = [];
     for (const group of parsedAccountGroups) {
       const groupAccount = accountByGroupKey.get(group.key);
       if (!groupAccount) {
@@ -13290,13 +13396,29 @@ export const confirmImportFile = async (
         continue;
       }
 
-      await tx.account.update({
-        where: { id: groupAccount.id },
-        data: { balance: groupBalance.toString() },
+      accountBalanceUpdates.push({
+        accountId: groupAccount.id,
+        balance: groupBalance.toString(),
       });
       if (groupAccount.id === resolvedAccountId) {
         reconciledAccountBalance = groupBalance.toString();
       }
+    }
+    if (accountBalanceUpdates.length > 0) {
+      await tx.$executeRaw(
+        Prisma.sql`
+          UPDATE "Account" AS account
+          SET "balance" = updates."balance"::numeric
+          FROM (
+            VALUES ${Prisma.join(
+              accountBalanceUpdates.map(
+                (entry) => Prisma.sql`(${entry.accountId}, ${entry.balance})`
+              )
+            )}
+          ) AS updates("id", "balance")
+          WHERE account."id" = updates."id"
+        `
+      );
     }
   } else {
     const currentAccountBalance = snapshotBalanceToString(account.balance);
