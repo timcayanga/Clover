@@ -14,9 +14,31 @@ export const metadata = {
   title: "Settings",
 };
 
+const settingsSections = [
+  "account",
+  "profiles",
+  "notifications",
+  "security",
+  "imports",
+  "regional",
+  "display",
+  "data",
+  "categories",
+  "plan",
+] as const;
+
+type SettingsSection = (typeof settingsSections)[number];
+
+const getSettingsSection = (value: string | string[] | undefined): SettingsSection | null => {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return settingsSections.find((section) => section === candidate) ?? null;
+};
+
 export default async function SettingsPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const params = (await searchParams) ?? {};
-  const initialSection = params.upgrade === "pro" ? "plan" : "account";
+  const requestedSection = getSettingsSection(params.section);
+  const initialSection = params.upgrade === "pro" ? "plan" : requestedSection ?? "account";
+  const mobileSectionOpen = params.upgrade === "pro" || Boolean(requestedSection);
   const preferredBillingInterval = params.interval === "monthly" || params.interval === "annual" ? params.interval : undefined;
   const session = await getSessionContext();
   let workspaceId = "";
@@ -124,10 +146,11 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
   }
 
   return (
-    <CloverShell active="settings" title="Settings">
+    <CloverShell active="settings" title="Settings" mobileBackHref={mobileSectionOpen ? "/settings" : "/home"}>
       <SettingsHub
         mode="full"
         initialSection={initialSection}
+        mobileSectionOpen={mobileSectionOpen}
         preferredBillingInterval={preferredBillingInterval}
         workspaceId={workspaceId}
         billingCustomerId={user?.id ?? null}

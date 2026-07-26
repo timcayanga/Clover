@@ -138,6 +138,7 @@ type DataDeleteModalState = {
 type SettingsHubProps = {
   mode?: "menu" | "panel" | "full";
   initialSection?: SettingsSectionKey;
+  mobileSectionOpen?: boolean;
   preferredBillingInterval?: BillingInterval;
   workspaceId: string;
   billingCustomerId?: string | null;
@@ -482,6 +483,7 @@ function downloadBlob(blob: Blob, fileName: string) {
 export function SettingsHub({
   mode = "full",
   initialSection = "account",
+  mobileSectionOpen = false,
   preferredBillingInterval,
   workspaceId: initialWorkspaceId,
   billingCustomerId: initialBillingCustomerId,
@@ -1625,14 +1627,17 @@ export function SettingsHub({
   };
 
   return (
-    <section className={`settings-hub${mode === "panel" ? " settings-hub--panel-only" : mode === "menu" ? " settings-hub--menu-only" : ""}`}>
+    <section
+      className={`settings-hub${mode === "panel" ? " settings-hub--panel-only" : mode === "menu" ? " settings-hub--menu-only" : ""}${
+        mobileSectionOpen ? " settings-hub--mobile-panel" : " settings-hub--mobile-menu"
+      }`}
+    >
       {mode !== "panel" ? (
         <aside className="settings-hub__menu glass">
           <Link className="settings-hub__brand" href="/dashboard" aria-label="Go to dashboard">
             <img className="settings-hub__brand-mark" src="/clover-mark.svg" alt="" aria-hidden="true" loading="eager" fetchPriority="high" />
             <div className="settings-hub__brand-copy">
-              <strong>Clover</strong>
-              <span>{activeProfile?.name ?? workspaceName}</span>
+              <span>{activeProfile?.name ?? (workspaceName === "Settings" ? "Personal" : workspaceName)}</span>
             </div>
           </Link>
           <div className="settings-hub__menu-list" role="list" aria-label="Settings sections">
@@ -1648,7 +1653,13 @@ export function SettingsHub({
                     role="tab"
                     aria-selected={isActive}
                     className={`settings-hub__menu-item${isActive ? " is-active" : ""}`}
-                    onClick={() => setActiveSection(sectionKey)}
+                    onClick={() => {
+                      if (window.matchMedia("(max-width: 760px)").matches) {
+                        router.push(`/settings?section=${sectionKey}`);
+                        return;
+                      }
+                      setActiveSection(sectionKey);
+                    }}
                   >
                     {section.icon}
                     <strong>{section.title}</strong>
