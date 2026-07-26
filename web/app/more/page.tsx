@@ -123,7 +123,7 @@ async function MorePageContent() {
   await ensureOnboardingAccess();
 
   return (
-    <CloverShell active="more" title="More">
+    <CloverShell active="more" title="More" mobileBackHref="/home">
       <section className="more-page">
         <div className="more-page__sections">
           {moreSections.map((section) => (
@@ -136,7 +136,7 @@ async function MorePageContent() {
                     <span className="more-page__link-icon" aria-hidden="true">
                       <PageIcon name={item.icon} />
                     </span>
-                    <strong>{item.title}</strong>
+                    <span className="more-page__link-label">{item.title}</span>
                   </Link>
                 ))}
               </div>

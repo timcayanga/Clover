@@ -1266,9 +1266,10 @@ body.transactions-manual-open .shell-quick-add-button {
   object-fit: contain;
 }
 
-.more-page__link strong {
+.more-page__link-label {
   color: var(--text);
   font-size: 13px;
+  font-weight: 500;
   line-height: 1.15;
 }
 
@@ -3912,19 +3913,51 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
     display: grid;
   }
 
+  .content--more > .topbar {
+    min-height: 44px;
+    padding-block: 0;
+    margin-bottom: 2px;
+  }
+
+  .content--more > .topbar .shell-back-button {
+    align-self: center;
+  }
+
+  .content--more > .topbar .topbar__title-wrap {
+    top: 50%;
+  }
+
+  .more-page {
+    gap: 0;
+  }
+
   .more-page__sections {
     grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .more-page__section {
+    gap: 4px;
+    padding-top: 4px;
+  }
+
+  .more-page__section-label {
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: 0;
+    text-transform: none;
   }
 
   .more-page__links {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
+    gap: 2px;
   }
 
   .more-page__link {
     min-height: 0;
-    padding: 8px 0 4px;
-    gap: 4px;
+    padding: 1px 0 3px;
+    gap: 1px;
     border-radius: 0;
     border: 0;
     background: transparent;
@@ -3947,12 +3980,14 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   }
 
   .more-page__link-icon-image {
-    width: 34px;
-    height: 34px;
+    width: 54px;
+    height: 54px;
   }
 
-  .more-page__link strong {
+  .more-page__link-label {
     font-size: 12px;
+    font-weight: 400;
+    line-height: 1.05;
   }
 }
 
