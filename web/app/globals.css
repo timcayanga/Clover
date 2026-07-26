@@ -48755,3 +48755,597 @@ html[data-theme="dark"] .content--adviser .adviser-summary .adviser-summary-card
     text-align: left;
   }
 }
+
+/* Dark-mode cohesion and contrast pass. Keep this late so legacy page rules
+   cannot reintroduce light surfaces or mint primary actions. */
+html[data-theme="dark"] {
+  --accent: #08abc1;
+  --accent-hover: #18bfd0;
+  --accent-light: #55d6dd;
+  --accent-mint: #55d6dd;
+  --accent-soft: rgba(8, 171, 193, 0.14);
+  --accent-strong: rgba(8, 171, 193, 0.24);
+  --brand-gradient: linear-gradient(135deg, #079fb8, #20bdca);
+  --brand-gradient-alt: linear-gradient(135deg, #08abc1, #35cbd3);
+}
+
+html[data-theme="dark"] .nav-link:hover .nav-link__icon,
+html[data-theme="dark"] .nav-link.is-active .nav-link__icon,
+html[data-theme="dark"] .nav-link__icon,
+html[data-theme="dark"] .more-page__link-icon,
+html[data-theme="dark"] .sidebar-icon-button,
+html[data-theme="dark"] .sidebar-icon-button:hover,
+html[data-theme="dark"] .sidebar-icon-button.is-active,
+html[data-theme="dark"] .shell-bottom-nav__icon {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="dark"] .sidebar-icon-button img,
+html[data-theme="dark"] .more-page__link-icon img,
+html[data-theme="dark"] .shell-bottom-nav__icon img {
+  background: transparent !important;
+}
+
+html[data-theme="dark"] .shell-quick-add-button,
+html[data-theme="dark"] .button-primary,
+html[data-theme="dark"] .accounts-toolbar-button--upload,
+html[data-theme="dark"] .transactions-toolbar-upload,
+html[data-theme="dark"] .recurring-topbar-add,
+html[data-theme="dark"] .circles-primary-action,
+html[data-theme="dark"] .split-bill-primary-action,
+html[data-theme="dark"] .budget-editor__actions .button-primary,
+html[data-theme="dark"] .goals-editor__actions .button-primary,
+html[data-theme="dark"] .investments-add-modal .button-primary {
+  background: var(--brand-gradient) !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(8, 171, 193, 0.22) !important;
+}
+
+html[data-theme="dark"] .shell-quick-add-button:hover,
+html[data-theme="dark"] .button-primary:hover:not(:disabled),
+html[data-theme="dark"] .button-primary:focus-visible:not(:disabled),
+html[data-theme="dark"] .accounts-toolbar-button--upload:hover,
+html[data-theme="dark"] .transactions-toolbar-upload:hover {
+  background: var(--brand-gradient-alt) !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="dark"] .shell-back-button,
+html[data-theme="dark"] .help-page__back-button,
+html[data-theme="dark"] .settings-hub__back-button {
+  background: #111d2d !important;
+  border-color: rgba(148, 163, 184, 0.24) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28) !important;
+}
+
+html[data-theme="dark"] .shell-back-button:hover,
+html[data-theme="dark"] .shell-back-button:focus-visible,
+html[data-theme="dark"] .help-page__back-button:hover,
+html[data-theme="dark"] .help-page__back-button:focus-visible {
+  background: #17263a !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="dark"] .clover-loading-screen__copy h2 {
+  color: #ffffff;
+}
+
+html[data-theme="dark"] .animated-tabs__tab:hover,
+html[data-theme="dark"] .animated-tabs__tab:focus-visible,
+html[data-theme="dark"] .reports-top-tabs a:hover,
+html[data-theme="dark"] .reports-top-tabs button:hover,
+html[data-theme="dark"] .investments-tabs a:hover,
+html[data-theme="dark"] .investments-tabs button:hover,
+html[data-theme="dark"] .recurring-tabs a:hover,
+html[data-theme="dark"] .recurring-tabs button:hover,
+html[data-theme="dark"] .circles-tabs a:hover,
+html[data-theme="dark"] .circles-tabs button:hover {
+  background: rgba(8, 171, 193, 0.1) !important;
+  color: #f8fafc !important;
+}
+
+html[data-theme="dark"] .dashboard-home__hero-mini-card {
+  background: #132438 !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+}
+
+html[data-theme="dark"] .dashboard-home__hero-mini-card strong,
+html[data-theme="dark"] .dashboard-home__hero-mini-card span,
+html[data-theme="dark"] .dashboard-home__insight-strip-item strong,
+html[data-theme="dark"] .dashboard-home__insight-strip-item span {
+  color: #f8fafc !important;
+}
+
+html[data-theme="dark"] .dashboard-home__insight-strip-item,
+html[data-theme="dark"] .dashboard-home__insight-strip-item--positive,
+html[data-theme="dark"] .dashboard-home__insight-strip-item--warning {
+  background: #132438 !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+}
+
+html[data-theme="dark"] .dashboard-home__insight-strip-action {
+  color: #55d6dd !important;
+}
+
+html[data-theme="dark"] .report-card,
+html[data-theme="dark"] .report-ai-card,
+html[data-theme="dark"] .reports-next,
+html[data-theme="dark"] .report-insight,
+html[data-theme="dark"] .report-flow-map__row,
+html[data-theme="dark"] .report-list__item,
+html[data-theme="dark"] .reports-summary-grid .metric {
+  background: #0e1725 !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  color: #e7eef7 !important;
+}
+
+html[data-theme="dark"] .report-insight strong,
+html[data-theme="dark"] .report-insight span,
+html[data-theme="dark"] .report-insight small,
+html[data-theme="dark"] .report-list__item strong,
+html[data-theme="dark"] .report-list__item span,
+html[data-theme="dark"] .report-flow-map__row strong,
+html[data-theme="dark"] .report-flow-map__row span {
+  color: #e7eef7 !important;
+}
+
+html[data-theme="dark"] .report-category-bar__value,
+html[data-theme="dark"] .report-category-bar__value span {
+  color: #07111d !important;
+}
+
+html[data-theme="dark"] .accounts-overview-grid {
+  background: #0e1725 !important;
+}
+
+html[data-theme="dark"] .accounts-overview-card,
+html[data-theme="dark"] .summary-aligned-card,
+html[data-theme="dark"] .budget-summary-card.summary-aligned-card {
+  background: linear-gradient(145deg, #079fb8, #147f98) !important;
+  border-color: rgba(85, 214, 221, 0.28) !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="dark"] .accounts-overview-card .eyebrow,
+html[data-theme="dark"] .accounts-overview-card__amount,
+html[data-theme="dark"] .accounts-overview-card__amount.is-good,
+html[data-theme="dark"] .accounts-overview-card__amount.is-danger,
+html[data-theme="dark"] .accounts-overview-card__amount.is-neutral {
+  color: #ffffff !important;
+}
+
+html[data-theme="dark"] .accounts-group__head strong,
+html[data-theme="dark"] .accounts-group__head span,
+html[data-theme="dark"] .accounts-summary-column__head h4 {
+  color: #e7eef7 !important;
+}
+
+html[data-theme="dark"] .accounts-detail__transaction-header,
+html[data-theme="dark"] .accounts-detail__transaction-row,
+html[data-theme="dark"] .line-item,
+html[data-theme="dark"] .transactions-table tbody tr {
+  background: #0e1725 !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  color: #e7eef7 !important;
+}
+
+html[data-theme="dark"] .accounts-detail__transaction-header,
+html[data-theme="dark"] .line-item-header,
+html[data-theme="dark"] .transactions-table thead,
+html[data-theme="dark"] .transactions-table th {
+  background: #0e1725 !important;
+  color: #cbd5e1 !important;
+}
+
+html[data-theme="dark"] .accounts-detail__transaction-name,
+html[data-theme="dark"] .accounts-detail__transaction-date,
+html[data-theme="dark"] .accounts-detail__transaction-category,
+html[data-theme="dark"] .line-item strong,
+html[data-theme="dark"] .line-item span,
+html[data-theme="dark"] .transactions-table td {
+  color: #e7eef7 !important;
+}
+
+html[data-theme="dark"] .accounts-detail__transaction-category {
+  background: rgba(8, 171, 193, 0.14);
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+
+html[data-theme="dark"] .transactions-pagination__page {
+  min-width: auto !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="dark"] .transactions-pagination__page.is-active {
+  color: #55d6dd !important;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+html[data-theme="dark"] .transactions-footer-snapshot__metric--net {
+  background: #0e1725 !important;
+  color: #e7eef7 !important;
+}
+
+html[data-theme="dark"] .line-item__direction,
+html[data-theme="dark"] .transaction-type-indicator,
+html[data-theme="dark"] .transactions-type-indicator {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="dark"] .accounts-import-modal,
+html[data-theme="dark"] .accounts-import-dropzone,
+html[data-theme="dark"] .page-file-drop-zone__frame,
+html[data-theme="dark"] .split-bill-import-modal,
+html[data-theme="dark"] .split-bill-import-modal__dropzone {
+  background: #111d2d !important;
+  background-image: none !important;
+  color: #e7eef7 !important;
+}
+
+html[data-theme="dark"] .recurring-modal-close,
+html[data-theme="dark"] .accounts-import-close,
+html[data-theme="dark"] .budget-editor .icon-button,
+html[data-theme="dark"] .split-bill-editor .icon-button,
+html[data-theme="dark"] .circles-create-dialog .icon-button,
+html[data-theme="dark"] .investments-add-modal .icon-button {
+  background: #111d2d !important;
+  border-color: rgba(148, 163, 184, 0.24) !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="dark"] .recurring-modal,
+html[data-theme="dark"] .budget-editor,
+html[data-theme="dark"] .split-bill-editor,
+html[data-theme="dark"] .circles-create-dialog,
+html[data-theme="dark"] .investments-add-modal {
+  background: #0e1725 !important;
+  color: #e7eef7 !important;
+}
+
+html[data-theme="dark"] .budget-empty,
+html[data-theme="dark"] .budget-empty__chip {
+  background: #111d2d !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  color: #e7eef7 !important;
+}
+
+html[data-theme="dark"] .goal-inline-setup__chip,
+html[data-theme="dark"] .goals-editor__purpose-chip {
+  background: #111d2d !important;
+  border-color: rgba(8, 171, 193, 0.36) !important;
+  color: #55d6dd !important;
+}
+
+html[data-theme="dark"] .goal-inline-setup__chip.is-selected,
+html[data-theme="dark"] .goals-editor__purpose-chip.is-selected {
+  background: rgba(8, 171, 193, 0.2) !important;
+  color: #7ee7f2 !important;
+}
+
+html[data-theme="dark"] .investments-page,
+html[data-theme="dark"] .investments-portfolio-table,
+html[data-theme="dark"] .investments-portfolio-table__row,
+html[data-theme="dark"] .investments-portfolio-table__row--head,
+html[data-theme="dark"] .investments-filters,
+html[data-theme="dark"] .investments-portfolio-view-toggle,
+html[data-theme="dark"] .investments-market-insights,
+html[data-theme="dark"] .investments-insights-panel {
+  background: #0e1725 !important;
+  background-image: none !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  color: #e7eef7 !important;
+}
+
+html[data-theme="dark"] .investments-market-empty,
+html[data-theme="dark"] .investments-market-insights__card,
+html[data-theme="dark"] .investments-portfolio-outlook,
+html[data-theme="dark"] .investments-ticker-picker {
+  background: #132438 !important;
+  background-image: none !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  color: #e7eef7 !important;
+}
+
+html[data-theme="dark"] .settings-section--data .settings-data-zone,
+html[data-theme="dark"] .settings-section--data .settings-data-export-card,
+html[data-theme="dark"] .settings-section--data .settings-data-danger-item,
+html[data-theme="dark"] .settings-section--data .settings-privacy-panel {
+  background: #111d2d !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  color: #e7eef7 !important;
+}
+
+html[data-theme="dark"] .settings-plan-card--pro .settings-plan-card__band {
+  background: var(--brand-gradient) !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="dark"] .settings-plan-card,
+html[data-theme="dark"] .settings-plan-card__body,
+html[data-theme="dark"] .settings-plan-usage,
+html[data-theme="dark"] .settings-plan-usage__card {
+  overflow: visible;
+}
+
+html[data-theme="dark"] .info-tooltip,
+html[data-theme="dark"] .info-tooltip__button {
+  position: relative;
+  z-index: 5;
+}
+
+html[data-theme="dark"] .help-page {
+  background: #08111e;
+  color: #e7eef7;
+  overflow: visible;
+}
+
+html[data-theme="dark"] .help-page .landing-nav {
+  background: rgba(8, 17, 30, 0.98) !important;
+  border-color: rgba(148, 163, 184, 0.16) !important;
+  color: #e7eef7;
+}
+
+html[data-theme="dark"] .help-search input {
+  min-height: 44px;
+  background: #0e1725;
+  border-color: rgba(148, 163, 184, 0.22);
+  color: #e7eef7;
+}
+
+html[data-theme="dark"] .help-card {
+  color: #ffffff;
+}
+
+html[data-theme="dark"] .help-card--teal {
+  background: linear-gradient(135deg, #087e91, #0eb3c5) !important;
+}
+
+html[data-theme="dark"] .help-card--mint {
+  background: linear-gradient(135deg, #087f7e, #27b89b) !important;
+}
+
+html[data-theme="dark"] .help-card--gold {
+  background: linear-gradient(135deg, #8a6514, #c49b2e) !important;
+}
+
+html[data-theme="dark"] .help-card--sky {
+  background: linear-gradient(135deg, #176da5, #318ebc) !important;
+}
+
+html[data-theme="dark"] .help-card--coral {
+  background: linear-gradient(135deg, #9b4d42, #cb725e) !important;
+}
+
+html[data-theme="dark"] .help-card--violet {
+  background: linear-gradient(135deg, #62449a, #8e67c7) !important;
+}
+
+html[data-theme="dark"] .help-card--lime {
+  background: linear-gradient(135deg, #557d2a, #7fae42) !important;
+}
+
+html[data-theme="dark"] .help-card--rose {
+  background: linear-gradient(135deg, #8f4168, #bc6087) !important;
+}
+
+html[data-theme="dark"] .landing-nav__mobile-toggle {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: #ffffff;
+}
+
+html[data-theme="dark"] .landing-nav__mobile-menu {
+  background: #08111e !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="dark"] .landing-nav__mobile-menu a,
+html[data-theme="dark"] .landing-nav__mobile-menu-group {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: #e7eef7 !important;
+}
+
+@media (max-width: 760px) {
+  html[data-theme="dark"] .settings-hub--mobile-menu .settings-profile-summary {
+    display: none !important;
+  }
+
+  html[data-theme="dark"] .settings-hub--mobile-menu .settings-hub__menu,
+  html[data-theme="dark"] .settings-hub--mobile-menu .settings-hub__menu-list,
+  html[data-theme="dark"] .settings-hub--mobile-menu .settings-hub__menu-item {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+  }
+
+  html[data-theme="dark"] .investments-page > .topbar,
+  html[data-theme="dark"] .investments-page > .shell-compact-bar,
+  html[data-theme="dark"] .investments-tabs {
+    background: #0e1725 !important;
+    border-color: transparent !important;
+  }
+
+  html[data-theme="dark"] .accounts-detail__transaction-list {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  html[data-theme="dark"] .accounts-detail__transaction-row {
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+/* Final dark-mode polish for compact controls and responsive detail views. */
+.investments-add-modal__money-row {
+  align-items: end;
+}
+
+.investments-add-modal__field-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.investments-add-modal__currency-selector,
+.investments-add-modal__currency-selector .currency-selector__button {
+  width: 100%;
+}
+
+.investments-add-modal__currency-selector .currency-selector__button {
+  min-height: 42px;
+  border-radius: 14px;
+}
+
+.investments-add-modal__money-row input {
+  min-height: 42px;
+}
+
+html[data-theme="dark"] .landing-nav__links a,
+html[data-theme="dark"] .landing-nav__mobile-menu a {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 500;
+}
+
+html[data-theme="dark"] .accounts-group__head,
+html[data-theme="dark"] .accounts-summary-column__head {
+  color: #e7eef7;
+}
+
+html[data-theme="dark"] .accounts-group__head strong,
+html[data-theme="dark"] .accounts-group__head span,
+html[data-theme="dark"] .accounts-summary-column__head strong,
+html[data-theme="dark"] .accounts-summary-column__head span {
+  color: #e7eef7 !important;
+}
+
+html[data-theme="dark"] .transactions-table,
+html[data-theme="dark"] .transactions-table tbody,
+html[data-theme="dark"] .transactions-table tr,
+html[data-theme="dark"] .transactions-table td,
+html[data-theme="dark"] .transactions-table th {
+  background-image: none !important;
+}
+
+html[data-theme="dark"] .transactions-table thead,
+html[data-theme="dark"] .transactions-table th {
+  background-color: transparent !important;
+}
+
+html[data-theme="dark"] .import-files-modal__dropzone,
+html[data-theme="dark"] .import-files-modal__dropzone::before,
+html[data-theme="dark"] .import-files-modal__dropzone::after {
+  background: #111d2d !important;
+  background-image: none !important;
+}
+
+html[data-theme="dark"] .modal-backdrop .icon-button,
+html[data-theme="dark"] .modal-backdrop .modal-close,
+html[data-theme="dark"] .modal-backdrop [aria-label^="Close"],
+html[data-theme="dark"] .modal-backdrop [aria-label^="close"] {
+  background: #111d2d !important;
+  border-color: rgba(148, 163, 184, 0.24) !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="dark"] .button-primary,
+html[data-theme="dark"] .button-primary span,
+html[data-theme="dark"] .button-primary svg,
+html[data-theme="dark"] .button-primary svg path {
+  color: #ffffff !important;
+  stroke: currentColor;
+}
+
+html[data-theme="dark"] .settings-plan-card--pro .settings-plan-card__band,
+html[data-theme="dark"] .pricing-card--pro .pricing-card__band {
+  background: linear-gradient(135deg, #079fb8, #20bdca) !important;
+}
+
+html[data-theme="dark"] .settings-data-zone h6,
+html[data-theme="dark"] .settings-data-export-card strong,
+html[data-theme="dark"] .settings-data-danger-copy strong,
+html[data-theme="dark"] .settings-privacy-panel strong,
+html[data-theme="dark"] .settings-data-zone label,
+html[data-theme="dark"] .settings-data-zone span {
+  color: #e7eef7;
+}
+
+html[data-theme="dark"] .help-page,
+html[data-theme="dark"] .help-page__content,
+html[data-theme="dark"] .help-page__main {
+  min-height: 100dvh;
+  overflow: visible;
+}
+
+html[data-theme="dark"] .help-page .landing-nav {
+  position: sticky;
+  top: 0;
+}
+
+html[data-theme="dark"] .help-page .landing-footer__heading,
+html[data-theme="dark"] .help-page .landing-footer__link {
+  color: #f8fafc !important;
+}
+
+html[data-theme="dark"] .help-search,
+html[data-theme="dark"] .help-search input {
+  min-height: 40px;
+}
+
+@media (max-width: 760px) {
+  .investments-add-modal__money-row {
+    grid-template-columns: minmax(104px, 0.42fr) minmax(0, 1fr);
+  }
+
+  html[data-theme="dark"] .accounts-detail__transactions {
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  html[data-theme="dark"] .accounts-detail__transactions .transactions-mobile-date-group,
+  html[data-theme="dark"] .accounts-detail__transactions .transactions-mobile-date-group__rows,
+  html[data-theme="dark"] .accounts-detail__transactions .transactions-mobile-simple-row {
+    background: transparent !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  html[data-theme="dark"] .accounts-detail__transactions .transactions-mobile-simple-row {
+    border-bottom: 1px solid rgba(148, 163, 184, 0.18) !important;
+    color: #e7eef7 !important;
+  }
+
+  .accounts-detail__transactions .transactions-mobile-simple-row__account-brand {
+    display: none !important;
+  }
+
+  html[data-theme="dark"] .accounts-detail__transactions .transactions-mobile-simple-row__category-icon {
+    background: rgba(8, 171, 193, 0.18);
+    border-radius: 10px;
+  }
+
+  html[data-theme="dark"] .more-page,
+  html[data-theme="dark"] .more-page__content,
+  html[data-theme="dark"] .more-page__section {
+    background: #0e1725 !important;
+  }
+}

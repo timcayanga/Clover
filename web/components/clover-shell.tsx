@@ -319,7 +319,7 @@ const desktopNavSections = [
 ];
 
 const shouldPrefetchNavHref = (href: string) => href !== "/split-bill";
-const MENU_ICON_VERSION = "20260709";
+const MENU_ICON_VERSION = "20260726";
 
 type IconName =
   | "dashboard"

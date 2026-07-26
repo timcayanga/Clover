@@ -1048,6 +1048,24 @@ export default function InvestmentsPage() {
   }, [addOpen, selectedInvestmentAssetId]);
 
   useEffect(() => {
+    if (!addOpen) {
+      return;
+    }
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      setManualMoreOpen(false);
+      setAddOpen(false);
+    };
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [addOpen]);
+
+  useEffect(() => {
     setPortfolioCurrencyFilter("all");
   }, [selectedWorkspaceId]);
 
@@ -3443,7 +3461,7 @@ export default function InvestmentsPage() {
         {addOpen ? (
           <div className="modal-backdrop modal-backdrop--investments-add" role="presentation" onClick={() => setAddOpen(false)}>
             <section
-            className="modal-card modal-card--wide accounts-add-modal glass"
+            className="modal-card modal-card--wide accounts-add-modal investments-add-modal glass"
             role="dialog"
             aria-modal="true"
             aria-labelledby="add-investment-title"
@@ -3508,7 +3526,7 @@ export default function InvestmentsPage() {
                 </div>
                 <div className="investments-add-modal__money-row">
                   <div className="accounts-form-currency-field">
-                    <span className="sr-only">Currency</span>
+                    <span className="investments-add-modal__field-label">Currency</span>
                     <CurrencySelector
                       value={manualCurrency}
                       onChange={setManualCurrency}
