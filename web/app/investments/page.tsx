@@ -1040,8 +1040,10 @@ export default function InvestmentsPage() {
 
   useEffect(() => {
     document.body.toggleAttribute("data-clover-page-modal", addOpen || Boolean(selectedInvestmentAssetId));
+    document.body.toggleAttribute("data-investment-asset-detail", Boolean(selectedInvestmentAssetId));
     return () => {
       document.body.removeAttribute("data-clover-page-modal");
+      document.body.removeAttribute("data-investment-asset-detail");
     };
   }, [addOpen, selectedInvestmentAssetId]);
 
@@ -2400,6 +2402,7 @@ export default function InvestmentsPage() {
     <CloverShell
       active="investments"
       title="Investments"
+      mobileBackHref="/more"
       titleAddon={
         <AnimatedTabs
           className="investments-tabs"
@@ -2488,24 +2491,6 @@ export default function InvestmentsPage() {
               <span className="investments-page__add-button-label">Add investment</span>
             </button>
           </div>
-        </div>
-        <div className="investments-mobile-header__currency-row">
-          <CurrencySelector
-            value={portfolioCurrencyFilter}
-            onChange={setPortfolioCurrencyFilter}
-            options={portfolioCurrencyOptions.filter((currency) => currency !== "all")}
-            includeAllOption
-            allLabel="All currencies"
-            ariaLabel="Select investment currency"
-            className="investments-currency-filter investments-currency-filter--mobile-row"
-            buttonClassName="transactions-currency-filter__button transactions-action-button transactions-toolbar-chip"
-            menuClassName="transactions-currency-filter__menu"
-            optionClassName="transactions-currency-filter__option"
-            compact
-            menuAlignment="end"
-            showChevron={false}
-            portalMenu
-          />
         </div>
       </section>
 
@@ -2786,7 +2771,7 @@ export default function InvestmentsPage() {
                             onCommit={(value) => commitPortfolioRowField(row, "institution", value)}
                           />
                         </div>
-                        <div className="investments-portfolio-table__cell">
+                        <div className="investments-portfolio-table__cell investments-portfolio-table__cell--type">
                           <PortfolioInlineEdit
                             value={row.subtype ?? "other"}
                             displayValue={row.subtype ? getInvestmentSubtypeLabel(row.subtype) : "Other"}
@@ -2799,7 +2784,7 @@ export default function InvestmentsPage() {
                             onCommit={(value) => commitPortfolioRowField(row, "subtype", value)}
                           />
                         </div>
-                        <div className="investments-portfolio-table__cell">
+                        <div className="investments-portfolio-table__cell investments-portfolio-table__cell--symbol">
                           <PortfolioInlineEdit
                             value={row.symbol ?? ""}
                             displayValue={row.symbol ?? ""}
@@ -2807,7 +2792,7 @@ export default function InvestmentsPage() {
                             onCommit={(value) => commitPortfolioRowField(row, "symbol", value)}
                           />
                         </div>
-                        <div className="investments-portfolio-table__cell">
+                        <div className="investments-portfolio-table__cell investments-portfolio-table__cell--units">
                           {row.source !== "account" || isMarketInvestmentSubtype(row.subtype) ? (
                             <PortfolioInlineEdit
                               value={row.detail ?? ""}
@@ -2820,7 +2805,7 @@ export default function InvestmentsPage() {
                             ""
                           )}
                         </div>
-                        <div className="investments-portfolio-table__cell">
+                        <div className="investments-portfolio-table__cell investments-portfolio-table__cell--value">
                           <PortfolioInlineEdit
                             value={row.currentValue?.toString() ?? ""}
                             displayValue={row.currentValue === null ? "" : formatInvestmentAmount(row.currentValue, row.currency)}
@@ -2830,7 +2815,7 @@ export default function InvestmentsPage() {
                             onCommit={(value) => commitPortfolioRowField(row, "currentValue", value)}
                           />
                         </div>
-                        <div className={`investments-portfolio-table__cell ${row.gainLoss === null ? "" : row.gainLoss >= 0 ? "is-positive" : "is-negative"}`}>
+                        <div className={`investments-portfolio-table__cell investments-portfolio-table__cell--gain ${row.gainLoss === null ? "" : row.gainLoss >= 0 ? "is-positive" : "is-negative"}`}>
                           {row.gainLoss === null ? "" : `${row.gainLoss >= 0 ? "+" : "-"}${formatInvestmentAmount(Math.abs(row.gainLoss), row.currency)}`}
                         </div>
                         <button
@@ -3147,8 +3132,11 @@ export default function InvestmentsPage() {
                   <p className="eyebrow">Asset details</p>
                   <h4 id="investment-asset-detail-title">{selectedPortfolioRow.name}</h4>
                 </div>
-                <button className="icon-button" type="button" onClick={closeInvestmentAsset} aria-label="Close asset details">
-                  ×
+                <button className="icon-button investments-asset-detail-modal__back" type="button" onClick={closeInvestmentAsset} aria-label="Back to investments">
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="m14.5 6-6 6 6 6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" />
+                  </svg>
+                  <span aria-hidden="true">×</span>
                 </button>
               </div>
 

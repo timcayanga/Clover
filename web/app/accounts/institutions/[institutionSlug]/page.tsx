@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
@@ -242,11 +242,17 @@ const sortTransactionsDesc = (rows: Transaction[]) =>
 
 export default function InvestmentInstitutionDetailPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const params = useParams<{ institutionSlug: string }>();
   const workspaceId = readSelectedWorkspaceId() ?? "";
   const { institution: routeInstitution, currency: routeCurrency } = extractInvestmentInstitutionFromPathSegment(
     params?.institutionSlug ?? ""
   );
+  const tradeMode = searchParams.get("trade") === "1";
+  const institutionPath = getInvestmentInstitutionPath({
+    institution: routeInstitution,
+    currency: routeCurrency,
+  });
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -727,6 +733,9 @@ export default function InvestmentInstitutionDetailPage() {
         syncWorkspaceCache(accounts, nextTransactions);
         resetTradeDraft();
         setMessage("Trade updated.");
+        if (tradeMode) {
+          router.replace(institutionPath);
+        }
       } else {
         const response = await fetch("/api/transactions", {
           method: "POST",
@@ -756,6 +765,9 @@ export default function InvestmentInstitutionDetailPage() {
         syncWorkspaceCache(accounts, nextTransactions);
         resetTradeDraft();
         setMessage("Trade added.");
+        if (tradeMode) {
+          router.replace(institutionPath);
+        }
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : editingTrade ? "Unable to update this trade." : "Unable to add this trade.");
@@ -831,16 +843,17 @@ export default function InvestmentInstitutionDetailPage() {
   return (
     <CloverShell
       active="accounts"
-      title={routeInstitution || "Institution"}
-      actions={
-        <button className="button button-secondary button-small" type="button" onClick={() => router.push("/accounts")}>
+      title={tradeMode ? "Add Trade" : routeInstitution || "Institution"}
+      mobileBackHref={tradeMode ? institutionPath : "/accounts"}
+      actions={!tradeMode ? (
+        <button className="button button-secondary button-small institution-back-to-accounts" type="button" onClick={() => router.push("/accounts")}>
           Back to Accounts
         </button>
-      }
+      ) : undefined}
       hideCompactBarCopyOnMobile
     >
       <div
-        className="institution-detail-page"
+        className={`institution-detail-page${tradeMode ? " institution-detail-page--trade" : ""}`}
         style={
           {
             ["--institution-accent" as string]: institutionBrand.accent,
@@ -848,7 +861,7 @@ export default function InvestmentInstitutionDetailPage() {
           } as CSSProperties
         }
       >
-        <section className="institution-detail-hero glass">
+        <section className="institution-detail-hero institution-detail-section--overview glass">
           <div className="institution-detail-hero__head">
             <div className="institution-detail-hero__brand">
               <button
@@ -919,7 +932,7 @@ export default function InvestmentInstitutionDetailPage() {
           </div>
         </section>
 
-        <section className="institution-detail-panel glass">
+        <section className="institution-detail-panel institution-detail-panel--assets glass">
           <div className="institution-detail-panel__head">
             <div>
               <p className="eyebrow">Assets</p>
@@ -942,7 +955,18 @@ export default function InvestmentInstitutionDetailPage() {
                 </thead>
                 <tbody>
                   {sortedAccounts.map((account) => (
-                    <tr key={account.id} className="institution-assets-table__row">
+                    <tr
+                      key={account.id}
+                      className="institution-assets-table__row"
+                      tabIndex={0}
+                      onClick={() => openAssetEditor(account)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          openAssetEditor(account);
+                        }
+                      }}
+                    >
                       <td>{accountAssetNameMap.get(account.id) ?? account.name}</td>
                       <td>{getInvestmentSubtypeLabel(account.investmentSubtype)}</td>
                       <td>{formatMoney(Math.abs(parseAmount(account.balance)), account.currency)}</td>
@@ -950,7 +974,10 @@ export default function InvestmentInstitutionDetailPage() {
                         <button
                           className="institution-assets-table__chevron"
                           type="button"
-                          onClick={() => openAssetEditor(account)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openAssetEditor(account);
+                          }}
                           aria-label={`Open ${accountAssetNameMap.get(account.id) ?? account.name} details`}
                         >
                           <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1076,11 +1103,11 @@ export default function InvestmentInstitutionDetailPage() {
           </div>
         ) : null}
 
-        <section className="institution-detail-panel glass">
+        <section className="institution-detail-panel institution-detail-panel--history glass">
           <div className="institution-detail-panel__head">
             <div>
-              <p className="eyebrow">History</p>
-              <h2>Trading history</h2>
+              <p className="eyebrow">{tradeMode ? "New entry" : "History"}</p>
+              <h2>{tradeMode ? "Add trading history" : "Trading history"}</h2>
             </div>
           </div>
 
@@ -1164,7 +1191,7 @@ export default function InvestmentInstitutionDetailPage() {
           </form>
 
           {transactions.length === 0 ? (
-            <p className="institution-detail-empty">No trading history yet for this institution.</p>
+            <p className="institution-detail-empty">No Trading History Yet</p>
           ) : (
             <div className="institution-assets-table-wrap">
               <table className="institution-assets-table">
@@ -1212,6 +1239,15 @@ export default function InvestmentInstitutionDetailPage() {
               </table>
             </div>
           )}
+          {!tradeMode ? (
+            <button
+              className="button button-primary button-small institution-trade-add-cta"
+              type="button"
+              onClick={() => router.push(`${institutionPath}?trade=1`)}
+            >
+              Add Trade
+            </button>
+          ) : null}
         </section>
 
         <div className="institution-detail-delete">

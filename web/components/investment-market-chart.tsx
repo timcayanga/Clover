@@ -665,7 +665,7 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
         >
           <div className="investments-market__ticker-field">
             <label>
-              Ticker
+              <span className="investments-market__field-label">Ticker</span>
               <input
                 value={tickerInput}
                 onChange={(event) => {
@@ -711,7 +711,7 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
           </div>
 
           <label>
-            Market
+            <span className="investments-market__field-label">Market</span>
             <select
               value={selectedMarket}
               className="investments-market__select investments-market__select--compact"
@@ -729,7 +729,7 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
           </label>
 
           <label className="investments-market__currency-select">
-            Currency
+            <span className="investments-market__field-label">Currency</span>
             <select
               className="investments-market__select investments-market__select--compact"
               value={displayCurrency}
@@ -742,7 +742,7 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
           </label>
 
             <label className="investments-market__currency-select">
-              Benchmark
+              <span className="investments-market__field-label">Benchmark</span>
               <select
                 className="investments-market__select investments-market__select--compact"
                 value={benchmarkKey}

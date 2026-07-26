@@ -45305,6 +45305,425 @@ html[data-theme="dark"] .investments-portfolio-table__total {
   }
 }
 
+.investments-market__field-label {
+  display: inline-block;
+}
+
+.investments-asset-detail-modal__back svg {
+  display: none;
+}
+
+.institution-trade-add-cta {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .investments-mobile-header {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    margin: -8px 0 8px;
+    padding: 10px 0 8px;
+    background: rgba(247, 250, 251, 0.96);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+
+  .investments-mobile-header__bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .investments-mobile-header__title-group {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .investments-mobile-header__back {
+    display: inline-grid !important;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    place-items: center;
+    visibility: visible !important;
+  }
+
+  .investments-tabs--mobile {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .investments-tabs--mobile::-webkit-scrollbar {
+    display: none;
+  }
+
+  .investments-mobile-header__actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .investments-mobile-icon-button--compact {
+    border-radius: 999px !important;
+  }
+
+  .investments-mobile-header__currency-row {
+    display: none !important;
+  }
+
+  .investments-filters--portfolio {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
+    gap: 6px;
+    overflow: visible;
+  }
+
+  .investments-filters__search {
+    grid-column: 1 / -1;
+    width: auto;
+    flex: auto;
+  }
+
+  .investments-filters--portfolio > label:last-of-type {
+    min-width: 0;
+  }
+
+  .investments-filters--portfolio > label:last-of-type select,
+  .investments-filters--portfolio select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .investments-portfolio-view-toggle {
+    min-width: 0;
+  }
+
+  .investments-portfolio-table {
+    padding-bottom: 18px;
+  }
+
+  .investments-portfolio-table__header {
+    top: 88px;
+    padding-block: 6px 8px;
+  }
+
+  .investments-portfolio-table__table {
+    gap: 0;
+    overflow-x: visible;
+  }
+
+  .investments-portfolio-table__row--head {
+    display: none;
+  }
+
+  .investments-portfolio-table__row {
+    grid-template-columns: minmax(0, 1fr) auto 26px;
+    gap: 8px;
+    min-width: 0;
+    padding: 11px 0;
+  }
+
+  .investments-portfolio-table__row > :not(.investments-portfolio-table__cell--asset):not(.investments-portfolio-table__cell--value):not(.investments-portfolio-table__chevron) {
+    display: none;
+  }
+
+  .investments-portfolio-table__cell {
+    padding-inline: 0;
+  }
+
+  .investments-portfolio-table__cell--asset {
+    gap: 9px;
+  }
+
+  .investments-portfolio-table__cell--asset .accounts-brand-mark {
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
+  }
+
+  .investments-portfolio-table__cell--value {
+    display: block;
+    justify-items: end;
+    max-width: 125px;
+    white-space: nowrap;
+  }
+
+  .investments-portfolio-table__cell--value .investments-portfolio-inline-edit {
+    width: auto;
+    margin: 0;
+    padding-inline: 2px;
+    text-align: right;
+    font-weight: 700;
+  }
+
+  .investments-portfolio-summary-row {
+    display: none !important;
+  }
+
+  .investments-market {
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .investments-market__controls {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .investments-market__ticker-field {
+    grid-column: 1 / -1;
+  }
+
+  .investments-market__controls > label:nth-of-type(3) {
+    grid-column: auto;
+  }
+
+  .investments-market__controls label {
+    position: relative;
+    gap: 0;
+  }
+
+  .investments-market__field-label {
+    position: absolute;
+    top: 5px;
+    left: 10px;
+    z-index: 1;
+    color: var(--muted);
+    font-size: 9px;
+    line-height: 1;
+    pointer-events: none;
+  }
+
+  .investments-market__controls input,
+  .investments-market__controls select {
+    min-height: 42px;
+    padding: 16px 8px 3px;
+    font-size: 11px;
+  }
+
+  .investments-market__ticker-field input {
+    font-size: 13px;
+  }
+
+  .investments-market__portfolio-tickers {
+    gap: 4px;
+  }
+
+  .investments-market__portfolio-tickers > span {
+    font-size: 10px;
+  }
+
+  body[data-investment-asset-detail] .mobile-tabbar,
+  body[data-investment-asset-detail] .shell-quick-add-button {
+    display: none !important;
+  }
+
+  .modal-backdrop--investment-detail {
+    z-index: 150;
+    align-items: stretch;
+    padding: 0;
+    background: var(--surface);
+  }
+
+  .investments-asset-detail-modal--sidepanel {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh;
+    max-height: none;
+    gap: 12px;
+    padding: 10px 14px 28px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .investments-asset-detail-modal--sidepanel .modal-head {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    padding: 6px 0 8px;
+    background: var(--surface);
+  }
+
+  .investments-asset-detail-modal--sidepanel .modal-head h4 {
+    font-size: 1rem;
+  }
+
+  .investments-asset-detail-modal__back svg {
+    display: block;
+    width: 19px;
+    height: 19px;
+  }
+
+  .investments-asset-detail-modal__back span {
+    display: none;
+  }
+
+  .investments-asset-detail-modal__hero {
+    padding: 10px 12px;
+    border-radius: 16px;
+  }
+
+  .investments-asset-detail-modal__hero strong {
+    font-size: 0.9rem;
+  }
+
+  .investments-asset-detail-modal__hero span,
+  .investments-asset-detail-modal__snapshot span,
+  .investments-asset-detail-modal__form label {
+    font-size: 11px;
+  }
+
+  .investments-asset-detail-modal__snapshot {
+    padding: 10px;
+    border-radius: 16px;
+  }
+
+  .investments-asset-detail-modal--sidepanel .accounts-detail__investment-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .investments-asset-detail-modal__form input,
+  .investments-asset-detail-modal__form select {
+    min-height: 40px;
+    font-size: 12px;
+  }
+
+  .institution-back-to-accounts {
+    display: none !important;
+  }
+
+  .institution-detail-page {
+    gap: 10px;
+  }
+
+  .institution-detail-hero,
+  .institution-detail-panel {
+    border-radius: 16px;
+  }
+
+  .institution-detail-hero,
+  .institution-detail-panel {
+    padding: 14px;
+  }
+
+  .institution-detail-hero__name-button {
+    font-size: 1.15rem;
+  }
+
+  .institution-detail-metric {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .institution-detail-metric span {
+    font-size: 0.62rem;
+  }
+
+  .institution-detail-metric strong {
+    font-size: 0.95rem;
+  }
+
+  .institution-detail-panel--assets .institution-assets-table-wrap,
+  .institution-detail-panel--history .institution-assets-table-wrap {
+    overflow: visible;
+  }
+
+  .institution-detail-panel--assets .institution-assets-table,
+  .institution-detail-panel--history .institution-assets-table {
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  .institution-detail-panel--assets .institution-assets-table th,
+  .institution-detail-panel--assets .institution-assets-table td {
+    padding: 10px 4px;
+    font-size: 12px;
+  }
+
+  .institution-detail-panel--assets .institution-assets-table th:nth-child(2),
+  .institution-detail-panel--assets .institution-assets-table td:nth-child(2),
+  .institution-detail-panel--assets .institution-assets-table th:nth-child(4),
+  .institution-detail-panel--assets .institution-assets-table td:nth-child(4) {
+    display: none;
+  }
+
+  .institution-detail-panel--assets .institution-assets-table th:nth-child(3),
+  .institution-detail-panel--assets .institution-assets-table td:nth-child(3) {
+    text-align: right;
+  }
+
+  .institution-detail-panel--assets .institution-assets-table__row {
+    cursor: pointer;
+  }
+
+  .institution-detail-panel--history .institution-trade-editor {
+    display: none;
+  }
+
+  .institution-detail-panel--history .institution-assets-table th,
+  .institution-detail-panel--history .institution-assets-table td {
+    padding: 9px 4px;
+    font-size: 11px;
+  }
+
+  .institution-detail-panel--history .institution-assets-table th:nth-child(3),
+  .institution-detail-panel--history .institution-assets-table td:nth-child(3),
+  .institution-detail-panel--history .institution-assets-table th:nth-child(4),
+  .institution-detail-panel--history .institution-assets-table td:nth-child(4),
+  .institution-detail-panel--history .institution-assets-table th:nth-child(6),
+  .institution-detail-panel--history .institution-assets-table td:nth-child(6),
+  .institution-detail-panel--history .institution-assets-table th:nth-child(7),
+  .institution-detail-panel--history .institution-assets-table td:nth-child(7) {
+    display: none;
+  }
+
+  .institution-detail-panel--history .institution-assets-table th:nth-child(5),
+  .institution-detail-panel--history .institution-assets-table td:nth-child(5) {
+    text-align: right;
+  }
+
+  .institution-trade-add-cta {
+    display: inline-flex;
+    justify-self: center;
+    margin-top: 2px;
+  }
+
+  .institution-detail-page--trade > :not(.institution-detail-panel--history):not(.page-message) {
+    display: none;
+  }
+
+  .institution-detail-page--trade .institution-detail-panel--history > .institution-detail-empty,
+  .institution-detail-page--trade .institution-detail-panel--history > .institution-assets-table-wrap,
+  .institution-detail-page--trade .institution-trade-add-cta {
+    display: none;
+  }
+
+  .institution-detail-page--trade .institution-trade-editor {
+    display: grid;
+  }
+
+  .institution-detail-page--trade .institution-asset-editor__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .institution-detail-page--trade .settings-field {
+    gap: 4px;
+    font-size: 11px;
+  }
+
+  .institution-detail-page--trade input,
+  .institution-detail-page--trade select {
+    min-height: 40px;
+    font-size: 12px;
+  }
+}
+
 /* Circles: collaborative finance with Profile-safe sharing. */
 .circles-page {
   display: grid;
