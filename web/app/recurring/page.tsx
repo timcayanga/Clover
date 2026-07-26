@@ -19,7 +19,12 @@ export const metadata = {
 
 function RecurringUnavailableState() {
   return (
-    <CloverShell active="recurring" title="Recurring" actions={<ContextualAskClover context="recurring" />}>
+    <CloverShell
+      active="recurring"
+      title="Recurring"
+      mobileLeadingAction={<ContextualAskClover context="recurring" />}
+      actions={<ContextualAskClover context="recurring" />}
+    >
       <section className="recurring-page">
         <TransientDataRecovery eyebrow="Recurring" pageLabel="Recurring" transactionHref="/transactions?manual=1" transactionLabel="Add a transaction" />
       </section>

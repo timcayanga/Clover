@@ -85,6 +85,7 @@ type CloverShellProps = {
   subtitle?: string;
   titleAddon?: ReactNode;
   actions?: ReactNode;
+  mobileLeadingAction?: ReactNode;
   showTopbar?: boolean;
   mobileBackHref?: string;
   hideCompactBarCopyOnMobile?: boolean;
@@ -753,6 +754,7 @@ export function CloverShell({
   subtitle,
   titleAddon,
   actions,
+  mobileLeadingAction,
   showTopbar = true,
   mobileBackHref,
   hideCompactBarCopyOnMobile = false,
@@ -2012,7 +2014,9 @@ export function CloverShell({
       </nav>
 
       <main
-        className={`content content--${active} ${titleAddon ? "content--has-title-addon" : "content--plain-title"}`}
+        className={`content content--${active} ${titleAddon ? "content--has-title-addon" : "content--plain-title"}${
+          mobileLeadingAction ? " content--has-mobile-leading-action" : ""
+        }`}
         onClickCapture={() => {
           if (isSidebarOpen) {
             setIsSidebarOpen(false);
@@ -2022,14 +2026,17 @@ export function CloverShell({
         {!showTopbar ? (
           <div className="shell-compact-bar glass">
             {shouldShowBackButton ? (
-              <button
-                className={`shell-back-button${mobileFallbackBackOnly ? " shell-back-button--mobile-only" : ""}`}
-                type="button"
-                aria-label="Go back"
-                onClick={handleBack}
-              >
-                <MenuIcon name="chevron-left" />
-              </button>
+              <div className="shell-topbar-leading">
+                <button
+                  className={`shell-back-button${mobileFallbackBackOnly ? " shell-back-button--mobile-only" : ""}`}
+                  type="button"
+                  aria-label="Go back"
+                  onClick={handleBack}
+                >
+                  <MenuIcon name="chevron-left" />
+                </button>
+                {mobileLeadingAction ? <div className="shell-topbar-leading__actions">{mobileLeadingAction}</div> : null}
+              </div>
             ) : (
               <button
                 className="shell-menu-button"
@@ -2063,14 +2070,17 @@ export function CloverShell({
         {showTopbar ? (
           <header className="topbar glass">
             {shouldShowBackButton ? (
-              <button
-                className={`shell-back-button${mobileFallbackBackOnly ? " shell-back-button--mobile-only" : ""}`}
-                type="button"
-                aria-label="Go back"
-                onClick={handleBack}
-              >
-                <MenuIcon name="chevron-left" />
-              </button>
+              <div className="shell-topbar-leading">
+                <button
+                  className={`shell-back-button${mobileFallbackBackOnly ? " shell-back-button--mobile-only" : ""}`}
+                  type="button"
+                  aria-label="Go back"
+                  onClick={handleBack}
+                >
+                  <MenuIcon name="chevron-left" />
+                </button>
+                {mobileLeadingAction ? <div className="shell-topbar-leading__actions">{mobileLeadingAction}</div> : null}
+              </div>
             ) : null}
             <div className="topbar__title-wrap">
               {kicker ? <p className="eyebrow">{kicker}</p> : null}

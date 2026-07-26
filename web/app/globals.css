@@ -2815,6 +2815,14 @@ body.transactions-manual-open .shell-quick-add-button {
   gap: 8px;
 }
 
+.shell-topbar-leading {
+  display: contents;
+}
+
+.shell-topbar-leading__actions {
+  display: none;
+}
+
 .shell-compact-bar__copy h1 {
   font-size: clamp(1.2rem, 3.5vw, 1.75rem);
   line-height: 1.08;
@@ -46986,36 +46994,15 @@ body:has(.landing-page) {
     display: none !important;
   }
 
-  .content--accounts .topbar:has(.shell-back-button) {
-    position: relative;
+  .content--accounts > .topbar .topbar-actions > .contextual-ask-clover,
+  .content--transactions > .topbar .transactions-shell-actions > .contextual-ask-clover,
+  .content--recurring > .topbar .recurring-shell-actions > .contextual-ask-clover {
+    display: none !important;
   }
 
-  .content--accounts .topbar:has(.shell-back-button) .topbar-actions > .contextual-ask-clover {
-    position: absolute;
-    top: 50%;
-    left: 48px;
-    transform: translateY(-50%);
-  }
-
-  .content--accounts .topbar:has(.shell-back-button) .contextual-ask-clover__trigger,
-  .content--accounts .topbar:has(.shell-back-button) .contextual-ask-clover__icon {
-    width: 40px;
-    height: 40px;
-  }
-
-  .content--transactions .topbar:has(.shell-back-button) {
-    position: relative;
-  }
-
-  .content--transactions .topbar:has(.shell-back-button) .transactions-shell-actions--compact > .contextual-ask-clover {
-    position: absolute;
-    top: 50%;
-    left: 48px;
-    transform: translateY(-50%);
-  }
-
-  .content--transactions .topbar:has(.shell-back-button) .contextual-ask-clover__trigger,
-  .content--transactions .topbar:has(.shell-back-button) .contextual-ask-clover__icon {
+  .content:is(.content--accounts, .content--transactions, .content--recurring)
+    .shell-topbar-leading__actions
+    :is(.contextual-ask-clover, .contextual-ask-clover__trigger, .contextual-ask-clover__icon) {
     width: 40px;
     height: 40px;
   }
@@ -47830,6 +47817,10 @@ html[data-theme="dark"] .content--adviser .adviser-summary .adviser-summary-card
 
   .content--has-title-addon > :is(.topbar, .shell-compact-bar) {
     grid-template-columns: 44px minmax(0, 1fr) auto !important;
+  }
+
+  .content--has-title-addon.content--has-mobile-leading-action > :is(.topbar, .shell-compact-bar) {
+    grid-template-columns: 92px minmax(0, 1fr) auto !important;
   }
 
   .content--has-title-addon > .topbar .topbar__title-wrap,

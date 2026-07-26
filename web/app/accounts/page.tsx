@@ -3761,6 +3761,7 @@ function AccountsPageContent() {
     <CloverShell
       active="accounts"
       title="Accounts"
+      mobileLeadingAction={<ContextualAskClover context="accounts" planTier={planTier} />}
       actions={accountsShellActions}
       >
       <div className="accounts-page">

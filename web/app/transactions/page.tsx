@@ -6861,7 +6861,6 @@ function TransactionsPageContent() {
         tabIndex={-1}
       />
 
-      <ContextualAskClover context="transactions" planTier={planTier} />
       <button
         className={`button button-secondary button-small transactions-toolbar-filter transactions-toolbar-filter--compact${filterOpen ? " is-active" : ""}`}
         type="button"
@@ -7016,6 +7015,7 @@ function TransactionsPageContent() {
     <CloverShell
       active="transactions"
       title="Transactions"
+      mobileLeadingAction={<ContextualAskClover context="transactions" planTier={planTier} />}
       actions={transactionsShellActions}
     >
       <PageFileDropZone
