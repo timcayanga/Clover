@@ -6137,14 +6137,14 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   }
 
   .content--recurring > .topbar .topbar__title-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
     gap: 10px;
     justify-content: flex-start !important;
-    overflow-x: auto;
-    scrollbar-width: none;
+    overflow: visible;
   }
 
-  .content--recurring > .topbar .topbar__title-row::-webkit-scrollbar,
   .content--recurring .recurring-tabs--top::-webkit-scrollbar {
     display: none;
   }
@@ -6158,13 +6158,14 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
 
   .content--recurring > .topbar .topbar__title-addon {
     min-width: 0;
-    overflow: visible;
+    overflow: hidden;
   }
 
   .content--recurring .recurring-tabs--top {
     align-items: center;
     gap: 10px;
-    overflow-x: visible;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
   .content--recurring .recurring-tabs--top .investments-tab {
