@@ -1599,11 +1599,6 @@ function CircleMembers({
                 </span>
                 <div className="circles-member-list__name">
                   <strong>{member.displayName}</strong>
-                  <span>
-                    {member.status === "invited"
-                      ? "Not joined yet"
-                      : "Active member"}
-                  </span>
                 </div>
                 <select
                   className="circles-member-list__role"
