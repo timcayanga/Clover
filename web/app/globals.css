@@ -15211,12 +15211,14 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 }
 
 .transactions-shell-actions--compact .transactions-toolbar-add span:last-child,
-.transactions-shell-actions--compact .transactions-toolbar-upload span:last-child {
+.transactions-shell-actions--compact .transactions-toolbar-upload span:last-child,
+.transactions-shell-actions--compact .transactions-toolbar-filter span:last-child {
   display: none;
 }
 
 .transactions-toolbar-add--compact,
-.transactions-toolbar-upload--compact {
+.transactions-toolbar-upload--compact,
+.transactions-toolbar-filter--compact {
   min-height: 36px;
   min-width: 36px;
   padding-inline: 12px;
@@ -15805,11 +15807,13 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   position: relative;
   display: flex;
   align-items: center;
+  min-height: 28px;
   gap: 10px;
-  padding: 4px 10px 0;
+  padding: 0 10px;
   color: var(--muted-2);
   font-size: 0.7rem;
   font-weight: 700;
+  line-height: 1;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   justify-content: center;
@@ -15821,6 +15825,9 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 }
 
 .transactions-mobile-date-divider span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
   white-space: nowrap;
 }
 
@@ -15852,9 +15859,9 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 .transactions-mobile-simple-row__name {
   min-width: 0;
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
+  grid-template-columns: 24px 18px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 7px;
 }
 
 .transactions-mobile-simple-row__category-icon {
@@ -17803,13 +17810,17 @@ input.transaction-inline-edit--amount::placeholder {
 @media (max-width: 760px) {
   .modal-backdrop--transaction-detail {
     padding: 0;
-    background: rgba(9, 15, 20, 0.22);
+    background: var(--page);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 
   .transaction-drawer--sidepanel {
     width: 100vw;
     height: 100dvh;
     border-radius: 0;
+    border: 0;
+    box-shadow: none;
   }
 
   .transaction-drawer__back-button {
@@ -17818,6 +17829,10 @@ input.transaction-inline-edit--amount::placeholder {
 
   .transaction-drawer__head {
     padding-top: 14px;
+  }
+
+  .transaction-drawer__close-button {
+    display: none;
   }
 
   .transaction-drawer-receipt-table__row {
@@ -46171,6 +46186,48 @@ body:has(.landing-page) {
   .content--accounts .topbar:has(.shell-back-button) .contextual-ask-clover__icon {
     width: 40px;
     height: 40px;
+  }
+
+  .content--transactions .topbar:has(.shell-back-button) {
+    position: relative;
+  }
+
+  .content--transactions .topbar:has(.shell-back-button) .transactions-shell-actions--compact > .contextual-ask-clover {
+    position: absolute;
+    top: 50%;
+    left: 48px;
+    transform: translateY(-50%);
+  }
+
+  .content--transactions .topbar:has(.shell-back-button) .contextual-ask-clover__trigger,
+  .content--transactions .topbar:has(.shell-back-button) .contextual-ask-clover__icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .content--transactions .transactions-inline-filters {
+    position: fixed;
+    z-index: 2900;
+    top: 72px;
+    right: 12px;
+    left: 12px;
+    max-height: calc(100dvh - 168px);
+    margin: 0;
+    overflow-y: auto;
+    border-radius: 20px;
+  }
+
+  .content--transactions .transactions-inline-filters .form-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .content--transactions .transactions-inline-filters .transactions-filter-group__options {
+    gap: 6px;
+  }
+
+  .content--transactions .transactions-inline-filters .transactions-column-menu__fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .shell-bottom-nav__icon .menu-icon-3d--adviser {

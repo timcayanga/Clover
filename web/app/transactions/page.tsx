@@ -2308,6 +2308,7 @@ function TransactionsPageContent() {
   const handledImportedSummaryKeysRef = useRef(new Set<string>());
   const reviewTransactionParamRef = useRef<string | null>(null);
   const drilldownParamRef = useRef<string | null>(null);
+  const detailTransactionParamRef = useRef<string | null>(null);
   const [isCompactViewport, setIsCompactViewport] = useState(false);
   const [activeWarningTransactionId, setActiveWarningTransactionId] = useState<string | null>(null);
   const [headerMenuOpen, setHeaderMenuOpen] = useState<TransactionSortField | null>(null);
@@ -4653,7 +4654,7 @@ function TransactionsPageContent() {
     }
   };
 
-  const openTransactionDetail = (transaction: Transaction) => {
+  const openTransactionDetail = (transaction: Transaction, { syncRoute = true }: { syncRoute?: boolean } = {}) => {
     setActiveWarningTransactionId(null);
     setSelectedTransaction(transaction);
     setTransactionDeleteConfirmOpen(false);
@@ -4673,6 +4674,13 @@ function TransactionsPageContent() {
         ),
       }),
     });
+
+    if (syncRoute && isCompactViewport) {
+      detailTransactionParamRef.current = transaction.id;
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.set("detail", transaction.id);
+      router.push(`${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`, { scroll: false });
+    }
   };
 
   const openTransactionReview = (transaction: Transaction, transactionIndex?: number | null) => {
@@ -4770,7 +4778,10 @@ function TransactionsPageContent() {
     closeTransactionDetail();
   };
 
-  const closeTransactionDetail = () => {
+  const closeTransactionDetail = (
+    options?: { syncRoute?: boolean } | ReactMouseEvent<HTMLElement>
+  ) => {
+    const syncRoute = options && "syncRoute" in options ? options.syncRoute ?? true : true;
     if (detailAutosaveTimerRef.current) {
       window.clearTimeout(detailAutosaveTimerRef.current);
       detailAutosaveTimerRef.current = null;
@@ -4792,7 +4803,35 @@ function TransactionsPageContent() {
     setTransactionSplitBillSaving(false);
     setTransactionSplitBillError(null);
     setActiveWarningTransactionId(null);
+
+    if (syncRoute && isCompactViewport && urlSearchParams.get("detail")) {
+      detailTransactionParamRef.current = null;
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.delete("detail");
+      router.replace(`${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`, { scroll: false });
+    }
   };
+
+  useEffect(() => {
+    if (!isCompactViewport) {
+      return;
+    }
+
+    const detailTransactionId = urlSearchParams.get("detail");
+    if (!detailTransactionId) {
+      return;
+    }
+
+    detailTransactionParamRef.current = detailTransactionId;
+    if (selectedTransaction?.id === detailTransactionId) {
+      return;
+    }
+
+    const transaction = transactions.find((candidate) => candidate.id === detailTransactionId);
+    if (transaction) {
+      openTransactionDetail(transaction, { syncRoute: false });
+    }
+  }, [isCompactViewport, selectedTransaction, transactions, urlSearchParams]);
 
   const createTransactionSplitBill = async () => {
     if (!selectedTransaction) {
@@ -6824,6 +6863,17 @@ function TransactionsPageContent() {
 
       <ContextualAskClover context="transactions" planTier={planTier} />
       <button
+        className={`button button-secondary button-small transactions-toolbar-filter transactions-toolbar-filter--compact${filterOpen ? " is-active" : ""}`}
+        type="button"
+        onClick={toggleFiltersPanel}
+        aria-label="Filter transactions"
+        title="Filter transactions"
+        aria-expanded={filterOpen}
+      >
+        <ActionIcon name="filters" />
+        <span>Filters</span>
+      </button>
+      <button
         className="button button-secondary button-small accounts-toolbar-add transactions-toolbar-add transactions-toolbar-add--compact"
         type="button"
         onClick={() => void openManualAdd()}
@@ -7005,6 +7055,33 @@ function TransactionsPageContent() {
                 </button>
               </div>
               <div className="form-grid">
+                <div className="transactions-filter-group" role="group" aria-label="Dates">
+                  <div className="transactions-filter-group__head">
+                    <span className="transactions-filter-group__label">Dates</span>
+                  </div>
+                  <div className="transactions-filter-group__options">
+                    {[
+                      ["ltd", "Lifetime"],
+                      ["day", "Today"],
+                      ["week", "This week"],
+                      ["month", "This month"],
+                      ["year", "This year"],
+                    ].map(([mode, label]) => {
+                      const isSelected = dateFilterMode === mode;
+                      return (
+                        <button
+                          key={mode}
+                          className={`pill pill-interactive transactions-filter-pill ${isSelected ? "pill-is-selected" : ""}`}
+                          type="button"
+                          aria-pressed={isSelected}
+                          onClick={() => applyDateFilterMode(isSelected && mode !== "ltd" ? "ltd" : (mode as DateFilterMode))}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <MultiSelectFilterGroup
                   label="Categories"
                   options={categories.map((category) => ({
@@ -7033,6 +7110,33 @@ function TransactionsPageContent() {
                   onToggle={(value) => setTypeFilters((current) => toggleTypedFilterValue(current, value as TransactionTypeFilter))}
                   onClear={() => setTypeFilters([])}
                 />
+                <div className="transactions-filter-group transactions-filter-group--amount" role="group" aria-label="Amount range">
+                  <div className="transactions-filter-group__head">
+                    <span className="transactions-filter-group__label">Amount range</span>
+                  </div>
+                  <div className="transactions-column-menu__fields transactions-column-menu__fields--amount-range">
+                    <label className="transactions-column-menu__field">
+                      <span>Minimum</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={amountMin}
+                        onChange={(event) => setAmountMin(event.target.value)}
+                        placeholder="0.00"
+                      />
+                    </label>
+                    <label className="transactions-column-menu__field">
+                      <span>Maximum</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={amountMax}
+                        onChange={(event) => setAmountMax(event.target.value)}
+                        placeholder="0.00"
+                      />
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
           ) : null}
@@ -7491,6 +7595,9 @@ function TransactionsPageContent() {
                             }}
                           >
                             <div className="transactions-mobile-simple-row__name">
+                              <span className="transactions-mobile-simple-row__account-brand" aria-hidden="true">
+                                <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
+                              </span>
                               <CategoryBrandMark
                                 categoryName={categoryLabel}
                                 size={24}
@@ -7500,9 +7607,6 @@ function TransactionsPageContent() {
                               <span className="transactions-mobile-simple-row__name-main">{merchantSummary}</span>
                             </div>
                             <div className={`transactions-mobile-simple-row__amount-group ${amountToneClass}`}>
-                              <span className="transactions-mobile-simple-row__account-brand" aria-hidden="true">
-                                <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
-                              </span>
                               <span className="transactions-mobile-simple-row__amount">{formatTransactionAmount(amount, transaction.currency)}</span>
                             </div>
                             <button
