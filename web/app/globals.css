@@ -33,51 +33,6 @@
   --page-shell: rgba(255, 255, 255, 0.84);
 }
 
-@media (max-width: 760px) {
-  /* Circles keeps its title and Circle switcher aligned beside the mobile back control. */
-  .content--circles > .topbar:has(.shell-back-button) {
-    grid-template-columns: 40px minmax(0, 1fr) 40px !important;
-  }
-
-  .content--circles > .topbar:not(:has(.shell-back-button)) {
-    grid-template-columns: minmax(0, 1fr) 40px !important;
-  }
-
-  .content--circles > .topbar .topbar__title-wrap {
-    position: static;
-    inset: auto !important;
-    grid-row: 1;
-    width: 100% !important;
-    max-width: 100% !important;
-    transform: none;
-    justify-self: stretch !important;
-    justify-items: start !important;
-    overflow: hidden;
-    text-align: left !important;
-  }
-
-  .content--circles > .topbar:has(.shell-back-button) .topbar__title-wrap {
-    grid-column: 2 !important;
-  }
-
-  .content--circles > .topbar:not(:has(.shell-back-button)) .topbar__title-wrap {
-    grid-column: 1 !important;
-  }
-
-  .content--circles > .topbar .topbar__title-row {
-    width: 100%;
-    justify-content: flex-start !important;
-  }
-
-  .content--circles > .topbar:has(.shell-back-button) .topbar-actions {
-    grid-column: 3 !important;
-  }
-
-  .content--circles > .topbar:not(:has(.shell-back-button)) .topbar-actions {
-    grid-column: 2 !important;
-  }
-}
-
 /* Compact pricing cards and a responsive iOS-style billing toggle. */
 .pricing-page__comparison { align-items: stretch; }
 .pricing-page .pricing-card {
