@@ -28,6 +28,7 @@ import { ReportsSection as ReportsSectionPanel, ReportsTabsProvider, ReportsTopT
 import { ReportsStream } from "@/app/reports/page";
 import { PlanUpgradeCallout } from "@/components/plan-upgrade-callout";
 import { hasFullFeatureAccess } from "@/lib/beta-access";
+import { InfoTooltip } from "@/components/info-tooltip";
 
 export const dynamic = "force-dynamic";
 
@@ -308,13 +309,6 @@ type AdviserThresholdProfile = {
   investmentSwingPercent: number;
   goalDriftPercent: number;
 };
-
-const InfoIcon = () => (
-  <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-    <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="1.2" />
-    <path d="M8 4.3a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8Zm-1 3.2h1a.6.6 0 0 1 .6.6v3.2H9a.6.6 0 0 1 0 1.2H7a.6.6 0 0 1 0-1.2h.4V8.7h-.4a.6.6 0 0 1 0-1.2Z" fill="currentColor" />
-  </svg>
-);
 
 const getAdviserCardEmoji = (card: { title: string; group: string; tone: AdviserCard["tone"] }) => {
   const title = card.title.toLowerCase();
@@ -3345,16 +3339,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
             {summaryCardsToRender.map((card) => (
               <article key={card.id} className="accounts-overview-card glass adviser-summary-card">
                 <p className="eyebrow">{card.title}</p>
-                <button
-                  type="button"
-                  className="accounts-overview-card__info adviser-summary-card__info"
-                  aria-label={`More information about ${card.title}`}
-                >
-                  <InfoIcon />
-                  <span className="accounts-overview-card__info-tooltip" role="tooltip">
-                    {card.detail}
-                  </span>
-                </button>
+                <InfoTooltip className="summary-card-info adviser-summary-card__info" label={card.detail} />
                 <strong className={`accounts-overview-card__amount ${card.tone === "warning" ? "is-danger" : "is-good"}`}>{card.value}</strong>
               </article>
             ))}

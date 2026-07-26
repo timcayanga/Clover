@@ -11,7 +11,6 @@ import { AnimatedTabs } from "@/components/animated-tabs";
 import { AdviserChat } from "@/components/adviser-chat";
 import { PlanUpgradeCallout } from "@/components/plan-upgrade-callout";
 import { CurrencySelector } from "@/components/currency-selector";
-import { InfoTip } from "@/components/info-tip";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { InvestmentMarketChart } from "@/components/investment-market-chart";
@@ -2528,12 +2527,7 @@ export default function InvestmentsPage() {
           <>
             <section className="investments-overview-metrics" aria-label="Portfolio totals">
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
-                <button className="accounts-overview-card__info" type="button" aria-label="How estimated value is calculated">
-                  i
-                  <span className="accounts-overview-card__info-tooltip" role="tooltip">
-                    The total value of the visible investment holdings for the selected currency view.
-                  </span>
-                </button>
+                <InfoTooltip className="summary-card-info" label="The total value of the visible investment holdings for the selected currency view." />
                 <p className="eyebrow">Estimated value</p>
                 <strong className="accounts-overview-card__amount is-good">
                   {hasVisibleCurrencySelection && canAggregateSelectedCurrency
@@ -2544,12 +2538,7 @@ export default function InvestmentsPage() {
                 </strong>
               </article>
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
-                <button className="accounts-overview-card__info" type="button" aria-label="How total returns are calculated">
-                  i
-                  <span className="accounts-overview-card__info-tooltip" role="tooltip">
-                    Recorded gain or loss for visible holdings with an available purchase value.
-                  </span>
-                </button>
+                <InfoTooltip className="summary-card-info" label="Recorded gain or loss for visible holdings with an available purchase value." />
                 <p className="eyebrow">Total returns</p>
                 <strong className={`accounts-overview-card__amount ${portfolioTotals.gainLoss > 0 ? "is-good" : portfolioTotals.gainLoss < 0 ? "is-danger" : "is-neutral"}`}>
                   {hasVisibleCurrencySelection && canAggregateSelectedCurrency
@@ -2560,24 +2549,14 @@ export default function InvestmentsPage() {
                 </strong>
               </article>
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
-                <button className="accounts-overview-card__info" type="button" aria-label="How portfolio risk is estimated">
-                  i
-                  <span className="accounts-overview-card__info-tooltip" role="tooltip">
-                    A portfolio-level indicator based on the mix of asset types and concentration in the largest category.
-                  </span>
-                </button>
+                <InfoTooltip className="summary-card-info" label="A portfolio-level indicator based on the mix of asset types and concentration in the largest category." />
                 <p className="eyebrow">Risk level</p>
                 <strong className={`accounts-overview-card__amount investments-risk-level investments-risk-level--${portfolioRisk.label.toLowerCase()}`}>
                   {portfolioRisk.label}
                 </strong>
               </article>
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
-                <button className="accounts-overview-card__info" type="button" aria-label="How ROI is calculated">
-                  i
-                  <span className="accounts-overview-card__info-tooltip" role="tooltip">
-                    Total recorded return divided by the available purchase value for visible holdings.
-                  </span>
-                </button>
+                <InfoTooltip className="summary-card-info" label="Total recorded return divided by the available purchase value for visible holdings." />
                 <p className="eyebrow">ROI percentage</p>
                 <strong className={`accounts-overview-card__amount ${portfolioRoi === null ? "is-neutral" : portfolioRoi > 0 ? "is-good" : portfolioRoi < 0 ? "is-danger" : "is-neutral"}`}>
                   {portfolioRoi === null ? "—" : percentFormatter.format(portfolioRoi)}
@@ -2589,7 +2568,7 @@ export default function InvestmentsPage() {
                 <div className="investments-allocation__head-title">
                   <div className="investments-allocation__title-row">
                     <h5>Investment Growth</h5>
-                    <InfoTip label="Tracks the total recorded portfolio value across dated investment statements and snapshots for the selected currency." />
+                    <InfoTooltip label="Tracks the total recorded portfolio value across dated investment statements and snapshots for the selected currency." />
                   </div>
                 </div>
                 {investmentGrowthPoints.length > 1 ? (
@@ -2631,7 +2610,7 @@ export default function InvestmentsPage() {
                     <div className="investments-allocation__head-title">
                       <div className="investments-allocation__title-row">
                         <h5>Portfolio Mix</h5>
-                        <InfoTip label="This shows how the visible portfolio value is split across investment types and the assets inside each type." />
+                        <InfoTooltip label="This shows how the visible portfolio value is split across investment types and the assets inside each type." />
                       </div>
                     </div>
                     <div className="investments-allocation__summary">
@@ -2932,7 +2911,7 @@ export default function InvestmentsPage() {
                 <div className="investments-allocation__head-title">
                   <div className="investments-allocation__title-row">
                     <h5>Portfolio Outlook</h5>
-                    <InfoTip label="Outlook groups holdings by recorded return. It is not an analyst rating or a prediction. Open Market data for price history and News for current coverage." />
+                    <InfoTooltip label="Outlook groups holdings by recorded return. It is not an analyst rating or a prediction. Open Market data for price history and News for current coverage." />
                   </div>
                 </div>
               </div>
@@ -3025,7 +3004,7 @@ export default function InvestmentsPage() {
                 <div className="investments-allocation__head-title">
                   <div className="investments-allocation__title-row">
                     <h5>Allocation By Subtype</h5>
-                    <InfoTip label="A broader view of concentration across the portfolio." />
+                    <InfoTooltip label="A broader view of concentration across the portfolio." />
                   </div>
                 </div>
                 <div className="investments-allocation__summary">
@@ -3079,7 +3058,7 @@ export default function InvestmentsPage() {
                 <div className="investments-allocation__head-title">
                   <div className="investments-allocation__title-row">
                     <h5>Largest Positions</h5>
-                    <InfoTip label="The biggest holdings by current value." />
+                    <InfoTooltip label="The biggest holdings by current value." />
                   </div>
                 </div>
                 <div className="investments-allocation__summary">
@@ -3133,7 +3112,7 @@ export default function InvestmentsPage() {
                 <div className="investments-allocation__head-title">
                   <div className="investments-allocation__title-row">
                     <h5>Ask Adviser About Your Investments</h5>
-                    <InfoTip label="Adviser considers your portfolio together with the rest of your Clover data." />
+                    <InfoTooltip label="Adviser considers your portfolio together with the rest of your Clover data." />
                   </div>
                 </div>
               </div>

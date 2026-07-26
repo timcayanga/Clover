@@ -2077,30 +2077,50 @@ body.transactions-manual-open .shell-quick-add-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   padding: 0;
-  border: 1px solid rgba(148, 163, 184, 0.38);
+  border: 1px solid rgba(100, 116, 139, 0.22);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
-  color: rgba(100, 116, 139, 0.92);
+  background: rgba(255, 255, 255, 0.58);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
   cursor: help;
+  opacity: 0.62;
   appearance: none;
   box-shadow: none;
-  transition: background-color 140ms ease, color 140ms ease;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    opacity 0.18s ease,
+    transform 0.18s ease;
 }
 
 .info-tooltip__button:hover,
 .info-tooltip__button:focus-visible {
-  background: rgba(3, 168, 192, 0.14);
-  color: var(--accent);
+  background: rgba(255, 255, 255, 0.86);
+  border-color: rgba(0, 169, 191, 0.36);
+  color: var(--brand);
+  opacity: 1;
+  transform: translateY(-1px);
   outline: none;
 }
 
+.info-tooltip__button:focus-visible {
+  outline: 2px solid rgba(0, 169, 191, 0.3);
+  outline-offset: 2px;
+}
+
 .info-tooltip__icon {
-  width: 12px;
-  height: 12px;
+  display: block;
+  width: auto;
+  height: auto;
   flex: none;
+  font: inherit;
+  line-height: 1;
 }
 
 .report-tip {
@@ -45816,6 +45836,13 @@ body:has(.landing-page) {
   z-index: 4;
 }
 
+.accounts-overview-card > .summary-card-info {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 4;
+}
+
 .summary-aligned-card > .summary-card-info .info-tooltip__button {
   width: 18px;
   height: 18px;
@@ -45823,8 +45850,8 @@ body:has(.landing-page) {
 }
 
 .summary-aligned-card > .summary-card-info .info-tooltip__icon {
-  width: 13px;
-  height: 13px;
+  width: auto;
+  height: auto;
 }
 
 .summary-aligned-card .eyebrow {

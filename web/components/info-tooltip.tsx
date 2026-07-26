@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { InfoIcon } from "@/components/info-icon";
 
 type InfoTooltipProps = {
   label: string;
@@ -69,7 +68,9 @@ export function InfoTooltip({ label, title, align = "right", className }: InfoTo
         onBlur={() => setIsOpen(false)}
         onMouseDown={(event) => event.preventDefault()}
       >
-        <InfoIcon className="info-tooltip__icon" />
+        <span className="info-tooltip__icon" aria-hidden="true">
+          i
+        </span>
       </button>
       {isOpen && panelStyle
         ? createPortal(
