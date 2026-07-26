@@ -550,6 +550,7 @@ export function SettingsHub({
   const [paypalAnnualPlanId, setPaypalAnnualPlanId] = useState<string | null>(initialPaypalAnnualPlanId ?? null);
   const [paypalBuyerCountry, setPaypalBuyerCountry] = useState<string | null>(initialPaypalBuyerCountry ?? null);
   const [themeMode, setThemeMode] = useState<ThemeMode>("light");
+  const [themePreferenceLoaded, setThemePreferenceLoaded] = useState(false);
   const [helperTextVisible, setHelperTextVisible] = useState(true);
   const [guidanceLevel, setGuidanceLevel] = useState<GuidanceLevel>("very-comfortable");
   const [guidanceMenuVisibility, setGuidanceMenuVisibility] = useState<GuidanceMenuVisibility>(() =>
@@ -645,6 +646,7 @@ export function SettingsHub({
     const initialTheme = storedTheme === "dark" ? "dark" : "light";
     setThemeMode(initialTheme);
     applyThemeMode(initialTheme);
+    setThemePreferenceLoaded(true);
   }, []);
 
   useEffect(() => {
@@ -1064,9 +1066,13 @@ export function SettingsHub({
   }, [initialSelectedProfileId]);
 
   useEffect(() => {
+    if (!themePreferenceLoaded) {
+      return;
+    }
+
     window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
     applyThemeMode(themeMode);
-  }, [themeMode]);
+  }, [themeMode, themePreferenceLoaded]);
 
   useEffect(() => {
     window.localStorage.setItem(HELPER_TEXT_STORAGE_KEY, helperTextVisible ? "visible" : "hidden");
