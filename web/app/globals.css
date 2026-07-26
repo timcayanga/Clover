@@ -2652,6 +2652,14 @@ body.transactions-manual-open .shell-quick-add-button {
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
+  padding: 16px 0;
+  border: 0;
+  border-bottom: 1px solid var(--stroke);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .notification-item--budget {
@@ -2716,6 +2724,40 @@ body.transactions-manual-open .shell-quick-add-button {
 .notification-item__time {
   flex: none;
   padding-top: 2px;
+}
+
+.home-notifications-button {
+  position: relative;
+  display: none;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.home-notifications-button img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+}
+
+.home-notifications-button__badge {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  padding: 0 4px;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .tier-card {
@@ -47813,6 +47855,50 @@ html[data-theme="dark"] .content--adviser .adviser-summary .adviser-summary-card
 
   .content--plain-title > :is(.topbar, .shell-compact-bar) :is(.eyebrow, .topbar-subtitle) {
     display: none;
+  }
+
+  .content--dashboard .home-notifications-button {
+    display: grid;
+  }
+
+  .content--dashboard > .topbar .topbar-actions {
+    grid-column: 3 !important;
+    justify-self: end;
+    min-width: 40px;
+  }
+
+  .content--notifications .notifications-layout,
+  .content--notifications .notifications-list,
+  .content--notifications .notifications-budget,
+  .content--notifications .notifications-budget__grid {
+    gap: 0;
+  }
+
+  .content--notifications .notifications-budget > .report-card__head {
+    padding: 14px 0 8px;
+    border-bottom: 1px solid var(--stroke);
+  }
+
+  .content--notifications .notification-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 14px 0;
+  }
+
+  .content--notifications .notification-item__main {
+    gap: 4px;
+  }
+
+  .content--notifications .notification-item__main p {
+    line-height: 1.4;
+  }
+
+  .content--notifications .notification-item__time {
+    display: flex;
+    align-items: center;
+    align-self: center;
+    gap: 6px;
+    padding: 0;
   }
 
   .content--has-title-addon > :is(.topbar, .shell-compact-bar) {

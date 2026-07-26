@@ -1455,6 +1455,24 @@ export function CloverShell({
     return items;
   }, [circleInvitations, dismissedNotifications, importActivity, reviewQueueCount, searchWorkspaceId]);
   const notificationCount = notifications.length;
+  const homeNotificationsAction =
+    active === "dashboard" ? (
+      <Link
+        href="/notifications"
+        className="home-notifications-button"
+        aria-label={`Open notifications${notificationCount ? ` (${notificationCount})` : ""}`}
+        onClick={(event) => handleNavigationLinkClick(event, "/notifications")}
+        onMouseEnter={() => prefetchNavTarget("/notifications")}
+        onTouchStart={() => prefetchNavTarget("/notifications")}
+      >
+        <MenuIcon name="notifications" />
+        {notificationCount > 0 ? (
+          <span className="home-notifications-button__badge" aria-hidden="true">
+            {notificationCount > 99 ? "99+" : notificationCount}
+          </span>
+        ) : null}
+      </Link>
+    ) : null;
   const navigateTo = (href: string) => {
     closeChrome();
     if (typeof window !== "undefined" && pathname?.startsWith("/accounts")) {
@@ -2064,7 +2082,12 @@ export function CloverShell({
               </div>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
             </div>
-            {actions ? <div className="shell-compact-bar__actions">{actions}</div> : null}
+            {actions || homeNotificationsAction ? (
+              <div className="shell-compact-bar__actions">
+                {homeNotificationsAction}
+                {actions}
+              </div>
+            ) : null}
           </div>
         ) : null}
         {showTopbar ? (
@@ -2091,6 +2114,7 @@ export function CloverShell({
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
             </div>
             <div className="topbar-actions">
+              {homeNotificationsAction}
               <button
                 className="shell-menu-button"
                 type="button"

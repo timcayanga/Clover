@@ -4,12 +4,11 @@ import { useEffect, useState } from "react";
 import { CloverShell } from "@/components/clover-shell";
 import {
   clearImportActivity,
-  getImportActivityTimingSummary,
   readImportActivity,
   subscribeImportActivity,
   type ImportActivitySnapshot,
 } from "@/lib/import-activity";
-import { buildImportResultChecklist, formatImportResultHeadline } from "@/lib/import-result-summary";
+import { formatImportResultHeadline } from "@/lib/import-result-summary";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 
 type BudgetAlert = {
@@ -30,15 +29,6 @@ type BudgetAlert = {
   href: string;
 };
 
-type AdviserAlert = {
-  id: string;
-  tone: "positive" | "warning" | "danger";
-  title: string;
-  body: string;
-  href: string;
-  actionLabel: string;
-};
-
 type CircleInvitationAlert = {
   id: string;
   circleName: string;
@@ -49,8 +39,18 @@ type CircleInvitationAlert = {
   href: string;
 };
 
-const ADVISER_ALERT_DISMISSALS_KEY = "clover.adviser-alert-dismissals.v1";
-const ADVISER_ALERTS_ENABLED_KEY = "clover.adviser-alerts-enabled.v1";
+const LAST_SUCCESSFUL_IMPORT_KEY = "clover.last-successful-import-at.v1";
+const WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000;
+const MONTH_IN_MS = 30 * 24 * 60 * 60 * 1000;
+
+const readLastSuccessfulImportAt = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const stored = Number(window.localStorage.getItem(LAST_SUCCESSFUL_IMPORT_KEY));
+  return Number.isFinite(stored) && stored > 0 ? stored : null;
+};
 
 const formatUpdatedAt = (updatedAt: number) => {
   if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
@@ -75,54 +75,44 @@ const getImportNotificationTone = (activity: ImportActivitySnapshot) => {
 };
 
 const getImportNotificationTitle = (activity: ImportActivitySnapshot) => {
-  if (activity.status === "error") return activity.errorTitle ?? "Import needs attention";
-  if (activity.status === "done") return "Import complete";
-  return "Import in progress";
+  const fileName = activity.fileName?.trim();
+  if (activity.status === "error") return fileName ? `${fileName} failed to upload` : activity.errorTitle ?? "Upload failed";
+  if (activity.status === "done") return fileName ? `${fileName} uploaded` : "Upload complete";
+  return fileName ? `Uploading ${fileName}` : "Upload in progress";
 };
 
 const getImportNotificationBody = (activity: ImportActivitySnapshot) => {
-  const timingSummary = getImportActivityTimingSummary(activity);
-
   if (activity.status === "error") {
-    return [activity.errorMessage ?? activity.detail ?? "Clover could not finish this import automatically.", timingSummary]
-      .filter(Boolean)
-      .join(" · ");
+    return activity.errorMessage ?? activity.detail ?? "Clover could not finish this upload.";
   }
 
   if (activity.status === "done" && activity.summary) {
-    return [formatImportResultHeadline(activity.summary) || activity.detail || "Your import is ready in Clover.", timingSummary]
-      .filter(Boolean)
-      .join(" · ");
+    return formatImportResultHeadline(activity.summary) || activity.detail || "Your data is ready in Clover.";
   }
 
-  const fileProgress =
-    activity.fileTotal > 0
-      ? `${Math.min(activity.completedFiles, activity.fileTotal)} of ${activity.fileTotal} files ready`
-      : "Import queued";
-  const percent = `${Math.round(Math.max(0, Math.min(100, activity.progress)))}%`;
-  return [activity.detail, timingSummary, `${fileProgress} · ${percent}`].filter(Boolean).join(" · ");
+  return activity.detail || `${Math.round(Math.max(0, Math.min(100, activity.progress)))}% complete`;
 };
 
 export function NotificationsClient() {
   const [activity, setActivity] = useState<ImportActivitySnapshot | null>(() => readImportActivity());
   const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>([]);
-  const [adviserAlerts, setAdviserAlerts] = useState<AdviserAlert[]>([]);
-  const [dismissedAdviserAlerts, setDismissedAdviserAlerts] = useState<string[]>([]);
-  const [adviserAlertsEnabled, setAdviserAlertsEnabled] = useState(true);
+  const [lastSuccessfulImportAt, setLastSuccessfulImportAt] = useState<number | null>(null);
+  const [reminderReady, setReminderReady] = useState(false);
   const [circleInvitations, setCircleInvitations] = useState<CircleInvitationAlert[]>([]);
 
   useEffect(() => subscribeImportActivity(() => setActivity(readImportActivity())), []);
   useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(ADVISER_ALERT_DISMISSALS_KEY);
-      const parsed = stored ? JSON.parse(stored) : [];
-      if (Array.isArray(parsed)) {
-        setDismissedAdviserAlerts(parsed.filter((value): value is string => typeof value === "string"));
-      }
-    } catch {
-      setDismissedAdviserAlerts([]);
-    }
+    setLastSuccessfulImportAt(readLastSuccessfulImportAt());
+    setReminderReady(true);
   }, []);
+  useEffect(() => {
+    if (activity?.status !== "done") {
+      return;
+    }
+
+    window.localStorage.setItem(LAST_SUCCESSFUL_IMPORT_KEY, String(activity.updatedAt));
+    setLastSuccessfulImportAt(activity.updatedAt);
+  }, [activity]);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,12 +127,6 @@ export function NotificationsClient() {
     return () => {
       cancelled = true;
     };
-  }, []);
-  useEffect(() => {
-    const stored = window.localStorage.getItem(ADVISER_ALERTS_ENABLED_KEY);
-    if (stored === "false") {
-      setAdviserAlertsEnabled(false);
-    }
   }, []);
   useEffect(() => {
     let cancelled = false;
@@ -172,64 +156,33 @@ export function NotificationsClient() {
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    fetch("/api/adviser/alerts", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((result: { alerts?: AdviserAlert[] } | null) => {
-        if (!cancelled) {
-          setAdviserAlerts(result?.alerts ?? []);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAdviserAlerts([]);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const dismissImportActivity = () => {
     clearImportActivity();
     setActivity(null);
   };
-  const dismissAdviserAlert = (alertId: string) => {
-    setDismissedAdviserAlerts((current) => {
-      const next = Array.from(new Set([...current, alertId])).slice(-50);
-      window.localStorage.setItem(ADVISER_ALERT_DISMISSALS_KEY, JSON.stringify(next));
-      return next;
-    });
-  };
-  const toggleAdviserAlerts = () => {
-    setAdviserAlertsEnabled((current) => {
-      const next = !current;
-      window.localStorage.setItem(ADVISER_ALERTS_ENABLED_KEY, String(next));
-      return next;
-    });
-  };
-  const importChecklist = activity?.summary ? buildImportResultChecklist(activity.summary) : [];
-  const visibleAdviserAlerts = adviserAlerts.filter((alert) => !dismissedAdviserAlerts.includes(alert.id));
+  const importAge = lastSuccessfulImportAt ? Date.now() - lastSuccessfulImportAt : Number.POSITIVE_INFINITY;
+  const uploadReminder = !reminderReady
+    ? null
+    : importAge >= MONTH_IN_MS
+      ? {
+          tone: "Monthly reminder",
+          title: "Upload this month's data",
+          body: "Add your latest statements or receipts to keep Clover current.",
+        }
+      : importAge >= WEEK_IN_MS
+        ? {
+            tone: "Weekly reminder",
+            title: "Upload your latest data",
+            body: "A quick upload keeps your balances and trends up to date.",
+          }
+        : null;
 
   return (
     <CloverShell
       active="notifications"
       title="Notifications"
-      kicker="Updates"
-      subtitle="Track imports and Clover activity you may have dismissed."
     >
       <section className="notifications-layout">
-        <div className="notifications-hero">
-          <div>
-            <p className="eyebrow">Notifications</p>
-            <h3>Recent activity</h3>
-            <p className="panel-muted">Imports keep running even when you close the progress window.</p>
-          </div>
-        </div>
-
         <div className="notifications-list">
           {circleInvitations.length > 0 ? (
             <section className="notifications-budget">
@@ -241,7 +194,7 @@ export function NotificationsClient() {
               </div>
               <div className="notifications-budget__grid">
                 {circleInvitations.map((invitation) => (
-                  <article key={invitation.id} className="notification-item glass notification-item--positive">
+                  <article key={invitation.id} className="notification-item notification-item--positive">
                     <div className="notification-item__main">
                       <p className="notification-item__tone">{invitation.circleType} Circle</p>
                       <h4>{invitation.circleName}</h4>
@@ -258,19 +211,11 @@ export function NotificationsClient() {
           ) : null}
 
           {activity ? (
-            <article className="notification-item glass">
+            <article className="notification-item">
               <div className="notification-item__main">
                 <p className="notification-item__tone">{getImportNotificationTone(activity)}</p>
                 <h4>{getImportNotificationTitle(activity)}</h4>
                 <p>{getImportNotificationBody(activity)}</p>
-                {importChecklist.length > 0 ? (
-                  <ul className="notification-item__checklist" aria-label="Import highlights">
-                    {importChecklist.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                ) : null}
-                {activity.fileName ? <p className="notification-item__tone">{activity.fileName}</p> : null}
               </div>
               <div className="notification-item__time">
                 <time>{formatUpdatedAt(activity.updatedAt)}</time>
@@ -279,58 +224,19 @@ export function NotificationsClient() {
                 </button>
               </div>
             </article>
-          ) : (
-            <article className="notification-item glass">
-              <div className="notification-item__main">
-                <p className="notification-item__tone">All caught up</p>
-                <h4>No active import notifications</h4>
-                <p>When you close an import progress window, its latest status will show here.</p>
-              </div>
-            </article>
-          )}
+          ) : null}
 
-          {adviserAlertsEnabled && visibleAdviserAlerts.length > 0 ? (
-            <section className="notifications-budget">
-              <div className="report-card__head report-card__head--compact">
-                <div>
-                  <p className="eyebrow">Adviser alerts</p>
-                  <h4>Worth a look right now</h4>
-                </div>
-                <button className="button button-secondary button-small" type="button" onClick={toggleAdviserAlerts}>
-                  Pause alerts
-                </button>
-              </div>
-              <div className="notifications-budget__grid">
-                {visibleAdviserAlerts.map((alert) => (
-                  <article key={alert.id} className={`notification-item glass notification-item--${alert.tone}`}>
-                    <div className="notification-item__main">
-                      <p className="notification-item__tone">Adviser</p>
-                      <h4>{alert.title}</h4>
-                      <p>{alert.body}</p>
-                    </div>
-                    <div className="notification-item__time">
-                      <a className="button button-secondary button-small" href={alert.href}>
-                        {alert.actionLabel}
-                      </a>
-                      <button className="button button-secondary button-small" type="button" onClick={() => dismissAdviserAlert(alert.id)}>
-                        Dismiss
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          ) : adviserAlerts.length > 0 ? (
-            <article className="notification-item glass">
+          {uploadReminder ? (
+            <article className="notification-item notification-item--reminder">
               <div className="notification-item__main">
-                <p className="notification-item__tone">Adviser alerts paused</p>
-                <h4>Notifications are still available when you want them</h4>
-                <p>Adviser will keep generating grounded signals, but this device will not show them here until you resume alerts.</p>
+                <p className="notification-item__tone">{uploadReminder.tone}</p>
+                <h4>{uploadReminder.title}</h4>
+                <p>{uploadReminder.body}</p>
               </div>
               <div className="notification-item__time">
-                <button className="button button-secondary button-small" type="button" onClick={toggleAdviserAlerts}>
-                  Resume alerts
-                </button>
+                <a className="button button-secondary button-small" href="/transactions">
+                  Upload data
+                </a>
               </div>
             </article>
           ) : null}
@@ -345,7 +251,7 @@ export function NotificationsClient() {
               </div>
               <div className="notifications-budget__grid">
                 {budgetAlerts.slice(0, 4).map((budget) => (
-                  <article key={budget.id} className={`notification-item glass notification-item--budget notification-item--${budget.tone}`}>
+                  <article key={budget.id} className={`notification-item notification-item--budget notification-item--${budget.tone}`}>
                     <div className="notification-item__main">
                       <p className="notification-item__tone">{budget.kindLabel}</p>
                       <h4>{budget.name}</h4>
@@ -367,15 +273,7 @@ export function NotificationsClient() {
                 ))}
               </div>
             </section>
-          ) : (
-            <article className="notification-item glass">
-              <div className="notification-item__main">
-                <p className="notification-item__tone">Budgets</p>
-                <h4>No budget alerts yet</h4>
-                <p>Set a budget in Budgeting and Clover will show threshold alerts here as limits get closer.</p>
-              </div>
-            </article>
-          )}
+          ) : null}
         </div>
       </section>
     </CloverShell>
