@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { InfoTooltip } from "@/components/info-tooltip";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 
 type BudgetKind = "spend_limit" | "savings_target";
@@ -545,10 +546,14 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
   return (
     <section className="budgeting-page">
       <section className="budget-summary-grid">
-        <article className="budget-summary-card glass budget-summary-card--positive">
+        <article className="accounts-overview-card summary-aligned-card budget-summary-card glass budget-summary-card--positive">
+          <InfoTooltip
+            className="summary-card-info"
+            label="Budgets whose current and projected spending remain within their configured limits."
+          />
           <div className="budget-summary-card__head">
             <p className="eyebrow">On Track</p>
-            <strong>{onTrackBudgets.length}</strong>
+            <strong className="accounts-overview-card__amount is-good">{onTrackBudgets.length}</strong>
           </div>
           <div className="budget-summary-card__items">
             {onTrackBudgets.slice(0, 3).map((budget) => (
@@ -561,10 +566,14 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
           </div>
         </article>
 
-        <article className="budget-summary-card glass budget-summary-card--warning">
+        <article className="accounts-overview-card summary-aligned-card budget-summary-card glass budget-summary-card--warning">
+          <InfoTooltip
+            className="summary-card-info"
+            label="Budgets that are close to, projected to exceed, or have already exceeded their configured limits."
+          />
           <div className="budget-summary-card__head">
             <p className="eyebrow">At Risk</p>
-            <strong>{atRiskBudgets.length}</strong>
+            <strong className="accounts-overview-card__amount is-danger">{atRiskBudgets.length}</strong>
           </div>
           <div className="budget-summary-card__items">
             {atRiskBudgets.slice(0, 3).map((budget) => (

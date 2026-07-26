@@ -12,6 +12,7 @@ import { AdviserChat } from "@/components/adviser-chat";
 import { PlanUpgradeCallout } from "@/components/plan-upgrade-callout";
 import { CurrencySelector } from "@/components/currency-selector";
 import { InfoTip } from "@/components/info-tip";
+import { InfoTooltip } from "@/components/info-tooltip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { InvestmentMarketChart } from "@/components/investment-market-chart";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
@@ -2841,42 +2842,34 @@ export default function InvestmentsPage() {
               </div>
             ) : null}
             <div className="investments-insights__stats investments-insights__stats--top">
-              <article className="accounts-overview-card glass">
-                <div className="investments-metric__label">
-                  <span>Largest position</span>
-                  <InfoTip label="The holding with the highest current value." />
-                </div>
-                <strong>{topHoldings[0] ? formatInvestmentAmount(topHoldings[0].currentValue, topHoldings[0].account.currency) : "—"}</strong>
+              <article className="accounts-overview-card summary-aligned-card glass">
+                <InfoTooltip className="summary-card-info" label="The holding with the highest current value." />
+                <p className="eyebrow">Largest position</p>
+                <strong className="accounts-overview-card__amount">{topHoldings[0] ? formatInvestmentAmount(topHoldings[0].currentValue, topHoldings[0].account.currency) : "—"}</strong>
                 <span className="accounts-overview-card__asset-name">
                   {topHoldings[0]?.account.name ?? "No portfolio assets yet"}
                 </span>
               </article>
-              <article className="accounts-overview-card glass">
-                <div className="investments-metric__label">
-                  <span>Best gain</span>
-                  <InfoTip label="The holding with the largest gain in absolute currency value." />
-                </div>
-                <strong>
+              <article className="accounts-overview-card summary-aligned-card glass">
+                <InfoTooltip className="summary-card-info" label="The holding with the largest gain in absolute currency value." />
+                <p className="eyebrow">Best gain</p>
+                <strong className="accounts-overview-card__amount">
                   {bestGainHolding?.gainLoss === null || bestGainHolding?.gainLoss === undefined
                     ? "—"
                     : formatInvestmentAmount(bestGainHolding.gainLoss, bestGainHolding.account.currency)}
                 </strong>
                 <span>{bestGainHolding?.account.name ?? "No portfolio assets yet"}</span>
               </article>
-              <article className="accounts-overview-card glass">
-                <div className="investments-metric__label">
-                  <span>Best return</span>
-                  <InfoTip label="The holding with the highest return percentage." />
-                </div>
-                <strong>{bestReturnHolding?.returnPercent === null || bestReturnHolding?.returnPercent === undefined ? "—" : percentFormatter.format(bestReturnHolding.returnPercent)}</strong>
+              <article className="accounts-overview-card summary-aligned-card glass">
+                <InfoTooltip className="summary-card-info" label="The holding with the highest return percentage." />
+                <p className="eyebrow">Best return</p>
+                <strong className="accounts-overview-card__amount">{bestReturnHolding?.returnPercent === null || bestReturnHolding?.returnPercent === undefined ? "—" : percentFormatter.format(bestReturnHolding.returnPercent)}</strong>
                 <span>{bestReturnHolding?.account.name ?? "No portfolio assets yet"}</span>
               </article>
-              <article className="accounts-overview-card glass">
-                <div className="investments-metric__label">
-                  <span>Worst gain</span>
-                  <InfoTip label="The holding with the largest loss in absolute currency value." />
-                </div>
-                <strong>
+              <article className="accounts-overview-card summary-aligned-card glass">
+                <InfoTooltip className="summary-card-info" label="The holding with the largest loss in absolute currency value." />
+                <p className="eyebrow">Worst gain</p>
+                <strong className="accounts-overview-card__amount">
                   {worstGainHolding?.gainLoss === null || worstGainHolding?.gainLoss === undefined
                     ? "—"
                     : formatInvestmentAmount(worstGainHolding.gainLoss, worstGainHolding.account.currency)}

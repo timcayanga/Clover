@@ -12,6 +12,7 @@ import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { GoalsEditor } from "@/components/goals-editor-modal";
 import { GoalInlineSetup } from "@/components/goal-inline-setup";
+import { InfoTooltip } from "@/components/info-tooltip";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import {
   GOAL_OPTIONS,
@@ -640,18 +641,21 @@ async function GoalsPageStream() {
       value: spendDelta === null ? "N/A" : formatPercent(spendDelta),
       note: spendDelta === null ? "No prior comparison" : spendDelta > 0 ? "Up vs prior month" : "Down vs prior month",
       tone: spendDelta === null ? "neutral" : spendDelta > 0 ? "negative" : "positive",
+      info: "Compares current spending with the prior comparable period.",
     },
     {
       label: "Savings rate",
       value: currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100),
       note: currentSavingsRate === null ? "Need more income context" : savingsRateDelta !== null && savingsRateDelta >= 0 ? "Improving momentum" : "Needs a reset",
       tone: currentSavingsRate === null ? "neutral" : savingsRateDelta !== null && savingsRateDelta >= 0 ? "positive" : "negative",
+      info: "Income left after expenses, shown as a percentage of income.",
     },
     {
       label: "Recurring costs",
       value: recurringShare > 0 ? formatPercent(recurringShare * 100) : "Clean",
       note: recurringShare > 0.25 ? "A meaningful slice of the month" : "Recurring spending is under control",
       tone: recurringShare > 0.25 ? "negative" : "positive",
+      info: "The share of current spending associated with recurring costs.",
     },
     {
       label: "Investment movement",
@@ -661,6 +665,7 @@ async function GoalsPageStream() {
           ? `${investmentHoldingsCount} holding${investmentHoldingsCount === 1 ? "" : "s"} · ${investmentGainLoss >= 0 ? "+" : "-"}${formatCurrency(Math.abs(investmentGainLoss), goalCurrency)}`
           : "Connect Investments to make this lane feel real",
       tone: investmentHoldingsCount > 0 ? "positive" : "neutral",
+      info: "Current recorded investment value and gain or loss across connected holdings.",
     },
   ];
 
@@ -698,18 +703,21 @@ async function GoalsPageStream() {
       value: spendDelta === null ? "N/A" : formatPercent(spendDelta),
       note: spendDelta === null ? "No prior comparison" : spendDelta > 0 ? "Spending is higher than before" : "Spending is easing",
       tone: spendDelta === null ? "neutral" : spendDelta > 0 ? "negative" : "positive",
+      info: "Compares current spending with the prior comparable period.",
     },
     {
       label: "Savings rate",
       value: currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100),
       note: currentSavingsRate === null ? "Need more income context" : savingsRateDelta !== null && savingsRateDelta >= 0 ? "Improving momentum" : "Needs a reset",
       tone: currentSavingsRate === null ? "neutral" : savingsRateDelta !== null && savingsRateDelta >= 0 ? "positive" : "negative",
+      info: "Income left after expenses, shown as a percentage of income.",
     },
     {
       label: "Recurring costs",
       value: recurringShare > 0 ? formatPercent(recurringShare * 100) : "Clean",
       note: recurringShare > 0.25 ? "A meaningful slice of the month" : "Recurring spending is under control",
       tone: recurringShare > 0.25 ? "negative" : "positive",
+      info: "The share of current spending associated with recurring costs.",
     },
     {
       label: "Investment movement",
@@ -719,6 +727,7 @@ async function GoalsPageStream() {
           ? `${investmentHoldingsCount} holding${investmentHoldingsCount === 1 ? "" : "s"} · ${investmentGainLoss >= 0 ? "+" : "-"}${formatCurrency(Math.abs(investmentGainLoss), goalCurrency)}`
           : "Connect Investments to make this lane feel real",
       tone: investmentHoldingsCount > 0 ? "positive" : "neutral",
+      info: "Current recorded investment value and gain or loss across connected holdings.",
     },
   ];
 
@@ -817,18 +826,20 @@ async function GoalsPageStream() {
               </div>
               <div className="goals-weekly__grid">
                 {weeklyChangeCards.map((signal) => (
-                  <div key={signal.label} className={`goals-weekly__card ${signal.tone}`}>
-                    <span>{signal.label}</span>
-                    <strong>{signal.value}</strong>
+                  <div key={signal.label} className={`accounts-overview-card summary-aligned-card goals-weekly__card ${signal.tone}`}>
+                    <InfoTooltip className="summary-card-info" label={signal.info} />
+                    <p className="eyebrow">{signal.label}</p>
+                    <strong className="accounts-overview-card__amount">{signal.value}</strong>
                     <small>{signal.note}</small>
                   </div>
                 ))}
               </div>
               <div className="goals-drivers-grid goals-drivers-grid--simple">
                 {driverCards.map((card) => (
-                  <article key={card.label} className={`goals-driver--summary glass ${card.tone}`}>
-                    <span>{card.label}</span>
-                    <strong className="goals-driver__value">{card.value}</strong>
+                  <article key={card.label} className={`accounts-overview-card summary-aligned-card goals-driver--summary glass ${card.tone}`}>
+                    <InfoTooltip className="summary-card-info" label={card.info} />
+                    <p className="eyebrow">{card.label}</p>
+                    <strong className="accounts-overview-card__amount goals-driver__value">{card.value}</strong>
                     <small>{card.note}</small>
                   </article>
                 ))}

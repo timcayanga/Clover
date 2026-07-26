@@ -12,6 +12,7 @@ import {
 } from "react";
 import { CircleCreateDialog } from "@/components/circle-create-dialog";
 import { AnimatedTabs } from "@/components/animated-tabs";
+import { InfoTooltip } from "@/components/info-tooltip";
 import {
   type CircleSummary,
   type CirclesWorkspaceData,
@@ -716,27 +717,43 @@ function CircleOverview({
   return (
     <div className="circles-panel-stack">
       <div className="circles-metric-grid">
-        <article className="panel glass">
-          <span>Shared expenses this month</span>
-          <strong>
+        <article className="accounts-overview-card summary-aligned-card panel glass">
+          <InfoTooltip
+            className="summary-card-info"
+            label="Total expenses shared with this Circle during the current month."
+          />
+          <p className="eyebrow">Shared expenses this month</p>
+          <strong className="accounts-overview-card__amount is-neutral">
             {formatMoney(circle.expenseTotalThisMonth, circle.currency)}
           </strong>
         </article>
-        <article className="panel glass">
-          <span>Contributions this month</span>
-          <strong>
+        <article className="accounts-overview-card summary-aligned-card panel glass">
+          <InfoTooltip
+            className="summary-card-info"
+            label="Total contributions recorded for this Circle during the current month."
+          />
+          <p className="eyebrow">Contributions this month</p>
+          <strong className="accounts-overview-card__amount is-neutral">
             {formatMoney(circle.contributionTotalThisMonth, circle.currency)}
           </strong>
         </article>
-        <article className="panel glass">
-          <span>Active goals</span>
-          <strong>
+        <article className="accounts-overview-card summary-aligned-card panel glass">
+          <InfoTooltip
+            className="summary-card-info"
+            label="The number of shared Circle goals currently marked active."
+          />
+          <p className="eyebrow">Active goals</p>
+          <strong className="accounts-overview-card__amount is-neutral">
             {circle.goals.filter((goal) => goal.status === "active").length}
           </strong>
         </article>
-        <article className="panel glass">
-          <span>Upcoming commitments</span>
-          <strong>{upcoming.length}</strong>
+        <article className="accounts-overview-card summary-aligned-card panel glass">
+          <InfoTooltip
+            className="summary-card-info"
+            label="Active shared commitments currently surfaced as coming up for this Circle."
+          />
+          <p className="eyebrow">Upcoming commitments</p>
+          <strong className="accounts-overview-card__amount is-neutral">{upcoming.length}</strong>
         </article>
       </div>
       <section className="circles-section panel glass">

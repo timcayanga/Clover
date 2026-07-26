@@ -45612,3 +45612,109 @@ body:has(.landing-page) {
     height: 36px;
   }
 }
+
+/* Keep summary cards consistent with the Accounts overview across feature pages. */
+.summary-aligned-card {
+  position: relative;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 4px;
+  min-height: 92px;
+  padding: 10px 28px 11px;
+  border: 1px solid var(--stroke);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: none;
+  text-align: center;
+  overflow: visible;
+}
+
+.summary-aligned-card > .summary-card-info {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 4;
+}
+
+.summary-aligned-card > .summary-card-info .info-tooltip__button {
+  width: 18px;
+  height: 18px;
+  opacity: 0.62;
+}
+
+.summary-aligned-card > .summary-card-info .info-tooltip__icon {
+  width: 13px;
+  height: 13px;
+}
+
+.summary-aligned-card .eyebrow {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.summary-aligned-card .accounts-overview-card__amount {
+  align-self: auto;
+  text-align: center;
+}
+
+.circles-metric-grid .summary-aligned-card {
+  min-height: 112px;
+  padding: 14px 28px;
+}
+
+.circles-metric-grid .summary-aligned-card strong {
+  align-self: auto;
+}
+
+.budget-summary-card.summary-aligned-card {
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: none;
+}
+
+.budget-summary-card.summary-aligned-card .budget-summary-card__head {
+  place-items: center;
+}
+
+.goals-progress-panel .summary-aligned-card {
+  min-height: 100px;
+  padding: 12px 28px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: none;
+}
+
+.goals-progress-panel .summary-aligned-card small {
+  text-align: center;
+}
+
+.goals-progress-panel .summary-aligned-card.positive .accounts-overview-card__amount {
+  color: var(--good);
+}
+
+.goals-progress-panel .summary-aligned-card.negative .accounts-overview-card__amount {
+  color: var(--bad);
+}
+
+.goals-progress-panel .summary-aligned-card.warning .accounts-overview-card__amount {
+  color: #d97706;
+}
+
+.goals-progress-panel .summary-aligned-card.neutral .accounts-overview-card__amount {
+  color: var(--ink);
+}
+
+.investments-insights__stats--top .summary-aligned-card {
+  padding-inline: 28px;
+}
+
+html[data-theme="dark"] .summary-aligned-card,
+html[data-theme="dark"] .budget-summary-card.summary-aligned-card,
+html[data-theme="dark"] .goals-progress-panel .summary-aligned-card {
+  background: rgba(20, 30, 44, 0.9);
+}
