@@ -16876,15 +16876,44 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-pagination__nav .transactions-action-button,
-.table-footer__summary > .pill,
 .transactions-selection-menu--footer .transactions-selection-menu__toggle {
   height: 32px;
   min-height: 32px;
 }
 
+.transactions-footer__showing {
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.transactions-pagination__nav .transactions-action-button {
+  font-size: 0.68rem;
+}
+
+.transactions-pagination__nav .transactions-pagination__page {
+  min-width: 20px;
+  height: auto;
+  min-height: 0;
+  padding: 2px 3px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+}
+
+.transactions-pagination__nav .transactions-pagination__page:hover {
+  border: 0;
+  background: transparent;
+  color: var(--accent-hover);
+  box-shadow: none;
+}
+
 .transactions-pagination__page.is-active {
-  background: rgba(3, 168, 192, 0.12);
-  border-color: rgba(3, 168, 192, 0.28);
+  background: transparent;
+  border-color: transparent;
   color: var(--accent-hover);
   font-weight: 700;
 }
@@ -16914,6 +16943,7 @@ input.transaction-inline-edit--amount::placeholder {
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.94);
   color: var(--text);
+  font-size: 0.7rem;
 }
 
 .transaction-drawer-audit {

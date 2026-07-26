@@ -7590,7 +7590,7 @@ function TransactionsPageContent() {
                   </>
                 ) : null}
                 {!hasSelectedTransactions && totalTransactionCountForDisplay > 0 ? (
-                  <span className="pill pill-subtle">Showing {currentPageLabel}</span>
+                  <span className="transactions-footer__showing">Showing {currentPageLabel}</span>
                 ) : null}
                 {warningTransactionCount > 0 ? (
                   <button
