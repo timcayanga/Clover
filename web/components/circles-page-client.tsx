@@ -70,9 +70,20 @@ export function CirclesPageClient({
           className="button button-primary button-small circles-topbar-action"
           type="button"
           onClick={() => setCreateRequest((current) => current + 1)}
+          aria-label="Create Circle"
         >
-          <span className="circles-topbar-action__full">Create Circle</span>
-          <span className="circles-topbar-action__short">Create</span>
+          <span className="circles-topbar-action__icon button-icon" aria-hidden="true">
+            <svg viewBox="0 0 20 20" fill="none">
+              <path
+                d="M10 4v12M4 10h12"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.8"
+              />
+            </svg>
+          </span>
+          <span className="circles-topbar-action__label">Create Circle</span>
         </button>
       }
     >

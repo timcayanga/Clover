@@ -113,6 +113,7 @@ export function CirclesWorkspace({
   createRequest,
 }: CirclesWorkspaceProps) {
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const workspaceRef = useRef<HTMLElement>(null);
   const [data, setData] = useState(initialData);
   const [activeTab, setActiveTab] = useState<CircleTab>("overview");
   const [showCreate, setShowCreate] = useState(false);
@@ -147,6 +148,9 @@ export function CirclesWorkspace({
     setActiveTab("overview");
     setOpenForm(null);
     setMessage(null);
+    window.requestAnimationFrame(() => {
+      workspaceRef.current?.scrollIntoView({ block: "start" });
+    });
   }, [selectedCircleId]);
 
   const openCreate = (type: CircleTypeValue | null = null) => {
@@ -198,6 +202,9 @@ export function CirclesWorkspace({
     setActiveTab(tab);
     setOpenForm(null);
     setMessage(null);
+    window.requestAnimationFrame(() => {
+      workspaceRef.current?.scrollIntoView({ block: "start" });
+    });
   };
 
   const refresh = async (preferredCircleId?: string) => {
@@ -552,7 +559,7 @@ export function CirclesWorkspace({
       ) : (
         <div className="circles-layout">
           {selectedCircle ? (
-            <main className="circles-workspace">
+            <main ref={workspaceRef} className="circles-workspace">
               <AnimatedTabs
                 className="investments-tabs circles-section-tabs"
                 activeKey={activeTab}
@@ -688,13 +695,19 @@ function CircleEmptyState({
   image,
   title,
   children,
+  plain = false,
 }: {
   image: string;
   title: string;
   children: ReactNode;
+  plain?: boolean;
 }) {
   return (
-    <div className="circles-soft-empty circles-soft-empty--illustrated">
+    <div
+      className={`circles-soft-empty circles-soft-empty--illustrated${
+        plain ? " circles-soft-empty--plain" : ""
+      }`}
+    >
       <img src={image} alt="" width={92} height={92} />
       <strong>{title}</strong>
       <p>{children}</p>
@@ -722,7 +735,7 @@ function CircleOverview({
             className="summary-card-info"
             label="Total expenses shared with this Circle during the current month."
           />
-          <p className="eyebrow">Shared expenses this month</p>
+          <p className="eyebrow">Shared Expenses</p>
           <strong className="accounts-overview-card__amount is-neutral">
             {formatMoney(circle.expenseTotalThisMonth, circle.currency)}
           </strong>
@@ -732,7 +745,7 @@ function CircleOverview({
             className="summary-card-info"
             label="Total contributions recorded for this Circle during the current month."
           />
-          <p className="eyebrow">Contributions this month</p>
+          <p className="eyebrow">Contributions</p>
           <strong className="accounts-overview-card__amount is-neutral">
             {formatMoney(circle.contributionTotalThisMonth, circle.currency)}
           </strong>
@@ -742,7 +755,7 @@ function CircleOverview({
             className="summary-card-info"
             label="The number of shared Circle goals currently marked active."
           />
-          <p className="eyebrow">Active goals</p>
+          <p className="eyebrow">Goals</p>
           <strong className="accounts-overview-card__amount is-neutral">
             {circle.goals.filter((goal) => goal.status === "active").length}
           </strong>
@@ -752,7 +765,7 @@ function CircleOverview({
             className="summary-card-info"
             label="Active shared commitments currently surfaced as coming up for this Circle."
           />
-          <p className="eyebrow">Upcoming commitments</p>
+          <p className="eyebrow">Commitments</p>
           <strong className="accounts-overview-card__amount is-neutral">{upcoming.length}</strong>
         </article>
       </div>
@@ -889,38 +902,7 @@ function CircleExpenses({
   return (
     <section className="circles-section panel glass">
       <div className="circles-section__head">
-        <div>
-          <p className="eyebrow">Shared expenses</p>
-          <h3>Expenses and settlements</h3>
-          <p>
-            Split bills are Circle-owned. Personal transactions remain yours and
-            are only referenced when shared.
-          </p>
-        </div>
-        <div className="circles-section__actions">
-          <button
-            className="button button-secondary button-small"
-            type="button"
-            onClick={() =>
-              setOpenForm(
-                openForm === "share-transaction" ? null : "share-transaction",
-              )
-            }
-          >
-            Share transaction
-          </button>
-          <Link
-            className="button button-primary button-small"
-            href={
-              circle.splitBillGroupId
-                ? `/split-bill?group=${encodeURIComponent(circle.splitBillGroupId)}`
-                : "/split-bill"
-            }
-            prefetch={false}
-          >
-            Open Split Bills
-          </Link>
-        </div>
+        <p className="eyebrow">Shared expenses</p>
       </div>
       {openForm === "share-transaction" ? (
         <form
@@ -1020,10 +1002,35 @@ function CircleExpenses({
           <CircleEmptyState
             image="/illustrations/clover-transactions-search-3d.png"
             title="No shared expenses yet"
+            plain
           >
             Add a Split Bill or selectively share one of your own transactions.
           </CircleEmptyState>
         )}
+      </div>
+      <div className="circles-section__actions circles-section__actions--footer">
+        <button
+          className="button button-secondary button-small"
+          type="button"
+          onClick={() =>
+            setOpenForm(
+              openForm === "share-transaction" ? null : "share-transaction",
+            )
+          }
+        >
+          Share transaction
+        </button>
+        <Link
+          className="button button-primary button-small"
+          href={
+            circle.splitBillGroupId
+              ? `/split-bill?group=${encodeURIComponent(circle.splitBillGroupId)}`
+              : "/split-bill"
+          }
+          prefetch={false}
+        >
+          Open Split Bills
+        </Link>
       </div>
     </section>
   );
@@ -1046,18 +1053,7 @@ function CircleBudgets({
   return (
     <section className="circles-section panel glass">
       <div className="circles-section__head">
-        <div>
-          <p className="eyebrow">Shared budgets</p>
-          <h3>Guardrails based on what the Circle shares</h3>
-          <p>Circle budgets never inspect anyone’s private spending.</p>
-        </div>
-        <button
-          className="button button-primary button-small"
-          type="button"
-          onClick={() => setOpenForm(openForm === "budget" ? null : "budget")}
-        >
-          Create budget
-        </button>
+        <p className="eyebrow">Shared budgets</p>
       </div>
       {openForm === "budget" ? (
         <form className="circles-inline-form" onSubmit={submitBudget}>
@@ -1157,11 +1153,21 @@ function CircleBudgets({
           <CircleEmptyState
             image="/assets/3d%20icons/menu/budgeting.png"
             title="No shared budgets yet"
+            plain
           >
             Start with one broad monthly budget and refine it after the group
             has real shared activity.
           </CircleEmptyState>
         )}
+      </div>
+      <div className="circles-section__actions circles-section__actions--footer">
+        <button
+          className="button button-primary button-small"
+          type="button"
+          onClick={() => setOpenForm(openForm === "budget" ? null : "budget")}
+        >
+          Create budget
+        </button>
       </div>
     </section>
   );
@@ -1191,28 +1197,7 @@ function CircleGoals({
     <div className="circles-panel-stack">
       <section className="circles-section panel glass">
         <div className="circles-section__head">
-          <div>
-            <p className="eyebrow">Goals and life plans</p>
-            <h3>Plan around something real</h3>
-          </div>
-          <div className="circles-section__actions">
-            <button
-              className="button button-secondary button-small"
-              type="button"
-              onClick={() =>
-                setOpenForm(openForm === "contribution" ? null : "contribution")
-              }
-            >
-              Record contribution
-            </button>
-            <button
-              className="button button-primary button-small"
-              type="button"
-              onClick={() => setOpenForm(openForm === "goal" ? null : "goal")}
-            >
-              Create goal
-            </button>
-          </div>
+          <p className="eyebrow">Goals and life plans</p>
         </div>
         {openForm === "goal" ? (
           <form
@@ -1380,33 +1365,34 @@ function CircleGoals({
             <CircleEmptyState
               image="/illustrations/clover-goals-progress-3d.png"
               title="No shared goals yet"
+              plain
             >
               Choose a life event or create a straightforward savings target.
             </CircleEmptyState>
           )}
         </div>
+        <div className="circles-section__actions circles-section__actions--footer">
+          <button
+            className="button button-secondary button-small"
+            type="button"
+            onClick={() =>
+              setOpenForm(openForm === "contribution" ? null : "contribution")
+            }
+          >
+            Record contribution
+          </button>
+          <button
+            className="button button-primary button-small"
+            type="button"
+            onClick={() => setOpenForm(openForm === "goal" ? null : "goal")}
+          >
+            Create goal
+          </button>
+        </div>
       </section>
       <section className="circles-section panel glass">
         <div className="circles-section__head">
-          <div>
-            <p className="eyebrow">Shared investment visibility</p>
-            <h3>Share a selected summary, never an account login</h3>
-            <p>
-              This is for coordination and goals. It does not create joint
-              ownership.
-            </p>
-          </div>
-          {investmentAccounts.length ? (
-            <button
-              className="button button-secondary button-small"
-              type="button"
-              onClick={() =>
-                setOpenForm(openForm === "investment" ? null : "investment")
-              }
-            >
-              Share summary
-            </button>
-          ) : null}
+          <p className="eyebrow">Shared investment visibility</p>
         </div>
         {openForm === "investment" ? (
           <form className="circles-inline-form" onSubmit={submitInvestment}>
@@ -1481,11 +1467,25 @@ function CircleGoals({
             <CircleEmptyState
               image="/illustrations/clover-investments-portfolio-3d.png"
               title="No shared investments"
+              plain
             >
               No investment information is shared with this Circle.
             </CircleEmptyState>
           )}
         </div>
+        {investmentAccounts.length ? (
+          <div className="circles-section__actions circles-section__actions--footer">
+            <button
+              className="button button-secondary button-small"
+              type="button"
+              onClick={() =>
+                setOpenForm(openForm === "investment" ? null : "investment")
+              }
+            >
+              Share summary
+            </button>
+          </div>
+        ) : null}
       </section>
     </div>
   );
@@ -1493,12 +1493,9 @@ function CircleGoals({
 
 function CircleActivity({ circle }: { circle: CircleSummary }) {
   return (
-    <section className="circles-section panel glass">
+    <section className="circles-section circles-section--activity panel glass">
       <div className="circles-section__head">
-        <div>
-          <p className="eyebrow">Audit history</p>
-          <h3>What changed and who changed it</h3>
-        </div>
+        <p className="eyebrow">Audit history</p>
       </div>
       <div className="circles-timeline">
         {circle.activities.length ? (
@@ -1558,24 +1555,36 @@ function CircleMembers({
     <div className="circles-panel-stack">
       <section className="circles-section panel glass">
         <div className="circles-section__head">
-          <div>
-            <h3 className="eyebrow">People and permissions</h3>
-          </div>
+          <h3 className="eyebrow">People and permissions</h3>
+        </div>
+        <div className="circles-members-photo">
           {circle.role === "organizer" ? (
             <button
-              className="circles-change-photo"
+              className="circles-members-photo__button"
               type="button"
               onClick={onChangeCirclePhoto}
               disabled={isSaving}
+              aria-label={`Change ${circle.name} Circle photo`}
             >
               <span
-                className={`circles-avatar circles-avatar--small circles-avatar--${circle.color}`}
+                className={`circles-avatar circles-avatar--feature circles-avatar--${circle.color}`}
+              >
+                <img src={getCircleAvatarUrl(circle)} alt="" />
+                <span aria-hidden="true">+</span>
+              </span>
+              <strong>{circle.name}</strong>
+              <small>Change Circle photo</small>
+            </button>
+          ) : (
+            <div className="circles-members-photo__display">
+              <span
+                className={`circles-avatar circles-avatar--feature circles-avatar--${circle.color}`}
               >
                 <img src={getCircleAvatarUrl(circle)} alt="" />
               </span>
-              Change Circle photo
-            </button>
-          ) : null}
+              <strong>{circle.name}</strong>
+            </div>
+          )}
         </div>
         <div className="circles-member-list">
           {circle.members
@@ -1585,47 +1594,51 @@ function CircleMembers({
             )
             .map((member) => (
               <article key={member.id}>
-                <span className="circles-avatar">
+                <span className="circles-avatar circles-member-list__avatar">
                   {getInitials(member.displayName)}
                 </span>
-                <div>
+                <div className="circles-member-list__name">
                   <strong>{member.displayName}</strong>
                   <span>
                     {member.status === "invited"
                       ? "Not joined yet"
-                      : member.email || "Active member"}
+                      : "Active member"}
                   </span>
                 </div>
-                <div className="circles-member-list__actions">
-                  <select
-                    value={member.role}
-                    aria-label={`${member.displayName} role`}
-                    onChange={(event) =>
-                      updateMemberRole(member.id, event.currentTarget.value)
-                    }
-                    disabled={
-                      circle.role !== "organizer" ||
-                      member.isOwner ||
-                      isSaving
-                    }
+                <select
+                  className="circles-member-list__role"
+                  value={member.role}
+                  aria-label={`${member.displayName} role`}
+                  onChange={(event) =>
+                    updateMemberRole(member.id, event.currentTarget.value)
+                  }
+                  disabled={
+                    circle.role !== "organizer" ||
+                    member.isOwner ||
+                    isSaving
+                  }
+                >
+                  <option value="organizer">Organizer</option>
+                  <option value="member">Member</option>
+                  <option value="participant">Participant</option>
+                </select>
+                <span className="circles-member-list__email">
+                  {member.email || "No email on file"}
+                </span>
+                {circle.role === "organizer" && !member.isOwner ? (
+                  <button
+                    className="circles-member-remove"
+                    type="button"
+                    aria-label={`Remove ${member.displayName}`}
+                    title={`Remove ${member.displayName}`}
+                    onClick={() => removeMember(member.id, member.displayName)}
+                    disabled={isSaving}
                   >
-                    <option value="organizer">Organizer</option>
-                    <option value="member">Member</option>
-                    <option value="participant">Participant</option>
-                  </select>
-                  {circle.role === "organizer" && !member.isOwner ? (
-                    <button
-                      className="circles-member-remove"
-                      type="button"
-                      aria-label={`Remove ${member.displayName}`}
-                      title={`Remove ${member.displayName}`}
-                      onClick={() => removeMember(member.id, member.displayName)}
-                      disabled={isSaving}
-                    >
-                      ×
-                    </button>
-                  ) : null}
-                </div>
+                    ×
+                  </button>
+                ) : (
+                  <span className="circles-member-list__remove-spacer" />
+                )}
               </article>
             ))}
           {circle.role === "organizer" ? (
@@ -1713,14 +1726,7 @@ function CircleMembers({
           ) : null}
       </section>
       {circle.isOwner ? (
-        <section className="settings-action-card settings-account-card settings-account-card--danger circles-delete-card">
-          <div className="settings-account-card__head">
-            <h5>Delete Circle</h5>
-          </div>
-          <p>
-            Permanently delete this Circle and its shared plans. Personal
-            transactions and existing Split Bills will remain.
-          </p>
+        <div className="circles-delete-action">
           <button
             className="button button-danger button-small"
             type="button"
@@ -1729,7 +1735,7 @@ function CircleMembers({
           >
             Delete Circle
           </button>
-        </section>
+        </div>
       ) : null}
     </div>
   );
