@@ -2865,6 +2865,10 @@ body.transactions-manual-open .shell-quick-add-button {
   box-shadow: var(--shadow-soft);
 }
 
+.shell-back-button--mobile-only {
+  display: none;
+}
+
 .shell-back-button:hover,
 .shell-back-button:focus-visible {
   background: rgba(3, 168, 192, 0.08);
@@ -6758,6 +6762,10 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
+}
+
+.budgeting-section__head--actions-only {
+  justify-content: flex-end;
 }
 
 .budgeting-section__head h4 {
@@ -46983,5 +46991,68 @@ html[data-theme="dark"] .content--adviser .adviser-summary .adviser-summary-card
 
   .content--circles .circles-topbar-action__label {
     display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .content--budgeting > .topbar {
+    grid-template-columns: 40px minmax(0, 1fr) 40px !important;
+  }
+
+  .content--budgeting > .topbar .shell-back-button {
+    display: inline-flex;
+  }
+
+  .content--budgeting > .topbar .topbar__title-wrap {
+    position: static;
+    inset: auto !important;
+    grid-column: 2 !important;
+    grid-row: 1;
+    width: 100% !important;
+    transform: none;
+    justify-self: stretch !important;
+    justify-items: center !important;
+    text-align: center !important;
+  }
+
+  .content--budgeting > .topbar .topbar__title-row {
+    width: 100%;
+    justify-content: center !important;
+  }
+
+  .content--budgeting > .topbar .topbar-actions {
+    grid-column: 3 !important;
+    min-width: 40px;
+  }
+
+  .content--budgeting .budget-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .content--budgeting .budget-summary-card {
+    min-height: 82px;
+    height: 82px;
+    padding: 9px 20px;
+  }
+
+  .content--budgeting .budget-summary-card__items:empty {
+    display: none;
+  }
+
+  .content--budgeting .budgeting-section:has(.budget-empty) {
+    gap: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .content--budgeting .budget-empty {
+    padding: 18px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
   }
 }

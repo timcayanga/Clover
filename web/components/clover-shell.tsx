@@ -86,6 +86,7 @@ type CloverShellProps = {
   titleAddon?: ReactNode;
   actions?: ReactNode;
   showTopbar?: boolean;
+  mobileBackHref?: string;
   hideCompactBarCopyOnMobile?: boolean;
   hideCompactBarKickerAndSubtitleOnMobile?: boolean;
   children: ReactNode;
@@ -753,6 +754,7 @@ export function CloverShell({
   titleAddon,
   actions,
   showTopbar = true,
+  mobileBackHref,
   hideCompactBarCopyOnMobile = false,
   hideCompactBarKickerAndSubtitleOnMobile = false,
   children,
@@ -823,16 +825,26 @@ export function CloverShell({
   const hasHiddenDesktopNavItems = desktopNavSections.some((section) =>
     section.items.some((item) => !guidanceMenuVisibility[item.key])
   );
-  const shouldShowBackButton =
-    !!previousPathname &&
-    !pathname?.startsWith("/home") &&
-    previousPathname !== "/home" &&
-    previousPathname !== pathname;
   const closeChrome = () => {
     setOpenMenu(null);
     setIsSearchOpen(false);
     setIsSidebarOpen(false);
     setNotificationsPopoverStyle(null);
+  };
+  const hasHistoryBackTarget =
+    !!previousPathname &&
+    !pathname?.startsWith("/home") &&
+    previousPathname !== "/home" &&
+    previousPathname !== pathname;
+  const shouldShowBackButton = hasHistoryBackTarget || Boolean(mobileBackHref);
+  const mobileFallbackBackOnly = !hasHistoryBackTarget && Boolean(mobileBackHref);
+  const handleBack = () => {
+    closeChrome();
+    if (mobileFallbackBackOnly && mobileBackHref) {
+      router.push(mobileBackHref);
+      return;
+    }
+    router.back();
   };
 
   useEffect(() => {
@@ -2010,13 +2022,10 @@ export function CloverShell({
           <div className="shell-compact-bar glass">
             {shouldShowBackButton ? (
               <button
-                className="shell-back-button"
+                className={`shell-back-button${mobileFallbackBackOnly ? " shell-back-button--mobile-only" : ""}`}
                 type="button"
                 aria-label="Go back"
-                onClick={() => {
-                  closeChrome();
-                  router.back();
-                }}
+                onClick={handleBack}
               >
                 <MenuIcon name="chevron-left" />
               </button>
@@ -2054,13 +2063,10 @@ export function CloverShell({
           <header className="topbar glass">
             {shouldShowBackButton ? (
               <button
-                className="shell-back-button"
+                className={`shell-back-button${mobileFallbackBackOnly ? " shell-back-button--mobile-only" : ""}`}
                 type="button"
                 aria-label="Go back"
-                onClick={() => {
-                  closeChrome();
-                  router.back();
-                }}
+                onClick={handleBack}
               >
                 <MenuIcon name="chevron-left" />
               </button>

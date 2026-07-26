@@ -562,7 +562,6 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
               </button>
             ))}
             {onTrackBudgets.length > 3 ? <span className="budget-summary-card__more">and {onTrackBudgets.length - 3} others</span> : null}
-            {onTrackBudgets.length === 0 ? <p className="budget-summary-card__empty">No budgets yet</p> : null}
           </div>
         </article>
 
@@ -582,18 +581,18 @@ export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
               </button>
             ))}
             {atRiskBudgets.length > 3 ? <span className="budget-summary-card__more">and {atRiskBudgets.length - 3} others</span> : null}
-            {atRiskBudgets.length === 0 ? <p className="budget-summary-card__empty">No budgets yet</p> : null}
           </div>
         </article>
       </section>
 
       <section className="budgeting-section glass">
-        <div className="budgeting-section__head">
-          <h4>Current Budgets</h4>
-          <button className="button button-secondary button-pill" type="button" onClick={openCreateEditor}>
-            Add budget
-          </button>
-        </div>
+        {budgetGroups.length > 0 ? (
+          <div className="budgeting-section__head budgeting-section__head--actions-only">
+            <button className="button button-secondary button-pill" type="button" onClick={openCreateEditor}>
+              Add budget
+            </button>
+          </div>
+        ) : null}
         {data.overview.uncategorizedTransactionCount > 0 ? (
           <p className="budgeting-section__note">
             {formatCurrency(data.overview.uncategorizedAmount, data.budgets[0]?.currency)} across {data.overview.uncategorizedTransactionCount} uncategorized transaction

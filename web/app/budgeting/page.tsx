@@ -16,7 +16,7 @@ export const metadata = {
 function BudgetingPageShell() {
   return (
     <RouteSplash label="budgeting">
-      <CloverShell active="budgeting" title="Budgeting">
+      <CloverShell active="budgeting" title="Budgeting" mobileBackHref="/more">
         <Suspense fallback={<BudgetingLoadingState />}>
           <BudgetingPageContent />
         </Suspense>
