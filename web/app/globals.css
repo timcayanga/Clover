@@ -5899,6 +5899,55 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   color: var(--muted);
 }
 
+.commitments-table__editable--empty-date {
+  min-width: 56px;
+}
+
+.commitments-table__status {
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 5px 9px;
+}
+
+.commitments-table__status--active {
+  background: rgba(3, 168, 192, 0.12);
+  color: #078da3;
+}
+
+.commitments-table__status--paused {
+  background: rgba(245, 158, 11, 0.14);
+  color: #a16207;
+}
+
+.commitments-table__status--resolved {
+  background: rgba(34, 197, 94, 0.14);
+  color: #16833d;
+}
+
+.commitments-table__status:hover,
+.commitments-table__status:focus-visible {
+  filter: brightness(0.96);
+}
+
+.commitments-table__status--active:hover,
+.commitments-table__status--active:focus-visible {
+  color: #078da3;
+}
+
+.commitments-table__status--paused:hover,
+.commitments-table__status--paused:focus-visible {
+  color: #a16207;
+}
+
+.commitments-table__status--resolved:hover,
+.commitments-table__status--resolved:focus-visible {
+  color: #16833d;
+}
+
 .commitments-table__editor {
   appearance: none;
   border: 0;

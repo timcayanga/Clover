@@ -929,8 +929,9 @@ export function CommitmentsPanel({
     const tabLabel = activeTab === "planned" ? "planned payment" : activeTab === "debt" ? "debt or loan" : activeTab === "owed" ? "money owed" : "installment";
     const hasRows = tabCommitments.length > 0 || tabSuggestions.length > 0;
     const showsPerson = activeTab === "debt" || activeTab === "owed";
+    const showsAccount = activeTab !== "owed";
     const personHeading = activeTab === "debt" ? "Owed To" : "Owed From";
-    const columnCount = showsPerson ? 8 : 7;
+    const columnCount = 6 + (showsPerson ? 1 : 0) + (showsAccount ? 1 : 0);
     const isEditing = (commitmentId: string, field: EditableCommitmentField) =>
       editingCell?.commitmentId === commitmentId && editingCell.field === field;
 
@@ -945,7 +946,7 @@ export function CommitmentsPanel({
                 <th>Due Date</th>
                 <th>Type</th>
                 <th>Amount</th>
-                <th>Account</th>
+                {showsAccount ? <th>Account</th> : null}
                 <th>Status</th>
                 <th aria-label="Actions" />
               </tr>
@@ -969,10 +970,10 @@ export function CommitmentsPanel({
                     <span className="commitments-table__secondary">{suggestion.sourceLabel}</span>
                   </td>
                   {showsPerson ? <td>{suggestion.counterparty ?? "Add person"}</td> : null}
-                  <td>{formatDate(suggestion.dueDate)}</td>
+                  <td>{activeTab === "owed" && !suggestion.dueDate ? "" : formatDate(suggestion.dueDate)}</td>
                   <td>{suggestion.recurrence === "once" ? "One-time" : commitmentRecurrenceLabels[suggestion.recurrence]}</td>
                   <td>{formatCurrency(suggestion.amount)}</td>
-                  <td>{suggestion.accountName ?? "Not linked"}</td>
+                  {showsAccount ? <td>{suggestion.accountName ?? "Not linked"}</td> : null}
                   <td>
                     <button className="button button-primary button-small" type="button" onClick={() => openPlannedPaymentReview(suggestion)}>
                       Review and add
@@ -1044,8 +1045,19 @@ export function CommitmentsPanel({
                         aria-label="Edit due date"
                       />
                     ) : (
-                      <button className="commitments-table__editable" type="button" onClick={() => beginCellEdit(commitment, "dueDate")}>
-                        {formatDate(getCommitmentDateValue(commitment))}
+                      <button
+                        className={`commitments-table__editable${
+                          activeTab === "owed" && !getCommitmentDateValue(commitment)
+                            ? " commitments-table__editable--empty-date"
+                            : ""
+                        }`}
+                        type="button"
+                        onClick={() => beginCellEdit(commitment, "dueDate")}
+                        aria-label={getCommitmentDateValue(commitment) ? "Edit due date" : "Add due date"}
+                      >
+                        {activeTab === "owed" && !getCommitmentDateValue(commitment)
+                          ? "\u00A0"
+                          : formatDate(getCommitmentDateValue(commitment))}
                       </button>
                     )}
                   </td>
@@ -1089,7 +1101,7 @@ export function CommitmentsPanel({
                       </button>
                     )}
                   </td>
-                  <td>
+                  {showsAccount ? <td>
                     {isEditing(commitment.id, "accountId") ? (
                       <select
                         autoFocus
@@ -1115,7 +1127,7 @@ export function CommitmentsPanel({
                         {commitment.account?.name ?? "Not linked"}
                       </button>
                     )}
-                  </td>
+                  </td> : null}
                   <td>
                     {isEditing(commitment.id, "status") ? (
                       <select
@@ -1133,7 +1145,15 @@ export function CommitmentsPanel({
                         ))}
                       </select>
                     ) : (
-                      <button className="commitments-table__editable" type="button" onClick={() => beginCellEdit(commitment, "status")}>
+                      <button
+                        className={`commitments-table__editable${
+                          activeTab === "owed"
+                            ? ` commitments-table__status commitments-table__status--${commitment.status}`
+                            : ""
+                        }`}
+                        type="button"
+                        onClick={() => beginCellEdit(commitment, "status")}
+                      >
                         {commitmentStatusLabels[commitment.status]}
                       </button>
                     )}
