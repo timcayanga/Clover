@@ -3393,7 +3393,7 @@ body.transactions-manual-open .shell-quick-add-button {
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.94);
   color: var(--text);
-  border-radius: 16px;
+  border-radius: 50%;
   width: 44px;
   height: 44px;
   align-items: center;
