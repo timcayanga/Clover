@@ -3733,6 +3733,7 @@ function AccountsPageContent() {
 
   const accountsShellActions = (
     <>
+      <ContextualAskClover context="accounts" planTier={planTier} />
       <CurrencySelector
         value={selectedCurrency}
         onChange={setSelectedCurrency}
@@ -3745,7 +3746,6 @@ function AccountsPageContent() {
         menuAlignment="end"
         showChevron={false}
       />
-      <ContextualAskClover context="accounts" planTier={planTier} />
       <button className="button button-secondary button-small accounts-toolbar-add" type="button" onClick={openAddAccount}>
         <ActionIcon name="plus" />
         <span>Add account</span>
