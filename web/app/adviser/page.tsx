@@ -3338,7 +3338,18 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
           <div className="adviser-summary__grid" aria-label="Adviser summary">
             {summaryCardsToRender.map((card) => (
               <article key={card.id} className="accounts-overview-card glass adviser-summary-card">
-                <p className="eyebrow">{card.title}</p>
+                <p className="eyebrow">
+                  <span className="adviser-summary-card__title-full">{card.title}</span>
+                  <span className="adviser-summary-card__title-mobile">
+                    {card.id === "money_left"
+                      ? "Balance"
+                      : card.id === "savings_rate"
+                        ? "Savings rate"
+                        : card.id === "upcoming_pressure"
+                          ? "Bills"
+                          : card.title}
+                  </span>
+                </p>
                 <InfoTooltip className="summary-card-info adviser-summary-card__info" label={card.detail} />
                 <strong className={`accounts-overview-card__amount ${card.tone === "warning" ? "is-danger" : "is-good"}`}>{card.value}</strong>
               </article>

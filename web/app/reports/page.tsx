@@ -871,16 +871,7 @@ export async function ReportsStream({
     const incomeDelta = previousSummary.income > 0 ? ((currentSummary.income - previousSummary.income) / previousSummary.income) * 100 : null;
 
     const reportExpenseTransactions = reportDisplayTransactions.filter(isReportSpendingTransaction);
-    const reportPreviousExpenseTransactions = reportPreviousWindowTransactions.filter(isReportSpendingTransaction);
     const reportExpenseCategories = reportExpenseTransactions.reduce(
-      (totals, transaction) => {
-        const categoryName = getReportTransactionCategoryName(transaction);
-        totals.set(categoryName, (totals.get(categoryName) ?? 0) + Math.abs(Number(transaction.amount)));
-        return totals;
-      },
-      new Map<string, number>()
-    );
-    const reportPreviousExpenseCategories = reportPreviousExpenseTransactions.reduce(
       (totals, transaction) => {
         const categoryName = getReportTransactionCategoryName(transaction);
         totals.set(categoryName, (totals.get(categoryName) ?? 0) + Math.abs(Number(transaction.amount)));
@@ -954,11 +945,13 @@ export async function ReportsStream({
         ),
       }))
       .filter((account) => account.amount > 0)
-      .sort((a, b) => b.amount - a.amount);
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 6);
 
     const reportSankeyCategories = Array.from(reportSankeyCategoryTotals.values())
       .filter((category) => category.amount > 0)
-      .sort((a, b) => b.amount - a.amount);
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 8);
 
     const reportSankeyCategoryColorByKey = new Map(
       reportSankeyCategories.map((category) => [normalizeMerchant(category.label), getCategoryIconTone(category.label)])
@@ -966,105 +959,60 @@ export async function ReportsStream({
 
     const sankeyIncomeAmount = reportSankeyAccounts.reduce((sum, account) => sum + account.amount, 0);
     const sankeyExpenseAmount = reportSankeyCategories.reduce((sum, category) => sum + category.amount, 0);
-    const sankeyScale = Math.max(0.0045, Math.min(0.015, 220 / Math.max(sankeyIncomeAmount, sankeyExpenseAmount, 1)));
-    const sankeyNodeMinHeight = 22;
-    const sankeyColumnGap = 18;
-    const sankeyLinkGap = 5;
-    const sankeyLabelBandHeight = 34;
-    const sankeyBarWidth = 26;
-    const sankeySourceWidth = sankeyIncomeAmount > 0 ? Math.max(sankeyIncomeAmount * sankeyScale, 110) : 110;
-    const sankeyAccountNodes = reportSankeyAccounts.map((account) => {
-      const incomeHeight = Math.max(account.amount * sankeyScale, sankeyNodeMinHeight);
-      const expenseHeight = Math.max(account.expenseAmount * sankeyScale, sankeyNodeMinHeight);
-      return {
-        ...account,
-        incomeHeight,
-        expenseHeight,
-        height: incomeHeight + sankeyLabelBandHeight + expenseHeight,
-      };
-    });
+    const sankeyBarWidth = 18;
+    const sankeyNodeHeight = 34;
+    const sankeyNodeGap = 20;
+    const sankeyAccountNodes = reportSankeyAccounts;
     const sankeyCategoryNodes = reportSankeyCategories.map((category) => ({
       ...category,
       color: reportSankeyCategoryColorByKey.get(normalizeMerchant(category.label)) ?? getCategoryIconTone(category.label),
-      height: Math.max(category.amount * sankeyScale, sankeyNodeMinHeight),
     }));
-    const sankeyChartHeight = 268;
+    const sankeyChartHeight = Math.max(300, Math.max(sankeyAccountNodes.length, sankeyCategoryNodes.length) * (sankeyNodeHeight + sankeyNodeGap) + 42);
     const sankeyChartWidth = 980;
-    const sankeyIncomeX = 54;
-    const sankeyAccountX = 378;
-    const sankeyCategoryX = 742;
+    const sankeyIncomeX = 28;
+    const sankeyAccountX = 356;
+    const sankeyCategoryX = 730;
+    const sankeySourceWidth = Math.min(190, Math.max(96, sankeyAccountNodes.length * 30));
     const sankeyIncomeColumnTop = (sankeyChartHeight - sankeySourceWidth) / 2;
-    const sankeyAccountsColumnTop = 16;
-    const sankeyCategoriesColumnTop = 16;
-
-    let sankeyIncomeOffset = 0;
-    let sankeyAccountOffset = 0;
-    const sankeyAccountLayouts = sankeyAccountNodes.map((node) => {
-      const incomingHeight = Math.max(node.amount * sankeyScale, sankeyNodeMinHeight);
-      const outgoingHeight = Math.max(node.expenseAmount * sankeyScale, sankeyNodeMinHeight);
-      const y = sankeyAccountsColumnTop + sankeyAccountOffset;
-      const layout = {
+    const layoutSankeyColumn = <T,>(nodes: T[]) => {
+      const totalHeight = nodes.length * sankeyNodeHeight + Math.max(nodes.length - 1, 0) * sankeyNodeGap;
+      const top = Math.max(20, (sankeyChartHeight - totalHeight) / 2);
+      return nodes.map((node, index) => ({
         ...node,
-        y,
-        incomingHeight,
-        outgoingHeight,
-        incomingTop: y,
-        outgoingTop: y + incomingHeight + sankeyLabelBandHeight,
-      };
-      sankeyAccountOffset += layout.height + sankeyColumnGap;
-      return layout;
-    });
+        y: top + index * (sankeyNodeHeight + sankeyNodeGap),
+        height: sankeyNodeHeight,
+      }));
+    };
+    const sankeyAccountLayouts = layoutSankeyColumn(sankeyAccountNodes);
+    const sankeyCategoryLayouts = layoutSankeyColumn(sankeyCategoryNodes);
 
-    let sankeyCategoryOffset = 0;
-    const sankeyCategoryLayouts = sankeyCategoryNodes.map((node) => {
-      const y = sankeyCategoriesColumnTop + sankeyCategoryOffset;
-      const layout = {
-        ...node,
-        y,
-      };
-      sankeyCategoryOffset += layout.height + sankeyColumnGap;
-      return layout;
-    });
-
-    const sankeyAccountLayoutByKey = new Map(sankeyAccountLayouts.map((account) => [normalizeMerchant(account.label), account]));
     const sankeyCategoryLayoutByKey = new Map(sankeyCategoryLayouts.map((category) => [normalizeMerchant(category.label), category]));
-    const sankeyIncomeLinks = sankeyAccountLayouts.map((account) => {
-      const linkHeight = Math.max(account.amount * sankeyScale, sankeyNodeMinHeight);
-      const sourceY = sankeyIncomeColumnTop + sankeyIncomeOffset + linkHeight / 2;
-      const targetY = account.incomingTop + account.incomingHeight / 2;
-      sankeyIncomeOffset += linkHeight + sankeyLinkGap;
+    const sankeyIncomeLinks = sankeyAccountLayouts.map((account, index) => {
+      const sourceY = sankeyIncomeColumnTop + ((index + 0.5) / Math.max(sankeyAccountLayouts.length, 1)) * sankeySourceWidth;
       return {
         key: account.label,
         amount: account.amount,
         sourceY,
-        targetY,
-        height: linkHeight,
+        targetY: account.y + account.height / 2,
+        height: 8 + 22 * Math.sqrt(account.amount / Math.max(sankeyIncomeAmount, 1)),
       };
     });
 
-    const sankeyCategoryIncomingOffsets = new Map<string, number>();
     const sankeyCategoryLinks = sankeyAccountLayouts.flatMap((account) => {
       const accountExpenses = Array.from(reportSankeyAccountExpenseByCategory.get(normalizeMerchant(account.label))?.values() ?? []).filter(
-        (entry) => entry.amount > 0
+        (entry) => entry.amount > 0 && sankeyCategoryLayoutByKey.has(normalizeMerchant(entry.label))
       );
-      let accountOutOffset = 0;
-      return accountExpenses.map((entry) => {
-        const linkHeight = Math.max(entry.amount * sankeyScale, sankeyNodeMinHeight * 0.9);
-        const sourceY = account.outgoingTop + accountOutOffset + linkHeight / 2;
-        const targetOffset = sankeyCategoryIncomingOffsets.get(normalizeMerchant(entry.label)) ?? 0;
+      return accountExpenses.map((entry, index) => {
         const categoryLayout = sankeyCategoryLayoutByKey.get(normalizeMerchant(entry.label));
-        const targetY = (categoryLayout?.y ?? sankeyCategoriesColumnTop) + targetOffset + linkHeight / 2;
-        sankeyCategoryIncomingOffsets.set(normalizeMerchant(entry.label), targetOffset + linkHeight + sankeyLinkGap);
-        accountOutOffset += linkHeight + sankeyLinkGap;
 
         return {
           key: `${account.label}:${entry.label}`,
           accountLabel: account.label,
           categoryLabel: entry.label,
           amount: entry.amount,
-          sourceY,
-          targetY,
-          height: linkHeight,
+          sourceY: account.y + ((index + 0.5) / Math.max(accountExpenses.length, 1)) * account.height,
+          targetY: (categoryLayout?.y ?? 20) + (categoryLayout?.height ?? sankeyNodeHeight) / 2,
+          height: 6 + 20 * Math.sqrt(entry.amount / Math.max(sankeyExpenseAmount, 1)),
           color: categoryLayout?.color.borderColor ?? getCategoryIconTone(entry.label).borderColor,
         };
       });
@@ -1783,7 +1731,7 @@ export async function ReportsStream({
                             strokeWidth={Math.max(link.height, 7)}
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            opacity={index === 0 ? 0.42 : 0.26}
+                            opacity={index === 0 ? 0.5 : 0.36}
                           />
                         ))}
 
@@ -1807,15 +1755,12 @@ export async function ReportsStream({
                               fill="rgba(15, 118, 110, 0.34)"
                               stroke="rgba(15, 118, 110, 0.18)"
                             />
-                            <text x={sankeyAccountX + sankeyBarWidth + 12} y={account.y + 20} className="report-sankey__target-label report-sankey__account-label">
+                            <text x={sankeyAccountX + sankeyBarWidth + 12} y={account.y + 13} className="report-sankey__target-label report-sankey__account-label">
                               <tspan x={sankeyAccountX + sankeyBarWidth + 12} className="report-sankey__target-title">
                                 {account.label}
                               </tspan>
                               <tspan x={sankeyAccountX + sankeyBarWidth + 12} dy="1.15em" className="report-sankey__target-value">
-                                {formatCurrency(account.amount)} received
-                              </tspan>
-                              <tspan x={sankeyAccountX + sankeyBarWidth + 12} dy="1.15em" className="report-sankey__target-detail">
-                                {formatCurrency(account.expenseAmount)} sent to categories
+                                {formatCurrency(account.amount)} in · {formatCurrency(account.expenseAmount)} out
                               </tspan>
                             </text>
                           </g>
@@ -1835,7 +1780,7 @@ export async function ReportsStream({
                             strokeWidth={Math.max(link.height, 7)}
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            opacity="0.3"
+                            opacity="0.4"
                           />
                         ))}
 
@@ -1850,27 +1795,24 @@ export async function ReportsStream({
                               fill={category.color.backgroundColor}
                               stroke={category.color.borderColor}
                             />
-                            <text x={sankeyCategoryX + sankeyBarWidth + 12} y={category.y + 20} className="report-sankey__target-label">
+                            <text x={sankeyCategoryX + sankeyBarWidth + 12} y={category.y + 13} className="report-sankey__target-label">
                               <tspan x={sankeyCategoryX + sankeyBarWidth + 12} className="report-sankey__target-title">
                                 {category.label}
                               </tspan>
                               <tspan x={sankeyCategoryX + sankeyBarWidth + 12} dy="1.15em" className="report-sankey__target-value">
-                                {formatCurrency(category.amount)}
-                              </tspan>
-                              <tspan x={sankeyCategoryX + sankeyBarWidth + 12} dy="1.15em" className="report-sankey__target-detail">
-                                {formatPercent(currentSpend > 0 ? (category.amount / currentSpend) * 100 : 0)}
+                                {formatCurrency(category.amount)} · {formatPercent(currentSpend > 0 ? (category.amount / currentSpend) * 100 : 0)}
                               </tspan>
                             </text>
                           </g>
                         ))}
 
-                        <text x={58} y={56} className="report-sankey__source-label">
+                        <text x={sankeyIncomeX + sankeyBarWidth + 12} y={sankeyIncomeColumnTop + 18} className="report-sankey__source-label">
                           Income
                         </text>
-                        <text x={58} y={78} className="report-sankey__source-value">
+                        <text x={sankeyIncomeX + sankeyBarWidth + 12} y={sankeyIncomeColumnTop + 40} className="report-sankey__source-value">
                           {formatCurrency(currentSummary.income)}
                         </text>
-                        <text x={58} y={98} className="report-sankey__source-meta">
+                        <text x={sankeyIncomeX + sankeyBarWidth + 12} y={sankeyIncomeColumnTop + 60} className="report-sankey__source-meta">
                           {reportCurrentWindowTransactions.length > 0 ? selectedRangeLabel.toLowerCase() : "latest available activity"}
                         </text>
 
@@ -1912,7 +1854,6 @@ export async function ReportsStream({
                       <div key={signal.label} className={`report-ai-signal report-ai-signal--${signal.tone}`}>
                         <span>{signal.label}</span>
                         <strong>{signal.value}</strong>
-                        <small>{signal.detail}</small>
                       </div>
                     ))}
                   </div>
@@ -1929,11 +1870,10 @@ export async function ReportsStream({
                     {aiActions.map((action) => (
                       <div key={action.title} className="report-list__item report-list__item--compact">
                         <div className="report-list__meta">
-                          <strong>{action.title}</strong>
                           <span>{action.body}</span>
                         </div>
-                        <Link className="pill-link pill-link--inline" href={action.href}>
-                          {action.label}
+                        <Link className="button button-primary button-small report-next-step__button" href={action.href}>
+                          {action.title}
                         </Link>
                       </div>
                     ))}
@@ -1946,19 +1886,9 @@ export async function ReportsStream({
               <p className="eyebrow reports-subtab-title">🎯 Goal check</p>
               <h4>{goalNextStep.title}</h4>
               <p>{goalSummary}</p>
-              <div className="reports-next__meta">
-                <span>{goalLabel ?? "No primary goal set"}</span>
-                <span>{savingsRate === null ? "Savings rate unavailable" : `${formatPercent(savingsRate * 100)} savings rate`}</span>
-              </div>
               <Link className="button button-primary button-pill" href={goalNextStep.href}>
                 {goalNextStep.label}
               </Link>
-              <div className="reports-next__meta">
-                <span>
-                  {actionableCount} item{actionableCount === 1 ? "" : "s"} need attention
-                </span>
-                <span>{accountCount} account{accountCount === 1 ? "" : "s"}</span>
-              </div>
             </article>
             </>
           </ReportsSectionPanel>
@@ -1991,30 +1921,30 @@ export async function ReportsStream({
                       >
                         <div className="report-flow-map__meta">
                           <strong>{segment.categoryName}</strong>
-                          <span>{formatCurrency(segment.amount)}</span>
                         </div>
-                        <div className="report-flow-map__bar" aria-hidden="true">
+                        <div className="report-flow-map__bar" aria-label={`${formatCurrency(segment.amount)}, ${formatPercent(segment.share * 100)}`}>
                           <span
                             style={{
                               width: `${Math.max(segment.share * 100, 8)}%`,
                               background: segment.color.backgroundColor,
                               borderColor: segment.color.borderColor,
                             }}
-                          />
+                          >
+                            <small>{formatCurrency(segment.amount)} · {formatPercent(segment.share * 100)}</small>
+                          </span>
                         </div>
-                        <strong className="report-flow-map__share">{formatPercent(segment.share * 100)}</strong>
                       </Link>
                     ))}
                     {currentOtherSpend > 0 ? (
                       <div className="report-flow-map__row report-flow-map__row--other">
                         <div className="report-flow-map__meta">
                           <strong>Other spend</strong>
-                          <span>{formatCurrency(currentOtherSpend)}</span>
                         </div>
-                        <div className="report-flow-map__bar" aria-hidden="true">
-                          <span style={{ width: `${Math.max((currentOtherSpend / Math.max(currentSpend, 1)) * 100, 8)}%`, background: "var(--border-subtle)" }} />
+                        <div className="report-flow-map__bar">
+                          <span style={{ width: `${Math.max((currentOtherSpend / Math.max(currentSpend, 1)) * 100, 8)}%`, background: "var(--border-subtle)" }}>
+                            <small>{formatCurrency(currentOtherSpend)} · {formatPercent((currentOtherSpend / Math.max(currentSpend, 1)) * 100)}</small>
+                          </span>
                         </div>
-                        <strong className="report-flow-map__share">{formatPercent((currentOtherSpend / Math.max(currentSpend, 1)) * 100)}</strong>
                       </div>
                     ) : null}
                   </>
@@ -2075,8 +2005,6 @@ export async function ReportsStream({
               <div className="report-donut__legend">
                 {reportCategorySegments.length > 0 ? (
                   reportCategorySegments.map((segment) => {
-                    const previousAmount = reportPreviousExpenseCategories.get(segment.categoryName) ?? 0;
-                    const delta = segment.amount - previousAmount;
                     return (
                       <Link
                         key={segment.categoryName}
@@ -2092,9 +2020,6 @@ export async function ReportsStream({
                           <span>
                             {formatCurrency(segment.amount)} · {formatPercent(segment.share * 100)}
                           </span>
-                          <small className={delta >= 0 ? "negative" : "positive"}>
-                            {delta === 0 ? "Flat vs prior period" : `${delta >= 0 ? "+" : "-"}${formatCurrency(Math.abs(delta))} vs prior period`}
-                          </small>
                         </div>
                       </Link>
                     );
@@ -2229,10 +2154,6 @@ export async function ReportsStream({
                         {merchant.nextDueDate ? ` · next due ${formatShortDate(merchant.nextDueDate)}` : ""}
                       </small>
                     </div>
-                    <div className="report-tags">
-                      <span className="pill pill-subtle">{merchant.cadenceLabel}</span>
-                      <span className="pill pill-subtle">{formatPercent((merchant.amount / Math.max(currentSpend, 1)) * 100)} of spend</span>
-                    </div>
                   </Link>
                 ))
               ) : (
@@ -2267,20 +2188,18 @@ export async function ReportsStream({
 
             <div className="report-list">
               {topMerchants.length > 0 ? (
-                topMerchants.map((merchant) => (
+                topMerchants.map((merchant, index) => (
                   <Link
                     key={merchant.label}
                     href={buildTransactionsHref({ merchant: merchant.label })}
                     className="report-list__item report-list__item--link"
                   >
+                    <span className="report-merchant-rank" aria-hidden="true">{index + 1}</span>
                     <div className="report-list__meta">
                       <strong>{merchant.label}</strong>
                       <span>
                         {merchant.count} transaction{merchant.count === 1 ? "" : "s"} · {formatCurrency(merchant.amount)}
                       </span>
-                    </div>
-                    <div className="report-list__track" aria-hidden="true">
-                      <span className="report-list__fill" style={{ width: `${Math.max((merchant.amount / currentSpend) * 100, 10)}%` }} />
                     </div>
                   </Link>
                 ))
