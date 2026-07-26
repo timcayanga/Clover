@@ -1525,6 +1525,12 @@ body.transactions-manual-open .shell-quick-add-button {
     transform: scale(1.35);
   }
 
+  .nav-link .menu-icon-3d--adviser {
+    width: 22px;
+    height: 22px;
+    transform: scale(1.35);
+  }
+
   .sidebar-nav {
     gap: 0;
   }
@@ -2918,8 +2924,8 @@ body.transactions-manual-open .shell-quick-add-button {
 .contextual-ask-clover__trigger {
   position: relative;
   display: inline-grid;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   place-items: center;
   border: 0;
   padding: 0;
@@ -2929,8 +2935,8 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .contextual-ask-clover__icon {
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   object-fit: contain;
   transition: transform 160ms ease, filter 160ms ease;
 }
@@ -45521,7 +45527,7 @@ body:has(.landing-page) {
   }
 
   .shell-bottom-nav__icon .menu-icon-3d--adviser {
-    width: 30px;
-    height: 30px;
+    width: 36px;
+    height: 36px;
   }
 }
