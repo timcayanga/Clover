@@ -172,11 +172,6 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
       return;
     }
 
-    if (current.isSystem) {
-      setStatusMessage("Built-in categories are locked.");
-      return;
-    }
-
     setBusyCategoryId(categoryId);
     setStatusMessage(null);
     setErrorMessage(null);
@@ -241,6 +236,77 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
     }
   };
 
+  const renderCategoryRow = (category: CategoryRecord) => {
+    const draft = drafts[category.id] ?? { name: category.name, type: category.type };
+    const hasChanges = normalizeName(draft.name) !== normalizeName(category.name) || draft.type !== category.type;
+    const busy = busyCategoryId === category.id;
+    const inputId = `settings-category-name-${category.id}`;
+
+    return (
+      <div
+        key={category.id}
+        className={`settings-category-table__row settings-category-table__row--compact ${
+          category.isSystem ? "settings-category-table__row--built-in" : "settings-category-table__row--custom"
+        }`}
+      >
+        <div className="settings-category-table__name">
+          <button
+            type="button"
+            className="settings-category-icon-button"
+            aria-label={`Edit ${category.name}`}
+            onClick={() => document.getElementById(inputId)?.focus()}
+          >
+            <CategoryIcon category={{ ...category, name: draft.name || category.name }} />
+          </button>
+          <div className="settings-category-table__name-copy">
+            <input
+              id={inputId}
+              aria-label={`${category.name} category name`}
+              value={draft.name}
+              onChange={(event) =>
+                setDrafts((current) => ({
+                  ...current,
+                  [category.id]: {
+                    ...draft,
+                    name: event.target.value,
+                  },
+                }))
+              }
+              disabled={busy}
+            />
+          </div>
+        </div>
+
+        <div className="settings-category-table__actions">
+          <button
+            type="button"
+            className="settings-category-icon-action settings-category-icon-action--save"
+            aria-label={`Save ${category.name}`}
+            title="Save"
+            onClick={() => void saveCategory(category.id)}
+            disabled={busy || !hasChanges}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m5 12 4 4L19 6" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className="settings-category-icon-action settings-category-icon-action--delete"
+            aria-label={`Delete ${category.name}`}
+            title="Delete"
+            onClick={() => void archiveCategory(category.id)}
+            disabled={busy}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 12h14" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <section className="settings-category-manager">
       <div className="settings-section__intro">
@@ -249,37 +315,18 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
         </div>
       </div>
 
-      <section className="settings-category-section settings-category-section--panel glass" aria-label="Built-in categories">
-        <div className="settings-category-section__head">
-          <h5>Built-in categories</h5>
-        </div>
-        <div className="settings-category-table settings-category-table--compact">
-          {isLoading ? (
-            <div className="settings-category-table__empty">Loading categories...</div>
-          ) : (
-            activeBuiltInCategories.map((category) => (
-              <div
-                key={category.id}
-                className="settings-category-table__row settings-category-table__row--compact settings-category-table__row--built-in"
-              >
-                <div className="settings-category-table__name">
-                  <CategoryIcon category={category} />
-                  <div className="settings-category-table__name-copy">
-                    <strong>{category.name}</strong>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
+      <section className="settings-category-section" aria-label="Categories">
+        <div className="settings-category-table settings-category-table--compact settings-category-table--plain">
+          {isLoading ? <div className="settings-category-table__empty">Loading categories...</div> : activeBuiltInCategories.map(renderCategoryRow)}
         </div>
       </section>
 
-      <section className="settings-category-section settings-category-section--panel glass" aria-label="Custom categories">
+      <section className="settings-category-section settings-category-section--custom" aria-label="Custom categories">
         <div className="settings-category-section__head">
           <h5>Custom categories</h5>
         </div>
 
-        <article className="settings-action-card settings-category-creator glass">
+        <div className="settings-category-creator">
           <div className="settings-category-creator__fields">
             <label className="settings-inline-field">
               <span>Name</span>
@@ -299,62 +346,13 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
               {isSavingNewCategory ? "Adding..." : "Add category"}
             </button>
           </div>
-        </article>
+        </div>
 
-        <div className="settings-category-table settings-category-table--compact">
+        <div className="settings-category-table settings-category-table--compact settings-category-table--plain">
           {isLoading ? (
             <div className="settings-category-table__empty">Loading categories...</div>
           ) : activeCustomCategories.length > 0 ? (
-            activeCustomCategories.map((category) => {
-              const draft = drafts[category.id] ?? { name: category.name, type: category.type };
-              const hasChanges = normalizeName(draft.name) !== normalizeName(category.name) || draft.type !== category.type;
-              const busy = busyCategoryId === category.id;
-
-              return (
-                <div
-                  key={category.id}
-                  className="settings-category-table__row settings-category-table__row--compact settings-category-table__row--custom"
-                >
-                  <div className="settings-category-table__name">
-                    <CategoryIcon category={category} />
-                    <div className="settings-category-table__name-copy">
-                      <input
-                        value={draft.name}
-                        onChange={(event) =>
-                          setDrafts((current) => ({
-                            ...current,
-                            [category.id]: {
-                              ...draft,
-                              name: event.target.value,
-                            },
-                          }))
-                        }
-                        disabled={busy}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="settings-category-table__actions">
-                    <button
-                      type="button"
-                      className="button button-secondary button-small"
-                      onClick={() => void saveCategory(category.id)}
-                      disabled={busy || !hasChanges}
-                    >
-                      {busy ? "Saving..." : "Save"}
-                    </button>
-                    <button
-                      type="button"
-                      className="button button-danger button-small"
-                      onClick={() => void archiveCategory(category.id)}
-                      disabled={busy}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              );
-            })
+            activeCustomCategories.map(renderCategoryRow)
           ) : null}
         </div>
       </section>

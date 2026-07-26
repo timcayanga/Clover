@@ -377,6 +377,32 @@ const formatSessionDeviceLabel = ({
   return isMobile ? "Mobile device" : "Computer";
 };
 
+function SessionDeviceIcon({ label }: { label: string }) {
+  const isPhone = /phone|iphone|android/i.test(label);
+  const isTablet = /tablet|ipad/i.test(label);
+
+  return (
+    <span className="settings-session-device-icon" aria-hidden="true">
+      {isPhone ? (
+        <svg viewBox="0 0 48 48">
+          <rect x="14" y="5" width="20" height="38" rx="6" />
+          <path d="M20 10h8M22 37h4" />
+        </svg>
+      ) : isTablet ? (
+        <svg viewBox="0 0 48 48">
+          <rect x="9" y="5" width="30" height="38" rx="6" />
+          <path d="M22 37h4" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 48 48">
+          <rect x="6" y="7" width="36" height="25" rx="4" />
+          <path d="M3 38h42M17 32l-2 6M31 32l2 6" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
 function SettingsToggleRow({
   label,
   checked,
@@ -1880,7 +1906,7 @@ export function SettingsHub({
         ) : null}
 
         {activeSection === "notifications" ? (
-          <section className="settings-section settings-section--swap" role="tabpanel">
+          <section className="settings-section settings-section--notifications settings-section--swap" role="tabpanel">
             <div className="settings-section__intro settings-section__intro--single">
               <div>
                 <h4>Notifications</h4>
@@ -1955,7 +1981,7 @@ export function SettingsHub({
         ) : null}
 
         {activeSection === "security" ? (
-          <section className="settings-section settings-section--swap" role="tabpanel">
+          <section className="settings-section settings-section--security settings-section--swap" role="tabpanel">
             <div className="settings-section__intro settings-section__intro--single">
               <div>
                 <h4>Security</h4>
@@ -1970,21 +1996,24 @@ export function SettingsHub({
                 {securitySessions.length ? (
                   securitySessions.map((entry) => (
                     <div key={entry.id} className="settings-session-item">
-                      <div className="settings-session-item__copy">
-                        <strong>
-                          {entry.deviceLabel}
-                          {entry.isCurrent ? <span className="settings-session-current">Current</span> : null}
-                        </strong>
-                        <span>
-                          {[
-                            [entry.browserName, entry.browserVersion].filter(Boolean).join(" "),
-                            entry.location,
-                            entry.ipAddress,
-                            entry.lastActiveAt ? formatRelativeSessionTime(entry.lastActiveAt) : entry.isCurrent ? "Active now" : "Activity time unavailable",
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </span>
+                      <div className="settings-session-item__identity">
+                        <SessionDeviceIcon label={entry.deviceLabel} />
+                        <div className="settings-session-item__copy">
+                          <strong>
+                            {entry.deviceLabel}
+                            {entry.isCurrent ? <span className="settings-session-current">Current</span> : null}
+                          </strong>
+                          <span>
+                            {[
+                              [entry.browserName, entry.browserVersion].filter(Boolean).join(" "),
+                              entry.location,
+                              entry.ipAddress,
+                              entry.lastActiveAt ? formatRelativeSessionTime(entry.lastActiveAt) : entry.isCurrent ? "Active now" : "Activity time unavailable",
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </span>
+                        </div>
                       </div>
                       {!entry.isCurrent ? (
                         <button type="button" className="button button-secondary button-small settings-session-action" disabled={isPending} onClick={() => handleSignOutSession(entry.id)}>
@@ -1995,8 +2024,13 @@ export function SettingsHub({
                   ))
                 ) : (
                   <div className="settings-session-item">
-                    <strong>{securityLoading ? "Loading..." : getCurrentDeviceLabel()}</strong>
-                    <span>{securityLoading ? "Fetching active sessions" : "Active now"}</span>
+                    <div className="settings-session-item__identity">
+                      <SessionDeviceIcon label={getCurrentDeviceLabel()} />
+                      <div className="settings-session-item__copy">
+                        <strong>{securityLoading ? "Loading..." : getCurrentDeviceLabel()}</strong>
+                        <span>{securityLoading ? "Fetching active sessions" : "Active now"}</span>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2083,7 +2117,7 @@ export function SettingsHub({
         ) : null}
 
         {activeSection === "regional" ? (
-          <section className="settings-section settings-section--swap" role="tabpanel">
+          <section className="settings-section settings-section--regional settings-section--swap" role="tabpanel">
             <div className="settings-section__intro settings-section__intro--single">
               <div>
                 <h4>Regional Preferences</h4>
@@ -2379,7 +2413,7 @@ export function SettingsHub({
                           disabled={isPending}
                           onClick={() => openDeleteModal("transactions")}
                         >
-                          Delete transactions
+                          Delete
                         </button>
                       </div>
                     </div>
@@ -2394,7 +2428,7 @@ export function SettingsHub({
                         disabled={isPending}
                         onClick={() => openDeleteModal("accounts")}
                       >
-                        Delete accounts
+                        Delete
                       </button>
                     </div>
 
@@ -2408,7 +2442,7 @@ export function SettingsHub({
                         disabled={isPending}
                         onClick={() => openDeleteModal("all")}
                       >
-                        Delete all data
+                        Delete
                       </button>
                     </div>
                   </div>

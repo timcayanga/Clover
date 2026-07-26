@@ -30,6 +30,7 @@ type BillingActionsProps = {
   className?: string;
   compactInterval?: BillingInterval;
   hideIntervalActions?: boolean;
+  minimalManagement?: boolean;
 };
 
 type ActionState = {
@@ -100,6 +101,7 @@ export function BillingActions({
   className,
   compactInterval,
   hideIntervalActions = false,
+  minimalManagement = false,
 }: BillingActionsProps) {
   const router = useRouter();
   const [state, setState] = useState<ActionState>({ key: "", message: null });
@@ -169,6 +171,22 @@ export function BillingActions({
         {state.key === `revise-${compactInterval}` ? "Opening PayPal..." : `Switch to ${getBillingPlanLabel(compactInterval)}`}
       </button>
     ) : null;
+  }
+
+  if (!isFree && minimalManagement) {
+    return (
+      <div className={className}>
+        <button
+          className="button button-danger button-small"
+          type="button"
+          onClick={() => void handleCancel()}
+          disabled={state.key !== ""}
+        >
+          {state.key === "cancel" ? "Unsubscribing..." : "Unsubscribe"}
+        </button>
+        {state.message ? <p className="billing-helper">{state.message}</p> : null}
+      </div>
+    );
   }
 
   return (

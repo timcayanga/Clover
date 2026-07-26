@@ -29,6 +29,19 @@ const settingsSections = [
 
 type SettingsSection = (typeof settingsSections)[number];
 
+const settingsSectionTitles: Record<SettingsSection, string> = {
+  account: "Account",
+  profiles: "Profiles",
+  notifications: "Notifications",
+  security: "Security",
+  imports: "Review",
+  regional: "Region",
+  display: "Display",
+  data: "Data",
+  categories: "Categories",
+  plan: "Plan",
+};
+
 const getSettingsSection = (value: string | string[] | undefined): SettingsSection | null => {
   const candidate = Array.isArray(value) ? value[0] : value;
   return settingsSections.find((section) => section === candidate) ?? null;
@@ -146,7 +159,11 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
   }
 
   return (
-    <CloverShell active="settings" title="Settings" mobileBackHref={mobileSectionOpen ? "/settings" : "/home"}>
+    <CloverShell
+      active="settings"
+      title={mobileSectionOpen ? settingsSectionTitles[initialSection] : "Settings"}
+      mobileBackHref={mobileSectionOpen ? "/settings" : "/home"}
+    >
       <SettingsHub
         mode="full"
         initialSection={initialSection}

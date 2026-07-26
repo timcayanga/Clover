@@ -33,6 +33,492 @@
   --page-shell: rgba(255, 255, 255, 0.84);
 }
 
+/* Mobile Settings is a focused detail view: labels stay left and controls stay right. */
+.settings-session-item__identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.settings-session-device-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: 15px;
+  color: #079eb5;
+  background: linear-gradient(145deg, rgba(175, 241, 231, 0.72), rgba(216, 247, 251, 0.9));
+  box-shadow: inset 0 0 0 1px rgba(3, 168, 192, 0.13);
+}
+
+.settings-session-device-icon svg {
+  width: 34px;
+  height: 34px;
+  fill: rgba(255, 255, 255, 0.7);
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.settings-category-table--plain {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.settings-category-table--plain .settings-category-table__row--compact {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-inline: 0;
+}
+
+.settings-category-icon-button,
+.settings-category-icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.settings-category-icon-button {
+  border-radius: 12px;
+}
+
+.settings-category-icon-action {
+  width: 28px;
+  height: 28px;
+  color: var(--accent);
+}
+
+.settings-category-icon-action--delete {
+  color: #dc2626;
+}
+
+.settings-category-icon-action svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.settings-category-icon-action:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.settings-category-table--plain .settings-category-table__name-copy {
+  width: 100%;
+}
+
+.settings-category-table--plain .settings-category-table__name-copy input {
+  width: 100%;
+  min-height: 32px;
+  padding: 2px 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  font-weight: 500;
+}
+
+.settings-category-table--plain .settings-category-table__name-copy input:focus {
+  border-bottom-color: var(--accent);
+  box-shadow: none;
+}
+
+.settings-category-section--custom .settings-category-section__head h5 {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.settings-category-creator {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.settings-plan-card--pro .settings-plan-card__band {
+  background: linear-gradient(135deg, #09abc0 0%, #78e6bf 100%);
+}
+
+.settings-plan-card--pro .settings-plan-card__band-title,
+.settings-plan-card--pro .settings-plan-card__band-price {
+  color: #ffffff;
+}
+
+.settings-plan-card--pro .settings-plan-card__icon {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.settings-plan-card__icon svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.settings-plan-interval {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 3px;
+  width: fit-content;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.settings-plan-interval button {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.settings-plan-interval button.is-selected {
+  color: #083d2f;
+  background: #83e8c4;
+}
+
+.settings-plan-usage {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  border-block: 1px solid var(--stroke);
+}
+
+.settings-plan-usage__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(100px, 34%);
+  align-items: center;
+  gap: 16px;
+  min-height: 54px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--stroke);
+}
+
+.settings-plan-usage__row:last-child {
+  border-bottom: 0;
+}
+
+.settings-plan-usage__row--current {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.settings-plan-usage__row strong,
+.settings-plan-usage__row > span {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.settings-plan-usage__copy {
+  display: grid;
+  gap: 3px;
+}
+
+.settings-plan-usage__copy span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings-plan-unsubscribe {
+  display: flex;
+  justify-content: flex-start;
+}
+
+@media (max-width: 760px) {
+  .settings-hub--mobile-panel .settings-section__intro {
+    display: none;
+  }
+
+  .settings-hub--mobile-panel .settings-section {
+    gap: 12px;
+  }
+
+  .settings-hub--mobile-panel .settings-hub__panel {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .settings-hub--mobile-panel .button,
+  .settings-hub--mobile-panel button,
+  .settings-hub--mobile-panel select {
+    font-weight: 500;
+  }
+
+  .settings-toggle-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 32px;
+    padding: 3px 0;
+    gap: 10px;
+  }
+
+  .settings-toggle-row__copy strong {
+    font-weight: 500;
+  }
+
+  .settings-section--data .settings-data-shell {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .settings-section--data .settings-data-shell__grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .settings-section--data .settings-data-zone {
+    gap: 10px;
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .settings-section--data .settings-data-zone__header h6 {
+    font-size: 18px;
+    font-weight: 500;
+  }
+
+  .settings-section--data .settings-data-export-actions,
+  .settings-section--data .settings-data-danger-list {
+    gap: 0;
+  }
+
+  .settings-section--data .settings-data-export-card,
+  .settings-section--data .settings-data-danger-item,
+  .settings-section--data .settings-data-danger-item--history {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    min-height: 56px;
+    padding: 10px 4px;
+    border: 0;
+    border-bottom: 1px solid var(--stroke);
+    border-radius: 0;
+    background: transparent;
+    text-align: left;
+  }
+
+  .settings-section--data .settings-data-export-card:last-child,
+  .settings-section--data .settings-data-danger-item:last-child {
+    border-bottom: 0;
+  }
+
+  .settings-section--data .settings-data-export-card strong,
+  .settings-section--data .settings-data-danger-copy strong {
+    font-size: 14px;
+    font-weight: 500;
+    text-align: left;
+  }
+
+  .settings-section--data .settings-data-danger-copy {
+    justify-self: start;
+    text-align: left;
+  }
+
+  .settings-section--data .settings-data-danger-controls {
+    width: auto;
+    justify-content: flex-end;
+  }
+
+  .settings-section--data .settings-data-export-card .button,
+  .settings-section--data .settings-data-danger-item .button-danger,
+  .settings-section--data .settings-data-danger-item .button-danger--history {
+    justify-self: end;
+    width: auto;
+    min-width: 76px;
+    padding-inline: 12px;
+  }
+
+  .settings-section--data .settings-inline-field--history {
+    min-width: 0;
+  }
+
+  .settings-section--data .settings-data-privacy {
+    padding: 14px;
+  }
+
+  .settings-section--regional .settings-preference-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .settings-section--regional .settings-preference-card {
+    gap: 0;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .settings-section--regional .settings-inline-field {
+    grid-template-columns: minmax(90px, 0.7fr) minmax(170px, 1.3fr);
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+    min-height: 58px;
+    border-bottom: 1px solid var(--stroke);
+  }
+
+  .settings-section--regional .settings-inline-field span {
+    color: var(--text);
+    font-weight: 400;
+  }
+
+  .settings-section--regional .settings-inline-field select {
+    min-width: 0;
+    width: 100%;
+    justify-self: end;
+  }
+
+  .settings-section--security .settings-security-card {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .settings-section--security .settings-preference-card__head {
+    padding-inline: 2px;
+  }
+
+  .settings-session-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 66px;
+    padding: 8px 2px;
+  }
+
+  .settings-session-device-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+  }
+
+  .settings-session-device-icon svg {
+    width: 30px;
+    height: 30px;
+  }
+
+  .settings-category-manager > .settings-section__intro {
+    display: none;
+  }
+
+  .settings-category-manager {
+    gap: 12px;
+  }
+
+  .settings-category-table--plain .settings-category-table__row--compact {
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 46px;
+    padding-block: 5px;
+  }
+
+  .settings-category-table__name {
+    gap: 8px;
+  }
+
+  .settings-category-table__icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .settings-category-creator__fields {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .settings-category-section--custom .settings-category-section__head {
+    padding-top: 4px;
+  }
+
+  .settings-plan-grid {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(84%, 1fr);
+    grid-template-columns: none;
+    gap: 12px;
+    width: calc(100% + 20px);
+    margin-right: -20px;
+    padding: 2px 20px 10px 0;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .settings-plan-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings-plan-card {
+    min-width: 0;
+    scroll-snap-align: start;
+    overflow: hidden;
+  }
+
+  .settings-plan-card__band {
+    padding: 14px;
+  }
+
+  .settings-plan-card__body {
+    padding: 14px;
+  }
+
+  .settings-plan-card__features {
+    gap: 8px;
+  }
+
+  .settings-plan-card__feature-row .plan-feature-item__info {
+    display: none;
+  }
+
+  .settings-plan-card__feature-row .plan-feature-item__info-wrap {
+    display: none;
+  }
+
+  .settings-plan-grid--current-pro .settings-plan-card--pro {
+    order: -1;
+  }
+}
+
+html[data-theme="dark"] .settings-session-device-icon {
+  color: #64dfed;
+  background: linear-gradient(145deg, rgba(17, 94, 108, 0.72), rgba(17, 49, 65, 0.9));
+}
+
+html[data-theme="dark"] .settings-category-table--plain,
+html[data-theme="dark"] .settings-category-creator,
+html[data-theme="dark"] .settings-section--data .settings-data-shell,
+html[data-theme="dark"] .settings-section--data .settings-data-export-card,
+html[data-theme="dark"] .settings-section--data .settings-data-danger-item {
+  background: transparent;
+}
+
 /* Compact pricing cards and a responsive iOS-style billing toggle. */
 .pricing-page__comparison { align-items: stretch; }
 .pricing-page .pricing-card {
@@ -48041,5 +48527,231 @@ html[data-theme="dark"] .content--adviser .adviser-summary .adviser-summary-card
     border: 0;
     border-radius: 0;
     background: transparent;
+  }
+}
+
+/* Keep these Settings rules last so legacy responsive declarations cannot re-expand them. */
+.settings-category-table--plain {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.settings-category-table--plain.settings-category-table--compact .settings-category-table__row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-inline: 0;
+}
+
+.settings-plan-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-plan-usage {
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+@media (max-width: 760px) {
+  .settings-hub--mobile-panel .settings-section__intro {
+    display: none;
+  }
+
+  .settings-hub--mobile-panel .settings-hub__panel {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .settings-toggle-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 32px;
+    padding: 3px 0;
+  }
+
+  .settings-toggle-row__copy strong,
+  .settings-hub--mobile-panel .button,
+  .settings-hub--mobile-panel select {
+    font-weight: 500;
+  }
+
+  .settings-section--data .settings-data-shell {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .settings-section--data .settings-data-shell__grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .settings-section--data .settings-data-zone {
+    gap: 8px;
+    padding: 14px;
+  }
+
+  .settings-section--data .settings-data-zone__header h6 {
+    font-size: 18px;
+    font-weight: 500;
+  }
+
+  .settings-section--data .settings-data-export-actions,
+  .settings-section--data .settings-data-danger-list {
+    gap: 0;
+  }
+
+  .settings-section--data .settings-data-export-card,
+  .settings-section--data .settings-data-danger-item,
+  .settings-section--data .settings-data-danger-item--history {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    min-height: 56px;
+    padding: 10px 4px;
+    border: 0;
+    border-bottom: 1px solid var(--stroke);
+    border-radius: 0;
+    background: transparent;
+    text-align: left;
+  }
+
+  .settings-section--data .settings-data-export-card:last-child,
+  .settings-section--data .settings-data-danger-item:last-child {
+    border-bottom: 0;
+  }
+
+  .settings-section--data .settings-data-export-card strong,
+  .settings-section--data .settings-data-danger-copy strong {
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .settings-section--data .settings-data-danger-controls {
+    width: auto;
+    justify-content: flex-end;
+  }
+
+  .settings-section--data .settings-data-export-card > .button,
+  .settings-section--data .settings-data-danger-item > .button,
+  .settings-section--data .settings-data-danger-controls > .button {
+    justify-self: end;
+    width: auto;
+    min-width: 76px;
+    padding-inline: 12px;
+  }
+
+  .settings-section--regional .settings-preference-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .settings-section--regional .settings-preference-card {
+    gap: 0;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .settings-section--regional .settings-inline-field {
+    grid-template-columns: minmax(86px, 0.7fr) minmax(170px, 1.3fr);
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+    min-height: 58px;
+    border-bottom: 1px solid var(--stroke);
+  }
+
+  .settings-section--regional .settings-inline-field span {
+    color: var(--text);
+    font-weight: 400;
+  }
+
+  .settings-section--regional .settings-inline-field select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .settings-section--security .settings-security-card {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .settings-session-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 66px;
+    padding: 8px 2px;
+  }
+
+  .settings-category-manager > .settings-section__intro {
+    display: none;
+  }
+
+  .settings-category-table--plain.settings-category-table--compact .settings-category-table__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 46px;
+    padding-block: 5px;
+  }
+
+  .settings-category-creator__fields {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-plan-grid {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(84%, 1fr);
+    grid-template-columns: none;
+    gap: 12px;
+    width: calc(100% + 20px);
+    margin-right: -20px;
+    padding: 2px 20px 10px 0;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .settings-plan-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings-plan-card {
+    min-width: 0;
+    overflow: hidden;
+    scroll-snap-align: start;
+  }
+
+  .settings-plan-card__band {
+    min-height: 0;
+    padding: 14px;
+  }
+
+  .settings-plan-card__body {
+    padding: 14px;
+  }
+
+  .settings-plan-card__feature-row .plan-feature-item__info {
+    display: none;
+  }
+
+  .settings-plan-card__feature-row .plan-feature-item__info-wrap {
+    display: none;
+  }
+
+  .settings-plan-grid--current-pro .settings-plan-card--pro {
+    order: -1;
+  }
+
+  .settings-section--data .settings-data-danger-copy {
+    justify-self: start;
+    text-align: left;
   }
 }

@@ -52,12 +52,9 @@ export async function GET(request: Request) {
       where: { workspaceId },
       select: { id: true, name: true, type: true, isArchived: true, isSystem: true },
     });
-    const existingCategoriesByName = new Map(categoriesForSeeding.map((category) => [normalizeCategoryName(category.name), category] as const));
-    const existingCategoryNames = new Set(existingCategoriesByName.keys());
-    const missingDefaultCategories = DEFAULT_CATEGORY_ROWS.filter((category) => !existingCategoryNames.has(normalizeCategoryName(category.name)));
-    if (missingDefaultCategories.length > 0) {
+    if (categoriesForSeeding.length === 0) {
       await prisma.category.createMany({
-        data: missingDefaultCategories.map((category: { name: string; type: TransactionType }) => ({
+        data: DEFAULT_CATEGORY_ROWS.map((category: { name: string; type: TransactionType }) => ({
           workspaceId,
           name: category.name,
           type: category.type,
@@ -65,29 +62,6 @@ export async function GET(request: Request) {
         })),
         skipDuplicates: true,
       });
-    }
-
-    const archivedDefaultCategories = DEFAULT_CATEGORY_ROWS.flatMap((category): Array<{ id: string; name: string; type: TransactionType }> => {
-      const existingCategory = existingCategoriesByName.get(normalizeCategoryName(category.name));
-      return existingCategory && (existingCategory.isArchived || !existingCategory.isSystem || existingCategory.type !== category.type)
-        ? [{ id: existingCategory.id, name: category.name, type: category.type }]
-        : [];
-    });
-
-    if (archivedDefaultCategories.length > 0) {
-      await prisma.$transaction(
-        archivedDefaultCategories.map((category) =>
-          prisma.category.update({
-            where: { id: category.id },
-            data: {
-              name: category.name,
-              type: category.type,
-              isArchived: false,
-              isSystem: true,
-            },
-          })
-        )
-      );
     }
 
     const categories = await prisma.category.findMany({
@@ -206,10 +180,6 @@ export async function PATCH(request: Request) {
 
     await assertWorkspaceAccess(userId, existingCategory.workspaceId);
 
-    if (existingCategory.isSystem && (payload.name !== undefined || payload.type !== undefined || payload.isArchived !== undefined)) {
-      return NextResponse.json({ error: "Built-in categories are locked." }, { status: 400 });
-    }
-
     const category = await prisma.category.update({
       where: { id: payload.id },
       data: {
@@ -269,10 +239,6 @@ export async function DELETE(request: Request) {
     }
 
     await assertWorkspaceAccess(userId, existingCategory.workspaceId);
-
-    if (existingCategory.isSystem) {
-      return NextResponse.json({ error: "Built-in categories are locked." }, { status: 400 });
-    }
 
     const category = await prisma.category.update({
       where: { id },
