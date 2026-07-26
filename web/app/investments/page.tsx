@@ -406,6 +406,13 @@ type PortfolioDisplayRow = {
   classification: InvestmentClassification;
 };
 
+type PortfolioOutlookTone = "positive" | "neutral" | "negative";
+
+type PortfolioOutlookItem = {
+  row: PortfolioDisplayRow;
+  returnPercent: number | null;
+};
+
 type PortfolioEditableField = "name" | "institution" | "subtype" | "symbol" | "detail" | "currentValue";
 type PortfolioView = "all" | "assets" | "institutions";
 
@@ -1018,6 +1025,7 @@ export default function InvestmentsPage() {
   const [manualCurrency, setManualCurrency] = useState("PHP");
   const [manualMoreOpen, setManualMoreOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState<InvestmentTab>(requestedTab);
+  const [marketFocusAssetId, setMarketFocusAssetId] = useState<string | null>(null);
 
   useEffect(() => {
     document.title = "Clover | Investments";
@@ -1670,6 +1678,45 @@ export default function InvestmentsPage() {
     [accountPerformance]
   );
 
+  const portfolioOutlook = useMemo<Record<PortfolioOutlookTone, PortfolioOutlookItem[]>>(() => {
+    const columns: Record<PortfolioOutlookTone, PortfolioOutlookItem[]> = {
+      positive: [],
+      neutral: [],
+      negative: [],
+    };
+
+    for (const row of portfolioSourceRows) {
+      if (
+        portfolioCurrencyFilter !== "all" &&
+        formatCurrencyCode(row.currency) !== formatCurrencyCode(portfolioCurrencyFilter)
+      ) {
+        continue;
+      }
+
+      const returnPercent = getReturnPercent(row.currentValue, row.purchaseValue);
+      const tone: PortfolioOutlookTone =
+        returnPercent === null
+          ? "neutral"
+          : returnPercent > 0.02
+            ? "positive"
+            : returnPercent < -0.02
+              ? "negative"
+              : "neutral";
+
+      columns[tone].push({ row, returnPercent });
+    }
+
+    for (const items of Object.values(columns)) {
+      items.sort(
+        (left, right) =>
+          (right.row.currentValue ?? 0) - (left.row.currentValue ?? 0) ||
+          left.row.name.localeCompare(right.row.name)
+      );
+    }
+
+    return columns;
+  }, [portfolioCurrencyFilter, portfolioSourceRows]);
+
   const allocationAnalysisSlices = useMemo<InvestmentAnalysisSlice[]>(
     () =>
       portfolioAllocation.map((group, index) => ({
@@ -1892,6 +1939,16 @@ export default function InvestmentsPage() {
     cancelEditingAccount();
     setHoldingEditDraft(null);
     window.history.replaceState(null, "", "/investments");
+  };
+
+  const openOutlookMarketData = (row: PortfolioDisplayRow) => {
+    if (!row.symbol?.trim()) {
+      openInvestmentAsset(row);
+      return;
+    }
+
+    setMarketFocusAssetId(row.assetId);
+    selectInvestmentTab("market");
   };
 
   useEffect(() => {
@@ -2832,6 +2889,7 @@ export default function InvestmentsPage() {
           <InvestmentMarketChart
             investmentAccounts={marketPortfolioAccounts.length > 0 ? marketPortfolioAccounts : classifiedInvestmentAccounts}
             onOpenPortfolio={() => selectInvestmentTab("portfolio")}
+            focusAssetId={marketFocusAssetId}
           />
         ) : (
           <section className="investments-insights-grid">
@@ -2877,6 +2935,99 @@ export default function InvestmentsPage() {
                 <span>{worstGainHolding?.account.name ?? "No portfolio assets yet"}</span>
               </article>
             </div>
+            <article className="investments-portfolio-outlook glass">
+              <div className="investments-allocation__head">
+                <div className="investments-allocation__head-title">
+                  <div className="investments-allocation__title-row">
+                    <h5>Portfolio Outlook</h5>
+                    <InfoTip label="Outlook groups holdings by recorded return. It is not an analyst rating or a prediction. Open Market data for price history and News for current coverage." />
+                  </div>
+                </div>
+              </div>
+              <div className="investments-portfolio-outlook__columns">
+                {([
+                  ["positive", "Positive"],
+                  ["neutral", "Neutral"],
+                  ["negative", "Negative"],
+                ] as Array<[PortfolioOutlookTone, string]>).map(([tone, label]) => {
+                  const items = portfolioOutlook[tone];
+                  return (
+                    <section
+                      className={`investments-portfolio-outlook__column investments-portfolio-outlook__column--${tone}`}
+                      key={tone}
+                      aria-label={`${label} portfolio outlook`}
+                    >
+                      <div className="investments-portfolio-outlook__column-head">
+                        <span className="investments-portfolio-outlook__status-dot" aria-hidden="true" />
+                        <strong>{label}</strong>
+                        <span>{items.length}</span>
+                      </div>
+                      <div className="investments-portfolio-outlook__list">
+                        {items.length > 0 ? (
+                          items.slice(0, 4).map(({ row, returnPercent }) => (
+                            <article className="investments-portfolio-outlook__asset" key={row.key}>
+                              <div className="investments-portfolio-outlook__asset-head">
+                                <AccountBrandMark
+                                  accountBrand={getInvestmentAssetBrand({
+                                    symbol: row.symbol,
+                                    name: row.name,
+                                    subtype: row.subtype,
+                                    currency: row.currency,
+                                    institution: row.institution,
+                                  })}
+                                  label={row.symbol ?? row.name}
+                                />
+                                <div>
+                                  <strong>{row.name}</strong>
+                                  <span>
+                                    {row.symbol?.trim() || getInvestmentSubtypeLabel(row.subtype ?? "other")}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="investments-portfolio-outlook__data">
+                                <strong>
+                                  {returnPercent === null
+                                    ? "Return not set"
+                                    : `${returnPercent >= 0 ? "+" : ""}${percentFormatter.format(returnPercent)}`}
+                                </strong>
+                                <span>
+                                  {row.currentValue === null
+                                    ? "Value not set"
+                                    : formatInvestmentAmount(row.currentValue, row.currency)}
+                                </span>
+                              </div>
+                              <div className="investments-portfolio-outlook__actions">
+                                <button type="button" onClick={() => openOutlookMarketData(row)}>
+                                  {row.symbol?.trim() ? "Market data" : "Add ticker"}
+                                </button>
+                                <a
+                                  href={`https://news.google.com/search?q=${encodeURIComponent(`${row.name} ${row.symbol ?? ""}`.trim())}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  News
+                                </a>
+                              </div>
+                            </article>
+                          ))
+                        ) : (
+                          <p className="investments-portfolio-outlook__empty">No holdings in this outlook.</p>
+                        )}
+                      </div>
+                      {items.length > 4 ? (
+                        <button
+                          className="investments-portfolio-outlook__more"
+                          type="button"
+                          onClick={() => selectInvestmentTab("portfolio")}
+                        >
+                          View {items.length - 4} more
+                        </button>
+                      ) : null}
+                    </section>
+                  );
+                })}
+              </div>
+            </article>
             <article className="investments-projected-growth glass">
               <div className="investments-allocation__head">
                 <div className="investments-allocation__head-title">
@@ -2889,9 +3040,6 @@ export default function InvestmentsPage() {
                   {projectedPortfolioGrowth === null ? "—" : `${percentFormatter.format(projectedPortfolioGrowth)} yearly`}
                 </strong>
               </div>
-              <p>
-                Clover blends conservative asset-type assumptions with available recorded performance. Update tickers, units, and purchase values to improve this estimate.
-              </p>
             </article>
             <article className="investments-allocation glass">
               <div className="investments-allocation__head">

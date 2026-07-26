@@ -45600,6 +45600,202 @@ body:has(.landing-page) {
   }
 }
 
+.investments-portfolio-outlook {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--stroke);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(16, 185, 129, 0.06), transparent 28%),
+    radial-gradient(circle at 92% 0%, rgba(239, 68, 68, 0.05), transparent 28%),
+    rgba(255, 255, 255, 0.88);
+  box-shadow: var(--shadow-soft);
+}
+
+.investments-portfolio-outlook__columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.investments-portfolio-outlook__column {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid color-mix(in srgb, var(--stroke) 86%, transparent);
+  border-radius: 17px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.investments-portfolio-outlook__column-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 24px;
+}
+
+.investments-portfolio-outlook__column-head strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.investments-portfolio-outlook__column-head > span:last-child {
+  display: grid;
+  min-width: 23px;
+  height: 23px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.investments-portfolio-outlook__status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.investments-portfolio-outlook__column--positive .investments-portfolio-outlook__status-dot {
+  background: #18a66a;
+  box-shadow: 0 0 0 4px rgba(24, 166, 106, 0.1);
+}
+
+.investments-portfolio-outlook__column--neutral .investments-portfolio-outlook__status-dot {
+  background: #e5a11b;
+  box-shadow: 0 0 0 4px rgba(229, 161, 27, 0.1);
+}
+
+.investments-portfolio-outlook__column--negative .investments-portfolio-outlook__status-dot {
+  background: #df5c63;
+  box-shadow: 0 0 0 4px rgba(223, 92, 99, 0.1);
+}
+
+.investments-portfolio-outlook__list {
+  display: grid;
+  gap: 7px;
+}
+
+.investments-portfolio-outlook__asset {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 10px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.investments-portfolio-outlook__asset-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.investments-portfolio-outlook__asset-head .account-brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+}
+
+.investments-portfolio-outlook__asset-head > div {
+  display: grid;
+  min-width: 0;
+}
+
+.investments-portfolio-outlook__asset-head strong,
+.investments-portfolio-outlook__asset-head span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.investments-portfolio-outlook__asset-head strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.investments-portfolio-outlook__asset-head span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.investments-portfolio-outlook__data {
+  display: grid;
+  justify-items: end;
+  align-content: center;
+  white-space: nowrap;
+}
+
+.investments-portfolio-outlook__data strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.investments-portfolio-outlook__data span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.investments-portfolio-outlook__column--positive .investments-portfolio-outlook__data strong {
+  color: #138a58;
+}
+
+.investments-portfolio-outlook__column--negative .investments-portfolio-outlook__data strong {
+  color: #c94951;
+}
+
+.investments-portfolio-outlook__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+}
+
+.investments-portfolio-outlook__actions :is(button, a),
+.investments-portfolio-outlook__more {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.investments-portfolio-outlook__actions :is(button, a):hover,
+.investments-portfolio-outlook__more:hover {
+  text-decoration: underline;
+}
+
+.investments-portfolio-outlook__empty {
+  min-height: 56px;
+  margin: 0;
+  padding: 16px 8px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.investments-portfolio-outlook__more {
+  justify-self: start;
+}
+
+@media (max-width: 960px) {
+  .investments-portfolio-outlook__columns {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Phone navigation is fully available from the bottom bar and More page. */
 @media (max-width: 760px) {
   .topbar .shell-menu-button,

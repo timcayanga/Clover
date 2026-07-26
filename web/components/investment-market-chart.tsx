@@ -61,6 +61,7 @@ type TickerSuggestion = {
 type InvestmentMarketChartProps = {
   investmentAccounts: InvestmentAccount[];
   onOpenPortfolio?: () => void;
+  focusAssetId?: string | null;
 };
 
 const isMarketTrackableSubtype = (value: string | null) =>
@@ -264,7 +265,7 @@ const formatRelativeTime = (timestamp: number) => {
   return `${elapsedDays}d ago`;
 };
 
-export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio }: InvestmentMarketChartProps) {
+export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, focusAssetId }: InvestmentMarketChartProps) {
   const trackablePortfolioAssets = useMemo(
     () =>
       investmentAccounts
@@ -275,9 +276,12 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio }: I
   );
   const defaultMarketAsset = useMemo(
     () =>
-      trackablePortfolioAssets
-        .filter((account) => Boolean(account.investmentSymbol?.trim()))[0] ?? null,
-    [trackablePortfolioAssets]
+      trackablePortfolioAssets.find(
+        (account) => account.id === focusAssetId && Boolean(account.investmentSymbol?.trim())
+      ) ??
+      trackablePortfolioAssets.filter((account) => Boolean(account.investmentSymbol?.trim()))[0] ??
+      null,
+    [focusAssetId, trackablePortfolioAssets]
   );
   const defaultMarket = defaultMarketAsset ? getMarketForInvestment(defaultMarketAsset) : "us";
   const defaultSymbol = defaultMarketAsset?.investmentSymbol?.trim().toUpperCase() ?? "";
