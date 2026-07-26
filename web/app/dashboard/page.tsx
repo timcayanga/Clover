@@ -323,6 +323,15 @@ const comparePeriods = (currentTransactions: DashboardTransaction[], previousTra
   };
 };
 
+const getPeriodChangePercent = (current: number, previous: number) => {
+  // Values below half a cent render as zero, so they are not a meaningful comparison baseline.
+  if (Math.abs(previous) < 0.005) {
+    return null;
+  }
+
+  return ((current - previous) / Math.abs(previous)) * 100;
+};
+
 function DashboardUnavailableContent() {
   return (
     <section className="dashboard-home">
@@ -736,11 +745,16 @@ async function DashboardStream({
   const weeklySummary = comparePeriods(currentSevenDayTransactions, previousSevenDayTransactions);
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const currentMonthTransactions = currentTransactions.filter(
     (transaction) => transaction.date >= monthStart && transaction.date < nextMonthStart
   );
+  const previousMonthTransactions = currentTransactions.filter(
+    (transaction) => transaction.date >= previousMonthStart && transaction.date < monthStart
+  );
   const monthDayCount = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const monthSummary = summarizeWindow(currentMonthTransactions, "This month");
+  const previousMonthSummary = summarizeWindow(previousMonthTransactions, "Previous month");
   const weeklyFlowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
   const weeklyFlow = buildDailyFlow(currentTransactions, weeklyFlowStart, 7, { weekday: "short" });
   const monthlyFlow = buildDailyFlow(currentMonthTransactions, monthStart, monthDayCount, { day: "numeric" });
@@ -798,6 +812,16 @@ async function DashboardStream({
           tone: daysSinceLastImport === null ? "neutral" : "warning",
         }
       : null,
+    savingsTotal > 0
+      ? {
+          emoji: "💚",
+          label: "Balance in view",
+          copy: `${formatCurrency(savingsTotal)} is currently tracked across your spendable accounts.`,
+          href: "/accounts",
+          actionLabel: "View accounts",
+          tone: "positive",
+        }
+      : null,
     categorySpike
       ? {
           emoji: "📈",
@@ -828,6 +852,36 @@ async function DashboardStream({
           tone: "neutral",
         }
       : null,
+    weeklySummary.previous.expense > 0 && weeklySummary.current.expense < weeklySummary.previous.expense
+      ? {
+          emoji: "🌿",
+          label: "Spending eased",
+          copy: `You spent ${formatCurrency(Math.abs(weeklySpendDelta))} less than last week.`,
+          href: "/adviser?section=trends",
+          actionLabel: "See the trend",
+          tone: "positive",
+        }
+      : null,
+    monthSummary.net > 0
+      ? {
+          emoji: "✨",
+          label: "Positive cash flow",
+          copy: `${formatCurrency(monthSummary.net)} more came in than went out this month.`,
+          href: "/adviser?section=trends",
+          actionLabel: "Open Adviser",
+          tone: "positive",
+        }
+      : null,
+    currentSevenDayTransactions.length > 0 && reviewAttentionCount === 0
+      ? {
+          emoji: "✅",
+          label: "All caught up",
+          copy: "Your recent transactions look tidy and ready to use.",
+          href: "/transactions",
+          actionLabel: "View transactions",
+          tone: "positive",
+        }
+      : null,
     currentSevenDayTransactions.length > 0
       ? {
           emoji: "🗓️",
@@ -846,13 +900,13 @@ async function DashboardStream({
       key: "income",
       label: "Monthly Income",
       value: formatCurrency(monthSummary.income, displayCurrency),
-      trend: currentSummary.incomeDelta,
+      trend: getPeriodChangePercent(monthSummary.income, previousMonthSummary.income),
     },
     {
       key: "expenses",
       label: "Monthly Expenses",
       value: formatCurrency(monthSummary.expense, displayCurrency),
-      trend: currentSummary.expenseDelta,
+      trend: getPeriodChangePercent(monthSummary.expense, previousMonthSummary.expense),
     },
   ];
   const weeklyReportTone = weeklySummary.net >= 0 ? "positive" : "warning";
@@ -900,8 +954,20 @@ async function DashboardStream({
                 <span className="dashboard-home__hero-mini-label">{pill.label}</span>
                 <div className="dashboard-home__hero-mini-row">
                   <strong className="dashboard-home__hero-mini-value">{pill.value}</strong>
-                  <span className={pill.trend >= 0 ? "dashboard-home__hero-mini-trend positive" : "dashboard-home__hero-mini-trend negative"}>
-                    {pill.trend === 0 ? "0%" : `${pill.trend > 0 ? "+" : ""}${Math.abs(pill.trend).toFixed(0)}%`}
+                  <span
+                    className={
+                      pill.trend === null
+                        ? "dashboard-home__hero-mini-trend dashboard-home__hero-mini-trend--unavailable"
+                        : pill.trend >= 0
+                          ? "dashboard-home__hero-mini-trend positive"
+                          : "dashboard-home__hero-mini-trend negative"
+                    }
+                  >
+                    {pill.trend === null
+                      ? "No prior month"
+                      : pill.trend === 0
+                        ? "0%"
+                        : `${pill.trend > 0 ? "+" : ""}${pill.trend.toFixed(0)}%`}
                   </span>
                 </div>
               </div>
@@ -915,8 +981,20 @@ async function DashboardStream({
               <span className="dashboard-home__hero-mini-label">{pill.label}</span>
               <div className="dashboard-home__hero-mini-row">
                 <strong className="dashboard-home__hero-mini-value">{pill.value}</strong>
-                <span className={pill.trend >= 0 ? "dashboard-home__hero-mini-trend positive" : "dashboard-home__hero-mini-trend negative"}>
-                  {pill.trend === 0 ? "0%" : `${pill.trend > 0 ? "+" : ""}${Math.abs(pill.trend).toFixed(0)}%`}
+                <span
+                  className={
+                    pill.trend === null
+                      ? "dashboard-home__hero-mini-trend dashboard-home__hero-mini-trend--unavailable"
+                      : pill.trend >= 0
+                        ? "dashboard-home__hero-mini-trend positive"
+                        : "dashboard-home__hero-mini-trend negative"
+                  }
+                >
+                  {pill.trend === null
+                    ? "No prior month"
+                    : pill.trend === 0
+                      ? "0%"
+                      : `${pill.trend > 0 ? "+" : ""}${pill.trend.toFixed(0)}%`}
                 </span>
               </div>
             </article>
