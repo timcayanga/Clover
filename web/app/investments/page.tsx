@@ -2477,31 +2477,6 @@ export default function InvestmentsPage() {
           />
         ) : selectedTab === "overview" ? (
           <>
-            <section className="investments-growth-hero glass">
-              <div className="investments-allocation__head">
-                <div className="investments-allocation__head-title">
-                  <div className="investments-allocation__title-row">
-                    <h5>Investment Growth</h5>
-                    <InfoTip label="Tracks the total recorded portfolio value across dated investment statements and snapshots for the selected currency." />
-                  </div>
-                </div>
-                {investmentGrowthPoints.length > 1 ? (
-                  <div className="investments-growth-hero__change">
-                    <span>Recorded change</span>
-                    <strong>
-                      {formatInvestmentAmount(
-                        investmentGrowthPoints[investmentGrowthPoints.length - 1].value - investmentGrowthPoints[0].value,
-                        selectedCurrencyCodes[0] ?? "PHP"
-                      )}
-                    </strong>
-                  </div>
-                ) : null}
-              </div>
-              <InvestmentGrowthChart
-                points={investmentGrowthPoints}
-                currency={selectedCurrencyCodes[0] ?? "PHP"}
-              />
-            </section>
             <section className="investments-overview-metrics" aria-label="Portfolio totals">
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
                 <button className="accounts-overview-card__info" type="button" aria-label="How estimated value is calculated">
@@ -2559,6 +2534,31 @@ export default function InvestmentsPage() {
                   {portfolioRoi === null ? "—" : percentFormatter.format(portfolioRoi)}
                 </strong>
               </article>
+            </section>
+            <section className="investments-growth-hero glass">
+              <div className="investments-allocation__head">
+                <div className="investments-allocation__head-title">
+                  <div className="investments-allocation__title-row">
+                    <h5>Investment Growth</h5>
+                    <InfoTip label="Tracks the total recorded portfolio value across dated investment statements and snapshots for the selected currency." />
+                  </div>
+                </div>
+                {investmentGrowthPoints.length > 1 ? (
+                  <div className="investments-growth-hero__change">
+                    <span>Recorded change</span>
+                    <strong>
+                      {formatInvestmentAmount(
+                        investmentGrowthPoints[investmentGrowthPoints.length - 1].value - investmentGrowthPoints[0].value,
+                        selectedCurrencyCodes[0] ?? "PHP"
+                      )}
+                    </strong>
+                  </div>
+                ) : null}
+              </div>
+              <InvestmentGrowthChart
+                points={investmentGrowthPoints}
+                currency={selectedCurrencyCodes[0] ?? "PHP"}
+              />
             </section>
             {hasVisibleCurrencySelection && !canAggregateSelectedCurrency ? (
               <div className="investments-valuation-note is-warning">
