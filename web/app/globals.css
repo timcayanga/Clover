@@ -16378,14 +16378,12 @@ button.transaction-inline-edit--name {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  border-radius: 10px;
-  transition: background-color 160ms ease, box-shadow 160ms ease, color 160ms ease;
 }
 
 button.transaction-inline-edit--name:hover,
 button.transaction-inline-edit--name:focus-visible {
-  background: rgba(3, 168, 192, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(3, 168, 192, 0.14);
+  background: transparent;
+  box-shadow: none;
   outline: none;
 }
 
@@ -16403,8 +16401,8 @@ select.transaction-inline-edit {
 input.transaction-inline-edit:focus,
 select.transaction-inline-edit:focus {
   outline: none;
-  background: rgba(3, 168, 192, 0.07);
-  box-shadow: inset 0 -1px 0 rgba(3, 168, 192, 0.52);
+  background: transparent;
+  box-shadow: none;
 }
 
 .transaction-inline-edit--date,
@@ -16451,7 +16449,6 @@ input.transaction-inline-edit--amount::placeholder {
   -moz-appearance: none;
   cursor: pointer;
   line-height: 1.35;
-  transition: background-color 160ms ease, box-shadow 160ms ease, color 160ms ease;
 }
 
 .transaction-account-cell .transaction-inline-edit--select:focus,
@@ -16464,8 +16461,8 @@ input.transaction-inline-edit--amount::placeholder {
 .transaction-category-cell .transaction-inline-edit--select:hover,
 .transaction-account-cell .transaction-inline-edit--select:focus-visible,
 .transaction-category-cell .transaction-inline-edit--select:focus-visible {
-  background: rgba(3, 168, 192, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(3, 168, 192, 0.14);
+  background: transparent;
+  box-shadow: none;
   outline: none;
 }
 
