@@ -34,46 +34,46 @@ export type FeatureNeedPage = {
 
 export const FEATURE_PAGES: FeatureNeedPage[] = [
   {
-    slug: "track-finances",
-    navLabel: "Track Finances",
-    shortLabel: "Track Finances",
-    overview: "Bring your files, transactions, accounts, and recurring activity into one place.",
-    heroEyebrow: "Track finances",
-    heroTitle: "Bring months of finances into one place.",
+    slug: "manage-money",
+    navLabel: "Manage Money",
+    shortLabel: "Manage Money",
+    overview: "Organize uploads, accounts, transactions, and recurring activity without rebuilding everything by hand.",
+    heroEyebrow: "Manage money",
+    heroTitle: "Organize months of money without starting from zero.",
     heroCopy:
-      "Upload the records and accounts you already have, and Clover helps you start from real history instead of a blank page.",
-    heroPlaceholder: "Placeholder for a Track Finances overview image",
+      "Upload statements, receipts, screenshots, or spreadsheets. Clover turns the records you already have into a financial history you can review and use.",
+    heroPlaceholder: "Placeholder showing uploaded records becoming organized financial data",
     accent: "teal",
     sections: [
       {
-        id: "file-uploads",
-        eyebrow: "File uploads",
-        title: "Start with the records you already have.",
+        id: "accounts",
+        eyebrow: "Accounts",
+        title: "See every account in context.",
         body: [
-          "Upload statements, receipts, screenshots, or exports instead of building everything manually.",
-          "Clover turns them into usable data so you can start seeing results faster.",
+          "Bring cash, bank accounts, cards, e-wallets, and other balances into one view.",
+          "You can see what each account holds and how it contributes to your overall financial picture.",
         ],
-        placeholder: "Placeholder for file upload image",
+        placeholder: "Placeholder showing connected accounts and balances",
       },
       {
         id: "transactions",
         eyebrow: "Transactions",
-        title: "Review your transactions faster.",
+        title: "Keep transactions clean without doing everything by hand.",
         body: [
-          "Review categories, merchant names, and transaction details in one place.",
-          "Fix what matters and keep the final result under your control.",
+          "Clover organizes imported activity so categories, merchant names, and account details are easier to review.",
+          "Correct anything that needs attention, confirm it once, and keep the final record under your control.",
         ],
-        placeholder: "Placeholder for transactions review image",
+        placeholder: "Placeholder showing organized transactions ready for review",
       },
       {
-        id: "accounts-recurring-investments",
-        eyebrow: "Accounts and visibility",
-        title: "Keep your accounts and repeating activity clear.",
+        id: "recurring",
+        eyebrow: "Recurring",
+        title: "Know what keeps coming back.",
         body: [
-          "Organize accounts, spot repeating bills, and keep investments visible without jumping between tools.",
-          "That makes it easier to see what is fixed, what changed, and what needs attention next from one account view.",
+          "Spot repeating bills, subscriptions, income, installments, and other commitments from the history already inside Clover.",
+          "See what is expected next so fewer payments or changes catch you by surprise.",
         ],
-        placeholder: "Placeholder for accounts, recurring activity, and investments image",
+        placeholder: "Placeholder showing recurring bills, income, and upcoming commitments",
       },
     ],
   },
@@ -81,114 +81,131 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
     slug: "gain-insights",
     navLabel: "Gain Insights",
     shortLabel: "Gain Insights",
-    overview: "Turn uploaded data into reports, guidance, and simple next steps.",
+    overview: "Turn organized financial data into reports, Adviser guidance, and clearer next steps.",
     heroEyebrow: "Gain insights",
-    heroTitle: "See what your money is telling you.",
+    heroTitle: "Understand what changed without digging through every transaction.",
     heroCopy:
-      "Turn your data into reports and insights so you can see patterns faster and decide what to do next.",
-    heroPlaceholder: "Placeholder for a Gain Insights overview image",
+      "Clover connects the activity across your accounts so important changes, patterns, and decisions are easier to see.",
+    heroPlaceholder: "Placeholder showing a clear overview of financial changes and patterns",
     accent: "gold",
     sections: [
       {
         id: "reports",
         eyebrow: "Reports",
-        title: "See where your money goes.",
+        title: "See the pattern behind the total.",
         body: [
-          "Open reports by category, merchant, account, or time whenever you want a clearer breakdown.",
-          "You can quickly see what changed and where most of your money is going.",
+          "Break down money by category, merchant, account, or time period whenever a balance alone does not explain enough.",
+          "Compare what changed and trace the movement back to the transactions behind it.",
         ],
-        placeholder: "Placeholder for reports image",
+        placeholder: "Placeholder showing spending and account reports",
       },
       {
         id: "adviser",
         eyebrow: "Adviser",
-        title: "Catch issues earlier.",
+        title: "Ask about your money in plain language.",
         body: [
-          "Adviser can surface spending spikes, repeating costs, and unusual changes that deserve a closer look.",
-          "Instead of digging through everything yourself, you can focus on what needs attention first.",
+          "Ask Adviser what changed, where money went, or what deserves attention next.",
+          "Its guidance is grounded in the financial history you have organized in Clover, so the answer starts with your actual situation.",
         ],
-        placeholder: "Placeholder for Adviser image",
+        placeholder: "Placeholder showing a conversation with Clover Adviser",
       },
       {
-        id: "progress",
-        eyebrow: "Progress",
-        title: "Turn insights into your next step.",
+        id: "next-step",
+        eyebrow: "Next steps",
+        title: "Turn one useful insight into a better habit.",
         body: [
-          "Use what you learn to adjust spending, budgets, savings, or investing.",
-          "The point is not just to look at data, but to keep moving with a clearer picture of your account.",
+          "Use what you learn to adjust a budget, protect a goal, review a recurring cost, or make a more informed decision.",
+          "Clover helps narrow the next step so progress feels practical instead of overwhelming.",
         ],
-        placeholder: "Placeholder for progress and next-step image",
+        placeholder: "Placeholder showing an insight becoming a practical next step",
       },
     ],
   },
   {
-    slug: "split-bills",
-    navLabel: "Split Bills",
-    shortLabel: "Split Bills",
-    overview: "Track shared expenses, see who owes what, and settle up without the usual back-and-forth.",
-    heroEyebrow: "Split bills",
-    heroTitle: "Share expenses without the hassle.",
+    slug: "plan-ahead",
+    navLabel: "Plan Ahead",
+    shortLabel: "Plan Ahead",
+    overview: "Use real financial history to shape budgets, goals, and investment decisions.",
+    heroEyebrow: "Plan ahead",
+    heroTitle: "Make plans from the life you are already living.",
     heroCopy:
-      "Add a shared expense, split it clearly, and keep track of what is still unpaid without chasing people manually.",
-    heroPlaceholder: "Placeholder for Split Bills image",
-    accent: "mint",
-    sections: [],
-  },
-  {
-    slug: "budgeting",
-    navLabel: "Budgeting",
-    shortLabel: "Budgeting",
-    overview: "Build practical budgets from your real spending instead of starting from guesswork.",
-    heroEyebrow: "Budgeting",
-    heroTitle: "Create budgets that match real life.",
-    heroCopy:
-      "Use your real spending history to set better limits, watch progress, and stay closer to your goals.",
-    heroPlaceholder: "Placeholder for Budgeting image",
+      "Clover uses the money patterns you already have to help you make realistic plans for what comes next.",
+    heroPlaceholder: "Placeholder showing financial history becoming a forward-looking plan",
     accent: "sky",
-    sections: [],
-  },
-  {
-    slug: "pro",
-    navLabel: "Pro",
-    shortLabel: "Pro",
-    overview: "Unlock more room, deeper insights, and investment tools when you need more.",
-    heroEyebrow: "Clover Pro",
-    heroTitle: "Get more when your finances need more.",
-    heroCopy:
-      "Pro gives you more room, deeper reporting, and investment tools when you need a fuller account.",
-    heroPlaceholder: "Placeholder for a Pro overview image",
-    accent: "violet",
-    featured: true,
     sections: [
       {
-        id: "advanced-reporting",
-        eyebrow: "Advanced reporting",
-        title: "See more detail when you need it.",
+        id: "budgeting",
+        eyebrow: "Budgeting",
+        title: "Set limits using real spending, not guesswork.",
         body: [
-          "Compare time periods and trends in more detail when basic tracking is no longer enough.",
-          "That gives you a fuller picture when you need to make bigger financial decisions.",
+          "Build a budget from the categories and patterns already visible in your history.",
+          "Watch actual spending against the plan and adjust it when real life changes.",
         ],
-        placeholder: "Placeholder for advanced reporting image",
+        placeholder: "Placeholder showing a practical budget based on real spending",
       },
       {
-        id: "higher-limits",
-        eyebrow: "Higher limits",
-        title: "Keep more of your financial history in Clover.",
+        id: "goals",
+        eyebrow: "Goals",
+        title: "Give each goal a clear path forward.",
         body: [
-          "Add more uploads, more accounts, and more history as your finances grow.",
-          "You can keep using the same account without running into limits too quickly.",
+          "Set the amount, timing, and progress you want to protect, from an emergency fund to a major purchase.",
+          "Clover connects the goal to your broader finances so you can see what is helping or slowing it down.",
         ],
-        placeholder: "Placeholder for higher limits image",
+        placeholder: "Placeholder showing goal progress and recommended actions",
       },
       {
-        id: "investment-tools",
-        eyebrow: "Investment tools",
-        title: "Keep investing in the same place.",
+        id: "investments",
+        eyebrow: "Investments",
+        title: "Keep long-term growth in the same picture.",
         body: [
-          "Add investment tools alongside the rest of your finances instead of splitting everything across separate apps.",
-          "That makes it easier to see spending and long-term money in the same account.",
+          "Track holdings, purchases, dividends, and market movement alongside the rest of your accounts.",
+          "See how investing contributes to your net worth without losing sight of the money you use today.",
         ],
-        placeholder: "Placeholder for investment tools image",
+        placeholder: "Placeholder showing investments alongside a complete net worth view",
+      },
+    ],
+  },
+  {
+    slug: "grow-together",
+    navLabel: "Grow Together",
+    shortLabel: "Grow Together",
+    overview: "Manage group plans and shared expenses without mixing them into your private finances.",
+    heroEyebrow: "Grow together",
+    heroTitle: "Handle shared money without shared confusion.",
+    heroCopy:
+      "Use Circles for the plans a group shares and Split Bills for the expenses that need to be settled.",
+    heroPlaceholder: "Placeholder showing people coordinating shared money in Clover",
+    accent: "mint",
+    sections: [
+      {
+        id: "circles",
+        eyebrow: "Circles",
+        title: "Give every group one place to stay aligned.",
+        body: [
+          "Create a Circle for a household, trip, family plan, or other shared purpose.",
+          "Keep the relevant goals, budgets, commitments, and activity together without giving everyone access to your personal financial history.",
+        ],
+        placeholder: "Placeholder showing a Clover Circle with shared plans and activity",
+      },
+      {
+        id: "split-bills",
+        eyebrow: "Split Bills",
+        title: "Settle expenses without awkward math.",
+        body: [
+          "Turn a receipt or transaction into a shared expense, then split it equally or by item.",
+          "Track who paid, who owes, and what has already been settled without chasing everyone manually.",
+        ],
+        placeholder: "Placeholder showing a receipt divided into clear shares",
+      },
+      {
+        id: "sharing-boundaries",
+        eyebrow: "Privacy",
+        title: "Share the plan, not your entire financial life.",
+        body: [
+          "Clover keeps your Profiles private by default and only shares the information a collaborative feature needs.",
+          "The group gets clarity while your unrelated accounts and transactions remain yours.",
+        ],
+        placeholder: "Placeholder showing a clear boundary between personal and shared finances",
       },
     ],
   },
@@ -196,59 +213,112 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
     slug: "security",
     navLabel: "Security",
     shortLabel: "Security",
-    overview: "Understand how Clover protects access, preserves traceability, and handles sensitive financial data carefully.",
+    overview: "See how Clover protects access, preserves traceability, and keeps you in control of your data.",
     heroEyebrow: "Security",
-    heroTitle: "Keep your data safe and secure.",
+    heroTitle: "Your financial data stays protected and under your control.",
     heroCopy:
-      "Clover is built to protect account access, keep uploaded data reviewable, and give you confidence that your information stays private.",
-    heroPlaceholder: "Placeholder for Security image",
+      "Clover keeps your records private, traceable, and editable. You decide what is imported, corrected, shared, or removed.",
+    heroPlaceholder: "Placeholder showing protected financial records and account controls",
     accent: "coral",
     sections: [
       {
         id: "uploaded-files",
         eyebrow: "Uploaded files",
-        title: "What happens to the files you upload?",
+        title: "Know what happens to every file you upload.",
         body: [
-          "When you upload a statement, receipt, or screenshot, Clover uses it to extract the financial details you need for tracking.",
-          "The original file stays tied to your import so you can review where the data came from when you need it.",
+          "Clover uses a statement, receipt, screenshot, or spreadsheet to extract the financial details needed for your account.",
+          "The source stays connected to the import for traceability, and you can remove files or related data when you no longer want Clover to keep them.",
         ],
-        placeholder: "Placeholder for uploaded files security image",
+        placeholder: "Placeholder showing a source file connected to reviewed transactions",
       },
       {
-        id: "data-safety",
-        eyebrow: "Data safety",
-        title: "Your data stays private to your account.",
+        id: "private-account",
+        eyebrow: "Private account",
+        title: "Keep your account private.",
         body: [
-          "Your financial data is meant for your account and your review, not for other users to browse or access.",
-          "That means the information you upload stays connected to your own Clover account unless you explicitly share something through a product feature.",
+          "Your financial records belong to your Clover account and are not available for other users to browse.",
+          "Clover does not sell your personal information, and sharing only happens when you deliberately use a feature designed for it.",
         ],
-        placeholder: "Placeholder for private account access image",
+        placeholder: "Placeholder showing private account access and protected records",
       },
       {
-        id: "protection",
-        eyebrow: "Protection",
-        title: "Security is built into how Clover handles your data.",
+        id: "review-control",
+        eyebrow: "Review and control",
+        title: "Review every important detail before you trust it.",
         body: [
-          "Clover is designed to protect account access, preserve the link between uploaded files and imported data, and make important changes easier to trace.",
-          "That helps keep your information secure while also making it easier for you to review and verify what Clover is showing you.",
+          "Imported records remain traceable and editable so you can verify what Clover extracted and correct anything that needs attention.",
+          "Confirmed financial data stays under your control instead of being silently replaced by a later suggestion.",
         ],
-        placeholder: "Placeholder for security protections image",
+        placeholder: "Placeholder showing an imported record being reviewed and confirmed",
       },
       {
-        id: "access-control",
-        eyebrow: "Access control",
-        title: "Can other people access your data?",
+        id: "sharing-control",
+        eyebrow: "Sharing control",
+        title: "Share only what you choose.",
         body: [
-          "Other people should not be able to access your financial data just by using Clover.",
-          "Your information stays tied to your own account, and shared access only happens when a specific Clover feature is built for sharing, like split bills.",
+          "Circles and Split Bills can share the details needed for a group plan or expense without opening the rest of your financial life.",
+          "Your unrelated Profiles, accounts, and transactions remain private.",
         ],
-        placeholder: "Placeholder for account access control image",
+        placeholder: "Placeholder showing selected shared details separated from private data",
+      },
+    ],
+  },
+  {
+    slug: "pro",
+    navLabel: "Pro",
+    shortLabel: "Pro",
+    overview: "Add more capacity, richer guidance, and deeper investment tools as your finances grow.",
+    heroEyebrow: "Clover Pro",
+    heroTitle: "Grow with confidence with Pro.",
+    heroCopy:
+      "Start free, then upgrade when you need more room for history, accounts, profiles, reports, Adviser guidance, and investments.",
+    heroPlaceholder: "Placeholder showing a richer Pro financial overview",
+    accent: "violet",
+    featured: true,
+    sections: [
+      {
+        id: "more-history",
+        eyebrow: "More history",
+        title: "Keep more of your financial history together.",
+        body: [
+          "Increase upload, account, transaction, and Profile limits as the amount you manage grows.",
+          "You can keep the fuller story inside Clover instead of trimming the history that gives your numbers context.",
+        ],
+        placeholder: "Placeholder showing expanded upload, account, and Profile capacity",
+      },
+      {
+        id: "deeper-guidance",
+        eyebrow: "Deeper guidance",
+        title: "See deeper patterns before they become problems.",
+        body: [
+          "Use advanced reports and richer Adviser guidance to compare periods, investigate movement, and identify what deserves attention.",
+          "More complete data gives Clover more context for practical recommendations.",
+        ],
+        placeholder: "Placeholder showing advanced reports and Adviser recommendations",
+      },
+      {
+        id: "investment-context",
+        eyebrow: "Investment context",
+        title: "Track investments with the rest of your financial picture.",
+        body: [
+          "Use fuller portfolio tools for holdings, purchases, dividends, and market movement.",
+          "Connect long-term growth with your accounts, spending, goals, and net worth in one place.",
+        ],
+        placeholder: "Placeholder showing a full investment portfolio within Clover",
       },
     ],
   },
 ];
 
 export const FEATURE_PAGE_MAP = new Map(FEATURE_PAGES.map((page) => [page.slug, page] as const));
+
+export const FEATURE_SLUG_ALIASES: Record<string, string> = {
+  "track-finances": "manage-money",
+  "budgeting": "plan-ahead",
+  "split-bills": "grow-together",
+};
+
+export const resolveFeatureSlug = (slug: string) => FEATURE_SLUG_ALIASES[slug] ?? slug;
 
 export const PRODUCT_LINKS: PublicNavLink[] = [
   {
@@ -277,12 +347,7 @@ export const LEGAL_LINKS: PublicNavLink[] = [
 ];
 
 export const FEATURE_LINKS: PublicNavLink[] = [
-  ...[...FEATURE_PAGES]
-    .sort((left, right) => {
-      const order = ["track-finances", "gain-insights", "split-bills", "budgeting", "security", "pro"];
-      return order.indexOf(left.slug) - order.indexOf(right.slug);
-    })
-    .map((page) => ({
+  ...FEATURE_PAGES.map((page) => ({
     label: page.navLabel,
     href: `/features/${page.slug}`,
     description: page.overview,
@@ -312,4 +377,4 @@ export const PUBLIC_NAV_CATEGORIES: PublicNavCategory[] = [
   },
 ];
 
-export const isFeatureSlug = (slug: string): slug is FeatureNeedPage["slug"] => FEATURE_PAGE_MAP.has(slug);
+export const isFeatureSlug = (slug: string): slug is FeatureNeedPage["slug"] => FEATURE_PAGE_MAP.has(resolveFeatureSlug(slug));

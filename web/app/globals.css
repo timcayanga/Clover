@@ -33322,6 +33322,55 @@ button.accounts-detail__transaction-head-cell {
   margin-top: auto;
 }
 
+.feature-detail-page__visual .marketing-placeholder {
+  width: min(100%, 560px);
+  aspect-ratio: 4 / 3;
+  display: grid;
+  place-items: center;
+  padding: clamp(18px, 3vw, 30px);
+  border: 1px solid rgba(3, 168, 192, 0.14);
+  border-radius: clamp(24px, 3vw, 38px);
+  background:
+    radial-gradient(circle at 18% 18%, rgba(87, 220, 198, 0.24), transparent 34%),
+    radial-gradient(circle at 82% 76%, rgba(3, 168, 192, 0.16), transparent 38%),
+    rgba(255, 255, 255, 0.82);
+  box-shadow: 0 28px 70px rgba(15, 55, 67, 0.1);
+  overflow: hidden;
+}
+
+.feature-detail-page__visual .marketing-placeholder__frame {
+  width: 100%;
+  min-height: 100%;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  padding: clamp(22px, 4vw, 42px);
+  border: 1px dashed rgba(3, 168, 192, 0.3);
+  border-radius: clamp(18px, 2.4vw, 30px);
+  color: var(--ink);
+  text-align: center;
+}
+
+.feature-detail-page__visual .marketing-placeholder__frame strong {
+  color: var(--accent);
+  font-size: clamp(1rem, 1.6vw, 1.25rem);
+}
+
+.feature-detail-page__visual .marketing-placeholder__frame p {
+  max-width: 34ch;
+  margin: 0 auto;
+  color: var(--muted);
+  font-size: clamp(0.82rem, 1.2vw, 0.98rem);
+  line-height: 1.5;
+}
+
+.feature-detail-page__section--lead .marketing-placeholder {
+  background:
+    radial-gradient(circle at 18% 18%, rgba(87, 220, 198, 0.34), transparent 34%),
+    radial-gradient(circle at 82% 76%, rgba(3, 168, 192, 0.22), transparent 38%),
+    rgba(255, 255, 255, 0.86);
+}
+
 .feature-detail-page--single .feature-detail-page__inner {
   min-height: max(760px, calc(100dvh - 220px));
   align-content: center;

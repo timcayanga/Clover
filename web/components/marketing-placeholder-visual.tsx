@@ -9,7 +9,7 @@ export function MarketingPlaceholderVisual({ eyebrow, title, description, featur
   return (
     <div className={`marketing-placeholder ${featured ? "marketing-placeholder--featured" : ""}`.trim()} aria-hidden="true">
       <div className="marketing-placeholder__frame">
-        <span className="marketing-placeholder__eyebrow">{eyebrow}</span>
+        {eyebrow ? <span className="marketing-placeholder__eyebrow">{eyebrow}</span> : null}
         <strong>{title}</strong>
         <p>{description}</p>
       </div>

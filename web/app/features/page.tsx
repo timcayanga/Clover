@@ -8,7 +8,7 @@ import { FEATURE_PAGES } from "@/lib/public-site";
 export const metadata: Metadata = {
   title: "Features | Clover",
   description:
-    "Explore Clover features for tracking finances, gaining insights, splitting bills, budgeting better, unlocking Pro, and understanding Clover security.",
+    "Explore how Clover helps you manage money, gain insights, plan ahead, handle shared finances, protect your data, and grow with Pro.",
 };
 
 export default async function FeaturesPage() {
@@ -21,10 +21,10 @@ export default async function FeaturesPage() {
       <section className="features-page__hero">
         <div className="features-page__copy">
           <p className="eyebrow">Features</p>
-          <h1>Pick the money problem you want Clover to solve first.</h1>
+          <h1>Start with what you need from your money.</h1>
           <p className="features-page__lede">
-            Clover is organized around real needs: getting your data in faster, understanding it better, handling shared expenses, building
-            practical budgets, and growing into a fuller financial account over time.
+            Clover follows the same path inside and outside the app: organize what you have, understand what changed, plan what comes next,
+            and work with other people when money is shared.
           </p>
           <div className="features-page__actions">
             <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>
@@ -44,7 +44,7 @@ export default async function FeaturesPage() {
             ))}
           </ul>
           <p className="features-page__lede">
-            Each page explains the pain point first, then shows how Clover helps solve it in a few simple steps.
+            Each page begins with the need, then shows how Clover helps without making you learn the product first.
           </p>
         </div>
       </section>
@@ -74,11 +74,11 @@ export default async function FeaturesPage() {
       <section className="landing-cta">
         <div className="landing-cta__inner">
           <div className="landing-cta__copy">
-            <p className="eyebrow">Start where the pain is</p>
-            <h2>Pick the part you need first and build from there.</h2>
+            <p className="eyebrow">Start where you are</p>
+            <h2>Organize the present, then make the next decision clearer.</h2>
             <p>
-              Most people begin with imports and transaction cleanup, then grow into insights, budgets, shared bills, and Pro once Clover has more
-              of the full picture.
+              Most people begin by bringing in their records. As Clover learns more of the picture, insights, plans, shared money, and Pro become
+              more useful naturally.
             </p>
           </div>
           <div className="landing-cta__actions">

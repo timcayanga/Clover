@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { LandingNav } from "@/components/landing-nav";
+import { LandingStoryReveal } from "@/components/landing-story-reveal";
 import { MarketingFooter } from "@/components/marketing-footer";
 import { MarketingPlaceholderVisual } from "@/components/marketing-placeholder-visual";
-import { ScrollReveal } from "@/components/scroll-reveal";
 import { resolvePublicAccountState } from "@/lib/public-account-state";
-import { FEATURE_PAGE_MAP, isFeatureSlug } from "@/lib/public-site";
+import { FEATURE_PAGE_MAP, isFeatureSlug, resolveFeatureSlug } from "@/lib/public-site";
 
 type FeatureDetailPageProps = {
   params: Promise<{
@@ -15,14 +15,15 @@ type FeatureDetailPageProps = {
 
 export async function generateMetadata({ params }: FeatureDetailPageProps): Promise<Metadata> {
   const { slug } = await params;
+  const resolvedSlug = resolveFeatureSlug(slug);
 
-  if (!isFeatureSlug(slug)) {
+  if (!isFeatureSlug(resolvedSlug)) {
     return {
       title: "Features | Clover",
     };
   }
 
-  const page = FEATURE_PAGE_MAP.get(slug);
+  const page = FEATURE_PAGE_MAP.get(resolvedSlug);
 
   if (!page) {
     return {
@@ -38,12 +39,17 @@ export async function generateMetadata({ params }: FeatureDetailPageProps): Prom
 
 export default async function FeatureDetailPage({ params }: FeatureDetailPageProps) {
   const { slug } = await params;
+  const resolvedSlug = resolveFeatureSlug(slug);
 
-  if (!isFeatureSlug(slug)) {
+  if (!isFeatureSlug(resolvedSlug)) {
     notFound();
   }
 
-  const page = FEATURE_PAGE_MAP.get(slug);
+  if (resolvedSlug !== slug) {
+    redirect(`/features/${resolvedSlug}`);
+  }
+
+  const page = FEATURE_PAGE_MAP.get(resolvedSlug);
 
   if (!page) {
     notFound();
@@ -67,7 +73,7 @@ export default async function FeatureDetailPage({ params }: FeatureDetailPagePro
     })),
   ];
 
-  const pageClassName = `landing-page feature-detail-page ${page.sections.length === 0 ? "feature-detail-page--single" : "feature-detail-page--multi"}`.trim();
+  const pageClassName = `landing-page feature-detail-page ${page.sections.length === 0 ? "feature-detail-page--single" : "feature-detail-page--multi"} ${page.slug === "pro" ? "feature-detail-page--pro" : ""}`.trim();
 
   return (
     <main className={pageClassName}>
@@ -76,19 +82,17 @@ export default async function FeatureDetailPage({ params }: FeatureDetailPagePro
       <div className="feature-detail-page__inner">
         {sections.map((section, index) => {
           const reverse = index % 2 === 1;
-          const sectionClassName = `landing-feature feature-detail-page__section ${reverse ? "landing-feature--reverse" : ""} ${section.isLead ? "feature-detail-page__section--lead" : ""}`.trim();
+          const sectionClassName = `landing-feature feature-detail-page__section ${reverse ? "landing-feature--reverse" : ""} ${section.isLead ? "feature-detail-page__section--lead" : ""} ${page.slug === "pro" ? "landing-feature--pro" : ""}`.trim();
 
           return (
-            <ScrollReveal
+            <LandingStoryReveal
               key={section.id}
               as="section"
               id={section.id}
-              threshold={0.18}
-              rootMargin="-6% 0px -6% 0px"
+              initialVisible={index === 0}
               className={sectionClassName}
             >
               <div className="landing-feature__copy feature-detail-page__section-copy">
-                {!section.isLead ? <p className="eyebrow">{section.eyebrow}</p> : null}
                 {section.isLead ? <h1 className="landing-feature__title">{section.title}</h1> : <h2 className="landing-feature__title">{section.title}</h2>}
                 <div className="landing-feature__body">
                   {section.body.map((paragraph) => (
@@ -99,13 +103,13 @@ export default async function FeatureDetailPage({ params }: FeatureDetailPagePro
 
               <div className="landing-feature__visual feature-detail-page__visual">
                 <MarketingPlaceholderVisual
-                  eyebrow={section.eyebrow}
+                  eyebrow=""
                   title="Image placeholder"
                   description={section.placeholder}
                   featured={section.featured}
                 />
               </div>
-            </ScrollReveal>
+            </LandingStoryReveal>
           );
         })}
 
