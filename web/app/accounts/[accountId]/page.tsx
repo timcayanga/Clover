@@ -3833,12 +3833,6 @@ function AccountDetailPageContent() {
     );
   }
 
-  const mobileBackAction = (
-    <button className="button button-secondary button-small accounts-detail__mobile-back" type="button" onClick={() => router.push("/accounts")}>
-      Back to Accounts
-    </button>
-  );
-
   return (
     <CloverShell
       active="accounts"
@@ -3849,21 +3843,10 @@ function AccountDetailPageContent() {
           ? "View the full history for a single investment asset."
           : "View the full statement history for a single account."
       }
-      actions={isMobileViewport ? mobileBackAction : undefined}
       hideCompactBarKickerAndSubtitleOnMobile
       showTopbar={false}
     >
       <section className="accounts-detail__panel" style={accountBrandStyles}>
-        {!isMobileViewport ? (
-          <div className="accounts-detail__header">
-            <div className="actions accounts-detail__desktop-actions">
-              <button className="button button-secondary" type="button" onClick={() => router.push("/accounts")}>
-                Back to Accounts
-              </button>
-            </div>
-          </div>
-        ) : null}
-
         {account ? (
           <div className="accounts-detail__hero">
             {isPendingBalance ? (

@@ -31891,15 +31891,17 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .accounts-detail__hero-card-row {
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
+    position: relative;
+    display: grid;
+    align-items: start;
+    justify-items: center;
     gap: 8px;
     width: 100%;
   }
 
   .accounts-detail__hero-card-row .accounts-detail__hero-card {
-    flex: 0 1 min(100%, 272px);
+    grid-row: 1;
+    width: min(100%, 272px);
   }
 
   .accounts-detail__hero-tools {
@@ -31908,14 +31910,48 @@ button.accounts-detail__transaction-head-cell {
 
   .accounts-detail__favorite-toggle {
     display: inline-flex;
-    flex: 0 0 auto;
+    position: absolute;
+    top: 12px;
+    right: calc(50% - 124px);
+    z-index: 3;
     width: 28px;
     height: 28px;
     min-width: 28px;
     min-height: 28px;
-    margin-top: 14px;
-    background: rgba(255, 255, 255, 0.94);
-    box-shadow: 0 8px 18px rgba(8, 15, 26, 0.08);
+    margin: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .accounts-detail__favorite-toggle:hover,
+  .accounts-detail__favorite-toggle:focus-visible,
+  .accounts-detail__favorite-toggle.is-active {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: #f3b600;
+  }
+
+  .accounts-detail__balance-adjust-button {
+    grid-row: 2;
+    min-height: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--accent-strong);
+    font-size: 0.74rem;
+    font-weight: 600;
+  }
+
+  .accounts-detail__balance-adjust-button:hover,
+  .accounts-detail__balance-adjust-button:focus-visible {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    text-decoration: underline;
   }
 
   .accounts-detail__identity-edit {
@@ -31944,6 +31980,23 @@ button.accounts-detail__transaction-head-cell {
     border-radius: 0;
     background: transparent;
     box-shadow: none;
+  }
+
+  .accounts-detail__reconciliation-head h3 {
+    margin-top: 0;
+    font-size: 0.98rem;
+    letter-spacing: -0.02em;
+  }
+
+  .accounts-detail__footer-actions {
+    gap: 6px;
+    margin-top: 14px !important;
+  }
+
+  .accounts-detail__footer-actions .button {
+    min-height: 30px;
+    padding: 6px 10px;
+    font-size: 0.72rem;
   }
 
   .accounts-detail__summary .status-card {
@@ -45918,6 +45971,23 @@ body:has(.landing-page) {
   .topbar .shell-menu-button,
   .shell-compact-bar .shell-menu-button {
     display: none !important;
+  }
+
+  .content--accounts .topbar:has(.shell-back-button) {
+    position: relative;
+  }
+
+  .content--accounts .topbar:has(.shell-back-button) .topbar-actions > .contextual-ask-clover {
+    position: absolute;
+    top: 50%;
+    left: 48px;
+    transform: translateY(-50%);
+  }
+
+  .content--accounts .topbar:has(.shell-back-button) .contextual-ask-clover__trigger,
+  .content--accounts .topbar:has(.shell-back-button) .contextual-ask-clover__icon {
+    width: 40px;
+    height: 40px;
   }
 
   .shell-bottom-nav__icon .menu-icon-3d--adviser {
