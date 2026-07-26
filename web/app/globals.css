@@ -5836,6 +5836,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   height: 36px;
   font-weight: 400;
   letter-spacing: 0.04em;
+  text-transform: none;
 }
 
 .commitments-table td strong,
