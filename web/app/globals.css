@@ -13296,32 +13296,6 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   top: 8px;
 }
 
-.investments-projected-growth {
-  grid-column: 1 / -1;
-  display: grid;
-  gap: 8px;
-  padding: 15px 17px;
-  border: 1px solid rgba(3, 168, 192, 0.2);
-  border-radius: 20px;
-  background:
-    linear-gradient(120deg, rgba(3, 168, 192, 0.08), rgba(80, 220, 202, 0.05)),
-    rgba(255, 255, 255, 0.8);
-}
-
-.investments-projected-growth p {
-  max-width: 78ch;
-  margin: 0;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.investments-projected-growth__value {
-  color: var(--good);
-  font-size: clamp(1.2rem, 2vw, 1.65rem);
-  letter-spacing: -0.04em;
-}
-
 .investments-market-insights {
   display: grid;
   gap: 12px;

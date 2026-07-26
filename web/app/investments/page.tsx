@@ -1814,15 +1814,6 @@ export default function InvestmentsPage() {
     );
   }, [accountPerformance]);
 
-  const worstGainHolding = useMemo(() => {
-    return (
-      accountPerformance
-        .filter((item) => item.gainLoss !== null)
-        .slice()
-        .sort((left, right) => (left.gainLoss ?? Number.POSITIVE_INFINITY) - (right.gainLoss ?? Number.POSITIVE_INFINITY))[0] ?? null
-    );
-  }, [accountPerformance]);
-
   const bestReturnHolding = useMemo(() => {
     return (
       accountPerformance
@@ -2925,14 +2916,15 @@ export default function InvestmentsPage() {
                 <span>{bestReturnHolding?.account.name ?? "No portfolio assets yet"}</span>
               </article>
               <article className="accounts-overview-card summary-aligned-card glass">
-                <InfoTooltip className="summary-card-info" label="The holding with the largest loss in absolute currency value." />
-                <p className="eyebrow">Worst gain</p>
+                <InfoTooltip
+                  className="summary-card-info"
+                  label="A planning estimate blended from the visible asset mix and bounded recorded returns. It is not a guaranteed return or live analyst forecast."
+                />
+                <p className="eyebrow">Projected growth rate</p>
                 <strong className="accounts-overview-card__amount">
-                  {worstGainHolding?.gainLoss === null || worstGainHolding?.gainLoss === undefined
-                    ? "—"
-                    : formatInvestmentAmount(worstGainHolding.gainLoss, worstGainHolding.account.currency)}
+                  {projectedPortfolioGrowth === null ? "—" : percentFormatter.format(projectedPortfolioGrowth)}
                 </strong>
-                <span>{worstGainHolding?.account.name ?? "No portfolio assets yet"}</span>
+                <span>Estimated yearly</span>
               </article>
             </div>
             <article className="investments-portfolio-outlook glass">
@@ -3026,19 +3018,6 @@ export default function InvestmentsPage() {
                     </section>
                   );
                 })}
-              </div>
-            </article>
-            <article className="investments-projected-growth glass">
-              <div className="investments-allocation__head">
-                <div className="investments-allocation__head-title">
-                  <div className="investments-allocation__title-row">
-                    <h5>Projected Growth Rate</h5>
-                    <InfoTip label="A planning estimate blended from the visible asset mix and bounded recorded returns. It is not a guaranteed return or live analyst forecast." />
-                  </div>
-                </div>
-                <strong className="investments-projected-growth__value">
-                  {projectedPortfolioGrowth === null ? "—" : `${percentFormatter.format(projectedPortfolioGrowth)} yearly`}
-                </strong>
               </div>
             </article>
             <article className="investments-allocation glass">
