@@ -23,7 +23,6 @@ import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
 import { isTransientDataError } from "@/lib/transient-data";
 import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
 import { TransientDataRecovery } from "@/components/transient-data-recovery";
-import { ReportsRangeMenu } from "@/components/reports-range-menu";
 import { ReportsSection as ReportsSectionPanel, ReportsTabsProvider, ReportsTopTabs } from "@/components/reports-tabs";
 import { ReportsStream } from "@/app/reports/page";
 import { PlanUpgradeCallout } from "@/components/plan-upgrade-callout";
@@ -1098,20 +1097,10 @@ const getWeightedHistoricalBaseline = (series: Array<{ income: number; expense: 
 
 type AdviserSearchParams = { range?: string; section?: string; filter?: string };
 
-const adviserReportRanges = {
-  "30d": "30 days",
-  "90d": "90 days",
-  ytd: "Year to date",
-} as const;
-
-const normalizeAdviserReportRange = (value: string | undefined): keyof typeof adviserReportRanges =>
-  value === "90d" || value === "ytd" ? value : "30d";
-
 async function AdviserPageContent({ searchParams }: { searchParams?: Promise<AdviserSearchParams> }) {
   try {
   const now = new Date();
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const selectedReportRange = normalizeAdviserReportRange(resolvedSearchParams?.range);
   const session = await getSessionContext();
   const existingUser = await prisma.user.findUnique({
     where: { clerkUserId: session.userId },
@@ -3312,7 +3301,6 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
         active="adviser"
         title="Adviser"
         titleAddon={<ReportsTopTabs />}
-        actions={<ReportsRangeMenu currentRange={selectedReportRange} currentRangeLabel={adviserReportRanges[selectedReportRange]} />}
       >
       <ReportsSectionPanel section="overview">
       <section className="adviser-page">

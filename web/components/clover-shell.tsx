@@ -836,12 +836,13 @@ export function CloverShell({
     !pathname?.startsWith("/home") &&
     previousPathname !== "/home" &&
     previousPathname !== pathname;
-  const shouldShowBackButton = hasHistoryBackTarget || Boolean(mobileBackHref);
-  const mobileFallbackBackOnly = !hasHistoryBackTarget && Boolean(mobileBackHref);
+  const resolvedMobileBackHref = mobileBackHref ?? (active === "dashboard" ? undefined : "/home");
+  const shouldShowBackButton = active !== "dashboard";
+  const mobileFallbackBackOnly = !hasHistoryBackTarget && Boolean(resolvedMobileBackHref);
   const handleBack = () => {
     closeChrome();
-    if (mobileFallbackBackOnly && mobileBackHref) {
-      router.push(mobileBackHref);
+    if (mobileFallbackBackOnly && resolvedMobileBackHref) {
+      router.push(resolvedMobileBackHref);
       return;
     }
     router.back();
@@ -2011,7 +2012,7 @@ export function CloverShell({
       </nav>
 
       <main
-        className={`content content--${active}`}
+        className={`content content--${active} ${titleAddon ? "content--has-title-addon" : "content--plain-title"}`}
         onClickCapture={() => {
           if (isSidebarOpen) {
             setIsSidebarOpen(false);

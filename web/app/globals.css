@@ -47801,6 +47801,99 @@ html[data-theme="dark"] .content--adviser .adviser-summary .adviser-summary-card
 }
 
 @media (max-width: 760px) {
+  /* Plain mobile pages center their title; tabbed pages keep title and tabs beside Back. */
+  .content--plain-title > :is(.topbar, .shell-compact-bar) {
+    grid-template-columns: 44px minmax(0, 1fr) 44px !important;
+  }
+
+  .content--plain-title > .topbar .topbar__title-wrap,
+  .content--plain-title > .shell-compact-bar .shell-compact-bar__copy {
+    position: absolute;
+    inset: auto 0 !important;
+    top: 50%;
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    transform: translateY(-50%);
+    justify-items: center !important;
+    text-align: center !important;
+    pointer-events: none;
+  }
+
+  .content--plain-title > :is(.topbar, .shell-compact-bar) .topbar__title-row {
+    width: 100%;
+    justify-content: center !important;
+  }
+
+  .content--plain-title > :is(.topbar, .shell-compact-bar) :is(.eyebrow, .topbar-subtitle) {
+    display: none;
+  }
+
+  .content--has-title-addon > :is(.topbar, .shell-compact-bar) {
+    grid-template-columns: 44px minmax(0, 1fr) auto !important;
+  }
+
+  .content--has-title-addon > .topbar .topbar__title-wrap,
+  .content--has-title-addon > .shell-compact-bar .shell-compact-bar__copy {
+    position: static;
+    inset: auto !important;
+    grid-column: 2 !important;
+    grid-row: 1;
+    width: 100% !important;
+    max-width: 100% !important;
+    transform: none;
+    justify-self: stretch !important;
+    justify-items: start !important;
+    overflow: hidden;
+    text-align: left !important;
+  }
+
+  .content--has-title-addon > :is(.topbar, .shell-compact-bar) .topbar__title-row {
+    width: 100%;
+    justify-content: flex-start !important;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .content--has-title-addon > :is(.topbar, .shell-compact-bar) .topbar__title-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .content--investments .investments-mobile-header__bar {
+    display: flex;
+    grid-template-columns: none;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .content--investments .investments-mobile-header__title-group,
+  .content--investments .investments-tabs--mobile,
+  .content--investments .investments-mobile-header__actions {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .content--investments .investments-mobile-header__title-group,
+  .content--investments .investments-mobile-header__actions {
+    flex: 0 0 auto;
+  }
+
+  .content--investments .investments-mobile-header__back {
+    order: 0;
+  }
+
+  .content--investments .investments-mobile-header__title-group h1 {
+    order: 1;
+  }
+
+  .content--investments .investments-tabs--mobile {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    padding-bottom: 0;
+  }
+
   .content--budgeting > .topbar {
     grid-template-columns: 40px minmax(0, 1fr) 40px !important;
   }
