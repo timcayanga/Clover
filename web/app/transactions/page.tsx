@@ -6847,6 +6847,8 @@ function TransactionsPageContent() {
     </div>
   ) : (
     <div className="transactions-shell-actions" style={transactionsShellActionsStyle}>
+      <ContextualAskClover context="transactions" planTier={planTier} />
+
       <CurrencySelector
         value={currencyFilter}
         onChange={(next) => setCurrencyFilter(next && next.toLowerCase() !== "all" ? formatCurrencyCode(next) : "")}
@@ -6862,7 +6864,6 @@ function TransactionsPageContent() {
         showChevron={false}
       />
 
-      <ContextualAskClover context="transactions" planTier={planTier} />
       <input
         ref={addFileInputRef}
         className="hidden-file-input"

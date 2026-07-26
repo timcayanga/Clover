@@ -22880,7 +22880,7 @@ button.investments-portfolio-inline-edit {
   border-color: rgba(182, 191, 197, 1);
   color: #111111;
   box-shadow: none;
-  font-weight: 600;
+  font-weight: 400;
   font-size: 0.72rem;
 }
 
@@ -22895,6 +22895,7 @@ button.investments-portfolio-inline-edit {
 .transactions-currency-filter__button .currency-selector__trigger-all {
   color: var(--accent);
   font-size: 0.72rem;
+  font-weight: 400;
 }
 
 .transactions-currency-filter__menu {
