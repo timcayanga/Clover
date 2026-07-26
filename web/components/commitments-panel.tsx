@@ -17,6 +17,8 @@ import type { PlannedPaymentSuggestion } from "@/lib/planned-payment-suggestions
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { formatAccountTypeLabel, getRecurringKindSuggestionForAccountType, isLiabilityAccountType } from "@/lib/account-types";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
+import { AccountBrandMark } from "@/components/account-brand-mark";
+import { getAccountBrand } from "@/lib/account-brand";
 
 type CommitmentAccountOption = {
   id: string;
@@ -153,6 +155,29 @@ const formatTransactionLabel = (transaction: CommitmentTransactionOption) => {
 };
 
 const getCommitmentDateValue = (commitment: FinancialCommitmentSummary) => commitment.nextDueDate ?? commitment.dueDate;
+
+const mobileDateFormatter = new Intl.DateTimeFormat("en-PH", {
+  month: "short",
+  day: "2-digit",
+  year: "numeric",
+});
+
+const getMobileDateGroup = (value: string | null) => {
+  if (!value) {
+    return { key: "undated", label: "No due date", timestamp: Number.POSITIVE_INFINITY };
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return { key: value, label: value, timestamp: Number.POSITIVE_INFINITY - 1 };
+  }
+
+  return {
+    key: parsed.toISOString().slice(0, 10),
+    label: mobileDateFormatter.format(parsed),
+    timestamp: parsed.getTime(),
+  };
+};
 
 const commitmentFormCopy: Record<CommitmentFormKind, CommitmentFormCopy> = {
   planned_payment: {
@@ -319,6 +344,7 @@ export function CommitmentsPanel({
   const [editingCell, setEditingCell] = useState<{ commitmentId: string; field: EditableCommitmentField } | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [savingCommitmentId, setSavingCommitmentId] = useState<string | null>(null);
+  const [mobileDetailId, setMobileDetailId] = useState<string | null>(null);
   const overviewStats = useMemo(() => {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
@@ -368,6 +394,17 @@ export function CommitmentsPanel({
   }, [commitments]);
 
   useEffect(() => {
+    const syncDetailFromLocation = () => {
+      const detailId = new URLSearchParams(window.location.search).get("detail");
+      setMobileDetailId(detailId);
+    };
+
+    syncDetailFromLocation();
+    window.addEventListener("popstate", syncDetailFromLocation);
+    return () => window.removeEventListener("popstate", syncDetailFromLocation);
+  }, []);
+
+  useEffect(() => {
     if (showAddModal) {
       setKind(initialKind);
     }
@@ -414,6 +451,21 @@ export function CommitmentsPanel({
     activeTab === "debt" ? "debt" : activeTab === "owed" ? "receivable" : activeTab === "installments" ? "reminder" : activeTab === "planned" ? "planned_payment" : initialKind;
   const openRecurringAdd = () => {
     window.dispatchEvent(new CustomEvent("clover:open-recurring-add", { detail: { kind: addKindForActiveTab } }));
+  };
+
+  const openMobileDetail = (commitmentId: string) => {
+    setMobileDetailId(commitmentId);
+    const query = new URLSearchParams(window.location.search);
+    query.set("detail", commitmentId);
+    window.history.pushState({}, "", `${window.location.pathname}?${query.toString()}`);
+  };
+
+  const closeMobileDetail = () => {
+    setMobileDetailId(null);
+    const query = new URLSearchParams(window.location.search);
+    query.delete("detail");
+    const suffix = query.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${suffix ? `?${suffix}` : ""}`);
   };
 
   useEffect(() => {
@@ -935,8 +987,124 @@ export function CommitmentsPanel({
     const isEditing = (commitmentId: string, field: EditableCommitmentField) =>
       editingCell?.commitmentId === commitmentId && editingCell.field === field;
 
+    const mobileGroups = Array.from(
+      tabCommitments.reduce((groups, commitment) => {
+        const group = getMobileDateGroup(getCommitmentDateValue(commitment));
+        const current = groups.get(group.key) ?? { ...group, commitments: [] as FinancialCommitmentSummary[] };
+        current.commitments.push(commitment);
+        groups.set(group.key, current);
+        return groups;
+      }, new Map<string, ReturnType<typeof getMobileDateGroup> & { commitments: FinancialCommitmentSummary[] }>())
+        .values()
+    ).sort((left, right) => left.timestamp - right.timestamp);
+    const mobileDetailCommitment = mobileDetailId
+      ? tabCommitments.find((commitment) => commitment.id === mobileDetailId) ?? null
+      : null;
+    const renderStatusIcon = (status: FinancialCommitmentSummary["status"]) => {
+      if (status === "resolved") {
+        return <path d="m6.5 12.5 3.2 3.2 7.8-8" />;
+      }
+      if (status === "paused") {
+        return <>
+          <path d="M9 8v8" />
+          <path d="M15 8v8" />
+        </>;
+      }
+      return <>
+        <circle cx="12" cy="12" r="7.5" />
+        <path d="M12 8v4l2.5 1.5" />
+      </>;
+    };
+
     return (
       <article className="commitments-detail-panel">
+        <div className="recurring-mobile-list" aria-label={`${tabLabel} list`}>
+          {!hasRows ? (
+            <div className="recurring-mobile-list__empty">
+              <strong>No {tabLabel}s yet</strong>
+              <button className="button button-primary button-small" type="button" onClick={openRecurringAdd}>
+                Add {tabLabel}
+              </button>
+            </div>
+          ) : null}
+          {mobileGroups.map((group) => (
+            <section className="recurring-mobile-group" key={group.key}>
+              <div className="recurring-mobile-group__date"><span>{group.label}</span></div>
+              {group.commitments.map((commitment) => {
+                const brand = getAccountBrand({
+                  institution: commitment.account?.institution ?? null,
+                  name: commitment.account?.name ?? "Recurring",
+                  type: commitment.account?.type ?? null,
+                });
+                return (
+                  <button
+                    className="recurring-mobile-row"
+                    type="button"
+                    key={commitment.id}
+                    onClick={() => openMobileDetail(commitment.id)}
+                    aria-label={`Open ${commitment.title}`}
+                  >
+                    <span className="recurring-mobile-row__account" aria-hidden="true">
+                      <AccountBrandMark accountBrand={brand} label={commitment.account?.name ?? commitment.title} />
+                    </span>
+                    <strong className="recurring-mobile-row__name">{commitment.title}</strong>
+                    <span className="recurring-mobile-row__amount">{formatCurrency(commitment.amount)}</span>
+                    <span
+                      className={`recurring-mobile-row__status recurring-mobile-row__status--${commitment.status}`}
+                      title={commitmentStatusLabels[commitment.status]}
+                      aria-label={commitmentStatusLabels[commitment.status]}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        {renderStatusIcon(commitment.status)}
+                      </svg>
+                    </span>
+                    <svg className="recurring-mobile-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="m9 6 6 6-6 6" />
+                    </svg>
+                  </button>
+                );
+              })}
+            </section>
+          ))}
+          {tabSuggestions.length > 0 ? (
+            <section className="recurring-mobile-group">
+              <div className="recurring-mobile-group__date"><span>Suggestions</span></div>
+              {tabSuggestions.map((suggestion) => {
+                const brand = getAccountBrand({ name: suggestion.accountName ?? suggestion.sourceLabel });
+                return (
+                  <button
+                    className="recurring-mobile-row"
+                    type="button"
+                    key={suggestion.id}
+                    onClick={() => openPlannedPaymentReview(suggestion)}
+                    aria-label={`Review ${suggestion.title}`}
+                  >
+                    <span className="recurring-mobile-row__account" aria-hidden="true">
+                      <AccountBrandMark accountBrand={brand} label={suggestion.accountName ?? suggestion.title} />
+                    </span>
+                    <strong className="recurring-mobile-row__name">{suggestion.title}</strong>
+                    <span className="recurring-mobile-row__amount">{formatCurrency(suggestion.amount)}</span>
+                    <span className="recurring-mobile-row__status recurring-mobile-row__status--review" title="Review" aria-label="Review">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M12 3v3" />
+                        <path d="M12 18v3" />
+                        <path d="m4.2 4.2 2.1 2.1" />
+                        <path d="m17.7 17.7 2.1 2.1" />
+                        <path d="M3 12h3" />
+                        <path d="M18 12h3" />
+                        <path d="m4.2 19.8 2.1-2.1" />
+                        <path d="m17.7 6.3 2.1-2.1" />
+                      </svg>
+                    </span>
+                    <svg className="recurring-mobile-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="m9 6 6 6-6 6" />
+                    </svg>
+                  </button>
+                );
+              })}
+            </section>
+          ) : null}
+        </div>
         <div className="table-wrap commitments-table-wrap">
           <table className="transactions-table commitments-table">
             <thead>
@@ -1175,6 +1343,30 @@ export function CommitmentsPanel({
             </tbody>
           </table>
         </div>
+        {mobileDetailCommitment ? (
+          <section className="recurring-mobile-detail" aria-label={`${mobileDetailCommitment.title} details`}>
+            <header className="recurring-mobile-detail__header">
+              <button type="button" className="recurring-mobile-detail__back" onClick={closeMobileDetail} aria-label="Back to recurring list">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="m15 18-6-6 6-6" />
+                </svg>
+              </button>
+              <div>
+                <p className="eyebrow">Recurring details</p>
+                <h2>{mobileDetailCommitment.title}</h2>
+              </div>
+            </header>
+            <dl className="recurring-mobile-detail__fields">
+              <div><dt>Status</dt><dd>{commitmentStatusLabels[mobileDetailCommitment.status]}</dd></div>
+              <div><dt>Amount</dt><dd>{formatCurrency(mobileDetailCommitment.amount)}</dd></div>
+              <div><dt>Due date</dt><dd>{formatDate(getCommitmentDateValue(mobileDetailCommitment))}</dd></div>
+              <div><dt>Repeats</dt><dd>{mobileDetailCommitment.recurrence === "once" ? "One-time" : commitmentRecurrenceLabels[mobileDetailCommitment.recurrence]}</dd></div>
+              {mobileDetailCommitment.account ? <div><dt>Account</dt><dd>{mobileDetailCommitment.account.name}</dd></div> : null}
+              {mobileDetailCommitment.counterparty ? <div><dt>{activeTab === "owed" ? "Owed from" : "Payee"}</dt><dd>{mobileDetailCommitment.counterparty}</dd></div> : null}
+              {mobileDetailCommitment.notes ? <div className="recurring-mobile-detail__field--wide"><dt>Notes</dt><dd>{mobileDetailCommitment.notes}</dd></div> : null}
+            </dl>
+          </section>
+        ) : null}
       </article>
     );
   };

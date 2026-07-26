@@ -146,7 +146,7 @@ export function RecurringPageClient({
         </nav>
       }
       actions={
-        <>
+        <div className="recurring-shell-actions">
           <ContextualAskClover context="recurring" planTier={planTier} />
           <button
             type="button"
@@ -166,7 +166,7 @@ export function RecurringPageClient({
               </svg>
             </span>
           </button>
-        </>
+        </div>
       }
     >
       <div className="recurring-page__stack">
