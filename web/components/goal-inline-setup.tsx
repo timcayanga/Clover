@@ -52,6 +52,7 @@ export function GoalInlineSetup({ goals, suggestedTargetAmount, monthlyIncome, c
     && suggestedTargetAmount
     ? `Clover suggests starting at ${formatCurrencyAmount(Math.round(suggestedTargetAmount), currency)}. Adjust it before saving.`
     : null;
+  const roadmapNote = vagueTargetSuggestion ?? (monthlyIncome ? "Clover will shape the milestones around your recent cash flow." : null);
 
   const handleIntentChange = (value: string) => {
     setIntent(value);
@@ -116,13 +117,13 @@ export function GoalInlineSetup({ goals, suggestedTargetAmount, monthlyIncome, c
       </label>
       <div className="goal-inline-setup__target-row">
         <label className="goal-inline-setup__field">
-          <span>Target amount</span>
+          <span>Target Amount</span>
           <input inputMode="decimal" value={targetAmount} onChange={(event) => setTargetAmount(event.target.value)} placeholder="25000" />
         </label>
         <div className="goal-inline-setup__suggestion">
-          <span>Roadmap preview</span>
+          <span>Roadmap Preview</span>
           <strong>{formatCurrencyAmount(Number(targetAmount) || 0, currency)} target</strong>
-          <small>{vagueTargetSuggestion ?? (monthlyIncome ? "Clover will shape the milestones around your recent cash flow." : "Add recent income later for more personalized pacing.")}</small>
+          {roadmapNote ? <small>{roadmapNote}</small> : null}
         </div>
       </div>
       {error ? <p className="goal-inline-setup__error">{error}</p> : null}

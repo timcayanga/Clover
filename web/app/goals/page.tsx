@@ -690,46 +690,11 @@ async function GoalsPageStream() {
           },
         ];
 
-  const recurringMerchantsPreview = recurringMerchants.slice(0, 3);
-  const recentIncomeDays = currentWindowTransactions.filter((transaction) => transaction.type === "income").map((transaction) => transaction.date.getDate());
+  const recentIncomeDays = currentWindowTransactions
+    .filter((transaction) => transaction.type === "income")
+    .map((transaction) => transaction.date.getDate());
   const paydayDay = getMostCommonDayOfMonth(recentIncomeDays);
-  const paydayHint =
-    paydayDay !== null
-      ? `Recent income tends to arrive around the ${formatOrdinalDay(paydayDay)}.`
-      : null;
-  const driverCards = [
-    {
-      label: "Spending pressure",
-      value: spendDelta === null ? "N/A" : formatPercent(spendDelta),
-      note: spendDelta === null ? "No prior comparison" : spendDelta > 0 ? "Spending is higher than before" : "Spending is easing",
-      tone: spendDelta === null ? "neutral" : spendDelta > 0 ? "negative" : "positive",
-      info: "Compares current spending with the prior comparable period.",
-    },
-    {
-      label: "Savings rate",
-      value: currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100),
-      note: currentSavingsRate === null ? "Need more income context" : savingsRateDelta !== null && savingsRateDelta >= 0 ? "Improving momentum" : "Needs a reset",
-      tone: currentSavingsRate === null ? "neutral" : savingsRateDelta !== null && savingsRateDelta >= 0 ? "positive" : "negative",
-      info: "Income left after expenses, shown as a percentage of income.",
-    },
-    {
-      label: "Recurring costs",
-      value: recurringShare > 0 ? formatPercent(recurringShare * 100) : "Clean",
-      note: recurringShare > 0.25 ? "A meaningful slice of the month" : "Recurring spending is under control",
-      tone: recurringShare > 0.25 ? "negative" : "positive",
-      info: "The share of current spending associated with recurring costs.",
-    },
-    {
-      label: "Investment movement",
-      value: investmentHoldingsCount > 0 ? formatCurrency(investmentHoldingsValue, goalCurrency) : "No holdings",
-      note:
-        investmentHoldingsCount > 0
-          ? `${investmentHoldingsCount} holding${investmentHoldingsCount === 1 ? "" : "s"} · ${investmentGainLoss >= 0 ? "+" : "-"}${formatCurrency(Math.abs(investmentGainLoss), goalCurrency)}`
-          : "Connect Investments to make this lane feel real",
-      tone: investmentHoldingsCount > 0 ? "positive" : "neutral",
-      info: "Current recorded investment value and gain or loss across connected holdings.",
-    },
-  ];
+  const paydayHint = paydayDay !== null ? `Recent income tends to arrive around the ${formatOrdinalDay(paydayDay)}.` : null;
 
   const goalEmojis: Record<string, string> = {
     save_more: "🌱",
@@ -754,14 +719,12 @@ async function GoalsPageStream() {
 
   return (
     <RouteSplash label="goals">
-      <CloverShell active="goals" title="Goals">
+      <CloverShell active="goals" title="Goals" mobileBackHref="/more">
         <section className="goals-page">
           {!hasGoalSelection ? (
             <section className="goals-blank-state glass">
               <span className="goals-blank-state__emoji" aria-hidden="true">🎯</span>
-              <p className="eyebrow">Your primary goal</p>
               <h3>What do you want your money to help you do?</h3>
-              <p>Choose a direction or tell Clover in your own words. We will turn it into a clear target and roadmap for you to confirm.</p>
               <GoalInlineSetup goals={GOAL_OPTIONS} suggestedTargetAmount={suggestedGoalTarget} monthlyIncome={monthlyIncome} currency={goalCurrency} />
             </section>
           ) : (
@@ -834,16 +797,6 @@ async function GoalsPageStream() {
                   </div>
                 ))}
               </div>
-              <div className="goals-drivers-grid goals-drivers-grid--simple">
-                {driverCards.map((card) => (
-                  <article key={card.label} className={`accounts-overview-card summary-aligned-card goals-driver--summary glass ${card.tone}`}>
-                    <InfoTooltip className="summary-card-info" label={card.info} />
-                    <p className="eyebrow">{card.label}</p>
-                    <strong className="accounts-overview-card__amount goals-driver__value">{card.value}</strong>
-                    <small>{card.note}</small>
-                  </article>
-                ))}
-              </div>
             </article>
 
             <article className="goals-coach-panel glass">
@@ -854,11 +807,11 @@ async function GoalsPageStream() {
                 </div>
                 <strong className="goals-coach-panel__emoji" aria-hidden="true">✨</strong>
               </div>
-              <p>{hasGoalTarget ? goalProgress.coachCopy : "Set a primary goal and Clover will explain what is helping, what is getting in the way, and what to do next."}</p>
-              <strong className="goals-coach-panel__action">{goalNextAction}</strong>
+              {hasGoalTarget ? <p>{goalProgress.coachCopy}</p> : null}
+              <p className="goals-coach-panel__action">{goalNextAction}</p>
               <div className="goals-coach-panel__links">
                 <Link className="button button-secondary button-small" href={supportDestination.href}>{supportDestination.label}</Link>
-                <Link className="pill-link pill-link--inline" href="/adviser">Ask Adviser</Link>
+                <Link className="button button-primary button-small" href="/adviser">Ask Adviser</Link>
               </div>
             </article>
           </section>
