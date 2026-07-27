@@ -1221,6 +1221,7 @@ async function DashboardPageStream() {
       <CloverShell
         active="dashboard"
         title="Home"
+        workspaceId={workspaceSummary.id}
         actions={
         <DashboardTopActionsLazy
           workspaceId={workspaceSummary.id}

@@ -17,7 +17,12 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { formatCurrencyAmount } from "@/lib/currency-format";
-import { persistSelectedWorkspaceId, readSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
+import {
+  persistSelectedWorkspaceId,
+  readSelectedWorkspaceId,
+  selectedWorkspaceEventName,
+  syncSelectedWorkspaceCookie,
+} from "@/lib/workspace-selection";
 import { clearAllWorkspaceCaches, clearLegacyWorkspaceCaches } from "@/lib/workspace-cache";
 import { signOutToLanding } from "@/lib/sign-out";
 import { readAccountIdentityCache, writeAccountIdentityCache } from "@/lib/account-identity-cache";
@@ -99,6 +104,7 @@ type CloverShellProps = {
   mobileBackHref?: string;
   hideCompactBarCopyOnMobile?: boolean;
   hideCompactBarKickerAndSubtitleOnMobile?: boolean;
+  workspaceId?: string;
   children: ReactNode;
 };
 
@@ -768,6 +774,7 @@ export function CloverShell({
   mobileBackHref,
   hideCompactBarCopyOnMobile = false,
   hideCompactBarKickerAndSubtitleOnMobile = false,
+  workspaceId,
   children,
 }: CloverShellProps) {
   const { user } = useUser();
@@ -798,7 +805,7 @@ export function CloverShell({
   const [quickAddSeedFiles, setQuickAddSeedFiles] = useState<File[] | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [searchWorkspaceId, setSearchWorkspaceId] = useState(() => readSelectedWorkspaceId());
+  const [searchWorkspaceId, setSearchWorkspaceId] = useState(() => readSelectedWorkspaceId() || workspaceId || "");
   const [searchAccounts, setSearchAccounts] = useState<SidebarSearchAccount[]>([]);
   const [searchPlanTier, setSearchPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [searchTicker, setSearchTicker] = useState<SidebarSearchMarket | null>(null);
@@ -1092,7 +1099,7 @@ export function CloverShell({
     let cancelled = false;
 
     const refreshSearchWorkspace = async () => {
-      const nextWorkspaceId = readSelectedWorkspaceId();
+      const nextWorkspaceId = readSelectedWorkspaceId() || workspaceId || "";
       if (nextWorkspaceId === searchWorkspaceId) {
         return;
       }
@@ -1112,13 +1119,34 @@ export function CloverShell({
         setSearchWorkspaceId(nextWorkspaceId);
       }
     };
+    const handleSameTabWorkspaceChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ workspaceId?: unknown }>).detail;
+      const nextWorkspaceId =
+        typeof detail?.workspaceId === "string"
+          ? detail.workspaceId
+          : readSelectedWorkspaceId();
+      if (!cancelled) {
+        setSearchWorkspaceId(nextWorkspaceId);
+      }
+    };
 
     window.addEventListener("storage", handleStorage);
+    window.addEventListener(selectedWorkspaceEventName, handleSameTabWorkspaceChange);
     return () => {
       cancelled = true;
       window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(selectedWorkspaceEventName, handleSameTabWorkspaceChange);
     };
-  }, [searchWorkspaceId]);
+  }, [searchWorkspaceId, workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId) {
+      return;
+    }
+
+    persistSelectedWorkspaceId(workspaceId);
+    setSearchWorkspaceId(workspaceId);
+  }, [workspaceId]);
 
   useEffect(() => {
     let cancelled = false;

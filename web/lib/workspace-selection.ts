@@ -1,4 +1,5 @@
 export const selectedWorkspaceKey = "clover.selected-workspace-id.v1";
+export const selectedWorkspaceEventName = "clover:selected-workspace";
 
 export type WorkspaceLike = {
   id: string;
@@ -48,6 +49,7 @@ export const persistSelectedWorkspaceId = (workspaceId: string) => {
   if (!workspaceId) {
     window.localStorage.removeItem(selectedWorkspaceKey);
     document.cookie = `${selectedWorkspaceKey}=; Path=/; Max-Age=0; SameSite=Lax`;
+    window.dispatchEvent(new CustomEvent(selectedWorkspaceEventName, { detail: { workspaceId: "" } }));
     return;
   }
 
@@ -58,6 +60,7 @@ export const persistSelectedWorkspaceId = (workspaceId: string) => {
   window.localStorage.setItem(selectedWorkspaceKey, workspaceId);
   const secure = window.location.protocol === "https:" ? "; Secure" : "";
   document.cookie = `${selectedWorkspaceKey}=${encodeURIComponent(workspaceId)}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+  window.dispatchEvent(new CustomEvent(selectedWorkspaceEventName, { detail: { workspaceId } }));
 };
 
 export const syncSelectedWorkspaceCookie = () => {

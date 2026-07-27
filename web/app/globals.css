@@ -34549,7 +34549,7 @@ button.accounts-detail__transaction-head-cell {
   max-width: none;
   color: var(--muted);
   line-height: 1.7;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .contact-page__email-note a {
@@ -47909,6 +47909,46 @@ html[data-theme="dark"] .content--adviser .adviser-summary .adviser-summary-card
 }
 
 @media (max-width: 760px) {
+  .content--has-mobile-leading-action .shell-topbar-leading__actions {
+    display: none !important;
+  }
+
+  .topbar:has(.shell-back-button),
+  .shell-compact-bar:has(.shell-back-button) {
+    grid-template-columns: 40px minmax(0, 1fr) auto !important;
+  }
+
+  .topbar:has(.shell-back-button) .topbar__title-wrap,
+  .shell-compact-bar:has(.shell-back-button) .shell-compact-bar__copy {
+    position: static !important;
+    inset: auto !important;
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    width: auto !important;
+    max-width: 100% !important;
+    transform: none !important;
+    justify-self: stretch !important;
+    justify-items: start !important;
+    overflow: hidden;
+    text-align: left !important;
+  }
+
+  .topbar:has(.shell-back-button) .topbar__title-row,
+  .shell-compact-bar:has(.shell-back-button) .topbar__title-row {
+    justify-content: flex-start !important;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .topbar:has(.shell-back-button) .topbar__title-row h1,
+  .shell-compact-bar:has(.shell-back-button) .topbar__title-row h1 {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   /* Page titles and contextual tabs share one left-aligned row; actions stay at the right. */
   .topbar:not(:has(.shell-back-button)),
   .shell-compact-bar:not(:has(.shell-back-button)) {
