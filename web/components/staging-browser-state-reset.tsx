@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { THEME_STORAGE_KEY } from "@/lib/theme-preference";
 
 const STAGING_HOSTNAME = "staging.clover.ph";
 const RESET_MARKER_KEY = "clover.staging-browser-state-reset.v2";
@@ -26,7 +27,7 @@ const deleteCookie = (name: string) => {
 };
 
 const clearBrowserState = ({ clearAuth }: { clearAuth: boolean }) => {
-  const preservedKeys = new Set([STAY_SIGNED_IN_KEY, DEPLOYMENT_MARKER_KEY]);
+  const preservedKeys = new Set([STAY_SIGNED_IN_KEY, DEPLOYMENT_MARKER_KEY, THEME_STORAGE_KEY]);
 
   if (clearAuth) {
     const cookieNames = document.cookie

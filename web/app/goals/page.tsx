@@ -793,7 +793,7 @@ async function GoalsPageStream() {
                     <InfoTooltip className="summary-card-info" label={signal.info} />
                     <p className="eyebrow">{signal.label}</p>
                     <strong className="accounts-overview-card__amount">{signal.value}</strong>
-                    <small>{signal.note}</small>
+                    {signal.note && signal.note !== "No prior comparison" ? <small>{signal.note}</small> : null}
                   </div>
                 ))}
               </div>

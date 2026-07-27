@@ -67,6 +67,17 @@ const shortDateFormatter = new Intl.DateTimeFormat("en-PH", {
   day: "2-digit",
 });
 
+const getReadableTextColor = (backgroundColor: string) => {
+  const channels = backgroundColor.match(/[\d.]+/g)?.slice(0, 3).map(Number);
+  if (!channels || channels.length < 3) {
+    return "#07111d";
+  }
+
+  const [red = 0, green = 0, blue = 0] = channels;
+  const luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
+  return luminance > 0.58 ? "#07111d" : "#f8fafc";
+};
+
 type WindowSummary = {
   income: number;
   expense: number;
@@ -922,6 +933,9 @@ export async function ReportsStream({
     reportSankeyExpenseTransactions.forEach((transaction) => {
       const accountLabel = transaction.account.name?.trim().length > 0 ? transaction.account.name : "Account";
       const accountKey = normalizeMerchant(accountLabel);
+      if (!reportSankeyAccountIncome.has(accountKey)) {
+        reportSankeyAccountIncome.set(accountKey, { label: accountLabel, amount: 0 });
+      }
       const categoryLabel = getReportTransactionCategoryName(transaction);
       const categoryKey = normalizeMerchant(categoryLabel);
       const amount = Math.abs(Number(transaction.amount));
@@ -937,14 +951,19 @@ export async function ReportsStream({
     });
 
     const reportSankeyAccounts = Array.from(reportSankeyAccountIncome.values())
-      .map((account) => ({
-        ...account,
-        expenseAmount: Array.from(reportSankeyAccountExpenseByCategory.get(normalizeMerchant(account.label))?.values() ?? []).reduce(
+      .map((account) => {
+        const expenseAmount = Array.from(reportSankeyAccountExpenseByCategory.get(normalizeMerchant(account.label))?.values() ?? []).reduce(
           (sum, category) => sum + category.amount,
           0
-        ),
-      }))
-      .filter((account) => account.amount > 0)
+        );
+        return {
+          ...account,
+          incomeAmount: account.amount,
+          amount: Math.max(account.amount, expenseAmount),
+          expenseAmount,
+        };
+      })
+      .filter((account) => account.amount > 0 || account.expenseAmount > 0)
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 6);
 
@@ -1266,6 +1285,25 @@ export async function ReportsStream({
     }));
     const currentTrackedCategorySpend = reportExpenseTopCategories.reduce((sum, [, amount]) => sum + amount, 0);
     const currentOtherSpend = Math.max(reportExpenseTotal - currentTrackedCategorySpend, 0);
+    const reportCategoryMaxAmount = Math.max(
+      ...reportCategorySegments.map((segment) => segment.amount),
+      currentOtherSpend,
+      1,
+    );
+    const reportSpendingMixSegments = [
+      ...reportCategorySegments,
+      ...(currentOtherSpend > 0
+        ? [{
+            categoryName: "Other spend",
+            amount: currentOtherSpend,
+            share: reportExpenseTotal > 0 ? currentOtherSpend / reportExpenseTotal : 0,
+            color: {
+              backgroundColor: "var(--border-subtle)",
+              borderColor: "#64748b",
+            },
+          }]
+        : []),
+    ];
     const recurringSavingsPotential = recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0) * 0.2;
     const topRecurringMerchant = recurringMerchants[0] ?? null;
     const averageRecurringSpend = recurringMerchants.length > 0
@@ -1729,8 +1767,8 @@ export async function ReportsStream({
                             fill="none"
                             stroke="rgba(3, 168, 192, 0.28)"
                             strokeWidth={Math.max(link.height, 7)}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
+                            strokeLinecap="butt"
+                            strokeLinejoin="miter"
                             opacity={index === 0 ? 0.5 : 0.36}
                           />
                         ))}
@@ -1740,7 +1778,7 @@ export async function ReportsStream({
                           y={sankeyIncomeColumnTop}
                           width={sankeyBarWidth}
                           height={sankeySourceWidth}
-                          rx="14"
+                          rx="0"
                           fill="rgba(3, 168, 192, 0.52)"
                         />
 
@@ -1751,7 +1789,7 @@ export async function ReportsStream({
                               y={account.y}
                               width={sankeyBarWidth}
                               height={account.height}
-                              rx="14"
+                              rx="0"
                               fill="rgba(15, 118, 110, 0.34)"
                               stroke="rgba(15, 118, 110, 0.18)"
                             />
@@ -1760,7 +1798,7 @@ export async function ReportsStream({
                                 {account.label}
                               </tspan>
                               <tspan x={sankeyAccountX + sankeyBarWidth + 12} dy="1.15em" className="report-sankey__target-value">
-                                {formatCurrency(account.amount)} in · {formatCurrency(account.expenseAmount)} out
+                                {formatCurrency(account.incomeAmount)} in · {formatCurrency(account.expenseAmount)} out
                               </tspan>
                             </text>
                           </g>
@@ -1778,8 +1816,8 @@ export async function ReportsStream({
                             fill="none"
                             stroke={link.color}
                             strokeWidth={Math.max(link.height, 7)}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
+                            strokeLinecap="butt"
+                            strokeLinejoin="miter"
                             opacity="0.4"
                           />
                         ))}
@@ -1791,7 +1829,7 @@ export async function ReportsStream({
                               y={category.y}
                               width={sankeyBarWidth}
                               height={category.height}
-                              rx="14"
+                              rx="0"
                               fill={category.color.backgroundColor}
                               stroke={category.color.borderColor}
                             />
@@ -1812,10 +1850,6 @@ export async function ReportsStream({
                         <text x={sankeyIncomeX + sankeyBarWidth + 12} y={sankeyIncomeColumnTop + 40} className="report-sankey__source-value">
                           {formatCurrency(currentSummary.income)}
                         </text>
-                        <text x={sankeyIncomeX + sankeyBarWidth + 12} y={sankeyIncomeColumnTop + 60} className="report-sankey__source-meta">
-                          {reportCurrentWindowTransactions.length > 0 ? selectedRangeLabel.toLowerCase() : "latest available activity"}
-                        </text>
-
                       </svg>
                     </div>
 
@@ -1924,8 +1958,9 @@ export async function ReportsStream({
                         </div>
                         <div className="report-flow-map__bar" aria-label={`${formatCurrency(segment.amount)}, ${formatPercent(segment.share * 100)}`}>
                           <span
+                            className={getReadableTextColor(segment.color.backgroundColor) === "#07111d" ? "is-light-tone" : "is-dark-tone"}
                             style={{
-                              width: `${Math.max(segment.share * 100, 8)}%`,
+                              width: `${Math.max((segment.amount / reportCategoryMaxAmount) * 100, 8)}%`,
                               background: segment.color.backgroundColor,
                               borderColor: segment.color.borderColor,
                             }}
@@ -1941,7 +1976,7 @@ export async function ReportsStream({
                           <strong>Other spend</strong>
                         </div>
                         <div className="report-flow-map__bar">
-                          <span style={{ width: `${Math.max((currentOtherSpend / Math.max(currentSpend, 1)) * 100, 8)}%`, background: "var(--border-subtle)" }}>
+                          <span style={{ width: `${Math.max((currentOtherSpend / reportCategoryMaxAmount) * 100, 8)}%`, background: "var(--border-subtle)" }}>
                             <small>{formatCurrency(currentOtherSpend)} · {formatPercent((currentOtherSpend / Math.max(currentSpend, 1)) * 100)}</small>
                           </span>
                         </div>
@@ -1966,22 +2001,22 @@ export async function ReportsStream({
               <ReportInfoTip className="reports-container-info" label="The biggest spending groups in this period." />
             </div>
 
-            <div className="report-donut">
+            <div className="report-donut report-donut--pie">
               <div className="report-donut__chart" role="img" aria-label="Spending breakdown donut chart">
                 <svg viewBox="0 0 240 240">
-                  <circle cx="120" cy="120" r="82" className="report-donut__track" />
-                  {reportCategorySegments.length > 0
+                  <circle cx="120" cy="120" r="58" className="report-donut__track" />
+                  {reportSpendingMixSegments.length > 0
                     ? (() => {
-                        const circumference = 2 * Math.PI * 82;
+                        const circumference = 2 * Math.PI * 58;
                         let offset = 0;
-                        return reportCategorySegments.map((segment) => {
+                        return reportSpendingMixSegments.map((segment) => {
                           const dashLength = segment.share * circumference;
                           const circle = (
                             <circle
                               key={segment.categoryName}
                               cx="120"
                               cy="120"
-                              r="82"
+                              r="58"
                               className="report-donut__segment"
                               style={{
                                 stroke: segment.color.borderColor,
@@ -1996,10 +2031,6 @@ export async function ReportsStream({
                       })()
                     : null}
                 </svg>
-                <div className="report-donut__center">
-                  <strong>{formatCurrency(reportSpentTotal)}</strong>
-                  <span>spent</span>
-                </div>
               </div>
 
               <div className="report-donut__legend">
@@ -2057,14 +2088,14 @@ export async function ReportsStream({
             </div>
 
             <div className="report-insight-grid">
-              <div className="report-insight">
+              <div className="report-insight report-insight--income">
                 <span>Gross inflow</span>
-                <strong>{formatCurrency(weeklySummary.income)}</strong>
+                <strong className="positive">{formatCurrency(weeklySummary.income)}</strong>
                 <small>{weeklySummaryLabel}</small>
               </div>
-              <div className="report-insight">
+              <div className="report-insight report-insight--expense">
                 <span>Gross outflow</span>
-                <strong>{formatCurrency(weeklySummary.expense)}</strong>
+                <strong className="negative">{formatCurrency(weeklySummary.expense)}</strong>
                 <small>All tracked expenses</small>
               </div>
               <div className="report-insight">
@@ -2100,14 +2131,14 @@ export async function ReportsStream({
             </div>
 
             <div className="report-insight-grid">
-              <div className="report-insight">
+              <div className="report-insight report-insight--income">
                 <span>Gross inflow</span>
-                <strong>{formatCurrency(currentMonthBucket.income)}</strong>
+                <strong className="positive">{formatCurrency(currentMonthBucket.income)}</strong>
                 <small>{currentMonthBucket.label}</small>
               </div>
-              <div className="report-insight">
+              <div className="report-insight report-insight--expense">
                 <span>Gross outflow</span>
-                <strong>{formatCurrency(currentMonthBucket.expense)}</strong>
+                <strong className="negative">{formatCurrency(currentMonthBucket.expense)}</strong>
                 <small>All tracked expenses</small>
               </div>
               <div className="report-insight">

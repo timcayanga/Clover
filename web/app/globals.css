@@ -49349,3 +49349,283 @@ html[data-theme="dark"] .help-search input {
     background: #0e1725 !important;
   }
 }
+
+/* Dark-mode follow-up: remove the remaining legacy light layers and keep
+   responsive summaries aligned across product pages. */
+html[data-theme="dark"] .dashboard-home__hero-mini-pill {
+  background: #f8fafc !important;
+  border-color: rgba(148, 163, 184, 0.32) !important;
+}
+
+html[data-theme="dark"] .dashboard-home__hero-mini-pill .dashboard-home__hero-mini-label {
+  color: #64748b !important;
+}
+
+html[data-theme="dark"] .dashboard-home__hero-mini-pill .dashboard-home__hero-mini-value {
+  color: #0f172a !important;
+}
+
+.content--adviser .adviser-summary {
+  z-index: 90;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.content--adviser .adviser-summary::before {
+  inset: -10px -8px -12px;
+}
+
+html[data-theme="dark"] .content--adviser .adviser-summary,
+html[data-theme="dark"] .content--adviser .adviser-summary::before {
+  background: #0e1725 !important;
+}
+
+html[data-theme="dark"] .content--adviser .report-flow-map__source,
+html[data-theme="dark"] .content--adviser .report-ai-signal,
+html[data-theme="dark"] .content--adviser .reports-brief-grid__split .report-ai-card {
+  background: #111d2d !important;
+  background-image: none !important;
+  border-color: rgba(148, 163, 184, 0.2) !important;
+  color: #e7eef7 !important;
+}
+
+html[data-theme="dark"] .content--adviser .report-flow-map__source :is(span, strong, small),
+html[data-theme="dark"] .content--adviser .report-ai-signal :is(span, strong) {
+  color: #e7eef7 !important;
+}
+
+.content--adviser .report-flow-map__bar span.is-light-tone small,
+html[data-theme="dark"] .content--adviser .report-flow-map__bar span.is-light-tone small {
+  color: #07111d !important;
+}
+
+.content--adviser .report-flow-map__bar span.is-dark-tone small,
+html[data-theme="dark"] .content--adviser .report-flow-map__bar span.is-dark-tone small {
+  color: #f8fafc !important;
+}
+
+.content--adviser .report-donut--pie .report-donut__track {
+  display: none;
+}
+
+.content--adviser .report-donut--pie .report-donut__segment {
+  stroke-width: 116;
+  stroke-linecap: butt;
+}
+
+.content--adviser .report-donut--pie .report-donut__chart::after {
+  content: none;
+}
+
+.content--adviser .report-insight strong.positive,
+html[data-theme="dark"] .content--adviser .report-insight strong.positive {
+  color: #22c55e !important;
+}
+
+.content--adviser .report-insight strong.negative,
+html[data-theme="dark"] .content--adviser .report-insight strong.negative {
+  color: #fb7185 !important;
+}
+
+.content--adviser .report-sankey__svg text {
+  text-transform: none;
+}
+
+.content--adviser .report-sankey__target-title,
+.content--adviser .report-sankey__source-label,
+.content--adviser .report-sankey__legend-item strong {
+  font-size: 11px;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.content--adviser .report-sankey__target-value,
+.content--adviser .report-sankey__legend-item span {
+  font-size: 10px;
+}
+
+.content--adviser .report-sankey__legend {
+  gap: 4px 12px;
+}
+
+.content--adviser .report-sankey__legend-item {
+  min-height: 28px;
+  padding: 3px 0;
+}
+
+html[data-theme="dark"] .accounts-overview-grid {
+  background: transparent !important;
+}
+
+html[data-theme="dark"] .accounts-overview-grid::before {
+  background: #0e1725 !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+}
+
+.summary-aligned-card > .summary-card-info {
+  display: none;
+}
+
+html[data-theme="dark"] .investments-market-empty,
+html[data-theme="dark"] .investments-market-insights,
+html[data-theme="dark"] .investments-market-insights__card,
+html[data-theme="dark"] .investments-portfolio-outlook,
+html[data-theme="dark"] .investments-portfolio-outlook > *,
+html[data-theme="dark"] .investments-ticker-picker {
+  background: #111d2d !important;
+  background-image: none !important;
+  border-color: rgba(148, 163, 184, 0.2) !important;
+  color: #e7eef7 !important;
+}
+
+html[data-theme="dark"] .settings-section--data .settings-privacy-panel,
+html[data-theme="dark"] .settings-section--data .settings-privacy-panel .settings-toggle-row,
+html[data-theme="dark"] .settings-section--data .settings-data-privacy,
+html[data-theme="dark"] .settings-section--data .settings-data-privacy .settings-toggle-row {
+  background: #111d2d !important;
+  background-image: none !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  color: #e7eef7 !important;
+}
+
+.settings-category-table--compact .settings-category-table__row,
+.settings-category-table--plain.settings-category-table--compact .settings-category-table__row {
+  min-height: 38px;
+  padding-block: 3px;
+}
+
+.settings-category-table--compact .settings-category-table__name {
+  gap: 8px;
+}
+
+.settings-category-table--compact .settings-category-table__name-copy strong,
+.settings-category-table--compact .settings-category-table__name-copy input {
+  font-size: 12px;
+}
+
+.settings-category-table--compact .settings-category-table__name-copy input {
+  min-height: 32px;
+}
+
+.settings-section--plan,
+.settings-section--plan .settings-plan-grid,
+.settings-section--plan .settings-plan-usage {
+  align-content: start;
+  align-self: start;
+}
+
+.circles-section__actions--footer .button {
+  min-width: 132px;
+  min-height: 34px;
+  padding: 7px 13px;
+  font-size: 0.76rem;
+}
+
+html[data-theme="dark"] .split-bill-manual-modal-backdrop,
+html[data-theme="dark"] .split-bill-modal__card.split-bill-manual-modal {
+  background: #0e1725 !important;
+  background-image: none !important;
+  color: #e7eef7 !important;
+}
+
+html[data-theme="dark"] .split-bill-manual-modal__back,
+html[data-theme="dark"] .split-bill-manual-modal__back-mobile,
+html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
+  background: #111d2d !important;
+  border-color: rgba(148, 163, 184, 0.24) !important;
+  color: #ffffff !important;
+}
+
+@media (max-width: 980px) {
+  .recurring-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  html[data-theme="dark"] body,
+  html[data-theme="dark"] .app-shell,
+  html[data-theme="dark"] .content,
+  html[data-theme="dark"] .content-scroll,
+  html[data-theme="dark"] .accounts-page,
+  html[data-theme="dark"] .transactions-page {
+    background: #0e1725 !important;
+    border-color: transparent !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+  }
+
+  html[data-theme="dark"] .accounts-mobile-featured,
+  html[data-theme="dark"] .accounts-mobile-list,
+  html[data-theme="dark"] .accounts-group,
+  html[data-theme="dark"] .accounts-group::before,
+  html[data-theme="dark"] .accounts-group::after {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+  }
+
+  html[data-theme="dark"] .accounts-mobile-featured__head :is(h5, span),
+  html[data-theme="dark"] .accounts-group__head :is(h5, strong, span, p),
+  html[data-theme="dark"] .accounts-mobile-list-row__brand :is(strong, small),
+  html[data-theme="dark"] .accounts-mobile-list-row__end strong {
+    color: #f8fafc !important;
+  }
+
+  html[data-theme="dark"] .accounts-mobile-list-row {
+    background: transparent !important;
+    border-color: rgba(148, 163, 184, 0.18) !important;
+  }
+
+  .transactions-mobile-simple-row__name {
+    grid-template-columns: 24px 22px minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .transactions-mobile-simple-row__category-icon,
+  .transactions-mobile-simple-row__category-icon img {
+    width: 22px;
+    height: 22px;
+  }
+
+  .transactions-mobile-simple-row__account-brand,
+  .transactions-mobile-simple-row__category-icon,
+  .transactions-mobile-simple-row__name-main {
+    align-self: center;
+  }
+
+  html[data-theme="dark"] .transactions-mobile-list,
+  html[data-theme="dark"] .transactions-mobile-date-group,
+  html[data-theme="dark"] .transactions-mobile-simple-row {
+    background: transparent !important;
+    border-radius: 0 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .recurring-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px;
+  }
+
+  .recurring-overview-card {
+    min-height: 118px;
+    padding: 12px;
+  }
+
+  .recurring-overview-card__value {
+    font-size: clamp(1.1rem, 5vw, 1.45rem);
+  }
+
+  .settings-section--plan {
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .settings-section--plan .settings-plan-grid {
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+}
