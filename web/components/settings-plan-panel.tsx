@@ -29,8 +29,8 @@ type SettingsPlanPanelProps = {
   paypalBuyerCountry?: string | null;
   billingSubscription: BillingSubscriptionSummary | null;
   planLimits: {
-    accountLimit: number;
-    monthlyUploadLimit: number;
+    accountLimit: number | null;
+    monthlyUploadLimit: number | null;
     transactionLimit: number | null;
   };
   planUsage: {

@@ -579,8 +579,8 @@ export function SettingsHub({
   const [profileListMessage, setProfileListMessage] = useState<string | null>(null);
   const [billingSubscription, setBillingSubscription] = useState<BillingSubscriptionSummary | null>(null);
   const [planLimits, setPlanLimits] = useState({
-    accountLimit: initialPlanLimits?.accountLimit ?? 0,
-    monthlyUploadLimit: initialPlanLimits?.monthlyUploadLimit ?? 0,
+    accountLimit: initialPlanLimits?.accountLimit ?? null,
+    monthlyUploadLimit: initialPlanLimits?.monthlyUploadLimit ?? null,
     transactionLimit: initialPlanLimits?.transactionLimit ?? null,
   });
   const [planUsage, setPlanUsage] = useState({
@@ -940,8 +940,8 @@ export function SettingsHub({
         const mePayload = (await meResponse.json().catch(() => ({}))) as {
           user?: {
             billingSubscription?: BillingSubscriptionSummary | null;
-            accountLimit?: number;
-            monthlyUploadLimit?: number;
+            accountLimit?: number | null;
+            monthlyUploadLimit?: number | null;
             transactionLimit?: number | null;
             usage?: {
               accountCount: number;
@@ -959,8 +959,8 @@ export function SettingsHub({
         if (!cancelled) {
           setBillingSubscription(mePayload.user?.billingSubscription ?? null);
           setPlanLimits({
-            accountLimit: mePayload.user?.accountLimit ?? 0,
-            monthlyUploadLimit: mePayload.user?.monthlyUploadLimit ?? 0,
+            accountLimit: mePayload.user?.accountLimit ?? null,
+            monthlyUploadLimit: mePayload.user?.monthlyUploadLimit ?? null,
             transactionLimit: mePayload.user?.transactionLimit ?? null,
           });
           setPlanUsage(
@@ -1491,7 +1491,7 @@ export function SettingsHub({
           monthlyUploadCount: 0,
           transactionCount: 0,
         });
-        setPlanLimits({ accountLimit: 0, monthlyUploadLimit: 0, transactionLimit: null });
+        setPlanLimits({ accountLimit: null, monthlyUploadLimit: null, transactionLimit: null });
         setPlanLoaded(false);
 
         setDataDeleteModal({

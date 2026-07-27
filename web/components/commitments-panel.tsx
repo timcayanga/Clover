@@ -1021,7 +1021,7 @@ export function CommitmentsPanel({
         <div className="recurring-mobile-list" aria-label={`${tabLabel} list`}>
           {!hasRows ? (
             <div className="recurring-mobile-list__empty">
-              <strong>No {tabLabel}s yet</strong>
+              <strong>{tabLabel === "money owed" ? "No money owed yet" : `No ${tabLabel}s yet`}</strong>
               <button className="button button-primary button-small" type="button" onClick={openRecurringAdd}>
                 Add {tabLabel}
               </button>
@@ -1123,7 +1123,7 @@ export function CommitmentsPanel({
               {!hasRows ? (
                 <tr>
                   <td colSpan={columnCount} className="commitments-table__empty">
-                    <strong>No {tabLabel}s yet</strong>
+                    <strong>{tabLabel === "money owed" ? "No money owed yet" : `No ${tabLabel}s yet`}</strong>
                     <span>Add one to start tracking it here.</span>
                     <button className="button button-primary button-small" type="button" onClick={openRecurringAdd}>
                       Add {tabLabel}

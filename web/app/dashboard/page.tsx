@@ -9,7 +9,7 @@ import { getSessionContext } from "@/lib/auth";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
-import { deriveReconciledBalance } from "@/lib/account-balance";
+import { deriveReconciledBalance, normalizeAccountBalanceSign } from "@/lib/account-balance";
 import { isLiabilityAccountType, isSpendableAccountType } from "@/lib/account-types";
 import { RouteSplash } from "@/components/route-splash";
 import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
@@ -129,8 +129,6 @@ const toIsoDay = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
 const toDayStart = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
-
-const normalizeNetWorthBalance = (type: string, value: number) => (isLiabilityAccountType(type as Parameters<typeof isLiabilityAccountType>[0]) ? -Math.abs(value) : Math.abs(value));
 
 const getDashboardTransactionType = (transaction: DashboardTransaction) =>
   resolveFinancialTransactionType({
@@ -720,7 +718,7 @@ async function DashboardStream({
   };
 
   const savingsTotal = normalizedDashboardAccounts.reduce((sum, account) => {
-    const signedBalance = normalizeNetWorthBalance(account.type, reconcileAccountBalance(account));
+    const signedBalance = normalizeAccountBalanceSign(account.type, reconcileAccountBalance(account));
     if (!isSpendableAccountType(account.type as Parameters<typeof isSpendableAccountType>[0])) {
       return sum;
     }
@@ -732,7 +730,7 @@ async function DashboardStream({
       return sum;
     }
 
-    const signedBalance = normalizeNetWorthBalance(account.type, reconcileAccountBalance(account));
+    const signedBalance = normalizeAccountBalanceSign(account.type, reconcileAccountBalance(account));
     return sum + Math.max(signedBalance, 0);
   }, 0);
   const currentThirtyDayTransactions = currentTransactions.filter((transaction) => transaction.date >= thirtyDaysAgo);

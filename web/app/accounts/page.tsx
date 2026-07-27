@@ -15,7 +15,7 @@ import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
-import { deriveReconciledBalance } from "@/lib/account-balance";
+import { deriveReconciledBalance, normalizeAccountBalanceSign } from "@/lib/account-balance";
 import { prefersLiveInvestmentBalance } from "@/lib/investment-balance";
 import { requiresAccountVisibilityRetry } from "@/lib/import-visibility-refresh";
 import { getAccountCardName, getAccountDisplayName, formatUploadAccountDisplayName } from "@/lib/account-display";
@@ -793,9 +793,6 @@ const buildInvestmentInstitutionCards = (
   );
 };
 
-const normalizeAccountBalance = (type: Account["type"], value: number) =>
-  isLiabilityAccountType(type) ? -Math.abs(value) : Math.abs(value);
-
 const parseNullableNumberInput = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -1541,7 +1538,7 @@ function AccountsPageContent() {
                                 transactions: accountTransactions,
                                 checkpoints: accountCheckpoints,
                               }));
-                        const normalizedBalance = normalizeAccountBalance(effectiveType, parseAmount(reconciledBalance ?? account.balance));
+                        const normalizedBalance = normalizeAccountBalanceSign(effectiveType, parseAmount(reconciledBalance ?? account.balance));
 
         return {
           ...account,
@@ -2664,8 +2661,8 @@ function AccountsPageContent() {
     const amountSortedAccounts = visibleAccounts
       .filter((account) => swipableAccountTypes.has(getEffectiveAccountType(account)))
       .sort((left, right) => {
-        const leftAmount = Math.abs(normalizeAccountBalance(getEffectiveAccountType(left), parseAmount(getDisplayedAccountBalance(left))));
-        const rightAmount = Math.abs(normalizeAccountBalance(getEffectiveAccountType(right), parseAmount(getDisplayedAccountBalance(right))));
+        const leftAmount = Math.abs(normalizeAccountBalanceSign(getEffectiveAccountType(left), parseAmount(getDisplayedAccountBalance(left))));
+        const rightAmount = Math.abs(normalizeAccountBalanceSign(getEffectiveAccountType(right), parseAmount(getDisplayedAccountBalance(right))));
         if (rightAmount !== leftAmount) {
           return rightAmount - leftAmount;
         }
@@ -2680,7 +2677,7 @@ function AccountsPageContent() {
     return visibleAccounts.reduce(
       (accumulator, account) => {
         const displayedBalance = getDisplayedAccountBalance(account);
-        const signedValue = normalizeAccountBalance(getEffectiveAccountType(account), parseAmount(displayedBalance));
+        const signedValue = normalizeAccountBalanceSign(getEffectiveAccountType(account), parseAmount(displayedBalance));
         if (isSpendableAccountType(getEffectiveAccountType(account)) && signedValue > 0) {
           accumulator.spendable += signedValue;
         }
@@ -2757,7 +2754,7 @@ function AccountsPageContent() {
         total: group.rows.reduce(
           (sum, row) =>
             sum +
-            normalizeAccountBalance(
+            normalizeAccountBalanceSign(
               "kind" in row && row.kind === "investment_institution" ? "investment" : getEffectiveAccountType(row as Account),
               parseAmount(row.balance)
             ),

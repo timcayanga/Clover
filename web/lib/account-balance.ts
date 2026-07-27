@@ -1,3 +1,5 @@
+import { isLiabilityAccountType } from "@/lib/account-types";
+
 type BalanceLike = string | number | null | undefined;
 
 type BalanceLikeRawPayload = {
@@ -87,6 +89,11 @@ const getTransactionAmountDelta = (transaction: BalanceLikeTransaction) => {
 
   return 0;
 };
+
+export const normalizeAccountBalanceSign = (type: string, value: number) =>
+  isLiabilityAccountType(type as Parameters<typeof isLiabilityAccountType>[0])
+    ? -Math.abs(value)
+    : value;
 
 export const deriveReconciledBalance = ({
   balance,

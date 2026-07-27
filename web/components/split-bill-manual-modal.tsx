@@ -6,6 +6,10 @@ import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import type { SplitBillSerializedBill } from "@/lib/split-bill";
 import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
+import {
+  getQuickAddItemParticipantIds,
+  type SplitBillQuickAddMode,
+} from "@/lib/split-bill-quick-add";
 
 type SplitBillManualModalProps = {
   open: boolean;
@@ -16,11 +20,9 @@ type SplitBillManualModalProps = {
   onSaved?: (bill: SplitBillSerializedBill) => void;
 };
 
-type SplitMode = "you-paid" | "you-owed" | "person-paid" | "person-owed";
-
 const currencyOptions = getCurrencyCatalogCodes();
 
-const splitModeOptions = (currentUserName: string): Array<{ value: SplitMode; label: string }> => [
+const splitModeOptions = (currentUserName: string): Array<{ value: SplitBillQuickAddMode; label: string }> => [
   { value: "you-paid", label: `${currentUserName} paid, split equally` },
   { value: "you-owed", label: `${currentUserName} is owed the full amount` },
   { value: "person-paid", label: "Person paid, split equally" },
@@ -44,7 +46,7 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("PHP");
-  const [splitMode, setSplitMode] = useState<SplitMode>("you-paid");
+  const [splitMode, setSplitMode] = useState<SplitBillQuickAddMode>("you-paid");
   const [selectedPayer, setSelectedPayer] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -184,7 +186,7 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
           name,
         }));
       const payerParticipant = participantEntries.find((participant) => participant.name === payerName) ?? null;
-      const peopleParticipantIds = participantEntries.filter((participant) => participant.name !== payerName).map((participant) => participant.id);
+      const itemParticipantIds = getQuickAddItemParticipantIds(splitMode, participantEntries, payerName);
 
       if (splitMode.startsWith("person") && !payerParticipant) {
         throw new Error("Choose who paid or is owed.");
@@ -202,7 +204,7 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
             id: createId(),
             description: trimmedDescription,
             amount: trimmedAmount,
-            participantIds: peopleParticipantIds,
+            participantIds: itemParticipantIds,
           },
         ],
         payments:
@@ -372,7 +374,7 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
 
         <label className="settings-field">
           <span>Split as</span>
-          <select className="settings-input" value={splitMode} onChange={(event) => setSplitMode(event.target.value as SplitMode)}>
+          <select className="settings-input" value={splitMode} onChange={(event) => setSplitMode(event.target.value as SplitBillQuickAddMode)}>
                 {splitOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
