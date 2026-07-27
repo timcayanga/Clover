@@ -14,7 +14,7 @@ type HelpPageProps = {
 export const metadata: Metadata = {
   title: "Help Center | Clover",
   description:
-    "Find help for getting started, importing statements, receipts, screenshots, split bills, transactions, accounts, pricing, privacy, and troubleshooting in Clover.",
+    "Find Clover help for Profiles, imports, spreadsheets, transactions, recurring activity, Adviser, reports, Circles, Split Bills, budgets, goals, investments, billing, privacy, and security.",
   keywords: Array.from(
     new Set(
       helpSections.flatMap((section) => [

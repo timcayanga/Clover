@@ -1,3 +1,5 @@
+import { currentProductHelpSections } from "@/lib/help-center-current";
+
 export type HelpQuestion = {
   question: string;
   answer: string;
@@ -52,7 +54,9 @@ export function simplifyHelpText(value: string) {
     .replace(/workspaces/gi, (match) => (match[0] === "W" ? "finance setups" : "finance setups"))
     .replace(/workspace/gi, (match) => (match[0] === "W" ? "finance setup" : "finance setup"))
     .replace(/protected pages/gi, "pages that need a login")
-    .replace(/protected page/gi, "page that needs a login");
+    .replace(/protected page/gi, "page that needs a login")
+    .replace(/workflows/gi, "ways of working")
+    .replace(/workflow/gi, "process");
 }
 
 const createArticle = (
@@ -1860,6 +1864,8 @@ export const helpSections: HelpSection[] = [
   },
 ];
 
+helpSections.push(...currentProductHelpSections);
+
 export const helpSectionMap = new Map(helpSections.map((section) => [section.slug, section] as const));
 
 const dedupeBy = <T,>(items: T[], getKey: (item: T) => string) => {
@@ -1923,23 +1929,42 @@ export const publicHelpSections: HelpSection[] = [
     "billing-and-accounts",
     "Manage access",
     "Billing and Accounts",
-    "Handle plans, payments, workspaces, and account access so Clover stays connected to the way you manage your finances.",
+    "Manage Profiles, accounts, plans, payments, and access without mixing separate financial lives.",
     "wallet",
     "sky",
-    ["accounts-workspaces", "billing-plan"],
-    ["how billing works in Clover", "how to manage my workspace", "how to update my plan"],
-    ["Manage your plan and payment details.", "Organize the right accounts and workspaces.", "Keep access clear when your setup changes."]
+    ["profiles-accounts", "billing-plan"],
+    ["how billing works in Clover", "how to manage my Profiles", "how to update my plan"],
+    ["Manage your plan and payment details.", "Keep Profiles and accounts organized.", "Know which Profile receives new financial data."]
   ),
   mergeHelpSections(
     "product-features",
     "Use Clover",
     "Product Features",
-    "Learn how Clover helps with uploads, transactions, reports, budgets, split bills, and the everyday parts of tracking money.",
+    "Learn how to bring in financial history, understand it, plan ahead, and manage money with other people.",
     "play",
     "mint",
-    ["importing-reviewing", "transactions-categories", "split-bills", "reports-adviser-goals"],
-    ["how to upload statements", "how to track transactions", "how split bills work", "how to read Clover reports"],
-    ["Upload files and review the results.", "Keep transactions and categories clean.", "Use reports and split bills with less manual work."]
+    [
+      "importing-reviewing",
+      "modern-imports",
+      "transactions-categories",
+      "recurring-commitments",
+      "gain-insights-current",
+      "plan-ahead-current",
+      "investments-current",
+      "grow-together-current",
+    ],
+    [
+      "how to upload statements and spreadsheets",
+      "how recurring activity works",
+      "how to use Adviser and Reports",
+      "how Circles and Split Bills work",
+    ],
+    [
+      "Import files and review the results.",
+      "Understand patterns with Reports and Adviser.",
+      "Plan ahead with recurring activity, budgets, goals, and investments.",
+      "Manage shared money with Circles and Split Bills.",
+    ]
   ),
   mergeHelpSections(
     "security",
@@ -1948,9 +1973,19 @@ export const publicHelpSections: HelpSection[] = [
     "Understand what happens to your files, how Clover protects your data, and who can access your account information.",
     "shield",
     "violet",
-    ["privacy-security-data"],
-    ["is my data safe in Clover", "what happens to uploaded files", "can others access my data"],
-    ["Know where your uploaded files go.", "Understand how Clover protects account data.", "See what access stays private to you."]
+    ["privacy-security-data", "security-controls-current"],
+    [
+      "is my data safe in Clover",
+      "what happens to uploaded files",
+      "can others access my data",
+      "how to manage signed in devices",
+    ],
+    [
+      "Know where your uploaded files go.",
+      "Review signed-in devices and sessions.",
+      "Keep Profiles private and share through Circles intentionally.",
+      "Choose the right option when removing data.",
+    ]
   ),
 ];
 
@@ -2007,6 +2042,20 @@ export const getHelpSectionImageSrc = (sectionSlug: HelpSection["slug"]) => {
       return "/help-icons/transactions-and-categories.png";
     case "accounts-workspaces":
       return "/help-icons/accounts-and-workspaces.png";
+    case "profiles-accounts":
+      return "/help-icons/accounts-and-workspaces.png";
+    case "modern-imports":
+      return "/help-icons/importing-and-reviewing.png";
+    case "recurring-commitments":
+      return "/help-icons/transactions-and-categories.png";
+    case "gain-insights-current":
+    case "plan-ahead-current":
+    case "investments-current":
+      return "/help-icons/reports-insights-goals.png";
+    case "grow-together-current":
+      return "/help-icons/accounts-and-workspaces.png";
+    case "security-controls-current":
+      return "/help-icons/privacy-security-data.png";
     case "split-bills":
       return "/help-icons/accounts-and-workspaces.png";
     case "reports-adviser-goals":
