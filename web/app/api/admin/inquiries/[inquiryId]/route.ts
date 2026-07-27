@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminAuth } from "@/lib/admin";
-import { updateContactInquiry } from "@/lib/contact-inquiries";
+import {
+  toAdminContactInquiry,
+  updateContactInquiry,
+} from "@/lib/contact-inquiries";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +27,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ in
       adminReplyBy: payload.adminReplyBody?.trim() ? userId : undefined,
     });
 
-    return NextResponse.json({ ok: true, inquiry });
+    return NextResponse.json({
+      ok: true,
+      inquiry: toAdminContactInquiry(inquiry),
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to update inquiry.";
 

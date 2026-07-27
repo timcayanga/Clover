@@ -47,4 +47,25 @@ assert.match(
   /const where: Prisma\.UserWhereInput = \{\s*\.\.\.PRODUCTION_USER_WHERE,/,
 );
 
+const inquiriesSource = readSource("lib/contact-inquiries.ts");
+assert.match(inquiriesSource, /items: items\.map\(toAdminContactInquiry\)/);
+assert.match(inquiriesSource, /getAdminContactInquiryAttachment/);
+
+const inquiriesComponentSource = readSource(
+  "components/admin-inquiries-console.tsx",
+);
+assert.match(inquiriesComponentSource, /View attachment/);
+assert.doesNotMatch(inquiriesComponentSource, /attachment\.dataUrl/);
+assert.match(
+  inquiriesComponentSource,
+  /if \(!normalized\) \{\s*return items;/,
+);
+
+const attachmentRouteSource = readSource(
+  "app/api/admin/inquiries\/[inquiryId]\/attachment/route.ts",
+);
+assert.match(attachmentRouteSource, /await requireAdminAuth\(\)/);
+assert.match(attachmentRouteSource, /private, no-store/);
+assert.match(attachmentRouteSource, /X-Content-Type-Options/);
+
 console.log("Admin operational scope regression passed.");

@@ -25,7 +25,52 @@ export type ContactInquiryAttachment = {
   dataUrl: string;
 };
 
+export type AdminContactInquiry = Omit<ContactInquiry, "attachment"> & {
+  attachment: Omit<ContactInquiryAttachment, "dataUrl"> | null;
+};
+
 const normalizeQuery = (value?: string) => value?.trim() ?? "";
+
+const readContactInquiryAttachment = (
+  value: Prisma.JsonValue | null,
+): ContactInquiryAttachment | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const attachment = value as Record<string, Prisma.JsonValue>;
+  if (
+    typeof attachment.name !== "string" ||
+    typeof attachment.type !== "string" ||
+    typeof attachment.size !== "number" ||
+    typeof attachment.dataUrl !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    name: attachment.name,
+    type: attachment.type,
+    size: attachment.size,
+    dataUrl: attachment.dataUrl,
+  };
+};
+
+export const toAdminContactInquiry = (
+  inquiry: ContactInquiry,
+): AdminContactInquiry => {
+  const attachment = readContactInquiryAttachment(inquiry.attachment);
+  return {
+    ...inquiry,
+    attachment: attachment
+      ? {
+          name: attachment.name,
+          type: attachment.type,
+          size: attachment.size,
+        }
+      : null,
+  };
+};
 
 export async function createContactInquiry(input: {
   name: string;
@@ -109,7 +154,7 @@ export async function getAdminContactInquiries(filters: ContactInquiryFilters = 
     ]);
 
     return {
-      items,
+      items: items.map(toAdminContactInquiry),
       page,
       pageSize,
       total,
@@ -151,4 +196,11 @@ export async function updateContactInquiry(id: string, input: ContactInquiryUpda
   });
 }
 
-export type AdminContactInquiry = ContactInquiry;
+export async function getAdminContactInquiryAttachment(id: string) {
+  const inquiry = await prisma.contactInquiry.findUnique({
+    where: { id },
+    select: { attachment: true },
+  });
+
+  return inquiry ? readContactInquiryAttachment(inquiry.attachment) : null;
+}

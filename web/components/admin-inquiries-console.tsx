@@ -23,7 +23,6 @@ type InquiryAttachment = {
   name: string;
   type: string;
   size: number;
-  dataUrl: string;
 };
 
 function buildMailtoHref(inquiry: AdminContactInquiry, subject: string, body: string) {
@@ -43,13 +42,14 @@ export function AdminInquiriesConsole({ inquiries }: AdminInquiriesConsoleProps)
   const [draftSubject, setDraftSubject] = useState("Thanks for reaching out to Clover");
   const [draftBody, setDraftBody] = useState("");
   const [saving, setSaving] = useState(false);
+  const [attachmentOpened, setAttachmentOpened] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const filteredInquiries = useMemo(() => {
     const normalized = query.trim().toLowerCase();
 
     if (!normalized) {
-      return inquiries;
+      return items;
     }
 
     return items.filter((inquiry) =>
@@ -88,6 +88,7 @@ export function AdminInquiriesConsole({ inquiries }: AdminInquiriesConsoleProps)
     setDraftStatus(inquiry.status);
     setDraftSubject(inquiry.adminReplySubject ?? "Thanks for reaching out to Clover");
     setDraftBody(inquiry.adminReplyBody ?? "");
+    setAttachmentOpened(false);
     setFeedback(null);
   };
 
@@ -146,6 +147,9 @@ export function AdminInquiriesConsole({ inquiries }: AdminInquiriesConsoleProps)
     "Clover Support",
   ].join("\n");
   const attachment = currentSelection?.attachment as InquiryAttachment | null | undefined;
+  const attachmentUrl = currentSelection
+    ? `/api/admin/inquiries/${currentSelection.id}/attachment`
+    : null;
 
   return (
     <section className="admin-inquiries">
@@ -267,10 +271,28 @@ export function AdminInquiriesConsole({ inquiries }: AdminInquiriesConsoleProps)
               {attachment ? (
                 <section className="admin-inquiries__attachment">
                   <h3>Attached image</h3>
-                  <a href={attachment.dataUrl} target="_blank" rel="noreferrer" className="admin-inquiries__attachment-link">
-                    <img src={attachment.dataUrl} alt={attachment.name} className="admin-inquiries__attachment-image" />
-                    <span>{attachment.name}</span>
-                  </a>
+                  <p>
+                    {attachment.name} · {Math.max(1, Math.ceil(attachment.size / 1024)).toLocaleString()} KB
+                  </p>
+                  {attachmentOpened && attachmentUrl ? (
+                    <a href={attachmentUrl} target="_blank" rel="noreferrer" className="admin-inquiries__attachment-link">
+                      <img
+                        src={attachmentUrl}
+                        alt={attachment.name}
+                        className="admin-inquiries__attachment-image"
+                        loading="lazy"
+                      />
+                      <span>Open original</span>
+                    </a>
+                  ) : (
+                    <button
+                      className="button button-secondary button-small"
+                      type="button"
+                      onClick={() => setAttachmentOpened(true)}
+                    >
+                      View attachment
+                    </button>
+                  )}
                 </section>
               ) : null}
 
