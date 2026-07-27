@@ -248,7 +248,7 @@ export default function InvestmentInstitutionDetailPage() {
   const { institution: routeInstitution, currency: routeCurrency } = extractInvestmentInstitutionFromPathSegment(
     params?.institutionSlug ?? ""
   );
-  const tradeMode = searchParams.get("trade") === "1";
+  const tradeMode = searchParams?.get("trade") === "1";
   const institutionPath = getInvestmentInstitutionPath({
     institution: routeInstitution,
     currency: routeCurrency,

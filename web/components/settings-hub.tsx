@@ -1140,7 +1140,19 @@ export function SettingsHub({
 
     setSecuritySessions(
       (deviceSessions ?? []).map((entry) => {
-        const activity = entry.latestActivity;
+        const activity = (
+          entry as typeof entry & {
+            latestActivity?: {
+              browserName?: string;
+              browserVersion?: string;
+              deviceType?: string;
+              isMobile?: boolean;
+              ipAddress?: string;
+              city?: string;
+              country?: string;
+            };
+          }
+        ).latestActivity;
         const isCurrent = entry.id === session?.id;
         const lastActiveAt =
           entry.lastActiveAt instanceof Date
