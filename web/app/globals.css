@@ -47676,6 +47676,100 @@ html[data-theme="dark"] .goals-progress-panel .summary-aligned-card {
   background: rgba(20, 30, 44, 0.9);
 }
 
+/* Adviser cash-flow Sankey: proportional Clover ribbons with inline labels. */
+.content--adviser .report-sankey-card {
+  overflow: hidden;
+}
+
+.content--adviser .report-sankey__chart-wrap {
+  padding: 4px 0 10px;
+  scrollbar-color: rgba(3, 168, 192, 0.3) transparent;
+}
+
+.content--adviser .report-sankey__svg {
+  min-width: 900px;
+  overflow: visible;
+}
+
+.content--adviser .report-sankey__ribbon {
+  pointer-events: visiblePainted;
+  transition: opacity 180ms ease, filter 180ms ease;
+}
+
+.content--adviser .report-sankey__ribbon--income {
+  opacity: 0.34;
+}
+
+.content--adviser .report-sankey__ribbon--category {
+  opacity: 0.28;
+}
+
+.content--adviser .report-sankey__ribbon:hover {
+  opacity: 0.52;
+  filter: saturate(1.08);
+}
+
+.content--adviser .report-sankey__svg text {
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.94);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.content--adviser .report-sankey__column-label {
+  fill: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.content--adviser .report-sankey__target-title,
+.content--adviser .report-sankey__target-value {
+  font-size: 10px;
+}
+
+.content--adviser .report-sankey__target-title {
+  fill: var(--ink);
+  font-weight: 750;
+}
+
+.content--adviser .report-sankey__target-value {
+  fill: var(--muted);
+  font-weight: 600;
+}
+
+.content--adviser .report-sankey__source-label {
+  fill: var(--ink);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.content--adviser .report-sankey__source-value {
+  fill: var(--muted);
+  font-size: 14px;
+  font-weight: 750;
+}
+
+html[data-theme="dark"] .content--adviser .report-sankey__svg text {
+  stroke: rgba(14, 23, 37, 0.96);
+}
+
+@media (max-width: 760px) {
+  .content--adviser .report-sankey-card {
+    padding-inline: 12px;
+  }
+
+  .content--adviser .report-sankey__svg {
+    min-width: 780px;
+  }
+
+  .content--adviser .report-sankey__target-title,
+  .content--adviser .report-sankey__target-value {
+    font-size: 9px;
+  }
+}
+
 /* Adviser polish: keep the sticky overview solid and make report views easier to scan. */
 .adviser-summary-card__title-mobile {
   display: none;
@@ -49664,5 +49758,16 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     max-height: none;
     overflow-x: auto;
     overflow-y: hidden;
+  }
+}
+
+/* Keep the redesigned Sankey sizing after legacy mobile report overrides. */
+.content--adviser .report-sankey__svg {
+  min-width: 900px;
+}
+
+@media (max-width: 760px) {
+  .content--adviser .report-sankey__svg {
+    min-width: 780px;
   }
 }

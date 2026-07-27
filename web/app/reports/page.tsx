@@ -967,84 +967,144 @@ export async function ReportsStream({
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 6);
 
-    const reportSankeyCategories = Array.from(reportSankeyCategoryTotals.values())
+    const sankeyCategoryEntries = Array.from(reportSankeyCategoryTotals.values())
       .filter((category) => category.amount > 0)
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 8);
-
-    const reportSankeyCategoryColorByKey = new Map(
-      reportSankeyCategories.map((category) => [normalizeMerchant(category.label), getCategoryIconTone(category.label)])
-    );
-
-    const sankeyIncomeAmount = reportSankeyAccounts.reduce((sum, account) => sum + account.amount, 0);
-    const sankeyExpenseAmount = reportSankeyCategories.reduce((sum, category) => sum + category.amount, 0);
-    const sankeyBarWidth = 18;
-    const sankeyNodeHeight = 34;
-    const sankeyNodeGap = 20;
-    const sankeyAccountNodes = reportSankeyAccounts;
-    const sankeyCategoryNodes = reportSankeyCategories.map((category) => ({
-      ...category,
-      color: reportSankeyCategoryColorByKey.get(normalizeMerchant(category.label)) ?? getCategoryIconTone(category.label),
-    }));
-    const sankeyChartHeight = Math.max(300, Math.max(sankeyAccountNodes.length, sankeyCategoryNodes.length) * (sankeyNodeHeight + sankeyNodeGap) + 42);
-    const sankeyChartWidth = 980;
-    const sankeyIncomeX = 28;
-    const sankeyAccountX = 356;
-    const sankeyCategoryX = 730;
-    const sankeySourceWidth = Math.min(190, Math.max(96, sankeyAccountNodes.length * 30));
-    const sankeyIncomeColumnTop = (sankeyChartHeight - sankeySourceWidth) / 2;
-    const layoutSankeyColumn = <T,>(nodes: T[]) => {
-      const totalHeight = nodes.length * sankeyNodeHeight + Math.max(nodes.length - 1, 0) * sankeyNodeGap;
-      const top = Math.max(20, (sankeyChartHeight - totalHeight) / 2);
-      return nodes.map((node, index) => ({
-        ...node,
-        y: top + index * (sankeyNodeHeight + sankeyNodeGap),
-        height: sankeyNodeHeight,
-      }));
-    };
-    const sankeyAccountLayouts = layoutSankeyColumn(sankeyAccountNodes);
-    const sankeyCategoryLayouts = layoutSankeyColumn(sankeyCategoryNodes);
-
-    const sankeyCategoryLayoutByKey = new Map(sankeyCategoryLayouts.map((category) => [normalizeMerchant(category.label), category]));
-    const sankeyIncomeLinks = sankeyAccountLayouts.map((account, index) => {
-      const sourceY = sankeyIncomeColumnTop + ((index + 0.5) / Math.max(sankeyAccountLayouts.length, 1)) * sankeySourceWidth;
+      .sort((a, b) => b.amount - a.amount);
+    const sankeyTopCategoryKeys = new Set(sankeyCategoryEntries.slice(0, 7).map((category) => normalizeMerchant(category.label)));
+    const sankeyAccountColors = ["#08abc4", "#44c7b6", "#79c98d", "#63a9e8", "#f0bd4f", "#f28b62"];
+    const sankeyCategoryTotals = new Map<string, { label: string; amount: number }>();
+    const sankeyAccountFlows = reportSankeyAccounts.map((account, accountIndex) => {
+      const expenses = Array.from(reportSankeyAccountExpenseByCategory.get(normalizeMerchant(account.label))?.values() ?? [])
+        .filter((entry) => entry.amount > 0)
+        .reduce<Array<{ key: string; label: string; amount: number }>>((entries, entry) => {
+          const entryKey = normalizeMerchant(entry.label);
+          const key = sankeyTopCategoryKeys.has(entryKey) ? entryKey : "other-spending";
+          const label = sankeyTopCategoryKeys.has(entryKey) ? entry.label : "Other spending";
+          const existing = entries.find((candidate) => candidate.key === key);
+          if (existing) {
+            existing.amount += entry.amount;
+          } else {
+            entries.push({ key, label, amount: entry.amount });
+          }
+          return entries;
+        }, []);
+      const leftAfterSpending = Math.max(account.amount - account.expenseAmount, 0);
+      if (leftAfterSpending > 0) {
+        expenses.push({
+          key: "left-after-spending",
+          label: "Left after spending",
+          amount: leftAfterSpending,
+        });
+      }
+      expenses.forEach((entry) => {
+        const total = sankeyCategoryTotals.get(entry.key) ?? { label: entry.label, amount: 0 };
+        total.amount += entry.amount;
+        sankeyCategoryTotals.set(entry.key, total);
+      });
       return {
-        key: account.label,
-        amount: account.amount,
-        sourceY,
-        targetY: account.y + account.height / 2,
-        height: 8 + 22 * Math.sqrt(account.amount / Math.max(sankeyIncomeAmount, 1)),
+        ...account,
+        color: sankeyAccountColors[accountIndex % sankeyAccountColors.length],
+        flows: expenses,
       };
     });
 
-    const sankeyCategoryLinks = sankeyAccountLayouts.flatMap((account) => {
-      const accountExpenses = Array.from(reportSankeyAccountExpenseByCategory.get(normalizeMerchant(account.label))?.values() ?? []).filter(
-        (entry) => entry.amount > 0 && sankeyCategoryLayoutByKey.has(normalizeMerchant(entry.label))
-      );
-      return accountExpenses.map((entry, index) => {
-        const categoryLayout = sankeyCategoryLayoutByKey.get(normalizeMerchant(entry.label));
-
+    const sankeyCategoryNodes = Array.from(sankeyCategoryTotals.entries())
+      .map(([key, category]) => {
+        const categoryTone = getCategoryIconTone(category.label);
         return {
-          key: `${account.label}:${entry.label}`,
-          accountLabel: account.label,
-          categoryLabel: entry.label,
-          amount: entry.amount,
-          sourceY: account.y + ((index + 0.5) / Math.max(accountExpenses.length, 1)) * account.height,
-          targetY: (categoryLayout?.y ?? 20) + (categoryLayout?.height ?? sankeyNodeHeight) / 2,
-          height: 6 + 20 * Math.sqrt(entry.amount / Math.max(sankeyExpenseAmount, 1)),
-          color: categoryLayout?.color.borderColor ?? getCategoryIconTone(entry.label).borderColor,
+          key,
+          ...category,
+          color:
+            key === "left-after-spending"
+              ? "#35b878"
+              : key === "other-spending"
+                ? "#91a2ae"
+                : categoryTone.borderColor,
         };
+      })
+      .sort((a, b) => {
+        if (a.key === "left-after-spending") return 1;
+        if (b.key === "left-after-spending") return -1;
+        return b.amount - a.amount;
+      });
+
+    const sankeyTotalFlow = sankeyAccountFlows.reduce((sum, account) => sum + account.amount, 0);
+    const sankeyChartWidth = 1120;
+    const sankeyChartHeight = Math.max(420, 300 + Math.max(sankeyAccountFlows.length, sankeyCategoryNodes.length) * 22);
+    const sankeyNodeWidth = 12;
+    const sankeyColumnPadding = 30;
+    const sankeyAccountGap = 14;
+    const sankeyCategoryGap = 10;
+    const sankeySourceX = 48;
+    const sankeyAccountX = 472;
+    const sankeyCategoryX = 858;
+    const sankeyAvailableHeight = sankeyChartHeight - sankeyColumnPadding * 2;
+    const sankeyAccountScale =
+      (sankeyAvailableHeight - Math.max(sankeyAccountFlows.length - 1, 0) * sankeyAccountGap) / Math.max(sankeyTotalFlow, 1);
+    const sankeyCategoryTotal = sankeyCategoryNodes.reduce((sum, category) => sum + category.amount, 0);
+    const sankeyCategoryScale =
+      (sankeyAvailableHeight - Math.max(sankeyCategoryNodes.length - 1, 0) * sankeyCategoryGap) / Math.max(sankeyCategoryTotal, 1);
+    const sankeyScale = Math.max(0.0001, Math.min(sankeyAccountScale, sankeyCategoryScale));
+    const sankeyFlowHeight = sankeyTotalFlow * sankeyScale;
+    const sankeySourceY = (sankeyChartHeight - sankeyFlowHeight) / 2;
+    const layoutProportionalColumn = <T extends { amount: number }>(nodes: T[], gap: number) => {
+      const columnHeight = nodes.reduce((sum, node) => sum + node.amount * sankeyScale, 0) + Math.max(nodes.length - 1, 0) * gap;
+      let offset = (sankeyChartHeight - columnHeight) / 2;
+      return nodes.map((node) => {
+        const height = Math.max(node.amount * sankeyScale, 1.5);
+        const layout = { ...node, y: offset, height };
+        offset += height + gap;
+        return layout;
+      });
+    };
+    const sankeyAccountLayouts = layoutProportionalColumn(sankeyAccountFlows, sankeyAccountGap);
+    const sankeyCategoryLayouts = layoutProportionalColumn(sankeyCategoryNodes, sankeyCategoryGap);
+    const sankeyCategoryLayoutByKey = new Map(sankeyCategoryLayouts.map((category) => [category.key, category]));
+
+    let sankeySourceOffset = 0;
+    const sankeyIncomeLinks = sankeyAccountLayouts.map((account) => {
+      const height = account.amount * sankeyScale;
+      const link = {
+        key: account.label,
+        color: account.color,
+        sourceY: sankeySourceY + sankeySourceOffset,
+        targetY: account.y,
+        height,
+      };
+      sankeySourceOffset += height;
+      return link;
+    });
+
+    const sankeyCategoryOffsets = new Map<string, number>();
+    const sankeyCategoryLinks = sankeyAccountLayouts.flatMap((account) => {
+      let accountOffset = 0;
+      return account.flows.map((flow) => {
+        const height = flow.amount * sankeyScale;
+        const category = sankeyCategoryLayoutByKey.get(flow.key);
+        const categoryOffset = sankeyCategoryOffsets.get(flow.key) ?? 0;
+        const link = {
+          key: `${account.label}:${flow.key}`,
+          color: category?.color ?? "#91a2ae",
+          sourceY: account.y + accountOffset,
+          targetY: (category?.y ?? sankeyColumnPadding) + categoryOffset,
+          height,
+        };
+        accountOffset += height;
+        sankeyCategoryOffsets.set(flow.key, categoryOffset + height);
+        return link;
       });
     });
 
-    const sankeyLegendCategories = reportSankeyCategories.map((category) => ({
-      ...category,
-      color: reportSankeyCategoryColorByKey.get(normalizeMerchant(category.label)) ?? getCategoryIconTone(category.label),
-    }));
-    const buildSankeyCurve = (startX: number, startY: number, endX: number, endY: number) => {
-      const controlX = startX + (endX - startX) * 0.45;
-      const controlX2 = startX + (endX - startX) * 0.55;
-      return `M ${startX.toFixed(1)} ${startY.toFixed(1)} C ${controlX.toFixed(1)} ${startY.toFixed(1)} ${controlX2.toFixed(1)} ${endY.toFixed(1)} ${endX.toFixed(1)} ${endY.toFixed(1)}`;
+    const buildSankeyRibbon = (startX: number, startY: number, endX: number, endY: number, height: number) => {
+      const controlX1 = startX + (endX - startX) * 0.42;
+      const controlX2 = startX + (endX - startX) * 0.58;
+      return [
+        `M ${startX.toFixed(1)} ${startY.toFixed(1)}`,
+        `C ${controlX1.toFixed(1)} ${startY.toFixed(1)} ${controlX2.toFixed(1)} ${endY.toFixed(1)} ${endX.toFixed(1)} ${endY.toFixed(1)}`,
+        `L ${endX.toFixed(1)} ${(endY + height).toFixed(1)}`,
+        `C ${controlX2.toFixed(1)} ${(endY + height).toFixed(1)} ${controlX1.toFixed(1)} ${(startY + height).toFixed(1)} ${startX.toFixed(1)} ${(startY + height).toFixed(1)}`,
+        "Z",
+      ].join(" ");
     };
 
     const recurringMerchantHistory = new Map<
@@ -1755,31 +1815,38 @@ export async function ReportsStream({
                         role="img"
                         aria-label="Cash flow Sankey diagram"
                       >
-                        {sankeyIncomeLinks.map((link, index) => (
+                        <defs>
+                          <filter id="sankeyNodeShadow" x="-30%" y="-20%" width="160%" height="140%">
+                            <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#0f172a" floodOpacity="0.12" />
+                          </filter>
+                        </defs>
+                        <text x={sankeySourceX} y="17" className="report-sankey__column-label">Funds</text>
+                        <text x={sankeyAccountX} y="17" className="report-sankey__column-label">Accounts</text>
+                        <text x={sankeyCategoryX} y="17" className="report-sankey__column-label">Destinations</text>
+
+                        {sankeyIncomeLinks.map((link) => (
                           <path
                             key={`${link.key}-income`}
-                            d={buildSankeyCurve(
-                              sankeyIncomeX + sankeyBarWidth,
+                            d={buildSankeyRibbon(
+                              sankeySourceX + sankeyNodeWidth,
                               link.sourceY,
                               sankeyAccountX,
-                              link.targetY
+                              link.targetY,
+                              link.height
                             )}
-                            fill="none"
-                            stroke="rgba(3, 168, 192, 0.28)"
-                            strokeWidth={Math.max(link.height, 7)}
-                            strokeLinecap="butt"
-                            strokeLinejoin="miter"
-                            opacity={index === 0 ? 0.5 : 0.36}
+                            fill={link.color}
+                            className="report-sankey__ribbon report-sankey__ribbon--income"
                           />
                         ))}
 
                         <rect
-                          x={sankeyIncomeX}
-                          y={sankeyIncomeColumnTop}
-                          width={sankeyBarWidth}
-                          height={sankeySourceWidth}
-                          rx="0"
-                          fill="rgba(3, 168, 192, 0.52)"
+                          x={sankeySourceX}
+                          y={sankeySourceY}
+                          width={sankeyNodeWidth}
+                          height={sankeyFlowHeight}
+                          rx="3"
+                          fill="#009eb7"
+                          filter="url(#sankeyNodeShadow)"
                         />
 
                         {sankeyAccountLayouts.map((account) => (
@@ -1787,19 +1854,20 @@ export async function ReportsStream({
                             <rect
                               x={sankeyAccountX}
                               y={account.y}
-                              width={sankeyBarWidth}
+                              width={sankeyNodeWidth}
                               height={account.height}
-                              rx="0"
-                              fill="rgba(15, 118, 110, 0.34)"
-                              stroke="rgba(15, 118, 110, 0.18)"
+                              rx="3"
+                              fill={account.color}
+                              filter="url(#sankeyNodeShadow)"
                             />
-                            <text x={sankeyAccountX + sankeyBarWidth + 12} y={account.y + 13} className="report-sankey__target-label report-sankey__account-label">
-                              <tspan x={sankeyAccountX + sankeyBarWidth + 12} className="report-sankey__target-title">
-                                {account.label}
-                              </tspan>
-                              <tspan x={sankeyAccountX + sankeyBarWidth + 12} dy="1.15em" className="report-sankey__target-value">
-                                {formatCurrency(account.incomeAmount)} in · {formatCurrency(account.expenseAmount)} out
-                              </tspan>
+                            <text
+                              x={sankeyAccountX - 14}
+                              y={account.y + account.height / 2 + 4}
+                              textAnchor="end"
+                              className="report-sankey__target-label report-sankey__account-label"
+                            >
+                              <tspan className="report-sankey__target-title">{account.label}: </tspan>
+                              <tspan className="report-sankey__target-value">{formatCurrency(account.amount)}</tspan>
                             </text>
                           </g>
                         ))}
@@ -1807,18 +1875,15 @@ export async function ReportsStream({
                         {sankeyCategoryLinks.map((link) => (
                           <path
                             key={link.key}
-                            d={buildSankeyCurve(
-                              sankeyAccountX + sankeyBarWidth,
+                            d={buildSankeyRibbon(
+                              sankeyAccountX + sankeyNodeWidth,
                               link.sourceY,
                               sankeyCategoryX,
-                              link.targetY
+                              link.targetY,
+                              link.height
                             )}
-                            fill="none"
-                            stroke={link.color}
-                            strokeWidth={Math.max(link.height, 7)}
-                            strokeLinecap="butt"
-                            strokeLinejoin="miter"
-                            opacity="0.4"
+                            fill={link.color}
+                            className="report-sankey__ribbon report-sankey__ribbon--category"
                           />
                         ))}
 
@@ -1827,44 +1892,40 @@ export async function ReportsStream({
                             <rect
                               x={sankeyCategoryX}
                               y={category.y}
-                              width={sankeyBarWidth}
+                              width={sankeyNodeWidth}
                               height={category.height}
-                              rx="0"
-                              fill={category.color.backgroundColor}
-                              stroke={category.color.borderColor}
+                              rx="3"
+                              fill={category.color}
+                              filter="url(#sankeyNodeShadow)"
                             />
-                            <text x={sankeyCategoryX + sankeyBarWidth + 12} y={category.y + 13} className="report-sankey__target-label">
-                              <tspan x={sankeyCategoryX + sankeyBarWidth + 12} className="report-sankey__target-title">
-                                {category.label}
-                              </tspan>
-                              <tspan x={sankeyCategoryX + sankeyBarWidth + 12} dy="1.15em" className="report-sankey__target-value">
-                                {formatCurrency(category.amount)} · {formatPercent(currentSpend > 0 ? (category.amount / currentSpend) * 100 : 0)}
+                            <text
+                              x={sankeyCategoryX + sankeyNodeWidth + 14}
+                              y={category.y + category.height / 2 + 4}
+                              className="report-sankey__target-label"
+                            >
+                              <tspan className="report-sankey__target-title">{category.label}: </tspan>
+                              <tspan className="report-sankey__target-value">
+                                {formatCurrency(category.amount)} · {formatPercent((category.amount / Math.max(sankeyTotalFlow, 1)) * 100)}
                               </tspan>
                             </text>
                           </g>
                         ))}
 
-                        <text x={sankeyIncomeX + sankeyBarWidth + 12} y={sankeyIncomeColumnTop + 18} className="report-sankey__source-label">
-                          Income
+                        <text
+                          x={sankeySourceX + sankeyNodeWidth + 16}
+                          y={sankeySourceY + sankeyFlowHeight / 2 - 5}
+                          className="report-sankey__source-label"
+                        >
+                          Tracked funds
                         </text>
-                        <text x={sankeyIncomeX + sankeyBarWidth + 12} y={sankeyIncomeColumnTop + 40} className="report-sankey__source-value">
-                          {formatCurrency(currentSummary.income)}
+                        <text
+                          x={sankeySourceX + sankeyNodeWidth + 16}
+                          y={sankeySourceY + sankeyFlowHeight / 2 + 16}
+                          className="report-sankey__source-value"
+                        >
+                          {formatCurrency(sankeyTotalFlow)}
                         </text>
                       </svg>
-                    </div>
-
-                    <div className="report-sankey__legend" aria-label="Transaction categories">
-                      {sankeyLegendCategories.map((category) => (
-                        <Link
-                          key={category.label}
-                          href={buildTransactionsHref({ category: category.label })}
-                          className="report-sankey__legend-item"
-                        >
-                          <span className="report-sankey__swatch" style={{ background: category.color.backgroundColor, borderColor: category.color.borderColor }} />
-                          <strong>{category.label}</strong>
-                          <span>{formatCurrency(category.amount)}</span>
-                        </Link>
-                      ))}
                     </div>
                   </>
                 ) : (
