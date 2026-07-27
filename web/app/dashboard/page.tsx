@@ -13,7 +13,7 @@ import { deriveReconciledBalance, normalizeAccountBalanceSign } from "@/lib/acco
 import { isLiabilityAccountType, isSpendableAccountType } from "@/lib/account-types";
 import { RouteSplash } from "@/components/route-splash";
 import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
-import { DashboardTopActions } from "@/components/dashboard-top-actions";
+import { DashboardTopActionsLazy } from "@/components/dashboard-top-actions-lazy";
 import { DashboardImportTrigger } from "@/components/dashboard-import-trigger";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
@@ -1222,7 +1222,7 @@ async function DashboardPageStream() {
         active="dashboard"
         title="Home"
         actions={
-        <DashboardTopActions
+        <DashboardTopActionsLazy
           workspaceId={workspaceSummary.id}
           accounts={workspaceSummary.accounts.map((account) => ({
             id: account.id,

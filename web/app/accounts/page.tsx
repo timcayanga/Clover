@@ -2147,7 +2147,13 @@ function AccountsPageContent() {
     setAccountsLoading(true);
     setAccountsHydrationPending(!hydratedFromCache && accounts.length === 0);
     setHasInitialWorkspaceDataLoaded(hydratedFromCache);
-    void loadWorkspaceData(selectedWorkspaceId, { silent: hydratedFromCache });
+    void loadWorkspaceData(selectedWorkspaceId, {
+      silent: hydratedFromCache,
+      // A cold Accounts view must not present the stored snapshot as final
+      // before transaction deltas have reconciled it. Cached workspaces can
+      // paint immediately and refresh in the background.
+      awaitHydration: !hydratedFromCache,
+    });
   }, [selectedWorkspaceId, workspacesLoading, workspaces.length]);
 
   useEffect(() => {

@@ -68,6 +68,7 @@
     "qa:integration-security": "tsx scripts/integration-security-regression.ts",
     "qa:account-balance-sign": "tsx scripts/account-balance-sign-regression.ts",
     "qa:split-bill-quick-add": "tsx scripts/split-bill-quick-add-regression.ts",
+    "qa:critical-page-loading": "tsx scripts/critical-page-loading-regression.ts",
     "qa:circles": "tsx scripts/circles-regression.ts",
     "train:image-labels": "tsx --tsconfig tsconfig.json scripts/train-image-label-corpus.ts"
   },

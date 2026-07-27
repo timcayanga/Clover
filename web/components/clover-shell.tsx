@@ -12,14 +12,13 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { persistSelectedWorkspaceId, readSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
 import { clearAllWorkspaceCaches, clearLegacyWorkspaceCaches } from "@/lib/workspace-cache";
-import { DashboardManualTransactionModal } from "@/components/dashboard-top-actions";
-import { ImportFilesModal } from "@/components/import-files-modal";
 import { signOutToLanding } from "@/lib/sign-out";
 import { readAccountIdentityCache, writeAccountIdentityCache } from "@/lib/account-identity-cache";
 import {
@@ -43,6 +42,16 @@ import {
   SETTINGS_GUIDANCE_MENU_KEY,
   type GuidanceMenuVisibility,
 } from "@/lib/guidance-menu";
+
+const DashboardManualTransactionModal = dynamic(
+  () => import("@/components/dashboard-top-actions").then((module) => module.DashboardManualTransactionModal),
+  { ssr: false }
+);
+
+const ImportFilesModal = dynamic(
+  () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
+  { ssr: false }
+);
 
 type CloverChromeActions = {
   closeChrome: () => void;
