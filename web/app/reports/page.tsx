@@ -1027,6 +1027,12 @@ export async function ReportsStream({
         if (b.key === "left-after-spending") return -1;
         return b.amount - a.amount;
       });
+    const sankeyCategoryOrder = new Map(sankeyCategoryNodes.map((category, index) => [category.key, index]));
+    sankeyAccountFlows.forEach((account) => {
+      account.flows.sort(
+        (a, b) => (sankeyCategoryOrder.get(a.key) ?? Number.MAX_SAFE_INTEGER) - (sankeyCategoryOrder.get(b.key) ?? Number.MAX_SAFE_INTEGER)
+      );
+    });
 
     const sankeyTotalFlow = sankeyAccountFlows.reduce((sum, account) => sum + account.amount, 0);
     const sankeyChartWidth = 1120;
