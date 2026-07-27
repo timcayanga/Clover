@@ -6,8 +6,11 @@ import {
   type MarketRange,
   type MarketRegion,
 } from "@/lib/market-data";
+import { requireAuth } from "@/lib/auth";
+import { assertRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
+const MARKET_PROVIDER_TIMEOUT_MS = 8_000;
 
 type YahooFinanceResponse = {
   chart?: {
@@ -213,6 +216,7 @@ const fetchYahooHistory = async (symbol: string, market: MarketRegion, range: Ma
 
   const response = await fetch(url.toString(), {
     cache: "no-store",
+    signal: AbortSignal.timeout(MARKET_PROVIDER_TIMEOUT_MS),
     headers: {
       "user-agent": "Mozilla/5.0",
       accept: "application/json,text/plain,*/*",
@@ -270,7 +274,10 @@ const fetchAlphaFallback = async (symbol: string, market: MarketRegion) => {
   }
   url.searchParams.set("apikey", apiKey);
 
-  const response = await fetch(url.toString(), { cache: "no-store" });
+  const response = await fetch(url.toString(), {
+    cache: "no-store",
+    signal: AbortSignal.timeout(MARKET_PROVIDER_TIMEOUT_MS),
+  });
   if (!response.ok) {
     return { error: "Unable to load market data." as const };
   }
@@ -312,6 +319,18 @@ const fetchAlphaFallback = async (symbol: string, market: MarketRegion) => {
 };
 
 export async function GET(request: Request) {
+  let userId: string;
+  try {
+    ({ userId } = await requireAuth());
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  try {
+    assertRateLimit(`market-history:${userId}`, 60, 60_000);
+  } catch {
+    return NextResponse.json({ error: "Too many requests. Please try again shortly." }, { status: 429 });
+  }
+
   const { searchParams } = new URL(request.url);
   const symbol = normalizeMarketSymbol(searchParams.get("symbol") ?? "");
   const market = parseMarket(searchParams.get("market"));
@@ -325,6 +344,7 @@ export async function GET(request: Request) {
     const stockAnalysisSymbol = normalizeMarketSymbol(symbol).replace(/\.PS$/, "");
     const stockAnalysisResponse = await fetch(`https://stockanalysis.com/quote/pse/${encodeURIComponent(stockAnalysisSymbol)}/history/`, {
       cache: "no-store",
+      signal: AbortSignal.timeout(MARKET_PROVIDER_TIMEOUT_MS),
       headers: {
         "user-agent": "Mozilla/5.0",
         accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",

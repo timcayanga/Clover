@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { getBillingPlanById, type BillingInterval } from "@/lib/billing-plans";
+import { getDeploymentEnvironment } from "@/lib/deployment-environment";
 
 export type PayPalWebhookBody = {
   id?: string;
@@ -32,6 +33,7 @@ const tokenCache = {
   accessToken: null as string | null,
   expiresAt: 0,
 };
+const PAYPAL_REQUEST_TIMEOUT_MS = 10_000;
 
 function getPayPalBaseUrl(env = getEnv()) {
   return env.PAYPAL_ENV === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
@@ -72,6 +74,7 @@ function getResource(body: PayPalWebhookBody) {
 
 function getCandidateUserIdentifiers(body: PayPalWebhookBody) {
   const resource = getResource(body);
+  const eventType = getEventType(body).toUpperCase();
   const subscriber = asRecord(resource.subscriber);
   const payer = asRecord(resource.payer);
 
@@ -88,39 +91,12 @@ function getCandidateUserIdentifiers(body: PayPalWebhookBody) {
     readString(resource.payer_email_address);
 
   const subscriptionId =
-    readString(resource.id) ??
     readString(resource.subscription_id) ??
     readString(resource.billing_agreement_id) ??
-    readString(asRecord(resource.billing_agreement)?.id);
+    readString(asRecord(resource.billing_agreement)?.id) ??
+    (eventType.startsWith("BILLING.SUBSCRIPTION.") ? readString(resource.id) : null);
 
   return { customId, email, subscriptionId };
-}
-
-function shouldSetPro(eventType: string, resource: Record<string, unknown>) {
-  const upperType = eventType.toUpperCase();
-  const status = readString(resource.status)?.toUpperCase() ?? readString(resource.state)?.toUpperCase() ?? "";
-
-  if (upperType === "BILLING.SUBSCRIPTION.ACTIVATED") {
-    return true;
-  }
-
-  if (upperType === "BILLING.SUBSCRIPTION.UPDATED") {
-    return status === "ACTIVE";
-  }
-
-  if (upperType === "PAYMENT.SALE.COMPLETED") {
-    return true;
-  }
-
-  if (["BILLING.SUBSCRIPTION.CANCELLED", "BILLING.SUBSCRIPTION.SUSPENDED", "BILLING.SUBSCRIPTION.EXPIRED"].includes(upperType)) {
-    return false;
-  }
-
-  if (["PAYMENT.SALE.REFUNDED", "PAYMENT.SALE.REVERSED", "BILLING.SUBSCRIPTION.PAYMENT.FAILED"].includes(upperType)) {
-    return false;
-  }
-
-  return status === "ACTIVE";
 }
 
 async function getPayPalAccessToken(env = getEnv()) {
@@ -141,6 +117,7 @@ async function getPayPalAccessToken(env = getEnv()) {
       Accept: "application/json",
     },
     body: new URLSearchParams({ grant_type: "client_credentials" }),
+    signal: AbortSignal.timeout(PAYPAL_REQUEST_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -166,6 +143,7 @@ async function fetchPayPalSubscription(subscriptionId: string, env = getEnv()) {
       Authorization: `Bearer ${accessToken}`,
       Accept: "application/json",
     },
+    signal: AbortSignal.timeout(PAYPAL_REQUEST_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -210,6 +188,7 @@ export async function verifyPayPalWebhook(body: PayPalWebhookBody, headers: Head
       Accept: "application/json",
     },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(PAYPAL_REQUEST_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -222,28 +201,32 @@ export async function verifyPayPalWebhook(body: PayPalWebhookBody, headers: Head
 
 export async function resolvePayPalUser(body: PayPalWebhookBody) {
   const { customId, email, subscriptionId } = getCandidateUserIdentifiers(body);
+  const environment = getDeploymentEnvironment();
 
-  const findByIdentifiers = async (identifier?: string | null, address?: string | null) => {
+  const findByIdentifiers = async (identifier?: string | null) => {
+    const existingSubscription = subscriptionId
+      ? await prisma.billingSubscription.findUnique({
+          where: { providerSubscriptionId: subscriptionId },
+          include: { user: true },
+        })
+      : null;
+    if (existingSubscription?.user.environment === environment) {
+      return existingSubscription.user;
+    }
+
     const byCustomId = identifier
       ? await prisma.user.findFirst({
           where: {
-            OR: [{ id: identifier }, { clerkUserId: identifier }, { email: identifier }],
+            environment,
+            OR: [{ id: identifier }, { clerkUserId: identifier }],
           },
         })
       : null;
 
-    if (byCustomId) {
-      return byCustomId;
-    }
-
-    return address
-      ? await prisma.user.findUnique({
-          where: { email: address },
-        })
-      : null;
+    return byCustomId;
   };
 
-  const initialMatch = await findByIdentifiers(customId, email);
+  const initialMatch = await findByIdentifiers(customId);
   if (initialMatch) {
     return { user: initialMatch, subscriptionId, email };
   }
@@ -259,7 +242,7 @@ export async function resolvePayPalUser(body: PayPalWebhookBody) {
     readString(asRecord(subscription?.subscriber)?.email_address);
   const subscriptionEmail = readString(asRecord(subscription?.subscriber)?.email_address);
 
-  const resolvedMatch = await findByIdentifiers(subscriptionCustomId, subscriptionEmail);
+  const resolvedMatch = await findByIdentifiers(subscriptionCustomId);
   return { user: resolvedMatch, subscriptionId, email: subscriptionEmail ?? email };
 }
 
@@ -283,9 +266,6 @@ export async function applyPayPalEntitlement(body: PayPalWebhookBody) {
     return { matched: false, user: null, planTier: null as PlanTier | null };
   }
 
-  const shouldGrant = shouldSetPro(eventType, resource);
-  const nextPlanTier = shouldGrant ? PlanTier.pro : PlanTier.free;
-
   if (subscriptionId) {
     const snapshot = await syncBillingSubscriptionFromPayPal(subscriptionId, user, { eventType });
     if (snapshot && "planTier" in snapshot) {
@@ -299,29 +279,14 @@ export async function applyPayPalEntitlement(body: PayPalWebhookBody) {
     }
   }
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      planTier: nextPlanTier,
-    },
-  });
-
+  // A verified event alone is not proof of a Clover subscription. Keep the
+  // current entitlement if PayPal cannot return a configured subscription.
   return {
     matched: true,
     user,
     email,
     subscriptionId,
-    planTier: nextPlanTier,
-  };
-}
-
-export function getPayPalDebugInfo(body: PayPalWebhookBody) {
-  const { customId, email, subscriptionId } = getCandidateUserIdentifiers(body);
-  return {
-    eventType: getEventType(body),
-    customId,
-    email,
-    subscriptionId,
+    planTier: user.planTier,
   };
 }
 
@@ -439,7 +404,10 @@ async function applyBillingSubscriptionSnapshot(
 ) {
   // Approval pending means the buyer has not completed the PayPal consent flow.
   // Do not grant paid entitlements until PayPal reports an active subscription.
-  const planTier = snapshot.status === BillingSubscriptionStatus.active ? PlanTier.pro : PlanTier.free;
+  const planTier =
+    snapshot.status === BillingSubscriptionStatus.active && snapshot.interval !== null
+      ? PlanTier.pro
+      : PlanTier.free;
   const shouldClearPending = eventType !== "MANUAL.REVISE" && snapshot.status !== BillingSubscriptionStatus.approval_pending;
 
   const existing = await prisma.billingSubscription.findUnique({
@@ -491,7 +459,6 @@ async function applyBillingSubscriptionSnapshot(
       billing_status: snapshot.status,
       plan_tier: planTier,
       interval: snapshot.interval ?? null,
-      provider_subscription_id: snapshot.providerSubscriptionId,
     });
 
     if (!wasPro) {
@@ -499,7 +466,6 @@ async function applyBillingSubscriptionSnapshot(
         billing_status: snapshot.status,
         plan_tier: planTier,
         interval: snapshot.interval ?? null,
-        provider_subscription_id: snapshot.providerSubscriptionId,
       });
     }
   }
@@ -509,7 +475,6 @@ async function applyBillingSubscriptionSnapshot(
       billing_status: snapshot.status,
       plan_tier: planTier,
       interval: snapshot.interval ?? null,
-      provider_subscription_id: snapshot.providerSubscriptionId,
     });
   }
 
@@ -541,7 +506,10 @@ export async function reconcileBillingPlanTier(userId: string) {
     return null;
   }
 
-  const nextPlanTier = subscription.status === BillingSubscriptionStatus.active ? PlanTier.pro : PlanTier.free;
+  const nextPlanTier =
+    subscription.status === BillingSubscriptionStatus.active && subscription.interval !== null
+      ? PlanTier.pro
+      : PlanTier.free;
 
   if (subscription.planTier !== nextPlanTier) {
     await prisma.billingSubscription.update({
@@ -668,6 +636,7 @@ export async function createPayPalSubscription(params: {
         cancel_url: params.cancelUrl,
       },
     }),
+    signal: AbortSignal.timeout(PAYPAL_REQUEST_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -718,6 +687,7 @@ export async function revisePayPalSubscription(params: {
         cancel_url: params.cancelUrl,
       },
     }),
+    signal: AbortSignal.timeout(PAYPAL_REQUEST_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -751,6 +721,7 @@ export async function cancelPayPalSubscription(params: { subscriptionId: string;
     body: JSON.stringify({
       reason: params.reason,
     }),
+    signal: AbortSignal.timeout(PAYPAL_REQUEST_TIMEOUT_MS),
   });
 
   if (!response.ok) {

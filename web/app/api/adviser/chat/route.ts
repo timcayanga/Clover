@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getSessionContext } from "@/lib/auth";
+import { getSessionContext, isLocalDevHost } from "@/lib/auth";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
@@ -17,6 +17,7 @@ import { assertRateLimit } from "@/lib/rate-limit";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
 import { normalizeAdviserPreferences } from "@/lib/adviser-preferences";
 import { ADVISER_LIMITS_ENABLED, BETA_FULL_ACCESS_ENABLED } from "@/lib/beta-access";
+import { assertContentLengthWithin, assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,8 @@ const ADVISER_CHAT_LIMITS = {
   free: 5,
   pro: 100,
 } as const;
+const MAX_ADVISER_REQUEST_BYTES = 32 * 1024;
+const ADVISER_SECURITY_RATE_LIMIT = 30;
 
 const getNextMonthStart = (referenceDate: Date) => new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 1);
 const getNextPaydayDate = (referenceDate: Date, paydayDay: number) => {
@@ -839,8 +842,17 @@ const extractOutputText = (payload: Record<string, unknown>) => {
 
 export async function POST(request: Request) {
   try {
+    if (!(await isLocalDevHost())) {
+      assertTrustedRequestOrigin(request);
+    }
+    assertContentLengthWithin(request, MAX_ADVISER_REQUEST_BYTES);
     const { userId } = await getSessionContext();
     const user = await getOrCreateCurrentUser(userId);
+    try {
+      assertRateLimit(`adviser-chat-security:${user.id}`, ADVISER_SECURITY_RATE_LIMIT, 60_000);
+    } catch {
+      return NextResponse.json({ error: "Clover needs a short pause before the next question." }, { status: 429 });
+    }
 
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);

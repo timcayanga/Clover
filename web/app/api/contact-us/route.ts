@@ -1,4 +1,5 @@
 import { after, NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { createContactInquiry } from "@/lib/contact-inquiries";
 import { sendContactInquiryEmail } from "@/lib/contact-email";
@@ -11,6 +12,17 @@ export const dynamic = "force-dynamic";
 const MAX_CONTACT_BODY_BYTES = 3 * 1024 * 1024;
 const MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024;
 const MAX_ATTACHMENT_DATA_URL_LENGTH = Math.ceil((MAX_ATTACHMENT_BYTES * 4) / 3) + 512;
+const getSafeSourcePath = (value: string | null | undefined, requestUrl: string) => {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return new URL(value, requestUrl).pathname;
+  } catch {
+    return null;
+  }
+};
 
 const schema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -64,8 +76,11 @@ export async function POST(request: Request) {
       }
     });
 
-    void capturePostHogServerEvent("support_contacted", payload.email, {
-      inquiry_source_page: payload.sourcePage ?? request.headers.get("referer") ?? null,
+    const anonymousContactId = createHash("sha256")
+      .update(payload.email.trim().toLowerCase())
+      .digest("hex");
+    void capturePostHogServerEvent("support_contacted", `contact:${anonymousContactId}`, {
+      inquiry_source_page: getSafeSourcePath(payload.sourcePage, request.url),
       has_attachment: Boolean(payload.attachment),
       attachment_size_bytes: payload.attachment?.size ?? null,
     });

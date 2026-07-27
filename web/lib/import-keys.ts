@@ -1,3 +1,5 @@
+import { getDeploymentEnvironment } from "@/lib/deployment-environment";
+
 export const buildImportKey = (workspaceId: string, fileName: string) => {
   const safeName = fileName
     .toLowerCase()
@@ -5,5 +7,9 @@ export const buildImportKey = (workspaceId: string, fileName: string) => {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
 
-  return `workspaces/${workspaceId}/imports/${Date.now()}-${safeName || "upload"}`;
+  const environmentPrefix = getDeploymentEnvironment() === "staging" ? "staging/" : "";
+
+  // Production keeps its legacy path. New staging objects are isolated even when
+  // both deployments temporarily share an R2 bucket.
+  return `${environmentPrefix}workspaces/${workspaceId}/imports/${Date.now()}-${safeName || "upload"}`;
 };

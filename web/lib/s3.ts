@@ -54,7 +54,7 @@ export const createUploadUrl = async (key: string, contentType: string) => {
       url: `file://${getLocalImportObjectPath(key)}`,
       key,
       bucket: "local",
-      expiresInSeconds: 600,
+      expiresInSeconds: 300,
     };
   }
 
@@ -69,13 +69,13 @@ export const createUploadUrl = async (key: string, contentType: string) => {
     ContentType: contentType,
   });
 
-  const url = await getSignedUrl(getR2Client(), command, { expiresIn: 60 * 10 });
+  const url = await getSignedUrl(getR2Client(), command, { expiresIn: 60 * 5 });
 
   return {
     url,
     key,
     bucket: env.R2_BUCKET_NAME,
-    expiresInSeconds: 600,
+    expiresInSeconds: 300,
   };
 };
 

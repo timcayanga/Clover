@@ -2,7 +2,7 @@
 
 import Script from "next/script";
 import { useEffect } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import {
   analyticsOnceKey,
@@ -37,6 +37,21 @@ type PostHogPersonPropertiesProps = {
 };
 
 const normalizeHost = (host: string) => host.replace(/\/$/, "");
+const redactAnalyticsPath = (pathname: string | null | undefined) =>
+  (pathname || "/")
+    .split("/")
+    .map((segment) =>
+      segment.length >= 20 || /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(segment) ? "[redacted]" : segment
+    )
+    .join("/");
+
+const getSafeAnalyticsLocation = (pathname: string | null | undefined = window.location.pathname) => {
+  const safePathname = redactAnalyticsPath(pathname);
+  return {
+    $current_url: `${window.location.origin}${safePathname}`,
+    $pathname: safePathname,
+  };
+};
 
 const getPostHogPersonProperties = (user: {
   firstName?: string | null;
@@ -111,13 +126,17 @@ const safeReset = () => {
   }
 };
 
-const getClientAnalyticsEnvironment = () => {
+const getClientAnalyticsEnvironment = (): "production" | "staging" | "local" => {
   if (typeof document === "undefined") {
     return "production";
   }
 
   const rawEnvironment = document.body.dataset.environment ?? "production";
-  return rawEnvironment === "preview" ? "staging" : rawEnvironment;
+  if (rawEnvironment === "preview" || rawEnvironment === "staging") {
+    return "staging";
+  }
+
+  return rawEnvironment === "local" ? "local" : "production";
 };
 
 const SESSION_STARTED_KEY = "clover.posthog.session-started.v1";
@@ -149,18 +168,12 @@ function PostHogBootstrap({ token, host }: PostHogScriptProps) {
 
 function PostHogPageViews() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const search = searchParams?.toString() ?? "";
 
   useEffect(() => {
     runWhenPostHogReady(() => {
-      safeCapture("$pageview", {
-        $current_url: window.location.href,
-        $pathname: pathname,
-        $search: search,
-      });
+      safeCapture("$pageview", getSafeAnalyticsLocation(pathname));
     });
-  }, [pathname, search]);
+  }, [pathname]);
 
   return null;
 }
@@ -182,11 +195,7 @@ function PostHogSessionSignals() {
         }
 
         const returning = window.localStorage.getItem(sessionReturnedKey) === "1";
-        safeCapture(returning ? "session_returned" : "session_started", {
-          $current_url: window.location.href,
-          $pathname: window.location.pathname,
-          $search: window.location.search,
-        });
+        safeCapture(returning ? "session_returned" : "session_started", getSafeAnalyticsLocation());
 
         window.sessionStorage.setItem(sessionStartedKey, "1");
         window.localStorage.setItem(sessionReturnedKey, "1");
@@ -217,7 +226,7 @@ function PostHogRoutePerformance() {
       const finishedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
       const durationMs = Math.max(0, Math.round(finishedAt - startedAt));
       const properties = {
-        route: pathname,
+        route: redactAnalyticsPath(pathname),
         duration_ms: durationMs,
         viewport_class: window.innerWidth < 768 ? "mobile" : window.innerWidth < 1200 ? "tablet" : "desktop",
       } satisfies AnalyticsProperties;
@@ -342,8 +351,6 @@ export function PostHogEvent({ event, properties = {}, onceKey }: PostHogEventPr
 
 export function PostHogPageEvent({ event, properties }: Omit<PostHogEventProps, "onceKey">) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const search = searchParams?.toString() ?? "";
 
   useEffect(() => {
     if (!shouldTrackAnalytics()) {
@@ -353,12 +360,10 @@ export function PostHogPageEvent({ event, properties }: Omit<PostHogEventProps, 
     runWhenPostHogReady(() => {
       safeCapture(event, {
         ...properties,
-        $current_url: window.location.href,
-        $pathname: pathname,
-        $search: search,
+        ...getSafeAnalyticsLocation(pathname),
       });
     });
-  }, [event, pathname, properties, search]);
+  }, [event, pathname, properties]);
 
   return null;
 }

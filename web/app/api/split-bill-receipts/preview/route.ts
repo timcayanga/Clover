@@ -3,10 +3,15 @@ import { normalizeReceiptImageForVision, readUploadedFileText, renderReceiptPdfP
 import { parseImportTextWithOpenAIFallback } from "@/lib/openai-import-parser";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
 import { assessReceiptPreviewQuality, normalizeCurrencyCode, parseAmountValue, parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
+import { isLocalDevHost } from "@/lib/auth";
+import { MAX_IMPORT_FILE_SIZE, validateImportFile } from "@/lib/import-file-validation";
+import { assertContentLengthWithin, assertTrustedRequestOrigin } from "@/lib/request-security";
+import { assertRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
+const MAX_RECEIPT_REQUEST_BYTES = MAX_IMPORT_FILE_SIZE + 128 * 1024;
 
 const asText = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
 const asAmount = (value: unknown) => {
@@ -195,7 +200,16 @@ const tryReceiptBackup = async (params: { file: File; receiptText: string; previ
 
 export async function POST(request: Request) {
   try {
-    await getSplitBillCurrentUser();
+    if (!(await isLocalDevHost())) {
+      assertTrustedRequestOrigin(request);
+    }
+    assertContentLengthWithin(request, MAX_RECEIPT_REQUEST_BYTES);
+    const user = await getSplitBillCurrentUser();
+    try {
+      assertRateLimit(`split-bill-receipt-preview:${user.id}`, 12, 60_000);
+    } catch {
+      return NextResponse.json({ error: "Too many receipt previews. Please try again shortly." }, { status: 429 });
+    }
 
     const formData = await request.formData();
     const file = formData.get("file");
@@ -205,6 +219,15 @@ export async function POST(request: Request) {
     }
 
     const selectedFile = file as File;
+    const validationError = validateImportFile({
+      fileName: selectedFile.name,
+      fileSize: selectedFile.size,
+      contentType: selectedFile.type,
+      importMode: "receipt",
+    });
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 });
+    }
     let receiptText = "";
     let localPreview: ReceiptPreviewResult;
     try {

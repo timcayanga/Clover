@@ -23,6 +23,7 @@ import {
   isUnauthorizedDataError,
 } from "@/lib/transient-data";
 import { summarizeErrorForLog } from "@/lib/security-logging";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
@@ -151,6 +152,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const localDev = await isLocalDevHost();
+    if (!localDev) {
+      assertTrustedRequestOrigin(request);
+    }
     const { userId } = localDev ? { userId: "local-admin" } : await requireAuth();
     const payload = prepareSchema.parse(await request.json());
     const importMode = payload.importMode ? normalizeImportImageMode(payload.importMode) : null;

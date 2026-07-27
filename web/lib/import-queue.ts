@@ -1,6 +1,7 @@
 import { Queue } from "bullmq";
 import Redis from "ioredis";
 import { getEnv } from "@/lib/env";
+import { getDeploymentEnvironment } from "@/lib/deployment-environment";
 import type { ImportImageMode } from "@/lib/import-image-mode";
 
 type ImportJobPayload = {
@@ -14,8 +15,12 @@ type ImportJobPayload = {
 };
 
 const redisUrl = getEnv().REDIS_URL ?? "redis://127.0.0.1:6379";
-export const getImportQueueName = () =>
-  process.env.NODE_ENV === "production" ? "import-processing" : "import-processing-local";
+export const getImportQueueName = () => {
+  const environment = getDeploymentEnvironment();
+
+  // Keep the production name stable so already queued production jobs are not stranded.
+  return environment === "production" ? "import-processing" : `import-processing-${environment}`;
+};
 
 let connection: Redis | null = null;
 let queue: Queue<ImportJobPayload> | null = null;

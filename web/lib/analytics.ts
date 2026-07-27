@@ -1,3 +1,5 @@
+import { getDeploymentEnvironment } from "@/lib/deployment-environment";
+
 export type AnalyticsValue = string | number | boolean | null | undefined;
 
 export type AnalyticsProperties = Record<string, AnalyticsValue>;
@@ -172,19 +174,7 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
 const normalizeHost = (host: string) => host.replace(/\/$/, "");
 
 export const getAnalyticsEnvironment = () => {
-  if (process.env.VERCEL_ENV === "production") {
-    return "production";
-  }
-
-  if (process.env.VERCEL_ENV === "preview") {
-    return "staging";
-  }
-
-  if (process.env.NODE_ENV !== "production") {
-    return "local";
-  }
-
-  return "production";
+  return getDeploymentEnvironment();
 };
 
 export const scopeAnalyticsDistinctId = (distinctId: string, environment = getAnalyticsEnvironment()) =>

@@ -119,8 +119,6 @@ export function PayPalSubscribeButton({
           onStart?.();
           capturePostHogClientEvent("billing_started", {
             billing_action: "create_subscription",
-            plan_id: planId,
-            custom_id: customId,
             funding_source: fundingSource,
           });
           return actions.subscription.create({

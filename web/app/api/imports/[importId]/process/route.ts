@@ -29,6 +29,7 @@ import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { summarizeErrorForLog } from "@/lib/security-logging";
 import { getErrorDetails, recordAppError } from "@/lib/error-logs";
+import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { after, NextResponse } from "next/server";
 import { normalizeBankName } from "@/lib/data-qa-banks";
 import { hasCompatibleTable } from "@/lib/data-engine";
@@ -1249,6 +1250,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
   try {
     const { importId } = await params;
     const localDev = await isLocalDevHost();
+    if (!localDev) {
+      assertTrustedRequestOrigin(_request);
+    }
     const { userId } = localDev ? { userId: "local-admin" } : await requireAuth();
     const pdfJsBaseUrl = new URL(_request.url).origin;
     const contentType = _request.headers.get("content-type") ?? "";
