@@ -116,6 +116,7 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
     usersWithImports,
     usersWithCompletedImports,
     usersWithTransactions,
+    usersWithReviewedTransactions,
     posthogLive,
   ] = await Promise.all([
     prisma.user.count({ where: productionUser }),
@@ -192,6 +193,21 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
     prisma.user.count({ where: { ...productionUser, workspaces: { some: { importFiles: { some: activeImport } } } } }),
     prisma.user.count({ where: { ...productionUser, workspaces: { some: { importFiles: { some: { ...activeImport, status: "done" } } } } } }),
     prisma.user.count({ where: { ...productionUser, workspaces: { some: { transactions: { some: activeTransaction } } } } }),
+    prisma.user.count({
+      where: {
+        ...productionUser,
+        workspaces: {
+          some: {
+            transactions: {
+              some: {
+                ...activeTransaction,
+                reviewStatus: { in: ["confirmed", "edited"] },
+              },
+            },
+          },
+        },
+      },
+    }),
     getPostHogLiveAnalytics(),
   ]);
 
@@ -246,7 +262,7 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
           { label: "Users with an upload", count: usersWithImports },
           { label: "Users with a completed import", count: usersWithCompletedImports },
           { label: "Transactions available", count: usersWithTransactions },
-          { label: "Items awaiting review", count: reviewQueueItems },
+          { label: "Users who reviewed a transaction", count: usersWithReviewedTransactions },
         ],
       },
     ],

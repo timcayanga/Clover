@@ -27,6 +27,17 @@ const commandCenterSource = readSource("lib/admin-command-center.ts");
 assert.match(commandCenterSource, /getCurrentDeploymentErrorWhere/);
 assert.match(commandCenterSource, /Current deploy errors/);
 
+const analyticsSource = readSource("lib/admin-analytics.ts");
+assert.match(analyticsSource, /usersWithReviewedTransactions/);
+assert.match(
+  analyticsSource,
+  /Users who reviewed a transaction/,
+);
+assert.doesNotMatch(
+  analyticsSource,
+  /\{ label: "Items awaiting review", count: reviewQueueItems \}/,
+);
+
 const usersSource = readSource("lib/admin-users.ts");
 assert.match(usersSource, /const realUserWhere = getAdminRealUserWhere\(\)/);
 assert.match(usersSource, /adminRealUserSqlPredicate/);
