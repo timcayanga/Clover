@@ -23,10 +23,10 @@ export type FeatureNeedPage = {
   navLabel: string;
   shortLabel: string;
   overview: string;
-  heroEyebrow: string;
-  heroTitle: string;
-  heroCopy: string;
-  heroPlaceholder: string;
+  heroEyebrow?: string;
+  heroTitle?: string;
+  heroCopy?: string;
+  heroPlaceholder?: string;
   accent: "teal" | "mint" | "sky" | "gold" | "violet" | "coral";
   featured?: boolean;
   sections: FeatureNeedSection[];
@@ -82,23 +82,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
     navLabel: "Gain Insights",
     shortLabel: "Gain Insights",
     overview: "Turn organized financial data into reports, Adviser guidance, and clearer next steps.",
-    heroEyebrow: "Gain insights",
-    heroTitle: "Understand what changed without digging through every transaction.",
-    heroCopy:
-      "Clover connects the activity across your accounts so important changes, patterns, and decisions are easier to see.",
-    heroPlaceholder: "Placeholder showing a clear overview of financial changes and patterns",
     accent: "gold",
     sections: [
-      {
-        id: "reports",
-        eyebrow: "Reports",
-        title: "See the pattern behind the total.",
-        body: [
-          "Break down money by category, merchant, account, or time period whenever a balance alone does not explain enough.",
-          "Compare what changed and trace the movement back to the transactions behind it.",
-        ],
-        placeholder: "Placeholder showing spending and account reports",
-      },
       {
         id: "adviser",
         eyebrow: "Adviser",
@@ -110,14 +95,14 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
         placeholder: "Placeholder showing a conversation with Clover Adviser",
       },
       {
-        id: "next-step",
-        eyebrow: "Next steps",
-        title: "Turn one useful insight into a better habit.",
+        id: "reports",
+        eyebrow: "Reports",
+        title: "See the pattern behind the total.",
         body: [
-          "Use what you learn to adjust a budget, protect a goal, review a recurring cost, or make a more informed decision.",
-          "Clover helps narrow the next step so progress feels practical instead of overwhelming.",
+          "Break down money by category, merchant, account, or time period whenever a balance alone does not explain enough.",
+          "Compare what changed and trace the movement back to the transactions behind it.",
         ],
-        placeholder: "Placeholder showing an insight becoming a practical next step",
+        placeholder: "Placeholder showing spending and account reports",
       },
     ],
   },
@@ -126,11 +111,6 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
     navLabel: "Plan Ahead",
     shortLabel: "Plan Ahead",
     overview: "Use real financial history to shape budgets, goals, and investment decisions.",
-    heroEyebrow: "Plan ahead",
-    heroTitle: "Make plans from the life you are already living.",
-    heroCopy:
-      "Clover uses the money patterns you already have to help you make realistic plans for what comes next.",
-    heroPlaceholder: "Placeholder showing financial history becoming a forward-looking plan",
     accent: "sky",
     sections: [
       {
@@ -170,11 +150,6 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
     navLabel: "Grow Together",
     shortLabel: "Grow Together",
     overview: "Manage group plans and shared expenses without mixing them into your private finances.",
-    heroEyebrow: "Grow together",
-    heroTitle: "Handle shared money without shared confusion.",
-    heroCopy:
-      "Use Circles for the plans a group shares and Split Bills for the expenses that need to be settled.",
-    heroPlaceholder: "Placeholder showing people coordinating shared money in Clover",
     accent: "mint",
     sections: [
       {
@@ -197,16 +172,6 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
         ],
         placeholder: "Placeholder showing a receipt divided into clear shares",
       },
-      {
-        id: "sharing-boundaries",
-        eyebrow: "Privacy",
-        title: "Share the plan, not your entire financial life.",
-        body: [
-          "Clover keeps your Profiles private by default and only shares the information a collaborative feature needs.",
-          "The group gets clarity while your unrelated accounts and transactions remain yours.",
-        ],
-        placeholder: "Placeholder showing a clear boundary between personal and shared finances",
-      },
     ],
   },
   {
@@ -214,11 +179,6 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
     navLabel: "Security",
     shortLabel: "Security",
     overview: "See how Clover protects access, preserves traceability, and keeps you in control of your data.",
-    heroEyebrow: "Security",
-    heroTitle: "Your financial data stays protected and under your control.",
-    heroCopy:
-      "Clover keeps your records private, traceable, and editable. You decide what is imported, corrected, shared, or removed.",
-    heroPlaceholder: "Placeholder showing protected financial records and account controls",
     accent: "coral",
     sections: [
       {
@@ -240,26 +200,6 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
           "Clover does not sell your personal information, and sharing only happens when you deliberately use a feature designed for it.",
         ],
         placeholder: "Placeholder showing private account access and protected records",
-      },
-      {
-        id: "review-control",
-        eyebrow: "Review and control",
-        title: "Review every important detail before you trust it.",
-        body: [
-          "Imported records remain traceable and editable so you can verify what Clover extracted and correct anything that needs attention.",
-          "Confirmed financial data stays under your control instead of being silently replaced by a later suggestion.",
-        ],
-        placeholder: "Placeholder showing an imported record being reviewed and confirmed",
-      },
-      {
-        id: "sharing-control",
-        eyebrow: "Sharing control",
-        title: "Share only what you choose.",
-        body: [
-          "Circles and Split Bills can share the details needed for a group plan or expense without opening the rest of your financial life.",
-          "Your unrelated Profiles, accounts, and transactions remain private.",
-        ],
-        placeholder: "Placeholder showing selected shared details separated from private data",
       },
     ],
   },

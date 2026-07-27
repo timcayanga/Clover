@@ -56,24 +56,31 @@ export default async function FeatureDetailPage({ params }: FeatureDetailPagePro
   }
 
   const accountState = await resolvePublicAccountState();
+  const heroSection =
+    page.heroTitle && page.heroCopy && page.heroPlaceholder
+      ? [
+          {
+            id: "overview",
+            eyebrow: page.heroEyebrow ?? "",
+            title: page.heroTitle,
+            body: [page.heroCopy],
+            placeholder: page.heroPlaceholder,
+            featured: page.featured ?? false,
+          },
+        ]
+      : [];
   const sections = [
-    {
-      id: "overview",
-      eyebrow: page.heroEyebrow,
-      title: page.heroTitle,
-      body: [page.heroCopy],
-      placeholder: page.heroPlaceholder,
-      featured: page.featured ?? false,
-      isLead: true,
-    },
+    ...heroSection,
     ...page.sections.map((section) => ({
       ...section,
       featured: false,
-      isLead: false,
     })),
-  ];
+  ].map((section, index) => ({
+    ...section,
+    isLead: index === 0,
+  }));
 
-  const pageClassName = `landing-page feature-detail-page ${page.sections.length === 0 ? "feature-detail-page--single" : "feature-detail-page--multi"} ${page.slug === "pro" ? "feature-detail-page--pro" : ""}`.trim();
+  const pageClassName = `landing-page feature-detail-page ${sections.length === 1 ? "feature-detail-page--single" : "feature-detail-page--multi"}`.trim();
 
   return (
     <main className={pageClassName}>
@@ -82,7 +89,7 @@ export default async function FeatureDetailPage({ params }: FeatureDetailPagePro
       <div className="feature-detail-page__inner">
         {sections.map((section, index) => {
           const reverse = index % 2 === 1;
-          const sectionClassName = `landing-feature feature-detail-page__section ${reverse ? "landing-feature--reverse" : ""} ${section.isLead ? "feature-detail-page__section--lead" : ""} ${page.slug === "pro" ? "landing-feature--pro" : ""}`.trim();
+          const sectionClassName = `landing-feature feature-detail-page__section ${reverse ? "landing-feature--reverse" : ""} ${section.isLead ? "feature-detail-page__section--lead" : ""}`.trim();
 
           return (
             <LandingStoryReveal
