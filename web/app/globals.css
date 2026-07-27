@@ -34320,14 +34320,23 @@ button.accounts-detail__transaction-head-cell {
   place-items: center;
 }
 
-.feature-detail-page .feature-detail-page__image {
-  width: min(100%, 620px);
+.feature-detail-page .landing-feature__visual .feature-detail-page__image {
+  width: auto;
+  max-width: min(100%, 500px);
   height: auto;
+  max-height: 330px;
+  object-fit: contain;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
   filter: none;
+}
+
+@media (max-width: 720px) {
+  .feature-detail-page .landing-feature__visual .feature-detail-page__image {
+    max-height: min(280px, 36svh);
+  }
 }
 
 @media (min-width: 981px) {
