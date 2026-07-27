@@ -48447,20 +48447,22 @@ html[data-theme="dark"] .content--adviser .adviser-summary .adviser-summary-card
 }
 
 @media (max-width: 760px) {
-  /* Plain mobile pages center their title; tabbed pages keep title and tabs beside Back. */
+  /* Keep plain-page titles between Back and actions so narrow phones never overlap. */
   .content--plain-title > :is(.topbar, .shell-compact-bar) {
-    grid-template-columns: 44px minmax(0, 1fr) 44px !important;
+    grid-template-columns: 40px minmax(0, 1fr) auto !important;
   }
 
   .content--plain-title > .topbar .topbar__title-wrap,
   .content--plain-title > .shell-compact-bar .shell-compact-bar__copy {
-    position: absolute;
-    inset: auto 0 !important;
-    top: 50%;
-    grid-column: 1 / -1 !important;
+    position: static;
+    inset: auto !important;
+    grid-column: 2 !important;
+    grid-row: 1 !important;
     width: 100% !important;
-    transform: translateY(-50%);
+    max-width: 100% !important;
+    transform: none;
     justify-items: center !important;
+    overflow: hidden;
     text-align: center !important;
     pointer-events: none;
   }

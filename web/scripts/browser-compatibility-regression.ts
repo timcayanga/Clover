@@ -64,6 +64,16 @@ async function main() {
     /\.topbar:has\(\.shell-back-button\) \.topbar__title-row h1[\s\S]{0,260}text-overflow: ellipsis;/,
     "Long phone page titles must truncate instead of overlapping actions."
   );
+  assert.match(
+    globalStyles,
+    /\.content--plain-title > :is\(\.topbar, \.shell-compact-bar\) \{[\s\S]{0,160}grid-template-columns: 40px minmax\(0, 1fr\) auto !important;/,
+    "Plain phone headers must reserve the real action width instead of overlaying it."
+  );
+  assert.match(
+    globalStyles,
+    /\.content--plain-title > \.topbar \.topbar__title-wrap,[\s\S]{0,180}position: static;[\s\S]{0,180}grid-column: 2 !important;/,
+    "Plain phone titles must stay in the collision-free middle column."
+  );
 
   console.log("Browser compatibility regression passed.");
 }
