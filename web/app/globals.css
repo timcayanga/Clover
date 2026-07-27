@@ -34361,6 +34361,13 @@ button.accounts-detail__transaction-head-cell {
     rgba(255, 255, 255, 0.86);
 }
 
+@media (min-width: 981px) {
+  .feature-detail-page .feature-detail-page__section--lead {
+    min-height: calc(100svh - 58px);
+    padding-block: clamp(64px, 9vh, 104px);
+  }
+}
+
 .feature-detail-page--single .feature-detail-page__inner {
   min-height: max(760px, calc(100dvh - 220px));
   align-content: center;
