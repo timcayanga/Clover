@@ -39,6 +39,11 @@ async function main() {
     "Quick add must react to workspace selection performed by the current page."
   );
   assert.match(
+    shellSource,
+    /\{shouldShowBackButton && !mobileFallbackBackOnly \? \([\s\S]{0,900}className="shell-menu-button"/,
+    "Compact tablet headers must show the menu when only a phone fallback Back target exists."
+  );
+  assert.match(
     dashboardSource,
     /<CloverShell[\s\S]{0,180}workspaceId=\{workspaceSummary\.id\}/,
     "Home must provide its resolved workspace to camera and file quick-add actions."

@@ -2080,10 +2080,10 @@ export function CloverShell({
       >
         {!showTopbar ? (
           <div className="shell-compact-bar glass">
-            {shouldShowBackButton ? (
+            {shouldShowBackButton && !mobileFallbackBackOnly ? (
               <div className="shell-topbar-leading">
                 <button
-                  className={`shell-back-button${mobileFallbackBackOnly ? " shell-back-button--mobile-only" : ""}`}
+                  className="shell-back-button"
                   type="button"
                   aria-label="Go back"
                   onClick={handleBack}
