@@ -208,11 +208,6 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
     navLabel: "Pro",
     shortLabel: "Pro",
     overview: "Add more capacity, richer guidance, and deeper investment tools as your finances grow.",
-    heroEyebrow: "Clover Pro",
-    heroTitle: "Grow with confidence with Pro.",
-    heroCopy:
-      "Start free, then upgrade when you need more room for history, accounts, profiles, reports, Adviser guidance, and investments.",
-    heroPlaceholder: "Placeholder showing a richer Pro financial overview",
     accent: "violet",
     featured: true,
     sections: [
