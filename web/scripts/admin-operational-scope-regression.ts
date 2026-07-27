@@ -68,4 +68,20 @@ assert.match(attachmentRouteSource, /await requireAdminAuth\(\)/);
 assert.match(attachmentRouteSource, /private, no-store/);
 assert.match(attachmentRouteSource, /X-Content-Type-Options/);
 
+const importMutationRouteSource = readSource(
+  "app/api/imports\/[importId]\/route.ts",
+);
+assert.equal(
+  importMutationRouteSource.match(/await assertWorkspaceAccess\(/g)?.length,
+  2,
+);
+assert.match(
+  importMutationRouteSource,
+  /await assertWorkspaceAccess\(userId, String\(existingImport\.workspaceId\)\)/,
+);
+assert.match(
+  importMutationRouteSource,
+  /await assertWorkspaceAccess\(userId, String\(importFile\.workspaceId\)\)/,
+);
+
 console.log("Admin operational scope regression passed.");
