@@ -21963,8 +21963,8 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .settings-hub__menu-icon {
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   flex: none;
   color: var(--muted-2);
 }
@@ -23074,6 +23074,11 @@ input.transaction-inline-edit--amount::placeholder {
     gap: 0;
     padding: 0;
     overflow: visible;
+  }
+
+  .settings-hub--mobile-menu .settings-hub__menu-icon {
+    width: 24px;
+    height: 24px;
   }
 
   .settings-hub--mobile-menu .settings-hub__menu-item,
