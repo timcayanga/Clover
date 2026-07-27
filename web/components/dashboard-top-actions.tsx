@@ -14,6 +14,7 @@ import { getCategoryIconSrc, getCategoryIconTone } from "@/lib/category-icons";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
 import { sanitizeTransactionTagNames } from "@/lib/transaction-tags";
+import { clearAccountsWorkspaceCache } from "@/lib/workspace-cache";
 
 type DashboardTopActionsProps = {
   workspaceId: string;
@@ -377,6 +378,7 @@ export function DashboardManualTransactionModal({
         throw new Error(payload?.error ?? "Unable to create transaction.");
       }
 
+      clearAccountsWorkspaceCache(workspaceId);
       const createdTransaction = payload?.transaction ?? null;
       const splitBillDraftHasContent = manualSplitBillOpen && (manualSplitBillDraft.groupId.trim() || manualSplitBillDraft.participantNames.length > 0);
       if (splitBillDraftHasContent && createdTransaction?.id) {

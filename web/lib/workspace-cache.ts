@@ -2077,7 +2077,7 @@ export const applyOptimisticWorkspaceTransactionDeletion = (workspaceId: string,
   }
 };
 
-export const clearWorkspaceCache = (workspaceId: string) => {
+export const clearAccountsWorkspaceCache = (workspaceId: string) => {
   if (!workspaceId) {
     return;
   }
@@ -2091,6 +2091,14 @@ export const clearWorkspaceCache = (workspaceId: string) => {
       snapshots: nextAccountsSnapshots,
     } satisfies AccountsWorkspaceCacheState);
   }
+};
+
+export const clearWorkspaceCache = (workspaceId: string) => {
+  if (!workspaceId) {
+    return;
+  }
+
+  clearAccountsWorkspaceCache(workspaceId);
 
   const transactionsCache = readTransactionsWorkspaceCache();
   if (transactionsCache?.snapshots[workspaceId]) {

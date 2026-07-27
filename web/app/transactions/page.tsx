@@ -83,6 +83,7 @@ import {
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
 import {
   applyOptimisticWorkspaceTransactionDeletion,
+  clearAccountsWorkspaceCache,
   deriveCachedCategoriesFromTransactions,
   mergeImportedWorkspaceTransactions,
   getDeletedWorkspaceAccountIds,
@@ -5338,6 +5339,7 @@ function TransactionsPageContent() {
 
       const payload = await response.json();
       const created = payload.transaction as Transaction;
+      clearAccountsWorkspaceCache(activeWorkspaceId);
       if (optimisticTransactionId) {
         setTransactions((current) =>
           current.map((entry) => (entry.id === optimisticTransactionId ? created : entry))
@@ -5470,6 +5472,7 @@ function TransactionsPageContent() {
 
     const payload = await response.json();
     const updated = payload.transaction as Transaction;
+    clearAccountsWorkspaceCache(selectedWorkspaceId);
     setTransactions((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
     setSelectedTransaction((current) => (current?.id === updated.id ? updated : current));
     setDetailDraft((current) => {
@@ -5652,6 +5655,8 @@ function TransactionsPageContent() {
     if (!response.ok) {
       throw new Error("Unable to delete transaction.");
     }
+
+    clearAccountsWorkspaceCache(selectedWorkspaceId);
   };
 
   const deleteTransaction = async (transactionId: string) => {
