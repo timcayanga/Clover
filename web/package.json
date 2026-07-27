@@ -63,6 +63,7 @@
     "qa:data-loop": "tsx scripts/data-qa-regression.ts",
     "qa:budgeting": "tsx scripts/budgeting-regression.ts",
     "qa:investments": "tsx scripts/investments-regression.ts",
+    "qa:posthog-query": "NODE_OPTIONS=--conditions=react-server tsx scripts/posthog-query-regression.ts",
     "qa:circles": "tsx scripts/circles-regression.ts",
     "train:image-labels": "tsx --tsconfig tsconfig.json scripts/train-image-label-corpus.ts"
   },

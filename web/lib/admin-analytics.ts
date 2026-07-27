@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getAdminDataEnvironment } from "@/lib/admin";
-import { getPostHogConfig, type AnalyticsEventName } from "@/lib/analytics";
+import { ANALYTICS_EVENT_NAMES, getAnalyticsEnvironment, getPostHogConfig, type AnalyticsEventName } from "@/lib/analytics";
+import { getPostHogLiveAnalytics, type PostHogLiveAnalytics } from "@/lib/posthog-query";
 
 export type AdminAnalyticsEvent = {
   name: AnalyticsEventName;
@@ -8,45 +9,25 @@ export type AdminAnalyticsEvent = {
   description: string;
 };
 
-export const ADMIN_ANALYTICS_EVENTS: AdminAnalyticsEvent[] = [
-  { name: "signup_completed", category: "activation", description: "A new account completed sign-up." },
-  { name: "onboarding_completed", category: "activation", description: "A user completed onboarding." },
-  { name: "first_login", category: "activation", description: "A user signed in for the first time." },
-  { name: "workspace_created", category: "activation", description: "A profile/workspace was created." },
-  { name: "dashboard_viewed", category: "activation", description: "The dashboard was viewed." },
-  { name: "file_upload_started", category: "imports", description: "A file upload started." },
-  { name: "file_uploaded", category: "imports", description: "A file was accepted by Clover." },
-  { name: "file_upload_failed", category: "imports", description: "A file upload failed." },
-  { name: "import_started", category: "imports", description: "An import workflow started." },
-  { name: "import_parsed_successfully", category: "imports", description: "Parsing completed without warnings." },
-  { name: "import_parsed_with_warnings", category: "imports", description: "Parsing completed with review warnings." },
-  { name: "import_failed", category: "imports", description: "An import failed." },
-  { name: "import_processing_stalled", category: "imports", description: "An import exceeded its expected processing window." },
-  { name: "import_confirmed", category: "imports", description: "A user confirmed imported records." },
-  { name: "import_retry_started", category: "imports", description: "A user retried an import." },
-  { name: "review_queue_opened", category: "review", description: "A user opened the review queue." },
-  { name: "review_queue_completed", category: "review", description: "A user completed a review queue session." },
-  { name: "review_item_opened", category: "review", description: "A review item was opened." },
-  { name: "review_item_edited", category: "review", description: "A review item was edited." },
-  { name: "transaction_confirmed_without_edit", category: "review", description: "A transaction was confirmed without an edit." },
-  { name: "transaction_edited_before_confirmation", category: "review", description: "A transaction was edited before confirmation." },
-  { name: "confidence_details_viewed", category: "review", description: "A user inspected parsing confidence details." },
-  { name: "report_viewed", category: "insights", description: "A report was viewed." },
-  { name: "insight_generated", category: "insights", description: "An insight was generated." },
-  { name: "insight_opened", category: "insights", description: "An insight was opened." },
-  { name: "adviser_question_asked", category: "insights", description: "A user asked Adviser a question." },
-  { name: "weekly_summary_viewed", category: "retention", description: "A weekly summary was viewed." },
-  { name: "session_started", category: "retention", description: "A new session started." },
-  { name: "session_returned", category: "retention", description: "A returning session started." },
-  { name: "feature_used", category: "retention", description: "A tracked feature was used." },
-  { name: "plan_limit_reached", category: "billing", description: "A user reached a plan limit." },
-  { name: "upgrade_cta_clicked", category: "billing", description: "A user clicked an upgrade call to action." },
-  { name: "billing_success", category: "billing", description: "A billing flow succeeded." },
-  { name: "page_load_slow", category: "reliability", description: "A page load exceeded the slow threshold." },
-  { name: "data_load_failed", category: "reliability", description: "A data request failed." },
-  { name: "data_load_slow", category: "reliability", description: "A data request exceeded the slow threshold." },
-  { name: "error_shown", category: "reliability", description: "An error was shown to a user." },
-];
+const categoryForEvent = (name: AnalyticsEventName): AdminAnalyticsEvent["category"] => {
+  if (/^(signup|onboarding|first_login|workspace|dashboard)/.test(name)) return "activation";
+  if (/^(file_|import_|first_import|second_import|statement_identity|password_|qa_run)/.test(name)) return "imports";
+  if (/^(review_|confidence_|source_document|transaction_(confirm|edit))/.test(name)) return "review";
+  if (/^(report_|cashflow_|category_mix|top_sources|trend_line|insight_|adviser_)/.test(name)) return "insights";
+  if (/^(session_|weekly_summary|feature_used|recurring_item|circle_)/.test(name)) return "retention";
+  if (/^(plan_|billing_|upgrade_|trial_to_paid)/.test(name)) return "billing";
+  if (/^(page_load|data_load|error_shown)/.test(name)) return "reliability";
+  return "retention";
+};
+
+const descriptionForEvent = (name: AnalyticsEventName) =>
+  name.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
+
+export const ADMIN_ANALYTICS_EVENTS: AdminAnalyticsEvent[] = ANALYTICS_EVENT_NAMES.map((name) => ({
+  name,
+  category: categoryForEvent(name),
+  description: descriptionForEvent(name),
+}));
 
 export type AdminAnalyticsSnapshot = {
   generatedAt: string;
@@ -55,6 +36,7 @@ export type AdminAnalyticsSnapshot = {
     new7d: number;
     onboardingCompleted: number;
     verified: number;
+    active7d: number;
     active30d: number;
   };
   product: {
@@ -64,6 +46,7 @@ export type AdminAnalyticsSnapshot = {
     imports: number;
     completedImports7d: number;
     failedImports7d: number;
+    reviewedTransactions7d: number;
     processingImports: number;
     staleImports: number;
     reviewQueueItems: number;
@@ -73,6 +56,7 @@ export type AdminAnalyticsSnapshot = {
     errors24h: number;
     errors7d: number;
     openInquiries: number;
+    topErrors: Array<{ label: string; count: number; lastSeen: string }>;
   };
   funnels: Array<{
     name: string;
@@ -81,9 +65,12 @@ export type AdminAnalyticsSnapshot = {
   }>;
   posthog: {
     configured: boolean;
+    captureConfigured: boolean;
+    queryConfigured: boolean;
     projectId: string | null;
     host: string;
     dashboardUrl: string | null;
+    live: PostHogLiveAnalytics;
   };
 };
 
@@ -104,6 +91,7 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
     new7d,
     onboardingCompleted,
     verified,
+    active7d,
     active30d,
     workspaces,
     accounts,
@@ -111,6 +99,7 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
     imports,
     completedImports7d,
     failedImports7d,
+    reviewedTransactions7d,
     processingImports,
     staleImports,
     reviewQueueItems,
@@ -118,14 +107,29 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
     errors24h,
     errors7d,
     openInquiries,
+    recentErrors,
     usersWithImports,
     usersWithCompletedImports,
     usersWithTransactions,
+    posthogLive,
   ] = await Promise.all([
     prisma.user.count({ where: productionUser }),
     prisma.user.count({ where: { ...productionUser, createdAt: { gte: sevenDaysAgo } } }),
     prisma.user.count({ where: { ...productionUser, onboardingCompletedAt: { not: null } } }),
     prisma.user.count({ where: { ...productionUser, verified: true } }),
+    prisma.user.count({
+      where: {
+        ...productionUser,
+        workspaces: {
+          some: {
+            OR: [
+              { transactions: { some: { ...activeTransaction, createdAt: { gte: sevenDaysAgo } } } },
+              { importFiles: { some: { ...activeImport, uploadedAt: { gte: sevenDaysAgo } } } },
+            ],
+          },
+        },
+      },
+    }),
     prisma.user.count({
       where: {
         ...productionUser,
@@ -145,6 +149,14 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
     prisma.importFile.count({ where: { ...activeImport, workspace: productionWorkspace } }),
     prisma.importFile.count({ where: { ...activeImport, status: "done", updatedAt: { gte: sevenDaysAgo }, workspace: productionWorkspace } }),
     prisma.importFile.count({ where: { status: "failed", updatedAt: { gte: sevenDaysAgo }, workspace: productionWorkspace } }),
+    prisma.transaction.count({
+      where: {
+        ...activeTransaction,
+        reviewStatus: { in: ["confirmed", "edited"] },
+        updatedAt: { gte: sevenDaysAgo },
+        workspace: productionWorkspace,
+      },
+    }),
     prisma.importFile.count({ where: { status: "processing", workspace: productionWorkspace } }),
     prisma.importFile.count({ where: { status: "processing", updatedAt: { lt: staleImportCutoff }, workspace: productionWorkspace } }),
     prisma.transaction.count({
@@ -166,18 +178,36 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
     prisma.appErrorLog.count({ where: { environment: getAdminDataEnvironment(), occurredAt: { gte: oneDayAgo } } }),
     prisma.appErrorLog.count({ where: { environment: getAdminDataEnvironment(), occurredAt: { gte: sevenDaysAgo } } }),
     prisma.contactInquiry.count({ where: { status: "open" } }),
+    prisma.appErrorLog.findMany({
+      where: { environment: getAdminDataEnvironment(), occurredAt: { gte: oneDayAgo } },
+      orderBy: { occurredAt: "desc" },
+      take: 100,
+      select: { source: true, route: true, message: true, occurredAt: true },
+    }),
     prisma.user.count({ where: { ...productionUser, workspaces: { some: { importFiles: { some: activeImport } } } } }),
     prisma.user.count({ where: { ...productionUser, workspaces: { some: { importFiles: { some: { ...activeImport, status: "done" } } } } } }),
     prisma.user.count({ where: { ...productionUser, workspaces: { some: { transactions: { some: activeTransaction } } } } }),
+    getPostHogLiveAnalytics(),
   ]);
 
   const posthogConfig = getPostHogConfig();
   const projectId = process.env.POSTHOG_PROJECT_ID?.trim() || null;
   const dashboardBase = process.env.POSTHOG_APP_URL?.trim().replace(/\/$/, "") || "https://us.posthog.com";
+  const topErrors = Array.from(
+    recentErrors.reduce((groups, error) => {
+      const label = `${error.source}${error.route ? ` · ${error.route}` : ""}`;
+      const current = groups.get(label) ?? { count: 0, lastSeen: error.occurredAt };
+      groups.set(label, { count: current.count + 1, lastSeen: current.lastSeen > error.occurredAt ? current.lastSeen : error.occurredAt });
+      return groups;
+    }, new Map<string, { count: number; lastSeen: Date }>())
+  )
+    .map(([label, value]) => ({ label, count: value.count, lastSeen: value.lastSeen.toISOString() }))
+    .sort((a, b) => b.count - a.count || b.lastSeen.localeCompare(a.lastSeen))
+    .slice(0, 5);
 
   return {
     generatedAt: new Date().toISOString(),
-    users: { total: totalUsers, new7d, onboardingCompleted, verified, active30d },
+    users: { total: totalUsers, new7d, onboardingCompleted, verified, active7d, active30d },
     product: {
       workspaces,
       accounts,
@@ -185,12 +215,13 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
       imports,
       completedImports7d,
       failedImports7d,
+      reviewedTransactions7d,
       processingImports,
       staleImports,
       reviewQueueItems,
       lowConfidenceItems,
     },
-    reliability: { errors24h, errors7d, openInquiries },
+    reliability: { errors24h, errors7d, openInquiries, topErrors },
     funnels: [
       {
         name: "Activation",
@@ -216,9 +247,12 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
     ],
     posthog: {
       configured: Boolean(posthogConfig.key && projectId),
+      captureConfigured: Boolean(posthogConfig.key),
+      queryConfigured: Boolean(process.env.POSTHOG_PERSONAL_API_KEY?.trim()),
       projectId,
       host: posthogConfig.host,
       dashboardUrl: projectId ? `${dashboardBase}/project/${projectId}/insights` : null,
+      live: posthogLive,
     },
   };
 }
