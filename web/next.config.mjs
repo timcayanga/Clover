@@ -1,3 +1,28 @@
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self' https://*.paypal.com",
+  "script-src 'self' 'unsafe-inline' https://*.clerk.accounts.dev https://*.clerk.com https://*.paypal.com https://*.paypalobjects.com https://us.i.posthog.com",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https://*.clerk.com https://*.clerk.accounts.dev https://*.paypal.com https://*.paypalobjects.com",
+  "font-src 'self' data:",
+  "connect-src 'self' https://*.clerk.com https://*.clerk.accounts.dev https://*.paypal.com https://us.i.posthog.com https://*.r2.cloudflarestorage.com",
+  "frame-src 'self' https://*.clerk.com https://*.clerk.accounts.dev https://*.paypal.com https://challenges.cloudflare.com",
+  "worker-src 'self' blob:",
+  "upgrade-insecure-requests",
+].join("; ");
+
+const securityHeaders = [
+  { key: "Content-Security-Policy-Report-Only", value: contentSecurityPolicy },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=(self)" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
+];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -19,6 +44,14 @@ const nextConfig = {
   },
   eslint: {
     ignoreDuringBuilds: true,
+  },
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: securityHeaders,
+      },
+    ];
   },
   async rewrites() {
     return [

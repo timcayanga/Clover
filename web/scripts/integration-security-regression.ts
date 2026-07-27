@@ -26,6 +26,7 @@ try {
   const webhook = await readFile(join(root, "app/api/billing/paypal/webhook/route.ts"), "utf8");
   const marketHistory = await readFile(join(root, "app/api/market-history/route.ts"), "utf8");
   const analytics = await readFile(join(root, "components/posthog-analytics.tsx"), "utf8");
+  const nextConfig = await readFile(join(root, "next.config.mjs"), "utf8");
 
   assert.match(paypal, /snapshot\.status === BillingSubscriptionStatus\.active && snapshot\.interval !== null/);
   assert.match(paypal, /where: \{ providerSubscriptionId: subscriptionId \}/);
@@ -38,6 +39,9 @@ try {
   assert.match(marketHistory, /market-history:\$\{userId\}/);
   assert.doesNotMatch(analytics, /\$search:/);
   assert.match(analytics, /redactAnalyticsPath/);
+  assert.match(nextConfig, /Content-Security-Policy-Report-Only/);
+  assert.match(nextConfig, /X-Content-Type-Options/);
+  assert.match(nextConfig, /X-Frame-Options/);
 
   console.log("Integration security regression passed.");
 } finally {
