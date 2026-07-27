@@ -15,7 +15,8 @@ export type FeatureNeedSection = {
   eyebrow: string;
   title: string;
   body: string[];
-  placeholder: string;
+  imageSrc: string;
+  imageAlt: string;
 };
 
 export type FeatureNeedPage = {
@@ -26,7 +27,8 @@ export type FeatureNeedPage = {
   heroEyebrow?: string;
   heroTitle?: string;
   heroCopy?: string;
-  heroPlaceholder?: string;
+  heroImageSrc?: string;
+  heroImageAlt?: string;
   accent: "teal" | "mint" | "sky" | "gold" | "violet" | "coral";
   featured?: boolean;
   sections: FeatureNeedSection[];
@@ -42,7 +44,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
     heroTitle: "Organize months of money without starting from zero.",
     heroCopy:
       "Upload statements, receipts, screenshots, or spreadsheets. Clover turns the records you already have into a financial history you can review and use.",
-    heroPlaceholder: "Placeholder showing uploaded records becoming organized financial data",
+    heroImageSrc: "/assets/landing page/Organize months of money.png",
+    heroImageAlt: "Uploaded financial records becoming organized Clover data",
     accent: "teal",
     sections: [
       {
@@ -53,7 +56,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
           "Bring cash, bank accounts, cards, e-wallets, and other balances into one view.",
           "You can see what each account holds and how it contributes to your overall financial picture.",
         ],
-        placeholder: "Placeholder showing connected accounts and balances",
+        imageSrc: "/assets/landing page/See every account in context.png",
+        imageAlt: "Clover accounts and balances shown together",
       },
       {
         id: "transactions",
@@ -63,7 +67,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
           "Clover organizes imported activity so categories, merchant names, and account details are easier to review.",
           "Correct anything that needs attention, confirm it once, and keep the final record under your control.",
         ],
-        placeholder: "Placeholder showing organized transactions ready for review",
+        imageSrc: "/assets/landing page/keep transactions clean.png",
+        imageAlt: "Organized Clover transactions ready for review",
       },
       {
         id: "recurring",
@@ -73,7 +78,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
           "Spot repeating bills, subscriptions, income, installments, and other commitments from the history already inside Clover.",
           "See what is expected next so fewer payments or changes catch you by surprise.",
         ],
-        placeholder: "Placeholder showing recurring bills, income, and upcoming commitments",
+        imageSrc: "/assets/landing page/Know what keeps coming back.png",
+        imageAlt: "Recurring bills, income, and upcoming commitments in Clover",
       },
     ],
   },
@@ -92,7 +98,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
           "Ask Adviser what changed, where money went, or what deserves attention next.",
           "Its guidance is grounded in the financial history you have organized in Clover, so the answer starts with your actual situation.",
         ],
-        placeholder: "Placeholder showing a conversation with Clover Adviser",
+        imageSrc: "/assets/landing page/Ask about your money in plain language.png",
+        imageAlt: "A conversation with Clover Adviser about personal finances",
       },
       {
         id: "reports",
@@ -102,7 +109,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
           "Break down money by category, merchant, account, or time period whenever a balance alone does not explain enough.",
           "Compare what changed and trace the movement back to the transactions behind it.",
         ],
-        placeholder: "Placeholder showing spending and account reports",
+        imageSrc: "/assets/landing page/See the pattern behind the total.png",
+        imageAlt: "Clover spending and account reports revealing financial patterns",
       },
     ],
   },
@@ -121,7 +129,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
           "Build a budget from the categories and patterns already visible in your history.",
           "Watch actual spending against the plan and adjust it when real life changes.",
         ],
-        placeholder: "Placeholder showing a practical budget based on real spending",
+        imageSrc: "/assets/landing page/Set limits using real spending, not guesswork.png",
+        imageAlt: "A practical Clover budget based on real spending",
       },
       {
         id: "goals",
@@ -131,7 +140,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
           "Set the amount, timing, and progress you want to protect, from an emergency fund to a major purchase.",
           "Clover connects the goal to your broader finances so you can see what is helping or slowing it down.",
         ],
-        placeholder: "Placeholder showing goal progress and recommended actions",
+        imageSrc: "/assets/landing page/Give each goal a clear path forward.png",
+        imageAlt: "Financial goal progress and recommended actions in Clover",
       },
       {
         id: "investments",
@@ -141,7 +151,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
           "Track holdings, purchases, dividends, and market movement alongside the rest of your accounts.",
           "See how investing contributes to your net worth without losing sight of the money you use today.",
         ],
-        placeholder: "Placeholder showing investments alongside a complete net worth view",
+        imageSrc: "/assets/landing page/Keep long-term growth in the same picture.png",
+        imageAlt: "Investments shown alongside a complete Clover net worth view",
       },
     ],
   },
@@ -160,7 +171,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
           "Create a Circle for a household, trip, family plan, or other shared purpose.",
           "Keep the relevant goals, budgets, commitments, and activity together without giving everyone access to your personal financial history.",
         ],
-        placeholder: "Placeholder showing a Clover Circle with shared plans and activity",
+        imageSrc: "/assets/landing page/Give every group one place to stay aligned.png",
+        imageAlt: "A Clover Circle with shared plans and activity",
       },
       {
         id: "split-bills",
@@ -170,7 +182,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
           "Turn a receipt or transaction into a shared expense, then split it equally or by item.",
           "Track who paid, who owes, and what has already been settled without chasing everyone manually.",
         ],
-        placeholder: "Placeholder showing a receipt divided into clear shares",
+        imageSrc: "/assets/landing page/Settle expenses without awkward math.png",
+        imageAlt: "A shared expense divided into clear shares in Clover",
       },
     ],
   },
@@ -189,7 +202,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
           "Clover uses a statement, receipt, screenshot, or spreadsheet to extract the financial details needed for your account.",
           "The source stays connected to the import for traceability, and you can remove files or related data when you no longer want Clover to keep them.",
         ],
-        placeholder: "Placeholder showing a source file connected to reviewed transactions",
+        imageSrc: "/assets/landing page/Know what happens to every file you upload.png",
+        imageAlt: "An uploaded source file connected to reviewed Clover transactions",
       },
       {
         id: "private-account",
@@ -199,7 +213,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
           "Your financial records belong to your Clover account and are not available for other users to browse.",
           "Clover does not sell your personal information, and sharing only happens when you deliberately use a feature designed for it.",
         ],
-        placeholder: "Placeholder showing private account access and protected records",
+        imageSrc: "/assets/landing page/Keep your account private.png",
+        imageAlt: "Private Clover account access and protected financial records",
       },
     ],
   },
@@ -219,7 +234,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
           "Increase upload, account, transaction, and Profile limits as the amount you manage grows.",
           "You can keep the fuller story inside Clover instead of trimming the history that gives your numbers context.",
         ],
-        placeholder: "Placeholder showing expanded upload, account, and Profile capacity",
+        imageSrc: "/assets/landing page/Keep more of your financial history together.png",
+        imageAlt: "Expanded upload, account, and Profile capacity with Clover Pro",
       },
       {
         id: "deeper-guidance",
@@ -229,7 +245,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
           "Use advanced reports and richer Adviser guidance to compare periods, investigate movement, and identify what deserves attention.",
           "More complete data gives Clover more context for practical recommendations.",
         ],
-        placeholder: "Placeholder showing advanced reports and Adviser recommendations",
+        imageSrc: "/assets/landing page/See deeper patterns before they become problems.png",
+        imageAlt: "Advanced Clover reports and Adviser recommendations",
       },
       {
         id: "investment-context",
@@ -239,7 +256,8 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
           "Use fuller portfolio tools for holdings, purchases, dividends, and market movement.",
           "Connect long-term growth with your accounts, spending, goals, and net worth in one place.",
         ],
-        placeholder: "Placeholder showing a full investment portfolio within Clover",
+        imageSrc: "/assets/landing page/Track investments with the rest of your financial picture.png",
+        imageAlt: "A complete investment portfolio within Clover",
       },
     ],
   },

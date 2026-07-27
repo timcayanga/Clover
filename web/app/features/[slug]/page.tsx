@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { LandingNav } from "@/components/landing-nav";
 import { LandingStoryReveal } from "@/components/landing-story-reveal";
 import { MarketingFooter } from "@/components/marketing-footer";
-import { MarketingPlaceholderVisual } from "@/components/marketing-placeholder-visual";
+import { FeatureArtwork } from "@/components/feature-artwork";
 import { resolvePublicAccountState } from "@/lib/public-account-state";
 import { FEATURE_PAGE_MAP, isFeatureSlug, resolveFeatureSlug } from "@/lib/public-site";
 
@@ -57,25 +57,19 @@ export default async function FeatureDetailPage({ params }: FeatureDetailPagePro
 
   const accountState = await resolvePublicAccountState();
   const heroSection =
-    page.heroTitle && page.heroCopy && page.heroPlaceholder
+    page.heroTitle && page.heroCopy && page.heroImageSrc && page.heroImageAlt
       ? [
           {
             id: "overview",
             eyebrow: page.heroEyebrow ?? "",
             title: page.heroTitle,
             body: [page.heroCopy],
-            placeholder: page.heroPlaceholder,
-            featured: page.featured ?? false,
+            imageSrc: page.heroImageSrc,
+            imageAlt: page.heroImageAlt,
           },
         ]
       : [];
-  const sections = [
-    ...heroSection,
-    ...page.sections.map((section) => ({
-      ...section,
-      featured: false,
-    })),
-  ].map((section, index) => ({
+  const sections = [...heroSection, ...page.sections].map((section, index) => ({
     ...section,
     isLead: index === 0,
   }));
@@ -109,12 +103,7 @@ export default async function FeatureDetailPage({ params }: FeatureDetailPagePro
               </div>
 
               <div className="landing-feature__visual feature-detail-page__visual">
-                <MarketingPlaceholderVisual
-                  eyebrow=""
-                  title="Image placeholder"
-                  description={section.placeholder}
-                  featured={section.featured}
-                />
+                <FeatureArtwork src={section.imageSrc} alt={section.imageAlt} priority={index === 0} />
               </div>
             </LandingStoryReveal>
           );
