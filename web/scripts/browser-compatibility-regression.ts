@@ -74,6 +74,11 @@ async function main() {
     /\.content--plain-title > \.topbar \.topbar__title-wrap,[\s\S]{0,180}position: static;[\s\S]{0,180}grid-column: 2 !important;/,
     "Plain phone titles must stay in the collision-free middle column."
   );
+  assert.match(
+    globalStyles,
+    /@media \(min-width: 981px\) \{[\s\S]{0,180}\.accounts-card-grid\.accounts-card-grid--desktop \{[\s\S]{0,180}repeat\(auto-fit, minmax\(min\(100%, 240px\), 272px\)\)/,
+    "Desktop account grids must add columns instead of stretching cards beyond their intended width."
+  );
 
   console.log("Browser compatibility regression passed.");
 }
