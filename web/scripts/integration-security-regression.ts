@@ -27,6 +27,7 @@ try {
   const marketHistory = await readFile(join(root, "app/api/market-history/route.ts"), "utf8");
   const analytics = await readFile(join(root, "components/posthog-analytics.tsx"), "utf8");
   const nextConfig = await readFile(join(root, "next.config.mjs"), "utf8");
+  const middleware = await readFile(join(root, "middleware.ts"), "utf8");
 
   assert.match(paypal, /snapshot\.status === BillingSubscriptionStatus\.active && snapshot\.interval !== null/);
   assert.match(paypal, /where: \{ providerSubscriptionId: subscriptionId \}/);
@@ -42,6 +43,8 @@ try {
   assert.match(nextConfig, /Content-Security-Policy-Report-Only/);
   assert.match(nextConfig, /X-Content-Type-Options/);
   assert.match(nextConfig, /X-Frame-Options/);
+  assert.match(middleware, /clerkMiddleware/);
+  assert.match(middleware, /\/\(api\|trpc\)\(\.\*\)/);
 
   console.log("Integration security regression passed.");
 } finally {
