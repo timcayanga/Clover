@@ -25,11 +25,11 @@ export function PublicAccountActions({ variant = "desktop", accountState }: Publ
     return (
       <a
         className={`landing-account-link landing-account-link--${variant}`}
-        href="/home"
+        href="/continue"
         aria-label="My Account"
         onClick={(event) => {
           event.preventDefault();
-          window.location.assign("/home");
+          window.location.assign("/continue");
         }}
       >
         <span className="landing-account-link__avatar" aria-hidden="true" style={avatar ? undefined : getAvatarBackgroundStyle(displayName)}>

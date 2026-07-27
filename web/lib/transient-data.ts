@@ -40,6 +40,9 @@ export const isTransientDataError = (error: unknown) => {
 
 export const isUnauthorizedDataError = (error: unknown) => error instanceof Error && error.message === "UNAUTHORIZED";
 
+export const isAdminOnlyDataError = (error: unknown) =>
+  error instanceof Error && error.message === "ADMIN_ONLY";
+
 export const createTransientDataUnavailableResponse = (message = "Temporarily unavailable") =>
   NextResponse.json(
     {

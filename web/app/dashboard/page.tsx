@@ -17,7 +17,11 @@ import { DashboardTopActions } from "@/components/dashboard-top-actions";
 import { DashboardImportTrigger } from "@/components/dashboard-import-trigger";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
-import { isTransientDataError } from "@/lib/transient-data";
+import {
+  isAdminOnlyDataError,
+  isTransientDataError,
+  isUnauthorizedDataError,
+} from "@/lib/transient-data";
 import { TransientDataRecovery } from "@/components/transient-data-recovery";
 import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
 import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
@@ -1181,6 +1185,14 @@ async function DashboardStream({
   } catch (error) {
     if (isNextNavigationSignal(error)) {
       throw error;
+    }
+
+    if (isAdminOnlyDataError(error)) {
+      redirect("/admin");
+    }
+
+    if (isUnauthorizedDataError(error)) {
+      redirect("/sign-in");
     }
 
     await recordServerPageError({

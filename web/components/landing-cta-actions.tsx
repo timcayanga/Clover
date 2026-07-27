@@ -34,7 +34,7 @@ export function LandingCtaActions({ accountState, authEnabled }: LandingCtaActio
   const avatarUrl = accountState.avatarUrl ?? user?.imageUrl ?? null;
 
   return (
-    <Link className="button button-primary button-pill landing-account-cta" href="/home" prefetch={false}>
+    <Link className="button button-primary button-pill landing-account-cta" href="/continue" prefetch={false}>
       <span
         className="landing-account-cta__avatar"
         aria-hidden="true"

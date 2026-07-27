@@ -36,7 +36,6 @@ const socialProviders: Array<{
   },
 ];
 
-const completeRedirectUrl = "/home";
 const callbackUrl = "/sso-callback";
 function formatError(error: unknown) {
   if (typeof error === "string") {
@@ -151,7 +150,7 @@ function SocialIcon({ provider }: { provider: "google" | "facebook" }) {
   return provider === "google" ? <GoogleIcon /> : <FacebookIcon />;
 }
 
-export function ClerkAuthScreen({ enabled, mode, completeRedirectUrl = "/home" }: ClerkAuthScreenProps) {
+export function ClerkAuthScreen({ enabled, mode, completeRedirectUrl = "/continue" }: ClerkAuthScreenProps) {
   if (!enabled) {
     return (
       <section className="glass" style={{ maxWidth: 640, margin: "0 auto", padding: 24 }}>

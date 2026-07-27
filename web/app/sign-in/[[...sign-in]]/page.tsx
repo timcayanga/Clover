@@ -17,7 +17,7 @@ export default async function SignInPage({ searchParams }: { searchParams?: Prom
     : params.circleInvite;
   const completeRedirectUrl = isCircleInvitationToken(circleInvite)
     ? getCircleInvitationPath(circleInvite, { accept: true })
-    : "/home";
+    : "/continue";
   return (
     <main className="auth-page auth-page--signin">
       <ClerkAuthScreen enabled={Boolean(publishableKey)} mode="sign-in" completeRedirectUrl={completeRedirectUrl} />
