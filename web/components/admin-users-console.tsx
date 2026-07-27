@@ -529,7 +529,7 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
           <div className="admin-users__stats">
             <div className="admin-users__stat">
               <strong>{data.overview.totalUsers}</strong>
-              <span>Users</span>
+              <span>Real users</span>
             </div>
             <div className="admin-users__stat">
               <strong>{data.overview.proUsers}</strong>
@@ -549,7 +549,7 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
             </div>
             <div className="admin-users__stat">
               <strong>{data.overview.productionErrors7d.toLocaleString()}</strong>
-              <span>Prod errors 7d</span>
+              <span>Current deploy errors</span>
             </div>
           </div>
         </div>
@@ -566,7 +566,7 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
             <small>{formatTrendValue(data.overview.imports7d, data.overview.importsPrev7d)} vs previous 7d</small>
           </div>
           <div className="admin-users__trend-card">
-            <span>Production errors</span>
+            <span>Current deploy errors</span>
             <strong>{data.overview.productionErrors7d.toLocaleString()}</strong>
             <small>{formatTrendValue(data.overview.productionErrors7d, data.overview.errorsPrev7d)} vs previous 7d</small>
           </div>

@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { getAdminDataEnvironment } from "@/lib/admin";
 import type { AdminCommandCenterSnapshot } from "@/components/admin-command-center";
+import {
+  getAdminRealUserWhere,
+  getAdminRealWorkspaceWhere,
+  getCurrentDeploymentErrorWhere,
+} from "@/lib/admin-data-scope";
 
 const formatCount = (value: number) => value.toLocaleString();
 
@@ -9,7 +13,8 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const eightWeeksAgo = new Date(now.getTime() - 8 * 7 * 24 * 60 * 60 * 1000);
-  const environment = getAdminDataEnvironment();
+  const realUser = getAdminRealUserWhere();
+  const realWorkspace = getAdminRealWorkspaceWhere();
   const activeTransaction = { deletedAt: null } as const;
   const activeImport = { status: { not: "deleted" } } as const;
   const recentActivity = {
@@ -62,45 +67,44 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
     recentImports,
   ] = await Promise.all([
     prisma.user.count({
-      where: { environment },
+      where: realUser,
     }),
     prisma.workspace.count({
-      where: { user: { environment } },
+      where: realWorkspace,
     }),
     prisma.account.count({
-      where: { workspace: { user: { environment } } },
+      where: { workspace: realWorkspace },
     }),
     prisma.transaction.count({
-      where: { ...activeTransaction, workspace: { user: { environment } } },
+      where: { ...activeTransaction, workspace: realWorkspace },
     }),
     prisma.importFile.count({
-      where: { ...activeImport, workspace: { user: { environment } } },
+      where: { ...activeImport, workspace: realWorkspace },
     }),
     prisma.appErrorLog.count({
-      where: {
-        environment,
-        occurredAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
-      },
+      where: getCurrentDeploymentErrorWhere(
+        new Date(now.getTime() - 24 * 60 * 60 * 1000),
+      ),
     }),
     Promise.all([
       prisma.user.count({
-        where: { environment, onboardingCompletedAt: { not: null } },
+        where: { ...realUser, onboardingCompletedAt: { not: null } },
       }),
       prisma.importFile.count({
-        where: { status: "processing", workspace: { user: { environment } } },
+        where: { status: "processing", workspace: realWorkspace },
       }),
       prisma.importFile.count({
         where: {
           status: "done",
           updatedAt: { gte: sevenDaysAgo },
-          workspace: { user: { environment } },
+          workspace: realWorkspace,
         },
       }),
       prisma.importFile.count({
         where: {
           status: "failed",
           updatedAt: { gte: sevenDaysAgo },
-          workspace: { user: { environment } },
+          workspace: realWorkspace,
         },
       }),
       prisma.transaction.count({
@@ -110,7 +114,7 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
           reviewStatus: {
             notIn: ["confirmed", "rejected", "duplicate_skipped"],
           },
-          workspace: { user: { environment } },
+          workspace: realWorkspace,
         },
       }),
       prisma.transaction.count({
@@ -122,29 +126,29 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
             { categoryConfidence: { lt: 70 } },
             { accountMatchConfidence: { lt: 70 } },
           ],
-          workspace: { user: { environment } },
+          workspace: realWorkspace,
         },
       }),
     ]),
     Promise.all([
       prisma.user.count({
-        where: { environment, onboardingCompletedAt: { not: null } },
+        where: { ...realUser, onboardingCompletedAt: { not: null } },
       }),
       prisma.user.count({
         where: {
-          environment,
+          ...realUser,
           workspaces: { some: { accounts: { some: {} } } },
         },
       }),
       prisma.user.count({
         where: {
-          environment,
+          ...realUser,
           workspaces: { some: { importFiles: { some: activeImport } } },
         },
       }),
       prisma.user.count({
         where: {
-          environment,
+          ...realUser,
           workspaces: {
             some: {
               importFiles: { some: { ...activeImport, status: "done" } },
@@ -154,7 +158,7 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
       }),
       prisma.user.count({
         where: {
-          environment,
+          ...realUser,
           workspaces: { some: { transactions: { some: activeTransaction } } },
         },
       }),
@@ -162,7 +166,7 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
     Promise.all([
       prisma.user.count({
         where: {
-          environment,
+          ...realUser,
           workspaces: {
             some: {
               OR: [
@@ -188,11 +192,11 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
         },
       }),
       prisma.user.count({
-        where: { environment, workspaces: { some: recentActivity } },
+        where: { ...realUser, workspaces: { some: recentActivity } },
       }),
       prisma.user.count({
         where: {
-          environment,
+          ...realUser,
           AND: [
             { workspaces: { some: recentActivity } },
             { workspaces: { some: priorActivity } },
@@ -203,26 +207,26 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
     Promise.all([
       prisma.user.count({
         where: {
-          environment,
+          ...realUser,
           workspaces: { some: { recurringPatterns: { some: {} } } },
         },
       }),
       prisma.user.count({
         where: {
-          environment,
+          ...realUser,
           workspaces: { some: { budgets: { some: {} } } },
         },
       }),
-      prisma.user.count({ where: { environment, goalSettings: { some: {} } } }),
+      prisma.user.count({ where: { ...realUser, goalSettings: { some: {} } } }),
       prisma.user.count({
         where: {
-          environment,
+          ...realUser,
           workspaces: { some: { accounts: { some: { type: "investment" } } } },
         },
       }),
       prisma.user.count({
         where: {
-          environment,
+          ...realUser,
           OR: [
             { ownedCircles: { some: { archivedAt: null } } },
             { circleMemberships: { some: { status: "active" } } },
@@ -231,14 +235,14 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
       }),
     ]),
     prisma.user.findMany({
-      where: { environment, createdAt: { gte: eightWeeksAgo } },
+      where: { ...realUser, createdAt: { gte: eightWeeksAgo } },
       select: { createdAt: true },
     }),
     prisma.importFile.findMany({
       where: {
         ...activeImport,
         uploadedAt: { gte: eightWeeksAgo },
-        workspace: { user: { environment } },
+        workspace: realWorkspace,
       },
       select: { uploadedAt: true },
     }),
@@ -283,7 +287,7 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
       },
       { label: "Imports", value: formatCount(imports), href: "/admin/data-qa" },
       {
-        label: "Errors 24h",
+        label: "Current deploy errors",
         value: formatCount(errors24h),
         href: "/admin/errors",
       },
@@ -355,7 +359,7 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
         href: "/admin/data-qa",
       },
       {
-        label: "Errors, 24h",
+        label: "Current deploy errors",
         value: errors24h,
         status: errors24h ? "danger" : "good",
         href: "/admin/errors",

@@ -1,5 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { getAdminDataEnvironment } from "@/lib/admin";
+import {
+  getAdminRealUserWhere,
+  getAdminRealWorkspaceWhere,
+  getCurrentDeploymentErrorWhere,
+} from "@/lib/admin-data-scope";
 import { ANALYTICS_EVENT_NAMES, getAnalyticsEnvironment, getPostHogConfig, type AnalyticsEventName } from "@/lib/analytics";
 import { getPostHogLiveAnalytics, type PostHogLiveAnalytics } from "@/lib/posthog-query";
 
@@ -74,8 +79,6 @@ export type AdminAnalyticsSnapshot = {
   };
 };
 
-const productionUser = { environment: getAdminDataEnvironment() } as const;
-const productionWorkspace = { user: productionUser } as const;
 const activeImport = { status: { not: "deleted" } } as const;
 const activeTransaction = { deletedAt: null } as const;
 
@@ -85,6 +88,8 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
   const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
   const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000);
   const staleImportCutoff = new Date(now - 30 * 60 * 1000);
+  const productionUser = getAdminRealUserWhere();
+  const productionWorkspace = getAdminRealWorkspaceWhere();
 
   const [
     totalUsers,
@@ -175,11 +180,11 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
         workspace: productionWorkspace,
       },
     }),
-    prisma.appErrorLog.count({ where: { environment: getAdminDataEnvironment(), occurredAt: { gte: oneDayAgo } } }),
-    prisma.appErrorLog.count({ where: { environment: getAdminDataEnvironment(), occurredAt: { gte: sevenDaysAgo } } }),
+    prisma.appErrorLog.count({ where: getCurrentDeploymentErrorWhere(oneDayAgo) }),
+    prisma.appErrorLog.count({ where: getCurrentDeploymentErrorWhere(sevenDaysAgo) }),
     prisma.contactInquiry.count({ where: { status: "open" } }),
     prisma.appErrorLog.findMany({
-      where: { environment: getAdminDataEnvironment(), occurredAt: { gte: oneDayAgo } },
+      where: getCurrentDeploymentErrorWhere(oneDayAgo),
       orderBy: { occurredAt: "desc" },
       take: 100,
       select: { source: true, route: true, message: true, occurredAt: true },
@@ -284,7 +289,7 @@ export async function getAdminAuditLogs({ query = "", page = 1, pageSize = 40 }:
   const search = query.trim();
   const where = {
     workspace: {
-      user: productionUser,
+      user: { environment: getAdminDataEnvironment() },
     },
     ...(search
       ? {

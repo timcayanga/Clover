@@ -1,5 +1,9 @@
 import { getEnv } from "@/lib/env";
 import { getAdminDataEnvironment } from "@/lib/admin";
+import {
+  getAdminRealUserWhere,
+  getAdminRealWorkspaceWhere,
+} from "@/lib/admin-data-scope";
 import { prisma } from "@/lib/prisma";
 
 export type AdminOperationsSnapshot = {
@@ -39,17 +43,18 @@ const list = (value: string | undefined) => (value ?? "").split(",").map((item) 
 
 export async function getAdminOperationsSnapshot(): Promise<AdminOperationsSnapshot> {
   const environment = getAdminDataEnvironment();
-  const scopedWorkspace = { user: { environment } } as const;
+  const realUser = getAdminRealUserWhere();
+  const scopedWorkspace = getAdminRealWorkspaceWhere();
   const now = Date.now();
   const dayAgo = new Date(now - 24 * 60 * 60 * 1000);
   const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
   const staleCutoff = new Date(now - 30 * 60 * 1000);
   const [active, pending, cancelled, suspended, recentEvents, processing, stale, failed24h, queuedJobs, failedJobs, recentImports, actions24h, notes7d, snapshotsAvailable, recentActions] = await Promise.all([
-    prisma.billingSubscription.count({ where: { status: "active", user: { environment } } }),
-    prisma.billingSubscription.count({ where: { status: "approval_pending", user: { environment } } }),
-    prisma.billingSubscription.count({ where: { status: "cancelled", user: { environment } } }),
-    prisma.billingSubscription.count({ where: { status: "suspended", user: { environment } } }),
-    prisma.billingEvent.findMany({ where: { createdAt: { gte: weekAgo }, user: { environment } }, orderBy: { createdAt: "desc" }, take: 12, include: { user: { select: { email: true } } } }),
+    prisma.billingSubscription.count({ where: { status: "active", user: realUser } }),
+    prisma.billingSubscription.count({ where: { status: "approval_pending", user: realUser } }),
+    prisma.billingSubscription.count({ where: { status: "cancelled", user: realUser } }),
+    prisma.billingSubscription.count({ where: { status: "suspended", user: realUser } }),
+    prisma.billingEvent.findMany({ where: { createdAt: { gte: weekAgo }, user: realUser }, orderBy: { createdAt: "desc" }, take: 12, include: { user: { select: { email: true } } } }),
     prisma.importFile.count({ where: { status: "processing", workspace: scopedWorkspace } }),
     prisma.importFile.count({ where: { status: "processing", updatedAt: { lt: staleCutoff }, workspace: scopedWorkspace } }),
     prisma.importFile.count({ where: { status: "failed", updatedAt: { gte: dayAgo }, workspace: scopedWorkspace } }),

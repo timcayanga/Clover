@@ -93,7 +93,7 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
         <MetricCard label="Imports, 7d" value={snapshot.product.completedImports7d} detail={`${snapshot.product.failedImports7d.toLocaleString()} failed`} tone={snapshot.product.failedImports7d ? "warning" : "default"} />
         <MetricCard label="Reviewed, 7d" value={snapshot.product.reviewedTransactions7d} detail="Confirmed or edited transactions" />
         <MetricCard label="Review queue" value={snapshot.product.reviewQueueItems} detail={`${snapshot.product.lowConfidenceItems.toLocaleString()} low-confidence`} tone={snapshot.product.reviewQueueItems ? "warning" : "default"} />
-        <MetricCard label="Errors, 24h" value={snapshot.reliability.errors24h} detail={`${snapshot.reliability.errors7d.toLocaleString()} in the last 7d`} tone={snapshot.reliability.errors24h ? "danger" : "default"} />
+        <MetricCard label="Current deploy errors" value={snapshot.reliability.errors24h} detail={`${snapshot.reliability.errors7d.toLocaleString()} from this deployment in the last 7d`} tone={snapshot.reliability.errors24h ? "danger" : "default"} />
         <MetricCard label="Stale imports" value={snapshot.product.staleImports} detail={`${snapshot.product.processingImports.toLocaleString()} processing now`} tone={snapshot.product.staleImports ? "danger" : "default"} />
         <MetricCard
           label="PostHog events, 30d"
@@ -156,8 +156,8 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
           </div>
           <div className="admin-alert-list">
             <div className={`admin-alert-item ${snapshot.reliability.errors24h ? "is-danger" : "is-good"}`}>
-              <strong>{snapshot.reliability.errors24h ? `${snapshot.reliability.errors24h.toLocaleString()} errors in 24h` : "No errors in 24h"}</strong>
-              <span>Application error log</span>
+              <strong>{snapshot.reliability.errors24h ? `${snapshot.reliability.errors24h.toLocaleString()} current-deployment errors` : "No current-deployment errors"}</strong>
+              <span>Current build, last 24 hours</span>
             </div>
             <div className={`admin-alert-item ${snapshot.product.staleImports ? "is-danger" : "is-good"}`}>
               <strong>{snapshot.product.staleImports ? `${snapshot.product.staleImports.toLocaleString()} stale imports` : "No stale imports"}</strong>
@@ -287,7 +287,7 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
           <div><span>Users verified</span><strong>{snapshot.users.verified.toLocaleString()} / {snapshot.users.total.toLocaleString()}</strong></div>
           <div><span>Workspaces</span><strong>{snapshot.product.workspaces.toLocaleString()}</strong></div>
           <div><span>Imports total</span><strong>{snapshot.product.imports.toLocaleString()}</strong></div>
-          <div><span>Errors, 7d</span><strong>{snapshot.reliability.errors7d.toLocaleString()}</strong></div>
+          <div><span>Current deploy errors, 7d</span><strong>{snapshot.reliability.errors7d.toLocaleString()}</strong></div>
         </div>
         <p className="admin-analytics__footnote">Generated {formatDate(snapshot.generatedAt)}. Counts are scoped to the current environment.</p>
       </section>
@@ -296,7 +296,7 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
         <div className="admin-hub__panel-head">
           <div>
             <p className="eyebrow">Reliability</p>
-            <h3 id="admin-top-errors-title">Top error sources in the last 24 hours</h3>
+            <h3 id="admin-top-errors-title">Top error sources for the current deployment</h3>
           </div>
           <Link className="button button-secondary button-small" href="/admin/errors">Open error log</Link>
         </div>
@@ -315,7 +315,7 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
             ))}
           </div>
         ) : (
-          <p className="panel-muted">No application errors have been recorded in the last 24 hours.</p>
+          <p className="panel-muted">No application errors have been recorded for the current deployment in the last 24 hours.</p>
         )}
       </section>
     </section>
