@@ -6,17 +6,31 @@ export type AdminCommandCenterSnapshot = {
     value: string;
     href?: string | null;
   }>;
-  analytics: {
-    onboardingCompletedUsers: number;
-    processingImports: number;
-    completedImports7d: number;
-    failedImports7d: number;
-    reviewQueueItems: number;
-    lowConfidenceItems: number;
+  funnels: Array<{
+    name: string;
+    steps: Array<{
+      label: string;
+      count: number;
+    }>;
+  }>;
+  retention: {
+    active30d: number;
+    active7d: number;
+    returning7d: number;
   };
-  cards: Array<{
-    title: string;
-    body: string;
+  activity: Array<{
+    label: string;
+    signups: number;
+    imports: number;
+  }>;
+  adoption: Array<{
+    label: string;
+    users: number;
+  }>;
+  attention: Array<{
+    label: string;
+    value: number;
+    status: "good" | "warning" | "danger";
     href: string;
   }>;
 };
@@ -26,84 +40,200 @@ type Props = {
 };
 
 export function AdminCommandCenter({ snapshot }: Props) {
-  return (
-    <section className="admin-hub">
-      <div className="admin-hub__hero table-panel">
-        <div className="admin-hub__hero-copy">
-          <p className="section-kicker">Command center</p>
-          <h2>Internal tools at a glance</h2>
-          <p className="panel-muted">
-            Jump into support, parser QA, and operational reviews without leaving the admin area.
-          </p>
-        </div>
-        <div className="admin-hub__grid">
-          {snapshot.metrics.map((metric) => (
-            <div className="admin-hub__panel-stats" key={metric.label}>
-              <div>
-                <strong>{metric.value}</strong>
-                <span>{metric.label}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+  const maxActivity = Math.max(
+    1,
+    ...snapshot.activity.flatMap((item) => [item.signups, item.imports]),
+  );
+  const adoptionBase = Math.max(
+    1,
+    Number(
+      snapshot.metrics
+        .find((metric) => metric.label === "Users")
+        ?.value.replaceAll(",", "") ?? 0,
+    ),
+  );
+  const retentionRate = snapshot.retention.active30d
+    ? Math.round(
+        (snapshot.retention.returning7d / snapshot.retention.active30d) * 100,
+      )
+    : 0;
 
-      <div className="admin-hub__grid">
-        {snapshot.cards.map((card) => (
-          <article key={card.title} className="admin-hub__panel glass">
-            <div className="admin-hub__panel-head">
-              <div>
-                <p className="section-kicker">Workspace</p>
-                <h3>{card.title}</h3>
-              </div>
-            </div>
-            <p className="panel-muted">{card.body}</p>
-            <div className="admin-hub__nav-actions" style={{ justifyContent: "flex-start" }}>
-              <Link className="button button-secondary button-small" href={card.href}>
-                Open
-              </Link>
-            </div>
-          </article>
+  return (
+    <section className="admin-command-center">
+      <div className="admin-kpi-grid" aria-label="Key metrics">
+        {snapshot.metrics.map((metric) => (
+          <Link
+            className="admin-kpi"
+            href={metric.href ?? "/admin/analytics"}
+            key={metric.label}
+          >
+            <span>{metric.label}</span>
+            <strong>{metric.value}</strong>
+          </Link>
         ))}
       </div>
 
-      <section className="admin-hub__panel glass" aria-labelledby="admin-product-health-title">
-        <div className="admin-hub__panel-head">
-          <div>
-            <p className="section-kicker">Product health</p>
-            <h3 id="admin-product-health-title">Activation and data quality</h3>
+      <div className="admin-dashboard-grid">
+        <section
+          className="admin-compact-panel admin-compact-panel--wide"
+          aria-labelledby="admin-activity-title"
+        >
+          <div className="admin-compact-panel__head">
+            <h2 id="admin-activity-title">Eight-week activity</h2>
+            <div className="admin-chart-legend">
+              <span>
+                <i className="is-signup" />
+                Signups
+              </span>
+              <span>
+                <i className="is-import" />
+                Imports
+              </span>
+            </div>
           </div>
-          <Link className="button button-secondary button-small" href="/admin/data-qa">
-            Open Data QA
-          </Link>
+          <div
+            className="admin-activity-chart"
+            role="img"
+            aria-label="Weekly signups and imports"
+          >
+            {snapshot.activity.map((item) => (
+              <div className="admin-activity-chart__week" key={item.label}>
+                <div className="admin-activity-chart__bars">
+                  <span
+                    className="is-signup"
+                    style={{
+                      height: `${Math.max(3, (item.signups / maxActivity) * 100)}%`,
+                    }}
+                    title={`${item.signups} signups`}
+                  />
+                  <span
+                    className="is-import"
+                    style={{
+                      height: `${Math.max(3, (item.imports / maxActivity) * 100)}%`,
+                    }}
+                    title={`${item.imports} imports`}
+                  />
+                </div>
+                <small>{item.label}</small>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section
+          className="admin-compact-panel"
+          aria-labelledby="admin-retention-title"
+        >
+          <div className="admin-compact-panel__head">
+            <h2 id="admin-retention-title">Retention</h2>
+            <strong className="admin-rate">{retentionRate}%</strong>
+          </div>
+          <div className="admin-retention-diagram">
+            <div>
+              <strong>{snapshot.retention.active30d.toLocaleString()}</strong>
+              <span>Active 30d</span>
+            </div>
+            <i aria-hidden="true" />
+            <div>
+              <strong>{snapshot.retention.active7d.toLocaleString()}</strong>
+              <span>Active 7d</span>
+            </div>
+            <i aria-hidden="true" />
+            <div>
+              <strong>{snapshot.retention.returning7d.toLocaleString()}</strong>
+              <span>Returned</span>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section
+        className="admin-compact-panel"
+        aria-labelledby="admin-funnels-title"
+      >
+        <div className="admin-compact-panel__head">
+          <h2 id="admin-funnels-title">Funnels</h2>
+          <Link href="/admin/analytics">Details</Link>
         </div>
-        <div className="admin-hub__panel-stats">
-          <div>
-            <strong>{snapshot.analytics.onboardingCompletedUsers.toLocaleString()}</strong>
-            <span>Onboarding completed</span>
-          </div>
-          <div>
-            <strong>{snapshot.analytics.completedImports7d.toLocaleString()}</strong>
-            <span>Imports completed, 7d</span>
-          </div>
-          <div>
-            <strong>{snapshot.analytics.reviewQueueItems.toLocaleString()}</strong>
-            <span>Items awaiting review</span>
-          </div>
-          <div>
-            <strong>{snapshot.analytics.lowConfidenceItems.toLocaleString()}</strong>
-            <span>Low-confidence items</span>
-          </div>
-          <div>
-            <strong>{snapshot.analytics.processingImports.toLocaleString()}</strong>
-            <span>Imports processing</span>
-          </div>
-          <div>
-            <strong>{snapshot.analytics.failedImports7d.toLocaleString()}</strong>
-            <span>Failed imports, 7d</span>
-          </div>
+        <div className="admin-funnel-grid">
+          {snapshot.funnels.map((funnel) => {
+            const firstCount = funnel.steps[0]?.count ?? 0;
+            const lastCount = funnel.steps.at(-1)?.count ?? 0;
+            return (
+              <article className="admin-compact-funnel" key={funnel.name}>
+                <div className="admin-compact-funnel__title">
+                  <strong>{funnel.name}</strong>
+                  <span>
+                    {firstCount
+                      ? Math.round((lastCount / firstCount) * 100)
+                      : 0}
+                    %
+                  </span>
+                </div>
+                {funnel.steps.map((step) => (
+                  <div className="admin-compact-funnel__step" key={step.label}>
+                    <span>{step.label}</span>
+                    <div>
+                      <i
+                        style={{
+                          width: `${firstCount ? Math.max(2, (step.count / firstCount) * 100) : 0}%`,
+                        }}
+                      />
+                    </div>
+                    <strong>{step.count.toLocaleString()}</strong>
+                  </div>
+                ))}
+              </article>
+            );
+          })}
         </div>
       </section>
+
+      <div className="admin-dashboard-grid">
+        <section
+          className="admin-compact-panel admin-compact-panel--wide"
+          aria-labelledby="admin-adoption-title"
+        >
+          <div className="admin-compact-panel__head">
+            <h2 id="admin-adoption-title">Feature adoption</h2>
+            <span>Users</span>
+          </div>
+          <div className="admin-adoption-table">
+            {snapshot.adoption.map((item) => (
+              <div className="admin-adoption-row" key={item.label}>
+                <span>{item.label}</span>
+                <div>
+                  <i
+                    style={{
+                      width: `${Math.max(2, (item.users / adoptionBase) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <strong>{item.users.toLocaleString()}</strong>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section
+          className="admin-compact-panel"
+          aria-labelledby="admin-attention-title"
+        >
+          <div className="admin-compact-panel__head">
+            <h2 id="admin-attention-title">Needs attention</h2>
+            <Link href="/admin/operations">Open</Link>
+          </div>
+          <div className="admin-attention-table">
+            {snapshot.attention.map((item) => (
+              <Link href={item.href} key={item.label}>
+                <i className={`is-${item.status}`} />
+                <span>{item.label}</span>
+                <strong>{item.value.toLocaleString()}</strong>
+              </Link>
+            ))}
+          </div>
+        </section>
+      </div>
     </section>
   );
 }

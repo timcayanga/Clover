@@ -2,9 +2,12 @@
 
 :root {
   color-scheme: light;
-  --font-body: "Poppins", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-heading: "Raleway", "Poppins", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  --font-body:
+    "Poppins", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-heading:
+    "Raleway", "Poppins", ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
   --bg: #f5f7f9;
   --surface: #ffffff;
   --surface-2: #f5f7f9;
@@ -42,8 +45,16 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 28%),
-    radial-gradient(circle at right 14%, rgba(110, 231, 183, 0.08), transparent 30%),
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.08),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at right 14%,
+      rgba(110, 231, 183, 0.08),
+      transparent 30%
+    ),
     var(--bg);
 }
 
@@ -56,8 +67,16 @@ body {
   font-size: 16px;
   line-height: 1.5;
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 34%),
-    radial-gradient(circle at 20% 0%, rgba(110, 231, 183, 0.08), transparent 22%),
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.08),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 20% 0%,
+      rgba(110, 231, 183, 0.08),
+      transparent 22%
+    ),
     linear-gradient(180deg, #ffffff 0%, #f5f8fa 100%);
   color: var(--text);
   accent-color: var(--accent);
@@ -229,9 +248,21 @@ label {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 18% 18%, rgba(3, 168, 192, 0.08), transparent 26%),
-    radial-gradient(circle at 80% 20%, rgba(110, 231, 183, 0.08), transparent 24%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(245, 248, 250, 0.98));
+    radial-gradient(
+      circle at 18% 18%,
+      rgba(3, 168, 192, 0.08),
+      transparent 26%
+    ),
+    radial-gradient(
+      circle at 80% 20%,
+      rgba(110, 231, 183, 0.08),
+      transparent 24%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.92),
+      rgba(245, 248, 250, 0.98)
+    );
   pointer-events: none;
 }
 
@@ -242,7 +273,11 @@ label {
   width: 220px;
   height: 220px;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(94, 211, 208, 0.12), transparent 72%);
+  background: radial-gradient(
+    circle,
+    rgba(94, 211, 208, 0.12),
+    transparent 72%
+  );
   filter: blur(6px);
   pointer-events: none;
 }
@@ -419,7 +454,11 @@ label {
   justify-content: center;
   gap: 10px;
   font-weight: 600;
-  transition: transform 160ms ease, background 160ms ease, border-color 160ms ease, box-shadow 160ms ease,
+  transition:
+    transform 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
     opacity 160ms ease;
 }
 
@@ -527,7 +566,11 @@ label {
   gap: 12px;
   border-right: 1px solid var(--stroke);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 247, 249, 0.98)),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.96),
+      rgba(245, 247, 249, 0.98)
+    ),
     radial-gradient(circle at top, rgba(3, 168, 192, 0.05), transparent 24%);
   box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.8);
   border-radius: 0;
@@ -631,7 +674,9 @@ label {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: color 160ms ease, transform 160ms ease;
+  transition:
+    color 160ms ease,
+    transform 160ms ease;
 }
 
 .sidebar-search-trigger:hover,
@@ -699,7 +744,11 @@ label {
   gap: 10px;
   text-align: left;
   cursor: pointer;
-  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 
 .sidebar-search-results__item:hover {
@@ -807,7 +856,12 @@ label {
   border-radius: 15px;
   font-size: 14px;
   line-height: 1.2;
-  transition: background 160ms ease, color 160ms ease, transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .nav-link__icon {
@@ -824,7 +878,11 @@ label {
 
 .nav-link:hover,
 .nav-link.is-active {
-  background: linear-gradient(135deg, rgba(3, 168, 192, 0.14), rgba(3, 168, 192, 0.08));
+  background: linear-gradient(
+    135deg,
+    rgba(3, 168, 192, 0.14),
+    rgba(3, 168, 192, 0.08)
+  );
   color: var(--text);
   border-color: rgba(3, 168, 192, 0.2);
   box-shadow: 0 10px 24px rgba(3, 168, 192, 0.08);
@@ -859,7 +917,12 @@ label {
   color: var(--muted);
   background: rgba(255, 255, 255, 0.58);
   cursor: pointer;
-  transition: background 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 
 .sidebar-icon-button:hover,
@@ -886,7 +949,12 @@ label {
   overflow: hidden;
   flex: none;
   cursor: pointer;
-  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 
 .sidebar-profile--photo {
@@ -1010,7 +1078,10 @@ label {
   align-items: center;
   grid-template-columns: auto 1fr;
   column-gap: 10px;
-  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
 }
 
 .sidebar-popover__link--bare,
@@ -1272,7 +1343,9 @@ label {
   opacity: 0;
   pointer-events: none;
   transform: translateY(-4px);
-  transition: opacity 140ms ease, transform 140ms ease;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
 }
 
 .plan-feature-item__info-wrap:hover .plan-feature-item__tooltip,
@@ -1344,7 +1417,9 @@ label {
   background: rgba(148, 163, 184, 0.12);
   color: var(--muted-2);
   cursor: help;
-  transition: background-color 140ms ease, color 140ms ease;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
 }
 
 .info-tooltip__button:hover,
@@ -1550,7 +1625,11 @@ label {
 
 .billing-action-card--featured {
   border-color: rgba(3, 168, 192, 0.2);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(245, 252, 253, 0.95));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.95),
+    rgba(245, 252, 253, 0.95)
+  );
 }
 
 .billing-action-card__copy {
@@ -1820,7 +1899,10 @@ label {
   background: rgba(248, 251, 252, 0.96);
   border: 1px solid var(--stroke);
   color: var(--text);
-  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
 }
 
 .profile-shortcut:hover {
@@ -1946,7 +2028,11 @@ label {
   min-height: 0;
   overflow: hidden;
   background:
-    radial-gradient(circle at top right, rgba(3, 168, 192, 0.04), transparent 22%),
+    radial-gradient(
+      circle at top right,
+      rgba(3, 168, 192, 0.04),
+      transparent 22%
+    ),
     linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(245, 248, 250, 0.96));
   padding: 18px 20px 20px;
 }
@@ -2212,7 +2298,11 @@ label {
   border: 1px solid transparent;
   background: rgba(247, 249, 250, 0.72);
   color: var(--muted);
-  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
 }
 
 .settings-submenu__link-title {
@@ -2354,7 +2444,11 @@ label {
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(247, 249, 250, 0.82);
   cursor: pointer;
-  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .settings-choice__option input {
@@ -2457,7 +2551,9 @@ label {
   border-radius: 999px;
   background: rgba(148, 163, 184, 0.4);
   border: 1px solid rgba(148, 163, 184, 0.18);
-  transition: background 160ms ease, border-color 160ms ease;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
 }
 
 .settings-switch span::after {
@@ -2772,7 +2868,11 @@ label {
   padding: 20px;
   border: 1px solid var(--stroke);
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.12), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.12),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.92);
   box-shadow: var(--shadow);
 }
@@ -2894,19 +2994,35 @@ label {
 .dashboard-category-bars__fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(3, 168, 192, 0.55), rgba(3, 168, 192, 0.95));
+  background: linear-gradient(
+    90deg,
+    rgba(3, 168, 192, 0.55),
+    rgba(3, 168, 192, 0.95)
+  );
 }
 
 .dashboard-category-bars__fill--1 {
-  background: linear-gradient(90deg, rgba(14, 165, 233, 0.55), rgba(14, 165, 233, 0.95));
+  background: linear-gradient(
+    90deg,
+    rgba(14, 165, 233, 0.55),
+    rgba(14, 165, 233, 0.95)
+  );
 }
 
 .dashboard-category-bars__fill--2 {
-  background: linear-gradient(90deg, rgba(139, 92, 246, 0.5), rgba(139, 92, 246, 0.95));
+  background: linear-gradient(
+    90deg,
+    rgba(139, 92, 246, 0.5),
+    rgba(139, 92, 246, 0.95)
+  );
 }
 
 .dashboard-category-bars__fill--3 {
-  background: linear-gradient(90deg, rgba(20, 184, 166, 0.5), rgba(20, 184, 166, 0.95));
+  background: linear-gradient(
+    90deg,
+    rgba(20, 184, 166, 0.5),
+    rgba(20, 184, 166, 0.95)
+  );
 }
 
 .dashboard-empty-visual {
@@ -2980,7 +3096,12 @@ label {
   width: 118px;
   height: 40px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(233, 238, 242, 0.8) 25%, rgba(244, 247, 249, 0.98) 50%, rgba(233, 238, 242, 0.8) 75%);
+  background: linear-gradient(
+    90deg,
+    rgba(233, 238, 242, 0.8) 25%,
+    rgba(244, 247, 249, 0.98) 50%,
+    rgba(233, 238, 242, 0.8) 75%
+  );
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.4s ease-in-out infinite;
 }
@@ -3064,8 +3185,16 @@ label {
   padding: 18px 20px;
   border: 1px solid var(--stroke);
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.12), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(247, 250, 251, 0.92));
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.12),
+      transparent 34%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.97),
+      rgba(247, 250, 251, 0.92)
+    );
   box-shadow: var(--shadow-soft);
 }
 
@@ -3114,9 +3243,21 @@ label {
   padding: 18px;
   border: 1px solid var(--stroke);
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.12), transparent 32%),
-    radial-gradient(circle at 84% 12%, rgba(34, 197, 94, 0.12), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(247, 250, 251, 0.93));
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.12),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 84% 12%,
+      rgba(34, 197, 94, 0.12),
+      transparent 28%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.99),
+      rgba(247, 250, 251, 0.93)
+    );
   box-shadow: var(--shadow);
 }
 
@@ -3379,7 +3520,11 @@ label {
   border-radius: 24px;
   border: 1px solid rgba(15, 23, 42, 0.06);
   background:
-    radial-gradient(circle at top right, rgba(3, 168, 192, 0.12), transparent 30%),
+    radial-gradient(
+      circle at top right,
+      rgba(3, 168, 192, 0.12),
+      transparent 30%
+    ),
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 251, 0.9));
   box-shadow: var(--shadow-soft);
 }
@@ -3623,7 +3768,11 @@ label {
 }
 
 .dashboard-home__ring--loading {
-  background: radial-gradient(circle at 50% 50%, rgba(3, 168, 192, 0.08), rgba(255, 255, 255, 0.92));
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(3, 168, 192, 0.08),
+    rgba(255, 255, 255, 0.92)
+  );
 }
 
 .dashboard-home__mini-card--loading {
@@ -3803,8 +3952,16 @@ label {
 .report-ai-card--featured {
   padding: 24px;
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.14), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(245, 252, 253, 0.92));
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.14),
+      transparent 34%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.95),
+      rgba(245, 252, 253, 0.92)
+    );
   border-color: rgba(3, 168, 192, 0.18);
 }
 
@@ -3918,7 +4075,11 @@ label {
   padding: 18px;
   border: 1px solid var(--stroke);
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 30%),
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.08),
+      transparent 30%
+    ),
     rgba(255, 255, 255, 0.9);
   box-shadow: var(--shadow);
   display: grid;
@@ -3944,7 +4105,11 @@ label {
   padding: 18px 20px;
   border: 1px solid rgba(15, 23, 42, 0.06);
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 30%),
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.08),
+      transparent 30%
+    ),
     rgba(255, 255, 255, 0.9);
   box-shadow: var(--shadow);
 }
@@ -3975,7 +4140,11 @@ label {
   padding: 18px 20px;
   border: 1px solid rgba(3, 168, 192, 0.16);
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.1), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.1),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.9);
   box-shadow: var(--shadow);
 }
@@ -4007,8 +4176,16 @@ label {
   padding: 18px 20px;
   border: 1px solid rgba(3, 168, 192, 0.14);
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.12), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(247, 251, 252, 0.95));
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.12),
+      transparent 28%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.95),
+      rgba(247, 251, 252, 0.95)
+    );
   box-shadow: var(--shadow);
 }
 
@@ -4180,8 +4357,11 @@ label {
   gap: 10px;
   padding: 14px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 252, 253, 0.98));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98),
+    rgba(250, 252, 253, 0.98)
+  );
   box-shadow: var(--shadow);
 }
 
@@ -4260,7 +4440,12 @@ label {
   z-index: 2;
 }
 
-:is(.reports-tabs, .goals-tabs, .insights-tabs, .investments-tabs)::-webkit-scrollbar {
+:is(
+  .reports-tabs,
+  .goals-tabs,
+  .insights-tabs,
+  .investments-tabs
+)::-webkit-scrollbar {
   display: none;
 }
 
@@ -4293,14 +4478,29 @@ label {
   border-color: rgba(3, 168, 192, 0.34);
 }
 
-:is(.reports-tab--active, .insights-tab--active, .investments-tab.is-active, .goals-tab--active) {
+:is(
+  .reports-tab--active,
+  .insights-tab--active,
+  .investments-tab.is-active,
+  .goals-tab--active
+) {
   color: var(--accent);
   border-color: var(--accent);
   font-weight: 400;
 }
 
-:is(.reports-tab--active, .insights-tab--active, .investments-tab.is-active, .goals-tab--active):hover,
-:is(.reports-tab--active, .insights-tab--active, .investments-tab.is-active, .goals-tab--active):focus-visible {
+:is(
+  .reports-tab--active,
+  .insights-tab--active,
+  .investments-tab.is-active,
+  .goals-tab--active
+):hover,
+:is(
+  .reports-tab--active,
+  .insights-tab--active,
+  .investments-tab.is-active,
+  .goals-tab--active
+):focus-visible {
   color: var(--accent-hover);
 }
 
@@ -5142,8 +5342,16 @@ label {
   padding: 24px;
   border: 1px solid var(--stroke);
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.16), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 252, 253, 0.94));
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.16),
+      transparent 34%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.96),
+      rgba(245, 252, 253, 0.94)
+    );
   box-shadow: var(--shadow);
   display: grid;
   gap: 14px;
@@ -5166,8 +5374,16 @@ label {
   padding: 24px;
   border: 1px solid var(--stroke);
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.16), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 252, 253, 0.94));
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.16),
+      transparent 34%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.98),
+      rgba(245, 252, 253, 0.94)
+    );
   box-shadow: var(--shadow);
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
@@ -5892,7 +6108,11 @@ label {
   border-radius: 28px;
   border: 1px solid var(--stroke);
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 28%),
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.08),
+      transparent 28%
+    ),
     rgba(255, 255, 255, 0.92);
   box-shadow: var(--shadow-soft);
   display: grid;
@@ -5968,9 +6188,21 @@ label {
   border-radius: 30px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background:
-    radial-gradient(circle at top left, rgba(34, 197, 94, 0.12), transparent 34%),
-    radial-gradient(circle at 84% 12%, rgba(3, 168, 192, 0.14), transparent 30%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(245, 252, 249, 0.95));
+    radial-gradient(
+      circle at top left,
+      rgba(34, 197, 94, 0.12),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 84% 12%,
+      rgba(3, 168, 192, 0.14),
+      transparent 30%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.99),
+      rgba(245, 252, 249, 0.95)
+    );
   box-shadow: var(--shadow);
   align-items: start;
 }
@@ -6093,7 +6325,11 @@ label {
 .goals-progress__fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(34, 197, 94, 0.9), rgba(3, 168, 192, 0.95));
+  background: linear-gradient(
+    90deg,
+    rgba(34, 197, 94, 0.9),
+    rgba(3, 168, 192, 0.95)
+  );
   box-shadow: 0 0 0 1px rgba(3, 168, 192, 0.08);
 }
 
@@ -6119,7 +6355,11 @@ label {
   border-radius: 20px;
   border: 1px solid rgba(34, 197, 94, 0.18);
   background:
-    radial-gradient(circle at top left, rgba(34, 197, 94, 0.14), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(34, 197, 94, 0.14),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.86);
   display: flex;
   gap: 12px;
@@ -6166,7 +6406,11 @@ label {
   border-radius: 28px;
   border: 1px solid rgba(15, 23, 42, 0.06);
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.1), transparent 30%),
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.1),
+      transparent 30%
+    ),
     rgba(255, 255, 255, 0.86);
   box-shadow: var(--shadow-soft);
   display: grid;
@@ -6201,7 +6445,11 @@ label {
 .goals-hero__focus-card-fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(34, 197, 94, 0.9), rgba(3, 168, 192, 0.95));
+  background: linear-gradient(
+    90deg,
+    rgba(34, 197, 94, 0.9),
+    rgba(3, 168, 192, 0.95)
+  );
 }
 
 .goals-hero__details {
@@ -6232,7 +6480,11 @@ label {
   border-radius: 28px;
   border: 1px solid rgba(15, 23, 42, 0.06);
   background:
-    radial-gradient(circle at top left, rgba(34, 197, 94, 0.12), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(34, 197, 94, 0.12),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.78);
   box-shadow: var(--shadow-soft);
   display: grid;
@@ -6314,7 +6566,10 @@ label {
   display: grid;
   gap: 14px;
   align-content: start;
-  transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+  transition:
+    transform 220ms ease,
+    box-shadow 220ms ease,
+    border-color 220ms ease;
 }
 
 .goals-hero__ring-card:hover {
@@ -6396,7 +6651,10 @@ label {
   background: rgba(255, 255, 255, 0.72);
   display: grid;
   gap: 4px;
-  transition: transform 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
+  transition:
+    transform 200ms ease,
+    border-color 200ms ease,
+    box-shadow 200ms ease;
 }
 
 .goals-stat:hover {
@@ -6438,7 +6696,11 @@ label {
   border-radius: 28px;
   border: 1px solid var(--stroke);
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.08),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.92);
   box-shadow: var(--shadow);
   display: grid;
@@ -6597,7 +6859,11 @@ label {
 .goals-pace__fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(34, 197, 94, 0.9), rgba(3, 168, 192, 0.95));
+  background: linear-gradient(
+    90deg,
+    rgba(34, 197, 94, 0.9),
+    rgba(3, 168, 192, 0.95)
+  );
 }
 
 .goals-pace__bar small {
@@ -6687,7 +6953,11 @@ label {
 }
 
 .goals-heatmap__cell.is-4 {
-  background: linear-gradient(180deg, rgba(34, 197, 94, 0.26), rgba(3, 168, 192, 0.18));
+  background: linear-gradient(
+    180deg,
+    rgba(34, 197, 94, 0.26),
+    rgba(3, 168, 192, 0.18)
+  );
 }
 
 .goals-drivers__bars {
@@ -6747,7 +7017,11 @@ label {
 .goals-driver__fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(34, 197, 94, 0.88), rgba(3, 168, 192, 0.92));
+  background: linear-gradient(
+    90deg,
+    rgba(34, 197, 94, 0.88),
+    rgba(3, 168, 192, 0.92)
+  );
 }
 
 .goals-driver small {
@@ -6821,7 +7095,9 @@ label {
   background: rgba(255, 255, 255, 0.68);
   display: grid;
   gap: 2px;
-  transition: transform 180ms ease, border-color 180ms ease;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease;
 }
 
 .goals-chart__label:hover {
@@ -6858,7 +7134,10 @@ label {
   display: grid;
   gap: 12px;
   align-content: start;
-  transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+  transition:
+    transform 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease;
 }
 
 .goals-lane:hover {
@@ -6870,7 +7149,11 @@ label {
 .goals-lane.is-active {
   border-color: rgba(3, 168, 192, 0.22);
   background:
-    radial-gradient(circle at top left, rgba(34, 197, 94, 0.12), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(34, 197, 94, 0.12),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.88);
   box-shadow: 0 18px 34px rgba(3, 168, 192, 0.08);
 }
@@ -6982,7 +7265,10 @@ label {
   display: grid;
   gap: 10px;
   align-content: start;
-  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .goals-action:hover {
@@ -7049,7 +7335,11 @@ label {
   gap: 6px;
   text-align: left;
   color: var(--text);
-  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background 180ms ease;
 }
 
 .goals-editor__card:hover {
@@ -7061,7 +7351,11 @@ label {
 .goals-editor__card.is-selected {
   border-color: rgba(3, 168, 192, 0.26);
   background:
-    radial-gradient(circle at top left, rgba(34, 197, 94, 0.12), transparent 36%),
+    radial-gradient(
+      circle at top left,
+      rgba(34, 197, 94, 0.12),
+      transparent 36%
+    ),
     rgba(255, 255, 255, 0.92);
   box-shadow: 0 18px 34px rgba(3, 168, 192, 0.08);
 }
@@ -7105,7 +7399,11 @@ label {
   border-radius: 22px;
   border: 1px solid rgba(15, 23, 42, 0.06);
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 36%),
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.08),
+      transparent 36%
+    ),
     rgba(255, 255, 255, 0.76);
 }
 
@@ -7198,7 +7496,11 @@ label {
   color: var(--text);
   text-align: left;
   font-size: 13px;
-  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background 180ms ease;
 }
 
 .goals-editor__purpose-chip:hover {
@@ -7420,7 +7722,11 @@ label {
 .goals-milestone.is-reached {
   border-color: rgba(34, 197, 94, 0.18);
   background:
-    radial-gradient(circle at top left, rgba(34, 197, 94, 0.12), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(34, 197, 94, 0.12),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.84);
 }
 
@@ -7473,7 +7779,11 @@ label {
 .goals-milestone__fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(34, 197, 94, 0.9), rgba(3, 168, 192, 0.95));
+  background: linear-gradient(
+    90deg,
+    rgba(34, 197, 94, 0.9),
+    rgba(3, 168, 192, 0.95)
+  );
 }
 
 .goals-weekly__grid,
@@ -7526,7 +7836,11 @@ label {
 .goals-checklist__item.is-done {
   border-color: rgba(34, 197, 94, 0.18);
   background:
-    radial-gradient(circle at top left, rgba(34, 197, 94, 0.12), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(34, 197, 94, 0.12),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.84);
 }
 
@@ -7594,7 +7908,11 @@ label {
   height: 10px;
   border-radius: 999px;
   margin-top: 5px;
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.95), rgba(3, 168, 192, 0.95));
+  background: linear-gradient(
+    135deg,
+    rgba(34, 197, 94, 0.95),
+    rgba(3, 168, 192, 0.95)
+  );
   display: grid;
   place-items: center;
   color: white;
@@ -7854,7 +8172,11 @@ label {
 }
 
 .onboarding-option.is-selected {
-  background: linear-gradient(135deg, rgba(3, 168, 192, 0.16), rgba(3, 168, 192, 0.08));
+  background: linear-gradient(
+    135deg,
+    rgba(3, 168, 192, 0.16),
+    rgba(3, 168, 192, 0.08)
+  );
   border-color: rgba(3, 168, 192, 0.34);
 }
 
@@ -7867,7 +8189,11 @@ label {
 .onboarding-option--featured {
   min-height: 118px;
   border-color: rgba(3, 168, 192, 0.28);
-  background: linear-gradient(135deg, rgba(3, 168, 192, 0.14), rgba(255, 255, 255, 0.96));
+  background: linear-gradient(
+    135deg,
+    rgba(3, 168, 192, 0.14),
+    rgba(255, 255, 255, 0.96)
+  );
   box-shadow: 0 12px 30px rgba(3, 168, 192, 0.08);
 }
 
@@ -7948,7 +8274,8 @@ label {
   height: 100%;
   object-fit: contain;
   display: block;
-  filter: brightness(0) saturate(100%) invert(34%) sepia(86%) saturate(1837%) hue-rotate(162deg) brightness(98%) contrast(98%);
+  filter: brightness(0) saturate(100%) invert(34%) sepia(86%) saturate(1837%)
+    hue-rotate(162deg) brightness(98%) contrast(98%);
 }
 
 .onboarding-option--experience-beginner .onboarding-option__icon img {
@@ -8050,8 +8377,16 @@ label {
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 12% 14%, rgba(3, 168, 192, 0.18), transparent 22%),
-    radial-gradient(circle at 88% 12%, rgba(110, 231, 183, 0.12), transparent 24%),
+    radial-gradient(
+      circle at 12% 14%,
+      rgba(3, 168, 192, 0.18),
+      transparent 22%
+    ),
+    radial-gradient(
+      circle at 88% 12%,
+      rgba(110, 231, 183, 0.12),
+      transparent 24%
+    ),
     radial-gradient(circle at 50% 100%, rgba(9, 30, 42, 0.06), transparent 22%);
   opacity: 0.8;
   z-index: -1;
@@ -8236,7 +8571,12 @@ label {
   height: 100%;
   border-radius: 40px;
   background:
-    radial-gradient(circle at 22% 12%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.62) 22%, transparent 58%),
+    radial-gradient(
+      circle at 22% 12%,
+      rgba(255, 255, 255, 0.95),
+      rgba(255, 255, 255, 0.62) 22%,
+      transparent 58%
+    ),
     linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(246, 250, 251, 0.8));
   border: 1px solid rgba(15, 23, 42, 0.06);
   box-shadow:
@@ -8382,13 +8722,21 @@ label {
 }
 
 .landing-mini-card--accent {
-  background: linear-gradient(135deg, rgba(94, 211, 208, 0.36), rgba(3, 168, 192, 0.18));
+  background: linear-gradient(
+    135deg,
+    rgba(94, 211, 208, 0.36),
+    rgba(3, 168, 192, 0.18)
+  );
 }
 
 .landing-mini-card--chart {
   min-height: 150px;
   background:
-    radial-gradient(circle at top right, rgba(94, 211, 208, 0.22), transparent 34%),
+    radial-gradient(
+      circle at top right,
+      rgba(94, 211, 208, 0.22),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.07);
 }
 
@@ -8403,7 +8751,11 @@ label {
 .landing-mini-bars span {
   width: 18%;
   border-radius: 999px 999px 12px 12px;
-  background: linear-gradient(180deg, rgba(110, 231, 183, 0.95), rgba(3, 168, 192, 0.45));
+  background: linear-gradient(
+    180deg,
+    rgba(110, 231, 183, 0.95),
+    rgba(3, 168, 192, 0.45)
+  );
   box-shadow: 0 12px 24px rgba(3, 168, 192, 0.18);
 }
 
@@ -8997,7 +9349,9 @@ label {
 
 .line-item-header {
   display: grid;
-  grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(130px, 0.95fr) minmax(150px, 1fr) minmax(110px, 0.8fr) 40px 40px;
+  grid-template-columns:
+    28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr)
+    minmax(130px, 0.95fr) minmax(150px, 1fr) minmax(110px, 0.8fr) 40px 40px;
   gap: 10px;
   align-items: center;
   padding: 2px 4px 1px;
@@ -9075,22 +9429,34 @@ label {
   border-radius: 22px;
   border: 1px solid var(--stroke);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 252, 253, 0.92)),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.95),
+      rgba(248, 252, 253, 0.92)
+    ),
     rgba(255, 255, 255, 0.9);
   box-shadow: var(--shadow-soft);
 }
 
 .transactions-mobile-card--imported {
-  box-shadow: inset 3px 0 0 rgba(3, 168, 192, 0.34), var(--shadow-soft);
+  box-shadow:
+    inset 3px 0 0 rgba(3, 168, 192, 0.34),
+    var(--shadow-soft);
 }
 
 .transactions-mobile-card--manual {
-  box-shadow: inset 3px 0 0 rgba(34, 197, 94, 0.28), var(--shadow-soft);
+  box-shadow:
+    inset 3px 0 0 rgba(34, 197, 94, 0.28),
+    var(--shadow-soft);
 }
 
 .transactions-mobile-card--warning {
   background:
-    linear-gradient(180deg, rgba(245, 158, 11, 0.07), rgba(255, 255, 255, 0.96)),
+    linear-gradient(
+      180deg,
+      rgba(245, 158, 11, 0.07),
+      rgba(255, 255, 255, 0.96)
+    ),
     rgba(255, 255, 255, 0.9);
 }
 
@@ -9211,7 +9577,9 @@ label {
 
 .line-item {
   display: grid;
-  grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(130px, 0.95fr) minmax(150px, 1fr) minmax(110px, 0.8fr) 40px 40px;
+  grid-template-columns:
+    28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr)
+    minmax(130px, 0.95fr) minmax(150px, 1fr) minmax(110px, 0.8fr) 40px 40px;
   gap: 10px;
   align-items: center;
   padding: 8px 4px;
@@ -9219,7 +9587,10 @@ label {
   font-size: 0.88rem;
   position: relative;
   border-radius: 18px;
-  transition: background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 
 .line-item.is-muted {
@@ -9234,7 +9605,9 @@ label {
 .line-item:hover,
 .line-item:focus-visible {
   background: rgba(255, 255, 255, 0.98);
-  box-shadow: inset 0 0 0 1px rgba(3, 168, 192, 0.12), 0 8px 18px rgba(15, 23, 42, 0.03);
+  box-shadow:
+    inset 0 0 0 1px rgba(3, 168, 192, 0.12),
+    0 8px 18px rgba(15, 23, 42, 0.03);
 }
 
 .line-item:focus-visible {
@@ -9264,11 +9637,15 @@ label {
 }
 
 .line-item.is-selected.line-item--imported {
-  box-shadow: inset 3px 0 0 rgba(3, 168, 192, 0.34), inset 0 0 0 1px rgba(3, 168, 192, 0.14);
+  box-shadow:
+    inset 3px 0 0 rgba(3, 168, 192, 0.34),
+    inset 0 0 0 1px rgba(3, 168, 192, 0.14);
 }
 
 .line-item.is-selected.line-item--manual {
-  box-shadow: inset 3px 0 0 rgba(34, 197, 94, 0.28), inset 0 0 0 1px rgba(3, 168, 192, 0.14);
+  box-shadow:
+    inset 3px 0 0 rgba(34, 197, 94, 0.28),
+    inset 0 0 0 1px rgba(3, 168, 192, 0.14);
 }
 
 .transaction-select-cell {
@@ -10016,7 +10393,11 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 12px;
   padding: 16px 18px;
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(245, 158, 11, 0.14), rgba(245, 158, 11, 0.06));
+  background: linear-gradient(
+    180deg,
+    rgba(245, 158, 11, 0.14),
+    rgba(245, 158, 11, 0.06)
+  );
   border: 1px solid rgba(245, 158, 11, 0.28);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
@@ -10129,7 +10510,11 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   gap: 14px;
   background:
-    radial-gradient(circle at top right, rgba(94, 211, 208, 0.16), transparent 28%),
+    radial-gradient(
+      circle at top right,
+      rgba(94, 211, 208, 0.16),
+      transparent 28%
+    ),
     rgba(255, 255, 255, 0.98);
   border: 1px solid rgba(3, 168, 192, 0.18);
   box-shadow: 0 24px 44px rgba(31, 41, 51, 0.18);
@@ -10218,7 +10603,11 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   gap: 12px;
   background:
-    radial-gradient(circle at top right, rgba(94, 211, 208, 0.15), transparent 30%),
+    radial-gradient(
+      circle at top right,
+      rgba(94, 211, 208, 0.15),
+      transparent 30%
+    ),
     rgba(255, 255, 255, 0.98);
   border: 1px solid rgba(3, 168, 192, 0.16);
   box-shadow: 0 22px 40px rgba(31, 41, 51, 0.16);
@@ -10322,8 +10711,16 @@ input.transaction-inline-edit--amount::placeholder {
   height: 180px;
   border-radius: 50%;
   background:
-    radial-gradient(circle at center, rgba(255, 255, 255, 0.98) 0 58%, transparent 59%),
-    conic-gradient(from 0deg, #03a8c0 var(--progress), rgba(3, 168, 192, 0.14) 0);
+    radial-gradient(
+      circle at center,
+      rgba(255, 255, 255, 0.98) 0 58%,
+      transparent 59%
+    ),
+    conic-gradient(
+      from 0deg,
+      #03a8c0 var(--progress),
+      rgba(3, 168, 192, 0.14) 0
+    );
   display: grid;
   place-items: center;
   flex: none;
@@ -10530,8 +10927,14 @@ input.transaction-inline-edit--amount::placeholder {
   inset: 0;
   border-radius: 32px;
   border: 2px solid rgba(3, 168, 192, 0.2);
-  background: linear-gradient(180deg, rgba(5, 182, 196, 0.08), rgba(255, 255, 255, 0.18));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.58), 0 32px 80px rgba(15, 23, 42, 0.14);
+  background: linear-gradient(
+    180deg,
+    rgba(5, 182, 196, 0.08),
+    rgba(255, 255, 255, 0.18)
+  );
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.58),
+    0 32px 80px rgba(15, 23, 42, 0.14);
   backdrop-filter: blur(10px);
 }
 
@@ -11445,13 +11848,21 @@ input.transaction-inline-edit--amount::placeholder {
     margin-right: 0;
   }
 
-  .transactions-page .transactions-toolbar-chip.button-secondary > span:not(.button-icon),
-  .transactions-page .transactions-toolbar-add.button-primary > span:not(.button-icon) {
+  .transactions-page
+    .transactions-toolbar-chip.button-secondary
+    > span:not(.button-icon),
+  .transactions-page
+    .transactions-toolbar-add.button-primary
+    > span:not(.button-icon) {
     display: inline;
   }
 
-  .transactions-page .transactions-toolbar-add.button-primary .button-icon:last-child,
-  .transactions-page .transactions-toolbar-chip.button-secondary .button-icon:last-child {
+  .transactions-page
+    .transactions-toolbar-add.button-primary
+    .button-icon:last-child,
+  .transactions-page
+    .transactions-toolbar-chip.button-secondary
+    .button-icon:last-child {
     display: inline-flex;
   }
 
@@ -11573,7 +11984,9 @@ input.transaction-inline-edit--amount::placeholder {
 
 .investments-market__controls {
   display: grid;
-  grid-template-columns: minmax(240px, 1.6fr) minmax(130px, 0.9fr) minmax(130px, 0.9fr) minmax(130px, 0.9fr);
+  grid-template-columns:
+    minmax(240px, 1.6fr) minmax(130px, 0.9fr) minmax(130px, 0.9fr)
+    minmax(130px, 0.9fr);
   gap: 10px;
   align-items: end;
   width: 100%;
@@ -12098,7 +12511,11 @@ input.transaction-inline-edit--amount::placeholder {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(3, 168, 192, 0.72), rgba(20, 184, 166, 0.72));
+  background: linear-gradient(
+    90deg,
+    rgba(3, 168, 192, 0.72),
+    rgba(20, 184, 166, 0.72)
+  );
 }
 
 .investments-holdings-chart {
@@ -12399,11 +12816,18 @@ input.transaction-inline-edit--amount::placeholder {
   border-radius: 16px;
   border: 1px solid var(--stroke);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 252, 253, 0.9)),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.96),
+      rgba(248, 252, 253, 0.9)
+    ),
     var(--brand-soft, rgba(255, 255, 255, 0.9));
   box-shadow: var(--shadow-soft);
   cursor: pointer;
-  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease;
   overflow: hidden;
 }
 
@@ -12662,7 +13086,11 @@ input.transaction-inline-edit--amount::placeholder {
   padding: 18px;
   border-radius: 22px;
   border: 1px solid var(--account-accent-soft);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), var(--account-accent-faint));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.95),
+    var(--account-accent-faint)
+  );
   box-shadow: var(--shadow-soft);
   display: grid;
   gap: 14px;
@@ -12712,7 +13140,11 @@ input.transaction-inline-edit--amount::placeholder {
   padding: 18px;
   border-radius: 22px;
   border: 1px solid var(--account-accent-soft);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), var(--account-accent-faint));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.95),
+    var(--account-accent-faint)
+  );
   box-shadow: var(--shadow-soft);
 }
 
@@ -12747,7 +13179,11 @@ input.transaction-inline-edit--amount::placeholder {
   padding: 18px;
   border-radius: 22px;
   border: 1px solid var(--account-accent-soft);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), var(--account-accent-faint));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.95),
+    var(--account-accent-faint)
+  );
   box-shadow: var(--shadow-soft);
 }
 
@@ -12773,7 +13209,9 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-detail__transaction-header,
 .accounts-detail__transaction-row {
-  grid-template-columns: 36px minmax(0, 2.6fr) minmax(110px, 0.8fr) minmax(120px, 0.9fr) minmax(90px, 0.72fr) minmax(110px, 0.82fr);
+  grid-template-columns:
+    36px minmax(0, 2.6fr) minmax(110px, 0.8fr) minmax(120px, 0.9fr)
+    minmax(90px, 0.72fr) minmax(110px, 0.82fr);
 }
 
 .accounts-detail__transaction-header {
@@ -12832,7 +13270,12 @@ input.transaction-inline-edit--amount::placeholder {
   display: block;
   height: 20px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(226, 232, 240, 0.9), rgba(241, 245, 249, 0.96), rgba(226, 232, 240, 0.9));
+  background: linear-gradient(
+    90deg,
+    rgba(226, 232, 240, 0.9),
+    rgba(241, 245, 249, 0.96),
+    rgba(226, 232, 240, 0.9)
+  );
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.2s ease-in-out infinite;
 }
@@ -13028,7 +13471,9 @@ input.transaction-inline-edit--amount::placeholder {
   text-align: left;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 140ms ease, transform 140ms ease;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
 }
 
 .accounts-warning-tooltip::after {
@@ -13157,7 +13602,11 @@ input.transaction-inline-edit--amount::placeholder {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(3, 168, 192, 0.45), rgba(3, 168, 192, 0.9));
+  background: linear-gradient(
+    90deg,
+    rgba(3, 168, 192, 0.45),
+    rgba(3, 168, 192, 0.9)
+  );
 }
 
 .accounts-summary-bar--liability {
@@ -13165,7 +13614,11 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-summary-bar--liability span {
-  background: linear-gradient(90deg, rgba(198, 79, 110, 0.45), rgba(198, 79, 110, 0.9));
+  background: linear-gradient(
+    90deg,
+    rgba(198, 79, 110, 0.45),
+    rgba(198, 79, 110, 0.9)
+  );
 }
 
 .accounts-summary-actions {
@@ -13552,7 +14005,11 @@ input.transaction-inline-edit--amount::placeholder {
   padding: 10px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 20px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(238, 247, 250, 0.96));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98),
+    rgba(238, 247, 250, 0.96)
+  );
 }
 
 .accounts-add-brand-tile .account-brand-mark {
@@ -13686,7 +14143,11 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 14px;
   padding: 18px 20px 20px;
   border: 1px solid var(--account-accent-soft);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), var(--account-accent-faint));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.95),
+    var(--account-accent-faint)
+  );
   box-shadow: var(--shadow-soft);
 }
 
@@ -13765,9 +14226,16 @@ input.transaction-inline-edit--amount::placeholder {
   padding: 18px;
   border-radius: 22px;
   border: 1px dashed rgba(3, 168, 192, 0.24);
-  background: linear-gradient(180deg, rgba(3, 168, 192, 0.08), rgba(255, 255, 255, 0.9));
+  background: linear-gradient(
+    180deg,
+    rgba(3, 168, 192, 0.08),
+    rgba(255, 255, 255, 0.9)
+  );
   color: var(--text);
-  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
 }
 
 .accounts-import-dropzone--hero {
@@ -13780,7 +14248,11 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-import-dropzone.is-active {
   border-color: rgba(3, 168, 192, 0.52);
-  background: linear-gradient(180deg, rgba(3, 168, 192, 0.14), rgba(255, 255, 255, 0.94));
+  background: linear-gradient(
+    180deg,
+    rgba(3, 168, 192, 0.14),
+    rgba(255, 255, 255, 0.94)
+  );
   transform: translateY(-1px);
 }
 
@@ -14337,7 +14809,12 @@ input.transaction-inline-edit--amount::placeholder {
 
 .admin-data-qa-bank-detail__table-row {
   display: grid;
-  grid-template-columns: minmax(240px, 2.2fr) minmax(110px, 0.8fr) minmax(80px, 0.55fr) minmax(70px, 0.45fr) minmax(90px, 0.55fr) minmax(100px, 0.6fr) minmax(220px, 1.3fr);
+  grid-template-columns:
+    minmax(240px, 2.2fr) minmax(110px, 0.8fr) minmax(80px, 0.55fr)
+    minmax(70px, 0.45fr) minmax(90px, 0.55fr) minmax(100px, 0.6fr) minmax(
+      220px,
+      1.3fr
+    );
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
@@ -14653,7 +15130,9 @@ input.transaction-inline-edit--amount::placeholder {
   list-style: none;
   cursor: pointer;
   display: grid;
-  grid-template-columns: minmax(70px, 90px) minmax(110px, 150px) minmax(160px, 1fr) minmax(90px, 120px);
+  grid-template-columns:
+    minmax(70px, 90px) minmax(110px, 150px) minmax(160px, 1fr)
+    minmax(90px, 120px);
   gap: 12px;
   align-items: center;
   padding: 12px 14px;
@@ -14839,7 +15318,11 @@ input.transaction-inline-edit--amount::placeholder {
 
 .admin-data-qa-run-page__notice {
   background:
-    radial-gradient(circle at top right, rgba(3, 168, 192, 0.1), transparent 22%),
+    radial-gradient(
+      circle at top right,
+      rgba(3, 168, 192, 0.1),
+      transparent 22%
+    ),
     rgba(255, 255, 255, 0.86);
 }
 
@@ -15047,8 +15530,16 @@ input.transaction-inline-edit--amount::placeholder {
 
 .admin-users__hero {
   background:
-    radial-gradient(circle at top right, rgba(94, 211, 208, 0.16), transparent 22%),
-    radial-gradient(circle at 12% 20%, rgba(3, 168, 192, 0.14), transparent 28%),
+    radial-gradient(
+      circle at top right,
+      rgba(94, 211, 208, 0.16),
+      transparent 22%
+    ),
+    radial-gradient(
+      circle at 12% 20%,
+      rgba(3, 168, 192, 0.14),
+      transparent 28%
+    ),
     rgba(255, 255, 255, 0.9);
 }
 
@@ -15189,8 +15680,16 @@ input.transaction-inline-edit--amount::placeholder {
 
 .admin-hub__hero {
   background:
-    radial-gradient(circle at top right, rgba(94, 211, 208, 0.16), transparent 22%),
-    radial-gradient(circle at 12% 20%, rgba(3, 168, 192, 0.14), transparent 28%),
+    radial-gradient(
+      circle at top right,
+      rgba(94, 211, 208, 0.16),
+      transparent 22%
+    ),
+    radial-gradient(
+      circle at 12% 20%,
+      rgba(3, 168, 192, 0.14),
+      transparent 28%
+    ),
     rgba(255, 255, 255, 0.9);
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
@@ -15326,7 +15825,11 @@ input.transaction-inline-edit--amount::placeholder {
 
 .admin-error-logs__summary {
   background:
-    radial-gradient(circle at top right, rgba(245, 158, 11, 0.08), transparent 24%),
+    radial-gradient(
+      circle at top right,
+      rgba(245, 158, 11, 0.08),
+      transparent 24%
+    ),
     rgba(255, 255, 255, 0.9);
 }
 
@@ -15881,7 +16384,9 @@ input.transaction-inline-edit--amount::placeholder {
 .admin-users__mono {
   display: inline-block;
   max-width: 100%;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
   font-size: 12px;
   color: var(--muted);
   word-break: break-all;
@@ -15978,7 +16483,11 @@ input.transaction-inline-edit--amount::placeholder {
 
 .admin-users__detail-panel {
   background:
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 24%),
+    radial-gradient(
+      circle at top right,
+      rgba(59, 130, 246, 0.08),
+      transparent 24%
+    ),
     rgba(255, 255, 255, 0.92);
 }
 
@@ -16182,7 +16691,11 @@ input.transaction-inline-edit--amount::placeholder {
   padding: 22px;
   border-radius: 20px;
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.06), transparent 42%),
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.06),
+      transparent 42%
+    ),
     rgba(255, 255, 255, 0.9);
   border-color: rgba(3, 168, 192, 0.16);
   color: var(--text);
@@ -16612,7 +17125,9 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .review-workbench__queue-item.is-active {
-  box-shadow: 0 0 0 1px rgba(3, 168, 192, 0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 0 0 1px rgba(3, 168, 192, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.9);
 }
 
 .review-workbench__queue-check {
@@ -16963,7 +17478,8 @@ input.transaction-inline-edit--amount::placeholder {
   padding: 0;
 }
 
-.transactions-table-wrap.transactions-table-wrap--empty .transactions-empty-state {
+.transactions-table-wrap.transactions-table-wrap--empty
+  .transactions-empty-state {
   align-self: center;
   justify-self: center;
   max-width: none;
@@ -17001,7 +17517,9 @@ input.transaction-inline-edit--amount::placeholder {
 .transactions-loading-header,
 .transactions-loading-row {
   display: grid;
-  grid-template-columns: 42px 52px minmax(180px, 1.5fr) 132px 170px 180px 132px 42px 42px;
+  grid-template-columns:
+    42px 52px minmax(180px, 1.5fr)
+    132px 170px 180px 132px 42px 42px;
   gap: 12px;
   align-items: center;
 }
@@ -17025,7 +17543,12 @@ input.transaction-inline-edit--amount::placeholder {
 .skeleton-block {
   display: block;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(233, 238, 242, 0.8) 25%, rgba(244, 247, 249, 0.98) 50%, rgba(233, 238, 242, 0.8) 75%);
+  background: linear-gradient(
+    90deg,
+    rgba(233, 238, 242, 0.8) 25%,
+    rgba(244, 247, 249, 0.98) 50%,
+    rgba(233, 238, 242, 0.8) 75%
+  );
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.4s ease-in-out infinite;
 }
@@ -17152,7 +17675,9 @@ input.transaction-inline-edit--amount::placeholder {
     border-radius: 28px;
     box-shadow: var(--shadow);
     transform: translateX(calc(-100% - 20px));
-    transition: transform 180ms ease, visibility 180ms ease;
+    transition:
+      transform 180ms ease,
+      visibility 180ms ease;
     z-index: 90;
     visibility: hidden;
   }
@@ -17217,7 +17742,7 @@ input.transaction-inline-edit--amount::placeholder {
       display: none;
     }
 
-  .shell-compact-bar__copy--hide-chrome-on-mobile h1 {
+    .shell-compact-bar__copy--hide-chrome-on-mobile h1 {
       font-size: 13px;
       letter-spacing: -0.01em;
     }
@@ -17287,7 +17812,8 @@ input.transaction-inline-edit--amount::placeholder {
     font-size: 0.72rem;
   }
 
-  .transactions-action-button > span:not(.button-icon):not(.transactions-filter-count-badge) {
+  .transactions-action-button
+    > span:not(.button-icon):not(.transactions-filter-count-badge) {
     display: inline;
   }
 
@@ -17319,7 +17845,9 @@ input.transaction-inline-edit--amount::placeholder {
 
   .line-item-header,
   .line-item {
-    grid-template-columns: 24px 36px minmax(0, 2fr) minmax(92px, 0.9fr) minmax(92px, 0.9fr) 38px 38px;
+    grid-template-columns:
+      24px 36px minmax(0, 2fr) minmax(92px, 0.9fr) minmax(92px, 0.9fr)
+      38px 38px;
   }
 
   .line-item-header-cell:nth-child(5),
@@ -17347,7 +17875,10 @@ input.transaction-inline-edit--amount::placeholder {
 
   .accounts-detail__transaction-header,
   .accounts-detail__transaction-row {
-    grid-template-columns: 36px minmax(0, 2fr) minmax(100px, 0.85fr) minmax(90px, 0.7fr);
+    grid-template-columns: 36px minmax(0, 2fr) minmax(100px, 0.85fr) minmax(
+        90px,
+        0.7fr
+      );
   }
 
   .accounts-detail__transaction-category,
@@ -17423,7 +17954,9 @@ input.transaction-inline-edit--amount::placeholder {
     color: transparent;
   }
 
-  .transactions-toolbar-row--bottom .transactions-toolbar-group--left .transactions-toolbar-chip:not(.transactions-toolbar-add),
+  .transactions-toolbar-row--bottom
+    .transactions-toolbar-group--left
+    .transactions-toolbar-chip:not(.transactions-toolbar-add),
   .transactions-toolbar-row--bottom .transactions-toolbar-group--right {
     display: none;
   }
@@ -17541,7 +18074,9 @@ input.transaction-inline-edit--amount::placeholder {
     display: contents;
   }
 
-  .transactions-toolbar-row--bottom .transactions-toolbar-group--left .transactions-toolbar-chip:not(.transactions-toolbar-add) {
+  .transactions-toolbar-row--bottom
+    .transactions-toolbar-group--left
+    .transactions-toolbar-chip:not(.transactions-toolbar-add) {
     display: inline-flex;
   }
 
@@ -17570,11 +18105,15 @@ input.transaction-inline-edit--amount::placeholder {
     gap: 0;
   }
 
-  .transactions-page .transactions-toolbar-add.button-primary > span:not(.button-icon) {
+  .transactions-page
+    .transactions-toolbar-add.button-primary
+    > span:not(.button-icon) {
     display: none;
   }
 
-  .transactions-page .transactions-toolbar-add.button-primary .button-icon:last-child {
+  .transactions-page
+    .transactions-toolbar-add.button-primary
+    .button-icon:last-child {
     display: none;
   }
 
@@ -17583,8 +18122,12 @@ input.transaction-inline-edit--amount::placeholder {
     margin-right: 0;
   }
 
-  .transactions-page .transactions-toolbar-chip.button-secondary > span:not(.button-icon):not(.transactions-filter-count-badge),
-  .transactions-page .transactions-toolbar-add.button-primary > span:not(.button-icon) {
+  .transactions-page
+    .transactions-toolbar-chip.button-secondary
+    > span:not(.button-icon):not(.transactions-filter-count-badge),
+  .transactions-page
+    .transactions-toolbar-add.button-primary
+    > span:not(.button-icon) {
     display: none;
   }
 
@@ -18474,13 +19017,21 @@ input.transaction-inline-edit--amount::placeholder {
     padding-inline: 0;
   }
 
-  .transactions-page .transactions-toolbar-chip.button-secondary > span:not(.button-icon),
-  .transactions-page .transactions-toolbar-add.button-primary > span:not(.button-icon) {
+  .transactions-page
+    .transactions-toolbar-chip.button-secondary
+    > span:not(.button-icon),
+  .transactions-page
+    .transactions-toolbar-add.button-primary
+    > span:not(.button-icon) {
     display: none;
   }
 
-  .transactions-page .transactions-toolbar-chip.button-secondary .button-icon:last-child,
-  .transactions-page .transactions-toolbar-add.button-primary .button-icon:last-child {
+  .transactions-page
+    .transactions-toolbar-chip.button-secondary
+    .button-icon:last-child,
+  .transactions-page
+    .transactions-toolbar-add.button-primary
+    .button-icon:last-child {
     display: none;
   }
 
@@ -18659,7 +19210,11 @@ input.transaction-inline-edit--amount::placeholder {
   pointer-events: none;
   background:
     radial-gradient(circle at 12% 10%, rgba(3, 168, 192, 0.1), transparent 24%),
-    radial-gradient(circle at 88% 12%, rgba(110, 231, 183, 0.08), transparent 22%),
+    radial-gradient(
+      circle at 88% 12%,
+      rgba(110, 231, 183, 0.08),
+      transparent 22%
+    ),
     radial-gradient(circle at 50% 110%, rgba(9, 30, 42, 0.06), transparent 22%);
   z-index: -1;
 }
@@ -18975,8 +19530,16 @@ input.transaction-inline-edit--amount::placeholder {
   aspect-ratio: 16 / 10;
   overflow: hidden;
   background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.92), transparent 40%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(239, 246, 247, 0.92));
+    radial-gradient(
+      circle at top left,
+      rgba(255, 255, 255, 0.92),
+      transparent 40%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.88),
+      rgba(239, 246, 247, 0.92)
+    );
   border: 1px solid rgba(15, 23, 42, 0.06);
   box-shadow:
     0 26px 70px rgba(15, 23, 42, 0.08),
@@ -19184,7 +19747,11 @@ input.transaction-inline-edit--amount::placeholder {
   border-radius: 28px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), transparent 38%),
+    radial-gradient(
+      circle at top left,
+      rgba(255, 255, 255, 0.9),
+      transparent 38%
+    ),
     rgba(255, 255, 255, 0.78);
   box-shadow: var(--shadow-soft);
 }
@@ -19192,7 +19759,11 @@ input.transaction-inline-edit--amount::placeholder {
 .landing-plan-card--featured {
   border-color: rgba(3, 168, 192, 0.16);
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.14), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.14),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.82);
 }
 
@@ -19840,7 +20411,8 @@ input.transaction-inline-edit--amount::placeholder {
 .clover-loading-screen__leaf {
   transform-box: fill-box;
   transform-origin: center;
-  animation: clover-loading-screen-pulse 2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  animation: clover-loading-screen-pulse 2s cubic-bezier(0.45, 0.05, 0.55, 0.95)
+    infinite;
   will-change: transform, opacity, filter;
 }
 
@@ -19936,7 +20508,11 @@ input.transaction-inline-edit--amount::placeholder {
   border-radius: 28px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.95), transparent 42%),
+    radial-gradient(
+      circle at top left,
+      rgba(255, 255, 255, 0.95),
+      transparent 42%
+    ),
     rgba(255, 255, 255, 0.82);
   box-shadow: var(--shadow);
 }
@@ -19944,7 +20520,11 @@ input.transaction-inline-edit--amount::placeholder {
 .pricing-card--featured {
   border-color: rgba(3, 168, 192, 0.22);
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.14), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.14),
+      transparent 34%
+    ),
     linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 251, 252, 0.9));
   box-shadow:
     0 24px 60px rgba(3, 168, 192, 0.14),
@@ -19971,7 +20551,11 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .pricing-card__icon--featured {
-  background: linear-gradient(135deg, rgba(3, 168, 192, 0.14), rgba(110, 231, 183, 0.12));
+  background: linear-gradient(
+    135deg,
+    rgba(3, 168, 192, 0.14),
+    rgba(110, 231, 183, 0.12)
+  );
   border-color: rgba(3, 168, 192, 0.22);
 }
 
@@ -20114,8 +20698,16 @@ input.transaction-inline-edit--amount::placeholder {
   border-radius: 32px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.09), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(104, 220, 177, 0.1), transparent 24%),
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.09),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at bottom right,
+      rgba(104, 220, 177, 0.1),
+      transparent 24%
+    ),
     rgba(255, 255, 255, 0.88);
   box-shadow: var(--shadow);
 }
@@ -20210,7 +20802,11 @@ input.transaction-inline-edit--amount::placeholder {
   border-radius: 28px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background:
-    radial-gradient(circle at top right, rgba(3, 168, 192, 0.08), transparent 30%),
+    radial-gradient(
+      circle at top right,
+      rgba(3, 168, 192, 0.08),
+      transparent 30%
+    ),
     rgba(255, 255, 255, 0.9);
   box-shadow: var(--shadow);
 }
@@ -20401,8 +20997,16 @@ input.transaction-inline-edit--amount::placeholder {
   border-radius: 32px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background:
-    radial-gradient(circle at top left, var(--help-section-accent-soft), transparent 30%),
-    radial-gradient(circle at bottom right, var(--help-section-accent-strong), transparent 26%),
+    radial-gradient(
+      circle at top left,
+      var(--help-section-accent-soft),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at bottom right,
+      var(--help-section-accent-strong),
+      transparent 26%
+    ),
     rgba(255, 255, 255, 0.9);
   box-shadow: var(--shadow);
 }
@@ -20414,7 +21018,11 @@ input.transaction-inline-edit--amount::placeholder {
   width: 280px;
   height: 280px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.7), transparent 70%);
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.7),
+    transparent 70%
+  );
   filter: blur(10px);
   pointer-events: none;
 }
@@ -20803,8 +21411,16 @@ input.transaction-inline-edit--amount::placeholder {
   border-radius: 32px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(104, 220, 177, 0.09), transparent 26%),
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.08),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at bottom right,
+      rgba(104, 220, 177, 0.09),
+      transparent 26%
+    ),
     rgba(255, 255, 255, 0.88);
   box-shadow: var(--shadow);
 }
@@ -20845,49 +21461,81 @@ input.transaction-inline-edit--amount::placeholder {
 
 .help-article-page__visual--teal {
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.12), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.12),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.88);
 }
 
 .help-article-page__visual--mint {
   background:
-    radial-gradient(circle at top left, rgba(14, 159, 110, 0.12), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(14, 159, 110, 0.12),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.88);
 }
 
 .help-article-page__visual--gold {
   background:
-    radial-gradient(circle at top left, rgba(208, 139, 0, 0.12), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(208, 139, 0, 0.12),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.88);
 }
 
 .help-article-page__visual--sky {
   background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(59, 130, 246, 0.12),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.88);
 }
 
 .help-article-page__visual--coral {
   background:
-    radial-gradient(circle at top left, rgba(198, 79, 110, 0.12), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(198, 79, 110, 0.12),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.88);
 }
 
 .help-article-page__visual--violet {
   background:
-    radial-gradient(circle at top left, rgba(124, 92, 255, 0.12), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(124, 92, 255, 0.12),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.88);
 }
 
 .help-article-page__visual--lime {
   background:
-    radial-gradient(circle at top left, rgba(14, 159, 110, 0.12), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(14, 159, 110, 0.12),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.88);
 }
 
 .help-article-page__visual--rose {
   background:
-    radial-gradient(circle at top left, rgba(198, 79, 110, 0.12), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(198, 79, 110, 0.12),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.88);
 }
 
@@ -21050,55 +21698,91 @@ input.transaction-inline-edit--amount::placeholder {
   border-radius: 28px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.96), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(255, 255, 255, 0.96),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.88);
 }
 
 .help-section-page__visual--teal {
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.14), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(3, 168, 192, 0.14),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.88);
 }
 
 .help-section-page__visual--mint {
   background:
-    radial-gradient(circle at top left, rgba(14, 159, 110, 0.14), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(14, 159, 110, 0.14),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.88);
 }
 
 .help-section-page__visual--gold {
   background:
-    radial-gradient(circle at top left, rgba(208, 139, 0, 0.16), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(208, 139, 0, 0.16),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.88);
 }
 
 .help-section-page__visual--sky {
   background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.16), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(59, 130, 246, 0.16),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.88);
 }
 
 .help-section-page__visual--coral {
   background:
-    radial-gradient(circle at top left, rgba(198, 79, 110, 0.16), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(198, 79, 110, 0.16),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.88);
 }
 
 .help-section-page__visual--violet {
   background:
-    radial-gradient(circle at top left, rgba(124, 92, 255, 0.16), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(124, 92, 255, 0.16),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.88);
 }
 
 .help-section-page__visual--lime {
   background:
-    radial-gradient(circle at top left, rgba(14, 159, 110, 0.16), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(14, 159, 110, 0.16),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.88);
 }
 
 .help-section-page__visual--rose {
   background:
-    radial-gradient(circle at top left, rgba(198, 79, 110, 0.16), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(198, 79, 110, 0.16),
+      transparent 34%
+    ),
     rgba(255, 255, 255, 0.88);
 }
 
@@ -21350,7 +22034,11 @@ input.transaction-inline-edit--amount::placeholder {
     padding: 14px;
     border-radius: 20px;
     border: 1px solid rgba(255, 255, 255, 0.45);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(247, 249, 250, 0.74));
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.86),
+      rgba(247, 249, 250, 0.74)
+    );
     box-shadow:
       0 18px 40px rgba(15, 23, 42, 0.1),
       inset 0 1px 0 rgba(255, 255, 255, 0.7);
@@ -21413,7 +22101,9 @@ input.transaction-inline-edit--amount::placeholder {
     background: rgba(255, 255, 255, 0.76);
     color: var(--text);
     font-size: 14px;
-    transition: background 140ms ease, transform 140ms ease;
+    transition:
+      background 140ms ease,
+      transform 140ms ease;
   }
 
   .landing-nav__mobile-menu a:hover,
@@ -21609,7 +22299,9 @@ input.transaction-inline-edit--amount::placeholder {
     height: 7px;
     border-radius: 999px;
     background: rgba(15, 23, 42, 0.16);
-    transition: width 140ms ease, background 140ms ease;
+    transition:
+      width 140ms ease,
+      background 140ms ease;
   }
 
   .landing-carousel__dots span.is-active {
@@ -21952,7 +22644,11 @@ input.transaction-inline-edit--amount::placeholder {
   background: transparent;
   color: var(--muted);
   text-align: left;
-  transition: background 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .settings-hub__menu-item strong {
@@ -21976,7 +22672,9 @@ input.transaction-inline-edit--amount::placeholder {
 
 .settings-hub__menu-item.is-active {
   background: rgba(3, 168, 192, 0.11);
-  box-shadow: inset 0 0 0 1px rgba(3, 168, 192, 0.16), 0 10px 22px rgba(3, 168, 192, 0.08);
+  box-shadow:
+    inset 0 0 0 1px rgba(3, 168, 192, 0.16),
+    0 10px 22px rgba(3, 168, 192, 0.08);
 }
 
 .settings-hub__panel {
@@ -22167,7 +22865,11 @@ input.transaction-inline-edit--amount::placeholder {
   text-align: left;
   width: 100%;
   cursor: pointer;
-  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .settings-choice-card input {
@@ -22392,7 +23094,9 @@ input.transaction-inline-edit--amount::placeholder {
   border-radius: 999px;
   background: rgba(148, 163, 184, 0.35);
   box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.12);
-  transition: background 180ms ease, box-shadow 180ms ease;
+  transition:
+    background 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .settings-ios-switch__thumb {
@@ -22405,7 +23109,11 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .settings-ios-switch.is-on .settings-ios-switch__track {
-  background: linear-gradient(135deg, rgba(96, 223, 178, 0.96), rgba(67, 202, 225, 0.96));
+  background: linear-gradient(
+    135deg,
+    rgba(96, 223, 178, 0.96),
+    rgba(67, 202, 225, 0.96)
+  );
 }
 
 .settings-ios-switch.is-on .settings-ios-switch__thumb {
@@ -22476,7 +23184,11 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .settings-plan-usage__card--plan {
-  background: linear-gradient(180deg, rgba(247, 249, 250, 0.96), rgba(255, 255, 255, 0.92));
+  background: linear-gradient(
+    180deg,
+    rgba(247, 249, 250, 0.96),
+    rgba(255, 255, 255, 0.92)
+  );
 }
 
 .settings-plan-card {
@@ -22488,7 +23200,11 @@ input.transaction-inline-edit--amount::placeholder {
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: #ffffff;
   text-align: left;
-  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .settings-plan-card:hover {
@@ -22575,7 +23291,11 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .settings-plan-card--free .settings-plan-card__band {
-  background: linear-gradient(145deg, rgba(247, 249, 250, 0.96), rgba(255, 255, 255, 0.92));
+  background: linear-gradient(
+    145deg,
+    rgba(247, 249, 250, 0.96),
+    rgba(255, 255, 255, 0.92)
+  );
 }
 
 .settings-plan-card--free .settings-plan-card__band-badge {
@@ -22584,7 +23304,11 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .settings-plan-card--annual .settings-plan-card__band {
-  background: linear-gradient(145deg, rgba(4, 164, 184, 0.98), rgba(28, 198, 214, 0.9));
+  background: linear-gradient(
+    145deg,
+    rgba(4, 164, 184, 0.98),
+    rgba(28, 198, 214, 0.9)
+  );
 }
 
 .settings-plan-card--annual .settings-plan-card__band-title,
@@ -22599,7 +23323,11 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .settings-plan-card--monthly .settings-plan-card__band {
-  background: linear-gradient(145deg, rgba(164, 244, 214, 0.96), rgba(96, 223, 178, 0.9));
+  background: linear-gradient(
+    145deg,
+    rgba(164, 244, 214, 0.96),
+    rgba(96, 223, 178, 0.9)
+  );
 }
 
 .settings-plan-card--monthly .settings-plan-card__band-title,
@@ -22963,7 +23691,10 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .settings-section--data .settings-data-grid--split > *,
-  .settings-hub--panel-only .settings-section--data .settings-data-grid--split > * {
+  .settings-hub--panel-only
+    .settings-section--data
+    .settings-data-grid--split
+    > * {
     width: 100%;
   }
 
@@ -22983,7 +23714,9 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .admin-data-qa-bank-detail__table-row {
-    grid-template-columns: minmax(200px, 1.6fr) minmax(100px, 0.75fr) minmax(70px, 0.5fr) minmax(60px, 0.45fr) minmax(80px, 0.55fr) minmax(90px, 0.6fr);
+    grid-template-columns:
+      minmax(200px, 1.6fr) minmax(100px, 0.75fr) minmax(70px, 0.5fr)
+      minmax(60px, 0.45fr) minmax(80px, 0.55fr) minmax(90px, 0.6fr);
   }
 
   .admin-data-qa-bank-detail__table-row--head {
@@ -23008,7 +23741,9 @@ input.transaction-inline-edit--amount::placeholder {
 
   .line-item-header,
   .line-item {
-    grid-template-columns: 22px 32px minmax(0, 1fr) minmax(82px, 0.84fr) 36px 36px;
+    grid-template-columns:
+      22px 32px minmax(0, 1fr) minmax(82px, 0.84fr)
+      36px 36px;
   }
 
   .line-item-header-cell:nth-child(4) {
@@ -23080,7 +23815,722 @@ input.transaction-inline-edit--amount::placeholder {
     width: 24px;
     height: 24px;
   }
+}
 
+/* Compact Admin workspace */
+.admin-page-shell {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.admin-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+  gap: 12px;
+}
+
+.admin-page-header h1 {
+  font-size: 20px;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+}
+
+.admin-page-shell > .admin-section-nav {
+  flex-wrap: nowrap;
+  gap: 2px;
+  overflow-x: auto;
+  padding-bottom: 1px;
+  border-bottom: 1px solid var(--stroke);
+  scrollbar-width: none;
+}
+
+.admin-page-shell > .admin-section-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.admin-page-shell > .admin-section-nav .admin-section-nav__link {
+  flex: none;
+  min-height: 30px;
+  padding: 5px 9px 7px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.admin-page-shell > .admin-section-nav .admin-section-nav__link:hover,
+.admin-page-shell > .admin-section-nav .admin-section-nav__link:focus-visible,
+.admin-page-shell > .admin-section-nav .admin-section-nav__link.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  box-shadow: none;
+}
+
+.admin-page__content {
+  min-width: 0;
+}
+
+.admin-page__content h2 {
+  font-size: 17px;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
+.admin-page__content h3 {
+  font-size: 15px;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.admin-page__content h4 {
+  font-size: 14px;
+}
+
+.admin-page__content .eyebrow,
+.admin-page__content .section-kicker {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+.admin-page__content .panel-muted {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.admin-page__content .table-panel,
+.admin-page__content .admin-hub__panel,
+.admin-page__content .glass {
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+.admin-page__content .table-panel,
+.admin-page__content .admin-hub__panel {
+  padding: 12px;
+}
+
+.admin-page__content .button {
+  min-height: 32px;
+  padding: 6px 11px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.admin-page__content input,
+.admin-page__content select {
+  min-height: 34px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.admin-page__content textarea {
+  min-height: 88px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.admin-page__content label {
+  gap: 4px;
+  font-size: 12px;
+}
+
+.admin-page__content table thead th,
+.admin-page__content .admin-users__table thead th {
+  padding: 8px 10px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+.admin-page__content table tbody td,
+.admin-page__content .admin-users__table tbody td {
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.admin-page__content .admin-users__inline-input,
+.admin-page__content .admin-users__inline-select {
+  height: 32px;
+  min-height: 32px;
+  font-size: 12px;
+}
+
+.admin-page__content .admin-users__pill {
+  padding: 3px 7px;
+  font-size: 10px;
+}
+
+.admin-command-center {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--stroke);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.admin-kpi {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-right: 1px solid var(--stroke);
+}
+
+.admin-kpi:last-child {
+  border-right: 0;
+}
+
+.admin-kpi:hover {
+  background: var(--accent-soft);
+}
+
+.admin-kpi span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.admin-kpi strong {
+  font-size: 18px;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+}
+
+.admin-dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(260px, 0.75fr);
+  gap: 10px;
+}
+
+.admin-compact-panel {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--stroke);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.admin-compact-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.admin-compact-panel__head h2 {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.admin-compact-panel__head > a,
+.admin-compact-panel__head > span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.admin-compact-panel__head > a {
+  color: var(--accent);
+}
+
+.admin-chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.admin-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.admin-chart-legend i,
+.admin-attention-table i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.admin-chart-legend i.is-signup,
+.admin-activity-chart__bars .is-signup {
+  background: var(--accent);
+}
+
+.admin-chart-legend i.is-import,
+.admin-activity-chart__bars .is-import {
+  background: var(--accent-mint);
+}
+
+.admin-activity-chart {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(28px, 1fr));
+  gap: 8px;
+  height: 152px;
+  padding-top: 4px;
+}
+
+.admin-activity-chart__week {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 5px;
+  min-width: 0;
+}
+
+.admin-activity-chart__bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  min-height: 0;
+  border-bottom: 1px solid var(--stroke);
+  background-image: linear-gradient(
+    to top,
+    rgba(219, 227, 232, 0.5) 1px,
+    transparent 1px
+  );
+  background-size: 100% 33.333%;
+}
+
+.admin-activity-chart__bars span {
+  display: block;
+  width: min(14px, 38%);
+  min-height: 3px;
+  border-radius: 3px 3px 0 0;
+}
+
+.admin-activity-chart__week small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.admin-rate {
+  color: var(--accent);
+  font-size: 18px;
+}
+
+.admin-retention-diagram {
+  display: grid;
+  grid-template-columns: minmax(60px, 1fr) 22px minmax(60px, 1fr) 22px minmax(
+      60px,
+      1fr
+    );
+  align-items: center;
+  gap: 4px;
+  min-height: 118px;
+}
+
+.admin-retention-diagram div {
+  display: grid;
+  gap: 3px;
+  text-align: center;
+}
+
+.admin-retention-diagram strong {
+  font-size: 17px;
+}
+
+.admin-retention-diagram span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.admin-retention-diagram i {
+  height: 2px;
+  background: var(--stroke-strong);
+}
+
+.admin-retention-diagram i::after {
+  content: "";
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin: -2px 0 0 auto;
+  border-top: 2px solid var(--stroke-strong);
+  border-right: 2px solid var(--stroke-strong);
+  transform: rotate(45deg);
+}
+
+.admin-funnel-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.admin-compact-funnel {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding-right: 14px;
+  border-right: 1px solid var(--stroke);
+}
+
+.admin-compact-funnel:last-child {
+  padding-right: 0;
+  border-right: 0;
+}
+
+.admin-compact-funnel__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.admin-compact-funnel__title span {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.admin-compact-funnel__step,
+.admin-adoption-row {
+  display: grid;
+  grid-template-columns: minmax(76px, 0.8fr) minmax(90px, 1.5fr) 44px;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-compact-funnel__step > span,
+.admin-adoption-row > span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.admin-compact-funnel__step > div,
+.admin-adoption-row > div {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+.admin-compact-funnel__step i,
+.admin-adoption-row i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--brand-gradient);
+}
+
+.admin-compact-funnel__step > strong,
+.admin-adoption-row > strong {
+  font-size: 10px;
+  text-align: right;
+}
+
+.admin-adoption-table,
+.admin-attention-table {
+  display: grid;
+  gap: 0;
+}
+
+.admin-adoption-row,
+.admin-attention-table a {
+  min-height: 30px;
+  border-top: 1px solid var(--stroke);
+}
+
+.admin-adoption-row:first-child,
+.admin-attention-table a:first-child {
+  border-top: 0;
+}
+
+.admin-attention-table a {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.admin-attention-table a:hover span {
+  color: var(--accent);
+}
+
+.admin-attention-table strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.admin-attention-table i.is-good {
+  background: var(--good);
+}
+
+.admin-attention-table i.is-warning {
+  background: var(--warn);
+}
+
+.admin-attention-table i.is-danger {
+  background: var(--bad);
+}
+
+/* Existing Admin consoles inherit the same dense visual rhythm. */
+.admin-page__content .admin-hub,
+.admin-page__content .admin-users,
+.admin-page__content .admin-analytics-workspace,
+.admin-page__content .admin-error-logs,
+.admin-page__content .admin-inquiries,
+.admin-page__content .admin-operations {
+  gap: 10px;
+}
+
+.admin-page__content .admin-hub__hero,
+.admin-page__content .admin-analytics-workspace__hero {
+  display: flex;
+  align-items: center;
+  min-height: 0;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.admin-page__content .admin-hub__hero-copy > .panel-muted,
+.admin-page__content
+  .admin-analytics-workspace__hero
+  > div:first-child
+  > .eyebrow,
+.admin-page__content
+  .admin-analytics-workspace__hero
+  > div:first-child
+  > .panel-muted {
+  display: none;
+}
+
+.admin-page__content .admin-analytics-workspace__hero h2 {
+  max-width: none;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.admin-page__content .admin-analytics-metric-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.admin-page__content .admin-analytics-card,
+.admin-page__content .admin-users__stat,
+.admin-page__content .admin-users__trend-card,
+.admin-page__content .admin-inquiries__stats div,
+.admin-page__content .admin-operations__metrics div,
+.admin-page__content .admin-support__stats div {
+  gap: 2px;
+  padding: 9px 10px;
+  border-radius: 11px;
+  box-shadow: none;
+}
+
+.admin-page__content .admin-analytics-card strong,
+.admin-page__content .admin-users__stat strong,
+.admin-page__content .admin-users__trend-card strong,
+.admin-page__content .admin-inquiries__stats strong {
+  font-size: 16px;
+}
+
+.admin-page__content .admin-analytics-card span,
+.admin-page__content .admin-analytics-card small,
+.admin-page__content .admin-users__stat span,
+.admin-page__content .admin-users__trend-card span,
+.admin-page__content .admin-inquiries__stats span {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+.admin-page__content .admin-funnel-card,
+.admin-page__content .admin-event-group,
+.admin-page__content .admin-alert-item,
+.admin-page__content .admin-inquiries__item,
+.admin-page__content .admin-users__detail-card,
+.admin-page__content .admin-users__detail-section {
+  padding: 10px;
+  border-radius: 11px;
+  box-shadow: none;
+}
+
+.admin-page__content .admin-users__table-wrap {
+  border-radius: 12px;
+}
+
+.admin-page__content .admin-data-qa-summary,
+.admin-page__content .admin-data-qa-summary__bank-grid,
+.admin-page__content .admin-data-qa-summary__bank-card,
+.admin-page__content .admin-data-qa-summary__bank-card-head,
+.admin-page__content .admin-data-qa-summary__bank-stats,
+.admin-page__content .admin-data-qa-summary__card-actions,
+.admin-page__content .admin-data-qa-summary__file-list,
+.admin-page__content .admin-data-qa-summary__file-chip {
+  min-width: 0;
+}
+
+.admin-page__content .admin-data-qa-summary__bank-card {
+  gap: 10px;
+  overflow: hidden;
+  padding: 10px;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.admin-page__content .admin-data-qa-summary__bank-stats {
+  gap: 5px;
+}
+
+.admin-page__content .admin-data-qa-summary__bank-stats div,
+.admin-page__content .admin-data-qa-summary__file-chip {
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 8px;
+}
+
+.admin-page__content .admin-data-qa-summary__file-chip {
+  width: 100%;
+  overflow: hidden;
+}
+
+.admin-page__content
+  .admin-data-qa-summary__file-chip
+  .admin-data-qa__truncated-name {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.admin-page__content .admin-data-qa-summary__table-wrap,
+.admin-page__content .admin-data-qa-bank-detail__table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.admin-page__content
+  .admin-data-qa-summary
+  .admin-users__hero-copy
+  .panel-muted {
+  display: none;
+}
+
+.admin-page__content .admin-users__toolbar,
+.admin-page__content .admin-error-logs__toolbar {
+  gap: 8px;
+}
+
+.admin-page__content .admin-operations__alert,
+.admin-page__content .admin-operations__event-list div,
+.admin-page__content .admin-support__user {
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
+@media (max-width: 1180px) {
+  .admin-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .admin-kpi:nth-child(3) {
+    border-right: 0;
+  }
+
+  .admin-kpi:nth-child(-n + 3) {
+    border-bottom: 1px solid var(--stroke);
+  }
+
+  .admin-page__content .admin-analytics-metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .admin-page-shell {
+    gap: 8px;
+  }
+
+  .admin-page-header {
+    min-height: 30px;
+  }
+
+  .admin-page-header h1 {
+    font-size: 18px;
+  }
+
+  .admin-dashboard-grid,
+  .admin-funnel-grid,
+  .admin-page__content .admin-analytics-workspace__grid,
+  .admin-page__content .admin-hub__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-kpi:nth-child(3) {
+    border-right: 1px solid var(--stroke);
+  }
+
+  .admin-kpi:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .admin-kpi:nth-child(-n + 4) {
+    border-bottom: 1px solid var(--stroke);
+  }
+
+  .admin-compact-funnel {
+    padding: 0 0 10px;
+    border-right: 0;
+    border-bottom: 1px solid var(--stroke);
+  }
+
+  .admin-compact-funnel:last-child {
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+
+  .admin-activity-chart {
+    gap: 4px;
+    height: 132px;
+  }
+
+  .admin-page__content .admin-analytics-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-page__content .table-panel,
+  .admin-page__content .admin-hub__panel {
+    padding: 10px;
+  }
+}
+
+@media (max-width: 760px) {
   .settings-hub--mobile-menu .settings-hub__menu-item,
   .settings-hub--mobile-menu .settings-hub__menu-item:hover,
   .settings-hub--mobile-menu .settings-hub__menu-item.is-active {
