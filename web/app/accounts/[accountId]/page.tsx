@@ -14,7 +14,7 @@ import { formatUploadAccountDisplayName, getAccountCardName, getAccountDisplayNa
 import { getAccountBrand } from "@/lib/account-brand";
 import { getCategoryIconSrc, getCategoryIconTone } from "@/lib/category-icons";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
-import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
+import { deriveReconciledBalance, normalizeAccountBalanceSign, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { extractAccountIdFromPathSegment, getAccountPath } from "@/lib/account-path";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
@@ -87,9 +87,6 @@ import {
   isFixedIncomeInvestmentSubtype,
   isMarketInvestmentSubtype,
 } from "@/lib/investments";
-import {
-  isLiabilityAccountType,
-} from "@/lib/account-types";
 import { uploadSummaryMatchesImportedAccount } from "@/lib/imported-account-ui";
 
 type Account = {
@@ -448,9 +445,6 @@ const getCurrentMonthPeriod = () => {
 };
 
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
-
-const normalizeAccountBalance = (type: Account["type"] | null | undefined, value: number) =>
-  isLiabilityAccountType(type) ? -Math.abs(value) : Math.abs(value);
 
 const formatCardAccountNumber = (value: string | null | undefined) => {
   const cleaned = (value ?? "").trim();
@@ -1972,7 +1966,7 @@ function AccountDetailPageContent() {
               checkpoints: checkpoint ? [checkpoint] : [],
             }));
 
-      return normalizeAccountBalance(account?.type ?? null, parseAmount(reconciledValue));
+      return normalizeAccountBalanceSign(account?.type ?? "", parseAmount(reconciledValue));
     },
     [account?.balance, account?.source, account?.type, cachedImportedBalance, latestCheckpoint, transactions]
   );
@@ -2388,7 +2382,7 @@ function AccountDetailPageContent() {
       return;
     }
 
-    const nextBalance = normalizeAccountBalance(account.type, parsedBalance).toFixed(2);
+    const nextBalance = normalizeAccountBalanceSign(account.type, parsedBalance).toFixed(2);
     setBalanceSaveState("saving");
 
     try {
@@ -3862,7 +3856,7 @@ function AccountDetailPageContent() {
                 accountBrand={accountBrand}
                 name={accountCardName}
                 accountNumber={liveCardNumber}
-                amount={isPendingBalance ? "Loading..." : formatAccountAmount(Math.abs(parseAmount(displayBalance)), account.currency)}
+                amount={isPendingBalance ? "Loading..." : formatAccountAmount(parseAmount(displayBalance), account.currency)}
                 amountLabel={`Change ${accountCardName} balance`}
                 onAmountClick={openBalanceEditor}
                 showChevron={false}
