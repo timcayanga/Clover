@@ -5373,22 +5373,16 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   padding: 16px;
   border: 1px solid var(--stroke);
   border-radius: 28px;
-  background:
-    radial-gradient(circle at 92% 10%, rgba(94, 211, 208, 0.2), transparent 32%),
-    rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.9);
   box-shadow: var(--shadow);
 }
 
 .dashboard-home__report-card--positive {
-  background:
-    radial-gradient(circle at 92% 10%, rgba(34, 197, 94, 0.18), transparent 34%),
-    rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .dashboard-home__report-card--warning {
-  background:
-    radial-gradient(circle at 92% 10%, rgba(245, 158, 11, 0.2), transparent 34%),
-    rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .dashboard-home__report-card-head {
@@ -5512,10 +5506,6 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   overflow: hidden;
   border-radius: 6px;
   background: transparent;
-}
-
-.dashboard-home__report-flow-track[data-active="true"] {
-  background: rgba(219, 227, 232, 0.42);
 }
 
 .dashboard-home__report-flow-segment {
