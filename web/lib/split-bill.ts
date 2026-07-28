@@ -331,6 +331,36 @@ export const parseAmountValue = (value: string | number | null | undefined) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+export const deriveSplitBillDraftTotals = (
+  draft: Pick<
+    SplitBillDraft,
+    "items" | "subtotal" | "serviceCharge" | "tax" | "tip" | "rounding" | "discount" | "total"
+  >
+) => {
+  const itemAmounts = draft.items
+    .map((item) => parseAmountValue(item.amount))
+    .filter((amount): amount is number => amount !== null);
+  const itemSubtotal = itemAmounts.length > 0 ? itemAmounts.reduce((sum, amount) => sum + amount, 0) : null;
+  const subtotal = parseAmountValue(draft.subtotal) ?? itemSubtotal;
+  const explicitTotal = parseAmountValue(draft.total);
+  const total =
+    explicitTotal ??
+    (subtotal === null
+      ? null
+      : subtotal +
+        (parseAmountValue(draft.serviceCharge) ?? 0) +
+        (parseAmountValue(draft.tax) ?? 0) +
+        (parseAmountValue(draft.tip) ?? 0) +
+        (parseAmountValue(draft.rounding) ?? 0) -
+        (parseAmountValue(draft.discount) ?? 0));
+  const serialize = (value: number | null) => (value === null ? null : value.toFixed(2));
+
+  return {
+    subtotal: serialize(subtotal),
+    total: serialize(total),
+  };
+};
+
 export const formatSplitBillAmount = (amount: number, currency = "PHP") =>
   new Intl.NumberFormat("en-US", {
     style: "currency",

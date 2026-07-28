@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   buildSplitBillSettlement,
   createBlankSplitBillDraft,
+  deriveSplitBillDraftTotals,
   formatSplitBillAmount,
   mergeSplitBillItemSplitMetadata,
   mergeSplitBillReceiptSummary,
@@ -315,6 +316,7 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
     rounding: draft.rounding,
     discount: draft.discount,
   });
+  const derivedTotals = deriveSplitBillDraftTotals(draft);
 
   const participantOptions = draft.participants.filter(
     (participant): participant is { id: string; name: string } => Boolean(participant.id && participant.name.trim())
@@ -593,6 +595,10 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
         throw new Error(validationError);
       }
 
+      const persistedTotals = deriveSplitBillDraftTotals({
+        ...draft,
+        items,
+      });
       const payload = {
         ...draft,
         title: draft.title.trim(),
@@ -602,18 +608,20 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
         receiptMimeType: draft.receiptMimeType?.trim() || null,
         receiptText: draft.receiptText?.trim() || null,
         groupId: draft.groupId || null,
+        subtotal: draft.subtotal?.trim() || persistedTotals.subtotal,
+        total: draft.total?.trim() || persistedTotals.total,
         participants,
         items,
         payments,
         rawPayload: mergeSplitBillItemSplitMetadata(
           mergeSplitBillReceiptSummary(draft.rawPayload, {
-            subtotal: draft.subtotal?.trim() || null,
+            subtotal: draft.subtotal?.trim() || persistedTotals.subtotal,
             serviceCharge: draft.serviceCharge?.trim() || null,
             tax: draft.tax?.trim() || null,
             tip: draft.tip?.trim() || null,
             rounding: draft.rounding?.trim() || null,
             discount: draft.discount?.trim() || null,
-            total: draft.total?.trim() || null,
+            total: draft.total?.trim() || persistedTotals.total,
           }),
           items
         ),
@@ -1100,7 +1108,7 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
             <div className="split-bill-editor__totals">
               <div>
                 <span>Subtotal</span>
-                <strong>{draft.subtotal ? formatSplitBillAmount(Number(draft.subtotal), draft.currency) : "—"}</strong>
+                <strong>{derivedTotals.subtotal ? formatSplitBillAmount(Number(derivedTotals.subtotal), draft.currency) : "—"}</strong>
               </div>
               <div>
                 <span>Service charge</span>
@@ -1124,7 +1132,7 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
               </div>
               <div>
                 <span>Total</span>
-                <strong>{draft.total ? formatSplitBillAmount(Number(draft.total), draft.currency) : "—"}</strong>
+                <strong>{derivedTotals.total ? formatSplitBillAmount(Number(derivedTotals.total), draft.currency) : "—"}</strong>
               </div>
             </div>
           </section>
