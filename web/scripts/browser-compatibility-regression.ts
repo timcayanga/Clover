@@ -159,13 +159,28 @@ async function main() {
   );
   assert.match(
     globalStyles,
-    /\.content > :is\(\.topbar, \.shell-compact-bar\) \{[\s\S]{0,240}background: transparent !important;[\s\S]{0,100}box-shadow: none !important;/,
-    "Sticky page headers must remain visually integrated with the page background."
+    /\.content > :is\(\.topbar, \.shell-compact-bar\) \{[\s\S]{0,240}background: var\(--surface\) !important;[\s\S]{0,100}box-shadow: none !important;/,
+    "Sticky page headers must use an opaque page-matched background without a container shadow."
   );
   assert.match(
     globalStyles,
     /@media \(min-width: 921px\) \{[\s\S]{0,520}\.nav-link \{[\s\S]{0,140}font-size: 13px;[\s\S]{0,180}\.nav-link__icon \{[\s\S]{0,80}width: 20px;[\s\S]{0,80}height: 20px;/,
     "Desktop sidebar labels and icon slots must retain their readable sizing."
+  );
+  assert.match(
+    globalStyles,
+    /@media \(max-width: 1100px\) \{[\s\S]{0,140}\.content > :is\(\.topbar, \.shell-compact-bar\):has\(\.shell-back-button\) \{[\s\S]{0,100}grid-template-columns: auto minmax\(0, 1fr\) auto !important;/,
+    "Compact headers must reserve separate columns for leading controls, titles, and actions."
+  );
+  assert.match(
+    globalStyles,
+    /@media \(max-width: 760px\) \{[\s\S]{0,140}\.content--has-mobile-leading-action \.shell-topbar-leading__actions \{[\s\S]{0,80}display: inline-flex !important;/,
+    "Mobile Accounts, Transactions, and Recurring headers must expose their Ask Clover action."
+  );
+  assert.match(
+    globalStyles,
+    /\.content--has-mobile-leading-action[\s\S]{0,160}> :is\(\.topbar, \.shell-compact-bar\):has\(\.shell-back-button\)[\s\S]{0,100}\.topbar__title-row[\s\S]{0,300}h1 \{[\s\S]{0,100}flex: 1 1 auto;[\s\S]{0,160}text-overflow: ellipsis;/,
+    "Very narrow mobile headers must shrink and ellipsize titles inside the center column."
   );
 
   console.log("Browser compatibility regression passed.");
