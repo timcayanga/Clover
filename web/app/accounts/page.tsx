@@ -393,17 +393,22 @@ const mergeAccountsWithOptimisticImports = (
   supportingTransactions: Transaction[] = [],
   options?: { preserveImportedEvidence?: boolean }
 ) => {
+  const shouldPreserveImportedEvidence =
+    (options?.preserveImportedEvidence ?? false) || hasImportedTransactionEvidence(supportingTransactions);
   const baseMergedAccounts = mergeAccountsWithOptimisticImportsShared(
     fetchedAccounts,
     currentAccounts,
     {
       deletedAccountIds,
       preserveNonZeroOptimisticBalance: true,
+      preserveCurrentInventory: shouldPreserveImportedEvidence,
     }
   );
-  const shouldPreserveImportedEvidence =
-    (options?.preserveImportedEvidence ?? false) || hasImportedTransactionEvidence(supportingTransactions);
-  if (!shouldPreserveImportedEvidence || supportingTransactions.length === 0) {
+  if (!shouldPreserveImportedEvidence) {
+    return baseMergedAccounts;
+  }
+
+  if (supportingTransactions.length === 0) {
     return baseMergedAccounts;
   }
 

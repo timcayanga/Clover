@@ -315,6 +315,7 @@ export const mergeAccountsWithOptimisticImports = <TAccount extends ImportedAcco
   options?: {
     deletedAccountIds?: Set<string>;
     preserveNonZeroOptimisticBalance?: boolean;
+    preserveCurrentInventory?: boolean;
   }
 ) => {
   const deletedAccountIds = options?.deletedAccountIds ?? new Set<string>();
@@ -377,7 +378,7 @@ export const mergeAccountsWithOptimisticImports = <TAccount extends ImportedAcco
       return false;
     }
 
-    if (isTransientUploadedAccountPlaceholder(account)) {
+    if (!options?.preserveCurrentInventory && isTransientUploadedAccountPlaceholder(account)) {
       return false;
     }
 

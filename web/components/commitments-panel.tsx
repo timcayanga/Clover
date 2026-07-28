@@ -411,9 +411,9 @@ export function CommitmentsPanel({
   }, [initialKind, showAddModal]);
 
   const recentTransactions = transactions.slice(0, 24);
-  const actionablePlannedPaymentSuggestions = plannedPaymentSuggestions.filter(
-    (suggestion) => suggestion.sourceKind !== "recurring_transaction"
-  );
+  // Home counts recurring-transaction suggestions as potential payments, so
+  // the Recurring overview must expose the same records for review.
+  const actionablePlannedPaymentSuggestions = plannedPaymentSuggestions;
   const suggestedRecurringPatterns = useMemo(() => {
     const deduped = new Map<string, RecurringPatternSummary>();
     for (const pattern of recurringPatterns) {

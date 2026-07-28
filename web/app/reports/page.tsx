@@ -95,8 +95,10 @@ type ReportTransaction = {
   description: string | null;
   rawPayload: unknown;
   account: {
+    id: string;
     name: string;
     institution: string | null;
+    accountNumber: string | null;
   };
   category: {
     name: string;
@@ -170,6 +172,7 @@ type MonthBucket = {
 type WorkspaceAccountSnapshot = {
   id: string;
   name: string;
+  accountNumber: string | null;
   balance: unknown;
   currency: string;
   type: string;
@@ -288,8 +291,10 @@ const mapParsedRowsToReportTransactions = (
     accountName: string | null;
     importFile: {
       account: {
+        id: string;
         name: string;
         institution: string | null;
+        accountNumber: string | null;
       } | null;
     } | null;
   }>
@@ -312,8 +317,10 @@ const mapParsedRowsToReportTransactions = (
         description: null,
         rawPayload: row.rawPayload,
         account: {
+          id: row.importFile?.account?.id ?? `import:${row.importFileId}`,
           name: row.importFile?.account?.name ?? row.accountName ?? "Imported account",
           institution: row.importFile?.account?.institution ?? row.institution,
+          accountNumber: row.importFile?.account?.accountNumber ?? null,
         },
         category: row.categoryName ? { name: row.categoryName } : null,
         importFileId: row.importFileId,
@@ -536,8 +543,10 @@ export async function ReportsStream({
           isTransfer: true,
           account: {
             select: {
+              id: true,
               name: true,
               institution: true,
+              accountNumber: true,
             },
           },
           category: {
@@ -585,12 +594,12 @@ export async function ReportsStream({
             select: {
               id: true,
               name: true,
+              accountNumber: true,
               balance: true,
               currency: true,
               type: true,
             },
             orderBy: [{ balance: "desc" }, { updatedAt: "desc" }],
-            take: 5,
           }) as Promise<WorkspaceAccountSnapshot[]>)
         : Promise.resolve([] as WorkspaceAccountSnapshot[]),
       needsAdvancedData
@@ -647,8 +656,10 @@ export async function ReportsStream({
             select: {
               account: {
                 select: {
+                  id: true,
                   name: true,
                   institution: true,
+                  accountNumber: true,
                 },
               },
             },
@@ -790,6 +801,7 @@ export async function ReportsStream({
             {
               id: account.id,
               name: typeof account.name === "string" && account.name.trim().length > 0 ? account.name : "Account",
+              accountNumber: typeof account.accountNumber === "string" ? account.accountNumber : null,
               balance: account.balance,
               currency: typeof account.currency === "string" && account.currency.trim().length > 0 ? account.currency : "MIXED",
               type: typeof account.type === "string" && account.type.trim().length > 0 ? account.type : "account",
@@ -892,7 +904,7 @@ export async function ReportsStream({
     );
     const reportExpenseCategoryEntries = Array.from(reportExpenseCategories.entries()).sort((a, b) => b[1] - a[1]);
     const reportExpenseTotal = reportExpenseCategoryEntries.reduce((sum, [, amount]) => sum + amount, 0);
-    const reportExpenseTopCategories = reportExpenseCategoryEntries.slice(0, 5);
+    const reportExpenseDisplayCategories = reportExpenseCategoryEntries;
     const reportSpentTotal = reportExpenseTotal > 0 ? reportExpenseTotal : currentSpend;
 
     const reportSankeyIncomeTransactions = reportDisplayTransactions.filter((transaction) => getReportTransactionType(transaction) === "income");
@@ -900,6 +912,7 @@ export async function ReportsStream({
     const reportSankeyAccountIncome = new Map<
       string,
       {
+        id: string;
         label: string;
         amount: number;
       }
@@ -923,18 +936,20 @@ export async function ReportsStream({
     >();
 
     reportSankeyIncomeTransactions.forEach((transaction) => {
-      const accountLabel = transaction.account.name?.trim().length > 0 ? transaction.account.name : "Account";
-      const key = normalizeMerchant(accountLabel);
-      const existing = reportSankeyAccountIncome.get(key) ?? { label: accountLabel, amount: 0 };
+      const accountLastFour = transaction.account.accountNumber?.replace(/\D/g, "").slice(-4);
+      const accountLabel = `${transaction.account.name?.trim() || "Account"}${accountLastFour ? ` ${accountLastFour}` : ""}`;
+      const key = transaction.account.id;
+      const existing = reportSankeyAccountIncome.get(key) ?? { id: key, label: accountLabel, amount: 0 };
       existing.amount += Math.abs(Number(transaction.amount));
       reportSankeyAccountIncome.set(key, existing);
     });
 
     reportSankeyExpenseTransactions.forEach((transaction) => {
-      const accountLabel = transaction.account.name?.trim().length > 0 ? transaction.account.name : "Account";
-      const accountKey = normalizeMerchant(accountLabel);
+      const accountLastFour = transaction.account.accountNumber?.replace(/\D/g, "").slice(-4);
+      const accountLabel = `${transaction.account.name?.trim() || "Account"}${accountLastFour ? ` ${accountLastFour}` : ""}`;
+      const accountKey = transaction.account.id;
       if (!reportSankeyAccountIncome.has(accountKey)) {
-        reportSankeyAccountIncome.set(accountKey, { label: accountLabel, amount: 0 });
+        reportSankeyAccountIncome.set(accountKey, { id: accountKey, label: accountLabel, amount: 0 });
       }
       const categoryLabel = getReportTransactionCategoryName(transaction);
       const categoryKey = normalizeMerchant(categoryLabel);
@@ -950,22 +965,35 @@ export async function ReportsStream({
       reportSankeyCategoryTotals.set(categoryKey, categoryExisting);
     });
 
+    for (const account of workspaceAccountSummaries) {
+      const accountLastFour = account.accountNumber?.replace(/\D/g, "").slice(-4);
+      const accountLabel = `${account.name}${accountLastFour ? ` ${accountLastFour}` : ""}`;
+      if (!reportSankeyAccountIncome.has(account.id)) {
+        reportSankeyAccountIncome.set(account.id, { id: account.id, label: accountLabel, amount: 0 });
+      }
+    }
+
+    const accountSnapshotById = new Map(workspaceAccountSummaries.map((account) => [account.id, account] as const));
     const reportSankeyAccounts = Array.from(reportSankeyAccountIncome.values())
       .map((account) => {
-        const expenseAmount = Array.from(reportSankeyAccountExpenseByCategory.get(normalizeMerchant(account.label))?.values() ?? []).reduce(
+        const expenseAmount = Array.from(reportSankeyAccountExpenseByCategory.get(account.id)?.values() ?? []).reduce(
           (sum, category) => sum + category.amount,
           0
         );
+        const currentBalance = Math.max(Number(accountSnapshotById.get(account.id)?.balance ?? 0), 0);
+        const beginningBalance = Math.max(currentBalance - account.amount + expenseAmount, 0);
+        const availableAmount = Math.max(beginningBalance + account.amount, expenseAmount);
         return {
           ...account,
           incomeAmount: account.amount,
-          amount: Math.max(account.amount, expenseAmount),
+          beginningBalance,
+          currentBalance,
+          amount: availableAmount,
           expenseAmount,
         };
       })
-      .filter((account) => account.amount > 0 || account.expenseAmount > 0)
       .sort((a, b) => b.amount - a.amount)
-      .slice(0, 6);
+      .slice(0, 12);
 
     const sankeyCategoryEntries = Array.from(reportSankeyCategoryTotals.values())
       .filter((category) => category.amount > 0)
@@ -974,7 +1002,7 @@ export async function ReportsStream({
     const sankeyAccountColors = ["#08abc4", "#44c7b6", "#79c98d", "#63a9e8", "#f0bd4f", "#f28b62"];
     const sankeyCategoryTotals = new Map<string, { label: string; amount: number }>();
     const sankeyAccountFlows = reportSankeyAccounts.map((account, accountIndex) => {
-      const expenses = Array.from(reportSankeyAccountExpenseByCategory.get(normalizeMerchant(account.label))?.values() ?? [])
+      const expenses = Array.from(reportSankeyAccountExpenseByCategory.get(account.id)?.values() ?? [])
         .filter((entry) => entry.amount > 0)
         .reduce<Array<{ key: string; label: string; amount: number }>>((entries, entry) => {
           const entryKey = normalizeMerchant(entry.label);
@@ -1008,6 +1036,21 @@ export async function ReportsStream({
       };
     });
 
+    const sankeySourceNodes = [
+      {
+        key: "beginning-balance",
+        label: "Beginning balance (estimated)",
+        amount: sankeyAccountFlows.reduce((sum, account) => sum + account.beginningBalance, 0),
+        color: "#35b878",
+      },
+      {
+        key: "income",
+        label: "Income",
+        amount: sankeyAccountFlows.reduce((sum, account) => sum + account.incomeAmount, 0),
+        color: "#08abc4",
+      },
+    ].filter((source) => source.amount > 0);
+
     const sankeyCategoryNodes = Array.from(sankeyCategoryTotals.entries())
       .map(([key, category]) => {
         const categoryTone = getCategoryIconTone(category.label);
@@ -1039,6 +1082,7 @@ export async function ReportsStream({
     const sankeyChartHeight = Math.max(420, 300 + Math.max(sankeyAccountFlows.length, sankeyCategoryNodes.length) * 22);
     const sankeyNodeWidth = 12;
     const sankeyColumnPadding = 30;
+    const sankeySourceGap = 18;
     const sankeyAccountGap = 14;
     const sankeyCategoryGap = 10;
     const sankeySourceX = 48;
@@ -1047,12 +1091,13 @@ export async function ReportsStream({
     const sankeyAvailableHeight = sankeyChartHeight - sankeyColumnPadding * 2;
     const sankeyAccountScale =
       (sankeyAvailableHeight - Math.max(sankeyAccountFlows.length - 1, 0) * sankeyAccountGap) / Math.max(sankeyTotalFlow, 1);
+    const sankeySourceTotal = sankeySourceNodes.reduce((sum, source) => sum + source.amount, 0);
+    const sankeySourceScale =
+      (sankeyAvailableHeight - Math.max(sankeySourceNodes.length - 1, 0) * sankeySourceGap) / Math.max(sankeySourceTotal, 1);
     const sankeyCategoryTotal = sankeyCategoryNodes.reduce((sum, category) => sum + category.amount, 0);
     const sankeyCategoryScale =
       (sankeyAvailableHeight - Math.max(sankeyCategoryNodes.length - 1, 0) * sankeyCategoryGap) / Math.max(sankeyCategoryTotal, 1);
-    const sankeyScale = Math.max(0.0001, Math.min(sankeyAccountScale, sankeyCategoryScale));
-    const sankeyFlowHeight = sankeyTotalFlow * sankeyScale;
-    const sankeySourceY = (sankeyChartHeight - sankeyFlowHeight) / 2;
+    const sankeyScale = Math.max(0.0001, Math.min(sankeySourceScale, sankeyAccountScale, sankeyCategoryScale));
     const layoutProportionalColumn = <T extends { amount: number }>(nodes: T[], gap: number) => {
       const columnHeight = nodes.reduce((sum, node) => sum + node.amount * sankeyScale, 0) + Math.max(nodes.length - 1, 0) * gap;
       let offset = (sankeyChartHeight - columnHeight) / 2;
@@ -1063,22 +1108,39 @@ export async function ReportsStream({
         return layout;
       });
     };
+    const sankeySourceLayouts = layoutProportionalColumn(sankeySourceNodes, sankeySourceGap);
     const sankeyAccountLayouts = layoutProportionalColumn(sankeyAccountFlows, sankeyAccountGap);
     const sankeyCategoryLayouts = layoutProportionalColumn(sankeyCategoryNodes, sankeyCategoryGap);
+    const sankeySourceLayoutByKey = new Map(sankeySourceLayouts.map((source) => [source.key, source]));
     const sankeyCategoryLayoutByKey = new Map(sankeyCategoryLayouts.map((category) => [category.key, category]));
 
-    let sankeySourceOffset = 0;
-    const sankeyIncomeLinks = sankeyAccountLayouts.map((account) => {
-      const height = account.amount * sankeyScale;
-      const link = {
-        key: account.label,
-        color: account.color,
-        sourceY: sankeySourceY + sankeySourceOffset,
-        targetY: account.y,
-        height,
-      };
-      sankeySourceOffset += height;
-      return link;
+    const sankeySourceOffsets = new Map<string, number>();
+    const sankeyIncomeLinks = sankeyAccountLayouts.flatMap((account) => {
+      let accountOffset = 0;
+      return [
+        { key: "beginning-balance", amount: account.beginningBalance },
+        { key: "income", amount: account.incomeAmount },
+      ].flatMap((sourceFlow) => {
+        if (sourceFlow.amount <= 0) {
+          return [];
+        }
+        const source = sankeySourceLayoutByKey.get(sourceFlow.key);
+        if (!source) {
+          return [];
+        }
+        const sourceOffset = sankeySourceOffsets.get(sourceFlow.key) ?? 0;
+        const height = sourceFlow.amount * sankeyScale;
+        const link = {
+          key: `${sourceFlow.key}:${account.id}`,
+          color: source.color,
+          sourceY: source.y + sourceOffset,
+          targetY: account.y + accountOffset,
+          height,
+        };
+        sankeySourceOffsets.set(sourceFlow.key, sourceOffset + height);
+        accountOffset += height;
+        return [link];
+      });
     });
 
     const sankeyCategoryOffsets = new Map<string, number>();
@@ -1343,13 +1405,13 @@ export async function ReportsStream({
     const reportCashFlowPath = reportCashFlowPoints
       .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
       .join(" ");
-    const reportCategorySegments = reportExpenseTopCategories.map(([categoryName, amount]) => ({
+    const reportCategorySegments = reportExpenseDisplayCategories.map(([categoryName, amount]) => ({
       categoryName,
       amount,
       share: reportExpenseTotal > 0 ? amount / reportExpenseTotal : 0,
       color: getCategoryIconTone(categoryName),
     }));
-    const currentTrackedCategorySpend = reportExpenseTopCategories.reduce((sum, [, amount]) => sum + amount, 0);
+    const currentTrackedCategorySpend = reportExpenseDisplayCategories.reduce((sum, [, amount]) => sum + amount, 0);
     const currentOtherSpend = Math.max(reportExpenseTotal - currentTrackedCategorySpend, 0);
     const reportCategoryMaxAmount = Math.max(
       ...reportCategorySegments.map((segment) => segment.amount),
@@ -1805,14 +1867,17 @@ export async function ReportsStream({
             <>
             <section className="reports-brief-grid reports-brief-grid--more">
               <article className="report-ai-card reports-subtab-card report-ai-card--featured report-sankey-card glass">
-                <ReportInfoTip className="reports-container-info" label="A Sankey view of how income flows into accounts and then into spending categories." />
+                <ReportInfoTip
+                  className="reports-container-info"
+                  label="Shows estimated beginning balances and recorded income flowing through each account into spending categories. Transfers between your own accounts are excluded."
+                />
                 <div className="report-card__head report-card__head--compact">
                   <div>
                     <h4 className="reports-subtab-title">🗺️ Cash flow map</h4>
                   </div>
                 </div>
 
-                {sankeyIncomeLinks.length > 0 ? (
+                {sankeyAccountLayouts.length > 0 ? (
                   <>
                     <div className="report-sankey__chart-wrap">
                       <svg
@@ -1826,7 +1891,7 @@ export async function ReportsStream({
                             <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#0f172a" floodOpacity="0.12" />
                           </filter>
                         </defs>
-                        <text x={sankeySourceX} y="17" className="report-sankey__column-label">Funds</text>
+                        <text x={sankeySourceX} y="17" className="report-sankey__column-label">Sources</text>
                         <text x={sankeyAccountX} y="17" className="report-sankey__column-label">Accounts</text>
                         <text x={sankeyCategoryX} y="17" className="report-sankey__column-label">Destinations</text>
 
@@ -1845,15 +1910,33 @@ export async function ReportsStream({
                           />
                         ))}
 
-                        <rect
-                          x={sankeySourceX}
-                          y={sankeySourceY}
-                          width={sankeyNodeWidth}
-                          height={sankeyFlowHeight}
-                          rx="3"
-                          fill="#009eb7"
-                          filter="url(#sankeyNodeShadow)"
-                        />
+                        {sankeySourceLayouts.map((source) => (
+                          <g key={source.key}>
+                            <rect
+                              x={sankeySourceX}
+                              y={source.y}
+                              width={sankeyNodeWidth}
+                              height={source.height}
+                              rx="3"
+                              fill={source.color}
+                              filter="url(#sankeyNodeShadow)"
+                            />
+                            <text
+                              x={sankeySourceX + sankeyNodeWidth + 16}
+                              y={source.y + source.height / 2 - 5}
+                              className="report-sankey__source-label"
+                            >
+                              {source.label}
+                            </text>
+                            <text
+                              x={sankeySourceX + sankeyNodeWidth + 16}
+                              y={source.y + source.height / 2 + 16}
+                              className="report-sankey__source-value"
+                            >
+                              {formatCurrency(source.amount)}
+                            </text>
+                          </g>
+                        ))}
 
                         {sankeyAccountLayouts.map((account) => (
                           <g key={account.label}>
@@ -1917,22 +2000,11 @@ export async function ReportsStream({
                           </g>
                         ))}
 
-                        <text
-                          x={sankeySourceX + sankeyNodeWidth + 16}
-                          y={sankeySourceY + sankeyFlowHeight / 2 - 5}
-                          className="report-sankey__source-label"
-                        >
-                          Tracked funds
-                        </text>
-                        <text
-                          x={sankeySourceX + sankeyNodeWidth + 16}
-                          y={sankeySourceY + sankeyFlowHeight / 2 + 16}
-                          className="report-sankey__source-value"
-                        >
-                          {formatCurrency(sankeyTotalFlow)}
-                        </text>
                       </svg>
                     </div>
+                    <p className="reports-data-note reports-data-note--inline">
+                      Beginning balance is estimated from the current account balance and recorded activity in this period.
+                    </p>
                   </>
                 ) : (
                   <ReportsEmptyNote

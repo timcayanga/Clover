@@ -643,11 +643,11 @@ async function GoalsPageStream() {
       info: "Compares current spending with the prior comparable period.",
     },
     {
-      label: "Savings rate",
+      label: "Savings rate · 30 days",
       value: currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100),
       note: currentSavingsRate === null ? "Need more income context" : savingsRateDelta !== null && savingsRateDelta >= 0 ? "Improving momentum" : "Needs a reset",
       tone: currentSavingsRate === null ? "neutral" : savingsRateDelta !== null && savingsRateDelta >= 0 ? "positive" : "negative",
-      info: "Income left after expenses, shown as a percentage of income.",
+      info: `Income left after expenses from ${shortDateFormatter.format(thirtyDaysAgo)} to ${shortDateFormatter.format(now)}, shown as a percentage of income.`,
     },
     {
       label: "Recurring costs",

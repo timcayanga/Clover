@@ -1425,26 +1425,31 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
         completionBoostFromStats(adviserOutcomeByItem.get(itemId)) * 0.7
     );
 
-  const analysisAnchorDate = allTransactions[0]?.date ?? now;
-  const dataFreshness = getDataFreshnessCopy(analysisAnchorDate, now);
-  const analysisMonthHref = toIsoMonth(analysisAnchorDate);
-  const currentWindowStart = new Date(analysisAnchorDate);
+  const latestTransactionDate = allTransactions[0]?.date ?? now;
+  const analysisAnchorDate = now;
+  const dataFreshness = getDataFreshnessCopy(latestTransactionDate, now);
+  const analysisMonthHref = toIsoMonth(latestTransactionDate);
+  const currentWindowStart = new Date(now);
   currentWindowStart.setDate(currentWindowStart.getDate() - 30);
-  const previousWindowStart = new Date(analysisAnchorDate);
+  const previousWindowStart = new Date(now);
   previousWindowStart.setDate(previousWindowStart.getDate() - 60);
 
   const currentWindowTransactions = allTransactions.filter(
-    (transaction) => transaction.date > currentWindowStart && transaction.date <= analysisAnchorDate
+    (transaction) => transaction.date > currentWindowStart && transaction.date <= now
   );
   const previousWindowTransactions = allTransactions.filter(
     (transaction) => transaction.date > previousWindowStart && transaction.date <= currentWindowStart
   );
   const activeTransactions = currentWindowTransactions.length > 0 ? currentWindowTransactions : allTransactions;
-  const activeTransactionWindowLabel = currentWindowTransactions.length > 0 ? dataFreshness.label : "available history";
+  const activeTransactionWindowLabel =
+    currentWindowTransactions.length > 0
+      ? `${toShortDateLabel(currentWindowStart)} to ${toShortDateLabel(now)}`
+      : "available history";
   const comparisonWindowTransactions =
     previousWindowTransactions.length > 0 ? previousWindowTransactions : allTransactions.filter((transaction) => transaction.date <= currentWindowStart);
 
   const currentSummary = buildTransactionSummary(activeTransactions);
+  const recentThirtyDaySummary = buildTransactionSummary(currentWindowTransactions);
   const previousSummary = buildTransactionSummary(comparisonWindowTransactions);
   const allSummary = buildTransactionSummary(allTransactions);
 
@@ -1452,7 +1457,10 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
   const previousSpend = previousSummary.expense;
   const currentNet = currentSummary.income - currentSummary.expense;
   const previousNet = previousSummary.income - previousSummary.expense;
-  const currentSavingsRate = currentSummary.income > 0 ? currentNet / currentSummary.income : null;
+  const currentSavingsRate =
+    recentThirtyDaySummary.income > 0
+      ? (recentThirtyDaySummary.income - recentThirtyDaySummary.expense) / recentThirtyDaySummary.income
+      : null;
   const previousSavingsRate = previousSummary.income > 0 ? (previousSummary.income - previousSummary.expense) / previousSummary.income : null;
   const historySpanDays = allTransactions.length > 0 ? daysBetween(analysisAnchorDate, allTransactions[allTransactions.length - 1].date) : 0;
   const historyWindowCount = Math.max(historySpanDays / 30, 1);
@@ -2125,7 +2133,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     },
     {
       id: "savings_rate",
-      title: "Recent savings rate",
+      title: "Savings rate · 30 days",
       value: currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100),
       tone: currentSavingsRate === null || currentSavingsRate >= 0 ? "positive" : "warning",
       detail:
@@ -3299,6 +3307,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
       initialSection="overview"
       availableSections={[...reportSections]}
       lockedSections={hasCompleteAccess ? [] : ["advanced"]}
+      restoreSelection={false}
     >
       <CloverShell
         active="adviser"

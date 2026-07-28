@@ -2,6 +2,7 @@ import { strict as assert } from "node:assert";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import {
   mergeFetchedTransactionsPreservingImported,
+  mergeAccountsWithOptimisticImports,
   mergeOptimisticImportedAccount,
   isTransientUploadedAccountPlaceholder,
   uploadSummaryCanDismissImportUi,
@@ -118,6 +119,18 @@ const main = () => {
     }),
     false,
     "Published account-inventory rows must survive client placeholder cleanup even with no transactions or balance."
+  );
+  assert.deepEqual(
+    mergeAccountsWithOptimisticImports([], [genericPlaceholder], {
+      preserveCurrentInventory: true,
+    }).map((account) => account.id),
+    [genericPlaceholder.id],
+    "A temporarily incomplete post-import read must preserve the visible account inventory until the server publication settles."
+  );
+  assert.deepEqual(
+    mergeAccountsWithOptimisticImports([], [genericPlaceholder]).map((account) => account.id),
+    [],
+    "Transient placeholders must still be removed outside the post-import settlement window."
   );
   assert.deepEqual(
     pruneImportedAccountPlaceholders([

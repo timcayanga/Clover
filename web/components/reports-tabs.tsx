@@ -35,15 +35,17 @@ export function ReportsTabsProvider({
   initialSection,
   availableSections,
   lockedSections = [],
+  restoreSelection = true,
   children,
 }: {
   initialSection: ReportsSection;
   availableSections: ReportsSection[];
   lockedSections?: ReportsSection[];
+  restoreSelection?: boolean;
   children: ReactNode;
 }) {
   const [activeSection, setActiveSection] = useState<ReportsSection>(() => {
-    if (typeof window === "undefined") {
+    if (typeof window === "undefined" || !restoreSelection) {
       return initialSection;
     }
 
@@ -55,12 +57,12 @@ export function ReportsTabsProvider({
   }, [availableSections, initialSection]);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
+    if (typeof window === "undefined" || !restoreSelection) {
       return;
     }
 
     window.sessionStorage.setItem(reportsSectionStorageKey, activeSection);
-  }, [activeSection]);
+  }, [activeSection, restoreSelection]);
 
   return (
     <ReportsTabsContext.Provider value={{ activeSection, setActiveSection, availableSections, lockedSections }}>

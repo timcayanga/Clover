@@ -49552,7 +49552,7 @@ html[data-theme="dark"] .content--adviser .report-insight strong.positive {
 
 .content--adviser .report-insight strong.negative,
 html[data-theme="dark"] .content--adviser .report-insight strong.negative {
-  color: #fb7185 !important;
+  color: var(--bad) !important;
 }
 
 .content--adviser .report-sankey__svg text {
