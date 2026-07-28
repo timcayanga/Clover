@@ -26,4 +26,17 @@ assert.match(lazyActionsSource, /dynamic\(\s*\(\) => import\("@\/components\/imp
 const accountsSource = readSource("app/accounts/page.tsx");
 assert.match(accountsSource, /awaitHydration: !hydratedFromCache/);
 
+const commitmentsSource = readSource("components/commitments-panel.tsx");
+assert.match(commitmentsSource, /Why Clover suggested this/);
+assert.match(commitmentsSource, /<span>Paid to<\/span>/);
+assert.match(commitmentsSource, /<span>Currency<\/span>/);
+assert.match(commitmentsSource, /recurring-overview-review-button/);
+assert.doesNotMatch(commitmentsSource, /Add this to Recurring\?/);
+assert.doesNotMatch(commitmentsSource, /overviewStats\.upcoming\.length\} scheduled/);
+assert.doesNotMatch(commitmentsSource, /overviewStats\.activeCount\} active/);
+assert.doesNotMatch(
+  commitmentsSource,
+  /actionablePlannedPaymentSuggestions\.length \+ suggestedRecurringPatterns\.length/,
+);
+
 console.log("Critical page loading regression passed.");

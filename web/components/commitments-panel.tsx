@@ -1380,7 +1380,6 @@ export function CommitmentsPanel({
         <article className="panel recurring-overview-card">
           <div className="recurring-overview-card__heading">
             <p className="eyebrow">Next 30 days</p>
-            <span className="recurring-overview-card__icon" aria-hidden="true">↗</span>
           </div>
           <strong className="recurring-overview-card__value">{formatCurrency(String(overviewStats.dueWithin30DaysTotal))}</strong>
           <p>{overviewStats.dueWithin30Days.length === 0 ? "No payments due yet" : `${overviewStats.dueWithin30Days.length} payment${overviewStats.dueWithin30Days.length === 1 ? "" : "s"} due`}</p>
@@ -1389,7 +1388,6 @@ export function CommitmentsPanel({
         <article className="panel recurring-overview-card recurring-overview-card--list">
           <div className="recurring-overview-card__heading">
             <p className="eyebrow">Upcoming payments</p>
-            <span>{overviewStats.upcoming.length} scheduled</span>
           </div>
           {overviewStats.upcoming.length > 0 ? (
             <div className="recurring-overview-list">
@@ -1411,7 +1409,6 @@ export function CommitmentsPanel({
         <article className="panel recurring-overview-card">
           <div className="recurring-overview-card__heading">
             <p className="eyebrow">Monthly commitments</p>
-            <span>{overviewStats.activeCount} active</span>
           </div>
           <strong className="recurring-overview-card__value">{formatCurrency(String(overviewStats.monthlyTotal))}</strong>
           <p>Estimated from recurring active items</p>
@@ -1420,7 +1417,6 @@ export function CommitmentsPanel({
         <article className="panel recurring-overview-card recurring-overview-card--list">
           <div className="recurring-overview-card__heading">
             <p className="eyebrow">Needs attention</p>
-            <span>{actionablePlannedPaymentSuggestions.length + suggestedRecurringPatterns.length}</span>
           </div>
           {actionablePlannedPaymentSuggestions.length > 0 || suggestedRecurringPatterns.length > 0 ? (
             <div className="recurring-overview-list">
@@ -1430,7 +1426,7 @@ export function CommitmentsPanel({
                     <strong>{suggestion.title}</strong>
                     <small>{suggestion.sourceLabel}</small>
                   </span>
-                  <button className="button button-secondary button-small" type="button" onClick={() => openPlannedPaymentReview(suggestion)}>
+                  <button className="button button-secondary button-small recurring-overview-review-button" type="button" onClick={() => openPlannedPaymentReview(suggestion)}>
                     Review
                   </button>
                 </div>
@@ -1441,7 +1437,7 @@ export function CommitmentsPanel({
                     <strong>{pattern.merchantClean ?? pattern.merchantRaw}</strong>
                     <small>{formatDate(pattern.nextExpectedDate)}</small>
                   </span>
-                  <button className="button button-secondary button-small" type="button" onClick={() => openPatternReview(pattern)}>
+                  <button className="button button-secondary button-small recurring-overview-review-button" type="button" onClick={() => openPatternReview(pattern)}>
                     Review
                   </button>
                 </div>
@@ -1514,20 +1510,9 @@ export function CommitmentsPanel({
         >
           <section className="panel glass" style={{ width: "min(720px, 100%)", display: "grid", gap: 16, maxHeight: "min(92vh, 880px)", overflow: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
-              <div>
+              <div className="recurring-suggestion-review__intro">
                 <p className="eyebrow">Review suggestion</p>
-                <h3 style={{ margin: 0 }}>
-                  {reviewingSuggestion.sourceKind === "installment" ? "Add installment payment?" : "Add this to Recurring?"}
-                </h3>
-                <p className="panel-muted" style={{ margin: "6px 0 0" }}>
-                  {reviewingSuggestion.sourceLabel}
-                  {reviewingSuggestion.sourceDetail ? ` · ${reviewingSuggestion.sourceDetail}` : ""}
-                </p>
-                {reviewingSuggestion.reasonSummary ? (
-                  <p className="panel-muted" style={{ margin: "6px 0 0" }}>
-                    <strong style={{ color: "var(--foreground)" }}>Why Clover suggested this:</strong> {reviewingSuggestion.reasonSummary}
-                  </p>
-                ) : null}
+                <h3 className="recurring-suggestion-review__why">Why Clover suggested this</h3>
                 {reviewingSuggestion.reasonTags.length > 0 ? (
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
                     {reviewingSuggestion.reasonTags.map((tag) => (
@@ -1564,7 +1549,7 @@ export function CommitmentsPanel({
 
               <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
                 <label className="settings-field">
-                  <span>Counterparty</span>
+                  <span>Paid to</span>
                   <input
                     className="settings-input"
                     value={patternDraft.counterparty}
@@ -1573,20 +1558,19 @@ export function CommitmentsPanel({
                   />
                 </label>
                 <label className="settings-field">
-                  <span>Amount</span>
+                  <span>Next due date</span>
                   <input
                     className="settings-input"
-                    inputMode="decimal"
-                    value={patternDraft.amount}
-                    onChange={(event) => setPatternDraft((draft) => ({ ...draft, amount: event.target.value }))}
-                    placeholder="2500.00"
+                    type="date"
+                    value={patternDraft.dueDate}
+                    onChange={(event) => setPatternDraft((draft) => ({ ...draft, dueDate: event.target.value }))}
                   />
                 </label>
               </div>
 
               <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
                 <label className="settings-field">
-                  <span className="sr-only">Currency</span>
+                  <span>Currency</span>
                   <CurrencySelector
                     value={patternDraft.currency}
                     onChange={(value) => setPatternDraft((draft) => ({ ...draft, currency: value }))}
@@ -1600,12 +1584,13 @@ export function CommitmentsPanel({
                   />
                 </label>
                 <label className="settings-field">
-                  <span>Next due date</span>
+                  <span>Amount</span>
                   <input
                     className="settings-input"
-                    type="date"
-                    value={patternDraft.dueDate}
-                    onChange={(event) => setPatternDraft((draft) => ({ ...draft, dueDate: event.target.value }))}
+                    inputMode="decimal"
+                    value={patternDraft.amount}
+                    onChange={(event) => setPatternDraft((draft) => ({ ...draft, amount: event.target.value }))}
+                    placeholder="2500.00"
                   />
                 </label>
               </div>
