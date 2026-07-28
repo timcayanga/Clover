@@ -83,7 +83,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1095.0",
     "@clerk/nextjs": "^6.39.6",
     "@napi-rs/canvas": "^0.1.100",
-    "@prisma/adapter-pg": "^7.7.0",
+    "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "bullmq": "^5.76.2",
     "ioredis": "5.10.1",
