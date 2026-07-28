@@ -51,6 +51,58 @@ const baseRoutingInput = {
   parsedDateCoverage: 0.67,
 };
 
+const strongHsbcPdfDecision = buildParserRoutingDecision({
+  ...baseRoutingInput,
+  parsedRowsLength: 31,
+  metadataConfidence: 98,
+  hasAccountNumber: true,
+  hasReliableDeterministicStatementParse: hasStrongStructuredPdfParse({
+    fileType: "application/pdf",
+    imageImport: false,
+    importMode: "statement",
+    parsedRowsLength: 31,
+    parsedDateCoverage: 1,
+    metadataConfidence: 98,
+    hasKnownInstitution: true,
+    hasAccountNumber: true,
+    hasMultipleAccountNumbers: false,
+  }),
+  genericParseLooksSuspicious: true,
+  genericIdentityLooksWeak: true,
+  parsedDateCoverage: 1,
+});
+assert.equal(
+  strongHsbcPdfDecision.decision,
+  "local_fast",
+  "Expected a complete HSBC UK PDF parse to skip the slow backup and vision parsers."
+);
+
+const sparseHsbcPdfDecision = buildParserRoutingDecision({
+  ...baseRoutingInput,
+  parsedRowsLength: 2,
+  metadataConfidence: 82,
+  hasAccountNumber: true,
+  hasReliableDeterministicStatementParse: hasStrongStructuredPdfParse({
+    fileType: "application/pdf",
+    imageImport: false,
+    importMode: "statement",
+    parsedRowsLength: 2,
+    parsedDateCoverage: 1,
+    metadataConfidence: 82,
+    hasKnownInstitution: true,
+    hasAccountNumber: true,
+    hasMultipleAccountNumbers: false,
+  }),
+  genericParseLooksSuspicious: true,
+  genericIdentityLooksWeak: true,
+  parsedDateCoverage: 1,
+});
+assert.equal(
+  sparseHsbcPdfDecision.decision,
+  "backup_required",
+  "Expected sparse HSBC PDFs to retain backup parser protection."
+);
+
 const noHistoryDecision = buildParserRoutingDecision({
   ...baseRoutingInput,
   hasTemplateMemory: true,

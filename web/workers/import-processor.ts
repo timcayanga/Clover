@@ -8762,7 +8762,9 @@ export const processImportFileText = async (
     trainedReceiptDetails: Boolean(trainedReceiptDetails),
     canReuseCachedStatementParse,
     hasReliableDeterministicStatementParse:
-      preliminaryHasStrongWisePdfDeterministicParse || hasStructuredWorkbookRows,
+      preliminaryStrongStructuredPdfParse ||
+      preliminaryHasStrongWisePdfDeterministicParse ||
+      hasStructuredWorkbookRows,
     imageStatementParseLooksUsable: preliminaryImageStatementParseLooksUsable,
     textForParse,
     parsedRowsLength: parsedRows.length,
@@ -9273,6 +9275,7 @@ export const processImportFileText = async (
   });
   const hasReliableDeterministicStatementParse =
     hasStructuredWorkbookRows ||
+    strongStructuredPdfParse ||
     hasStrongWiseDeterministicParse ||
     hasKnownUnionBankSampleRows ||
     (importMode === "statement" &&
