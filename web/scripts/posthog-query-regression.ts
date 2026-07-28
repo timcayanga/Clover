@@ -6,6 +6,7 @@ const originalPersonalApiKey = process.env.POSTHOG_PERSONAL_API_KEY;
 const originalProjectId = process.env.POSTHOG_PROJECT_ID;
 const originalAppUrl = process.env.POSTHOG_APP_URL;
 const originalVercelEnv = process.env.VERCEL_ENV;
+const originalBetaStartedAt = process.env.NEXT_PUBLIC_ANALYTICS_BETA_STARTED_AT;
 
 const restoreEnvironment = () => {
   global.fetch = originalFetch;
@@ -15,6 +16,7 @@ const restoreEnvironment = () => {
     POSTHOG_PROJECT_ID: originalProjectId,
     POSTHOG_APP_URL: originalAppUrl,
     VERCEL_ENV: originalVercelEnv,
+    NEXT_PUBLIC_ANALYTICS_BETA_STARTED_AT: originalBetaStartedAt,
   };
 
   for (const [key, value] of Object.entries(values)) {
@@ -39,6 +41,7 @@ const main = async () => {
     process.env.POSTHOG_PROJECT_ID = "388373";
     process.env.POSTHOG_APP_URL = "https://us.posthog.com";
     process.env.VERCEL_ENV = "preview";
+    process.env.NEXT_PUBLIC_ANALYTICS_BETA_STARTED_AT = "2026-07-28T11:40:00.000Z";
 
     let capturedRequest: { url: string; authorization: string | null; body: string } | null = null;
     global.fetch = async (input, init) => {
@@ -70,6 +73,8 @@ const main = async () => {
     assert.match(capturedRequest.url, /\/api\/projects\/388373\/query\/$/);
     assert.equal(capturedRequest.authorization, "Bearer test-personal-key");
     assert.match(capturedRequest.body, /staging:%/);
+    assert.match(capturedRequest.body, /2026-07-28T11:40:00\.000Z/);
+    assert.equal(ready.rangeStartedAt, "2026-07-28T11:40:00.000Z");
     assert.doesNotMatch(capturedRequest.body, /test-personal-key/);
 
     global.fetch = async () => new Response(null, { status: 401 });

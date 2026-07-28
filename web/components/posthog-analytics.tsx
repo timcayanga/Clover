@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import {
   analyticsOnceKey,
+  getAnalyticsEpochProperties,
   getPostHogClientHost,
   scopeAnalyticsDistinctId,
   shouldTrackAnalytics,
@@ -104,7 +105,10 @@ const runWhenPostHogReady = (callback: () => void) => {
 
 const safeCapture = (event: string, properties: Record<string, unknown> = {}) => {
   try {
-    window.posthog?.capture(event, properties);
+    window.posthog?.capture(event, {
+      ...getAnalyticsEpochProperties(),
+      ...properties,
+    });
   } catch {
     // Analytics must never interrupt Clover rendering or navigation.
   }
@@ -139,8 +143,8 @@ const getClientAnalyticsEnvironment = (): "production" | "staging" | "local" => 
   return rawEnvironment === "local" ? "local" : "production";
 };
 
-const SESSION_STARTED_KEY = "clover.posthog.session-started.v1";
-const SESSION_RETURNED_KEY = "clover.posthog.session-returned.v1";
+const SESSION_STARTED_KEY = "clover.posthog.session-started.beta-2026-07-28";
+const SESSION_RETURNED_KEY = "clover.posthog.session-returned.beta-2026-07-28";
 
 function PostHogBootstrap({ token, host }: PostHogScriptProps) {
   const apiHost = normalizeHost(host);
@@ -264,7 +268,10 @@ function PostHogIdentity() {
       if (user) {
         safeIdentify(
           scopeAnalyticsDistinctId(user.id, getClientAnalyticsEnvironment()),
-          getPostHogPersonProperties(user)
+          {
+            ...getAnalyticsEpochProperties(),
+            ...getPostHogPersonProperties(user),
+          }
         );
         return;
       }
@@ -311,7 +318,10 @@ export function PostHogPersonProperties({ distinctId, properties }: PostHogPerso
     }
 
     runWhenPostHogReady(() => {
-      safeIdentify(scopeAnalyticsDistinctId(distinctId, getClientAnalyticsEnvironment()), properties);
+      safeIdentify(scopeAnalyticsDistinctId(distinctId, getClientAnalyticsEnvironment()), {
+        ...getAnalyticsEpochProperties(),
+        ...properties,
+      });
     });
   }, [distinctId, properties]);
 

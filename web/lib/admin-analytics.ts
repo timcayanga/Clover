@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getAdminDataEnvironment } from "@/lib/admin";
 import {
@@ -5,7 +6,14 @@ import {
   getAdminRealWorkspaceWhere,
   getCurrentDeploymentErrorWhere,
 } from "@/lib/admin-data-scope";
-import { ANALYTICS_EVENT_NAMES, getAnalyticsEnvironment, getPostHogConfig, type AnalyticsEventName } from "@/lib/analytics";
+import {
+  ANALYTICS_BETA_EPOCH,
+  ANALYTICS_EVENT_NAMES,
+  getAnalyticsBetaStartedAt,
+  getAnalyticsEnvironment,
+  getPostHogConfig,
+  type AnalyticsEventName,
+} from "@/lib/analytics";
 import { getPostHogLiveAnalytics, type PostHogLiveAnalytics } from "@/lib/posthog-query";
 
 export type AdminAnalyticsEvent = {
@@ -36,6 +44,10 @@ export const ADMIN_ANALYTICS_EVENTS: AdminAnalyticsEvent[] = ANALYTICS_EVENT_NAM
 
 export type AdminAnalyticsSnapshot = {
   generatedAt: string;
+  beta: {
+    epoch: string;
+    startedAt: string;
+  };
   users: {
     total: number;
     new7d: number;
@@ -84,12 +96,48 @@ const activeTransaction = { deletedAt: null } as const;
 
 export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapshot> {
   const now = Date.now();
-  const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
-  const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
-  const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000);
+  const betaStartedAt = getAnalyticsBetaStartedAt();
+  const sinceBeta = (candidate: Date) => candidate > betaStartedAt ? candidate : betaStartedAt;
+  const sevenDaysAgo = sinceBeta(new Date(now - 7 * 24 * 60 * 60 * 1000));
+  const thirtyDaysAgo = sinceBeta(new Date(now - 30 * 24 * 60 * 60 * 1000));
+  const oneDayAgo = sinceBeta(new Date(now - 24 * 60 * 60 * 1000));
   const staleImportCutoff = new Date(now - 30 * 60 * 1000);
   const productionUser = getAdminRealUserWhere();
   const productionWorkspace = getAdminRealWorkspaceWhere();
+  const betaParticipantUser: Prisma.UserWhereInput = {
+    AND: [
+      productionUser,
+      {
+        OR: [
+          { createdAt: { gte: betaStartedAt } },
+          {
+            workspaces: {
+              some: {
+                OR: [
+                  { transactions: { some: { ...activeTransaction, createdAt: { gte: betaStartedAt } } } },
+                  { importFiles: { some: { ...activeImport, uploadedAt: { gte: betaStartedAt } } } },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    ],
+  };
+  const betaWorkspace: Prisma.WorkspaceWhereInput = {
+    AND: [
+      productionWorkspace,
+      {
+        OR: [
+          { createdAt: { gte: betaStartedAt } },
+          { transactions: { some: { ...activeTransaction, createdAt: { gte: betaStartedAt } } } },
+          { importFiles: { some: { ...activeImport, uploadedAt: { gte: betaStartedAt } } } },
+        ],
+      },
+    ],
+  };
+  const betaTransaction: Prisma.TransactionWhereInput = { ...activeTransaction, createdAt: { gte: betaStartedAt } };
+  const betaImport: Prisma.ImportFileWhereInput = { ...activeImport, uploadedAt: { gte: betaStartedAt } };
 
   const [
     totalUsers,
@@ -119,55 +167,63 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
     usersWithReviewedTransactions,
     posthogLive,
   ] = await Promise.all([
-    prisma.user.count({ where: productionUser }),
-    prisma.user.count({ where: { ...productionUser, createdAt: { gte: sevenDaysAgo } } }),
-    prisma.user.count({ where: { ...productionUser, onboardingCompletedAt: { not: null } } }),
-    prisma.user.count({ where: { ...productionUser, verified: true } }),
+    prisma.user.count({ where: betaParticipantUser }),
+    prisma.user.count({ where: { AND: [betaParticipantUser, { createdAt: { gte: sevenDaysAgo } }] } }),
+    prisma.user.count({ where: { AND: [betaParticipantUser, { onboardingCompletedAt: { not: null } }] } }),
+    prisma.user.count({ where: { AND: [betaParticipantUser, { verified: true }] } }),
     prisma.user.count({
       where: {
-        ...productionUser,
-        workspaces: {
-          some: {
-            OR: [
-              { transactions: { some: { ...activeTransaction, createdAt: { gte: sevenDaysAgo } } } },
-              { importFiles: { some: { ...activeImport, uploadedAt: { gte: sevenDaysAgo } } } },
-            ],
+        AND: [
+          betaParticipantUser,
+          {
+            workspaces: {
+              some: {
+                OR: [
+                  { transactions: { some: { ...activeTransaction, createdAt: { gte: sevenDaysAgo } } } },
+                  { importFiles: { some: { ...activeImport, uploadedAt: { gte: sevenDaysAgo } } } },
+                ],
+              },
+            },
           },
-        },
+        ],
       },
     }),
     prisma.user.count({
       where: {
-        ...productionUser,
-        workspaces: {
-          some: {
-            OR: [
-              { transactions: { some: { ...activeTransaction, createdAt: { gte: thirtyDaysAgo } } } },
-              { importFiles: { some: { ...activeImport, uploadedAt: { gte: thirtyDaysAgo } } } },
-            ],
+        AND: [
+          betaParticipantUser,
+          {
+            workspaces: {
+              some: {
+                OR: [
+                  { transactions: { some: { ...activeTransaction, createdAt: { gte: thirtyDaysAgo } } } },
+                  { importFiles: { some: { ...activeImport, uploadedAt: { gte: thirtyDaysAgo } } } },
+                ],
+              },
+            },
           },
-        },
+        ],
       },
     }),
-    prisma.workspace.count({ where: productionWorkspace }),
-    prisma.account.count({ where: { workspace: productionWorkspace } }),
-    prisma.transaction.count({ where: { ...activeTransaction, workspace: productionWorkspace } }),
-    prisma.importFile.count({ where: { ...activeImport, workspace: productionWorkspace } }),
-    prisma.importFile.count({ where: { ...activeImport, status: "done", updatedAt: { gte: sevenDaysAgo }, workspace: productionWorkspace } }),
-    prisma.importFile.count({ where: { status: "failed", updatedAt: { gte: sevenDaysAgo }, workspace: productionWorkspace } }),
+    prisma.workspace.count({ where: betaWorkspace }),
+    prisma.account.count({ where: { createdAt: { gte: betaStartedAt }, workspace: productionWorkspace } }),
+    prisma.transaction.count({ where: { ...betaTransaction, workspace: productionWorkspace } }),
+    prisma.importFile.count({ where: { ...betaImport, workspace: productionWorkspace } }),
+    prisma.importFile.count({ where: { ...betaImport, status: "done", updatedAt: { gte: sevenDaysAgo }, workspace: productionWorkspace } }),
+    prisma.importFile.count({ where: { ...betaImport, status: "failed", updatedAt: { gte: sevenDaysAgo }, workspace: productionWorkspace } }),
     prisma.transaction.count({
       where: {
-        ...activeTransaction,
+        ...betaTransaction,
         reviewStatus: { in: ["confirmed", "edited"] },
         updatedAt: { gte: sevenDaysAgo },
         workspace: productionWorkspace,
       },
     }),
-    prisma.importFile.count({ where: { status: "processing", workspace: productionWorkspace } }),
-    prisma.importFile.count({ where: { status: "processing", updatedAt: { lt: staleImportCutoff }, workspace: productionWorkspace } }),
+    prisma.importFile.count({ where: { ...betaImport, status: "processing", workspace: productionWorkspace } }),
+    prisma.importFile.count({ where: { ...betaImport, status: "processing", updatedAt: { lt: staleImportCutoff }, workspace: productionWorkspace } }),
     prisma.transaction.count({
       where: {
-        ...activeTransaction,
+        ...betaTransaction,
         isExcluded: false,
         reviewStatus: { notIn: ["confirmed", "rejected", "duplicate_skipped"] },
         workspace: productionWorkspace,
@@ -175,7 +231,7 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
     }),
     prisma.transaction.count({
       where: {
-        ...activeTransaction,
+        ...betaTransaction,
         isExcluded: false,
         OR: [{ parserConfidence: { lt: 70 } }, { categoryConfidence: { lt: 70 } }, { accountMatchConfidence: { lt: 70 } }],
         workspace: productionWorkspace,
@@ -183,29 +239,33 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
     }),
     prisma.appErrorLog.count({ where: getCurrentDeploymentErrorWhere(oneDayAgo) }),
     prisma.appErrorLog.count({ where: getCurrentDeploymentErrorWhere(sevenDaysAgo) }),
-    prisma.contactInquiry.count({ where: { status: "open" } }),
+    prisma.contactInquiry.count({ where: { status: "open", createdAt: { gte: betaStartedAt } } }),
     prisma.appErrorLog.findMany({
       where: getCurrentDeploymentErrorWhere(oneDayAgo),
       orderBy: { occurredAt: "desc" },
       take: 100,
       select: { source: true, route: true, message: true, occurredAt: true },
     }),
-    prisma.user.count({ where: { ...productionUser, workspaces: { some: { importFiles: { some: activeImport } } } } }),
-    prisma.user.count({ where: { ...productionUser, workspaces: { some: { importFiles: { some: { ...activeImport, status: "done" } } } } } }),
-    prisma.user.count({ where: { ...productionUser, workspaces: { some: { transactions: { some: activeTransaction } } } } }),
+    prisma.user.count({ where: { AND: [betaParticipantUser, { workspaces: { some: { importFiles: { some: betaImport } } } }] } }),
+    prisma.user.count({ where: { AND: [betaParticipantUser, { workspaces: { some: { importFiles: { some: { ...betaImport, status: "done" } } } } }] } }),
+    prisma.user.count({ where: { AND: [betaParticipantUser, { workspaces: { some: { transactions: { some: betaTransaction } } } }] } }),
     prisma.user.count({
       where: {
-        ...productionUser,
-        workspaces: {
-          some: {
-            transactions: {
+        AND: [
+          betaParticipantUser,
+          {
+            workspaces: {
               some: {
-                ...activeTransaction,
-                reviewStatus: { in: ["confirmed", "edited"] },
+                transactions: {
+                  some: {
+                    ...betaTransaction,
+                    reviewStatus: { in: ["confirmed", "edited"] },
+                  },
+                },
               },
             },
           },
-        },
+        ],
       },
     }),
     getPostHogLiveAnalytics(),
@@ -228,6 +288,10 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
 
   return {
     generatedAt: new Date().toISOString(),
+    beta: {
+      epoch: ANALYTICS_BETA_EPOCH,
+      startedAt: betaStartedAt.toISOString(),
+    },
     users: { total: totalUsers, new7d, onboardingCompleted, verified, active7d, active30d },
     product: {
       workspaces,

@@ -1,9 +1,14 @@
 import "server-only";
 
-import { ANALYTICS_EVENT_NAMES, getAnalyticsEnvironment, type AnalyticsEventName } from "@/lib/analytics";
+import {
+  ANALYTICS_BETA_EPOCH,
+  ANALYTICS_EVENT_NAMES,
+  getAnalyticsBetaStartedAt,
+  getAnalyticsEnvironment,
+  type AnalyticsEventName,
+} from "@/lib/analytics";
 
 const POSTHOG_QUERY_TIMEOUT_MS = 5_000;
-const POSTHOG_QUERY_RANGE_DAYS = 30;
 const POSTHOG_QUERY_EVENT_LIMIT = 250;
 
 type PostHogQueryResponse = {
@@ -22,6 +27,7 @@ export type PostHogEventAggregate = {
 export type PostHogLiveAnalytics = {
   status: "not_configured" | "ready" | "unavailable";
   generatedAt: string;
+  rangeStartedAt: string;
   rangeDays: number;
   isCached: boolean;
   totalEvents: number;
@@ -36,19 +42,23 @@ export type PostHogLiveAnalytics = {
 const emptyResult = (
   status: PostHogLiveAnalytics["status"],
   errorCode: PostHogLiveAnalytics["errorCode"]
-): PostHogLiveAnalytics => ({
-  status,
-  generatedAt: new Date().toISOString(),
-  rangeDays: POSTHOG_QUERY_RANGE_DAYS,
-  isCached: false,
-  totalEvents: 0,
-  observedEventTypes: 0,
-  instrumentedEventTypes: ANALYTICS_EVENT_NAMES.length,
-  observedInstrumentedEvents: 0,
-  topEvents: [],
-  missingInstrumentedEvents: [...ANALYTICS_EVENT_NAMES],
-  errorCode,
-});
+): PostHogLiveAnalytics => {
+  const betaStartedAt = getAnalyticsBetaStartedAt();
+  return {
+    status,
+    generatedAt: new Date().toISOString(),
+    rangeStartedAt: betaStartedAt.toISOString(),
+    rangeDays: Math.max(1, Math.ceil((Date.now() - betaStartedAt.getTime()) / 86_400_000)),
+    isCached: false,
+    totalEvents: 0,
+    observedEventTypes: 0,
+    instrumentedEventTypes: ANALYTICS_EVENT_NAMES.length,
+    observedInstrumentedEvents: 0,
+    topEvents: [],
+    missingInstrumentedEvents: [...ANALYTICS_EVENT_NAMES],
+    errorCode,
+  };
+};
 
 const getQueryConfig = () => {
   const personalApiKey = process.env.POSTHOG_PERSONAL_API_KEY?.trim() ?? "";
@@ -135,6 +145,8 @@ export async function getPostHogLiveAnalytics(): Promise<PostHogLiveAnalytics> {
   }
 
   const environment = getAnalyticsEnvironment();
+  const betaStartedAt = getAnalyticsBetaStartedAt();
+  const escapedBetaStartedAt = betaStartedAt.toISOString().replaceAll("'", "''");
   const distinctIdPrefix = `${environment.replaceAll("'", "''")}:%`;
   const query = `
     SELECT
@@ -143,7 +155,7 @@ export async function getPostHogLiveAnalytics(): Promise<PostHogLiveAnalytics> {
       count(DISTINCT distinct_id) AS unique_users,
       max(timestamp) AS last_seen
     FROM events
-    WHERE timestamp >= now() - INTERVAL ${POSTHOG_QUERY_RANGE_DAYS} DAY
+    WHERE timestamp >= toDateTime('${escapedBetaStartedAt}')
       AND event NOT LIKE '$%'
       AND toString(distinct_id) LIKE '${distinctIdPrefix}'
     GROUP BY event
@@ -165,7 +177,7 @@ export async function getPostHogLiveAnalytics(): Promise<PostHogLiveAnalytics> {
           kind: "HogQLQuery",
           query,
         },
-        name: `clover_admin_event_coverage_${environment}_30d`,
+        name: `clover_admin_event_coverage_${environment}_${ANALYTICS_BETA_EPOCH}`,
         refresh: "blocking",
       }),
       cache: "no-store",
@@ -184,7 +196,8 @@ export async function getPostHogLiveAnalytics(): Promise<PostHogLiveAnalytics> {
     return {
       status: "ready",
       generatedAt: new Date().toISOString(),
-      rangeDays: POSTHOG_QUERY_RANGE_DAYS,
+      rangeStartedAt: betaStartedAt.toISOString(),
+      rangeDays: Math.max(1, Math.ceil((Date.now() - betaStartedAt.getTime()) / 86_400_000)),
       isCached: payload.is_cached === true,
       totalEvents: topEvents.reduce((total, event) => total + event.count, 0),
       observedEventTypes: topEvents.length,

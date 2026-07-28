@@ -171,6 +171,21 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "trial_to_paid_conversion", "upgrade_prompt_viewed", "support_contacted", "admin_support_action", "error_shown",
 ];
 
+export const ANALYTICS_BETA_EPOCH = "beta-2026-07-28";
+export const DEFAULT_ANALYTICS_BETA_STARTED_AT = "2026-07-28T11:40:00.000Z";
+
+export const getAnalyticsBetaStartedAt = () => {
+  const configured = process.env.NEXT_PUBLIC_ANALYTICS_BETA_STARTED_AT?.trim();
+  const parsed = configured ? new Date(configured) : new Date(DEFAULT_ANALYTICS_BETA_STARTED_AT);
+  return Number.isNaN(parsed.getTime()) ? new Date(DEFAULT_ANALYTICS_BETA_STARTED_AT) : parsed;
+};
+
+export const getAnalyticsEpochProperties = (): AnalyticsProperties => ({
+  analytics_epoch: ANALYTICS_BETA_EPOCH,
+  release_stage: "beta",
+  beta_started_at: getAnalyticsBetaStartedAt().toISOString(),
+});
+
 const normalizeHost = (host: string) => host.replace(/\/$/, "");
 
 export const getAnalyticsEnvironment = () => {
@@ -224,10 +239,14 @@ export const capturePostHogServerEvent = async (
       api_key: key,
       event,
       distinct_id: scopedDistinctId,
-      properties,
+      properties: {
+        ...getAnalyticsEpochProperties(),
+        ...properties,
+      },
       timestamp: new Date().toISOString(),
     }),
   }).catch(() => null);
 };
 
-export const analyticsOnceKey = (event: AnalyticsEventName, scope: string) => `posthog:${event}:${scope}`;
+export const analyticsOnceKey = (event: AnalyticsEventName, scope: string) =>
+  `posthog:${ANALYTICS_BETA_EPOCH}:${event}:${scope}`;

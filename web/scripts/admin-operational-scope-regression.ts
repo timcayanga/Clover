@@ -29,6 +29,10 @@ assert.match(commandCenterSource, /Current deploy errors/);
 
 const analyticsSource = readSource("lib/admin-analytics.ts");
 assert.match(analyticsSource, /usersWithReviewedTransactions/);
+assert.match(analyticsSource, /getAnalyticsBetaStartedAt/);
+assert.match(analyticsSource, /betaParticipantUser/);
+assert.match(analyticsSource, /betaTransaction/);
+assert.match(analyticsSource, /betaImport/);
 assert.match(
   analyticsSource,
   /Users who reviewed a transaction/,
