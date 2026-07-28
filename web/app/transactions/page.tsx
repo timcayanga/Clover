@@ -7162,7 +7162,7 @@ function TransactionsPageContent() {
               className={`table-wrap transactions-table-wrap${!hasVisibleTransactions && !showTransactionsLoadingState ? " transactions-table-wrap--empty" : ""}`}
               aria-busy={showTransactionsLoadingState}
             >
-              <div className="line-item-header" role="row" aria-label="Transaction columns">
+              <div className="line-item-header transactions-column-header" role="row" aria-label="Transaction columns">
                 <label className="line-item-header-cell line-item-header-cell--select line-item-header-cell--select-all">
                   <input
                     ref={selectAllRef}

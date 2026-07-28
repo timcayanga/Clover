@@ -16424,6 +16424,17 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   -webkit-backdrop-filter: blur(12px);
 }
 
+.transactions-column-header {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  isolation: isolate;
+  background: #ffffff;
+  background-image: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .line-item-header-cell {
   border: 0;
   background: transparent;
@@ -41044,6 +41055,11 @@ html[data-theme="dark"] .line-item-header {
   background: rgba(9, 15, 27, 0.98);
   color: var(--text);
   border-bottom-color: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="dark"] .transactions-column-header {
+  background: #0e1725 !important;
+  background-image: none !important;
 }
 
 html[data-theme="dark"] .line-item-header-cell {
