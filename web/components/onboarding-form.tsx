@@ -359,32 +359,34 @@ export function OnboardingForm({
         {message && step !== "experience" ? <p className="onboarding-card__message">{message}</p> : null}
       </section>
 
-      <ImportFilesModal
-        open={importOpen}
-        workspaceId={workspaceId}
-        accounts={workspaceAccounts}
-        defaultAccountId={workspaceAccounts.find((account) => account.type !== "cash")?.id ?? workspaceAccounts[0]?.id ?? null}
-        showManualTransactionLink={false}
-        initialFiles={importSeedFiles}
-        onInitialFilesConsumed={() => setImportSeedFiles(null)}
-        onClose={() => {
-          setImportOpen(false);
-          setImportSeedFiles(null);
-        }}
-        onImported={async (summary: UploadInsightsSummary) => {
-          if (summary.optimistic) {
-            return;
-          }
+      {importOpen ? (
+        <ImportFilesModal
+          open
+          workspaceId={workspaceId}
+          accounts={workspaceAccounts}
+          defaultAccountId={workspaceAccounts.find((account) => account.type !== "cash")?.id ?? workspaceAccounts[0]?.id ?? null}
+          showManualTransactionLink={false}
+          initialFiles={importSeedFiles}
+          onInitialFilesConsumed={() => setImportSeedFiles(null)}
+          onClose={() => {
+            setImportOpen(false);
+            setImportSeedFiles(null);
+          }}
+          onImported={async (summary: UploadInsightsSummary) => {
+            if (summary.optimistic) {
+              return;
+            }
 
-          try {
-            await persistOnboarding("import");
-            setMessage(completionUrl === "/dashboard" ? "Import complete. Taking you to the dashboard." : "Import complete. Opening your Circle invitation.");
-            router.replace(completionUrl);
-          } catch (error) {
-            setMessage(error instanceof Error ? error.message : "Unable to finish Clover setup.");
-          }
-        }}
-      />
+            try {
+              await persistOnboarding("import");
+              setMessage(completionUrl === "/dashboard" ? "Import complete. Taking you to the dashboard." : "Import complete. Opening your Circle invitation.");
+              router.replace(completionUrl);
+            } catch (error) {
+              setMessage(error instanceof Error ? error.message : "Unable to finish Clover setup.");
+            }
+          }}
+        />
+      ) : null}
     </>
   );
 }

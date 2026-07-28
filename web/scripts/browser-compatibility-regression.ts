@@ -6,10 +6,11 @@ const root = process.cwd();
 const readSource = (relativePath: string) => readFile(path.join(root, relativePath), "utf8");
 
 async function main() {
-  const [shellSource, dashboardSource, workspaceSelectionSource, globalStyles] = await Promise.all([
+  const [shellSource, dashboardSource, workspaceSelectionSource, onboardingSource, globalStyles] = await Promise.all([
     readSource("components/clover-shell.tsx"),
     readSource("app/dashboard/page.tsx"),
     readSource("lib/workspace-selection.ts"),
+    readSource("components/onboarding-form.tsx"),
     readSource("app/globals.css"),
   ]);
 
@@ -47,6 +48,11 @@ async function main() {
     dashboardSource,
     /<CloverShell[\s\S]{0,180}workspaceId=\{workspaceSummary\.id\}/,
     "Home must provide its resolved workspace to camera and file quick-add actions."
+  );
+  assert.match(
+    onboardingSource,
+    /\{importOpen \? \(\s*<ImportFilesModal\s+open/,
+    "Onboarding must not download the parser-heavy import modal before the user starts an upload."
   );
 
   assert.match(
