@@ -75,8 +75,6 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const buildInfo = getAppBuildInfo();
   const themeCookie = (await cookies()).get(THEME_RESOLVED_COOKIE_KEY)?.value;
   const serverTheme = themeCookie === "light" || themeCookie === "dark" ? themeCookie : null;
-  const adminStylesheetVersion =
-    buildInfo.environment === "development" ? `dev-${Date.now()}` : buildInfo.buildId;
 
   return (
     <html
@@ -85,33 +83,6 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       data-theme={serverTheme ?? undefined}
       style={serverTheme ? { colorScheme: serverTheme } : undefined}
     >
-      <head>
-        <link rel="stylesheet" href={`/admin.css?v=${adminStylesheetVersion}`} />
-        <Script id="clover-theme-bootstrap" strategy="beforeInteractive">
-          {`
-            (() => {
-              try {
-                const key = ${JSON.stringify(THEME_STORAGE_KEY)};
-                const saved = window.localStorage.getItem(key);
-                const pathname = window.location.pathname;
-                const isLightOnlyRoute =
-                  pathname === "/" ||
-                  pathname.startsWith("/sign-in") ||
-                  pathname.startsWith("/sign-up") ||
-                  pathname === "/onboarding";
-                const mode = isLightOnlyRoute
-                  ? "light"
-                  : saved === "light" || saved === "dark"
-                    ? saved
-                    : "light";
-                const resolved = mode;
-                document.documentElement.dataset.theme = resolved;
-                document.documentElement.style.colorScheme = resolved;
-              } catch (error) {}
-            })();
-          `}
-        </Script>
-      </head>
       <body
         data-build-id={buildInfo.buildId}
         data-deployment-id={buildInfo.deploymentId ?? undefined}
@@ -140,6 +111,30 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           </>
         )}
       </body>
+      <Script id="clover-theme-bootstrap" strategy="beforeInteractive">
+        {`
+          (() => {
+            try {
+              const key = ${JSON.stringify(THEME_STORAGE_KEY)};
+              const saved = window.localStorage.getItem(key);
+              const pathname = window.location.pathname;
+              const isLightOnlyRoute =
+                pathname === "/" ||
+                pathname.startsWith("/sign-in") ||
+                pathname.startsWith("/sign-up") ||
+                pathname === "/onboarding";
+              const mode = isLightOnlyRoute
+                ? "light"
+                : saved === "light" || saved === "dark"
+                  ? saved
+                  : "light";
+              const resolved = mode;
+              document.documentElement.dataset.theme = resolved;
+              document.documentElement.style.colorScheme = resolved;
+            } catch (error) {}
+          })();
+        `}
+      </Script>
     </html>
   );
 }
