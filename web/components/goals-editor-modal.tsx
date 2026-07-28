@@ -14,6 +14,7 @@ import {
 } from "@/lib/goals";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import { detectGoalIntent, parseGoalIntentAmount } from "@/lib/goal-intent";
+import { postJsonWithXhr } from "@/lib/client-json-request";
 
 type GoalsEditorProps = {
   goals: GoalDefinition[];
@@ -236,15 +237,9 @@ export function GoalsEditor({
     setIsSaving(true);
     setIsOpen(false);
 
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 15000);
-
     void (async () => {
       try {
-        const response = await fetch("/api/settings/financial-focus", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        await postJsonWithXhr("/api/settings/financial-focus", {
             goal: selectedGoalKey,
             targetAmount:
               goalValue === null
@@ -253,14 +248,7 @@ export function GoalsEditor({
                   ? resolvedMonthlyTarget.toFixed(2)
                   : null,
             goalPlan: goalValue === null ? null : nextPlan,
-          }),
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          const payload = await response.json().catch(() => null) as { error?: string } | null;
-          throw new Error(payload?.error || "Unable to save goal");
-        }
+          }, { timeoutMs: 15_000 });
 
         setOptimisticGoalLabel(nextGoalLabel);
         setStatus(goalValue ? summary?.detail ?? "Goal target updated. Nice work." : "Goal cleared. You can set a new one anytime.");
@@ -269,7 +257,6 @@ export function GoalsEditor({
         setStatus(error instanceof Error ? error.message : "We couldn't save that goal right now.");
         setIsOpen(true);
       } finally {
-        window.clearTimeout(timeout);
         setIsSaving(false);
         setOptimisticStatusLabel(null);
       }

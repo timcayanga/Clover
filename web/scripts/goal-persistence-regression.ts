@@ -20,8 +20,8 @@ assert.doesNotMatch(
 );
 assert.match(
   modalSource,
-  /fetch\("\/api\/settings\/financial-focus"/,
-  "Goal writes must use a neutral settings endpoint that privacy extensions do not confuse with analytics tracking."
+  /postJsonWithXhr\("\/api\/settings\/financial-focus"/,
+  "Goal writes must use a neutral same-origin transport that remains available when privacy extensions intercept fetch."
 );
 assert.ok(
   (modalSource.match(/onClick=\{\(\) => saveGoal\(null\)\}/g) ?? []).length >= 2,

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { GoalDefinition, GoalKey } from "@/lib/goals";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { detectGoalIntent, parseGoalIntentAmount } from "@/lib/goal-intent";
+import { postJsonWithXhr } from "@/lib/client-json-request";
 
 type GoalInlineSetupProps = {
   goals: GoalDefinition[];
@@ -55,10 +56,7 @@ export function GoalInlineSetup({ goals, suggestedTargetAmount, monthlyIncome, c
     setSaving(true);
     setError(null);
     try {
-      const response = await fetch("/api/settings/financial-focus", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      await postJsonWithXhr("/api/settings/financial-focus", {
           goal: selectedGoal,
           targetAmount: amount.toFixed(2),
           goalPlan: {
@@ -69,12 +67,7 @@ export function GoalInlineSetup({ goals, suggestedTargetAmount, monthlyIncome, c
             targetPercent: null,
             purpose: intent.trim() || null,
           },
-        }),
-      });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null) as { error?: string } | null;
-        throw new Error(payload?.error || "Unable to save goal");
-      }
+        });
       router.refresh();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Unable to save goal");

@@ -47,6 +47,22 @@ const makeInitialDraft = (initialBill?: SplitBillSerializedBill | null): SplitBi
     draft.payments = [{ id: createDraftId(), participantId: draft.participants[0]?.id ?? "", amount: "", note: "" }];
   }
 
+  // Blank and OCR fallback drafts can include rows without persisted IDs.
+  // Every controlled editor row needs a stable ID or its update handler cannot
+  // find the row and the field immediately snaps back to its previous value.
+  draft.participants = draft.participants.map((participant) => ({
+    ...participant,
+    id: participant.id ?? createDraftId(),
+  }));
+  draft.items = draft.items.map((item) => ({
+    ...item,
+    id: item.id ?? createDraftId(),
+  }));
+  draft.payments = draft.payments.map((payment) => ({
+    ...payment,
+    id: payment.id ?? createDraftId(),
+  }));
+
   return draft;
 };
 
