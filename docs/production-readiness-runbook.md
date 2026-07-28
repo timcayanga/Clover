@@ -17,7 +17,7 @@ npm run qa:release
 npm run build
 ```
 
-With target-environment database variables loaded, also run:
+With all target-environment variables loaded, also run:
 
 ```bash
 npm run qa:release:live
