@@ -157,6 +157,16 @@ async function main() {
     /\.content > :is\(\.topbar, \.shell-compact-bar\) \{[\s\S]{0,100}position: sticky !important;[\s\S]{0,80}top: 0;/,
     "Shared page headers must remain anchored across desktop and compact layouts."
   );
+  assert.match(
+    globalStyles,
+    /\.content > :is\(\.topbar, \.shell-compact-bar\) \{[\s\S]{0,240}background: transparent !important;[\s\S]{0,100}box-shadow: none !important;/,
+    "Sticky page headers must remain visually integrated with the page background."
+  );
+  assert.match(
+    globalStyles,
+    /@media \(min-width: 921px\) \{[\s\S]{0,520}\.nav-link \{[\s\S]{0,140}font-size: 13px;[\s\S]{0,180}\.nav-link__icon \{[\s\S]{0,80}width: 20px;[\s\S]{0,80}height: 20px;/,
+    "Desktop sidebar labels and icon slots must retain their readable sizing."
+  );
 
   console.log("Browser compatibility regression passed.");
 }
