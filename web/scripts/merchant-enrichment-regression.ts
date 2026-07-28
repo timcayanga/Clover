@@ -51,11 +51,27 @@ const main = () => {
     trainingSignals: [],
   });
   assert.equal(didiTransferMisclassification.categoryName, "Transport");
-  assert.equal(didiTransferMisclassification.preferredType, "expense");
+  assert.equal(
+    didiTransferMisclassification.preferredType,
+    "transfer",
+    "Transfer direction remains provisional until the account-ownership matcher resolves it."
+  );
 
   const confirmedLike = applyDeterministicMerchantRescue({ merchantRaw: "Custom source", merchantClean: "Confirmed Merchant", categoryName: "Shopping", type: "expense" });
   assert.equal(confirmedLike.merchantClean, "Confirmed Merchant");
   assert.equal(confirmedLike.categoryName, "Shopping");
+  const structuredCategory = applyDeterministicMerchantRescue({
+    merchantRaw: "DIDI TIANJIN CH",
+    categoryName: "Other",
+    preserveCategory: true,
+    type: "expense",
+  });
+  assert.equal(structuredCategory.merchantClean, "DiDi");
+  assert.equal(
+    structuredCategory.categoryName,
+    "Other",
+    "An explicit structured-file category must survive background merchant enrichment."
+  );
   assert.equal(
     summarizeMerchantText("1 012500024 Garnet )Days Check 1233 - Pasig", "PNB"),
     "Check Deposit",

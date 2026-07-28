@@ -6876,11 +6876,16 @@ const applyMerchantRescueToEnrichedRow = (
   row: EnrichedParsedImportRow,
   parsedRow: EnrichedParsedImportRow | undefined
 ): EnrichedParsedImportRow => {
+  const preserveParserCategory =
+    typeof parsedRow?.categoryName === "string" &&
+    Boolean(parsedRow.categoryName.trim()) &&
+    normalizeImportConfidenceScore(parsedRow.categoryConfidence) >= 100;
   const rescue = applyDeterministicMerchantRescue({
     merchantRaw: row.merchantRaw ?? parsedRow?.merchantRaw ?? null,
     merchantClean: row.merchantClean ?? parsedRow?.merchantClean ?? null,
     description: row.description ?? parsedRow?.description ?? null,
-    categoryName: row.categoryName ?? parsedRow?.categoryName ?? null,
+    categoryName: preserveParserCategory ? parsedRow.categoryName : row.categoryName ?? parsedRow?.categoryName ?? null,
+    preserveCategory: preserveParserCategory,
     type: row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : parsedRow?.type,
     institution: row.institution ?? parsedRow?.institution ?? null,
   });

@@ -6,6 +6,7 @@ export type MerchantEnrichmentInput = {
   merchantClean?: string | null;
   description?: string | null;
   categoryName?: string | null;
+  preserveCategory?: boolean;
   type?: "income" | "expense" | "transfer";
   institution?: string | null;
 };
@@ -37,9 +38,12 @@ export const applyDeterministicMerchantRescue = (input: MerchantEnrichmentInput)
   const currentCategory = nonEmpty(input.categoryName);
   // Imported rows are not confirmed data. A strong merchant identity is more
   // reliable than a parser's generic transfer guess (for example, "DiDi
-  // Tianjin" is ride-hailing, not a person-to-person transfer).
+  // Tianjin" is ride-hailing, not a person-to-person transfer). Structured
+  // files can mark their supplied category as authoritative.
   const categoryName =
-    hint && (!currentCategory || currentCategory.toLowerCase() === "other" || currentCategory.toLowerCase() === "transfers")
+    !input.preserveCategory &&
+    hint &&
+    (!currentCategory || currentCategory.toLowerCase() === "other" || currentCategory.toLowerCase() === "transfers")
       ? hint
       : currentCategory;
   const type =
