@@ -87,6 +87,8 @@ type WindowSummary = {
 type DailyFlow = {
   key: string;
   label: string;
+  dateLabel: string;
+  dayLabel: string;
   income: number;
   expense: number;
 };
@@ -180,6 +182,8 @@ const buildDailyFlow = (transactions: DashboardTransaction[], start: Date, dayCo
     return {
       key,
       label: date.toLocaleDateString("en-PH", labelFormat),
+      dateLabel: date.toLocaleDateString("en-PH", { month: "short", day: "numeric" }),
+      dayLabel: date.toLocaleDateString("en-PH", { weekday: "long" }),
       ...dayTotals,
     };
   });
@@ -188,11 +192,17 @@ const buildDailyFlow = (transactions: DashboardTransaction[], start: Date, dayCo
 function DailyFlowChart({ days, label, currency }: { days: DailyFlow[]; label: string; currency: string }) {
   const scale = Math.max(1, ...days.flatMap((day) => [day.income, day.expense]));
   const isMonthly = days.length > 7;
+  const monthlyTimelineIndexes = new Set(
+    Array.from({ length: 5 }, (_, index) => Math.round((index * Math.max(days.length - 1, 0)) / 4))
+  );
+  const monthlyTimelineDays = Array.from(monthlyTimelineIndexes).map((index) => days[index]).filter(Boolean);
 
   return (
-    <div className={`dashboard-home__report-flow${isMonthly ? " dashboard-home__report-flow--monthly" : ""}`} aria-label={`${label} daily money in and expenses`}>
+    <div className={`dashboard-home__report-flow${isMonthly ? " dashboard-home__report-flow--monthly" : ""}`} aria-label={`${label} daily income and expenses`}>
       <div className="dashboard-home__report-flow-bars">
-        {days.map((day) => {
+        {days.map((day, index) => {
+          const hasMovement = day.income > 0 || day.expense > 0;
+          const detailLabel = `${day.dayLabel}, ${day.dateLabel}: ${formatCurrency(day.income, currency)} income, ${formatCurrency(day.expense, currency)} expenses`;
           const segments = day.income > day.expense
             ? [
                 { kind: "expense", value: day.expense },
@@ -204,8 +214,14 @@ function DailyFlowChart({ days, label, currency }: { days: DailyFlow[]; label: s
               ];
 
           return (
-            <div className="dashboard-home__report-flow-bar" key={day.key} title={`${day.label}: ${formatCurrency(day.income, currency)} income, ${formatCurrency(day.expense, currency)} expenses`}>
-              <div className="dashboard-home__report-flow-track">
+            <div
+              aria-label={detailLabel}
+              className="dashboard-home__report-flow-bar"
+              key={day.key}
+              tabIndex={hasMovement ? 0 : undefined}
+              title={detailLabel}
+            >
+              <div className="dashboard-home__report-flow-track" data-active={hasMovement ? "true" : "false"}>
                 {segments.map((segment) => (
                   <span
                     className={`dashboard-home__report-flow-segment dashboard-home__report-flow-segment--${segment.kind}`}
@@ -216,12 +232,22 @@ function DailyFlowChart({ days, label, currency }: { days: DailyFlow[]; label: s
                 ))}
               </div>
               {!isMonthly ? <span className="dashboard-home__report-flow-label">{day.label}</span> : null}
+              <span className="dashboard-home__report-flow-tooltip" aria-hidden="true">
+                <strong>{day.dayLabel}, {day.dateLabel}</strong>
+                <span>Income {formatCurrency(day.income, currency)}</span>
+                <span>Expenses {formatCurrency(day.expense, currency)}</span>
+              </span>
             </div>
           );
         })}
       </div>
+      {isMonthly ? (
+        <div className="dashboard-home__report-flow-timeline" aria-hidden="true">
+          {monthlyTimelineDays.map((day) => <span key={day.key}>{day.dateLabel}</span>)}
+        </div>
+      ) : null}
       <div className="dashboard-home__report-flow-legend" aria-hidden="true">
-        <span><i className="dashboard-home__report-flow-dot dashboard-home__report-flow-dot--income" />Money in</span>
+        <span><i className="dashboard-home__report-flow-dot dashboard-home__report-flow-dot--income" />Income</span>
         <span><i className="dashboard-home__report-flow-dot dashboard-home__report-flow-dot--expense" />Expenses</span>
       </div>
     </div>
@@ -572,25 +598,16 @@ async function DashboardStream({
 
   const shouldLoadTransactions = workspaceSummary._count.transactions > 0;
   const now = new Date();
-  const latestTransactionDatePromise = shouldLoadTransactions
-    ? prisma.transaction.findFirst({
-        where: buildVisibleWorkspaceTransactionWhere(workspaceSummary.id, {
-          isExcluded: false,
-        }),
-        orderBy: { date: "desc" },
-        select: { date: true },
-      })
-    : Promise.resolve(null);
-  const latestTransactionDate = await latestTransactionDatePromise;
-  const activityAnchorDate = latestTransactionDate?.date ?? now;
-  const todayStart = toDayStart(activityAnchorDate);
+  const todayStart = toDayStart(now);
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
   const sevenDaysAgo = new Date(todayStart);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
   const thirtyDaysAgo = new Date(todayStart);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
-  const sixtyDaysAgo = new Date(activityAnchorDate);
+  const sixtyDaysAgo = new Date(todayStart);
   sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-  const ninetyDaysAgo = new Date(activityAnchorDate);
+  const ninetyDaysAgo = new Date(todayStart);
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
   const latestImportPromise = prisma.importFile.findFirst({
@@ -656,7 +673,7 @@ async function DashboardStream({
     ? prisma.transaction.findMany({
         where: buildVisibleWorkspaceTransactionWhere(workspaceSummary.id, {
           isExcluded: false,
-          date: { gte: ninetyDaysAgo },
+          date: { gte: ninetyDaysAgo, lt: tomorrowStart },
         }),
         select: {
           id: true,
@@ -735,8 +752,12 @@ async function DashboardStream({
     const signedBalance = normalizeAccountBalanceSign(account.type, reconcileAccountBalance(account));
     return sum + Math.max(signedBalance, 0);
   }, 0);
-  const currentThirtyDayTransactions = currentTransactions.filter((transaction) => transaction.date >= thirtyDaysAgo);
-  const currentSevenDayTransactions = currentTransactions.filter((transaction) => transaction.date >= sevenDaysAgo);
+  const currentThirtyDayTransactions = currentTransactions.filter(
+    (transaction) => transaction.date >= thirtyDaysAgo && transaction.date < tomorrowStart
+  );
+  const currentSevenDayTransactions = currentTransactions.filter(
+    (transaction) => transaction.date >= sevenDaysAgo && transaction.date < tomorrowStart
+  );
   const previousSevenDaysAgo = new Date(sevenDaysAgo);
   previousSevenDaysAgo.setDate(previousSevenDaysAgo.getDate() - 7);
   const previousSevenDayTransactions = currentTransactions.filter(
@@ -751,7 +772,7 @@ async function DashboardStream({
   const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const currentMonthTransactions = currentTransactions.filter(
-    (transaction) => transaction.date >= monthStart && transaction.date < nextMonthStart
+    (transaction) => transaction.date >= monthStart && transaction.date < tomorrowStart
   );
   const previousMonthTransactions = currentTransactions.filter(
     (transaction) => transaction.date >= previousMonthStart && transaction.date < monthStart
@@ -1038,14 +1059,14 @@ async function DashboardStream({
           <article className={`dashboard-home__report-card dashboard-home__report-card--${weeklyReportTone} glass`}>
             <div className="dashboard-home__report-card-head">
               <div>
-                <p className="eyebrow">Weekly Spending</p>
+                <p className="eyebrow">Weekly Report</p>
                 <h4>{formatCurrency(weeklySummary.current.expense, displayCurrency)}</h4>
                 <p className="dashboard-home__report-note">Recorded spending in the last 7 days</p>
               </div>
             </div>
             <div className="dashboard-home__report-metrics" aria-label="Weekly report metrics">
               <span>
-                <small>Money in</small>
+                <small>Income</small>
                 <strong className="dashboard-home__report-metric-value--income">{formatCurrency(weeklySummary.current.income, displayCurrency)}</strong>
               </span>
               <span>
@@ -1068,14 +1089,14 @@ async function DashboardStream({
           <article className={`dashboard-home__report-card dashboard-home__report-card--${monthlyReportTone} glass`}>
             <div className="dashboard-home__report-card-head">
               <div>
-                <p className="eyebrow">Monthly Spending</p>
+                <p className="eyebrow">Monthly Report</p>
                 <h4>{formatCurrency(monthSummary.expense, displayCurrency)}</h4>
-                <p className="dashboard-home__report-note">Recorded spending this month</p>
+                <p className="dashboard-home__report-note">Recorded spending this month to date</p>
               </div>
             </div>
             <div className="dashboard-home__report-metrics" aria-label="Monthly report metrics">
               <span>
-                <small>Money in</small>
+                <small>Income</small>
                 <strong className="dashboard-home__report-metric-value--income">{formatCurrency(monthSummary.income, displayCurrency)}</strong>
               </span>
               <span>

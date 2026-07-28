@@ -12,6 +12,12 @@ assert.doesNotMatch(shellSource, /^import \{ DashboardManualTransactionModal \} 
 const dashboardSource = readSource("app/dashboard/page.tsx");
 assert.match(dashboardSource, /DashboardTopActionsLazy/);
 assert.doesNotMatch(dashboardSource, /from "@\/components\/dashboard-top-actions";/);
+assert.match(dashboardSource, /const todayStart = toDayStart\(now\)/);
+assert.doesNotMatch(dashboardSource, /activityAnchorDate/);
+assert.match(dashboardSource, /Weekly Report/);
+assert.match(dashboardSource, /Monthly Report/);
+assert.match(dashboardSource, /monthlyTimelineDays/);
+assert.match(dashboardSource, /dashboard-home__report-flow-tooltip/);
 
 const lazyActionsSource = readSource("components/dashboard-top-actions-lazy.tsx");
 assert.match(lazyActionsSource, /dynamic\(\s*\(\) => import\("@\/components\/dashboard-top-actions"\)/);
