@@ -129,6 +129,13 @@ async function main() {
     /@media \(min-width: 761px\) and \(max-width: 1180px\) \{[\s\S]{0,240}\.content--plain-title > \.topbar \.topbar__title-wrap,[\s\S]{0,180}justify-items: start !important;/,
     "Compact laptop page titles must stay left-aligned instead of centering within action-reduced space."
   );
+  const transactionDesktopColumns =
+    "28px 40px minmax(0, 1.8fr) minmax(110px, 0.85fr) minmax(170px, 1.55fr) minmax(140px, 0.9fr) minmax(110px, 0.8fr) 40px 40px";
+  assert.equal(
+    globalStyles.split(transactionDesktopColumns).length - 1,
+    2,
+    "Desktop transaction headers and rows must share the wider Category column layout."
+  );
 
   console.log("Browser compatibility regression passed.");
 }
