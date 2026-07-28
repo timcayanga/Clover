@@ -310,30 +310,6 @@ const getImportedAccountInstitutionShadowKey = (account: CachedRecord | Imported
   canonicalImportedInstitutionKey(readImportedAccountText(account, "institution")) ||
   canonicalImportedInstitutionKey(readImportedAccountText(account, "name"));
 
-const isTransientImportedAccountPlaceholder = (account: CachedRecord) => {
-  if (account.publishedImportInventory === true) {
-    return false;
-  }
-
-  if (readImportedAccountText(account, "source") !== "upload" || hasImportedAccountNumber(account.accountNumber)) {
-    return false;
-  }
-
-  const transactionCount = Number(account.transactionCount ?? 0);
-  if (Number.isFinite(transactionCount) && transactionCount > 0) {
-    return false;
-  }
-
-  const balanceText = String(account.balance ?? "").trim();
-  const numericBalance = balanceText ? Number(balanceText.replace(/[^0-9.-]/g, "")) : Number.NaN;
-  if (Number.isFinite(numericBalance) && numericBalance !== 0) {
-    return false;
-  }
-
-  const type = normalizeWhitespace(String(account.type ?? "")).toLowerCase();
-  return type === "bank" || type === "credit_card" || type === "line_of_credit";
-};
-
 const pruneGenericImportedAccountPlaceholders = <T extends CachedRecord>(accounts: T[]) => {
   const institutionsWithNumberedUploadAccounts = new Set(
     accounts
@@ -353,37 +329,6 @@ const pruneGenericImportedAccountPlaceholders = <T extends CachedRecord>(account
 
     return !institutionsWithNumberedUploadAccounts.has(getImportedAccountInstitutionShadowKey(account));
   });
-};
-
-const isOrphanImportedAccountPlaceholder = (account: CachedRecord) => {
-  if (account.publishedImportInventory === true) {
-    return false;
-  }
-
-  if (typeof account.id === "string" && account.id.startsWith("optimistic-")) {
-    return false;
-  }
-
-  if (readImportedAccountText(account, "source") !== "upload") {
-    return false;
-  }
-
-  if (readImportedAccountText(account, "institution") || !hasImportedAccountNumber(account.accountNumber)) {
-    return false;
-  }
-
-  const transactionCount = Number(account.transactionCount ?? 0);
-  if (Number.isFinite(transactionCount) && transactionCount > 0) {
-    return false;
-  }
-
-  if (typeof account.importFileId === "string" && account.importFileId.trim()) {
-    return false;
-  }
-
-  const balanceText = String(account.balance ?? "").trim();
-  const numericBalance = balanceText ? Number(balanceText.replace(/[^0-9.-]/g, "")) : 0;
-  return !balanceText || !Number.isFinite(numericBalance) || numericBalance === 0;
 };
 
 const looksLikeImportedImageFilenameAccount = (account: CachedRecord) => {
@@ -425,16 +370,11 @@ const isFilenameImportedAccountPlaceholder = (account: CachedRecord) => {
   return !balanceText || !Number.isFinite(numericBalance) || numericBalance === 0;
 };
 
-const pruneOrphanImportedAccountPlaceholders = <T extends CachedRecord>(accounts: T[]) =>
-  accounts.filter(
-    (account) =>
-      !isOrphanImportedAccountPlaceholder(account) &&
-      !isTransientImportedAccountPlaceholder(account) &&
-      !isFilenameImportedAccountPlaceholder(account)
-  );
+const pruneFilenameImportedAccountPlaceholders = <T extends CachedRecord>(accounts: T[]) =>
+  accounts.filter((account) => !isFilenameImportedAccountPlaceholder(account));
 
 export const pruneImportedAccountPlaceholders = <T extends CachedRecord>(accounts: T[]) =>
-  pruneOrphanImportedAccountPlaceholders(pruneGenericImportedAccountPlaceholders(accounts));
+  pruneFilenameImportedAccountPlaceholders(pruneGenericImportedAccountPlaceholders(accounts));
 
 export const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityLike, right: ImportedAccountIdentityLike) => {
   const leftInstitution = canonicalImportedInstitutionKey(left.institution);

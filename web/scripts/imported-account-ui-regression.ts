@@ -9,7 +9,11 @@ import {
   type ImportedAccountLike,
 } from "@/lib/imported-account-ui";
 import { combineUploadInsightsSummaries } from "@/lib/import-upload-summary";
-import { findBestImportedAccountMatch, matchesImportedAccountIdentity } from "@/lib/workspace-cache";
+import {
+  findBestImportedAccountMatch,
+  matchesImportedAccountIdentity,
+  pruneImportedAccountPlaceholders,
+} from "@/lib/workspace-cache";
 
 type TestAccount = ImportedAccountLike & {
   updatedAt?: string;
@@ -114,6 +118,20 @@ const main = () => {
     }),
     false,
     "Published account-inventory rows must survive client placeholder cleanup even with no transactions or balance."
+  );
+  assert.deepEqual(
+    pruneImportedAccountPlaceholders([
+      {
+        ...genericPlaceholder,
+        id: "persisted-account",
+        name: "QA Audit Bank",
+        institution: "QA Bank",
+        transactionCount: 0,
+        balance: null,
+      },
+    ]).map((account) => account.id),
+    ["persisted-account"],
+    "A server-persisted account must remain cached after its final transaction is deleted."
   );
 
   const mergedWithoutPlaceholder = mergeOptimisticImportedAccount([genericPlaceholder], numberedUploadAccount);
