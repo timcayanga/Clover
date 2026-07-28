@@ -9,7 +9,7 @@ import {
   uploadSummaryMatchesImportedAccount,
   type ImportedAccountLike,
 } from "@/lib/imported-account-ui";
-import { combineUploadInsightsSummaries } from "@/lib/import-upload-summary";
+import { combineUploadInsightsSummaries, getUploadSummaryCurrencies } from "@/lib/import-upload-summary";
 import {
   findBestImportedAccountMatch,
   matchesImportedAccountIdentity,
@@ -94,6 +94,40 @@ const main = () => {
     topMerchantName: null,
     topMerchantCount: null,
   };
+
+  assert.deepEqual(
+    getUploadSummaryCurrencies({
+      ...summary,
+      currency: null,
+      accountSummaries: [
+        {
+          accountId: "hsbc-account",
+          accountName: "HSBC",
+          institution: "HSBC",
+          accountNumber: "12345678",
+          accountType: "bank",
+          currency: "gbp",
+          balance: "1250.75",
+          rowsImported: 1,
+        },
+      ],
+    }),
+    ["GBP"],
+    "Accounts should expose a newly imported currency from the completion summary before the server refresh settles."
+  );
+  assert.deepEqual(
+    getUploadSummaryCurrencies({
+      ...summary,
+      currency: null,
+      accountSummaries: undefined,
+      previewTransactions: summary.previewTransactions?.map((transaction) => ({
+        ...transaction,
+        currency: "gbp",
+      })),
+    }),
+    ["GBP"],
+    "Preview rows should provide the imported currency when account metadata has not settled yet."
+  );
 
   assert.equal(
     uploadSummaryMatchesImportedAccount(summary, numberedUploadAccount),

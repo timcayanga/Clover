@@ -2,6 +2,34 @@ import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 
 export type UploadAccountSummary = NonNullable<UploadInsightsSummary["accountSummaries"]>[number];
 
+const normalizeUploadCurrency = (value: string | null | undefined) => {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(normalized) ? normalized : null;
+};
+
+export const getUploadSummaryCurrencies = (summary: UploadInsightsSummary | null | undefined) => {
+  if (!summary) {
+    return [];
+  }
+
+  const normalizeCurrencies = (values: Array<string | null | undefined>) =>
+    values
+      .map(normalizeUploadCurrency)
+      .filter((currency): currency is string => Boolean(currency));
+  const accountCurrencies = normalizeCurrencies(
+    (summary.accountSummaries ?? []).map((accountSummary) => accountSummary.currency)
+  );
+  const summaryCurrencies = normalizeCurrencies([summary.currency]);
+  const currencies =
+    accountCurrencies.length > 0
+      ? accountCurrencies
+      : summaryCurrencies.length > 0
+        ? summaryCurrencies
+        : normalizeCurrencies((summary.previewTransactions ?? []).map((transaction) => transaction.currency));
+
+  return Array.from(new Set(currencies));
+};
+
 export const toBalanceString = (value: unknown): string | null => {
   if (value === null || value === undefined) {
     return null;

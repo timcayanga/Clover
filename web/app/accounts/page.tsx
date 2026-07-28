@@ -18,6 +18,7 @@ import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "
 import { deriveReconciledBalance, normalizeAccountBalanceSign } from "@/lib/account-balance";
 import { prefersLiveInvestmentBalance } from "@/lib/investment-balance";
 import { requiresAccountVisibilityRetry } from "@/lib/import-visibility-refresh";
+import { getUploadSummaryCurrencies } from "@/lib/import-upload-summary";
 import { getAccountCardName, getAccountDisplayName, formatUploadAccountDisplayName } from "@/lib/account-display";
 import { getAccountPath, getInvestmentInstitutionPath } from "@/lib/account-path";
 import { countNonCashAccounts } from "@/lib/account-limit-count";
@@ -2447,13 +2448,16 @@ function AccountsPageContent() {
         .map((account) => formatCurrencyCode(account.currency))
         .filter(Boolean)
     );
+    for (const currency of getUploadSummaryCurrencies(pendingImportSummary)) {
+      currencySet.add(currency);
+    }
 
     if (currencySet.size === 0) {
       currencySet.add("PHP");
     }
 
     return Array.from(currencySet).sort((left, right) => left.localeCompare(right));
-  }, [reconciledAccounts]);
+  }, [pendingImportSummary, reconciledAccounts]);
 
   useEffect(() => {
     if (availableCurrencies.includes(selectedCurrency)) {
@@ -4656,7 +4660,11 @@ function AccountsPageContent() {
           setImportSeedFiles(null);
           setImportBackgroundOnly(false);
         }}
-      onImported={async (summary) => {
+        onImported={async (summary) => {
+          const importedCurrencies = getUploadSummaryCurrencies(summary);
+          if (importedCurrencies.length === 1) {
+            setSelectedCurrency(importedCurrencies[0]);
+          }
           const importedAccountSummaries =
             summary.accountSummaries && summary.accountSummaries.length > 1
               ? summary.accountSummaries.map((accountSummary) => ({
