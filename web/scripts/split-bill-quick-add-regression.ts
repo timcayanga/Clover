@@ -27,13 +27,18 @@ assert.deepEqual(
 const editorSource = fs.readFileSync(path.join(process.cwd(), "components/split-bill-editor.tsx"), "utf8");
 assert.match(
   editorSource,
-  /draft\.items = draft\.items\.map\(\(item\) => \(\{[\s\S]{0,120}id: item\.id \?\? createDraftId\(\)/,
+  /draft\.items = draft\.items\.map\(\(item, index\) => \(\{[\s\S]{0,120}id: item\.id \?\? `draft-item-\$\{index \+ 1\}`/,
   "Every split-bill item must receive a stable draft ID before controlled fields can update it."
 );
 assert.match(
   editorSource,
-  /draft\.payments = draft\.payments\.map\(\(payment\) => \(\{[\s\S]{0,120}id: payment\.id \?\? createDraftId\(\)/,
+  /draft\.payments = draft\.payments\.map\(\(payment, index\) => \(\{[\s\S]{0,120}id: payment\.id \?\? `draft-payment-\$\{index \+ 1\}`/,
   "Every split-bill payment must receive a stable draft ID before controlled fields can update it."
+);
+assert.doesNotMatch(
+  editorSource.slice(editorSource.indexOf("const makeInitialDraft"), editorSource.indexOf("const readJsonResponse")),
+  /createDraftId\(\)/,
+  "The server and browser must render the same initial split-bill IDs."
 );
 
 console.log("Split bill quick-add regression passed.");

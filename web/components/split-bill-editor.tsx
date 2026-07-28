@@ -36,31 +36,31 @@ const makeInitialDraft = (initialBill?: SplitBillSerializedBill | null): SplitBi
   const draft = initialBill ? splitBillDraftFromSerializedBill(initialBill) : createBlankSplitBillDraft();
 
   if (draft.participants.length === 0) {
-    draft.participants = [{ id: createDraftId(), name: "" }];
+    draft.participants = [{ id: "draft-participant-1", name: "" }];
   }
 
   if (draft.items.length === 0) {
-    draft.items = [{ id: createDraftId(), description: "Total", amount: "", participantIds: [], splitMethod: "equal", allocations: [] }];
+    draft.items = [{ id: "draft-item-1", description: "Total", amount: "", participantIds: [], splitMethod: "equal", allocations: [] }];
   }
 
   if (draft.payments.length === 0) {
-    draft.payments = [{ id: createDraftId(), participantId: draft.participants[0]?.id ?? "", amount: "", note: "" }];
+    draft.payments = [{ id: "draft-payment-1", participantId: draft.participants[0]?.id ?? "", amount: "", note: "" }];
   }
 
   // Blank and OCR fallback drafts can include rows without persisted IDs.
   // Every controlled editor row needs a stable ID or its update handler cannot
   // find the row and the field immediately snaps back to its previous value.
-  draft.participants = draft.participants.map((participant) => ({
+  draft.participants = draft.participants.map((participant, index) => ({
     ...participant,
-    id: participant.id ?? createDraftId(),
+    id: participant.id ?? `draft-participant-${index + 1}`,
   }));
-  draft.items = draft.items.map((item) => ({
+  draft.items = draft.items.map((item, index) => ({
     ...item,
-    id: item.id ?? createDraftId(),
+    id: item.id ?? `draft-item-${index + 1}`,
   }));
-  draft.payments = draft.payments.map((payment) => ({
+  draft.payments = draft.payments.map((payment, index) => ({
     ...payment,
-    id: payment.id ?? createDraftId(),
+    id: payment.id ?? `draft-payment-${index + 1}`,
   }));
 
   return draft;
