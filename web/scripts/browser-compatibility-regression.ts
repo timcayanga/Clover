@@ -6,12 +6,13 @@ const root = process.cwd();
 const readSource = (relativePath: string) => readFile(path.join(root, relativePath), "utf8");
 
 async function main() {
-  const [shellSource, dashboardSource, workspaceSelectionSource, onboardingSource, pageAuthSource, globalStyles] = await Promise.all([
+  const [shellSource, dashboardSource, workspaceSelectionSource, onboardingSource, pageAuthSource, middlewareSource, globalStyles] = await Promise.all([
     readSource("components/clover-shell.tsx"),
     readSource("app/dashboard/page.tsx"),
     readSource("lib/workspace-selection.ts"),
     readSource("components/onboarding-form.tsx"),
     readSource("lib/page-auth.ts"),
+    readSource("middleware.ts"),
     readSource("app/globals.css"),
   ]);
   const protectedPageSources = await Promise.all(
@@ -76,6 +77,16 @@ async function main() {
   assert.ok(
     protectedPageSources.every((source) => source.includes("getPageSessionContext")),
     "Every protected Server Component page must use the shared page authentication boundary."
+  );
+  assert.match(
+    middlewareSource,
+    /"\/investments\(\.\*\)"[\s\S]{0,180}"\/notifications\(\.\*\)"/,
+    "Client-only authenticated pages must be protected before their empty shells can render."
+  );
+  assert.match(
+    middlewareSource,
+    /!isGuestEnabledEnvironment\([\s\S]{0,180}auth\.protect\(\{[\s\S]{0,120}unauthenticatedUrl:/,
+    "Production app routes must require Clerk authentication without disabling staging guest access."
   );
 
   assert.match(
