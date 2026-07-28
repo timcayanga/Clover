@@ -8,6 +8,7 @@ import { GOAL_OPTIONS } from "@/lib/goals";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
+import { summarizeErrorForLog } from "@/lib/security-logging";
 
 export const dynamic = "force-dynamic";
 
@@ -93,53 +94,63 @@ const saveGoal = async (request: Request) => {
               purpose: payload.goalPlan.purpose ?? null,
             };
 
-    const updated = await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        primaryGoal: payload.goal === undefined ? undefined : payload.goal,
-        goalTargetAmount: targetAmount === undefined ? undefined : targetAmount,
-        goalTargetSource: targetAmount === undefined ? undefined : "goals",
-        goalPlan: nextGoalPlan === null ? Prisma.DbNull : (nextGoalPlan as Prisma.InputJsonValue),
-      },
-    });
-
-    if (payload.goal !== undefined || targetAmount !== undefined || payload.goalPlan !== undefined) {
-      await prisma.goalSetting.create({
+    const updated = await prisma.$transaction(async (tx) => {
+      const nextUser = await tx.user.update({
+        where: { id: user.id },
         data: {
-          userId: user.id,
-          primaryGoal: nextGoal,
-          targetAmount: nextTargetAmount,
-          source: "goals",
+          primaryGoal: payload.goal === undefined ? undefined : payload.goal,
+          goalTargetAmount: targetAmount === undefined ? undefined : targetAmount,
+          goalTargetSource: targetAmount === undefined ? undefined : targetAmount === null ? null : "goals",
           goalPlan: nextGoalPlan === null ? Prisma.DbNull : (nextGoalPlan as Prisma.InputJsonValue),
         },
       });
-    }
+
+      if (payload.goal !== undefined || targetAmount !== undefined || payload.goalPlan !== undefined) {
+        await tx.goalSetting.create({
+          data: {
+            userId: user.id,
+            primaryGoal: nextGoal,
+            targetAmount: nextTargetAmount,
+            source: "goals",
+            goalPlan: nextGoalPlan === null ? Prisma.DbNull : (nextGoalPlan as Prisma.InputJsonValue),
+          },
+        });
+      }
+
+      return nextUser;
+    });
 
     if (workspace) {
-      await prisma.auditLog.create({
-        data: {
+      void Promise.allSettled([
+        prisma.auditLog.create({
+          data: {
+            workspaceId: workspace.id,
+            actorUserId: userId,
+            action: "goal_updated",
+            entity: "Goal",
+            entityId: user.id,
+            metadata: {
+              primaryGoal: nextGoal,
+              targetAmount: nextTargetAmount ? Number(nextTargetAmount.toString()) : null,
+              goalPlan: nextGoalPlan,
+            },
+          },
+        }),
+        recordAdviserActionCompletion({
           workspaceId: workspace.id,
           actorUserId: userId,
-          action: "goal_updated",
-          entity: "Goal",
-          entityId: user.id,
-          metadata: {
-            primaryGoal: nextGoal,
-            targetAmount: nextTargetAmount ? Number(nextTargetAmount.toString()) : null,
-            goalPlan: nextGoalPlan,
-          },
-        },
-      });
-
-      await recordAdviserActionCompletion({
-        workspaceId: workspace.id,
-        actorUserId: userId,
-        group: "goals",
-        itemId: `goal:${user.id}`,
-        label: nextGoal ? `Updated goal: ${nextGoal}` : "Updated goal settings",
-        sourceAction: "goal_updated",
-        href: "/goals",
-        pathname: "/goals",
+          group: "goals",
+          itemId: `goal:${user.id}`,
+          label: nextGoal ? `Updated goal: ${nextGoal}` : "Cleared goal settings",
+          sourceAction: nextGoal ? "goal_updated" : "goal_reset",
+          href: "/goals",
+          pathname: "/goals",
+        }),
+      ]).then((auditResults) => {
+        const failedAudit = auditResults.find((result) => result.status === "rejected");
+        if (failedAudit?.status === "rejected") {
+          console.warn("[goals] saved goal but could not record optional audit activity", summarizeErrorForLog(failedAudit.reason));
+        }
       });
     }
 
@@ -177,8 +188,15 @@ const saveGoal = async (request: Request) => {
       },
     });
   } catch (error) {
+    console.error("[goals] unable to update goal", summarizeErrorForLog(error));
+    const safeMessage =
+      error instanceof z.ZodError
+        ? "Check the goal details and try again."
+        : error instanceof Error && error.message === "Untrusted request origin."
+          ? error.message
+          : "Unable to update goal";
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unable to update goal" },
+      { error: safeMessage },
       { status: 400 }
     );
   }

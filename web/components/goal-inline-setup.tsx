@@ -55,7 +55,7 @@ export function GoalInlineSetup({ goals, suggestedTargetAmount, monthlyIncome, c
     setSaving(true);
     setError(null);
     try {
-      const response = await fetch("/api/goals", {
+      const response = await fetch("/api/goal-settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -71,7 +71,10 @@ export function GoalInlineSetup({ goals, suggestedTargetAmount, monthlyIncome, c
           },
         }),
       });
-      if (!response.ok) throw new Error("Unable to save goal");
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(payload?.error || "Unable to save goal");
+      }
       router.refresh();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Unable to save goal");

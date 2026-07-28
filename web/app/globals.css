@@ -49814,3 +49814,17 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     min-width: 780px;
   }
 }
+
+/* Compact laptop headers should not center titles inside only the space left
+   over by variable-width actions. Phones keep their intentional centered row. */
+@media (min-width: 761px) and (max-width: 1180px) {
+  .content--plain-title > .topbar .topbar__title-wrap,
+  .content--plain-title > .shell-compact-bar .shell-compact-bar__copy {
+    justify-items: start !important;
+    text-align: left !important;
+  }
+
+  .content--plain-title > :is(.topbar, .shell-compact-bar) .topbar__title-row {
+    justify-content: flex-start !important;
+  }
+}

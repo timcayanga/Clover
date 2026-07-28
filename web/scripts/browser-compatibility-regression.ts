@@ -124,6 +124,11 @@ async function main() {
     /@media \(min-width: 981px\) \{[\s\S]{0,180}\.accounts-card-grid\.accounts-card-grid--desktop \{[\s\S]{0,180}repeat\(auto-fit, minmax\(min\(100%, 240px\), 272px\)\)/,
     "Desktop account grids must add columns instead of stretching cards beyond their intended width."
   );
+  assert.match(
+    globalStyles,
+    /@media \(min-width: 761px\) and \(max-width: 1180px\) \{[\s\S]{0,240}\.content--plain-title > \.topbar \.topbar__title-wrap,[\s\S]{0,180}justify-items: start !important;/,
+    "Compact laptop page titles must stay left-aligned instead of centering within action-reduced space."
+  );
 
   console.log("Browser compatibility regression passed.");
 }

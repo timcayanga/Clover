@@ -241,7 +241,7 @@ export function GoalsEditor({
 
     void (async () => {
       try {
-        const response = await fetch("/api/goals", {
+        const response = await fetch("/api/goal-settings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -258,14 +258,15 @@ export function GoalsEditor({
         });
 
         if (!response.ok) {
-          throw new Error("Unable to save goal");
+          const payload = await response.json().catch(() => null) as { error?: string } | null;
+          throw new Error(payload?.error || "Unable to save goal");
         }
 
         setOptimisticGoalLabel(nextGoalLabel);
         setStatus(goalValue ? summary?.detail ?? "Goal target updated. Nice work." : "Goal cleared. You can set a new one anytime.");
         router.refresh();
-      } catch {
-        setStatus("We couldn't save that goal right now.");
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "We couldn't save that goal right now.");
         setIsOpen(true);
       } finally {
         window.clearTimeout(timeout);

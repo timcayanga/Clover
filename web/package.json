@@ -69,6 +69,7 @@
     "qa:integration-security": "tsx scripts/integration-security-regression.ts",
     "qa:account-balance-sign": "tsx scripts/account-balance-sign-regression.ts",
     "qa:goal-intent": "tsx scripts/goal-intent-regression.ts",
+    "qa:goal-persistence": "tsx scripts/goal-persistence-regression.ts",
     "qa:split-bill-quick-add": "tsx scripts/split-bill-quick-add-regression.ts",
     "qa:critical-page-loading": "tsx scripts/critical-page-loading-regression.ts",
     "qa:browser-compatibility": "tsx scripts/browser-compatibility-regression.ts",
