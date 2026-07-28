@@ -9,6 +9,7 @@
     "build": "next build",
     "db:migrate": "prisma migrate deploy --schema prisma/schema.prisma",
     "start": "next start",
+    "typecheck": "tsc --noEmit",
     "lint": "next lint",
     "postinstall": "tsx scripts/sync-public-assets.ts && prisma generate",
     "worker:imports": "tsx workers/imports-worker.ts",

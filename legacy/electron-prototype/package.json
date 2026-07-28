@@ -1,0 +1,19 @@
+{
+  "name": "clover-electron-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "check": "node scripts/check.mjs",
+    "qa:renderer": "node scripts/renderer-check.mjs"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^5.7.284",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "electron": "^39.0.0",
+    "jsdom": "^26.1.0"
+  }
+}

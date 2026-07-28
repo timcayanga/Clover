@@ -1,70 +1,19 @@
-import { cp, mkdir, readdir, stat } from "node:fs/promises";
-import path from "node:path";
+import { cp, mkdir, rm, stat } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
-const cwd = process.cwd();
-const sourceRoot = path.resolve(cwd, "..", "assets");
-const destinationRoot = path.resolve(cwd, "public", "assets");
-
-const copyDirectoryIfPresent = async (sourceDir: string, destinationDir: string) => {
-  try {
-    const sourceStats = await stat(sourceDir);
-    if (!sourceStats.isDirectory()) {
-      return;
-    }
-  } catch {
-    return;
-  }
-
-  await mkdir(destinationDir, { recursive: true });
-  const entries = await readdir(sourceDir, { withFileTypes: true });
-
-  for (const entry of entries) {
-    const sourcePath = path.join(sourceDir, entry.name);
-    const destinationPath = path.join(destinationDir, entry.name);
-
-    if (entry.isDirectory()) {
-      await copyDirectoryIfPresent(sourcePath, destinationPath);
-      continue;
-    }
-
-    if (!entry.isFile() && !entry.isSymbolicLink()) {
-      continue;
-    }
-
-    try {
-      const destinationStats = await stat(destinationPath);
-      const sourceStats = await stat(sourcePath);
-      if (destinationStats.ino === sourceStats.ino && destinationStats.dev === sourceStats.dev) {
-        continue;
-      }
-    } catch {
-      // The destination may not exist yet, which is fine.
-    }
-
-    await mkdir(path.dirname(destinationPath), { recursive: true });
-    await cp(sourcePath, destinationPath);
-  }
-};
+const sourceRoot = fileURLToPath(new URL("../../assets/", import.meta.url));
+const destinationRoot = fileURLToPath(new URL("../public/assets/", import.meta.url));
 
 const main = async () => {
-  try {
-    await mkdir(destinationRoot, { recursive: true });
-
-    const sourceEntries = await readdir(sourceRoot, { withFileTypes: true });
-    for (const entry of sourceEntries) {
-      if (!entry.isDirectory()) {
-        continue;
-      }
-
-      await copyDirectoryIfPresent(path.join(sourceRoot, entry.name), path.join(destinationRoot, entry.name));
-    }
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return;
-    }
-
-    throw error;
+  const sourceStats = await stat(sourceRoot);
+  if (!sourceStats.isDirectory()) {
+    throw new Error(`Canonical asset source is not a directory: ${sourceRoot}`);
   }
+
+  // public/assets is a disposable build artifact. Recreate it to avoid stale files.
+  await rm(destinationRoot, { recursive: true, force: true });
+  await mkdir(destinationRoot, { recursive: true });
+  await cp(sourceRoot, destinationRoot, { recursive: true, force: true });
 };
 
 void main();

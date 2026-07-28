@@ -4,6 +4,7 @@ node_modules/
 web/node_modules/
 web/.next/
 .next/
+web/public/assets/
 web/.cache/
 tmp/
 web/tmp/
