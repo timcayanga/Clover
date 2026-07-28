@@ -40,6 +40,7 @@ const main = async () => {
     getDeletingWorkspaceAccountIds,
     markDeletedWorkspaceAccount,
     markDeletingWorkspaceAccount,
+    reconcilePersistedWorkspaceAccountDeletionMarkers,
   } = await import("@/lib/workspace-cache");
 
   const workspaceId = "workspace-qa";
@@ -60,6 +61,21 @@ const main = async () => {
     getDeletingWorkspaceAccountIds(workspaceId),
     [],
     "A persisted account must clear a stale in-progress deletion marker."
+  );
+
+  markDeletedWorkspaceAccount(workspaceId, "persisted-account");
+  markDeletedWorkspaceAccount(workspaceId, "actually-deleted-account");
+  markDeletingWorkspaceAccount(workspaceId, "persisted-account");
+  const reconciled = reconcilePersistedWorkspaceAccountDeletionMarkers(workspaceId, ["persisted-account"]);
+  assert.deepEqual(
+    Array.from(reconciled.deletedIds),
+    ["actually-deleted-account"],
+    "The authoritative server payload must restore persisted accounts without reviving genuinely deleted IDs."
+  );
+  assert.deepEqual(
+    Array.from(reconciled.deletingIds),
+    [],
+    "The authoritative server payload must override stale in-flight deletion state for persisted accounts."
   );
 
   console.info("Workspace account deletion marker regression checks passed.");

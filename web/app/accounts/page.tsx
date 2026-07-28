@@ -29,7 +29,6 @@ import {
   applyOptimisticWorkspaceAccountDeletion,
   accountsWorkspaceCacheKey,
   clearDeletedWorkspaceAccount,
-  clearPersistedWorkspaceAccountDeletionMarkers,
   deletedAccountsWorkspaceCacheKey,
   getCachedAccountsWorkspace,
   getCachedTransactionsWorkspace,
@@ -41,6 +40,7 @@ import {
   markDeletingWorkspaceAccount,
   clearDeletingWorkspaceAccount,
   clearRepublishedWorkspaceAccountDeletionMarkers,
+  reconcilePersistedWorkspaceAccountDeletionMarkers,
   normalizeImportedAccountKey,
   matchesImportedAccountIdentity as isImportedAccountIdentityMatch,
   deletingAccountsWorkspaceCacheKey,
@@ -1710,7 +1710,7 @@ function AccountsPageContent() {
             : [];
         // A completed server response is authoritative. Stale browser
         // tombstones must never keep a persisted account hidden forever.
-        clearPersistedWorkspaceAccountDeletionMarkers(
+        const reconciledDeletionMarkers = reconcilePersistedWorkspaceAccountDeletionMarkers(
           workspaceId,
           fetchedAccounts.map((account) => account.id)
         );
@@ -1719,8 +1719,8 @@ function AccountsPageContent() {
         // fresh server result is authoritative for those explicit inventory
         // rows, so stale browser tombstones must no longer hide their cards.
         clearRepublishedWorkspaceAccountDeletionMarkers(workspaceId, republishedInventoryAccountIds);
-        deletedAccountIdsRef.current = new Set(getDeletedWorkspaceAccountIds(workspaceId));
-        deletingAccountIdsRef.current = new Set(getDeletingWorkspaceAccountIds(workspaceId));
+        deletedAccountIdsRef.current = reconciledDeletionMarkers.deletedIds;
+        deletingAccountIdsRef.current = reconciledDeletionMarkers.deletingIds;
         const cachedWorkspaceAccounts = getCachedAccountsWorkspace(workspaceId)?.accounts as Account[] | undefined;
         visibleFetchedAccounts = fetchedAccounts.filter(
           (account) =>

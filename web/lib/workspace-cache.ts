@@ -1420,6 +1420,19 @@ export const clearPersistedWorkspaceAccountDeletionMarkers = (
   } satisfies DeletingAccountsWorkspaceCacheState);
 };
 
+export const reconcilePersistedWorkspaceAccountDeletionMarkers = (
+  workspaceId: string,
+  accountIds: Iterable<string>
+) => {
+  const persistedIds = new Set(Array.from(accountIds).filter(Boolean));
+  clearPersistedWorkspaceAccountDeletionMarkers(workspaceId, persistedIds);
+
+  return {
+    deletedIds: new Set(getDeletedWorkspaceAccountIds(workspaceId).filter((id) => !persistedIds.has(id))),
+    deletingIds: new Set(getDeletingWorkspaceAccountIds(workspaceId).filter((id) => !persistedIds.has(id))),
+  };
+};
+
 export const clearRepublishedWorkspaceAccountDeletionMarkers = (
   workspaceId: string,
   accountIds: Iterable<string>
