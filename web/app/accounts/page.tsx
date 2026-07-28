@@ -29,6 +29,7 @@ import {
   applyOptimisticWorkspaceAccountDeletion,
   accountsWorkspaceCacheKey,
   clearDeletedWorkspaceAccount,
+  clearPersistedWorkspaceAccountDeletionMarkers,
   deletedAccountsWorkspaceCacheKey,
   getCachedAccountsWorkspace,
   getCachedTransactionsWorkspace,
@@ -1523,6 +1524,7 @@ function AccountsPageContent() {
                         const effectiveType = getEffectiveAccountType(account);
                         const accountCheckpoints = latestCheckpoint ? [latestCheckpoint] : [];
                         const checkpointBalance =
+                          latestCheckpoint?.status !== "mismatch" &&
                           !prefersLiveInvestmentBalance(effectiveType) &&
                           latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
                             ? String(latestCheckpoint.endingBalance)
@@ -1537,6 +1539,7 @@ function AccountsPageContent() {
                                 balance: account.balance,
                                 transactions: accountTransactions,
                                 checkpoints: accountCheckpoints,
+                                treatStoredBalanceAsOpening: account.source === "manual",
                               }));
                         const normalizedBalance = normalizeAccountBalanceSign(effectiveType, parseAmount(reconciledBalance ?? account.balance));
 
@@ -1705,6 +1708,12 @@ function AccountsPageContent() {
                 .filter((account) => account.publishedImportInventory === true)
                 .map((account) => account.id)
             : [];
+        // A completed server response is authoritative. Stale browser
+        // tombstones must never keep a persisted account hidden forever.
+        clearPersistedWorkspaceAccountDeletionMarkers(
+          workspaceId,
+          fetchedAccounts.map((account) => account.id)
+        );
         // A completed import can republish an account that was previously
         // deleted or left behind by an interrupted optimistic deletion. The
         // fresh server result is authoritative for those explicit inventory
@@ -2467,6 +2476,7 @@ function AccountsPageContent() {
       Number(matchingImportSummary.rowsImported ?? 0) > 0 &&
       uploadSummaryMatchesAccount(matchingImportSummary, account);
     const checkpointBalance =
+      latestCheckpoint?.status !== "mismatch" &&
       latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
         ? String(latestCheckpoint.endingBalance)
         : null;
@@ -2523,6 +2533,7 @@ function AccountsPageContent() {
 
     const latestCheckpoint = getLatestCheckpointForAccount(account, statementCheckpoints);
     const checkpointBalance =
+      latestCheckpoint?.status !== "mismatch" &&
       latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
         ? String(latestCheckpoint.endingBalance)
         : null;

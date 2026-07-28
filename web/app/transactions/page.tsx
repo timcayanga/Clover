@@ -536,6 +536,7 @@ const isAutoApplyCategorySuggestion = (suggestion: CategorySuggestion | null): s
 type UpdateTransactionOptions = {
   recordHistory?: boolean;
   historyBefore?: Transaction | null;
+  refreshSummary?: boolean;
 };
 
 const todayIso = new Date().toISOString().slice(0, 10);
@@ -5495,6 +5496,9 @@ function TransactionsPageContent() {
       setRedoStack([]);
     }
 
+    if (options.refreshSummary !== false) {
+      refreshTransactionsSummary();
+    }
     return updated;
   };
 
@@ -5960,9 +5964,11 @@ function TransactionsPageContent() {
           payloads.map(({ transaction, payload }) =>
             updateTransaction(transaction.id, payload, {
               recordHistory: false,
+              refreshSummary: false,
             })
           )
         );
+        refreshTransactionsSummary();
 
         const failedTransactions = results
           .map((result, index) => ({ result, transaction: payloads[index].transaction }))

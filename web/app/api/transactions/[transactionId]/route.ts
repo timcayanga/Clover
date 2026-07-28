@@ -433,6 +433,13 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
     const transaction = await prisma.transaction.findFirst({
       where: { id: transactionId },
+      include: {
+        account: {
+          select: {
+            source: true,
+          },
+        },
+      },
     });
 
     if (!transaction) {
@@ -441,25 +448,40 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
     await assertWorkspaceAccess(userId, transaction.workspaceId);
 
-    await prisma.transaction.update({
-      where: { id: transactionId },
-      data: {
-        deletedAt: new Date(),
-      },
-    });
-
-    await prisma.account.updateMany({
-      where: { id: transaction.accountId },
-      data: {
-        balance: null,
-      },
-    });
-
-    if (await hasCompatibleTable("AccountStatementCheckpoint")) {
-      await prisma.accountStatementCheckpoint.deleteMany({
-        where: { accountId: transaction.accountId },
+    const hasStatementCheckpoints = await hasCompatibleTable("AccountStatementCheckpoint");
+    await prisma.$transaction(async (tx) => {
+      await tx.transaction.update({
+        where: { id: transactionId },
+        data: {
+          deletedAt: new Date(),
+        },
       });
-    }
+
+      // Imported balances are derived from their remaining source rows. Manual
+      // account balances are user-entered evidence and must not be erased when
+      // an individual transaction is removed.
+      if (transaction.account.source === "upload") {
+        await tx.account.updateMany({
+          where: { id: transaction.accountId },
+          data: {
+            balance: null,
+          },
+        });
+      }
+
+      if (hasStatementCheckpoints) {
+        await tx.accountStatementCheckpoint.updateMany({
+          where: {
+            accountId: transaction.accountId,
+            ...(transaction.importFileId ? { importFileId: transaction.importFileId } : {}),
+          },
+          data: {
+            status: "mismatch",
+            mismatchReason: "A transaction from this statement was deleted by the user.",
+          },
+        });
+      }
+    });
 
     const siblingTransactions = await prisma.transaction.findMany({
       where: {

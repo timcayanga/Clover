@@ -617,9 +617,10 @@ async function DashboardStream({
             accountNumber: true,
             type: true,
             currency: true,
+            source: true,
             balance: true,
             transactions: {
-              where: { isExcluded: false },
+              where: { isExcluded: false, deletedAt: null },
               select: {
                 amount: true,
                 type: true,
@@ -712,6 +713,7 @@ async function DashboardStream({
         balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
         transactions: account.transactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
         checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
+        treatStoredBalanceAsOpening: account.source === "manual",
       });
 
     return Number(reconciledBalance ?? account.balance ?? 0);

@@ -1988,7 +1988,9 @@ export async function GET(request: Request) {
           ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).accountNumber).trim()
           : null;
       const checkpointBalance =
-        checkpointPublishedSummary && typeof checkpointPublishedSummary.balance === "string"
+        latestCheckpoint?.status === "mismatch"
+          ? null
+          : checkpointPublishedSummary && typeof checkpointPublishedSummary.balance === "string"
           ? checkpointPublishedSummary.balance
           : latestCheckpoint?.accountId === account.id &&
               latestCheckpoint?.endingBalance !== null &&

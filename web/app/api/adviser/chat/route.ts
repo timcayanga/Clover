@@ -152,6 +152,7 @@ type AdviserChatAccountSource = {
   institution: string | null;
   type: string;
   currency: string | null;
+  source: string;
   balance: unknown;
   investmentSubtype: string | null;
   investmentSymbol: string | null;
@@ -929,12 +930,13 @@ export async function POST(request: Request) {
                   institution: true,
                   type: true,
                   currency: true,
+                  source: true,
                   balance: true,
                   investmentSubtype: true,
                   investmentSymbol: true,
                   investmentQuantity: true,
                   transactions: {
-                    where: { isExcluded: false },
+                    where: { isExcluded: false, deletedAt: null },
                     select: {
                       amount: true,
                       type: true,
@@ -979,12 +981,13 @@ export async function POST(request: Request) {
                 institution: true,
                 type: true,
                 currency: true,
+                source: true,
                 balance: true,
                 investmentSubtype: true,
                 investmentSymbol: true,
                 investmentQuantity: true,
                 transactions: {
-                  where: { isExcluded: false },
+                  where: { isExcluded: false, deletedAt: null },
                   select: {
                     amount: true,
                     type: true,
@@ -1030,6 +1033,7 @@ export async function POST(request: Request) {
           balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
           transactions: account.transactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
           checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
+          treatStoredBalanceAsOpening: account.source === "manual",
         });
       const parsed = Number(reconciledBalance ?? account.balance ?? 0);
       return Number.isFinite(parsed) ? parsed : 0;

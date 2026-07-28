@@ -1372,6 +1372,38 @@ export const clearDeletingWorkspaceAccount = (workspaceId: string, accountId: st
   } satisfies DeletingAccountsWorkspaceCacheState);
 };
 
+export const clearPersistedWorkspaceAccountDeletionMarkers = (
+  workspaceId: string,
+  accountIds: Iterable<string>
+) => {
+  if (!workspaceId) {
+    return;
+  }
+
+  const persistedIds = new Set(Array.from(accountIds).filter(Boolean));
+  if (persistedIds.size === 0) {
+    return;
+  }
+
+  const cache = readDeletedAccountsWorkspaceCache();
+  const currentIds = cache?.snapshots[workspaceId] ?? [];
+  const nextIds = currentIds.filter((id) => !persistedIds.has(id));
+  if (nextIds.length === currentIds.length) {
+    return;
+  }
+
+  const nextSnapshots = { ...(cache?.snapshots ?? {}) };
+  if (nextIds.length === 0) {
+    delete nextSnapshots[workspaceId];
+  } else {
+    nextSnapshots[workspaceId] = nextIds;
+  }
+
+  writeJsonCache(deletedAccountsWorkspaceCacheKey, {
+    snapshots: nextSnapshots,
+  } satisfies DeletedAccountsWorkspaceCacheState);
+};
+
 export const clearRepublishedWorkspaceAccountDeletionMarkers = (
   workspaceId: string,
   accountIds: Iterable<string>

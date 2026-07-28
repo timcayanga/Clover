@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { GoalDefinition, GoalKey } from "@/lib/goals";
 import { formatCurrencyAmount } from "@/lib/currency-format";
+import { detectGoalIntent, parseGoalIntentAmount } from "@/lib/goal-intent";
 
 type GoalInlineSetupProps = {
   goals: GoalDefinition[];
@@ -20,24 +21,6 @@ const goalEmojis: Record<GoalKey, string> = {
   invest_better: "📈",
 };
 
-const parseAmount = (value: string) => {
-  const match = value.match(/(?:₱|php|p)?\s*([\d,]+(?:\.\d+)?)\s*(k|m)?/i);
-  if (!match) return null;
-  const amount = Number(match[1].replace(/,/g, ""));
-  if (!Number.isFinite(amount) || amount <= 0) return null;
-  return amount * (match[2]?.toLowerCase() === "m" ? 1_000_000 : match[2]?.toLowerCase() === "k" ? 1_000 : 1);
-};
-
-const detectGoal = (value: string): GoalKey | null => {
-  const text = value.toLowerCase();
-  if (/invest|portfolio|stocks|fund/.test(text)) return "invest_better";
-  if (/debt|loan|credit card/.test(text)) return "pay_down_debt";
-  if (/emergency|buffer|rainy day/.test(text)) return "build_emergency_fund";
-  if (/spend|track|overspend/.test(text)) return "track_spending";
-  if (/save|car|vehicle|house|home|school|tuition|travel|trip|phone|laptop/.test(text)) return "save_more";
-  return null;
-};
-
 export function GoalInlineSetup({ goals, suggestedTargetAmount, monthlyIncome, currency }: GoalInlineSetupProps) {
   const router = useRouter();
   const availableGoals = useMemo(() => goals.filter((goal) => goal.value !== "track_spending"), [goals]);
@@ -47,7 +30,7 @@ export function GoalInlineSetup({ goals, suggestedTargetAmount, monthlyIncome, c
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const vagueTargetSuggestion = intent.trim()
-    && parseAmount(intent) === null
+    && parseGoalIntentAmount(intent) === null
     && /car|vehicle|house|home|school|tuition|travel|trip|phone|laptop/.test(intent.toLowerCase())
     && suggestedTargetAmount
     ? `Clover suggests starting at ${formatCurrencyAmount(Math.round(suggestedTargetAmount), currency)}. Adjust it before saving.`
@@ -56,8 +39,8 @@ export function GoalInlineSetup({ goals, suggestedTargetAmount, monthlyIncome, c
 
   const handleIntentChange = (value: string) => {
     setIntent(value);
-    const detectedGoal = detectGoal(value);
-    const detectedAmount = parseAmount(value);
+    const detectedGoal = detectGoalIntent(value);
+    const detectedAmount = parseGoalIntentAmount(value);
     if (detectedGoal && availableGoals.some((goal) => goal.value === detectedGoal)) setSelectedGoal(detectedGoal);
     if (detectedAmount !== null) setTargetAmount(String(detectedAmount));
   };

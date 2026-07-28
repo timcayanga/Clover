@@ -74,6 +74,7 @@ type AdviserWorkspaceAccountSource = {
   name: string;
   type: string;
   currency: string | null;
+  source: string;
   balance: unknown;
   investmentSubtype: string | null;
   investmentSymbol: string | null;
@@ -1119,6 +1120,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
         name: true,
         type: true,
         currency: true,
+        source: true,
         balance: true,
         investmentSubtype: true,
         investmentSymbol: true,
@@ -1129,7 +1131,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
         investmentInterestRate: true,
         investmentMaturityValue: true,
         transactions: {
-          where: { isExcluded: false },
+          where: { isExcluded: false, deletedAt: null },
           select: {
             amount: true,
             type: true,
@@ -1308,6 +1310,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
         balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
         transactions: account.transactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
         checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
+        treatStoredBalanceAsOpening: account.source === "manual",
       });
 
     const parsed = Number(reconciledBalance ?? account.balance ?? 0);

@@ -1950,6 +1950,7 @@ function AccountDetailPageContent() {
     () => {
       const checkpoint = latestCheckpoint;
       const checkpointBalance =
+        checkpoint?.status !== "mismatch" &&
         checkpoint?.endingBalance !== null && checkpoint?.endingBalance !== undefined
           ? String(checkpoint.endingBalance)
           : null;
@@ -1964,13 +1965,16 @@ function AccountDetailPageContent() {
               balance: account?.balance ?? cachedImportedBalance ?? null,
               transactions: transactions as BalanceLikeTransaction[],
               checkpoints: checkpoint ? [checkpoint] : [],
+              treatStoredBalanceAsOpening: account?.source === "manual",
             }));
 
       return normalizeAccountBalanceSign(account?.type ?? "", parseAmount(reconciledValue));
     },
     [account?.balance, account?.source, account?.type, cachedImportedBalance, latestCheckpoint, transactions]
   );
-  const checkpointBalance = latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
+  const checkpointBalance =
+    latestCheckpoint?.status !== "mismatch" &&
+    latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
     ? String(latestCheckpoint.endingBalance)
     : null;
   const matchingImportSummary =

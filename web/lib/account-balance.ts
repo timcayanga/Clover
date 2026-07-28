@@ -31,6 +31,7 @@ type ReconciledBalanceInput = {
   balance?: BalanceLike;
   transactions?: BalanceLikeTransaction[];
   checkpoints?: BalanceLikeCheckpoint[];
+  treatStoredBalanceAsOpening?: boolean;
 };
 
 const parseBalanceValue = (value: BalanceLike) => {
@@ -99,6 +100,7 @@ export const deriveReconciledBalance = ({
   balance,
   transactions = [],
   checkpoints = [],
+  treatStoredBalanceAsOpening = false,
 }: ReconciledBalanceInput) => {
   const storedBalance = parseBalanceValue(balance);
   const orderedTransactions = [...transactions].sort((left, right) => {
@@ -142,6 +144,10 @@ export const deriveReconciledBalance = ({
   const netBalance = transactions
     .filter((transaction) => !isOpeningBalanceTransaction(transaction))
     .reduce((sum, transaction) => sum + getTransactionAmountDelta(transaction), 0);
+
+  if (treatStoredBalanceAsOpening && storedBalance !== null) {
+    return (storedBalance + netBalance).toFixed(2);
+  }
 
   if (netBalance !== 0) {
     return netBalance.toFixed(2);

@@ -13,6 +13,7 @@ import {
   goalTargetModeLabels,
 } from "@/lib/goals";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
+import { detectGoalIntent, parseGoalIntentAmount } from "@/lib/goal-intent";
 
 type GoalsEditorProps = {
   goals: GoalDefinition[];
@@ -33,19 +34,10 @@ type GoalsEditorProps = {
 
 const formatCurrency = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
 
-const parseIntentAmount = (value: string) => {
-  const match = value.match(/(?:₱|php|p)?\s*([\d,]+(?:\.\d+)?)\s*(k|m)?/i);
-  if (!match) return null;
-  const base = Number(match[1].replace(/,/g, ""));
-  if (!Number.isFinite(base) || base <= 0) return null;
-  const multiplier = match[2]?.toLowerCase() === "m" ? 1_000_000 : match[2]?.toLowerCase() === "k" ? 1_000 : 1;
-  return base * multiplier;
-};
-
 const getIntentSuggestion = (value: string, currency?: string | null) => {
   const text = value.trim().toLowerCase();
   if (!text) return null;
-  const amount = parseIntentAmount(value);
+  const amount = parseGoalIntentAmount(value);
   if (amount !== null) {
     return `Clover found a ${formatCurrency(amount, currency)} target in your note. Save the goal to use it in your roadmap.`;
   }
@@ -255,10 +247,12 @@ export function GoalsEditor({
           body: JSON.stringify({
             goal: selectedGoalKey,
             targetAmount:
-              resolvedMonthlyTarget !== null && Number.isFinite(resolvedMonthlyTarget)
-                ? resolvedMonthlyTarget.toFixed(2)
-                : null,
-            goalPlan: nextPlan,
+              goalValue === null
+                ? null
+                : resolvedMonthlyTarget !== null && Number.isFinite(resolvedMonthlyTarget)
+                  ? resolvedMonthlyTarget.toFixed(2)
+                  : null,
+            goalPlan: goalValue === null ? null : nextPlan,
           }),
           signal: controller.signal,
         });
@@ -384,22 +378,11 @@ export function GoalsEditor({
                   onChange={(event) => {
                     const value = event.target.value;
                     setPurpose(value);
-                    const lowerValue = value.toLowerCase();
-                    const detectedGoal: GoalPlan["goalKey"] | null = /invest|portfolio|stocks|fund/.test(lowerValue)
-                      ? "invest_better"
-                      : /debt|loan|credit card/.test(lowerValue)
-                        ? "pay_down_debt"
-                        : /emergency|buffer|rainy day/.test(lowerValue)
-                          ? "build_emergency_fund"
-                          : /spend|track|overspend/.test(lowerValue)
-                            ? "track_spending"
-                            : /save|car|vehicle|house|home|school|tuition|travel|trip|phone|laptop/.test(lowerValue)
-                              ? "save_more"
-                              : null;
+                    const detectedGoal = detectGoalIntent(value);
                     if (!currentGoal && detectedGoal) {
                       setSelectedGoal(detectedGoal);
                     }
-                    const detectedAmount = parseIntentAmount(value);
+                    const detectedAmount = parseGoalIntentAmount(value);
                     if (detectedAmount !== null && targetMode === "amount") {
                       setTargetAmount(String(detectedAmount));
                     }
