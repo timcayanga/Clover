@@ -20,8 +20,13 @@ assert.doesNotMatch(
 );
 assert.match(
   modalSource,
-  /fetch\("\/api\/goal-settings"/,
-  "Goal writes must use the settings endpoint that is not confused with analytics goal tracking."
+  /fetch\("\/api\/settings\/financial-focus"/,
+  "Goal writes must use a neutral settings endpoint that privacy extensions do not confuse with analytics tracking."
 );
+assert.ok(
+  (modalSource.match(/onClick=\{\(\) => saveGoal\(null\)\}/g) ?? []).length >= 2,
+  "Goal deletion must be available in both desktop and mobile editors."
+);
+assert.match(modalSource, /role="status"/, "Goal save failures must be visible to the user.");
 
 console.log("Goal persistence regression passed.");

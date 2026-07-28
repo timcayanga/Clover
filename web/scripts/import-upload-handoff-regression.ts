@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readImportedFileTextWithCacheInfo } from "@/lib/import-file-text.server";
+import { getImportQueueName } from "@/lib/import-queue";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const webRoot = join(scriptDir, "..");
@@ -537,11 +538,23 @@ const main = async () => {
   assert.match(workerSource, /if \(isPdfPasswordError\(error\)\) \{\s*job\.discard\(\);/);
   assert.match(workerSource, /processingPhase: "password_required"/);
   assert.match(workerSource, /getImportQueueName\(\)/, "The worker and producer must share the environment-scoped queue.");
-  assert.match(
-    importQueueSource,
-    /process\.env\.NODE_ENV === "production" \? "import-processing" : "import-processing-local"/,
-    "Local QA must never consume staging or production import jobs."
-  );
+  assert.match(importQueueSource, /getDeploymentEnvironment\(\)/);
+  const originalVercelEnvironment = process.env.VERCEL_ENV;
+  const originalNodeEnvironment = process.env.NODE_ENV;
+  try {
+    process.env.VERCEL_ENV = "production";
+    assert.equal(getImportQueueName(), "import-processing");
+    process.env.VERCEL_ENV = "preview";
+    assert.equal(getImportQueueName(), "import-processing-staging");
+    delete process.env.VERCEL_ENV;
+    process.env.NODE_ENV = "development";
+    assert.equal(getImportQueueName(), "import-processing-local", "Local QA must never consume staging or production import jobs.");
+  } finally {
+    if (originalVercelEnvironment === undefined) delete process.env.VERCEL_ENV;
+    else process.env.VERCEL_ENV = originalVercelEnvironment;
+    if (originalNodeEnvironment === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = originalNodeEnvironment;
+  }
   assert.match(
     importFileTextSource,
     /if \(!pdfJsBaseUrl \|\| isPdfPasswordError\(error\)\) \{\s*throw error;/,

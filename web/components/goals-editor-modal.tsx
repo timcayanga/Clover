@@ -241,7 +241,7 @@ export function GoalsEditor({
 
     void (async () => {
       try {
-        const response = await fetch("/api/goal-settings", {
+        const response = await fetch("/api/settings/financial-focus", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -531,6 +531,7 @@ export function GoalsEditor({
                   Reset selection
                 </button>
               </div>
+              {status ? <p className="goals-editor__status" role="status">{status}</p> : null}
             </section>
           </div>
         ) : null}
@@ -727,6 +728,11 @@ export function GoalsEditor({
               >
                 {isSaving ? "Saving..." : selectedGoal ? "Save goal" : "Clear goal"}
               </button>
+              {currentGoal ? (
+                <button type="button" className="pill-link pill-link--inline goals-editor__delete" disabled={isSaving} onClick={() => saveGoal(null)}>
+                  Delete goal
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="button button-secondary"
@@ -758,6 +764,7 @@ export function GoalsEditor({
                 Reset selection
               </button>
             </div>
+            {status ? <p className="goals-editor__status" role="status">{status}</p> : null}
           </section>
         </div>
       ) : null}

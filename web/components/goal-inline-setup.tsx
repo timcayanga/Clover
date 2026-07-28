@@ -55,7 +55,7 @@ export function GoalInlineSetup({ goals, suggestedTargetAmount, monthlyIncome, c
     setSaving(true);
     setError(null);
     try {
-      const response = await fetch("/api/goal-settings", {
+      const response = await fetch("/api/settings/financial-focus", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
