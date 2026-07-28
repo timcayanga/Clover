@@ -46370,7 +46370,6 @@ html[data-theme="dark"] .investments-portfolio-table__total {
   width: min(1480px, 100%);
   margin: 0 auto;
 }
-.circles-topbar-action { min-height: 34px; padding-inline: 13px; }
 .circles-topbar-action__icon { display: none; }
 .circles-topbar-action__short { display: none; }
 .circles-title-tabs { max-width: min(720px, 56vw); }

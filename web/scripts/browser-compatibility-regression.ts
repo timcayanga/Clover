@@ -6,11 +6,12 @@ const root = process.cwd();
 const readSource = (relativePath: string) => readFile(path.join(root, relativePath), "utf8");
 
 async function main() {
-  const [shellSource, dashboardSource, workspaceSelectionSource, onboardingSource, pageAuthSource, middlewareSource, globalStyles] = await Promise.all([
+  const [shellSource, dashboardSource, workspaceSelectionSource, onboardingSource, circlesSource, pageAuthSource, middlewareSource, globalStyles] = await Promise.all([
     readSource("components/clover-shell.tsx"),
     readSource("app/dashboard/page.tsx"),
     readSource("lib/workspace-selection.ts"),
     readSource("components/onboarding-form.tsx"),
+    readSource("components/circles-page-client.tsx"),
     readSource("lib/page-auth.ts"),
     readSource("middleware.ts"),
     readSource("app/globals.css"),
@@ -68,6 +69,11 @@ async function main() {
     onboardingSource,
     /\{importOpen \? \(\s*<ImportFilesModal\s+open/,
     "Onboarding must not download the parser-heavy import modal before the user starts an upload."
+  );
+  assert.match(
+    circlesSource,
+    /accounts-toolbar-button accounts-toolbar-button--upload circles-topbar-action/,
+    "Create Circle must use the same compact toolbar sizing as Upload files."
   );
   assert.match(
     pageAuthSource,
