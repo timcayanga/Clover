@@ -142,6 +142,21 @@ async function main() {
     2,
     "Desktop transaction headers and rows must share the wider Category column layout."
   );
+  assert.match(
+    globalStyles,
+    /\.dashboard-home__report-flow-segment \{[\s\S]{0,140}border-radius: 999px;/,
+    "Home report bars must remain rounded even when a value produces a short segment."
+  );
+  assert.match(
+    globalStyles,
+    /@media \(min-width: 1101px\) \{[\s\S]{0,100}\.app-shell > \.sidebar \{[\s\S]{0,100}position: sticky !important;[\s\S]{0,100}top: 0 !important;/,
+    "The desktop sidebar must remain anchored while the document scrolls."
+  );
+  assert.match(
+    globalStyles,
+    /\.content > :is\(\.topbar, \.shell-compact-bar\) \{[\s\S]{0,100}position: sticky !important;[\s\S]{0,80}top: 0;/,
+    "Shared page headers must remain anchored across desktop and compact layouts."
+  );
 
   console.log("Browser compatibility regression passed.");
 }

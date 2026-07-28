@@ -5531,6 +5531,8 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   display: block;
   width: 100%;
   min-height: 0;
+  overflow: hidden;
+  border-radius: 999px;
   transition: height 180ms ease;
 }
 
@@ -49926,4 +49928,32 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   .content--plain-title > :is(.topbar, .shell-compact-bar) .topbar__title-row {
     justify-content: flex-start !important;
   }
+}
+
+/* The document is the primary page scroller. Keep shared navigation anchored
+   to the viewport instead of letting late responsive overrides unstick it. */
+@media (min-width: 1101px) {
+  .app-shell > .sidebar {
+    position: sticky !important;
+    inset: auto !important;
+    top: 0 !important;
+    align-self: start;
+  }
+}
+
+.content > :is(.topbar, .shell-compact-bar) {
+  position: sticky !important;
+  top: 0;
+  z-index: 60;
+  background: rgba(255, 255, 255, 0.94) !important;
+  border-bottom: 1px solid rgba(215, 228, 233, 0.82) !important;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+}
+
+html[data-theme="dark"] .content > :is(.topbar, .shell-compact-bar) {
+  background: rgba(14, 23, 37, 0.94) !important;
+  border-bottom-color: rgba(148, 163, 184, 0.18) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.16) !important;
 }
