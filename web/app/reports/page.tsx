@@ -10,7 +10,7 @@ import { ReportsRangeMenu } from "@/components/reports-range-menu";
 import { ReportsSection as ReportsSectionPanel, ReportsTabsProvider, ReportsTopTabs } from "@/components/reports-tabs";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
-import { getSessionContext } from "@/lib/auth";
+import { getPageSessionContext } from "@/lib/page-auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { getGoalPlanSummary, getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
@@ -381,7 +381,7 @@ export async function ReportsStream({
   const rangeWindowText = selectedRange === "ytd" ? "year-to-date" : selectedRangeLabel.toLowerCase();
   const requestedSection = normalizeReportsSection(searchParams?.section);
 
-  const session = await getSessionContext();
+  const session = await getPageSessionContext();
   const existingUser = await prisma.user.findUnique({
     where: { clerkUserId: session.userId },
   });
@@ -2364,7 +2364,7 @@ export async function ReportsStream({
 
 async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string }> }) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const session = await getSessionContext();
+  const session = await getPageSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");

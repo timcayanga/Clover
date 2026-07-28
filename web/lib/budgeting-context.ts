@@ -2,11 +2,12 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { getSessionContext } from "@/lib/auth";
+import type { PageSessionContext } from "@/lib/page-auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 
-export const resolveBudgetingWorkspace = async () => {
-  const session = await getSessionContext();
+export const resolveBudgetingWorkspace = async (pageSession?: PageSessionContext) => {
+  const session = pageSession ?? (await getSessionContext());
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
 

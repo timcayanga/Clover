@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
+import { getPageSessionContext } from "@/lib/page-auth";
 import { prisma } from "@/lib/prisma";
 import { loadSplitBillGroup } from "@/lib/split-bill-loaders";
 import {
@@ -49,7 +50,7 @@ const getInitials = (name: string) =>
   })();
 
 export default async function SplitBillGroupPage({ params }: { params: Promise<{ groupId: string }> }) {
-  const user = await getSplitBillCurrentUser();
+  const user = await getSplitBillCurrentUser(await getPageSessionContext());
   const { groupId } = await params;
 
   const [group, bills] = await Promise.all([

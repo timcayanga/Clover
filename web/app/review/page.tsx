@@ -6,7 +6,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
-import { getSessionContext } from "@/lib/auth";
+import { getPageSessionContext } from "@/lib/page-auth";
 import { buildReviewQueueWhere } from "@/lib/review-queue";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
@@ -38,7 +38,7 @@ const formatDate = (value: Date) =>
   });
 
 export default async function ReviewPage() {
-  const session = await getSessionContext();
+  const session = await getPageSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");

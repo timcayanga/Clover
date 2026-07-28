@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { SplitBillDeleteButton } from "@/components/split-bill-delete-button";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
+import { getPageSessionContext } from "@/lib/page-auth";
 import { loadSplitBillBill } from "@/lib/split-bill-loaders";
 import {
   formatSplitBillAmount,
@@ -21,7 +22,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
 export default async function SplitBillDetailPage({ params }: { params: Promise<{ billId: string }> }) {
-  const user = await getSplitBillCurrentUser();
+  const user = await getSplitBillCurrentUser(await getPageSessionContext());
   const { billId } = await params;
 
   const bill = await loadSplitBillBill(user.id, billId);

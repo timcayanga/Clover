@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
-import { getSessionContext } from "@/lib/auth";
+import { getPageSessionContext } from "@/lib/page-auth";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { RouteSplash } from "@/components/route-splash";
@@ -217,7 +217,7 @@ const createGoalChart = (buckets: MonthBucket[]) => {
 };
 
 async function GoalsPageStream() {
-  const session = await getSessionContext();
+  const session = await getPageSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
 
   if (!session.isGuest && !hasCompletedOnboarding(user)) {

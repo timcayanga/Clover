@@ -1,6 +1,6 @@
 import { CloverShell } from "@/components/clover-shell";
 import { SettingsHub } from "@/components/settings-hub";
-import { getSessionContext } from "@/lib/auth";
+import { getPageSessionContext } from "@/lib/page-auth";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
@@ -53,7 +53,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
   const initialSection = params.upgrade === "pro" ? "plan" : requestedSection ?? "account";
   const mobileSectionOpen = params.upgrade === "pro" || Boolean(requestedSection);
   const preferredBillingInterval = params.interval === "monthly" || params.interval === "annual" ? params.interval : undefined;
-  const session = await getSessionContext();
+  const session = await getPageSessionContext();
   let workspaceId = "";
   let workspaceName = "Settings";
   let profileList: Array<{

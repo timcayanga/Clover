@@ -6,13 +6,27 @@ const root = process.cwd();
 const readSource = (relativePath: string) => readFile(path.join(root, relativePath), "utf8");
 
 async function main() {
-  const [shellSource, dashboardSource, workspaceSelectionSource, onboardingSource, globalStyles] = await Promise.all([
+  const [shellSource, dashboardSource, workspaceSelectionSource, onboardingSource, pageAuthSource, globalStyles] = await Promise.all([
     readSource("components/clover-shell.tsx"),
     readSource("app/dashboard/page.tsx"),
     readSource("lib/workspace-selection.ts"),
     readSource("components/onboarding-form.tsx"),
+    readSource("lib/page-auth.ts"),
     readSource("app/globals.css"),
   ]);
+  const protectedPageSources = await Promise.all(
+    [
+      "app/adviser/page.tsx",
+      "app/budgeting/page.tsx",
+      "app/goals/page.tsx",
+      "app/profile/page.tsx",
+      "app/recurring/page.tsx",
+      "app/reports/page.tsx",
+      "app/review/page.tsx",
+      "app/settings/page.tsx",
+      "app/split-bill/page.tsx",
+    ].map(readSource),
+  );
 
   assert.match(
     workspaceSelectionSource,
@@ -53,6 +67,15 @@ async function main() {
     onboardingSource,
     /\{importOpen \? \(\s*<ImportFilesModal\s+open/,
     "Onboarding must not download the parser-heavy import modal before the user starts an upload."
+  );
+  assert.match(
+    pageAuthSource,
+    /error\.message === "UNAUTHORIZED"[\s\S]{0,100}redirect\("\/sign-in"\)/,
+    "Protected Server Component pages must redirect signed-out production visitors instead of rendering an error."
+  );
+  assert.ok(
+    protectedPageSources.every((source) => source.includes("getPageSessionContext")),
+    "Every protected Server Component page must use the shared page authentication boundary."
   );
 
   assert.match(

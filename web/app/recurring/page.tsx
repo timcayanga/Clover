@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { CloverShell } from "@/components/clover-shell";
 import { RecurringPageClient } from "@/components/recurring-page-client";
-import { getSessionContext } from "@/lib/auth";
+import { getPageSessionContext } from "@/lib/page-auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { getRecurringPageData, getRecurringWorkspaceId } from "@/lib/recurring-page";
 import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
@@ -38,7 +38,7 @@ export default async function RecurringPage({
   searchParams: Promise<{ add?: string; tab?: string }>;
 }) {
   try {
-    const session = await getSessionContext();
+    const session = await getPageSessionContext();
     const user = await getOrCreateCurrentUser(session.userId);
     if (!session.isGuest && !hasCompletedOnboarding(user)) {
       redirect("/onboarding");

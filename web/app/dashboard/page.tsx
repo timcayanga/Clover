@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
-import { getSessionContext } from "@/lib/auth";
+import { getPageSessionContext } from "@/lib/page-auth";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
@@ -1210,7 +1210,7 @@ async function DashboardStream({
 
 async function DashboardPageStream() {
   try {
-    const session = await getSessionContext();
+    const session = await getPageSessionContext();
     const user = await getOrCreateCurrentUser(session.userId);
     if (!session.isGuest && !hasCompletedOnboarding(user)) {
       redirect("/onboarding");

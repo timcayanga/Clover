@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { RouteSplash } from "@/components/route-splash";
-import { getSessionContext } from "@/lib/auth";
+import { getPageSessionContext } from "@/lib/page-auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
@@ -1101,7 +1101,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
   try {
   const now = new Date();
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const session = await getSessionContext();
+  const session = await getPageSessionContext();
   const existingUser = await prisma.user.findUnique({
     where: { clerkUserId: session.userId },
   });
