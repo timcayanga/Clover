@@ -68,6 +68,7 @@
     "qa:supabase-security": "tsx scripts/supabase-security-regression.ts",
     "qa:integration-security": "tsx scripts/integration-security-regression.ts",
     "qa:account-balance-sign": "tsx scripts/account-balance-sign-regression.ts",
+    "qa:account-deletion-markers": "tsx scripts/workspace-account-deletion-marker-regression.ts",
     "qa:goal-intent": "tsx scripts/goal-intent-regression.ts",
     "qa:goal-persistence": "tsx scripts/goal-persistence-regression.ts",
     "qa:split-bill-quick-add": "tsx scripts/split-bill-quick-add-regression.ts",

@@ -1388,20 +1388,36 @@ export const clearPersistedWorkspaceAccountDeletionMarkers = (
   const cache = readDeletedAccountsWorkspaceCache();
   const currentIds = cache?.snapshots[workspaceId] ?? [];
   const nextIds = currentIds.filter((id) => !persistedIds.has(id));
-  if (nextIds.length === currentIds.length) {
+  if (nextIds.length !== currentIds.length) {
+    const nextSnapshots = { ...(cache?.snapshots ?? {}) };
+    if (nextIds.length === 0) {
+      delete nextSnapshots[workspaceId];
+    } else {
+      nextSnapshots[workspaceId] = nextIds;
+    }
+
+    writeJsonCache(deletedAccountsWorkspaceCacheKey, {
+      snapshots: nextSnapshots,
+    } satisfies DeletedAccountsWorkspaceCacheState);
+  }
+
+  const deletingCache = readDeletingAccountsWorkspaceCache();
+  const deletingIds = deletingCache?.snapshots[workspaceId] ?? [];
+  const nextDeletingIds = deletingIds.filter((id) => !persistedIds.has(id));
+  if (nextDeletingIds.length === deletingIds.length) {
     return;
   }
 
-  const nextSnapshots = { ...(cache?.snapshots ?? {}) };
-  if (nextIds.length === 0) {
-    delete nextSnapshots[workspaceId];
+  const nextDeletingSnapshots = { ...(deletingCache?.snapshots ?? {}) };
+  if (nextDeletingIds.length === 0) {
+    delete nextDeletingSnapshots[workspaceId];
   } else {
-    nextSnapshots[workspaceId] = nextIds;
+    nextDeletingSnapshots[workspaceId] = nextDeletingIds;
   }
 
-  writeJsonCache(deletedAccountsWorkspaceCacheKey, {
-    snapshots: nextSnapshots,
-  } satisfies DeletedAccountsWorkspaceCacheState);
+  writeJsonCache(deletingAccountsWorkspaceCacheKey, {
+    snapshots: nextDeletingSnapshots,
+  } satisfies DeletingAccountsWorkspaceCacheState);
 };
 
 export const clearRepublishedWorkspaceAccountDeletionMarkers = (
