@@ -2293,7 +2293,6 @@ function TransactionsPageContent() {
     });
   }, [selectedWorkspaceId]);
   const [merchantRenameBusy, setMerchantRenameBusy] = useState(false);
-  const [manualCategoryTouched, setManualCategoryTouched] = useState(false);
   const [manualMoreOpen, setManualMoreOpen] = useState(false);
   const [manualAccountMenuOpen, setManualAccountMenuOpen] = useState(false);
   const [manualCategoryMenuOpen, setManualCategoryMenuOpen] = useState(false);
@@ -5056,7 +5055,6 @@ function TransactionsPageContent() {
 
     flushSync(() => {
       setManualForm(createEmptyManualForm("", getOtherCategoryId(categories)));
-      setManualCategoryTouched(false);
       setManualMoreOpen(false);
       setManualAccountMenuOpen(false);
       setManualCategoryMenuOpen(false);
@@ -5239,7 +5237,6 @@ function TransactionsPageContent() {
     try {
       const accountId = manualForm.accountId || (await ensureDefaultAccount(activeWorkspaceId));
       resolvedAccountId = accountId;
-      const merchantText = manualForm.merchantRaw.trim();
       const categoryId = manualForm.categoryId || getOtherCategoryId(categories) || undefined;
       const categoryName = getCategoryNameById(categories, categoryId ?? null);
       const account = accounts.find((entry) => entry.id === accountId) ?? null;
@@ -5355,54 +5352,6 @@ function TransactionsPageContent() {
         pageSizeOverride: transactionsPageSize,
         summaryMode: "full",
       });
-      if (
-        merchantText.length >= 2 &&
-        !manualCategoryTouched &&
-        (!categoryId || categoryId === getOtherCategoryId(categories))
-      ) {
-        window.setTimeout(() => {
-          void (async () => {
-            const currentTransaction = transactionsRef.current.find((entry) => entry.id === created.id);
-            if (!currentTransaction || currentTransaction.categoryId !== created.categoryId) {
-              return;
-            }
-
-            const immediateSuggestionCategoryName = guessCategoryName(
-              merchantText,
-              created.type === "income" ? "income" : "expense"
-            );
-            let suggestedCategoryId = immediateSuggestionCategoryName
-              ? getCategoryIdByName(categories, immediateSuggestionCategoryName)
-              : "";
-
-            if (!suggestedCategoryId) {
-              const suggestion = await fetchCategorySuggestion(
-                merchantText,
-                created.type === "income" ? "income" : "expense"
-              );
-              if (!isAutoApplyCategorySuggestion(suggestion)) {
-                return;
-              }
-              suggestedCategoryId = suggestion.categoryId;
-            }
-
-            if (!suggestedCategoryId || suggestedCategoryId === currentTransaction.categoryId) {
-              return;
-            }
-
-            await updateTransaction(
-              created.id,
-              {
-                categoryId: suggestedCategoryId,
-              },
-              {
-                recordHistory: false,
-                historyBefore: null,
-              }
-            );
-          })();
-        }, 1800);
-      }
       setMessage(`Transaction "${created.merchantRaw}" added.`);
 
       if (keepOpenAfterSave) {
@@ -5417,7 +5366,6 @@ function TransactionsPageContent() {
               nextCurrency
             )
           );
-          setManualCategoryTouched(false);
           setManualMoreOpen(false);
           setManualAccountMenuOpen(false);
           setManualCategoryMenuOpen(false);
@@ -8136,7 +8084,6 @@ function TransactionsPageContent() {
                                   category.id === manualSelectedCategoryId ? "is-selected" : ""
                                 }`}
                                 onClick={() => {
-                                  setManualCategoryTouched(true);
                                   setManualForm((current) => ({ ...current, categoryId: category.id }));
                                   setManualCategoryMenuOpen(false);
                                 }}

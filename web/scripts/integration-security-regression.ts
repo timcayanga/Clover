@@ -29,7 +29,8 @@ try {
   const nextConfig = await readFile(join(root, "next.config.mjs"), "utf8");
   const middleware = await readFile(join(root, "middleware.ts"), "utf8");
 
-  assert.match(paypal, /snapshot\.status === BillingSubscriptionStatus\.active && snapshot\.interval !== null/);
+  assert.match(paypal, /getBillingPlanTierForSubscription\(snapshot\.status, snapshot\.interval\)/);
+  assert.match(paypal, /status === BillingSubscriptionStatus\.active && interval !== null/);
   assert.match(paypal, /where: \{ providerSubscriptionId: subscriptionId \}/);
   assert.match(paypal, /existingSubscription\?\.user\.environment === environment/);
   assert.doesNotMatch(paypal, /\{ email: identifier \}/);

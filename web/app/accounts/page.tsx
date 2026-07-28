@@ -1735,6 +1735,24 @@ function AccountsPageContent() {
         );
         shouldAwaitBackgroundBeforeCompletingInitialLoad =
           !options?.silent && visibleFetchedAccounts.length === 0 && visibleCachedWorkspaceAccounts.length === 0;
+        const authoritativeAccountRules = Array.isArray(payload?.accountRules)
+          ? (payload.accountRules as AccountRule[])
+          : [];
+        const authoritativeStatementCheckpoints = Array.isArray(payload?.statementCheckpoints)
+          ? (payload.statementCheckpoints as StatementCheckpoint[])
+          : [];
+        const authoritativeCacheUpdatedAt = persistAccountsWorkspaceCache(workspaceId, {
+          accounts: visibleFetchedAccounts,
+          accountRules: authoritativeAccountRules,
+          transactions: transactions.filter(
+            (transaction) =>
+              transaction.workspaceId === workspaceId &&
+              !deletedAccountIdsRef.current.has(transaction.accountId) &&
+              !deletingAccountIdsRef.current.has(transaction.accountId)
+          ),
+          statementCheckpoints: authoritativeStatementCheckpoints,
+        });
+        markWorkspaceHydrated(workspaceId, authoritativeCacheUpdatedAt);
         setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
         setAccounts((current) =>
           mergeAccountsWithOptimisticImports(
@@ -1754,8 +1772,8 @@ function AccountsPageContent() {
             { preserveImportedEvidence: hasRecentWorkspaceImportEvidence(workspaceId, importActivitySnapshot) }
           )
         );
-        setAccountRules(Array.isArray(payload?.accountRules) ? payload.accountRules : []);
-        setStatementCheckpoints(Array.isArray(payload?.statementCheckpoints) ? (payload.statementCheckpoints as StatementCheckpoint[]) : []);
+        setAccountRules(authoritativeAccountRules);
+        setStatementCheckpoints(authoritativeStatementCheckpoints);
         if (visibleFetchedAccounts.length > 0) {
           setAccountsHydrationPending(false);
         }

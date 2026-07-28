@@ -4,6 +4,21 @@ import { deleteWorkspaceTransactions } from "@/lib/account-deletion";
 import { BillingSubscriptionStatus } from "@prisma/client";
 import { cancelPayPalSubscription } from "@/lib/paypal-billing";
 
+export const shouldCancelPayPalSubscription = (
+  subscription:
+    | {
+        providerSubscriptionId: string | null;
+        status: BillingSubscriptionStatus;
+      }
+    | null
+    | undefined
+) =>
+  Boolean(
+    subscription?.providerSubscriptionId &&
+      subscription.status !== BillingSubscriptionStatus.cancelled &&
+      subscription.status !== BillingSubscriptionStatus.expired
+  );
+
 export const wipeLocalUserData = async (
   clerkUserId: string,
   options?: {
@@ -83,11 +98,9 @@ export const deleteLocalUserAccount = async (clerkUserId: string) => {
   }
 
   const subscription = user.billingSubscription;
-  const isTerminalSubscription =
-    subscription?.status === BillingSubscriptionStatus.cancelled || subscription?.status === BillingSubscriptionStatus.expired;
-  if (subscription?.providerSubscriptionId && !isTerminalSubscription) {
+  if (shouldCancelPayPalSubscription(subscription)) {
     await cancelPayPalSubscription({
-      subscriptionId: subscription.providerSubscriptionId,
+      subscriptionId: subscription!.providerSubscriptionId!,
       reason: "Clover account deleted by the subscriber.",
     });
   }

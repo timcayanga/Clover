@@ -1,0 +1,48 @@
+name: Clover quality gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - staging
+
+concurrency:
+  group: clover-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate --schema web/prisma/schema.prisma
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run release regressions
+        run: npm run qa:release
+
+      - name: Build production application
+        run: npm run build
+
+      - name: Reject critical dependency advisories
+        run: npm audit --omit=dev --audit-level=critical

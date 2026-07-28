@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { reconcileWorkspaceData } from "@/lib/reconciliation";
+import { auditWorkspaceData, reconcileWorkspaceData } from "@/lib/reconciliation";
 
 const shouldApply = process.argv.includes("--apply");
 
@@ -26,29 +26,7 @@ const run = async () => {
   for (const workspace of workspaces) {
     const issues = shouldApply
       ? await reconcileWorkspaceData(workspace.id)
-      : await prisma.$transaction(async (tx) => {
-          const mismatchedRows = await tx.$queryRaw<Array<{ count: bigint }>>`
-            SELECT COUNT(*)::bigint AS count
-            FROM "Transaction" t
-            INNER JOIN "Account" a ON a."id" = t."accountId"
-            WHERE a."workspaceId" = ${workspace.id}
-              AND t."workspaceId" <> a."workspaceId"
-              AND t."deletedAt" IS NULL
-          `;
-
-          return [
-            ...(Number(mismatchedRows[0]?.count ?? 0) > 0
-              ? [
-                  {
-                    type: "transaction_workspace_mismatch" as const,
-                    severity: "warning" as const,
-                    message: `${Number(mismatchedRows[0]?.count ?? 0)} transaction rows would be reconnected to this profile from their linked accounts.`,
-                    entityIds: [],
-                  },
-                ]
-              : []),
-          ];
-        });
+      : await auditWorkspaceData(workspace.id);
 
     const repairedIssue = issues.find((issue) => issue.type === "transaction_workspace_mismatch");
     const repairedRows = Number(repairedIssue?.message.match(/^\d+/)?.[0] ?? 0);

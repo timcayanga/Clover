@@ -54,20 +54,10 @@ export const repairWorkspaceDataVisibility = async (workspaceId: string) => {
   };
 };
 
-export const reconcileWorkspaceData = async (workspaceId: string): Promise<WorkspaceReconciliationIssue[]> => {
+export const auditWorkspaceData = async (workspaceId: string): Promise<WorkspaceReconciliationIssue[]> => {
   const issues: WorkspaceReconciliationIssue[] = [];
 
-  const repairs = await repairWorkspaceDataVisibility(workspaceId);
-  if (repairs.repairedTransactionWorkspaceRows > 0) {
-    issues.push({
-      type: "transaction_workspace_mismatch",
-      severity: "warning",
-      message: `${repairs.repairedTransactionWorkspaceRows} transaction${repairs.repairedTransactionWorkspaceRows === 1 ? "" : "s"} were reconnected to this profile from their linked accounts.`,
-      entityIds: [],
-    });
-  }
-
-  const [accounts, orphanedTransactions, stuckImports] = await Promise.all([
+  const [accounts, mismatchedTransactions, orphanedTransactions, stuckImports] = await Promise.all([
     prisma.account.findMany({
       where: { workspaceId },
       select: {
@@ -87,6 +77,15 @@ export const reconcileWorkspaceData = async (workspaceId: string): Promise<Works
         },
       },
     }),
+    prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT t."id"
+      FROM "Transaction" t
+      INNER JOIN "Account" a ON a."id" = t."accountId"
+      WHERE a."workspaceId" = ${workspaceId}
+        AND t."workspaceId" <> a."workspaceId"
+        AND t."deletedAt" IS NULL
+      LIMIT 100
+    `,
     prisma.$queryRaw<Array<{ id: string; accountId: string }>>`
       SELECT t."id", t."accountId"
       FROM "Transaction" t
@@ -114,6 +113,15 @@ export const reconcileWorkspaceData = async (workspaceId: string): Promise<Works
       orderBy: { updatedAt: "asc" },
     }),
   ]);
+
+  if (mismatchedTransactions.length > 0) {
+    issues.push({
+      type: "transaction_workspace_mismatch",
+      severity: "warning",
+      message: `${mismatchedTransactions.length} transaction${mismatchedTransactions.length === 1 ? "" : "s"} belong to a different profile than their linked accounts.`,
+      entityIds: mismatchedTransactions.map((transaction) => transaction.id),
+    });
+  }
 
   for (const account of accounts) {
     const balance = Number(account.balance ?? 0);
@@ -191,6 +199,22 @@ export const reconcileWorkspaceData = async (workspaceId: string): Promise<Works
       severity: "warning",
       message: `${importFile.fileName} has been processing for more than 30 minutes${importFile.processingPhase ? ` (${importFile.processingPhase})` : ""}.`,
       entityIds: [importFile.id],
+    });
+  }
+
+  return issues;
+};
+
+export const reconcileWorkspaceData = async (workspaceId: string): Promise<WorkspaceReconciliationIssue[]> => {
+  const repairs = await repairWorkspaceDataVisibility(workspaceId);
+  const issues = await auditWorkspaceData(workspaceId);
+
+  if (repairs.repairedTransactionWorkspaceRows > 0) {
+    issues.unshift({
+      type: "transaction_workspace_mismatch",
+      severity: "warning",
+      message: `${repairs.repairedTransactionWorkspaceRows} transaction${repairs.repairedTransactionWorkspaceRows === 1 ? "" : "s"} were reconnected to this profile from their linked accounts.`,
+      entityIds: [],
     });
   }
 

@@ -318,7 +318,7 @@ function parseBillingDate(value: unknown) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function getBillingStatus(status: string | null | undefined) {
+export function getBillingStatus(status: string | null | undefined) {
   const normalized = status?.trim().toUpperCase() ?? "";
 
   if (normalized === "ACTIVE") {
@@ -342,6 +342,15 @@ function getBillingStatus(status: string | null | undefined) {
   }
 
   return BillingSubscriptionStatus.unknown;
+}
+
+export function getBillingPlanTierForSubscription(
+  status: BillingSubscriptionStatus,
+  interval: BillingInterval | null
+) {
+  return status === BillingSubscriptionStatus.active && interval !== null
+    ? PlanTier.pro
+    : PlanTier.free;
 }
 
 function getPlanIntervalFromSubscription(subscription: Record<string, unknown>, env = getEnv()) {
@@ -404,10 +413,7 @@ async function applyBillingSubscriptionSnapshot(
 ) {
   // Approval pending means the buyer has not completed the PayPal consent flow.
   // Do not grant paid entitlements until PayPal reports an active subscription.
-  const planTier =
-    snapshot.status === BillingSubscriptionStatus.active && snapshot.interval !== null
-      ? PlanTier.pro
-      : PlanTier.free;
+  const planTier = getBillingPlanTierForSubscription(snapshot.status, snapshot.interval);
   const shouldClearPending = eventType !== "MANUAL.REVISE" && snapshot.status !== BillingSubscriptionStatus.approval_pending;
 
   const existing = await prisma.billingSubscription.findUnique({
@@ -506,10 +512,7 @@ export async function reconcileBillingPlanTier(userId: string) {
     return null;
   }
 
-  const nextPlanTier =
-    subscription.status === BillingSubscriptionStatus.active && subscription.interval !== null
-      ? PlanTier.pro
-      : PlanTier.free;
+  const nextPlanTier = getBillingPlanTierForSubscription(subscription.status, subscription.interval);
 
   if (subscription.planTier !== nextPlanTier) {
     await prisma.billingSubscription.update({
