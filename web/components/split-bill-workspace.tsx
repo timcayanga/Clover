@@ -8,6 +8,7 @@ import { SplitBillHome } from "@/components/split-bill-home";
 import { SplitBillPageActions } from "@/components/split-bill-page-actions";
 import { SplitBillPaymentTools } from "@/components/split-bill-payment-tools";
 import {
+  deriveSplitBillDraftTotals,
   formatSplitBillAmount,
   formatSplitBillSettlementStatus,
   mergeSplitBillItemSplitMetadata,
@@ -978,6 +979,10 @@ export function SplitBillWorkspace({
     setBillEditError(null);
 
     try {
+      const persistedTotals = deriveSplitBillDraftTotals({
+        ...selectedBillDraft,
+        items,
+      });
       const response = await fetch(`/api/split-bills/${selectedBill.id}`, {
         method: "PATCH",
         headers: {
@@ -996,11 +1001,13 @@ export function SplitBillWorkspace({
           receiptMimeType: selectedBillDraft.receiptMimeType?.trim() || null,
           receiptText: selectedBillDraft.receiptText?.trim() || null,
           receiptConfidence: selectedBillDraft.receiptConfidence ?? 0,
-          subtotal: selectedBillDraft.subtotal?.trim() || null,
+          subtotal: selectedBillDraft.subtotal?.trim() || persistedTotals.subtotal,
+          serviceCharge: selectedBillDraft.serviceCharge?.trim() || null,
           tax: selectedBillDraft.tax?.trim() || null,
           tip: selectedBillDraft.tip?.trim() || null,
+          rounding: selectedBillDraft.rounding?.trim() || null,
           discount: selectedBillDraft.discount?.trim() || null,
-          total: selectedBillDraft.total?.trim() || null,
+          total: selectedBillDraft.total?.trim() || persistedTotals.total,
           rawPayload: mergeSplitBillItemSplitMetadata(selectedBillDraft.rawPayload, items),
           participants,
           items,

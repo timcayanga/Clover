@@ -50,6 +50,7 @@ assert.deepEqual(
 );
 
 const editorSource = fs.readFileSync(path.join(process.cwd(), "components/split-bill-editor.tsx"), "utf8");
+const workspaceSource = fs.readFileSync(path.join(process.cwd(), "components/split-bill-workspace.tsx"), "utf8");
 assert.match(
   editorSource,
   /draft\.items = draft\.items\.map\(\(item, index\) => \(\{[\s\S]{0,120}id: item\.id \?\? `draft-item-\$\{index \+ 1\}`/,
@@ -64,6 +65,16 @@ assert.doesNotMatch(
   editorSource.slice(editorSource.indexOf("const makeInitialDraft"), editorSource.indexOf("const readJsonResponse")),
   /createDraftId\(\)/,
   "The server and browser must render the same initial split-bill IDs."
+);
+assert.match(
+  workspaceSource,
+  /const persistedTotals = deriveSplitBillDraftTotals\(\{[\s\S]{0,120}items,/,
+  "The inline split-bill editor must derive missing persisted totals from its item rows."
+);
+assert.match(
+  workspaceSource,
+  /serviceCharge: selectedBillDraft\.serviceCharge[\s\S]{0,160}rounding: selectedBillDraft\.rounding/,
+  "The inline split-bill editor must preserve service charge and rounding adjustments."
 );
 
 console.log("Split bill quick-add regression passed.");
