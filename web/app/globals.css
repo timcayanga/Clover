@@ -13837,6 +13837,10 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 .goals-editor__modal {
   display: grid;
   gap: 14px;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .goals-editor__modal-copy {

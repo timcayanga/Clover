@@ -6,6 +6,7 @@ const root = process.cwd();
 const routeSource = fs.readFileSync(path.join(root, "app/api/goals/route.ts"), "utf8");
 const pageSource = fs.readFileSync(path.join(root, "app/goals/page.tsx"), "utf8");
 const modalSource = fs.readFileSync(path.join(root, "components/goals-editor-modal.tsx"), "utf8");
+const globalStyles = fs.readFileSync(path.join(root, "app/globals.css"), "utf8");
 
 assert.match(
   routeSource,
@@ -28,5 +29,10 @@ assert.ok(
   "Goal deletion must be available in both desktop and mobile editors."
 );
 assert.match(modalSource, /role="status"/, "Goal save failures must be visible to the user.");
+assert.match(
+  globalStyles,
+  /\.goals-editor__modal \{[\s\S]{0,180}max-height: calc\(100dvh - 40px\);[\s\S]{0,100}overflow-y: auto;/,
+  "Goal actions must remain reachable when the editor is taller than the browser viewport."
+);
 
 console.log("Goal persistence regression passed.");
