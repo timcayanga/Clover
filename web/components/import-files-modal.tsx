@@ -1771,9 +1771,11 @@ export function ImportFilesModal({
     },
     options?: {
       backgroundOnly?: boolean;
+      serverResolveAccount?: boolean;
     }
   ): Promise<ImportProcessResult> => {
     const backgroundOnly = Boolean(options?.backgroundOnly);
+    const serverResolveAccount = Boolean(options?.serverResolveAccount);
     const emitItemUpdate = (patch: Partial<QueuedFile>) => {
       if (!backgroundOnly) {
         updateItem(itemId, patch);
@@ -1788,18 +1790,20 @@ export function ImportFilesModal({
       closeImportAfterError(itemId, stage, fileName, message);
     };
     const resolvedAccountId =
-      accountId && !accountId.startsWith("optimistic-")
-        ? accountId
-        : await ensureTargetAccountId(
-            summaryContext.accountName,
-            summaryContext.institution,
-            summaryContext.accountType,
-            summaryContext.accountNumber,
-            null,
-            summaryContext.currency ?? summaryContext.previewTransactions?.[0]?.currency ?? null
-          );
+      serverResolveAccount
+        ? null
+        : accountId && !accountId.startsWith("optimistic-")
+          ? accountId
+          : await ensureTargetAccountId(
+              summaryContext.accountName,
+              summaryContext.institution,
+              summaryContext.accountType,
+              summaryContext.accountNumber,
+              null,
+              summaryContext.currency ?? summaryContext.previewTransactions?.[0]?.currency ?? null
+            );
 
-    if (!resolvedAccountId) {
+    if (!serverResolveAccount && !resolvedAccountId) {
       throw new Error("Unable to determine the destination account for this document.");
     }
 
@@ -1960,9 +1964,23 @@ export function ImportFilesModal({
         lastKnownAccountBalance = accountBalance;
         const insightSummary = confirmed.result?.insightSummary ?? null;
         const confirmedAccountSummaries = normalizeServerAccountSummaries(confirmed.result?.accountSummaries);
+        const durableAccountId =
+          (typeof confirmed.result?.accountId === "string" && confirmed.result.accountId.trim()
+            ? confirmed.result.accountId.trim()
+            : null) ??
+          confirmedAccountSummaries.find((accountSummary) => Boolean(accountSummary.accountId))?.accountId ??
+          resolvedAccountId;
+        if (!durableAccountId) {
+          emitImportError(
+            "confirm",
+            summaryContext.fileName,
+            "Clover saved the statement but could not resolve its account. Nothing was discarded; retry the import status."
+          );
+          return { status: "staged", importedRows, summary: null };
+        }
         const resolvedAccountType = (
           summaryContext.accountType ??
-          accounts.find((account) => account.id === resolvedAccountId)?.type ??
+          accounts.find((account) => account.id === durableAccountId)?.type ??
           inferAccountTypeFromStatement(summaryContext.institution, summaryContext.accountName, "bank")
         ) as UploadInsightsSummary["accountType"];
         const summary = buildResolvedOptimisticUploadSummary({
@@ -1970,12 +1988,13 @@ export function ImportFilesModal({
           workspaceId,
           fileName: summaryContext.fileName,
           importedRows,
-          accountId: resolvedAccountId,
+          accountId: durableAccountId,
           accountName: resolvedSummaryAccountName,
           institution: summaryContext.institution ?? null,
           accountNumber: summaryContext.accountNumber ?? null,
           accountType: resolvedAccountType ?? null,
-          optimisticAccountId: resolvedAccountId.startsWith("optimistic-") ? summaryContext.optimisticAccountId ?? resolvedAccountId : null,
+          currency: summaryContext.currency ?? confirmedAccountSummaries[0]?.currency ?? null,
+          optimisticAccountId: durableAccountId.startsWith("optimistic-") ? summaryContext.optimisticAccountId ?? durableAccountId : null,
           balanceSources: [accountBalance],
           // The local preview is useful while parsing, but its transfer type
           // can be provisional. Once confirmation succeeds, let the workspace
@@ -1993,7 +2012,7 @@ export function ImportFilesModal({
         const settledVisible = await waitForSettledVisibility(
           itemId,
           importFileId,
-          resolvedAccountId,
+          durableAccountId,
           importedRows,
           summary.balance ?? null,
           "Import confirmation succeeded before settled data became visible"
@@ -2006,7 +2025,7 @@ export function ImportFilesModal({
           confirmationState: "confirmed",
           error: null,
           importFileId,
-          targetAccountId: resolvedAccountId,
+          targetAccountId: durableAccountId,
           importedRows,
           progress: 100,
           progressLabel: "Visible in Clover",
@@ -2032,7 +2051,7 @@ export function ImportFilesModal({
           transaction_count: importedRows,
           institution: summaryContext.institution ?? null,
           amount_total: summary ? summary.incomeTotal + summary.expenseTotal : null,
-          currency: "PHP",
+          currency: summary.currency ?? summaryContext.currency ?? null,
         });
         capturePostHogClientEvent("transaction_confirmation_completed", {
           workspace_id: workspaceId || null,
@@ -2041,6 +2060,21 @@ export function ImportFilesModal({
           source_surface: importActivitySurfaceRef.current,
         });
         return { status: "done", importedRows, summary };
+      }
+
+      if (serverResolveAccount) {
+        return {
+          status: "staged",
+          importedRows: lastKnownConfirmedRows || null,
+          summary: null,
+        };
+      }
+      if (!resolvedAccountId) {
+        return {
+          status: "staged",
+          importedRows: lastKnownConfirmedRows || null,
+          summary: null,
+        };
       }
 
       if (
@@ -2449,7 +2483,7 @@ export function ImportFilesModal({
               optimisticAccountId: summaryContext.optimisticAccountId,
               previewTransactions: summaryContext.previewTransactions,
             },
-            { backgroundOnly }
+            { backgroundOnly, serverResolveAccount: true }
           );
           return;
         }

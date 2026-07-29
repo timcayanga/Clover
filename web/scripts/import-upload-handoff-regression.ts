@@ -37,6 +37,7 @@ const main = async () => {
     readFile(join(webRoot, "vercel.json"), "utf8"),
   ]);
   const optimisticSummarySource = await readFile(join(webRoot, "lib/import-optimistic-summary.ts"), "utf8");
+  const accountsRouteSource = await readFile(join(webRoot, "app/api/accounts/route.ts"), "utf8");
   const localPreparseSource = section(
     modalSource,
     "async function preparsePendingItemLocally",
@@ -82,8 +83,23 @@ const main = async () => {
   );
   assert.match(
     modalSource,
-    /processingPhase === "account_match_needs_confirmation"[\s\S]{0,800}await confirmItemImport\([\s\S]{0,600}currency: resolvedStatementCurrency/,
+    /processingPhase === "account_match_needs_confirmation"[\s\S]{0,800}await confirmItemImport\([\s\S]{0,600}currency: resolvedStatementCurrency[\s\S]{0,300}serverResolveAccount: true/,
     "An explicit statement upload must confirm a deleted-account restoration with its parsed currency."
+  );
+  assert.match(
+    modalSource,
+    /const resolvedAccountId =\s*serverResolveAccount\s*\? null\s*:/,
+    "Deleted-account restoration must let the server resolve the durable account instead of creating a browser-side placeholder."
+  );
+  assert.match(
+    modalSource,
+    /const durableAccountId =[\s\S]{0,500}confirmed\.result\?\.accountId[\s\S]{0,500}confirmedAccountSummaries/,
+    "The client must publish the account ID returned by durable confirmation."
+  );
+  assert.match(
+    accountsRouteSource,
+    /normalizeAccountRuleKey\(account\.name, account\.institution\) === candidateKey[\s\S]{0,200}normalizeAccountCurrency\(account\) === normalizedCurrency/,
+    "Explicit-currency account creation must not reuse a same-name account in another currency."
   );
   assert.doesNotMatch(
     modalSource,

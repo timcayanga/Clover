@@ -2134,9 +2134,22 @@ export async function POST(request: Request) {
       select: getCompatibleAccountSelect(compatibleColumns),
     });
     const candidateKey = normalizeAccountRuleKey(name, institution);
+    const requestSpecifiedCurrency = Boolean(body?.currency && String(body.currency).trim());
     const existingAccount =
-      existingAccounts.find((account) => account.type === type && normalizeAccountRuleKey(account.name, account.institution) === candidateKey) ??
-      existingAccounts.find((account) => account.type === type && account.name === name && account.institution === institution) ??
+      existingAccounts.find(
+        (account) =>
+          account.type === type &&
+          normalizeAccountRuleKey(account.name, account.institution) === candidateKey &&
+          normalizeAccountCurrency(account) === normalizedCurrency
+      ) ??
+      (!requestSpecifiedCurrency
+        ? existingAccounts.find(
+            (account) =>
+              account.type === type &&
+              normalizeAccountRuleKey(account.name, account.institution) === candidateKey
+          ) ??
+          existingAccounts.find((account) => account.type === type && account.name === name && account.institution === institution)
+        : null) ??
       null;
     const existingCashAccount =
       type === "cash"
