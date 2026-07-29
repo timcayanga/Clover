@@ -16,6 +16,7 @@ export type StatementExtractionQuality = {
   evidenceCoverage: number;
   pageCoverage: number;
   duplicateKeyRate: number;
+  unsafeRowRate: number;
   critical: boolean;
   reasons: string[];
 };
@@ -45,6 +46,34 @@ const rowEvidence = (row: StatementQualityRow) => {
 };
 
 const normalizeKeyPart = (value: unknown) => asText(value).toLowerCase().replace(/\s+/g, " ");
+
+const rowLooksStructurallyUnsafe = (row: StatementQualityRow) => {
+  const merchant = asText(row.merchantRaw ?? row.merchantClean);
+  const amount = Number(String(row.amount ?? "").replace(/,/g, ""));
+  const payload =
+    row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+      ? (row.rawPayload as Record<string, unknown>)
+      : null;
+  const sourceText = asText(payload?.sourceLine ?? payload?.line);
+  const rawAmountText = asText(payload?.amountText);
+  const sourceAmounts = Array.from(rawAmountText.matchAll(/[0-9][0-9,]*\.\d{2}/g))
+    .map((match) => Number(match[0].replace(/,/g, "")))
+    .filter(Number.isFinite);
+  const largestSourceAmount = sourceAmounts.length > 0 ? Math.max(...sourceAmounts) : 0;
+  const mergedAmount =
+    Number.isFinite(amount) &&
+    sourceAmounts.length >= 2 &&
+    largestSourceAmount > 0 &&
+    Math.abs(amount) > largestSourceAmount * 100;
+
+  return (
+    merchant.length > 500 ||
+    sourceText.length > 1_500 ||
+    /\bBALANCE\s+(?:BROUGHT|CARRIED)\s+FORWARD\b/i.test(`${merchant} ${sourceText}`) ||
+    (Number.isFinite(amount) && Math.abs(amount) >= 1_000_000_000_000) ||
+    mergedAmount
+  );
+};
 
 const rowIdentity = (row: StatementQualityRow) => {
   if (!row.rawPayload || typeof row.rawPayload !== "object" || Array.isArray(row.rawPayload)) {
@@ -88,6 +117,7 @@ export const assessStatementExtractionQuality = (params: {
   const duplicateKeyRate = rowCount
     ? 1 - new Set(keys.filter((key) => key !== "||")).size / Math.max(1, keys.filter((key) => key !== "||").length)
     : 0;
+  const unsafeRowRate = rowCount ? rows.filter(rowLooksStructurallyUnsafe).length / rowCount : 0;
   const reasons: string[] = [];
   let score = 100;
 
@@ -127,8 +157,16 @@ export const assessStatementExtractionQuality = (params: {
     score -= 10;
     reasons.push("balance_not_reconciled");
   }
+  if (unsafeRowRate > 0) {
+    score -= 60;
+    reasons.push("structurally_unsafe_rows");
+  }
 
-  const critical = rowCount === 0 || reasons.includes("declared_count_mismatch") || reasons.includes("incomplete_page_coverage");
+  const critical =
+    rowCount === 0 ||
+    reasons.includes("declared_count_mismatch") ||
+    reasons.includes("incomplete_page_coverage") ||
+    reasons.includes("structurally_unsafe_rows");
   return {
     score: Math.max(0, Math.min(100, Math.round(score))),
     rowCount,
@@ -138,6 +176,7 @@ export const assessStatementExtractionQuality = (params: {
     evidenceCoverage,
     pageCoverage,
     duplicateKeyRate,
+    unsafeRowRate,
     critical,
     reasons,
   };

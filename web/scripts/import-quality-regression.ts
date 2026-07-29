@@ -80,6 +80,22 @@ const main = () => {
   assert.equal(criticalBackupComparison.winner, "local");
   assert.equal(criticalBackupComparison.reason, "backup_critical");
 
+  const structurallyUnsafe = assessStatementExtractionQuality({
+    rows: [
+      row({
+        amount: "6399114.88",
+        merchantRaw: "Internet Transfer",
+        rawPayload: {
+          kind: "generic_bank_statement_transaction",
+          line: "07 Dec 24 TFR INTERNET TRANSFER 63.99 114.88",
+          amountText: "63.99 114.88",
+        },
+      }),
+    ],
+  });
+  assert.equal(structurallyUnsafe.critical, true);
+  assert.ok(structurallyUnsafe.reasons.includes("structurally_unsafe_rows"));
+
   console.log("Import quality regression checks passed.");
 };
 

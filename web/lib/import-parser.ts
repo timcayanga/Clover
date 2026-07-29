@@ -13442,13 +13442,17 @@ const parseHsbcAccountNumber = (lines: string[]) => {
 };
 
 const hsbcUkPdfDatePattern = /^(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{2,4})\s+(.+)$/i;
+const hsbcUkPdfDateOnlyPattern = /^(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{2,4})$/i;
 
 const parseHsbcUkPdfStatement = (text: string) => {
   const normalizedText = normalizeWhitespace(text);
+  const hasHsbcLedgerHeading =
+    /\bYour\s+Bank\s+Account\s+details\b/i.test(normalizedText) ||
+    /\bYour\s+(?:Online\s+Bonus\s+Saver|Global\s+Money\s+Account)\s+details\b/i.test(normalizedText);
   if (
     !/\bHSBC\s+UK\s+Bank\s+plc\b/i.test(normalizedText) ||
     !/\bYour\s+Statement\b/i.test(normalizedText) ||
-    !/\bYour\s+Bank\s+Account\s+details\b/i.test(normalizedText)
+    !hasHsbcLedgerHeading
   ) {
     return null;
   }
@@ -13463,6 +13467,8 @@ const parseHsbcUkPdfStatement = (text: string) => {
   );
   const startDate = parseDateValue(periodMatch?.[1] ?? null);
   const endDate = parseDateValue(periodMatch?.[2] ?? null);
+  const productName =
+    normalizedText.match(/\bYour\s+(Online\s+Bonus\s+Saver|Global\s+Money\s+Account)\s+details\b/i)?.[1] ?? "HSBC";
   const rows: ParsedImportRow[] = [];
   let previousBalance: number | null = null;
   let openingBalance: number | null = null;
@@ -13491,7 +13497,14 @@ const parseHsbcUkPdfStatement = (text: string) => {
     const trailingValue = moneyValues.at(-1) ?? null;
     const hasBoundaryBalance =
       boundaryBalance !== null && trailingValue !== null && Math.abs(trailingValue - boundaryBalance) < 0.005;
-    const carriesRunningBalance = (hasBoundaryBalance || inferTrailingBalance) && moneyValues.length >= 2;
+    const penultimateValue = moneyValues.at(-2) ?? null;
+    const reconcilesWithPreviousBalance =
+      previousBalance !== null &&
+      trailingValue !== null &&
+      penultimateValue !== null &&
+      Math.abs(Math.abs(trailingValue - previousBalance) - Math.abs(penultimateValue)) < 0.005;
+    const carriesRunningBalance =
+      (hasBoundaryBalance || inferTrailingBalance || reconcilesWithPreviousBalance) && moneyValues.length >= 2;
     const accountImpact = carriesRunningBalance ? moneyValues.at(-2) : trailingValue;
     const runningBalance = hasBoundaryBalance ? boundaryBalance : carriesRunningBalance ? trailingValue : null;
     if (accountImpact === undefined || accountImpact === null) {
@@ -13525,8 +13538,17 @@ const parseHsbcUkPdfStatement = (text: string) => {
     const description = normalizeWhitespace(distinctCandidates.join(" ") || segment.lines.join(" "));
     const normalizedCode = String(segment.transactionCode ?? "").toUpperCase();
     const personalCounterparty = isLikelyPersonToPersonMerchant(description);
+    const balanceDerivedType: TransactionType | null =
+      runningBalance !== null && previousBalance !== null
+        ? runningBalance > previousBalance
+          ? "income"
+          : runningBalance < previousBalance
+            ? "expense"
+            : null
+        : null;
     const inferredType: TransactionType =
-      normalizedCode === "CR" || /\b(?:credit|salary|interest|refund)\b/i.test(description) ? "income" : "expense";
+      balanceDerivedType ??
+      (normalizedCode === "CR" || /\b(?:credit|salary|interest|refund)\b/i.test(description) ? "income" : "expense");
     const isTransferCategory =
       ["BP", "TFR", "FPI", "SO", "DD"].includes(normalizedCode) ||
       (normalizedCode === "CR" && personalCounterparty) ||
@@ -13534,7 +13556,12 @@ const parseHsbcUkPdfStatement = (text: string) => {
     // A bank-payment label describes purpose, not ownership. Keep the ledger
     // direction until Clover can match an opposite movement in another account.
     const type: TransactionType = inferredType;
-    const guessedCategoryName = isTransferCategory ? "Transfers" : guessCategoryName(description, type);
+    const isInterestCredit = type === "income" && /\b(?:gross\s+interest|interest\s+(?:earned|credit))\b/i.test(description);
+    const guessedCategoryName = isInterestCredit
+      ? "Interest"
+      : isTransferCategory
+        ? "Transfers"
+        : guessCategoryName(description, type);
     const isCardPurchase = ["VIS", "VMS", ")))", ">>>", "))", ">>"].includes(normalizedCode);
     const categoryName = isCardPurchase && guessedCategoryName === "Transfers" ? "Other" : guessedCategoryName;
 
@@ -13547,7 +13574,7 @@ const parseHsbcUkPdfStatement = (text: string) => {
       description,
       runningBalance: runningBalance ?? undefined,
       categoryName,
-      accountName: "HSBC",
+      accountName: productName,
       accountNumber: accountNumber ?? undefined,
       institution: "HSBC",
       type,
@@ -13570,13 +13597,15 @@ const parseHsbcUkPdfStatement = (text: string) => {
     if (runningBalance !== null) {
       previousBalance = runningBalance;
       endingBalance = runningBalance;
+    } else if (previousBalance !== null) {
+      previousBalance += type === "income" ? Math.abs(accountImpact) : -Math.abs(accountImpact);
     }
   };
 
   const transactionStartPattern = /^((?:VIS|VMS|BP|CR|DR|TFR|FPI|SO|DD|ATM|CHQ|[)>]{2,4}))\s+(.+)$/i;
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? "";
-    if (/^Your\s+Bank\s+Account\s+details$/i.test(line)) {
+    if (/^Your\s+(?:Bank\s+Account|Online\s+Bonus\s+Saver|Global\s+Money\s+Account)\s+details$/i.test(line)) {
       activeLedger = true;
       continue;
     }
@@ -13589,6 +13618,18 @@ const parseHsbcUkPdfStatement = (text: string) => {
     if (/^(?:63-64\s+St\s+Andrews|Contact\s+tel|Information\s+about\s+the\s+Financial)/i.test(line)) {
       emitPendingSegment();
       activeLedger = false;
+      continue;
+    }
+
+    const dateOnlyLine = line.match(hsbcUkPdfDateOnlyPattern);
+    if (dateOnlyLine) {
+      // Savings statements may place "CR GROSS INTEREST" before a date-only
+      // line. Keep that empty segment open for the new date, but finish a
+      // preceding segment that already contains its monetary values.
+      if (pendingSegment && readMoneyValues(pendingSegment.lines).length > 0) {
+        emitPendingSegment(null, true);
+      }
+      currentDate = parseDateValue(dateOnlyLine[1] ?? null)?.toISOString().slice(0, 10) ?? currentDate;
       continue;
     }
 
@@ -13634,7 +13675,7 @@ const parseHsbcUkPdfStatement = (text: string) => {
   const metadata: DetectedStatementMetadata = {
     institution: "HSBC",
     accountNumber,
-    accountName: "HSBC",
+    accountName: productName,
     accountType: "bank",
     currency: "GBP",
     openingBalance,

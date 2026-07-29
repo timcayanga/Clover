@@ -18,6 +18,7 @@ export type ImportValidationResult = {
     typeCoverage: number;
     evidenceCoverage: number;
     outsidePeriodRate: number;
+    unsafeRowRate: number;
   };
 };
 
@@ -50,6 +51,52 @@ const rowHasEvidence = (row: ParsedImportRow) => {
   return Boolean(text(record.source_text ?? record.sourceText) || typeof record.page === "number");
 };
 
+const unsafeRowFinding = (row: ParsedImportRow): ImportValidationFinding | null => {
+  const payload =
+    row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+      ? (row.rawPayload as Record<string, unknown>)
+      : null;
+  const merchant = text(row.merchantRaw ?? row.merchantClean ?? row.description);
+  const sourceText = text(payload?.sourceLine ?? payload?.line);
+  if (/\bBALANCE\s+(?:BROUGHT|CARRIED)\s+FORWARD\b/i.test(`${merchant} ${sourceText}`)) {
+    return {
+      code: "row.balance_anchor",
+      severity: "critical",
+      field: "rows",
+      message: "A statement balance anchor was incorrectly extracted as a transaction.",
+    };
+  }
+  if (merchant.length > 500 || sourceText.length > 1_500) {
+    return {
+      code: "evidence.boilerplate",
+      severity: "critical",
+      field: "rawPayload",
+      message: "Statement instructions or legal copy were incorrectly extracted as a transaction.",
+    };
+  }
+
+  const amount = parseAmountValue(row.amount == null ? null : String(row.amount));
+  const rawAmountText = text(payload?.amountText);
+  const sourceAmounts = Array.from(rawAmountText.matchAll(/[0-9][0-9,]*\.\d{2}/g))
+    .map((match) => Number(match[0].replace(/,/g, "")))
+    .filter(Number.isFinite);
+  const largestSourceAmount = sourceAmounts.length > 0 ? Math.max(...sourceAmounts) : 0;
+  const mergedAmount =
+    amount !== null &&
+    sourceAmounts.length >= 2 &&
+    largestSourceAmount > 0 &&
+    Math.abs(amount) > largestSourceAmount * 100;
+  if ((amount !== null && Math.abs(amount) >= 1_000_000_000_000) || mergedAmount) {
+    return {
+      code: "amount.implausible",
+      severity: "critical",
+      field: "amount",
+      message: "Multiple statement values appear to have been merged into one transaction amount.",
+    };
+  }
+  return null;
+};
+
 export const validateParsedImportRows = (params: {
   rows: ParsedImportRow[];
   metadata?: Partial<DetectedStatementMetadata> | null;
@@ -76,21 +123,33 @@ export const validateParsedImportRows = (params: {
     : 0;
   const outsidePeriodRate = rowCount ? outsidePeriodCount / rowCount : 0;
   const findings: ImportValidationFinding[] = [];
+  const unsafeFindings = rows.map(unsafeRowFinding).filter((finding): finding is ImportValidationFinding => Boolean(finding));
+  const unsafeRowRate = rowCount ? unsafeFindings.length / rowCount : 0;
   if (rowCount === 0) findings.push({ code: "rows.empty", severity: "critical", field: "rows", message: "No transaction rows were extracted." });
   if (rowCount > 0 && dateCoverage < 0.65) findings.push({ code: "date.coverage_low", severity: "critical", field: "date", message: "Too many rows have no usable date." });
   if (rowCount > 0 && amountCoverage < 0.9) findings.push({ code: "amount.coverage_low", severity: "critical", field: "amount", message: "Too many rows have no usable amount." });
   if (rowCount > 0 && typeCoverage < 0.8) findings.push({ code: "type.coverage_low", severity: "warning", field: "type", message: "Some rows have no reliable transaction direction." });
   if (rowCount > 0 && evidenceCoverage < 0.8) findings.push({ code: "evidence.coverage_low", severity: "warning", field: "rawPayload", message: "Some rows lack source evidence." });
   if (outsidePeriodRate > 0.1) findings.push({ code: "date.outside_statement_period", severity: outsidePeriodRate > 0.35 ? "critical" : "warning", field: "date", message: "Some rows fall outside the statement period." });
+  for (const finding of unsafeFindings) {
+    if (!findings.some((existing) => existing.code === finding.code)) {
+      findings.push(finding);
+    }
+  }
 
   const score = clamp(
-    dateCoverage * 30 + amountCoverage * 30 + typeCoverage * 15 + evidenceCoverage * 15 + (1 - Math.min(1, outsidePeriodRate)) * 10
+    dateCoverage * 30 +
+      amountCoverage * 30 +
+      typeCoverage * 15 +
+      evidenceCoverage * 15 +
+      (1 - Math.min(1, outsidePeriodRate)) * 10 -
+      Math.min(60, unsafeRowRate * 100)
   );
   return {
     score,
     critical: findings.some((finding) => finding.severity === "critical"),
     findings,
-    metrics: { rowCount, dateCoverage, amountCoverage, typeCoverage, evidenceCoverage, outsidePeriodRate },
+    metrics: { rowCount, dateCoverage, amountCoverage, typeCoverage, evidenceCoverage, outsidePeriodRate, unsafeRowRate },
   };
 };
 

@@ -17,9 +17,10 @@ These rules cover HSBC UK mobile screenshots and HSBC UK current-account PDF sta
 
 ## PDF Statement Rules
 
-- Detect the HSBC UK statement layout from `HSBC UK Bank plc`, `Your Statement`, and `Your Bank Account details` together.
+- Detect the HSBC UK statement layout from `HSBC UK Bank plc`, `Your Statement`, and a supported ledger heading such as `Your Bank Account details`, `Your Online Bonus Saver details`, or `Your Global Money Account details`.
 - Accept OCR-spaced labels such as `Pay m e nt`, `Ope ning Balance`, and `Clos ing Balance`; transaction extraction must rely on the dated ledger rows rather than exact header spelling.
 - Carry the last visible `DD Mon YY` date across following transaction-code rows because HSBC omits repeated dates for same-day transactions.
+- Support savings-interest blocks where `CR GROSS INTEREST` appears before a date-only `DD Mon YY` line; the date belongs to that pending interest row.
 - Start a new transaction at each HSBC code such as `VIS`, `VMS`, `BP`, `CR`, `DR`, `TFR`, `FPI`, `SO`, or `DD`; retain following merchant/location lines until the next code or balance anchor.
 - Treat `BALANCE BROUGHT FORWARD` and `BALANCE CARRIED FORWARD` as reconciliation anchors, not transactions.
 - The last two monetary values in a transaction block are the account impact and running balance. Use the running-balance movement to determine money in versus money out when PDF column spacing is lost.

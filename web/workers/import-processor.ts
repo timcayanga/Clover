@@ -10513,6 +10513,36 @@ export const processImportFileText = async (
   }
   const rawRows = effectiveRows as EnrichedParsedImportRow[];
   const importValidation = validateParsedImportRows({ rows: rawRows, metadata: resolvedMetadata });
+  const hasStructurallyUnsafeStatementRows =
+    importMode === "statement" &&
+    importValidation.findings.some((finding) =>
+      ["row.balance_anchor", "evidence.boilerplate", "amount.implausible"].includes(finding.code)
+    );
+  if (hasStructurallyUnsafeStatementRows) {
+    await updateImportFileCompat(importFileId, {
+      status: "failed",
+      processingPhase: "repair_needed",
+      processingMessage:
+        "Clover stopped this import because parts of the statement were read as transaction amounts. Nothing was added. Please try again after the parser is updated.",
+      parsedRowsCount: 0,
+      confirmedTransactionsCount: 0,
+    });
+    emitImportProcessingEvent("import_processing_stalled", {
+      processing_status: "failed",
+      processing_phase: "repair_needed",
+      reason: "structurally_unsafe_statement_parse_rejected",
+      parsed_rows: rawRows.length,
+      validation_findings: importValidation.findings.map((finding) => finding.code),
+    });
+    return {
+      imported: 0,
+      duplicate: false,
+      metadata: resolvedMetadata,
+      accountId: null,
+      confirmedTransactionsCount: 0,
+      status: "error",
+    };
+  }
   if (importMode === "notes" && importValidation.critical && !useOpenAiParse && !trainedNotesRows) {
     await updateImportFileCompat(importFileId, {
       status: "failed",

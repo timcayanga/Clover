@@ -116,4 +116,68 @@ assert.equal(
   "An HSBC BP row is an expense until another Clover account contains its matching incoming movement."
 );
 
+const onlineBonusSaverRows = parseImportText(
+  [
+    "Your Statement",
+    "Account Summary",
+    "Ope ning Balance £50.89",
+    "Paym e nts In £65.18",
+    "£60.00",
+    "Paym e nts Out",
+    "Clos ing Balance £56.07",
+    "5 December 2024 to 4 April 2025",
+    "Mr Timothy Gunther Cayanga 40-11-95 72514818 2",
+    "Your Online Bonus Saver details",
+    "Date Pay m e nt t y pe and de t ails £ Paid out £ Paid in £ Balance",
+    "04 Dec 24 BALANCE BROUGHT FORWARD . 50.89",
+    "07 Dec 24 TFR 401672 64156943",
+    "INTERNET TRANSFER 63.99 114.88",
+    "CR GROSS INTEREST",
+    "01 Jan 25",
+    "TO 31DEC2024 0.15",
+    "CR ADDED GROSS INTEREST 0.19 115.22",
+    "CR GROSS INTEREST",
+    "01 Feb 25",
+    "TO 31JAN2025 0.17",
+    "CR ADDED GROSS INTEREST 0.22",
+    "115.61",
+    "01 Mar 25 CR GROSS INTEREST",
+    "TO 28FEB2025 0.13",
+    "CR ADDED GROSS INTEREST 0.22",
+    "115.96",
+    "18 Mar 25 TFR 401608 84795067",
+    "INTERNET TRANSFER 60.00 55.96",
+    "01 Apr 25 CR GROSS INTEREST",
+    "TO 31MAR2025 0.11 56.07",
+    "04 Apr 25 BALANCE CARRIED FORWARD 56.07",
+    "Information about the Financial Services Compensation Scheme",
+    "HSBC UK Bank plc, registered in England and Wales number 09928412.",
+  ].join("\n"),
+  "2025-04-04_Statement.pdf",
+  "application/pdf"
+);
+assert.equal(onlineBonusSaverRows.length, 9, "HSBC savings statements must exclude both balance anchors.");
+assert.deepEqual(
+  onlineBonusSaverRows.map((row) => row.amount),
+  ["63.99", "0.15", "0.19", "0.17", "0.22", "0.13", "0.22", "60.00", "0.11"],
+  "HSBC savings amounts must remain separate from dates and running balances."
+);
+assert.deepEqual(
+  onlineBonusSaverRows.map((row) => row.type),
+  ["income", "income", "income", "income", "income", "income", "income", "expense", "income"]
+);
+assert.ok(onlineBonusSaverRows.every((row) => row.currency === "GBP"));
+assert.ok(onlineBonusSaverRows.every((row) => row.accountName === "Online Bonus Saver"));
+assert.equal(onlineBonusSaverRows.at(-1)?.runningBalance, 56.07);
+assert.ok(
+  onlineBonusSaverRows
+    .filter((row) => /interest/i.test(String(row.description)))
+    .every((row) => row.categoryName === "Interest"),
+  "HSBC savings interest credits must stay in the Interest category."
+);
+assert.ok(
+  onlineBonusSaverRows.every((row) => Number(row.amount) < 100),
+  "Dates, phone numbers, and legal copy must never be merged into HSBC amounts."
+);
+
 console.log("[PASS] HSBC UK PDF rows survive OCR-spaced headers and reconcile through running balances.");
