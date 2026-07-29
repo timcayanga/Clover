@@ -63,12 +63,18 @@ const normalizeAccountType = (value?: AccountType | string | null): AccountType 
 };
 
 export const buildAccountTombstoneKey = (account: AccountIdentityInput) =>
-  normalizeImportedAccountKey(
-    account.name ?? null,
-    account.institution ?? null,
-    normalizeAccountNumberForMatch(account.accountNumber) || account.accountNumber || null,
-    normalizeAccountType(account.type)
-  );
+  [
+    normalizeImportedAccountKey(
+      account.name ?? null,
+      account.institution ?? null,
+      normalizeAccountNumberForMatch(account.accountNumber) || account.accountNumber || null,
+      normalizeAccountType(account.type),
+      account.currency ?? null
+    ),
+    normalizeText(account.currency),
+  ]
+    .filter(Boolean)
+    .join("::");
 
 const getLastFour = (value?: string | null) => {
   const normalized = normalizeAccountNumberForMatch(value);
@@ -82,7 +88,16 @@ const normalizeText = (value?: string | null) =>
     .trim()
     .toLowerCase();
 
-const scoreTombstoneMatch = (candidate: AccountIdentityInput, tombstone: AccountTombstoneMatch["tombstone"]) => {
+export const scoreAccountTombstoneMatch = (
+  candidate: AccountIdentityInput,
+  tombstone: AccountTombstoneMatch["tombstone"]
+) => {
+  const candidateCurrency = normalizeText(candidate.currency);
+  const tombstoneCurrency = normalizeText(tombstone.currency);
+  if (candidateCurrency && tombstoneCurrency && candidateCurrency !== tombstoneCurrency) {
+    return { confidence: 0, reason: "Deleted account currency does not match." };
+  }
+
   const candidateKey = buildAccountTombstoneKey(candidate);
   if (candidateKey && candidateKey === tombstone.normalizedAccountKey) {
     return { confidence: 100, reason: "Exact deleted account identity match." };
@@ -103,8 +118,6 @@ const scoreTombstoneMatch = (candidate: AccountIdentityInput, tombstone: Account
       : { confidence: 0, reason: "" };
   }
 
-  const candidateCurrency = normalizeText(candidate.currency);
-  const tombstoneCurrency = normalizeText(tombstone.currency);
   const candidateName = normalizeText(candidate.name);
   const tombstoneName = normalizeText(tombstone.name);
   if (candidateCurrency && tombstoneCurrency && candidateCurrency === tombstoneCurrency && candidateName && tombstoneName && candidateName === tombstoneName) {
@@ -192,7 +205,7 @@ export const findDeletedAccountTombstoneMatch = async (
 
   let bestMatch: AccountTombstoneMatch | null = null;
   for (const tombstone of tombstones) {
-    const scored = scoreTombstoneMatch(candidate, tombstone);
+    const scored = scoreAccountTombstoneMatch(candidate, tombstone);
     if (scored.confidence > (bestMatch?.confidence ?? 0)) {
       bestMatch = {
         tombstone,

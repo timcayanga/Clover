@@ -70,6 +70,7 @@
     "qa:integration-security": "tsx scripts/integration-security-regression.ts",
     "qa:account-balance-sign": "tsx scripts/account-balance-sign-regression.ts",
     "qa:account-deletion-markers": "tsx scripts/workspace-account-deletion-marker-regression.ts",
+    "qa:account-tombstone-currency": "tsx scripts/account-tombstone-currency-regression.ts",
     "qa:confirmed-data": "tsx scripts/confirmed-data-regression.ts",
     "qa:billing-lifecycle": "tsx scripts/billing-lifecycle-regression.ts",
     "qa:goal-intent": "tsx scripts/goal-intent-regression.ts",

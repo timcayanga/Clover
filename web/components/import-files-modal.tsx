@@ -6488,6 +6488,83 @@ export function ImportFilesModal({
             })
             .catch(() => null)
         : null;
+      const accountConfirmationPhase =
+        typeof recoverableStatus?.importFile?.processingPhase === "string"
+          ? recoverableStatus.importFile.processingPhase
+          : null;
+      if (importFileId && accountConfirmationPhase === "account_match_needs_confirmation") {
+        const confirmationIdentity = resolveStatementIdentityFromMetadata(
+          recoverableStatus?.statementCheckpoint?.sourceMetadata
+        );
+        updateItem(itemId, {
+          status: "importing",
+          confirmationState: "staged",
+          error: null,
+          errorCode: null,
+          errorTitle: null,
+          errorNextSteps: null,
+          importFileId,
+          progress: IMPORT_PROGRESS.loadingAccount,
+          progressLabel: "Confirming account",
+        });
+        publishImportActivity({
+          workspaceId,
+          surface: importActivitySurfaceRef.current,
+          status: "active",
+          importFileId,
+          fileName: item.file.name,
+          fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+          fileTotal: items.length,
+          completedFiles: completedFileCount,
+          progress: IMPORT_PROGRESS.loadingAccount,
+          detail: "Clover is confirming the statement account before publishing it.",
+          summary: null,
+          errorMessage: null,
+        });
+        await monitorQueuedImportAndConfirm(itemId, importFileId, null, {
+          fileName: item.file.name,
+          fallbackAccountName:
+            deriveStatementFallbackAccountName(
+              item.file.name,
+              confirmationIdentity?.institution ?? guessedIdentity?.institution ?? null,
+              confirmationIdentity?.accountNumber ?? guessedIdentity?.accountNumber ?? null,
+              confirmationIdentity?.accountType ?? null
+            ) ?? "Imported statement",
+          guessedAccountName: guessedIdentity?.accountName ?? null,
+          guessedInstitution: guessedIdentity?.institution ?? null,
+          guessedAccountNumber: guessedIdentity?.accountNumber ?? null,
+          guessedAccountType: guessedIdentity
+            ? inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank")
+            : null,
+          accountName: confirmationIdentity?.accountName ?? null,
+          institution: confirmationIdentity?.institution ?? null,
+          accountNumber: confirmationIdentity?.accountNumber ?? null,
+          accountType: confirmationIdentity?.accountType ?? null,
+          currency:
+            typeof recoverableStatus?.statementCheckpoint?.sourceMetadata === "object" &&
+            recoverableStatus.statementCheckpoint.sourceMetadata &&
+            !Array.isArray(recoverableStatus.statementCheckpoint.sourceMetadata) &&
+            typeof (recoverableStatus.statementCheckpoint.sourceMetadata as Record<string, unknown>).currency === "string"
+              ? String((recoverableStatus.statementCheckpoint.sourceMetadata as Record<string, unknown>).currency)
+              : getUploadSummaryCurrencies(localPreparseSummaryByItemIdRef.current.get(itemId) ?? null)[0] ?? null,
+          optimisticAccountId: null,
+          initialBalance: toBalanceString(recoverableStatus?.statementCheckpoint?.endingBalance),
+          password: item.password.trim() || undefined,
+        }, {
+          backgroundOnly: false,
+        });
+        const reconciledItem = itemsRef.current.find((entry) => entry.id === itemId);
+        return {
+          status:
+            reconciledItem?.status === "error"
+              ? "error"
+              : reconciledItem?.status === "done" || reconciledItem?.confirmationState === "confirmed"
+                ? "done"
+                : "staged",
+          importedRows: reconciledItem?.importedRows ?? null,
+          summary: null,
+        };
+      }
       const localRecoverableSummary = localPreparseSummaryByItemIdRef.current.get(itemId) ?? null;
       if (localRecoverableSummary && Number(localRecoverableSummary.rowsImported ?? 0) > 0) {
         retiredImportActivityFileNamesRef.current.add(item.file.name);
