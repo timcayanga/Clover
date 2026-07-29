@@ -392,7 +392,10 @@ const mergeAccountsWithOptimisticImports = (
   currentAccounts: Account[],
   deletedAccountIds: Set<string>,
   supportingTransactions: Transaction[] = [],
-  options?: { preserveImportedEvidence?: boolean }
+  options?: {
+    preserveImportedEvidence?: boolean;
+    preferCurrentImportedSnapshot?: boolean;
+  }
 ) => {
   const shouldPreserveImportedEvidence =
     (options?.preserveImportedEvidence ?? false) || hasImportedTransactionEvidence(supportingTransactions);
@@ -403,6 +406,7 @@ const mergeAccountsWithOptimisticImports = (
       deletedAccountIds,
       preserveNonZeroOptimisticBalance: true,
       preserveCurrentInventory: shouldPreserveImportedEvidence,
+      preferCurrentImportedSnapshot: options?.preferCurrentImportedSnapshot ?? false,
     }
   );
   if (!shouldPreserveImportedEvidence) {
@@ -1655,7 +1659,15 @@ function AccountsPageContent() {
     }
   };
 
-  const loadWorkspaceData = async (workspaceId: string, options?: { silent?: boolean; awaitHydration?: boolean; forceFresh?: boolean }) => {
+  const loadWorkspaceData = async (
+    workspaceId: string,
+    options?: {
+      silent?: boolean;
+      awaitHydration?: boolean;
+      forceFresh?: boolean;
+      preserveImportedEvidence?: boolean;
+    }
+  ) => {
     const loadSeq = ++workspaceLoadSeqRef.current;
     let fetchedAccounts: Account[] = [];
     let visibleFetchedAccounts: Account[] = [];
@@ -1747,8 +1759,29 @@ function AccountsPageContent() {
         const authoritativeStatementCheckpoints = Array.isArray(payload?.statementCheckpoints)
           ? (payload.statementCheckpoints as StatementCheckpoint[])
           : [];
+        const shouldPreserveSettlingImport =
+          options?.preserveImportedEvidence === true ||
+          hasRecentWorkspaceImportEvidence(workspaceId, importActivitySnapshot);
+        const accountsForAuthoritativeCache = mergeAccountsWithOptimisticImports(
+          visibleFetchedAccounts,
+          visibleCachedWorkspaceAccounts,
+          deletedAccountIdsRef.current,
+          transactions.filter(
+            (transaction) =>
+              transaction.workspaceId === workspaceId &&
+              !deletedAccountIdsRef.current.has(transaction.accountId) &&
+              !deletingAccountIdsRef.current.has(transaction.accountId)
+          ),
+          {
+            preserveImportedEvidence: shouldPreserveSettlingImport,
+            preferCurrentImportedSnapshot: shouldPreserveSettlingImport,
+          }
+        );
         const authoritativeCacheUpdatedAt = persistAccountsWorkspaceCache(workspaceId, {
-          accounts: visibleFetchedAccounts,
+          // A completion read can briefly lag the import transaction. Keep the
+          // confirmed browser snapshot in the cache until a later ordinary
+          // refresh observes the same durable account inventory.
+          accounts: accountsForAuthoritativeCache,
           accountRules: authoritativeAccountRules,
           transactions: transactions.filter(
             (transaction) =>
@@ -1775,7 +1808,10 @@ function AccountsPageContent() {
                 !deletedAccountIdsRef.current.has(transaction.accountId) &&
                 !deletingAccountIdsRef.current.has(transaction.accountId)
             ),
-            { preserveImportedEvidence: hasRecentWorkspaceImportEvidence(workspaceId, importActivitySnapshot) }
+            {
+              preserveImportedEvidence: shouldPreserveSettlingImport,
+              preferCurrentImportedSnapshot: shouldPreserveSettlingImport,
+            }
           )
         );
         setAccountRules(authoritativeAccountRules);
@@ -1952,7 +1988,10 @@ function AccountsPageContent() {
                 ),
                 deletedAccountIdsRef.current,
                 visibleFetchedTransactions.length > 0 ? visibleFetchedTransactions : visibleCachedWorkspaceTransactions,
-                { preserveImportedEvidence: true }
+                {
+                  preserveImportedEvidence: true,
+                  preferCurrentImportedSnapshot: options?.preserveImportedEvidence === true,
+                }
               )
             );
           }
@@ -2079,9 +2118,19 @@ function AccountsPageContent() {
     // snapshot can commit immediately after the first completion event.
     // This is deliberately independent of the modal so background imports
     // also render their accounts without a manual page reload.
-    void loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true, forceFresh: true });
+    void loadWorkspaceData(selectedWorkspaceId, {
+      silent: true,
+      awaitHydration: true,
+      forceFresh: true,
+      preserveImportedEvidence: true,
+    });
     const retry = window.setTimeout(() => {
-      void loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true, forceFresh: true });
+      void loadWorkspaceData(selectedWorkspaceId, {
+        silent: true,
+        awaitHydration: true,
+        forceFresh: true,
+        preserveImportedEvidence: true,
+      });
     }, 650);
 
     return () => {
@@ -2102,12 +2151,14 @@ function AccountsPageContent() {
         silent: true,
         awaitHydration: true,
         forceFresh: true,
+        preserveImportedEvidence: true,
       });
       window.setTimeout(() => {
         void loadWorkspaceData(selectedWorkspaceId, {
           silent: true,
           awaitHydration: true,
           forceFresh: true,
+          preserveImportedEvidence: true,
         });
       }, 650);
     });
@@ -3066,9 +3117,14 @@ function AccountsPageContent() {
     [accountEditInvestmentSubtype, accountEditType]
   );
 
-  const refreshAll = async () => {
+  const refreshAll = async (options?: { preserveImportedEvidence?: boolean }) => {
     if (!selectedWorkspaceId) return;
-    await loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true, forceFresh: true });
+    await loadWorkspaceData(selectedWorkspaceId, {
+      silent: true,
+      awaitHydration: true,
+      forceFresh: true,
+      preserveImportedEvidence: options?.preserveImportedEvidence,
+    });
     setMessage(`Workspace "${selectedWorkspace?.name ?? "selected"}" refreshed.`);
   };
 
@@ -4801,13 +4857,13 @@ function AccountsPageContent() {
           // already updated above, while this authoritative refresh converges
           // in the background instead of serially delaying later accounts.
           const refreshImportWorkspace = async () => {
-            await refreshAll();
+            await refreshAll({ preserveImportedEvidence: true });
             if (requiresSnapshotVisibilityRefresh) {
               // Portfolio and account-only captures legitimately have no
               // transaction rows. Their first post-confirmation read can race
               // the account write, so retry before publishing 100% success.
               await new Promise((resolve) => window.setTimeout(resolve, 500));
-              await refreshAll();
+              await refreshAll({ preserveImportedEvidence: true });
             }
           };
           if (requiresSnapshotVisibilityRefresh) {

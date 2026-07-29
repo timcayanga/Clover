@@ -167,6 +167,53 @@ const main = () => {
     "Transient placeholders must still be removed outside the post-import settlement window."
   );
   assert.deepEqual(
+    mergeAccountsWithOptimisticImports(
+      [
+        {
+          ...numberedUploadAccount,
+          balance: "100.00",
+        },
+      ],
+      [
+        {
+          ...numberedUploadAccount,
+          balance: "250.00",
+        },
+      ],
+      {
+        preserveCurrentInventory: true,
+        preferCurrentImportedSnapshot: true,
+      }
+    ).map((account) => ({ id: account.id, currency: account.currency, balance: account.balance })),
+    [{ id: numberedUploadAccount.id, currency: "PHP", balance: "250.00" }],
+    "A lagging completion read must not replace the confirmed import balance while Accounts is settling."
+  );
+  const phpAccount: TestAccount = {
+    ...numberedUploadAccount,
+    id: "php-account",
+    name: "BPI 3012",
+    institution: "BPI",
+    accountNumber: "3012",
+    currency: "PHP",
+  };
+  const gbpAccount: TestAccount = {
+    ...numberedUploadAccount,
+    id: "gbp-account",
+    name: "HSBC 5678",
+    institution: "HSBC",
+    accountNumber: "5678",
+    currency: "GBP",
+    balance: "840.25",
+  };
+  assert.deepEqual(
+    mergeAccountsWithOptimisticImports([phpAccount], [phpAccount, gbpAccount], {
+      preserveCurrentInventory: true,
+      preferCurrentImportedSnapshot: true,
+    }).map((account) => account.id),
+    [gbpAccount.id, phpAccount.id],
+    "A PHP-only completion response must not temporarily remove the newly confirmed GBP account."
+  );
+  assert.deepEqual(
     pruneImportedAccountPlaceholders([
       {
         ...genericPlaceholder,

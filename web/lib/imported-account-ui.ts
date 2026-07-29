@@ -316,6 +316,7 @@ export const mergeAccountsWithOptimisticImports = <TAccount extends ImportedAcco
     deletedAccountIds?: Set<string>;
     preserveNonZeroOptimisticBalance?: boolean;
     preserveCurrentInventory?: boolean;
+    preferCurrentImportedSnapshot?: boolean;
   }
 ) => {
   const deletedAccountIds = options?.deletedAccountIds ?? new Set<string>();
@@ -340,6 +341,19 @@ export const mergeAccountsWithOptimisticImports = <TAccount extends ImportedAcco
 
     if (!optimistic) {
       return account;
+    }
+
+    if (options?.preferCurrentImportedSnapshot) {
+      return {
+        ...account,
+        name: optimistic.name || account.name,
+        institution: optimistic.institution || account.institution,
+        accountNumber: optimistic.accountNumber || account.accountNumber,
+        type: optimistic.type || account.type,
+        currency: optimistic.currency || account.currency,
+        balance: optimistic.balance ?? account.balance,
+        source: optimistic.source ?? account.source,
+      };
     }
 
     if (!options?.preserveNonZeroOptimisticBalance) {
