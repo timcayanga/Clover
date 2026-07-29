@@ -1,3 +1,5 @@
+import { getUkMerchantCategoryHint } from "@/lib/uk-merchant-corpus";
+
 const normalizeWhitespace = (value: string) => value.replace(/\s+/g, " ").trim();
 
 const compactWhitespace = (value: string) => normalizeWhitespace(value).replace(/\s+/g, "");
@@ -108,6 +110,11 @@ const getSpecificMerchantCategoryHint = (value: string) => {
 };
 
 export const getStrongMerchantCategoryHint = (value: string): string | null => {
+  const ukMerchantHint = getUkMerchantCategoryHint(value);
+  if (ukMerchantHint) {
+    return ukMerchantHint;
+  }
+
   const specificHint = getSpecificMerchantCategoryHint(value);
   if (specificHint && specificHint !== "Transfers" && specificHint !== "Other") {
     return specificHint;

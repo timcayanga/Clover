@@ -42,6 +42,44 @@ const main = () => {
     assert.equal(result.applied, true);
   }
 
+  const ukCases = [
+    ["TITANIC BELFAST LT BELFAST", "Entertainment", "Titanic Belfast"],
+    ["CROWN LIQUOR SALOO BELFAST", "Food & Dining", "Crown Liquor Saloon"],
+    ["SSP UK LTD DERBY", "Food & Dining", "SSP UK"],
+    ["ZETTLE_*NATIONAL J NOTTINGHAM", "Entertainment", "National Justice Museum"],
+    ["SQ *DERBY UNCOVERE DERBY", "Travel & Lifestyle", "Derby Uncovered"],
+    ["SP BIRMINGHAMMUSEU BIRMINGHAM", "Entertainment", "Birmingham Museum"],
+    ["BIRMINGHAM NEW ST BIRMINGHAM", "Transport", "Birmingham New Street"],
+    ["T4 BIRMINGHAM", "Food & Dining", "T4"],
+    ["ZETTLE_*DARWIN COL CAMBRIDGE", "Food & Dining", "Darwin College"],
+    ["VMS DOWNING JCR CAMBRIDGE", "Food & Dining", "Downing JCR"],
+    ["TOWN AND GOWN CAMBRIDGE", "Food & Dining", "Town and Gown"],
+    ["HOLIDAY INN BELFAS BELFAST", "Travel & Lifestyle", "Holiday Inn Belfast"],
+    ["THE NORN IRISH GIF BELFAST", "Shopping", "The Norn Irish Gift Shop"],
+    ["TRANSLINK FARE CHA BELFAST", "Transport", "Translink"],
+    ["NON-STERLING TRANSACTION FEE", "Financial", "Non-Sterling Transaction Fee"],
+  ] as const;
+
+  for (const [merchantRaw, categoryName, expectedMerchant] of ukCases) {
+    const result = applyDeterministicMerchantRescue({
+      merchantRaw,
+      categoryName: "Transfers",
+      type: "expense",
+      institution: "HSBC",
+    });
+    assert.equal(result.categoryName, categoryName, `${merchantRaw} should override a false transfer category`);
+    assert.equal(result.merchantClean, expectedMerchant, `${merchantRaw} should use its UK corpus label`);
+    assert.equal(result.type, "expense", `${merchantRaw} should remain an expense`);
+  }
+
+  const unknownUkMerchant = applyDeterministicMerchantRescue({
+    merchantRaw: "DUBLIN CSA EUR Visa Rate",
+    categoryName: "Other",
+    type: "expense",
+    institution: "HSBC",
+  });
+  assert.equal(unknownUkMerchant.categoryName, "Other", "Ambiguous UK descriptors must not receive a speculative category.");
+
   const didiTransferMisclassification = classifyMerchant({
     merchantText: "Didi Tianjin CH",
     categoryName: "Transfers",

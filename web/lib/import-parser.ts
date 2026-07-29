@@ -13533,7 +13533,9 @@ const parseHsbcUkPdfStatement = (text: string) => {
       isStatementPaymentSettlementDescription(description)
         ? "transfer"
         : inferredType;
-    const categoryName = type === "transfer" ? "Transfers" : guessCategoryName(description, type);
+    const guessedCategoryName = type === "transfer" ? "Transfers" : guessCategoryName(description, type);
+    const isCardPurchase = ["VIS", "VMS", ")))", ">>>", "))", ">>"].includes(normalizedCode);
+    const categoryName = isCardPurchase && guessedCategoryName === "Transfers" ? "Other" : guessedCategoryName;
 
     rows.push({
       date: currentDate,

@@ -25,6 +25,9 @@ These rules cover HSBC UK mobile screenshots and HSBC UK current-account PDF sta
 - The last two monetary values in a transaction block are the account impact and running balance. Use the running-balance movement to determine money in versus money out when PDF column spacing is lost.
 - Preserve HSBC transaction codes such as `VIS` and the original grouped source lines in `rawPayload`.
 - Remove routing/reference prefixes such as `INT'L <digits>` from the normalized merchant while retaining them in the audit payload.
+- Treat `VIS`, `VMS`, and contactless markers such as `)))` as card purchases. They may use a known expense category or `Other`, but must not become transfers merely because a truncated merchant descriptor resembles a person's name.
+- Normalize fixed-width UK descriptors through `web/lib/uk-merchant-corpus.ts`. Payment-facilitator prefixes such as `Zettle`, `Square`, and `SumUp` should resolve to the underlying merchant only when the combined merchant and location evidence is specific.
+- Keep `BP`, `TFR`, and `FPI` as bank-payment or transfer evidence; do not apply the card-purchase override to those codes.
 - Reconcile parsed rows from opening balance through the final running or carried-forward balance before treating the deterministic parse as high confidence.
 
 ## Review Rules

@@ -1,3 +1,5 @@
+import { getUkMerchantLabel } from "@/lib/uk-merchant-corpus";
+
 type SimplifierRule = {
   patterns?: RegExp[];
   allPatterns?: RegExp[];
@@ -2692,6 +2694,11 @@ export const summarizeMerchantText = (value: string, institution?: string | null
 
   if (!simplified) {
     return simplified;
+  }
+
+  const ukMerchantLabel = getUkMerchantLabel(value) ?? getUkMerchantLabel(simplified);
+  if (ukMerchantLabel) {
+    return ukMerchantLabel;
   }
 
   if (institution === "BPI" && (/\bel\s*\/?\s*es\s*p\s*a\s*y\b/i.test(rawLower) || rawCompact.includes("elespay"))) {

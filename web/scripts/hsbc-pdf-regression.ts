@@ -85,4 +85,31 @@ assert.deepEqual(sameDateRows.map((row) => row.date), ["2026-05-21", "2026-05-21
 assert.deepEqual(sameDateRows.map((row) => row.amount), ["9.90", "3.30"]);
 assert.equal(sameDateRows[1]?.merchantClean, "Jack's Gelato");
 
+const transferGuardRows = parseImportText(
+  [
+    "Your Statement",
+    "20 January 2025 to 20 February 2025",
+    "Mr Timothy Gunther Cayanga 40-16-08 84795067 9",
+    "Your Bank Account details",
+    "20 Jan 25 BALANCE BROUGHT FORWARD 100.00",
+    "21 Jan 25 ))) PERSON LIKE SHOP",
+    "CAMBRIDGE 3.00 97.00",
+    "22 Jan 25 BP Jane Doe",
+    "Dinner 17.00 80.00",
+    "20 Feb 25 BALANCE CARRIED FORWARD 80.00",
+    "HSBC UK Bank plc, registered in England and Wales number 09928412.",
+  ].join("\n"),
+  "2025-02-20_Statement.pdf",
+  "application/pdf"
+);
+assert.equal(transferGuardRows.length, 2);
+assert.notEqual(
+  transferGuardRows[0]?.categoryName,
+  "Transfers",
+  "An unknown card merchant must not become a transfer because its descriptor resembles a name."
+);
+assert.equal(transferGuardRows[0]?.type, "expense");
+assert.equal(transferGuardRows[1]?.categoryName, "Transfers", "An HSBC BP row should retain transfer semantics.");
+assert.equal(transferGuardRows[1]?.type, "transfer");
+
 console.log("[PASS] HSBC UK PDF rows survive OCR-spaced headers and reconcile through running balances.");
