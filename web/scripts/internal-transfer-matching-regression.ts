@@ -7,6 +7,7 @@ import {
   inferTransferCandidateDirection,
   type WorkspaceTransferCandidate,
 } from "@/lib/internal-transfer-matching";
+import { buildOptimisticPreviewTransactions } from "@/lib/import-preview-transactions";
 
 const outgoing: WorkspaceTransferCandidate = {
   id: "hsbc-outgoing",
@@ -84,6 +85,33 @@ assert.equal(
   0,
   "Equal opposite movements must not pair unless both are transfer-category candidates."
 );
+
+const hsbcCardPreview = buildOptimisticPreviewTransactions(
+  [
+    {
+      date: "2025-02-10",
+      amount: "6.35",
+      currency: "GBP",
+      type: "expense",
+      categoryName: "Transfers",
+      merchantRaw: "Crown Liquor Saloo Belfast",
+      rawPayload: {
+        bank: "HSBC",
+        transactionCode: ")))",
+        parsedDirectionType: "expense",
+      },
+    },
+  ],
+  {
+    importFileId: "hsbc-preview",
+    accountId: "hsbc",
+    accountName: "HSBC 5067",
+    institution: "HSBC",
+  }
+);
+assert.equal(hsbcCardPreview[0]?.type, "expense");
+assert.equal(hsbcCardPreview[0]?.isTransfer, false);
+assert.equal(hsbcCardPreview[0]?.categoryName, "Food & Dining");
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const workerSource = readFileSync(join(scriptDir, "..", "workers", "import-processor.ts"), "utf8");

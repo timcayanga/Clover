@@ -122,6 +122,16 @@ const main = async () => {
     "Accounts must scope every immediate imported card to the active workspace."
   );
   assert.match(
+    accountsPageSource,
+    /setStatementCheckpoints\(\(current\) =>[\s\S]{0,300}!importedAccountIds\.has\(checkpoint\.accountId\)/,
+    "A newly confirmed balance must not remain hidden behind the previous statement checkpoint."
+  );
+  assert.match(
+    importProcessorSource,
+    /requiresDeletedAccountConfirmation[\s\S]{0,300}!requiresDeletedAccountConfirmation[\s\S]{0,200}lastParsedRowsReady > 0/,
+    "Deleted-account confirmation must return immediately instead of entering save retries."
+  );
+  assert.match(
     modalSource,
     /balanceSources: \[confirmedAccountSummary\?\.balance \?\? null, accountBalance\]/,
     "The immediate Accounts card must prefer the server-confirmed balance over a provisional browser preview."

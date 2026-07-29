@@ -4746,6 +4746,7 @@ function AccountsPageContent() {
           const optimisticAccounts = importedAccountSummaries
             .map((accountSummary) => buildOptimisticImportedAccount(accountSummary, selectedWorkspaceId))
             .filter((account): account is Account => Boolean(account));
+          const importedAccountIds = new Set(optimisticAccounts.map((account) => account.id));
           const previewTransactions = summary.previewTransactions ?? [];
           const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
           let nextAccountsSnapshot: Account[] | null = null;
@@ -4753,6 +4754,14 @@ function AccountsPageContent() {
 
           flushSync(() => {
             setAccountsLoading(false);
+            // The previous statement checkpoint would otherwise hide the newly
+            // confirmed balance until the next Accounts request finishes.
+            setStatementCheckpoints((current) =>
+              current.filter(
+                (checkpoint) =>
+                  !checkpoint.accountId || !importedAccountIds.has(checkpoint.accountId)
+              )
+            );
             if (optimisticAccounts.length > 0) {
               setAccounts((current) =>
                 (nextAccountsSnapshot = current.filter((account) => {

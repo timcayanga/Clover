@@ -1,4 +1,8 @@
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
+import {
+  getHsbcUkParsedDirection,
+  resolveHsbcUkTransactionCategory,
+} from "@/lib/hsbc-uk-transactions";
 import { getKnownPreviewTransactions } from "@/lib/import-preview-cache";
 import type { UploadAccountType } from "@/lib/import-optimistic-summary";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
@@ -41,9 +45,22 @@ export const buildOptimisticPreviewTransactions = (
           ? row.merchantClean.trim()
           : merchantRaw;
       const parsedType = row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
-      const categoryName = typeof row.categoryName === "string" && row.categoryName.trim() ? row.categoryName.trim() : null;
+      const parsedCategoryName = typeof row.categoryName === "string" && row.categoryName.trim() ? row.categoryName.trim() : null;
       const description = typeof row.description === "string" && row.description.trim() ? row.description.trim() : null;
-      const type = coerceTransactionTypeFromCategoryName(categoryName, parsedType);
+      const categoryName = resolveHsbcUkTransactionCategory({
+        categoryName: parsedCategoryName ?? "Other",
+        merchantRaw,
+        merchantClean,
+        description,
+        rawPayload,
+      });
+      const directionalType = getHsbcUkParsedDirection(rawPayload) ?? parsedType;
+      const type = coerceTransactionTypeFromCategoryName(
+        categoryName,
+        directionalType,
+        amount,
+        row.isTransfer === true
+      );
       const isTransfer = type === "transfer";
 
       if (!date || !amount) {

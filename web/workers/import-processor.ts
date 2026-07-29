@@ -96,6 +96,7 @@ import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib
 import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
 import { coerceTransactionTypeFromCategoryName, isTransferCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 import { classifyWorkspaceInternalTransfers } from "@/lib/internal-transfer-matching";
+import { resolveHsbcUkTransactionCategory } from "@/lib/hsbc-uk-transactions";
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { inferInvestmentClassification } from "@/lib/investments";
@@ -1328,6 +1329,24 @@ const reconcileWorkspaceInternalTransfers = async (
     })),
     accounts
   );
+  const categoryUpdates = new Map<string, string[]>();
+  for (const transaction of transactions) {
+    const currentCategoryName = transaction.category?.name ?? "Transfers";
+    const resolvedCategoryName = resolveHsbcUkTransactionCategory({
+      categoryName: currentCategoryName,
+      merchantRaw: transaction.merchantRaw,
+      merchantClean: transaction.merchantClean,
+      description: transaction.description,
+      rawPayload: transaction.rawPayload,
+    });
+    if (resolvedCategoryName !== currentCategoryName) {
+      const transactionIds = categoryUpdates.get(resolvedCategoryName) ?? [];
+      transactionIds.push(transaction.id);
+      categoryUpdates.set(resolvedCategoryName, transactionIds);
+      internalIds.delete(transaction.id);
+      directions.set(transaction.id, "expense");
+    }
+  }
 
   const internalTransactionIds: string[] = [];
   const externalIncomeIds: string[] = [];
@@ -1355,6 +1374,24 @@ const reconcileWorkspaceInternalTransfers = async (
     (direction === "income" ? externalIncomeIds : externalExpenseIds).push(transaction.id);
   }
 
+  const categoryUpdatePromises: Promise<unknown>[] = [];
+  for (const [categoryName, transactionIds] of categoryUpdates) {
+    const categoryId = await resolveOrCreateWorkspaceCategoryId({
+      workspaceId,
+      categoryName,
+      fallbackType: "expense",
+      client: tx,
+    });
+    if (categoryId) {
+      categoryUpdatePromises.push(
+        tx.transaction.updateMany({
+          where: { id: { in: transactionIds } },
+          data: { categoryId },
+        })
+      );
+    }
+  }
+
   await Promise.all([
     internalTransactionIds.length > 0
       ? tx.transaction.updateMany({
@@ -1374,20 +1411,34 @@ const reconcileWorkspaceInternalTransfers = async (
           data: { type: "expense", isTransfer: false, transferConfidence: 0 },
         })
       : Promise.resolve(),
+    ...categoryUpdatePromises,
   ]);
+  console.info("[internal-transfer-reconciliation] completed", {
+    workspaceId,
+    candidateCount: transactions.length,
+    internalCount: internalIds.size,
+    externalIncomeCount: externalIncomeIds.length,
+    externalExpenseCount: externalExpenseIds.length,
+    recategorizedCardPurchaseCount: Array.from(categoryUpdates.values()).reduce(
+      (total, transactionIds) => total + transactionIds.length,
+      0
+    ),
+  });
 };
 
 const resolveOrCreateWorkspaceCategoryId = async (params: {
   workspaceId: string;
   categoryName: string;
   fallbackType?: TransactionType;
+  client?: Prisma.TransactionClient | typeof prisma;
 }) => {
+  const client = params.client ?? prisma;
   const categoryName = params.categoryName.trim();
   if (!categoryName) {
     return null;
   }
 
-  const existingCategories = await prisma.category.findMany({
+  const existingCategories = await client.category.findMany({
     where: { workspaceId: params.workspaceId },
     select: { id: true, name: true, type: true },
   });
@@ -1396,7 +1447,7 @@ const resolveOrCreateWorkspaceCategoryId = async (params: {
     return existingCategory.id;
   }
 
-  const createdCategory = await prisma.category.create({
+  const createdCategory = await client.category.create({
     data: {
       workspaceId: params.workspaceId,
       name: categoryName,
@@ -7191,8 +7242,15 @@ export const processImportEnrichmentJobs = async (options: {
               : null;
           const rowType =
             row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
-          const categoryName =
-            (typeof row.categoryName === "string" && row.categoryName.trim()) || defaultCategoryForType(rowType);
+          const categoryName = resolveHsbcUkTransactionCategory({
+            categoryName:
+              (typeof row.categoryName === "string" && row.categoryName.trim()) ||
+              defaultCategoryForType(rowType),
+            merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : null,
+            merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : null,
+            description: typeof row.description === "string" ? row.description : null,
+            rawPayload: row.rawPayload,
+          });
           const unionBankDirection = resolveUnionBankExternalTransferDirection(row, parsedRow);
           const canonicalType =
             unionBankDirection ??
@@ -7619,7 +7677,13 @@ export const processImportFileText = async (
       } catch (error) {
         lastError = error;
         lastParsedRowsReady = await prisma.parsedTransaction.count({ where: { importFileId } }).catch(() => 0);
-        const shouldRetry = lastParsedRowsReady > 0 && attempt < maxAttempts;
+        const requiresDeletedAccountConfirmation =
+          error instanceof Error &&
+          /appears to belong to a deleted account[\s\S]*confirm before recreating/i.test(error.message);
+        const shouldRetry =
+          !requiresDeletedAccountConfirmation &&
+          lastParsedRowsReady > 0 &&
+          attempt < maxAttempts;
         if (!shouldRetry) {
           break;
         }
@@ -13621,9 +13685,15 @@ export const confirmImportFile = async (
     const rowResolvedAccountId = rowAccount.id;
     const rowType =
       row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : undefined;
-    const parsedCategoryName =
-      (typeof row.categoryName === "string" && row.categoryName.trim()) ||
-      defaultCategoryForType((rowType as "income" | "expense" | "transfer") ?? "expense");
+    const parsedCategoryName = resolveHsbcUkTransactionCategory({
+      categoryName:
+        (typeof row.categoryName === "string" && row.categoryName.trim()) ||
+        defaultCategoryForType((rowType as "income" | "expense" | "transfer") ?? "expense"),
+      merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : null,
+      merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : null,
+      description: typeof row.description === "string" ? row.description : null,
+      rawPayload: row.rawPayload,
+    });
     const rowConfidence = inferParserRowConfidence({
       confidence: row.confidence,
       parserConfidence: row.parserConfidence,
