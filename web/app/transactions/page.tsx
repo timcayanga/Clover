@@ -65,6 +65,7 @@ import {
 } from "@/lib/transaction-notes";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
+import { getTransactionDisplayType } from "@/lib/transaction-display-type";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId, selectedWorkspaceKey } from "@/lib/workspace-selection";
 import {
@@ -573,60 +574,6 @@ const formatTransactionAggregate = (value: number, transactions: Array<{ currenc
 };
 
 const normalizeDigits = (value?: string | null) => String(value ?? "").replace(/\D/g, "");
-
-const getTransferCounterpartNumbers = (rawPayload: unknown) => {
-  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
-    return { from: null as string | null, to: null as string | null };
-  }
-
-  const payload = rawPayload as Record<string, unknown>;
-  const from = typeof payload.transferFromAccountNumber === "string" && payload.transferFromAccountNumber.trim() ? payload.transferFromAccountNumber.trim() : null;
-  const to = typeof payload.transferToAccountNumber === "string" && payload.transferToAccountNumber.trim() ? payload.transferToAccountNumber.trim() : null;
-  return { from, to };
-};
-
-const isInternalWorkspaceTransfer = (
-  transaction: Transaction,
-  currentAccountNumber: string | null,
-  workspaceAccountNumbers: Set<string>
-) => {
-  const normalizedCurrentAccountNumber = normalizeDigits(currentAccountNumber);
-  if (!normalizedCurrentAccountNumber) {
-    return false;
-  }
-
-  const { from, to } = getTransferCounterpartNumbers(transaction.rawPayload);
-  const fromDigits = normalizeDigits(from);
-  const toDigits = normalizeDigits(to);
-  const counterpartNumber =
-    fromDigits && normalizedCurrentAccountNumber === fromDigits
-      ? toDigits
-      : toDigits && normalizedCurrentAccountNumber === toDigits
-        ? fromDigits
-        : null;
-
-  if (!counterpartNumber) {
-    return false;
-  }
-
-  return workspaceAccountNumbers.has(counterpartNumber);
-};
-
-const getTransactionDisplayType = (
-  transaction: Transaction,
-  currentAccountNumber: string | null,
-  workspaceAccountNumbers: Set<string>
-): Transaction["type"] => {
-  if (isInternalWorkspaceTransfer(transaction, currentAccountNumber, workspaceAccountNumbers)) {
-    return "transfer";
-  }
-
-  if (transaction.type === "transfer" || transaction.isTransfer) {
-    return "transfer";
-  }
-
-  return transaction.type;
-};
 
 const buildVisibleTransactionSummary = (
   transactions: Transaction[],

@@ -20,6 +20,7 @@ import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { guessCategoryName } from "@/lib/import-parser";
 import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
+import { getTransactionDisplayType } from "@/lib/transaction-display-type";
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
@@ -894,7 +895,7 @@ const getTransactionSortLabel = (transaction: Transaction) =>
 
 const createDetailDraft = (
   transaction: Transaction,
-  options: { categoryId?: string | null } = {}
+  options: { categoryId?: string | null; type?: Transaction["type"] } = {}
 ): TransactionDetailDraft => {
   const categoryName =
     getEffectiveTransactionCategoryName({
@@ -905,12 +906,14 @@ const createDetailDraft = (
       source: transaction.source ?? null,
       type: transaction.type,
     }) ?? transaction.categoryName ?? null;
-  const effectiveType = coerceTransactionTypeFromCategoryName(
-    categoryName,
-    transaction.type,
-    transaction.amount,
-    transaction.isTransfer
-  );
+  const effectiveType =
+    options.type ??
+    coerceTransactionTypeFromCategoryName(
+      categoryName,
+      transaction.type,
+      transaction.amount,
+      transaction.isTransfer
+    );
 
   return buildTransactionDetailDraft(transaction, {
     merchantClean:
@@ -2764,6 +2767,28 @@ function AccountDetailPageContent() {
 
     return Array.from(accountsById.values());
   }, [account, workspaceAccounts]);
+  const detailAccountNumberById = useMemo(
+    () => new Map(detailAccountOptions.map((entry) => [entry.id, entry.accountNumber ?? null] as const)),
+    [detailAccountOptions]
+  );
+  const workspaceAccountNumbers = useMemo(
+    () =>
+      new Set(
+        Array.from(detailAccountNumberById.values())
+          .map((value) => String(value ?? "").replace(/\D/g, ""))
+          .filter(Boolean)
+      ),
+    [detailAccountNumberById]
+  );
+  const getAccountTransactionDisplayType = useCallback(
+    (transaction: Transaction) =>
+      getTransactionDisplayType(
+        transaction,
+        detailAccountNumberById.get(transaction.accountId) ?? transaction.accountNumber ?? account?.accountNumber ?? null,
+        workspaceAccountNumbers
+      ),
+    [account?.accountNumber, detailAccountNumberById, workspaceAccountNumbers]
+  );
   const detailSelectedAccount = useMemo(
     () => (detailDraft ? detailAccountOptions.find((entry) => entry.id === detailDraft.accountId) ?? account : account),
     [account, detailAccountOptions, detailDraft]
@@ -2955,7 +2980,13 @@ function AccountDetailPageContent() {
     setSelectedTransaction((current) => (current?.id === updated.id ? { ...current, ...updated } : current));
     setDetailDraft((current) =>
       current && selectedTransaction?.id === updated.id
-        ? createDetailDraft({ ...updated }, { categoryId: getDisplayCategoryIdForTransaction(updated) })
+        ? createDetailDraft(
+            { ...updated },
+            {
+              categoryId: getDisplayCategoryIdForTransaction(updated),
+              type: getAccountTransactionDisplayType(updated),
+            }
+          )
         : current
     );
     return updated;
@@ -2994,7 +3025,12 @@ function AccountDetailPageContent() {
 
   const openTransactionDetail = (transaction: Transaction) => {
     setSelectedTransaction(transaction);
-    setDetailDraft(createDetailDraft(transaction, { categoryId: getDisplayCategoryIdForTransaction(transaction) }));
+    setDetailDraft(
+      createDetailDraft(transaction, {
+        categoryId: getDisplayCategoryIdForTransaction(transaction),
+        type: getAccountTransactionDisplayType(transaction),
+      })
+    );
     setTransactionDeleteConfirmOpen(false);
     setTransactionSplitBillOpen(false);
     setTransactionSplitBillDraft({
@@ -4473,7 +4509,7 @@ function AccountDetailPageContent() {
                     const categoryValue = transaction.categoryId ?? "";
                     const categoryLabel = getDisplayTransactionCategoryName(transaction, categories, account?.institution);
                     const effectiveCategoryValue = getCategoryIdByName(categories, categoryLabel) || categoryValue;
-                    const effectiveType = coerceTransactionTypeFromCategoryName(categoryLabel, transaction.type, transaction.amount);
+                    const effectiveType = getAccountTransactionDisplayType(transaction);
                     const amountToneClass = effectiveType === "transfer" ? "neutral" : effectiveType === "income" ? "positive" : "negative";
                     const normalizedName =
                       getEffectiveTransactionMerchantName({
@@ -4573,9 +4609,9 @@ function AccountDetailPageContent() {
                           {group.transactions.map((transaction) => {
                             const amount = Number(transaction.amount);
                             const categoryLabel = getDisplayTransactionCategoryName(transaction, categories, account?.institution);
-                            const isTransferTransaction =
-                              transaction.type === "transfer" || normalizeCategoryName(categoryLabel) === "transfers";
-                            const amountToneClass = isTransferTransaction ? "neutral" : transaction.type === "income" ? "positive" : "negative";
+                            const effectiveType = getAccountTransactionDisplayType(transaction);
+                            const amountToneClass =
+                              effectiveType === "transfer" ? "neutral" : effectiveType === "income" ? "positive" : "negative";
                             const normalizedName =
                               getEffectiveTransactionMerchantName({
                                 merchantClean: transaction.merchantClean,
