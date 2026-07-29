@@ -107,6 +107,16 @@ const main = async () => {
     "The client must publish the account ID returned by durable confirmation."
   );
   assert.match(
+    modalSource,
+    /currency: confirmedAccountSummary\?\.currency \?\? summaryContext\.currency \?\? null/,
+    "The immediate Accounts card must prefer the server-confirmed currency over a provisional browser preview."
+  );
+  assert.match(
+    modalSource,
+    /balanceSources: \[confirmedAccountSummary\?\.balance \?\? null, accountBalance\]/,
+    "The immediate Accounts card must prefer the server-confirmed balance over a provisional browser preview."
+  );
+  assert.match(
     accountsRouteSource,
     /normalizeAccountRuleKey\(account\.name, account\.institution\) === candidateKey[\s\S]{0,200}normalizeAccountCurrency\(account\) === normalizedCurrency/,
     "Explicit-currency account creation must not reuse a same-name account in another currency."

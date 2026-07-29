@@ -1978,7 +1978,12 @@ export function ImportFilesModal({
           );
           return { status: "staged", importedRows, summary: null };
         }
+        const confirmedAccountSummary =
+          confirmedAccountSummaries.find((accountSummary) => accountSummary.accountId === durableAccountId) ??
+          confirmedAccountSummaries[0] ??
+          null;
         const resolvedAccountType = (
+          confirmedAccountSummary?.accountType ??
           summaryContext.accountType ??
           accounts.find((account) => account.id === durableAccountId)?.type ??
           inferAccountTypeFromStatement(summaryContext.institution, summaryContext.accountName, "bank")
@@ -1989,13 +1994,16 @@ export function ImportFilesModal({
           fileName: summaryContext.fileName,
           importedRows,
           accountId: durableAccountId,
-          accountName: resolvedSummaryAccountName,
-          institution: summaryContext.institution ?? null,
-          accountNumber: summaryContext.accountNumber ?? null,
+          accountName: confirmedAccountSummary?.accountName ?? resolvedSummaryAccountName,
+          institution: confirmedAccountSummary?.institution ?? summaryContext.institution ?? null,
+          accountNumber: confirmedAccountSummary?.accountNumber ?? summaryContext.accountNumber ?? null,
           accountType: resolvedAccountType ?? null,
-          currency: summaryContext.currency ?? confirmedAccountSummaries[0]?.currency ?? null,
+          // The browser preview can be intentionally provisional. Group the
+          // immediate Accounts card by the durable server identity so a GBP
+          // account never remains under PHP until the next page reload.
+          currency: confirmedAccountSummary?.currency ?? summaryContext.currency ?? null,
           optimisticAccountId: durableAccountId.startsWith("optimistic-") ? summaryContext.optimisticAccountId ?? durableAccountId : null,
-          balanceSources: [accountBalance],
+          balanceSources: [confirmedAccountSummary?.balance ?? null, accountBalance],
           // The local preview is useful while parsing, but its transfer type
           // can be provisional. Once confirmation succeeds, let the workspace
           // refresh render the committed rows rather than briefly replacing
