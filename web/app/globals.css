@@ -39905,6 +39905,22 @@ html[data-theme="dark"] body {
     grid-template-columns: 236px minmax(0, 1fr) !important;
   }
 
+  .content--transactions {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .content--transactions .content-body {
+    overflow: hidden;
+  }
+
+  .content--transactions .transactions-footer {
+    position: relative;
+    bottom: auto;
+    flex: 0 0 auto;
+    background: rgba(247, 250, 251, 0.98);
+  }
+
   .sidebar {
     position: relative !important;
     inset: auto !important;
@@ -41068,6 +41084,10 @@ html[data-theme="dark"] .line-item-header-cell {
 
 html[data-theme="dark"] .transactions-footer {
   border-top-color: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="dark"] .content--transactions .transactions-footer {
+  background: rgba(8, 17, 30, 0.98);
 }
 
 html[data-theme="dark"] .transactions-footer-snapshot__metric,
