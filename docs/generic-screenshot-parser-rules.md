@@ -16,6 +16,17 @@ These rules apply when an uploaded screenshot does not match a trained instituti
 - Emit low-confidence, review-required rows with `rawPayload.kind = generic_mobile_screenshot_transaction`.
 - Never let the generic fallback override a trained parser, a deterministic statement parser, or confirmed financial data.
 
+## Cold and untrained visual layouts
+
+- Use the deterministic parser first. The cold-layout path only applies when a statement image or rendered PDF has no usable local rows and weak or unknown identity.
+- Send at most two representative pages to the fast backup model for the first decision. This keeps a new layout from paying the full multi-page vision cost when the compact result is already complete.
+- Require visible evidence for every extracted row. A usable fast result needs account or institution identity, dated rows, finite amounts, transaction names, and parser evidence.
+- Escalate automatically to the strong backup model with the available representative pages when the fast result is empty, under-counted, undated, unsupported, or missing account identity.
+- Prefer the stronger result only when its candidate-quality score exceeds the fast result. Never replace a more complete result merely because a stronger model was called.
+- Keep inferred or low-confidence fields review-required. Backup parsing must not overwrite confirmed financial records.
+- Record backup model, decision duration, schema validation, quality score, and routing outcome in import metadata for QA and Admin diagnostics.
+- When source OCR text is blank, derive the reusable statement-family signature from validated rows and resolved account metadata so the successful import can contribute to future routing history.
+
 ## Investment semantics
 
 - Shares, units, and principal are optional fields and must only be emitted when the screenshot labels them.

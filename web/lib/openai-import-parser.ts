@@ -457,6 +457,121 @@ type ReceiptAccountMatch = {
   reason: string | null;
 };
 
+export const shouldUseColdVisualImportFastPath = (params: {
+  importMode?: ImportMode | null;
+  documentFamily: OpenAIDocumentFamily;
+  pageImageCount: number;
+  textLength: number;
+  parsedRowsCount: number;
+  metadataConfidence: number;
+  hasInstitution: boolean;
+  hasAccountIdentity: boolean;
+}) =>
+  (params.importMode ?? "statement") === "statement" &&
+  params.pageImageCount > 0 &&
+  params.parsedRowsCount === 0 &&
+  (
+    params.documentFamily === "generic_document" ||
+    (
+      params.textLength < 180 &&
+      params.metadataConfidence < 75 &&
+      (!params.hasInstitution || !params.hasAccountIdentity)
+    )
+  );
+
+type ColdLayoutCandidate = {
+  document_type?: string | null;
+  institution?: string | null;
+  account?: {
+    display_name?: string | null;
+    institution_name?: string | null;
+    account_number?: string | null;
+    account_last4?: string | null;
+  } | null;
+  transactions?: Array<{
+    date?: string | null;
+    post_date?: string | null;
+    transaction_date?: string | null;
+    amount?: number | null;
+    raw_name?: string | null;
+    parser_evidence?: {
+      source_text?: string | null;
+    } | null;
+  }> | null;
+  quality_checks?: {
+    transaction_count?: number | null;
+  } | null;
+};
+
+export const scoreColdLayoutCandidate = (candidate: ColdLayoutCandidate | null | undefined) => {
+  if (!candidate) {
+    return 0;
+  }
+
+  const transactions = Array.isArray(candidate.transactions) ? candidate.transactions : [];
+  const datedRows = transactions.filter((row) => row.date || row.transaction_date || row.post_date).length;
+  const supportedRows = transactions.filter(
+    (row) =>
+      typeof row.amount === "number" &&
+      Number.isFinite(row.amount) &&
+      Boolean(row.raw_name?.trim()) &&
+      Boolean(row.parser_evidence?.source_text?.trim())
+  ).length;
+  const hasInstitution = Boolean(candidate.institution?.trim() || candidate.account?.institution_name?.trim());
+  const hasAccountIdentity = Boolean(
+    candidate.account?.account_number?.trim() ||
+    candidate.account?.account_last4?.trim() ||
+    candidate.account?.display_name?.trim()
+  );
+  const declaredCount = Math.max(0, Math.round(Number(candidate.quality_checks?.transaction_count ?? transactions.length) || 0));
+  const coveragePenalty = declaredCount > transactions.length ? Math.min(20, (declaredCount - transactions.length) * 4) : 0;
+
+  return Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(
+        Math.min(45, transactions.length * 9) +
+        (transactions.length > 0 ? (datedRows / transactions.length) * 18 : 0) +
+        (transactions.length > 0 ? (supportedRows / transactions.length) * 17 : 0) +
+        (hasInstitution ? 10 : 0) +
+        (hasAccountIdentity ? 10 : 0) -
+        coveragePenalty
+      )
+    )
+  );
+};
+
+export const coldLayoutCandidateNeedsStrongRetry = (params: {
+  candidate: ColdLayoutCandidate | null | undefined;
+  pageImageCount: number;
+}) => {
+  const candidate = params.candidate;
+  if (!candidate || candidate.document_type === "statement" && !candidate.transactions?.length) {
+    return true;
+  }
+  if (candidate.document_type && candidate.document_type !== "statement") {
+    return false;
+  }
+
+  const transactions = Array.isArray(candidate.transactions) ? candidate.transactions : [];
+  const datedRows = transactions.filter((row) => row.date || row.transaction_date || row.post_date).length;
+  const hasInstitution = Boolean(candidate.institution?.trim() || candidate.account?.institution_name?.trim());
+  const hasAccountIdentity = Boolean(
+    candidate.account?.account_number?.trim() ||
+    candidate.account?.account_last4?.trim() ||
+    candidate.account?.display_name?.trim()
+  );
+
+  return (
+    scoreColdLayoutCandidate(candidate) < 62 ||
+    !hasInstitution ||
+    !hasAccountIdentity ||
+    datedRows / Math.max(1, transactions.length) < 0.6 ||
+    (params.pageImageCount > 2 && transactions.length < 2)
+  );
+};
+
 const importedStatementSchema = z.object({
   institution: z.string().nullable().optional().default(null),
   institution_raw: z.string().nullable().optional().default(null),
@@ -2346,6 +2461,22 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     inferredDocumentFamily === "generic_document" &&
     isVisualImageImport &&
     pageImagesToSend.length === 1;
+  const useColdVisualFastPath = shouldUseColdVisualImportFastPath({
+    importMode: params.importMode ?? null,
+    documentFamily: inferredDocumentFamily,
+    pageImageCount: pageImagesToSend.length,
+    textLength: inputText.trim().length,
+    parsedRowsCount: params.parsedRows.length,
+    metadataConfidence: Number(params.detectedMetadata?.confidence ?? 0),
+    hasInstitution: Boolean(
+      params.detectedMetadata?.institution &&
+      params.detectedMetadata.institution !== "Unknown"
+    ),
+    hasAccountIdentity: Boolean(
+      params.detectedMetadata?.accountNumber ||
+      params.detectedMetadata?.accountName
+    ),
+  });
 
   const userPrompt = isSinglePageGenericImage && inputText.trim().length === 0
     ? buildCompactGenericImageInputPayload({
@@ -2385,7 +2516,9 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     OPENAI_IMPORT_PDF_MODEL_FALLBACK,
     "pdf model",
   );
-  const model = pdfFileDataBase64
+  const model = useColdVisualFastPath
+    ? fastModel
+    : pdfFileDataBase64
     ? pdfModel
     : pageImagesToSend.length > 0
       ? inferredDocumentFamily === "generic_document"
@@ -2397,7 +2530,9 @@ export const parseImportTextWithOpenAIFallback = async (params: {
           : strongModel
       : textModel;
   const modelFallbackChain = dedupeOpenAIImportModels(
-    pdfFileDataBase64
+    useColdVisualFastPath
+      ? [fastModel]
+      : pdfFileDataBase64
       ? inferredDifficulty === "hard"
         ? [strongModel, pdfModel, OPENAI_IMPORT_LEGACY_PDF_MODEL_FALLBACK]
         : [model, strongModel, OPENAI_IMPORT_LEGACY_PDF_MODEL_FALLBACK]
@@ -2576,6 +2711,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     const primaryTimeoutMs =
       typeof params.timeoutMs === "number" && Number.isFinite(params.timeoutMs)
         ? Math.max(10_000, Math.floor(params.timeoutMs))
+        : useColdVisualFastPath
+          ? 28_000
         : isReceiptMode
           ? inferredDifficulty === "hard"
             ? 40_000
@@ -2612,6 +2749,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     const totalFallbackBudgetMs =
       typeof params.timeoutMs === "number" && Number.isFinite(params.timeoutMs)
         ? Math.max(10_000, Math.floor(params.timeoutMs))
+        : useColdVisualFastPath
+          ? 75_000
         : isReceiptMode
           ? 55_000
           : pdfFileDataBase64
@@ -2620,15 +2759,26 @@ export const parseImportTextWithOpenAIFallback = async (params: {
               ? 120_000
               : 75_000;
     const fallbackDeadlineMs = Date.now() + totalFallbackBudgetMs;
+    const initialPageImages =
+      useColdVisualFastPath && pageImagesToSend.length > 2
+        ? pageImagesToSend.slice(0, 2)
+        : pageImagesToSend;
     const attempted = await callOpenAIWithFallbackModels(
       fallbackChain,
-      pageImagesToSend,
+      initialPageImages,
       primaryTimeoutMs,
       fallbackDeadlineMs
     );
     const attemptedResult =
       attempted ??
-      (pageImagesToSend.length > 0 && model !== textModel
+      (useColdVisualFastPath
+        ? await callOpenAIWithFallbackModels(
+            dedupeOpenAIImportModels([strongModel, imageModel, OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK]),
+            pageImagesToSend,
+            retryTimeoutMs,
+            fallbackDeadlineMs
+          )
+        : pageImagesToSend.length > 0 && model !== textModel
         ? await callOpenAIWithFallbackModels(
             dedupeOpenAIImportModels([textModel, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]),
             pageImagesToSend.slice(0, 1),
@@ -2640,7 +2790,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       return null;
     }
 
-    const selectedModel = attemptedResult.model;
+    let selectedModel = attemptedResult.model;
     let payload = (await attemptedResult.response.json()) as Record<string, unknown>;
     let outputText = extractOutputText(payload);
     if (!outputText) {
@@ -2671,6 +2821,47 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       };
     }
     let validation = importedStatementSchema.safeParse(parsedJson);
+    if (
+      useColdVisualFastPath &&
+      validation.success &&
+      coldLayoutCandidateNeedsStrongRetry({
+        candidate: validation.data,
+        pageImageCount: pageImagesToSend.length,
+      })
+    ) {
+      const initialCandidateScore = scoreColdLayoutCandidate(validation.data);
+      const strongRetryTimeoutMs = getRemainingOpenAIImportAttemptTimeout({
+        deadlineMs: fallbackDeadlineMs,
+        requestedTimeoutMs: retryTimeoutMs,
+      });
+      const strongRetry =
+        strongRetryTimeoutMs === null
+          ? null
+          : await callOpenAIWithFallbackModels(
+              dedupeOpenAIImportModels([strongModel, imageModel, OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK]),
+              pageImagesToSend,
+              strongRetryTimeoutMs,
+              fallbackDeadlineMs
+            );
+      if (strongRetry) {
+        const strongPayload = (await strongRetry.response.json()) as Record<string, unknown>;
+        const strongOutputText = extractOutputText(strongPayload);
+        const strongParsedJson = strongOutputText ? parseStructuredJsonText(strongOutputText) : null;
+        const strongValidation = strongParsedJson ? importedStatementSchema.safeParse(strongParsedJson) : null;
+        if (
+          strongOutputText &&
+          strongParsedJson &&
+          strongValidation?.success &&
+          scoreColdLayoutCandidate(strongValidation.data) > initialCandidateScore
+        ) {
+          payload = strongPayload;
+          outputText = strongOutputText;
+          parsedJson = strongParsedJson;
+          validation = strongValidation;
+          selectedModel = strongRetry.model;
+        }
+      }
+    }
     const splitBillDetailsMissingDespiteDetection =
       params.importMode === "notes" &&
       validation.success &&

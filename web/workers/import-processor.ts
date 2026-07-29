@@ -54,6 +54,7 @@ import {
   DATA_ENGINE_VERSION,
   applyDataQaReviewLearning,
   buildParsedTransactionInsertData,
+  buildStatementFamilySignature,
   buildStatementFamilySignatureFromText,
   buildStatementFingerprint,
   buildUnsupervisedLearningSnapshot,
@@ -8811,6 +8812,8 @@ export const processImportFileText = async (
         })
       : null;
   const openAiPrimaryMode = isTruthyEnvValue(getEnv().OPENAI_IMPORT_PARSER_PRIMARY);
+  const earlyOpenAiFallbackStartedAt =
+    shouldPrioritizeBackupEarly && importMode === "statement" ? Date.now() : null;
   const earlyOpenAiFallbackPromise =
     shouldPrioritizeBackupEarly && importMode === "statement"
       ? (async () => {
@@ -9487,6 +9490,8 @@ export const processImportFileText = async (
   }
   let openAiParsed: Awaited<ReturnType<typeof parseImportTextWithOpenAIFallback>> | null = null;
   let openAiMetadata: typeof metadataForParse | null = null;
+  let backupParserStartedAt = earlyOpenAiFallbackStartedAt;
+  let backupParserDecisionDurationMs: number | null = null;
   const shouldRunOpenAiFallback =
     !skipVisualBackupParser &&
     !hasStructuredWorkbookRows &&
@@ -9500,6 +9505,7 @@ export const processImportFileText = async (
   let backupParserRaceResolved = false;
   let backupParserRaceTimedOut = false;
   if (shouldRunOpenAiFallback) {
+    backupParserStartedAt ??= Date.now();
     if (importMode === "receipt") {
       await updateImportProgress({
         status: "processing",
@@ -9542,6 +9548,8 @@ export const processImportFileText = async (
             });
       backupParserRaceResolved = Boolean(importMode === "statement" && earlyOpenAiFallbackPromise);
     }
+    backupParserDecisionDurationMs =
+      backupParserStartedAt === null ? null : Math.max(0, Date.now() - backupParserStartedAt);
 
     openAiMetadata = openAiParsed
       ? mergeStatementMetadataWithTemplate(
@@ -9595,6 +9603,7 @@ export const processImportFileText = async (
     usedHybridRaceMode: shouldRaceBackupAgainstLocal,
     backupParserRaceResolved,
     backupParserRaceTimedOut,
+    backupParserDecisionDurationMs,
   } as const;
   let receiptDetails =
     (effectiveImportMode === "receipt" || effectiveImportMode === "notes") &&
@@ -10368,6 +10377,25 @@ export const processImportFileText = async (
     };
   }
   const rows = applyImportValidationToRows(rawRows, importValidation);
+  const learnedStatementFamilySignature =
+    buildStatementFamilySignatureFromText(
+      textForParse,
+      {
+        institution: resolvedMetadata.institution ?? null,
+        accountType: resolvedMetadata.accountType ?? null,
+      },
+      importFile.fileType
+    ) ??
+    buildStatementFamilySignature({
+      rows,
+      metadata: {
+        institution: resolvedMetadata.institution ?? null,
+        accountType: resolvedMetadata.accountType ?? null,
+        startDate: resolvedMetadata.startDate ?? null,
+        endDate: resolvedMetadata.endDate ?? null,
+      },
+      fileType: importFile.fileType,
+    });
   const backupLearningSignalsForTemplate = extractBackupParserLearningSignals(
     rows.filter((row) => {
       const rawPayload = row.rawPayload;
@@ -10815,17 +10843,13 @@ export const processImportFileText = async (
         usedHybridRaceMode: parserRoutingMetadata.usedHybridRaceMode,
         backupParserRaceResolved: parserRoutingMetadata.backupParserRaceResolved,
         backupParserRaceTimedOut: parserRoutingMetadata.backupParserRaceTimedOut,
+        backupParserDecisionDurationMs: parserRoutingMetadata.backupParserDecisionDurationMs,
+        backupParserSchemaValidated: useOpenAiParse ? openAiParsed?.audit.schemaValidated ?? false : null,
+        backupParserQualityScore: useOpenAiParse ? openAiParsed?.audit.quality?.score ?? null : null,
         unsupervisedLearning: unsupervisedLearningSnapshot,
         accountType: resolvedMetadata.accountType ?? inferAccountTypeFromStatement(resolvedMetadata.institution, resolvedMetadata.accountName, "bank"),
         rowCount: rows.length,
-        statementFamilySignature: buildStatementFamilySignatureFromText(
-          textForParse,
-          {
-            institution: resolvedMetadata.institution ?? null,
-            accountType: resolvedMetadata.accountType ?? null,
-          },
-          importFile.fileType
-        ),
+        statementFamilySignature: learnedStatementFamilySignature,
         firstMerchant:
           typeof rows[0]?.merchantClean === "string"
             ? rows[0]?.merchantClean
@@ -10903,7 +10927,7 @@ export const processImportFileText = async (
         documentType: effectiveImportMode,
         workflowStage: "identifying_transactions",
         statementFingerprint,
-        statementFamilySignature,
+        statementFamilySignature: learnedStatementFamilySignature,
         earlyRoutingDecision: readCheckpointParserRoutingDecision(statementCheckpoint?.sourceMetadata) ?? parserRoutingMetadata.decision,
         earlyRoutingReasons: (() => {
           const existingEarlyRoutingReasons = readParserRoutingReasons(statementCheckpoint?.sourceMetadata);
@@ -10920,6 +10944,10 @@ export const processImportFileText = async (
         usedHybridRaceMode: parserRoutingMetadata.usedHybridRaceMode,
         backupParserRaceResolved: parserRoutingMetadata.backupParserRaceResolved,
         backupParserRaceTimedOut: parserRoutingMetadata.backupParserRaceTimedOut,
+        backupParserDecisionDurationMs: parserRoutingMetadata.backupParserDecisionDurationMs,
+        backupParserModel: useOpenAiParse ? openAiParsed?.model ?? null : null,
+        backupParserSchemaValidated: useOpenAiParse ? openAiParsed?.audit.schemaValidated ?? false : null,
+        backupParserQualityScore: useOpenAiParse ? openAiParsed?.audit.quality?.score ?? null : null,
         balanceReconciled: rows.some((row) => {
           const rawPayload = row.rawPayload;
           if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
