@@ -16,6 +16,14 @@ import { deriveReconciledBalance } from "@/lib/account-balance";
 import { assertRateLimit } from "@/lib/rate-limit";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
 import { normalizeAdviserPreferences } from "@/lib/adviser-preferences";
+import {
+  buildInvestmentReview,
+  calculateDailySpendingPlan,
+  calculatePurchaseSavingsPlan,
+  classifyEverydayQuestion,
+  extractEverydayMoneyAmount,
+  getEverydayRoutingHint,
+} from "@/lib/adviser-everyday";
 import { ADVISER_LIMITS_ENABLED, BETA_FULL_ACCESS_ENABLED } from "@/lib/beta-access";
 import { assertContentLengthWithin, assertTrustedRequestOrigin } from "@/lib/request-security";
 
@@ -157,6 +165,9 @@ type AdviserChatAccountSource = {
   investmentSubtype: string | null;
   investmentSymbol: string | null;
   investmentQuantity: unknown;
+  investmentCostBasis: unknown;
+  investmentPrincipal: unknown;
+  investmentMaturityDate: Date | null;
   transactions: Array<{
     amount: unknown;
     type: "income" | "expense" | "transfer";
@@ -935,6 +946,9 @@ export async function POST(request: Request) {
                   investmentSubtype: true,
                   investmentSymbol: true,
                   investmentQuantity: true,
+                  investmentCostBasis: true,
+                  investmentPrincipal: true,
+                  investmentMaturityDate: true,
                   transactions: {
                     where: { isExcluded: false, deletedAt: null },
                     select: {
@@ -986,6 +1000,9 @@ export async function POST(request: Request) {
                 investmentSubtype: true,
                 investmentSymbol: true,
                 investmentQuantity: true,
+                investmentCostBasis: true,
+                investmentPrincipal: true,
+                investmentMaturityDate: true,
                 transactions: {
                   where: { isExcluded: false, deletedAt: null },
                   select: {
@@ -1049,6 +1066,8 @@ export async function POST(request: Request) {
       investmentSubtype: account.investmentSubtype,
       investmentSymbol: account.investmentSymbol,
       investmentQuantity: Number(account.investmentQuantity ?? 0),
+      investmentCostBasis: Number(account.investmentCostBasis ?? account.investmentPrincipal ?? 0),
+      investmentMaturityDate: account.investmentMaturityDate,
     }));
 
     const nextSevenDays = new Date(now);
@@ -1549,6 +1568,15 @@ export async function POST(request: Request) {
         ].filter(Boolean);
         return `${account.name}${account.institution ? ` at ${account.institution}` : ""}: ${formatCurrency(account.balance, account.currency)} (${metadata.join(", ")})`;
       });
+    const investmentReview = buildInvestmentReview(
+      currentInvestmentAccounts.map((account) => ({
+        name: account.name,
+        symbol: account.investmentSymbol,
+        value: account.balance,
+        costBasis: account.investmentCostBasis > 0 ? account.investmentCostBasis : null,
+        maturityDate: account.investmentMaturityDate?.toISOString() ?? null,
+      }))
+    );
 
     const liquidBalance = accountAnalysisAccounts
       .filter((account) => ["bank", "wallet", "cash"].includes(account.type))
@@ -2008,6 +2036,60 @@ export async function POST(request: Request) {
         freshness: dataFreshnessLabel,
       };
     };
+    const getDailySpendingPlan = () => {
+      const safeToSpend = calculateSafeToSpend();
+      const todayKey = now.toISOString().slice(0, 10);
+      const todaySpend = normalizedAllTransactions.reduce((sum, transaction) => {
+        return transaction.type === "expense" && transaction.date.toISOString().slice(0, 10) === todayKey
+          ? sum + Math.abs(Number(transaction.amount ?? 0))
+          : sum;
+      }, 0);
+      const broadBudget = budgets.find((budget) => !budget.categoryId);
+      const activeBudgetRemaining = broadBudget
+        ? Math.max(0, Number(broadBudget.targetAmount) - currentSpend)
+        : null;
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const activeBudgetDaysRemaining = Math.max(1, Math.ceil((monthEnd.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
+      const plan = calculateDailySpendingPlan({
+        safeToSpend: safeToSpend.safeToSpend,
+        horizonDays: safeToSpend.horizonDays,
+        baselineMonthlySpend: baselineSpend,
+        todaySpend,
+        activeBudgetRemaining,
+        activeBudgetDaysRemaining,
+        accountCount: accountAnalysisAccounts.length,
+        transactionCount: normalizedAllTransactions.length,
+      });
+
+      return {
+        ...plan,
+        currency: displayCurrency,
+        availableCash: safeToSpend.availableCash,
+        protectedAmount: safeToSpend.knownObligations + safeToSpend.recommendedBuffer,
+        confidence: safeToSpend.confidence,
+        freshness: dataFreshnessLabel,
+        caveats: safeToSpend.caveats,
+      };
+    };
+    const getEstimatedMonthlySavingsCapacity = () => {
+      if (normalizedAllTransactions.length < 3 || longTermAverageIncome <= 0) {
+        return null;
+      }
+
+      const monthlySafeToSpend = calculateSafeToSpend({ horizonDays: 30 });
+      return Math.max(0, Math.min(longTermAverageNet, monthlySafeToSpend.safeToSpend));
+    };
+    const foodTransactions = activeTransactions.filter((transaction) => {
+      if (transaction.type !== "expense") {
+        return false;
+      }
+      const label = `${transaction.category?.name ?? ""} ${transaction.merchantClean ?? transaction.merchantRaw ?? ""}`.toLowerCase();
+      return /food|dining|restaurant|grocer|meal|cafe|coffee/.test(label);
+    });
+    const typicalFoodSpend =
+      foodTransactions.length > 0
+        ? median(foodTransactions.map((transaction) => Math.abs(Number(transaction.amount ?? 0))).filter((amount) => amount > 0))
+        : null;
     const cashflowPressureScore = forecastSignal?.score ?? average([
       currentSavingsRate !== null && currentSavingsRate < 0 ? 90 : 45,
       accountPressureEstimate,
@@ -2166,6 +2248,12 @@ export async function POST(request: Request) {
       "For follow-up questions, use the previous conversation context and do not repeat the same explanation unless a new number or caveat changes it.",
       "Treat short follow-ups such as 'what about next month?', 'how much more?', 'why?', or 'do that' as continuations of the recent conversation. Preserve the prior topic, numbers, and requested action instead of resetting to a generic overview.",
       "When the user asks a broad question, choose the most useful interpretation from the data and state the assumption in one short sentence rather than asking a vague clarifying question.",
+      "Everyday questions should get a useful first answer even when data is partial. Label the limitation, use a conservative range instead of false precision, and ask at most one focused follow-up only when the missing input would materially change the answer.",
+      "For 'how much should I spend' questions, distinguish a conservative target from the maximum supported by protected cash. Never present the full account balance as spendable.",
+      "For saving questions, translate the answer into a per-payday, weekly, or monthly amount and name one concrete spending lever from the user's data when available.",
+      "For bank accounts and credit cards, recommend selection criteria rather than inventing products, approval odds, fees, interest rates, rewards, or eligibility. Named offers require the user's country and current issuer information that Clover can verify.",
+      "For ways to make more money, use income patterns only to size the gap. Do not infer the user's profession, skills, available time, or legal ability to perform a job.",
+      "For food questions, use the daily spending plan and typical food spending when available. Offer flexible meal formats rather than medical, nutrition, allergy, or dietary claims, and invite the user to mention restrictions if relevant.",
       "If the user asks whether they can afford a purchase but does not provide a price, ask for the price and, if relevant, the date they need it by. Do not invent a price or give a yes/no answer without one.",
       "If the user asks what to invest in, do not name a specific security as a personalized recommendation. Explain the missing suitability details and offer high-level educational categories only after checking investment readiness.",
       "Never expose internal personas, confidence scores, theme scores, tool names, implementation labels, or phrases such as 'Clover surfaced'. Write in plain, friendly language.",
@@ -2191,6 +2279,12 @@ export async function POST(request: Request) {
       "When the user asks about budgets or whether spending is within a limit, use get_budget_status.",
       "When the user asks how much they could invest, use estimate_investment_contribution and explain that it is a conservative planning range, not a security recommendation.",
       "When the user asks what they should invest in or asks for personalized investment advice, use get_investment_readiness first. Explain what suitability information is still needed before discussing options.",
+      "When the user asks what investment to stop, use review_investments. Discuss review flags and decision criteria, not a sell instruction. A loss by itself is not a reason to sell.",
+      "When the user asks for today's budget or spending room, use plan_daily_spending.",
+      "When the user asks how much to save for a purchase, use build_purchase_savings_plan. If no deadline is given, compare 3, 6, and 12 month paths.",
+      "When the user asks how to save, grow money, or earn more, use build_saving_plan, build_money_growth_plan, or build_income_growth_plan respectively.",
+      "When the user asks which bank account or credit card fits, use evaluate_financial_product_fit.",
+      "When the user asks what food to buy or eat today, use plan_food_spending.",
       "When the user asks about duplicate, uncategorized, or review-needed transactions, use find_data_quality_issues.",
       "When the user asks Clover to add or edit a record, use prepare_write_action and wait for confirmation; never describe a proposed write as completed. Supported writes include goals, budgets, Adviser planning preferences, transactions, accounts, investments, and split bills.",
       "Before prepare_write_action, verify that the required fields for that action are present. If anything essential is missing, ask one focused follow-up question instead of creating a partial confirmation card.",
@@ -2201,6 +2295,15 @@ export async function POST(request: Request) {
 
     const latestQuestion = incomingMessages[incomingMessages.length - 1]?.content?.trim() || "your question";
     const latestQuestionLower = latestQuestion.toLowerCase();
+    const latestEverydayIntent = classifyEverydayQuestion(latestQuestion);
+    const everydayTargetAmount = extractEverydayMoneyAmount(latestQuestion);
+    const priorUserQuestion = incomingMessages
+      .filter((message) => message.role === "user")
+      .slice(-2, -1)[0]?.content ?? "";
+    const everydayIntent =
+      latestEverydayIntent ??
+      (latestQuestion.length <= 80 ? classifyEverydayQuestion(priorUserQuestion) : null);
+    const everydayRoutingHint = getEverydayRoutingHint(everydayIntent);
     const recentUserContext = incomingMessages
       .filter((message) => message.role === "user")
       .slice(-3)
@@ -2211,7 +2314,7 @@ export async function POST(request: Request) {
       /overall money picture|money overview|overview of my balances|balances.*spending.*(?:upcoming|pressure|focus)|balances.*upcoming.*focus/.test(
         latestQuestionLower
       );
-    const latestHasExplicitTheme = /goal|target|track|progress|save|invest|portfolio|dividend|gain|loss|snapshot|stock|transaction|spend|merchant|bill|recurr|due|loan|balance|cash flow|budget|owe|payment|pressure|account|afford|purchase|phone|car|travel|safe to spend|payday/.test(latestQuestionLower);
+    const latestHasExplicitTheme = /goal|target|track|progress|save|invest|portfolio|dividend|gain|loss|snapshot|stock|transaction|spend|merchant|bill|recurr|due|loan|balance|cash flow|budget|owe|payment|pressure|account|afford|purchase|phone|car|travel|safe to spend|payday|credit card|bank|income|earn|food|meal|eat/.test(latestQuestionLower);
     const asksForSuggestedGoal =
       !goalValue
       && /suggest.*goal|what goal|which goal|realistic.*goal|goal.*realistic|set.*goal|savings goal/.test(latestQuestionLower);
@@ -2219,6 +2322,12 @@ export async function POST(request: Request) {
     const inferredQuestionTheme = (
       asksForOverallMoneyOverview
         ? "cashflow"
+        : everydayIntent === "investment_selection" || everydayIntent === "investment_review"
+          ? "investments"
+          : everydayIntent === "saving" || everydayIntent === "purchase_savings" || everydayIntent === "money_growth"
+            ? "goals"
+            : everydayIntent
+              ? "cashflow"
         : /goal|target|track|progress|save more|emergency fund|drift/.test(themeSource)
         ? "goals"
         : /invest|portfolio|dividend|gain|loss|snapshot|stock/.test(themeSource)
@@ -2232,6 +2341,9 @@ export async function POST(request: Request) {
     const asksAboutSpecificPurchase = /can i afford|can we afford|could i afford|can i buy|should i buy|would .* be affordable|affordability|can i travel|can we travel|trip .* budget/.test(latestQuestionLower) && !/how much can i safely spend/.test(latestQuestionLower);
     const includesPurchaseAmount = /(?:₱|php|usd|\$|€|£)\s*[\d,.]+|\b\d+(?:[,.]\d{2})?\s*[km]?\b(?!\s*(?:day|days|month|months|week|weeks|year|years))/i.test(latestQuestionLower);
     const requestRoutingHint = (() => {
+      if (everydayRoutingHint) {
+        return everydayRoutingHint;
+      }
       if (asksForOverallMoneyOverview) {
         return "Route this request to get_account_summary first, then answer with available cash, investments, liabilities, recent income and spending, upcoming obligations, and one clear focus. A goal is not required.";
       }
@@ -2316,7 +2428,79 @@ export async function POST(request: Request) {
                   ? "Open Split Bills and settle the largest open balance first."
                   : "Review the largest recent change that affects your question.";
 
+    const everydayFallbackReply = (() => {
+      const dailyPlan = getDailySpendingPlan();
+      const monthlySavingsCapacity = getEstimatedMonthlySavingsCapacity();
+      if (everydayIntent === "daily_spending") {
+        if (dailyPlan.coverage === "missing") {
+          return "I can turn this into a daily amount, but Clover does not have a usable balance or spending history yet.\n\nHow much cash needs to last until your next income? I’ll protect known bills first and divide only the remainder.";
+        }
+        return `A cautious target for today is ${formatCurrency(dailyPlan.remainingToday, displayCurrency)}.\n\nMaximum supported by protected cash: ${formatCurrency(dailyPlan.safeDailyCeiling, displayCurrency)}.\nAlready spent today: ${formatCurrency(dailyPlan.alreadySpentToday, displayCurrency)}.\n\n${dailyPlan.coverage === "partial" ? "This is a conservative estimate because Clover has incomplete history." : `It uses your recent daily pace and keeps ${formatCurrency(dailyPlan.protectedAmount, displayCurrency)} protected.`}`;
+      }
+      if (everydayIntent === "purchase_savings" && everydayTargetAmount) {
+        const plan = calculatePurchaseSavingsPlan({
+          targetAmount: everydayTargetAmount,
+          monthlySavingsCapacity,
+          accountCount: accountAnalysisAccounts.length,
+          transactionCount: normalizedAllTransactions.length,
+        });
+        const scenarios = plan.scenarios
+          .map((scenario) => `${scenario.months} months: ${formatCurrency(scenario.monthlyAmount, displayCurrency)} per month`)
+          .join("\n");
+        return `For a ${formatCurrency(plan.targetAmount, displayCurrency)} purchase, you could save:\n\n${scenarios}\n\n${plan.estimatedMonthlyCapacity === null ? "Clover needs more reliable income and spending history to say which timeline fits." : `Your estimated room is about ${formatCurrency(plan.estimatedMonthlyCapacity, displayCurrency)} per month, so choose the first timeline below that amount.`}`;
+      }
+      if (everydayIntent === "saving") {
+        if (monthlySavingsCapacity === null) {
+          return "Start with an amount small enough to repeat: set aside 5% of each income deposit, then increase it after one month of tracked spending.\n\nClover needs a reliable income-and-expense pattern before turning that into a trustworthy fixed amount.";
+        }
+        const starterAmount = monthlySavingsCapacity * 0.5;
+        const lever = topCategoryName && topCategorySpend > 0
+          ? `A 10% reduction in ${topCategoryName} would free about ${formatCurrency(topCategorySpend * 0.1, displayCurrency)} in the current window.`
+          : "Automate the transfer just after income arrives so saving happens before discretionary spending.";
+        return `A realistic starting target is ${formatCurrency(starterAmount, displayCurrency)} per month.\n\n${lever}\n\nKeep the rest of the estimated surplus available until the pattern proves stable.`;
+      }
+      if (everydayIntent === "money_growth") {
+        const safe = calculateSafeToSpend({ horizonDays: 30 });
+        return `Grow money in this order:\n\n1. Protect ${formatCurrency(safe.knownObligations + safe.recommendedBuffer, displayCurrency)} for bills and normal spending.\n2. Address expensive debt before taking more investment risk${liabilityAccountBalance > 0 ? `; Clover can see ${formatCurrency(liabilityAccountBalance, displayCurrency)} owed` : ""}.\n3. Invest only the repeatable monthly surplus${monthlySavingsCapacity === null ? "" : `, currently estimated near ${formatCurrency(monthlySavingsCapacity, displayCurrency)}`}.\n\nUse diversified, low-cost categories matched to your time horizon rather than chasing recent winners.`;
+      }
+      if (everydayIntent === "income_growth") {
+        const incomeLine = longTermAverageIncome > 0
+          ? `Clover sees average monthly inflow near ${formatCurrency(longTermAverageIncome, displayCurrency)}, with a ${incomeCadence} pattern.`
+          : "Clover does not yet have a reliable income pattern.";
+        return `${incomeLine}\n\nThe practical paths are: earn more per hour, add paid hours, sell a repeatable service, or turn an unused asset into income. Start with the option that needs the least upfront cash.\n\nWhat skill or time block could you consistently offer each week?`;
+      }
+      if (everydayIntent === "investment_selection") {
+        const reserveReady = spendableAccountBalance >= Math.max(0, baselineSpend);
+        return `${reserveReady ? "Your cash reserve appears able to support an investment-planning conversation." : "Protect cash and near-term bills before choosing an investment."}\n\nFor money needed within 3 years, prioritize lower-volatility cash or fixed-income categories. For 5+ years, learn about broad diversified funds before individual securities.\n\nBefore narrowing it further, decide your time horizon and how much temporary loss you could tolerate.`;
+      }
+      if (everydayIntent === "investment_review") {
+        if (investmentReview.length === 0) {
+          return "Clover cannot identify an investment to review because no current holding value is available.\n\nAdd the holding, current value, and cost or principal. Then Clover can flag concentration, losses, maturity, and cash-flow conflicts without guessing.";
+        }
+        const mostConcentrated = investmentReview[0];
+        return `Do not stop an investment from performance alone.\n\nReview ${mostConcentrated.name} first because it represents ${formatPercent(mostConcentrated.concentration * 100)} of the portfolio Clover can see${mostConcentrated.returnPercent === null ? "" : ` and is ${formatPercent(mostConcentrated.returnPercent)} versus recorded cost`}.\n\nBefore selling, check whether it still fits your goal, time horizon, fees, taxes, and need for cash.`;
+      }
+      if (everydayIntent === "credit_card") {
+        const repaymentRoom = Math.max(0, longTermAverageNet);
+        return `Choose card features from your actual spending, not the welcome offer.\n\nPrioritize: no or recoverable annual fee, rewards for ${topCategoryName ?? "your regular spending"}, low foreign or cash fees only if you use them, and a limit you can repay in full.\n\nClover estimates ${formatCurrency(repaymentRoom, displayCurrency)} of historical monthly surplus. It cannot predict approval or name a current offer without your country, verified income, and current issuer terms.`;
+      }
+      if (everydayIntent === "bank_account") {
+        return `Choose the account for its job:\n\nDaily spending: reliable transfers, broad access, low fees.\nSavings: strong net interest, no forced spending, deposit protection.\nTravel or freelance income: good exchange rates and inbound-transfer support.\n\nClover can compare these criteria with your existing ${chatAccounts.length} account${chatAccounts.length === 1 ? "" : "s"}, but current rates and fees must be verified before naming a bank.`;
+      }
+      if (everydayIntent === "food_choice") {
+        if (dailyPlan.coverage === "missing") {
+          return "For today, choose a simple meal built around a staple, an affordable protein, and produce you will actually eat. Compare home-cooked, grocery-prepared, and delivery totals before ordering.\n\nTell me the amount you want to keep today’s food under, and I’ll narrow the options.";
+        }
+        const mealBudget = Math.max(0, Math.min(dailyPlan.remainingToday, typicalFoodSpend ?? dailyPlan.remainingToday / 3));
+        return `Keep the next meal around ${formatCurrency(mealBudget, displayCurrency)} or less.\n\nGood flexible formats are a rice or grain bowl with protein and vegetables, a filling soup or noodle meal, or grocery-prepared food that avoids delivery fees.\n\n${typicalFoodSpend ? `Your typical food-related transaction is about ${formatCurrency(typicalFoodSpend, displayCurrency)}.` : "Clover has limited food history, so this uses today's broader spending room."}`;
+      }
+      return null;
+    })();
+
     const fallbackReply = (() => {
+      if (everydayFallbackReply) {
+        return everydayFallbackReply;
+      }
       if (inferredQuestionTheme === "goals") {
         return goalLabel
           ? `Your ${goalLabel.toLowerCase()} goal is currently ${goalProgressLabel.toLowerCase()} based on your ${dataFreshnessLabel}. ${fallbackNextStep}`
@@ -2369,6 +2553,34 @@ export async function POST(request: Request) {
           questions.push({ id, group, label, prompt });
         }
       };
+
+      if (everydayIntent === "daily_spending" || everydayIntent === "food_choice") {
+        add("follow-up-weekend-budget", "cashflow", "What can I spend this weekend?", "How much can I spend this weekend after protecting bills and normal spending until my next income?");
+        add("follow-up-food-budget", "cashflow", "What is a sensible food budget today?", "What is a sensible food budget for today based on what I still need my cash to cover?");
+      }
+      if (everydayIntent === "purchase_savings") {
+        add("follow-up-purchase-faster", "goals", "How could I reach it sooner?", "What realistic spending change could help me reach this purchase target sooner?");
+        add("follow-up-purchase-afford", "cashflow", "Could I buy it now?", "Could I buy this now without using money needed for bills, normal spending, or my cash buffer?");
+      }
+      if (everydayIntent === "saving" || everydayIntent === "money_growth") {
+        add("follow-up-saving-automatic", "goals", "How much should I automate?", "How much could I safely automate into savings after each income deposit?");
+        add("follow-up-saving-lever", "behavior", "What is the easiest place to cut?", "Which part of my actual spending could I reduce with the least disruption?");
+      }
+      if (everydayIntent === "income_growth") {
+        add("follow-up-income-target", "cashflow", "What extra income would help most?", "How much additional monthly income would meaningfully improve my current cash flow?");
+        add("follow-up-income-irregular", "cashflow", "How should I plan irregular income?", "How should I divide irregular income between bills, savings, and flexible spending?");
+      }
+      if (everydayIntent === "credit_card") {
+        add("follow-up-card-features", "accounts", "Which card features fit my spending?", "Which credit-card features fit my actual spending categories and repayment capacity?");
+        add("follow-up-card-ready", "cashflow", "Am I ready for another card?", "Does my current cash flow suggest I can repay another credit card in full each month?");
+      }
+      if (everydayIntent === "bank_account") {
+        add("follow-up-account-gap", "accounts", "What is missing from my accounts?", "What useful job is not covered by my current bank accounts?");
+        add("follow-up-account-criteria", "accounts", "What should I compare?", "What fees, access, safety, and interest details should I compare before opening another account?");
+      }
+      if (everydayIntent === "investment_selection" || everydayIntent === "investment_review") {
+        add("follow-up-investment-fit", "investments", "What does not fit my plan?", "Which visible investment deserves review because of concentration, cash needs, or a mismatch with my time horizon?");
+      }
 
       if (inferredQuestionTheme === "cashflow") {
         add(
@@ -2652,6 +2864,16 @@ export async function POST(request: Request) {
               : ["open_cashflow", "open_recurring", "open_accounts", "open_split_bills", "open_budgeting"];
       return [preferredTypes.map((type) => candidates.find((action) => action.type === type)).find(Boolean) ?? candidates[0]];
     };
+    if (everydayIntent === "purchase_savings" && !everydayTargetAmount) {
+      return NextResponse.json({
+        reply: "What target price should I use? If you do not have a deadline yet, I can compare 3, 6, and 12 month saving plans from that one number.",
+        actions: [],
+        suggestions: suggestedQuestions,
+        usage: usageForResponse(),
+        grounding,
+        requiresInput: "purchase_target_amount",
+      });
+    }
     if (asksAboutSpecificPurchase && !includesPurchaseAmount) {
       return NextResponse.json({
         reply: "I can check that safely, but I need the purchase price first. If timing matters, tell me the date you need it by or how long you want your cash to last. I will compare it with your available cash, known obligations, and a reasonable buffer.",
@@ -2719,6 +2941,80 @@ export async function POST(request: Request) {
           required: ["horizonDays", "untilDate", "expectedIncome", "additionalBuffer"],
           additionalProperties: false,
         },
+      },
+      {
+        type: "function",
+        name: "plan_daily_spending",
+        description: "Calculate a conservative spending target for today, a separate safe ceiling, and what remains after today's recorded spending. Works with full or partial data and reports coverage limitations.",
+        parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+      },
+      {
+        type: "function",
+        name: "build_purchase_savings_plan",
+        description: "Turn a purchase price into a grounded savings timeline. When no deadline is supplied, compare 3, 6, and 12 month paths. Never assume the whole account balance is dedicated savings.",
+        parameters: {
+          type: "object",
+          properties: {
+            itemName: { type: "string" },
+            targetAmount: { type: "number" },
+            targetMonths: { type: ["number", "null"] },
+          },
+          required: ["itemName", "targetAmount", "targetMonths"],
+          additionalProperties: false,
+        },
+      },
+      {
+        type: "function",
+        name: "build_saving_plan",
+        description: "Build a practical saving plan from historical surplus, safe cash, and the strongest reducible spending categories. Use for broad questions about how to save.",
+        parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+      },
+      {
+        type: "function",
+        name: "build_money_growth_plan",
+        description: "Sequence cash protection, obligations, saving, and educational investment readiness for broad questions about growing money.",
+        parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+      },
+      {
+        type: "function",
+        name: "build_income_growth_plan",
+        description: "Summarize the user's observed income pattern and size a useful income target without inventing their profession, skills, or available time.",
+        parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
+      },
+      {
+        type: "function",
+        name: "evaluate_financial_product_fit",
+        description: "Build criteria for selecting a credit card or bank account from cash flow and spending behavior. Never promise approval or invent named products, current rates, fees, rewards, or eligibility.",
+        parameters: {
+          type: "object",
+          properties: {
+            productType: { type: "string", enum: ["credit_card", "bank_account"] },
+            country: { type: ["string", "null"] },
+            useCase: { type: ["string", "null"] },
+          },
+          required: ["productType", "country", "useCase"],
+          additionalProperties: false,
+        },
+      },
+      {
+        type: "function",
+        name: "plan_food_spending",
+        description: "Use today's spending room and typical food transactions to suggest a meal budget and flexible meal formats. This is budget guidance, not medical or dietary advice.",
+        parameters: {
+          type: "object",
+          properties: {
+            dietaryPreference: { type: ["string", "null"] },
+            mealsRemaining: { type: ["number", "null"] },
+          },
+          required: ["dietaryPreference", "mealsRemaining"],
+          additionalProperties: false,
+        },
+      },
+      {
+        type: "function",
+        name: "review_investments",
+        description: "Review visible holdings for concentration, recorded gain or loss, maturity, and cash-pressure flags. Use for questions about what to stop or sell, but never issue a sell instruction from a single flag.",
+        parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
       },
       {
         type: "function",
@@ -2993,6 +3289,175 @@ export async function POST(request: Request) {
             expectedIncome: typeof args.expectedIncome === "number" ? args.expectedIncome : null,
             additionalBuffer: typeof args.additionalBuffer === "number" ? args.additionalBuffer : null,
           });
+        } else if (call.name === "plan_daily_spending") {
+          result = getDailySpendingPlan();
+          actions.push({
+            id: `daily-budget-${actions.length + 1}`,
+            kind: "navigate",
+            type: "open_budgeting",
+            label: budgets.length > 0 ? "Review daily budget" : "Set a spending limit",
+            description: budgets.length > 0 ? "Check the budget behind today's target." : "Add a budget if you want Clover to enforce a firmer daily target.",
+            href: "/budgeting",
+          });
+        } else if (call.name === "build_purchase_savings_plan") {
+          const targetAmount = Math.max(0, Number(args.targetAmount ?? 0));
+          result = {
+            itemName: typeof args.itemName === "string" ? args.itemName : "purchase",
+            currency: displayCurrency,
+            ...calculatePurchaseSavingsPlan({
+              targetAmount,
+              monthlySavingsCapacity: getEstimatedMonthlySavingsCapacity(),
+              targetMonths: typeof args.targetMonths === "number" ? args.targetMonths : null,
+              accountCount: accountAnalysisAccounts.length,
+              transactionCount: normalizedAllTransactions.length,
+            }),
+            protectedCashIsNotDedicatedSavings: true,
+          };
+          actions.push({
+            id: `purchase-goal-${actions.length + 1}`,
+            kind: "navigate",
+            type: "open_goal",
+            label: "Track this purchase",
+            description: "Open Goals if you want to turn this timeline into a tracked target.",
+            href: "/goals",
+          });
+        } else if (call.name === "build_saving_plan") {
+          const monthlyCapacity = getEstimatedMonthlySavingsCapacity();
+          const categoryLevers = topCategories.map(([name, amount]) => ({
+            category: name,
+            currentWindowSpend: amount,
+            tenPercentReduction: amount * 0.1,
+          }));
+          result = {
+            currency: displayCurrency,
+            coverage: normalizedAllTransactions.length >= 30 && longTermAverageIncome > 0 ? "grounded" : normalizedAllTransactions.length > 0 || accountAnalysisAccounts.length > 0 ? "partial" : "missing",
+            averageMonthlyIncome: longTermAverageIncome || null,
+            averageMonthlySpending: longTermAverageSpend || null,
+            historicalMonthlySurplus: longTermAverageNet,
+            estimatedMonthlySavingsCapacity: monthlyCapacity,
+            starterTarget: monthlyCapacity === null ? null : monthlyCapacity * 0.5,
+            currentSavingsRate,
+            categoryLevers,
+            guidance: monthlyCapacity === null
+              ? "Give a repeatable percentage-based starting habit and explain which data would make a fixed amount reliable."
+              : "Start below the full estimated capacity so the plan has room for irregular expenses.",
+          };
+          actions.push({ id: `saving-budget-${actions.length + 1}`, kind: "navigate", type: "open_budgeting", label: "Review spending limits", description: "Use Budgeting to protect the saving amount.", href: "/budgeting" });
+        } else if (call.name === "build_money_growth_plan") {
+          const safe = calculateSafeToSpend({ horizonDays: 30 });
+          const monthlyCapacity = getEstimatedMonthlySavingsCapacity();
+          result = {
+            currency: displayCurrency,
+            availableCash: spendableAccountBalance,
+            protectedCash: safe.knownObligations + safe.recommendedBuffer,
+            safeRoomAfterProtection: safe.safeToSpend,
+            balancesOwed: liabilityAccountBalance,
+            historicalMonthlySurplus: longTermAverageNet,
+            estimatedMonthlyGrowthCapacity: monthlyCapacity,
+            investmentPortfolioValue: investmentPortfolioValueLabel,
+            investmentAccountCount: currentInvestmentAccounts.length,
+            sequence: ["protect near-term cash", "address expensive debt or overdue obligations", "automate repeatable saving", "learn diversified investment categories that fit the time horizon"],
+            coverage: safe.confidence.label,
+          };
+          actions.push({ id: `growth-plan-${actions.length + 1}`, kind: "navigate", type: "open_investments", label: "Review Investments", description: "Review the portfolio only after protecting near-term cash.", href: "/investments" });
+        } else if (call.name === "build_income_growth_plan") {
+          result = {
+            currency: displayCurrency,
+            averageMonthlyIncome: longTermAverageIncome || null,
+            latestWindowIncome: currentSummary.income || null,
+            incomeCadence,
+            incomeTimingConfidence,
+            observedIncomeEvents: recentIncomeHistory.length,
+            incomeChangeFromBaseline: incomeDelta,
+            suggestedInitialIncreaseTarget: longTermAverageIncome > 0 ? longTermAverageIncome * 0.1 : null,
+            possiblePaths: [
+              "increase pay for existing work",
+              "add paid hours without upfront cost",
+              "sell a repeatable service based on an existing skill",
+              "sell or rent an underused asset",
+            ],
+            missingPersonalContext: ["skills", "available time", "work constraints", "preferred income type"],
+            guidance: "Use the financial data to size a target, not to invent a job recommendation.",
+          };
+        } else if (call.name === "evaluate_financial_product_fit") {
+          const productType = args.productType === "bank_account" ? "bank_account" : "credit_card";
+          const repaymentRoom = Math.max(0, longTermAverageNet);
+          const commonContext = {
+            productType,
+            country: typeof args.country === "string" ? args.country : null,
+            useCase: typeof args.useCase === "string" ? args.useCase : null,
+            currency: displayCurrency,
+            topSpendingCategories: topCategories.map(([name, amount]) => ({ name, amount })),
+            averageMonthlyIncome: longTermAverageIncome || null,
+            averageMonthlySpending: longTermAverageSpend || null,
+            historicalMonthlyRepaymentRoom: repaymentRoom,
+            balancesOwed: liabilityAccountBalance,
+            existingInstitutions: Array.from(new Set(chatAccounts.map((account) => account.institution).filter(Boolean))),
+            namedProductRecommendationAvailable: false,
+            limitation: "Clover does not have a verified live catalog of issuer rates, fees, rewards, eligibility, or approval criteria.",
+          };
+          result = productType === "credit_card"
+            ? {
+                ...commonContext,
+                readiness: longTermAverageIncome <= 0
+                  ? "income_not_verified"
+                  : repaymentRoom <= 0 || liabilityAccountBalance > repaymentRoom * 3
+                    ? "protect_repayment_capacity"
+                    : "compare_features",
+                criteria: [
+                  "a limit that can be repaid in full",
+                  "annual fee after realistic waivers",
+                  `rewards for ${topCategoryName ?? "regular spending"}`,
+                  "foreign, cash-advance, and late-payment fees only when relevant",
+                ],
+              }
+            : {
+                ...commonContext,
+                criteria: [
+                  "deposit protection and institution reliability",
+                  "net interest after requirements and fees",
+                  "transfer, ATM, and cash-deposit access",
+                  "foreign exchange or inbound payment support when needed",
+                ],
+                useCaseOptions: ["daily spending", "emergency savings", "cash deposits", "travel", "freelance or foreign income"],
+              };
+          actions.push({ id: `product-accounts-${actions.length + 1}`, kind: "navigate", type: "open_accounts", label: "Compare your accounts", description: "Review what your current accounts already cover before opening another.", href: "/accounts" });
+        } else if (call.name === "plan_food_spending") {
+          const dailyPlan = getDailySpendingPlan();
+          const mealsRemaining = Math.max(1, Math.min(6, Math.round(Number(args.mealsRemaining ?? 1))));
+          const availablePerMeal = dailyPlan.remainingToday / mealsRemaining;
+          const suggestedPerMeal = typicalFoodSpend
+            ? Math.min(availablePerMeal, typicalFoodSpend)
+            : availablePerMeal;
+          result = {
+            currency: displayCurrency,
+            coverage: dailyPlan.coverage,
+            dailySpendingTargetRemaining: dailyPlan.remainingToday,
+            mealsRemaining,
+            suggestedPerMeal: Math.max(0, suggestedPerMeal),
+            typicalFoodTransaction: typicalFoodSpend,
+            dietaryPreference: typeof args.dietaryPreference === "string" ? args.dietaryPreference : null,
+            mealFormats: [
+              "a staple with an affordable protein and vegetables",
+              "a filling soup or noodle meal",
+              "grocery-prepared food without delivery fees",
+            ],
+            limitation: "This is spending guidance, not medical, allergy, or nutrition advice.",
+          };
+          actions.push({ id: `food-transactions-${actions.length + 1}`, kind: "navigate", type: "find_transactions", label: "Review food spending", description: "See the food transactions behind the estimate.", href: "/transactions?q=food" });
+        } else if (call.name === "review_investments") {
+          const safe = calculateSafeToSpend({ horizonDays: 30 });
+          result = {
+            portfolioValue: investmentPortfolioValueLabel,
+            positions: investmentReview,
+            cashPressure: safe.status,
+            safeRoomAfterProtection: safe.safeToSpend,
+            missingDecisionContext: ["investment goal", "time horizon", "fees and taxes", "risk tolerance"],
+            guidance: investmentReview.length === 0
+              ? "No current holding value is available for a grounded review."
+              : "Flags identify what deserves review. They are not automatic reasons to sell, and a loss by itself is not a sell signal.",
+          };
+          actions.push({ id: `review-investments-${actions.length + 1}`, kind: "navigate", type: "open_investments", label: "Review portfolio", description: "Open Investments to inspect the flagged positions.", href: "/investments" });
         } else if (call.name === "check_affordability") {
           const price = Number(args.price ?? 0);
           const safeToSpend = calculateSafeToSpend({
