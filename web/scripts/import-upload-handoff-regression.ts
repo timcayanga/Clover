@@ -205,8 +205,8 @@ const main = async () => {
   );
   assert.match(
     confirmRouteSource,
-    /importFile\.status === "queued" \|\| importFile\.status === "processing"[\s\S]{0,700}status: "staged"/,
-    "The confirmation endpoint must not start a second worker path while the import worker is processing."
+    /importFile\.status === "queued" \|\| importFile\.status === "processing"[\s\S]{0,1600}if \(canTakeOverStrandedConfirmation\)[\s\S]{0,1600}status: "staged"/,
+    "The confirmation endpoint must return a cheap staged response unless parsed rows have genuinely stopped progressing."
   );
   assert.match(
     modalSource,
@@ -401,6 +401,41 @@ const main = async () => {
     staleStatementImageQueueSource,
     /after\(async \(\) =>/,
     "A stranded screenshot must be recovered by the status request, not another best-effort callback."
+  );
+  assert.match(
+    statusRouteSource,
+    /const isRecoverableStatementFile[\s\S]{0,300}application\/pdf[\s\S]{0,300}avif\|pdf/,
+    "Import status recovery must include PDF statements, not only screenshots."
+  );
+  const staleStatementReconcilingSource = section(
+    statusRouteSource,
+    "if (staleStatementImageReconciling)",
+    "const staleStatementImageStaged"
+  );
+  assert.doesNotMatch(
+    staleStatementReconcilingSource,
+    /after\(async \(\) =>/,
+    "A parsed statement stranded during final save must be confirmed inside the recovery request."
+  );
+  assert.match(
+    confirmRouteSource,
+    /canTakeOverStrandedConfirmation[\s\S]{0,1500}confirmImportFile\(importId, payload\.accountId \?\? null,[\s\S]{0,200}allowDeletedAccountRecreation: true/,
+    "Confirmation polling must take over a parsed import when the original worker stops progressing."
+  );
+  const confirmationAccountsSource = section(
+    importProcessorSource,
+    "const confirmationAccountGroups",
+    "const account = accountByGroupKey"
+  );
+  assert.match(
+    confirmationAccountsSource,
+    /\{ throwOnError: true \}/,
+    "Account-resolution errors must reach the import route instead of being replaced by a generic missing-account error."
+  );
+  assert.match(
+    transactionsPageSource,
+    /const shouldPreserveImportedTransactions =[\s\S]{0,180}!hasServerSideFilters &&\s*\(requestPage === 1 \|\| Boolean\(options\?\.append\)\)/,
+    "Optimistic import rows must not be merged into later server-paginated transaction pages."
   );
   const confirmationSource = section(importProcessorSource, "export const confirmImportFile", "if (isDocumentImport)");
   assert.match(

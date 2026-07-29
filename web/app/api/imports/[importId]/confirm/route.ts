@@ -7,6 +7,8 @@ import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
+const STALE_RECONCILING_IMPORT_MS = 8_000;
+
 const confirmSchema = z.object({
   accountId: z.string().min(1).nullable().optional(),
 });
@@ -49,13 +51,31 @@ export async function POST(request: Request, { params }: { params: Promise<{ imp
       }
     }
 
-    // The import worker owns confirmation while an import is queued or
-    // processing. Returning a cheap staged response here prevents the modal
-    // from starting a second parser/account-resolution pass that only waits on
-    // the same database lock. The client polls this endpoint until the worker
-    // records its durable result.
     const recreatingDeletedAccount = importFile.processingPhase === "account_match_needs_confirmation";
+    const importUpdatedAtMs = new Date(importFile.updatedAt).getTime();
+    const canTakeOverStrandedConfirmation =
+      importFile.status === "processing" &&
+      (importFile.processingPhase === "reconciling" || importFile.processingPhase === "staged") &&
+      Number(importFile.parsedRowsCount ?? 0) > 0 &&
+      Number(importFile.confirmedTransactionsCount ?? 0) === 0 &&
+      Number.isFinite(importUpdatedAtMs) &&
+      Date.now() - importUpdatedAtMs >= STALE_RECONCILING_IMPORT_MS;
+
+    // The worker normally owns confirmation. If it has already parsed rows but
+    // stopped making progress, this fresh request can safely finish the save;
+    // confirmImportFile serializes concurrent attempts with its import lock.
     if ((importFile.status === "queued" || importFile.status === "processing") && !recreatingDeletedAccount) {
+      if (canTakeOverStrandedConfirmation) {
+        const { confirmImportFile } = await import("@/workers/import-processor");
+        // Re-uploading a statement is the explicit user action that restores a
+        // matching tombstoned account, including when the original request was
+        // stranded before it could expose the account confirmation state.
+        const result = await confirmImportFile(importId, payload.accountId ?? null, {
+          allowDeletedAccountRecreation: true,
+        });
+        return NextResponse.json({ ok: true, result });
+      }
+
       return NextResponse.json(
         {
           ok: true,

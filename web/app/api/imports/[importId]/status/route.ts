@@ -36,9 +36,10 @@ const STALE_STATEMENT_IMAGE_RECONCILING_MS = 30 * 1000;
 const STALE_STATEMENT_IMAGE_STAGED_MS = 30 * 1000;
 const STALE_STATEMENT_IMAGE_EMPTY_DONE_MS = 15 * 1000;
 
-const isImageImportFile = (fileName?: string | null, fileType?: string | null) =>
+const isRecoverableStatementFile = (fileName?: string | null, fileType?: string | null) =>
   String(fileType ?? "").toLowerCase().startsWith("image/") ||
-  /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif)$/i.test(String(fileName ?? "").toLowerCase());
+  String(fileType ?? "").toLowerCase() === "application/pdf" ||
+  /\.(jpe?g|png|webp|heic|heif|gif|bmp|avif|pdf)$/i.test(String(fileName ?? "").toLowerCase());
 
 const isBackupParserHandoffMessage = (value?: string | null) =>
   /backup parser|double-checking this file|local parse looks incomplete/i.test(String(value ?? ""));
@@ -135,7 +136,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       isRecoverableImageImportMode(importMode) &&
       snapshot.importFile.status === "processing" &&
       (snapshot.importFile.processingPhase === "queued_retry" || snapshot.importFile.processingPhase === "reading_account_details") &&
-      isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
+      isRecoverableStatementFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount === 0 &&
       Number.isFinite(updatedAtMs) &&
@@ -209,7 +210,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     const staleStatementImageEmptyDone =
       isRecoverableImageImportMode(importMode) &&
       (snapshot.importFile.status === "done" || snapshot.importFile.status === "failed") &&
-      isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
+      isRecoverableStatementFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount === 0 &&
       Number.isFinite(updatedAtMs) &&
@@ -260,7 +261,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       isRecoverableImageImportMode(importMode) &&
       snapshot.importFile.status === "processing" &&
       snapshot.importFile.processingPhase === "reconciling" &&
-      isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
+      isRecoverableStatementFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount > 0 &&
       Number.isFinite(updatedAtMs) &&
@@ -272,44 +273,42 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         processingPhase: "reconciling",
         processingMessage: "Saving screenshot transactions...",
       });
-      after(async () => {
-        try {
-          const { confirmImportFile } = await import("@/workers/import-processor");
-          const result = await confirmImportFile(importId, null);
-          if (result.status === "done") {
-            await updateImportFileCompat(importId, {
-              status: "done",
-              processingPhase: "complete",
-              processingMessage: buildRecoverableImageImportSuccessMessage(importMode),
-              confirmedTransactionsCount: result.confirmedTransactionsCount ?? result.imported,
-            }).catch(() => null);
-          }
-        } catch {
-          const refreshedRows = await prisma.transaction
-            .count({
-              where: {
-                deletedAt: null,
-                OR: [
-                  { importFileId: importId },
-                  {
-                    rawPayload: {
-                      path: ["sourceImportFileId"],
-                      equals: importId,
-                    },
-                  },
-                ],
-              },
-            })
-            .catch(() => 0);
-          if (refreshedRows === 0) {
-            await updateImportFileCompat(importId, {
-              status: "failed",
-              processingPhase: "repair_needed",
-              processingMessage: `Clover read rows from this ${imageImportLabel}, but could not save them yet. Please retry the import.`,
-            }).catch(() => null);
-          }
+      try {
+        const { confirmImportFile } = await import("@/workers/import-processor");
+        const result = await confirmImportFile(importId, null);
+        if (result.status === "done") {
+          await updateImportFileCompat(importId, {
+            status: "done",
+            processingPhase: "complete",
+            processingMessage: buildRecoverableImageImportSuccessMessage(importMode),
+            confirmedTransactionsCount: result.confirmedTransactionsCount ?? result.imported,
+          }).catch(() => null);
         }
-      });
+      } catch {
+        const refreshedRows = await prisma.transaction
+          .count({
+            where: {
+              deletedAt: null,
+              OR: [
+                { importFileId: importId },
+                {
+                  rawPayload: {
+                    path: ["sourceImportFileId"],
+                    equals: importId,
+                  },
+                },
+              ],
+            },
+          })
+          .catch(() => 0);
+        if (refreshedRows === 0) {
+          await updateImportFileCompat(importId, {
+            status: "failed",
+            processingPhase: "repair_needed",
+            processingMessage: `Clover read rows from this ${imageImportLabel}, but could not save them yet. Please retry the import.`,
+          }).catch(() => null);
+        }
+      }
       const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
         importFile: (await fetchImportFileCompat(importId)) ?? importFile,
         promoteFailedVisibleImport: true,
@@ -329,7 +328,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       isRecoverableImageImportMode(importMode) &&
       snapshot.importFile.status === "processing" &&
       snapshot.importFile.processingPhase === "staged" &&
-      isImageImportFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
+      isRecoverableStatementFile(snapshot.importFile.fileName, snapshot.importFile.fileType) &&
       snapshot.confirmedTransactionsCount === 0 &&
       snapshot.parsedRowsCount > 0 &&
       Number.isFinite(updatedAtMs) &&

@@ -230,7 +230,12 @@ const schedulePostVisibleImportWork = (
   }
 };
 
-const runWithConcurrency = async <T>(items: T[], concurrency: number, task: (item: T, index: number) => Promise<unknown>) => {
+const runWithConcurrency = async <T>(
+  items: T[],
+  concurrency: number,
+  task: (item: T, index: number) => Promise<unknown>,
+  options?: { throwOnError?: boolean }
+) => {
   let nextIndex = 0;
   const workers = Array.from({ length: Math.min(Math.max(1, concurrency), items.length) }, async () => {
     while (nextIndex < items.length) {
@@ -239,7 +244,13 @@ const runWithConcurrency = async <T>(items: T[], concurrency: number, task: (ite
       await task(items[index]!, index);
     }
   });
-  await Promise.allSettled(workers);
+  const results = await Promise.allSettled(workers);
+  if (options?.throwOnError) {
+    const rejected = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+    if (rejected) {
+      throw rejected.reason;
+    }
+  }
 };
 
 type ImportInsightSummary = {
@@ -12614,7 +12625,8 @@ export const confirmImportFile = async (
     }
 
     accountByGroupKey.set(group.key, groupAccount);
-    }
+    },
+    { throwOnError: true }
   );
   const account = accountByGroupKey.get(parsedAccountGroups[0]?.key ?? "__default__") ?? accountByGroupKey.values().next().value ?? null;
   if (!account) {
