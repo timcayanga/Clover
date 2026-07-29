@@ -12,7 +12,6 @@ import { FinancialAccountCard } from "@/components/financial-account-card";
 import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
 import { formatUploadAccountDisplayName, getAccountCardName, getAccountDisplayName } from "@/lib/account-display";
 import { getAccountBrand } from "@/lib/account-brand";
-import { getCategoryIconSrc, getCategoryIconTone } from "@/lib/category-icons";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
 import { deriveReconciledBalance, normalizeAccountBalanceSign, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { formatCurrencyAmount } from "@/lib/currency-format";
@@ -4499,9 +4498,12 @@ function AccountDetailPageContent() {
                           />
                         </label>
                         <div className="transaction-category-icon-cell" aria-hidden="true">
-                          <span className="transaction-category-icon" style={getCategoryIconTone(categoryLabel)}>
-                            <img src={getCategoryIconSrc(categoryLabel)} alt="" aria-hidden="true" />
-                          </span>
+                          <CategoryBrandMark
+                            categoryName={categoryLabel}
+                            size={24}
+                            radius={8}
+                            className="transaction-category-icon"
+                          />
                         </div>
                         <div className="transaction-name-cell">
                           <InlineEditableCell
@@ -4599,16 +4601,16 @@ function AccountDetailPageContent() {
                                   }
                                 }}
                               >
-                                <div className="transactions-mobile-simple-row__name">
-                                  <span className="transactions-mobile-simple-row__category-icon" aria-hidden="true">
-                                    <img src={getCategoryIconSrc(categoryLabel)} alt="" aria-hidden="true" />
-                                  </span>
+                                <div className="transactions-mobile-simple-row__name accounts-detail__mobile-transaction-name">
+                                  <CategoryBrandMark
+                                    categoryName={categoryLabel}
+                                    size={24}
+                                    radius={8}
+                                    className="transactions-mobile-simple-row__category-icon"
+                                  />
                                   <span className="transactions-mobile-simple-row__name-main">{normalizedName}</span>
                                 </div>
                                 <div className={`transactions-mobile-simple-row__amount-group ${amountToneClass}`}>
-                                  <span className="transactions-mobile-simple-row__account-brand" aria-hidden="true">
-                                    <AccountBrandMark accountBrand={accountBrand} label={accountCardName} />
-                                  </span>
                                   <span className="transactions-mobile-simple-row__amount">
                                     {formatAccountAmount(amount, transaction.currency ?? account?.currency ?? "PHP")}
                                   </span>

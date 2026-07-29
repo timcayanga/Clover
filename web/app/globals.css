@@ -49579,6 +49579,11 @@ html[data-theme="dark"] .help-search input {
     display: none !important;
   }
 
+  .accounts-detail__transactions .accounts-detail__mobile-transaction-name {
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 9px;
+  }
+
   html[data-theme="dark"] .accounts-detail__transactions .transactions-mobile-simple-row__category-icon {
     background: rgba(8, 171, 193, 0.18);
     border-radius: 10px;
