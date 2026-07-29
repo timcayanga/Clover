@@ -204,7 +204,10 @@ type UploadAccountLoadingContext = {
   isTimedOut: boolean;
 };
 
-const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account | null => {
+const buildOptimisticImportedAccount = (
+  summary: UploadInsightsSummary,
+  workspaceId: string
+): Account | null => {
   if (!summary.accountName) {
     return null;
   }
@@ -237,6 +240,7 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
 
   return {
     id: optimisticAccountId,
+    workspaceId,
     name: displayName,
     institution: summary.institution,
     accountNumber: summary.accountNumber ?? null,
@@ -4740,7 +4744,7 @@ function AccountsPageContent() {
                 }))
               : [summary];
           const optimisticAccounts = importedAccountSummaries
-            .map(buildOptimisticImportedAccount)
+            .map((accountSummary) => buildOptimisticImportedAccount(accountSummary, selectedWorkspaceId))
             .filter((account): account is Account => Boolean(account));
           const previewTransactions = summary.previewTransactions ?? [];
           const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;

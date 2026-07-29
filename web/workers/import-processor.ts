@@ -7274,6 +7274,11 @@ export const processImportEnrichmentJobs = async (options: {
         skippedRows,
       });
 
+      // Enrichment may retain the Transfers category, but ownership determines
+      // whether the ledger movement is an internal transfer or an expense/income.
+      // Run this last so enrichment cannot restore an external payment to transfer.
+      await reconcileWorkspaceInternalTransfers(prisma, String(importFile.workspaceId));
+
       if (processedRows >= totalRows) {
         await collapseDuplicateTransactionsForImport(job.importFileId).catch((error) => {
           console.warn("Unable to collapse duplicate transactions after enrichment", {

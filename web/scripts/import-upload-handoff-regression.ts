@@ -112,6 +112,16 @@ const main = async () => {
     "The immediate Accounts card must prefer the server-confirmed currency over a provisional browser preview."
   );
   assert.match(
+    accountsPageSource,
+    /const buildOptimisticImportedAccount = \(\s*summary: UploadInsightsSummary,\s*workspaceId: string[\s\S]{0,1800}workspaceId,/,
+    "An immediate imported account must retain its workspace while the durable Accounts refresh settles."
+  );
+  assert.match(
+    accountsPageSource,
+    /\.map\(\(accountSummary\) => buildOptimisticImportedAccount\(accountSummary, selectedWorkspaceId\)\)/,
+    "Accounts must scope every immediate imported card to the active workspace."
+  );
+  assert.match(
     modalSource,
     /balanceSources: \[confirmedAccountSummary\?\.balance \?\? null, accountBalance\]/,
     "The immediate Accounts card must prefer the server-confirmed balance over a provisional browser preview."

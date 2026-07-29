@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   classifyWorkspaceInternalTransfers,
   inferTransferCandidateDirection,
@@ -80,6 +83,24 @@ assert.equal(
   categoryGuard.internalIds.size,
   0,
   "Equal opposite movements must not pair unless both are transfer-category candidates."
+);
+
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const workerSource = readFileSync(join(scriptDir, "..", "workers", "import-processor.ts"), "utf8");
+const enrichmentLogIndex = workerSource.indexOf('console.info("[import-enrichment] processed batch"');
+const enrichmentReconciliationIndex = workerSource.indexOf(
+  "await reconcileWorkspaceInternalTransfers(prisma, String(importFile.workspaceId));",
+  enrichmentLogIndex
+);
+const enrichmentCompletionIndex = workerSource.indexOf(
+  "if (processedRows >= totalRows)",
+  enrichmentLogIndex
+);
+assert.ok(enrichmentLogIndex >= 0, "The enrichment completion section must remain identifiable.");
+assert.ok(
+  enrichmentReconciliationIndex > enrichmentLogIndex &&
+    enrichmentReconciliationIndex < enrichmentCompletionIndex,
+  "Ownership reconciliation must run after enrichment updates and before enrichment completes."
 );
 
 console.log("[PASS] internal transfer ownership matching regression");
