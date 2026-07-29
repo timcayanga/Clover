@@ -13527,13 +13527,14 @@ const parseHsbcUkPdfStatement = (text: string) => {
     const personalCounterparty = isLikelyPersonToPersonMerchant(description);
     const inferredType: TransactionType =
       normalizedCode === "CR" || /\b(?:credit|salary|interest|refund)\b/i.test(description) ? "income" : "expense";
-    const type: TransactionType =
+    const isTransferCategory =
       ["BP", "TFR", "FPI", "SO", "DD"].includes(normalizedCode) ||
       (normalizedCode === "CR" && personalCounterparty) ||
-      isStatementPaymentSettlementDescription(description)
-        ? "transfer"
-        : inferredType;
-    const guessedCategoryName = type === "transfer" ? "Transfers" : guessCategoryName(description, type);
+      isStatementPaymentSettlementDescription(description);
+    // A bank-payment label describes purpose, not ownership. Keep the ledger
+    // direction until Clover can match an opposite movement in another account.
+    const type: TransactionType = inferredType;
+    const guessedCategoryName = isTransferCategory ? "Transfers" : guessCategoryName(description, type);
     const isCardPurchase = ["VIS", "VMS", ")))", ">>>", "))", ">>"].includes(normalizedCode);
     const categoryName = isCardPurchase && guessedCategoryName === "Transfers" ? "Other" : guessedCategoryName;
 
@@ -13560,6 +13561,7 @@ const parseHsbcUkPdfStatement = (text: string) => {
         sourceRowIndex: segment.sourceRowIndex,
         sourceLines: segment.lines,
         transactionCode: segment.transactionCode,
+        parsedDirectionType: inferredType,
         accountImpact,
         previousBalance,
         runningBalance,

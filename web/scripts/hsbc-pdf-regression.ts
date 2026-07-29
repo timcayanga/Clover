@@ -110,6 +110,10 @@ assert.notEqual(
 );
 assert.equal(transferGuardRows[0]?.type, "expense");
 assert.equal(transferGuardRows[1]?.categoryName, "Transfers", "An HSBC BP row should retain transfer semantics.");
-assert.equal(transferGuardRows[1]?.type, "transfer");
+assert.equal(
+  transferGuardRows[1]?.type,
+  "expense",
+  "An HSBC BP row is an expense until another Clover account contains its matching incoming movement."
+);
 
 console.log("[PASS] HSBC UK PDF rows survive OCR-spaced headers and reconcile through running balances.");

@@ -95,6 +95,7 @@ import { parseImportTextWithOpenAIFallback, transcribeImportImagesWithOpenAI } f
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
 import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
 import { coerceTransactionTypeFromCategoryName, isTransferCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
+import { classifyWorkspaceInternalTransfers } from "@/lib/internal-transfer-matching";
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { inferInvestmentClassification } from "@/lib/investments";
@@ -1284,6 +1285,96 @@ const resolveTransferTypeAgainstWorkspaceAccounts = (params: {
   return rowMentionsAnotherWorkspaceAccount(params.row, params.workspaceAccounts, params.currentAccountId)
     ? "transfer"
     : inferExternalTransferDirection(params.row);
+};
+
+const reconcileWorkspaceInternalTransfers = async (
+  tx: Prisma.TransactionClient | typeof prisma,
+  workspaceId: string
+) => {
+  const [accounts, transactions] = await Promise.all([
+    tx.account.findMany({
+      where: { workspaceId },
+      select: { id: true, accountNumber: true },
+    }),
+    tx.transaction.findMany({
+      where: {
+        workspaceId,
+        deletedAt: null,
+        importFileId: { not: null },
+        category: { is: { name: "Transfers" } },
+        reviewStatus: { notIn: ["edited", "rejected", "duplicate_skipped"] },
+      },
+      select: {
+        id: true,
+        accountId: true,
+        date: true,
+        amount: true,
+        currency: true,
+        type: true,
+        merchantRaw: true,
+        merchantClean: true,
+        description: true,
+        rawPayload: true,
+        isTransfer: true,
+        transferConfidence: true,
+        category: { select: { name: true } },
+      },
+    }),
+  ]);
+  const { internalIds, directions } = classifyWorkspaceInternalTransfers(
+    transactions.map((transaction) => ({
+      ...transaction,
+      categoryName: transaction.category?.name ?? null,
+    })),
+    accounts
+  );
+
+  const internalTransactionIds: string[] = [];
+  const externalIncomeIds: string[] = [];
+  const externalExpenseIds: string[] = [];
+  for (const transaction of transactions) {
+    if (internalIds.has(transaction.id)) {
+      if (
+        transaction.type !== "transfer" ||
+        !transaction.isTransfer ||
+        transaction.transferConfidence !== 100
+      ) {
+        internalTransactionIds.push(transaction.id);
+      }
+      continue;
+    }
+
+    const direction = directions.get(transaction.id) ?? "expense";
+    if (
+      transaction.type === direction &&
+      !transaction.isTransfer &&
+      transaction.transferConfidence === 0
+    ) {
+      continue;
+    }
+    (direction === "income" ? externalIncomeIds : externalExpenseIds).push(transaction.id);
+  }
+
+  await Promise.all([
+    internalTransactionIds.length > 0
+      ? tx.transaction.updateMany({
+          where: { id: { in: internalTransactionIds } },
+          data: { type: "transfer", isTransfer: true, transferConfidence: 100 },
+        })
+      : Promise.resolve(),
+    externalIncomeIds.length > 0
+      ? tx.transaction.updateMany({
+          where: { id: { in: externalIncomeIds } },
+          data: { type: "income", isTransfer: false, transferConfidence: 0 },
+        })
+      : Promise.resolve(),
+    externalExpenseIds.length > 0
+      ? tx.transaction.updateMany({
+          where: { id: { in: externalExpenseIds } },
+          data: { type: "expense", isTransfer: false, transferConfidence: 0 },
+        })
+      : Promise.resolve(),
+  ]);
 };
 
 const resolveOrCreateWorkspaceCategoryId = async (params: {
@@ -6847,7 +6938,7 @@ const strengthenEnrichmentRowForAttempt = (
     resolveUnionBankExternalTransferDirection(row, parsedRow) ??
     (parsedRow?.type === "income" || parsedRow?.type === "expense" ? parsedRow.type : null);
   const type =
-    parserDirection && shouldPreserveParserTransferDirection(row, parsedRow)
+    parserDirection && isTransferCategoryName(categoryName)
       ? parserDirection
       : categoryName
         ? coerceTransactionTypeFromCategoryName(categoryName, fallbackType)
@@ -13542,7 +13633,7 @@ export const confirmImportFile = async (
     const rowDuplicateConfidence = typeof row.duplicateConfidence === "number" ? row.duplicateConfidence : 0;
     const categoryCoercedType =
       resolveUnionBankExternalTransferDirection(row) ??
-      (rowType && rowType !== "transfer" && shouldPreserveParserTransferDirection(row)
+      (rowType && rowType !== "transfer" && isTransferCategoryName(parsedCategoryName)
         ? rowType
         : coerceTransactionTypeFromCategoryName(
             parsedCategoryName,
@@ -13707,6 +13798,12 @@ export const confirmImportFile = async (
       transferConfidence: rowTransferConfidence,
       rawPayload: {
         ...(row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as Record<string, unknown>) : {}),
+        parsedDirectionType:
+          rowType === "income" || rowType === "expense"
+            ? rowType
+            : canonicalType === "income" || canonicalType === "expense"
+              ? canonicalType
+              : undefined,
         sourceRowIndex: index + 1,
         sourceImportFileId: importFileId,
         sourceStatementFingerprint:
@@ -13923,6 +14020,12 @@ export const confirmImportFile = async (
         }),
     });
   }
+
+  // Category describes the payment mechanism. Only an opposite movement in
+  // another account owned by this workspace makes the transaction internal.
+  // Re-running this after every import also promotes historical counterparts
+  // when their destination account is uploaded later.
+  await reconcileWorkspaceInternalTransfers(tx, String(importFile.workspaceId));
 
   const visibleTransactionsCount =
     retainedExistingImportTransactionsCount +

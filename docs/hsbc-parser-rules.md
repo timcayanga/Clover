@@ -27,7 +27,7 @@ These rules cover HSBC UK mobile screenshots and HSBC UK current-account PDF sta
 - Remove routing/reference prefixes such as `INT'L <digits>` from the normalized merchant while retaining them in the audit payload.
 - Treat `VIS`, `VMS`, and contactless markers such as `)))` as card purchases. They may use a known expense category or `Other`, but must not become transfers merely because a truncated merchant descriptor resembles a person's name.
 - Normalize fixed-width UK descriptors through `web/lib/uk-merchant-corpus.ts`. Payment-facilitator prefixes such as `Zettle`, `Square`, and `SumUp` should resolve to the underlying merchant only when the combined merchant and location evidence is specific.
-- Keep `BP`, `TFR`, and `FPI` as bank-payment or transfer evidence; do not apply the card-purchase override to those codes.
+- Keep `BP`, `TFR`, and `FPI` in the `Transfers` category, but preserve their ledger direction as income or expense. Promote them to the transfer type only when Clover finds the matching opposite movement in another account owned by the same workspace.
 - Reconcile parsed rows from opening balance through the final running or carried-forward balance before treating the deterministic parse as high confidence.
 
 ## Review Rules

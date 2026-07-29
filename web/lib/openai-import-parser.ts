@@ -1566,12 +1566,17 @@ const buildBankInstructionJson = (params: {
   };
 };
 
-const mapMovementTypeToInternalType = (movementType: AllowedMovementType, notes: string | null, rawName: string): "income" | "expense" | "transfer" => {
+const mapMovementTypeToInternalType = (
+  movementType: AllowedMovementType,
+  notes: string | null,
+  rawName: string,
+  statementDirection: "Debit" | "Credit"
+): "income" | "expense" => {
   if (movementType === "income" || movementType === "passive_income") {
     return "income";
   }
   if (movementType === "transfer" || movementType === "internal_movement" || movementType === "refund") {
-    return "transfer";
+    return statementDirection === "Credit" ? "income" : "expense";
   }
   if (movementType === "fee" || movementType === "real_spend") {
     return "expense";
@@ -1582,7 +1587,7 @@ const mapMovementTypeToInternalType = (movementType: AllowedMovementType, notes:
     return "income";
   }
   if (/fee|tax|charge|refund|payment|transfer|withdraw|cash in|cash out/.test(lower)) {
-    return "transfer";
+    return statementDirection === "Credit" ? "income" : "expense";
   }
   return "expense";
 };
@@ -3079,7 +3084,12 @@ export const parseImportTextWithOpenAIFallback = async (params: {
           })
         : null;
       const category = wiseSemantics?.category ?? normalizedCategory;
-      const internalType = wiseSemantics?.type ?? mapMovementTypeToInternalType(movementType, row.notes ?? null, rawName);
+      const statementDirectionType = row.type === "Credit" ? "income" : "expense";
+      const internalType =
+        wiseSemantics?.type === "transfer"
+          ? statementDirectionType
+          : wiseSemantics?.type ??
+            mapMovementTypeToInternalType(movementType, row.notes ?? null, rawName, row.type);
       const merchantBase = row.normalized_name ?? row.raw_name ?? description;
       const merchantClean = summarizeMerchantText(merchantBase, rowInstitution);
       const reviewRequired = row.review_required || row.confidence_score < 85 || category === "Other" || movementType === "internal_movement";
@@ -3134,6 +3144,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
           genericReviewReasons,
           notes: row.notes ?? null,
           amountType: row.type,
+          parsedDirectionType: statementDirectionType,
           balanceReconciled,
           computedBalance,
           qualityChecks: value.quality_checks,

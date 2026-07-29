@@ -564,14 +564,16 @@ const mapTransactionRow = (transaction: {
     source,
     type: transaction.type,
   });
-  const effectiveIsTransfer = isInternalWorkspaceTransfer(
-    {
-      accountId: transaction.accountId,
-      accountNumber: transaction.accountNumber ?? null,
-      rawPayload: transaction.rawPayload,
-    },
-    workspaceAccounts
-  );
+  const effectiveIsTransfer =
+    (transaction.isTransfer && transaction.type === "transfer") ||
+    isInternalWorkspaceTransfer(
+      {
+        accountId: transaction.accountId,
+        accountNumber: transaction.accountNumber ?? null,
+        rawPayload: transaction.rawPayload,
+      },
+      workspaceAccounts
+    );
   const effectiveType = coerceTransactionTypeFromCategoryName(
     categoryName,
     landbankOverride?.type ?? transaction.type,
