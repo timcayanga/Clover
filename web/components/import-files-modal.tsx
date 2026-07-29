@@ -69,6 +69,7 @@ import type { AccountType } from "@/lib/domain-types";
 import {
   combineUploadInsightsSummaries,
   dedupeAccountSummaries,
+  getUploadSummaryCurrencies,
   normalizeServerAccountSummaries,
   pickStableBalance,
   toBalanceString,
@@ -1764,6 +1765,7 @@ export function ImportFilesModal({
       institution: string | null;
       accountNumber: string | null;
       accountType: UploadInsightsSummary["accountType"];
+      currency?: string | null;
       optimisticAccountId: string | null;
       previewTransactions?: NonNullable<UploadInsightsSummary["previewTransactions"]>;
     },
@@ -1792,7 +1794,9 @@ export function ImportFilesModal({
             summaryContext.accountName,
             summaryContext.institution,
             summaryContext.accountType,
-            summaryContext.accountNumber
+            summaryContext.accountNumber,
+            null,
+            summaryContext.currency ?? summaryContext.previewTransactions?.[0]?.currency ?? null
           );
 
     if (!resolvedAccountId) {
@@ -2221,6 +2225,7 @@ export function ImportFilesModal({
       institution: string | null;
       accountNumber: string | null;
       accountType: UploadInsightsSummary["accountType"];
+      currency?: string | null;
       optimisticAccountId: string | null;
       initialBalance?: string | null;
       password?: string;
@@ -2329,6 +2334,15 @@ export function ImportFilesModal({
           statementCheckpoint?.sourceMetadata && typeof statementCheckpoint.sourceMetadata === "object"
             ? (statementCheckpoint.sourceMetadata as Record<string, unknown>)
             : null;
+        const resolvedStatementCurrency = normalizeInstitutionCurrency(
+          primaryStatusAccountSummary?.institution ?? summaryContext.institution,
+          primaryStatusAccountSummary?.currency ??
+            (typeof statementMetadata?.currency === "string" ? statementMetadata.currency : null) ??
+            summaryContext.currency ??
+            summaryContext.previewTransactions?.[0]?.currency ??
+            null,
+          primaryStatusAccountSummary?.accountName ?? summaryContext.accountName
+        );
         const checkpointIdentity = resolveStatementIdentityFromMetadata(statementMetadata);
         const processingIdentity =
           (primaryStatusAccountSummary
@@ -2421,11 +2435,21 @@ export function ImportFilesModal({
         }
 
         if (processingPhase === "account_match_needs_confirmation") {
-          closeImportAfterError(
+          await confirmItemImport(
             itemId,
-            "confirm",
-            summaryContext.fileName,
-            processingMessage ?? "Clover needs confirmation before recreating an account that was previously deleted."
+            importFileId,
+            latestResolvedAccountId,
+            {
+              fileName: summaryContext.fileName,
+              accountName: processingIdentity?.accountName ?? summaryContext.accountName,
+              institution: processingIdentity?.institution ?? summaryContext.institution,
+              accountNumber: processingIdentity?.accountNumber ?? summaryContext.accountNumber,
+              accountType: processingIdentity?.accountType ?? summaryContext.accountType,
+              currency: resolvedStatementCurrency,
+              optimisticAccountId: summaryContext.optimisticAccountId,
+              previewTransactions: summaryContext.previewTransactions,
+            },
+            { backgroundOnly }
           );
           return;
         }
@@ -2732,7 +2756,7 @@ export function ImportFilesModal({
                 previewAccountType,
                 previewAccountNumber,
                 stableOptimisticBalance,
-                null
+                resolvedStatementCurrency
               );
               const previewTransactions = previewAccountId
                 ? buildOptimisticPreviewTransactions(parsedRows, {
@@ -2754,6 +2778,7 @@ export function ImportFilesModal({
                   institution: previewInstitution,
                   accountNumber: previewAccountNumber,
                   accountType: previewAccountType ?? null,
+                  currency: resolvedStatementCurrency,
                   optimisticAccountId: summaryContext.optimisticAccountId,
                   balanceSources: [stableOptimisticBalance],
                   previewTransactions,
@@ -2794,6 +2819,7 @@ export function ImportFilesModal({
                     institution: previewSummary.institution,
                     accountNumber: previewSummary.accountNumber ?? null,
                     accountType: previewSummary.accountType,
+                    currency: resolvedStatementCurrency,
                     optimisticAccountId: summaryContext.optimisticAccountId,
                     previewTransactions,
                   },
@@ -2823,7 +2849,7 @@ export function ImportFilesModal({
                     processingIdentity?.accountType ?? summaryContext.accountType ?? null,
                     processingIdentity?.accountNumber ?? null,
                     stableOptimisticBalance,
-                    null
+                    resolvedStatementCurrency
                   );
             const fallbackAccountId =
               persistedFallbackAccountId ??
@@ -2866,6 +2892,7 @@ export function ImportFilesModal({
               institution: processingIdentity?.institution ?? null,
               accountNumber: processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null,
               accountType: processingIdentity?.accountType ?? summaryContext.accountType ?? null,
+              currency: resolvedStatementCurrency,
               optimisticAccountId: summaryContext.optimisticAccountId,
               balanceSources: [stableOptimisticBalance],
               previewTransactions: fallbackPreviewTransactions,
@@ -2907,6 +2934,7 @@ export function ImportFilesModal({
                     institution: fallbackSummary.institution,
                     accountNumber: fallbackSummary.accountNumber ?? null,
                     accountType: fallbackSummary.accountType,
+                    currency: resolvedStatementCurrency,
                     optimisticAccountId: summaryContext.optimisticAccountId,
                     previewTransactions: fallbackPreviewTransactions,
                   },
@@ -2982,6 +3010,7 @@ export function ImportFilesModal({
                 institution: processingIdentity?.institution ?? summaryContext.institution,
                 accountNumber: processingIdentity?.accountNumber ?? summaryContext.accountNumber,
                 accountType: processingIdentity?.accountType ?? summaryContext.accountType,
+                currency: resolvedStatementCurrency,
                 optimisticAccountId: summaryContext.optimisticAccountId,
                 previewTransactions: summaryContext.previewTransactions,
               },
@@ -3010,7 +3039,7 @@ export function ImportFilesModal({
                 processingIdentity?.accountType ?? summaryContext.accountType ?? null,
                 fallbackAccountNumber,
                 stableOptimisticBalance,
-                null
+                resolvedStatementCurrency
               );
             }
           }
@@ -3140,7 +3169,7 @@ export function ImportFilesModal({
                       processingIdentity?.accountType ?? summaryContext.accountType ?? null,
                       processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null,
                       stableOptimisticBalance,
-                      null
+                      resolvedStatementCurrency
                     )
                   : null;
           const fallbackPreviewTransactions =
@@ -3177,6 +3206,7 @@ export function ImportFilesModal({
               accountNumber:
                 primaryStatusAccountSummary?.accountNumber ?? processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null,
               accountType: primaryStatusAccountSummary?.accountType ?? processingIdentity?.accountType ?? summaryContext.accountType ?? null,
+              currency: primaryStatusAccountSummary?.currency ?? resolvedStatementCurrency,
               optimisticAccountId: statusIsAccountInventory ? null : summaryContext.optimisticAccountId,
               balanceSources: [primaryStatusAccountSummary?.balance, stableOptimisticBalance],
               previewTransactions: fallbackPreviewTransactions,
@@ -3365,7 +3395,9 @@ export function ImportFilesModal({
                       processingIdentity?.accountName ?? summaryContext.fallbackAccountName,
                       processingIdentity?.institution ?? null,
                       processingIdentity?.accountType ?? summaryContext.accountType ?? null,
-                      processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null
+                      processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null,
+                      stableOptimisticBalance,
+                      resolvedStatementCurrency
                     )
                   : null;
               if (!fallbackAccountId) {
@@ -3479,7 +3511,7 @@ export function ImportFilesModal({
               resolvedAccountType,
               resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
               summaryContext.initialBalance ?? null,
-              null
+              resolvedStatementCurrency
             ).catch(() => null);
           }
 
@@ -3492,7 +3524,7 @@ export function ImportFilesModal({
               resolvedAccountType,
               resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
               summaryContext.initialBalance ?? null,
-              null
+              resolvedStatementCurrency
             );
           }
           if (!resolvedAccountId) {
@@ -3596,6 +3628,7 @@ export function ImportFilesModal({
               institution: resolvedIdentity.institution ?? summaryContext.institution,
               accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
               accountType: resolvedAccountType,
+              currency: resolvedStatementCurrency,
               previewTransactions: summaryContext.previewTransactions ?? [],
             },
             { backgroundOnly: true }
@@ -3640,6 +3673,7 @@ export function ImportFilesModal({
                   institution: resolvedIdentity.institution ?? summaryContext.institution ?? null,
                   accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
                   accountType: resolvedAccountType ?? null,
+                  currency: resolvedStatementCurrency,
                   optimisticAccountId: null,
                   balanceSources: [summaryContext.initialBalance],
                   previewTransactions: summaryContext.previewTransactions,
@@ -5486,6 +5520,14 @@ export function ImportFilesModal({
       const statementAccountType =
         statementIdentity?.accountType ??
         inferAccountTypeFromStatement(statementIdentity?.institution, statementIdentity?.accountName, "bank");
+      const localPreparseSummary = localPreparseSummaryByItemIdRef.current.get(itemId) ?? null;
+      const resolvedProcessCurrency = normalizeInstitutionCurrency(
+        statementIdentity?.institution,
+        typeof processPayload?.metadata?.currency === "string"
+          ? processPayload.metadata.currency
+          : getUploadSummaryCurrencies(localPreparseSummary)[0] ?? null,
+        statementIdentity?.accountName
+      );
       if (statementIdentity?.accountName || statementIdentity?.institution) {
         capturePostHogClientEventOnce(
           "statement_identity_resolved",
@@ -5887,7 +5929,7 @@ export function ImportFilesModal({
               statementAccountType,
               statementIdentity?.accountNumber ?? null,
               knownOptimisticBalance,
-              null
+              resolvedProcessCurrency
             )
           : canUseOptimisticGuess
             ? item.optimisticAccountId ?? null
@@ -5927,13 +5969,13 @@ export function ImportFilesModal({
               institution: optimisticIdentity.institution ?? null,
               accountNumber: statementIdentity?.accountNumber ?? null,
               accountType: optimisticIdentity.accountType ?? statementAccountType,
+              currency: resolvedProcessCurrency,
               optimisticAccountId,
               balanceSources: [knownOptimisticBalance],
               previewTransactions,
               showBalanceEvenIfEmpty: true,
             })
           : null;
-        const localPreparseSummary = localPreparseSummaryByItemIdRef.current.get(itemId) ?? null;
         const rawQueuedVisibleSummary = optimisticSummary ?? localPreparseSummary;
         const queuedVisibleSummary = shouldPublishImportSummary(item.file.name, rawQueuedVisibleSummary)
           ? rawQueuedVisibleSummary
@@ -6029,6 +6071,7 @@ export function ImportFilesModal({
               institution: statementIdentity?.institution ?? null,
               accountNumber: statementIdentity?.accountNumber ?? null,
               accountType: statementIdentity?.accountType ?? null,
+              currency: resolvedProcessCurrency,
               optimisticAccountId: hasStatementIdentity ? optimisticAccountId : canUseOptimisticGuess ? item.optimisticAccountId : null,
               initialBalance: queuedVisibleSummary.balance ?? null,
               password: item.password.trim() || undefined,
@@ -6098,6 +6141,7 @@ export function ImportFilesModal({
               institution: statementIdentity?.institution ?? null,
               accountNumber: statementIdentity?.accountNumber ?? null,
               accountType: statementIdentity?.accountType ?? null,
+              currency: resolvedProcessCurrency,
               optimisticAccountId: hasStatementIdentity ? optimisticAccountId : canUseOptimisticGuess ? item.optimisticAccountId : null,
               initialBalance: null,
               password: item.password.trim() || undefined,
@@ -6168,6 +6212,7 @@ export function ImportFilesModal({
           institution: statementIdentity?.institution ?? null,
           accountNumber: statementIdentity?.accountNumber ?? null,
           accountType: statementIdentity?.accountType ?? null,
+          currency: resolvedProcessCurrency,
           optimisticAccountId: hasStatementIdentity ? optimisticAccountId : canUseOptimisticGuess ? item.optimisticAccountId : null,
           initialBalance: null,
           password: item.password.trim() || undefined,
@@ -6188,7 +6233,7 @@ export function ImportFilesModal({
             statementAccountType,
             statementIdentity.accountNumber ?? null,
             null,
-            null
+            resolvedProcessCurrency
           )
         : null;
 
@@ -6205,7 +6250,6 @@ export function ImportFilesModal({
               accountType: statementAccountType,
             })
           : [];
-      const localPreparseSummary = localPreparseSummaryByItemIdRef.current.get(itemId) ?? null;
       const optimisticPreviewSummary =
         targetAccountId
           ? buildResolvedOptimisticUploadSummary({
@@ -6218,6 +6262,7 @@ export function ImportFilesModal({
               institution: statementIdentity?.institution ?? null,
               accountNumber: statementIdentity?.accountNumber ?? null,
               accountType: statementAccountType,
+              currency: resolvedProcessCurrency,
               optimisticAccountId: targetAccountId.startsWith("optimistic-") ? targetAccountId : null,
               previewTransactions,
               showBalanceEvenIfEmpty: true,
@@ -6278,6 +6323,7 @@ export function ImportFilesModal({
               institution: statementIdentity?.institution ?? null,
               accountNumber: statementIdentity?.accountNumber ?? null,
               accountType: statementIdentity?.accountType ?? statementAccountType,
+              currency: resolvedProcessCurrency,
               optimisticAccountId: targetAccountId,
               previewTransactions,
             },

@@ -68,6 +68,7 @@ export const buildOptimisticUploadSummary = (
     institution: canonicalIdentity.institution,
     accountNumber: canonicalIdentity.accountNumber,
     accountType,
+    currency: previewTransactions?.[0]?.currency ?? null,
     balance: showBalanceEvenIfEmpty || importedRows > 0 ? balance : null,
     accountSummaries: undefined,
     optimistic: true,

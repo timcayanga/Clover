@@ -36,6 +36,7 @@ const main = async () => {
     readFile(join(webRoot, "components/global-import-activity.tsx"), "utf8"),
     readFile(join(webRoot, "vercel.json"), "utf8"),
   ]);
+  const optimisticSummarySource = await readFile(join(webRoot, "lib/import-optimistic-summary.ts"), "utf8");
   const localPreparseSource = section(
     modalSource,
     "async function preparsePendingItemLocally",
@@ -69,6 +70,26 @@ const main = async () => {
     "Waiting for a password is not a completed import and must never contribute 100% progress."
   );
   assert.match(modalSource, /const settledVisible = await waitForSettledVisibility\(/);
+  assert.match(
+    optimisticSummarySource,
+    /currency: previewTransactions\?\.\[0\]\?\.currency \?\? null/,
+    "An optimistic account must retain the currency parsed from its statement rows."
+  );
+  assert.match(
+    modalSource,
+    /const resolvedProcessCurrency = normalizeInstitutionCurrency\([\s\S]{0,500}getUploadSummaryCurrencies\(localPreparseSummary\)\[0\]/,
+    "Queued imports must resolve currency from server metadata or the local statement preview before publishing an account."
+  );
+  assert.match(
+    modalSource,
+    /processingPhase === "account_match_needs_confirmation"[\s\S]{0,800}await confirmItemImport\([\s\S]{0,600}currency: resolvedStatementCurrency/,
+    "An explicit statement upload must confirm a deleted-account restoration with its parsed currency."
+  );
+  assert.doesNotMatch(
+    modalSource,
+    /processingPhase === "account_match_needs_confirmation"[\s\S]{0,400}closeImportAfterError\(/,
+    "A deleted-account match must not strand an explicit upload at a false terminal state."
+  );
   assert.match(
     modalSource,
     /const accountOnlyImport = importedRows <= 0;[\s\S]{0,300}accountOnlyImport \? "Making accounts visible" : "Making transactions visible"/,
