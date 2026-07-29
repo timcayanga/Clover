@@ -2515,6 +2515,10 @@ function AccountsPageContent() {
   }, [pendingImportSummary, reconciledAccounts]);
 
   useEffect(() => {
+    if ((!selectedCurrency || selectedCurrency.toLowerCase() === "all") && availableCurrencies.length > 1) {
+      return;
+    }
+
     if (availableCurrencies.includes(selectedCurrency)) {
       return;
     }
@@ -2523,8 +2527,13 @@ function AccountsPageContent() {
   }, [availableCurrencies, selectedCurrency]);
 
   const currencyFilteredAccounts = useMemo(
-    () =>
-      reconciledAccounts.filter((account) => formatCurrencyCode(account.currency) === selectedCurrency),
+    () => {
+      if (!selectedCurrency || selectedCurrency.toLowerCase() === "all") {
+        return reconciledAccounts;
+      }
+
+      return reconciledAccounts.filter((account) => formatCurrencyCode(account.currency) === selectedCurrency);
+    },
     [reconciledAccounts, selectedCurrency]
   );
 
@@ -2748,7 +2757,7 @@ function AccountsPageContent() {
     const hasCashAccount = currencyFilteredAccounts.some((account) => getEffectiveAccountType(account) === "cash");
     const accountsForDisplay = hasCashAccount
       ? currencyFilteredAccounts
-      : [...currencyFilteredAccounts, buildCashFallbackAccount(selectedCurrency)];
+      : [...currencyFilteredAccounts, buildCashFallbackAccount(selectedCurrency || "PHP")];
 
     return [...accountsForDisplay].sort((left, right) => {
       return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
@@ -3837,8 +3846,10 @@ function AccountsPageContent() {
       <ContextualAskClover context="accounts" planTier={planTier} />
       <CurrencySelector
         value={selectedCurrency}
-        onChange={setSelectedCurrency}
+        onChange={(next) => setSelectedCurrency(next.toLowerCase() === "all" ? "" : formatCurrencyCode(next))}
         options={availableCurrencies}
+        includeAllOption={availableCurrencies.length > 1}
+        allLabel="All currencies"
         ariaLabel="Select account currency"
         className="accounts-currency-filter"
         buttonClassName="accounts-currency-filter__button"

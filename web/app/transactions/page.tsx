@@ -2335,13 +2335,10 @@ function TransactionsPageContent() {
   );
   const getAccountOptionsForTransaction = useCallback(
     (transaction: Transaction) => {
-      const hasMultipleCurrencies = new Set(accounts.map((account) => formatCurrencyCode(account.currency))).size > 1;
       const options = accounts
         .map((account) => ({
           value: account.id,
-          label: `${formatTransactionAccountName(account)}${
-            hasMultipleCurrencies ? ` · ${formatCurrencyCode(account.currency)}` : ""
-          }`,
+          label: formatTransactionAccountName(account),
         }))
         .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base", numeric: true }));
 
@@ -6806,10 +6803,10 @@ function TransactionsPageContent() {
       <ContextualAskClover context="transactions" planTier={planTier} />
 
       <CurrencySelector
-        value={currencyFilter}
+        value={workspaceCurrencyCodes.length > 1 ? currencyFilter : workspaceCurrencyCodes[0] ?? "PHP"}
         onChange={(next) => setCurrencyFilter(next && next.toLowerCase() !== "all" ? formatCurrencyCode(next) : "")}
         options={workspaceCurrencyCodes}
-        includeAllOption
+        includeAllOption={workspaceCurrencyCodes.length > 1}
         allLabel="All currencies"
         ariaLabel="Filter transactions by currency"
         className="transactions-currency-filter"

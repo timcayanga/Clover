@@ -191,6 +191,25 @@ export function CurrencySelector({
     };
   }, [menuAlignment, open, portalMenu]);
 
+  const allCurrenciesOption = includeAllOption ? (
+    <button
+      type="button"
+      className={`currency-selector__option ${optionClassName ?? ""} ${isAllSelected ? "is-selected" : ""}`.trim()}
+      role="option"
+      aria-selected={isAllSelected}
+      onClick={() => {
+        onChange("all");
+        setOpen(false);
+      }}
+    >
+      <span className="currency-selector__option-text">
+        <strong>{allLabel}</strong>
+        <span>Show every currency</span>
+      </span>
+      {isAllSelected ? <span className="currency-selector__option-check" aria-hidden="true">✓</span> : null}
+    </button>
+  ) : null;
+
   const menuContent = open ? (
     <div
       id={menuId}
@@ -202,24 +221,7 @@ export function CurrencySelector({
     >
       {showGroupedSections ? (
         <>
-          {includeAllOption ? (
-            <button
-              type="button"
-              className={`currency-selector__option ${optionClassName ?? ""} ${isAllSelected ? "is-selected" : ""}`.trim()}
-              role="option"
-              aria-selected={isAllSelected}
-              onClick={() => {
-                onChange("all");
-                setOpen(false);
-              }}
-            >
-              <span className="currency-selector__option-text">
-                <strong>{allLabel}</strong>
-                <span>Show every currency</span>
-              </span>
-              {isAllSelected ? <span className="currency-selector__option-check" aria-hidden="true">✓</span> : null}
-            </button>
-          ) : null}
+          {allCurrenciesOption}
           {sections.map((section) => (
             <CurrencySection
               key={section.label}
@@ -235,28 +237,31 @@ export function CurrencySelector({
           ))}
         </>
       ) : (
-        catalogOptions.map((option) => {
-          const isSelected = option.code === selectedCode;
-          return (
-            <button
-              key={option.code}
-              type="button"
-              className={`currency-selector__option ${optionClassName ?? ""} ${isSelected ? "is-selected" : ""}`.trim()}
-              role="option"
-              aria-selected={isSelected}
-              onClick={() => {
-                onChange(option.code);
-                setOpen(false);
-              }}
-            >
-              <span className="currency-selector__option-text">
-                <strong>{option.symbol}</strong>
-                <span>{option.name}</span>
-              </span>
-              {isSelected ? <span className="currency-selector__option-check" aria-hidden="true">✓</span> : null}
-            </button>
-          );
-        })
+        <>
+          {allCurrenciesOption}
+          {catalogOptions.map((option) => {
+            const isSelected = option.code === selectedCode;
+            return (
+              <button
+                key={option.code}
+                type="button"
+                className={`currency-selector__option ${optionClassName ?? ""} ${isSelected ? "is-selected" : ""}`.trim()}
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => {
+                  onChange(option.code);
+                  setOpen(false);
+                }}
+              >
+                <span className="currency-selector__option-text">
+                  <strong>{option.symbol}</strong>
+                  <span>{option.name}</span>
+                </span>
+                {isSelected ? <span className="currency-selector__option-check" aria-hidden="true">✓</span> : null}
+              </button>
+            );
+          })}
+        </>
       )}
     </div>
   ) : null;
