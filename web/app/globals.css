@@ -34621,6 +34621,11 @@ button.accounts-detail__transaction-head-cell {
   padding: 0 0 56px;
 }
 
+.contact-page > .landing-nav {
+  width: 100%;
+  margin-left: 0;
+}
+
 .contact-page__inner {
   width: min(100%, 1120px);
   margin: 0 auto;
