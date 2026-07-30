@@ -6,7 +6,7 @@ const root = process.cwd();
 const readSource = (relativePath: string) => readFile(path.join(root, relativePath), "utf8");
 
 async function main() {
-  const [shellSource, dashboardSource, workspaceSelectionSource, onboardingSource, circlesSource, pageAuthSource, middlewareSource, globalStyles] = await Promise.all([
+  const [shellSource, dashboardSource, workspaceSelectionSource, onboardingSource, circlesSource, pageAuthSource, middlewareSource, globalStyles, transactionsSource, accountDetailsSource] = await Promise.all([
     readSource("components/clover-shell.tsx"),
     readSource("app/dashboard/page.tsx"),
     readSource("lib/workspace-selection.ts"),
@@ -15,6 +15,8 @@ async function main() {
     readSource("lib/page-auth.ts"),
     readSource("middleware.ts"),
     readSource("app/globals.css"),
+    readSource("app/transactions/page.tsx"),
+    readSource("app/accounts/[accountId]/page.tsx"),
   ]);
   const protectedPageSources = await Promise.all(
     [
@@ -196,6 +198,24 @@ async function main() {
     globalStyles,
     /\.accounts-detail__transactions \.accounts-detail__mobile-transaction-name \{[\s\S]{0,120}grid-template-columns: 20px minmax\(0, 1fr\);/,
     "Account Details must retain its compact single-badge mobile transaction layout."
+  );
+  assert.match(
+    globalStyles,
+    /\.transactions-mobile-date-divider::before,[\s\S]{0,100}\.transactions-mobile-date-divider::after \{[\s\S]{0,120}border-top: 1px dashed currentColor;/,
+    "Mobile transaction dates must use equal flexible divider lines instead of typed hyphens."
+  );
+  assert.match(
+    globalStyles,
+    /\.transactions-mobile-date-divider,[\s\S]{0,80}\.transactions-mobile-date-divider span \{[\s\S]{0,80}min-height: 18px;/,
+    "Mobile transaction date dividers must keep their compact vertical rhythm."
+  );
+  assert.ok(
+    [transactionsSource, accountDetailsSource].every(
+      (source) =>
+        /className="transactions-mobile-date-divider">\s*<span>\{group\.label\}<\/span>/.test(source) &&
+        /size=\{20\}[\s\S]{0,100}className="transactions-mobile-simple-row__category-icon"/.test(source)
+    ),
+    "Transactions and Account Details must use centered date labels and equal 20px mobile badges."
   );
 
   console.log("Browser compatibility regression passed.");

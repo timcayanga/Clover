@@ -16838,7 +16838,8 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 
 .transactions-mobile-date-divider {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   min-height: 28px;
   gap: 10px;
@@ -16854,7 +16855,11 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 
 .transactions-mobile-date-divider::before,
 .transactions-mobile-date-divider::after {
-  content: none;
+  content: "";
+  display: block;
+  width: 100%;
+  border-top: 1px dashed currentColor;
+  opacity: 0.65;
 }
 
 .transactions-mobile-date-divider span {
@@ -50165,11 +50170,13 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
 
   .transactions-mobile-date-divider,
   .transactions-mobile-date-divider span {
-    min-height: 22px;
+    min-height: 18px;
   }
 
   .transactions-mobile-date-divider {
-    padding-inline: 6px;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 6px;
+    padding-inline: 4px;
     font-size: 0.64rem;
   }
 

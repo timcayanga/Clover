@@ -7463,7 +7463,7 @@ function TransactionsPageContent() {
                 {mobileTransactionGroups.map((group) => (
                   <section key={group.date} className="transactions-mobile-date-group">
                     <div className="transactions-mobile-date-divider">
-                      <span>{`-------${group.label}-------`}</span>
+                      <span>{group.label}</span>
                     </div>
                     <div className="transactions-mobile-date-group__rows">
                       {group.transactions.map((transaction) => {
@@ -7524,8 +7524,8 @@ function TransactionsPageContent() {
                               </span>
                               <CategoryBrandMark
                                 categoryName={categoryLabel}
-                                size={24}
-                                radius={8}
+                                size={20}
+                                radius={7}
                                 className="transactions-mobile-simple-row__category-icon"
                               />
                               <span className="transactions-mobile-simple-row__name-main">{merchantSummary}</span>
