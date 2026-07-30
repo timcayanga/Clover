@@ -7531,7 +7531,9 @@ function TransactionsPageContent() {
                               <span className="transactions-mobile-simple-row__name-main">{merchantSummary}</span>
                             </div>
                             <div className={`transactions-mobile-simple-row__amount-group ${amountToneClass}`}>
-                              <span className="transactions-mobile-simple-row__amount">{formatTransactionAmount(amount, transaction.currency)}</span>
+                              <span className={`transactions-mobile-simple-row__amount ${amountToneClass}`}>
+                                {formatTransactionAmount(amount, transaction.currency)}
+                              </span>
                             </div>
                             <button
                               type="button"

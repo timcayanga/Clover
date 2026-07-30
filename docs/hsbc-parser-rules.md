@@ -29,6 +29,7 @@ These rules cover HSBC UK mobile screenshots and HSBC UK current-account PDF sta
 - Treat `VIS`, `VMS`, and contactless markers such as `)))` as card purchases. They may use a known expense category or `Other`, but must not become transfers merely because a truncated merchant descriptor resembles a person's name.
 - Normalize fixed-width UK descriptors through `web/lib/uk-merchant-corpus.ts`. Payment-facilitator prefixes such as `Zettle`, `Square`, and `SumUp` should resolve to the underlying merchant only when the combined merchant and location evidence is specific.
 - Reapply the UK merchant corpus after enrichment and in optimistic previews. A card code such as `VIS`, `VMS`, or `)))` must never inherit `Transfers` from a later generic categorization pass.
+- Normalize European public-transport descriptors through the shared context corpus. For example, `SERVICE NAVIGO ... PARIS ... VISA RATE` becomes `Navigo`, remains an expense, and uses the `Transport` category.
 - Keep `BP`, `TFR`, and `FPI` in the `Transfers` category, but preserve their ledger direction as income or expense. Promote them to the transfer type only when Clover finds the matching opposite movement in another account owned by the same workspace.
 - Reconcile parsed rows from opening balance through the final running or carried-forward balance before treating the deterministic parse as high confidence.
 

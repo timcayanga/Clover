@@ -2543,6 +2543,10 @@ const genericSimplifierRules: SimplifierRule[] = [
     replacement: "Ryanair",
   },
   {
+    patterns: [/\bservice\s+navigo\b/i, /\b(?:ile|île)[\s-]+de[\s-]+france\s+mobilit(?:e|é)s\b/i],
+    replacement: "Navigo",
+  },
+  {
     patterns: [/\bnational\s+express\b/i],
     replacement: "National Express",
   },

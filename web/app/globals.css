@@ -24,8 +24,10 @@
   --brand-gradient: linear-gradient(135deg, #03a8c0, #5ed3d0);
   --brand-gradient-alt: linear-gradient(135deg, #03a8c0, #6ee7b7);
   --good: #22c55e;
+  --positive: var(--good);
   --warn: #f59e0b;
   --bad: #ef4444;
+  --negative: var(--bad);
   --shadow: 0 14px 30px rgba(31, 41, 51, 0.08);
   --shadow-soft: 0 6px 14px rgba(31, 41, 51, 0.05);
   --radius: 24px;
@@ -50017,6 +50019,15 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     grid-template-columns: auto minmax(0, 1fr) auto !important;
   }
 
+  .content {
+    padding-top: 0;
+  }
+
+  .content > :is(.topbar, .shell-compact-bar) {
+    box-sizing: border-box;
+    padding-top: max(12px, env(safe-area-inset-top));
+  }
+
   .content > :is(.topbar, .shell-compact-bar):has(.shell-back-button) .shell-topbar-leading {
     grid-column: 1 !important;
     grid-row: 1 !important;
@@ -50076,5 +50087,38 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .transactions-mobile-simple-row__name {
+    grid-template-columns: 24px 24px minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .transactions-mobile-simple-row__account-brand,
+  .transactions-mobile-simple-row__account-brand .accounts-brand-mark,
+  .transactions-mobile-simple-row__category-icon,
+  .transactions-mobile-simple-row__category-icon img {
+    width: 24px;
+    height: 24px;
+  }
+
+  .transactions-mobile-simple-row__account-brand,
+  .transactions-mobile-simple-row__category-icon {
+    display: inline-flex;
+    align-self: center;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .transactions-mobile-simple-row__amount.positive {
+    color: var(--good);
+  }
+
+  .transactions-mobile-simple-row__amount.negative {
+    color: var(--bad);
+  }
+
+  .transactions-mobile-simple-row__amount.neutral {
+    color: var(--text);
   }
 }

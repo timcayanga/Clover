@@ -103,6 +103,16 @@ const runMerchantFamilyChecks = () => {
     guessCategoryFallback("QANTAS AIR 081237681400 612-96913464 US", "expense") === "Travel & Lifestyle",
     "Expected Qantas rows to classify as travel"
   );
+  assert(
+    summarizeMerchantText("SERVICE NAVIGO 40 75 PARIS EUR VISA RATE", "HSBC") === "Navigo",
+    "Expected HSBC Navigo descriptors to normalize to the transit provider"
+  );
+  assert(
+    guessCategoryFallback("SERVICE NAVIGO 40 75 PARIS EUR VISA RATE", "expense") === "Transport",
+    "Expected Navigo fares to classify as Transport"
+  );
+  assert(guessCategoryFallback("DEUTSCHE BAHN TICKET BERLIN", "expense") === "Transport", "Expected German rail fares to classify as Transport");
+  assert(guessCategoryFallback("OV-CHIPKAART AMSTERDAM", "expense") === "Transport", "Expected Dutch transit fares to classify as Transport");
 };
 
 const runRecurringChecks = () => {

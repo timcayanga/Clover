@@ -58,6 +58,8 @@ The semantic depth pass adds canonical investment, insurance, housing, subscript
 
 The latest ASEAN and Europe semantic pass adds healthcare, education, utilities, telecom, pharmacy, ecommerce, housing, and charity descriptors for Indonesia, Vietnam, Thailand, Germany, France, Spain, Italy, Switzerland, Ireland, and the Philippines.
 
+The European transit pass separates rail, metro, bus, and fare-card providers from broad travel spending. It includes French Navigo/RATP/Transilien descriptors and additional deterministic transit aliases across Germany, Spain, Italy, the Netherlands, Belgium, Austria, Switzerland, and Ireland.
+
 The recurring-spend pass adds canonical subscription, household-service, food-delivery, rental, telecom, and charity context across the Philippines, ASEAN, Latin America, Africa, South Asia, and Gulf markets, plus global household and donation descriptors. These remain advisory purpose signals and do not replace confirmed categories.
 
 The latest institution-depth pass adds banks and fintechs for Brazil, Mexico, Colombia, Chile, South Africa, Kenya, Nigeria, Ghana, Tanzania, Cambodia, Myanmar, Brunei, and Laos. This strengthens statement-account and transfer recognition in markets that previously relied mostly on wallet or merchant aliases.

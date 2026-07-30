@@ -32,6 +32,13 @@ const SPECIFIC_MERCHANT_CATEGORY_HINTS: Array<{
     compact: /nationalexpress|translinkfare|contactlesstravel/,
   },
   {
+    category: "Transport",
+    lower:
+      /service\s+navigo|(?:ile|île)[\s-]+de[\s-]+france\s+mobilit(?:e|é)s|ratp|transilien|sncf|deutsche\s+bahn|\bdb\s+bahn\b|\bbvg\b|hvv\s+hamburg|renfe|metro\s+de\s+madrid|\btmb\s+(?:barcelona|transport)|trenitalia|italo\s+treno|atac\s+roma|atm\s+milano|ov[\s-]+chipkaart|\bgvb\s+amsterdam|ret\s+rotterdam|sncb|nmbs|stib|mivb|de\s+lijn|oebb|öbb|wiener\s+linien|westbahn|sbb|cff|zvv\s+zurich|leap\s+(?:card|top\s*up)|irish\s+rail|dublin\s+bus|luas|\bruter\s+oslo|\bvy\s+norway|rejsekort|\bdsb\s+denmark|sl\s+stockholm|\bsj\s+sweden|pkp\s+intercity|oasa\s+athens|hellenic\s+train|metro\s+lisboa|cp\s+comboios/,
+    compact:
+      /servicenavigo|iledefrancemobilites|ratp|transilien|sncf|deutschebahn|dbbahn|bvg|hvvhamburg|renfe|metrodemadrid|tmbbarcelona|tmbtransport|trenitalia|italotreno|atacroma|atmmilano|ovchipkaart|gvbamsterdam|retrotterdam|sncb|nmbs|stib|mivb|delijn|oebb|wienerlinien|westbahn|sbb|cff|zvvzurich|leapcard|leaptopup|irishrail|dublinbus|luas|ruteroslo|vynorway|rejsekort|dsbdenmark|slstockholm|sjsweden|pkpintercity|oasaathens|hellenictrain|metrolisboa|cpcomboios/,
+  },
+  {
     category: "Shopping",
     lower: /sainsbury'?s|\blondis\b|wh\s*smith|norn\s+irish\s+gif/,
     compact: /sainsburys|londis|whsmith|nornirishgif/,

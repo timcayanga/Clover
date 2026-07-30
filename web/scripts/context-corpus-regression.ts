@@ -68,6 +68,13 @@ const travel = resolveTransactionContext({ merchantRaw: "SUICA JR EAST", currenc
 assert.equal(travel.countryCode, "JP");
 assert.equal(travel.categoryHint, "Transport");
 
+const navigo = resolveTransactionContext({ merchantRaw: "SERVICE NAVIGO 40 75 PARIS EUR VISA RATE", currency: "GBP" });
+assert.equal(navigo.countryCode, "FR");
+assert.equal(navigo.categoryHint, "Transport");
+assert.equal(navigo.counterpartyType, "transport_provider");
+assert.equal(navigo.purposeHint, "transport");
+assert.equal(navigo.transactionTypeHint, null);
+
 const unknown = resolveTransactionContext({ merchantRaw: "A merchant not in the corpus", currency: "USD" });
 assert.equal(unknown.countryCode, null);
 assert.equal(unknown.currency, "USD");
