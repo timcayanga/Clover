@@ -230,15 +230,15 @@ const main = async () => {
     /hasCompletedBatchNow[\s\S]{0,500}window\.setTimeout\([\s\S]{0,250}onClose\(\)[\s\S]{0,100}, 0\)/,
     "A completed server job must not close the modal before UI visibility is verified."
   );
-  assert.match(
+  assert.doesNotMatch(
     modalSource,
-    /const scheduleSuccessfulImportAutoClose = \(\) =>[\s\S]{0,800}successfulImportAutoCloseTimerRef\.current = window\.setTimeout[\s\S]{0,400}onClose\(\)[\s\S]{0,100}, 10_000\)/,
-    "A verified successful import should close its modal ten seconds after rows are visible."
+    /successfulImportAutoCloseTimerRef|scheduleSuccessfulImportAutoClose/,
+    "A verified foreground import must keep its success confirmation visible until the user dismisses it."
   );
-  assert.match(
+  assert.doesNotMatch(
     modalSource,
-    /primaryVisibilityCompletedRef\.current = true;[\s\S]{0,300}scheduleSuccessfulImportAutoClose\(\)/,
-    "The successful auto-close timer must start only after the visibility contract completes."
+    /primaryVisibilityCompletedRef\.current = true;[\s\S]{0,300}onClose\(\)/,
+    "Completing the visibility contract must not automatically close the foreground success state."
   );
   assert.match(
     modalSource,

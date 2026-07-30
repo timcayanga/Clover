@@ -403,7 +403,6 @@ export function ImportFilesModal({
   const lastImportActivityRef = useRef<ImportActivitySnapshot | null>(null);
   const retiredImportActivityFileNamesRef = useRef(new Set<string>());
   const autoCloseAfterStartRef = useRef(false);
-  const successfulImportAutoCloseTimerRef = useRef<number | null>(null);
   const compactProgressUnlockTimerRef = useRef<number | null>(null);
   const compactProgressStartedAtRef = useRef<number | null>(null);
   const visibilityDeadlineRef = useRef<number | null>(null);
@@ -712,26 +711,6 @@ export function ImportFilesModal({
     autoCloseAfterStartRef.current = false;
   };
 
-  const scheduleSuccessfulImportAutoClose = () => {
-    if (backgroundOnly || importActivitySurfaceRef.current === "background") {
-      return;
-    }
-
-    if (successfulImportAutoCloseTimerRef.current !== null) {
-      window.clearTimeout(successfulImportAutoCloseTimerRef.current);
-    }
-
-    successfulImportAutoCloseTimerRef.current = window.setTimeout(() => {
-      successfulImportAutoCloseTimerRef.current = null;
-      if (!primaryVisibilityCompletedRef.current) {
-        return;
-      }
-      clearImportActivity();
-      lastImportActivityRef.current = null;
-      onClose();
-    }, 10_000);
-  };
-
   const hardStopVisibleImportModal = (reason: "deadline" | "background" | "visible") => {
     const currentItems = itemsRef.current;
     if (currentItems.length === 0) {
@@ -907,10 +886,6 @@ export function ImportFilesModal({
       });
 
       primaryVisibilityCompletedRef.current = true;
-      // The success state is only allowed to close after durable rows are
-      // visible. This gives the user feedback without leaving a completed
-      // modal on screen indefinitely.
-      scheduleSuccessfulImportAutoClose();
     }
   };
 
@@ -1050,10 +1025,6 @@ export function ImportFilesModal({
       localPreparseStartedRef.current.clear();
       localPreparseSummaryByItemIdRef.current.clear();
       autoCloseAfterStartRef.current = false;
-      if (successfulImportAutoCloseTimerRef.current !== null) {
-        window.clearTimeout(successfulImportAutoCloseTimerRef.current);
-        successfulImportAutoCloseTimerRef.current = null;
-      }
       visibilityDeadlineRef.current = null;
       if (visibilityHardStopTimerRef.current) {
         window.clearTimeout(visibilityHardStopTimerRef.current);
@@ -4851,7 +4822,6 @@ export function ImportFilesModal({
             itemsRef.current.every((entry) => entry.status === "done" || entry.confirmationState === "confirmed")
           ) {
             primaryVisibilityCompletedRef.current = true;
-            scheduleSuccessfulImportAutoClose();
           }
           if (keepWatchingAfterVisible && !payload.receiptTransaction && importStatus !== "done") {
             void monitorQueuedDocumentImport(itemId, importFileId, importMode, fileName, {
@@ -5031,7 +5001,6 @@ export function ImportFilesModal({
           itemsRef.current.every((entry) => entry.status === "done" || entry.confirmationState === "confirmed")
         ) {
           primaryVisibilityCompletedRef.current = true;
-          scheduleSuccessfulImportAutoClose();
         }
         router.refresh();
         return { completed: true, summary: null };
@@ -7542,10 +7511,9 @@ export function ImportFilesModal({
           router.refresh();
         }
       }
-      // Stop the active-state effect from refreshing the completed snapshot and
-      // allow the scheduled success dismissal to close the visible modal.
+      // Stop the active-state effect from refreshing the completed snapshot.
+      // Foreground success remains visible until the user dismisses it.
       primaryVisibilityCompletedRef.current = true;
-      scheduleSuccessfulImportAutoClose();
     }
   };
 
