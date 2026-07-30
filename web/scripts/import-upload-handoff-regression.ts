@@ -322,6 +322,11 @@ const main = async () => {
     /pendingImportSummary\.optimistic[\s\S]{0,500}setImportOpen\(false\)/,
     "The transactions page must not close the modal before its visibility contract completes."
   );
+  assert.doesNotMatch(
+    accountsPageSource,
+    /pendingImportSummary\.optimistic[\s\S]{0,500}setImportOpen\(false\)/,
+    "The Accounts page must leave success timing to the import modal instead of closing it as soon as the account appears."
+  );
   assert.match(transactionsPageSource, /const importedTransactionsRefreshDelays = \[400\]/);
   assert.match(
     transactionsPageSource,

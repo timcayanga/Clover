@@ -94,7 +94,6 @@ import {
   isGenericUploadedAccountShadowed,
   isTransientUploadedAccountPlaceholder,
   transactionMatchesImportedAccount,
-  uploadSummaryCanDismissImportUi,
   uploadSummaryMatchesImportedAccount,
 } from "@/lib/imported-account-ui";
 
@@ -3030,27 +3029,6 @@ function AccountsPageContent() {
     () => buildImportSummaries(selectedAccountTransactions),
     [selectedAccountTransactions]
   );
-  useEffect(() => {
-    if (!importOpen || !pendingImportSummary || pendingImportSummary.optimistic) {
-      return;
-    }
-
-    const inferredType =
-      pendingImportSummary.accountType ??
-      inferAccountTypeFromStatement(pendingImportSummary.institution, pendingImportSummary.accountName, "bank");
-    if (!uploadSummaryCanDismissImportUi(pendingImportSummary, accounts, inferredType, true)) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      setImportOpen(false);
-      setPendingImportSummary(null);
-    }, 250);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [accounts, importOpen, pendingImportSummary]);
 
   const manualAccountBrand = useMemo(
     () =>
