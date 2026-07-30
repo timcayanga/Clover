@@ -44,6 +44,7 @@ const billSchema = z.object({
   merchantName: z.string().trim().nullable().optional(),
   receiptFileName: z.string().trim().nullable().optional(),
   receiptMimeType: z.string().trim().nullable().optional(),
+  receiptStorageKey: z.string().trim().nullable().optional(),
   receiptText: z.string().nullable().optional(),
   receiptConfidence: z.number().int().min(0).max(100).optional().default(0),
   subtotal: z.union([z.string(), z.number(), z.null()]).optional(),
@@ -317,6 +318,18 @@ const buildBillPayload = async (userId: string, input: z.infer<typeof billSchema
     };
   });
   const resolvedRawPayload = await resolveReceiptAccountResolution(userId, input.rawPayload ?? null);
+  const requestedReceiptStorageKey = normalizeOptionalString(input.receiptStorageKey ?? null);
+  const existingReceiptStorageKey = existingBillId
+    ? (
+        await prisma.splitBill.findFirst({
+          where: { id: existingBillId, userId },
+          select: { receiptStorageKey: true },
+        })
+      )?.receiptStorageKey ?? null
+    : null;
+  const receiptStorageKey = requestedReceiptStorageKey?.startsWith(`split-bill-receipts/${userId}/`)
+    ? requestedReceiptStorageKey
+    : existingReceiptStorageKey;
   const rawPayloadWithActivity = appendSplitBillActivity(
     resolvedRawPayload,
     existingBillId ? "edited" : "created",
@@ -338,6 +351,7 @@ const buildBillPayload = async (userId: string, input: z.infer<typeof billSchema
       merchantName: normalizeOptionalString(input.merchantName ?? null),
       receiptFileName: normalizeOptionalString(input.receiptFileName ?? null),
       receiptMimeType: normalizeOptionalString(input.receiptMimeType ?? null),
+      receiptStorageKey,
       receiptText: normalizeOptionalString(input.receiptText ?? null),
       receiptConfidence: input.receiptConfidence ?? 0,
       subtotal: normalizeOptionalDecimal(input.subtotal ?? null),

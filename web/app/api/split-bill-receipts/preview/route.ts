@@ -7,11 +7,19 @@ import { isLocalDevHost } from "@/lib/auth";
 import { MAX_IMPORT_FILE_SIZE, validateImportFile } from "@/lib/import-file-validation";
 import { assertContentLengthWithin, assertTrustedRequestOrigin } from "@/lib/request-security";
 import { assertRateLimit } from "@/lib/rate-limit";
+import { uploadObject } from "@/lib/s3";
+import { randomUUID } from "node:crypto";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 const MAX_RECEIPT_REQUEST_BYTES = MAX_IMPORT_FILE_SIZE + 128 * 1024;
+const sanitizeReceiptFileName = (value: string) =>
+  value
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120) || "receipt";
 
 const asText = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
 const asAmount = (value: unknown) => {
@@ -241,8 +249,18 @@ export async function POST(request: Request) {
       localPreview = parseReceiptText("");
     }
     const preview = await tryReceiptBackup({ file: selectedFile, receiptText, preview: localPreview });
+    const receiptStorageKey = [
+      "split-bill-receipts",
+      user.id,
+      `${randomUUID()}-${sanitizeReceiptFileName(selectedFile.name)}`,
+    ].join("/");
+    await uploadObject(
+      receiptStorageKey,
+      new Uint8Array(await selectedFile.arrayBuffer()),
+      selectedFile.type || "application/octet-stream"
+    );
 
-    return NextResponse.json({ preview });
+    return NextResponse.json({ preview, receiptStorageKey });
   } catch (error) {
     return NextResponse.json(
       {

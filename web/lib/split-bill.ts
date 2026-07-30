@@ -55,6 +55,7 @@ export type SplitBillDraft = {
   merchantName?: string | null;
   receiptFileName?: string | null;
   receiptMimeType?: string | null;
+  receiptStorageKey?: string | null;
   receiptText?: string | null;
   receiptConfidence?: number;
   subtotal?: string | null;
@@ -218,6 +219,7 @@ export type SplitBillSerializedBill = {
   merchantName: string | null;
   receiptFileName: string | null;
   receiptMimeType: string | null;
+  receiptStorageKey: string | null;
   receiptText: string | null;
   receiptConfidence: number;
   subtotal: string | null;
@@ -2907,6 +2909,7 @@ export const createBlankSplitBillDraft = (): SplitBillDraft => ({
   merchantName: "",
   receiptFileName: "",
   receiptMimeType: "",
+  receiptStorageKey: null,
   receiptText: "",
   receiptConfidence: 0,
   subtotal: "",
@@ -3305,6 +3308,7 @@ export const splitBillDraftFromSerializedBill = (bill: SplitBillSerializedBill):
   merchantName: bill.merchantName ?? "",
   receiptFileName: bill.receiptFileName ?? "",
   receiptMimeType: bill.receiptMimeType ?? "",
+  receiptStorageKey: bill.receiptStorageKey,
   receiptText: bill.receiptText ?? "",
   receiptConfidence: bill.receiptConfidence,
   subtotal: bill.subtotal ?? "",
@@ -3434,6 +3438,7 @@ export const serializeSplitBillRecord = (bill: {
   merchantName: string | null;
   receiptFileName: string | null;
   receiptMimeType: string | null;
+  receiptStorageKey: string | null;
   receiptText: string | null;
   receiptConfidence: number;
   subtotal: { toString: () => string } | null;
@@ -3543,6 +3548,7 @@ export const serializeSplitBillRecord = (bill: {
     merchantName: bill.merchantName,
     receiptFileName: bill.receiptFileName,
     receiptMimeType: bill.receiptMimeType,
+    receiptStorageKey: bill.receiptStorageKey,
     receiptText: bill.receiptText,
     receiptConfidence: bill.receiptConfidence,
     subtotal: bill.subtotal?.toString() ?? null,

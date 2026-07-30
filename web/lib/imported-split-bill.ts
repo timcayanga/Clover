@@ -54,6 +54,7 @@ export const ensureImportedSplitBill = async (params: {
   currency: string;
   total: number;
   fileName: string;
+  storageKey?: string | null;
   lineItems: ImportedLineItem[];
   allocations: ImportedAllocation[];
   payerName?: string | null;
@@ -161,6 +162,7 @@ export const ensureImportedSplitBill = async (params: {
         sourceType: "receipt",
         merchantName: params.merchantName || "Shared bill",
         receiptFileName: params.fileName,
+        receiptStorageKey: params.storageKey ?? null,
         receiptConfidence: Math.max(
           0,
           Math.min(100, Math.round(params.confidence > 0 && params.confidence <= 1 ? params.confidence * 100 : params.confidence))

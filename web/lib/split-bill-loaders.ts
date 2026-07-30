@@ -49,6 +49,7 @@ const workspaceBillSelect = {
   merchantName: true,
   receiptFileName: true,
   receiptMimeType: true,
+  receiptStorageKey: true,
   receiptConfidence: true,
   subtotal: true,
   tax: true,

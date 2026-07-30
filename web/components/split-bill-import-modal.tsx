@@ -128,7 +128,7 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
     setError(validateFile(nextFile));
   };
 
-  const saveReceiptBill = async (preview: ReceiptPreviewResult, fileToSave: File) => {
+  const saveReceiptBill = async (preview: ReceiptPreviewResult, fileToSave: File, receiptStorageKey: string) => {
     const draft = splitBillDraftFromReceiptPreview(preview);
     const participantIdMap = new Map<string, string>();
     const participants =
@@ -192,6 +192,7 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
       merchantName: draft.merchantName?.trim() || null,
       receiptFileName: fileToSave.name,
       receiptMimeType: fileToSave.type,
+      receiptStorageKey,
       receiptText: draft.receiptText?.trim() || null,
       receiptConfidence: draft.receiptConfidence,
       subtotal: draft.subtotal?.trim() || null,
@@ -227,13 +228,14 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
     return result.bill;
   };
 
-  const openReceiptEditor = (preview: ReceiptPreviewResult, fileToSave: File) => {
+  const openReceiptEditor = (preview: ReceiptPreviewResult, fileToSave: File, receiptStorageKey: string) => {
     sessionStorage.setItem(
       RECEIPT_PREVIEW_STORAGE_KEY,
       JSON.stringify({
         preview,
         fileName: fileToSave.name,
         fileType: fileToSave.type,
+        receiptStorageKey,
       })
     );
     onClose();
@@ -260,17 +262,17 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
         method: "POST",
         body: formData,
       });
-      const payload = await readJsonResponse<{ preview: ReceiptPreviewResult }>(response);
+      const payload = await readJsonResponse<{ preview: ReceiptPreviewResult; receiptStorageKey: string }>(response);
       const quality = assessReceiptPreviewQuality(payload.preview);
 
       if (!quality.reliableForFastPath) {
         setMessage("Opening the bill editor so you can review Clover's draft...");
-        openReceiptEditor(payload.preview, selectedFile);
+        openReceiptEditor(payload.preview, selectedFile, payload.receiptStorageKey);
         return;
       }
 
       setMessage("Saving your split bill...");
-      const savedBill = await saveReceiptBill(payload.preview, selectedFile);
+      const savedBill = await saveReceiptBill(payload.preview, selectedFile, payload.receiptStorageKey);
       onSaved?.(savedBill);
       onClose();
     } catch (uploadError) {

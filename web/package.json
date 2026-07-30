@@ -49,6 +49,7 @@
     "qa:imported-accounts": "tsx scripts/imported-account-ui-regression.ts",
     "qa:internal-transfers": "tsx scripts/internal-transfer-matching-regression.ts",
     "qa:digital-note-split-bill": "tsx scripts/digital-note-split-bill-regression.ts",
+    "qa:split-bill-details": "tsx scripts/split-bill-detail-features-regression.ts",
     "qa:parser-routing": "tsx scripts/parser-routing-regression.ts",
     "qa:import-quality": "tsx scripts/import-quality-regression.ts",
     "qa:merchant-enrichment": "tsx scripts/merchant-enrichment-regression.ts",

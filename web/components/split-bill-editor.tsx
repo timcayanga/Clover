@@ -175,6 +175,7 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
         preview?: ReceiptPreviewResult;
         fileName?: string;
         fileType?: string;
+        receiptStorageKey?: string;
       };
 
       if (!payload.preview) {
@@ -202,6 +203,7 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
         merchantName: receiptDraft.merchantName,
         receiptFileName: payload.fileName ?? "",
         receiptMimeType: payload.fileType ?? "",
+        receiptStorageKey: payload.receiptStorageKey ?? null,
         receiptText: receiptDraft.receiptText,
         receiptConfidence: receiptDraft.receiptConfidence,
         subtotal: receiptDraft.subtotal,
@@ -523,7 +525,7 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
         body: formData,
       });
 
-      const payload = await readJsonResponse<{ preview: ReceiptPreviewResult }>(response);
+      const payload = await readJsonResponse<{ preview: ReceiptPreviewResult; receiptStorageKey: string }>(response);
 
       setDraft((current) => {
         const receiptDraft = splitBillDraftFromReceiptPreview(payload.preview);
@@ -536,6 +538,7 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
           merchantName: receiptDraft.merchantName,
           receiptFileName: file.name,
           receiptMimeType: file.type,
+          receiptStorageKey: payload.receiptStorageKey,
           receiptText: receiptDraft.receiptText,
           receiptConfidence: receiptDraft.receiptConfidence,
           subtotal: receiptDraft.subtotal,
@@ -606,6 +609,7 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
         merchantName: draft.merchantName?.trim() || null,
         receiptFileName: draft.receiptFileName?.trim() || null,
         receiptMimeType: draft.receiptMimeType?.trim() || null,
+        receiptStorageKey: draft.receiptStorageKey?.trim() || null,
         receiptText: draft.receiptText?.trim() || null,
         groupId: draft.groupId || null,
         subtotal: draft.subtotal?.trim() || persistedTotals.subtotal,

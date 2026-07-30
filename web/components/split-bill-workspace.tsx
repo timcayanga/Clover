@@ -7,6 +7,7 @@ import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
 import { SplitBillHome } from "@/components/split-bill-home";
 import { SplitBillPageActions } from "@/components/split-bill-page-actions";
 import { SplitBillPaymentTools } from "@/components/split-bill-payment-tools";
+import { SplitBillDetailTools } from "@/components/split-bill-detail-tools";
 import {
   deriveSplitBillDraftTotals,
   formatSplitBillAmount,
@@ -34,7 +35,7 @@ type DetailSelection =
   | { kind: "person"; id: string }
   | null;
 
-type DetailTab = "overview" | "bills" | "settle" | "activity";
+type DetailTab = "overview" | "bills" | "settle" | "insights" | "receipts" | "activity";
 
 const getParticipantName = (bill: SplitBillSerializedBill, participantId: string) =>
   bill.participants.find((participant) => participant.id === participantId)?.name ?? "Unknown";
@@ -307,6 +308,7 @@ const buildBillUpdatePayload = (bill: SplitBillSerializedBill, participants: Spl
     merchantName: bill.merchantName,
     receiptFileName: bill.receiptFileName,
     receiptMimeType: bill.receiptMimeType,
+    receiptStorageKey: bill.receiptStorageKey,
     receiptText: bill.receiptText,
     receiptConfidence: bill.receiptConfidence,
     subtotal: bill.subtotal,
@@ -999,6 +1001,7 @@ export function SplitBillWorkspace({
           merchantName: selectedBillDraft.merchantName?.trim() || null,
           receiptFileName: selectedBillDraft.receiptFileName?.trim() || null,
           receiptMimeType: selectedBillDraft.receiptMimeType?.trim() || null,
+          receiptStorageKey: selectedBillDraft.receiptStorageKey?.trim() || null,
           receiptText: selectedBillDraft.receiptText?.trim() || null,
           receiptConfidence: selectedBillDraft.receiptConfidence ?? 0,
           subtotal: selectedBillDraft.subtotal?.trim() || persistedTotals.subtotal,
@@ -1040,6 +1043,8 @@ export function SplitBillWorkspace({
       { id: "overview", label: "Overview" },
       { id: "bills", label: "Bills" },
       { id: "settle", label: "Settle" },
+      { id: "insights", label: "Insights" },
+      { id: "receipts", label: "Receipts" },
       { id: "activity", label: "Activity" },
     ];
 
@@ -1695,6 +1700,8 @@ export function SplitBillWorkspace({
                 ) : null}
                 {detailTab === "bills" ? renderBillRows(selectedGroupBills) : null}
                 {detailTab === "settle" ? renderSettlementBoard(selectedGroupBills) : null}
+                {detailTab === "insights" ? <SplitBillDetailTools bills={selectedGroupBills} label={selectedGroup.name} view="insights" /> : null}
+                {detailTab === "receipts" ? <SplitBillDetailTools bills={selectedGroupBills} label={selectedGroup.name} view="receipts" /> : null}
                 {detailTab === "activity" ? renderActivityList(selectedGroupActivity) : null}
                 <div className="split-bill-detail-modal__actions">
                   <button className="button button-secondary button-small" type="button" onClick={() => void shareGroup(selectedGroup.id)}>
@@ -1738,6 +1745,8 @@ export function SplitBillWorkspace({
                 ) : null}
                 {detailTab === "bills" ? renderBillRows(selectedPersonBills, selectedPerson.name) : null}
                 {detailTab === "settle" ? renderSettlementBoard(selectedPersonBills, selectedPerson.name) : null}
+                {detailTab === "insights" ? <SplitBillDetailTools bills={selectedPersonBills} label={selectedPerson.name} view="insights" /> : null}
+                {detailTab === "receipts" ? <SplitBillDetailTools bills={selectedPersonBills} label={selectedPerson.name} view="receipts" /> : null}
                 {detailTab === "activity" ? renderActivityList(selectedPersonActivity) : null}
                 <div className="split-bill-detail-modal__actions">
                   <button className="button button-danger button-small" type="button" onClick={() => void removePerson(selectedPerson.id)}>

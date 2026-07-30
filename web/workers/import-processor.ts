@@ -12408,6 +12408,7 @@ export const confirmImportFile = async (
           currency: receiptCurrency,
           total: Number(receiptAmount),
           fileName: String(importFile.fileName ?? ""),
+          storageKey: String(importFile.storageKey ?? "") || null,
           lineItems: receiptLineItems.map((item) => ({
             description: item.description,
             quantity: item.quantity,

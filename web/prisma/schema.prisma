@@ -1375,6 +1375,7 @@ model SplitBill {
   merchantName        String?
   receiptFileName     String?
   receiptMimeType     String?
+  receiptStorageKey   String?
   receiptText         String?                       @db.Text
   receiptConfidence   Int                           @default(0)
   subtotal            Decimal?                      @db.Decimal(18, 2)
