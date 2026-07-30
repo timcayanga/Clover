@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import { buildImportResultChecklist, formatImportResultHeadline } from "@/lib/import-result-summary";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 
@@ -41,44 +41,46 @@ const truncateMiddle = (value: string, maxLength = 44) => {
   return `${value.slice(0, leading)}…${value.slice(-trailing)}${extension}`;
 };
 
-const describeImportStage = (label: string, progress: number) => {
+const IMPORT_STAGE_LABELS = [
+  "Received file",
+  "Reading statement",
+  "Identifying transactions",
+  "Matching account",
+  "Enriching transactions",
+  "Saving transactions",
+] as const;
+
+const describeImportStageRank = (label: string, progress: number) => {
   const normalizedLabel = label.trim().toLowerCase();
+  const progressRank = progress >= 95 ? 5 : progress >= 75 ? 4 : progress >= 70 ? 3 : progress >= 50 ? 2 : progress >= 25 ? 1 : 0;
+  const withProgressFloor = (stage: { label: string; rank: number }) =>
+    stage.rank >= progressRank
+      ? stage
+      : { label: IMPORT_STAGE_LABELS[progressRank], rank: progressRank };
 
   if (/password/.test(normalizedLabel)) {
-    return "Password needed";
+    return { label: "Password needed", rank: -1 };
   }
   if (/categor|enrich|normal|duplicate|finaliz|apply/.test(normalizedLabel)) {
-    return "Enriching transactions";
+    return withProgressFloor({ label: IMPORT_STAGE_LABELS[4], rank: 4 });
   }
   if (/identif|transaction|parsing/.test(normalizedLabel)) {
-    return "Identifying transactions";
+    return withProgressFloor({ label: IMPORT_STAGE_LABELS[2], rank: 2 });
   }
   if (/account|matching|saving visible|visible in clover/.test(normalizedLabel)) {
-    return "Matching account";
+    return withProgressFloor({ label: IMPORT_STAGE_LABELS[3], rank: 3 });
   }
   if (/read|scan|statement|document|details|layout/.test(normalizedLabel)) {
-    return "Reading statement";
+    return withProgressFloor({ label: IMPORT_STAGE_LABELS[1], rank: 1 });
   }
   if (/queue|wait|start/.test(normalizedLabel)) {
-    return "Queued for import";
+    return withProgressFloor({ label: "Queued for import", rank: 0 });
   }
   if (/upload|receiv|prepar|ready/.test(normalizedLabel)) {
-    return "Received file";
+    return withProgressFloor({ label: IMPORT_STAGE_LABELS[0], rank: 0 });
   }
 
-  if (progress >= 95) {
-    return "Saving transactions";
-  }
-  if (progress >= 75) {
-    return "Enriching transactions";
-  }
-  if (progress >= 50) {
-    return "Identifying transactions";
-  }
-  if (progress >= 25) {
-    return "Reading statement";
-  }
-  return "Received file";
+  return { label: IMPORT_STAGE_LABELS[progressRank], rank: progressRank };
 };
 
 export function ImportUploadDock({
@@ -102,6 +104,8 @@ export function ImportUploadDock({
   onCancel,
   onClose,
 }: ImportUploadDockProps) {
+  const displayedStageRef = useRef<{ importKey: string; rank: number; label: string } | null>(null);
+
   useEffect(() => {
     if (!open || typeof document === "undefined") {
       return;
@@ -134,9 +138,16 @@ export function ImportUploadDock({
           : null
       : null;
   const displayFileName = fileName ? truncateMiddle(fileName) : null;
+  const stageCandidate = describeImportStageRank(detail || phaseLabel || "", value);
+  const importKey = `${fileName ?? ""}:${safeFileIndex}:${safeFileTotal}`;
+  if (!displayedStageRef.current || displayedStageRef.current.importKey !== importKey) {
+    displayedStageRef.current = { importKey, ...stageCandidate };
+  } else if (stageCandidate.rank > displayedStageRef.current.rank || stageCandidate.rank < 0) {
+    displayedStageRef.current = { importKey, ...stageCandidate };
+  }
   const progressLabel = isComplete
     ? `${safeCompletedFiles} of ${safeFileTotal}`
-    : describeImportStage(detail || phaseLabel || "", value);
+    : displayedStageRef.current.label;
   const progressCaption =
     safeFileTotal > 0
       ? isComplete

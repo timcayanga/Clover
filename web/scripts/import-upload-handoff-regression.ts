@@ -38,6 +38,8 @@ const main = async () => {
   ]);
   const optimisticSummarySource = await readFile(join(webRoot, "lib/import-optimistic-summary.ts"), "utf8");
   const accountsRouteSource = await readFile(join(webRoot, "app/api/accounts/route.ts"), "utf8");
+  const uploadDockSource = await readFile(join(webRoot, "components/import-upload-dock.tsx"), "utf8");
+  const globalStylesSource = await readFile(join(webRoot, "app/globals.css"), "utf8");
   const localPreparseSource = section(
     modalSource,
     "async function preparsePendingItemLocally",
@@ -244,9 +246,19 @@ const main = async () => {
     "A completed foreground import must render an explicit success dock with its result summary before it auto-closes."
   );
   assert.match(
-    await readFile(join(webRoot, "components/import-upload-dock.tsx"), "utf8"),
+    uploadDockSource,
     /isComplete && tone === "success"[\s\S]{0,300}<strong>Import complete<\/strong>/,
     "The completed dock must say Import complete rather than relying on 100% alone."
+  );
+  assert.match(
+    uploadDockSource,
+    /displayedStageRef[\s\S]{0,1200}stageCandidate\.rank > displayedStageRef\.current\.rank/,
+    "A long-running import must not flicker backward through earlier progress phases."
+  );
+  assert.match(
+    globalStylesSource,
+    /\.transactions-mobile-simple-row__category-icon \.category-brand-mark__glyph-icon\s*\{\s*width: 62%;\s*height: 62%;/,
+    "Mobile category badges must retain the same inset artwork scale used on desktop."
   );
   assert.doesNotMatch(
     modalSource,

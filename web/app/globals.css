@@ -16908,8 +16908,8 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 
 .transactions-mobile-simple-row__category-icon img {
   display: block;
-  width: 18px;
-  height: 18px;
+  width: 62%;
+  height: 62%;
   object-fit: contain;
 }
 
@@ -19550,6 +19550,14 @@ body[data-clover-page-modal] .modal-card {
   line-height: 1.45;
   font-size: 11px;
   overflow-wrap: anywhere;
+}
+
+.import-upload-dock__message {
+  min-height: 2.9em;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .import-upload-dock__file-name {
@@ -49919,10 +49927,14 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     gap: 9px;
   }
 
-  .transactions-mobile-simple-row__category-icon,
-  .transactions-mobile-simple-row__category-icon img {
+  .transactions-mobile-simple-row__category-icon {
     width: 22px;
     height: 22px;
+  }
+
+  .transactions-mobile-simple-row__category-icon .category-brand-mark__glyph-icon {
+    width: 62%;
+    height: 62%;
   }
 
   .transactions-mobile-simple-row__account-brand,
@@ -50096,10 +50108,14 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
 
   .transactions-mobile-simple-row__account-brand,
   .transactions-mobile-simple-row__account-brand .accounts-brand-mark,
-  .transactions-mobile-simple-row__category-icon,
-  .transactions-mobile-simple-row__category-icon img {
+  .transactions-mobile-simple-row__category-icon {
     width: 24px;
     height: 24px;
+  }
+
+  .transactions-mobile-simple-row__category-icon .category-brand-mark__glyph-icon {
+    width: 62%;
+    height: 62%;
   }
 
   .transactions-mobile-simple-row__account-brand,
