@@ -193,6 +193,11 @@ async function main() {
   );
   assert.match(
     globalStyles,
+    /@media \(min-width: 1101px\) \{[\s\S]{0,1000}\.topbar__title-wrap,[\s\S]{0,120}order: 0 !important;[\s\S]{0,80}grid-column: 1 !important;[\s\S]{0,180}\.topbar-actions,[\s\S]{0,120}grid-column: 2 !important;/,
+    "Desktop headers must keep titles before actions at every desktop width."
+  );
+  assert.match(
+    globalStyles,
     /@media \(max-width: 1100px\) \{[\s\S]{0,100}\.shell-bottom-nav \{[\s\S]{0,80}display: grid !important;/,
     "The complete mobile layout must include bottom navigation at every mobile width."
   );
