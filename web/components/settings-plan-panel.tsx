@@ -103,6 +103,8 @@ export function SettingsPlanPanel({
 }: SettingsPlanPanelProps) {
   const initialInterval = preferredBillingInterval ?? billingSubscription?.interval ?? "annual";
   const [billingInterval, setBillingInterval] = useState<BillingInterval>(initialInterval);
+  const [paddlePortalLoading, setPaddlePortalLoading] = useState(false);
+  const [paddlePortalMessage, setPaddlePortalMessage] = useState<string | null>(null);
   const billingPlan = BILLING_PLANS.find((plan) => plan.interval === billingInterval);
   const checkoutPlanId = billingInterval === "monthly" ? paypalMonthlyPlanId : paypalAnnualPlanId;
   const paddlePriceId = billingInterval === "monthly" ? paddleMonthlyPriceId : paddleAnnualPriceId;
@@ -116,6 +118,43 @@ export function SettingsPlanPanel({
   const isAwaitingApproval = billingSubscription?.status === "approval_pending";
   const currentInterval = billingSubscription?.interval ?? null;
   const currentProvider = billingSubscription?.provider ?? null;
+
+  const openPaddlePortal = async () => {
+    setPaddlePortalLoading(true);
+    setPaddlePortalMessage(null);
+
+    try {
+      const response = await fetch("/api/billing/paddle/portal", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: "{}",
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        url?: string;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.url) {
+        throw new Error(payload.error ?? "Unable to open subscription management.");
+      }
+
+      capturePostHogClientEvent("billing_started", {
+        billing_action: "manage_subscription",
+        billing_provider: "paddle",
+        plan_interval: currentInterval,
+      });
+      window.location.assign(payload.url);
+    } catch (error) {
+      setPaddlePortalMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to open subscription management."
+      );
+      setPaddlePortalLoading(false);
+    }
+  };
 
   const usageRows = [
     {
@@ -307,6 +346,22 @@ export function SettingsPlanPanel({
           className="settings-plan-unsubscribe"
           minimalManagement
         />
+      ) : planTier === "pro" && currentProvider === "paddle" ? (
+        <div className="settings-plan-unsubscribe">
+          <button
+            type="button"
+            className="button button-secondary button-small"
+            onClick={() => void openPaddlePortal()}
+            disabled={paddlePortalLoading}
+          >
+            {paddlePortalLoading ? "Opening Paddle..." : "Manage subscription"}
+          </button>
+          {paddlePortalMessage ? (
+            <p className="billing-helper" aria-live="polite">
+              {paddlePortalMessage}
+            </p>
+          ) : null}
+        </div>
       ) : null}
     </section>
   );

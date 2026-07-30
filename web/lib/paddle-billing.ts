@@ -19,6 +19,7 @@ export type PaddleWebhookEvent = {
 };
 
 const PADDLE_SIGNATURE_TOLERANCE_SECONDS = 300;
+const PADDLE_REQUEST_TIMEOUT_MS = 10_000;
 
 function readString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -412,11 +413,100 @@ export async function cancelPaddleSubscription(
           effective_at: "immediately",
         },
       }),
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(PADDLE_REQUEST_TIMEOUT_MS),
     }
   );
 
   if (!response.ok) {
     throw new Error(`Unable to cancel Paddle subscription (${response.status})`);
   }
+}
+
+function getPaddleBaseUrl(env: AppEnv) {
+  return env.PADDLE_ENV === "live"
+    ? "https://api.paddle.com"
+    : "https://sandbox-api.paddle.com";
+}
+
+function getPaddleCustomerIdFromPayload(rawPayload: Prisma.JsonValue | null) {
+  const payload = asRecord(rawPayload);
+  return readString(asRecord(payload?.data)?.customer_id);
+}
+
+async function fetchPaddleSubscriptionCustomerId(
+  subscriptionId: string,
+  env: AppEnv
+) {
+  const response = await fetch(
+    `${getPaddleBaseUrl(env)}/subscriptions/${encodeURIComponent(subscriptionId)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${env.PADDLE_API_KEY}`,
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(PADDLE_REQUEST_TIMEOUT_MS),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Unable to load Paddle subscription (${response.status})`);
+  }
+
+  const body = (await response.json()) as { data?: Record<string, unknown> };
+  const customerId = readString(body.data?.customer_id);
+  if (!customerId) {
+    throw new Error("Paddle subscription does not include a customer.");
+  }
+
+  return customerId;
+}
+
+export async function createPaddleCustomerPortalSession(params: {
+  subscriptionId: string;
+  rawPayload: Prisma.JsonValue | null;
+  env?: AppEnv;
+}) {
+  const env = params.env ?? getEnv();
+  if (!env.PADDLE_API_KEY) {
+    throw new Error("Paddle subscription management is not configured.");
+  }
+
+  const customerId =
+    getPaddleCustomerIdFromPayload(params.rawPayload) ??
+    (await fetchPaddleSubscriptionCustomerId(params.subscriptionId, env));
+  const response = await fetch(
+    `${getPaddleBaseUrl(env)}/customers/${encodeURIComponent(customerId)}/portal-sessions`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.PADDLE_API_KEY}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        subscription_ids: [params.subscriptionId],
+      }),
+      signal: AbortSignal.timeout(PADDLE_REQUEST_TIMEOUT_MS),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Unable to open Paddle subscription management (${response.status})`);
+  }
+
+  const body = (await response.json()) as {
+    data?: {
+      urls?: {
+        general?: {
+          overview?: string;
+        };
+      };
+    };
+  };
+  const url = readString(body.data?.urls?.general?.overview);
+  if (!url) {
+    throw new Error("Paddle did not return a customer portal link.");
+  }
+
+  return url;
 }
