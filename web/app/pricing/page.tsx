@@ -94,12 +94,12 @@ export default async function PricingPage() {
               Organize your finances with the core Clover tools.
             </p>
             <ul className="pricing-card__list">
-              <PlanFeatureItem label="Manual transaction tracking" />
-              <PlanFeatureItem label="No profile, account, upload, or transaction row caps for now" />
-              <PlanFeatureItem label="Receipt scanning" />
-              <PlanFeatureItem label="Basic investment tracking" />
-              <PlanFeatureItem label="Basic reports and Adviser guidance" />
-              <PlanFeatureItem label="Basic goal tracking" />
+              <PlanFeatureItem label="Manual transaction tracking" detailPlan="free" />
+              <PlanFeatureItem label="No profile, account, upload, or transaction row caps for now" detailPlan="free" />
+              <PlanFeatureItem label="Receipt scanning" detailPlan="free" />
+              <PlanFeatureItem label="Basic investment tracking" detailPlan="free" />
+              <PlanFeatureItem label="Basic reports and Adviser guidance" detailPlan="free" />
+              <PlanFeatureItem label="Basic goal tracking" detailPlan="free" />
             </ul>
             {!accountState.signedIn ? (
               <Link className="button button-secondary button-pill pricing-card__cta" href="/sign-up?intent=free" prefetch={false}>
@@ -121,12 +121,12 @@ export default async function PricingPage() {
               More room for uploads, accounts, reports, Adviser guidance, and investments.
             </p>
             <ul className="pricing-card__list">
-              <PlanFeatureItem label="Manual transaction tracking" />
-              <PlanFeatureItem label="No profile, account, upload, or transaction row caps for now" />
-              <PlanFeatureItem label="Receipt scanning" />
-              <PlanFeatureItem label="Full investment portfolio tools" />
-              <PlanFeatureItem label="Advanced reports and Adviser guidance" />
-              <PlanFeatureItem label="Enhanced goal tracking and recommendations" />
+              <PlanFeatureItem label="Manual transaction tracking" detailPlan="pro" />
+              <PlanFeatureItem label="No profile, account, upload, or transaction row caps for now" detailPlan="pro" />
+              <PlanFeatureItem label="Receipt scanning" detailPlan="pro" />
+              <PlanFeatureItem label="Full investment portfolio tools" detailPlan="pro" />
+              <PlanFeatureItem label="Advanced reports and Adviser guidance" detailPlan="pro" />
+              <PlanFeatureItem label="Enhanced goal tracking and recommendations" detailPlan="pro" />
             </ul>
             <PricingProSelector
               signedIn={accountState.signedIn}

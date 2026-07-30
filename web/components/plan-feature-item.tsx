@@ -5,6 +5,7 @@ import { getPlanFeatureDetailByLabel } from "@/lib/plan-feature-details";
 type PlanFeatureItemProps = {
   label: string;
   className?: string;
+  detailPlan?: "free" | "pro";
 };
 
 function InfoIcon() {
@@ -17,8 +18,13 @@ function InfoIcon() {
   );
 }
 
-export function PlanFeatureItem({ label, className }: PlanFeatureItemProps) {
+export function PlanFeatureItem({ label, className, detailPlan }: PlanFeatureItemProps) {
   const detail = getPlanFeatureDetailByLabel(label);
+  const planItems = detailPlan && detail
+    ? detailPlan === "free"
+      ? detail.freeItems
+      : detail.proItems
+    : null;
 
   return (
     <li className={`plan-feature-item${className ? ` ${className}` : ""}`}>
@@ -38,26 +44,36 @@ export function PlanFeatureItem({ label, className }: PlanFeatureItemProps) {
               <InfoIcon />
             </button>
             <span className="plan-feature-item__tooltip" role="tooltip">
-              <strong>{detail.title}</strong>
-              <p>{detail.summary}</p>
-              <div className="plan-feature-item__tooltip-grid">
-                <div className="plan-feature-item__tooltip-column">
-                  <span className="pill pill-subtle">{detail.freeLabel}</span>
-                  <ul>
-                    {detail.freeItems.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="plan-feature-item__tooltip-column plan-feature-item__tooltip-column--pro">
-                  <span className="pill pill-good">{detail.proLabel}</span>
-                  <ul>
-                    {detail.proItems.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
+              {planItems ? (
+                <ul className="plan-feature-item__tooltip-list">
+                  {planItems.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              ) : (
+                <>
+                  <strong>{detail.title}</strong>
+                  <p>{detail.summary}</p>
+                  <div className="plan-feature-item__tooltip-grid">
+                    <div className="plan-feature-item__tooltip-column">
+                      <span className="pill pill-subtle">{detail.freeLabel}</span>
+                      <ul>
+                        {detail.freeItems.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="plan-feature-item__tooltip-column plan-feature-item__tooltip-column--pro">
+                      <span className="pill pill-good">{detail.proLabel}</span>
+                      <ul>
+                        {detail.proItems.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </>
+              )}
             </span>
           </span>
         ) : null}
@@ -65,4 +81,3 @@ export function PlanFeatureItem({ label, className }: PlanFeatureItemProps) {
     </li>
   );
 }
-

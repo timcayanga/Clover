@@ -35246,8 +35246,8 @@ body:has(.pricing-page) {
 .pricing-page .plan-feature-item__check,
 .pricing-page .plan-feature-item__info-button,
 .pricing-page .plan-feature-item__info-icon {
-  width: 15px;
-  height: 15px;
+  width: 12px;
+  height: 12px;
 }
 
 .pricing-page .plan-feature-item__check {
@@ -35258,11 +35258,13 @@ body:has(.pricing-page) {
 .pricing-page .plan-feature-item__tooltip {
   left: 50%;
   right: auto;
-  width: min(300px, calc(100vw - 32px));
+  width: min(250px, calc(100vw - 32px));
   min-width: 0;
-  max-width: min(300px, calc(100vw - 32px));
-  padding: 11px;
-  border-radius: 14px;
+  max-width: min(250px, calc(100vw - 32px));
+  padding: 9px 10px;
+  border-radius: 12px;
+  font-size: 0.68rem;
+  line-height: 1.35;
   transform: translate(-50%, -4px);
 }
 
@@ -35279,6 +35281,17 @@ body:has(.pricing-page) {
   gap: 5px;
   padding: 8px;
   border-radius: 10px;
+}
+
+.pricing-page .plan-feature-item__tooltip-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 15px;
+}
+
+.pricing-page .plan-feature-item__tooltip-list li {
+  line-height: 1.35;
 }
 
 .pricing-page .landing-footer--expanded::after {
