@@ -591,6 +591,16 @@ body {
   accent-color: var(--accent);
 }
 
+/* Public landing content scrolls with the document, not inside the body. */
+html:has(.landing-page--snap) {
+  overflow-x: clip;
+  overflow-y: auto;
+}
+
+body:has(.landing-page--snap) {
+  overflow: visible !important;
+}
+
 h1,
 h2,
 h3,

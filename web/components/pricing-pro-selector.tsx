@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 
 type BillingInterval = "monthly" | "annual";
 
@@ -11,10 +12,14 @@ type PricingProSelectorProps = {
 };
 
 export function PricingProSelector({ signedIn, planTier }: PricingProSelectorProps) {
+  const auth = useAuth();
   const [interval, setInterval] = useState<BillingInterval>("annual");
   const isAnnual = interval === "annual";
-  const isPro = planTier === "pro";
-  const proHref = signedIn ? "/settings?upgrade=pro&interval=" + interval + "#billing" : "/sign-up?intent=pro&interval=" + interval;
+  const resolvedSignedIn = auth.isLoaded ? Boolean(auth.isSignedIn) : signedIn;
+  const isPro = auth.isLoaded && auth.isSignedIn && planTier === "pro";
+  const proHref = resolvedSignedIn
+    ? "/settings?upgrade=pro&interval=" + interval + "#billing"
+    : "/sign-up?intent=pro&interval=" + interval;
 
   if (isPro) {
     return <div className="pricing-pro-selector pricing-pro-selector--active"><p>Pro is active on your account.</p></div>;
@@ -56,7 +61,7 @@ export function PricingProSelector({ signedIn, planTier }: PricingProSelectorPro
       )}
 
       <Link className="button button-primary button-pill pricing-pro-selector__signup" href={proHref} prefetch={false}>
-        {signedIn ? "Upgrade to Pro" : "Organize my finances with Pro"}
+        {resolvedSignedIn ? "Upgrade to Pro" : "Organize my finances with Pro"}
       </Link>
     </div>
   );

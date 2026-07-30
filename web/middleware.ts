@@ -19,19 +19,12 @@ const isProtectedAppRoute = createRouteMatcher([
   "/more(.*)",
   "/notifications(.*)",
   "/imports(.*)",
+  "/onboarding(.*)",
+  "/continue(.*)",
 ]);
 
-const isGuestEnabledEnvironment = (hostname: string) =>
-  process.env.VERCEL_ENV === "preview" ||
-  hostname === "staging.clover.ph" ||
-  hostname === "clover-stage.vercel.app" ||
-  hostname === "localhost" ||
-  hostname === "127.0.0.1" ||
-  hostname === "::1" ||
-  (hostname.startsWith("clover-stage-") && hostname.endsWith(".vercel.app"));
-
 export default clerkMiddleware(async (auth, request) => {
-  if (isProtectedAppRoute(request) && !isGuestEnabledEnvironment(request.nextUrl.hostname.toLowerCase())) {
+  if (isProtectedAppRoute(request)) {
     await auth.protect({
       unauthenticatedUrl: new URL("/sign-in", request.url).toString(),
     });

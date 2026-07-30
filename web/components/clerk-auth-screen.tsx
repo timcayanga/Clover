@@ -277,9 +277,9 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
   if (!isReady) {
     return (
       <section className="clover-auth-card glass">
-        <div className="clover-auth-card__brand">
+        <Link className="clover-auth-card__brand" href="/" aria-label="Back to Clover home" prefetch={false}>
           <img className="clover-auth-card__logo" src="/clover-mark.svg" alt="Clover" loading="eager" fetchPriority="high" />
-        </div>
+        </Link>
           <p className="clover-auth-card__loading">Loading secure sign-in...</p>
       </section>
     );
@@ -681,14 +681,15 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
 
   return (
     <section className="clover-auth-card glass">
-      <div className="clover-auth-card__brand">
+      <Link className="clover-auth-card__brand" href="/" aria-label="Back to Clover home" prefetch={false}>
         <img className="clover-auth-card__logo" src="/clover-mark.svg" alt="Clover" loading="eager" fetchPriority="high" />
-      </div>
+      </Link>
 
-      <header className="clover-auth-card__header">
-        <h1>{title}</h1>
-        {mode === "sign-up" ? <p className="clover-auth-card__trust">No credit card. Start in under a minute.</p> : null}
-      </header>
+      {mode === "sign-in" ? (
+        <header className="clover-auth-card__header">
+          <h1>{title}</h1>
+        </header>
+      ) : null}
 
       <form className="clover-auth-card__form" onSubmit={handleSubmit}>
         {mode === "sign-in" && phase === "reset-request" ? (
@@ -866,7 +867,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
                 </button>
               </div>
             </label>
-            {mode === "sign-up" ? (
+            {mode === "sign-up" && password.length > 0 ? (
               <p
                 className={`clover-auth-field__hint clover-auth-field__hint--status ${passwordMatchesRequirements ? "is-ok" : "is-missing"}`}
                 role="status"
