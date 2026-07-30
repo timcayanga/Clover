@@ -535,14 +535,14 @@ html[data-theme="dark"] .settings-section--data .settings-data-danger-item {
 .pricing-page .pricing-card--featured .pricing-card__icon--featured { background: #fff; border-color: #fff; color: #008ea5; }
 .pricing-page .pricing-card__summary { min-height: 38px; margin: 4px 0 8px; }
 .pricing-page .pricing-card__list { margin: 0; }
-.pricing-page .pricing-pro-selector__billing { position: relative; isolation: isolate; width: fit-content; padding: 3px; gap: 0; overflow: hidden; }
-.pricing-page .pricing-pro-selector__billing-thumb { position: absolute; z-index: -1; inset: 3px auto 3px 3px; width: 76px; border-radius: 999px; background: #fff; box-shadow: 0 2px 8px rgb(0 55 71 / 16%); transition: transform 180ms ease; }
-.pricing-page .pricing-pro-selector__billing.is-annual .pricing-pro-selector__billing-thumb { transform: translateX(76px); }
+.pricing-page .pricing-pro-selector__billing { display: inline-grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: min(184px, 100%); padding: 3px; gap: 3px; overflow: hidden; }
+.pricing-page .pricing-pro-selector__billing-thumb { display: none; }
 .pricing-page .pricing-card--featured .pricing-pro-selector__billing { background: rgb(255 255 255 / 30%); border-color: rgb(255 255 255 / 46%); }
-.pricing-page .pricing-pro-selector__billing button { position: relative; z-index: 1; min-width: 76px; transition: color 180ms ease; }
+.pricing-page .pricing-pro-selector__billing button { width: 100%; min-width: 0; min-height: 34px; padding: 0 10px; transition: color 180ms ease, background-color 180ms ease, box-shadow 180ms ease; }
 .pricing-page .pricing-pro-selector__billing button.is-selected,
-.pricing-page .pricing-card--featured .pricing-pro-selector__billing button.is-selected { color: #073844; background: transparent; }
+.pricing-page .pricing-card--featured .pricing-pro-selector__billing button.is-selected { color: #073844; background: #fff; box-shadow: 0 2px 8px rgb(0 55 71 / 16%); }
 .pricing-page .pricing-card--featured .pricing-pro-selector__billing button { color: #fff; }
+.pricing-page .pricing-card--featured .pricing-pro-selector__billing button:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
 .pricing-page .pricing-card--featured .pricing-pro-selector__price span,
 .pricing-page .pricing-card--featured .pricing-pro-selector__saving,
 .pricing-page .pricing-card--featured .pricing-pro-selector__saving s { color: rgb(255 255 255 / 88%); }
