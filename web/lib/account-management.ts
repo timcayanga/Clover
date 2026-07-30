@@ -1,12 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { deleteWorkspaceTransactions } from "@/lib/account-deletion";
-import { BillingSubscriptionStatus } from "@prisma/client";
+import { BillingProvider, BillingSubscriptionStatus } from "@prisma/client";
 import { cancelPayPalSubscription } from "@/lib/paypal-billing";
+import { cancelPaddleSubscription } from "@/lib/paddle-billing";
 
-export const shouldCancelPayPalSubscription = (
+export const shouldCancelBillingSubscription = (
   subscription:
     | {
+        provider: BillingProvider;
         providerSubscriptionId: string | null;
         status: BillingSubscriptionStatus;
       }
@@ -88,7 +90,7 @@ export const deleteLocalUserAccount = async (clerkUserId: string) => {
     select: {
       id: true,
       billingSubscription: {
-        select: { providerSubscriptionId: true, status: true },
+        select: { provider: true, providerSubscriptionId: true, status: true },
       },
     },
   });
@@ -98,11 +100,15 @@ export const deleteLocalUserAccount = async (clerkUserId: string) => {
   }
 
   const subscription = user.billingSubscription;
-  if (shouldCancelPayPalSubscription(subscription)) {
-    await cancelPayPalSubscription({
-      subscriptionId: subscription!.providerSubscriptionId!,
-      reason: "Clover account deleted by the subscriber.",
-    });
+  if (shouldCancelBillingSubscription(subscription)) {
+    if (subscription!.provider === BillingProvider.paddle) {
+      await cancelPaddleSubscription(subscription!.providerSubscriptionId!);
+    } else {
+      await cancelPayPalSubscription({
+        subscriptionId: subscription!.providerSubscriptionId!,
+        reason: "Clover account deleted by the subscriber.",
+      });
+    }
   }
 
   await prisma.user.delete({

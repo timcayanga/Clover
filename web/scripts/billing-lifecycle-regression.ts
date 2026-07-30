@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
-import { BillingSubscriptionStatus, PlanTier } from "@prisma/client";
-import { shouldCancelPayPalSubscription } from "@/lib/account-management";
+import { createHmac } from "node:crypto";
+import { BillingProvider, BillingSubscriptionStatus, PlanTier } from "@prisma/client";
+import { shouldCancelBillingSubscription } from "@/lib/account-management";
+import {
+  getPaddleBillingStatus,
+  getPaddlePlanTier,
+  verifyPaddleWebhookSignature,
+} from "@/lib/paddle-billing";
 import {
   getBillingPlanTierForSubscription,
   getBillingStatus,
@@ -31,7 +37,8 @@ for (const status of [
   BillingSubscriptionStatus.unknown,
 ]) {
   assert.equal(
-    shouldCancelPayPalSubscription({
+    shouldCancelBillingSubscription({
+      provider: BillingProvider.paypal,
       providerSubscriptionId: "I-SUBSCRIPTION",
       status,
     }),
@@ -45,7 +52,8 @@ for (const status of [
   BillingSubscriptionStatus.expired,
 ]) {
   assert.equal(
-    shouldCancelPayPalSubscription({
+    shouldCancelBillingSubscription({
+      provider: BillingProvider.paypal,
       providerSubscriptionId: "I-SUBSCRIPTION",
       status,
     }),
@@ -55,12 +63,65 @@ for (const status of [
 }
 
 assert.equal(
-  shouldCancelPayPalSubscription({
+  shouldCancelBillingSubscription({
+    provider: BillingProvider.paypal,
     providerSubscriptionId: null,
     status: BillingSubscriptionStatus.active,
   }),
   false,
   "a local record without a provider subscription cannot call PayPal cancellation"
+);
+
+assert.equal(getPaddleBillingStatus("active"), BillingSubscriptionStatus.active);
+assert.equal(getPaddleBillingStatus("canceled"), BillingSubscriptionStatus.cancelled);
+assert.equal(getPaddleBillingStatus("paused"), BillingSubscriptionStatus.suspended);
+assert.equal(getPaddleBillingStatus("past_due"), BillingSubscriptionStatus.suspended);
+assert.equal(getPaddleBillingStatus("unexpected"), BillingSubscriptionStatus.unknown);
+assert.equal(
+  getPaddlePlanTier(BillingSubscriptionStatus.active, "annual"),
+  PlanTier.pro,
+  "an active configured Paddle price should grant Pro"
+);
+assert.equal(
+  getPaddlePlanTier(BillingSubscriptionStatus.active, null),
+  PlanTier.free,
+  "an unrecognized Paddle price must not grant Pro"
+);
+assert.equal(
+  shouldCancelBillingSubscription({
+    provider: BillingProvider.paddle,
+    providerSubscriptionId: "sub_123",
+    status: BillingSubscriptionStatus.active,
+  }),
+  true,
+  "an active Paddle subscription must be cancelled before account deletion"
+);
+
+const paddleSecret = "pdl_ntfset_test";
+const paddleTimestamp = 1_800_000_000;
+const paddleBody = JSON.stringify({ event_id: "evt_test", event_type: "subscription.updated" });
+const paddleSignature = createHmac("sha256", paddleSecret)
+  .update(`${paddleTimestamp}:${paddleBody}`)
+  .digest("hex");
+assert.equal(
+  verifyPaddleWebhookSignature({
+    rawBody: paddleBody,
+    signatureHeader: `ts=${paddleTimestamp};h1=${paddleSignature}`,
+    secret: paddleSecret,
+    now: new Date(paddleTimestamp * 1000),
+  }),
+  true,
+  "Paddle webhook signatures should be verified over the untouched raw body"
+);
+assert.equal(
+  verifyPaddleWebhookSignature({
+    rawBody: `${paddleBody} `,
+    signatureHeader: `ts=${paddleTimestamp};h1=${paddleSignature}`,
+    secret: paddleSecret,
+    now: new Date(paddleTimestamp * 1000),
+  }),
+  false,
+  "mutating the Paddle webhook body must invalidate its signature"
 );
 
 console.log("Billing lifecycle regression checks passed.");

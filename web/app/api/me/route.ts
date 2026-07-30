@@ -34,6 +34,7 @@ export async function GET() {
         dataWipedAt: user.dataWipedAt,
         billingSubscription: billingSubscription
           ? {
+              provider: billingSubscription.provider,
               status: billingSubscription.status,
               interval: billingSubscription.interval,
               pendingPlanId: billingSubscription.pendingPlanId,

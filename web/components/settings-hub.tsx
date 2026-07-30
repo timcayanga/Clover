@@ -71,6 +71,7 @@ type ProfileSummary = {
 };
 
 type BillingSubscriptionSummary = {
+  provider: "paypal" | "paddle";
   status: string;
   interval: BillingInterval | null;
   pendingPlanId: string | null;
@@ -167,6 +168,11 @@ type SettingsHubProps = {
   paypalMonthlyPlanId?: string | null;
   paypalAnnualPlanId?: string | null;
   paypalBuyerCountry?: string | null;
+  paddleEnvironment?: "sandbox" | "live";
+  paddleClientToken?: string | null;
+  paddleMonthlyPriceId?: string | null;
+  paddleAnnualPriceId?: string | null;
+  paddleCheckoutReady?: boolean;
   disableWorkspaceBootstrap?: boolean;
 };
 
@@ -529,6 +535,11 @@ export function SettingsHub({
   paypalMonthlyPlanId: initialPaypalMonthlyPlanId,
   paypalAnnualPlanId: initialPaypalAnnualPlanId,
   paypalBuyerCountry: initialPaypalBuyerCountry,
+  paddleEnvironment = "sandbox",
+  paddleClientToken = null,
+  paddleMonthlyPriceId = null,
+  paddleAnnualPriceId = null,
+  paddleCheckoutReady = false,
   disableWorkspaceBootstrap = false,
 }: SettingsHubProps) {
   const router = useRouter();
@@ -2534,6 +2545,12 @@ export function SettingsHub({
             paypalMonthlyPlanId={paypalMonthlyPlanId}
             paypalAnnualPlanId={paypalAnnualPlanId}
             paypalBuyerCountry={paypalBuyerCountry}
+            paddleEnvironment={paddleEnvironment}
+            paddleClientToken={paddleClientToken}
+            paddleMonthlyPriceId={paddleMonthlyPriceId}
+            paddleAnnualPriceId={paddleAnnualPriceId}
+            paddleCheckoutReady={paddleCheckoutReady}
+            customerEmail={email}
             billingSubscription={billingSubscription}
             planLimits={planLimits}
             planUsage={planUsage}

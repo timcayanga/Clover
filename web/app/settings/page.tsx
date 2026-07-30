@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { getEffectiveProfileLimit, getEffectiveUserLimits } from "@/lib/user-limits";
 import { getUserPlanUsage } from "@/lib/plan-access";
 import { getEnv } from "@/lib/env";
+import { isPaddleCheckoutReady } from "@/lib/paddle-billing";
 
 export const metadata = {
   title: "Settings",
@@ -186,6 +187,11 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
         paypalMonthlyPlanId={env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
         paypalAnnualPlanId={env.PAYPAL_ANNUAL_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
         paypalBuyerCountry={env.PAYPAL_BUYER_COUNTRY ?? null}
+        paddleEnvironment={env.PADDLE_ENV ?? "sandbox"}
+        paddleClientToken={env.PADDLE_CLIENT_TOKEN ?? null}
+        paddleMonthlyPriceId={env.PADDLE_MONTHLY_PRICE_ID ?? null}
+        paddleAnnualPriceId={env.PADDLE_ANNUAL_PRICE_ID ?? null}
+        paddleCheckoutReady={isPaddleCheckoutReady(env)}
         disableWorkspaceBootstrap={Boolean(user?.dataWipedAt)}
       />
     </CloverShell>

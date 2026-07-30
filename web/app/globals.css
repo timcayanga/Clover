@@ -39471,6 +39471,15 @@ body:has(.pricing-page) {
   min-height: 40px;
 }
 
+.settings-plan-card__paddle {
+  width: min(100%, 260px);
+}
+
+.settings-plan-card__paddle-button {
+  width: 100%;
+  min-height: 42px;
+}
+
 .settings-plan-card__current .settings-pill {
   width: fit-content;
 }

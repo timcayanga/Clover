@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { BillingActions } from "@/components/billing-actions";
 import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
+import { PaddleCheckoutButton } from "@/components/paddle-checkout-button";
 import { PlanFeatureItem } from "@/components/plan-feature-item";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import { BILLING_PLANS, type BillingInterval } from "@/lib/billing-plans";
 
 type BillingSubscriptionSummary = {
+  provider: "paypal" | "paddle";
   status: string;
   interval: BillingInterval | null;
   pendingPlanId: string | null;
@@ -27,6 +29,12 @@ type SettingsPlanPanelProps = {
   paypalMonthlyPlanId?: string | null;
   paypalAnnualPlanId?: string | null;
   paypalBuyerCountry?: string | null;
+  paddleEnvironment: "sandbox" | "live";
+  paddleClientToken: string | null;
+  paddleMonthlyPriceId: string | null;
+  paddleAnnualPriceId: string | null;
+  paddleCheckoutReady: boolean;
+  customerEmail: string;
   billingSubscription: BillingSubscriptionSummary | null;
   planLimits: {
     accountLimit: number | null;
@@ -89,6 +97,12 @@ export function SettingsPlanPanel({
   paypalMonthlyPlanId,
   paypalAnnualPlanId,
   paypalBuyerCountry,
+  paddleEnvironment,
+  paddleClientToken,
+  paddleMonthlyPriceId,
+  paddleAnnualPriceId,
+  paddleCheckoutReady,
+  customerEmail,
   billingSubscription,
   planLimits,
   planUsage,
@@ -97,9 +111,17 @@ export function SettingsPlanPanel({
   const [billingInterval, setBillingInterval] = useState<BillingInterval>(initialInterval);
   const billingPlan = BILLING_PLANS.find((plan) => plan.interval === billingInterval);
   const checkoutPlanId = billingInterval === "monthly" ? paypalMonthlyPlanId : paypalAnnualPlanId;
-  const checkoutReady = Boolean(paypalClientId && checkoutPlanId && billingCustomerId);
+  const paddlePriceId = billingInterval === "monthly" ? paddleMonthlyPriceId : paddleAnnualPriceId;
+  const paypalCheckoutReady = Boolean(paypalClientId && checkoutPlanId && billingCustomerId);
+  const paddleReady = Boolean(
+    paddleCheckoutReady &&
+      paddleClientToken &&
+      paddlePriceId &&
+      billingCustomerId
+  );
   const isAwaitingApproval = billingSubscription?.status === "approval_pending";
   const currentInterval = billingSubscription?.interval ?? null;
+  const currentProvider = billingSubscription?.provider ?? null;
 
   const usageRows = [
     {
@@ -199,7 +221,25 @@ export function SettingsPlanPanel({
               {planTier === "free" ? (
                 isAwaitingApproval ? (
                   <p className="settings-helper">Waiting for PayPal confirmation.</p>
-                ) : checkoutReady ? (
+                ) : paddleReady ? (
+                  <PaddleCheckoutButton
+                    clientToken={paddleClientToken!}
+                    environment={paddleEnvironment}
+                    priceId={paddlePriceId!}
+                    customerId={billingCustomerId ?? ""}
+                    customerEmail={customerEmail}
+                    interval={billingInterval}
+                    className="settings-plan-card__paddle"
+                    onStart={() =>
+                      capturePostHogClientEvent("upgrade_cta_clicked", {
+                        cta_location: `settings_billing_${billingInterval}`,
+                        billing_provider: "paddle",
+                        plan_tier: planTier,
+                        plan_interval: billingInterval,
+                      })
+                    }
+                  />
+                ) : paypalCheckoutReady ? (
                   <PayPalSubscribeButton
                     clientId={paypalClientId!}
                     planId={checkoutPlanId!}
@@ -216,7 +256,17 @@ export function SettingsPlanPanel({
                     }
                   />
                 ) : (
-                  <p className="settings-helper">PayPal checkout is not configured yet.</p>
+                  <p className="settings-helper">
+                    {paddleClientToken
+                      ? "Paddle checkout will unlock after its webhook is connected."
+                      : "Subscription checkout is not configured yet."}
+                  </p>
+                )
+              ) : currentProvider === "paddle" ? (
+                billingInterval === currentInterval ? (
+                  <span className="settings-pill">Current plan</span>
+                ) : (
+                  <p className="settings-helper">Paddle plan changes will be available from subscription management.</p>
                 )
               ) : billingInterval === currentInterval ? (
                 <span className="settings-pill">Current plan</span>
@@ -238,7 +288,7 @@ export function SettingsPlanPanel({
         </article>
       </div>
 
-      {planTier === "pro" ? (
+      {planTier === "pro" && currentProvider !== "paddle" ? (
         <BillingActions
           planTier="pro"
           clientId={paypalClientId}
