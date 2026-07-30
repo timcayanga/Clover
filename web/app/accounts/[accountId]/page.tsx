@@ -4361,39 +4361,35 @@ function AccountDetailPageContent() {
         ) : null}
 
         <div className="accounts-detail__transactions glass" style={{ marginTop: 24 }}>
-          <div className="accounts-detail__reconciliation-head">
-            <div>
-              <h3>Transactions</h3>
-            </div>
-            <div className="accounts-detail__transactions-actions">
-              <span className="accounts-summary-chip is-neutral">
-                {transactionsLoading ? "Loading transactions..." : `${visibleTransactions.length} of ${transactionTotalCount} loaded`}
-              </span>
-              {showFinalizingNotice ? (
-                <span className="accounts-summary-chip is-neutral">
-                  <span>
-                    {finalizingNoticeState.label} {finalizingTransactionCount} detail{finalizingTransactionCount === 1 ? "" : "s"} · {finalizingNoticeState.detail}
+          {showFinalizingNotice || selectedTransactionIds.length > 0 ? (
+            <div className="accounts-detail__reconciliation-head accounts-detail__transactions-toolbar">
+              <div className="accounts-detail__transactions-actions">
+                {showFinalizingNotice ? (
+                  <span className="accounts-summary-chip is-neutral">
+                    <span>
+                      {finalizingNoticeState.label} {finalizingTransactionCount} detail{finalizingTransactionCount === 1 ? "" : "s"} · {finalizingNoticeState.detail}
+                    </span>
+                    <button
+                      className="icon-button transactions-status-line__dismiss"
+                      type="button"
+                      onClick={dismissFinalizingStatusNotice}
+                      aria-label="Dismiss status notice"
+                    >
+                      <span aria-hidden="true">×</span>
+                    </button>
                   </span>
-                  <button
-                    className="icon-button transactions-status-line__dismiss"
-                    type="button"
-                    onClick={dismissFinalizingStatusNotice}
-                    aria-label="Dismiss status notice"
-                  >
-                    <span aria-hidden="true">×</span>
-                  </button>
-                </span>
-              ) : null}
-              {selectedTransactionIds.length > 0 ? (
-                <>
-                  <span className="accounts-summary-chip is-neutral">{`${selectedTransactionIds.length} selected`}</span>
-                  <button className="button button-secondary button-small" type="button" onClick={openBulkDeleteConfirm}>
-                    Delete selected
-                  </button>
-                </>
-              ) : null}
+                ) : null}
+                {selectedTransactionIds.length > 0 ? (
+                  <>
+                    <span className="accounts-summary-chip is-neutral">{`${selectedTransactionIds.length} selected`}</span>
+                    <button className="button button-secondary button-small" type="button" onClick={openBulkDeleteConfirm}>
+                      Delete selected
+                    </button>
+                  </>
+                ) : null}
+              </div>
             </div>
-          </div>
+          ) : null}
           {transactionsError ? (
             <p className="panel-muted">{transactionsError}</p>
           ) : transactionsLoading ? (
@@ -4647,7 +4643,7 @@ function AccountDetailPageContent() {
                                   <span className="transactions-mobile-simple-row__name-main">{normalizedName}</span>
                                 </div>
                                 <div className={`transactions-mobile-simple-row__amount-group ${amountToneClass}`}>
-                                  <span className="transactions-mobile-simple-row__amount">
+                                  <span className={`transactions-mobile-simple-row__amount ${amountToneClass}`}>
                                     {formatAccountAmount(amount, transaction.currency ?? account?.currency ?? "PHP")}
                                   </span>
                                 </div>
