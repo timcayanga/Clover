@@ -1,6 +1,6 @@
 import { BillingProvider } from "@prisma/client";
+import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth";
 import { createPaddleCustomerPortalSession } from "@/lib/paddle-billing";
 import { prisma } from "@/lib/prisma";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
@@ -13,8 +13,12 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   try {
     assertTrustedRequestOrigin(request);
-    const { userId } = await requireAuth();
-    const user = await getOrCreateCurrentUser(userId);
+    const session = await auth();
+    if (!session.userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const user = await getOrCreateCurrentUser(session.userId);
     const subscription = await prisma.billingSubscription.findUnique({
       where: { userId: user.id },
     });
