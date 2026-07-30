@@ -50371,7 +50371,7 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   }
 
   .content {
-    padding-top: 0;
+    padding-top: 0 !important;
   }
 
   .content > :is(.topbar, .shell-compact-bar) {
