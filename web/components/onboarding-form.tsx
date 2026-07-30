@@ -307,7 +307,7 @@ export function OnboardingForm({
             aria-pressed={selectedUpgradeInterval === option}
             onClick={() => setSelectedUpgradeInterval(option)}
           >
-            {option === "monthly" ? "Monthly · PHP 99" : "Annually · PHP 999"}
+            {option === "monthly" ? "Monthly · USD 2.99" : "Annually · USD 29.99"}
           </button>
         ))}
       </div>

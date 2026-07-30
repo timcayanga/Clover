@@ -1287,7 +1287,7 @@ export const helpSections: HelpSection[] = [
     slug: "billing-plan",
     eyebrow: "Billing",
     title: "Billing and plan",
-    summary: "Compare Free and Pro, understand limits, and manage Clover billing at PHP 99 monthly or PHP 999 annually.",
+    summary: "Compare Free and Pro, understand limits, and manage Clover billing at USD 2.99 monthly or USD 29.99 annually.",
     icon: "pricing",
     accent: "violet",
     keywords: ["pricing", "plan", "billing", "free", "pro", "upgrade", "subscription", "refund", "limits", "investment tools"],
@@ -1300,7 +1300,7 @@ export const helpSections: HelpSection[] = [
     highlights: [
       "Free is useful for trying Clover and starting small.",
       "Pro gives you more room for accounts, uploads, analysis, and investing.",
-      "Monthly is PHP 99 and annual is PHP 999.",
+      "Monthly is USD 2.99 and annual is USD 29.99.",
       "Billing lives in Settings once you are signed in.",
     ],
     articles: [
@@ -1324,7 +1324,7 @@ export const helpSections: HelpSection[] = [
           {
             question: "How much does Clover Pro cost?",
             answer:
-              "Clover Pro is priced at PHP 99 monthly or PHP 999 annually.",
+              "Clover Pro is priced at USD 2.99 monthly or USD 29.99 annually.",
           },
           {
             question: "What is included in the Free plan?",
@@ -1448,7 +1448,7 @@ export const helpSections: HelpSection[] = [
       {
         question: "How much does Clover Pro cost?",
         answer:
-          "Clover Pro is priced at PHP 99 monthly or PHP 999 annually.",
+          "Clover Pro is priced at USD 2.99 monthly or USD 29.99 annually.",
       },
       {
         question: "Where do I manage billing?",

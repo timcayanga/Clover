@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { BILLING_PLANS } from "@/lib/billing-plans";
 
 type BillingInterval = "monthly" | "annual";
 
@@ -20,6 +21,10 @@ export function PricingProSelector({ signedIn, planTier }: PricingProSelectorPro
   const proHref = resolvedSignedIn
     ? "/settings?upgrade=pro&interval=" + interval + "#billing"
     : "/sign-up?intent=pro&interval=" + interval;
+  const monthlyPlan = BILLING_PLANS.find((plan) => plan.interval === "monthly")!;
+  const annualPlan = BILLING_PLANS.find((plan) => plan.interval === "annual")!;
+  const annualizedMonthlyPrice = monthlyPlan.priceValue * 12;
+  const annualSavings = annualizedMonthlyPrice - annualPlan.priceValue;
 
   if (isPro) {
     return <div className="pricing-pro-selector pricing-pro-selector--active"><p>Pro is active on your account.</p></div>;
@@ -48,16 +53,18 @@ export function PricingProSelector({ signedIn, planTier }: PricingProSelectorPro
       </div>
 
       <div className="pricing-pro-selector__price">
-        <strong>{isAnnual ? "PHP 999" : "PHP 99"}</strong>
+        <strong>{isAnnual ? annualPlan.priceLabel : monthlyPlan.priceLabel}</strong>
         <span>{isAnnual ? "/ year" : "/ month"}</span>
       </div>
 
       {isAnnual ? (
         <p className="pricing-pro-selector__saving">
-          <s>PHP 1,188</s> Save PHP 189 when billed annually.
+          <s>USD {annualizedMonthlyPrice.toFixed(2)}</s> Save USD {annualSavings.toFixed(2)} when billed annually.
         </p>
       ) : (
-        <p className="pricing-pro-selector__saving">Switch to annually to save PHP 189 each year.</p>
+        <p className="pricing-pro-selector__saving">
+          Switch to annually to save USD {annualSavings.toFixed(2)} each year.
+        </p>
       )}
 
       <Link className="button button-primary button-pill pricing-pro-selector__signup" href={proHref} prefetch={false}>

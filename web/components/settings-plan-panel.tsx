@@ -244,7 +244,7 @@ export function SettingsPlanPanel({
             <span className="settings-plan-card__band-text">
               <strong className="settings-plan-card__band-title">Pro</strong>
               <span className="settings-plan-card__band-price">
-                {billingPlan?.priceLabel ?? (billingInterval === "monthly" ? "PHP 149" : "PHP 1,299")}
+                {billingPlan?.priceLabel ?? (billingInterval === "monthly" ? "USD 2.99" : "USD 29.99")}
                 {billingInterval === "monthly" ? " / month" : " / year"}
               </span>
             </span>

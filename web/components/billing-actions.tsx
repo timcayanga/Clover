@@ -41,12 +41,12 @@ type ActionState = {
 const planMeta: Record<BillingInterval, { label: string; price: string; helper: string }> = {
   monthly: {
     label: "Monthly",
-    price: "PHP 99",
+    price: "USD 2.99",
     helper: "Upgrade anytime. Great if you want flexibility while you test Clover Pro.",
   },
   annual: {
     label: "Annual",
-    price: "PHP 999",
+    price: "USD 29.99",
     helper: "Best value for people who already know they want the yearly plan.",
   },
 };
