@@ -50619,6 +50619,25 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   }
 }
 
+/* Let the opaque sticky header cover the content gutters while keeping its
+   title and actions aligned with the page content below. */
+.content {
+  --content-inline-gutter: 20px;
+}
+
+.content > :is(.topbar, .shell-compact-bar) {
+  box-sizing: border-box;
+  width: calc(100% + (var(--content-inline-gutter) * 2));
+  margin-inline: calc(var(--content-inline-gutter) * -1);
+  padding-inline: var(--content-inline-gutter);
+}
+
+@media (max-width: 1100px) {
+  .content {
+    --content-inline-gutter: 12px;
+  }
+}
+
 /* Compact plan usage keeps the current value and limit attached to the meter. */
 .settings-plan-usage__visual {
   display: grid;
