@@ -182,6 +182,21 @@ async function main() {
     /\.content--has-mobile-leading-action[\s\S]{0,160}> :is\(\.topbar, \.shell-compact-bar\):has\(\.shell-back-button\)[\s\S]{0,100}\.topbar__title-row[\s\S]{0,300}h1 \{[\s\S]{0,100}flex: 1 1 auto;[\s\S]{0,160}text-overflow: ellipsis;/,
     "Very narrow mobile headers must shrink and ellipsize titles inside the center column."
   );
+  assert.match(
+    globalStyles,
+    /@media \(max-width: 760px\) \{[\s\S]*?\.transactions-mobile-simple-row \{[\s\S]{0,180}min-height: 40px;[\s\S]{0,120}padding: 6px 4px 6px 6px;/,
+    "Mobile transaction lists must keep their compact row sizing."
+  );
+  assert.match(
+    globalStyles,
+    /\.transactions-mobile-simple-row__name-main,[\s\S]{0,100}\.transactions-mobile-simple-row__amount \{[\s\S]{0,100}font-size: 0\.82rem;/,
+    "Mobile transaction names and amounts must use the compact shared type scale."
+  );
+  assert.match(
+    globalStyles,
+    /\.accounts-detail__transactions \.accounts-detail__mobile-transaction-name \{[\s\S]{0,120}grid-template-columns: 20px minmax\(0, 1fr\);/,
+    "Account Details must retain its compact single-badge mobile transaction layout."
+  );
 
   console.log("Browser compatibility regression passed.");
 }

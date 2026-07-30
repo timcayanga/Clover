@@ -50102,15 +50102,16 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   }
 
   .transactions-mobile-simple-row__name {
-    grid-template-columns: 24px 24px minmax(0, 1fr);
+    grid-template-columns: 20px 20px minmax(0, 1fr);
     align-items: center;
+    gap: 6px;
   }
 
   .transactions-mobile-simple-row__account-brand,
   .transactions-mobile-simple-row__account-brand .accounts-brand-mark,
   .transactions-mobile-simple-row__category-icon {
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
   }
 
   .transactions-mobile-simple-row__category-icon .category-brand-mark__glyph-icon {
@@ -50124,6 +50125,57 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     align-self: center;
     align-items: center;
     justify-content: center;
+  }
+
+  .transactions-mobile-simple-row {
+    grid-template-columns: minmax(0, 1fr) auto 24px;
+    gap: 6px;
+    min-height: 40px;
+    padding: 6px 4px 6px 6px;
+  }
+
+  .transactions-mobile-simple-row__name-main,
+  .transactions-mobile-simple-row__amount {
+    font-size: 0.82rem;
+    line-height: 1.2;
+  }
+
+  .transactions-mobile-simple-row__amount-group {
+    gap: 5px;
+  }
+
+  .transactions-mobile-simple-row__detail {
+    width: 24px;
+    height: 24px;
+    min-height: 24px;
+  }
+
+  .transactions-mobile-simple-row__detail svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .transactions-mobile-list {
+    gap: 8px;
+  }
+
+  .transactions-mobile-date-group {
+    gap: 3px;
+  }
+
+  .transactions-mobile-date-divider,
+  .transactions-mobile-date-divider span {
+    min-height: 22px;
+  }
+
+  .transactions-mobile-date-divider {
+    padding-inline: 6px;
+    font-size: 0.64rem;
+  }
+
+  .accounts-detail__transactions .accounts-detail__mobile-transaction-name {
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 6px;
   }
 
   .transactions-mobile-simple-row__amount.positive {
