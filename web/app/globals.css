@@ -39476,6 +39476,14 @@ body:has(.pricing-page) {
   padding-top: 8px;
 }
 
+.button.settings-billing-action-button {
+  min-height: 32px;
+  padding-inline: 10px;
+  gap: 5px;
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+
 .settings-plan-card__paypal {
   width: min(100%, 220px);
   min-height: 40px;

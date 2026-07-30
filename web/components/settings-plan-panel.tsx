@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BillingActions } from "@/components/billing-actions";
 import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
 import { PaddleCheckoutButton } from "@/components/paddle-checkout-button";
@@ -100,6 +100,8 @@ export function SettingsPlanPanel({
   billingSubscription,
   planLimits,
   planUsage,
+  planLoading,
+  planLoaded,
 }: SettingsPlanPanelProps) {
   const initialInterval = preferredBillingInterval ?? billingSubscription?.interval ?? "annual";
   const [billingInterval, setBillingInterval] = useState<BillingInterval>(initialInterval);
@@ -118,6 +120,13 @@ export function SettingsPlanPanel({
   const isAwaitingApproval = billingSubscription?.status === "approval_pending";
   const currentInterval = billingSubscription?.interval ?? null;
   const currentProvider = billingSubscription?.provider ?? null;
+  const billingDetailsReady = planLoaded && !planLoading;
+
+  useEffect(() => {
+    if (billingDetailsReady && currentInterval) {
+      setBillingInterval(currentInterval);
+    }
+  }, [billingDetailsReady, currentInterval]);
 
   const openPaddlePortal = async () => {
     setPaddlePortalLoading(true);
@@ -307,15 +316,17 @@ export function SettingsPlanPanel({
                       : "Subscription checkout is not configured yet."}
                   </p>
                 )
+              ) : !billingDetailsReady ? (
+                <p className="settings-helper">Loading subscription details...</p>
               ) : currentProvider === "paddle" ? (
                 billingInterval === currentInterval ? (
                   <span className="settings-pill">Current plan</span>
                 ) : (
                   <p className="settings-helper">Paddle plan changes will be available from subscription management.</p>
                 )
-              ) : billingInterval === currentInterval ? (
+              ) : currentProvider === "paypal" && billingInterval === currentInterval ? (
                 <span className="settings-pill">Current plan</span>
-              ) : (
+              ) : currentProvider === "paypal" && currentInterval ? (
                 <BillingActions
                   planTier="pro"
                   clientId={paypalClientId}
@@ -327,13 +338,15 @@ export function SettingsPlanPanel({
                   subscription={billingSubscription}
                   compactInterval={billingInterval}
                 />
+              ) : (
+                <p className="settings-helper">Subscription details are unavailable.</p>
               )}
             </div>
           </div>
         </article>
       </div>
 
-      {planTier === "pro" && currentProvider !== "paddle" ? (
+      {planTier === "pro" && billingDetailsReady && currentProvider === "paypal" ? (
         <BillingActions
           planTier="pro"
           clientId={paypalClientId}
@@ -346,7 +359,7 @@ export function SettingsPlanPanel({
           className="settings-plan-unsubscribe"
           minimalManagement
         />
-      ) : planTier === "pro" && currentProvider === "paddle" ? (
+      ) : planTier === "pro" && billingDetailsReady && currentProvider === "paddle" ? (
         <div className="settings-plan-unsubscribe">
           <button
             type="button"

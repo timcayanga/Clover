@@ -156,14 +156,14 @@ export function BillingActions({
   const isFree = planTier === "free";
 
   if (!isFree && compactInterval) {
-    if (compactInterval === currentInterval) {
+    if (!currentInterval || compactInterval === currentInterval) {
       return null;
     }
 
     const compactPlanId = compactInterval === "monthly" ? monthlyPlanId : annualPlanId;
     return compactPlanId ? (
       <button
-        className="button button-secondary button-small"
+        className="button button-secondary button-small settings-billing-action-button"
         type="button"
         onClick={() => void handleRevision(compactInterval)}
         disabled={state.key !== ""}
@@ -177,7 +177,7 @@ export function BillingActions({
     return (
       <div className={className}>
         <button
-          className="button button-danger button-small"
+          className="button button-danger button-small settings-billing-action-button"
           type="button"
           onClick={() => void handleCancel()}
           disabled={state.key !== ""}
@@ -282,9 +282,9 @@ export function BillingActions({
 
           <div className="billing-actions__stack">
             <div className="billing-actions__row">
-              {!hideIntervalActions && currentInterval !== "monthly" && monthlyPlanId ? (
+              {!hideIntervalActions && currentInterval && currentInterval !== "monthly" && monthlyPlanId ? (
                 <button
-                  className="button button-secondary button-small"
+                  className="button button-secondary button-small settings-billing-action-button"
                   type="button"
                   onClick={() => void handleRevision("monthly")}
                   disabled={state.key !== "" }
@@ -292,9 +292,9 @@ export function BillingActions({
                   {state.key === "revise-monthly" ? "Opening PayPal..." : "Switch to Monthly"}
                 </button>
               ) : null}
-              {!hideIntervalActions && currentInterval !== "annual" && annualPlanId ? (
+              {!hideIntervalActions && currentInterval && currentInterval !== "annual" && annualPlanId ? (
                 <button
-                  className="button button-secondary button-small"
+                  className="button button-secondary button-small settings-billing-action-button"
                   type="button"
                   onClick={() => void handleRevision("annual")}
                   disabled={state.key !== ""}
@@ -303,7 +303,7 @@ export function BillingActions({
                 </button>
               ) : null}
               <button
-                className="button button-danger button-small"
+                className="button button-danger button-small settings-billing-action-button"
                 type="button"
                 onClick={() => void handleCancel()}
                 disabled={state.key !== ""}
