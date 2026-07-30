@@ -50596,3 +50596,64 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     display: block !important;
   }
 }
+
+/* Keep shared page headers fixed at one viewport position from first paint.
+   Desktop spacing belongs inside the sticky bar, not above it. */
+@media (min-width: 1101px) {
+  .content {
+    padding-top: 0;
+  }
+
+  .content > :is(.topbar, .shell-compact-bar) {
+    min-height: 58px;
+    padding-top: 18px;
+    padding-bottom: 10px;
+  }
+}
+
+/* Compact plan usage keeps the current value and limit attached to the meter. */
+.settings-plan-usage__visual {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.settings-plan-usage__legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.settings-plan-card {
+  overflow: hidden;
+  border-radius: 26px;
+}
+
+.settings-plan-card__band {
+  border-radius: 25px 25px 0 0;
+}
+
+.settings-plan-card__body {
+  border-radius: 0 0 25px 25px;
+}
+
+.settings-plan-card__paddle-button {
+  min-height: 42px;
+  border-radius: 999px;
+}
+
+@media (max-width: 1100px) {
+  .settings-plan-usage__row {
+    grid-template-columns: minmax(100px, 0.65fr) minmax(150px, 1.35fr);
+    gap: 12px;
+  }
+
+  .settings-plan-usage__legend {
+    font-size: 10px;
+  }
+}

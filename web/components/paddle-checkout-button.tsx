@@ -157,9 +157,8 @@ export function PaddleCheckoutButton({
         onClick={openCheckout}
         disabled={!scriptReady}
       >
-        {scriptReady ? `Choose Pro ${interval === "monthly" ? "Monthly" : "Annual"}` : "Loading secure checkout..."}
+        {scriptReady ? "Subscribe" : "Loading secure checkout..."}
       </button>
-      {environment === "sandbox" ? <p className="billing-helper">Paddle sandbox — no live charge.</p> : null}
       {message ? <p className="billing-helper" aria-live="polite">{message}</p> : null}
     </div>
   );

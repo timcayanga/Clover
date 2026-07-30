@@ -79,12 +79,6 @@ function PlanIcon({ pro = false }: { pro?: boolean }) {
   );
 }
 
-function formatLimitCount(used: number, limit: number | null, suffix: string) {
-  return limit === null
-    ? `Unlimited ${suffix}`
-    : `${used.toLocaleString()} / ${limit.toLocaleString()} ${suffix}`;
-}
-
 function getUsagePercent(used: number, limit: number | null) {
   return limit === null ? 100 : Math.max(0, Math.min((used / limit) * 100, 100));
 }
@@ -126,17 +120,26 @@ export function SettingsPlanPanel({
   const usageRows = [
     {
       label: "Accounts",
-      value: formatLimitCount(planUsage.accountCount, planLimits.accountLimit, "accounts"),
+      used: `${planUsage.accountCount.toLocaleString()} used`,
+      limit: planLimits.accountLimit === null ? "Unlimited" : `${planLimits.accountLimit.toLocaleString()} limit`,
       percent: getUsagePercent(planUsage.accountCount, planLimits.accountLimit),
     },
     {
       label: "Monthly uploads",
-      value: formatLimitCount(planUsage.monthlyUploadCount, planLimits.monthlyUploadLimit, "uploads"),
+      used: `${planUsage.monthlyUploadCount.toLocaleString()} used`,
+      limit:
+        planLimits.monthlyUploadLimit === null
+          ? "Unlimited"
+          : `${planLimits.monthlyUploadLimit.toLocaleString()} limit`,
       percent: getUsagePercent(planUsage.monthlyUploadCount, planLimits.monthlyUploadLimit),
     },
     {
       label: "Transaction rows",
-      value: formatLimitCount(planUsage.transactionCount, planLimits.transactionLimit, "rows"),
+      used: `${planUsage.transactionCount.toLocaleString()} used`,
+      limit:
+        planLimits.transactionLimit === null
+          ? "Unlimited"
+          : `${planLimits.transactionLimit.toLocaleString()} limit`,
       percent: getUsagePercent(planUsage.transactionCount, planLimits.transactionLimit),
     },
   ];
@@ -154,13 +157,16 @@ export function SettingsPlanPanel({
         </div>
         {usageRows.map((usage) => (
           <div key={usage.label} className="settings-plan-usage__row">
-            <div className="settings-plan-usage__copy">
-              <strong>{usage.label}</strong>
-              <span>{usage.value}</span>
+            <strong>{usage.label}</strong>
+            <div className="settings-plan-usage__visual">
+              <span className="settings-plan-usage__legend">
+                <span>{usage.used}</span>
+                <span>{usage.limit}</span>
+              </span>
+              <span className="settings-plan-usage__meter" aria-hidden="true">
+                <span style={{ width: `${usage.percent}%` }} />
+              </span>
             </div>
-            <span className="settings-plan-usage__meter" aria-hidden="true">
-              <span style={{ width: `${usage.percent}%` }} />
-            </span>
           </div>
         ))}
       </div>
