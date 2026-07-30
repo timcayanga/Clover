@@ -17,7 +17,6 @@ import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
 import { deriveReconciledBalance, normalizeAccountBalanceSign } from "@/lib/account-balance";
 import { prefersLiveInvestmentBalance } from "@/lib/investment-balance";
-import { requiresAccountVisibilityRetry } from "@/lib/import-visibility-refresh";
 import { getUploadSummaryCurrencies } from "@/lib/import-upload-summary";
 import { getAccountCardName, getAccountDisplayName, formatUploadAccountDisplayName } from "@/lib/account-display";
 import { getAccountPath, getInvestmentInstitutionPath } from "@/lib/account-path";
@@ -25,7 +24,6 @@ import { countNonCashAccounts } from "@/lib/account-limit-count";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { fetchJsonOnce } from "@/lib/request-dedupe";
-import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   applyOptimisticWorkspaceAccountDeletion,
   accountsWorkspaceCacheKey,
@@ -51,7 +49,13 @@ import {
 import { getAccountBrand } from "@/lib/account-brand";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
-import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
+import {
+  chooseWorkspaceId,
+  persistSelectedCurrency,
+  persistSelectedWorkspaceId,
+  readSelectedCurrency,
+  readSelectedWorkspaceId,
+} from "@/lib/workspace-selection";
 import { mergeImportedWorkspaceTransactions } from "@/lib/workspace-cache";
 import {
   getInvestmentFieldConfigs,
@@ -1778,7 +1782,7 @@ function AccountsPageContent() {
           ),
           {
             preserveImportedEvidence: shouldPreserveSettlingImport,
-            preferCurrentImportedSnapshot: shouldPreserveSettlingImport,
+            preferCurrentImportedSnapshot: shouldPreserveSettlingImport && !options?.forceFresh,
           }
         );
         const authoritativeCacheUpdatedAt = persistAccountsWorkspaceCache(workspaceId, {
@@ -1814,7 +1818,7 @@ function AccountsPageContent() {
             ),
             {
               preserveImportedEvidence: shouldPreserveSettlingImport,
-              preferCurrentImportedSnapshot: shouldPreserveSettlingImport,
+              preferCurrentImportedSnapshot: shouldPreserveSettlingImport && !options?.forceFresh,
             }
           )
         );
@@ -1994,7 +1998,8 @@ function AccountsPageContent() {
                 visibleFetchedTransactions.length > 0 ? visibleFetchedTransactions : visibleCachedWorkspaceTransactions,
                 {
                   preserveImportedEvidence: true,
-                  preferCurrentImportedSnapshot: options?.preserveImportedEvidence === true,
+                  preferCurrentImportedSnapshot:
+                    options?.preserveImportedEvidence === true && !options?.forceFresh,
                 }
               )
             );
@@ -2091,6 +2096,14 @@ function AccountsPageContent() {
 
     persistSelectedWorkspaceId(selectedWorkspaceId);
   }, [selectedWorkspaceId, workspacesLoading]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    setSelectedCurrency(readSelectedCurrency(selectedWorkspaceId) ?? "PHP");
+  }, [selectedWorkspaceId]);
 
   useEffect(() => {
     setImportActivitySnapshot(readImportActivity());
@@ -2515,6 +2528,10 @@ function AccountsPageContent() {
   }, [pendingImportSummary, reconciledAccounts]);
 
   useEffect(() => {
+    if (!hasInitialWorkspaceDataLoaded) {
+      return;
+    }
+
     if ((!selectedCurrency || selectedCurrency.toLowerCase() === "all") && availableCurrencies.length > 1) {
       return;
     }
@@ -2523,8 +2540,10 @@ function AccountsPageContent() {
       return;
     }
 
-    setSelectedCurrency(availableCurrencies[0] ?? "PHP");
-  }, [availableCurrencies, selectedCurrency]);
+    const fallbackCurrency = availableCurrencies[0] ?? "PHP";
+    setSelectedCurrency(fallbackCurrency);
+    persistSelectedCurrency(selectedWorkspaceId, fallbackCurrency);
+  }, [availableCurrencies, hasInitialWorkspaceDataLoaded, selectedCurrency, selectedWorkspaceId]);
 
   const currencyFilteredAccounts = useMemo(
     () => {
@@ -3846,7 +3865,11 @@ function AccountsPageContent() {
       <ContextualAskClover context="accounts" planTier={planTier} />
       <CurrencySelector
         value={selectedCurrency}
-        onChange={(next) => setSelectedCurrency(next.toLowerCase() === "all" ? "" : formatCurrencyCode(next))}
+        onChange={(next) => {
+          const nextCurrency = next.toLowerCase() === "all" ? "" : formatCurrencyCode(next);
+          setSelectedCurrency(nextCurrency);
+          persistSelectedCurrency(selectedWorkspaceId, nextCurrency);
+        }}
         options={availableCurrencies}
         includeAllOption={availableCurrencies.length > 1}
         allLabel="All currencies"
@@ -4735,6 +4758,7 @@ function AccountsPageContent() {
           const importedCurrencies = getUploadSummaryCurrencies(summary);
           if (importedCurrencies.length === 1) {
             setSelectedCurrency(importedCurrencies[0]);
+            persistSelectedCurrency(selectedWorkspaceId, importedCurrencies[0]);
           }
           const importedAccountSummaries =
             summary.accountSummaries && summary.accountSummaries.length > 1
@@ -4872,36 +4896,18 @@ function AccountsPageContent() {
           }
 
           setImportRefreshInFlight(true);
-          const requiresSnapshotVisibilityRefresh = requiresAccountVisibilityRetry(
-            summary.accountType,
-            previewTransactions.length
-          );
-          // Keep the import handoff non-blocking: a multi-account snapshot
-          // emits one settled summary per detected account. The local cache is
-          // already updated above, while this authoritative refresh converges
-          // in the background instead of serially delaying later accounts.
+          // Do not report success while Accounts still displays a pre-import
+          // balance. Adopt one authoritative response, then retry once in case
+          // the completion event raced the account projection.
           const refreshImportWorkspace = async () => {
             await refreshAll({ preserveImportedEvidence: true });
-            if (requiresSnapshotVisibilityRefresh) {
-              // Portfolio and account-only captures legitimately have no
-              // transaction rows. Their first post-confirmation read can race
-              // the account write, so retry before publishing 100% success.
-              await new Promise((resolve) => window.setTimeout(resolve, 500));
-              await refreshAll({ preserveImportedEvidence: true });
-            }
+            await new Promise((resolve) => window.setTimeout(resolve, 500));
+            await refreshAll({ preserveImportedEvidence: true });
           };
-          if (requiresSnapshotVisibilityRefresh) {
-            // A snapshot has no transaction row to prove visibility. Do not
-            // let its modal report 100% until Accounts has adopted the card.
-            try {
-              await refreshImportWorkspace();
-            } finally {
-              setImportRefreshInFlight(false);
-            }
-          } else {
-            void refreshImportWorkspace().finally(() => {
-              setImportRefreshInFlight(false);
-            });
+          try {
+            await refreshImportWorkspace();
+          } finally {
+            setImportRefreshInFlight(false);
           }
           // Invalidate prefetched server pages such as Recurring after an
           // account inventory changes. Accounts itself is refreshed above

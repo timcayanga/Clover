@@ -66,8 +66,14 @@ import {
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { getTransactionDisplayType } from "@/lib/transaction-display-type";
-import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
-import { chooseWorkspaceId, persistSelectedWorkspaceId, selectedWorkspaceKey } from "@/lib/workspace-selection";
+import {
+  chooseWorkspaceId,
+  persistSelectedCurrency,
+  persistSelectedWorkspaceId,
+  readSelectedCurrency,
+  readSelectedWorkspaceId,
+  selectedWorkspaceKey,
+} from "@/lib/workspace-selection";
 import {
   clearImportActivity,
   importActivityHasCompletedRows,
@@ -3213,9 +3219,11 @@ function TransactionsPageContent() {
 
       if (!importRefreshInFlightRef.current) {
         importRefreshInFlightRef.current = true;
-        void refreshTransactionsAfterImport(selectedWorkspaceId).finally(() => {
+        try {
+          await refreshTransactionsAfterImport(selectedWorkspaceId);
+        } finally {
           importRefreshInFlightRef.current = false;
-        });
+        }
       }
 
       setMessage("Import complete. Accounts and Transactions are updated.");
@@ -3356,6 +3364,14 @@ function TransactionsPageContent() {
 
   useEffect(() => {
     persistSelectedWorkspaceId(selectedWorkspaceId);
+  }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    setCurrencyFilter(readSelectedCurrency(selectedWorkspaceId) ?? "");
   }, [selectedWorkspaceId]);
 
   useLayoutEffect(() => {
@@ -3771,7 +3787,7 @@ function TransactionsPageContent() {
 
       drilldownParamRef.current = drilldownSignature;
       setQuery("");
-      setCurrencyFilter("");
+      setCurrencyFilter(readSelectedCurrency(selectedWorkspaceId) ?? "");
       setCategoryFilters([]);
       setAccountFilters([]);
       setTypeFilters([]);
@@ -3806,7 +3822,7 @@ function TransactionsPageContent() {
     setFilterOpen(false);
     setHeaderMenuOpen(null);
     setHeaderMenuPosition(null);
-  }, [accounts, categories, isWorkspaceDataReady, searchParams]);
+  }, [accounts, categories, isWorkspaceDataReady, searchParams, selectedWorkspaceId]);
 
   const ensureDefaultAccount = async (workspaceId: string) => {
     const cashAccount = accounts.find((account) => account.type === "cash" || account.name.trim().toLowerCase() === "cash");
@@ -6804,7 +6820,11 @@ function TransactionsPageContent() {
 
       <CurrencySelector
         value={workspaceCurrencyCodes.length > 1 ? currencyFilter : workspaceCurrencyCodes[0] ?? "PHP"}
-        onChange={(next) => setCurrencyFilter(next && next.toLowerCase() !== "all" ? formatCurrencyCode(next) : "")}
+        onChange={(next) => {
+          const nextCurrency = next && next.toLowerCase() !== "all" ? formatCurrencyCode(next) : "";
+          setCurrencyFilter(nextCurrency);
+          persistSelectedCurrency(selectedWorkspaceId, nextCurrency);
+        }}
         options={workspaceCurrencyCodes}
         includeAllOption={workspaceCurrencyCodes.length > 1}
         allLabel="All currencies"

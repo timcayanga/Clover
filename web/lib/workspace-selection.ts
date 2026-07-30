@@ -1,8 +1,58 @@
 export const selectedWorkspaceKey = "clover.selected-workspace-id.v1";
 export const selectedWorkspaceEventName = "clover:selected-workspace";
+export const selectedCurrencyByWorkspaceKey = "clover.selected-currency-by-workspace.v1";
 
 export type WorkspaceLike = {
   id: string;
+};
+
+const allCurrenciesStorageValue = "ALL";
+
+const readCurrencyPreferences = () => {
+  if (typeof window === "undefined") {
+    return {} as Record<string, string>;
+  }
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(selectedCurrencyByWorkspaceKey) ?? "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, string>)
+      : {};
+  } catch {
+    return {};
+  }
+};
+
+export const readSelectedCurrency = (workspaceId: string): string | null => {
+  if (!workspaceId) {
+    return null;
+  }
+
+  const stored = readCurrencyPreferences()[workspaceId];
+  if (stored === allCurrenciesStorageValue) {
+    return "";
+  }
+
+  return typeof stored === "string" && /^[A-Z]{3}$/.test(stored) ? stored : null;
+};
+
+export const persistSelectedCurrency = (workspaceId: string, currency: string) => {
+  if (typeof window === "undefined" || !workspaceId) {
+    return;
+  }
+
+  const normalizedCurrency = currency.trim().toUpperCase();
+  const storedCurrency = normalizedCurrency && normalizedCurrency !== "ALL"
+    ? normalizedCurrency
+    : allCurrenciesStorageValue;
+  const preferences = readCurrencyPreferences();
+  preferences[workspaceId] = storedCurrency;
+
+  try {
+    window.localStorage.setItem(selectedCurrencyByWorkspaceKey, JSON.stringify(preferences));
+  } catch {
+    // Browsing modes with disabled storage should still allow an in-memory selection.
+  }
 };
 
 const captureWorkspaceSwitch = (previousWorkspaceId: string, workspaceId: string) => {

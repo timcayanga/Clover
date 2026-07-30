@@ -188,6 +188,15 @@ const main = () => {
     [{ id: numberedUploadAccount.id, currency: "PHP", balance: "250.00" }],
     "A lagging completion read must not replace the confirmed import balance while Accounts is settling."
   );
+  assert.deepEqual(
+    mergeAccountsWithOptimisticImports(
+      [{ ...numberedUploadAccount, balance: "300.00" }],
+      [{ ...numberedUploadAccount, balance: "250.00" }],
+      { preserveCurrentInventory: true }
+    ).map((account) => ({ id: account.id, balance: account.balance })),
+    [{ id: numberedUploadAccount.id, balance: "300.00" }],
+    "A force-fresh completion read must replace the optimistic balance with the authoritative server balance."
+  );
   const phpAccount: TestAccount = {
     ...numberedUploadAccount,
     id: "php-account",

@@ -348,13 +348,13 @@ const main = async () => {
   );
   assert.match(
     accountsPageSource,
-    /const refreshImportWorkspace = async \(\) =>[\s\S]{0,1000}void refreshImportWorkspace\(\)\.finally[\s\S]{0,500}setMessage\("Import complete\. Accounts and Transactions are updated\."\)/,
-    "Regular import summaries must refresh authoritatively in the background after updating Accounts immediately."
+    /const refreshImportWorkspace = async \(\) =>[\s\S]{0,700}await new Promise[\s\S]{0,500}await refreshImportWorkspace\(\)[\s\S]{0,500}setMessage\("Import complete\. Accounts and Transactions are updated\."\)/,
+    "Every import must adopt and retry an authoritative Accounts refresh before reporting success."
   );
   assert.match(
-    accountsPageSource,
-    /requiresSnapshotVisibilityRefresh[\s\S]{0,1400}await refreshImportWorkspace\(\)/,
-    "Account-only snapshots must wait for the Accounts card refresh before reporting import success."
+    transactionsPageSource,
+    /importRefreshInFlightRef\.current = true;[\s\S]{0,250}await refreshTransactionsAfterImport\(selectedWorkspaceId\)/,
+    "Transactions imports must wait for their first authoritative refresh before reporting success."
   );
   assert.match(
     accountsPageSource,
