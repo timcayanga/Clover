@@ -25,6 +25,7 @@ import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
 import { getCategoryIconTone } from "@/lib/category-icons";
+import { MOBILE_LAYOUT_MEDIA_QUERY } from "@/lib/responsive-layout";
 import {
   analyticsOnceKey,
   capturePostHogClientEvent,
@@ -6924,7 +6925,7 @@ function TransactionsPageContent() {
   }, [bulkDeleteConfirmOpen]);
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(max-width: 1100px)");
+    const mediaQuery = window.matchMedia(MOBILE_LAYOUT_MEDIA_QUERY);
     const updateViewport = () => setIsCompactViewport(mediaQuery.matches);
 
     updateViewport();

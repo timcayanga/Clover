@@ -6,7 +6,23 @@ const root = process.cwd();
 const readSource = (relativePath: string) => readFile(path.join(root, relativePath), "utf8");
 
 async function main() {
-  const [shellSource, dashboardSource, workspaceSelectionSource, onboardingSource, circlesSource, pageAuthSource, middlewareSource, globalStyles, transactionsSource, accountDetailsSource] = await Promise.all([
+  const [
+    shellSource,
+    dashboardSource,
+    workspaceSelectionSource,
+    onboardingSource,
+    circlesSource,
+    pageAuthSource,
+    middlewareSource,
+    globalStyles,
+    transactionsSource,
+    accountDetailsSource,
+    responsiveLayoutSource,
+    dashboardActionsSource,
+    dashboardActionsLazySource,
+    settingsHubSource,
+    postHogSource,
+  ] = await Promise.all([
     readSource("components/clover-shell.tsx"),
     readSource("app/dashboard/page.tsx"),
     readSource("lib/workspace-selection.ts"),
@@ -17,6 +33,11 @@ async function main() {
     readSource("app/globals.css"),
     readSource("app/transactions/page.tsx"),
     readSource("app/accounts/[accountId]/page.tsx"),
+    readSource("lib/responsive-layout.ts"),
+    readSource("components/dashboard-top-actions.tsx"),
+    readSource("components/dashboard-top-actions-lazy.tsx"),
+    readSource("components/settings-hub.tsx"),
+    readSource("components/posthog-analytics.tsx"),
   ]);
   const protectedPageSources = await Promise.all(
     [
@@ -104,7 +125,7 @@ async function main() {
   );
   assert.match(
     globalStyles,
-    /@media \(max-width: 760px\) \{[\s\S]*?\.content--has-mobile-leading-action \.shell-topbar-leading__actions \{[\s\S]{0,80}display: none !important;/,
+    /@media \(max-width: 1100px\) \{[\s\S]*?\.content--has-mobile-leading-action \.shell-topbar-leading__actions \{[\s\S]{0,80}display: none !important;/,
     "Phone headers must remove duplicate leading actions before positioning the title."
   );
   assert.match(
@@ -129,13 +150,29 @@ async function main() {
   );
   assert.match(
     globalStyles,
-    /@media \(min-width: 981px\) \{[\s\S]{0,180}\.accounts-card-grid\.accounts-card-grid--desktop \{[\s\S]{0,180}repeat\(auto-fit, minmax\(min\(100%, 240px\), 272px\)\)/,
+    /@media \(min-width: 1101px\) \{[\s\S]{0,180}\.accounts-card-grid\.accounts-card-grid--desktop \{[\s\S]{0,180}repeat\(auto-fit, minmax\(min\(100%, 240px\), 272px\)\)/,
     "Desktop account grids must add columns instead of stretching cards beyond their intended width."
   );
   assert.match(
-    globalStyles,
-    /@media \(min-width: 761px\) and \(max-width: 1180px\) \{[\s\S]{0,240}\.content--plain-title > \.topbar \.topbar__title-wrap,[\s\S]{0,180}justify-items: start !important;/,
-    "Compact laptop page titles must stay left-aligned instead of centering within action-reduced space."
+    responsiveLayoutSource,
+    /MOBILE_LAYOUT_MAX_WIDTH = 1100[\s\S]{0,120}DESKTOP_LAYOUT_MIN_WIDTH = MOBILE_LAYOUT_MAX_WIDTH \+ 1[\s\S]{0,120}MOBILE_LAYOUT_MEDIA_QUERY/,
+    "Clover must publish one shared mobile/desktop viewport contract."
+  );
+  assert.ok(
+    [transactionsSource, accountDetailsSource, dashboardActionsSource, dashboardActionsLazySource, settingsHubSource].every(
+      (source) => source.includes("MOBILE_LAYOUT_MEDIA_QUERY")
+    ),
+    "Every React-rendered mobile page variant must use the shared layout query."
+  );
+  assert.match(
+    postHogSource,
+    /viewport_class: getCloverViewportLayout\(window\.innerWidth\)/,
+    "Analytics must report the same two viewport layouts that the interface renders."
+  );
+  assert.doesNotMatch(
+    postHogSource,
+    /viewport_class:[^\n]*tablet/,
+    "Analytics must not retain a third tablet layout class."
   );
   const transactionDesktopColumns =
     "28px 40px minmax(0, 1.8fr) minmax(110px, 0.85fr) minmax(170px, 1.55fr) minmax(140px, 0.9fr) minmax(110px, 0.8fr) 40px 40px";
@@ -156,6 +193,26 @@ async function main() {
   );
   assert.match(
     globalStyles,
+    /@media \(max-width: 1100px\) \{[\s\S]{0,100}\.shell-bottom-nav \{[\s\S]{0,80}display: grid !important;/,
+    "The complete mobile layout must include bottom navigation at every mobile width."
+  );
+  assert.match(
+    globalStyles,
+    /@media \(max-width: 1100px\) \{[\s\S]{0,220}\.transactions-table-wrap \{[\s\S]{0,80}display: none !important;[\s\S]{0,160}\.transactions-mobile-view \{[\s\S]{0,80}display: grid !important;/,
+    "Transactions must switch its list and table together at the shared mobile breakpoint."
+  );
+  assert.match(
+    globalStyles,
+    /@media \(max-width: 1100px\) \{[\s\S]{0,500}\.accounts-card-grid\.accounts-card-grid--desktop \{[\s\S]{0,80}display: none !important;[\s\S]{0,240}\.accounts-mobile-featured,[\s\S]{0,120}display: grid !important;/,
+    "Accounts must switch its desktop cards and mobile list together at the shared mobile breakpoint."
+  );
+  assert.doesNotMatch(
+    globalStyles,
+    /@media \(max-width: 1180px\) \{[\s\S]{0,120}\.(?:app-shell|sidebar|transactions-table-wrap|transactions-mobile-view|split-bill-mobile-home)/,
+    "No legacy 1,180px rule may activate a third application layout."
+  );
+  assert.match(
+    globalStyles,
     /\.content > :is\(\.topbar, \.shell-compact-bar\) \{[\s\S]{0,100}position: sticky !important;[\s\S]{0,80}top: 0;/,
     "Shared page headers must remain anchored across desktop and compact layouts."
   );
@@ -166,7 +223,7 @@ async function main() {
   );
   assert.match(
     globalStyles,
-    /@media \(min-width: 921px\) \{[\s\S]{0,520}\.nav-link \{[\s\S]{0,140}font-size: 13px;[\s\S]{0,180}\.nav-link__icon \{[\s\S]{0,80}width: 20px;[\s\S]{0,80}height: 20px;/,
+    /@media \(min-width: 1101px\) \{[\s\S]{0,520}\.nav-link \{[\s\S]{0,140}font-size: 13px;[\s\S]{0,180}\.nav-link__icon \{[\s\S]{0,80}width: 20px;[\s\S]{0,80}height: 20px;/,
     "Desktop sidebar labels and icon slots must retain their readable sizing."
   );
   assert.match(
@@ -176,7 +233,7 @@ async function main() {
   );
   assert.match(
     globalStyles,
-    /@media \(max-width: 760px\) \{[\s\S]{0,140}\.content--has-mobile-leading-action \.shell-topbar-leading__actions \{[\s\S]{0,80}display: inline-flex !important;/,
+    /@media \(max-width: 1100px\) \{[\s\S]{0,140}\.content--has-mobile-leading-action \.shell-topbar-leading__actions \{[\s\S]{0,80}display: inline-flex !important;/,
     "Mobile Accounts, Transactions, and Recurring headers must expose their Ask Clover action."
   );
   assert.match(
@@ -186,7 +243,7 @@ async function main() {
   );
   assert.match(
     globalStyles,
-    /@media \(max-width: 760px\) \{[\s\S]*?\.transactions-mobile-simple-row \{[\s\S]{0,180}min-height: 40px;[\s\S]{0,120}padding: 6px 4px 6px 6px;/,
+    /@media \(max-width: 1100px\) \{[\s\S]*?\.transactions-mobile-simple-row \{[\s\S]{0,180}min-height: 40px;[\s\S]{0,120}padding: 6px 4px 6px 6px;/,
     "Mobile transaction lists must keep their compact row sizing."
   );
   assert.match(

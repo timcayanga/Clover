@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useState } from "react";
+import { MOBILE_LAYOUT_MEDIA_QUERY } from "@/lib/responsive-layout";
 
 type DashboardTopActionsLazyProps = {
   workspaceId: string;
@@ -84,7 +85,7 @@ export function DashboardTopActionsLazy({ workspaceId, accounts }: DashboardTopA
   }, []);
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(max-width: 720px)");
+    const mediaQuery = window.matchMedia(MOBILE_LAYOUT_MEDIA_QUERY);
     const updateViewport = () => setIsCompactViewport(mediaQuery.matches);
 
     updateViewport();

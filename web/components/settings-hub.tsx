@@ -24,6 +24,7 @@ import { persistSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/w
 import type { BillingInterval } from "@/lib/billing-plans";
 import { signOutToLanding } from "@/lib/sign-out";
 import { readAccountIdentityCache, writeAccountIdentityCache } from "@/lib/account-identity-cache";
+import { MOBILE_LAYOUT_MEDIA_QUERY } from "@/lib/responsive-layout";
 
 const SettingsCategoriesPanel = dynamic(
   () => import("@/components/settings-categories-panel").then((module) => module.SettingsCategoriesPanel),
@@ -1698,7 +1699,7 @@ export function SettingsHub({
                     aria-selected={isActive}
                     className={`settings-hub__menu-item${isActive ? " is-active" : ""}`}
                     onClick={() => {
-                      if (window.matchMedia("(max-width: 760px)").matches) {
+                      if (window.matchMedia(MOBILE_LAYOUT_MEDIA_QUERY).matches) {
                         router.push(`/settings?section=${sectionKey}`);
                         return;
                       }

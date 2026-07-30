@@ -13,6 +13,7 @@ import {
   type AnalyticsEventName,
   type AnalyticsProperties,
 } from "@/lib/analytics";
+import { getCloverViewportLayout } from "@/lib/responsive-layout";
 
 declare global {
   interface Window {
@@ -232,7 +233,7 @@ function PostHogRoutePerformance() {
       const properties = {
         route: redactAnalyticsPath(pathname),
         duration_ms: durationMs,
-        viewport_class: window.innerWidth < 768 ? "mobile" : window.innerWidth < 1200 ? "tablet" : "desktop",
+        viewport_class: getCloverViewportLayout(window.innerWidth),
       } satisfies AnalyticsProperties;
 
       runWhenPostHogReady(() => {

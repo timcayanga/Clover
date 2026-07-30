@@ -23,6 +23,7 @@ import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directi
 import { getTransactionDisplayType } from "@/lib/transaction-display-type";
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
+import { MOBILE_LAYOUT_MEDIA_QUERY } from "@/lib/responsive-layout";
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
 import {
   buildTransactionCategoryUpdatedMessage,
@@ -1093,7 +1094,7 @@ function AccountDetailPageContent() {
       return;
     }
 
-    const mediaQuery = window.matchMedia("(max-width: 960px)");
+    const mediaQuery = window.matchMedia(MOBILE_LAYOUT_MEDIA_QUERY);
     const syncViewport = () => setIsMobileViewport(mediaQuery.matches);
 
     syncViewport();

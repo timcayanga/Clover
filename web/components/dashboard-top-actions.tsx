@@ -15,6 +15,7 @@ import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format"
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
 import { sanitizeTransactionTagNames } from "@/lib/transaction-tags";
 import { clearAccountsWorkspaceCache } from "@/lib/workspace-cache";
+import { MOBILE_LAYOUT_MEDIA_QUERY } from "@/lib/responsive-layout";
 
 type DashboardTopActionsProps = {
   workspaceId: string;
@@ -862,7 +863,7 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
   }, []);
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(max-width: 720px)");
+    const mediaQuery = window.matchMedia(MOBILE_LAYOUT_MEDIA_QUERY);
     const updateViewport = () => setIsCompactViewport(mediaQuery.matches);
 
     updateViewport();
