@@ -360,8 +360,13 @@ const main = async () => {
   );
   assert.match(
     accountsPageSource,
-    /const refreshImportWorkspace = async \(\) =>[\s\S]{0,700}await new Promise[\s\S]{0,500}await refreshImportWorkspace\(\)[\s\S]{0,500}setMessage\("Import complete\. Accounts and Transactions are updated\."\)/,
-    "Every import must adopt and retry an authoritative Accounts refresh before reporting success."
+    /const refreshImportedAccountProjection = async \(summary: UploadInsightsSummary\)[\s\S]{0,2600}const retryDelaysMs = \[0, 350, 750, 1_250, 2_000\][\s\S]{0,1800}accountProjectionMatchesImport/,
+    "Every import must keep refreshing Accounts until the authoritative balance reflects the confirmed import."
+  );
+  assert.match(
+    accountsPageSource,
+    /await refreshImportedAccountProjection\(settledSummary\)[\s\S]{0,500}setMessage\("Import complete\. Accounts and Transactions are updated\."\)/,
+    "Accounts must finish projection settlement before reporting an import as updated."
   );
   assert.match(
     transactionsPageSource,
@@ -395,7 +400,7 @@ const main = async () => {
   );
   assert.match(
     accountsPageSource,
-    /subscribeImportedSummary\(\(\{ workspaceId \}\)[\s\S]{0,1000}forceFresh: true/,
+    /subscribeImportedSummary\(\(\{ workspaceId, summary \}\)[\s\S]{0,1000}refreshImportedAccountProjection\(summary\)/,
     "Accounts must react to imports completed through Clover's global uploader."
   );
   assert.match(

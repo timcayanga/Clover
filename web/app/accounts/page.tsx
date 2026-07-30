@@ -452,6 +452,24 @@ const mergeOptimisticImportedAccount = (currentAccounts: Account[], optimisticAc
   });
 };
 
+const accountProjectionMatchesImport = (projectedAccounts: Account[], expectedAccounts: Account[]) =>
+  expectedAccounts.length > 0 &&
+  expectedAccounts.every((expectedAccount) => {
+    const projectedAccount =
+      projectedAccounts.find((account) => account.id === expectedAccount.id) ??
+      projectedAccounts.find((account) => matchesImportedAccountIdentity(account, expectedAccount)) ??
+      null;
+    if (!projectedAccount) {
+      return false;
+    }
+
+    if (expectedAccount.balance === null || expectedAccount.balance === undefined) {
+      return true;
+    }
+
+    return Math.abs(parseAmount(projectedAccount.balance) - parseAmount(expectedAccount.balance)) < 0.005;
+  });
+
 const getCachedWorkspaceHydration = (workspaceId: string) => {
   if (!workspaceId) {
     return null;
@@ -1335,6 +1353,7 @@ function AccountsPageContent() {
   const balanceInputRef = useRef<HTMLInputElement>(null);
   const workspaceLoadSeqRef = useRef(0);
   const completedImportRefreshKeyRef = useRef<string | null>(null);
+  const authoritativeAccountsRef = useRef<{ workspaceId: string; accounts: Account[] } | null>(null);
   const workspaceHydrationVersionRef = useRef(new Map<string, number>());
   const deletedAccountIdsRef = useRef(new Set<string>());
   // Keep the server and first browser render identical. Workspace selection
@@ -1753,6 +1772,10 @@ function AccountsPageContent() {
             !deletedAccountIdsRef.current.has(account.id) &&
             !deletingAccountIdsRef.current.has(account.id)
         );
+        authoritativeAccountsRef.current = {
+          workspaceId,
+          accounts: visibleFetchedAccounts,
+        };
         visibleCachedWorkspaceAccounts = (cachedWorkspaceAccounts ?? []).filter(
           (account) =>
             isWorkspaceAccount(account, workspaceId) &&
@@ -2045,6 +2068,71 @@ function AccountsPageContent() {
     }
   };
 
+  const refreshImportedAccountProjection = async (summary: UploadInsightsSummary) => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    const expectedSummaries =
+      summary.accountSummaries && summary.accountSummaries.length > 0
+        ? summary.accountSummaries.map((accountSummary) => ({
+            ...summary,
+            accountId: accountSummary.accountId,
+            accountName: accountSummary.accountName,
+            institution: accountSummary.institution,
+            accountNumber: accountSummary.accountNumber,
+            accountType: accountSummary.accountType,
+            currency: accountSummary.currency,
+            balance: accountSummary.balance,
+            rowsImported: accountSummary.rowsImported,
+            accountSummaries: undefined,
+            optimistic: false,
+            optimisticAccountId: null,
+            previewTransactions: [],
+          }))
+        : [summary];
+    const expectedAccounts = expectedSummaries
+      .map((accountSummary) => buildOptimisticImportedAccount(accountSummary, selectedWorkspaceId))
+      .filter((account): account is Account => Boolean(account));
+    const retryDelaysMs = [0, 350, 750, 1_250, 2_000];
+
+    for (const retryDelayMs of retryDelaysMs) {
+      if (retryDelayMs > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, retryDelayMs));
+      }
+
+      await loadWorkspaceData(selectedWorkspaceId, {
+        silent: true,
+        forceFresh: true,
+        preserveImportedEvidence: true,
+      });
+      const authoritativeSnapshot = authoritativeAccountsRef.current;
+      if (
+        authoritativeSnapshot?.workspaceId === selectedWorkspaceId &&
+        accountProjectionMatchesImport(authoritativeSnapshot.accounts, expectedAccounts)
+      ) {
+        // Finish one full hydration after the lightweight account projection
+        // settles so Transactions and account checkpoints advance together.
+        await loadWorkspaceData(selectedWorkspaceId, {
+          silent: true,
+          awaitHydration: true,
+          forceFresh: true,
+          preserveImportedEvidence: true,
+        });
+        return;
+      }
+    }
+
+    // Keep the latest authoritative response even if an institution-specific
+    // projection takes longer than the bounded settlement window.
+    await loadWorkspaceData(selectedWorkspaceId, {
+      silent: true,
+      awaitHydration: true,
+      forceFresh: true,
+      preserveImportedEvidence: true,
+    });
+  };
+
   const hydrateWorkspaceFromCache = (workspaceId: string) => {
     if (!workspaceId) {
       return false;
@@ -2156,28 +2244,16 @@ function AccountsPageContent() {
   }, [importActivitySnapshot, loadWorkspaceData, selectedWorkspaceId]);
 
   useEffect(() => {
-    return subscribeImportedSummary(({ workspaceId }) => {
+    return subscribeImportedSummary(({ workspaceId, summary }) => {
       if (!selectedWorkspaceId || workspaceId !== selectedWorkspaceId) {
         return;
       }
 
       // The global uploader can finish while Accounts remains mounted. A
       // server-component refresh alone preserves this page's client state, so
-      // explicitly replace it from the authoritative account inventory.
-      void loadWorkspaceData(selectedWorkspaceId, {
-        silent: true,
-        awaitHydration: true,
-        forceFresh: true,
-        preserveImportedEvidence: true,
-      });
-      window.setTimeout(() => {
-        void loadWorkspaceData(selectedWorkspaceId, {
-          silent: true,
-          awaitHydration: true,
-          forceFresh: true,
-          preserveImportedEvidence: true,
-        });
-      }, 650);
+      // follow the authoritative projection until it reflects the confirmed
+      // import balance instead of stopping on an early stale response.
+      void refreshImportedAccountProjection(summary);
     });
   }, [loadWorkspaceData, selectedWorkspaceId]);
 
@@ -4897,15 +4973,10 @@ function AccountsPageContent() {
 
           setImportRefreshInFlight(true);
           // Do not report success while Accounts still displays a pre-import
-          // balance. Adopt one authoritative response, then retry once in case
-          // the completion event raced the account projection.
-          const refreshImportWorkspace = async () => {
-            await refreshAll({ preserveImportedEvidence: true });
-            await new Promise((resolve) => window.setTimeout(resolve, 500));
-            await refreshAll({ preserveImportedEvidence: true });
-          };
+          // balance. Follow the authoritative projection with bounded backoff
+          // instead of assuming it will settle within one fixed retry.
           try {
-            await refreshImportWorkspace();
+            await refreshImportedAccountProjection(settledSummary);
           } finally {
             setImportRefreshInFlight(false);
           }
