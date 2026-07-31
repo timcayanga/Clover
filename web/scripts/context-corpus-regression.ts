@@ -2,21 +2,23 @@ import assert from "node:assert/strict";
 import { CONTEXT_CORPUS_VERSION, deriveTravelEpisodes, getContextCorpusCoverageReport, getContextCorpusEntries, getContextCorpusQualityReport, parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
 
 assert.ok(CONTEXT_CORPUS_VERSION);
-assert.ok(getContextCorpusEntries().length >= 638);
-assert.ok(getContextCorpusQualityReport().profileCount >= 85);
+assert.ok(getContextCorpusEntries().length >= 800);
+assert.ok(getContextCorpusQualityReport().profileCount >= 119);
 assert.equal(getContextCorpusQualityReport().valid, true);
 const coverage = getContextCorpusCoverageReport();
 assert.equal(coverage.corpusVersion, CONTEXT_CORPUS_VERSION);
-assert.ok(coverage.canonicalEntryCount >= 638);
-assert.ok(coverage.descriptorVariantEntryCount > 51000);
-assert.ok(Object.keys(coverage.countryCounts).length >= 86);
-assert.ok(coverage.currencies.length >= 70);
+assert.ok(coverage.canonicalEntryCount >= 800);
+assert.ok(coverage.descriptorVariantEntryCount > 60000);
+assert.ok(Object.keys(coverage.countryCounts).length >= 120);
+assert.ok(coverage.currencies.length >= 95);
 assert.ok((coverage.canonicalCountryCounts.PH ?? 0) > 0);
 assert.ok(coverage.localizedAliasCount >= 20);
 assert.ok(coverage.canonicalLocalizedAliasCount >= 30);
 assert.ok((coverage.aliasScriptCounts.japanese ?? 0) > 0);
 assert.ok((coverage.aliasScriptCounts.hangul ?? 0) > 0);
 assert.ok((coverage.aliasScriptCounts.han ?? 0) > 0);
+assert.ok((coverage.aliasScriptCounts.georgian ?? 0) > 0);
+assert.ok((coverage.aliasScriptCounts.armenian ?? 0) > 0);
 assert.ok((coverage.countryPurposeCounts.PH?.utilities ?? 0) > 0);
 assert.ok((coverage.countryPurposeCounts.SG?.healthcare ?? 0) > 0);
 assert.ok((coverage.countryPurposeCounts.AE?.utilities ?? 0) > 0);
@@ -219,7 +221,57 @@ for (const fixture of worldwideFixtures) {
   assert.notEqual(context.transactionTypeHint, "expense");
 }
 
+const worldwidePhaseTwoFixtures = [
+  { input: { description: "RT1 INSTANT PAYMENT ESTONIA", currency: "EUR" }, countryCode: "EE", paymentRail: "estonia_sepa_instant", purposeHint: "transfer" },
+  { input: { merchantRaw: "RĪGAS SATIKSME", currency: "EUR" }, countryCode: "LV", paymentRail: null, purposeHint: "transport" },
+  { input: { description: "CENTROLINK LITHUANIA", currency: "EUR" }, countryCode: "LT", paymentRail: "lithuania_centrolink", purposeHint: "transfer" },
+  { input: { description: "OKAMZITA PLATBA SLOVENSKO", currency: "EUR" }, countryCode: "SK", paymentRail: "slovakia_sepa_instant", purposeHint: "transfer" },
+  { input: { merchantRaw: "URBANA LJUBLJANA", currency: "EUR" }, countryCode: "SI", paymentRail: null, purposeHint: "transport" },
+  { input: { description: "IPS NBS SERBIA", currency: "RSD" }, countryCode: "RS", paymentRail: "serbia_ips", purposeHint: "transfer" },
+  { input: { merchantRaw: "ELEKTROPRIVREDA BIH", currency: "BAM" }, countryCode: "BA", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "ЈСП СКОПЈЕ", currency: "MKD" }, countryCode: "MK", paymentRail: null, purposeHint: "transport" },
+  { input: { merchantRaw: "OSHEE ALBANIA", currency: "ALL" }, countryCode: "AL", paymentRail: null, purposeHint: "utilities" },
+  { input: { description: "MIA PLATI INSTANT MOLDOVA", currency: "MDL" }, countryCode: "MD", paymentRail: "moldova_mia", purposeHint: "transfer" },
+  { input: { merchantRaw: "СІЛЬПО УКРАЇНА", currency: "UAH" }, countryCode: "UA", paymentRail: null, purposeHint: "groceries" },
+  { input: { merchantRaw: "თბილისის სატრანსპორტო კომპანია", currency: "GEL" }, countryCode: "GE", paymentRail: null, purposeHint: "transport" },
+  { input: { merchantRaw: "ԵՐԵՎԱՆ ՍԻԹԻ ՍՈՒՊԵՐՄԱՐԿԵՏ", currency: "AMD" }, countryCode: "AM", paymentRail: null, purposeHint: "groceries" },
+  { input: { merchantRaw: "AZƏRIŞIQ", currency: "AZN" }, countryCode: "AZ", paymentRail: null, purposeHint: "utilities" },
+  { input: { description: "JCCSMART CYPRUS", currency: "EUR" }, countryCode: "CY", paymentRail: "cyprus_jcc", purposeHint: "transfer" },
+  { input: { merchantRaw: "TALLINJA MALTA", currency: "EUR" }, countryCode: "MT", paymentRail: null, purposeHint: "transport" },
+  { input: { merchantRaw: "BÓNUS ISLAND", currency: "ISK" }, countryCode: "IS", paymentRail: null, purposeHint: "groceries" },
+  { input: { description: "PAYCONIQ LUXEMBOURG", currency: "EUR" }, countryCode: "LU", paymentRail: "luxembourg_payconiq", purposeHint: "transfer" },
+  { input: { merchantRaw: "MI TELEFERICO BOLIVIA", currency: "BOB" }, countryCode: "BO", paymentRail: null, purposeHint: "transport" },
+  { input: { description: "SPI PARAGUAY PAGOS INSTANTANEOS", currency: "PYG" }, countryCode: "PY", paymentRail: "paraguay_spi", purposeHint: "transfer" },
+  { input: { merchantRaw: "ENEE HONDURAS", currency: "HNL" }, countryCode: "HN", paymentRail: null, purposeHint: "utilities" },
+  { input: { description: "TRANSFER365 EL SALVADOR", currency: "USD" }, countryCode: "SV", paymentRail: "el_salvador_transfer365", purposeHint: "transfer" },
+  { input: { merchantRaw: "DISNORTE DISSUR NICARAGUA", currency: "NIO" }, countryCode: "NI", paymentRail: null, purposeHint: "utilities" },
+  { input: { description: "JAM-DEX JAMAICA DIGITAL CURRENCY", currency: "JMD" }, countryCode: "JM", paymentRail: "jamaica_jamdex", purposeHint: "transfer" },
+  { input: { merchantRaw: "PTSC TRINIDAD", currency: "TTD" }, countryCode: "TT", paymentRail: null, purposeHint: "transport" },
+  { input: { merchantRaw: "سونلغاز الجزائر", currency: "DZD" }, countryCode: "DZ", paymentRail: null, purposeHint: "utilities" },
+  { input: { description: "D17 POSTE TUNISIENNE", currency: "TND" }, countryCode: "TN", paymentRail: "tunisia_d17", purposeHint: "transfer" },
+  { input: { merchantRaw: "ZESCO ZAMBIA", currency: "ZMW" }, countryCode: "ZM", paymentRail: null, purposeHint: "utilities" },
+  { input: { description: "AIRTEL MONEY MALAWI", currency: "MWK" }, countryCode: "MW", paymentRail: "malawi_mobile_money", purposeHint: "transfer" },
+  { input: { description: "M-PESA MOZAMBIQUE", currency: "MZN" }, countryCode: "MZ", paymentRail: "mozambique_mobile_money", purposeHint: "transfer" },
+  { input: { merchantRaw: "ОНАЙ АЛМАТЫ ТРАНСПОРТ", currency: "KZT" }, countryCode: "KZ", paymentRail: null, purposeHint: "transport" },
+  { input: { description: "HUMO PAYMENT UZBEKISTAN", currency: "UZS" }, countryCode: "UZ", paymentRail: "uzbekistan_humo", purposeHint: "transfer" },
+  { input: { description: "ELQR KYRGYZSTAN", currency: "KGS" }, countryCode: "KG", paymentRail: "kyrgyzstan_elqr", purposeHint: "transfer" },
+  { input: { description: "QPAY MONGOLIA", currency: "MNT" }, countryCode: "MN", paymentRail: "mongolia_qpay", purposeHint: "transfer" },
+] as const;
+for (const fixture of worldwidePhaseTwoFixtures) {
+  const context = resolveTransactionContext(fixture.input);
+  assert.equal(context.countryCode, fixture.countryCode);
+  assert.equal(context.paymentRail, fixture.paymentRail);
+  assert.equal(context.purposeHint, fixture.purposeHint);
+  assert.notEqual(context.transactionTypeHint, "expense");
+}
+
 for (const description of ["A BIT OF SOFTWARE", "WAVE HOTEL", "METRO MARKET", "MODE PAYMENT"]) {
+  const context = resolveTransactionContext({ description, currency: "USD" });
+  assert.equal(context.countryCode, null);
+  assert.equal(context.paymentRail, null);
+}
+
+for (const description of ["BONUS PAYMENT", "MAXI DRESS", "BINGO GAME", "BRAVO MUSIC", "GLOBUS MAP", "AURORA HOTEL"]) {
   const context = resolveTransactionContext({ description, currency: "USD" });
   assert.equal(context.countryCode, null);
   assert.equal(context.paymentRail, null);

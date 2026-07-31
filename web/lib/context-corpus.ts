@@ -6,8 +6,9 @@
  */
 
 import { WORLD_CONTEXT_ENTRIES, WORLD_REGIONAL_PROFILES } from "@/lib/world-context-corpus-packs";
+import { WORLD_CONTEXT_ENTRIES_2, WORLD_REGIONAL_PROFILES_2 } from "@/lib/world-context-corpus-packs-2";
 
-export const CONTEXT_CORPUS_VERSION = "2026.07.31";
+export const CONTEXT_CORPUS_VERSION = "2026.08.01";
 
 export type ContextSignal = {
   id: string;
@@ -627,7 +628,7 @@ const DESCRIPTOR_SUFFIXES = [
   "narrative", "particular",
 ].sort((left, right) => right.length - left.length);
 
-const normalizeCanonicalAlias = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(/\s+/g, " ");
+const normalizeCanonicalAlias = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(/\s+/g, " ");
 const usedCanonicalAliases = new Set(baseEntries.flatMap((entry) => entry.aliases.map(normalizeCanonicalAlias)));
 const deduplicatedAdditionalCanonicalEntries = additionalCanonicalEntries
   .map((entry) => ({
@@ -641,7 +642,7 @@ const deduplicatedAdditionalCanonicalEntries = additionalCanonicalEntries
   }))
   .filter((entry) => entry.aliases.length > 0);
 const usedExtendedAliases = new Set([...usedCanonicalAliases]);
-const deduplicatedWorldEntries = WORLD_CONTEXT_ENTRIES
+const deduplicatedWorldEntries = [...WORLD_CONTEXT_ENTRIES, ...WORLD_CONTEXT_ENTRIES_2]
   .map((entry) => ({
     ...entry,
     aliases: entry.aliases.filter((alias) => {
@@ -740,6 +741,7 @@ const regionalProfiles: RegionalParsingProfile[] = [
   { countryCode: "QA", regionCode: "MEA", locales: ["ar-QA", "en-QA"], primaryLocale: "en-QA", languages: ["ar", "en"], dateOrder: "dmy", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "QAR", legalEntitySuffixes: ["llc", "wll", "est"], confidence: 74 },
   { countryCode: "KW", regionCode: "MEA", locales: ["ar-KW", "en-KW"], primaryLocale: "en-KW", languages: ["ar", "en"], dateOrder: "dmy", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "KWD", legalEntitySuffixes: ["wll", "k s c", "co"], confidence: 74 },
   ...WORLD_REGIONAL_PROFILES,
+  ...WORLD_REGIONAL_PROFILES_2,
 ];
 
 const getRegionalProfile = (countryCode: string | null | undefined) =>
@@ -1111,6 +1113,8 @@ export const getContextCorpusCoverageReport = () => {
     if (/[\u0590-\u05FF]/u.test(alias)) return "hebrew";
     if (/[\u0400-\u04FF]/u.test(alias)) return "cyrillic";
     if (/[\u0370-\u03FF]/u.test(alias)) return "greek";
+    if (/[\u10A0-\u10FF]/u.test(alias)) return "georgian";
+    if (/[\u0530-\u058F]/u.test(alias)) return "armenian";
     if (/[\u1200-\u137F]/u.test(alias)) return "ethiopic";
     if (/[\u0980-\u09FF]/u.test(alias)) return "bengali";
     if (/[\u0D80-\u0DFF]/u.test(alias)) return "sinhala";
