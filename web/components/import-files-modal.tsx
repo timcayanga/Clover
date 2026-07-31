@@ -110,6 +110,7 @@ import {
   isLikelyLowQualityUnionBankStatementFile,
   isLikelyLowQualityUnionBankStatementFilename,
   isLikelyLowQualityPnbStatementFile,
+  isPasswordUnlockedPdfBatchItem,
   isServerHeavyStatementBatchItem,
   shouldPublishImportSummary,
   shouldRequireVisibleRowsForImport,
@@ -6873,8 +6874,10 @@ export function ImportFilesModal({
     item.status === "error" ||
     hasVisibleImportData(item, localPreparseSummaryByItemIdRef.current.get(item.id));
   const progressSettledFileCount = items.filter(isSettledForProgress).length;
-  const activeProgressContribution =
-    activeProgressItem && !isSettledForProgress(activeProgressItem) ? activeProgressItem.progress / 100 : 0;
+  const activeProgressContribution = items.reduce(
+    (total, item) => total + (isSettledForProgress(item) ? 0 : Math.max(0, Math.min(100, item.progress)) / 100),
+    0
+  );
   const overallProgress = items.length > 0
     ? ((progressSettledFileCount + activeProgressContribution) / items.length) * 100
     : 0;
@@ -7379,16 +7382,19 @@ export function ImportFilesModal({
       return isImageImportFile(item.file) && (mode === "statement" || mode === "receipt");
     };
     const processItemsForBatch = async (queue: QueuedFile[]) => {
+      const passwordUnlockedPdfBatch = queue.length > 1 && queue.every(isPasswordUnlockedPdfBatchItem);
       const canParallelizeQueue =
         queue.length > 1 &&
-        (queue.every(isFastImageBatchItem) || queue.every(isServerHeavyStatementBatchItem));
+        (queue.every(isFastImageBatchItem) || queue.every(isServerHeavyStatementBatchItem) || passwordUnlockedPdfBatch);
       if (!canParallelizeQueue) {
         return processItemsSequentially(queue);
       }
 
       const results: Array<{ itemId: string; result: ImportProcessResult }> = [];
       let nextIndex = 0;
-      const workerCount = Math.min(queue.every(isServerHeavyStatementBatchItem) ? 4 : 6, queue.length);
+      // Two encrypted PDFs can overlap extraction without opening enough
+      // concurrent confirmations to contend on one account's balance.
+      const workerCount = Math.min(passwordUnlockedPdfBatch ? 2 : queue.every(isServerHeavyStatementBatchItem) ? 4 : 6, queue.length);
 
       const runWorker = async () => {
         while (!uploadCancelRequestedRef.current) {

@@ -249,6 +249,16 @@ const main = async () => {
   );
   assert.match(
     modalSource,
+    /queue\.every\(isPasswordUnlockedPdfBatchItem\)/,
+    "Verified encrypted PDF batches should use bounded concurrent extraction."
+  );
+  assert.match(
+    modalSource,
+    /const activeProgressContribution = items\.reduce\(/,
+    "Batch progress should include every in-flight file rather than only the first active item."
+  );
+  assert.match(
+    modalSource,
     /<ImportUploadDock[\s\S]{0,1000}progress=\{visibleOverallProgress\}/,
     "The visible upload dock must receive real foreground progress, not a reset 0% display value."
   );

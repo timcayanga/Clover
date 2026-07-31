@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
-import { hasActiveServerImport, hasVisibleImportData } from "@/lib/import-visibility-rules";
+import {
+  hasActiveServerImport,
+  hasVisibleImportData,
+  isPasswordUnlockedPdfBatchItem,
+} from "@/lib/import-visibility-rules";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 
 const gcryptoOptimisticSummary: UploadInsightsSummary = {
@@ -97,6 +101,26 @@ assert.equal(
   ]),
   false,
   "A local pre-scan must not masquerade as an active server import."
+);
+
+assert.equal(
+  isPasswordUnlockedPdfBatchItem({
+    file: { name: "HSBC-statement.pdf", type: "application/pdf" },
+    importMode: "statement",
+    password: "verified-password",
+  }),
+  true,
+  "A password-validated statement PDF should be eligible for bounded batch concurrency."
+);
+
+assert.equal(
+  isPasswordUnlockedPdfBatchItem({
+    file: { name: "HSBC-statement.pdf", type: "application/pdf" },
+    importMode: "statement",
+    password: "",
+  }),
+  false,
+  "A locked PDF must not enter the parallel processing path."
 );
 
 assert.equal(

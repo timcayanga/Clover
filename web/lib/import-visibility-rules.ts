@@ -18,6 +18,7 @@ type VisibilityQueueItem = {
   confirmationState?: string | null;
   progress?: number | null;
   importFileId?: string | null;
+  password?: string | null;
 };
 
 const IMPORT_VISIBILITY_BASE_TIMEOUT_MS = 30_000;
@@ -191,6 +192,16 @@ export const isServerHeavyStatementBatchItem = (item: VisibilityQueueItem) => {
     mode === "statement" &&
     (lowerName.endsWith(".pdf") || /\.(?:csv|tsv)$/.test(lowerName)) &&
     (shouldSkipClientStatementPreparse(item.file.name) || shouldRequireVisibleRowsForImport(item.file.name))
+  );
+};
+
+export const isPasswordUnlockedPdfBatchItem = (item: VisibilityQueueItem) => {
+  const mode = inferImportModeForFile(item.file, item.importMode ?? "statement");
+  return (
+    mode === "statement" &&
+    item.file.name.toLowerCase().endsWith(".pdf") &&
+    typeof item.password === "string" &&
+    item.password.trim().length > 0
   );
 };
 
