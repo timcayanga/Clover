@@ -50674,7 +50674,40 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   border-radius: 999px;
 }
 
+.settings-section--plan .settings-plan-card__band {
+  position: relative;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.settings-section--plan .settings-plan-card__band-text {
+  justify-items: center;
+}
+
+.settings-section--plan .settings-plan-card__band > .settings-plan-card__icon {
+  position: absolute;
+  top: 50%;
+  left: 20px;
+  transform: translateY(-50%);
+}
+
+.settings-plan-card__management {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-plan-card__management .billing-helper {
+  flex-basis: 100%;
+}
+
 @media (max-width: 1100px) {
+  .settings-section--plan .settings-plan-card__band > .settings-plan-card__icon {
+    left: 14px;
+  }
+
   .settings-plan-usage__row {
     grid-template-columns: minmax(100px, 0.65fr) minmax(150px, 1.35fr);
     gap: 12px;

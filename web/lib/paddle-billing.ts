@@ -461,6 +461,30 @@ async function fetchPaddleSubscriptionCustomerId(
   return customerId;
 }
 
+export function getPaddleCustomerPortalLinks(
+  payload: unknown,
+  subscriptionId: string
+) {
+  const root = asRecord(payload);
+  const data = asRecord(root?.data);
+  const urls = asRecord(data?.urls);
+  const general = asRecord(urls?.general);
+  const subscriptions = Array.isArray(urls?.subscriptions)
+    ? urls.subscriptions
+    : [];
+  const subscriptionLinks = subscriptions
+    .map(asRecord)
+    .find((links) => readString(links?.id) === subscriptionId);
+
+  return {
+    overview: readString(general?.overview),
+    updatePaymentMethod: readString(
+      subscriptionLinks?.update_subscription_payment_method
+    ),
+    cancel: readString(subscriptionLinks?.cancel_subscription),
+  };
+}
+
 export async function createPaddleCustomerPortalSession(params: {
   subscriptionId: string;
   rawPayload: Prisma.JsonValue | null;
@@ -494,19 +518,14 @@ export async function createPaddleCustomerPortalSession(params: {
     throw new Error(`Unable to open Paddle subscription management (${response.status})`);
   }
 
-  const body = (await response.json()) as {
-    data?: {
-      urls?: {
-        general?: {
-          overview?: string;
-        };
-      };
-    };
-  };
-  const url = readString(body.data?.urls?.general?.overview);
-  if (!url) {
+  const links = getPaddleCustomerPortalLinks(
+    await response.json(),
+    params.subscriptionId
+  );
+
+  if (!links.overview) {
     throw new Error("Paddle did not return a customer portal link.");
   }
 
-  return url;
+  return links;
 }

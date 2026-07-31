@@ -10,6 +10,9 @@ import { getOrCreateCurrentUser } from "@/lib/user-context";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const portalActions = ["overview", "payment_method", "cancel"] as const;
+type PortalAction = (typeof portalActions)[number];
+
 export async function POST(request: Request) {
   try {
     assertTrustedRequestOrigin(request);
@@ -17,6 +20,15 @@ export async function POST(request: Request) {
     if (!session.userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const payload = (await request.json().catch(() => ({}))) as {
+      action?: unknown;
+    };
+    const action: PortalAction =
+      typeof payload.action === "string" &&
+      portalActions.includes(payload.action as PortalAction)
+        ? (payload.action as PortalAction)
+        : "overview";
 
     const user = await getOrCreateCurrentUser(session.userId);
     const subscription = await prisma.billingSubscription.findUnique({
@@ -33,10 +45,23 @@ export async function POST(request: Request) {
       );
     }
 
-    const url = await createPaddleCustomerPortalSession({
+    const links = await createPaddleCustomerPortalSession({
       subscriptionId: subscription.providerSubscriptionId,
       rawPayload: subscription.rawPayload,
     });
+    const url =
+      action === "payment_method"
+        ? links.updatePaymentMethod
+        : action === "cancel"
+          ? links.cancel
+          : links.overview;
+
+    if (!url) {
+      return NextResponse.json(
+        { error: "This Paddle subscription action is not available." },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json({ url });
   } catch (error) {

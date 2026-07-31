@@ -20,6 +20,8 @@ type BillingSubscriptionSummary = {
   planTier: "free" | "pro";
 };
 
+type PaddlePortalAction = "manage" | "payment_method" | "cancel" | "plan_change";
+
 type SettingsPlanPanelProps = {
   workspaceId: string;
   billingCustomerId?: string | null;
@@ -105,7 +107,7 @@ export function SettingsPlanPanel({
 }: SettingsPlanPanelProps) {
   const initialInterval = preferredBillingInterval ?? billingSubscription?.interval ?? "annual";
   const [billingInterval, setBillingInterval] = useState<BillingInterval>(initialInterval);
-  const [paddlePortalLoading, setPaddlePortalLoading] = useState(false);
+  const [paddlePortalAction, setPaddlePortalAction] = useState<PaddlePortalAction | null>(null);
   const [paddlePortalMessage, setPaddlePortalMessage] = useState<string | null>(null);
   const billingPlan = BILLING_PLANS.find((plan) => plan.interval === billingInterval);
   const checkoutPlanId = billingInterval === "monthly" ? paypalMonthlyPlanId : paypalAnnualPlanId;
@@ -121,6 +123,10 @@ export function SettingsPlanPanel({
   const currentInterval = billingSubscription?.interval ?? null;
   const currentProvider = billingSubscription?.provider ?? null;
   const billingDetailsReady = planLoaded && !planLoading;
+  const hasPaddleSubscription =
+    currentProvider === "paddle" &&
+    Boolean(billingSubscription?.providerSubscriptionId) &&
+    !["cancelled", "expired"].includes(billingSubscription?.status ?? "");
 
   useEffect(() => {
     if (billingDetailsReady && currentInterval) {
@@ -128,8 +134,8 @@ export function SettingsPlanPanel({
     }
   }, [billingDetailsReady, currentInterval]);
 
-  const openPaddlePortal = async () => {
-    setPaddlePortalLoading(true);
+  const openPaddlePortal = async (action: PaddlePortalAction) => {
+    setPaddlePortalAction(action);
     setPaddlePortalMessage(null);
 
     try {
@@ -138,7 +144,12 @@ export function SettingsPlanPanel({
         headers: {
           "Content-Type": "application/json",
         },
-        body: "{}",
+        body: JSON.stringify({
+          action:
+            action === "payment_method" || action === "cancel"
+              ? action
+              : "overview",
+        }),
       });
       const payload = (await response.json().catch(() => ({}))) as {
         url?: string;
@@ -150,9 +161,11 @@ export function SettingsPlanPanel({
       }
 
       capturePostHogClientEvent("billing_started", {
-        billing_action: "manage_subscription",
+        billing_action: action,
         billing_provider: "paddle",
         plan_interval: currentInterval,
+        target_plan_interval:
+          action === "plan_change" ? billingInterval : undefined,
       });
       window.location.assign(payload.url);
     } catch (error) {
@@ -161,7 +174,7 @@ export function SettingsPlanPanel({
           ? error.message
           : "Unable to open subscription management."
       );
-      setPaddlePortalLoading(false);
+      setPaddlePortalAction(null);
     }
   };
 
@@ -234,7 +247,6 @@ export function SettingsPlanPanel({
             <span className="settings-plan-card__icon"><PlanIcon /></span>
             <span className="settings-plan-card__band-text">
               <strong className="settings-plan-card__band-title">Free</strong>
-              <span className="settings-plan-card__band-price">PHP 0</span>
             </span>
           </div>
           <div className="settings-plan-card__body">
@@ -327,12 +339,55 @@ export function SettingsPlanPanel({
                 )
               ) : !billingDetailsReady ? (
                 <p className="settings-helper">Loading subscription details...</p>
-              ) : currentProvider === "paddle" ? (
+              ) : currentProvider === "paddle" && hasPaddleSubscription ? (
                 billingInterval === currentInterval ? (
-                  <span className="settings-pill">Current plan</span>
-                ) : (
-                  <p className="settings-helper">Paddle plan changes will be available from subscription management.</p>
-                )
+                  <div className="settings-plan-card__management">
+                    <button
+                      type="button"
+                      className="button button-secondary button-small settings-billing-action-button"
+                      onClick={() => void openPaddlePortal("manage")}
+                      disabled={paddlePortalAction !== null}
+                    >
+                      {paddlePortalAction === "manage" ? "Opening portal..." : "Manage Subscription"}
+                    </button>
+                    <button
+                      type="button"
+                      className="button button-secondary button-small settings-billing-action-button"
+                      onClick={() => void openPaddlePortal("payment_method")}
+                      disabled={paddlePortalAction !== null}
+                    >
+                      {paddlePortalAction === "payment_method" ? "Opening payment methods..." : "Change Payment Method"}
+                    </button>
+                    <button
+                      type="button"
+                      className="button button-danger button-small settings-billing-action-button"
+                      onClick={() => void openPaddlePortal("cancel")}
+                      disabled={paddlePortalAction !== null}
+                    >
+                      {paddlePortalAction === "cancel" ? "Opening cancellation..." : "Cancel Subscription"}
+                    </button>
+                    {paddlePortalMessage ? (
+                      <p className="billing-helper" aria-live="polite">
+                        {paddlePortalMessage}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : currentInterval ? (
+                  <button
+                    type="button"
+                    className="button button-primary button-small settings-billing-action-button"
+                    onClick={() => void openPaddlePortal("plan_change")}
+                    disabled={paddlePortalAction !== null}
+                  >
+                    {paddlePortalAction === "plan_change"
+                      ? "Opening plan options..."
+                      : currentInterval === "monthly" && billingInterval === "annual"
+                        ? "Upgrade to Annual"
+                        : `Switch to ${billingInterval === "monthly" ? "Monthly" : "Annual"}`}
+                  </button>
+                ) : null
+              ) : currentProvider === "paddle" ? (
+                null
               ) : currentProvider === "paypal" && billingInterval === currentInterval ? (
                 <span className="settings-pill">Current plan</span>
               ) : currentProvider === "paypal" && currentInterval ? (
@@ -368,22 +423,6 @@ export function SettingsPlanPanel({
           className="settings-plan-unsubscribe"
           minimalManagement
         />
-      ) : planTier === "pro" && billingDetailsReady && currentProvider === "paddle" ? (
-        <div className="settings-plan-unsubscribe">
-          <button
-            type="button"
-            className="button button-secondary button-small settings-billing-action-button"
-            onClick={() => void openPaddlePortal()}
-            disabled={paddlePortalLoading}
-          >
-            {paddlePortalLoading ? "Opening portal..." : "Manage subscription"}
-          </button>
-          {paddlePortalMessage ? (
-            <p className="billing-helper" aria-live="polite">
-              {paddlePortalMessage}
-            </p>
-          ) : null}
-        </div>
       ) : null}
     </section>
   );

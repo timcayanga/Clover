@@ -4,6 +4,7 @@ import { BillingProvider, BillingSubscriptionStatus, PlanTier } from "@prisma/cl
 import { shouldCancelBillingSubscription } from "@/lib/account-management";
 import {
   getPaddleBillingStatus,
+  getPaddleCustomerPortalLinks,
   getPaddlePlanTier,
   verifyPaddleWebhookSignature,
 } from "@/lib/paddle-billing";
@@ -96,6 +97,38 @@ assert.equal(
   true,
   "an active Paddle subscription must be cancelled before account deletion"
 );
+
+const paddlePortalLinks = getPaddleCustomerPortalLinks(
+  {
+    data: {
+      urls: {
+        general: {
+          overview: "https://sandbox-customer-portal.paddle.com/overview",
+        },
+        subscriptions: [
+          {
+            id: "sub_other",
+            cancel_subscription: "https://example.com/wrong-subscription",
+          },
+          {
+            id: "sub_test",
+            update_subscription_payment_method:
+              "https://sandbox-customer-portal.paddle.com/payment-method",
+            cancel_subscription:
+              "https://sandbox-customer-portal.paddle.com/cancel",
+          },
+        ],
+      },
+    },
+  },
+  "sub_test"
+);
+assert.deepEqual(paddlePortalLinks, {
+  overview: "https://sandbox-customer-portal.paddle.com/overview",
+  updatePaymentMethod:
+    "https://sandbox-customer-portal.paddle.com/payment-method",
+  cancel: "https://sandbox-customer-portal.paddle.com/cancel",
+});
 
 const paddleSecret = "pdl_ntfset_test";
 const paddleTimestamp = 1_800_000_000;
