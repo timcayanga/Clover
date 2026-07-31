@@ -89,6 +89,12 @@ import {
   isMarketInvestmentSubtype,
 } from "@/lib/investments";
 import { uploadSummaryMatchesImportedAccount } from "@/lib/imported-account-ui";
+import {
+  ACCOUNT_TYPE_SECTIONS,
+  formatAccountTypeLabel,
+  isSupportedAccountType,
+  type SupportedAccountType,
+} from "@/lib/account-types";
 
 type Account = {
   id: string;
@@ -105,7 +111,7 @@ type Account = {
   investmentMaturityDate: string | null;
   investmentInterestRate: string | null;
   investmentMaturityValue: string | null;
-  type: string;
+  type: SupportedAccountType;
   currency: string;
   source: string;
   balance: string | null;
@@ -1027,6 +1033,8 @@ function AccountDetailPageContent() {
   const [accountEditDraft, setAccountEditDraft] = useState({ name: "", accountNumber: "" });
   const [accountIdentityEditorOpen, setAccountIdentityEditorOpen] = useState(false);
   const [accountEditSaveState, setAccountEditSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [accountTypeEditorOpen, setAccountTypeEditorOpen] = useState(false);
+  const [accountTypeSaveState, setAccountTypeSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [balanceEditorOpen, setBalanceEditorOpen] = useState(false);
   const [balanceAdjustmentOpen, setBalanceAdjustmentOpen] = useState(false);
   const [balanceAdjustmentMode, setBalanceAdjustmentMode] = useState<"add" | "remove">("add");
@@ -3589,6 +3597,47 @@ function AccountDetailPageContent() {
     }
   };
 
+  const changeAccountType = async (nextType: SupportedAccountType) => {
+    if (!account || nextType === account.type || accountTypeSaveState === "saving") {
+      return;
+    }
+
+    const previousAccount = account;
+    setAccountTypeSaveState("saving");
+    setAccount((current) => (current ? { ...current, type: nextType } : current));
+
+    try {
+      const response = await fetch(`/api/accounts/${account.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: account.workspaceId,
+          type: nextType,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to update the account type.");
+      }
+
+      const payload = await response.json();
+      const nextAccount = payload.account as Account | undefined;
+      if (nextAccount) {
+        setAccount(nextAccount);
+        const canonicalPath = getAccountPath(nextAccount);
+        if (canonicalPath !== `/accounts/${accountPathSegment}`) {
+          router.replace(canonicalPath);
+        }
+      }
+      setAccountTypeSaveState("saved");
+      setMessage(`Account moved to ${formatAccountTypeLabel(nextType)}.`);
+    } catch (error) {
+      setAccount(previousAccount);
+      setAccountTypeSaveState("error");
+      setMessage(error instanceof Error ? error.message : "Unable to update the account type.");
+    }
+  };
+
   const mergeableAccounts = useMemo(
     () =>
       workspaceAccounts
@@ -3909,14 +3958,63 @@ function AccountDetailPageContent() {
                 }
               />
 
-              {canAdjustBalanceSimply ? (
+              <div className="accounts-detail__card-text-actions">
+                {canAdjustBalanceSimply ? (
+                  <button
+                    className="accounts-detail__balance-adjust-button"
+                    type="button"
+                    onClick={openBalanceAdjustment}
+                  >
+                    {balanceAdjustmentLabel}
+                  </button>
+                ) : null}
                 <button
-                  className="button button-secondary button-small accounts-detail__balance-adjust-button"
+                  className="accounts-detail__type-edit-button"
                   type="button"
-                  onClick={openBalanceAdjustment}
+                  onClick={() => {
+                    setAccountTypeEditorOpen((open) => !open);
+                    setAccountTypeSaveState("idle");
+                  }}
+                  aria-expanded={accountTypeEditorOpen}
                 >
-                  {balanceAdjustmentLabel}
+                  Edit Type
                 </button>
+              </div>
+
+              {accountTypeEditorOpen ? (
+                <label className="accounts-detail__type-editor">
+                  <span>Account type</span>
+                  <select
+                    value={account.type}
+                    onChange={(event) => {
+                      const nextType = event.target.value;
+                      if (isSupportedAccountType(nextType)) {
+                        void changeAccountType(nextType);
+                      }
+                    }}
+                    disabled={accountTypeSaveState === "saving"}
+                    aria-label="Account type"
+                  >
+                    {ACCOUNT_TYPE_SECTIONS.map((section) => (
+                      <optgroup key={section.label} label={section.label}>
+                        {section.options.map((option) => (
+                          <option key={option} value={option}>
+                            {formatAccountTypeLabel(option)}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <small aria-live="polite">
+                    {accountTypeSaveState === "saving"
+                      ? "Saving..."
+                      : accountTypeSaveState === "saved"
+                        ? "Saved"
+                        : accountTypeSaveState === "error"
+                          ? "Try again"
+                          : ""}
+                  </small>
+                </label>
               ) : null}
 
               <button
@@ -4361,7 +4459,7 @@ function AccountDetailPageContent() {
           </div>
         ) : null}
 
-        <div className="accounts-detail__transactions glass" style={{ marginTop: 24 }}>
+        <div className="accounts-detail__transactions" style={{ marginTop: 24 }}>
           {showFinalizingNotice || selectedTransactionIds.length > 0 ? (
             <div className="accounts-detail__reconciliation-head accounts-detail__transactions-toolbar">
               <div className="accounts-detail__transactions-actions">

@@ -24283,6 +24283,45 @@ button.investments-portfolio-inline-edit {
   width: 100%;
 }
 
+.accounts-card-drag-shell {
+  width: 100%;
+  max-width: 272px;
+  cursor: grab;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.accounts-card-drag-shell:active {
+  cursor: grabbing;
+}
+
+.accounts-card-drag-shell.is-dragging {
+  opacity: 0.46;
+  transform: scale(0.98);
+}
+
+.accounts-group--drop-target {
+  transition: background-color 140ms ease, outline-color 140ms ease;
+}
+
+.accounts-group--drop-target.is-drag-over {
+  border-radius: 18px;
+  background: rgba(3, 168, 192, 0.07) !important;
+  outline: 2px dashed rgba(3, 168, 192, 0.42);
+  outline-offset: 6px;
+}
+
+.accounts-group__empty-drop-hint {
+  display: grid;
+  width: min(100%, 272px);
+  min-height: 96px;
+  place-items: center;
+  border: 1px dashed rgba(3, 168, 192, 0.34);
+  border-radius: 20px;
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 @media (min-width: 1101px) {
   .accounts-card-grid.accounts-card-grid--desktop {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 272px));
@@ -25315,9 +25354,69 @@ button.investments-portfolio-inline-edit {
 .accounts-detail__balance-adjust-button {
   align-self: center;
   width: fit-content;
-  min-height: 34px;
-  padding-inline: 14px;
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.accounts-detail__card-text-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.accounts-detail__type-edit-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.accounts-detail__balance-adjust-button:hover,
+.accounts-detail__balance-adjust-button:focus-visible,
+.accounts-detail__type-edit-button:hover,
+.accounts-detail__type-edit-button:focus-visible {
   color: var(--accent-strong);
+  text-decoration: underline;
+}
+
+.accounts-detail__type-editor {
+  display: grid;
+  grid-template-columns: auto minmax(150px, 220px) 52px;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.accounts-detail__type-editor select {
+  min-height: 32px;
+  padding: 0 28px 0 8px;
+  border: 0;
+  border-bottom: 1px solid rgba(3, 168, 192, 0.34);
+  border-radius: 0;
+  background-color: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+}
+
+.accounts-detail__type-editor small {
+  min-width: 52px;
+  color: var(--muted);
+  font-size: 0.7rem;
 }
 
 .accounts-detail__transactions-toolbar {
@@ -50811,5 +50910,28 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   .settings-hub--mobile-menu .settings-hub__menu-icon {
     width: 34px;
     height: 34px;
+  }
+}
+
+/* Account detail desktop keeps transaction rows visually integrated with the page. */
+@media (min-width: 1101px) {
+  .accounts-detail__transactions {
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .accounts-detail__transaction-list--compact .line-item,
+  html[data-theme="dark"] .accounts-detail__transaction-list--compact .line-item {
+    border-bottom: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .accounts-detail__transaction-list--compact .line-item:hover,
+  .accounts-detail__transaction-list--compact .line-item:focus-within {
+    background: color-mix(in srgb, var(--surface) 54%, transparent) !important;
   }
 }

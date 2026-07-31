@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { flushSync } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CloverShell, useCloverChrome } from "@/components/clover-shell";
@@ -1376,6 +1376,9 @@ function AccountsPageContent() {
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(initialWorkspaceId);
   const [selectedCurrency, setSelectedCurrency] = useState("PHP");
   const [accounts, setAccounts] = useState<Account[]>(initialCachedAccounts);
+  const [draggedAccountId, setDraggedAccountId] = useState<string | null>(null);
+  const [activeAccountDropType, setActiveAccountDropType] = useState<SupportedAccountType | null>(null);
+  const [movingAccountId, setMovingAccountId] = useState<string | null>(null);
   const [accountRules, setAccountRules] = useState<AccountRule[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>(initialCachedTransactions);
   const [statementCheckpoints, setStatementCheckpoints] = useState<StatementCheckpoint[]>(initialCachedStatementCheckpoints);
@@ -2965,6 +2968,7 @@ function AccountsPageContent() {
     const groups = [
       {
         title: "Banks & savings",
+        dropType: "bank" as const,
         tone: "assets",
         itemLabel: "account",
         rows: visibleAccounts.filter((account) => {
@@ -2974,12 +2978,14 @@ function AccountsPageContent() {
       },
       {
         title: "Credit Cards",
+        dropType: "credit_card" as const,
         tone: "liability",
         itemLabel: "account",
         rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "credit_card"),
       },
       {
         title: "Liabilities",
+        dropType: "loan" as const,
         tone: "liability",
         itemLabel: "account",
         rows: visibleAccounts.filter((account) => {
@@ -2989,12 +2995,14 @@ function AccountsPageContent() {
       },
       {
         title: "Wallets",
+        dropType: "wallet" as const,
         tone: "assets",
         itemLabel: "account",
         rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "wallet"),
       },
       {
         title: "Investments",
+        dropType: "investment" as const,
         tone: "assets",
         itemLabel: "institution",
         rows: buildInvestmentInstitutionCards(
@@ -3004,12 +3012,14 @@ function AccountsPageContent() {
       },
       {
         title: "Tracked assets",
+        dropType: "other" as const,
         tone: "neutral",
         itemLabel: "account",
         rows: visibleAccounts.filter((account) => isTrackedAssetAccountType(getEffectiveAccountType(account))),
       },
       {
         title: "Cash",
+        dropType: "cash" as const,
         tone: "cash",
         itemLabel: "account",
         rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "cash"),
@@ -3029,8 +3039,8 @@ function AccountsPageContent() {
           0
         ),
       }))
-      .filter((group) => group.rows.length > 0);
-  }, [visibleAccounts]);
+      .filter((group) => group.rows.length > 0 || draggedAccountId !== null);
+  }, [draggedAccountId, visibleAccounts]);
 
   const selectedAccount = useMemo(
     () => reconciledAccounts.find((account) => account.id === drawerAccountId) ?? null,
@@ -3332,6 +3342,73 @@ function AccountsPageContent() {
     });
   };
 
+  const moveAccountToType = async (account: Account, nextType: SupportedAccountType) => {
+    if (
+      !selectedWorkspaceId ||
+      isCashFallbackAccount(account) ||
+      account.id.startsWith("optimistic-") ||
+      movingAccountId === account.id ||
+      account.type === nextType
+    ) {
+      return;
+    }
+
+    const previousType = account.type;
+    setMovingAccountId(account.id);
+    setAccounts((current) =>
+      current.map((entry) => (entry.id === account.id ? { ...entry, type: nextType } : entry))
+    );
+
+    try {
+      const response = await fetch(`/api/accounts/${account.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: selectedWorkspaceId,
+          type: nextType,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to move this account.");
+      }
+
+      const payload = await response.json();
+      setAccounts((current) =>
+        current.map((entry) => (entry.id === account.id ? ((payload.account as Account | undefined) ?? entry) : entry))
+      );
+      setMessage(`${account.name} moved to ${formatAccountTypeLabel(nextType)}.`);
+    } catch (error) {
+      setAccounts((current) =>
+        current.map((entry) => (entry.id === account.id ? { ...entry, type: previousType } : entry))
+      );
+      setMessage(error instanceof Error ? error.message : "Unable to move this account.");
+    } finally {
+      setMovingAccountId(null);
+    }
+  };
+
+  const handleAccountDragStart = (event: DragEvent<HTMLDivElement>, account: Account) => {
+    if (
+      window.innerWidth <= 1100 ||
+      isCashFallbackAccount(account) ||
+      account.id.startsWith("optimistic-") ||
+      movingAccountId === account.id
+    ) {
+      event.preventDefault();
+      return;
+    }
+
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", account.id);
+    setDraggedAccountId(account.id);
+  };
+
+  const finishAccountDrag = () => {
+    setDraggedAccountId(null);
+    setActiveAccountDropType(null);
+  };
+
   const renderAccountCard = (row: Account | InvestmentInstitutionCard, key: string) => {
     if (isInvestmentInstitutionCard(row)) {
       const accountBrand = getAccountBrand({
@@ -3416,22 +3493,29 @@ function AccountsPageContent() {
         : formattedAccountCardNumber;
 
     return (
-      <FinancialAccountCard
+      <div
         key={key}
-        accountBrand={accountBrand}
-        name={accountCardName}
-        accountNumber={accountCardNumber}
-        amount={
-          loadingContext.isLoading
-            ? "Loading..."
-            : loadingContext.isTimedOut
-              ? "Pending review"
-              : formatAccountAmount(balanceValue, row.currency)
-        }
-        onOpen={() => openAccountDrawer(row)}
-        openLabel={`Open ${accountCardName} account`}
-        state={isDeleting ? "deleting" : loadingContext.isLoading ? "loading" : undefined}
-      />
+        className={`accounts-card-drag-shell${draggedAccountId === row.id ? " is-dragging" : ""}`}
+        draggable={!isDeleting && !loadingContext.isLoading && !isCashFallbackAccount(row)}
+        onDragStart={(event) => handleAccountDragStart(event, row)}
+        onDragEnd={finishAccountDrag}
+      >
+        <FinancialAccountCard
+          accountBrand={accountBrand}
+          name={accountCardName}
+          accountNumber={accountCardNumber}
+          amount={
+            loadingContext.isLoading
+              ? "Loading..."
+              : loadingContext.isTimedOut
+                ? "Pending review"
+                : formatAccountAmount(balanceValue, row.currency)
+          }
+          onOpen={() => openAccountDrawer(row)}
+          openLabel={`Open ${accountCardName} account`}
+          state={isDeleting ? "deleting" : loadingContext.isLoading ? "loading" : undefined}
+        />
+      </div>
     );
   };
 
@@ -4094,7 +4178,43 @@ function AccountsPageContent() {
                 </div>
               ) : accountGroups.length > 0 ? (
                 accountGroups.map((group) => (
-                  <article key={group.title} className="accounts-group">
+                  <article
+                    key={group.title}
+                    className={`accounts-group accounts-group--drop-target${
+                      activeAccountDropType === group.dropType ? " is-drag-over" : ""
+                    }`}
+                    data-account-drop-type={group.dropType}
+                    onDragEnter={(event) => {
+                      if (!draggedAccountId) return;
+                      event.preventDefault();
+                      setActiveAccountDropType(group.dropType);
+                    }}
+                    onDragOver={(event) => {
+                      if (!draggedAccountId) return;
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                    }}
+                    onDragLeave={(event) => {
+                      const bounds = event.currentTarget.getBoundingClientRect();
+                      const leftSection =
+                        event.clientX <= bounds.left ||
+                        event.clientX >= bounds.right ||
+                        event.clientY <= bounds.top ||
+                        event.clientY >= bounds.bottom;
+                      if (leftSection) {
+                        setActiveAccountDropType((current) => (current === group.dropType ? null : current));
+                      }
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const accountId = event.dataTransfer.getData("text/plain") || draggedAccountId;
+                      const droppedAccount = accounts.find((entry) => entry.id === accountId);
+                      finishAccountDrag();
+                      if (droppedAccount) {
+                        void moveAccountToType(droppedAccount, group.dropType);
+                      }
+                    }}
+                  >
                     <div className="accounts-group__head">
                       <div className="accounts-group__title-row">
                         <h5>{group.title}</h5>
@@ -4104,6 +4224,9 @@ function AccountsPageContent() {
 
                     <div className="accounts-card-grid accounts-card-grid--desktop" aria-label={`${group.title} accounts`}>
                       {group.rows.map((row) => renderAccountCard(row, `${group.title}-${row.id}`))}
+                      {draggedAccountId && group.rows.length === 0 ? (
+                        <div className="accounts-group__empty-drop-hint">Move account here</div>
+                      ) : null}
                     </div>
                     <div className="accounts-mobile-list accounts-mobile-list--mobile" aria-label={`${group.title} account list`}>
                       {group.rows.map((row) => renderMobileListRow(row, `${group.title}-mobile-${row.id}`))}
