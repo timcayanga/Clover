@@ -1163,6 +1163,7 @@ model CircleInvitation {
   invitedBy       User                   @relation("CircleInvitationSender", fields: [invitedByUserId], references: [id], onDelete: Cascade)
 
   @@index([circleId, status])
+  @@index([invitedByUserId])
   @@index([email, status])
   @@index([expiresAt])
 }
@@ -1285,6 +1286,7 @@ model CircleSharedTransaction {
 
   @@unique([circleId, transactionId])
   @@index([circleId, createdAt])
+  @@index([transactionId])
   @@index([sharedByUserId])
 }
 
@@ -1303,6 +1305,7 @@ model CircleInvestmentShare {
 
   @@unique([circleId, accountId])
   @@index([circleId, createdAt])
+  @@index([accountId])
   @@index([sharedByUserId])
 }
 
@@ -1448,6 +1451,7 @@ model SplitBillPaymentRequest {
   paymentProfile         SplitBillPaymentProfile?      @relation(fields: [paymentProfileId], references: [id], onDelete: SetNull)
 
   @@index([billId])
+  @@index([paymentProfileId])
   @@index([recipientParticipantId])
   @@index([status])
   @@index([dueDate])
@@ -1601,6 +1605,7 @@ model MerchantRule {
   @@unique([workspaceId, merchantKey])
   @@index([workspaceId])
   @@index([merchantKey])
+  @@index([categoryId])
 }
 
 model AccountRule {
@@ -1657,6 +1662,7 @@ model TrainingSignal {
   @@index([transactionId])
   @@index([importFileId])
   @@index([merchantKey])
+  @@index([categoryId])
 }
 
 model DataQaRun {
