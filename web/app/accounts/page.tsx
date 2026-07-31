@@ -16,6 +16,11 @@ import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
 import { deriveReconciledBalance, normalizeAccountBalanceSign } from "@/lib/account-balance";
+import {
+  ACCOUNT_CARD_DRAG_MIME,
+  hasActiveAccountCardDrag,
+  readDraggedAccountId,
+} from "@/lib/account-card-drag";
 import { prefersLiveInvestmentBalance } from "@/lib/investment-balance";
 import { getUploadSummaryCurrencies } from "@/lib/import-upload-summary";
 import { getAccountCardName, getAccountDisplayName, formatUploadAccountDisplayName } from "@/lib/account-display";
@@ -1361,6 +1366,7 @@ function AccountsPageContent() {
   const workspaceHydrationVersionRef = useRef(new Map<string, number>());
   const workspaceCacheWriteDepthRef = useRef(0);
   const deletedAccountIdsRef = useRef(new Set<string>());
+  const draggedAccountIdRef = useRef<string | null>(null);
   // Keep the server and first browser render identical. Workspace selection
   // and its cached snapshot are restored after mount; reading localStorage
   // here caused a hydration failure that could strand Accounts on an empty
@@ -3400,11 +3406,14 @@ function AccountsPageContent() {
     }
 
     event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData(ACCOUNT_CARD_DRAG_MIME, account.id);
     event.dataTransfer.setData("text/plain", account.id);
+    draggedAccountIdRef.current = account.id;
     setDraggedAccountId(account.id);
   };
 
   const finishAccountDrag = () => {
+    draggedAccountIdRef.current = null;
     setDraggedAccountId(null);
     setActiveAccountDropType(null);
   };
@@ -4185,12 +4194,12 @@ function AccountsPageContent() {
                     }`}
                     data-account-drop-type={group.dropType}
                     onDragEnter={(event) => {
-                      if (!draggedAccountId) return;
+                      if (!hasActiveAccountCardDrag(draggedAccountIdRef.current, Array.from(event.dataTransfer.types))) return;
                       event.preventDefault();
                       setActiveAccountDropType(group.dropType);
                     }}
                     onDragOver={(event) => {
-                      if (!draggedAccountId) return;
+                      if (!hasActiveAccountCardDrag(draggedAccountIdRef.current, Array.from(event.dataTransfer.types))) return;
                       event.preventDefault();
                       event.dataTransfer.dropEffect = "move";
                     }}
@@ -4207,7 +4216,10 @@ function AccountsPageContent() {
                     }}
                     onDrop={(event) => {
                       event.preventDefault();
-                      const accountId = event.dataTransfer.getData("text/plain") || draggedAccountId;
+                      const accountId = readDraggedAccountId(
+                        (type) => event.dataTransfer.getData(type),
+                        draggedAccountIdRef.current
+                      );
                       const droppedAccount = accounts.find((entry) => entry.id === accountId);
                       finishAccountDrag();
                       if (droppedAccount) {
