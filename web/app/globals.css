@@ -19885,7 +19885,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .import-password-modal {
-  width: min(560px, 100%);
+  width: min(460px, 100%);
 }
 
 .import-password-header {
@@ -19900,7 +19900,8 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
 .import-password-body {
   display: grid;
-  gap: 16px;
+  gap: 12px;
+  font-size: 0.82rem;
 }
 
 .import-password-file {
@@ -19912,9 +19913,9 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .import-password-file strong {
-  font-size: 18px;
+  font-size: 0.92rem;
   line-height: 1.25;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
 }
 
 .import-password-file span {
@@ -19925,12 +19926,12 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 .import-password-error {
   color: #b91c1c;
   line-height: 1.45;
-  font-size: 14px;
+  font-size: 0.78rem;
 }
 
 .import-password-form {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .import-password-field {
@@ -19944,7 +19945,9 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
 .import-password-input input {
   width: 100%;
+  min-height: 38px;
   padding-right: 54px;
+  font-size: 0.84rem;
 }
 
 .import-password-toggle {
@@ -22617,32 +22620,29 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .accounts-detail__credit-inline {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  width: min(100%, 760px);
-  margin-top: 2px;
-  padding: 8px 10px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.72);
+  display: grid;
+  align-content: center;
+  gap: 14px;
+  width: min(100%, 310px);
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .accounts-detail__credit-inline-field {
   display: grid;
-  gap: 2px;
-  min-width: 132px;
-  padding: 6px 8px;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
 }
 
 .accounts-detail__credit-inline-field span,
 .accounts-detail__credit-inline-meta {
   color: var(--muted);
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .accounts-detail__credit-inline-field strong {
@@ -22652,11 +22652,11 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .accounts-detail__credit-inline-field--editable {
-  min-width: 154px;
+  min-width: 0;
 }
 
 .accounts-detail__credit-inline-field--period {
-  min-width: 270px;
+  min-width: 0;
 }
 
 .accounts-detail__credit-inline-field input {
@@ -22693,7 +22693,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .accounts-detail__credit-inline-meta {
-  margin-left: auto;
+  margin: -6px 0 0;
   text-transform: none;
   letter-spacing: 0;
 }
@@ -25311,6 +25311,21 @@ button.investments-portfolio-inline-edit {
   display: grid;
   justify-items: center;
   gap: 12px;
+}
+
+.accounts-detail__hero-layout {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  width: min(100%, 272px);
+}
+
+.accounts-detail__hero-layout.is-credit-account {
+  grid-template-columns: minmax(250px, 310px) 272px;
+  align-items: center;
+  justify-content: center;
+  column-gap: clamp(28px, 5vw, 72px);
+  width: min(100%, 680px);
 }
 
 .accounts-detail__hero-card-row {
@@ -33064,6 +33079,21 @@ button.accounts-detail__transaction-head-cell {
 
   .accounts-detail__hero-card {
     width: min(100%, 272px);
+  }
+
+  .accounts-detail__hero-layout,
+  .accounts-detail__hero-layout.is-credit-account {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .accounts-detail__hero-layout.is-credit-account .accounts-detail__hero-card-row {
+    grid-row: 1;
+  }
+
+  .accounts-detail__hero-layout.is-credit-account .accounts-detail__credit-inline {
+    grid-row: 2;
+    width: min(100%, 320px);
   }
 
   .accounts-detail__hero-card-row {

@@ -97,10 +97,10 @@ export function ImportPasswordModal({
             </label>
 
             <div className="import-password-actions">
-              <button className="button button-secondary" type="button" onClick={onClose}>
+              <button className="button button-secondary button-small" type="button" onClick={onClose}>
                 Close
               </button>
-              <button className="button button-primary" type="submit" disabled={!activeFile.password.trim()}>
+              <button className="button button-primary button-small" type="submit" disabled={!activeFile.password.trim()}>
                 Unlock file
               </button>
             </div>

@@ -92,6 +92,7 @@ import { uploadSummaryMatchesImportedAccount } from "@/lib/imported-account-ui";
 import {
   ACCOUNT_TYPE_SECTIONS,
   formatAccountTypeLabel,
+  isLiabilityAccountType,
   isSupportedAccountType,
   type SupportedAccountType,
 } from "@/lib/account-types";
@@ -2149,7 +2150,7 @@ function AccountDetailPageContent() {
         ? "Saved on account"
         : importedCreditLimit !== null
           ? "Read from latest statement"
-          : "Not set";
+          : null;
   const monthlyDefaultPeriod = useMemo(() => getCurrentMonthPeriod(), []);
   const detectedPeriodStartDraft = latestCheckpoint?.statementStartDate
     ? formatDateInputValue(latestCheckpoint.statementStartDate)
@@ -2159,28 +2160,13 @@ function AccountDetailPageContent() {
     : monthlyDefaultPeriod.end;
   const effectivePeriodStartDraft = creditPeriodStartDraft || formatDateInputValue(account?.creditPeriodStart) || detectedPeriodStartDraft;
   const effectivePeriodEndDraft = creditPeriodEndDraft || formatDateInputValue(account?.creditPeriodEnd) || detectedPeriodEndDraft;
-  const currentPeriodStart = new Date(`${effectivePeriodStartDraft}T00:00:00`);
-  const currentPeriodEnd = new Date(`${effectivePeriodEndDraft}T23:59:59`);
-  const currentPeriodCharges = isCreditAccount
-    ? transactions.reduce((total, transaction) => {
-        const transactionDate = new Date(transaction.date);
-        if (
-          Number.isNaN(transactionDate.getTime()) ||
-          transactionDate < currentPeriodStart ||
-          transactionDate > currentPeriodEnd ||
-          transaction.type !== "expense"
-        ) {
-          return total;
-        }
-
-        return total + Math.abs(parseAmount(transaction.amount));
-      }, 0)
-    : 0;
-  const currentPeriodRemainingLimit = effectiveCreditLimit === null ? null : Math.max(0, effectiveCreditLimit - currentPeriodCharges);
   const creditCurrentPeriodLabel =
     effectivePeriodStartDraft && effectivePeriodEndDraft
       ? `${formatDate(effectivePeriodStartDraft)} - ${formatDate(effectivePeriodEndDraft)}`
       : `${formatDate(detectedPeriodStartDraft)} - ${formatDate(detectedPeriodEndDraft)}`;
+  const accountCardBalance = isLiabilityAccountType(account?.type)
+    ? Math.abs(parseAmount(displayBalance))
+    : parseAmount(displayBalance);
 
   useEffect(() => {
     if (!account || !matchingImportSummaryHasRows || matchingImportSummaryPreviewTransactions.length === 0) {
@@ -3939,94 +3925,149 @@ function AccountDetailPageContent() {
               </div>
             ) : null}
 
-            <div className="accounts-detail__hero-card-row">
-              <FinancialAccountCard
-                className="accounts-detail__hero-card"
-                accountBrand={accountBrand}
-                name={accountCardName}
-                accountNumber={liveCardNumber}
-                amount={isPendingBalance ? "Loading..." : formatAccountAmount(parseAmount(displayBalance), account.currency)}
-                amountLabel={`Change ${accountCardName} balance`}
-                onAmountClick={openBalanceEditor}
-                showChevron={false}
-                onOpen={
-                  account.type === "investment"
-                    ? undefined
-                    : () => {
-                        setAccountIdentityEditorOpen((open) => !open);
-                      }
-                }
-              />
-
-              <div className="accounts-detail__card-text-actions">
-                {canAdjustBalanceSimply ? (
-                  <button
-                    className="accounts-detail__balance-adjust-button"
-                    type="button"
-                    onClick={openBalanceAdjustment}
-                  >
-                    {balanceAdjustmentLabel}
-                  </button>
-                ) : null}
-                <button
-                  className="accounts-detail__type-edit-button"
-                  type="button"
-                  onClick={() => {
-                    setAccountTypeEditorOpen((open) => !open);
-                    setAccountTypeSaveState("idle");
-                  }}
-                  aria-expanded={accountTypeEditorOpen}
-                >
-                  Edit Type
-                </button>
-              </div>
-
-              {accountTypeEditorOpen ? (
-                <label className="accounts-detail__type-editor">
-                  <span>Account type</span>
-                  <select
-                    value={account.type}
-                    onChange={(event) => {
-                      const nextType = event.target.value;
-                      if (isSupportedAccountType(nextType)) {
-                        void changeAccountType(nextType);
-                      }
-                    }}
-                    disabled={accountTypeSaveState === "saving"}
-                    aria-label="Account type"
-                  >
-                    {ACCOUNT_TYPE_SECTIONS.map((section) => (
-                      <optgroup key={section.label} label={section.label}>
-                        {section.options.map((option) => (
-                          <option key={option} value={option}>
-                            {formatAccountTypeLabel(option)}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                  <small aria-live="polite">
-                    {accountTypeSaveState === "saving"
-                      ? "Saving..."
-                      : accountTypeSaveState === "saved"
-                        ? "Saved"
-                        : accountTypeSaveState === "error"
-                          ? "Try again"
-                          : ""}
-                  </small>
-                </label>
+            <div className={`accounts-detail__hero-layout${isCreditAccount ? " is-credit-account" : ""}`}>
+              {isCreditAccount ? (
+                <div className="accounts-detail__credit-inline" aria-label="Credit card details">
+                  <label className="accounts-detail__credit-inline-field accounts-detail__credit-inline-field--editable">
+                    <span>Credit Limit</span>
+                    <input
+                      value={creditLimitDraft}
+                      onChange={(event) => {
+                        setCreditLimitDraft(event.target.value);
+                        setCreditLimitSaveState("idle");
+                      }}
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      aria-label="Credit limit"
+                    />
+                  </label>
+                  <div className="accounts-detail__credit-inline-field accounts-detail__credit-inline-field--period">
+                    <span>Current Period</span>
+                    <div className="accounts-detail__credit-period-inputs" aria-label={`Current period: ${creditCurrentPeriodLabel}`}>
+                      <input
+                        type="date"
+                        value={creditPeriodStartDraft}
+                        onChange={(event) => {
+                          setCreditPeriodStartDraft(event.target.value);
+                          setCreditLimitSaveState("idle");
+                        }}
+                        aria-label="Current period start"
+                      />
+                      <span>to</span>
+                      <input
+                        type="date"
+                        value={creditPeriodEndDraft}
+                        onChange={(event) => {
+                          setCreditPeriodEndDraft(event.target.value);
+                          setCreditLimitSaveState("idle");
+                        }}
+                        aria-label="Current period end"
+                      />
+                    </div>
+                  </div>
+                  {creditLimitSaveState !== "idle" || creditLimitSourceLabel ? (
+                    <span className="accounts-detail__credit-inline-meta">
+                      {creditLimitSaveState === "saving"
+                        ? "Saving..."
+                        : creditLimitSaveState === "saved"
+                          ? "Saved"
+                          : creditLimitSaveState === "error"
+                            ? "Needs attention"
+                            : creditLimitSourceLabel}
+                    </span>
+                  ) : null}
+                </div>
               ) : null}
 
-              <button
-                className={`icon-button accounts-detail__favorite-toggle${account.favorite ? " is-active" : ""}`}
-                type="button"
-                onClick={() => void toggleFavoriteAccount()}
-                aria-pressed={Boolean(account.favorite)}
-                aria-label={account.favorite ? "Remove account from favorites" : "Mark account as favorite"}
-                disabled={favoriteSaving}
-              >
-                <ActionIcon name={account.favorite ? "star-filled" : "star"} />
-              </button>
+              <div className="accounts-detail__hero-card-row">
+                <FinancialAccountCard
+                  className="accounts-detail__hero-card"
+                  accountBrand={accountBrand}
+                  name={accountCardName}
+                  accountNumber={liveCardNumber}
+                  amount={isPendingBalance ? "Loading..." : formatAccountAmount(accountCardBalance, account.currency)}
+                  amountLabel={`Change ${accountCardName} balance`}
+                  onAmountClick={openBalanceEditor}
+                  showChevron={false}
+                  onOpen={
+                    account.type === "investment"
+                      ? undefined
+                      : () => {
+                          setAccountIdentityEditorOpen((open) => !open);
+                        }
+                  }
+                />
+
+                <div className="accounts-detail__card-text-actions">
+                  {canAdjustBalanceSimply ? (
+                    <button
+                      className="accounts-detail__balance-adjust-button"
+                      type="button"
+                      onClick={openBalanceAdjustment}
+                    >
+                      {balanceAdjustmentLabel}
+                    </button>
+                  ) : null}
+                  <button
+                    className="accounts-detail__type-edit-button"
+                    type="button"
+                    onClick={() => {
+                      setAccountTypeEditorOpen((open) => !open);
+                      setAccountTypeSaveState("idle");
+                    }}
+                    aria-expanded={accountTypeEditorOpen}
+                  >
+                    Edit Type
+                  </button>
+                </div>
+
+                {accountTypeEditorOpen ? (
+                  <label className="accounts-detail__type-editor">
+                    <span>Account type</span>
+                    <select
+                      value={account.type}
+                      onChange={(event) => {
+                        const nextType = event.target.value;
+                        if (isSupportedAccountType(nextType)) {
+                          void changeAccountType(nextType);
+                        }
+                      }}
+                      disabled={accountTypeSaveState === "saving"}
+                      aria-label="Account type"
+                    >
+                      {ACCOUNT_TYPE_SECTIONS.map((section) => (
+                        <optgroup key={section.label} label={section.label}>
+                          {section.options.map((option) => (
+                            <option key={option} value={option}>
+                              {formatAccountTypeLabel(option)}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <small aria-live="polite">
+                      {accountTypeSaveState === "saving"
+                        ? "Saving..."
+                        : accountTypeSaveState === "saved"
+                          ? "Saved"
+                          : accountTypeSaveState === "error"
+                            ? "Try again"
+                            : ""}
+                    </small>
+                  </label>
+                ) : null}
+
+                <button
+                  className={`icon-button accounts-detail__favorite-toggle${account.favorite ? " is-active" : ""}`}
+                  type="button"
+                  onClick={() => void toggleFavoriteAccount()}
+                  aria-pressed={Boolean(account.favorite)}
+                  aria-label={account.favorite ? "Remove account from favorites" : "Mark account as favorite"}
+                  disabled={favoriteSaving}
+                >
+                  <ActionIcon name={account.favorite ? "star-filled" : "star"} />
+                </button>
+              </div>
             </div>
 
             {account.type !== "investment" && accountIdentityEditorOpen ? (
@@ -4099,60 +4140,6 @@ function AccountDetailPageContent() {
               </form>
             ) : null}
 
-            {isCreditAccount ? (
-              <div className="accounts-detail__credit-inline" aria-label="Credit card details">
-                <label className="accounts-detail__credit-inline-field accounts-detail__credit-inline-field--editable">
-                  <span>Monthly Limit</span>
-                  <input
-                    value={creditLimitDraft}
-                    onChange={(event) => {
-                      setCreditLimitDraft(event.target.value);
-                      setCreditLimitSaveState("idle");
-                    }}
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    aria-label="Monthly credit limit"
-                  />
-                </label>
-                <div className="accounts-detail__credit-inline-field">
-                  <span>Available Credit</span>
-                  <strong>{currentPeriodRemainingLimit === null ? "Not set" : formatAccountAmount(currentPeriodRemainingLimit, account.currency)}</strong>
-                </div>
-                <div className="accounts-detail__credit-inline-field accounts-detail__credit-inline-field--period">
-                  <span>Current Period</span>
-                  <div className="accounts-detail__credit-period-inputs" aria-label={`Current period: ${creditCurrentPeriodLabel}`}>
-                    <input
-                      type="date"
-                      value={creditPeriodStartDraft}
-                      onChange={(event) => {
-                        setCreditPeriodStartDraft(event.target.value);
-                        setCreditLimitSaveState("idle");
-                      }}
-                      aria-label="Current period start"
-                    />
-                    <span>to</span>
-                    <input
-                      type="date"
-                      value={creditPeriodEndDraft}
-                      onChange={(event) => {
-                        setCreditPeriodEndDraft(event.target.value);
-                        setCreditLimitSaveState("idle");
-                      }}
-                      aria-label="Current period end"
-                    />
-                  </div>
-                </div>
-                <span className="accounts-detail__credit-inline-meta">
-                  {creditLimitSaveState === "saving"
-                    ? "Saving..."
-                    : creditLimitSaveState === "saved"
-                      ? "Saved"
-                      : creditLimitSaveState === "error"
-                        ? "Needs attention"
-                        : creditLimitSourceLabel}
-                </span>
-              </div>
-            ) : null}
           </div>
         ) : null}
 
