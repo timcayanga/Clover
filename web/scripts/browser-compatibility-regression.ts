@@ -22,6 +22,9 @@ async function main() {
     dashboardActionsLazySource,
     settingsHubSource,
     postHogSource,
+    modalKeyboardSource,
+    rootLayoutSource,
+    commitmentsSource,
   ] = await Promise.all([
     readSource("components/clover-shell.tsx"),
     readSource("app/dashboard/page.tsx"),
@@ -38,6 +41,9 @@ async function main() {
     readSource("components/dashboard-top-actions-lazy.tsx"),
     readSource("components/settings-hub.tsx"),
     readSource("components/posthog-analytics.tsx"),
+    readSource("components/modal-keyboard-controller.tsx"),
+    readSource("app/layout.tsx"),
+    readSource("components/commitments-panel.tsx"),
   ]);
   const protectedPageSources = await Promise.all(
     [
@@ -212,6 +218,26 @@ async function main() {
     postHogSource,
     /viewport_class:[^\n]*tablet/,
     "Analytics must not retain a third tablet layout class."
+  );
+  assert.match(
+    rootLayoutSource,
+    /<ModalKeyboardController \/>/,
+    "Every route must mount the shared modal keyboard controller."
+  );
+  assert.match(
+    modalKeyboardSource,
+    /event\.key === "Escape"[\s\S]{0,300}findDismissControl\(modal\)[\s\S]{0,300}closeControl\.click\(\)/,
+    "Escape must dismiss the topmost modal through its own close action."
+  );
+  assert.match(
+    modalKeyboardSource,
+    /event\.key !== "Enter" && event\.key !== " "[\s\S]{0,500}\[role="button"\][\s\S]{0,500}customButton\.click\(\)/,
+    "Enter and Space must activate custom modal buttons just like native buttons."
+  );
+  assert.match(
+    commitmentsSource,
+    /className="panel glass recurring-add-modal__card recurring-suggestion-review-modal"[\s\S]{0,300}role="dialog"[\s\S]{0,500}data-modal-close/,
+    "Recurring suggestion review must use Clover's visible, keyboard-dismissible modal structure."
   );
   const transactionDesktopColumns =
     "28px 40px minmax(0, 1.8fr) minmax(110px, 0.85fr) minmax(170px, 1.55fr) minmax(140px, 0.9fr) minmax(110px, 0.8fr) 40px 40px";

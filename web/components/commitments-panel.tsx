@@ -1497,22 +1497,34 @@ export function CommitmentsPanel({
 
       {reviewingSuggestion ? (
         <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 85,
-            background: "rgba(15, 23, 42, 0.45)",
-            backdropFilter: "blur(12px)",
-            display: "grid",
-            placeItems: "center",
-            padding: 16,
-          }}
+          className="recurring-add-modal"
+          role="presentation"
+          onClick={() => setReviewingSuggestion(null)}
         >
-          <section className="panel glass" style={{ width: "min(720px, 100%)", display: "grid", gap: 16, maxHeight: "min(92vh, 880px)", overflow: "auto" }}>
+          <section
+            className="panel glass recurring-add-modal__card recurring-suggestion-review-modal"
+            style={{ width: "min(720px, 100%)", display: "grid", gap: 16, maxHeight: "min(92vh, 880px)", overflow: "auto" }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="recurring-suggestion-review-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              className="recurring-modal-close"
+              type="button"
+              onClick={() => setReviewingSuggestion(null)}
+              aria-label="Close recurring suggestion review"
+              data-modal-close
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M6 6l12 12" />
+                <path d="M18 6 6 18" />
+              </svg>
+            </button>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
               <div className="recurring-suggestion-review__intro">
                 <p className="eyebrow">Review suggestion</p>
-                <h3 className="recurring-suggestion-review__why">Why Clover suggested this</h3>
+                <h3 className="recurring-suggestion-review__why" id="recurring-suggestion-review-title">Why Clover suggested this</h3>
                 {reviewingSuggestion.reasonTags.length > 0 ? (
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
                     {reviewingSuggestion.reasonTags.map((tag) => (
@@ -1523,17 +1535,6 @@ export function CommitmentsPanel({
                   </div>
                 ) : null}
               </div>
-              <button
-                className="button button-secondary button-small recurring-modal-close"
-                type="button"
-                onClick={() => setReviewingSuggestion(null)}
-                aria-label="Close"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M6 6l12 12" />
-                  <path d="M18 6 6 18" />
-                </svg>
-              </button>
             </div>
 
             <form onSubmit={handleConfirmPattern} style={{ display: "grid", gap: 16 }}>

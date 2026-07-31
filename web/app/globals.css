@@ -1828,6 +1828,11 @@ body.transactions-manual-open .shell-quick-add-button {
   margin-bottom: 8px;
 }
 
+.recurring-suggestion-review-modal {
+  padding-top: 24px;
+  padding-right: 58px;
+}
+
 .recurring-suggestion-review__why {
   margin: 0;
   color: var(--foreground);

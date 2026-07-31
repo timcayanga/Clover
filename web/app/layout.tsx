@@ -11,6 +11,7 @@ import { THEME_RESOLVED_COOKIE_KEY, THEME_STORAGE_KEY } from "@/lib/theme-prefer
 import { HelperTextSync } from "@/components/helper-text-sync";
 import { StagingBrowserStateReset } from "@/components/staging-browser-state-reset";
 import { AdminOnlyRedirect } from "@/components/admin-only-redirect";
+import { ModalKeyboardController } from "@/components/modal-keyboard-controller";
 
 const clerkLocalization = {
   userProfile: {
@@ -91,6 +92,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       >
         <ThemeSync />
         <HelperTextSync />
+        <ModalKeyboardController />
         <StagingBrowserStateReset
           buildId={buildInfo.buildId}
           deploymentId={buildInfo.deploymentId ?? null}
