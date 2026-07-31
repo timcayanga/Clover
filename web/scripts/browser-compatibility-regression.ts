@@ -114,8 +114,13 @@ async function main() {
   );
   assert.match(
     middlewareSource,
-    /!isGuestEnabledEnvironment\([\s\S]{0,180}auth\.protect\(\{[\s\S]{0,120}unauthenticatedUrl:/,
-    "Production app routes must require Clerk authentication without disabling staging guest access."
+    /if \(isProtectedAppRoute\(request\)\) \{[\s\S]{0,120}await auth\.protect\(\{[\s\S]{0,120}unauthenticatedUrl:/,
+    "Protected app routes must require Clerk authentication in every deployed environment."
+  );
+  assert.doesNotMatch(
+    middlewareSource,
+    /isGuestEnabledEnvironment|VERCEL_ENV === "preview"|staging\.clover\.ph/,
+    "Staging and preview deployments must not bypass Clerk authentication for protected app routes."
   );
 
   assert.match(
