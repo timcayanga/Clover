@@ -372,11 +372,11 @@ export function SettingsPlanPanel({
         <div className="settings-plan-unsubscribe">
           <button
             type="button"
-            className="button button-secondary button-small"
+            className="button button-secondary button-small settings-billing-action-button"
             onClick={() => void openPaddlePortal()}
             disabled={paddlePortalLoading}
           >
-            {paddlePortalLoading ? "Opening Paddle..." : "Manage subscription"}
+            {paddlePortalLoading ? "Opening portal..." : "Manage subscription"}
           </button>
           {paddlePortalMessage ? (
             <p className="billing-helper" aria-live="polite">
