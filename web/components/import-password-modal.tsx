@@ -15,6 +15,7 @@ type ImportPasswordModalProps = {
   open: boolean;
   files: PasswordImportFile[];
   activeFileId: string | null;
+  validating: boolean;
   onCancel: (id: string) => void;
   onPasswordChange: (id: string, password: string) => void;
   onToggleVisibility: (id: string) => void;
@@ -25,6 +26,7 @@ export function ImportPasswordModal({
   open,
   files,
   activeFileId,
+  validating,
   onCancel,
   onPasswordChange,
   onToggleVisibility,
@@ -75,6 +77,7 @@ export function ImportPasswordModal({
         className="modal-card import-password-modal glass"
         role="dialog"
         aria-modal="true"
+        aria-busy={validating}
         aria-labelledby="import-password-notice"
         onClick={(event) => event.stopPropagation()}
       >
@@ -112,12 +115,14 @@ export function ImportPasswordModal({
                   placeholder="Enter password"
                   autoComplete="current-password"
                   autoFocus
+                  disabled={validating}
                 />
                 <button
                   className="import-password-toggle"
                   type="button"
                   onClick={() => onToggleVisibility(activeFile.id)}
                   aria-label={activeFile.passwordVisible ? "Hide password" : "Show password"}
+                  disabled={validating}
                 >
                   <PasswordIcon visible={activeFile.passwordVisible} />
                 </button>
@@ -128,9 +133,9 @@ export function ImportPasswordModal({
               <button
                 className="button button-primary button-small transactions-action-button"
                 type="submit"
-                disabled={!activeFile.password.trim()}
+                disabled={validating || !activeFile.password.trim()}
               >
-                Unlock file
+                {validating ? "Checking password..." : "Unlock file"}
               </button>
             </div>
           </form>

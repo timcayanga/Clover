@@ -72,6 +72,34 @@ export const probeFilePasswordProtection = async (file: File) => {
   }
 };
 
+export const validatePdfPassword = async (file: File, password: string): Promise<boolean | null> => {
+  if (!file.name.toLowerCase().endsWith(".pdf")) {
+    return true;
+  }
+
+  try {
+    const { pdfjs } = await import("@/lib/pdfjs");
+    const data = new Uint8Array(await file.arrayBuffer());
+    const loadingTask = pdfjs.getDocument({
+      data,
+      password,
+      standardFontDataUrl: pdfjsStandardFontDataUrl,
+    } as any);
+
+    try {
+      const pdf = await withTimeout(loadingTask.promise, CLIENT_PDF_PASSWORD_PROBE_TIMEOUT_MS);
+      await pdf.destroy();
+      return true;
+    } catch (error) {
+      await loadingTask.destroy().catch(() => undefined);
+      return isPdfPasswordError(error) ? false : null;
+    }
+  } catch {
+    // Browser validation is an optimization; the server remains authoritative.
+    return null;
+  }
+};
+
 export const extractTextFromFile = async (
   file: File,
   password?: string,

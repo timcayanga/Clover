@@ -19,7 +19,7 @@ import {
   isImageImportFile,
   resolveCashAccountOption,
 } from "@/lib/import-file-helpers";
-import { extractTextFromFile, probeFilePasswordProtection } from "@/lib/import-file-text";
+import { extractTextFromFile, probeFilePasswordProtection, validatePdfPassword } from "@/lib/import-file-text";
 import { postFileWithProgress } from "@/lib/import-file-post";
 import { validateImportFile } from "@/lib/import-file-validation";
 import { type ImportImageMode } from "@/lib/import-image-mode";
@@ -384,6 +384,7 @@ export function ImportFilesModal({
   const [message, setMessage] = useState("");
   const [validationNotice, setValidationNotice] = useState<string | null>(null);
   const [selectedPasswordItemId, setSelectedPasswordItemId] = useState<string | null>(null);
+  const [validatingPasswordItemId, setValidatingPasswordItemId] = useState<string | null>(null);
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [monthlyUploadLimit, setMonthlyUploadLimit] = useState<number | null>(10);
   const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
@@ -7003,6 +7004,9 @@ export function ImportFilesModal({
   };
 
   const handleCancelPasswordImport = (itemId: string) => {
+    if (validatingPasswordItemId === itemId) {
+      setValidatingPasswordItemId(null);
+    }
     const canceledItem = itemsRef.current.find((item) => item.id === itemId);
     if (!canceledItem) {
       clearImportActivity();
@@ -7592,6 +7596,33 @@ export function ImportFilesModal({
 
   const handleRetry = async (itemId: string) => {
     const item = items.find((entry) => entry.id === itemId);
+    if (!item || validatingPasswordItemId) {
+      return;
+    }
+
+    setValidatingPasswordItemId(itemId);
+    updateItem(itemId, {
+      error: null,
+      progress: IMPORT_PROGRESS.preparing,
+      progressLabel: "Checking password",
+    });
+    const passwordAccepted = await validatePdfPassword(item.file, item.password.trim());
+    const currentItem = itemsRef.current.find((entry) => entry.id === itemId);
+    if (!currentItem || currentItem.status !== "needs_password") {
+      setValidatingPasswordItemId(null);
+      return;
+    }
+    if (passwordAccepted === false) {
+      updateItem(itemId, {
+        error: `Wrong password for ${item.file.name}.`,
+        password: "",
+        progress: 0,
+        progressLabel: "Password needed",
+      });
+      setValidatingPasswordItemId(null);
+      return;
+    }
+
     if (item) {
       capturePostHogClientEvent("password_provided", {
         ...fileAnalyticsBase(item.file, workspaceId),
@@ -7624,12 +7655,13 @@ export function ImportFilesModal({
       fileTotal: itemsRef.current.length,
       completedFiles: completedFileCount,
       progress: IMPORT_PROGRESS.uploading,
-      detail: "Password accepted. Clover is opening the statement.",
+      detail: passwordAccepted ? "Password verified. Clover is opening the statement." : "Clover is verifying the password.",
       summary: null,
       errorMessage: null,
     });
 
     const remainingLockedFiles = items.filter((item) => item.id !== itemId && item.status === "needs_password");
+    setValidatingPasswordItemId(null);
     if (remainingLockedFiles.length > 0) {
       setMessage("Password saved. Enter the next password to continue.");
       return;
@@ -7882,6 +7914,7 @@ export function ImportFilesModal({
           passwordVisible: item.passwordVisible,
         }))}
         activeFileId={activePasswordItem.id}
+        validating={validatingPasswordItemId === activePasswordItem.id}
         onCancel={handleCancelPasswordImport}
         onPasswordChange={(id, password) => updateItem(id, { password, error: null })}
         onToggleVisibility={(id) =>

@@ -65,8 +65,18 @@ const main = async () => {
   );
   assert.match(
     modalSource,
-    /progress: IMPORT_PROGRESS\.uploading,[\s\S]{0,200}detail: "Password accepted\. Clover is opening the statement\."/,
+    /progress: IMPORT_PROGRESS\.uploading,[\s\S]{0,300}detail: passwordAccepted \? "Password verified\. Clover is opening the statement\."/,
     "A password retry must replace any stale completion activity with an active upload stage."
+  );
+  assert.match(
+    modalSource,
+    /const passwordAccepted = await validatePdfPassword\(item\.file, item\.password\.trim\(\)\);[\s\S]{0,600}if \(passwordAccepted === false\)/,
+    "A protected PDF must validate its password before it re-enters the upload pipeline."
+  );
+  assert.match(
+    passwordModalSource,
+    /disabled=\{validating \|\| !activeFile\.password\.trim\(\)\}[\s\S]{0,100}\{validating \? "Checking password\.\.\." : "Unlock file"\}/,
+    "The password dialog must show a stable validation state instead of exposing import progress prematurely."
   );
   assert.match(
     modalSource,
