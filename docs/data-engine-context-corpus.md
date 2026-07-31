@@ -97,6 +97,8 @@ The engine should keep these layers separate:
 
 When corpus evidence conflicts with a confirmed value, the confirmed value wins. When evidence is unfamiliar or ambiguous, the row remains reviewable.
 
+Workspace-scoped manual merchant or category corrections are persisted before the edit request returns. Later imports match the original statement descriptor, normalized merchant prototypes, and a conservative merchant-family signature. A high-confidence exact or family match from a manual correction outranks shared deterministic defaults for that workspace; token-only overlap does not.
+
 ## Expansion roadmap
 
 1. Add explicit country, region, payment rail, and evidence fields to normalized payloads.

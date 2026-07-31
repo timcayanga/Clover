@@ -47,8 +47,9 @@ type TrainingSignalRow = {
   confidence: number;
 };
 
-const isDeterministicLearningSource = (source: string | null | undefined) =>
-  typeof source === "string" && source.startsWith("deterministic_");
+const isAuthoritativeLearningSource = (source: string | null | undefined) =>
+  typeof source === "string" &&
+  (source.startsWith("deterministic_") || source === "manual" || source.startsWith("manual_"));
 const isExactLearningReason = (reason: string | null | undefined) =>
   reason === "rule-exact" || reason === "learned-exact" || reason === "hardcoded-exact" || reason === "hardcoded-override";
 const isProtectedParserCategory = (params: {
@@ -4290,7 +4291,28 @@ export const classifyMerchant = (params: {
   let bestSignal: TrainingSignalRow | null = null;
   let bestScore = 0;
 
-  if (hardcodedOverride) {
+  for (const rule of params.merchantRules) {
+    const score = scoreMerchantRule(tokens, normalizedMerchantCandidates, rule);
+    if (score > bestRuleScore) {
+      bestRuleScore = score;
+      bestRule = rule;
+    }
+  }
+
+  const bestRuleIsExact = Boolean(bestRule && normalizedMerchantCandidates.has(bestRule.merchantKey));
+  const bestRuleIsFamilyMatch = Boolean(
+    bestRule &&
+      !bestRuleIsExact &&
+      hasFamilyMatch(normalizedMerchantCandidates, bestRule.merchantPattern, bestRule.normalizedName, bestRule.merchantKey)
+  );
+  const authoritativeManualRule = Boolean(
+    bestRule &&
+      bestRule.confidence >= 85 &&
+      (bestRuleIsExact || bestRuleIsFamilyMatch) &&
+      isAuthoritativeLearningSource(bestRule.source)
+  );
+
+  if (hardcodedOverride && !authoritativeManualRule) {
     const contextualOverride = isContextualCategoryOverride(categoryText || params.merchantText, hardcodedOverride);
     return {
       categoryName: hardcodedOverride,
@@ -4302,14 +4324,6 @@ export const classifyMerchant = (params: {
       normalizedName: alignedNormalizedName,
       preferredType: preferredTypeForCategory(hardcodedOverride, params.type, categoryText || params.merchantText),
     };
-  }
-
-  for (const rule of params.merchantRules) {
-    const score = scoreMerchantRule(tokens, normalizedMerchantCandidates, rule);
-    if (score > bestRuleScore) {
-      bestRuleScore = score;
-      bestRule = rule;
-    }
   }
 
   const scoreNegativeSignal = (signal: NegativeMerchantSignalRow) => {
@@ -5589,7 +5603,7 @@ export const enrichParsedRowsWithTraining = async (params: {
       normalizeMerchantText(deterministicNormalizedName) !== normalizeMerchantText(learnedNormalizedName);
     const shouldKeepParserMerchantName =
       learnedNameConflictsWithParser &&
-      !isDeterministicLearningSource(learnedNameSource);
+      !isAuthoritativeLearningSource(learnedNameSource);
     const merchantClean = shouldKeepParserMerchantName
       ? deterministicNormalizedName
       : learnedNormalizedName || deterministicNormalizedName;
@@ -5612,12 +5626,12 @@ export const enrichParsedRowsWithTraining = async (params: {
       !parserSuppliedConcreteCategory &&
       learnedCategoryName.length > 0 &&
       parserCategoryName.toLowerCase() === "other" &&
-      (isDeterministicLearningSource(learnedCategorySource) ||
+      (isAuthoritativeLearningSource(learnedCategorySource) ||
         (isExactLearningReason(learnedCategoryReason) && normalizeConfidenceScore(learned.confidence) >= 85));
     const shouldKeepParserCategory =
       parserCategoryWasCorrected ||
       protectedParserCategory ||
-      (learnedConflictsWithParser && !isDeterministicLearningSource(learnedCategorySource)) ||
+      (learnedConflictsWithParser && !isAuthoritativeLearningSource(learnedCategorySource)) ||
       (!parserSuppliedConcreteCategory &&
         parserCategoryName.toLowerCase() === "other" &&
         learnedCategoryName.length > 0 &&

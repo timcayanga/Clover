@@ -4,7 +4,7 @@ import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { recordTrainingSignal, upsertAccountRule, upsertMerchantRule } from "@/lib/data-engine";
+import { recordTrainingSignal, upsertAccountRule } from "@/lib/data-engine";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
@@ -232,23 +232,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       : null;
 
     if (payload.merchantRaw || payload.merchantClean || payload.categoryId !== undefined || payload.type !== undefined || payload.isTransfer !== undefined) {
-      const merchantText = payload.merchantClean || payload.merchantRaw || updated.merchantClean || updated.merchantRaw;
+      const rawMerchantText = payload.merchantRaw || updated.merchantRaw || transaction.merchantRaw;
+      const normalizedMerchantName = payload.merchantClean || updated.merchantClean || rawMerchantText;
+      const merchantText = rawMerchantText || normalizedMerchantName;
 
       if (merchantText && categoryForRule) {
-        void upsertMerchantRule({
-          workspaceId: transaction.workspaceId,
-          merchantText,
-          normalizedName: payload.merchantClean || merchantText,
-          categoryId: categoryForRule.id,
-          categoryName: categoryForRule.name,
-          source: "manual_recategorization",
-          confidence: 100,
-        }).catch(() => null);
-
-        void recordTrainingSignal({
+        // Await durable workspace learning before returning. Fire-and-forget
+        // writes can be terminated when a serverless request completes.
+        await recordTrainingSignal({
           workspaceId: transaction.workspaceId,
           transactionId: transaction.id,
           merchantText,
+          normalizedName: normalizedMerchantName,
+          institution: account?.institution ?? null,
           categoryId: categoryForRule.id,
           categoryName: categoryForRule.name,
           type: resolvedType,
@@ -276,7 +272,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
               : payload.merchantClean !== undefined || payload.merchantRaw !== undefined
                 ? updated.merchantClean ?? updated.merchantRaw
                 : updated.type,
-        }).catch(() => null);
+        });
       }
     }
 
