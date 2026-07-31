@@ -10,7 +10,7 @@ quality gate. Do not rebuild a different commit for production.
 Run from the repository root:
 
 ```bash
-npm ci
+npm ci --prefix web
 npx prisma generate --schema web/prisma/schema.prisma
 npm run typecheck
 npm run qa:release

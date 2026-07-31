@@ -2,12 +2,12 @@
 
 Clover is a personal finance web application focused on importing financial files, deterministically parsing transactions, reviewing uncertain results, and learning from confirmed user edits.
 
-The production application lives in [`web/`](web/). The root package only provides convenient workspace commands.
+The production application lives in [`web/`](web/). The root package only provides convenient proxy commands.
 
 ## Start Here
 
 ```bash
-npm install
+npm ci --prefix web
 npm run dev
 ```
 
@@ -75,4 +75,3 @@ Additional parser and feature-specific checks are listed in [`web/package.json`]
 ## Deployment
 
 Vercel builds the `web` workspace. Staging uses the `staging` Git branch and production is served at `clover.ph`.
-

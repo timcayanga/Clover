@@ -2,18 +2,15 @@
   "name": "clover",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "web"
-  ],
   "scripts": {
-    "dev": "npm run dev --workspace=web",
-    "build": "npm run build --workspace=web",
-    "start": "npm run start --workspace=web",
-    "typecheck": "npm run typecheck --workspace=web",
-    "qa:critical": "npm run qa:critical-page-loading --workspace=web",
-    "qa:data-engine": "npm run qa:data-engine-safety --workspace=web && npm run qa:data-engine-validation --workspace=web",
-    "qa:browser": "npm run qa:browser-compatibility --workspace=web",
-    "qa:release": "npm run qa:release --workspace=web",
-    "qa:release:live": "npm run qa:release:live --workspace=web"
+    "dev": "npm --prefix web run dev",
+    "build": "npm --prefix web run build",
+    "start": "npm --prefix web run start",
+    "typecheck": "npm --prefix web run typecheck",
+    "qa:critical": "npm --prefix web run qa:critical-page-loading",
+    "qa:data-engine": "npm --prefix web run qa:data-engine-safety && npm --prefix web run qa:data-engine-validation",
+    "qa:browser": "npm --prefix web run qa:browser-compatibility",
+    "qa:release": "npm --prefix web run qa:release",
+    "qa:release:live": "npm --prefix web run qa:release:live"
   }
 }
