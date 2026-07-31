@@ -15,6 +15,7 @@ type PaddleInstance = {
   };
   Initialize: (options: {
     token: string;
+    pwCustomer?: Record<string, never>;
     eventCallback?: (event: PaddleCheckoutEvent) => void;
   }) => void;
   Checkout: {
@@ -79,6 +80,7 @@ export function PaddleCheckoutButton({
 
     window.Paddle.Initialize({
       token: clientToken,
+      ...(environment === "live" ? { pwCustomer: {} } : {}),
       eventCallback: (event) => {
         window.dispatchEvent(new CustomEvent("clover:paddle-checkout", { detail: event }));
       },
