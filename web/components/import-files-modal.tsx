@@ -7002,6 +7002,77 @@ export function ImportFilesModal({
     });
   };
 
+  const handleCancelPasswordImport = (itemId: string) => {
+    const canceledItem = itemsRef.current.find((item) => item.id === itemId);
+    if (!canceledItem) {
+      clearImportActivity();
+      lastImportActivityRef.current = null;
+      onClose();
+      return;
+    }
+
+    retiredImportActivityFileNamesRef.current.add(canceledItem.file.name);
+    startedImportMonitorKeys.delete(
+      `${importModalInstanceIdRef.current}:${workspaceId}:${canceledItem.importFileId ?? ""}`
+    );
+    localPreparseStartedRef.current.delete(itemId);
+    localPreparseSummaryByItemIdRef.current.delete(itemId);
+    localPreparseTextByItemIdRef.current.delete(itemId);
+
+    if (canceledItem.importFileId) {
+      void fetch(`/api/imports/${encodeURIComponent(canceledItem.importFileId)}`, {
+        method: "DELETE",
+        keepalive: true,
+      }).catch(() => null);
+    }
+
+    const remainingItems = itemsRef.current.filter((item) => item.id !== itemId);
+    itemsRef.current = remainingItems;
+    setItems(remainingItems);
+    setSelectedPasswordItemId(
+      remainingItems.find((item) => item.status === "needs_password")?.id ?? null
+    );
+    capturePostHogClientEvent("import_password_canceled", {
+      ...fileAnalyticsBase(canceledItem.file, workspaceId),
+      import_file_id: canceledItem.importFileId ?? null,
+      remaining_file_count: remainingItems.length,
+    });
+
+    if (remainingItems.length > 0) {
+      setMessage("Password-protected file removed.");
+      clearImportActivity();
+      lastImportActivityRef.current = null;
+      autoStartRef.current = true;
+      scheduleQueuedImport();
+      return;
+    }
+
+    uploadCancelRequestedRef.current = true;
+    setUploadPaused(false);
+    uploadPausedRef.current = false;
+    for (const controller of activeUploadAbortControllersRef.current) {
+      controller.abort();
+    }
+    activeUploadAbortControllersRef.current.clear();
+    if (visibilityHardStopTimerRef.current) {
+      window.clearTimeout(visibilityHardStopTimerRef.current);
+      visibilityHardStopTimerRef.current = null;
+    }
+    if (uploadRunnerTimerRef.current !== null) {
+      window.clearTimeout(uploadRunnerTimerRef.current);
+      uploadRunnerTimerRef.current = null;
+    }
+    visibilityDeadlineRef.current = null;
+    autoStartRef.current = false;
+    autoCloseAfterStartRef.current = false;
+    uploadRunnerActiveRef.current = false;
+    setBusy(false);
+    setMessage("");
+    clearImportActivity();
+    lastImportActivityRef.current = null;
+    onClose();
+  };
+
   useEffect(() => {
     if (compactProgressUnlockTimerRef.current) {
       window.clearTimeout(compactProgressUnlockTimerRef.current);
@@ -7811,7 +7882,7 @@ export function ImportFilesModal({
           passwordVisible: item.passwordVisible,
         }))}
         activeFileId={activePasswordItem.id}
-        onClose={onClose}
+        onCancel={handleCancelPasswordImport}
         onPasswordChange={(id, password) => updateItem(id, { password, error: null })}
         onToggleVisibility={(id) =>
           updateItem(id, { passwordVisible: !items.find((item) => item.id === id)?.passwordVisible })

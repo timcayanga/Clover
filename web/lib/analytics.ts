@@ -60,6 +60,7 @@ export type AnalyticsEventName =
   | "qa_run_failed"
   | "password_provided"
   | "password_failed"
+  | "import_password_canceled"
   | "statement_identity_resolved"
   | "statement_identity_confirmed"
   | "import_duplicate_detected"
@@ -155,7 +156,7 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "import_processing_completed", "import_processing_stalled", "review_queue_opened", "review_queue_completed", "review_queue_abandoned",
   "confidence_details_viewed", "source_document_viewed", "transaction_confirmed_without_edit", "transaction_edited_before_confirmation",
   "import_confirmed", "import_retry_started", "import_retry_succeeded", "import_retry_failed", "qa_run_completed", "qa_run_failed",
-  "password_provided", "password_failed", "statement_identity_resolved", "statement_identity_confirmed", "import_duplicate_detected",
+  "password_provided", "password_failed", "import_password_canceled", "statement_identity_resolved", "statement_identity_confirmed", "import_duplicate_detected",
   "manual_transaction_created", "bulk_transaction_updated", "bulk_transaction_deleted", "transaction_imported", "transaction_updated",
   "transaction_categorized", "transaction_recategorized", "transaction_merchant_normalized", "transaction_split", "transaction_merged",
   "transaction_deleted", "transaction_undone", "review_item_opened", "review_item_accepted", "review_item_edited", "review_item_rejected",

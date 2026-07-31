@@ -17,8 +17,9 @@ const section = (source: string, start: string, end: string) => {
 };
 
 const main = async () => {
-  const [modalSource, processRouteSource, progressRouteSource, confirmRouteSource, workerSource, importQueueSource, importProcessorSource, importFileTextSource, statusSnapshotSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource, accountsPageSource, pageDropSource, globalImportActivitySource, vercelConfigSource] = await Promise.all([
+  const [modalSource, passwordModalSource, processRouteSource, progressRouteSource, confirmRouteSource, workerSource, importQueueSource, importProcessorSource, importFileTextSource, statusSnapshotSource, settledVisibilitySource, filePostSource, visibilityRulesSource, transactionsPageSource, accountsPageSource, pageDropSource, globalImportActivitySource, vercelConfigSource] = await Promise.all([
     readFile(join(webRoot, "components/import-files-modal.tsx"), "utf8"),
+    readFile(join(webRoot, "components/import-password-modal.tsx"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/process/route.ts"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/progress/route.ts"), "utf8"),
     readFile(join(webRoot, "app/api/imports/[importId]/confirm/route.ts"), "utf8"),
@@ -66,6 +67,31 @@ const main = async () => {
     modalSource,
     /progress: IMPORT_PROGRESS\.uploading,[\s\S]{0,200}detail: "Password accepted\. Clover is opening the statement\."/,
     "A password retry must replace any stale completion activity with an active upload stage."
+  );
+  assert.match(
+    modalSource,
+    /const handleCancelPasswordImport = \(itemId: string\) =>[\s\S]{0,3000}clearImportActivity\(\);[\s\S]{0,200}onClose\(\);/,
+    "Canceling the only password-protected file must clear its import activity before closing."
+  );
+  assert.match(
+    modalSource,
+    /itemsRef\.current = remainingItems;\s*setItems\(remainingItems\);/,
+    "A canceled password-protected file must be removed from the imperative queue immediately."
+  );
+  assert.match(
+    modalSource,
+    /fetch\(`\/api\/imports\/\$\{encodeURIComponent\(canceledItem\.importFileId\)\}`,[\s\S]{0,100}method: "DELETE"/,
+    "Canceling a staged password-protected import must retire its server record."
+  );
+  assert.match(
+    passwordModalSource,
+    /onClick=\{\(\) => onCancel\(activeFile\.id\)\}/,
+    "The password backdrop and close control must cancel the active file rather than merely hide the prompt."
+  );
+  assert.doesNotMatch(
+    passwordModalSource,
+    />\s*Close\s*</,
+    "The password prompt should use the top-right close control instead of a secondary Close button."
   );
   assert.doesNotMatch(
     modalSource,

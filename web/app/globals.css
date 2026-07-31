@@ -228,7 +228,7 @@
 
 .settings-plan-usage__row strong,
 .settings-plan-usage__row > span {
-  color: var(--text);
+  color: #1f2937;
   font-size: 13px;
   font-weight: 500;
 }
@@ -19885,7 +19885,37 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .import-password-modal {
-  width: min(460px, 100%);
+  position: relative;
+  width: min(430px, 100%);
+  padding: 22px;
+}
+
+.import-password-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.import-password-close:hover {
+  color: #000000;
+}
+
+.import-password-close:focus-visible {
+  outline: 2px solid rgba(3, 168, 192, 0.45);
+  outline-offset: 2px;
+  border-radius: 999px;
 }
 
 .import-password-header {
@@ -19900,8 +19930,9 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
 .import-password-body {
   display: grid;
-  gap: 12px;
-  font-size: 0.82rem;
+  gap: 10px;
+  padding-right: 20px;
+  font-size: 0.76rem;
 }
 
 .import-password-file {
@@ -19913,7 +19944,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .import-password-file strong {
-  font-size: 0.92rem;
+  font-size: 0.84rem;
   line-height: 1.25;
   letter-spacing: -0.02em;
 }
@@ -19925,18 +19956,18 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
 .import-password-error {
   color: #b91c1c;
-  line-height: 1.45;
-  font-size: 0.78rem;
+  line-height: 1.4;
+  font-size: 0.74rem;
 }
 
 .import-password-form {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .import-password-field {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .import-password-input {
@@ -19945,9 +19976,9 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
 .import-password-input input {
   width: 100%;
-  min-height: 38px;
+  min-height: 36px;
   padding-right: 54px;
-  font-size: 0.84rem;
+  font-size: 0.8rem;
 }
 
 .import-password-toggle {
@@ -19978,8 +20009,13 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 .import-password-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
   flex-wrap: wrap;
+}
+
+.import-password-actions .transactions-action-button {
+  min-height: 32px;
+  padding-inline: 12px;
+  font-size: 0.78rem;
 }
 
 .modal-head {

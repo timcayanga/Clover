@@ -15,7 +15,7 @@ type ImportPasswordModalProps = {
   open: boolean;
   files: PasswordImportFile[];
   activeFileId: string | null;
-  onClose: () => void;
+  onCancel: (id: string) => void;
   onPasswordChange: (id: string, password: string) => void;
   onToggleVisibility: (id: string) => void;
   onUnlock: (id: string) => void;
@@ -25,7 +25,7 @@ export function ImportPasswordModal({
   open,
   files,
   activeFileId,
-  onClose,
+  onCancel,
   onPasswordChange,
   onToggleVisibility,
   onUnlock,
@@ -45,12 +45,32 @@ export function ImportPasswordModal({
     return () => window.cancelAnimationFrame(frame);
   }, [activeFile?.id, open]);
 
+  useEffect(() => {
+    if (!open || !activeFile) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCancel(activeFile.id);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeFile?.id, onCancel, open]);
+
   if (!open || files.length === 0) {
     return null;
   }
 
   return (
-    <div className="modal-backdrop import-password-layer" role="presentation" onClick={onClose}>
+    <div
+      className="modal-backdrop import-password-layer"
+      role="presentation"
+      onClick={() => onCancel(activeFile.id)}
+    >
       <section
         className="modal-card import-password-modal glass"
         role="dialog"
@@ -58,6 +78,14 @@ export function ImportPasswordModal({
         aria-labelledby="import-password-notice"
         onClick={(event) => event.stopPropagation()}
       >
+        <button
+          className="import-password-close"
+          type="button"
+          onClick={() => onCancel(activeFile.id)}
+          aria-label={`Cancel importing ${activeFile.name}`}
+        >
+          &times;
+        </button>
         <div className="import-password-body">
           <p className="eyebrow" id="import-password-notice">Password required</p>
           <div className="import-password-file">
@@ -97,10 +125,11 @@ export function ImportPasswordModal({
             </label>
 
             <div className="import-password-actions">
-              <button className="button button-secondary button-small" type="button" onClick={onClose}>
-                Close
-              </button>
-              <button className="button button-primary button-small" type="submit" disabled={!activeFile.password.trim()}>
+              <button
+                className="button button-primary button-small transactions-action-button"
+                type="submit"
+                disabled={!activeFile.password.trim()}
+              >
                 Unlock file
               </button>
             </div>
