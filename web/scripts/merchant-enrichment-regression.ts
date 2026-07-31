@@ -72,6 +72,45 @@ const main = () => {
     assert.equal(result.type, "expense", `${merchantRaw} should remain an expense`);
   }
 
+  const europeCases = [
+    ["SERVICE NAVIGO 40 75 PARIS EUR VISA RATE", "Transport", "Navigo"],
+    ["TRAINPAL LONDON GB", "Transport", "TrainPal"],
+    ["GWYNFOR COACHES LLANGEFNI", "Transport", "Gwynfor Coaches"],
+    ["SNCF CONNECT PARIS FR", "Transport", "SNCF"],
+    ["DB VERTRIEB BERLIN DE", "Transport", "Deutsche Bahn"],
+    ["OV-CHIPKAART AMSTERDAM NL", "Transport", "OV-chipkaart"],
+    ["RYANAIR DUBLIN IE", "Travel & Lifestyle", "Ryanair"],
+    ["EASYJET AIRLINE LUTON GB", "Travel & Lifestyle", "easyJet"],
+    ["BOOKING.COM AMSTERDAM NL", "Travel & Lifestyle", "Booking.com"],
+    ["DELIVEROO LONDON GB", "Food & Dining", "Deliveroo"],
+    ["CARREFOUR CITY PARIS FR", "Shopping", "Carrefour"],
+    ["REWE MARKT BERLIN DE", "Shopping", "REWE"],
+    ["ALBERT HEIJN AMSTERDAM NL", "Shopping", "Albert Heijn"],
+  ] as const;
+
+  for (const [merchantRaw, categoryName, expectedMerchant] of europeCases) {
+    const result = applyDeterministicMerchantRescue({
+      merchantRaw,
+      categoryName: "Transfers",
+      type: "expense",
+      institution: "HSBC",
+    });
+    assert.equal(result.categoryName, categoryName, `${merchantRaw} should use its European merchant category`);
+    assert.equal(result.merchantClean, expectedMerchant, `${merchantRaw} should use its European merchant label`);
+    assert.equal(result.type, "expense", `${merchantRaw} should remain an expense`);
+  }
+
+  const processorOnlyCases = ["ADYEN N.V.", "SUMUP", "STRIPE", "ZETTLE"];
+  for (const merchantRaw of processorOnlyCases) {
+    const result = applyDeterministicMerchantRescue({
+      merchantRaw,
+      categoryName: "Other",
+      type: "expense",
+      institution: "HSBC",
+    });
+    assert.equal(result.categoryName, "Other", `${merchantRaw} alone must not receive a speculative category`);
+  }
+
   const unknownUkMerchant = applyDeterministicMerchantRescue({
     merchantRaw: "DUBLIN CSA EUR Visa Rate",
     categoryName: "Other",

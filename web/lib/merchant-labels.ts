@@ -1,3 +1,4 @@
+import { getEuropeMerchantLabel } from "@/lib/europe-merchant-corpus";
 import { getUkMerchantLabel } from "@/lib/uk-merchant-corpus";
 
 type SimplifierRule = {
@@ -2700,9 +2701,13 @@ export const summarizeMerchantText = (value: string, institution?: string | null
     return simplified;
   }
 
-  const ukMerchantLabel = getUkMerchantLabel(value) ?? getUkMerchantLabel(simplified);
-  if (ukMerchantLabel) {
-    return ukMerchantLabel;
+  const regionalMerchantLabel =
+    getEuropeMerchantLabel(value) ??
+    getEuropeMerchantLabel(simplified) ??
+    getUkMerchantLabel(value) ??
+    getUkMerchantLabel(simplified);
+  if (regionalMerchantLabel) {
+    return regionalMerchantLabel;
   }
 
   if (institution === "BPI" && (/\bel\s*\/?\s*es\s*p\s*a\s*y\b/i.test(rawLower) || rawCompact.includes("elespay"))) {
