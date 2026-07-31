@@ -51062,3 +51062,42 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     background: color-mix(in srgb, var(--surface) 54%, transparent) !important;
   }
 }
+
+/* Keep the desktop Accounts summary fixed at its initial position beneath the
+   shared header, and let its opaque band cover the full content width. */
+@media (min-width: 1101px) {
+  .content--accounts {
+    --accounts-sticky-header-height: 62px;
+    --accounts-sticky-page-gap: 18px;
+  }
+
+  .content--accounts > .topbar {
+    height: var(--accounts-sticky-header-height);
+    min-height: var(--accounts-sticky-header-height);
+  }
+
+  .content--accounts .accounts-overview-grid {
+    top: calc(var(--accounts-sticky-header-height) + var(--accounts-sticky-page-gap));
+    box-sizing: border-box;
+    width: calc(100% + (var(--content-inline-gutter) * 2));
+    margin-inline: calc(var(--content-inline-gutter) * -1);
+    padding: 10px var(--content-inline-gutter) 12px;
+    border-radius: 0;
+  }
+
+  .content--accounts .accounts-overview-grid::before {
+    inset: calc(var(--accounts-sticky-page-gap) * -1) 0 -1px;
+    border-radius: 0;
+    background: var(--surface);
+  }
+
+  .content--accounts .accounts-group,
+  .content--accounts .accounts-group--drop-target,
+  .content--accounts .accounts-group--drop-target.is-drag-over {
+    border-radius: 0 !important;
+  }
+
+  .content--accounts .accounts-group + .accounts-group {
+    border-top: 1px solid var(--stroke) !important;
+  }
+}

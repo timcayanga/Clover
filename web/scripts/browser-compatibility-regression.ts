@@ -158,6 +158,16 @@ async function main() {
     /@media \(min-width: 1101px\) \{[\s\S]{0,180}\.accounts-card-grid\.accounts-card-grid--desktop \{[\s\S]{0,180}repeat\(auto-fit, minmax\(min\(100%, 240px\), 272px\)\)/,
     "Desktop account grids must add columns instead of stretching cards beyond their intended width."
   );
+  assert.match(
+    globalStyles,
+    /\.content--accounts \.accounts-overview-grid \{[\s\S]{0,180}top: calc\(var\(--accounts-sticky-header-height\) \+ var\(--accounts-sticky-page-gap\)\);[\s\S]{0,220}width: calc\(100% \+ \(var\(--content-inline-gutter\) \* 2\)\);/,
+    "The desktop Accounts summary must remain at its initial header offset and span both content gutters."
+  );
+  assert.match(
+    globalStyles,
+    /\.content--accounts \.accounts-group,[\s\S]{0,180}\.accounts-group--drop-target\.is-drag-over \{[\s\S]{0,80}border-radius: 0 !important;/,
+    "Desktop account section dividers must keep straight edges in every drag state."
+  );
   const creditDetailLayout = accountDetailsSource.slice(
     accountDetailsSource.indexOf('<div className={`accounts-detail__hero-layout'),
     accountDetailsSource.indexOf("{account.type !== \"investment\" && accountIdentityEditorOpen")
