@@ -940,7 +940,7 @@ export function SettingsHub({
     let cancelled = false;
 
     const loadPlan = async () => {
-      if (planLoaded || planLoading || activeSection !== "plan" || !workspaceReady) {
+      if (planLoaded || activeSection !== "plan" || !workspaceReady) {
         return;
       }
 
@@ -1002,7 +1002,7 @@ export function SettingsHub({
     return () => {
       cancelled = true;
     };
-  }, [activeSection, planLoaded, planLoading, workspaceId, workspaceReady]);
+  }, [activeSection, planLoaded, workspaceReady]);
 
   useEffect(() => {
     const initialHelperText = readStoredHelperTextPreference();
