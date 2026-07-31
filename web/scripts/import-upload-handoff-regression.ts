@@ -365,8 +365,33 @@ const main = async () => {
   );
   assert.match(
     accountsPageSource,
-    /const refreshImportedAccountProjection = async \(summary: UploadInsightsSummary\)[\s\S]{0,2600}const retryDelaysMs = \[0, 350, 750, 1_250, 2_000\][\s\S]{0,1800}accountProjectionMatchesImport/,
+    /const refreshImportedAccountProjection = \([\s\S]{0,300}summary: UploadInsightsSummary,[\s\S]{0,3600}const retryDelaysMs = \[0, 350, 750, 1_250, 2_000\][\s\S]{0,2200}accountProjectionMatchesImport/,
     "Every import must keep refreshing Accounts until the authoritative balance reflects the confirmed import."
+  );
+  assert.match(
+    accountsPageSource,
+    /const accountProjectionRefreshesRef = useRef\([\s\S]{0,180}new Map<string, \{ key: string; promise: Promise<void> \}>\(\)/,
+    "Accounts must track active projection refreshes by workspace."
+  );
+  assert.match(
+    accountsPageSource,
+    /const activeRefresh = accountProjectionRefreshesRef\.current\.get\(workspaceId\);[\s\S]{0,180}activeRefresh\?\.key === refreshKey[\s\S]{0,120}return activeRefresh\.promise;/,
+    "Duplicate import-completion signals must share one account projection refresh instead of racing independent request loops."
+  );
+  assert.match(
+    accountsPageSource,
+    /const persistAccountsWorkspaceSnapshot = useCallback\([\s\S]{0,650}workspaceCacheWriteDepthRef\.current \+= 1[\s\S]{0,500}workspaceCacheWriteDepthRef\.current -= 1/,
+    "Accounts must bracket its own cache persistence writes."
+  );
+  assert.match(
+    accountsPageSource,
+    /const handleWorkspaceCacheUpdated = \(event: Event\) => \{[\s\S]{0,500}workspaceCacheWriteDepthRef\.current > 0[\s\S]{0,80}return;/,
+    "Accounts must ignore the synchronous cache event emitted by its own persistence write."
+  );
+  assert.match(
+    accountsPageSource,
+    /const getUploadAccountLoadingContext = \(account: Account\)[\s\S]{0,800}const latestCheckpoint = getLatestCheckpointForAccount\(account, statementCheckpoints\)/,
+    "Account cards and totals must use the same canonical checkpoint resolver."
   );
   assert.match(
     accountsPageSource,

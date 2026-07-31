@@ -10,7 +10,7 @@ const main = async () => {
   const accountsResponseStart = accountsSource.indexOf("if (accountsResponse.ok)");
   const accountsStateUpdate = accountsSource.indexOf("setAccounts((current)", accountsResponseStart);
   const authoritativeCacheWrite = accountsSource.indexOf(
-    "persistAccountsWorkspaceCache(workspaceId",
+    "persistAccountsWorkspaceSnapshot(workspaceId",
     accountsResponseStart
   );
 

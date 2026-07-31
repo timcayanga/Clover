@@ -1355,7 +1355,11 @@ function AccountsPageContent() {
   const completedImportRefreshKeyRef = useRef<string | null>(null);
   const authoritativeAccountsRef = useRef<{ workspaceId: string; accounts: Account[] } | null>(null);
   const postImportReconciliationTimersRef = useRef(new Map<string, number[]>());
+  const accountProjectionRefreshesRef = useRef(
+    new Map<string, { key: string; promise: Promise<void> }>()
+  );
   const workspaceHydrationVersionRef = useRef(new Map<string, number>());
+  const workspaceCacheWriteDepthRef = useRef(0);
   const deletedAccountIdsRef = useRef(new Set<string>());
   // Keep the server and first browser render identical. Workspace selection
   // and its cached snapshot are restored after mount; reading localStorage
@@ -1487,6 +1491,21 @@ function AccountsPageContent() {
 
       const previousVersion = workspaceHydrationVersionRef.current.get(workspaceId) ?? 0;
       return Number(cachedSnapshot.updatedAt ?? 0) > previousVersion;
+    },
+    []
+  );
+
+  const persistAccountsWorkspaceSnapshot = useCallback(
+    (
+      workspaceId: string,
+      snapshot: Parameters<typeof persistAccountsWorkspaceCache>[1]
+    ) => {
+      workspaceCacheWriteDepthRef.current += 1;
+      try {
+        return persistAccountsWorkspaceCache(workspaceId, snapshot);
+      } finally {
+        workspaceCacheWriteDepthRef.current -= 1;
+      }
     },
     []
   );
@@ -1809,7 +1828,7 @@ function AccountsPageContent() {
             preferCurrentImportedSnapshot: shouldPreserveSettlingImport && !options?.forceFresh,
           }
         );
-        const authoritativeCacheUpdatedAt = persistAccountsWorkspaceCache(workspaceId, {
+        const authoritativeCacheUpdatedAt = persistAccountsWorkspaceSnapshot(workspaceId, {
           // A completion read can briefly lag the import transaction. Keep the
           // confirmed browser snapshot in the cache until a later ordinary
           // refresh observes the same durable account inventory.
@@ -2069,9 +2088,12 @@ function AccountsPageContent() {
     }
   };
 
-  const refreshImportedAccountProjection = async (summary: UploadInsightsSummary) => {
-    if (!selectedWorkspaceId) {
-      return;
+  const refreshImportedAccountProjection = (
+    summary: UploadInsightsSummary,
+    workspaceId = selectedWorkspaceId
+  ) => {
+    if (!workspaceId) {
+      return Promise.resolve();
     }
 
     const expectedSummaries =
@@ -2093,45 +2115,75 @@ function AccountsPageContent() {
           }))
         : [summary];
     const expectedAccounts = expectedSummaries
-      .map((accountSummary) => buildOptimisticImportedAccount(accountSummary, selectedWorkspaceId))
+      .map((accountSummary) => buildOptimisticImportedAccount(accountSummary, workspaceId))
       .filter((account): account is Account => Boolean(account));
+    const refreshKey = JSON.stringify(
+      expectedSummaries.map((accountSummary) => [
+        accountSummary.accountId,
+        accountSummary.accountNumber,
+        accountSummary.currency,
+        accountSummary.balance,
+        accountSummary.rowsImported,
+      ])
+    );
+    const activeRefresh = accountProjectionRefreshesRef.current.get(workspaceId);
+    if (activeRefresh?.key === refreshKey) {
+      return activeRefresh.promise;
+    }
+
     const retryDelaysMs = [0, 350, 750, 1_250, 2_000];
+    const previousRefresh = activeRefresh?.promise ?? Promise.resolve();
+    let refreshPromise: Promise<void>;
+    refreshPromise = previousRefresh
+      .catch(() => undefined)
+      .then(async () => {
+        for (const retryDelayMs of retryDelaysMs) {
+          if (retryDelayMs > 0) {
+            await new Promise((resolve) => window.setTimeout(resolve, retryDelayMs));
+          }
 
-    for (const retryDelayMs of retryDelaysMs) {
-      if (retryDelayMs > 0) {
-        await new Promise((resolve) => window.setTimeout(resolve, retryDelayMs));
-      }
+          await loadWorkspaceData(workspaceId, {
+            silent: true,
+            forceFresh: true,
+            preserveImportedEvidence: true,
+          });
+          const authoritativeSnapshot = authoritativeAccountsRef.current;
+          if (
+            authoritativeSnapshot?.workspaceId === workspaceId &&
+            accountProjectionMatchesImport(authoritativeSnapshot.accounts, expectedAccounts)
+          ) {
+            // Finish one full hydration after the lightweight account projection
+            // settles so Transactions and account checkpoints advance together.
+            await loadWorkspaceData(workspaceId, {
+              silent: true,
+              awaitHydration: true,
+              forceFresh: true,
+              preserveImportedEvidence: true,
+            });
+            return;
+          }
+        }
 
-      await loadWorkspaceData(selectedWorkspaceId, {
-        silent: true,
-        forceFresh: true,
-        preserveImportedEvidence: true,
-      });
-      const authoritativeSnapshot = authoritativeAccountsRef.current;
-      if (
-        authoritativeSnapshot?.workspaceId === selectedWorkspaceId &&
-        accountProjectionMatchesImport(authoritativeSnapshot.accounts, expectedAccounts)
-      ) {
-        // Finish one full hydration after the lightweight account projection
-        // settles so Transactions and account checkpoints advance together.
-        await loadWorkspaceData(selectedWorkspaceId, {
+        // Keep the latest authoritative response even if an institution-specific
+        // projection takes longer than the bounded settlement window.
+        await loadWorkspaceData(workspaceId, {
           silent: true,
           awaitHydration: true,
           forceFresh: true,
           preserveImportedEvidence: true,
         });
-        return;
-      }
-    }
+      })
+      .finally(() => {
+        if (accountProjectionRefreshesRef.current.get(workspaceId)?.promise === refreshPromise) {
+          accountProjectionRefreshesRef.current.delete(workspaceId);
+        }
+      });
 
-    // Keep the latest authoritative response even if an institution-specific
-    // projection takes longer than the bounded settlement window.
-    await loadWorkspaceData(selectedWorkspaceId, {
-      silent: true,
-      awaitHydration: true,
-      forceFresh: true,
-      preserveImportedEvidence: true,
+    accountProjectionRefreshesRef.current.set(workspaceId, {
+      key: refreshKey,
+      promise: refreshPromise,
     });
+    return refreshPromise;
   };
 
   const schedulePostImportWorkspaceReconciliation = (workspaceId: string) => {
@@ -2414,6 +2466,9 @@ function AccountsPageContent() {
       if (!shouldReactToCacheKey(customEvent.detail?.key ?? null)) {
         return;
       }
+      if (workspaceCacheWriteDepthRef.current > 0) {
+        return;
+      }
 
       const activeWorkspaceId = readSelectedWorkspaceId() || selectedWorkspaceId;
       if (!activeWorkspaceId || activeWorkspaceId !== selectedWorkspaceId) {
@@ -2439,7 +2494,7 @@ function AccountsPageContent() {
       return;
     }
 
-    const updatedAt = persistAccountsWorkspaceCache(selectedWorkspaceId, {
+    const updatedAt = persistAccountsWorkspaceSnapshot(selectedWorkspaceId, {
       accounts: accounts.filter((account) => isWorkspaceAccount(account, selectedWorkspaceId)),
       accountRules,
       transactions: transactions.filter((transaction) => transaction.workspaceId === selectedWorkspaceId),
@@ -2595,36 +2650,6 @@ function AccountsPageContent() {
     };
   }, []);
 
-  const latestCheckpoints = useMemo(() => {
-    const checkpointsByAccountId = new Map<string, StatementCheckpoint>();
-    const checkpointsByAccountKey = new Map<string, StatementCheckpoint>();
-
-    for (const checkpoint of statementCheckpoints) {
-    const checkpointTime = getCheckpointFreshnessTime(checkpoint);
-
-      if (checkpoint.accountId) {
-        const current = checkpointsByAccountId.get(checkpoint.accountId);
-      const currentTime = current ? getCheckpointFreshnessTime(current) : -1;
-
-        if (!current || checkpointTime >= currentTime) {
-          checkpointsByAccountId.set(checkpoint.accountId, checkpoint);
-        }
-      }
-
-      const checkpointKey = getCheckpointIdentityKey(checkpoint);
-      if (checkpointKey) {
-        const current = checkpointsByAccountKey.get(checkpointKey);
-      const currentTime = current ? getCheckpointFreshnessTime(current) : -1;
-
-        if (!current || checkpointTime >= currentTime) {
-          checkpointsByAccountKey.set(checkpointKey, checkpoint);
-        }
-      }
-    }
-
-    return { checkpointsByAccountId, checkpointsByAccountKey };
-  }, [statementCheckpoints]);
-
   const latestCheckpoint = useMemo(() => drawerStatementCheckpoints[0] ?? null, [drawerStatementCheckpoints]);
   const selectedAccountCheckpointSummary = useMemo(
     () => getCheckpointSummary(latestCheckpoint),
@@ -2692,12 +2717,7 @@ function AccountsPageContent() {
       pendingImportSummary
         ? pendingImportSummary
         : getCompletedImportActivitySummary(importActivitySnapshot);
-    const latestCheckpoint =
-      latestCheckpoints.checkpointsByAccountId.get(account.id) ??
-      latestCheckpoints.checkpointsByAccountKey.get(
-        normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency)
-      ) ??
-      null;
+    const latestCheckpoint = getLatestCheckpointForAccount(account, statementCheckpoints);
     const cachedTransactionsWorkspace = selectedWorkspaceId ? getCachedTransactionsWorkspace(selectedWorkspaceId) : null;
     const cachedTransactionsForAccount = Array.isArray(cachedTransactionsWorkspace?.transactions)
       ? (cachedTransactionsWorkspace.transactions as Transaction[]).some((transaction) => transactionMatchesAccount(transaction, account))
@@ -2785,11 +2805,11 @@ function AccountsPageContent() {
     return currencyFilteredAccounts
       .filter((account) => getUploadAccountLoadingContext(account).baseIsLoading)
       .map((account) => account.id);
-  }, [accountLoadingPulse, currencyFilteredAccounts, importActivitySnapshot, latestCheckpoints, pendingImportSummary, transactions]);
+  }, [accountLoadingPulse, currencyFilteredAccounts, importActivitySnapshot, pendingImportSummary, statementCheckpoints, transactions]);
 
   const visibleUploadLoadingAccountIds = useMemo(() => {
     return currencyFilteredAccounts.filter((account) => getUploadAccountLoadingContext(account).isLoading).map((account) => account.id);
-  }, [accountLoadingPulse, currencyFilteredAccounts, importActivitySnapshot, latestCheckpoints, pendingImportSummary, transactions]);
+  }, [accountLoadingPulse, currencyFilteredAccounts, importActivitySnapshot, pendingImportSummary, statementCheckpoints, transactions]);
 
   useEffect(() => {
     const activeIds = new Set(activeUploadLoadingAccountIds);
@@ -3018,7 +3038,7 @@ function AccountsPageContent() {
   );
   const selectedAccountLoadingContext = useMemo(
     () => (selectedAccount ? getUploadAccountLoadingContext(selectedAccount) : null),
-    [accountLoadingPulse, importActivitySnapshot, pendingImportSummary, selectedAccount, latestCheckpoints, transactions]
+    [accountLoadingPulse, importActivitySnapshot, pendingImportSummary, selectedAccount, statementCheckpoints, transactions]
   );
   const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
   const selectedAccountCurrency = selectedAccount?.currency ?? "PHP";
