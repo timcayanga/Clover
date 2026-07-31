@@ -8957,12 +8957,20 @@ export const processImportFileText = async (
     !hasStructuredWorkbookRows &&
     (preliminaryParserRoutingDecision.decision === "backup_required" ||
       preliminaryParserRoutingDecision.decision === "backup_preferred");
+  const preliminaryNeedsVisualBackupAssets =
+    imageImport ||
+    !textForParse.trim() ||
+    preliminaryLooksCharacterSpacedOcr ||
+    !preliminaryHasKnownInstitution;
   const preliminaryWiseImageStatement =
     imageImport &&
     importMode === "statement" &&
     /wise/i.test([metadataForParse.institution, metadataForParse.accountName, checkpointBankName, fileName].filter(Boolean).join(" "));
   const fallbackAssetPrefetchPromise =
-    shouldPrioritizeBackupEarly && !pageImages && !pdfFileDataBase64
+    shouldPrioritizeBackupEarly &&
+    preliminaryNeedsVisualBackupAssets &&
+    !pageImages &&
+    !pdfFileDataBase64
       ? loadFallbackAssets().catch((error) => {
           console.warn("Unable to prefetch backup parser assets; continuing without early handoff boost", {
             importFileId,
@@ -9489,6 +9497,12 @@ export const processImportFileText = async (
   });
   const shouldForceBackupForSuspiciousParse = parserRoutingDecision.shouldForceBackupForSuspiciousParse;
   const shouldUseVisionFallback = parserRoutingDecision.shouldUseVisionFallback;
+  const needsVisualBackupAssets =
+    imageImport ||
+    !textForParse.trim() ||
+    looksCharacterSpacedOcr ||
+    prefersVisionFallbackForInstitution ||
+    !hasKnownInstitution;
   if (imageStatementParseLooksUsable) {
     console.info("[import-performance] using fast screenshot statement parse", {
       importFileId,
@@ -9579,7 +9593,13 @@ export const processImportFileText = async (
           : "Double-checking this file with Clover backup parser.",
     }).catch(() => null);
   }
-  if ((shouldUseVisionFallback || shouldLoadReceiptBackupAssets || needsPdaxHoldingTranscript) && !pageImages && !pdfFileDataBase64) {
+  if (
+    ((shouldUseVisionFallback && needsVisualBackupAssets) ||
+      shouldLoadReceiptBackupAssets ||
+      needsPdaxHoldingTranscript) &&
+    !pageImages &&
+    !pdfFileDataBase64
+  ) {
     try {
       if (fallbackAssetPrefetchPromise) {
         const prefetchedAssets = await fallbackAssetPrefetchPromise;
@@ -11213,6 +11233,9 @@ export const processImportFileText = async (
         confirmationMs: Date.now() - statementConfirmationStartedAt,
         cachedParse: canReuseCachedStatementParse,
         parserRoute: parserRoutingMetadata.decision,
+        parserReasons: parserRoutingMetadata.reasons,
+        backupParserMs: parserRoutingMetadata.backupParserDecisionDurationMs,
+        usedVisualBackupAssets: Boolean(pageImages?.length || pdfFileDataBase64),
       });
       if (confirmedImportResult.status === "staged") {
         await updateImportProgress({

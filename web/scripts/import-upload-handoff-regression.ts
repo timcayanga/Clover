@@ -714,6 +714,21 @@ const main = async () => {
     /void runTemplateLearning\(\)/,
     "Small statements must not start template promotion on the visible-row critical path."
   );
+  assert.match(
+    importProcessorSource,
+    /const preliminaryNeedsVisualBackupAssets =[\s\S]{0,300}!textForParse\.trim\(\)[\s\S]{0,300}!preliminaryHasKnownInstitution/,
+    "Readable PDFs from known institutions should not prefetch heavy visual backup assets."
+  );
+  assert.match(
+    importProcessorSource,
+    /shouldUseVisionFallback && needsVisualBackupAssets/,
+    "Backup validation should only render PDF pages when the document genuinely requires vision."
+  );
+  assert.match(
+    importFileTextSource,
+    /nodeRequire\.resolve\("pdfjs-dist\/package\.json"\)[\s\S]{0,700}standardFontDataUrl/,
+    "The server PDF reader should resolve packaged PDF.js standard fonts instead of emitting one warning per page."
+  );
   assert.match(importProcessorSource, /textCacheInfo\?\.fileFingerprint[\s\S]{0,180}importFile\.sourceFingerprint/);
   assert.doesNotMatch(
     uploadHandoffSource,

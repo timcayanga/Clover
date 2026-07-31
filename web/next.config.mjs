@@ -35,6 +35,7 @@ const nextConfig = {
       "./node_modules/tesseract.js-core/tesseract-core-relaxedsimd.wasm",
       "../node_modules/@napi-rs/canvas/**/*",
       "../node_modules/@napi-rs/canvas-*/**/*",
+      "../node_modules/pdfjs-dist/standard_fonts/**/*",
       "../node_modules/tesseract.js-core/tesseract-core-relaxedsimd.js",
       "../node_modules/tesseract.js-core/tesseract-core-relaxedsimd.wasm",
     ],

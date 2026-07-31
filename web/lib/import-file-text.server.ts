@@ -1,5 +1,7 @@
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
+import { dirname, join, sep } from "node:path";
+import { pathToFileURL } from "node:url";
 import { Prisma } from "@prisma/client";
 import { downloadImportObject } from "@/lib/import-storage.server";
 import {
@@ -1799,6 +1801,25 @@ const loadPdfJsRender = async () => {
   return import("./pdfjs.server");
 };
 
+let pdfJsStandardFontDataUrlCache: string | null | undefined;
+
+const resolvePdfJsStandardFontDataUrl = () => {
+  if (pdfJsStandardFontDataUrlCache !== undefined) {
+    return pdfJsStandardFontDataUrlCache;
+  }
+
+  try {
+    const pdfJsPackagePath = nodeRequire.resolve("pdfjs-dist/package.json");
+    pdfJsStandardFontDataUrlCache = pathToFileURL(
+      `${join(dirname(pdfJsPackagePath), "standard_fonts")}${sep}`
+    ).href;
+  } catch {
+    pdfJsStandardFontDataUrlCache = null;
+  }
+
+  return pdfJsStandardFontDataUrlCache;
+};
+
 const clonePdfBytes = (data: Uint8Array) => {
   const copy = new Uint8Array(data.length);
   copy.set(data);
@@ -1806,9 +1827,11 @@ const clonePdfBytes = (data: Uint8Array) => {
 };
 
 const createPdfJsLoadOptions = (data: Uint8Array, password?: string, _baseUrl?: string | null, disableWorker = true) => {
+  const standardFontDataUrl = resolvePdfJsStandardFontDataUrl();
   return {
     data: clonePdfBytes(data),
     ...(password ? { password } : {}),
+    ...(standardFontDataUrl ? { standardFontDataUrl } : {}),
     disableWorker,
     useWorkerFetch: false,
     isOffscreenCanvasSupported: false,
@@ -2380,12 +2403,7 @@ const renderPdfPageImagesFromBytes = async (
   const pdfjs = (pdfjsModule as any).pdfjs ?? pdfjsModule;
   const renderPdfPages = async (pdfPassword?: string) => {
     const options = {
-      data: clonePdfBytes(data),
-      ...(pdfPassword ? { password: pdfPassword } : {}),
-      disableWorker: true,
-      useWorkerFetch: false,
-      isOffscreenCanvasSupported: false,
-      isImageDecoderSupported: false,
+      ...createPdfJsLoadOptions(data, pdfPassword),
       CanvasFactory: NodeCanvasFactory,
     };
     const loadingTask = pdfjs.getDocument(options as any);
