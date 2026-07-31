@@ -105,6 +105,7 @@ type PlanUsage = {
 
 const IMPORT_ACTIVITY_DATA_SETTLE_WINDOW_MS = 2 * 60 * 1000;
 const SYNCING_EMPTY_STATE_REFRESH_DELAY_MS = 250;
+const POST_IMPORT_RECONCILIATION_DELAYS_MS = [2_500, 7_500, 15_000] as const;
 
 const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
@@ -1353,6 +1354,7 @@ function AccountsPageContent() {
   const workspaceLoadSeqRef = useRef(0);
   const completedImportRefreshKeyRef = useRef<string | null>(null);
   const authoritativeAccountsRef = useRef<{ workspaceId: string; accounts: Account[] } | null>(null);
+  const postImportReconciliationTimersRef = useRef(new Map<string, number[]>());
   const workspaceHydrationVersionRef = useRef(new Map<string, number>());
   const deletedAccountIdsRef = useRef(new Set<string>());
   // Keep the server and first browser render identical. Workspace selection
@@ -2132,6 +2134,37 @@ function AccountsPageContent() {
     });
   };
 
+  const schedulePostImportWorkspaceReconciliation = (workspaceId: string) => {
+    if (!workspaceId || typeof window === "undefined") {
+      return;
+    }
+
+    for (const timer of postImportReconciliationTimersRef.current.get(workspaceId) ?? []) {
+      window.clearTimeout(timer);
+    }
+
+    const timers = POST_IMPORT_RECONCILIATION_DELAYS_MS.map((delayMs) =>
+      window.setTimeout(() => {
+        if (delayMs === POST_IMPORT_RECONCILIATION_DELAYS_MS.at(-1)) {
+          postImportReconciliationTimersRef.current.delete(workspaceId);
+        }
+
+        const activeWorkspaceId = readSelectedWorkspaceId();
+        if (activeWorkspaceId && activeWorkspaceId !== workspaceId) {
+          return;
+        }
+
+        void loadWorkspaceData(workspaceId, {
+          silent: true,
+          awaitHydration: true,
+          forceFresh: true,
+          preserveImportedEvidence: true,
+        });
+      }, delayMs)
+    );
+    postImportReconciliationTimersRef.current.set(workspaceId, timers);
+  };
+
   const hydrateWorkspaceFromCache = (workspaceId: string) => {
     if (!workspaceId) {
       return false;
@@ -2200,6 +2233,17 @@ function AccountsPageContent() {
   }, []);
 
   useEffect(() => {
+    return () => {
+      for (const timers of postImportReconciliationTimersRef.current.values()) {
+        for (const timer of timers) {
+          window.clearTimeout(timer);
+        }
+      }
+      postImportReconciliationTimersRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
     if (
       !selectedWorkspaceId ||
       importActivitySnapshot?.workspaceId !== selectedWorkspaceId ||
@@ -2236,6 +2280,7 @@ function AccountsPageContent() {
         preserveImportedEvidence: true,
       });
     }, 650);
+    schedulePostImportWorkspaceReconciliation(selectedWorkspaceId);
 
     return () => {
       window.clearTimeout(retry);
@@ -2253,6 +2298,7 @@ function AccountsPageContent() {
       // follow the authoritative projection until it reflects the confirmed
       // import balance instead of stopping on an early stale response.
       void refreshImportedAccountProjection(summary);
+      schedulePostImportWorkspaceReconciliation(selectedWorkspaceId);
     });
   }, [loadWorkspaceData, selectedWorkspaceId]);
 
@@ -4958,6 +5004,7 @@ function AccountsPageContent() {
           } finally {
             setImportRefreshInFlight(false);
           }
+          schedulePostImportWorkspaceReconciliation(selectedWorkspaceId);
           // Invalidate prefetched server pages such as Recurring after an
           // account inventory changes. Accounts itself is refreshed above
           // because router.refresh() preserves this client component's state.

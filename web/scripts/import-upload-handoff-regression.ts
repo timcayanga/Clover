@@ -374,6 +374,21 @@ const main = async () => {
     "Accounts must finish projection settlement before reporting an import as updated."
   );
   assert.match(
+    accountsPageSource,
+    /const POST_IMPORT_RECONCILIATION_DELAYS_MS = \[2_500, 7_500, 15_000\] as const/,
+    "Accounts must keep reconciling slower server-side balance projections after the import modal completes."
+  );
+  assert.match(
+    accountsPageSource,
+    /const schedulePostImportWorkspaceReconciliation = \(workspaceId: string\)[\s\S]{0,1700}awaitHydration: true,[\s\S]{0,300}forceFresh: true/,
+    "Post-import reconciliation must use fresh, fully hydrated account data instead of a cached projection."
+  );
+  assert.match(
+    accountsPageSource,
+    /await refreshImportedAccountProjection\(settledSummary\)[\s\S]{0,300}schedulePostImportWorkspaceReconciliation\(selectedWorkspaceId\)/,
+    "An Accounts-page upload must schedule continued balance reconciliation without delaying import success."
+  );
+  assert.match(
     transactionsPageSource,
     /importRefreshInFlightRef\.current = true;[\s\S]{0,250}await refreshTransactionsAfterImport\(selectedWorkspaceId\)/,
     "Transactions imports must wait for their first authoritative refresh before reporting success."
