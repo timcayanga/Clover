@@ -193,8 +193,13 @@ export function ImportUploadDock({
           </div>
           <div className="import-upload-dock__header-actions">
             {onClose ? (
-              <button className="import-upload-dock__close" type="button" onClick={onClose} aria-label="Close import progress">
-                ×
+              <button
+                className="import-upload-dock__close import-upload-dock__close--dismiss"
+                type="button"
+                onClick={onClose}
+                aria-label="Close import progress"
+              >
+                &times;
               </button>
             ) : null}
             {canControl && onPauseToggle ? (

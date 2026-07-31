@@ -19626,6 +19626,17 @@ body[data-clover-page-modal] .modal-card {
   flex: none;
 }
 
+.import-upload-dock__close--dismiss {
+  border-color: transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.import-upload-dock__close--dismiss:hover {
+  background: transparent;
+}
+
 .import-upload-dock__body {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

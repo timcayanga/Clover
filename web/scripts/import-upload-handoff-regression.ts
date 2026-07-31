@@ -205,6 +205,16 @@ const main = async () => {
     /if \(!activity \|\| activity\.status !== "done"\) \{[\s\S]{0,1000}current\.status !== "done" \|\| current\.updatedAt !== activity\.updatedAt[\s\S]{0,400}clearImportActivity\(\);[\s\S]{0,120}setActivity\(null\);/,
     "A completed background import should dismiss its success dock without hiding a newer import."
   );
+  assert.match(
+    uploadDockSource,
+    /className="import-upload-dock__close import-upload-dock__close--dismiss"/,
+    "The import progress dismiss control must have close-only styling."
+  );
+  assert.match(
+    globalStylesSource,
+    /\.import-upload-dock__close--dismiss\s*\{[\s\S]{0,180}background: transparent;[\s\S]{0,100}box-shadow: none;/,
+    "The import progress X must blend into the modal instead of rendering inside a circle."
+  );
   assert.doesNotMatch(processRouteSource, /Fast preflight routed/, "Progress copy should describe user-visible work, not internal parser jargon.");
   assert.match(
     modalSource,
