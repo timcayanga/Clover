@@ -1,6 +1,6 @@
 # Data Engine Context Corpus
 
-Version: `2026.07.28`
+Version: `2026.07.31`
 
 The context corpus provides regional and global evidence for transaction normalization. It is advisory context: it may enrich a parsed row or increase confidence, but it must not overwrite confirmed transaction fields.
 
@@ -11,6 +11,7 @@ The context corpus provides regional and global evidence for transaction normali
 - Southeast Asia: Singapore, Malaysia, Indonesia, Thailand, Vietnam, Cambodia, Myanmar, Brunei, and Laos, including national QR/instant-payment rails, banks, wallets, transit, grocery, commerce, and utility ecosystems
 - East Asia: Japan, South Korea, Hong Kong, Taiwan, and mainland China, including transit IC cards, wallets, banks, ecommerce, convenience stores, and local transport
 - Diaspora and international accounts: India, UAE, Saudi Arabia, Qatar, Kuwait, SEPA/Europe, United States, Canada, United Kingdom, Australia, and New Zealand
+- Worldwide reviewed packs: 85 regional parsing profiles and 86 canonical country/global contexts across Latin America, Europe, the Middle East and North Africa, Sub-Saharan Africa, South Asia, East Asia, Southeast Asia, North America, and Oceania
 
 ## Evidence policy
 
@@ -36,7 +37,7 @@ Context can also provide `counterpartyType` and `purposeHint` values such as emp
 
 The expansion pass prioritizes places where Filipino financial context is likely to originate: the Philippines launch market; ASEAN work, travel, and payment corridors; East Asian tourism and employment corridors; Western Asia OFW destinations; and large diaspora markets. It captures both institution-level evidence (banks, wallets, payment rails, remittance channels) and merchant-level evidence (groceries, transport, utilities, telecom, healthcare, education, travel, ecommerce, subscriptions, and fuel). Country inference remains conservative: a global merchant signal can enrich purpose without claiming a country.
 
-The corpus now contains more than 1,000 entries. In addition to canonical regional entries, it includes lower-confidence descriptor variants for multi-word signals, such as a known institution or merchant followed by `payment`, `transaction`, or `merchant`. These variants model the way statement processors decorate names, retain the same regional and semantic context, and are intentionally scored below canonical aliases.
+The corpus now contains 638 reviewed canonical entries and recognizes more than 52,000 lower-confidence descriptor patterns. Descriptor patterns model the way statement processors decorate names, retain the same regional and semantic context, and are intentionally scored below canonical aliases. They are evaluated dynamically instead of being materialized as duplicate in-memory records. Coverage gates evaluate the canonical layer separately so generated labels cannot make a shallow country pack appear complete.
 
 Matching also tolerates compact statement descriptors such as `GCASHCASHIN` when the compact alias is at least six characters long and the source descriptor itself is compact. Compact matches are recorded with `:compact` evidence so downstream review and diagnostics can distinguish them from ordinary word-boundary matches. Every result reports a coverage tier (`canonical`, `descriptor_variant`, `currency_only`, or `none`) plus the matched aliases. The coverage report exposes canonical and descriptor-variant counts, and breaks entries down by country, region, signal kind, semantic purpose, country-by-purpose, and currency so expansion work can target real gaps rather than only increasing volume.
 
@@ -80,9 +81,17 @@ Coverage diagnostics now distinguish canonical country counts from generated des
 
 Localized alias coverage now includes high-confidence script forms for Thai PromptPay and wallets, Japanese transit and wallet services, Korean wallets and transit cards, Hong Kong Octopus/FPS, Taiwan wallets and stored-value cards, mainland Chinese wallets, and Hindi UPI. The localized form is retained as an alias on the same canonical entry; it does not create a separate country inference path or overwrite user-confirmed values.
 
+The worldwide canonical pass adds 29 regional profiles: Argentina, Peru, Uruguay, Ecuador, Costa Rica, Panama, the Dominican Republic, Guatemala, Portugal, Finland, Czechia, Hungary, Romania, Croatia, Bulgaria, Egypt, Israel, Morocco, Jordan, Oman, Bahrain, Uganda, Rwanda, Ethiopia, Senegal, Côte d’Ivoire, Mauritius, Botswana, and Nepal. Each pack includes a combination of official payment infrastructure, financial institutions, transit, groceries, telecom, or utilities rather than only one globally recognizable merchant. Existing thin packs for Scandinavia, Poland, Greece, Turkey, Sri Lanka, Kenya, Nigeria, Ghana, and Tanzania also receive everyday-purpose depth.
+
+Payment rails in these packs are contextual evidence, not automatic transaction-type decisions. A Yape, MB Way, BenefitPay, mobile-money, or instant-payment descriptor can represent a merchant payment, a payment to another person, or movement between accounts. Clover therefore defers `expense` versus `transfer` until account ownership and counterparty evidence are available.
+
+Canonical alias deduplication is Unicode-aware. Arabic, Hebrew, Cyrillic, Ethiopic, Devanagari, Greek, and Asian-script aliases remain searchable through the same NFKC-normalized resolver used for Latin text. Coverage diagnostics report canonical localized aliases independently from their generated descriptor variants.
+
 Research basis for prioritization includes the Philippine Statistics Authority's 2024 Survey on Overseas Filipinos, which places Asia at 74.5% of OFWs and identifies Saudi Arabia, the UAE, Kuwait, Qatar, Hong Kong, Taiwan, Singapore, and Japan among the major Asian destinations. Payment-rail coverage follows current official descriptions from Bank Indonesia (QRIS), Bank of Thailand (PromptPay), PayNet Malaysia (DuitNow), Octopus/Hong Kong FPS, and Japan's transport-card guidance. These references guide coverage priorities; aliases remain curated evidence and are not treated as proof of identity or location.
 
 Reference sources: [PSA Survey on Overseas Filipinos 2024](https://psa.gov.ph/content/results-2024-overseas-filipino-workers-number-overseas-filipino-workers-grew), [Bank Indonesia QRIS](https://www.bi.go.id/en/fungsi-utama/sistem-pembayaran/ritel/kanal-layanan/qris/default.aspx), [Bank of Thailand PromptPay](https://www.bot.or.th/en/financial-innovation/digital-finance/digital-payment/promptpay.html), [PayNet DuitNow](https://paynet.my/personal-solutions/duitnow-qr.html), [Octopus FPS](https://www.octopus.com.hk/en/consumer/mobile-payment/fps/index.html), and [JNTO IC travel cards](https://faq.japan-travel.jnto.go.jp/en/plan/ic-card/).
+
+Worldwide rail validation references: [BCRA Transferencias 3.0](https://www.bcra.gob.ar/transferencias-3-0/), [BCRP retail-payment interoperability](https://www.bcrp.gob.pe/docs/Sistema-Pagos/articulos/estrategia-de-interoperabilidad-2025-1.pdf), [SIBS MB WAY](https://www.docs.pay.sibs.com/portugal/sibs-gateway/faqs-sibs-gateway/), [Magyar Nemzeti Bank qvik](https://www.mnb.hu/penzforgalom/qvik), [TRANSFOND RoPay](https://www.transfond.ro/pdf/RA%202024%20Transfond%20EN%20fin.pdf), [Central Bank of Jordan CliQ](https://cbj.gov.jo/EN/List/Payment_Systems_Legislations), [Egypt InstaPay](https://www.instapay.eg/?lang=en&page_id=348), [Bahrain BENEFITPay](https://benefit.bh/Personal/benefitpay/), [National Bank of Ethiopia licensed payment issuers](https://nbe.gov.et/payment-instrument-issuers-system-operators/), [BCEAO electronic-money issuers](https://www.bceao.int/en/content/electronic-money-issuing-institutions-0), [National Bank of Rwanda payment systems](https://www.bnr.rw/paymentsystems), and [Nepal connectIPS](https://connectips.com/index.php/faq).
 
 For generic delimited imports, known regional profiles now provide a conservative fallback for numeric dates and amount separators. Explicit statement parser rules still take precedence; unknown or ambiguous regions fall back to the existing parser and retain the original raw record.
 

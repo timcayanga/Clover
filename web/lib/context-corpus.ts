@@ -5,7 +5,9 @@
  * confirmed transaction values. Keep raw statement text outside this module.
  */
 
-export const CONTEXT_CORPUS_VERSION = "2026.07.30";
+import { WORLD_CONTEXT_ENTRIES, WORLD_REGIONAL_PROFILES } from "@/lib/world-context-corpus-packs";
+
+export const CONTEXT_CORPUS_VERSION = "2026.07.31";
 
 export type ContextSignal = {
   id: string;
@@ -84,7 +86,7 @@ export type TravelEpisodeContext = {
   evidence: string[];
 };
 
-type ContextEntry = {
+export type ContextEntry = {
   id: string;
   aliases: string[];
   negativeAliases?: string[];
@@ -378,7 +380,7 @@ const baseEntries: ContextEntry[] = [
   { id: "ie-public-transit", aliases: ["leap top up", "irish rail ticket", "dublin bus", "luas"], signalKind: "travel", countryCode: "IE", regionCode: "EUR", currency: "EUR", categoryHint: "Transport", counterpartyType: "transport_provider", purposeHint: "transport", travelLikely: true, confidence: 82 },
   { id: "nl-be-payment-rails", aliases: ["ideal netherlands", "tikkie netherlands", "ing netherlands", "abn amro", "kbc belgium", "bancontact belgium"], signalKind: "payment_rail", countryCode: "EU", regionCode: "EUR", paymentRail: "benelux_bank_rail", currency: "EUR", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 74 },
   { id: "nl-be-commerce-transit", aliases: ["ns nederland", "ret belgium", "albert heijn", "jumbo supermarkets", "bol.com", "brussels airlines"], signalKind: "travel", countryCode: "EU", regionCode: "EUR", currency: "EUR", categoryHint: "Travel & Lifestyle", counterpartyType: "travel_provider", purposeHint: "travel", travelLikely: true, confidence: 72 },
-  { id: "pt-payment-rails", aliases: ["mb way portugal", "multibanco portugal", "sibs portugal", "millennium bcp", "caixa geral de depositos"], signalKind: "payment_rail", countryCode: "EU", regionCode: "EUR", paymentRail: "portugal_bank_rail", currency: "EUR", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 72 },
+  { id: "pt-payment-rails", aliases: ["sibs portugal"], signalKind: "payment_rail", countryCode: "PT", regionCode: "EUR", paymentRail: "portugal_bank_rail", currency: "EUR", counterpartyType: "financial_institution", purposeHint: "transfer", confidence: 82 },
   { id: "pt-commerce-transit", aliases: ["metro lisboa", "cp comboios portugal", "continente portugal", "pingo doce", "tap air portugal"], signalKind: "travel", countryCode: "EU", regionCode: "EUR", currency: "EUR", categoryHint: "Travel & Lifestyle", counterpartyType: "travel_provider", purposeHint: "travel", travelLikely: true, confidence: 72 },
   { id: "bd-payment-rails", aliases: ["bkash bangladesh", "nagad bangladesh", "rocket bangladesh", "upay bangladesh", "npsb bangladesh"], signalKind: "payment_rail", countryCode: "BD", regionCode: "SAS", paymentRail: "bangladesh_wallet", currency: "BDT", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 70 },
   { id: "pk-payment-rails", aliases: ["easypaisa pakistan", "jazzcash pakistan", "sadapay pakistan", "nayapay pakistan", "raast pakistan"], signalKind: "payment_rail", countryCode: "PK", regionCode: "SAS", paymentRail: "pakistan_wallet", currency: "PKR", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 70 },
@@ -618,31 +620,14 @@ const additionalCanonicalEntries: ContextEntry[] = [
   { id: "us-chase", aliases: ["chase bank usa", "jpmorgan chase"], signalKind: "institution", countryCode: "US", regionCode: "NAM", institutionType: "bank", currency: "USD", confidence: 84 },
 ];
 
-/**
- * Statement providers frequently decorate a known name with a descriptor word
- * such as "payment", "transaction", or "merchant". Keep these as separate,
- * lower-confidence evidence entries so the corpus can recognize those forms
- * without making them as authoritative as the canonical alias.
- */
-const buildDescriptorExpansion = (sourceEntries: ContextEntry[]): ContextEntry[] =>
-  sourceEntries.flatMap((entry) =>
-    entry.aliases
-      .filter((alias) => alias.trim().split(/\s+/).length >= 2)
-      .flatMap((alias, aliasIndex) =>
-        ["payment", "transaction", "merchant", "posted", "settled", "statement", "details", "reference", "record", "activity", "description", "line item", "memo", "narration", "particulars", "transaction details", "statement entry", "ledger entry", "narrative", "particular", "reference number", "posted transaction", "processed payment", "account activity"].map((suffix, suffixIndex) => ({
-          ...entry,
-          id: `descriptor-${entry.id}-${aliasIndex + 1}-${suffixIndex + 1}`,
-          aliases: [`${alias} ${suffix}`],
-          negativeAliases: [],
-          confidence: Math.max(55, entry.confidence - 18),
-          source: "curated" as const,
-          reviewStatus: "active" as const,
-          coverage: "descriptor_variant" as const,
-        }))
-      )
-  );
+const DESCRIPTOR_SUFFIXES = [
+  "transaction details", "posted transaction", "processed payment", "statement entry", "reference number",
+  "account activity", "ledger entry", "line item", "payment", "transaction", "merchant", "posted", "settled",
+  "statement", "details", "reference", "record", "activity", "description", "memo", "narration", "particulars",
+  "narrative", "particular",
+].sort((left, right) => right.length - left.length);
 
-const normalizeCanonicalAlias = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+const normalizeCanonicalAlias = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(/\s+/g, " ");
 const usedCanonicalAliases = new Set(baseEntries.flatMap((entry) => entry.aliases.map(normalizeCanonicalAlias)));
 const deduplicatedAdditionalCanonicalEntries = additionalCanonicalEntries
   .map((entry) => ({
@@ -655,8 +640,47 @@ const deduplicatedAdditionalCanonicalEntries = additionalCanonicalEntries
     }),
   }))
   .filter((entry) => entry.aliases.length > 0);
-const canonicalEntries: ContextEntry[] = [...baseEntries, ...deduplicatedAdditionalCanonicalEntries];
-const entries: ContextEntry[] = [...canonicalEntries, ...buildDescriptorExpansion(canonicalEntries)];
+const usedExtendedAliases = new Set([...usedCanonicalAliases]);
+const deduplicatedWorldEntries = WORLD_CONTEXT_ENTRIES
+  .map((entry) => ({
+    ...entry,
+    aliases: entry.aliases.filter((alias) => {
+      const normalizedAlias = normalizeCanonicalAlias(alias);
+      if (!normalizedAlias || usedExtendedAliases.has(normalizedAlias)) return false;
+      usedExtendedAliases.add(normalizedAlias);
+      return true;
+    }),
+  }))
+  .filter((entry) => entry.aliases.length > 0);
+const canonicalEntries: ContextEntry[] = [...baseEntries, ...deduplicatedAdditionalCanonicalEntries, ...deduplicatedWorldEntries];
+const entries: ContextEntry[] = canonicalEntries;
+const descriptorVariantEntryCount = canonicalEntries.reduce(
+  (count, entry) => count + entry.aliases.filter((alias) => alias.trim().split(/\s+/).length >= 2).length * DESCRIPTOR_SUFFIXES.length,
+  0,
+);
+
+type IndexedAlias = {
+  entry: ContextEntry;
+  alias: string;
+  normalizedAlias: string;
+  compactAlias: string;
+};
+
+const aliasCandidatesByFirstToken = new Map<string, IndexedAlias[]>();
+const compactCandidatesByPrefix = new Map<string, IndexedAlias[]>();
+for (const entry of entries) {
+  for (const alias of entry.aliases) {
+    const normalizedAlias = normalizeCanonicalAlias(alias);
+    if (!normalizedAlias) continue;
+    const candidate = { entry, alias, normalizedAlias, compactAlias: normalizedAlias.replace(/\s+/g, "") };
+    const firstToken = normalizedAlias.split(" ")[0];
+    if (firstToken) aliasCandidatesByFirstToken.set(firstToken, [...(aliasCandidatesByFirstToken.get(firstToken) ?? []), candidate]);
+    if (candidate.compactAlias.length >= 6) {
+      const prefix = candidate.compactAlias.slice(0, 4);
+      compactCandidatesByPrefix.set(prefix, [...(compactCandidatesByPrefix.get(prefix) ?? []), candidate]);
+    }
+  }
+}
 
 const regionalProfiles: RegionalParsingProfile[] = [
   { countryCode: "PH", regionCode: "SEA", locales: ["en-PH", "fil-PH"], primaryLocale: "en-PH", languages: ["en", "fil"], dateOrder: "mdy", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "PHP", legalEntitySuffixes: ["inc", "corp", "corporation", "co", "ltd"], confidence: 86 },
@@ -715,6 +739,7 @@ const regionalProfiles: RegionalParsingProfile[] = [
   { countryCode: "SA", regionCode: "MEA", locales: ["ar-SA", "en-SA"], primaryLocale: "ar-SA", languages: ["ar", "en"], dateOrder: "dmy", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "SAR", legalEntitySuffixes: ["llc", "est", "co"], confidence: 78 },
   { countryCode: "QA", regionCode: "MEA", locales: ["ar-QA", "en-QA"], primaryLocale: "en-QA", languages: ["ar", "en"], dateOrder: "dmy", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "QAR", legalEntitySuffixes: ["llc", "wll", "est"], confidence: 74 },
   { countryCode: "KW", regionCode: "MEA", locales: ["ar-KW", "en-KW"], primaryLocale: "en-KW", languages: ["ar", "en"], dateOrder: "dmy", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "KWD", legalEntitySuffixes: ["wll", "k s c", "co"], confidence: 74 },
+  ...WORLD_REGIONAL_PROFILES,
 ];
 
 const getRegionalProfile = (countryCode: string | null | undefined) =>
@@ -766,6 +791,45 @@ const findAliasMatch = (text: string, alias: string): AliasMatchMode | null => {
 
 const matchesAlias = (text: string, alias: string) => Boolean(findAliasMatch(text, alias));
 
+const findIndexedMatches = (text: string) => {
+  const candidates = new Set<IndexedAlias>();
+  for (const token of new Set(text.split(" ").filter(Boolean))) {
+    for (const candidate of aliasCandidatesByFirstToken.get(token) ?? []) candidates.add(candidate);
+  }
+  if (!/\s/.test(text) && text.length >= 6) {
+    for (let index = 0; index <= text.length - 4; index += 1) {
+      for (const candidate of compactCandidatesByPrefix.get(text.slice(index, index + 4)) ?? []) candidates.add(candidate);
+    }
+  }
+
+  const paddedText = ` ${text} `;
+  const strongestByEntry = new Map<string, { entry: ContextEntry; aliasMatch: { alias: string; mode: AliasMatchMode } }>();
+  for (const candidate of candidates) {
+    const boundaryMatch = paddedText.includes(` ${candidate.normalizedAlias} `);
+    const compactMatch = !boundaryMatch && !/\s/.test(text) && text.includes(candidate.compactAlias);
+    if (!boundaryMatch && !compactMatch) continue;
+    if ((candidate.entry.negativeAliases ?? []).some((alias) => matchesAlias(text, alias))) continue;
+    const descriptorSuffix = boundaryMatch && candidate.normalizedAlias.includes(" ")
+      ? DESCRIPTOR_SUFFIXES.find((suffix) => paddedText.includes(` ${candidate.normalizedAlias} ${suffix} `))
+      : null;
+    const matchedAlias = descriptorSuffix ? `${candidate.alias} ${descriptorSuffix}` : candidate.alias;
+    const matchedEntry = descriptorSuffix
+      ? { ...candidate.entry, confidence: Math.max(55, candidate.entry.confidence - 18), coverage: "descriptor_variant" as const }
+      : candidate.entry;
+    const current = strongestByEntry.get(candidate.entry.id);
+    if (!current || matchedAlias.length > current.aliasMatch.alias.length) {
+      strongestByEntry.set(candidate.entry.id, {
+        entry: matchedEntry,
+        aliasMatch: { alias: matchedAlias, mode: compactMatch ? "compact" : "boundary" },
+      });
+    }
+  }
+  return [...strongestByEntry.values()].sort((left, right) => {
+    const lengthDifference = right.aliasMatch.alias.length - left.aliasMatch.alias.length;
+    return lengthDifference !== 0 ? lengthDifference : right.entry.confidence - left.entry.confidence;
+  });
+};
+
 export const resolveTransactionContext = (params: {
   institution?: string | null;
   accountName?: string | null;
@@ -782,22 +846,7 @@ export const resolveTransactionContext = (params: {
   const cacheKey = `${text}\u0000${explicitCurrency ?? ""}`;
   const cachedContext = transactionContextCache.get(cacheKey);
   if (cachedContext) return cachedContext;
-  const matches = entries
-    .map((entry) => ({
-      entry,
-      aliasMatch: entry.aliases
-        .map((candidate) => ({ alias: candidate, mode: findAliasMatch(text, candidate) }))
-        .sort((left, right) => right.alias.length - left.alias.length)
-        .find((candidate): candidate is { alias: string; mode: AliasMatchMode } => Boolean(candidate.mode)),
-    }))
-    .filter((match): match is { entry: ContextEntry; aliasMatch: { alias: string; mode: AliasMatchMode } } => {
-      if (!match.aliasMatch) return false;
-      return !(match.entry.negativeAliases ?? []).some((alias) => matchesAlias(text, alias));
-    })
-    .sort((left, right) => {
-      const lengthDifference = right.aliasMatch.alias.length - left.aliasMatch.alias.length;
-      return lengthDifference !== 0 ? lengthDifference : right.entry.confidence - left.entry.confidence;
-    });
+  const matches = findIndexedMatches(text);
 
   if (matches.length === 0) {
     return cacheTransactionContext(cacheKey, {
@@ -1042,6 +1091,14 @@ export const getContextCorpusCoverageReport = () => {
     counts[entry.countryCode] = purposes;
     return counts;
   }, {});
+  const canonicalEntries = entries.filter((entry) => entry.coverage !== "descriptor_variant");
+  const canonicalCountryPurposeCounts = canonicalEntries.reduce<Record<string, Record<string, number>>>((counts, entry) => {
+    if (!entry.purposeHint) return counts;
+    const purposes = counts[entry.countryCode] ?? {};
+    purposes[entry.purposeHint] = (purposes[entry.purposeHint] ?? 0) + 1;
+    counts[entry.countryCode] = purposes;
+    return counts;
+  }, {});
   const purposeHintCounts = countBy(entries.map((entry) => entry.purposeHint));
   const signalKindCounts = countBy(entries.map((entry) => entry.signalKind));
   const classifyAliasScript = (alias: string) => {
@@ -1051,25 +1108,37 @@ export const getContextCorpusCoverageReport = () => {
     if (/[\u4E00-\u9FFF]/u.test(alias)) return "han";
     if (/[\u0900-\u097F]/u.test(alias)) return "devanagari";
     if (/[\u0600-\u06FF]/u.test(alias)) return "arabic";
+    if (/[\u0590-\u05FF]/u.test(alias)) return "hebrew";
+    if (/[\u0400-\u04FF]/u.test(alias)) return "cyrillic";
+    if (/[\u0370-\u03FF]/u.test(alias)) return "greek";
+    if (/[\u1200-\u137F]/u.test(alias)) return "ethiopic";
+    if (/[\u0980-\u09FF]/u.test(alias)) return "bengali";
+    if (/[\u0D80-\u0DFF]/u.test(alias)) return "sinhala";
+    if (/[\u0B80-\u0BFF]/u.test(alias)) return "tamil";
+    if (/[\u1780-\u17FF]/u.test(alias)) return "khmer";
+    if (/[\u1000-\u109F]/u.test(alias)) return "myanmar";
+    if (/[\u0E80-\u0EFF]/u.test(alias)) return "lao";
     return "latin_or_other";
   };
   const allAliases = entries.flatMap((entry) => entry.aliases);
-  const canonicalEntries = entries.filter((entry) => entry.coverage !== "descriptor_variant");
+  const canonicalAliases = canonicalEntries.flatMap((entry) => entry.aliases);
 
   return {
     ...quality,
     corpusVersion: CONTEXT_CORPUS_VERSION,
     canonicalEntryCount: canonicalEntries.length,
-    descriptorVariantEntryCount: entries.filter((entry) => entry.coverage === "descriptor_variant").length,
+    descriptorVariantEntryCount,
     canonicalCountryCounts: countBy(canonicalEntries.map((entry) => entry.countryCode)),
     aliasCount: allAliases.length,
     localizedAliasCount: allAliases.filter((alias) => classifyAliasScript(alias) !== "latin_or_other").length,
+    canonicalLocalizedAliasCount: canonicalAliases.filter((alias) => classifyAliasScript(alias) !== "latin_or_other").length,
     aliasScriptCounts: countBy(allAliases.map(classifyAliasScript)),
     countryCounts: countBy(entries.map((entry) => entry.countryCode)),
     regionCounts: countBy(entries.map((entry) => entry.regionCode)),
     signalKindCounts,
     purposeHintCounts,
     countryPurposeCounts,
+    canonicalCountryPurposeCounts,
     currencies: [...new Set(entries.map((entry) => entry.currency).filter((value): value is string => Boolean(value)))].sort(),
   };
 };

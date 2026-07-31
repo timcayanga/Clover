@@ -2,22 +2,27 @@ import assert from "node:assert/strict";
 import { CONTEXT_CORPUS_VERSION, deriveTravelEpisodes, getContextCorpusCoverageReport, getContextCorpusEntries, getContextCorpusQualityReport, parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
 
 assert.ok(CONTEXT_CORPUS_VERSION);
-assert.ok(getContextCorpusEntries().length >= 40000);
-assert.ok(getContextCorpusQualityReport().profileCount >= 25);
+assert.ok(getContextCorpusEntries().length >= 638);
+assert.ok(getContextCorpusQualityReport().profileCount >= 85);
 assert.equal(getContextCorpusQualityReport().valid, true);
 const coverage = getContextCorpusCoverageReport();
 assert.equal(coverage.corpusVersion, CONTEXT_CORPUS_VERSION);
-assert.ok(coverage.canonicalEntryCount >= 100);
-assert.ok(coverage.descriptorVariantEntryCount > 38000);
-assert.ok(Object.keys(coverage.countryCounts).length >= 25);
+assert.ok(coverage.canonicalEntryCount >= 638);
+assert.ok(coverage.descriptorVariantEntryCount > 51000);
+assert.ok(Object.keys(coverage.countryCounts).length >= 86);
+assert.ok(coverage.currencies.length >= 70);
 assert.ok((coverage.canonicalCountryCounts.PH ?? 0) > 0);
 assert.ok(coverage.localizedAliasCount >= 20);
+assert.ok(coverage.canonicalLocalizedAliasCount >= 30);
 assert.ok((coverage.aliasScriptCounts.japanese ?? 0) > 0);
 assert.ok((coverage.aliasScriptCounts.hangul ?? 0) > 0);
 assert.ok((coverage.aliasScriptCounts.han ?? 0) > 0);
 assert.ok((coverage.countryPurposeCounts.PH?.utilities ?? 0) > 0);
 assert.ok((coverage.countryPurposeCounts.SG?.healthcare ?? 0) > 0);
 assert.ok((coverage.countryPurposeCounts.AE?.utilities ?? 0) > 0);
+assert.ok((coverage.canonicalCountryPurposeCounts.PE?.transport ?? 0) > 0);
+assert.ok((coverage.canonicalCountryPurposeCounts.EG?.groceries ?? 0) > 0);
+assert.ok((coverage.canonicalCountryPurposeCounts.ET?.utilities ?? 0) > 0);
 
 const gcash = resolveTransactionContext({ merchantRaw: "GCASH CASH IN", currency: "PHP" });
 assert.equal(gcash.countryCode, "PH");
@@ -173,6 +178,51 @@ for (const fixture of expandedFixtures) {
   assert.equal(context.countryCode, fixture.countryCode);
   if (fixture.paymentRail) assert.equal(context.paymentRail, fixture.paymentRail);
   assert.equal(context.purposeHint, fixture.purposeHint);
+}
+
+const worldwideFixtures = [
+  { input: { description: "TRANSFERENCIAS 3.0 ARGENTINA", currency: "ARS" }, countryCode: "AR", paymentRail: "argentina_transferencias_3", purposeHint: "transfer" },
+  { input: { description: "PAGO YAPE", currency: "PEN" }, countryCode: "PE", paymentRail: "peru_wallet", purposeHint: "transfer" },
+  { input: { merchantRaw: "TARJETA STM MONTEVIDEO", currency: "UYU" }, countryCode: "UY", paymentRail: null, purposeHint: "transport" },
+  { input: { merchantRaw: "SUPERMAXI ECUADOR", currency: "USD" }, countryCode: "EC", paymentRail: null, purposeHint: "groceries" },
+  { input: { description: "SINPE MOVIL COSTA RICA", currency: "CRC" }, countryCode: "CR", paymentRail: "costa_rica_sinpe", purposeHint: "transfer" },
+  { input: { description: "YAPPY PANAMA", currency: "PAB" }, countryCode: "PA", paymentRail: "panama_wallet", purposeHint: "transfer" },
+  { input: { merchantRaw: "EDESUR DOMINICANA", currency: "DOP" }, countryCode: "DO", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "TRANSMETRO GUATEMALA", currency: "GTQ" }, countryCode: "GT", paymentRail: null, purposeHint: "transport" },
+  { input: { description: "MB WAY PORTUGAL", currency: "EUR" }, countryCode: "PT", paymentRail: "portugal_mb_way", purposeHint: "transfer" },
+  { input: { merchantRaw: "HSL HELSINKI", currency: "EUR" }, countryCode: "FI", paymentRail: null, purposeHint: "transport" },
+  { input: { merchantRaw: "LÍTAČKA PRAHA", currency: "CZK" }, countryCode: "CZ", paymentRail: null, purposeHint: "transport" },
+  { input: { description: "QVIK HUNGARY", currency: "HUF" }, countryCode: "HU", paymentRail: "hungary_qvik", purposeHint: "transfer" },
+  { input: { description: "ROPAY ROMANIA", currency: "RON" }, countryCode: "RO", paymentRail: "romania_ropay", purposeHint: "transfer" },
+  { input: { merchantRaw: "KONZUM HRVATSKA", currency: "EUR" }, countryCode: "HR", paymentRail: null, purposeHint: "groceries" },
+  { input: { merchantRaw: "БАНКА ДСК", currency: "BGN" }, countryCode: "BG", paymentRail: null, purposeHint: null },
+  { input: { description: "انستاباي مصر", currency: "EGP" }, countryCode: "EG", paymentRail: "egypt_ipn", purposeHint: "transfer" },
+  { input: { description: "פייבוקס ישראל", currency: "ILS" }, countryCode: "IL", paymentRail: "israel_wallet", purposeHint: "transfer" },
+  { input: { merchantRaw: "ONCF MAROC", currency: "MAD" }, countryCode: "MA", paymentRail: null, purposeHint: "transport" },
+  { input: { description: "كليك الأردن", currency: "JOD" }, countryCode: "JO", paymentRail: "jordan_cliq", purposeHint: "transfer" },
+  { input: { description: "THAWANI PAY OMAN", currency: "OMR" }, countryCode: "OM", paymentRail: "oman_wallet", purposeHint: "transfer" },
+  { input: { description: "BENEFITPAY BAHRAIN", currency: "BHD" }, countryCode: "BH", paymentRail: "bahrain_benefitpay", purposeHint: "transfer" },
+  { input: { merchantRaw: "SAFEBODA UGANDA", currency: "UGX" }, countryCode: "UG", paymentRail: null, purposeHint: "transport" },
+  { input: { description: "MTN MOMO RWANDA", currency: "RWF" }, countryCode: "RW", paymentRail: "rwanda_mobile_money", purposeHint: "transfer" },
+  { input: { description: "ቴሌብር ኢትዮጵያ", currency: "ETB" }, countryCode: "ET", paymentRail: "ethiopia_mobile_money", purposeHint: "transfer" },
+  { input: { description: "WAVE MOBILE MONEY SENEGAL", currency: "XOF" }, countryCode: "SN", paymentRail: "senegal_mobile_money", purposeHint: "transfer" },
+  { input: { merchantRaw: "SOTRA ABIDJAN", currency: "XOF" }, countryCode: "CI", paymentRail: null, purposeHint: "transport" },
+  { input: { merchantRaw: "METRO EXPRESS MAURITIUS", currency: "MUR" }, countryCode: "MU", paymentRail: null, purposeHint: "transport" },
+  { input: { merchantRaw: "CHOPPIES BOTSWANA", currency: "BWP" }, countryCode: "BW", paymentRail: null, purposeHint: "groceries" },
+  { input: { description: "CONNECTIPS NEPAL", currency: "NPR" }, countryCode: "NP", paymentRail: "nepal_connectips", purposeHint: "transfer" },
+] as const;
+for (const fixture of worldwideFixtures) {
+  const context = resolveTransactionContext(fixture.input);
+  assert.equal(context.countryCode, fixture.countryCode);
+  assert.equal(context.paymentRail, fixture.paymentRail);
+  assert.equal(context.purposeHint, fixture.purposeHint);
+  assert.notEqual(context.transactionTypeHint, "expense");
+}
+
+for (const description of ["A BIT OF SOFTWARE", "WAVE HOTEL", "METRO MARKET", "MODE PAYMENT"]) {
+  const context = resolveTransactionContext({ description, currency: "USD" });
+  assert.equal(context.countryCode, null);
+  assert.equal(context.paymentRail, null);
 }
 
 const falsePositive = resolveTransactionContext({ merchantRaw: "VISA CAFE", currency: "PHP" });
