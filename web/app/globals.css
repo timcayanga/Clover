@@ -50684,3 +50684,40 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     font-size: 10px;
   }
 }
+
+/* Plan limits stay compact while adapting from one row to a two-by-two grid. */
+.settings-section--plan .settings-plan-usage {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  border: 0;
+}
+
+.settings-section--plan .settings-plan-usage__card {
+  align-content: center;
+  min-width: 0;
+  min-height: 86px;
+  gap: 7px;
+  padding: 10px 12px;
+  border-radius: 16px;
+}
+
+.settings-section--plan .settings-plan-usage__head {
+  min-width: 0;
+}
+
+.settings-section--plan .settings-plan-usage__head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-section--plan .settings-plan-usage__legend {
+  min-width: 0;
+}
+
+@media (max-width: 1350px) {
+  .settings-section--plan .settings-plan-usage {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

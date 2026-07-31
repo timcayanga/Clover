@@ -198,24 +198,33 @@ export function SettingsPlanPanel({
         <h4>Plan</h4>
       </div>
 
-      <div className="settings-plan-usage" aria-label="Current plan and usage">
-        <div className="settings-plan-usage__row settings-plan-usage__row--current">
-          <strong>Current plan</strong>
-          <span>{planTier === "pro" ? "Pro" : "Free"}</span>
-        </div>
-        {usageRows.map((usage) => (
-          <div key={usage.label} className="settings-plan-usage__row">
-            <strong>{usage.label}</strong>
-            <div className="settings-plan-usage__visual">
-              <span className="settings-plan-usage__legend">
-                <span>{usage.used}</span>
-                <span>{usage.limit}</span>
-              </span>
-              <span className="settings-plan-usage__meter" aria-hidden="true">
-                <span style={{ width: `${usage.percent}%` }} />
-              </span>
-            </div>
+      <div className="settings-plan-usage settings-plan-usage--with-plan" aria-label="Current plan and usage">
+        <article className="settings-plan-usage__card settings-plan-usage__card--plan">
+          <div className="settings-plan-usage__head">
+            <strong>Current plan</strong>
+            <span className="settings-plan-usage__tier">{planTier === "pro" ? "Pro" : "Free"}</span>
           </div>
+          <span className="settings-plan-usage__legend">
+            <span>Plan status</span>
+            <span>Active</span>
+          </span>
+          <span className="settings-plan-usage__meter" aria-hidden="true">
+            <span style={{ width: "100%" }} />
+          </span>
+        </article>
+        {usageRows.map((usage) => (
+          <article key={usage.label} className="settings-plan-usage__card">
+            <div className="settings-plan-usage__head">
+              <strong>{usage.label}</strong>
+            </div>
+            <span className="settings-plan-usage__legend">
+              <span>{usage.used}</span>
+              <span>{usage.limit}</span>
+            </span>
+            <span className="settings-plan-usage__meter" aria-hidden="true">
+              <span style={{ width: `${usage.percent}%` }} />
+            </span>
+          </article>
         ))}
       </div>
 
