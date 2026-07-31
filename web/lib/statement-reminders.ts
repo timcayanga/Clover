@@ -407,9 +407,10 @@ export const getUpcomingStatementReminders = async (workspaceId: string): Promis
     const existing = remindersByAccountKey.get(accountKey);
 
     if (existing) {
-      if (new Date(existing.paymentDueDate).getTime() <= paymentDueDate.getTime()) {
-        continue;
-      }
+      // Checkpoints are ordered newest first. Keep the newest usable statement
+      // instead of letting an older statement replace it merely because its
+      // historical due day falls earlier in the month.
+      continue;
     }
 
     remindersByAccountKey.set(accountKey, {
