@@ -10999,16 +10999,6 @@ export const processImportFileText = async (
     }
   }
 
-  const structuredWorkbookImport = rows.some((row) => {
-    const rawPayload = row.rawPayload;
-    return Boolean(
-      rawPayload &&
-      typeof rawPayload === "object" &&
-      !Array.isArray(rawPayload) &&
-      typeof (rawPayload as Record<string, unknown>).worksheetName === "string"
-    );
-  });
-  const deferTemplateLearning = structuredWorkbookImport || rows.length >= 250;
   const runTemplateLearning = async () => {
     const template = await upsertStatementTemplate({
       workspaceId: importFile.workspaceId,
@@ -11082,30 +11072,20 @@ export const processImportFileText = async (
     }
   };
 
-  if (deferTemplateLearning) {
-    // Large imports and workbooks can contain hundreds of rows. Template
-    // promotion is durable learning, but it is not required to make this
-    // upload visible.
-    // Delay it long enough that it cannot contend with confirmation for the
-    // database pool or make the UI wait at 70%.
-    schedulePostVisibleImportWork(`template-learning:${importFileId}`, async () => {
-      await runTemplateLearning().catch((error) => {
-        console.warn("Deferred statement template learning failed; continuing import", {
-          importFileId,
-          workspaceId: importFile.workspaceId,
-          error,
-        });
-      });
-    }, 30_000);
-  } else {
-    void runTemplateLearning().catch((error) => {
-      console.warn("Statement template learning failed; continuing import", {
+  // Template promotion scans recent statement memory and may perform many rule
+  // upserts. It is valuable durable learning, but never belongs on the path
+  // that makes the current statement visible. Running it immediately can
+  // consume one of the small serverless database pool's connections while
+  // parsed rows, checkpoints, and account balances are being committed.
+  schedulePostVisibleImportWork(`template-learning:${importFileId}`, async () => {
+    await runTemplateLearning().catch((error) => {
+      console.warn("Deferred statement template learning failed; continuing import", {
         importFileId,
         workspaceId: importFile.workspaceId,
         error,
       });
     });
-  }
+  }, 10_000);
 
   if (await hasCompatibleTable("AccountStatementCheckpoint")) {
     try {

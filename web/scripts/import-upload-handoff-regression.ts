@@ -699,6 +699,21 @@ const main = async () => {
     /const shouldMaterializeAccountBeforeConfirmation =\s*effectiveImportMode === "portfolio" \|\| effectiveImportMode === "account_detail"/,
     "Only account-document imports should materialize accounts before confirmation; statements should not pay for account matching twice."
   );
+  const templateLearningSource = section(
+    importProcessorSource,
+    "const runTemplateLearning = async () =>",
+    'if (await hasCompatibleTable("AccountStatementCheckpoint"))'
+  );
+  assert.match(
+    templateLearningSource,
+    /schedulePostVisibleImportWork\(`template-learning:\$\{importFileId\}`,[\s\S]{0,900}10_000\);/,
+    "Statement-template learning must run after the import becomes visible so rule promotion cannot contend with account persistence."
+  );
+  assert.doesNotMatch(
+    templateLearningSource,
+    /void runTemplateLearning\(\)/,
+    "Small statements must not start template promotion on the visible-row critical path."
+  );
   assert.match(importProcessorSource, /textCacheInfo\?\.fileFingerprint[\s\S]{0,180}importFile\.sourceFingerprint/);
   assert.doesNotMatch(
     uploadHandoffSource,
