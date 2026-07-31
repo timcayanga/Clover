@@ -3926,59 +3926,6 @@ function AccountDetailPageContent() {
             ) : null}
 
             <div className={`accounts-detail__hero-layout${isCreditAccount ? " is-credit-account" : ""}`}>
-              {isCreditAccount ? (
-                <div className="accounts-detail__credit-inline" aria-label="Credit card details">
-                  <label className="accounts-detail__credit-inline-field accounts-detail__credit-inline-field--editable">
-                    <span>Credit Limit</span>
-                    <input
-                      value={creditLimitDraft}
-                      onChange={(event) => {
-                        setCreditLimitDraft(event.target.value);
-                        setCreditLimitSaveState("idle");
-                      }}
-                      inputMode="decimal"
-                      placeholder="0.00"
-                      aria-label="Credit limit"
-                    />
-                  </label>
-                  <div className="accounts-detail__credit-inline-field accounts-detail__credit-inline-field--period">
-                    <span>Current Period</span>
-                    <div className="accounts-detail__credit-period-inputs" aria-label={`Current period: ${creditCurrentPeriodLabel}`}>
-                      <input
-                        type="date"
-                        value={creditPeriodStartDraft}
-                        onChange={(event) => {
-                          setCreditPeriodStartDraft(event.target.value);
-                          setCreditLimitSaveState("idle");
-                        }}
-                        aria-label="Current period start"
-                      />
-                      <span>to</span>
-                      <input
-                        type="date"
-                        value={creditPeriodEndDraft}
-                        onChange={(event) => {
-                          setCreditPeriodEndDraft(event.target.value);
-                          setCreditLimitSaveState("idle");
-                        }}
-                        aria-label="Current period end"
-                      />
-                    </div>
-                  </div>
-                  {creditLimitSaveState !== "idle" || creditLimitSourceLabel ? (
-                    <span className="accounts-detail__credit-inline-meta">
-                      {creditLimitSaveState === "saving"
-                        ? "Saving..."
-                        : creditLimitSaveState === "saved"
-                          ? "Saved"
-                          : creditLimitSaveState === "error"
-                            ? "Needs attention"
-                            : creditLimitSourceLabel}
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-
               <div className="accounts-detail__hero-card-row">
                 <FinancialAccountCard
                   className="accounts-detail__hero-card"
@@ -4068,6 +4015,59 @@ function AccountDetailPageContent() {
                   <ActionIcon name={account.favorite ? "star-filled" : "star"} />
                 </button>
               </div>
+
+              {isCreditAccount ? (
+                <div className="accounts-detail__credit-inline" aria-label="Credit card details">
+                  <label className="accounts-detail__credit-inline-field accounts-detail__credit-inline-field--editable">
+                    <span>Credit limit</span>
+                    <input
+                      value={creditLimitDraft}
+                      onChange={(event) => {
+                        setCreditLimitDraft(event.target.value);
+                        setCreditLimitSaveState("idle");
+                      }}
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      aria-label="Credit limit"
+                    />
+                  </label>
+                  <div className="accounts-detail__credit-inline-field accounts-detail__credit-inline-field--period">
+                    <span>Current period</span>
+                    <div className="accounts-detail__credit-period-inputs" aria-label={`Current period: ${creditCurrentPeriodLabel}`}>
+                      <input
+                        type="date"
+                        value={creditPeriodStartDraft}
+                        onChange={(event) => {
+                          setCreditPeriodStartDraft(event.target.value);
+                          setCreditLimitSaveState("idle");
+                        }}
+                        aria-label="Current period start"
+                      />
+                      <span>to</span>
+                      <input
+                        type="date"
+                        value={creditPeriodEndDraft}
+                        onChange={(event) => {
+                          setCreditPeriodEndDraft(event.target.value);
+                          setCreditLimitSaveState("idle");
+                        }}
+                        aria-label="Current period end"
+                      />
+                    </div>
+                  </div>
+                  {creditLimitSaveState !== "idle" || creditLimitSourceLabel ? (
+                    <span className="accounts-detail__credit-inline-meta">
+                      {creditLimitSaveState === "saving"
+                        ? "Saving..."
+                        : creditLimitSaveState === "saved"
+                          ? "Saved"
+                          : creditLimitSaveState === "error"
+                            ? "Needs attention"
+                            : creditLimitSourceLabel}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             {account.type !== "investment" && accountIdentityEditorOpen ? (
@@ -4097,7 +4097,7 @@ function AccountDetailPageContent() {
                             ? "Needs attention"
                             : ""}
                     </span>
-                    <button className="button button-secondary button-small" type="button" onClick={() => setAccountIdentityEditorOpen(false)}>
+                    <button className="accounts-detail__account-identity-close" type="button" onClick={() => setAccountIdentityEditorOpen(false)}>
                       Close
                     </button>
                   </div>

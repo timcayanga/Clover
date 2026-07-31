@@ -158,6 +158,30 @@ async function main() {
     /@media \(min-width: 1101px\) \{[\s\S]{0,180}\.accounts-card-grid\.accounts-card-grid--desktop \{[\s\S]{0,180}repeat\(auto-fit, minmax\(min\(100%, 240px\), 272px\)\)/,
     "Desktop account grids must add columns instead of stretching cards beyond their intended width."
   );
+  const creditDetailLayout = accountDetailsSource.slice(
+    accountDetailsSource.indexOf('<div className={`accounts-detail__hero-layout'),
+    accountDetailsSource.indexOf("{account.type !== \"investment\" && accountIdentityEditorOpen")
+  );
+  assert.ok(
+    creditDetailLayout.indexOf('className="accounts-detail__hero-card-row"') <
+      creditDetailLayout.indexOf('className="accounts-detail__credit-inline"'),
+    "Credit-card details must render below the centered account card."
+  );
+  assert.match(
+    globalStyles,
+    /\.accounts-detail__hero-layout\.is-credit-account \{[\s\S]{0,100}grid-template-columns: 1fr;[\s\S]{0,100}width: min\(100%, 320px\);/,
+    "Credit-card detail headers must use one centered column at desktop widths."
+  );
+  assert.match(
+    globalStyles,
+    /\.accounts-detail__account-identity-editor--inline \.accounts-inline-edit__grid input \{[\s\S]{0,240}border: 0;[\s\S]{0,100}border-bottom:/,
+    "Inline account identity fields must use flat underline styling instead of input containers."
+  );
+  assert.match(
+    accountDetailsSource,
+    /className="accounts-detail__account-identity-close"[\s\S]{0,120}>\s*Close\s*<\/button>/,
+    "The account identity editor must expose a compact text-only Close action."
+  );
   assert.match(
     responsiveLayoutSource,
     /MOBILE_LAYOUT_MAX_WIDTH = 1100[\s\S]{0,120}DESKTOP_LAYOUT_MIN_WIDTH = MOBILE_LAYOUT_MAX_WIDTH \+ 1[\s\S]{0,120}MOBILE_LAYOUT_MEDIA_QUERY/,

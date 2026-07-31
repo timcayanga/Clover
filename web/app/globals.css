@@ -22600,16 +22600,17 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 .accounts-detail__account-identity-editor--inline {
   display: grid;
   gap: 10px;
-  padding: 0 4px 2px;
+  width: min(100%, 320px);
+  padding: 0;
 }
 
 .accounts-detail__account-identity-editor-title {
   margin: 0;
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: 0.76rem;
   font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .accounts-detail__balance-editor {
@@ -22669,8 +22670,8 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 .accounts-detail__credit-inline {
   display: grid;
   align-content: center;
-  gap: 14px;
-  width: min(100%, 310px);
+  gap: 12px;
+  width: min(100%, 320px);
   padding: 0;
   border: 0;
   background: transparent;
@@ -22708,7 +22709,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
 .accounts-detail__credit-inline-field input {
   appearance: none;
-  width: 132px;
+  width: 100%;
   min-height: 30px;
   border: 0;
   border-bottom: 1px solid rgba(3, 168, 192, 0.32);
@@ -22726,7 +22727,8 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .accounts-detail__credit-period-inputs {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 7px;
   color: var(--muted);
@@ -22735,7 +22737,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .accounts-detail__credit-period-inputs input {
-  width: 112px;
+  width: 100%;
   font-size: 0.82rem;
 }
 
@@ -22755,10 +22757,61 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   gap: 6px;
 }
 
+.accounts-detail__account-identity-editor--inline .accounts-inline-edit__grid label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.accounts-detail__account-identity-editor--inline .accounts-inline-edit__grid input {
+  appearance: none;
+  width: 100%;
+  min-height: 30px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(3, 168, 192, 0.32);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.accounts-detail__account-identity-editor--inline .accounts-inline-edit__grid input:focus {
+  border-color: rgba(3, 168, 192, 0.78);
+  box-shadow: none;
+  outline: none;
+}
+
 .accounts-inline-edit__actions {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.accounts-detail__account-identity-close {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.accounts-detail__account-identity-close:hover,
+.accounts-detail__account-identity-close:focus-visible {
+  color: var(--accent-strong);
+  text-decoration: underline;
 }
 
 .investments-allocation {
@@ -25368,11 +25421,8 @@ button.investments-portfolio-inline-edit {
 }
 
 .accounts-detail__hero-layout.is-credit-account {
-  grid-template-columns: minmax(250px, 310px) 272px;
-  align-items: center;
-  justify-content: center;
-  column-gap: clamp(28px, 5vw, 72px);
-  width: min(100%, 680px);
+  grid-template-columns: 1fr;
+  width: min(100%, 320px);
 }
 
 .accounts-detail__hero-card-row {
