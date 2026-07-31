@@ -408,6 +408,7 @@ const mergeAccountsWithOptimisticImports = (
   options?: {
     preserveImportedEvidence?: boolean;
     preferCurrentImportedSnapshot?: boolean;
+    acceptConfirmedZeroBalances?: boolean;
   }
 ) => {
   const shouldPreserveImportedEvidence =
@@ -417,7 +418,7 @@ const mergeAccountsWithOptimisticImports = (
     currentAccounts,
     {
       deletedAccountIds,
-      preserveNonZeroOptimisticBalance: true,
+      preserveNonZeroOptimisticBalance: options?.acceptConfirmedZeroBalances !== true,
       preserveCurrentInventory: shouldPreserveImportedEvidence,
       preferCurrentImportedSnapshot: options?.preferCurrentImportedSnapshot ?? false,
     }
@@ -445,8 +446,13 @@ const mergeAccountsWithOptimisticImports = (
   return [...derivedOptimisticAccounts, ...baseMergedAccounts];
 };
 
-const mergeOptimisticImportedAccount = (currentAccounts: Account[], optimisticAccount: Account) => {
+const mergeOptimisticImportedAccount = (
+  currentAccounts: Account[],
+  optimisticAccount: Account,
+  options?: { authoritativeBalance?: boolean }
+) => {
   return mergeOptimisticImportedAccountShared(currentAccounts, optimisticAccount, {
+    authoritativeBalance: options?.authoritativeBalance,
     mergeMatchedAccount: (matchedAccount, nextOptimisticAccount, shouldPreserveExistingBalance) => ({
       ...matchedAccount,
       ...nextOptimisticAccount,
@@ -1722,6 +1728,7 @@ function AccountsPageContent() {
       awaitHydration?: boolean;
       forceFresh?: boolean;
       preserveImportedEvidence?: boolean;
+      acceptConfirmedZeroBalances?: boolean;
     }
   ) => {
     const loadSeq = ++workspaceLoadSeqRef.current;
@@ -1835,6 +1842,7 @@ function AccountsPageContent() {
           {
             preserveImportedEvidence: shouldPreserveSettlingImport,
             preferCurrentImportedSnapshot: shouldPreserveSettlingImport && !options?.forceFresh,
+            acceptConfirmedZeroBalances: options?.acceptConfirmedZeroBalances,
           }
         );
         const authoritativeCacheUpdatedAt = persistAccountsWorkspaceSnapshot(workspaceId, {
@@ -1871,6 +1879,7 @@ function AccountsPageContent() {
             {
               preserveImportedEvidence: shouldPreserveSettlingImport,
               preferCurrentImportedSnapshot: shouldPreserveSettlingImport && !options?.forceFresh,
+              acceptConfirmedZeroBalances: options?.acceptConfirmedZeroBalances,
             }
           )
         );
@@ -2052,6 +2061,7 @@ function AccountsPageContent() {
                   preserveImportedEvidence: true,
                   preferCurrentImportedSnapshot:
                     options?.preserveImportedEvidence === true && !options?.forceFresh,
+                  acceptConfirmedZeroBalances: options?.acceptConfirmedZeroBalances,
                 }
               )
             );
@@ -2126,6 +2136,12 @@ function AccountsPageContent() {
     const expectedAccounts = expectedSummaries
       .map((accountSummary) => buildOptimisticImportedAccount(accountSummary, workspaceId))
       .filter((account): account is Account => Boolean(account));
+    const hasAuthoritativeBalances = expectedSummaries.every(
+      (accountSummary) =>
+        accountSummary.optimistic === false &&
+        accountSummary.balance !== null &&
+        accountSummary.balance !== undefined
+    );
     const refreshKey = JSON.stringify(
       expectedSummaries.map((accountSummary) => [
         accountSummary.accountId,
@@ -2155,6 +2171,7 @@ function AccountsPageContent() {
             silent: true,
             forceFresh: true,
             preserveImportedEvidence: true,
+            acceptConfirmedZeroBalances: hasAuthoritativeBalances,
           });
           const authoritativeSnapshot = authoritativeAccountsRef.current;
           if (
@@ -2168,6 +2185,7 @@ function AccountsPageContent() {
               awaitHydration: true,
               forceFresh: true,
               preserveImportedEvidence: true,
+              acceptConfirmedZeroBalances: hasAuthoritativeBalances,
             });
             return;
           }
@@ -2180,6 +2198,7 @@ function AccountsPageContent() {
           awaitHydration: true,
           forceFresh: true,
           preserveImportedEvidence: true,
+          acceptConfirmedZeroBalances: hasAuthoritativeBalances,
         });
       })
       .finally(() => {
@@ -5104,7 +5123,32 @@ function AccountsPageContent() {
             if (optimisticAccounts.length > 0) {
               setAccounts((current) => {
                 const next = optimisticAccounts.reduce(
-                  (accountsSoFar, importedAccount) => mergeOptimisticImportedAccount(accountsSoFar, importedAccount),
+                  (accountsSoFar, importedAccount) => {
+                    const matchingSummary = importedAccountSummaries.find(
+                      (accountSummary) =>
+                        accountSummary.accountId === importedAccount.id ||
+                        getImportedAccountKey(
+                          accountSummary.accountName,
+                          accountSummary.institution,
+                          accountSummary.accountNumber,
+                          accountSummary.accountType,
+                          accountSummary.currency
+                        ) ===
+                          getImportedAccountKey(
+                            importedAccount.name,
+                            importedAccount.institution,
+                            importedAccount.accountNumber,
+                            importedAccount.type,
+                            importedAccount.currency
+                          )
+                    );
+                    return mergeOptimisticImportedAccount(accountsSoFar, importedAccount, {
+                      authoritativeBalance:
+                        matchingSummary?.optimistic === false &&
+                        matchingSummary.balance !== null &&
+                        matchingSummary.balance !== undefined,
+                    });
+                  },
                   current
                 );
                 nextAccountsSnapshot = next;

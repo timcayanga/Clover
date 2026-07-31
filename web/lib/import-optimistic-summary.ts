@@ -294,11 +294,12 @@ export const seedImportedWorkspaceCaches = (workspaceId: string, summary: Upload
     const importedBalance = typeof importedAccount.balance === "string" ? importedAccount.balance.trim() : "";
     const importedIsZeroish = importedBalance !== "" && Number(importedBalance) === 0;
     const currentIsNonZero = currentBalance !== "" && Number(currentBalance) !== 0;
-    if ((!importedBalance || importedIsZeroish) && currentIsNonZero) {
+    const authoritativeBalance = summary.optimistic === false && importedBalance !== "";
+    if ((!importedBalance || (importedIsZeroish && !authoritativeBalance)) && currentIsNonZero) {
       importedAccount.balance = currentBalance;
     }
 
-    syncImportedWorkspaceAccountCaches(workspaceId, importedAccount);
+    syncImportedWorkspaceAccountCaches(workspaceId, importedAccount, { authoritativeBalance });
   }
 
   if (Array.isArray(summary.previewTransactions) && summary.previewTransactions.length > 0) {

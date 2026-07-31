@@ -250,6 +250,7 @@ export const mergeOptimisticImportedAccount = <
   currentAccounts: TAccount[],
   optimisticAccount: TAccount,
   options?: {
+    authoritativeBalance?: boolean;
     mergeMatchedAccount?: (
       matchedAccount: TAccount,
       optimisticAccount: TAccount,
@@ -277,6 +278,7 @@ export const mergeOptimisticImportedAccount = <
   const existingBalance = typeof matchedAccount?.balance === "string" ? matchedAccount.balance.trim() : "";
   const optimisticBalance = typeof optimisticAccount.balance === "string" ? optimisticAccount.balance.trim() : "";
   const shouldPreserveExistingBalance =
+    options?.authoritativeBalance !== true &&
     existingBalance !== "" &&
     Number(existingBalance) !== 0 &&
     (optimisticBalance === "" || Number(optimisticBalance) === 0);
@@ -359,7 +361,7 @@ export const mergeAccountsWithOptimisticImports = <TAccount extends ImportedAcco
     if (!options?.preserveNonZeroOptimisticBalance) {
       return {
         ...account,
-        balance: account.balance && Number(account.balance) !== 0 ? account.balance : optimistic.balance ?? account.balance,
+        balance: account.balance ?? optimistic.balance,
         source: optimistic.source ?? account.source,
       };
     }

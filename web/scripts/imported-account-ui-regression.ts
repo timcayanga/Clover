@@ -197,6 +197,15 @@ const main = () => {
     [{ id: numberedUploadAccount.id, balance: "300.00" }],
     "A force-fresh completion read must replace the optimistic balance with the authoritative server balance."
   );
+  assert.deepEqual(
+    mergeAccountsWithOptimisticImports(
+      [{ ...numberedUploadAccount, balance: "0" }],
+      [{ ...numberedUploadAccount, balance: "250.00" }],
+      { preserveCurrentInventory: true, preserveNonZeroOptimisticBalance: false }
+    ).map((account) => ({ id: account.id, balance: account.balance })),
+    [{ id: numberedUploadAccount.id, balance: "0" }],
+    "A confirmed zero balance must replace the previous optimistic balance."
+  );
   const phpAccount: TestAccount = {
     ...numberedUploadAccount,
     id: "php-account",
@@ -265,6 +274,16 @@ const main = () => {
   assert.equal(mergedAccountResult.length, 1, "Merging a matching optimistic import should keep one account record.");
   assert.equal(mergedAccountResult[0]?.id, numberedUploadAccount.id, "The optimistic account id should be preserved in the merged record.");
   assert.equal(mergedAccountResult[0]?.balance, numberedUploadAccount.balance, "The non-zero optimistic balance should win when the matched record is empty.");
+  const confirmedZeroAccountResult = mergeOptimisticImportedAccount(
+    [{ ...numberedUploadAccount, balance: "250.00" }],
+    { ...numberedUploadAccount, balance: "0" },
+    { authoritativeBalance: true }
+  );
+  assert.equal(
+    confirmedZeroAccountResult[0]?.balance,
+    "0",
+    "A completed import must publish an explicit zero instead of retaining the previous balance."
+  );
   assert.equal(
     mergedAccountResult[0]?.createdAt,
     matchedServerAccount.createdAt,

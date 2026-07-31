@@ -38,6 +38,7 @@ const main = async () => {
     readFile(join(webRoot, "vercel.json"), "utf8"),
   ]);
   const optimisticSummarySource = await readFile(join(webRoot, "lib/import-optimistic-summary.ts"), "utf8");
+  const accountDetailsSource = await readFile(join(webRoot, "app/accounts/[accountId]/page.tsx"), "utf8");
   const accountsRouteSource = await readFile(join(webRoot, "app/api/accounts/route.ts"), "utf8");
   const uploadDockSource = await readFile(join(webRoot, "components/import-upload-dock.tsx"), "utf8");
   const globalStylesSource = await readFile(join(webRoot, "app/globals.css"), "utf8");
@@ -408,6 +409,16 @@ const main = async () => {
     accountsPageSource,
     /const hasResolvedBalance[\s\S]{0,220}return Number\.isFinite\(numeric\);/,
     "A confirmed zero balance must be treated as a settled account value, not loading."
+  );
+  assert.match(
+    accountsPageSource,
+    /const hasAuthoritativeBalances = expectedSummaries\.every\([\s\S]{0,400}accountSummary\.optimistic === false[\s\S]{0,1200}acceptConfirmedZeroBalances: hasAuthoritativeBalances/,
+    "Accounts must distinguish a confirmed zero from a provisional zero while an import settles."
+  );
+  assert.match(
+    accountDetailsSource,
+    /typeof nextAccount\.balance === "string" && nextAccount\.balance\.trim\(\)[\s\S]{0,120}\? nextAccount\.balance/,
+    "Account Details must accept an explicit live zero instead of restoring a stale cached amount."
   );
   assert.match(
     accountsPageSource,

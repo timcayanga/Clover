@@ -985,7 +985,11 @@ const mergeJsonPayload = (preferred: unknown, fallback: unknown) => {
   return preferred ?? fallback ?? null;
 };
 
-const mergeImportedAccount = <T extends CachedRecord>(items: T[], account: ImportedWorkspaceAccount) => {
+const mergeImportedAccount = <T extends CachedRecord>(
+  items: T[],
+  account: ImportedWorkspaceAccount,
+  options?: { authoritativeBalance?: boolean }
+) => {
   const idsToReplace = createImportedAccountCandidates(account);
   const accountKey = normalizeImportedAccountKey(
     typeof account.name === "string" ? account.name : null,
@@ -1035,6 +1039,7 @@ const mergeImportedAccount = <T extends CachedRecord>(items: T[], account: Impor
   const currentBalanceValue = currentHasMeaningfulBalance ? parseBalanceValue(currentBalance) : null;
   const incomingBalanceValue = incomingHasMeaningfulBalance ? parseBalanceValue(incomingBalance) : null;
   const shouldPreserveCurrentBalance =
+    options?.authoritativeBalance !== true &&
     currentHasMeaningfulBalance &&
     currentBalanceValue !== null &&
     currentBalanceValue !== 0 &&
@@ -1842,7 +1847,11 @@ export const persistTransactionsWorkspaceCache = (
   return updatedAt;
 };
 
-export const syncImportedWorkspaceAccountCaches = (workspaceId: string, account: ImportedWorkspaceAccount) => {
+export const syncImportedWorkspaceAccountCaches = (
+  workspaceId: string,
+  account: ImportedWorkspaceAccount,
+  options?: { authoritativeBalance?: boolean }
+) => {
   if (!workspaceId || !account.id) {
     return;
   }
@@ -1851,7 +1860,7 @@ export const syncImportedWorkspaceAccountCaches = (workspaceId: string, account:
   const nextAccountsSnapshot: AccountsWorkspaceCacheSnapshot = {
     workspaceId,
     updatedAt: Date.now(),
-    accounts: pruneImportedAccountPlaceholders(mergeImportedAccount(accountsCache?.snapshots[workspaceId]?.accounts ?? [], account)),
+    accounts: pruneImportedAccountPlaceholders(mergeImportedAccount(accountsCache?.snapshots[workspaceId]?.accounts ?? [], account, options)),
     accountRules: accountsCache?.snapshots[workspaceId]?.accountRules ?? [],
     transactions: accountsCache?.snapshots[workspaceId]?.transactions ?? [],
     statementCheckpoints: accountsCache?.snapshots[workspaceId]?.statementCheckpoints ?? [],
@@ -1862,7 +1871,7 @@ export const syncImportedWorkspaceAccountCaches = (workspaceId: string, account:
   const nextTransactionsSnapshot: TransactionsWorkspaceCacheSnapshot = {
     workspaceId,
     updatedAt: Date.now(),
-    accounts: pruneImportedAccountPlaceholders(mergeImportedAccount(transactionsCache?.snapshots[workspaceId]?.accounts ?? [], account)),
+    accounts: pruneImportedAccountPlaceholders(mergeImportedAccount(transactionsCache?.snapshots[workspaceId]?.accounts ?? [], account, options)),
     categories: transactionsCache?.snapshots[workspaceId]?.categories ?? [],
     transactions: transactionsCache?.snapshots[workspaceId]?.transactions ?? [],
     imports: transactionsCache?.snapshots[workspaceId]?.imports ?? [],

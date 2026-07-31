@@ -1582,7 +1582,7 @@ function AccountDetailPageContent() {
                 ...nextAccount,
                 source: cachedAccount.source ?? nextAccount.source,
                 balance:
-                  nextAccount.balance && Number(nextAccount.balance) !== 0
+                  typeof nextAccount.balance === "string" && nextAccount.balance.trim()
                     ? nextAccount.balance
                     : cachedAccount.balance ?? nextAccount.balance,
               } as Account)
@@ -2142,7 +2142,7 @@ function AccountDetailPageContent() {
   const displayBalance =
     isPendingBalance && hasMeaningfulBalance(checkpointBalance)
       ? checkpointBalance
-      : !hasMeaningfulBalance(account?.balance) && stableDisplayBalance
+      : !(typeof account?.balance === "string" && account.balance.trim()) && stableDisplayBalance
         ? stableDisplayBalance
         : currentBalance.toString();
   const isCreditAccount = account?.type === "credit_card" || account?.type === "line_of_credit";
