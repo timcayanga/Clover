@@ -89,7 +89,11 @@ import {
   upsertAccountRule,
   upsertStatementTemplate,
 } from "@/lib/data-engine";
-import { getTrailingBalanceFromParsedRows, inferAccountTypeFromStatement } from "@/lib/import-parser";
+import {
+  getTrailingBalanceFromParsedRows,
+  inferAccountTypeFromStatement,
+  normalizePayPalAccountType,
+} from "@/lib/import-parser";
 import { guessCategoryName } from "@/lib/import-parser";
 import { parseImportTextWithOpenAIFallback, transcribeImportImagesWithOpenAI } from "@/lib/openai-import-parser";
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
@@ -5833,6 +5837,31 @@ const resolveConfirmationAccount = async (params: {
           .filter((account) => accountNumberDigits(account.accountNumber) === accountNumberDigits(inferredAccountNumber))
           .sort(sortImportedAccountsByFreshness)[0] ?? null
       : null;
+  const legacyPayPalWalletAccount =
+    accountIdentityType === "wallet" &&
+    normalizePayPalAccountType(inferredInstitution, inferredAccountName) === "wallet"
+      ? (() => {
+          const candidates = workspaceAccounts
+            .filter((account) => account.source === "upload")
+            .filter((account) => account.type === "credit_card")
+            .filter(
+              (account) =>
+                normalizePayPalAccountType(account.institution, account.name) === "wallet"
+            )
+            .filter(
+              (account) =>
+                account.currency === (inferredCurrency ?? account.currency)
+            )
+            .filter(
+              (account) =>
+                !hasInferredAccountNumber ||
+                accountNumberDigits(account.accountNumber) === accountNumberDigits(inferredAccountNumber)
+            )
+            .sort(sortImportedAccountsByFreshness);
+
+          return candidates.length === 1 ? candidates[0] : null;
+        })()
+      : null;
   const normalizeSnapshotIdentityText = (value: unknown) =>
     String(value ?? "")
       .replace(/\u00a0/g, " ")
@@ -6018,6 +6047,22 @@ const resolveConfirmationAccount = async (params: {
       : workspaceAccounts
           .filter(accountMatchesImportIdentity)
           .sort(sortImportedAccountsByFreshness)[0] ?? null;
+  if (!existingByKey && legacyPayPalWalletAccount) {
+    const updatedAccount = await updateAccountIdentity(legacyPayPalWalletAccount, {
+      name: inferredAccountName,
+      institution: inferredInstitution,
+      accountNumber: inferredAccountNumber,
+      type: "wallet",
+      source: "upload",
+      currency: inferredCurrency,
+      balance: inferredBalance,
+      creditLimit: null,
+    });
+
+    await ensureDefaultCashAccountForImport(updatedAccount.currency ?? inferredCurrency ?? "PHP");
+    return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
+  }
+
   if (!existingByKey && legacyMayaCreditAccount) {
     const updatedAccount = await updateAccountIdentity(legacyMayaCreditAccount, {
       name: inferredAccountName,
@@ -10460,6 +10505,20 @@ export const processImportFileText = async (
       unionBankKnownSampleMetadata?.currency ?? ucpbKnownSampleMetadata?.currency ?? effectiveMetadataSource.currency ?? null,
       unionBankKnownSampleMetadata?.accountName ?? ucpbKnownSampleMetadata?.accountName ?? effectiveMetadataSource.accountName ?? null
     ),
+    accountType:
+      normalizePayPalAccountType(
+        unionBankKnownSampleMetadata?.institution ??
+          ucpbKnownSampleMetadata?.institution ??
+          effectiveMetadataSource.institution,
+        unionBankKnownSampleMetadata?.accountName ??
+          ucpbKnownSampleMetadata?.accountName ??
+          effectiveMetadataSource.accountName,
+        textForParse
+      ) ??
+      unionBankKnownSampleMetadata?.accountType ??
+      ucpbKnownSampleMetadata?.accountType ??
+      effectiveMetadataSource.accountType ??
+      null,
     endingBalance: effectiveRowsHaveMultipleAccountNumbers
       ? null
       : unionBankKnownSampleMetadata?.endingBalance ?? ucpbKnownSampleMetadata?.endingBalance ?? effectiveMetadataSource.endingBalance ?? parsedEndingBalance,

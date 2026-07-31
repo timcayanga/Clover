@@ -36,6 +36,7 @@
     "qa:eastwest-process": "tsx scripts/eastwest-process-route-regression.ts",
     "qa:wise-screenshots": "tsx scripts/wise-screenshot-regression.ts",
     "qa:hsbc-pdf": "tsx scripts/hsbc-pdf-regression.ts",
+    "qa:paypal": "tsx scripts/paypal-parser-regression.ts",
     "qa:gsave-uno-screenshots": "tsx scripts/gsave-uno-screenshot-regression.ts",
     "qa:gsave-uno-process": "tsx scripts/gsave-uno-process-route-regression.ts",
     "qa:gcash-mobile-screenshot": "tsx scripts/gcash-mobile-screenshot-regression.ts",
@@ -85,7 +86,7 @@
     "qa:browser-compatibility": "tsx scripts/browser-compatibility-regression.ts",
     "qa:admin-operational-scope": "tsx scripts/admin-operational-scope-regression.ts",
     "qa:circles": "tsx scripts/circles-regression.ts",
-    "qa:release": "npm run qa:production-readiness && npm run qa:billing-lifecycle && npm run qa:critical-page-loading && npm run qa:browser-compatibility && npm run qa:integration-security && npm run qa:data-engine-safety && npm run qa:data-engine-validation && npm run qa:account-balance-sign && npm run qa:account-deletion-markers && npm run qa:confirmed-data && npm run qa:goal-intent && npm run qa:goal-persistence && npm run qa:split-bill-quick-add && npm run qa:budgeting && npm run qa:investments && npm run qa:circles && npm run qa:parser-routing && npm run qa:structured-csv && npm run qa:spreadsheet-import && npm run qa:import-quality && npm run qa:import-upload-handoff",
+    "qa:release": "npm run qa:production-readiness && npm run qa:billing-lifecycle && npm run qa:critical-page-loading && npm run qa:browser-compatibility && npm run qa:integration-security && npm run qa:data-engine-safety && npm run qa:data-engine-validation && npm run qa:account-balance-sign && npm run qa:account-deletion-markers && npm run qa:confirmed-data && npm run qa:goal-intent && npm run qa:goal-persistence && npm run qa:split-bill-quick-add && npm run qa:budgeting && npm run qa:investments && npm run qa:circles && npm run qa:parser-routing && npm run qa:paypal && npm run qa:structured-csv && npm run qa:spreadsheet-import && npm run qa:import-quality && npm run qa:import-upload-handoff",
     "qa:release:live": "npm run qa:environment-readiness && npm run qa:supabase-security && tsx scripts/reconcile-workspace-data.ts",
     "train:image-labels": "tsx --tsconfig tsconfig.json scripts/train-image-label-corpus.ts"
   },

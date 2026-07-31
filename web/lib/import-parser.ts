@@ -243,6 +243,10 @@ export const inferAccountTypeFromStatement = (
   fallback: ImportedAccountType = "bank"
 ): ImportedAccountType => {
   const normalized = `${institution ?? ""} ${accountName ?? ""}`.toLowerCase();
+  const payPalAccountType = normalizePayPalAccountType(institution, accountName);
+  if (payPalAccountType) {
+    return payPalAccountType;
+  }
 
   if (/maya/.test(normalized)) {
     if (/(maya\s+easy\s+credit|maya\s+credit|easy\s+credit|billing\s+statement|payment\s+due\s+date|total\s+amount\s+due|minimum\s+amount\s+due|credit\s+limit|credit\s*card|card\s+ending|visa|mastercard|amex)/.test(normalized)) {
@@ -293,6 +297,20 @@ export const inferAccountTypeFromStatement = (
   }
 
   return fallback;
+};
+
+export const normalizePayPalAccountType = (
+  institution?: string | null,
+  accountName?: string | null,
+  statementText?: string | null
+): ImportedAccountType | null => {
+  const identity = `${institution ?? ""} ${accountName ?? ""}`.replace(/\s+/g, " ").trim();
+  if (!/\bpaypal\b/i.test(identity)) {
+    return null;
+  }
+
+  const productEvidence = `${identity} ${statementText ?? ""}`.replace(/\s+/g, " ");
+  return /\bpaypal\s+credit\b/i.test(productEvidence) ? "credit_card" : "wallet";
 };
 
 const splitLine = (line: string, delimiter: string) => {
@@ -20791,7 +20809,8 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
           ? `Account ${provisionalAccountNameSuffix}`
           : null);
   const refinedAccountType =
-    (paymentDueDate || totalAmountDue !== null) &&
+    normalizePayPalAccountType(institution, provisionalAccountName, normalized) ??
+    ((paymentDueDate || totalAmountDue !== null) &&
     /payment\s+due\s+date|due\s+date|total\s+amount\s+due|minimum\s+amount\s+due|credit\s+limit|statement\s+date/i.test(normalized)
       ? "credit_card"
       : /payment\s+due\s+date|due\s+date|total\s+amount\s+due|minimum\s+amount\s+due|credit\s+limit|statement\s+date/i.test(normalized) &&
@@ -20799,7 +20818,7 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
       ? "credit_card"
       : /PAYMENTDUEDATE|TOTALAMOUNTDUE|MINIMUMAMOUNTDUE|CREDITLIMIT|STATEMENTDATE/i.test(compactWhitespace(signalText))
         ? "credit_card"
-      : null;
+      : null);
   const inferredAccountType = refinedAccountType ?? inferAccountTypeFromStatement(institution, provisionalAccountName, "bank");
   const openingBalance =
     inferredAccountType === "credit_card"

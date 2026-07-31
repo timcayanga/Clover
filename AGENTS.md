@@ -35,13 +35,14 @@ Clover is a personal finance app focused on statement import, transaction parsin
 28. `docs/pnb-parser-rules.md` when working on PNB imports
 29. `docs/ucpb-parser-rules.md` when working on UCPB imports
 30. `docs/cimb-parser-rules.md` when working on CIMB imports
-31. `web/prisma/schema.prisma`
-32. `web/lib/import-parser.ts`
-33. `web/lib/data-engine.ts`
-34. `web/workers/import-processor.ts`
-35. `docs/generic-screenshot-parser-rules.md` when working on unfamiliar screenshot imports or generic parser fallbacks
-36. `docs/structured-csv-parser-rules.md` when working on CSV, TSV, or other delimited financial imports
-37. `docs/digital-notes-split-bills-parser-rules.md` when working on digital notes or split-bill receipt imports
+31. `docs/paypal-parser-rules.md` when working on PayPal imports
+32. `web/prisma/schema.prisma`
+33. `web/lib/import-parser.ts`
+34. `web/lib/data-engine.ts`
+35. `web/workers/import-processor.ts`
+36. `docs/generic-screenshot-parser-rules.md` when working on unfamiliar screenshot imports or generic parser fallbacks
+37. `docs/structured-csv-parser-rules.md` when working on CSV, TSV, or other delimited financial imports
+38. `docs/digital-notes-split-bills-parser-rules.md` when working on digital notes or split-bill receipt imports
 
 If `docs/product-spec.md` is added later, it should become the primary product spec and supersede `docs/user-management-spec.md` for implementation guidance.
 

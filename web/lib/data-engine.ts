@@ -9,6 +9,7 @@ import {
   inferAccountTypeFromStatement,
   isStandaloneCashPaymentDescription,
   isStatementPaymentSettlementDescription,
+  normalizePayPalAccountType,
   normalizeInstitutionCurrency,
   parseAmountValue,
   parseDateValue,
@@ -1977,6 +1978,7 @@ export const detectStatementMetadataFromText = (text: string, fileName = ""): St
       ? null
       : metadata?.endingBalance ?? (institution === "Security Bank" ? extractTrailingMoneyFromText(normalizedText) : null);
   const refinedAccountType =
+    normalizePayPalAccountType(institution, accountName, normalizedText) ??
     metadata?.accountType ??
     (institution && /maya/i.test(institution)
       ? /\b(maya\s+easy\s+credit|maya\s+credit|easy\s+credit|billing\s+statement|payment\s+due\s+date|total\s+amount\s+due|minimum\s+amount\s+due|credit\s+limit|credit\s*card|card\s+ending|visa|mastercard|amex)\b/i.test(normalizedText)
