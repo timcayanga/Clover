@@ -22723,7 +22723,15 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 
 .accounts-detail__credit-inline-field input:focus {
   border-color: rgba(3, 168, 192, 0.78);
-  outline: none;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.accounts-detail__credit-inline-field input:focus-visible {
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
 }
 
 .accounts-detail__credit-period-inputs {
@@ -22745,6 +22753,12 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   margin: -6px 0 0;
   text-transform: none;
   letter-spacing: 0;
+}
+
+.accounts-detail__credit-inline-field--period small {
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.25;
 }
 
 .accounts-inline-edit__grid {

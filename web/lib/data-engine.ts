@@ -2017,6 +2017,7 @@ export const detectStatementMetadataFromText = (text: string, fileName = ""): St
     currency: metadata?.currency ?? null,
     openingBalance: isMultiAccountCimbStatement ? null : metadata?.openingBalance ?? null,
     endingBalance,
+    creditLimit: metadata?.creditLimit ?? null,
     paymentDueDate: metadata?.paymentDueDate ?? null,
     totalAmountDue: metadata?.totalAmountDue ?? null,
     startDate: metadata?.startDate ?? null,

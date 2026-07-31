@@ -356,7 +356,13 @@ export const getUpcomingStatementReminders = async (workspaceId: string): Promis
     if (!inferCreditCardCheckpoint(checkpoint, sourceMetadata)) {
       continue;
     }
-    const referenceTimestamp = checkpoint.statementEndDate?.getTime() ?? checkpoint.createdAt.getTime();
+    // Historical statements uploaded today are still useful for learning the
+    // card's due-day cadence. Freshness therefore considers both statement age
+    // and when the user added the file to Clover.
+    const referenceTimestamp = Math.max(
+      checkpoint.statementEndDate?.getTime() ?? 0,
+      checkpoint.createdAt.getTime()
+    );
     if (referenceTimestamp < recencyCutoff) {
       continue;
     }

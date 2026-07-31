@@ -4555,7 +4555,9 @@ const rcbcStatementMetadata = (text: string): DetectedStatementMetadata | null =
         const dueHeadingIndex =
           lines.findIndex((line) => /CARDHOLDER\s+PAYMENT\s+DUE\s+DATE/i.test(line)) >= 0
             ? lines.findIndex((line) => /CARDHOLDER\s+PAYMENT\s+DUE\s+DATE/i.test(line))
-            : lines.findIndex((line) => /^PAYMENT\s+DUE\s+DATE$/i.test(line));
+            : lines.findIndex((line) => /^PAYMENT\s+DUE\s+DATE$/i.test(line)) >= 0
+              ? lines.findIndex((line) => /^PAYMENT\s+DUE\s+DATE$/i.test(line))
+              : lines.findIndex((line) => /STATEMENT\s+DATE\s+PAYMENT\s+DUE\s+DATE/i.test(line));
         const dueDateLine =
           dueHeadingIndex >= 0
             ? lines
@@ -4567,7 +4569,8 @@ const rcbcStatementMetadata = (text: string): DetectedStatementMetadata | null =
           dueDateLine?.match(/(\d{1,2}\/\d{1,2}\/\d{2,4}).*?(\d{1,2}\/\d{1,2}\/\d{2,4})/i) ??
           dueDateLine?.match(/([A-Z]{3}\s+\d{1,2}\s+\d{4})/i) ??
           dueDateLine?.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/i);
-        return parseDateValue(dateMatch?.[1] ?? null) ?? parseRcbcDate(dateMatch?.[1] ?? null);
+        const dueDateValue = dateMatch?.[2] ?? dateMatch?.[1] ?? null;
+        return parseDateValue(dueDateValue) ?? parseRcbcDate(dueDateValue);
       })();
 
   let openingBalance: number | null = null;
@@ -4598,6 +4601,23 @@ const rcbcStatementMetadata = (text: string): DetectedStatementMetadata | null =
       parseMoney(normalized.match(/TOTAL\s+(?:AMOUNT\s+)?DUE.*?([0-9,]+\.\d{2})/i)?.[1] ?? null);
   }
 
+  const creditLimitLabelIndex = lines.findIndex((line) => /^(?:total\s+)?credit\s+limit\s*$/i.test(line));
+  const creditLimit = isSavingsStatement || creditLimitLabelIndex < 0
+    ? null
+    : lines
+        .slice(creditLimitLabelIndex + 1, creditLimitLabelIndex + 9)
+        .map((line) => {
+          if (/hotline|customer\s+service|email|telephone|interest\s+rate/i.test(line) && !/%/.test(line)) {
+            return null;
+          }
+          const values = line.match(/[0-9]{1,3}(?:,[0-9]{3})+(?:\.\d{2})?/g) ?? [];
+          if (values.length < 2 && !/%/.test(line)) {
+            return null;
+          }
+          return parseMoney(values[0] ?? null);
+        })
+        .find((value): value is number => value !== null && value > 0) ?? null;
+
   return {
     institution: "RCBC",
     accountNumber,
@@ -4605,6 +4625,7 @@ const rcbcStatementMetadata = (text: string): DetectedStatementMetadata | null =
     accountType: isSavingsStatement ? "bank" : "credit_card",
     openingBalance,
     endingBalance,
+    creditLimit,
     paymentDueDate: !isSavingsStatement && endDate ? endDate.toISOString() : null,
     totalAmountDue: !isSavingsStatement ? endingBalance : null,
     startDate: isSavingsStatement ? (startDate ? startDate.toISOString() : null) : null,
@@ -20682,13 +20703,38 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
     parseMoney(normalized.match(/amount\s+due\s*[:\-]?\s*(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(signalText.match(/total\s+amount\s+due\s*[:\-]?\s*(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(signalText.match(/amount\s+due\s*[:\-]?\s*(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+  const extractSplitLabelCreditLimit = (sourceLines: string[]) => {
+    const labelIndex = sourceLines.findIndex((line) => /^(?:total\s+)?credit\s+limit\s*$/i.test(line.trim()));
+    if (labelIndex < 0) {
+      return null;
+    }
+
+    // RCBC prints the labels first, then the values after customer-service
+    // copy: "CREDIT LIMIT" ... "165,000 82,500 3.00% 3.00%".
+    for (const candidate of sourceLines.slice(labelIndex + 1, labelIndex + 9)) {
+      if (/hotline|customer\s+service|email|telephone|interest\s+rate/i.test(candidate) && !/%/.test(candidate)) {
+        continue;
+      }
+      const amountTokens = candidate.match(/(?:PHP|P|₱)?\s*[0-9]{1,3}(?:,[0-9]{3})+(?:\.\d{2})?|(?:PHP|P|₱)\s*[0-9]+(?:\.\d{2})?/gi) ?? [];
+      if (amountTokens.length >= 2 || (amountTokens.length >= 1 && /%/.test(candidate))) {
+        const parsed = parseMoney(amountTokens[0] ?? null);
+        if (parsed !== null && parsed > 0) {
+          return parsed;
+        }
+      }
+    }
+
+    return null;
+  };
   const creditLimit =
     parseMoney(signalLines.find((line) => /credit\s+limit|total\s+credit\s+limit|approved\s+limit/i.test(line))?.match(/(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(lines.find((line) => /credit\s+limit|total\s+credit\s+limit|approved\s+limit/i.test(line))?.match(/(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(normalized.match(/(?:total\s+)?credit\s+limit\s*[:\-]?\s*(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(signalText.match(/(?:total\s+)?credit\s+limit\s*[:\-]?\s*(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(normalized.match(/approved\s+limit\s*[:\-]?\s*(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
-    parseMoney(signalText.match(/approved\s+limit\s*[:\-]?\s*(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+    parseMoney(signalText.match(/approved\s+limit\s*[:\-]?\s*(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    extractSplitLabelCreditLimit(signalLines) ??
+    extractSplitLabelCreditLimit(lines);
   const rawPreparedForIndex = rawNormalizedLines.findIndex((line) => /prepared\s+for/i.test(line));
   const isLikelyRawTopHumanName = (value: string | null | undefined) => {
     const line = cleanAccountHolderDisplayName(value);
