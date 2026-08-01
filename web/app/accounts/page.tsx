@@ -2446,7 +2446,12 @@ function AccountsPageContent() {
       setTransactions([]);
       setStatementCheckpoints([]);
     }
-    setAccountsLoading(true);
+    // A cached workspace is already usable. Keep its refresh non-blocking so
+    // the persistence effect can save accounts reconstructed from background
+    // transaction evidence (notably currency-scoped Wise wallets). Marking a
+    // silent refresh as loading leaves the flag set indefinitely and makes the
+    // same wallet disappear on every reload until transactions arrive again.
+    setAccountsLoading(!hydratedFromCache);
     setAccountsHydrationPending(!hydratedFromCache && accounts.length === 0);
     setHasInitialWorkspaceDataLoaded(hydratedFromCache);
     void loadWorkspaceData(selectedWorkspaceId, {

@@ -1,4 +1,6 @@
 import { strict as assert } from "node:assert";
+import fs from "node:fs";
+import path from "node:path";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import {
   mergeFetchedTransactionsPreservingImported,
@@ -41,6 +43,13 @@ type TestTransaction = {
 };
 
 const main = () => {
+  const accountsPageSource = fs.readFileSync(path.join(process.cwd(), "app/accounts/page.tsx"), "utf8");
+  assert.match(
+    accountsPageSource,
+    /setAccountsLoading\(!hydratedFromCache\)/,
+    "Cached Accounts reloads must stay non-blocking so background-derived Wise wallets persist for the next reload."
+  );
+
   const numberedUploadAccount: TestAccount = {
     id: "acc-1",
     name: "UnionBank Savings 1234",
