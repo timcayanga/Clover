@@ -2,15 +2,15 @@ import assert from "node:assert/strict";
 import { CONTEXT_CORPUS_VERSION, deriveTravelEpisodes, getContextCorpusCoverageReport, getContextCorpusEntries, getContextCorpusQualityReport, parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
 
 assert.ok(CONTEXT_CORPUS_VERSION);
-assert.ok(getContextCorpusEntries().length >= 1000);
-assert.ok(getContextCorpusQualityReport().profileCount >= 149);
+assert.ok(getContextCorpusEntries().length >= 1200);
+assert.ok(getContextCorpusQualityReport().profileCount >= 179);
 assert.equal(getContextCorpusQualityReport().valid, true);
 const coverage = getContextCorpusCoverageReport();
 assert.equal(coverage.corpusVersion, CONTEXT_CORPUS_VERSION);
-assert.ok(coverage.canonicalEntryCount >= 1000);
-assert.ok(coverage.descriptorVariantEntryCount > 70000);
-assert.ok(Object.keys(coverage.countryCounts).length >= 150);
-assert.ok(coverage.currencies.length >= 120);
+assert.ok(coverage.canonicalEntryCount >= 1200);
+assert.ok(coverage.descriptorVariantEntryCount > 79000);
+assert.ok(Object.keys(coverage.countryCounts).length >= 180);
+assert.ok(coverage.currencies.length >= 137);
 assert.ok((coverage.canonicalCountryCounts.PH ?? 0) > 0);
 assert.ok(coverage.localizedAliasCount >= 20);
 assert.ok(coverage.canonicalLocalizedAliasCount >= 30);
@@ -305,6 +305,46 @@ for (const fixture of worldwidePhaseThreeFixtures) {
   assert.notEqual(context.transactionTypeHint, "expense");
 }
 
+const worldwidePhaseFourFixtures = [
+  { input: { merchantRaw: "FEDA ANDORRA ELECTRICITY", currency: "EUR" }, countryCode: "AD", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "LIEMOBIL LIECHTENSTEIN", currency: "CHF" }, countryCode: "LI", paymentRail: null, purposeHint: "transport" },
+  { input: { merchantRaw: "SMEG MONACO ELECTRICITY", currency: "EUR" }, countryCode: "MC", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "CONAD SUPERMARKET SAN MARINO", currency: "EUR" }, countryCode: "SM", paymentRail: null, purposeHint: "groceries" },
+  { input: { merchantRaw: "TRAFIKU URBAN PRISHTINA", currency: "EUR" }, countryCode: "XK", paymentRail: null, purposeHint: "transport" },
+  { input: { merchantRaw: "БЕЛЭНЕРГО БЕЛАРУСЬ", currency: "BYN" }, countryCode: "BY", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "مترو تهران ایران", currency: "IRR" }, countryCode: "IR", paymentRail: null, purposeHint: "transport" },
+  { input: { merchantRaw: "JEDCO PALESTINE ELECTRICITY", currency: "ILS" }, countryCode: "PS", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "YEMEN KUWAIT BANK", currency: "YER" }, countryCode: "YE", paymentRail: null, purposeHint: null },
+  { input: { merchantRaw: "GECOL LIBYA ELECTRICITY", currency: "LYD" }, countryCode: "LY", paymentRail: null, purposeHint: "utilities" },
+  { input: { description: "PI SPI MALI", currency: "XOF" }, countryCode: "ML", paymentRail: "uemoa_pispi", purposeHint: "transfer" },
+  { input: { merchantRaw: "SONABEL BURKINA FASO", currency: "XOF" }, countryCode: "BF", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "SOTRUNI BUS NIAMEY", currency: "XOF" }, countryCode: "NE", paymentRail: null, purposeHint: "transport" },
+  { input: { merchantRaw: "ELECTRICITE DE GUINEE", currency: "GNF" }, countryCode: "GN", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "LIBERIA ELECTRICITY CORPORATION", currency: "LRD" }, countryCode: "LR", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "GTSC BUS GAMBIA", currency: "GMD" }, countryCode: "GM", paymentRail: null, purposeHint: "transport" },
+  { input: { merchantRaw: "SOMELEC MAURITANIA ELECTRICITY", currency: "MRU" }, countryCode: "MR", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "AFRA SHOPPING CENTER SUDAN", currency: "SDG" }, countryCode: "SD", paymentRail: null, purposeHint: "groceries" },
+  { input: { merchantRaw: "ELECTRICITE DE DJIBOUTI", currency: "DJF" }, countryCode: "DJ", paymentRail: null, purposeHint: "utilities" },
+  { input: { description: "SIPS SOMALIA SOMQR", currency: "SOS" }, countryCode: "SO", paymentRail: "somalia_sips", purposeHint: "transfer" },
+  { input: { merchantRaw: "SHOPRITE MASERU SUPERMARKET", currency: "LSL" }, countryCode: "LS", paymentRail: null, purposeHint: "groceries" },
+  { input: { merchantRaw: "EEC ELECTRICITY ESWATINI", currency: "SZL" }, countryCode: "SZ", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "STPU BRAZZAVILLE CONGO", currency: "XAF" }, countryCode: "CG", paymentRail: null, purposeHint: "transport" },
+  { input: { merchantRaw: "ENERCA ELECTRICITY CENTRAFRIQUE", currency: "XAF" }, countryCode: "CF", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "SEGESA GUINEA ECUATORIAL", currency: "XAF" }, countryCode: "GQ", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "EMAE SAO TOME UTILITIES", currency: "STN" }, countryCode: "ST", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "SODIFRAM COMOROS SUPERMARKET", currency: "KMF" }, countryCode: "KM", paymentRail: null, purposeHint: "groceries" },
+  { input: { merchantRaw: "TURKMENENERGO ELECTRICITY", currency: "TMT" }, countryCode: "TM", paymentRail: null, purposeHint: "utilities" },
+  { input: { description: "AFGHANISTAN PAYMENTS SYSTEM AFPAY", currency: "AFN" }, countryCode: "AF", paymentRail: "afghanistan_afpay", purposeHint: "transfer" },
+  { input: { merchantRaw: "PPUC PALAU UTILITIES", currency: "USD" }, countryCode: "PW", paymentRail: null, purposeHint: "utilities" },
+] as const;
+for (const fixture of worldwidePhaseFourFixtures) {
+  const context = resolveTransactionContext(fixture.input);
+  assert.equal(context.countryCode, fixture.countryCode);
+  assert.equal(context.paymentRail, fixture.paymentRail);
+  assert.equal(context.purposeHint, fixture.purposeHint);
+  assert.notEqual(context.transactionTypeHint, "expense");
+}
+
 const worldwideDepthFixtures = [
   { merchantRaw: "AMERICAN HOSPITAL ALBANIA", currency: "ALL", countryCode: "AL", purposeHint: "healthcare" },
   { merchantRaw: "EDESUR ARGENTINA", currency: "ARS", countryCode: "AR", purposeHint: "utilities" },
@@ -341,6 +381,12 @@ for (const description of ["A BIT OF SOFTWARE", "WAVE HOTEL", "METRO MARKET", "M
 }
 
 for (const description of ["BONUS PAYMENT", "MAXI DRESS", "BINGO GAME", "BRAVO MUSIC", "GLOBUS MAP", "AURORA HOTEL"]) {
+  const context = resolveTransactionContext({ description, currency: "USD" });
+  assert.equal(context.countryCode, null);
+  assert.equal(context.paymentRail, null);
+}
+
+for (const description of ["ORANGE DRESS", "CASINO GAME", "TRUST EXERCISE", "COOP SOFTWARE", "FINEST HOTEL"]) {
   const context = resolveTransactionContext({ description, currency: "USD" });
   assert.equal(context.countryCode, null);
   assert.equal(context.paymentRail, null);
