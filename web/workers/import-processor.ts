@@ -100,7 +100,11 @@ import { parseImportTextWithOpenAIFallback, transcribeImportImagesWithOpenAI } f
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
 import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
 import { coerceTransactionTypeFromCategoryName, isTransferCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
-import { classifyWorkspaceInternalTransfers } from "@/lib/internal-transfer-matching";
+import {
+  classifyWorkspaceInternalTransfers,
+  findSameCurrencyCashAccount,
+  isAtmCashWithdrawalCandidate,
+} from "@/lib/internal-transfer-matching";
 import { resolveHsbcUkTransactionCategory } from "@/lib/hsbc-uk-transactions";
 import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
@@ -478,6 +482,11 @@ type PreparedImportTransaction = {
     teachabilityScore: number;
     notes: string | null;
   };
+};
+
+type PreparedAtmCashDestination = {
+  sourceTransactionId: string;
+  insertRow: Record<string, unknown>;
 };
 
 type BackupParserLearningSignal = {
@@ -6564,6 +6573,17 @@ const getImportSourceFileId = (rawPayload: Prisma.JsonValue | null | undefined) 
 
   const sourceImportFileId = (rawPayload as Record<string, unknown>).sourceImportFileId;
   return typeof sourceImportFileId === "string" && sourceImportFileId.trim() ? sourceImportFileId.trim() : null;
+};
+
+const getAtmCashTransferPayload = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const transfer = (rawPayload as Record<string, unknown>).atmCashTransfer;
+  return transfer && typeof transfer === "object" && !Array.isArray(transfer)
+    ? (transfer as Record<string, unknown>)
+    : null;
 };
 
 const getImportSourceStatementFingerprint = (rawPayload: Prisma.JsonValue | null | undefined) => {
@@ -13226,6 +13246,7 @@ export const confirmImportFile = async (
     notes: string | null;
   }> = [];
   const preparedTransactions: PreparedImportTransaction[] = [];
+  const preparedAtmCashDestinations: PreparedAtmCashDestination[] = [];
   let duplicateSkippedTransactionsCount = 0;
   let qaMetadataForRun: {
     institution: string | null;
@@ -13366,7 +13387,16 @@ export const confirmImportFile = async (
     const existingImportTransactionBySourceIndex = new Map<string, (typeof existingImportTransactions)[number]>();
     const existingImportTransactionByStatementSourceIndex = new Map<string, (typeof existingImportTransactions)[number]>();
     const existingImportTransactionsByDedupeKey = new Map<string, Array<(typeof existingImportTransactions)[number]>>();
+    const existingAtmCashDestinationBySourceTransactionId = new Map<string, (typeof existingImportTransactions)[number]>();
     for (const transaction of existingImportTransactions) {
+      const atmCashTransfer = getAtmCashTransferPayload(transaction.rawPayload);
+      const isDerivedAtmCashDestination = atmCashTransfer?.direction === "incoming";
+      const linkedSourceTransactionId =
+        typeof atmCashTransfer?.sourceTransactionId === "string" ? atmCashTransfer.sourceTransactionId : null;
+      if (isDerivedAtmCashDestination && linkedSourceTransactionId) {
+        existingAtmCashDestinationBySourceTransactionId.set(linkedSourceTransactionId, transaction);
+        continue;
+      }
       const sourceRowIndex = getImportSourceRowIndex(transaction.rawPayload);
       const sourceStatementFingerprint = getImportSourceStatementFingerprint(transaction.rawPayload);
       const accountScopedSourceRowKey = buildAccountScopedSourceRowKey(transaction.accountId, sourceRowIndex);
@@ -13894,6 +13924,27 @@ export const confirmImportFile = async (
       description: typeof row.description === "string" ? row.description : null,
       rawPayload: row.rawPayload,
     });
+    const rowCurrency =
+      normalizeInstitutionCurrency(
+        statementInstitution,
+        typeof row.currency === "string" && row.currency.trim() ? row.currency.trim().toUpperCase() : rowAccount.currency ?? "PHP",
+        rowAccount.name
+      ) ?? "PHP";
+    const atmCashAccount = findSameCurrencyCashAccount(workspaceAccountsForTransferMatching, rowCurrency);
+    const shouldTransferAtmWithdrawalToCash = Boolean(
+      atmCashAccount &&
+        atmCashAccount.id !== rowResolvedAccountId &&
+        isAtmCashWithdrawalCandidate({
+          type: rowType ?? "expense",
+          merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : null,
+          merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : null,
+          description:
+            typeof row.description === "string" && row.description.trim()
+              ? row.description
+              : extractHumanReadableDescription(row.rawPayload ?? null),
+          rawPayload: row.rawPayload ?? null,
+        })
+    );
     const rowConfidence = inferParserRowConfidence({
       confidence: row.confidence,
       parserConfidence: row.parserConfidence,
@@ -13914,24 +13965,26 @@ export const confirmImportFile = async (
             parsedCategoryName,
             (rowType ?? "expense") as "income" | "expense" | "transfer"
           ));
-    const canonicalType = resolveTransferTypeAgainstWorkspaceAccounts({
-      row: {
-        amount: row.amount,
-        type: categoryCoercedType,
-        merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : null,
-        merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : null,
-        description:
-          typeof row.description === "string" && row.description.trim()
-            ? row.description
-            : extractHumanReadableDescription(row.rawPayload ?? null),
-        categoryName: parsedCategoryName,
-        rawPayload: row.rawPayload ?? null,
-      },
-      candidateType: categoryCoercedType,
-      workspaceAccounts: workspaceAccountsForTransferMatching,
-      currentAccountId: rowResolvedAccountId,
-    });
-    const categoryName = parsedCategoryName;
+    const canonicalType = shouldTransferAtmWithdrawalToCash
+      ? "transfer"
+      : resolveTransferTypeAgainstWorkspaceAccounts({
+          row: {
+            amount: row.amount,
+            type: categoryCoercedType,
+            merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : null,
+            merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : null,
+            description:
+              typeof row.description === "string" && row.description.trim()
+                ? row.description
+                : extractHumanReadableDescription(row.rawPayload ?? null),
+            categoryName: parsedCategoryName,
+            rawPayload: row.rawPayload ?? null,
+          },
+          candidateType: categoryCoercedType,
+          workspaceAccounts: workspaceAccountsForTransferMatching,
+          currentAccountId: rowResolvedAccountId,
+        });
+    const categoryName = shouldTransferAtmWithdrawalToCash ? "Cash & ATM" : parsedCategoryName;
     const rowTransferConfidence =
       canonicalType === "transfer" ? (typeof row.transferConfidence === "number" ? row.transferConfidence : 100) : 0;
     const rowIsOpeningBalance = Boolean(
@@ -14090,6 +14143,16 @@ export const confirmImportFile = async (
           priority: reviewOnlyRow ? "none" : getImportReviewPriority(reviewReasons),
           reasons: reviewReasons,
         },
+        ...(shouldTransferAtmWithdrawalToCash && atmCashAccount
+          ? {
+              atmCashTransfer: {
+                direction: "outgoing",
+                sourceAccountId: rowResolvedAccountId,
+                destinationAccountId: atmCashAccount.id,
+                currency: rowCurrency,
+              },
+            }
+          : {}),
       } as Prisma.InputJsonValue,
       normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
       learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
@@ -14102,12 +14165,7 @@ export const confirmImportFile = async (
       date:
         parsedTransactionDate ?? new Date(),
       amount: parseAmountValue(coerceAmountToString(row.amount)) ?? 0,
-      currency:
-        normalizeInstitutionCurrency(
-          statementInstitution,
-          typeof row.currency === "string" && row.currency.trim() ? row.currency.trim().toUpperCase() : rowAccount.currency ?? "PHP",
-          rowAccount.name
-        ) ?? "PHP",
+      currency: rowCurrency,
       type: canonicalType,
       merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : "Imported transaction",
       merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
@@ -14118,6 +14176,81 @@ export const confirmImportFile = async (
         (typeof row.rawPayload === "object" && row.rawPayload !== null && (row.rawPayload as Record<string, unknown>).kind === "opening_balance"),
     });
     const transactionId = String(insertRow.id ?? crypto.randomUUID());
+    const prepareAtmCashDestination = (sourceTransactionId: string) => {
+      if (
+        !shouldTransferAtmWithdrawalToCash ||
+        !atmCashAccount ||
+        existingAtmCashDestinationBySourceTransactionId.has(sourceTransactionId) ||
+        preparedAtmCashDestinations.some((entry) => entry.sourceTransactionId === sourceTransactionId)
+      ) {
+        return;
+      }
+
+      const sourceRowKey = typeof insertRow.sourceRowKey === "string" ? insertRow.sourceRowKey : `${importFileId}:${index + 1}`;
+      const sourceAmount = parseAmountValue(coerceAmountToString(row.amount)) ?? 0;
+      const destinationInsertRow = buildTransactionInsertRecord({
+        workspaceId: String(importFile.workspaceId),
+        accountId: atmCashAccount.id,
+        importFileId,
+        categoryId,
+        categoryName: "Cash & ATM",
+        reviewStatus,
+        reviewPriority: reviewOnlyRow ? "none" : getImportReviewPriority(reviewReasons),
+        reviewReasons: reviewReasons as Prisma.InputJsonValue,
+        parserConfidence: rowParserConfidence,
+        categoryConfidence: rowCategoryConfidence,
+        accountMatchConfidence: 100,
+        duplicateConfidence: 0,
+        transferConfidence: 100,
+        rawPayload: {
+          kind: "atm_cash_destination_transfer",
+          source: "derived_atm_cash_transfer",
+          sourceRowIndex: index + 1,
+          sourceImportFileId: importFileId,
+          sourceStatementFingerprint:
+            typeof row.statementFingerprint === "string" && row.statementFingerprint.trim()
+              ? row.statementFingerprint.trim()
+              : checkpointStatementFingerprint,
+          parsedDirectionType: "income",
+          amountDelta: Math.abs(sourceAmount),
+          atmCashTransfer: {
+            direction: "incoming",
+            sourceTransactionId,
+            sourceAccountId: rowResolvedAccountId,
+            destinationAccountId: atmCashAccount.id,
+            currency: rowCurrency,
+          },
+          review: {
+            status: reviewStatus,
+            priority: reviewOnlyRow ? "none" : getImportReviewPriority(reviewReasons),
+            reasons: reviewReasons,
+          },
+        } as Prisma.InputJsonValue,
+        normalizedPayload: {
+          categoryName: "Cash & ATM",
+          type: "transfer",
+          transferDirection: "incoming",
+          sourceAccountId: rowResolvedAccountId,
+          destinationAccountId: atmCashAccount.id,
+        } as Prisma.InputJsonValue,
+        learnedRuleIdsApplied: [] as Prisma.InputJsonValue,
+        sourceRowKey: `${sourceRowKey}:atm-cash-destination`,
+        date: insertRow.date as Date,
+        amount: Math.abs(sourceAmount),
+        currency: rowCurrency,
+        type: "transfer",
+        merchantRaw: "ATM Withdrawal",
+        merchantClean: "ATM Withdrawal",
+        description: `Cash received from ${rowAccount.name}`,
+        isTransfer: true,
+        isExcluded: Boolean(insertRow.isExcluded),
+      });
+
+      preparedAtmCashDestinations.push({
+        sourceTransactionId,
+        insertRow: destinationInsertRow,
+      });
+    };
     const dedupeKey = buildConfirmedTransactionDedupeKey({
       ...insertRow,
       accountId: rowResolvedAccountId,
@@ -14143,6 +14276,24 @@ export const confirmImportFile = async (
       retainedExistingImportTransactionsCount += 1;
       const canPatchImportedClassification =
         !isProtectedTransactionReviewStatus(existingImportTransaction.reviewStatus);
+      const rawPayloadForExistingTransaction = (() => {
+        if (
+          canPatchImportedClassification ||
+          existingImportTransaction.type === "transfer" ||
+          !shouldTransferAtmWithdrawalToCash ||
+          !insertRow.rawPayload ||
+          typeof insertRow.rawPayload !== "object" ||
+          Array.isArray(insertRow.rawPayload)
+        ) {
+          return insertRow.rawPayload;
+        }
+
+        const { atmCashTransfer: _ignoredAtmCashTransfer, ...protectedRawPayload } = insertRow.rawPayload as Record<
+          string,
+          unknown
+        >;
+        return protectedRawPayload as Prisma.InputJsonValue;
+      })();
       await tx.transaction.update({
         where: { id: existingImportTransaction.id },
         data: {
@@ -14156,7 +14307,10 @@ export const confirmImportFile = async (
             typeof insertRow.description === "string" && insertRow.description.trim()
               ? insertRow.description
               : null,
-          rawPayload: mergeImportJsonPayload(insertRow.rawPayload, existingImportTransaction.rawPayload) as Prisma.InputJsonValue,
+          rawPayload: mergeImportJsonPayload(
+            rawPayloadForExistingTransaction,
+            existingImportTransaction.rawPayload
+          ) as Prisma.InputJsonValue,
           sourceRowKey: typeof insertRow.sourceRowKey === "string" ? insertRow.sourceRowKey : undefined,
           isExcluded: Boolean(insertRow.isExcluded),
           ...(canPatchImportedClassification
@@ -14181,6 +14335,9 @@ export const confirmImportFile = async (
             : {}),
         },
       });
+      if (canPatchImportedClassification || existingImportTransaction.type === "transfer") {
+        prepareAtmCashDestination(existingImportTransaction.id);
+      }
       transactions.push({
         amount: row.amount,
         type: canonicalType,
@@ -14261,7 +14418,8 @@ export const confirmImportFile = async (
         teachabilityScore: rowTeachability.score,
         notes: typeof row.categoryReason === "string" ? row.categoryReason : null,
       },
-      });
+    });
+    prepareAtmCashDestination(transactionId);
     }
 
     if (!multiAccountImport && existingImportTransactions.length > 0 && preparedTransactions.length > 0) {
@@ -14272,13 +14430,18 @@ export const confirmImportFile = async (
         skippedRows: preparedTransactions.length,
       });
       preparedTransactions.length = 0;
+      preparedAtmCashDestinations.length = 0;
     }
 
     if (planLimits?.transactionLimit != null) {
       const existingTransactionCount = planUsage?.transactionCount ?? await tx.transaction.count({
         where: { workspaceId: String(importFile.workspaceId) },
       });
-      const projectedTransactionCount = existingTransactionCount + preparedTransactions.length + (openingBalanceInserted ? 1 : 0);
+      const projectedTransactionCount =
+        existingTransactionCount +
+        preparedTransactions.length +
+        preparedAtmCashDestinations.length +
+        (openingBalanceInserted ? 1 : 0);
 
       if (projectedTransactionCount > planLimits.transactionLimit) {
         throw new Error(
@@ -14293,8 +14456,17 @@ export const confirmImportFile = async (
           const { categoryName: _categoryName, ...transactionRow } = entry.insertRow as Record<string, unknown>;
           return transactionRow as Prisma.TransactionCreateManyInput;
         }),
-    });
-  }
+      });
+    }
+
+    for (const batch of chunkArray(preparedAtmCashDestinations, highVolumeConfirmation ? 500 : 250)) {
+      await tx.transaction.createMany({
+        data: batch.map((entry) => {
+          const { categoryName: _categoryName, ...transactionRow } = entry.insertRow as Record<string, unknown>;
+          return transactionRow as Prisma.TransactionCreateManyInput;
+        }),
+      });
+    }
 
   // Category describes the payment mechanism. Only an opposite movement in
   // another account owned by this workspace makes the transaction internal.
@@ -14612,6 +14784,7 @@ export const confirmImportFile = async (
         });
       });
     }
+
   }
 
   const backupParserRows = parsedRows.filter((row) => {

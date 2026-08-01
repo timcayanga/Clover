@@ -4,10 +4,13 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   classifyWorkspaceInternalTransfers,
+  findSameCurrencyCashAccount,
   inferTransferCandidateDirection,
+  isAtmCashWithdrawalCandidate,
   type WorkspaceTransferCandidate,
 } from "@/lib/internal-transfer-matching";
 import { buildOptimisticPreviewTransactions } from "@/lib/import-preview-transactions";
+import { deriveReconciledBalance } from "@/lib/account-balance";
 
 const outgoing: WorkspaceTransferCandidate = {
   id: "hsbc-outgoing",
@@ -86,6 +89,63 @@ assert.equal(
   "Equal opposite movements must not pair unless both are transfer-category candidates."
 );
 
+assert.equal(
+  isAtmCashWithdrawalCandidate({
+    type: "expense",
+    merchantRaw: "ATM Withdrawal",
+    merchantClean: "ATM Withdrawal",
+    description: "W/D FR SAV BDO",
+    rawPayload: null,
+  }),
+  true,
+  "A real ATM withdrawal should be eligible for routing into Cash."
+);
+assert.equal(
+  isAtmCashWithdrawalCandidate({
+    type: "expense",
+    merchantRaw: "ATM Withdrawal Acquirer Fee",
+    merchantClean: "ATM Fee",
+    description: "ATM withdrawal fee",
+    rawPayload: null,
+  }),
+  false,
+  "An ATM fee must remain an expense instead of increasing Cash."
+);
+assert.equal(
+  isAtmCashWithdrawalCandidate({
+    type: "income",
+    merchantRaw: "Reversal - ATM Withdrawal",
+    merchantClean: "ATM Reversal",
+    description: null,
+    rawPayload: null,
+  }),
+  false,
+  "An ATM reversal must not create a cash destination entry."
+);
+
+const cashAccounts = [
+  { id: "cash-php", type: "cash", currency: "PHP" },
+  { id: "cash-gbp", type: "cash", currency: "GBP" },
+  { id: "bank-gbp", type: "bank", currency: "GBP" },
+];
+assert.equal(findSameCurrencyCashAccount(cashAccounts, "gbp")?.id, "cash-gbp");
+assert.equal(findSameCurrencyCashAccount(cashAccounts, "EUR"), null);
+assert.equal(
+  deriveReconciledBalance({
+    balance: "0",
+    transactions: [
+      {
+        amount: "100.00",
+        type: "transfer",
+        description: "Cash received from BPI 3012",
+        rawPayload: { amountDelta: 100 },
+      },
+    ],
+  }),
+  "100.00",
+  "The generated cash-side transfer must increase the Cash account balance."
+);
+
 const hsbcCardPreview = buildOptimisticPreviewTransactions(
   [
     {
@@ -115,6 +175,16 @@ assert.equal(hsbcCardPreview[0]?.categoryName, "Food & Dining");
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const workerSource = readFileSync(join(scriptDir, "..", "workers", "import-processor.ts"), "utf8");
+assert.match(
+  workerSource,
+  /findSameCurrencyCashAccount\(workspaceAccountsForTransferMatching, rowCurrency\)/,
+  "ATM routing must resolve Cash by the transaction currency."
+);
+assert.match(
+  workerSource,
+  /kind: "atm_cash_destination_transfer"[\s\S]+amountDelta: Math\.abs\(sourceAmount\)[\s\S]+sourceTransactionId/,
+  "ATM routing must persist an idempotent, positive cash-side transfer linked to its statement row."
+);
 const enrichmentLogIndex = workerSource.indexOf('console.info("[import-enrichment] processed batch"');
 const enrichmentReconciliationIndex = workerSource.indexOf(
   "await reconcileWorkspaceInternalTransfers(prisma, String(importFile.workspaceId));",

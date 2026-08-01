@@ -15,6 +15,15 @@ export type WorkspaceTransferCandidate = {
   rawPayload?: unknown;
 };
 
+export type WorkspaceTransferAccount = {
+  id: string;
+  name?: string | null;
+  institution?: string | null;
+  accountNumber?: string | null;
+  type?: string | null;
+  currency?: string | null;
+};
+
 const normalizeDigits = (value: unknown) => String(value ?? "").replace(/\D/g, "");
 
 const readPayloadRecord = (value: unknown) =>
@@ -34,6 +43,64 @@ const readDateTime = (value: Date | string) => {
 
 const isTransfersCategory = (value: unknown) =>
   /^transfers?$/i.test(String(value ?? "").trim());
+
+const buildCandidateText = (candidate: Pick<WorkspaceTransferCandidate, "merchantRaw" | "merchantClean" | "description" | "rawPayload">) => {
+  const payload = readPayloadRecord(candidate.rawPayload);
+  return [
+    candidate.merchantRaw,
+    candidate.merchantClean,
+    candidate.description,
+    payload?.originalDescription,
+    payload?.transactionCode,
+    payload?.transactionName,
+    payload?.details,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+export const isAtmCashWithdrawalCandidate = (
+  candidate: Pick<WorkspaceTransferCandidate, "type" | "merchantRaw" | "merchantClean" | "description" | "rawPayload">
+) => {
+  if (candidate.type === "income") {
+    return false;
+  }
+
+  const text = buildCandidateText(candidate);
+  if (!text) {
+    return false;
+  }
+
+  const isReversal = /\b(?:reversal|reversed|refund|refunded|reversal credit)\b/i.test(text);
+  const isFeeOnly = /\b(?:fee|charges?|surcharge|service\s+fee|acquirer\s+fee|inquiry)\b/i.test(text);
+  if (isReversal || isFeeOnly) {
+    return false;
+  }
+
+  return /\b(?:atm\s*(?:withdrawal|wdl|wd|cash\s+withdrawal)|cash\s+withdrawal|withdrawal\s+via\s+atm|w\/?d\s+fr\s+sav|et\s+wdl|atmwdl?|cash\s+out)\b|\/(?:drw)\b/i.test(
+    text
+  );
+};
+
+export const findSameCurrencyCashAccount = (
+  accounts: WorkspaceTransferAccount[],
+  currency: string | null | undefined
+) => {
+  const normalizedCurrency = String(currency ?? "").trim().toUpperCase();
+  if (!normalizedCurrency) {
+    return null;
+  }
+
+  return (
+    accounts.find(
+      (account) =>
+        account.type === "cash" &&
+        String(account.currency ?? "").trim().toUpperCase() === normalizedCurrency
+    ) ?? null
+  );
+};
 
 export const inferTransferCandidateDirection = (
   candidate: WorkspaceTransferCandidate
