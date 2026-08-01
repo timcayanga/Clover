@@ -343,6 +343,17 @@ const importedAccountInstitutionKey = (account: {
   return name || null;
 };
 
+const importedAccountInstitutionCurrencyKey = (account: {
+  name?: string | null;
+  institution?: string | null;
+  accountNumber?: string | null;
+  currency?: string | null;
+}) => {
+  const institution = importedAccountInstitutionKey(account);
+  const currency = String(account.currency ?? "").trim().toUpperCase();
+  return institution && currency ? `${institution}|${currency}` : null;
+};
+
 const resolveUploadedAccountInstitution = (
   currentInstitution?: string | null,
   checkpointBankHint?: string | null,
@@ -789,15 +800,19 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
     }
   }
 
-  const numberedInstitutions = new Set(
+  const numberedInstitutionCurrencies = new Set(
     Array.from(groups.values())
-      .map((group) => importedAccountInstitutionKey({ institution: group.institution, accountNumber: group.accountNumber }))
+      .map((group) => importedAccountInstitutionCurrencyKey({
+        institution: group.institution,
+        accountNumber: group.accountNumber,
+        currency: group.currency,
+      }))
       .filter(Boolean)
   );
   const genericPlaceholderIds = existingAccounts
     .filter((account) => {
-      const institutionKey = importedAccountInstitutionKey(account);
-      return Boolean(institutionKey && numberedInstitutions.has(institutionKey));
+      const institutionCurrencyKey = importedAccountInstitutionCurrencyKey(account);
+      return Boolean(institutionCurrencyKey && numberedInstitutionCurrencies.has(institutionCurrencyKey));
     })
     .filter(isGenericUploadedAccountForInstitution)
     .map((account) => account.id);
@@ -844,16 +859,17 @@ const cleanupEmptyGenericUploadedAccountPlaceholders = async (workspaceId: strin
       name: true,
       institution: true,
       accountNumber: true,
+      currency: true,
     },
   }).catch(() => []);
-  const institutionsWithNumberedAccounts = new Set(
+  const institutionCurrenciesWithNumberedAccounts = new Set(
     new Set(
       numberedUploadAccounts
-        .map((account) => importedAccountInstitutionKey(account))
+        .map((account) => importedAccountInstitutionCurrencyKey(account))
         .filter(Boolean)
     )
   );
-  if (institutionsWithNumberedAccounts.size === 0) {
+  if (institutionCurrenciesWithNumberedAccounts.size === 0) {
     return;
   }
 
@@ -869,14 +885,17 @@ const cleanupEmptyGenericUploadedAccountPlaceholders = async (workspaceId: strin
       name: true,
       institution: true,
       accountNumber: true,
+      currency: true,
       source: true,
     },
   }).catch(() => []);
   const deletableIds = emptyPlaceholderAccounts
     .filter(isGenericUploadedAccountForInstitution)
     .filter((account) => {
-      const institutionKey = importedAccountInstitutionKey(account);
-      return Boolean(institutionKey && institutionsWithNumberedAccounts.has(institutionKey));
+      const institutionCurrencyKey = importedAccountInstitutionCurrencyKey(account);
+      return Boolean(
+        institutionCurrencyKey && institutionCurrenciesWithNumberedAccounts.has(institutionCurrencyKey)
+      );
     })
     .map((account) => account.id);
 

@@ -5,6 +5,7 @@ import {
   mergeAccountsWithOptimisticImports,
   mergeOptimisticImportedAccount,
   isTransientUploadedAccountPlaceholder,
+  isGenericUploadedAccountShadowed,
   uploadSummaryCanDismissImportUi,
   uploadSummaryMatchesImportedAccount,
   type ImportedAccountLike,
@@ -145,6 +146,34 @@ const main = () => {
     source: "upload",
     balance: "0",
   };
+
+  const wiseEurWallet: TestAccount = {
+    ...genericPlaceholder,
+    id: "wise-eur-wallet",
+    name: "Wise",
+    institution: "Wise",
+    type: "wallet",
+    currency: "EUR",
+  };
+  const wiseGbpWallet: TestAccount = {
+    ...numberedUploadAccount,
+    id: "wise-gbp-wallet",
+    name: "Wise 8345",
+    institution: "Wise",
+    accountNumber: "84168345",
+    type: "wallet",
+    currency: "GBP",
+  };
+  assert.equal(
+    isGenericUploadedAccountShadowed(wiseEurWallet, [wiseGbpWallet]),
+    false,
+    "A numbered Wise wallet must not hide an unnumbered wallet in another currency."
+  );
+  assert.deepEqual(
+    mergeAccountsWithOptimisticImports([wiseEurWallet, wiseGbpWallet], []).map((account) => account.id),
+    [wiseEurWallet.id, wiseGbpWallet.id],
+    "Wise wallets in different currencies must remain independently visible."
+  );
 
   assert.equal(
     isTransientUploadedAccountPlaceholder({

@@ -17,6 +17,7 @@ import {
   parseImportTextGenericOnly,
   type ParsedImportRow,
 } from "@/lib/import-parser";
+import { isTrustedMetadataOnlyWiseStatement } from "@/lib/metadata-only-statement";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { applyDeterministicMerchantRescue } from "@/lib/merchant-enrichment";
 import {
@@ -1583,6 +1584,7 @@ type ProcessImportResult = {
     institution: string | null;
     accountNumber: string | null;
     accountType: AccountType | null;
+    currency: string | null;
     balance: string | null;
     rowsImported: number;
   }>;
@@ -11278,6 +11280,94 @@ export const processImportFileText = async (
       insightSummary: undefined,
       accountBalance: null,
       status: "error",
+    };
+  }
+
+  if (
+    isTrustedMetadataOnlyWiseStatement({
+      fileName: String(importFile.fileName ?? ""),
+      fileType: String(importFile.fileType ?? ""),
+      importMode: effectiveImportMode,
+      rowCount: rows.length,
+      metadata: resolvedMetadata,
+    })
+  ) {
+    const metadataOnlyAccount = await resolveConfirmationAccount({
+      importFile,
+      statementMetadata: resolvedMetadata,
+      parsedRows: [],
+      accountId: linkedImportAccountId,
+      planLimits: null,
+      planAccountCount: null,
+    });
+
+    if (!metadataOnlyAccount) {
+      throw new Error("Clover could not link the Wise statement to an account.");
+    }
+
+    const metadataOnlyBalance =
+      resolvedMetadata.endingBalance !== null && resolvedMetadata.endingBalance !== undefined
+        ? String(resolvedMetadata.endingBalance)
+        : metadataOnlyAccount.balance?.toString() ?? null;
+    const metadataOnlySummary: NonNullable<ProcessImportResult["accountSummaries"]>[number] = {
+      accountId: metadataOnlyAccount.id,
+      accountName: metadataOnlyAccount.name,
+      institution: metadataOnlyAccount.institution,
+      accountNumber: metadataOnlyAccount.accountNumber,
+      accountType: metadataOnlyAccount.type,
+      currency: metadataOnlyAccount.currency,
+      balance: metadataOnlyBalance,
+      rowsImported: 0,
+    };
+
+    await updateImportFileCompat(importFileId, {
+      accountId: metadataOnlyAccount.id,
+      status: "done",
+      processingPhase: "complete",
+      processingMessage: "Account details imported. This statement contained no transaction activity.",
+      parsedRowsCount: 0,
+      confirmedTransactionsCount: 0,
+    });
+
+    if (await hasCompatibleTable("AccountStatementCheckpoint")) {
+      await prisma.accountStatementCheckpoint.updateMany({
+        where: { importFileId },
+        data: {
+          accountId: metadataOnlyAccount.id,
+          status: "reconciled",
+          mismatchReason: null,
+          sourceMetadata: mergeCheckpointSourceMetadata(statementCheckpoint?.sourceMetadata, {
+            accountName: metadataOnlyAccount.name,
+            institution: metadataOnlyAccount.institution,
+            accountNumber: metadataOnlyAccount.accountNumber,
+            accountType: metadataOnlyAccount.type,
+            currency: metadataOnlyAccount.currency,
+            endingBalance: metadataOnlyBalance,
+            workflowStage: "complete",
+            publishedVisibleImportComplete: true,
+            publishedAccountSummaries: [metadataOnlySummary],
+          }) as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    emitImportProcessingEvent("import_processing_completed", {
+      processing_status: "done",
+      processing_phase: "metadata_only_statement_saved",
+      imported_rows: 0,
+      institution: metadataOnlyAccount.institution,
+      currency: metadataOnlyAccount.currency,
+    });
+
+    return {
+      imported: 0,
+      duplicate: false,
+      metadata: resolvedMetadata,
+      accountId: metadataOnlyAccount.id,
+      accountSummaries: [metadataOnlySummary],
+      confirmedTransactionsCount: 0,
+      accountBalance: metadataOnlyBalance,
+      status: "done",
     };
   }
 

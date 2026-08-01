@@ -63,7 +63,7 @@ export const isGenericUploadedImportAccount = (account: Pick<ImportedAccountLike
 };
 
 export const isGenericUploadedAccountShadowed = <
-  TAccount extends Pick<ImportedAccountLike, "source" | "accountNumber" | "institution" | "name">
+  TAccount extends Pick<ImportedAccountLike, "source" | "accountNumber" | "institution" | "name" | "currency">
 >(
   account: TAccount,
   numberedAccounts: TAccount[]
@@ -73,11 +73,13 @@ export const isGenericUploadedAccountShadowed = <
   }
 
   const institution = getImportedInstitutionShadowKey(account);
+  const currency = String(account.currency ?? "").trim().toUpperCase();
   return numberedAccounts.some(
     (numberedAccount) =>
       numberedAccount.source === "upload" &&
       getImportedAccountLastFour(numberedAccount.accountNumber) &&
-      getImportedInstitutionShadowKey(numberedAccount) === institution
+      getImportedInstitutionShadowKey(numberedAccount) === institution &&
+      (!currency || !numberedAccount.currency || String(numberedAccount.currency).trim().toUpperCase() === currency)
   );
 };
 
