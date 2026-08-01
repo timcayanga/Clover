@@ -2147,6 +2147,49 @@ body.transactions-manual-open .shell-quick-add-button {
   }
 }
 
+/* Adviser reporting controls and compact analysis cards. */
+.reports-range-menu__custom {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--stroke);
+}
+
+.reports-range-menu__custom label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.reports-range-menu__custom input {
+  min-width: 0;
+  width: 100%;
+  height: 34px;
+  padding: 5px 7px;
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.reports-range-menu__custom .button {
+  grid-column: 1 / -1;
+  justify-self: end;
+  min-height: 30px;
+  padding: 5px 11px;
+  font-size: 0.7rem;
+}
+
 .sidebar-popover--profile {
   width: 200px;
 }
@@ -51119,4 +51162,55 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   .content--accounts .accounts-group + .accounts-group {
     border-top: 1px solid var(--stroke) !important;
   }
+}
+
+/* Final Adviser density overrides stay after legacy responsive rules. */
+.content--adviser .adviser-card {
+  gap: 9px;
+  padding: 16px;
+}
+
+.content--adviser .adviser-card strong {
+  font-size: 0.94rem;
+}
+
+.content--adviser .adviser-card p {
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.content--adviser .adviser-card small {
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.content--adviser .adviser-card__cta {
+  min-height: 30px;
+  width: auto;
+  max-width: 160px;
+  padding: 5px 12px;
+  font-size: 0.72rem;
+}
+
+.content--adviser .reports-brief-grid__split .report-ai-card--compact {
+  align-content: start;
+  grid-auto-rows: max-content;
+}
+
+.content--adviser .reports-next h4 {
+  margin: 0;
+  font-size: 0.98rem;
+  line-height: 1.3;
+}
+
+.content--adviser .reports-next p {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.content--adviser .reports-next .button {
+  min-height: 30px;
+  padding: 5px 11px;
+  font-size: 0.7rem;
 }

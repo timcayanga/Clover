@@ -28,6 +28,8 @@ import { ReportsStream } from "@/app/reports/page";
 import { PlanUpgradeCallout } from "@/components/plan-upgrade-callout";
 import { hasFullFeatureAccess } from "@/lib/beta-access";
 import { InfoTooltip } from "@/components/info-tooltip";
+import { ReportsRangeMenu } from "@/components/reports-range-menu";
+import { resolveReportWindow } from "@/lib/report-window";
 
 export const dynamic = "force-dynamic";
 
@@ -1096,12 +1098,13 @@ const getWeightedHistoricalBaseline = (series: Array<{ income: number; expense: 
   };
 };
 
-type AdviserSearchParams = { range?: string; section?: string; filter?: string };
+type AdviserSearchParams = { range?: string; section?: string; filter?: string; from?: string; to?: string };
 
 async function AdviserPageContent({ searchParams }: { searchParams?: Promise<AdviserSearchParams> }) {
   try {
   const now = new Date();
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const reportWindow = resolveReportWindow(now, resolvedSearchParams);
   const session = await getPageSessionContext();
   const existingUser = await prisma.user.findUnique({
     where: { clerkUserId: session.userId },
@@ -1426,30 +1429,38 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     );
 
   const latestTransactionDate = allTransactions[0]?.date ?? now;
-  const analysisAnchorDate = now;
+  const analysisAnchorDate = reportWindow.currentEnd;
   const dataFreshness = getDataFreshnessCopy(latestTransactionDate, now);
   const analysisMonthHref = toIsoMonth(latestTransactionDate);
-  const currentWindowStart = new Date(now);
-  currentWindowStart.setDate(currentWindowStart.getDate() - 30);
-  const previousWindowStart = new Date(now);
-  previousWindowStart.setDate(previousWindowStart.getDate() - 60);
+  const currentWindowStart = reportWindow.currentStart;
+  const currentWindowEnd = reportWindow.currentEnd;
+  const previousWindowStart = reportWindow.previousStart;
+  const previousWindowEnd = reportWindow.previousEnd;
 
   const currentWindowTransactions = allTransactions.filter(
-    (transaction) => transaction.date > currentWindowStart && transaction.date <= now
+    (transaction) => transaction.date >= currentWindowStart && transaction.date <= currentWindowEnd
   );
   const previousWindowTransactions = allTransactions.filter(
-    (transaction) => transaction.date > previousWindowStart && transaction.date <= currentWindowStart
+    (transaction) => transaction.date >= previousWindowStart && transaction.date <= previousWindowEnd
   );
-  const activeTransactions = currentWindowTransactions.length > 0 ? currentWindowTransactions : allTransactions;
+  const activeTransactions = reportWindow.isCustom
+    ? currentWindowTransactions
+    : currentWindowTransactions.length > 0
+      ? currentWindowTransactions
+      : allTransactions;
   const activeTransactionWindowLabel =
-    currentWindowTransactions.length > 0
-      ? `${toShortDateLabel(currentWindowStart)} to ${toShortDateLabel(now)}`
+    reportWindow.isCustom || currentWindowTransactions.length > 0
+      ? reportWindow.label
       : "available history";
   const comparisonWindowTransactions =
-    previousWindowTransactions.length > 0 ? previousWindowTransactions : allTransactions.filter((transaction) => transaction.date <= currentWindowStart);
+    previousWindowTransactions.length > 0
+      ? previousWindowTransactions
+      : reportWindow.isCustom
+        ? []
+        : allTransactions.filter((transaction) => transaction.date < currentWindowStart);
 
   const currentSummary = buildTransactionSummary(activeTransactions);
-  const recentThirtyDaySummary = buildTransactionSummary(currentWindowTransactions);
+  const selectedWindowSummary = buildTransactionSummary(currentWindowTransactions);
   const previousSummary = buildTransactionSummary(comparisonWindowTransactions);
   const allSummary = buildTransactionSummary(allTransactions);
 
@@ -1458,8 +1469,8 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
   const currentNet = currentSummary.income - currentSummary.expense;
   const previousNet = previousSummary.income - previousSummary.expense;
   const currentSavingsRate =
-    recentThirtyDaySummary.income > 0
-      ? (recentThirtyDaySummary.income - recentThirtyDaySummary.expense) / recentThirtyDaySummary.income
+    selectedWindowSummary.income > 0
+      ? (selectedWindowSummary.income - selectedWindowSummary.expense) / selectedWindowSummary.income
       : null;
   const previousSavingsRate = previousSummary.income > 0 ? (previousSummary.income - previousSummary.expense) / previousSummary.income : null;
   const historySpanDays = allTransactions.length > 0 ? daysBetween(analysisAnchorDate, allTransactions[allTransactions.length - 1].date) : 0;
@@ -2133,7 +2144,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     },
     {
       id: "savings_rate",
-      title: "Savings rate · 30 days",
+      title: `Savings rate · ${reportWindow.label}`,
       value: currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100),
       tone: currentSavingsRate === null || currentSavingsRate >= 0 ? "positive" : "warning",
       detail:
@@ -3313,6 +3324,14 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
         active="adviser"
         title="Adviser"
         titleAddon={<ReportsTopTabs />}
+        actions={
+          <ReportsRangeMenu
+            currentRange={reportWindow.range}
+            currentRangeLabel={reportWindow.label}
+            currentFrom={reportWindow.from}
+            currentTo={reportWindow.to}
+          />
+        }
       >
       <ReportsSectionPanel section="overview">
       <section className="adviser-page">

@@ -26,6 +26,7 @@ import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directi
 import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
 import { buildVisibleWorkspaceTransactionWhere } from "@/lib/transaction-query";
 import { hasFullFeatureAccess } from "@/lib/beta-access";
+import { resolveReportWindow } from "@/lib/report-window";
 
 const ReportsReviewQueue = nextDynamic(() => import("@/components/reports-review-queue").then((module) => module.ReportsReviewQueue), {
   loading: () => (
@@ -157,8 +158,7 @@ const isReportSpendingTransaction = (transaction: ReportTransaction) => {
     return false;
   }
 
-  const categoryName = getReportTransactionCategoryName(transaction).trim().toLowerCase();
-  return !reportSankeyExcludedCategoryNames.has(categoryName);
+  return true;
 };
 
 type MonthBucket = {
@@ -187,22 +187,7 @@ type RecurringMerchant = {
   nextDueDate: Date | null;
 };
 
-type ReportsRange = "30d" | "90d" | "ytd";
 type ReportsSection = "overview" | "spending" | "trends" | "advanced";
-
-const reportsRangeLabels: Record<ReportsRange, string> = {
-  "30d": "30 days",
-  "90d": "90 days",
-  ytd: "Year to date",
-};
-
-const normalizeReportsRange = (value: string | undefined): ReportsRange => {
-  if (value === "90d" || value === "ytd") {
-    return value;
-  }
-
-  return "30d";
-};
 
 const normalizeReportsSection = (value: string | undefined): ReportsSection => {
   if (value === "spending" || value === "trends" || value === "advanced") {
@@ -210,30 +195,6 @@ const normalizeReportsSection = (value: string | undefined): ReportsSection => {
   }
 
   return "overview";
-};
-
-const getReportWindow = (anchor: Date, range: ReportsRange) => {
-  const currentStart = new Date(anchor);
-  if (range === "30d") {
-    currentStart.setDate(currentStart.getDate() - 30);
-  } else if (range === "90d") {
-    currentStart.setDate(currentStart.getDate() - 90);
-  } else {
-    currentStart.setMonth(0, 1);
-    currentStart.setHours(0, 0, 0, 0);
-  }
-
-  const previousStart = new Date(currentStart);
-  if (range === "30d") {
-    previousStart.setDate(previousStart.getDate() - 30);
-  } else if (range === "90d") {
-    previousStart.setDate(previousStart.getDate() - 90);
-  } else {
-    const durationDays = Math.max(Math.round((anchor.getTime() - currentStart.getTime()) / 86400000), 1);
-    previousStart.setDate(previousStart.getDate() - durationDays);
-  }
-
-  return { currentStart, previousStart };
 };
 
 const formatCurrency = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "MIXED");
@@ -379,12 +340,13 @@ export async function ReportsStream({
   searchParams,
 }: {
   active?: "reports" | "adviser";
-  searchParams?: { range?: string; section?: string; filter?: string };
+  searchParams?: { range?: string; section?: string; filter?: string; from?: string; to?: string };
 }) {
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
-  const selectedRange = normalizeReportsRange(searchParams?.range);
-  const selectedRangeLabel = reportsRangeLabels[selectedRange];
+  const reportWindow = resolveReportWindow(new Date(), searchParams);
+  const selectedRange = reportWindow.range;
+  const selectedRangeLabel = reportWindow.label;
   const rangeWindowText = selectedRange === "ytd" ? "year-to-date" : selectedRangeLabel.toLowerCase();
   const requestedSection = normalizeReportsSection(searchParams?.section);
 
@@ -511,8 +473,13 @@ export async function ReportsStream({
 
   try {
     const now = new Date();
-    const { currentStart: currentWindowStart, previousStart: previousWindowStart } = getReportWindow(now, selectedRange);
-    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const {
+      currentStart: currentWindowStart,
+      currentEnd: currentWindowEnd,
+      previousStart: previousWindowStart,
+      previousEnd: previousWindowEnd,
+    } = reportWindow;
+    const sixMonthsAgo = new Date(currentWindowEnd.getFullYear(), currentWindowEnd.getMonth() - 5, 1);
 
     const [
       reportTransactions,
@@ -681,19 +648,28 @@ export async function ReportsStream({
           return category.includes(requestedFilter) || merchant.includes(requestedFilter) || account.includes(requestedFilter);
         })
       : reportAllTransactions;
-    const reportCurrentWindowTransactions = reportScopedTransactions.filter((transaction) => transaction.date >= currentWindowStart);
-    const reportPreviousWindowTransactions = reportScopedTransactions.filter(
-      (transaction) => transaction.date >= previousWindowStart && transaction.date < currentWindowStart
+    const reportCurrentWindowTransactions = reportScopedTransactions.filter(
+      (transaction) => transaction.date >= currentWindowStart && transaction.date <= currentWindowEnd
     );
-    const reportSixMonthTransactions = reportScopedTransactions.filter((transaction) => transaction.date >= sixMonthsAgo);
+    const reportPreviousWindowTransactions = reportScopedTransactions.filter(
+      (transaction) => transaction.date >= previousWindowStart && transaction.date <= previousWindowEnd
+    );
+    const reportSixMonthTransactions = reportScopedTransactions.filter(
+      (transaction) => transaction.date >= sixMonthsAgo && transaction.date <= currentWindowEnd
+    );
     const reportDisplayTransactions =
-      reportCurrentWindowTransactions.length > 0
+      reportWindow.isCustom
         ? reportCurrentWindowTransactions
-        : reportSixMonthTransactions.length > 0
-          ? reportSixMonthTransactions
-          : reportAllTransactions;
-    const reportTrendTransactions =
-      reportSixMonthTransactions.length > 0 ? reportSixMonthTransactions : reportDisplayTransactions;
+        : reportCurrentWindowTransactions.length > 0
+          ? reportCurrentWindowTransactions
+          : reportSixMonthTransactions.length > 0
+            ? reportSixMonthTransactions
+            : reportAllTransactions;
+    const reportTrendTransactions = reportWindow.isCustom
+      ? reportCurrentWindowTransactions
+      : reportSixMonthTransactions.length > 0
+        ? reportSixMonthTransactions
+        : reportDisplayTransactions;
     const accountStatsCountId = Number((accountStats as { _count?: { id?: number } } | null | undefined)?._count?.id ?? 0);
     const isFreshResetWorkspace =
       user.dataWipedAt !== null && accountStatsCountId <= 1 && Object.values(importStatusCounts).every((count) => count === 0);
@@ -706,7 +682,7 @@ export async function ReportsStream({
       | null;
     const isEmptyWorkspace = accountStatsCountId <= 1 && reportDisplayTransactions.length === 0 && Object.values(importStatusCounts).every((count) => count === 0);
     const reportFallbackNotice =
-      reportCurrentWindowTransactions.length === 0 && reportDisplayTransactions.length > 0
+      !reportWindow.isCustom && reportCurrentWindowTransactions.length === 0 && reportDisplayTransactions.length > 0
         ? "No activity in the selected range yet. Showing the latest available transactions instead."
         : null;
     const reportHistoricalTransactions = reportScopedTransactions.filter((transaction) => transaction.date < currentWindowStart);
@@ -964,14 +940,6 @@ export async function ReportsStream({
       categoryExisting.amount += amount;
       reportSankeyCategoryTotals.set(categoryKey, categoryExisting);
     });
-
-    for (const account of workspaceAccountSummaries) {
-      const accountLastFour = account.accountNumber?.replace(/\D/g, "").slice(-4);
-      const accountLabel = `${account.name}${accountLastFour ? ` ${accountLastFour}` : ""}`;
-      if (!reportSankeyAccountIncome.has(account.id)) {
-        reportSankeyAccountIncome.set(account.id, { id: account.id, label: accountLabel, amount: 0 });
-      }
-    }
 
     const accountSnapshotById = new Map(workspaceAccountSummaries.map((account) => [account.id, account] as const));
     const reportSankeyAccounts = Array.from(reportSankeyAccountIncome.values())
@@ -2434,7 +2402,7 @@ export async function ReportsStream({
   }
 }
 
-async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string }> }) {
+async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string; from?: string; to?: string }> }) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const session = await getPageSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
@@ -2442,8 +2410,9 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
     redirect("/onboarding");
   }
 
-  const selectedRange = normalizeReportsRange(resolvedSearchParams?.range);
-  const selectedRangeLabel = reportsRangeLabels[selectedRange];
+  const reportWindow = resolveReportWindow(new Date(), resolvedSearchParams);
+  const selectedRange = reportWindow.range;
+  const selectedRangeLabel = reportWindow.label;
   const requestedSection = normalizeReportsSection(resolvedSearchParams?.section);
   const isPro = hasFullFeatureAccess(user.planTier);
   const sectionTabs: ReportsSection[] = isPro ? ["overview", "spending", "trends", "advanced"] : ["overview", "spending", "trends"];
@@ -2455,7 +2424,14 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
         active="reports"
         title="Reports"
         titleAddon={<ReportsTopTabs />}
-        actions={<ReportsRangeMenu currentRange={selectedRange} currentRangeLabel={selectedRangeLabel} />}
+        actions={
+          <ReportsRangeMenu
+            currentRange={selectedRange}
+            currentRangeLabel={selectedRangeLabel}
+            currentFrom={reportWindow.from}
+            currentTo={reportWindow.to}
+          />
+        }
       >
         <ReportsStream active="reports" searchParams={resolvedSearchParams} />
       </CloverShell>
@@ -2463,6 +2439,6 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
   );
 }
 
-export default function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string }> }) {
+export default function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string; from?: string; to?: string }> }) {
   redirect("/adviser");
 }

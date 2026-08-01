@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 type ReportsRange = "30d" | "90d" | "ytd";
 
 type ReportsRangeMenuProps = {
   currentRange: ReportsRange;
   currentRangeLabel: string;
+  currentFrom?: string;
+  currentTo?: string;
 };
 
 const reportsRangeLabels: Record<ReportsRange, string> = {
@@ -19,15 +21,38 @@ const reportsRangeLabels: Record<ReportsRange, string> = {
 export function ReportsRangeMenu({
   currentRange,
   currentRangeLabel,
+  currentFrom,
+  currentTo,
 }: ReportsRangeMenuProps) {
   const [open, setOpen] = useState(false);
+  const [from, setFrom] = useState(currentFrom ?? "");
+  const [to, setTo] = useState(currentTo ?? "");
   const menuRef = useRef<HTMLDivElement | null>(null);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const navigateWithParams = (update: (params: URLSearchParams) => void) => {
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
+    update(params);
+    window.location.assign(`${pathname}?${params.toString()}`);
+  };
 
   const setRange = (range: ReportsRange) => {
     setOpen(false);
-    const nextUrl = `${pathname}?${new URLSearchParams({ range }).toString()}`;
-    window.location.assign(nextUrl);
+    navigateWithParams((params) => {
+      params.set("range", range);
+      params.delete("from");
+      params.delete("to");
+    });
+  };
+
+  const applyCustomRange = () => {
+    if (!from || !to || from > to) return;
+    setOpen(false);
+    navigateWithParams((params) => {
+      params.set("from", from);
+      params.set("to", to);
+    });
   };
 
   useEffect(() => {
@@ -95,6 +120,24 @@ export function ReportsRangeMenu({
                 {reportsRangeLabels[range]}
               </button>
             ))}
+          </div>
+          <div className="reports-range-menu__custom">
+            <label>
+              <span>From</span>
+              <input type="date" value={from} max={to || undefined} onChange={(event) => setFrom(event.target.value)} />
+            </label>
+            <label>
+              <span>To</span>
+              <input type="date" value={to} min={from || undefined} onChange={(event) => setTo(event.target.value)} />
+            </label>
+            <button
+              className="button button-primary button-small"
+              type="button"
+              disabled={!from || !to || from > to}
+              onClick={applyCustomRange}
+            >
+              Apply dates
+            </button>
           </div>
         </div>
       ) : null}
