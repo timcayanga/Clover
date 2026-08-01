@@ -299,7 +299,7 @@ const isActiveEnrichmentJob = (importFile: ImportFile) => {
 
 const isFailedEnrichmentJob = (importFile: ImportFile) => importFile.enrichmentJob?.status === "failed";
 
-const getEnrichmentNoticeState = (importFiles: ImportFile[], nowMs: number) => {
+const getEnrichmentNoticeState = (importFiles: ImportFile[]) => {
   const activeJobs = importFiles.filter(isActiveEnrichmentJob);
   if (activeJobs.length === 0) {
     const failedJobs = importFiles.filter(isFailedEnrichmentJob);
@@ -315,16 +315,6 @@ const getEnrichmentNoticeState = (importFiles: ImportFile[], nowMs: number) => {
       const processedRows = Number(importFile.enrichmentJob?.processedRows ?? 0);
       return total + Math.max(0, totalRows - processedRows);
     }, 0);
-  const latestUpdatedAtMs = activeJobs.reduce((latest, importFile) => {
-    const updatedAt = importFile.enrichmentJob?.updatedAt;
-    const timestamp = updatedAt ? new Date(updatedAt).getTime() : 0;
-    return Number.isFinite(timestamp) ? Math.max(latest, timestamp) : latest;
-  }, 0);
-
-  const estimatedSeconds = Math.max(30, Math.min(600, Math.ceil(remainingRows / 50) * 60));
-  const elapsedSeconds = latestUpdatedAtMs > 0 ? Math.max(0, Math.floor((nowMs - latestUpdatedAtMs) / 1000)) : 0;
-  const remainingSeconds = estimatedSeconds - elapsedSeconds;
-
   if (remainingRows <= 0) {
     return {
       label: "Enriching data",
@@ -333,26 +323,9 @@ const getEnrichmentNoticeState = (importFiles: ImportFile[], nowMs: number) => {
     };
   }
 
-  if (remainingSeconds <= -60 || elapsedSeconds >= 300) {
-    return {
-      label: "Enriching data",
-      detail: "taking longer than expected",
-      needsReview: false,
-    };
-  }
-
-  if (remainingSeconds <= 60) {
-    return {
-      label: "Enriching data",
-      detail: "less than 1 min left",
-      needsReview: false,
-    };
-  }
-
-  const minutes = Math.max(1, Math.ceil(remainingSeconds / 60));
   return {
     label: "Enriching data",
-    detail: `about ${minutes} min${minutes === 1 ? "" : "s"} left`,
+    detail: "cleaning up names and categories",
     needsReview: false,
   };
 };
@@ -2528,17 +2501,6 @@ function AccountDetailPageContent() {
     () => new Set(importFiles.filter(isFailedEnrichmentJob).map((importFile) => importFile.id)),
     [importFiles]
   );
-  const [finalizingNowMs, setFinalizingNowMs] = useState(() => Date.now());
-  const hasActiveFinalizingImports = activeFinalizingImportIds.size > 0;
-  useEffect(() => {
-    if (!hasActiveFinalizingImports) {
-      return;
-    }
-
-    setFinalizingNowMs(Date.now());
-    const intervalId = window.setInterval(() => setFinalizingNowMs(Date.now()), 30_000);
-    return () => window.clearInterval(intervalId);
-  }, [hasActiveFinalizingImports]);
   useEffect(() => {
     if (!account?.id || !account.workspaceId || !activeFinalizingImportKey) {
       return;
@@ -2622,7 +2584,7 @@ function AccountDetailPageContent() {
       window.clearInterval(intervalId);
     };
   }, [account?.id, account?.workspaceId, activeFinalizingImportKey, transactionTotalCount]);
-  const finalizingNoticeState = useMemo(() => getEnrichmentNoticeState(importFiles, finalizingNowMs), [finalizingNowMs, importFiles]);
+  const finalizingNoticeState = useMemo(() => getEnrichmentNoticeState(importFiles), [importFiles]);
   const finalizingTransactions = useMemo(
     () =>
       visibleTransactions.filter(

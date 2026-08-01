@@ -212,6 +212,21 @@ const main = async () => {
     "Completed import success should remain visible for ten seconds."
   );
   assert.match(
+    modalSource,
+    /if \(primaryVisibilityCompletedRef\.current\) \{[\s\S]{0,700}snapshot\?\.status === "done"[\s\S]{0,400}surface: "background"/,
+    "A page remount must hand a completed foreground import to the global success dock."
+  );
+  assert.doesNotMatch(
+    accountDetailsSource,
+    /about \$\{minutes\}|less than 1 min left/,
+    "Account Details must not show an uncalibrated enrichment ETA."
+  );
+  assert.match(
+    accountDetailsSource,
+    /detail: "cleaning up names and categories"/,
+    "Account Details should describe active enrichment without inventing a completion time."
+  );
+  assert.match(
     globalImportActivitySource,
     /if \(!activity \|\| activity\.status !== "done"\) \{[\s\S]{0,1000}current\.status !== "done" \|\| current\.updatedAt !== activity\.updatedAt[\s\S]{0,400}clearImportActivity\(\);[\s\S]{0,120}setActivity\(null\);/,
     "A completed background import should dismiss its success dock without hiding a newer import."

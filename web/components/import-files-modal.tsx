@@ -1095,7 +1095,15 @@ export function ImportFilesModal({
       importActivitySurfaceRef.current = "background";
       const snapshot = lastImportActivityRef.current;
       if (primaryVisibilityCompletedRef.current) {
-        clearImportActivity();
+        // A fast import can complete just before a page refresh remounts this
+        // modal. Preserve its terminal snapshot so the global success dock can
+        // confirm the outcome instead of making completion look like a failure.
+        if (snapshot?.status === "done" || snapshot?.status === "error") {
+          setImportActivity({
+            ...snapshot,
+            surface: "background",
+          });
+        }
         lastImportActivityRef.current = null;
         return;
       }
