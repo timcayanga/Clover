@@ -18,8 +18,9 @@ import { WORLD_ESSENTIAL_GAP_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-
 import { WORLD_EVERYDAY_GAP_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-everyday-gaps";
 import { WORLD_FISCAL_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-fiscal";
 import { WORLD_FISCAL_CONTEXT_ENTRIES_2 } from "@/lib/world-context-corpus-fiscal-2";
+import { WORLD_FISCAL_CONTEXT_ENTRIES_3 } from "@/lib/world-context-corpus-fiscal-3";
 
-export const CONTEXT_CORPUS_VERSION = "2026.08.01.9";
+export const CONTEXT_CORPUS_VERSION = "2026.08.01.10";
 
 export type ContextSignal = {
   id: string;
@@ -653,7 +654,7 @@ const deduplicatedAdditionalCanonicalEntries = additionalCanonicalEntries
   }))
   .filter((entry) => entry.aliases.length > 0);
 const usedExtendedAliases = new Set([...usedCanonicalAliases]);
-const deduplicatedWorldEntries = [...WORLD_CONTEXT_ENTRIES, ...WORLD_CONTEXT_ENTRIES_2, ...WORLD_CONTEXT_ENTRIES_3, ...WORLD_CONTEXT_ENTRIES_4, ...WORLD_CONTEXT_ENTRIES_5, ...WORLD_VERTICAL_CONTEXT_ENTRIES, ...WORLD_COMMERCE_CONTEXT_ENTRIES, ...WORLD_TRAVEL_HEALTH_CONTEXT_ENTRIES, ...WORLD_ESSENTIAL_SERVICE_CONTEXT_ENTRIES, ...WORLD_ESSENTIAL_GAP_CONTEXT_ENTRIES, ...WORLD_EVERYDAY_GAP_CONTEXT_ENTRIES, ...WORLD_FISCAL_CONTEXT_ENTRIES, ...WORLD_FISCAL_CONTEXT_ENTRIES_2]
+const deduplicatedWorldEntries = [...WORLD_CONTEXT_ENTRIES, ...WORLD_CONTEXT_ENTRIES_2, ...WORLD_CONTEXT_ENTRIES_3, ...WORLD_CONTEXT_ENTRIES_4, ...WORLD_CONTEXT_ENTRIES_5, ...WORLD_VERTICAL_CONTEXT_ENTRIES, ...WORLD_COMMERCE_CONTEXT_ENTRIES, ...WORLD_TRAVEL_HEALTH_CONTEXT_ENTRIES, ...WORLD_ESSENTIAL_SERVICE_CONTEXT_ENTRIES, ...WORLD_ESSENTIAL_GAP_CONTEXT_ENTRIES, ...WORLD_EVERYDAY_GAP_CONTEXT_ENTRIES, ...WORLD_FISCAL_CONTEXT_ENTRIES, ...WORLD_FISCAL_CONTEXT_ENTRIES_2, ...WORLD_FISCAL_CONTEXT_ENTRIES_3]
   .map((entry) => ({
     ...entry,
     aliases: entry.aliases.filter((alias) => {

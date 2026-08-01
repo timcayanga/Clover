@@ -5,16 +5,17 @@ import { WORLD_ESSENTIAL_GAP_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-
 import { WORLD_ESSENTIAL_SERVICE_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-essential-services";
 import { WORLD_FISCAL_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-fiscal";
 import { WORLD_FISCAL_CONTEXT_ENTRIES_2 } from "@/lib/world-context-corpus-fiscal-2";
+import { WORLD_FISCAL_CONTEXT_ENTRIES_3 } from "@/lib/world-context-corpus-fiscal-3";
 
 assert.ok(CONTEXT_CORPUS_VERSION);
-assert.ok(getContextCorpusEntries().length >= 2462);
+assert.ok(getContextCorpusEntries().length >= 2614);
 assert.ok(getContextCorpusQualityReport().profileCount >= 197);
 assert.equal(getContextCorpusQualityReport().valid, true);
 const coverage = getContextCorpusCoverageReport();
 assert.equal(coverage.corpusVersion, CONTEXT_CORPUS_VERSION);
-assert.ok(coverage.canonicalEntryCount >= 2462);
-assert.ok(coverage.descriptorVariantEntryCount >= 139584);
-assert.ok(coverage.aliasCount >= 6146);
+assert.ok(coverage.canonicalEntryCount >= 2614);
+assert.ok(coverage.descriptorVariantEntryCount >= 146880);
+assert.ok(coverage.aliasCount >= 6450);
 assert.ok(Object.keys(coverage.countryCounts).length >= 198);
 assert.ok(coverage.currencies.length >= 144);
 assert.ok((coverage.canonicalCountryCounts.PH ?? 0) > 0);
@@ -36,8 +37,9 @@ assert.equal(WORLD_ESSENTIAL_GAP_CONTEXT_ENTRIES.length, 95);
 assert.equal(WORLD_EVERYDAY_GAP_CONTEXT_ENTRIES.length, 61);
 assert.equal(WORLD_FISCAL_CONTEXT_ENTRIES.length, 120);
 assert.equal(WORLD_FISCAL_CONTEXT_ENTRIES_2.length, 120);
+assert.equal(WORLD_FISCAL_CONTEXT_ENTRIES_3.length, 152);
 
-for (const entry of [...WORLD_ESSENTIAL_GAP_CONTEXT_ENTRIES, ...WORLD_EVERYDAY_GAP_CONTEXT_ENTRIES, ...WORLD_FISCAL_CONTEXT_ENTRIES, ...WORLD_FISCAL_CONTEXT_ENTRIES_2]) {
+for (const entry of [...WORLD_ESSENTIAL_GAP_CONTEXT_ENTRIES, ...WORLD_EVERYDAY_GAP_CONTEXT_ENTRIES, ...WORLD_FISCAL_CONTEXT_ENTRIES, ...WORLD_FISCAL_CONTEXT_ENTRIES_2, ...WORLD_FISCAL_CONTEXT_ENTRIES_3]) {
   const context = resolveTransactionContext({ merchantRaw: entry.aliases[0], currency: entry.currency });
   assert.equal(context.countryCode, entry.countryCode, entry.id);
   assert.equal(context.purposeHint, entry.purposeHint, entry.id);
@@ -52,6 +54,8 @@ for (const country of realCountries) {
   assert.ok((coverage.canonicalCountryPurposeCounts[country]?.transport ?? 0) > 0, `${country} is missing transport context`);
   assert.ok((coverage.canonicalCountryPurposeCounts[country]?.groceries ?? 0) > 0, `${country} is missing grocery context`);
   assert.ok((coverage.canonicalCountryPurposeCounts[country]?.utilities ?? 0) > 0, `${country} is missing utility context`);
+  assert.ok((coverage.canonicalCountryPurposeCounts[country]?.tax ?? 0) > 0, `${country} is missing tax context`);
+  assert.ok((coverage.canonicalCountryPurposeCounts[country]?.government_contribution ?? 0) > 0, `${country} is missing social-protection context`);
 }
 
 for (const description of ["SAT CLASS", "NAVIGATION NOTE", "FLOW CHART", "SUN AT NOON", "POST LETTER", "TEAM MEETING", "Revenue Forecast", "Social Gathering", "Metro Design", "Fresh Start"]) {
