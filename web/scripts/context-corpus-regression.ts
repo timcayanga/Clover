@@ -2,16 +2,16 @@ import assert from "node:assert/strict";
 import { CONTEXT_CORPUS_VERSION, deriveTravelEpisodes, getContextCorpusCoverageReport, getContextCorpusEntries, getContextCorpusQualityReport, parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
 
 assert.ok(CONTEXT_CORPUS_VERSION);
-assert.ok(getContextCorpusEntries().length >= 1620);
-assert.ok(getContextCorpusQualityReport().profileCount >= 179);
+assert.ok(getContextCorpusEntries().length >= 1838);
+assert.ok(getContextCorpusQualityReport().profileCount >= 197);
 assert.equal(getContextCorpusQualityReport().valid, true);
 const coverage = getContextCorpusCoverageReport();
 assert.equal(coverage.corpusVersion, CONTEXT_CORPUS_VERSION);
-assert.ok(coverage.canonicalEntryCount >= 1620);
-assert.ok(coverage.descriptorVariantEntryCount > 99000);
-assert.ok(coverage.aliasCount >= 4480);
-assert.ok(Object.keys(coverage.countryCounts).length >= 180);
-assert.ok(coverage.currencies.length >= 137);
+assert.ok(coverage.canonicalEntryCount >= 1838);
+assert.ok(coverage.descriptorVariantEntryCount > 109000);
+assert.ok(coverage.aliasCount >= 4900);
+assert.ok(Object.keys(coverage.countryCounts).length >= 198);
+assert.ok(coverage.currencies.length >= 144);
 assert.ok((coverage.canonicalCountryCounts.PH ?? 0) > 0);
 assert.ok(coverage.localizedAliasCount >= 20);
 assert.ok(coverage.canonicalLocalizedAliasCount >= 30);
@@ -483,6 +483,104 @@ for (const fixture of worldwideDepthFixtures) {
   assert.equal(context.transactionTypeHint, null);
 }
 
+const worldwideCoverageFiveFixtures = [
+  { merchantRaw: "APUA ANTIGUA UTILITIES", currency: "XCD", countryCode: "AG", purposeHint: "utilities" },
+  { merchantRaw: "OTRACO BURUNDI TRANSPORT", currency: "BIF", countryCode: "BI", purposeHint: "transport" },
+  { merchantRaw: "MODERN MARKET N DJAMENA CHAD", currency: "XAF", countryCode: "TD", purposeHint: "groceries" },
+  { merchantRaw: "METROBUS LA HABANA", currency: "CUP", countryCode: "CU", purposeHint: "transport" },
+  { merchantRaw: "DOMLEC DOMINICA ELECTRICITY", currency: "XCD", countryCode: "DM", purposeHint: "utilities" },
+  { merchantRaw: "ALFA SUPERMARKET ASMARA ERITREA", currency: "ERN", countryCode: "ER", purposeHint: "groceries" },
+  { merchantRaw: "GRENLEC GRENADA ELECTRICITY", currency: "XCD", countryCode: "GD", purposeHint: "utilities" },
+  { merchantRaw: "TOCA TOCA BISSAU TRANSPORT", currency: "XOF", countryCode: "GW", purposeHint: "transport" },
+  { merchantRaw: "PAYLESS SUPERMARKET MARSHALL ISLANDS", currency: "USD", countryCode: "MH", purposeHint: "groceries" },
+  { merchantRaw: "POHNPEI UTILITIES CORPORATION", currency: "USD", countryCode: "FM", purposeHint: "utilities" },
+  { merchantRaw: "RAMS SUPERMARKET ST KITTS", currency: "XCD", countryCode: "KN", purposeHint: "groceries" },
+  { merchantRaw: "LUCELEC SAINT LUCIA ELECTRICITY", currency: "XCD", countryCode: "LC", purposeHint: "utilities" },
+  { merchantRaw: "KINGSTOWN MINIBUS SVG", currency: "XCD", countryCode: "VC", purposeHint: "transport" },
+  { merchantRaw: "PHENICIA SUPERMARKET JUBA", currency: "SSP", countryCode: "SS", purposeHint: "groceries" },
+  { merchantRaw: "PUBLIC ESTABLISHMENT FOR ELECTRICITY SYRIA", currency: "SYP", countryCode: "SY", purposeHint: "utilities" },
+  { merchantRaw: "MIKROLET DILI TIMOR LESTE", currency: "USD", countryCode: "TL", purposeHint: "transport" },
+  { merchantRaw: "TUVALU ELECTRICITY CORPORATION", currency: "AUD", countryCode: "TV", purposeHint: "utilities" },
+  { merchantRaw: "PEREKRESTOK SUPERMARKET RUSSIA", currency: "RUB", countryCode: "RU", purposeHint: "groceries" },
+] as const;
+for (const fixture of worldwideCoverageFiveFixtures) {
+  const context = resolveTransactionContext(fixture);
+  assert.equal(context.countryCode, fixture.countryCode, fixture.merchantRaw);
+  assert.equal(context.purposeHint, fixture.purposeHint, fixture.merchantRaw);
+  assert.equal(context.transactionTypeHint, null);
+  assert.ok(context.primaryLocale);
+}
+
+const travelerFixtures = [
+  { merchantRaw: "BIPA OSTERREICH DROGERIE", currency: "EUR", countryCode: "AT", purposeHint: "healthcare" },
+  { merchantRaw: "BRUSSELS AIRLINES BELGIUM", currency: "EUR", countryCode: "BE", purposeHint: "travel" },
+  { merchantRaw: "ETOS NEDERLAND DROGIST", currency: "EUR", countryCode: "NL", purposeHint: "healthcare" },
+  { merchantRaw: "SAS FLIGHT DENMARK", currency: "DKK", countryCode: "DK", purposeHint: "travel" },
+  { merchantRaw: "APOTEKET SVERIGE", currency: "SEK", countryCode: "SE", purposeHint: "healthcare" },
+  { merchantRaw: "NORWEGIAN FLIGHT NORWAY", currency: "NOK", countryCode: "NO", purposeHint: "travel" },
+  { merchantRaw: "YLIOPISTON APTEEKKI FINLAND", currency: "EUR", countryCode: "FI", purposeHint: "healthcare" },
+  { merchantRaw: "LOT POLISH AIRLINES POLAND", currency: "PLN", countryCode: "PL", purposeHint: "travel" },
+  { merchantRaw: "HONDOS CENTER GREECE HEALTH RETAIL", currency: "EUR", countryCode: "GR", purposeHint: "healthcare" },
+  { merchantRaw: "TALLINK FERRY ESTONIA", currency: "EUR", countryCode: "EE", purposeHint: "travel" },
+  { merchantRaw: "BENU APTIEKA LATVIA", currency: "EUR", countryCode: "LV", purposeHint: "healthcare" },
+  { merchantRaw: "AIRBALTIC FLIGHT VILNIUS LITHUANIA", currency: "EUR", countryCode: "LT", purposeHint: "travel" },
+  { merchantRaw: "DR MAX PHARMACY SLOVAKIA", currency: "EUR", countryCode: "SK", purposeHint: "healthcare" },
+  { merchantRaw: "SAVA HOTELS RESORTS SLOVENIA", currency: "EUR", countryCode: "SI", purposeHint: "travel" },
+  { merchantRaw: "FARMACIA HRVATSKA LJEKARNA", currency: "EUR", countryCode: "HR", purposeHint: "healthcare" },
+  { merchantRaw: "BULGARIA AIR BULGARIA", currency: "BGN", countryCode: "BG", purposeHint: "travel" },
+  { merchantRaw: "FARMACIA CATENA ROMANIA", currency: "RON", countryCode: "RO", purposeHint: "healthcare" },
+  { merchantRaw: "WIZZ AIR HUNGARY", currency: "HUF", countryCode: "HU", purposeHint: "travel" },
+  { merchantRaw: "ALPHAMEGA PHARMACY CYPRUS", currency: "EUR", countryCode: "CY", purposeHint: "healthcare" },
+  { merchantRaw: "KM MALTA AIRLINES", currency: "EUR", countryCode: "MT", purposeHint: "travel" },
+  { merchantRaw: "FARMACIAS DEL AHORRO MEXICO", currency: "MXN", countryCode: "MX", purposeHint: "healthcare" },
+  { merchantRaw: "LATAM AIRLINES PERU", currency: "PEN", countryCode: "PE", purposeHint: "travel" },
+  { merchantRaw: "CRUZ VERDE COLOMBIA PHARMACY", currency: "COP", countryCode: "CO", purposeHint: "healthcare" },
+  { merchantRaw: "LATAM AIRLINES CHILE", currency: "CLP", countryCode: "CL", purposeHint: "travel" },
+  { merchantRaw: "FARMACITY ARGENTINA PHARMACY", currency: "ARS", countryCode: "AR", purposeHint: "healthcare" },
+  { merchantRaw: "BUQUEBUS URUGUAY FERRY", currency: "UYU", countryCode: "UY", purposeHint: "travel" },
+  { merchantRaw: "FARMACENTER PARAGUAY PHARMACY", currency: "PYG", countryCode: "PY", purposeHint: "healthcare" },
+  { merchantRaw: "BOLIVIANA DE AVIACION BOLIVIA", currency: "BOB", countryCode: "BO", purposeHint: "travel" },
+  { merchantRaw: "FYBECA ECUADOR PHARMACY", currency: "USD", countryCode: "EC", purposeHint: "healthcare" },
+  { merchantRaw: "SANSA AIRLINES COSTA RICA", currency: "CRC", countryCode: "CR", purposeHint: "travel" },
+  { merchantRaw: "FARMACIAS ARROCHA PANAMA", currency: "PAB", countryCode: "PA", purposeHint: "healthcare" },
+  { merchantRaw: "AVIANCA FLIGHT GUATEMALA", currency: "GTQ", countryCode: "GT", purposeHint: "travel" },
+  { merchantRaw: "FARMACIAS KIELSA HONDURAS", currency: "HNL", countryCode: "HN", purposeHint: "healthcare" },
+  { merchantRaw: "AVIANCA FLIGHT EL SALVADOR", currency: "USD", countryCode: "SV", purposeHint: "travel" },
+  { merchantRaw: "FARMACIA CAROL DOMINICAN REPUBLIC", currency: "DOP", countryCode: "DO", purposeHint: "healthcare" },
+  { merchantRaw: "AIR ALGERIE ALGERIA", currency: "DZD", countryCode: "DZ", purposeHint: "travel" },
+  { merchantRaw: "PHARMACIE CENTRALE DE TUNISIE", currency: "TND", countryCode: "TN", purposeHint: "healthcare" },
+  { merchantRaw: "EGYPTAIR MS FLIGHT", currency: "EGP", countryCode: "EG", purposeHint: "travel" },
+  { merchantRaw: "GOODLIFE PHARMACY KENYA", currency: "KES", countryCode: "KE", purposeHint: "healthcare" },
+  { merchantRaw: "PRECISION AIR TANZANIA", currency: "TZS", countryCode: "TZ", purposeHint: "travel" },
+  { merchantRaw: "GUARDIAN PHARMACY KAMPALA UGANDA", currency: "UGX", countryCode: "UG", purposeHint: "healthcare" },
+  { merchantRaw: "RWANDAIR WB FLIGHT", currency: "RWF", countryCode: "RW", purposeHint: "travel" },
+  { merchantRaw: "PHARMACIE GUIGON SENEGAL", currency: "XOF", countryCode: "SN", purposeHint: "healthcare" },
+  { merchantRaw: "AIR COTE D IVOIRE", currency: "XOF", countryCode: "CI", purposeHint: "travel" },
+  { merchantRaw: "CLICKS PHARMACY SOUTH AFRICA", currency: "ZAR", countryCode: "ZA", purposeHint: "healthcare" },
+  { merchantRaw: "PROFLIGHT ZAMBIA", currency: "ZMW", countryCode: "ZM", purposeHint: "travel" },
+  { merchantRaw: "BOOTIES PHARMACY HARARE", currency: "USD", countryCode: "ZW", purposeHint: "healthcare" },
+  { merchantRaw: "AFRICA WORLD AIRLINES GHANA", currency: "GHS", countryCode: "GH", purposeHint: "travel" },
+  { merchantRaw: "HEALTHPLUS PHARMACY NIGERIA", currency: "NGN", countryCode: "NG", purposeHint: "healthcare" },
+  { merchantRaw: "ROYAL AIR MAROC MOROCCO", currency: "MAD", countryCode: "MA", purposeHint: "travel" },
+  { merchantRaw: "マツモトキヨシ 日本", currency: "JPY", countryCode: "JP", purposeHint: "healthcare" },
+  { merchantRaw: "대한항공 대한민국", currency: "KRW", countryCode: "KR", purposeHint: "travel" },
+  { merchantRaw: "国药控股 药房 中国", currency: "CNY", countryCode: "CN", purposeHint: "healthcare" },
+  { merchantRaw: "INDIGO 6E FLIGHT INDIA", currency: "INR", countryCode: "IN", purposeHint: "travel" },
+  { merchantRaw: "LAZZ PHARMA BANGLADESH", currency: "BDT", countryCode: "BD", purposeHint: "healthcare" },
+  { merchantRaw: "PAKISTAN INTERNATIONAL AIRLINES", currency: "PKR", countryCode: "PK", purposeHint: "travel" },
+  { merchantRaw: "HEALTHGUARD PHARMACY SRI LANKA", currency: "LKR", countryCode: "LK", purposeHint: "healthcare" },
+  { merchantRaw: "BUDDHA AIR NEPAL", currency: "NPR", countryCode: "NP", purposeHint: "travel" },
+  { merchantRaw: "ЕВРОФАРМА КАЗАХСТАН", currency: "KZT", countryCode: "KZ", purposeHint: "healthcare" },
+  { merchantRaw: "UZBEKISTAN AIRWAYS UZBEKISTAN", currency: "UZS", countryCode: "UZ", purposeHint: "travel" },
+] as const;
+for (const fixture of travelerFixtures) {
+  const context = resolveTransactionContext(fixture);
+  assert.equal(context.countryCode, fixture.countryCode, fixture.merchantRaw);
+  assert.equal(context.purposeHint, fixture.purposeHint, fixture.merchantRaw);
+  assert.equal(context.transactionTypeHint, null);
+  assert.equal(context.travelLikely, fixture.purposeHint === "travel");
+}
+
 for (const description of ["A BIT OF SOFTWARE", "WAVE HOTEL", "METRO MARKET", "MODE PAYMENT"]) {
   const context = resolveTransactionContext({ description, currency: "USD" });
   assert.equal(context.countryCode, null);
@@ -508,6 +606,12 @@ for (const description of ["SHELL SCRIPT", "CLARO PHOTO", "TIGO SPORTS", "CIRCLE
 }
 
 for (const description of ["QUICK NOTE", "HAPPY SONG", "UNIVERSAL REMOTE", "DISCOVERY CHANNEL", "JUBILEE PARTY"]) {
+  const context = resolveTransactionContext({ description, currency: "USD" });
+  assert.equal(context.countryCode, null);
+  assert.equal(context.purposeHint, null);
+}
+
+for (const description of ["BIPA FILE", "MATAS NOTE", "LOT NUMBER", "CLICKS MOUSE", "AIR PEACE TALKS"]) {
   const context = resolveTransactionContext({ description, currency: "USD" });
   assert.equal(context.countryCode, null);
   assert.equal(context.purposeHint, null);
