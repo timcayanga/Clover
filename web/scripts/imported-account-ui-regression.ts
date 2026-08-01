@@ -264,10 +264,19 @@ const main = () => {
   assert.deepEqual(
     mergeAccountsWithOptimisticImports([phpAccount], [phpAccount, gbpAccount], {
       preserveCurrentInventory: true,
+      preserveCurrentAccountIds: new Set([gbpAccount.id]),
       preferCurrentImportedSnapshot: true,
     }).map((account) => account.id),
     [gbpAccount.id, phpAccount.id],
     "A PHP-only completion response must not temporarily remove the newly confirmed GBP account."
+  );
+  assert.deepEqual(
+    mergeAccountsWithOptimisticImports([phpAccount], [phpAccount, gbpAccount], {
+      preserveCurrentInventory: true,
+      preferCurrentImportedSnapshot: true,
+    }).map((account) => account.id),
+    [phpAccount.id],
+    "An authoritative response must drop durable cached upload accounts that are not part of the active import."
   );
   assert.deepEqual(
     pruneImportedAccountPlaceholders([

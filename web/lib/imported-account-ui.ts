@@ -320,6 +320,7 @@ export const mergeAccountsWithOptimisticImports = <TAccount extends ImportedAcco
     deletedAccountIds?: Set<string>;
     preserveNonZeroOptimisticBalance?: boolean;
     preserveCurrentInventory?: boolean;
+    preserveCurrentAccountIds?: Set<string>;
     preferCurrentImportedSnapshot?: boolean;
   }
 ) => {
@@ -383,7 +384,7 @@ export const mergeAccountsWithOptimisticImports = <TAccount extends ImportedAcco
   });
 
   const preservedCurrentAccounts = visibleCurrentAccounts.filter((account) => {
-    if (account.source === "upload") {
+    if (account.source === "upload" || !account.id.startsWith("optimistic-")) {
       return false;
     }
 
@@ -393,6 +394,12 @@ export const mergeAccountsWithOptimisticImports = <TAccount extends ImportedAcco
 
   const optimisticAccounts = visibleCurrentAccounts.filter((account) => {
     if (account.source !== "upload") {
+      return false;
+    }
+
+    const isActiveImportProjection =
+      account.id.startsWith("optimistic-") || options?.preserveCurrentAccountIds?.has(account.id) === true;
+    if (!isActiveImportProjection) {
       return false;
     }
 

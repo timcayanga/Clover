@@ -409,6 +409,7 @@ const mergeAccountsWithOptimisticImports = (
     preserveImportedEvidence?: boolean;
     preferCurrentImportedSnapshot?: boolean;
     acceptConfirmedZeroBalances?: boolean;
+    preserveCurrentAccountIds?: Set<string>;
   }
 ) => {
   const shouldPreserveImportedEvidence =
@@ -420,6 +421,7 @@ const mergeAccountsWithOptimisticImports = (
       deletedAccountIds,
       preserveNonZeroOptimisticBalance: options?.acceptConfirmedZeroBalances !== true,
       preserveCurrentInventory: shouldPreserveImportedEvidence,
+      preserveCurrentAccountIds: options?.preserveCurrentAccountIds,
       preferCurrentImportedSnapshot: options?.preferCurrentImportedSnapshot ?? false,
     }
   );
@@ -551,6 +553,22 @@ const hasRecentWorkspaceImportEvidence = (
   }
 
   return activity.status === "active" || importActivityHasCompletedRows(activity);
+};
+
+const getImportActivityAccountIds = (activity: ReturnType<typeof readImportActivity>) => {
+  const ids = new Set<string>();
+  const addId = (value: unknown) => {
+    if (typeof value === "string" && value.trim()) {
+      ids.add(value.trim());
+    }
+  };
+
+  addId(activity?.summary?.accountId);
+  addId(activity?.summary?.optimisticAccountId);
+  for (const account of activity?.summary?.accountSummaries ?? []) {
+    addId(account.accountId);
+  }
+  return ids;
 };
 
 type AccountRule = {
@@ -1829,20 +1847,30 @@ function AccountsPageContent() {
         const shouldPreserveSettlingImport =
           options?.preserveImportedEvidence === true ||
           hasRecentWorkspaceImportEvidence(workspaceId, importActivitySnapshot);
+        const settlingAccountIds = shouldPreserveSettlingImport
+          ? getImportActivityAccountIds(importActivitySnapshot)
+          : new Set<string>();
+        const authoritativeOrSettlingAccountIds = new Set([
+          ...visibleFetchedAccounts.map((account) => account.id),
+          ...settlingAccountIds,
+        ]);
+        const supportingWorkspaceTransactions = transactions.filter(
+          (transaction) =>
+            transaction.workspaceId === workspaceId &&
+            !deletedAccountIdsRef.current.has(transaction.accountId) &&
+            !deletingAccountIdsRef.current.has(transaction.accountId) &&
+            (authoritativeOrSettlingAccountIds.has(transaction.accountId) || transaction.accountId.startsWith("optimistic-"))
+        );
         const accountsForAuthoritativeCache = mergeAccountsWithOptimisticImports(
           visibleFetchedAccounts,
           visibleCachedWorkspaceAccounts,
           deletedAccountIdsRef.current,
-          transactions.filter(
-            (transaction) =>
-              transaction.workspaceId === workspaceId &&
-              !deletedAccountIdsRef.current.has(transaction.accountId) &&
-              !deletingAccountIdsRef.current.has(transaction.accountId)
-          ),
+          supportingWorkspaceTransactions,
           {
             preserveImportedEvidence: shouldPreserveSettlingImport,
             preferCurrentImportedSnapshot: shouldPreserveSettlingImport && !options?.forceFresh,
             acceptConfirmedZeroBalances: options?.acceptConfirmedZeroBalances,
+            preserveCurrentAccountIds: settlingAccountIds,
           }
         );
         const authoritativeCacheUpdatedAt = persistAccountsWorkspaceSnapshot(workspaceId, {
@@ -1851,12 +1879,7 @@ function AccountsPageContent() {
           // refresh observes the same durable account inventory.
           accounts: accountsForAuthoritativeCache,
           accountRules: authoritativeAccountRules,
-          transactions: transactions.filter(
-            (transaction) =>
-              transaction.workspaceId === workspaceId &&
-              !deletedAccountIdsRef.current.has(transaction.accountId) &&
-              !deletingAccountIdsRef.current.has(transaction.accountId)
-          ),
+          transactions: supportingWorkspaceTransactions,
           statementCheckpoints: authoritativeStatementCheckpoints,
         });
         markWorkspaceHydrated(workspaceId, authoritativeCacheUpdatedAt);
@@ -1870,16 +1893,12 @@ function AccountsPageContent() {
                 )
               : visibleCachedWorkspaceAccounts,
             deletedAccountIdsRef.current,
-            transactions.filter(
-              (transaction) =>
-                transaction.workspaceId === workspaceId &&
-                !deletedAccountIdsRef.current.has(transaction.accountId) &&
-                !deletingAccountIdsRef.current.has(transaction.accountId)
-            ),
+            supportingWorkspaceTransactions,
             {
               preserveImportedEvidence: shouldPreserveSettlingImport,
               preferCurrentImportedSnapshot: shouldPreserveSettlingImport && !options?.forceFresh,
               acceptConfirmedZeroBalances: options?.acceptConfirmedZeroBalances,
+              preserveCurrentAccountIds: settlingAccountIds,
             }
           )
         );
