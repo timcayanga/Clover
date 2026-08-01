@@ -19,6 +19,7 @@ import {
   buildUploadedAccountDedupeKey,
   buildUploadedAccountLastFourDedupeKey,
   isWiseWalletWithoutVisibleAccountNumber,
+  matchesLegacyPayPalWalletDuplicate,
   normalizeImportedCurrencyCode,
 } from "@/lib/imported-account-identity";
 import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
@@ -1536,6 +1537,72 @@ const repairLegacyUploadedCardAccountSplits = async (workspaceId: string, compat
   }
 };
 
+const repairLegacyUploadedPayPalAccountSplits = async (workspaceId: string, compatibleColumns: Set<string>) => {
+  if (!compatibleColumns.has("accountNumber")) {
+    return;
+  }
+
+  const uploadedAccounts = await prisma.account.findMany({
+    where: {
+      workspaceId,
+      source: "upload",
+      type: { in: ["wallet", "credit_card"] },
+    },
+    select: getCompatibleAccountSelect(compatibleColumns),
+  }).catch(() => []);
+  const wallets = uploadedAccounts.filter((account) => account.type === "wallet");
+
+  for (const wallet of wallets) {
+    const legacyCards = uploadedAccounts.filter(
+      (account) => account.type === "credit_card" && matchesLegacyPayPalWalletDuplicate(wallet, account)
+    );
+    if (legacyCards.length === 0) {
+      continue;
+    }
+
+    const freshestBalance = [wallet, ...legacyCards]
+      .sort((left, right) => {
+        const rightTime = Math.max(right.updatedAt.getTime(), right.createdAt.getTime());
+        const leftTime = Math.max(left.updatedAt.getTime(), left.createdAt.getTime());
+        return rightTime - leftTime;
+      })
+      .find((account) => account.balance !== null && account.balance !== undefined)?.balance?.toString() ?? null;
+    const duplicateIds = legacyCards.map((account) => account.id);
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        if (freshestBalance !== null && wallet.balance?.toString() !== freshestBalance) {
+          await tx.account.update({
+            where: { id: wallet.id },
+            data: { balance: freshestBalance, type: "wallet" },
+          });
+        }
+
+        await tx.transaction.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: wallet.id } });
+        await tx.importFile.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: wallet.id } });
+        await tx.documentImport.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: wallet.id } });
+        await tx.accountStatementCheckpoint.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: wallet.id } });
+        await tx.financialCommitment.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: wallet.id } });
+        await tx.receiptDocument.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: wallet.id } });
+        await tx.investmentSnapshot.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: wallet.id } });
+        await tx.investmentHolding.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: wallet.id } });
+        await tx.investmentPurchase.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: wallet.id } });
+        await tx.investmentDividend.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: wallet.id } });
+        await tx.recurringPattern.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: wallet.id } });
+        await tx.accountRule.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: wallet.id } });
+        await tx.account.deleteMany({ where: { id: { in: duplicateIds }, source: "upload", type: "credit_card" } });
+      });
+    } catch (error) {
+      console.warn("[accounts] unable to repair legacy PayPal wallet split", {
+        workspaceId,
+        walletAccountId: wallet.id,
+        duplicateAccountIds: duplicateIds,
+        error,
+      });
+    }
+  }
+};
+
 export async function GET(request: Request) {
   try {
     const userId = await resolveAccountsRouteUserId();
@@ -1639,6 +1706,12 @@ export async function GET(request: Request) {
       });
       await repairLegacyUploadedCardAccountSplits(workspaceId, compatibleColumns).catch((error) => {
         console.warn("[accounts] unable to repair legacy uploaded card account splits", {
+          workspaceId,
+          error,
+        });
+      });
+      await repairLegacyUploadedPayPalAccountSplits(workspaceId, compatibleColumns).catch((error) => {
+        console.warn("[accounts] unable to repair legacy PayPal wallet split", {
           workspaceId,
           error,
         });

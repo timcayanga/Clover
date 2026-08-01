@@ -4,6 +4,7 @@ import {
   inferAccountTypeFromStatement,
   normalizePayPalAccountType,
 } from "@/lib/import-parser";
+import { matchesLegacyPayPalWalletDuplicate } from "@/lib/imported-account-identity";
 
 const ordinaryActivityText = `
 PayPal
@@ -44,6 +45,73 @@ assert.equal(
   ),
   "credit_card",
   "The explicitly branded PayPal Credit product must remain a credit account."
+);
+
+assert.equal(
+  matchesLegacyPayPalWalletDuplicate(
+    {
+      name: "PayPal 5067",
+      institution: "PayPal",
+      accountNumber: "5067",
+      type: "wallet",
+      currency: "GBP",
+      source: "upload",
+    },
+    {
+      name: "PayPal 5067",
+      institution: "PayPal",
+      accountNumber: "5067",
+      type: "credit_card",
+      currency: "GBP",
+      source: "upload",
+    }
+  ),
+  true,
+  "A legacy upload-created PayPal credit-card copy should reconcile into the matching wallet."
+);
+assert.equal(
+  matchesLegacyPayPalWalletDuplicate(
+    {
+      name: "PayPal 5067",
+      institution: "PayPal",
+      accountNumber: "5067",
+      type: "wallet",
+      currency: "GBP",
+      source: "upload",
+    },
+    {
+      name: "PayPal Credit 5067",
+      institution: "PayPal",
+      accountNumber: "5067",
+      type: "credit_card",
+      currency: "GBP",
+      source: "upload",
+    }
+  ),
+  false,
+  "PayPal Credit must remain separate from an ordinary PayPal wallet."
+);
+assert.equal(
+  matchesLegacyPayPalWalletDuplicate(
+    {
+      name: "PayPal 5067",
+      institution: "PayPal",
+      accountNumber: "5067",
+      type: "wallet",
+      currency: "GBP",
+      source: "upload",
+    },
+    {
+      name: "PayPal 5067",
+      institution: "PayPal",
+      accountNumber: "5067",
+      type: "credit_card",
+      currency: "GBP",
+      source: "manual",
+    }
+  ),
+  false,
+  "Automatic repair must not remove a manually created account."
 );
 
 console.log("PayPal account-classification regression passed.");

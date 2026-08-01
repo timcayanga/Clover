@@ -116,6 +116,7 @@ import {
   resolveStatementIdentityFromParsedRows,
 } from "@/lib/import-statement-identity";
 import { mergeCheckpointSourceMetadata, readCheckpointImportMode } from "@/lib/import-workflow";
+import { matchesLegacyPayPalWalletDuplicate } from "@/lib/imported-account-identity";
 import { findBestImportedAccountMatch, matchesImportedAccountIdentity, normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import {
   claimNextImportEnrichmentJob,
@@ -5041,6 +5042,10 @@ const collapseDuplicateUploadedAccountsForAccount = async <
     },
   });
   const duplicates = duplicateCandidates.filter((candidate) => {
+    if (account.type === "wallet" && matchesLegacyPayPalWalletDuplicate(account, candidate)) {
+      return true;
+    }
+
     if (accountNumber) {
       return matchesImportedAccountIdentity(candidate, {
         name: account.name,
@@ -5121,6 +5126,8 @@ const collapseDuplicateUploadedAccountsForAccount = async <
       await tx.receiptDocument.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
       await tx.investmentSnapshot.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
       await tx.investmentHolding.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+      await tx.investmentPurchase.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+      await tx.investmentDividend.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
       await tx.recurringPattern.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
       await tx.accountRule.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
       await tx.account.deleteMany({ where: { id: { in: duplicateIds }, source: "upload" } });

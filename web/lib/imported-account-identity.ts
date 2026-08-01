@@ -109,6 +109,59 @@ export const buildUploadedAccountLastFourDedupeKey = (account: ImportedAccountId
     account.currency
   );
 
+const isOrdinaryPayPalAccountIdentity = (account: ImportedAccountIdentityLike) => {
+  const identity = normalizeWhitespace(`${account.institution ?? ""} ${account.name ?? ""}`);
+  return /\bpaypal\b/i.test(identity) && !/\bpaypal\s+credit\b/i.test(identity);
+};
+
+/**
+ * Matches an ordinary PayPal wallet to a legacy copy that was imported as a
+ * credit card. PayPal Credit and user-created accounts are excluded so this
+ * helper cannot collapse a genuine credit product.
+ */
+export const matchesLegacyPayPalWalletDuplicate = (
+  left: ImportedAccountIdentityLike,
+  right: ImportedAccountIdentityLike
+) => {
+  if (
+    left.source !== "upload" ||
+    right.source !== "upload" ||
+    !isOrdinaryPayPalAccountIdentity(left) ||
+    !isOrdinaryPayPalAccountIdentity(right)
+  ) {
+    return false;
+  }
+
+  const typePair = new Set([
+    normalizeWhitespace(String(left.type ?? "")).toLowerCase(),
+    normalizeWhitespace(String(right.type ?? "")).toLowerCase(),
+  ]);
+  if (!typePair.has("wallet") || !typePair.has("credit_card")) {
+    return false;
+  }
+
+  const leftCurrency = normalizeImportedCurrencyCode(left.currency);
+  const rightCurrency = normalizeImportedCurrencyCode(right.currency);
+  if (leftCurrency && rightCurrency && leftCurrency !== rightCurrency) {
+    return false;
+  }
+
+  const leftDigits = String(left.accountNumber ?? "").replace(/\D/g, "") || getImportedAccountLastFour(left.name) || "";
+  const rightDigits = String(right.accountNumber ?? "").replace(/\D/g, "") || getImportedAccountLastFour(right.name) || "";
+  if (leftDigits || rightDigits) {
+    return Boolean(
+      leftDigits &&
+        rightDigits &&
+        (leftDigits === rightDigits || leftDigits.endsWith(rightDigits) || rightDigits.endsWith(leftDigits))
+    );
+  }
+
+  return (
+    canonicalImportedInstitutionKey(left.institution) === canonicalImportedInstitutionKey(right.institution) &&
+    normalizeMerchantText(left.name) === normalizeMerchantText(right.name)
+  );
+};
+
 export const appendImportedAccountLastFour = (label: string, accountNumber?: string | null) => {
   const suffix = getImportedAccountLastFour(accountNumber);
   if (!suffix) {
