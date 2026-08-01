@@ -1006,7 +1006,11 @@ const structuredDirectionType = (
 
   if (accountType === "credit_card") return { type: "expense", evidence: "credit_card_default" };
   const normalizedDescription = description.toLowerCase();
-  if (/\b(?:salary|payroll|interest earned|dividend|refund|reversal|cashback|received)\b/.test(normalizedDescription)) {
+  if (
+    /\b(?:salary|payroll|interest earned|dividend|refund|reversal|cashback|received|money received|incoming payment|paid (?:in|to you)|funds? deposited|deposit received)\b/.test(
+      normalizedDescription
+    )
+  ) {
     return { type: "income", evidence: "description_hint" };
   }
   if (/\btransfer\b/.test(normalizedDescription)) {
@@ -24301,8 +24305,16 @@ const parseWisePdfStatement = (text: string) => {
     const merchantRaw = normalizeWhitespace(
       merchantMatch?.[1] ?? (isConverted ? "Wise currency conversion" : isSent || isReceived ? "Wise transfer" : "Wise card transaction")
     );
-    const type: TransactionType = isCard ? "expense" : "transfer";
-    const categoryName = isCard
+    const type: TransactionType = isReceived
+      ? "income"
+      : isCard
+        ? accountImpact > 0
+          ? "income"
+          : "expense"
+        : "transfer";
+    const categoryName = isReceived
+      ? "Income"
+      : isCard
       ? /\b(?:airport|train|rail|transport|bus|taxi|parking)\b/i.test(merchantRaw)
         ? "Transport"
         : guessCategoryName(merchantRaw, type)

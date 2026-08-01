@@ -46,11 +46,15 @@ assert.ok(rows.every((row) => row.currency === "GBP"));
 assert.ok(rows.every((row) => row.institution === "Wise"));
 assert.equal(rows[0]?.merchantClean, "Maun Airport");
 assert.equal(rows[0]?.categoryName, "Transport");
-assert.equal(rows[1]?.merchantClean, "Trainpal London");
+assert.equal(rows[1]?.merchantClean, "TrainPal");
 assert.equal(rows[1]?.categoryName, "Transport");
 assert.equal(rows[2]?.categoryName, "Transfers");
-assert.equal(rows[3]?.categoryName, "Transfers");
+assert.equal(rows[2]?.type, "transfer");
+assert.equal(rows[3]?.categoryName, "Income");
+assert.equal(rows[3]?.type, "income");
 assert.equal(rows[4]?.categoryName, "Transfers");
+assert.equal(rows[4]?.type, "transfer");
+assert.equal(rows[1]?.type, "income", "A positive Wise card account impact is a refund/credit, not spending.");
 
 const emptyStatementRows = parseImportText(
   "Wise Pilipinas Inc.\nEUR statement\n1 January 2026 [GMT+08:00] - 30 June 2026 [GMT+08:00]\nEUR on 30 June 2026 [GMT+08:00] 0.00 EUR\nDescription Incoming Outgoing Amount",

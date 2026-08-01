@@ -135,6 +135,44 @@ export const getStrongMerchantCategoryHint = (value: string): string | null => {
 
   if (
     matchesCategoryHint(value, {
+      lower: /\b(?:currency|foreign\s+exchange|fx)\s+conversion\b|\bconverted\s+[0-9.,]+\s+[a-z]{3}\s+to\s+[0-9.,]+\s+[a-z]{3}\b/,
+      compact: /currencyconversion|foreignexchangeconversion|fxconversion|converted[0-9.,]+[a-z]{3}to[0-9.,]+[a-z]{3}/,
+    })
+  ) {
+    return "Transfers";
+  }
+
+  if (
+    matchesCategoryHint(value, {
+      lower: /\b(?:hotel|hostel|motel|resort|guest\s*house|lodging|accommodation|apart[ -]?hotel)\b/,
+      compact: /hotel|hostel|motel|resort|guesthouse|lodging|accommodation|aparthotel/,
+    })
+  ) {
+    return "Travel & Lifestyle";
+  }
+
+  if (
+    matchesCategoryHint(value, {
+      lower: /^(?:le\s+)?pain(?:\s+quotidien)?$|\b(?:le\s+pain\s+quotidien|maison\s+du\s+pain|boulangerie|patisserie|pâtisserie)\b/,
+      compact: /^(?:le)?pain(?:quotidien)?$|lepainquotidien|maisondupain|boulangerie|patisserie/,
+    })
+  ) {
+    return "Food & Dining";
+  }
+
+  if (
+    matchesCategoryHint(value, {
+      lower:
+        /^metro$|\bmetro\s+(?:fare|ticket|transit|transport|rail|station|paris|madrid|barcelona|lisboa|lisbon|roma|rome|milano|milan|berlin|vienna|wien|prague|praha|budapest|athens|amsterdam|brussels|bruxelles|london|newcastle|porto|lyon|toulouse)\b/,
+      compact:
+        /^metro$|metro(?:fare|ticket|transit|transport|rail|station|paris|madrid|barcelona|lisboa|lisbon|roma|rome|milano|milan|berlin|vienna|wien|prague|praha|budapest|athens|amsterdam|brussels|bruxelles|london|newcastle|porto|lyon|toulouse)/,
+    })
+  ) {
+    return "Transport";
+  }
+
+  if (
+    matchesCategoryHint(value, {
       lower:
         /pedro\s+the\s+grocer|grocer\b|grocery|supermarket|mcdonald'?s|milksha|gogyo|gokan|goken|savory\s+project|bar\s+leone|four\s+frogs|woolworths|coles|dumplings|cafe|coffee|sushi|restaurant|seafood|mini\s+mart|7-?eleven|don\s+don\s+donki|proud\s+mary|byrdi|seven\s+seeds|amiri|toby'?s\s+estate|vacation\s+cafe|nirvana\s+restaurant|waterfront\s+mini\s+mart|apollo\s+bay\s+seafood|wootea|liberty\s+oil\s+convenience|iga\s+supermarkets?|\biga\b|potraviny|sweet\s+beans|\btasca\b|\brest\.?\s+la\b|\bel\s+(?:rincon|balcon)\b|ruta\s+de\s+la\s+seda|\balchemist\b|caretaker'?s\s+cottage|lee'?s\s+dumplings|samyan\s+mitrtown|jacks\s+of\s+bath|vesper|black\s+cabin\s+bar|coco\s+group|coco\s+dewata|nat'?s\s+rustic|moonlit\s+sanctuary|bakery|bistro|kitchen|ramen|noodle|tea\s+house|burger|pizza|steak|grill|canteen|eatery|food\s+court|brunch|breakfast|lunch|dinner|dunkin(?:\s+donuts?)?|krispy\s+kreme|jollibee|chowking|mang\s+inasal|burger\s+king|foodpanda|grabfood|ubereats?|doordash|pickaroo|starbucks|pickup\s+coffee|tim\s+hortons|shake\s+shack|wendy'?s|subway|chili'?s|cara\s+mia|jarandjam|main\s+bar|ac\s+bar|dairy\s+queen|\bdq\b|hapag|harlan\s*\+?\s*holden|matcha\s+bar|elephant\s+grounds|mo\s+cookies|nikkei|yardstick|your\s+local|brunch\s+bureau|breakfast\s+at\s+antonio'?s|royce|bok\s+korean\s+fried\s+chicken|din\s+tai\s+fung|arabica|ralph'?s\s+wines/,
       compact:

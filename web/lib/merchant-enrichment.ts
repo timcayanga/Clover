@@ -33,8 +33,12 @@ export const applyDeterministicMerchantRescue = (input: MerchantEnrichmentInput)
     normalizedCandidate && (!clean || clean === raw || (raw ? isAllCapsMerchant(raw) : false))
       ? normalizedCandidate
       : clean;
-  const hintSource = [raw, clean, description].filter(Boolean).join(" ");
-  const hint = hintSource ? getStrongMerchantCategoryHint([hintSource, normalizedCandidate].filter(Boolean).join(" ")) : null;
+  const hintCandidates = [raw, clean, description, normalizedCandidate].filter(
+    (value): value is string => Boolean(value)
+  );
+  const hint =
+    hintCandidates.map((value) => getStrongMerchantCategoryHint(value)).find(Boolean) ??
+    (hintCandidates.length > 0 ? getStrongMerchantCategoryHint(hintCandidates.join(" ")) : null);
   const currentCategory = nonEmpty(input.categoryName);
   // Imported rows are not confirmed data. A strong merchant identity is more
   // reliable than a parser's generic transfer guess (for example, "DiDi

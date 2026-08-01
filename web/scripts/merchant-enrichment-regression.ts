@@ -86,6 +86,10 @@ const main = () => {
     ["CARREFOUR CITY PARIS FR", "Shopping", "Carrefour"],
     ["REWE MARKT BERLIN DE", "Shopping", "REWE"],
     ["ALBERT HEIJN AMSTERDAM NL", "Shopping", "Albert Heijn"],
+    ["HOTEL DES ARTS PARIS FR", "Travel & Lifestyle", "Hotel DES Arts Paris FR"],
+    ["METRO PARIS", "Transport", "Metro Paris"],
+    ["LE PAIN QUOTIDIEN PARIS", "Food & Dining", "LE Pain Quotidien Paris"],
+    ["WISE CURRENCY CONVERSION", "Transfers", "Wise Currency Conversion"],
   ] as const;
 
   for (const [merchantRaw, categoryName, expectedMerchant] of europeCases) {
@@ -97,7 +101,11 @@ const main = () => {
     });
     assert.equal(result.categoryName, categoryName, `${merchantRaw} should use its European merchant category`);
     assert.equal(result.merchantClean, expectedMerchant, `${merchantRaw} should use its European merchant label`);
-    assert.equal(result.type, "expense", `${merchantRaw} should remain an expense`);
+    assert.equal(
+      result.type,
+      categoryName === "Transfers" ? "transfer" : "expense",
+      `${merchantRaw} should retain the category's safe cash-flow type`
+    );
   }
 
   const processorOnlyCases = ["ADYEN N.V.", "SUMUP", "STRIPE", "ZETTLE"];
