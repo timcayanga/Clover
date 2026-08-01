@@ -113,7 +113,7 @@ export function SplitBillDetailTools({ bills, label, view }: SplitBillDetailTool
       body{font-family:Arial,sans-serif;color:#17202b;margin:40px}h1{margin-bottom:4px}.meta{color:#667085;margin-bottom:28px}
       .summary{display:flex;gap:24px;margin:20px 0;padding:18px;border:1px solid #dbe5e8;border-radius:14px}
       table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:11px;border-bottom:1px solid #e7ecef;font-size:13px}
-      th{color:#667085;text-transform:uppercase;font-size:11px}@media print{button{display:none}}
+      th{color:#667085;text-transform: capitalize;font-size:11px}@media print{button{display:none}}
     </style></head><body><h1>${escapeHtml(label)}</h1><div class="meta">Split Bills settlement summary</div>
       <div class="summary"><span>${bills.length} bills</span><span>${settledBills.length} settled</span><span>${totalMarkup || "No recorded total"}</span></div>
       <table><thead><tr><th>Description</th><th>Date</th><th>People</th><th>Total</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>

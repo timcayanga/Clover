@@ -104,7 +104,7 @@ const reasonBadgeStyle: CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
   letterSpacing: "0.04em",
-  textTransform: "uppercase",
+  textTransform: "capitalize",
   color: "var(--accent)",
   background: "rgba(3, 168, 192, 0.08)",
 };

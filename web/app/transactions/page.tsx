@@ -6182,7 +6182,7 @@ function TransactionsPageContent() {
               .hero__eyebrow {
                 margin: 0;
                 font-size: 11px;
-                text-transform: uppercase;
+                text-transform: capitalize;
                 letter-spacing: 0.22em;
                 opacity: 0.8;
               }
@@ -6225,7 +6225,7 @@ function TransactionsPageContent() {
               .summary-card__label {
                 display: block;
                 font-size: 10px;
-                text-transform: uppercase;
+                text-transform: capitalize;
                 letter-spacing: 0.16em;
                 color: var(--clover-muted);
                 margin-bottom: 8px;
@@ -6245,7 +6245,7 @@ function TransactionsPageContent() {
               }
               thead th {
                 font-size: 10px;
-                text-transform: uppercase;
+                text-transform: capitalize;
                 letter-spacing: 0.14em;
                 color: var(--clover-muted);
                 text-align: left;
@@ -6296,7 +6296,7 @@ function TransactionsPageContent() {
                 font-size: 10px;
                 font-weight: 700;
                 letter-spacing: 0.08em;
-                text-transform: uppercase;
+                text-transform: capitalize;
                 border: 1px solid transparent;
               }
               .transactions-pdf-type--credit {

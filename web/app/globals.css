@@ -1289,7 +1289,7 @@ body.dashboard-modal-open .app-shell {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .sidebar-search-results__item {
@@ -1378,7 +1378,7 @@ body.dashboard-modal-open .app-shell {
 
 .eyebrow {
   margin: 0 0 6px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.14em;
   font-size: 12px;
   color: var(--muted-2);
@@ -1412,7 +1412,7 @@ body.dashboard-modal-open .app-shell {
   font-weight: 700;
   letter-spacing: 0.14em;
   line-height: 1.2;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .sidebar-nav__more {
@@ -1714,7 +1714,7 @@ body.transactions-manual-open .shell-quick-add-button {
 .more-page__section-label {
   margin: 0;
   color: var(--muted-2);
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.16em;
   font-size: 11px;
   font-weight: 700;
@@ -2164,7 +2164,7 @@ body.transactions-manual-open .shell-quick-add-button {
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .reports-range-menu__custom input {
@@ -2361,7 +2361,7 @@ body.transactions-manual-open .shell-quick-add-button {
 .sidebar-popover__notification-tone {
   color: var(--accent);
   border-color: rgba(3, 168, 192, 0.3);
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.14em;
 }
 
@@ -2424,7 +2424,7 @@ body.transactions-manual-open .shell-quick-add-button {
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   color: var(--accent);
 }
 
@@ -2857,7 +2857,7 @@ body.transactions-manual-open .shell-quick-add-button {
   font-size: 0.76rem;
   font-weight: 700;
   letter-spacing: 0.16em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .reports-plan-split__list {
@@ -2883,7 +2883,7 @@ body.transactions-manual-open .shell-quick-add-button {
   color: var(--muted-2);
   font-size: 12px;
   letter-spacing: 0.18em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .billing-actions__text {
@@ -2922,7 +2922,7 @@ body.transactions-manual-open .shell-quick-add-button {
   color: var(--muted-2);
   font-size: 12px;
   letter-spacing: 0.16em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .billing-action-card__copy strong {
@@ -3925,7 +3925,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   color: var(--muted-2);
   font-size: 12px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .settings-search input {
@@ -4710,7 +4710,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
 .metric--highlight span {
   margin-bottom: 0;
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.1em;
 }
 
@@ -5297,7 +5297,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   font-size: 12px;
   line-height: 1.2;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   white-space: nowrap;
 }
 
@@ -5378,7 +5378,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   font-size: 11px;
   line-height: 1.2;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   color: rgba(82, 89, 112, 0.82);
 }
 
@@ -5526,7 +5526,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .dashboard-home__report-metrics strong {
@@ -5810,7 +5810,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   font-size: 11px;
   font-weight: 400;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .dashboard-home__insight-strip-emoji {
@@ -5974,7 +5974,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
 .dashboard-home__activity-bar-label {
   color: var(--muted);
   font-size: 11px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.11em;
 }
 
@@ -6050,7 +6050,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
 .dashboard-home__decision-card span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -6221,7 +6221,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
 .dashboard-home__section-label {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -6272,7 +6272,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   color: var(--muted-2);
   font-size: 11px;
   line-height: 1.2;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.11em;
 }
 
@@ -6327,7 +6327,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   color: var(--muted);
   font-size: 11px;
   line-height: 1.2;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.11em;
 }
 
@@ -6928,7 +6928,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.08em;
-    text-transform: uppercase;
+    text-transform: capitalize;
   }
 
   .recurring-mobile-group__date span::before,
@@ -7083,7 +7083,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
     color: var(--muted);
     font-size: 11px;
     letter-spacing: 0.06em;
-    text-transform: uppercase;
+    text-transform: capitalize;
   }
 
   .recurring-mobile-detail__fields dd {
@@ -7737,7 +7737,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
 .budgeting-hero__ring-inner span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.14em;
 }
 
@@ -7759,7 +7759,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
 .budgeting-hero__stats span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.1em;
 }
 
@@ -8306,7 +8306,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
 .budget-editor__field span {
   color: var(--muted-2);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -8665,7 +8665,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .report-sankey__source-value {
@@ -8776,7 +8776,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
 .report-ai-signal span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -9158,7 +9158,7 @@ html[data-theme="dark"] .reports-range-menu details[open] > .reports-range-menu_
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   color: var(--muted);
 }
 
@@ -9430,7 +9430,7 @@ html[data-theme="dark"] .reports-section-empty {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .animated-tabs__tab:not(.is-locked) .animated-tabs__badge {
@@ -9602,7 +9602,7 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   font-weight: 400;
   letter-spacing: 0.14em;
   line-height: 1.25;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .reports-subtab-card .reports-subtab-title {
@@ -9612,7 +9612,7 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   font-weight: 400;
   letter-spacing: 0.14em;
   line-height: 1.25;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .reports-subtab-card > .report-card__stat {
@@ -9780,7 +9780,7 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 .report-insight span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -9866,7 +9866,7 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 .report-chart__label span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.1em;
 }
 
@@ -9901,7 +9901,7 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 .report-flow-map__source span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.11em;
 }
 
@@ -10025,7 +10025,7 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   color: var(--muted);
   font-size: 12px;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .report-donut__legend {
@@ -10395,7 +10395,7 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 .report-status-list__item span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -10603,14 +10603,14 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   min-width: 0;
   color: var(--muted);
   font-size: 11px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
 .insights-snapshot__metric span {
   color: var(--muted);
   font-size: 11px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -10666,7 +10666,7 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 .insight-tile span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -10787,7 +10787,7 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 .insight-donut__center span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -10951,7 +10951,7 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 .insight-signal span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -11256,7 +11256,7 @@ html[data-theme="dark"] .adviser-stat {
   font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .adviser-stat strong {
@@ -11681,7 +11681,7 @@ html[data-theme="dark"] .adviser-chat__prompt {
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   color: var(--muted);
 }
 
@@ -11817,7 +11817,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .adviser-footnote__metrics strong {
@@ -11994,7 +11994,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 .goals-overview__card span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -12549,7 +12549,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 .goals-driver--summary span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -12856,7 +12856,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.4;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.18em;
   font-weight: 600;
 }
@@ -13082,7 +13082,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   color: var(--muted);
 }
 
@@ -13231,7 +13231,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 .goal-illustration__metrics span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -13301,7 +13301,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   max-width: 16ch;
   color: var(--muted);
   font-size: 11px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -13337,7 +13337,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 .goals-stat span {
   color: var(--muted);
   font-size: 11px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -13420,7 +13420,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 .goals-action-plan__step span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -13442,7 +13442,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 .goals-action-plan__item span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -13506,7 +13506,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 .goals-pace__label span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -13870,7 +13870,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 .goals-lane__metrics span {
   color: var(--muted);
   font-size: 11px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -13976,7 +13976,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .goals-editor__chip.is-saved {
@@ -14022,7 +14022,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 .goals-editor__insight span {
   color: var(--muted);
   font-size: 11px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -14085,7 +14085,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   background: rgba(3, 168, 192, 0.1);
   color: var(--accent);
   font-size: 11px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -14109,7 +14109,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 
 .goals-editor__amount span {
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
   color: var(--muted);
 }
@@ -14156,7 +14156,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 .goals-editor__intent span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -14390,7 +14390,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .content--investments .report-donut__total strong {
@@ -14600,7 +14600,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 .goals-investments__item span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -14706,7 +14706,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 .goals-weekly__card span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -15179,7 +15179,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .onboarding-goal-target__prompt {
@@ -15314,7 +15314,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .onboarding-option--start .onboarding-option__copy {
@@ -16086,7 +16086,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
 
 .transactions-table th {
   font-size: 0.76rem;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
   color: var(--muted);
 }
@@ -16618,7 +16618,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   display: grid;
   gap: 4px;
   font-size: 0.68rem;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
   color: var(--muted-2);
 }
@@ -16757,7 +16757,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .transactions-mobile-table__head span:nth-child(3) {
@@ -16907,7 +16907,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   justify-content: center;
 }
 
@@ -17081,7 +17081,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   font-size: 0.76rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .transactions-mobile-load-more__spinner {
@@ -17195,7 +17195,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   color: var(--muted-2);
   font-size: 0.68rem;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .transactions-mobile-card__field-edit {
@@ -17794,7 +17794,7 @@ input.transaction-inline-edit--amount::placeholder {
   color: var(--muted-2);
   font-size: 0.6rem;
   letter-spacing: 0.16em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .transactions-context-strip__chips {
@@ -18094,7 +18094,7 @@ input.transaction-inline-edit--amount::placeholder {
   color: var(--muted-2);
   font-size: 0.62rem;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   white-space: nowrap;
 }
 
@@ -18123,7 +18123,7 @@ input.transaction-inline-edit--amount::placeholder {
   font-size: 0.76rem;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .transaction-drawer-audit__grid {
@@ -18214,7 +18214,7 @@ input.transaction-inline-edit--amount::placeholder {
   color: var(--muted);
   font-size: 0.58rem;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .transactions-footer-snapshot__metric-value {
@@ -18600,7 +18600,7 @@ input.transaction-inline-edit--amount::placeholder {
   font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .transaction-drawer-receipt-table__row input {
@@ -18717,7 +18717,7 @@ input.transaction-inline-edit--amount::placeholder {
   font-size: 0.76rem;
   font-weight: 800;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .transaction-drawer-more__body {
@@ -18806,7 +18806,7 @@ input.transaction-inline-edit--amount::placeholder {
   color: var(--muted-2);
   font-size: 0.68rem;
   letter-spacing: 0.14em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .transaction-drawer-summary__pill {
@@ -19222,7 +19222,7 @@ body[data-clover-page-modal] .modal-card {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .import-error-toast__title-row {
@@ -19276,7 +19276,7 @@ body[data-clover-page-modal] .modal-card {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .import-error-toast__callout {
@@ -19309,7 +19309,7 @@ body[data-clover-page-modal] .modal-card {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .upload-insights-toast__title-row {
@@ -19410,7 +19410,7 @@ body[data-clover-page-modal] .modal-card {
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   margin-bottom: 4px;
 }
 
@@ -19727,7 +19727,7 @@ body[data-clover-page-modal] .modal-card {
   font-size: 0.74rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .import-upload-dock__read-summary {
@@ -19874,7 +19874,7 @@ body[data-clover-page-modal] .modal-card {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.36em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .page-file-drop-zone__content strong {
@@ -20266,7 +20266,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 .transaction-drawer__merchant-label {
   color: var(--muted);
   font-size: 0.72rem;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.14em;
 }
 
@@ -20820,7 +20820,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .manual-receipt-table__cell {
@@ -21134,7 +21134,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .transactions-suggestion-chip strong {
@@ -21247,7 +21247,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   font-size: 0.74rem;
   font-weight: 600;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .transactions-bulk-toggle-group__buttons {
@@ -21359,7 +21359,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 .transaction-note-meta span {
   color: var(--muted);
   font-size: 0.78rem;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.1em;
 }
 
@@ -22679,7 +22679,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.14em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .accounts-detail__balance-editor input {
@@ -24133,7 +24133,7 @@ button.investments-portfolio-inline-edit {
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .currency-selector__section-list {
@@ -24671,7 +24671,7 @@ button.investments-portfolio-inline-edit {
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   color: inherit;
   padding-left: 2px;
 }
@@ -24883,7 +24883,7 @@ button.investments-portfolio-inline-edit {
   color: rgba(22, 34, 54, 0.8);
   font-size: 0.78rem;
   line-height: 1.25;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
 }
 
@@ -24919,7 +24919,7 @@ button.investments-portfolio-inline-edit {
   letter-spacing: 0.08em;
   line-height: 1;
   padding: 5px 8px;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .accounts-account-card__tone.is-asset {
@@ -24991,7 +24991,7 @@ button.investments-portfolio-inline-edit {
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   color: rgba(22, 34, 54, 0.7);
 }
 
@@ -25211,7 +25211,7 @@ button.investments-portfolio-inline-edit {
 .institution-detail-metric span {
   color: var(--muted);
   font-size: 0.76rem;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.14em;
 }
 
@@ -25278,7 +25278,7 @@ button.investments-portfolio-inline-edit {
 .institution-assets-table th {
   color: var(--muted);
   font-size: 0.74rem;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -25942,7 +25942,7 @@ button.investments-portfolio-inline-edit {
   border-bottom: 1px solid var(--stroke);
   font-size: 0.6rem;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -26154,7 +26154,7 @@ button.accounts-detail__transaction-head-cell {
   padding: 0 4px 4px;
   color: var(--muted-2);
   font-size: 0.78rem;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
 }
 
@@ -26371,7 +26371,7 @@ button.accounts-detail__transaction-head-cell {
 
 .accounts-summary-guide strong {
   font-size: 0.84rem;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
   color: var(--accent);
 }
@@ -26556,7 +26556,7 @@ button.accounts-detail__transaction-head-cell {
 .accounts-drawer__notice strong {
   font-size: 0.86rem;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   color: #a16207;
 }
 
@@ -26582,7 +26582,7 @@ button.accounts-detail__transaction-head-cell {
 
 .accounts-drawer__guide strong {
   font-size: 0.84rem;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
   color: var(--accent);
 }
@@ -26611,7 +26611,7 @@ button.accounts-detail__transaction-head-cell {
   margin: 0;
   font-size: 0.94rem;
   letter-spacing: 0.02em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   color: var(--muted);
 }
 
@@ -26678,7 +26678,7 @@ button.accounts-detail__transaction-head-cell {
 .accounts-drawer__checkpoint-grid span {
   color: var(--muted);
   font-size: 0.76rem;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
 }
 
@@ -27031,7 +27031,7 @@ button.accounts-detail__transaction-head-cell {
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 700;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.14em;
 }
 
@@ -27063,7 +27063,7 @@ button.accounts-detail__transaction-head-cell {
   color: var(--accent);
   font-size: 0.68rem;
   font-weight: 700;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -27325,7 +27325,7 @@ button.accounts-detail__transaction-head-cell {
   background: transparent;
   color: var(--muted-2);
   font-size: 0.72rem;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
   padding: 0 12px;
 }
@@ -27352,7 +27352,7 @@ button.accounts-detail__transaction-head-cell {
 .accounts-import-security strong {
   font-size: 0.92rem;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   color: var(--accent);
 }
 
@@ -27380,7 +27380,7 @@ button.accounts-detail__transaction-head-cell {
 .accounts-import-summary span {
   color: var(--muted-2);
   font-size: 0.76rem;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
 }
 
@@ -27684,7 +27684,7 @@ button.accounts-detail__transaction-head-cell {
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .accounts-import-file__error-list {
@@ -28027,7 +28027,7 @@ button.accounts-detail__transaction-head-cell {
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .admin-data-qa-bank-detail__table-row > span {
@@ -28260,7 +28260,7 @@ button.accounts-detail__transaction-head-cell {
 .admin-data-qa__guidance-preview span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
 }
 
@@ -28377,7 +28377,7 @@ button.accounts-detail__transaction-head-cell {
 
 .admin-data-qa__parsed-row-grid span {
   color: var(--muted);
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
 }
 
@@ -28416,7 +28416,7 @@ button.accounts-detail__transaction-head-cell {
   display: block;
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
   margin-bottom: 4px;
 }
@@ -28498,7 +28498,7 @@ button.accounts-detail__transaction-head-cell {
 .admin-data-qa__sample-card span {
   color: var(--muted);
   font-size: 11px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
 }
 
@@ -28553,7 +28553,7 @@ button.accounts-detail__transaction-head-cell {
   color: var(--muted);
   font-size: 11px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   text-align: left;
 }
 
@@ -28692,7 +28692,7 @@ button.accounts-detail__transaction-head-cell {
   color: var(--muted);
   font-size: 10px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .admin-data-qa-run-page__transaction-output select,
@@ -28765,7 +28765,7 @@ button.accounts-detail__transaction-head-cell {
 .admin-users__trend-card span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
 }
 
@@ -28940,7 +28940,7 @@ button.accounts-detail__transaction-head-cell {
 .admin-hub__panel-stats span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
 }
 
@@ -29090,7 +29090,7 @@ button.accounts-detail__transaction-head-cell {
 
 .admin-analytics-card span {
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
 }
 
@@ -29352,7 +29352,7 @@ button.accounts-detail__transaction-head-cell {
 .admin-error-logs__detail-body span {
   color: var(--muted);
   font-size: 11px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
 }
 
@@ -29414,7 +29414,7 @@ button.accounts-detail__transaction-head-cell {
 .admin-inquiries__stats span {
   color: var(--muted);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
 }
 
@@ -29530,7 +29530,7 @@ button.accounts-detail__transaction-head-cell {
   color: var(--accent-hover);
   font-size: 12px;
   font-weight: 600;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
 }
 
@@ -29601,7 +29601,7 @@ button.accounts-detail__transaction-head-cell {
 .admin-inquiries__panel span {
   color: var(--muted-2);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
 }
 
@@ -29707,7 +29707,7 @@ button.accounts-detail__transaction-head-cell {
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   padding: 14px 16px;
   white-space: nowrap;
 }
@@ -30030,7 +30030,7 @@ button.accounts-detail__transaction-head-cell {
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .investments-empty-state--compact .transactions-empty-state__copy {
@@ -30205,7 +30205,7 @@ button.accounts-detail__transaction-head-cell {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .review-workbench__card--side {
@@ -30255,7 +30255,7 @@ button.accounts-detail__transaction-head-cell {
 .review-workbench__meta-label {
   color: var(--muted-2);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -30387,7 +30387,7 @@ button.accounts-detail__transaction-head-cell {
 .review-workbench__image-score span {
   color: var(--muted-2);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.12em;
 }
 
@@ -30468,7 +30468,7 @@ button.accounts-detail__transaction-head-cell {
   gap: 10px;
   color: var(--muted-2);
   font-size: 12px;
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.08em;
 }
 
@@ -30837,7 +30837,7 @@ button.accounts-detail__transaction-head-cell {
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   color: var(--accent);
   margin-top: 0;
   margin-bottom: 0;
@@ -34333,7 +34333,7 @@ button.accounts-detail__transaction-head-cell {
   font-size: 12px;
   letter-spacing: 0.18em;
   color: var(--muted-2);
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .landing-flow__icon {
@@ -34515,7 +34515,7 @@ button.accounts-detail__transaction-head-cell {
   color: var(--muted-2);
   font-size: 12px;
   letter-spacing: 0.18em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .landing-plan-card h3 {
@@ -34824,7 +34824,7 @@ button.accounts-detail__transaction-head-cell {
 .landing-page .legal-page__eyebrow {
   margin: 0;
   color: var(--accent);
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.18em;
   font-size: 11px;
   font-weight: 700;
@@ -34919,7 +34919,7 @@ button.accounts-detail__transaction-head-cell {
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.14em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .legal-page__toc nav {
@@ -35092,7 +35092,7 @@ button.accounts-detail__transaction-head-cell {
 
 .contact-page__eyebrow {
   color: var(--muted-2);
-  text-transform: uppercase;
+  text-transform: capitalize;
   letter-spacing: 0.16em;
   font-size: 12px;
   font-weight: 600;
@@ -35541,7 +35541,7 @@ body:has(.pricing-page) {
   color: var(--muted-2);
   font-size: 12px;
   letter-spacing: 0.18em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .pricing-card h2 {
@@ -36019,7 +36019,7 @@ body:has(.pricing-page) {
   color: var(--muted-2);
   font-size: 0.7rem;
   letter-spacing: 0.16em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .help-search-result strong {
@@ -36355,7 +36355,7 @@ body:has(.pricing-page) {
   color: var(--accent);
   font-size: 0.76rem;
   letter-spacing: 0.18em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .help-topic__intro h2 {
@@ -36535,7 +36535,7 @@ body:has(.pricing-page) {
   color: var(--muted-2);
   font-size: 0.72rem;
   letter-spacing: 0.14em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .help-article-card strong {
@@ -36712,7 +36712,7 @@ body:has(.pricing-page) {
   color: var(--muted-2);
   font-size: 0.72rem;
   letter-spacing: 0.14em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .help-article-page__visual-bubble {
@@ -36926,7 +36926,7 @@ body:has(.pricing-page) {
   color: var(--muted);
   font-size: 0.75rem;
   letter-spacing: 0.14em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .help-section-page__visual-spark {
@@ -37191,7 +37191,7 @@ body:has(.pricing-page) {
   .landing-nav__mobile-menu-label {
     margin: 0 0 2px;
     color: var(--muted-2);
-    text-transform: uppercase;
+    text-transform: capitalize;
     letter-spacing: 0.14em;
     font-size: 11px;
     font-weight: 700;
@@ -38055,7 +38055,7 @@ body:has(.pricing-page) {
   color: var(--muted-2);
   font-size: 12px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .settings-profile-summary strong {
@@ -38178,7 +38178,7 @@ body:has(.pricing-page) {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .settings-choice-card input {
@@ -39222,7 +39222,7 @@ body:has(.pricing-page) {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .settings-category-table__row:last-child {
@@ -39642,7 +39642,7 @@ body:has(.pricing-page) {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.03em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   background: rgba(255, 255, 255, 0.18);
   color: #ffffff;
 }
@@ -39834,7 +39834,7 @@ body:has(.pricing-page) {
   color: var(--accent);
   font-size: 10px;
   letter-spacing: 0.02em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .settings-plan-usage__meter {
@@ -39875,7 +39875,7 @@ body:has(.pricing-page) {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .settings-plan-usage__renewal strong {
@@ -39938,7 +39938,7 @@ body:has(.pricing-page) {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.03em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .settings-pill--muted {
@@ -43787,7 +43787,7 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.05em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .split-bill-manual-modal__suggestion {
@@ -44085,7 +44085,7 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   text-align: left;
   font-size: 0.78rem;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   color: var(--text-secondary);
 }
 
@@ -45469,7 +45469,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.15em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .landing-bridge__table th,
@@ -45700,7 +45700,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .clarity-engine__status {
@@ -45777,7 +45777,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.14em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .landing-feature__visual {
@@ -45910,7 +45910,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
   color: rgba(255, 255, 255, 0.9);
   font-size: 12px;
   letter-spacing: 0.18em;
-  text-transform: uppercase;
+  text-transform: capitalize;
   font-weight: 700;
 }
 
@@ -48523,7 +48523,7 @@ html[data-theme="dark"] .goals-progress-panel .summary-aligned-card {
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.14em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .content--adviser .report-sankey__target-title,
