@@ -7175,7 +7175,7 @@ function TransactionsPageContent() {
                   Account
                 </button>
                 <button
-                  className="line-item-header-cell"
+                  className="line-item-header-cell line-item-header-cell--category"
                   type="button"
                   onClick={(event) => openHeaderMenu("category", event)}
                   aria-expanded={headerMenuOpen === "category"}

@@ -16549,6 +16549,10 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   text-align: left;
 }
 
+.line-item-header-cell--category {
+  padding-left: 8px;
+}
+
 .line-item-header-cell--spacer {
   visibility: hidden;
 }
