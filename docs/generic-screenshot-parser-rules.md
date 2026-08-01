@@ -27,6 +27,16 @@ These rules apply when an uploaded screenshot does not match a trained instituti
 - Record backup model, decision duration, schema validation, quality score, and routing outcome in import metadata for QA and Admin diagnostics.
 - When source OCR text is blank, derive the reusable statement-family signature from validated rows and resolved account metadata so the successful import can contribute to future routing history.
 
+## Unfamiliar institution and currency identity
+
+- Run trained institution parsers first. Generic identity detection must never override a dedicated parser result.
+- Prefer explicit labels such as `Bank name`, `Financial institution`, `Account provider`, `Statement currency`, and `Account currency`.
+- An unfamiliar institution name may be accepted from the statement header only when the document also has statement/account signals. Do not infer the user's institution from beneficiary, recipient, intermediary, payee, merchant, or transfer text.
+- Support ISO currency codes and unambiguous regional symbols worldwide. Prefix-qualified symbols such as `A$`, `C$`, `S$`, `HK$`, `R$`, `CN¥`, and `JP¥` are stronger than bare symbols.
+- Bare `$` and `¥` are ambiguous. Leave currency unset and retain the ambiguity evidence for review unless an explicit code, currency name, or labeled statement field resolves it.
+- Statement-level currency labels outrank transaction-level foreign/original-currency amounts. Conflicting high-confidence labels must remain unresolved instead of selecting the first match.
+- Preserve institution/currency confidence and evidence in detected metadata so cold-layout QA and Admin diagnostics can explain the decision.
+
 ## Investment semantics
 
 - Shares, units, and principal are optional fields and must only be emitted when the screenshot labels them.

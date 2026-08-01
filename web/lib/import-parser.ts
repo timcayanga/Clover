@@ -9,6 +9,11 @@ import {
 } from "@/lib/screenshot-artifact-filter";
 import { normalizeGcashFamilyScreenshotOcrText } from "@/lib/gcash-family-screenshot";
 import { parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
+import {
+  detectCurrencyEvidence,
+  detectUnknownInstitutionEvidence,
+  normalizeGlobalCurrencyCode,
+} from "@/lib/financial-identity-detection";
 
 export type ImportedAccountType =
   | "bank"
@@ -64,6 +69,9 @@ export type DetectedStatementMetadata = {
   startDate: string | null;
   endDate: string | null;
   confidence: number;
+  currencyConfidence?: number;
+  institutionConfidence?: number;
+  identityEvidence?: string[];
 };
 
 export type DeterministicParsedHolding = {
@@ -2077,62 +2085,8 @@ const splitStatementLines = (text: string) =>
     .filter(Boolean);
 
 const normalizeCurrencyCode = (value?: string | null) => {
-  if (!value) {
-    return null;
-  }
-
-  const normalized = normalizeWhitespace(value).toUpperCase();
-  const compact = normalized.replace(/[^A-Z0-9]/g, "");
-
-  if (!compact) {
-    return null;
-  }
-
-  const aliasMap: Record<string, string> = {
-    P: "PHP",
-    PHP: "PHP",
-    "PHILIPPINEPESO": "PHP",
-    "PHILIPPINEPESOS": "PHP",
-    "PESO": "PHP",
-    "PESOS": "PHP",
-    "U.S.DOLLAR": "USD",
-    "USDOLLAR": "USD",
-    USD: "USD",
-    "US$": "USD",
-    EURO: "EUR",
-    EUR: "EUR",
-    POUND: "GBP",
-    STERLING: "GBP",
-    GBP: "GBP",
-    BAHT: "THB",
-    THB: "THB",
-    SGD: "SGD",
-    JPY: "JPY",
-    YEN: "JPY",
-    HKD: "HKD",
-    AUD: "AUD",
-    CAD: "CAD",
-    NZD: "NZD",
-    CHF: "CHF",
-    KRW: "KRW",
-    CNY: "CNY",
-    RMB: "CNY",
-    TWD: "TWD",
-    MYR: "MYR",
-    IDR: "IDR",
-    INR: "INR",
-    BTC: "BTC",
-    ETH: "ETH",
-    USDT: "USDT",
-    USDC: "USDC",
-    SOL: "SOL",
-    XRP: "XRP",
-    ADA: "ADA",
-    BNB: "BNB",
-    DOGE: "DOGE",
-  };
-
-  return aliasMap[compact] ?? null;
+  if (value === "P" || value === "₱") return "PHP";
+  return normalizeGlobalCurrencyCode(value);
 };
 
 const isPhpFirstInstitution = (institution?: string | null, accountName?: string | null) => {
@@ -2160,46 +2114,7 @@ export const normalizeInstitutionCurrency = (
 };
 
 const detectCurrencyFromText = (text: string) => {
-  const normalized = normalizeWhitespace(text);
-  const compact = normalized.replace(/\s+/g, " ").toUpperCase();
-
-  const patterns: Array<{ code: string; match: RegExp }> = [
-    { code: "PHP", match: /\b(PHP|PHILIPPINE\s+PESO)\b|₱/i },
-    { code: "USD", match: /\b(USD|U\.?\s*S\.?\s*DOLLAR|U\.?\s*S\.?|US\s*DOLLAR)\b|\$/i },
-    { code: "EUR", match: /\b(EUR|EURO)\b|€/i },
-    { code: "GBP", match: /\b(GBP|POUND|STERLING)\b|£/i },
-    { code: "SGD", match: /\bSGD\b/ },
-    { code: "JPY", match: /\bJPY\b|\bYEN\b|¥/i },
-    { code: "HKD", match: /\bHKD\b/ },
-    { code: "THB", match: /\b(THB|BAHT)\b/ },
-    { code: "AUD", match: /\bAUD\b/ },
-    { code: "CAD", match: /\bCAD\b/ },
-    { code: "NZD", match: /\bNZD\b/ },
-    { code: "CHF", match: /\bCHF\b/ },
-    { code: "KRW", match: /\bKRW\b/ },
-    { code: "CNY", match: /\b(CNY|RMB)\b/ },
-    { code: "TWD", match: /\bTWD\b/ },
-    { code: "MYR", match: /\bMYR\b/ },
-    { code: "IDR", match: /\bIDR\b/ },
-    { code: "INR", match: /\bINR\b|₹/i },
-    { code: "BTC", match: /\bBTC\b|₿/i },
-    { code: "ETH", match: /\bETH\b/ },
-    { code: "USDT", match: /\bUSDT\b/ },
-    { code: "USDC", match: /\bUSDC\b/ },
-    { code: "SOL", match: /\bSOL\b/ },
-    { code: "XRP", match: /\bXRP\b/ },
-    { code: "ADA", match: /\bADA\b/ },
-    { code: "BNB", match: /\bBNB\b/ },
-    { code: "DOGE", match: /\bDOGE\b/ },
-  ];
-
-  for (const { code, match } of patterns) {
-    if (match.test(normalized) || match.test(compact)) {
-      return code;
-    }
-  }
-
-  return normalizeCurrencyCode(normalized);
+  return detectCurrencyEvidence(text).currency;
 };
 
 const scoreMetadataConfidence = (metadata: Omit<DetectedStatementMetadata, "confidence">) => {
@@ -2622,8 +2537,13 @@ const detectInstitutionFromSignals = (
   }
 
   const lines = options.headerLines?.length ? options.headerLines : splitStatementLines(text).slice(0, 24);
-  const topHeaderText = lines.slice(0, 8).join("\n");
-  const headerText = lines.join("\n");
+  const identityHeaderLines = lines.filter(
+    (line) =>
+      !/\b(?:beneficiary|recipient|intermediary|correspondent|payee|merchant|transfer(?:red)?\s+to|payment\s+to)\b/i.test(line) &&
+      !/(?:\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b|\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b)/.test(line)
+  );
+  const topHeaderText = identityHeaderLines.slice(0, 8).join("\n");
+  const headerText = identityHeaderLines.join("\n");
   const compact = compactGenericSignalLine(normalizedText);
   const fileInstitutionRaw = options.fileName ? sanitizeBankNameLabel(normalizeBankName(options.fileName)) : null;
   const fileInstitution = fileInstitutionRaw && fileInstitutionRaw !== "Unknown" ? fileInstitutionRaw : null;
@@ -2656,8 +2576,10 @@ const detectInstitutionFromSignals = (
     .sort((left, right) => right.score - left.score);
 
   const winner = scored[0];
-  if (!winner || winner.score < 5) {
-    return null;
+  // A bank name found only in transaction text is usually a counterparty.
+  // Require filename/header support before assigning the statement owner.
+  if (!winner || winner.score < 8) {
+    return detectUnknownInstitutionEvidence(text, options).institution;
   }
 
   const runnerUp = scored[1];
@@ -3872,10 +3794,36 @@ const detectBalanceFromText = (text: string) => {
   };
 };
 
-const withDetectedCurrency = (metadata: DetectedStatementMetadata, text: string): DetectedStatementMetadata => ({
-  ...metadata,
-  currency: normalizeInstitutionCurrency(metadata.institution, metadata.currency ?? detectCurrencyFromText(text), metadata.accountName),
-});
+const withDetectedCurrency = (metadata: DetectedStatementMetadata, text: string): DetectedStatementMetadata => {
+  const currencyDetection = metadata.currency ? null : detectCurrencyEvidence(text);
+  const institutionDetection = detectUnknownInstitutionEvidence(text);
+  const currency = normalizeInstitutionCurrency(
+    metadata.institution ?? institutionDetection?.institution,
+    metadata.currency ?? currencyDetection?.currency,
+    metadata.accountName
+  );
+
+  return {
+    ...metadata,
+    institution: metadata.institution ?? institutionDetection?.institution ?? null,
+    currency,
+    currencyConfidence: metadata.currency ? 100 : currencyDetection?.confidence ?? 0,
+    institutionConfidence:
+      metadata.institutionConfidence ??
+      (metadata.institution && institutionDetection.institution === metadata.institution
+        ? institutionDetection.confidence
+        : metadata.institution
+          ? 100
+          : institutionDetection.confidence),
+    identityEvidence: [
+      ...(metadata.identityEvidence ?? []),
+      ...(currencyDetection?.evidence ?? []),
+      ...(institutionDetection.institution === (metadata.institution ?? institutionDetection.institution)
+        ? institutionDetection.evidence
+        : []),
+    ],
+  };
+};
 
 const parseBpiDate = (value?: string | null, yearHint?: number) => {
   if (!value) return null;
@@ -13449,7 +13397,13 @@ const isKnownHsbcScreenshotFile = (fileName: string) =>
 
 const hsbcScreenshotMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
   const normalized = normalizeWhitespace(text);
-  if (!isKnownHsbcScreenshotFile(fileName) && !/\b(?:HSBC|Online\s+Bonus\s+Saver|Global\s+Money\s+Account|Bank\s+A\/C)\b/i.test(`${normalized} ${fileName}`)) {
+  const identityHeader = splitStatementLines(text)
+    .slice(0, 16)
+    .filter((line) => !/(?:\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b|\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b)/.test(line))
+    .join(" ");
+  const hasHsbcProductIdentity = /\b(?:Online\s+Bonus\s+Saver|Global\s+Money\s+Account|Bank\s+A\/C)\b/i.test(normalized);
+  const hasHsbcHeaderIdentity = /\bHSBC\b/i.test(identityHeader) && /\b(?:account|statement|balance|bank)\b/i.test(identityHeader);
+  if (!isKnownHsbcScreenshotFile(fileName) && !hasHsbcProductIdentity && !hasHsbcHeaderIdentity) {
     return null;
   }
   const detail = /\bAccount\s+information\b/i.test(normalized);
@@ -25247,7 +25201,11 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
   }
 
   const normalized = text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
-  const institution = sanitizeBankNameLabel(detectInstitutionFromSignals(normalized, { fileName }));
+  const institutionDetection = detectUnknownInstitutionEvidence(text, { fileName });
+  const currencyDetection = detectCurrencyEvidence(text);
+  const institution = sanitizeBankNameLabel(
+    detectInstitutionFromSignals(text, { fileName, headerLines: splitStatementLines(text).slice(0, 24) }) ?? institutionDetection.institution
+  );
   const accountNumber = detectAccountNumberFromText(normalized);
   const { startDate, endDate } = detectStatementDatesFromText(normalized);
   const { openingBalance, endingBalance } = detectBalanceFromText(normalized);
@@ -25270,7 +25228,7 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
     accountNumber,
     accountName,
     accountType: inferAccountTypeFromStatement(institution, accountName, "bank"),
-    currency: detectCurrencyFromText(normalized),
+    currency: currencyDetection.currency,
     openingBalance,
     endingBalance,
     startDate: startDate ? startDate.toISOString() : null,
@@ -25285,6 +25243,9 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
       startDate: startDate ? startDate.toISOString() : null,
       endDate: endDate ? endDate.toISOString() : null,
     }),
+    currencyConfidence: currencyDetection.confidence,
+    institutionConfidence: institution ? (institutionDetection.institution === institution ? institutionDetection.confidence : 100) : 0,
+    identityEvidence: [...currencyDetection.evidence, ...institutionDetection.evidence],
   };
 };
 
