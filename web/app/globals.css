@@ -49178,6 +49178,30 @@ html[data-theme="dark"] .content--adviser .adviser-summary .adviser-summary-card
   }
 }
 
+/* Keep every page-level header action aligned with Add transaction. */
+:is(.topbar-actions, .shell-compact-bar__actions)
+  :is(.button, .currency-selector__button, .reports-range-menu__summary) {
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+}
+
+:is(.topbar-actions, .shell-compact-bar__actions) :is(
+    .accounts-toolbar-button span:last-child,
+    .accounts-toolbar-add span:last-child,
+    .circles-topbar-action__label,
+    .investments-page__add-button-label
+  ) {
+  font-size: inherit !important;
+  font-weight: inherit !important;
+}
+
+@media (max-width: 1100px) {
+  :is(.topbar-actions, .shell-compact-bar__actions)
+    :is(.button, .currency-selector__button, .reports-range-menu__summary) {
+    font-size: 0.72rem !important;
+  }
+}
+
 @media (max-width: 1100px) {
   /* Circles keeps its title and Circle switcher aligned beside the mobile back control. */
   .content--circles > .topbar:has(.shell-back-button) {
