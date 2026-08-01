@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import { CONTEXT_CORPUS_VERSION, deriveTravelEpisodes, getContextCorpusCoverageReport, getContextCorpusEntries, getContextCorpusQualityReport, parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
 
 assert.ok(CONTEXT_CORPUS_VERSION);
-assert.ok(getContextCorpusEntries().length >= 1440);
+assert.ok(getContextCorpusEntries().length >= 1620);
 assert.ok(getContextCorpusQualityReport().profileCount >= 179);
 assert.equal(getContextCorpusQualityReport().valid, true);
 const coverage = getContextCorpusCoverageReport();
 assert.equal(coverage.corpusVersion, CONTEXT_CORPUS_VERSION);
-assert.ok(coverage.canonicalEntryCount >= 1440);
-assert.ok(coverage.descriptorVariantEntryCount > 91000);
-assert.ok(coverage.aliasCount >= 4100);
+assert.ok(coverage.canonicalEntryCount >= 1620);
+assert.ok(coverage.descriptorVariantEntryCount > 99000);
+assert.ok(coverage.aliasCount >= 4480);
 assert.ok(Object.keys(coverage.countryCounts).length >= 180);
 assert.ok(coverage.currencies.length >= 137);
 assert.ok((coverage.canonicalCountryCounts.PH ?? 0) > 0);
@@ -180,7 +180,7 @@ for (const fixture of expandedFixtures) {
   const context = resolveTransactionContext(fixture.input);
   assert.equal(context.countryCode, fixture.countryCode);
   if (fixture.paymentRail) assert.equal(context.paymentRail, fixture.paymentRail);
-  assert.equal(context.purposeHint, fixture.purposeHint);
+  assert.equal(context.purposeHint, fixture.purposeHint, fixture.merchantRaw);
 }
 
 const worldwideFixtures = [
@@ -415,6 +415,45 @@ for (const fixture of worldwideVerticalFixtures) {
   assert.equal(context.transactionTypeHint, null);
 }
 
+const worldwideCommerceFixtures = [
+  { merchantRaw: "UNIQA VERSICHERUNG OSTERREICH", currency: "EUR", countryCode: "AT", purposeHint: "insurance" },
+  { merchantRaw: "BOL BELGIQUE MARKETPLACE", currency: "EUR", countryCode: "BE", purposeHint: "ecommerce" },
+  { merchantRaw: "THUISBEZORGD.NL FOOD DELIVERY", currency: "EUR", countryCode: "NL", purposeHint: "food_delivery" },
+  { merchantRaw: "TRYG FORSIKRING DANMARK", currency: "DKK", countryCode: "DK", purposeHint: "insurance" },
+  { merchantRaw: "CDON SVERIGE MARKETPLACE", currency: "SEK", countryCode: "SE", purposeHint: "ecommerce" },
+  { merchantRaw: "FOODORA NORGE FOOD", currency: "NOK", countryCode: "NO", purposeHint: "food_delivery" },
+  { merchantRaw: "PZU UBEZPIECZENIA POLSKA", currency: "PLN", countryCode: "PL", purposeHint: "insurance" },
+  { merchantRaw: "SKROUTZ GREEK MARKETPLACE", currency: "EUR", countryCode: "GR", purposeHint: "ecommerce" },
+  { merchantRaw: "BOLT DELIVERY TALLINN ESTONIA", currency: "EUR", countryCode: "EE", purposeHint: "food_delivery" },
+  { merchantRaw: "TRIGLAV INSURANCE SLOVENIA", currency: "EUR", countryCode: "SI", purposeHint: "insurance" },
+  { merchantRaw: "MERCADOLIBRE MX MARKETPLACE", currency: "MXN", countryCode: "MX", purposeHint: "ecommerce" },
+  { merchantRaw: "PEDIDOS YA PERU FOOD", currency: "PEN", countryCode: "PE", purposeHint: "food_delivery" },
+  { merchantRaw: "SEGUROS SURA COLOMBIA", currency: "COP", countryCode: "CO", purposeHint: "insurance" },
+  { merchantRaw: "FALABELLA.COM CHILE MARKETPLACE", currency: "CLP", countryCode: "CL", purposeHint: "ecommerce" },
+  { merchantRaw: "PEDIDOS YA ARGENTINA FOOD", currency: "ARS", countryCode: "AR", purposeHint: "food_delivery" },
+  { merchantRaw: "BANCO DE SEGUROS ESTADO URUGUAY", currency: "UYU", countryCode: "UY", purposeHint: "insurance" },
+  { merchantRaw: "DISMAC ONLINE BOLIVIA", currency: "BOB", countryCode: "BO", purposeHint: "ecommerce" },
+  { merchantRaw: "UBEREATS SAN JOSE COSTA RICA", currency: "CRC", countryCode: "CR", purposeHint: "food_delivery" },
+  { merchantRaw: "SAA ASSURANCE ALGERIA", currency: "DZD", countryCode: "DZ", purposeHint: "insurance" },
+  { merchantRaw: "JUMIA MARKETPLACE EGYPT", currency: "EGP", countryCode: "EG", purposeHint: "ecommerce" },
+  { merchantRaw: "GLOVO NAIROBI FOOD", currency: "KES", countryCode: "KE", purposeHint: "food_delivery" },
+  { merchantRaw: "JUBILEE INSURANCE UGANDA", currency: "UGX", countryCode: "UG", purposeHint: "insurance" },
+  { merchantRaw: "KASHA MARKETPLACE RWANDA", currency: "RWF", countryCode: "RW", purposeHint: "ecommerce" },
+  { merchantRaw: "MRD DELIVERY SOUTH AFRICA", currency: "ZAR", countryCode: "ZA", purposeHint: "food_delivery" },
+  { merchantRaw: "LEADWAY ASSURANCE NIGERIA", currency: "NGN", countryCode: "NG", purposeHint: "insurance" },
+  { merchantRaw: "RAKUTEN ICHIBA JAPAN", currency: "JPY", countryCode: "JP", purposeHint: "ecommerce" },
+  { merchantRaw: "배달의민족 대한민국", currency: "KRW", countryCode: "KR", purposeHint: "food_delivery" },
+  { merchantRaw: "中国平安保险", currency: "CNY", countryCode: "CN", purposeHint: "insurance" },
+  { merchantRaw: "FLIPKART MARKETPLACE INDIA", currency: "INR", countryCode: "IN", purposeHint: "ecommerce" },
+  { merchantRaw: "FOODMANDU KATHMANDU", currency: "NPR", countryCode: "NP", purposeHint: "food_delivery" },
+] as const;
+for (const fixture of worldwideCommerceFixtures) {
+  const context = resolveTransactionContext(fixture);
+  assert.equal(context.countryCode, fixture.countryCode);
+  assert.equal(context.purposeHint, fixture.purposeHint, fixture.merchantRaw);
+  assert.equal(context.transactionTypeHint, null);
+}
+
 const worldwideDepthFixtures = [
   { merchantRaw: "AMERICAN HOSPITAL ALBANIA", currency: "ALL", countryCode: "AL", purposeHint: "healthcare" },
   { merchantRaw: "EDESUR ARGENTINA", currency: "ARS", countryCode: "AR", purposeHint: "utilities" },
@@ -463,6 +502,12 @@ for (const description of ["ORANGE DRESS", "CASINO GAME", "TRUST EXERCISE", "COO
 }
 
 for (const description of ["SHELL SCRIPT", "CLARO PHOTO", "TIGO SPORTS", "CIRCLE K THEORY", "TOTAL REWARDS"]) {
+  const context = resolveTransactionContext({ description, currency: "USD" });
+  assert.equal(context.countryCode, null);
+  assert.equal(context.purposeHint, null);
+}
+
+for (const description of ["QUICK NOTE", "HAPPY SONG", "UNIVERSAL REMOTE", "DISCOVERY CHANNEL", "JUBILEE PARTY"]) {
   const context = resolveTransactionContext({ description, currency: "USD" });
   assert.equal(context.countryCode, null);
   assert.equal(context.purposeHint, null);
