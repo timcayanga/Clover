@@ -13,8 +13,9 @@ import { WORLD_CONTEXT_ENTRIES_5, WORLD_REGIONAL_PROFILES_5 } from "@/lib/world-
 import { WORLD_VERTICAL_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-verticals";
 import { WORLD_COMMERCE_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-commerce";
 import { WORLD_TRAVEL_HEALTH_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-travel-health";
+import { WORLD_ESSENTIAL_SERVICE_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-essential-services";
 
-export const CONTEXT_CORPUS_VERSION = "2026.08.01.6";
+export const CONTEXT_CORPUS_VERSION = "2026.08.01.7";
 
 export type ContextSignal = {
   id: string;
@@ -648,7 +649,7 @@ const deduplicatedAdditionalCanonicalEntries = additionalCanonicalEntries
   }))
   .filter((entry) => entry.aliases.length > 0);
 const usedExtendedAliases = new Set([...usedCanonicalAliases]);
-const deduplicatedWorldEntries = [...WORLD_CONTEXT_ENTRIES, ...WORLD_CONTEXT_ENTRIES_2, ...WORLD_CONTEXT_ENTRIES_3, ...WORLD_CONTEXT_ENTRIES_4, ...WORLD_CONTEXT_ENTRIES_5, ...WORLD_VERTICAL_CONTEXT_ENTRIES, ...WORLD_COMMERCE_CONTEXT_ENTRIES, ...WORLD_TRAVEL_HEALTH_CONTEXT_ENTRIES]
+const deduplicatedWorldEntries = [...WORLD_CONTEXT_ENTRIES, ...WORLD_CONTEXT_ENTRIES_2, ...WORLD_CONTEXT_ENTRIES_3, ...WORLD_CONTEXT_ENTRIES_4, ...WORLD_CONTEXT_ENTRIES_5, ...WORLD_VERTICAL_CONTEXT_ENTRIES, ...WORLD_COMMERCE_CONTEXT_ENTRIES, ...WORLD_TRAVEL_HEALTH_CONTEXT_ENTRIES, ...WORLD_ESSENTIAL_SERVICE_CONTEXT_ENTRIES]
   .map((entry) => ({
     ...entry,
     aliases: entry.aliases.filter((alias) => {

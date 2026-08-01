@@ -1,15 +1,16 @@
 import assert from "node:assert/strict";
 import { CONTEXT_CORPUS_VERSION, deriveTravelEpisodes, getContextCorpusCoverageReport, getContextCorpusEntries, getContextCorpusQualityReport, parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
+import { WORLD_ESSENTIAL_SERVICE_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-essential-services";
 
 assert.ok(CONTEXT_CORPUS_VERSION);
-assert.ok(getContextCorpusEntries().length >= 1838);
+assert.ok(getContextCorpusEntries().length >= 2066);
 assert.ok(getContextCorpusQualityReport().profileCount >= 197);
 assert.equal(getContextCorpusQualityReport().valid, true);
 const coverage = getContextCorpusCoverageReport();
 assert.equal(coverage.corpusVersion, CONTEXT_CORPUS_VERSION);
-assert.ok(coverage.canonicalEntryCount >= 1838);
-assert.ok(coverage.descriptorVariantEntryCount > 109000);
-assert.ok(coverage.aliasCount >= 4900);
+assert.ok(coverage.canonicalEntryCount >= 2066);
+assert.ok(coverage.descriptorVariantEntryCount > 120000);
+assert.ok(coverage.aliasCount >= 5360);
 assert.ok(Object.keys(coverage.countryCounts).length >= 198);
 assert.ok(coverage.currencies.length >= 144);
 assert.ok((coverage.canonicalCountryCounts.PH ?? 0) > 0);
@@ -581,6 +582,14 @@ for (const fixture of travelerFixtures) {
   assert.equal(context.travelLikely, fixture.purposeHint === "travel");
 }
 
+assert.equal(WORLD_ESSENTIAL_SERVICE_CONTEXT_ENTRIES.length, 228);
+for (const entry of WORLD_ESSENTIAL_SERVICE_CONTEXT_ENTRIES) {
+  const context = resolveTransactionContext({ merchantRaw: entry.aliases[0], currency: entry.currency });
+  assert.equal(context.countryCode, entry.countryCode, entry.aliases[0]);
+  assert.equal(context.purposeHint, entry.purposeHint, entry.aliases[0]);
+  assert.equal(context.transactionTypeHint, null, entry.aliases[0]);
+}
+
 for (const description of ["A BIT OF SOFTWARE", "WAVE HOTEL", "METRO MARKET", "MODE PAYMENT"]) {
   const context = resolveTransactionContext({ description, currency: "USD" });
   assert.equal(context.countryCode, null);
@@ -615,6 +624,11 @@ for (const description of ["BIPA FILE", "MATAS NOTE", "LOT NUMBER", "CLICKS MOUS
   const context = resolveTransactionContext({ description, currency: "USD" });
   assert.equal(context.countryCode, null);
   assert.equal(context.purposeHint, null);
+}
+
+for (const description of ["TEAM MEETING", "POST LETTER", "FLOW CHART", "A1 PAPER", "TIM CLOCK", "MTS FILE"]) {
+  const context = resolveTransactionContext({ description, currency: "USD" });
+  assert.equal(context.countryCode, null);
 }
 
 const falsePositive = resolveTransactionContext({ merchantRaw: "VISA CAFE", currency: "PHP" });
