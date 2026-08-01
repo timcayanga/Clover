@@ -1,6 +1,6 @@
 # Data Engine Context Corpus
 
-Version: `2026.08.01.3`
+Version: `2026.08.01.4`
 
 The context corpus provides regional and global evidence for transaction normalization. It is advisory context: it may enrich a parsed row or increase confidence, but it must not overwrite confirmed transaction fields.
 
@@ -37,7 +37,7 @@ Context can also provide `counterpartyType` and `purposeHint` values such as emp
 
 The expansion pass prioritizes places where Filipino financial context is likely to originate: the Philippines launch market; ASEAN work, travel, and payment corridors; East Asian tourism and employment corridors; Western Asia OFW destinations; and large diaspora markets. It captures both institution-level evidence (banks, wallets, payment rails, remittance channels) and merchant-level evidence (groceries, transport, utilities, telecom, healthcare, education, travel, ecommerce, subscriptions, and fuel). Country inference remains conservative: a global merchant signal can enrich purpose without claiming a country.
 
-The corpus now contains 1,208 reviewed canonical entries, 3,648 aliases, 137 currencies, and 79,632 lower-confidence descriptor patterns. Descriptor patterns model the way statement processors decorate names, retain the same regional and semantic context, and are intentionally scored below canonical aliases. They are evaluated dynamically instead of being materialized as duplicate in-memory records. Coverage gates evaluate the canonical layer separately so generated labels cannot make a shallow country pack appear complete.
+The corpus now contains 1,448 reviewed canonical entries, 4,126 aliases, 137 currencies, and 91,104 lower-confidence descriptor patterns. Descriptor patterns model the way statement processors decorate names, retain the same regional and semantic context, and are intentionally scored below canonical aliases. They are evaluated dynamically instead of being materialized as duplicate in-memory records. Coverage gates evaluate the canonical layer separately so generated labels cannot make a shallow country pack appear complete.
 
 Matching also tolerates compact statement descriptors such as `GCASHCASHIN` when the compact alias is at least six characters long and the source descriptor itself is compact. Compact matches are recorded with `:compact` evidence so downstream review and diagnostics can distinguish them from ordinary word-boundary matches. Every result reports a coverage tier (`canonical`, `descriptor_variant`, `currency_only`, or `none`) plus the matched aliases. The coverage report exposes canonical and descriptor-variant counts, and breaks entries down by country, region, signal kind, semantic purpose, country-by-purpose, and currency so expansion work can target real gaps rather than only increasing volume.
 
@@ -104,6 +104,12 @@ The fourth worldwide canonical pass adds 30 more regional profiles: Andorra, Lie
 Phase-four regression fixtures exercise every new market, localized Arabic, Persian, and Cyrillic aliases, all three newly validated payment infrastructures, and generic-word collision controls for terms such as `orange`, `casino`, `trust`, `coop`, and `finest`. Shared brands remain country-qualified, so a generic purchase descriptor cannot claim geography by itself.
 
 Official infrastructure validation for this pass includes BCEAO's PI-SPI across the West African Monetary Union, the Central Bank of Somalia's SIPS/SOMQR platform, and Da Afghanistan Bank's APS/AfPay national switch. These entries retain `purposeHint: transfer` as contextual provenance but intentionally leave `transactionTypeHint` unset; Clover still requires account-ownership and counterparty evidence before classifying an own-account transfer.
+
+The worldwide vertical-depth pass adds 240 independently scored canonical providers across 60 existing markets. Each selected market receives one telecom, healthcare, fuel, and education context. Coverage spans 20 European markets, 15 Latin American and Caribbean markets, 15 African and Middle Eastern markets, and 10 Asian markets. This layer targets common statement activity rather than merely adding more country profiles.
+
+Vertical entries use official or distinctive provider names and country-qualified billing descriptors. Shared brands such as Orange, Claro, Tigo, Shell, Circle K, TotalEnergies, Puma, and Vodafone never receive an unqualified alias in this layer. Sixty country fixtures verify geography and purpose, while generic-word controls verify that unrelated uses such as `Shell Script`, `Claro Photo`, and `Tigo Sports` remain unmatched.
+
+Healthcare and education entity research follows the principle behind the [WHO Geolocated Health Facilities Data initiative](https://www.who.int/data/GIS/GHFD) and the [UNESCO World Higher Education Database](https://www.unesco.org/sdg4education2030/en/knowledge-hub/world-higher-education-database): use maintainable official names, preserve country context, and avoid inferring more than the entity identity supports. Fuel-market prioritization also considers the World Bank's cross-country retail-fuel work, but Clover stores merchant evidence rather than market-share or pricing claims.
 
 Research basis for prioritization includes the Philippine Statistics Authority's 2024 Survey on Overseas Filipinos, which places Asia at 74.5% of OFWs and identifies Saudi Arabia, the UAE, Kuwait, Qatar, Hong Kong, Taiwan, Singapore, and Japan among the major Asian destinations. Payment-rail coverage follows current official descriptions from Bank Indonesia (QRIS), Bank of Thailand (PromptPay), PayNet Malaysia (DuitNow), Octopus/Hong Kong FPS, and Japan's transport-card guidance. These references guide coverage priorities; aliases remain curated evidence and are not treated as proof of identity or location.
 

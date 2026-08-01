@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import { CONTEXT_CORPUS_VERSION, deriveTravelEpisodes, getContextCorpusCoverageReport, getContextCorpusEntries, getContextCorpusQualityReport, parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
 
 assert.ok(CONTEXT_CORPUS_VERSION);
-assert.ok(getContextCorpusEntries().length >= 1200);
+assert.ok(getContextCorpusEntries().length >= 1440);
 assert.ok(getContextCorpusQualityReport().profileCount >= 179);
 assert.equal(getContextCorpusQualityReport().valid, true);
 const coverage = getContextCorpusCoverageReport();
 assert.equal(coverage.corpusVersion, CONTEXT_CORPUS_VERSION);
-assert.ok(coverage.canonicalEntryCount >= 1200);
-assert.ok(coverage.descriptorVariantEntryCount > 79000);
+assert.ok(coverage.canonicalEntryCount >= 1440);
+assert.ok(coverage.descriptorVariantEntryCount > 91000);
+assert.ok(coverage.aliasCount >= 4100);
 assert.ok(Object.keys(coverage.countryCounts).length >= 180);
 assert.ok(coverage.currencies.length >= 137);
 assert.ok((coverage.canonicalCountryCounts.PH ?? 0) > 0);
@@ -345,6 +346,75 @@ for (const fixture of worldwidePhaseFourFixtures) {
   assert.notEqual(context.transactionTypeHint, "expense");
 }
 
+const worldwideVerticalFixtures = [
+  { merchantRaw: "A1 TELEKOM AUSTRIA", currency: "EUR", countryCode: "AT", purposeHint: "telecom" },
+  { merchantRaw: "UZ LEUVEN BELGIUM", currency: "EUR", countryCode: "BE", purposeHint: "healthcare" },
+  { merchantRaw: "SHELL NEDERLAND STATION", currency: "EUR", countryCode: "NL", purposeHint: "fuel" },
+  { merchantRaw: "UNIVERSITY OF COPENHAGEN DENMARK", currency: "DKK", countryCode: "DK", purposeHint: "education" },
+  { merchantRaw: "TELIA SVERIGE BILLING", currency: "SEK", countryCode: "SE", purposeHint: "telecom" },
+  { merchantRaw: "OSLO UNIVERSITETSSYKEHUS NORWAY", currency: "NOK", countryCode: "NO", purposeHint: "healthcare" },
+  { merchantRaw: "NESTE STATION FINLAND", currency: "EUR", countryCode: "FI", purposeHint: "fuel" },
+  { merchantRaw: "UNIWERSYTET WARSZAWSKI POLAND", currency: "PLN", countryCode: "PL", purposeHint: "education" },
+  { merchantRaw: "COSMOTE GREECE TELECOM", currency: "EUR", countryCode: "GR", purposeHint: "telecom" },
+  { merchantRaw: "CONFIDO HEALTHCARE ESTONIA", currency: "EUR", countryCode: "EE", purposeHint: "healthcare" },
+  { merchantRaw: "VIRSI STATION LATVIA", currency: "EUR", countryCode: "LV", purposeHint: "fuel" },
+  { merchantRaw: "VILNIAUS UNIVERSITETAS LITHUANIA", currency: "EUR", countryCode: "LT", purposeHint: "education" },
+  { merchantRaw: "SLOVAK TELEKOM TELECOM", currency: "EUR", countryCode: "SK", purposeHint: "telecom" },
+  { merchantRaw: "UNIVERSITY MEDICAL CENTRE LJUBLJANA SLOVENIA", currency: "EUR", countryCode: "SI", purposeHint: "healthcare" },
+  { merchantRaw: "INA STATION CROATIA", currency: "EUR", countryCode: "HR", purposeHint: "fuel" },
+  { merchantRaw: "SOFIYSKI UNIVERSITET BULGARIA", currency: "BGN", countryCode: "BG", purposeHint: "education" },
+  { merchantRaw: "ORANGE ROMANIA TELECOM", currency: "RON", countryCode: "RO", purposeHint: "telecom" },
+  { merchantRaw: "SEMMELWEIS HEALTHCARE HUNGARY", currency: "HUF", countryCode: "HU", purposeHint: "healthcare" },
+  { merchantRaw: "PETROLINA STATION CYPRUS", currency: "EUR", countryCode: "CY", purposeHint: "fuel" },
+  { merchantRaw: "UNIVERSITY OF MALTA", currency: "EUR", countryCode: "MT", purposeHint: "education" },
+  { merchantRaw: "TELCEL MEXICO TELECOM", currency: "MXN", countryCode: "MX", purposeHint: "telecom" },
+  { merchantRaw: "CLINICA INTERNACIONAL LIMA HEALTHCARE", currency: "PEN", countryCode: "PE", purposeHint: "healthcare" },
+  { merchantRaw: "TERPEL COLOMBIA FUEL", currency: "COP", countryCode: "CO", purposeHint: "fuel" },
+  { merchantRaw: "UNIVERSITY OF CHILE EDUCATION", currency: "CLP", countryCode: "CL", purposeHint: "education" },
+  { merchantRaw: "MOVISTAR ARGENTINA TELECOM", currency: "ARS", countryCode: "AR", purposeHint: "telecom" },
+  { merchantRaw: "BRITISH HOSPITAL MONTEVIDEO URUGUAY", currency: "UYU", countryCode: "UY", purposeHint: "healthcare" },
+  { merchantRaw: "PETROPAR STATION PARAGUAY", currency: "PYG", countryCode: "PY", purposeHint: "fuel" },
+  { merchantRaw: "UMSA BOLIVIA EDUCATION", currency: "BOB", countryCode: "BO", purposeHint: "education" },
+  { merchantRaw: "CLARO ECUADOR TELECOM", currency: "USD", countryCode: "EC", purposeHint: "telecom" },
+  { merchantRaw: "CLINICA BIBLICA SAN JOSE COSTA RICA", currency: "CRC", countryCode: "CR", purposeHint: "healthcare" },
+  { merchantRaw: "TERPEL PANAMA FUEL", currency: "PAB", countryCode: "PA", purposeHint: "fuel" },
+  { merchantRaw: "USAC GUATEMALA EDUCATION", currency: "GTQ", countryCode: "GT", purposeHint: "education" },
+  { merchantRaw: "TIGO HONDURAS TELECOM", currency: "HNL", countryCode: "HN", purposeHint: "telecom" },
+  { merchantRaw: "DIAGNOSTICO HEALTHCARE SAN SALVADOR", currency: "USD", countryCode: "SV", purposeHint: "healthcare" },
+  { merchantRaw: "SUNIX STATION DOMINICANA", currency: "DOP", countryCode: "DO", purposeHint: "fuel" },
+  { merchantRaw: "DJEZZY ALGERIA TELECOM", currency: "DZD", countryCode: "DZ", purposeHint: "telecom" },
+  { merchantRaw: "TAOUFIK HEALTHCARE TUNIS", currency: "TND", countryCode: "TN", purposeHint: "healthcare" },
+  { merchantRaw: "MISR STATION EGYPT", currency: "EGP", countryCode: "EG", purposeHint: "fuel" },
+  { merchantRaw: "UON KENYA EDUCATION", currency: "KES", countryCode: "KE", purposeHint: "education" },
+  { merchantRaw: "VODACOM TANZANIA TELECOM", currency: "TZS", countryCode: "TZ", purposeHint: "telecom" },
+  { merchantRaw: "NAKASERO HEALTHCARE KAMPALA", currency: "UGX", countryCode: "UG", purposeHint: "healthcare" },
+  { merchantRaw: "RUBIS STATION RWANDA", currency: "RWF", countryCode: "RW", purposeHint: "fuel" },
+  { merchantRaw: "UCAD SENEGAL EDUCATION", currency: "XOF", countryCode: "SN", purposeHint: "education" },
+  { merchantRaw: "ORANGE COTE IVOIRE TELECOM", currency: "XOF", countryCode: "CI", purposeHint: "telecom" },
+  { merchantRaw: "NETCARE HOSPITAL SOUTH AFRICA", currency: "ZAR", countryCode: "ZA", purposeHint: "healthcare" },
+  { merchantRaw: "PUMA STATION ZAMBIA", currency: "ZMW", countryCode: "ZM", purposeHint: "fuel" },
+  { merchantRaw: "UZ ZIMBABWE EDUCATION", currency: "USD", countryCode: "ZW", purposeHint: "education" },
+  { merchantRaw: "MTN GHANA TELECOM", currency: "GHS", countryCode: "GH", purposeHint: "telecom" },
+  { merchantRaw: "LAGOON HEALTHCARE LAGOS", currency: "NGN", countryCode: "NG", purposeHint: "healthcare" },
+  { merchantRaw: "AFRIQUIA STATION MOROCCO", currency: "MAD", countryCode: "MA", purposeHint: "fuel" },
+  { merchantRaw: "NTT DOCOMO JAPAN TELECOM", currency: "JPY", countryCode: "JP", purposeHint: "telecom" },
+  { merchantRaw: "삼성서울병원 대한민국", currency: "KRW", countryCode: "KR", purposeHint: "healthcare" },
+  { merchantRaw: "中国石化 加油站", currency: "CNY", countryCode: "CN", purposeHint: "fuel" },
+  { merchantRaw: "DELHI UNIVERSITY INDIA EDUCATION", currency: "INR", countryCode: "IN", purposeHint: "education" },
+  { merchantRaw: "GRAMEENPHONE BANGLADESH TELECOM", currency: "BDT", countryCode: "BD", purposeHint: "telecom" },
+  { merchantRaw: "SHIFA HEALTHCARE ISLAMABAD", currency: "PKR", countryCode: "PK", purposeHint: "healthcare" },
+  { merchantRaw: "LIOC STATION SRI LANKA", currency: "LKR", countryCode: "LK", purposeHint: "fuel" },
+  { merchantRaw: "TU NEPAL EDUCATION", currency: "NPR", countryCode: "NP", purposeHint: "education" },
+  { merchantRaw: "BEELINE KAZAKHSTAN TELECOM", currency: "KZT", countryCode: "KZ", purposeHint: "telecom" },
+  { merchantRaw: "AKFA HEALTHCARE TASHKENT", currency: "UZS", countryCode: "UZ", purposeHint: "healthcare" },
+] as const;
+for (const fixture of worldwideVerticalFixtures) {
+  const context = resolveTransactionContext(fixture);
+  assert.equal(context.countryCode, fixture.countryCode);
+  assert.equal(context.purposeHint, fixture.purposeHint);
+  assert.equal(context.transactionTypeHint, null);
+}
+
 const worldwideDepthFixtures = [
   { merchantRaw: "AMERICAN HOSPITAL ALBANIA", currency: "ALL", countryCode: "AL", purposeHint: "healthcare" },
   { merchantRaw: "EDESUR ARGENTINA", currency: "ARS", countryCode: "AR", purposeHint: "utilities" },
@@ -390,6 +460,12 @@ for (const description of ["ORANGE DRESS", "CASINO GAME", "TRUST EXERCISE", "COO
   const context = resolveTransactionContext({ description, currency: "USD" });
   assert.equal(context.countryCode, null);
   assert.equal(context.paymentRail, null);
+}
+
+for (const description of ["SHELL SCRIPT", "CLARO PHOTO", "TIGO SPORTS", "CIRCLE K THEORY", "TOTAL REWARDS"]) {
+  const context = resolveTransactionContext({ description, currency: "USD" });
+  assert.equal(context.countryCode, null);
+  assert.equal(context.purposeHint, null);
 }
 
 const falsePositive = resolveTransactionContext({ merchantRaw: "VISA CAFE", currency: "PHP" });
