@@ -87,4 +87,23 @@ assert.equal(
   "A MayaSavings filename should preserve the bank product when extracted PDF text is sparse."
 );
 
+const unlabeledMayaSavingsMetadata = detectStatementMetadataFromText(
+  `Statement of Account
+Statement date: 1 July 2026
+Consumer Savings
+0.00 PHP
+8052 8070 2608
+100.00 PHP
+- 1.00 PHP
+Maya Savings (2608) Statement date: 1 July 2026`,
+  "MayaSavings_SoA_generated-id_2026JUN.pdf"
+);
+assert.equal(unlabeledMayaSavingsMetadata.accountType, "bank");
+assert.equal(unlabeledMayaSavingsMetadata.accountName, "Maya Savings");
+assert.equal(
+  unlabeledMayaSavingsMetadata.accountNumber?.replace(/\D/g, ""),
+  "805280702608",
+  "A standalone Maya Savings account number must stop before the following balance."
+);
+
 console.log("[PASS] password prompting, wallet identity, and multi-file progress regressions");

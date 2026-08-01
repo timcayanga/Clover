@@ -7,6 +7,10 @@ export type ImportedAccountIdentityLike = {
   source?: string | null;
 };
 
+export type ImportedAccountProductEvidence = ImportedAccountIdentityLike & {
+  fileName?: string | null;
+};
+
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 
 const normalizeMerchantText = (value?: string | null) =>
@@ -48,6 +52,33 @@ export const canonicalImportedInstitutionKey = (value?: string | null) =>
     .replace(/\bchina\s+bank\b/g, "chinabank")
     .replace(/\bmetro\s+bank\b/g, "metrobank")
     .replace(/\bphilippine\s+national\s+bank\b/g, "pnb");
+
+export const inferCanonicalImportedAccountProduct = ({
+  fileName,
+  name,
+  institution,
+}: ImportedAccountProductEvidence): {
+  type: "bank" | "wallet";
+  institution: string;
+  name: string;
+} | null => {
+  const fileIdentity = normalizeMerchantText(fileName);
+  const accountIdentity = normalizeMerchantText(`${institution ?? ""} ${name ?? ""}`);
+
+  if (/\bmaya\s*savings\b|\bconsumer\s+savings\b/.test(`${fileIdentity} ${accountIdentity}`)) {
+    return { type: "bank", institution: "Maya Bank", name: "Maya Savings" };
+  }
+
+  if (/\bmaya\s*wallet\b/.test(`${fileIdentity} ${accountIdentity}`)) {
+    return { type: "wallet", institution: "Maya", name: "Maya Wallet" };
+  }
+
+  if (/\bwise\b/.test(accountIdentity)) {
+    return { type: "wallet", institution: "Wise", name: "Wise" };
+  }
+
+  return null;
+};
 
 export const isWiseWalletWithoutVisibleAccountNumber = ({
   name,

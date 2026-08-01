@@ -25,6 +25,8 @@ This document captures the Maya parsing rules learned from the synthetic trainin
 
 - Treat Maya Savings as a bank savings account, not a wallet.
 - Treat a `MayaSavings` filename as supporting product evidence when PDF text extraction is sparse. A labeled account number in the statement outranks unrelated long reference numbers and earlier generic metadata guesses.
+- Some Maya Savings PDFs place the 12-digit account number on its own line as three groups of four digits, followed immediately by balance rows. Read only that bounded line; never append digits from the following balance.
+- Treat a `MayaWallet` filename as explicit wallet evidence. If a legacy import created both bank and wallet copies for the same uploaded account, retain the source-backed account and move its transactions into the corrected product before removing the orphan copy.
 - Use running balance as a first-class field.
 - Keep `Salary Credit` as `Income`.
 - Keep `Interest Earned` as `Income`.

@@ -1,5 +1,11 @@
 import { strict as assert } from "node:assert";
-import { buildUploadedAccountDedupeKey, buildUploadedAccountLastFourDedupeKey } from "@/lib/imported-account-identity";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import {
+  buildUploadedAccountDedupeKey,
+  buildUploadedAccountLastFourDedupeKey,
+  inferCanonicalImportedAccountProduct,
+} from "@/lib/imported-account-identity";
 
 const creditCardKey = buildUploadedAccountDedupeKey({
   name: "RCBC 1014",
@@ -75,6 +81,53 @@ assert.notEqual(
   suffixOnlyCreditCardKey,
   suffixOnlyBankKey,
   "Last-four repair matching must stay scoped by account type."
+);
+
+assert.deepEqual(
+  inferCanonicalImportedAccountProduct({
+    fileName: "MayaSavings_SoA_generated-id_2026JUN.pdf",
+    name: "Fees and charges",
+    institution: "Maya Bank",
+    type: "wallet",
+  }),
+  { type: "bank", institution: "Maya Bank", name: "Maya Savings" },
+  "Maya Savings filename evidence must override a stale wallet classification."
+);
+assert.deepEqual(
+  inferCanonicalImportedAccountProduct({
+    fileName: "MayaWallet_SoA_JUN.pdf",
+    name: "Maya",
+    institution: "Maya Bank",
+    type: "bank",
+  }),
+  { type: "wallet", institution: "Maya", name: "Maya Wallet" },
+  "Maya Wallet filename evidence must override the generic bank fallback."
+);
+assert.deepEqual(
+  inferCanonicalImportedAccountProduct({
+    name: "Wise 8345",
+    institution: "Wise",
+    type: "bank",
+  }),
+  { type: "wallet", institution: "Wise", name: "Wise" },
+  "Ordinary Wise balances must remain wallets."
+);
+
+const accountsRouteSource = readFileSync(resolve(process.cwd(), "app/api/accounts/route.ts"), "utf8");
+const eagerMayaWiseRepair = accountsRouteSource.indexOf(
+  "await repairLegacyUploadedMayaWiseAccountSplits(workspaceId, compatibleColumns)"
+);
+const visibleAccountsQuery = accountsRouteSource.indexOf(
+  "const [accounts, accountRules, statementCheckpoints, investmentSnapshots]"
+);
+assert.ok(
+  eagerMayaWiseRepair > 0 && visibleAccountsQuery > eagerMayaWiseRepair,
+  "Maya/Wise split repair must finish before the Accounts API returns visible cards."
+);
+assert.match(
+  accountsRouteSource,
+  /transaction\.updateMany[\s\S]+importFile\.updateMany[\s\S]+accountStatementCheckpoint\.updateMany[\s\S]+account\.deleteMany/,
+  "Account repair must repoint financial history and import evidence before deleting an orphan account."
 );
 
 console.log("uploaded-account-dedupe-regression: ok");

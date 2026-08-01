@@ -18,6 +18,7 @@ import { BANK_PRIORITY, normalizeBankName } from "@/lib/data-qa-banks";
 import {
   buildUploadedAccountDedupeKey,
   buildUploadedAccountLastFourDedupeKey,
+  inferCanonicalImportedAccountProduct,
   isWiseWalletWithoutVisibleAccountNumber,
   matchesLegacyPayPalWalletDuplicate,
   normalizeImportedCurrencyCode,
@@ -623,6 +624,11 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
   if (repairRows.length === 0) {
     return;
   }
+  const importEvidence = await prisma.importFile.findMany({
+    where: { workspaceId, id: { in: Array.from(new Set(repairRows.map((row) => row.importFileId))) } },
+    select: { id: true, accountId: true, fileName: true },
+  }).catch(() => []);
+  const importEvidenceById = new Map(importEvidence.map((file) => [file.id, file] as const));
 
   const existingAccounts = await prisma.account.findMany({
     where: { workspaceId },
@@ -659,6 +665,7 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
     accountType: string | null;
     currency: string | null;
     balance: string | null;
+    linkedAccountIds: Set<string>;
     rows: RepairGroupRow[];
   };
   const groups = new Map<string, RepairGroup>();
@@ -671,10 +678,20 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
       continue;
     }
 
-    const institution = normalizeImportInstitution(row.institution ?? readImportedJsonText(row.rawPayload, "institution"));
-    const accountType = readImportedAccountType(row.rawPayload) ?? "bank";
-    const key = buildUploadedAccountDedupeKey({
+    const importFile = importEvidenceById.get(row.importFileId);
+    const parsedInstitution = normalizeImportInstitution(row.institution ?? readImportedJsonText(row.rawPayload, "institution"));
+    const product = inferCanonicalImportedAccountProduct({
+      fileName: importFile?.fileName,
       name: row.accountName?.trim() || readImportedJsonText(row.rawPayload, "accountName"),
+      institution: parsedInstitution,
+      type: readImportedAccountType(row.rawPayload),
+    });
+    const institution = product?.institution ?? parsedInstitution;
+    const accountType = product?.type ?? readImportedAccountType(row.rawPayload) ?? "bank";
+    const parsedAccountName =
+      product?.name ?? (row.accountName?.trim() || readImportedJsonText(row.rawPayload, "accountName"));
+    const key = buildUploadedAccountDedupeKey({
+      name: parsedAccountName,
       institution: institution || null,
       accountNumber,
       type: accountType,
@@ -687,16 +704,20 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
       groups.get(key) ??
         {
           accountNumber,
-          accountName: row.accountName?.trim() || readImportedJsonText(row.rawPayload, "accountName"),
+          accountName: parsedAccountName,
           institution: institution || null,
           accountType,
           currency: row.currency?.trim().toUpperCase() || null,
           balance: null,
+          linkedAccountIds: new Set<string>(),
           rows: [],
         };
     const runningBalance = readImportedRunningBalance(row.rawPayload);
     if (group.balance === null && runningBalance !== null) {
       group.balance = runningBalance.toFixed(2);
+    }
+    if (importFile?.accountId) {
+      group.linkedAccountIds.add(importFile.accountId);
     }
     group.rows.push(row);
     groups.set(key, group);
@@ -719,7 +740,11 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
       type: accountType,
       currency: group.currency,
     });
+    const linkedAccount = Array.from(group.linkedAccountIds)
+      .map((accountId) => existingAccounts.find((candidate) => candidate.id === accountId) ?? null)
+      .find((candidate) => candidate?.source === "upload") ?? null;
     let account =
+      linkedAccount ??
       (groupIdentityKey ? accountByIdentity.get(groupIdentityKey) ?? null : null) ??
       (groupLastFourIdentityKey ? accountByLastFourIdentity.get(groupLastFourIdentityKey) ?? null : null) ??
       null;
@@ -741,7 +766,7 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
           type: accountType,
           currency,
           source: "upload",
-          ...(group.balance !== null ? { balance: group.balance } : {}),
+          ...(group.balance !== null && !linkedAccount ? { balance: group.balance } : {}),
         },
         select: {
           id: true,
@@ -773,7 +798,7 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
           type: accountType,
           currency,
           source: "upload",
-          ...(group.balance !== null ? { balance: group.balance } : {}),
+          ...(group.balance !== null && !linkedAccount ? { balance: group.balance } : {}),
         },
       }).catch(() => null);
     }
@@ -1556,6 +1581,164 @@ const repairLegacyUploadedCardAccountSplits = async (workspaceId: string, compat
   }
 };
 
+const extractMayaSavingsAccountNumberFromText = (text: string) =>
+  text
+    .split(/\r?\n/)
+    .map((line) => line.match(/^\s*(\d{4}\s+\d{4}\s+\d{4})\s*$/)?.[1]?.replace(/\D/g, "") ?? null)
+    .find((value): value is string => Boolean(value)) ?? null;
+
+const repairLegacyUploadedMayaWiseAccountSplits = async (
+  workspaceId: string,
+  compatibleColumns: Set<string>
+) => {
+  if (!compatibleColumns.has("accountNumber")) {
+    return 0;
+  }
+
+  const uploadedAccounts = await prisma.account.findMany({
+    where: {
+      workspaceId,
+      source: "upload",
+      OR: [
+        { institution: { contains: "Maya", mode: "insensitive" } },
+        { institution: { contains: "Wise", mode: "insensitive" } },
+        { name: { contains: "Maya", mode: "insensitive" } },
+        { name: { contains: "Wise", mode: "insensitive" } },
+      ],
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      accountNumber: true,
+      type: true,
+      currency: true,
+      source: true,
+      createdAt: true,
+      updatedAt: true,
+      importFiles: {
+        select: { fileName: true, sourceFingerprint: true },
+      },
+      _count: {
+        select: { importFiles: true, statementCheckpoints: true },
+      },
+    },
+  }).catch(() => []);
+  if (uploadedAccounts.length === 0) {
+    return 0;
+  }
+
+  const mayaSavingsFingerprints = uploadedAccounts
+    .flatMap((account) =>
+      account.importFiles
+        .filter((file) => /maya\s*savings/i.test(file.fileName))
+        .map((file) => file.sourceFingerprint)
+    )
+    .filter((value): value is string => Boolean(value));
+  const mayaSavingsCaches = mayaSavingsFingerprints.length > 0
+    ? await prisma.importFileExtractionCache.findMany({
+        where: { workspaceId, fileFingerprint: { in: mayaSavingsFingerprints } },
+        select: { fileFingerprint: true, extractedText: true },
+      }).catch(() => [])
+    : [];
+  const extractedAccountNumberByFingerprint = new Map(
+    mayaSavingsCaches
+      .map((cache) => [cache.fileFingerprint, extractMayaSavingsAccountNumberFromText(cache.extractedText)] as const)
+      .filter((entry): entry is readonly [string, string] => Boolean(entry[1]))
+  );
+
+  let repairedCount = 0;
+  for (const canonical of uploadedAccounts.filter((account) => account._count.importFiles > 0)) {
+    const productEvidence = canonical.importFiles
+      .map((file) => inferCanonicalImportedAccountProduct({ ...canonical, fileName: file.fileName }))
+      .find(Boolean) ?? inferCanonicalImportedAccountProduct(canonical);
+    if (!productEvidence) {
+      continue;
+    }
+
+    const originalDigits = normalizeImportAccountNumber(canonical.accountNumber);
+    const correctedMayaSavingsNumber =
+      productEvidence.name === "Maya Savings"
+        ? canonical.importFiles
+            .map((file) => file.sourceFingerprint ? extractedAccountNumberByFingerprint.get(file.sourceFingerprint) ?? null : null)
+            .find((value): value is string => Boolean(value)) ?? null
+        : null;
+    const canonicalDigits = correctedMayaSavingsNumber ?? originalDigits;
+    const duplicateIds = uploadedAccounts
+      .filter((candidate) => candidate.id !== canonical.id)
+      .filter((candidate) => candidate._count.importFiles === 0 && candidate._count.statementCheckpoints === 0)
+      .filter((candidate) => {
+        const candidateIdentity = `${candidate.institution ?? ""} ${candidate.name ?? ""}`;
+        const isSameProduct = productEvidence.institution === "Wise"
+          ? /\bwise\b/i.test(candidateIdentity)
+          : /\bmaya\b/i.test(candidateIdentity);
+        const candidateDigits = normalizeImportAccountNumber(candidate.accountNumber);
+        const sameCurrency = normalizeImportedCurrencyCode(candidate.currency) === normalizeImportedCurrencyCode(canonical.currency);
+        return Boolean(isSameProduct && sameCurrency && originalDigits && candidateDigits === originalDigits);
+      })
+      .map((candidate) => candidate.id);
+
+    const canonicalName = correctedMayaSavingsNumber
+      ? `${productEvidence.name} ${correctedMayaSavingsNumber.slice(-4)}`
+      : formatUploadAccountDisplayName(
+          productEvidence.name,
+          productEvidence.institution,
+          canonicalDigits,
+          productEvidence.type
+        );
+    const needsIdentityUpdate =
+      canonical.type !== productEvidence.type ||
+      canonical.institution !== productEvidence.institution ||
+      canonical.name !== canonicalName ||
+      (correctedMayaSavingsNumber !== null && originalDigits !== correctedMayaSavingsNumber);
+    if (!needsIdentityUpdate && duplicateIds.length === 0) {
+      continue;
+    }
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.account.update({
+          where: { id: canonical.id },
+          data: {
+            type: productEvidence.type,
+            institution: productEvidence.institution,
+            name: canonicalName,
+            ...(correctedMayaSavingsNumber ? { accountNumber: correctedMayaSavingsNumber } : {}),
+          },
+        });
+        if (duplicateIds.length === 0) {
+          return;
+        }
+
+        await tx.transaction.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.importFile.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.documentImport.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.accountStatementCheckpoint.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.financialCommitment.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.receiptDocument.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.investmentSnapshot.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.investmentHolding.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.investmentPurchase.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.investmentDividend.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.recurringPattern.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.accountRule.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+        await tx.account.deleteMany({ where: { id: { in: duplicateIds }, source: "upload" } });
+      });
+      repairedCount += 1 + duplicateIds.length;
+    } catch (error) {
+      console.warn("[accounts] unable to repair legacy Maya/Wise account split", {
+        workspaceId,
+        canonicalAccountId: canonical.id,
+        duplicateAccountIds: duplicateIds,
+        error,
+      });
+    }
+  }
+
+  return repairedCount;
+};
+
 const repairLegacyUploadedPayPalAccountSplits = async (workspaceId: string, compatibleColumns: Set<string>) => {
   if (!compatibleColumns.has("accountNumber")) {
     return 0;
@@ -1653,6 +1836,13 @@ export async function GET(request: Request) {
     // accounts so stale client caches cannot keep the obsolete card copy alive.
     await repairLegacyUploadedPayPalAccountSplits(workspaceId, compatibleColumns).catch((error) => {
       console.warn("[accounts] unable to repair legacy PayPal wallet split", {
+        workspaceId,
+        error,
+      });
+      return 0;
+    });
+    await repairLegacyUploadedMayaWiseAccountSplits(workspaceId, compatibleColumns).catch((error) => {
+      console.warn("[accounts] unable to repair legacy Maya/Wise account splits", {
         workspaceId,
         error,
       });

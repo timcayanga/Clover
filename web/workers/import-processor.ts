@@ -117,7 +117,7 @@ import {
   resolveStatementIdentityFromParsedRows,
 } from "@/lib/import-statement-identity";
 import { mergeCheckpointSourceMetadata, readCheckpointImportMode } from "@/lib/import-workflow";
-import { matchesLegacyPayPalWalletDuplicate } from "@/lib/imported-account-identity";
+import { inferCanonicalImportedAccountProduct, matchesLegacyPayPalWalletDuplicate } from "@/lib/imported-account-identity";
 import { findBestImportedAccountMatch, matchesImportedAccountIdentity, normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import {
   claimNextImportEnrichmentJob,
@@ -5705,7 +5705,7 @@ const resolveConfirmationAccount = async (params: {
   const fileNameInstitutionFallback = isGenericMobileScreenshotFileName(fileName) || accountSnapshotInventory
     ? null
     : sanitizeBankNameLabel(normalizeBankName(fileName));
-  const inferredInstitution =
+  const inferredInstitutionCandidate =
     mobileScreenshotWalletIdentity?.institution ??
     inventoryInstitution ??
     sanitizeBankNameLabel(preferredIdentity?.institution) ??
@@ -5735,7 +5735,7 @@ const resolveConfirmationAccount = async (params: {
     "insurance",
     "other",
   ];
-  const inferredAccountType: AccountType | null =
+  const inferredAccountTypeCandidate: AccountType | null =
     mobileScreenshotWalletIdentity?.accountType ??
     inventoryAccountType ??
     (typeof preferredIdentity?.accountType === "string" &&
@@ -5748,19 +5748,29 @@ const resolveConfirmationAccount = async (params: {
             supportedImportAccountTypes.includes(params.statementMetadata.accountType as AccountType)
           ? (params.statementMetadata.accountType as AccountType)
           : null);
-  const inferredAccountName =
+  const inferredAccountNameCandidate =
     mobileScreenshotWalletIdentity?.accountName ??
     inventoryAccountName ??
     sanitizeBankNameLabel(preferredIdentity?.accountName) ??
     sanitizeBankNameLabel(fallbackIdentity?.accountName) ??
-    (inferredInstitution
+    (inferredInstitutionCandidate
       ? formatUploadAccountDisplayName(
-          inferredInstitution,
-          inferredInstitution,
+          inferredInstitutionCandidate,
+          inferredInstitutionCandidate,
           inferredAccountNumber,
-          inferredAccountType ?? inferAccountTypeFromStatement(inferredInstitution, inferredInstitution, "bank")
+          inferredAccountTypeCandidate ?? inferAccountTypeFromStatement(inferredInstitutionCandidate, inferredInstitutionCandidate, "bank")
         )
       : null);
+  const canonicalImportedProduct = inferCanonicalImportedAccountProduct({
+    fileName,
+    name: inferredAccountNameCandidate,
+    institution: inferredInstitutionCandidate,
+    accountNumber: inferredAccountNumber,
+    type: inferredAccountTypeCandidate,
+  });
+  const inferredInstitution = canonicalImportedProduct?.institution ?? inferredInstitutionCandidate;
+  const inferredAccountType: AccountType | null = canonicalImportedProduct?.type ?? inferredAccountTypeCandidate;
+  const inferredAccountName = canonicalImportedProduct?.name ?? inferredAccountNameCandidate;
   const inferredCurrency = normalizeInstitutionCurrency(
     inferredInstitution,
     inventoryCurrency ??

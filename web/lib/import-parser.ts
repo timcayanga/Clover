@@ -24116,11 +24116,20 @@ const parseMayaSavingsStatementMetadata = (
     lines.find((line) => /account\s+number/i.test(line)) ??
     accountLine;
 
+  // Maya Savings places its 12-digit account number on a standalone line,
+  // immediately before balance figures. Match that bounded line before any
+  // generic context so the following balance cannot be appended as digits.
+  const standaloneSavingsAccountNumber = lines
+    .map((line) => line.match(/^\s*(\d{4}\s+\d{4}\s+\d{4})\s*$/)?.[1] ?? null)
+    .find((value): value is string => Boolean(value));
+
   const labeledAccountNumber =
     preserveAccountNumberDisplayCandidate(accountNumberLine.match(/account\s+number\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i)?.[1]) ??
     normalizeAccountNumberCandidate(accountNumberLine.match(/account\s+number\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i)?.[1]);
   const accountNumber =
     labeledAccountNumber ??
+    preserveAccountNumberDisplayCandidate(standaloneSavingsAccountNumber) ??
+    normalizeAccountNumberCandidate(standaloneSavingsAccountNumber) ??
     preserveAccountNumberDisplayCandidate(accountNumberLine.match(/\b(?:\d[\d\s-]{10,}\d)\b/g)?.[0]) ??
     normalizeAccountNumberCandidate(accountNumberLine.match(/\b(?:\d[\d\s-]{10,}\d)\b/g)?.[0]) ??
     preserveAccountNumberDisplayCandidate(accountNumberLine.match(/\b(\d{4}\s+\d{4}\s+\d{4})\b/)?.[1] ?? null) ??
@@ -24142,7 +24151,7 @@ const parseMayaSavingsStatementMetadata = (
     "Maya Savings";
   const accountName =
     lines.find((line) => /account\s+name\s*:/i.test(line))?.match(/account\s+name\s*:\s*(.+)$/i)?.[1]?.trim() ??
-    mayaSavingsAccountNameFallback;
+    (/\bconsumer\s+savings\b/i.test(normalized) ? "Maya Savings" : mayaSavingsAccountNameFallback);
 
   const summaryLine = lines.find((line) => /account\s+summary/i.test(line)) ?? null;
   const summaryIndex = lines.findIndex((line) => /account\s+summary/i.test(line));
@@ -25171,6 +25180,16 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
     return withDetectedCurrency(gcashMobileMetadata, text);
   }
 
+  // A MayaSavings filename is explicit product evidence. Resolve it before
+  // the generic Maya mobile/wallet detector, which otherwise sees words such
+  // as "Wallet Transfer" in legitimate savings activity and wins too early.
+  if (/maya[\s_-]*savings/i.test(fileName)) {
+    const explicitMayaSavingsMetadata = parseMayaSavingsStatementMetadata(text, {}, fileName);
+    if (explicitMayaSavingsMetadata) {
+      return withDetectedCurrency(explicitMayaSavingsMetadata, text);
+    }
+  }
+
   const mayaMobileMetadata = mayaMobileScreenshotMetadata(text);
   if (mayaMobileMetadata) {
     return withDetectedCurrency(mayaMobileMetadata, text);
@@ -25713,6 +25732,13 @@ export const parseImportText = (
   const bpiMobileParsed = parseBpiMobileScreenshotImportText(text, fileName);
   if (bpiMobileParsed && bpiMobileParsed.rows.length > 0) {
     return filterSharedScreenshotParsedRows(bpiMobileParsed.rows, text, fileName, context);
+  }
+
+  if (/maya[\s_-]*savings/i.test(fileName)) {
+    const explicitMayaSavingsParsed = parseMayaSavingsImportText(text, context, fileName);
+    if (explicitMayaSavingsParsed && explicitMayaSavingsParsed.rows.length > 0) {
+      return explicitMayaSavingsParsed.rows;
+    }
   }
 
   const knownMobileWalletRows = knownMobileWalletScreenshotRows(fileName, fileType);
