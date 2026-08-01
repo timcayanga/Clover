@@ -7717,19 +7717,19 @@ function TransactionsPageContent() {
               <div className="transactions-footer-snapshot" aria-label="Cash flow snapshot for all filtered transactions">
                 <div className="transactions-footer-snapshot__metrics">
                   <div className="transactions-footer-snapshot__metric">
+                    <span className="transactions-footer-snapshot__metric-label">Income</span>
+                    <span className="transactions-footer-snapshot__metric-value positive">
+                      {formatTransactionAggregate(displayedTransactionsSummary.income, visibleTransactions)}
+                    </span>
+                  </div>
+                  <div className="transactions-footer-snapshot__metric">
                     <span className="transactions-footer-snapshot__metric-label">Spending</span>
                     <span className="transactions-footer-snapshot__metric-value negative">
                       {formatTransactionAggregate(displayedTransactionsSummary.spending, visibleTransactions)}
                     </span>
                   </div>
-                  <div className="transactions-footer-snapshot__metric">
-                    <span className="transactions-footer-snapshot__metric-label">Transfers</span>
-                    <span className="transactions-footer-snapshot__metric-value">
-                      {formatTransactionAggregate(displayedTransactionsSummary.transfers, visibleTransactions)}
-                    </span>
-                  </div>
                   <div className="transactions-footer-snapshot__metric transactions-footer-snapshot__metric--net" style={transactionsFooterNetMetricStyle}>
-                    <span className="transactions-footer-snapshot__metric-label">Net cash flow</span>
+                    <span className="transactions-footer-snapshot__metric-label">Net Cash Flow</span>
                     <span className={`transactions-footer-snapshot__metric-value ${netCashFlow >= 0 ? "positive" : "negative"}`}>
                       {formatTransactionAggregate(netCashFlow, visibleTransactions)}
                     </span>

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { classifyMerchant } from "../lib/data-engine";
 import { getTransactionSummaryTypeOverrides } from "../lib/transaction-summary";
 
@@ -66,4 +68,14 @@ const classifiedPaymentCredit = classifyMerchant({
 assert.equal(classifiedPaymentCredit.categoryName, "Transfers");
 assert.equal(classifiedPaymentCredit.preferredType, "income");
 
-console.log("[PASS] transaction summaries exclude signed card repayments and their matched bank debit from spending");
+const pageSource = readFileSync(path.join(process.cwd(), "app/transactions/page.tsx"), "utf8");
+const footerSnapshot = pageSource.match(
+  /<div className="transactions-footer-snapshot"[\s\S]*?<\/div>\s*<\/div>\s*\) : null}/
+)?.[0] ?? "";
+assert.match(footerSnapshot, />Income<\/span>/);
+assert.match(footerSnapshot, />Spending<\/span>/);
+assert.match(footerSnapshot, />Net Cash Flow<\/span>/);
+assert.doesNotMatch(footerSnapshot, />Transfers<\/span>/);
+assert.match(pageSource, /const netCashFlow = displayedTransactionsSummary\.income - displayedTransactionsSummary\.spending;/);
+
+console.log("[PASS] transaction summaries exclude repayments and show income, spending, and net cash flow");
