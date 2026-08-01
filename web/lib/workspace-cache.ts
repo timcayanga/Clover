@@ -90,6 +90,10 @@ export type WorkspaceCacheUpdatedEventDetail = {
   key: string;
 };
 
+const workspaceCacheMemory = new Map<string, unknown>();
+const workspaceCacheTransactionLimits = [500, 100, 0] as const;
+const workspaceCacheSnapshotLimit = 3;
+
 const isCachedRecordArray = (value: unknown): value is CachedRecord[] =>
   Array.isArray(value) && value.every((entry) => entry && typeof entry === "object");
 
@@ -593,20 +597,122 @@ const readJsonCacheFromStorage = <T>(storage: Storage | null, key: string): T | 
 };
 
 const readJsonCache = <T>(key: string): T | null => {
-  return readJsonCacheFromStorage<T>(getLocalStorage(), key) ?? readJsonCacheFromStorage<T>(getSessionStorage(), key);
+  return (
+    readJsonCacheFromStorage<T>(getLocalStorage(), key) ??
+    readJsonCacheFromStorage<T>(getSessionStorage(), key) ??
+    (workspaceCacheMemory.get(key) as T | undefined) ??
+    null
+  );
+};
+
+const compactWorkspaceCacheForStorage = (key: string, value: unknown, transactionLimit: number) => {
+  if (
+    (key !== accountsWorkspaceCacheKey && key !== transactionsWorkspaceCacheKey) ||
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value)
+  ) {
+    return value;
+  }
+
+  const state = value as { selectedWorkspaceId?: unknown; snapshots?: unknown };
+  if (!state.snapshots || typeof state.snapshots !== "object" || Array.isArray(state.snapshots)) {
+    return value;
+  }
+
+  const snapshots = Object.entries(state.snapshots as Record<string, unknown>)
+    .filter(([, snapshot]) => snapshot && typeof snapshot === "object" && !Array.isArray(snapshot))
+    .sort(([, left], [, right]) => {
+      const leftUpdatedAt = Number((left as { updatedAt?: unknown }).updatedAt ?? 0);
+      const rightUpdatedAt = Number((right as { updatedAt?: unknown }).updatedAt ?? 0);
+      return rightUpdatedAt - leftUpdatedAt;
+    })
+    .slice(0, workspaceCacheSnapshotLimit)
+    .map(([workspaceId, snapshot]) => {
+      const record = snapshot as Record<string, unknown>;
+      return [
+        workspaceId,
+        {
+          ...record,
+          transactions: Array.isArray(record.transactions) ? record.transactions.slice(0, transactionLimit) : [],
+          imports: Array.isArray(record.imports) ? record.imports.slice(0, 50) : [],
+          ...(key === accountsWorkspaceCacheKey
+            ? {
+                accountRules: Array.isArray(record.accountRules) ? record.accountRules.slice(0, 500) : [],
+                statementCheckpoints: Array.isArray(record.statementCheckpoints)
+                  ? record.statementCheckpoints.slice(0, 250)
+                  : [],
+              }
+            : {
+                categories: Array.isArray(record.categories) ? record.categories.slice(0, 250) : [],
+              }),
+        },
+      ];
+    });
+
+  return {
+    ...state,
+    snapshots: Object.fromEntries(snapshots),
+  };
+};
+
+const tryWriteStorageValue = (storage: Storage | null, key: string, serialized: string) => {
+  if (!storage) {
+    return false;
+  }
+
+  try {
+    storage.setItem(key, serialized);
+    return true;
+  } catch {
+    // Replacing an older oversized snapshot may need its quota released first.
+    try {
+      storage.removeItem(key);
+      storage.setItem(key, serialized);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 };
 
 const writeJsonCache = (key: string, value: unknown) => {
-  const serialized = JSON.stringify(value);
+  workspaceCacheMemory.set(key, value);
   const localStorageRef = getLocalStorage();
   const sessionStorageRef = getSessionStorage();
+  let persisted = false;
 
-  if (localStorageRef) {
-    localStorageRef.setItem(key, serialized);
+  for (const transactionLimit of workspaceCacheTransactionLimits) {
+    let serialized: string;
+    try {
+      serialized = JSON.stringify(compactWorkspaceCacheForStorage(key, value, transactionLimit));
+    } catch {
+      break;
+    }
+
+    if (tryWriteStorageValue(localStorageRef, key, serialized)) {
+      persisted = true;
+      try {
+        sessionStorageRef?.removeItem(key);
+      } catch {
+        // A stale session snapshot is harmless when local persistence succeeded.
+      }
+      break;
+    }
+
+    if (tryWriteStorageValue(sessionStorageRef, key, serialized)) {
+      persisted = true;
+      break;
+    }
   }
 
-  if (sessionStorageRef) {
-    sessionStorageRef.setItem(key, serialized);
+  if (!persisted) {
+    try {
+      localStorageRef?.removeItem(key);
+      sessionStorageRef?.removeItem(key);
+    } catch {
+      // The in-memory snapshot still keeps the current page responsive.
+    }
   }
 
   if (typeof window !== "undefined") {
@@ -619,12 +725,13 @@ const writeJsonCache = (key: string, value: unknown) => {
 };
 
 const clearStorageKeys = (storage: Storage | null, keys: string[]) => {
-  if (!storage) {
-    return;
-  }
-
   for (const key of keys) {
-    storage.removeItem(key);
+    workspaceCacheMemory.delete(key);
+    try {
+      storage?.removeItem(key);
+    } catch {
+      // Cache cleanup must not interrupt account or transaction actions.
+    }
   }
 
   if (typeof window !== "undefined") {
