@@ -71,12 +71,12 @@ const main = async () => {
   );
   assert.match(
     modalSource,
-    /const passwordAccepted = await validatePdfPassword\(item\.file, item\.password\.trim\(\)\);[\s\S]{0,600}if \(passwordAccepted === false\)/,
+    /const password = submittedPassword\?\.trim\(\) \?\? item\.password\.trim\(\);[\s\S]{0,700}const passwordAccepted = await validatePdfPassword\(item\.file, password\);[\s\S]{0,600}if \(passwordAccepted === false\)/,
     "A protected PDF must validate its password before it re-enters the upload pipeline."
   );
   assert.match(
     passwordModalSource,
-    /disabled=\{validating \|\| !activeFile\.password\.trim\(\)\}[\s\S]{0,100}\{validating \? "Checking password\.\.\." : "Unlock file"\}/,
+    /value=\{passwordDraft\}[\s\S]{0,150}onChange=\{\(event\) => setPasswordDraft\(event\.target\.value\)\}[\s\S]{0,900}disabled=\{validating \|\| !passwordDraft\.trim\(\)\}[\s\S]{0,100}\{validating \? "Checking password\.\.\." : "Unlock file"\}/,
     "The password dialog must show a stable validation state instead of exposing import progress prematurely."
   );
   assert.match(

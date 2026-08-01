@@ -470,6 +470,7 @@ const resolveNetWorthSnapshotAccount = (
     { pattern: /^bpi\b/, institution: "BPI", accountType: "bank" },
     { pattern: /^rcbc\b/, institution: "RCBC", accountType: "bank" },
     { pattern: /^gcash wallet$/, institution: "GCash", accountType: "wallet", accountName: () => "GCash" },
+    { pattern: /^maya\s+savings\b/, institution: "Maya Bank", accountType: "bank" },
     { pattern: /^maya\b/, institution: "Maya", accountType: "wallet" },
     { pattern: /^wise\b/, institution: "Wise", accountType: "wallet" },
     { pattern: /^unionbank\b/, institution: "UnionBank", accountType: "bank" },
@@ -17596,11 +17597,12 @@ const parseUnionBankImportText = (text: string) => {
     : null;
 };
 
-const isMayaSavingsStatementText = (text: string) => {
+const isMayaSavingsStatementText = (text: string, fileName = "") => {
   const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
   const compact = normalized.replace(/\s+/g, " ");
+  const fileSignalsSavings = /maya[\s_-]*savings/i.test(fileName);
 
-  if (!/\bMAYA\b/i.test(compact)) {
+  if (!/\bMAYA\b/i.test(compact) && !fileSignalsSavings) {
     return false;
   }
 
@@ -17609,6 +17611,7 @@ const isMayaSavingsStatementText = (text: string) => {
   }
 
   return (
+    fileSignalsSavings ||
     /\b(MAYA\s+SAVINGS|ACCOUNT\s+SUMMARY|ACCOUNT\s+DETAILS|TRANSACTION\s+DETAILS|TRANSACTION\s+TYPE\s*&\s*DETAILS|DATE\s*&\s*TIME|RUNNING\s+BALANCE)\b/i.test(
       compact
     ) ||
@@ -24092,8 +24095,12 @@ const parseMayaSavingsTransactionBlock = (
   } satisfies ParsedImportRow;
 };
 
-const parseMayaSavingsStatementMetadata = (text: string, context: ImportParseContext = {}): DetectedStatementMetadata | null => {
-  if (!isMayaSavingsStatementText(text)) {
+const parseMayaSavingsStatementMetadata = (
+  text: string,
+  context: ImportParseContext = {},
+  fileName = ""
+): DetectedStatementMetadata | null => {
+  if (!isMayaSavingsStatementText(text, fileName)) {
     return null;
   }
 
@@ -24105,16 +24112,20 @@ const parseMayaSavingsStatementMetadata = (text: string, context: ImportParseCon
     lines.find((line) => /account\s+number/i.test(line)) ??
     lines.find((line) => /maya\s+savings/i.test(line)) ??
     normalized;
+  const accountNumberLine =
+    lines.find((line) => /account\s+number/i.test(line)) ??
+    accountLine;
 
+  const labeledAccountNumber =
+    preserveAccountNumberDisplayCandidate(accountNumberLine.match(/account\s+number\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i)?.[1]) ??
+    normalizeAccountNumberCandidate(accountNumberLine.match(/account\s+number\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i)?.[1]);
   const accountNumber =
+    labeledAccountNumber ??
+    preserveAccountNumberDisplayCandidate(accountNumberLine.match(/\b(?:\d[\d\s-]{10,}\d)\b/g)?.[0]) ??
+    normalizeAccountNumberCandidate(accountNumberLine.match(/\b(?:\d[\d\s-]{10,}\d)\b/g)?.[0]) ??
+    preserveAccountNumberDisplayCandidate(accountNumberLine.match(/\b(\d{4}\s+\d{4}\s+\d{4})\b/)?.[1] ?? null) ??
     preserveAccountNumberDisplayCandidate(context.accountNumber) ??
     normalizeAccountNumberCandidate(context.accountNumber) ??
-    normalized.match(/\b(\d{4}\s+\d{4}\s+\d{4})\b/)?.[1] ??
-    preserveAccountNumberDisplayCandidate(accountLine.match(/account\s+number\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i)?.[1]) ??
-    normalizeAccountNumberCandidate(accountLine.match(/account\s+number\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i)?.[1]) ??
-    preserveAccountNumberDisplayCandidate(accountLine.match(/\b(?:\d[\d\s-]{10,}\d)\b/g)?.[0]) ??
-    normalizeAccountNumberCandidate(accountLine.match(/\b(?:\d[\d\s-]{10,}\d)\b/g)?.[0]) ??
-    preserveAccountNumberDisplayCandidate(accountLine.match(/\b(\d{4}\s+\d{4}\s+\d{4})\b/)?.[1] ?? null) ??
     extractFormattedAccountNumberFromLines(lines) ??
     detectAccountNumberFromText(normalized);
 
@@ -24209,8 +24220,8 @@ const parseMayaSavingsStatementMetadata = (text: string, context: ImportParseCon
   };
 };
 
-const parseMayaSavingsImportText = (text: string, context: ImportParseContext = {}) => {
-  const metadata = parseMayaSavingsStatementMetadata(text, context);
+const parseMayaSavingsImportText = (text: string, context: ImportParseContext = {}, fileName = "") => {
+  const metadata = parseMayaSavingsStatementMetadata(text, context, fileName);
   if (!metadata) {
     return null;
   }
@@ -25243,7 +25254,7 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
     return withDetectedCurrency(mayaCreditMetadata, text);
   }
 
-  const mayaSavingsMetadata = parseMayaSavingsStatementMetadata(text);
+  const mayaSavingsMetadata = parseMayaSavingsStatementMetadata(text, {}, fileName);
   if (mayaSavingsMetadata) {
     return withDetectedCurrency(mayaSavingsMetadata, text);
   }
@@ -25772,7 +25783,7 @@ export const parseImportText = (
     return mayaCreditParsed.rows;
   }
 
-  const mayaSavingsParsed = parseMayaSavingsImportText(text, context);
+  const mayaSavingsParsed = parseMayaSavingsImportText(text, context, fileName);
   if (mayaSavingsParsed && mayaSavingsParsed.rows.length > 0) {
     return mayaSavingsParsed.rows;
   }

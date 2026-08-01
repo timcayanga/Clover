@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PasswordIcon } from "@/components/password-icon";
 
 type PasswordImportFile = {
@@ -17,9 +17,7 @@ type ImportPasswordModalProps = {
   activeFileId: string | null;
   validating: boolean;
   onCancel: (id: string) => void;
-  onPasswordChange: (id: string, password: string) => void;
-  onToggleVisibility: (id: string) => void;
-  onUnlock: (id: string) => void;
+  onUnlock: (id: string, password: string) => void;
 };
 
 export function ImportPasswordModal({
@@ -28,12 +26,17 @@ export function ImportPasswordModal({
   activeFileId,
   validating,
   onCancel,
-  onPasswordChange,
-  onToggleVisibility,
   onUnlock,
 }: ImportPasswordModalProps) {
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const activeFile = files.find((file) => file.id === activeFileId) ?? files[0] ?? null;
+  const [passwordDraft, setPasswordDraft] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
+
+  useEffect(() => {
+    setPasswordDraft(activeFile?.password ?? "");
+    setPasswordVisible(activeFile?.passwordVisible ?? false);
+  }, [activeFile?.error, activeFile?.id, activeFile?.password, activeFile?.passwordVisible]);
 
   useEffect(() => {
     if (!open || !activeFile) {
@@ -101,7 +104,7 @@ export function ImportPasswordModal({
             className="import-password-form"
             onSubmit={(event) => {
               event.preventDefault();
-              onUnlock(activeFile.id);
+              onUnlock(activeFile.id, passwordDraft);
             }}
           >
             <label className="import-password-field">
@@ -109,9 +112,9 @@ export function ImportPasswordModal({
               <div className="import-password-input">
                 <input
                   ref={passwordInputRef}
-                  type={activeFile.passwordVisible ? "text" : "password"}
-                  value={activeFile.password}
-                  onChange={(event) => onPasswordChange(activeFile.id, event.target.value)}
+                  type={passwordVisible ? "text" : "password"}
+                  value={passwordDraft}
+                  onChange={(event) => setPasswordDraft(event.target.value)}
                   placeholder="Enter password"
                   autoComplete="current-password"
                   autoFocus
@@ -120,11 +123,11 @@ export function ImportPasswordModal({
                 <button
                   className="import-password-toggle"
                   type="button"
-                  onClick={() => onToggleVisibility(activeFile.id)}
-                  aria-label={activeFile.passwordVisible ? "Hide password" : "Show password"}
+                  onClick={() => setPasswordVisible((visible) => !visible)}
+                  aria-label={passwordVisible ? "Hide password" : "Show password"}
                   disabled={validating}
                 >
-                  <PasswordIcon visible={activeFile.passwordVisible} />
+                  <PasswordIcon visible={passwordVisible} />
                 </button>
               </div>
             </label>
@@ -133,7 +136,7 @@ export function ImportPasswordModal({
               <button
                 className="button button-primary button-small transactions-action-button"
                 type="submit"
-                disabled={validating || !activeFile.password.trim()}
+                disabled={validating || !passwordDraft.trim()}
               >
                 {validating ? "Checking password..." : "Unlock file"}
               </button>

@@ -19978,7 +19978,9 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 .import-password-modal {
   position: relative;
   width: min(430px, 100%);
+  max-width: calc(100vw - 32px);
   padding: 22px;
+  overflow: hidden;
 }
 
 .import-password-close {
@@ -20024,6 +20026,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   gap: 10px;
   padding-right: 20px;
   font-size: 0.76rem;
+  min-width: 0;
 }
 
 .import-password-file {
@@ -20032,12 +20035,18 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   align-items: flex-start;
   gap: 12px;
   flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .import-password-file strong {
   font-size: 0.84rem;
   line-height: 1.25;
   letter-spacing: -0.02em;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .import-password-file span {
@@ -20049,20 +20058,27 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   color: #b91c1c;
   line-height: 1.4;
   font-size: 0.74rem;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .import-password-form {
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .import-password-field {
   display: grid;
   gap: 6px;
+  min-width: 0;
 }
 
 .import-password-input {
   position: relative;
+  min-width: 0;
 }
 
 .import-password-input input {

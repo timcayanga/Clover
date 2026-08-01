@@ -7629,10 +7629,19 @@ export function ImportFilesModal({
 
   handleStartImportRef.current = handleStartImport;
 
-  const handleRetry = async (itemId: string) => {
-    const item = items.find((entry) => entry.id === itemId);
+  const handleRetry = async (itemId: string, submittedPassword?: string) => {
+    const item = itemsRef.current.find((entry) => entry.id === itemId);
     if (!item || validatingPasswordItemId) {
       return;
+    }
+
+    const password = submittedPassword?.trim() ?? item.password.trim();
+    if (!password) {
+      return;
+    }
+
+    if (password !== item.password) {
+      updateItem(itemId, { password, error: null });
     }
 
     setValidatingPasswordItemId(itemId);
@@ -7641,7 +7650,7 @@ export function ImportFilesModal({
       progress: IMPORT_PROGRESS.preparing,
       progressLabel: "Checking password",
     });
-    const passwordAccepted = await validatePdfPassword(item.file, item.password.trim());
+    const passwordAccepted = await validatePdfPassword(item.file, password);
     const currentItem = itemsRef.current.find((entry) => entry.id === itemId);
     if (!currentItem || currentItem.status !== "needs_password") {
       setValidatingPasswordItemId(null);
@@ -7951,11 +7960,7 @@ export function ImportFilesModal({
         activeFileId={activePasswordItem.id}
         validating={validatingPasswordItemId === activePasswordItem.id}
         onCancel={handleCancelPasswordImport}
-        onPasswordChange={(id, password) => updateItem(id, { password, error: null })}
-        onToggleVisibility={(id) =>
-          updateItem(id, { passwordVisible: !items.find((item) => item.id === id)?.passwordVisible })
-        }
-        onUnlock={(id) => void handleRetry(id)}
+        onUnlock={(id, password) => void handleRetry(id, password)}
       />
     ) : showImportProgressDock ? (
       <ImportUploadDock

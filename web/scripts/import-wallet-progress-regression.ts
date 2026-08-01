@@ -55,4 +55,36 @@ assert.equal(
   70
 );
 
+const mayaSavingsStatement = `
+  Maya
+  Maya Savings Statement of Account
+  Account Name: Sample User
+  Transaction Reference: 9999 8888 7777
+  Account Number: 1234 5678 9012
+  Account Summary
+  Starting Balance PHP 100.00
+  Ending Balance PHP 150.00
+  Transaction Details
+`;
+const mayaSavingsMetadata = detectStatementMetadataFromText(
+  mayaSavingsStatement,
+  "MayaSavings_SoA_very-long-generated-identifier_2026JUN.pdf"
+);
+assert.equal(mayaSavingsMetadata.accountType, "bank", "Maya Savings must not inherit Maya Wallet classification.");
+assert.equal(
+  mayaSavingsMetadata.accountNumber?.replace(/\D/g, ""),
+  "123456789012",
+  "The labeled Maya Savings account number must outrank unrelated reference numbers."
+);
+
+const sparseMayaSavingsMetadata = detectStatementMetadataFromText(
+  "Maya Statement of Account\nAccount Number: 1234 5678 9012",
+  "MayaSavings_SoA_generated-id_2026JUN.pdf"
+);
+assert.equal(
+  sparseMayaSavingsMetadata.accountType,
+  "bank",
+  "A MayaSavings filename should preserve the bank product when extracted PDF text is sparse."
+);
+
 console.log("[PASS] password prompting, wallet identity, and multi-file progress regressions");

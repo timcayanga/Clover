@@ -24,6 +24,7 @@ This document captures the Maya parsing rules learned from the synthetic trainin
 ## Savings Rules
 
 - Treat Maya Savings as a bank savings account, not a wallet.
+- Treat a `MayaSavings` filename as supporting product evidence when PDF text extraction is sparse. A labeled account number in the statement outranks unrelated long reference numbers and earlier generic metadata guesses.
 - Use running balance as a first-class field.
 - Keep `Salary Credit` as `Income`.
 - Keep `Interest Earned` as `Income`.
