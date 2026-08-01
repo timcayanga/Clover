@@ -51,6 +51,8 @@ export type PlannedPaymentSuggestion = {
   confidenceTier: "high" | "medium" | "low";
   confidence: number;
   sourceFileName: string | null;
+  combinedSuggestionCount?: number;
+  relatedAccountNames?: string[];
 };
 
 type ConfirmedRecurringMemory = {
@@ -667,6 +669,104 @@ const getSuggestionKindPriority = (suggestion: PlannedPaymentSuggestion) => {
   }
 };
 
+const compareSuggestionDates = (left: PlannedPaymentSuggestion, right: PlannedPaymentSuggestion) => {
+  const leftDate = new Date(left.dueDate ?? 0).getTime();
+  const rightDate = new Date(right.dueDate ?? 0).getTime();
+  return leftDate - rightDate;
+};
+
+export const combineLikelySameRecurringSuggestions = (
+  suggestions: PlannedPaymentSuggestion[]
+): PlannedPaymentSuggestion[] => {
+  const grouped = new Map<string, PlannedPaymentSuggestion[]>();
+  const ungrouped: PlannedPaymentSuggestion[] = [];
+
+  for (const suggestion of suggestions) {
+    if (suggestion.sourceKind !== "recurring_transaction") {
+      ungrouped.push(suggestion);
+      continue;
+    }
+
+    const familyKey = buildRecurringMerchantFamilySignature(suggestion.counterparty ?? suggestion.title);
+    if (!familyKey) {
+      ungrouped.push(suggestion);
+      continue;
+    }
+
+    const key = `${suggestion.currency.trim().toUpperCase()}::${familyKey}`;
+    grouped.set(key, [...(grouped.get(key) ?? []), suggestion]);
+  }
+
+  const combined = Array.from(grouped.entries()).map(([key, group]) => {
+    if (group.length === 1) {
+      return group[0] as PlannedPaymentSuggestion;
+    }
+
+    const ranked = [...group].sort(
+      (left, right) =>
+        right.confidence - left.confidence ||
+        compareSuggestionDates(left, right) ||
+        left.title.length - right.title.length
+    );
+    const representative = ranked[0] as PlannedPaymentSuggestion;
+    const earliestDueDate = [...group].filter((suggestion) => suggestion.dueDate).sort(compareSuggestionDates)[0]?.dueDate ?? null;
+    const accountNames = Array.from(
+      new Set(group.map((suggestion) => suggestion.accountName?.trim()).filter((value): value is string => Boolean(value)))
+    );
+    const accountIds = Array.from(
+      new Set(group.map((suggestion) => suggestion.accountId).filter((value): value is string => Boolean(value)))
+    );
+    const sharedAccountId =
+      accountIds.length === 1 && group.every((suggestion) => suggestion.accountId === accountIds[0])
+        ? accountIds[0] ?? null
+        : null;
+    const amounts = group
+      .map((suggestion) => Number(suggestion.amount))
+      .filter((amount) => Number.isFinite(amount) && amount > 0);
+    const minimumAmount = amounts.length > 0 ? Math.min(...amounts) : null;
+    const maximumAmount = amounts.length > 0 ? Math.max(...amounts) : null;
+    const amountRange = formatAmountRange(minimumAmount, maximumAmount, representative.currency);
+    const sourceFiles = Array.from(
+      new Set(group.map((suggestion) => suggestion.sourceFileName).filter((value): value is string => Boolean(value)))
+    );
+    const mergedReasonTags = Array.from(new Set([...group.flatMap((suggestion) => suggestion.reasonTags), "combined suggestions"]));
+    const mergedNotes = [
+      representative.notes,
+      `Clover combined ${group.length} similar ${representative.title} suggestions${accountNames.length > 0 ? ` seen through ${accountNames.join(", ")}` : ""}.`,
+      amountRange && minimumAmount !== maximumAmount ? `Observed amounts range from ${amountRange}.` : null,
+      "Review the linked account and amount before saving.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return {
+      ...representative,
+      id: `combined_recurring_transaction::${key}`,
+      dueDate: earliestDueDate,
+      accountId: sharedAccountId,
+      accountName: accountNames.length === 1 ? accountNames[0] ?? null : "Multiple accounts",
+      notes: mergedNotes,
+      sourceLabel: `${representative.sourceLabel} · ${group.length} similar`,
+      sourceDetail: [
+        `${group.length} similar suggestions`,
+        accountNames.length > 1 ? `Across ${accountNames.length} accounts` : null,
+        representative.sourceDetail,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      reasonSummary: `Clover grouped matching ${representative.title} candidates in the same currency. ${representative.reasonSummary ?? ""}`.trim(),
+      reasonTags: mergedReasonTags,
+      confidence: Math.max(...group.map((suggestion) => suggestion.confidence)),
+      confidenceTier: getRecurringConfidenceTier(Math.max(...group.map((suggestion) => suggestion.confidence))),
+      sourceFileName: sourceFiles.length === 1 ? sourceFiles[0] ?? null : null,
+      combinedSuggestionCount: group.length,
+      relatedAccountNames: accountNames,
+    } satisfies PlannedPaymentSuggestion;
+  });
+
+  return [...ungrouped, ...combined];
+};
+
 export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
   const reminders = await getUpcomingStatementReminders(workspaceId);
   const hasCommitmentTable = await hasCompatibleTable("FinancialCommitment");
@@ -863,7 +963,11 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
     confirmedRecurringMemoryByFamily
   );
 
-  return [...reminderSuggestions, ...installmentSuggestions, ...recurringTransactionSuggestions].sort((left, right) => {
+  return combineLikelySameRecurringSuggestions([
+    ...reminderSuggestions,
+    ...installmentSuggestions,
+    ...recurringTransactionSuggestions,
+  ]).sort((left, right) => {
     const leftDueDate = new Date(left.dueDate ?? 0).getTime();
     const rightDueDate = new Date(right.dueDate ?? 0).getTime();
     const leftPriority = getSuggestionKindPriority(left);

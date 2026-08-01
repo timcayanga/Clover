@@ -1847,6 +1847,14 @@ body.transactions-manual-open .shell-quick-add-button {
   line-height: 1;
 }
 
+.recurring-compact-action.button-small {
+  min-height: 32px;
+  padding-inline: 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
 .recurring-add-modal__name-row,
 .recurring-add-modal__money-row {
   display: grid;

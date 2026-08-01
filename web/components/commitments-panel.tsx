@@ -1143,7 +1143,7 @@ export function CommitmentsPanel({
                   <td>{formatCurrency(suggestion.amount)}</td>
                   {showsAccount ? <td>{suggestion.accountName ?? "Not linked"}</td> : null}
                   <td>
-                    <button className="button button-primary button-small" type="button" onClick={() => openPlannedPaymentReview(suggestion)}>
+                    <button className="button button-primary button-small recurring-compact-action" type="button" onClick={() => openPlannedPaymentReview(suggestion)}>
                       Review and add
                     </button>
                   </td>
@@ -1657,10 +1657,10 @@ export function CommitmentsPanel({
               ) : null}
 
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <button className="button button-secondary" type="button" onClick={() => setReviewingSuggestion(null)}>
+                <button className="button button-secondary button-small recurring-compact-action" type="button" onClick={() => setReviewingSuggestion(null)}>
                   Cancel
                 </button>
-                <button className="button button-primary" type="submit" disabled={confirmingPatternId === reviewingSuggestion.id}>
+                <button className="button button-primary button-small recurring-compact-action" type="submit" disabled={confirmingPatternId === reviewingSuggestion.id}>
                   {confirmingPatternId === reviewingSuggestion.id
                     ? "Saving..."
                     : reviewingSuggestion.sourceKind === "installment"
@@ -1896,7 +1896,7 @@ export function CommitmentsPanel({
               ) : null}
 
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <button className="button button-primary" type="submit" disabled={isSaving}>
+                <button className="button button-primary button-small recurring-compact-action" type="submit" disabled={isSaving}>
                   {isSaving ? "Saving..." : kind === "reminder" ? "Save reminder" : "Save recurring"}
                 </button>
               </div>

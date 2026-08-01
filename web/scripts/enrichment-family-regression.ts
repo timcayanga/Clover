@@ -1,6 +1,7 @@
 import { classifyMerchant, buildMerchantFamilySignature, guessCategoryFallback } from "@/lib/data-engine";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { buildRecurringMerchantFamilySignature, detectRecurringPatterns } from "@/lib/recurring-detection";
+import { combineLikelySameRecurringSuggestions, type PlannedPaymentSuggestion } from "@/lib/planned-payment-suggestions";
 
 const assert = (condition: unknown, message: string) => {
   if (!condition) {
@@ -113,6 +114,44 @@ const runMerchantFamilyChecks = () => {
   );
   assert(guessCategoryFallback("DEUTSCHE BAHN TICKET BERLIN", "expense") === "Transport", "Expected German rail fares to classify as Transport");
   assert(guessCategoryFallback("OV-CHIPKAART AMSTERDAM", "expense") === "Transport", "Expected Dutch transit fares to classify as Transport");
+};
+
+const runPlannedPaymentCombinationChecks = () => {
+  const suggestion = (
+    overrides: Partial<PlannedPaymentSuggestion> & Pick<PlannedPaymentSuggestion, "id" | "title" | "accountId" | "accountName" | "amount" | "currency" | "dueDate">
+  ): PlannedPaymentSuggestion => ({
+    sourceKind: "recurring_transaction",
+    counterparty: overrides.title,
+    recurrence: "monthly",
+    statementCheckpointId: null,
+    installmentTerms: null,
+    notes: null,
+    sourceLabel: "Subscription candidate",
+    sourceDetail: "Seen across two months",
+    reasonSummary: "monthly subscription pattern",
+    reasonTags: ["subscription", "multi-month"],
+    confidenceTier: "medium",
+    confidence: 78,
+    sourceFileName: null,
+    ...overrides,
+  });
+
+  const combined = combineLikelySameRecurringSuggestions([
+    suggestion({ id: "openai-a", title: "OpenAI ChatGPT Subscription", accountId: "a", accountName: "Wise", amount: "1363.22", currency: "PHP", dueDate: "2026-08-10T00:00:00.000Z" }),
+    suggestion({ id: "openai-b", title: "OpenAI ChatGPT subscription", accountId: "b", accountName: "RCBC 1014", amount: "7042.48", currency: "PHP", dueDate: "2026-08-17T00:00:00.000Z" }),
+    suggestion({ id: "openai-eur", title: "OpenAI ChatGPT Subscription", accountId: "c", accountName: "Wise EUR", amount: "22.00", currency: "EUR", dueDate: "2026-08-12T00:00:00.000Z" }),
+    {
+      ...suggestion({ id: "openai-reminder", title: "OpenAI card payment", accountId: "d", accountName: "Card", amount: "5000", currency: "PHP", dueDate: "2026-08-09T00:00:00.000Z" }),
+      sourceKind: "statement_reminder",
+    },
+  ]);
+
+  assert(combined.length === 3, "Expected same-family PHP recurring candidates to combine without merging other currencies or reminders");
+  const merged = combined.find((item) => item.id.startsWith("combined_recurring_transaction::PHP::openai"));
+  assert(merged?.combinedSuggestionCount === 2, "Expected the combined candidate to retain its source count");
+  assert(merged?.accountId === null && merged.accountName === "Multiple accounts", "Expected a cross-account candidate to stay unlinked until review");
+  assert(merged?.dueDate === "2026-08-10T00:00:00.000Z", "Expected the earliest upcoming candidate date to remain visible");
+  assert(merged?.notes?.includes("Wise") && merged.notes.includes("RCBC 1014"), "Expected review notes to preserve contributing accounts");
 };
 
 const runRecurringChecks = () => {
@@ -641,6 +680,7 @@ const runRecurringChecks = () => {
 
 const main = () => {
   runMerchantFamilyChecks();
+  runPlannedPaymentCombinationChecks();
   runRecurringChecks();
   console.log("enrichment-family-regression: ok");
 };
