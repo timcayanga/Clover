@@ -16878,10 +16878,8 @@ const parseBpiImportText = (text: string) => {
 };
 
 const unionbankDatePattern = /^(?:\d{2}\/\d{2}\/\d{2,4}|\d{1,2}\s*[A-Za-z]{3}\s*\d{2,4}|[A-Za-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}[A-Za-z]{3}\s*\d{2,4})$/i;
-const unionbankMoneyPattern = /^(?:PHP|P|₱)?\s*[0-9][0-9,]*\.\d{2}$/i;
 const unionbankReferencePattern = /^[A-Z]{1,3}\d{4,}$/i;
 const unionbankDateTokenPattern = /(?:\d{2}\/\d{2}\/\d{2,4}|\d{1,2}\s*[A-Za-z]{3}\s*\d{2,4}|[A-Za-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}[A-Za-z]{3}\s*\d{2,4})/i;
-const unionbankDateTokenGlobalPattern = new RegExp(unionbankDateTokenPattern.source, "gi");
 const unionbankLeadingDateTokenPattern = new RegExp(`^${unionbankDateTokenPattern.source}`, "i");
 
 const extractUnionBankLeadingDateToken = (value: string | null | undefined) => {
@@ -16939,6 +16937,14 @@ const normalizeUnionBankMerchantText = (description: string) => {
     return "Salary Credit";
   }
 
+  if (/^interest(?:\s+\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\s+to\s+\d{1,2}[-/]\d{1,2}[-/]\d{2,4})?$/i.test(normalized)) {
+    return "Interest Earned";
+  }
+
+  if (/^withholding tax\b/i.test(normalized)) {
+    return "Tax Withheld";
+  }
+
   const outwardFastPaymentMatch = normalized.match(/^outward fast payments?\s+(.+)$/i);
   if (outwardFastPaymentMatch?.[1]) {
     return normalizeWhitespace(outwardFastPaymentMatch[1]);
@@ -16989,8 +16995,12 @@ const classifyUnionBankTransaction = (description: string) => {
   const lower = description.toLowerCase();
   const normalizedMerchant = normalizeUnionBankMerchantText(description);
 
-  if (/interest earned/.test(lower)) {
+  if (/^interest(?:\s|$)|interest earned/.test(lower)) {
     return { type: "income" as TransactionType, categoryName: "Income" };
+  }
+
+  if (/^not applicable$/i.test(description)) {
+    return { type: "income" as TransactionType, categoryName: "Other" };
   }
 
   if (/cash out|atm withdrawal|cash withdrawal|withdrawal/.test(lower)) {
@@ -17344,7 +17354,7 @@ const parseUnionBankTransactionSegment = (
   descriptionSource = descriptionSource.replace(/Page\s+\d+\s+of\s+\d+/gi, " ");
   descriptionSource = descriptionSource.replace(/For billing concerns, you may contact our 24-Hour Customer Service at \+632 8841-8600 or send us your concern via our Mailbox-Support Feature\./gi, " ");
   descriptionSource = descriptionSource.replace(/For best results, print your Transaction History on A4 paper using portrait orientation at actual size or fit-to-page settings/gi, " ");
-  const description = normalizeWhitespace(descriptionSource);
+  const description = normalizeWhitespace(descriptionSource).replace(/^(?:[A-Z]{1,3}\s*)?\d{5,}\s+/i, "");
   if (
     !description ||
     isUnionBankBoilerplateLine(description) ||
@@ -17398,35 +17408,55 @@ const parseUnionBankImportText = (text: string) => {
   let current: string[] = [];
 
   for (const line of lines) {
-    const dateMatches = [...line.matchAll(unionbankDateTokenGlobalPattern)];
-    if (dateMatches.length === 0) {
-      if (current.length > 0) {
-        current.push(line);
+    if (metadata.accountType === "credit_card") {
+      const dateMatches = [...line.matchAll(new RegExp(unionbankDateTokenPattern.source, "gi"))];
+      if (dateMatches.length === 0) {
+        if (current.length > 0) {
+          current.push(line);
+        }
+        continue;
+      }
+
+      const prefix = normalizeWhitespace(line.slice(0, dateMatches[0]?.index ?? 0));
+      if (prefix) {
+        if (current.length > 0) {
+          current.push(prefix);
+        } else {
+          current = [prefix];
+        }
+      }
+
+      for (let index = 0; index < dateMatches.length; index += 1) {
+        const match = dateMatches[index];
+        const start = match.index ?? 0;
+        const end = dateMatches[index + 1]?.index ?? line.length;
+        const chunk = normalizeWhitespace(line.slice(start, end));
+        if (!chunk) {
+          continue;
+        }
+        if (current.length > 0) {
+          segments.push(current);
+        }
+        current = [chunk];
       }
       continue;
     }
 
-    const prefix = normalizeWhitespace(line.slice(0, dateMatches[0]?.index ?? 0));
-    if (prefix) {
-      if (current.length > 0) {
-        current.push(prefix);
-      } else {
-        current = [prefix];
-      }
-    }
+    const startsLedgerRow =
+      extractUnionBankLeadingDateToken(line) !== null && extractUnionBankMoneyTokens(line).length >= 2;
 
-    for (let index = 0; index < dateMatches.length; index += 1) {
-      const match = dateMatches[index];
-      const start = match.index ?? 0;
-      const end = dateMatches[index + 1]?.index ?? line.length;
-      const chunk = normalizeWhitespace(line.slice(start, end));
-      if (!chunk) {
-        continue;
-      }
+    if (startsLedgerRow) {
       if (current.length > 0) {
         segments.push(current);
       }
-      current = [chunk];
+      current = [line];
+      continue;
+    }
+
+    // A date-only line can finish an Interest or Withholding Tax description.
+    // It must not split the surrounding physical ledger row.
+    if (current.length > 0) {
+      current.push(line);
     }
   }
 
@@ -17434,7 +17464,7 @@ const parseUnionBankImportText = (text: string) => {
     segments.push(current);
   }
 
-  const rows = segments
+  const sourceOrderedRows = segments
     .map((segment) =>
       parseUnionBankTransactionSegment(segment, {
         accountName: metadata.accountName ?? "UnionBank",
@@ -17443,6 +17473,45 @@ const parseUnionBankImportText = (text: string) => {
       })
     )
     .filter(Boolean) as ParsedImportRow[];
+
+  let descendingPairs = 0;
+  let ascendingPairs = 0;
+  for (let index = 1; index < sourceOrderedRows.length; index += 1) {
+    const previous = Date.parse(sourceOrderedRows[index - 1]?.date ?? "");
+    const currentDate = Date.parse(sourceOrderedRows[index]?.date ?? "");
+    if (!Number.isFinite(previous) || !Number.isFinite(currentDate) || previous === currentDate) {
+      continue;
+    }
+    if (previous > currentDate) {
+      descendingPairs += 1;
+    } else {
+      ascendingPairs += 1;
+    }
+  }
+
+  // UnionBank transaction-history exports are commonly newest-first. Reversing
+  // preserves the correct order of same-day rows, which a date-only sort cannot.
+  const rows = descendingPairs > ascendingPairs ? [...sourceOrderedRows].reverse() : sourceOrderedRows;
+
+  for (let index = 1; index < rows.length; index += 1) {
+    const previousBalance = parseMoney(
+      rows[index - 1]?.rawPayload && typeof rows[index - 1]?.rawPayload === "object"
+        ? String((rows[index - 1]?.rawPayload as Record<string, unknown>).balanceText ?? "")
+        : null
+    );
+    const currentBalance = parseMoney(
+      rows[index]?.rawPayload && typeof rows[index]?.rawPayload === "object"
+        ? String((rows[index]?.rawPayload as Record<string, unknown>).balanceText ?? "")
+        : null
+    );
+    const amount = parseMoney(rows[index]?.amount ?? null);
+    if (previousBalance === null || currentBalance === null || amount === null) {
+      continue;
+    }
+    if (approxMoney(Math.abs(currentBalance - previousBalance), amount)) {
+      rows[index]!.type = currentBalance >= previousBalance ? "income" : "expense";
+    }
+  }
 
   const uniqueRows = rows.filter(
     (row) => !/minimum amount due|total amount due|payment due date/i.test(String(row.description ?? row.merchantRaw ?? ""))

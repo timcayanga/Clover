@@ -15,6 +15,9 @@ This document captures the UnionBank parsing rules learned from the synthetic tr
 - Only accept rows that belong to the transaction table. Ignore customer-service text, page footers, statement boilerplate, and other prose even if they contain numbers.
 - Parse the table by row shape: date, reference, description, amount, balance.
 - UnionBank often keeps the transaction amount and running balance on the same extracted line, so parse the full row block rather than expecting separate amount and balance rows.
+- Treat a physical line as a new transaction only when it starts with a posted date and contains the ledger amount plus running balance. Dates inside descriptions such as `Interest 11-13-2025 to 11-30-2025` are not row boundaries.
+- Transaction-history exports can be newest-first. Reverse the physical rows into chronological order rather than sorting only by date so same-day Interest and Withholding Tax rows retain their balance sequence.
+- Validate each row amount against the change in running balance when adjacent balances are available. Never replace a readable UnionBank amount with an amount from a neighboring row.
 - Keep `Bills Payment` rows as `Transfers`.
 - Keep `Interest Earned` as `Income`.
 - Keep `Withholding Tax` as `Financial`.
