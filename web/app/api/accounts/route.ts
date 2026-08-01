@@ -1539,7 +1539,7 @@ const repairLegacyUploadedCardAccountSplits = async (workspaceId: string, compat
 
 const repairLegacyUploadedPayPalAccountSplits = async (workspaceId: string, compatibleColumns: Set<string>) => {
   if (!compatibleColumns.has("accountNumber")) {
-    return;
+    return 0;
   }
 
   const uploadedAccounts = await prisma.account.findMany({
@@ -1551,6 +1551,7 @@ const repairLegacyUploadedPayPalAccountSplits = async (workspaceId: string, comp
     select: getCompatibleAccountSelect(compatibleColumns),
   }).catch(() => []);
   const wallets = uploadedAccounts.filter((account) => account.type === "wallet");
+  let repairedCount = 0;
 
   for (const wallet of wallets) {
     const legacyCards = uploadedAccounts.filter(
@@ -1592,6 +1593,7 @@ const repairLegacyUploadedPayPalAccountSplits = async (workspaceId: string, comp
         await tx.accountRule.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: wallet.id } });
         await tx.account.deleteMany({ where: { id: { in: duplicateIds }, source: "upload", type: "credit_card" } });
       });
+      repairedCount += duplicateIds.length;
     } catch (error) {
       console.warn("[accounts] unable to repair legacy PayPal wallet split", {
         workspaceId,
@@ -1601,6 +1603,8 @@ const repairLegacyUploadedPayPalAccountSplits = async (workspaceId: string, comp
       });
     }
   }
+
+  return repairedCount;
 };
 
 export async function GET(request: Request) {
@@ -1626,6 +1630,15 @@ export async function GET(request: Request) {
       });
     }
     const compatibleColumns = await getCompatibleAccountColumns();
+    // Run the narrow PayPal type-migration repair before returning visible
+    // accounts so stale client caches cannot keep the obsolete card copy alive.
+    await repairLegacyUploadedPayPalAccountSplits(workspaceId, compatibleColumns).catch((error) => {
+      console.warn("[accounts] unable to repair legacy PayPal wallet split", {
+        workspaceId,
+        error,
+      });
+      return 0;
+    });
     const shouldRepairImportedAccounts = ["1", "true"].includes(
       (searchParams.get("repairImportedAccounts") ?? "").trim().toLowerCase()
     );
@@ -1706,12 +1719,6 @@ export async function GET(request: Request) {
       });
       await repairLegacyUploadedCardAccountSplits(workspaceId, compatibleColumns).catch((error) => {
         console.warn("[accounts] unable to repair legacy uploaded card account splits", {
-          workspaceId,
-          error,
-        });
-      });
-      await repairLegacyUploadedPayPalAccountSplits(workspaceId, compatibleColumns).catch((error) => {
-        console.warn("[accounts] unable to repair legacy PayPal wallet split", {
           workspaceId,
           error,
         });

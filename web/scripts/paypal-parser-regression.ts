@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   detectStatementMetadata,
   inferAccountTypeFromStatement,
@@ -112,6 +114,14 @@ assert.equal(
   ),
   false,
   "Automatic repair must not remove a manually created account."
+);
+
+const accountsRouteSource = readFileSync(resolve(process.cwd(), "app/api/accounts/route.ts"), "utf8");
+const eagerRepairCall = accountsRouteSource.indexOf("await repairLegacyUploadedPayPalAccountSplits(workspaceId, compatibleColumns)");
+const visibleAccountQuery = accountsRouteSource.indexOf("const [accounts, accountRules, statementCheckpoints, investmentSnapshots]");
+assert.ok(
+  eagerRepairCall > 0 && visibleAccountQuery > eagerRepairCall,
+  "PayPal duplicate repair must run before the Accounts API returns visible accounts."
 );
 
 console.log("PayPal account-classification regression passed.");

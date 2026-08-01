@@ -49189,6 +49189,8 @@ html[data-theme="dark"] .content--adviser .adviser-summary .adviser-summary-card
     .accounts-toolbar-button span:last-child,
     .accounts-toolbar-add span:last-child,
     .circles-topbar-action__label,
+    .currency-selector__trigger-all,
+    .currency-selector__trigger-token,
     .investments-page__add-button-label
   ) {
   font-size: inherit !important;

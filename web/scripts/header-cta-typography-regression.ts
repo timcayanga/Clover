@@ -14,5 +14,10 @@ assert.match(
   /@media \(max-width: 1100px\)[\s\S]*?:is\(\.topbar-actions, \.shell-compact-bar__actions\)[\s\S]*?font-size: 0\.72rem !important;/,
   "Compact page-header actions must remain consistently sized."
 );
+assert.match(
+  css,
+  /\.currency-selector__trigger-all,[\s\S]*?\.currency-selector__trigger-token,[\s\S]*?font-size: inherit !important;[\s\S]*?font-weight: inherit !important;/,
+  "Header currency labels must not override the shared CTA typography."
+);
 
 console.log("Header CTA typography regression passed.");
