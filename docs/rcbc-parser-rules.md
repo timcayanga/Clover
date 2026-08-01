@@ -21,7 +21,7 @@ This document captures the RCBC credit-card parsing rules learned from the April
 - Keep explicit card-payment rows as card-payment credits, not income.
 - Capture the credit limit even when RCBC prints `CREDIT LIMIT` as a standalone label and places the values several lines later. In the RCBC summary row, the first amount is the card credit limit and the second is the cash-advance limit.
 - Capture the statement payment due date and total balance due so Clover can offer a reviewable Planned Payment in Recurring.
-- Treat standalone `Cash Payment` rows without a card-payment marker as cash-paid purchases (`Shopping`, expense) so they do not render as black transfer rows.
+- Treat a `Cash Payment` row whose amount ends in RCBC's trailing `-` credit marker as a card repayment (`Transfers`, income direction). Only treat an unsigned standalone `Cash Payment` as a cash-paid purchase (`Shopping`, expense).
 - For RCBC savings statements, keep the last 4 digits in the account name so multiple RCBC accounts do not merge, for example `RCBC 5080`.
 - For RCBC cards, keep the last 4 digits in the account name, for example `RCBC 1014` or `RCBC 2006`.
 - Keep travel, shopping, food, transport, business, and bill merchants as learned category candidates instead of collapsing them to `Other`.

@@ -78,6 +78,7 @@
     "qa:supabase-security": "tsx scripts/supabase-security-regression.ts",
     "qa:integration-security": "tsx scripts/integration-security-regression.ts",
     "qa:account-balance-sign": "tsx scripts/account-balance-sign-regression.ts",
+    "qa:transaction-summary": "tsx scripts/transaction-summary-regression.ts",
     "qa:account-card-drag": "tsx scripts/account-card-drag-regression.ts",
     "qa:account-deletion-markers": "tsx scripts/workspace-account-deletion-marker-regression.ts",
     "qa:account-tombstone-currency": "tsx scripts/account-tombstone-currency-regression.ts",

@@ -4250,7 +4250,16 @@ export const classifyMerchant = (params: {
   trainingSignals: TrainingSignalRow[];
   negativeSignals?: NegativeMerchantSignalRow[];
 }) => {
+  const isRcbcPaymentCredit = (categoryName: string | null | undefined) =>
+    /\brcbc\b/i.test(params.institution ?? "") &&
+    params.type === "income" &&
+    /^transfers?$/i.test(categoryName?.trim() ?? "") &&
+    isStandaloneCashPaymentDescription(params.merchantText);
   const preferredTypeForCategory = (categoryName: string | null | undefined, fallback: TransactionType, categorySource?: string | null) => {
+    if (isRcbcPaymentCredit(categoryName)) {
+      return "income";
+    }
+
     if (categoryName?.trim().toLowerCase() === "shopping" && isStandaloneCashPaymentDescription(categorySource)) {
       return "expense";
     }
@@ -4263,10 +4272,13 @@ export const classifyMerchant = (params: {
   const normalizedMerchant = merchantCandidates.map((value) => normalizeMerchantText(value)).find(Boolean) ?? normalizeMerchantText(params.merchantText);
   const categoryText = [params.categoryText, ...merchantCandidates].filter((value) => typeof value === "string" && value.trim()).join(" ");
   const tokens = tokenizeMerchant(categoryText || params.merchantText);
-  const hardcodedOverride = getHardcodedCategoryOverride(categoryText || params.merchantText);
   const providedCategory = params.categoryName?.trim();
+  const hardcodedOverride = isRcbcPaymentCredit(providedCategory)
+    ? null
+    : getHardcodedCategoryOverride(categoryText || params.merchantText);
   const strongMerchantCategory = getStrongMerchantCategoryHint(categoryText || params.merchantText);
   const parsedTransferContradictedByMerchant =
+    !isRcbcPaymentCredit(providedCategory) &&
     providedCategory?.toLowerCase() === "transfers" &&
     Boolean(strongMerchantCategory && strongMerchantCategory !== "Transfers");
   const heuristicCategory =
@@ -4290,6 +4302,19 @@ export const classifyMerchant = (params: {
     institution: params.institution ?? null,
   });
   const negativeSignals = params.negativeSignals ?? [];
+
+  if (isRcbcPaymentCredit(providedCategory)) {
+    return {
+      categoryName: "Transfers",
+      confidence: 99,
+      categoryReason: "rcbc-statement-payment-credit",
+      categorySource: "deterministic_override",
+      merchantKey: normalizedMerchant,
+      merchantTokens: tokens,
+      normalizedName: alignedNormalizedName,
+      preferredType: "income" as TransactionType,
+    };
+  }
 
   let bestRule: MerchantRuleRow | null = null;
   let bestRuleScore = 0;

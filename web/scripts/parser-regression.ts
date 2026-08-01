@@ -2046,12 +2046,12 @@ const main = async () => {
     accountNumber: rcbcCreditMetadata.accountNumber,
   });
   const rcbcCashPaymentRow = rcbcCreditRows.find((row) => /^cash payment$/i.test(String(row.description ?? row.merchantRaw ?? "")));
-  if (!rcbcCashPaymentRow || rcbcCashPaymentRow.type !== "expense" || rcbcCashPaymentRow.categoryName !== "Shopping") {
+  if (!rcbcCashPaymentRow || rcbcCashPaymentRow.type !== "income" || rcbcCashPaymentRow.categoryName !== "Transfers") {
     throw new Error(
-      `expected standalone RCBC Cash Payment to classify as Shopping expense, got ${rcbcCashPaymentRow?.categoryName ?? "missing"} ${rcbcCashPaymentRow?.type ?? "missing"}`
+      `expected signed RCBC Cash Payment credit to classify as Transfers income, got ${rcbcCashPaymentRow?.categoryName ?? "missing"} ${rcbcCashPaymentRow?.type ?? "missing"}`
     );
   }
-  console.log("[PASS] RCBC classification | standalone Cash Payment rows classify as Shopping expense");
+  console.log("[PASS] RCBC classification | signed Cash Payment credits classify as Transfers income");
 
   const metrobankCreditPath = join(root, "Samples/Metrobank/412340326-compressor.pdf");
   const metrobankCreditBytes = await readFile(metrobankCreditPath);

@@ -28,6 +28,10 @@ import {
   isUnauthorizedDataError,
 } from "@/lib/transient-data";
 import { summarizeErrorForLog } from "@/lib/security-logging";
+import {
+  getTransactionSummaryTypeOverrides,
+  type TransactionSummaryCandidate,
+} from "@/lib/transaction-summary";
 
 export const dynamic = "force-dynamic";
 
@@ -694,7 +698,7 @@ export async function GET(request: Request) {
     const [workspaceAccountRows, expandedAccountIds, expandedIdentityAccountIds] = await Promise.all([
       prisma.account.findMany({
         where: { workspaceId },
-        select: { id: true, accountNumber: true, institution: true },
+        select: { id: true, accountNumber: true, institution: true, type: true },
       }),
       expandImportedAccountFilters(workspaceId, parsedFilters.accountIds),
       expandImportedAccountIdentityFilters(workspaceId, {
@@ -782,7 +786,7 @@ export async function GET(request: Request) {
       const bdoAccountIds = workspaceAccountRows
         .filter((account) => /\bbdo\b|\bbanco de oro\b/i.test(account.institution ?? ""))
         .map((account) => account.id);
-      const [pageRows, recentImportRows, duplicateRows, summaryGroups, summaryCategories, bdoSummaryRows] = await Promise.all([
+      const [pageRows, recentImportRows, duplicateRows, summaryGroups, summaryCategories, bdoSummaryRows, summaryAdjustmentRows, summaryMatchingRows] = await Promise.all([
         prisma.transaction.findMany({
           where: visibleWhere,
           select: {
@@ -815,6 +819,7 @@ export async function GET(request: Request) {
                 name: true,
                 institution: true,
                 accountNumber: true,
+                type: true,
               },
             },
             splitBill: {
@@ -868,6 +873,7 @@ export async function GET(request: Request) {
                     name: true,
                     institution: true,
                     accountNumber: true,
+                    type: true,
                   },
                 },
                 splitBill: {
@@ -929,6 +935,68 @@ export async function GET(request: Request) {
               },
             })
           : Promise.resolve([]),
+        prisma.transaction.findMany({
+          where: {
+            AND: [
+              visibleWhere,
+              {
+                OR: [
+                  { merchantRaw: { contains: "payment", mode: "insensitive" } },
+                  { merchantClean: { contains: "payment", mode: "insensitive" } },
+                  { description: { contains: "payment", mode: "insensitive" } },
+                  { merchantRaw: { contains: "repayment", mode: "insensitive" } },
+                  { merchantClean: { contains: "repayment", mode: "insensitive" } },
+                  { description: { contains: "repayment", mode: "insensitive" } },
+                ],
+              },
+            ],
+          },
+          select: {
+            id: true,
+            accountId: true,
+            date: true,
+            amount: true,
+            currency: true,
+            type: true,
+            isTransfer: true,
+            merchantRaw: true,
+            merchantClean: true,
+            description: true,
+            rawPayload: true,
+            category: { select: { name: true } },
+            account: { select: { type: true, institution: true } },
+          },
+        }),
+        prisma.transaction.findMany({
+          where: {
+            workspaceId,
+            isExcluded: false,
+            deletedAt: null,
+            OR: [
+              { merchantRaw: { contains: "payment", mode: "insensitive" } },
+              { merchantClean: { contains: "payment", mode: "insensitive" } },
+              { description: { contains: "payment", mode: "insensitive" } },
+              { merchantRaw: { contains: "repayment", mode: "insensitive" } },
+              { merchantClean: { contains: "repayment", mode: "insensitive" } },
+              { description: { contains: "repayment", mode: "insensitive" } },
+            ],
+          },
+          select: {
+            id: true,
+            accountId: true,
+            date: true,
+            amount: true,
+            currency: true,
+            type: true,
+            isTransfer: true,
+            merchantRaw: true,
+            merchantClean: true,
+            description: true,
+            rawPayload: true,
+            category: { select: { name: true } },
+            account: { select: { type: true, institution: true } },
+          },
+        }),
       ]);
       const recentImportRowIds = new Set(recentImportRows.map((transaction) => transaction.id));
       const boostedPageRows = [
@@ -1021,6 +1089,38 @@ export async function GET(request: Request) {
         else if (effectiveType === "transfer") lightSummary.transfers += amount;
         else lightSummary.spending += amount;
       }
+      const lightSummaryOverrides = getTransactionSummaryTypeOverrides(
+        summaryMatchingRows.map((transaction) => ({
+          ...transaction,
+          accountType: transaction.account?.type ?? null,
+          categoryName: transaction.category?.name ?? null,
+        }))
+      );
+      for (const transaction of summaryAdjustmentRows) {
+        const overrideType = lightSummaryOverrides.get(transaction.id);
+        if (!overrideType) continue;
+
+        const originalType = getSummaryTransactionType({
+          type: transaction.type,
+          isTransfer: transaction.isTransfer,
+          categoryName: transaction.category?.name,
+          merchantRaw: transaction.merchantRaw,
+          merchantClean: transaction.merchantClean,
+          description: transaction.description,
+          institution: transaction.account?.institution,
+        });
+        if (originalType === overrideType) continue;
+
+        const amount = Math.abs(Number(transaction.amount));
+        if (!Number.isFinite(amount)) continue;
+        if (originalType === "income") lightSummary.income -= amount;
+        else if (originalType === "transfer") lightSummary.transfers -= amount;
+        else lightSummary.spending -= amount;
+
+        if (overrideType === "income") lightSummary.income += amount;
+        else if (overrideType === "transfer") lightSummary.transfers += amount;
+        else lightSummary.spending += amount;
+      }
 
       return NextResponse.json({
         transactions,
@@ -1062,7 +1162,7 @@ export async function GET(request: Request) {
       !filters.amountMax?.trim() &&
       !hasEffectiveCategoryFilters;
     const recentImportCutoff = new Date(Date.now() - RECENT_IMPORT_VISIBILITY_WINDOW_MS);
-    const [summaryRows, recentImportRows] = await Promise.all([
+    const [summaryRows, recentImportRows, summaryMatchingRows] = await Promise.all([
       prisma.transaction.findMany({
         where: visibleWhere,
         select: {
@@ -1095,6 +1195,7 @@ export async function GET(request: Request) {
               name: true,
               institution: true,
               accountNumber: true,
+              type: true,
             },
           },
           splitBill: {
@@ -1146,6 +1247,7 @@ export async function GET(request: Request) {
                   name: true,
                   institution: true,
                   accountNumber: true,
+                  type: true,
                 },
               },
               splitBill: {
@@ -1162,6 +1264,36 @@ export async function GET(request: Request) {
             take: Math.min(25, requestedPageSize ?? 25),
           })
         : Promise.resolve([]),
+      prisma.transaction.findMany({
+        where: {
+          workspaceId,
+          isExcluded: false,
+          deletedAt: null,
+          OR: [
+            { merchantRaw: { contains: "payment", mode: "insensitive" } },
+            { merchantClean: { contains: "payment", mode: "insensitive" } },
+            { description: { contains: "payment", mode: "insensitive" } },
+            { merchantRaw: { contains: "repayment", mode: "insensitive" } },
+            { merchantClean: { contains: "repayment", mode: "insensitive" } },
+            { description: { contains: "repayment", mode: "insensitive" } },
+          ],
+        },
+        select: {
+          id: true,
+          accountId: true,
+          date: true,
+          amount: true,
+          currency: true,
+          type: true,
+          isTransfer: true,
+          merchantRaw: true,
+          merchantClean: true,
+          description: true,
+          rawPayload: true,
+          category: { select: { name: true } },
+          account: { select: { type: true, institution: true } },
+        },
+      }),
     ]);
     const recentImportRowIds = new Set(recentImportRows.map((transaction) => transaction.id));
     const boostedSummaryRows = shouldBoostRecentImportRows
@@ -1224,6 +1356,40 @@ export async function GET(request: Request) {
         .filter((transaction) => transactionMatchesEffectiveCategoryFilters(transaction, categoryFilterNames))
     );
     const transactionById = new Map(mappedSummaryRows.map((entry) => [entry.mappedTransaction.id, entry] as const));
+    const visibleSummaryCandidates = transactions.map((mappedTransaction) => {
+        const transaction = transactionById.get(mappedTransaction.id)?.transaction;
+        return {
+          id: mappedTransaction.id,
+          accountId: mappedTransaction.accountId,
+          accountType: transaction?.account?.type ?? null,
+          date: transaction?.date ?? mappedTransaction.date,
+          amount: transaction?.amount ?? mappedTransaction.amount,
+          currency: transaction?.currency ?? mappedTransaction.currency,
+          type: transaction?.type ?? mappedTransaction.type,
+          isTransfer: transaction?.isTransfer ?? mappedTransaction.isTransfer,
+          categoryName: transaction?.category?.name ?? mappedTransaction.categoryName,
+          merchantRaw: transaction?.merchantRaw ?? mappedTransaction.merchantRaw,
+          merchantClean: transaction?.merchantClean ?? mappedTransaction.merchantClean,
+          description: transaction?.description ?? mappedTransaction.description,
+          rawPayload: transaction?.rawPayload ?? mappedTransaction.rawPayload,
+        };
+      });
+    const summaryCandidateById = new Map<string, TransactionSummaryCandidate>(
+      summaryMatchingRows.map((transaction) => [
+        transaction.id,
+        {
+          ...transaction,
+          accountType: transaction.account?.type ?? null,
+          categoryName: transaction.category?.name ?? null,
+        },
+      ] as const)
+    );
+    for (const transaction of visibleSummaryCandidates) {
+      summaryCandidateById.set(transaction.id, transaction);
+    }
+    const summaryTypeOverrides = getTransactionSummaryTypeOverrides(
+      Array.from(summaryCandidateById.values())
+    );
 
     const summaryState = {
       totalCount: transactions.length,
@@ -1247,15 +1413,17 @@ export async function GET(request: Request) {
       const accountName = mappedTransaction.accountName ?? transaction?.account?.name ?? "";
 
       if (!mappedTransaction.isExcluded) {
-        const effectiveType = getSummaryTransactionType({
-          type: transaction?.type ?? mappedTransaction.type,
-          isTransfer: transaction?.isTransfer ?? mappedTransaction.isTransfer,
-          categoryName: transaction?.category?.name ?? mappedTransaction.categoryName,
-          merchantRaw: transaction?.merchantRaw ?? mappedTransaction.merchantRaw,
-          merchantClean: transaction?.merchantClean ?? mappedTransaction.merchantClean,
-          description: transaction?.description ?? mappedTransaction.description,
-          institution: transaction?.account?.institution ?? mappedTransaction.institution,
-        });
+        const effectiveType =
+          summaryTypeOverrides.get(mappedTransaction.id) ??
+          getSummaryTransactionType({
+            type: transaction?.type ?? mappedTransaction.type,
+            isTransfer: transaction?.isTransfer ?? mappedTransaction.isTransfer,
+            categoryName: transaction?.category?.name ?? mappedTransaction.categoryName,
+            merchantRaw: transaction?.merchantRaw ?? mappedTransaction.merchantRaw,
+            merchantClean: transaction?.merchantClean ?? mappedTransaction.merchantClean,
+            description: transaction?.description ?? mappedTransaction.description,
+            institution: transaction?.account?.institution ?? mappedTransaction.institution,
+          });
 
         if (effectiveType === "income") {
           summaryState.income += amount;

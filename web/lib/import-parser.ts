@@ -7388,7 +7388,7 @@ const parseBpiCreditCardSegment = (
 
 const guessRcbcCategoryName = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
-  if (isStandaloneCashPaymentDescription(description)) return "Shopping";
+  if (isStandaloneCashPaymentDescription(description)) return type === "income" ? "Transfers" : "Shopping";
   if (isStatementPaymentSettlementDescription(description)) return "Transfers";
   if (/payment to card|card payment/.test(lower)) return "Financial";
   if (/transfer|instapay|pesonet/.test(lower)) return "Transfers";
@@ -7399,6 +7399,10 @@ const guessRcbcCategoryName = (description: string, type: TransactionType) => {
   if (/salary|payroll|credit memo|refund|reversal/.test(lower) && type !== "expense") return "Income";
   return guessCategoryName(description, type);
 };
+
+const isRcbcSignedPaymentCredit = (description: string, amountText: string) =>
+  /-\s*$/.test(amountText) &&
+  (isStandaloneCashPaymentDescription(description) || isStatementPaymentSettlementDescription(description));
 
 const parseRcbcTransactionLine = (
   line: string,
@@ -7423,8 +7427,10 @@ const parseRcbcTransactionLine = (
     return null;
   }
 
-  const type: TransactionType = isStatementPaymentSettlementDescription(description)
-    ? "transfer"
+  const type: TransactionType = isRcbcSignedPaymentCredit(description, amountText)
+    ? "income"
+    : isStatementPaymentSettlementDescription(description)
+      ? "transfer"
     : /refund|reversal|credit memo/i.test(description)
       ? "income"
       : "expense";
@@ -7494,8 +7500,10 @@ const parseRcbcOcrTransactionSegment = (
     return null;
   }
 
-  const type: TransactionType = isStatementPaymentSettlementDescription(description)
-    ? "transfer"
+  const type: TransactionType = isRcbcSignedPaymentCredit(description, amountText)
+    ? "income"
+    : isStatementPaymentSettlementDescription(description)
+      ? "transfer"
     : /refund|reversal|credit memo/i.test(description)
       ? "income"
       : "expense";
@@ -7641,7 +7649,11 @@ const parseRcbcImportText = (text: string) => {
               return null;
             }
 
-            const type: TransactionType = isStandaloneCashPaymentDescription(description) ? "expense" : "transfer";
+            const type: TransactionType = isRcbcSignedPaymentCredit(description, amountText)
+              ? "income"
+              : isStandaloneCashPaymentDescription(description)
+                ? "expense"
+                : "transfer";
             return {
               date: saleDate.toISOString().slice(0, 10),
               amount: Math.abs(amount).toFixed(2),
