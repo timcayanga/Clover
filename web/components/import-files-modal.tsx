@@ -50,7 +50,7 @@ import {
   loadOrGetKnownPreviewTransactions,
   loadOptimisticPreviewTransactions,
 } from "@/lib/import-preview-transactions";
-import { friendlyImportPhaseLabel, friendlyImportProgressLabel, IMPORT_PROGRESS } from "@/lib/import-progress";
+import { friendlyImportPhaseLabel, friendlyImportProgressLabel, IMPORT_PROGRESS, normalizeBatchImportProgress } from "@/lib/import-progress";
 import { getLocalPreparseProgressPatch, resolveImportModalStatusDecision } from "@/lib/import-modal-status";
 import { waitForImportSettledVisibility } from "@/lib/import-settled-visibility";
 import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
@@ -475,6 +475,15 @@ export function ImportFilesModal({
       snapshotFileName !== null
         ? liveItems.find((item) => item.file.name === snapshotFileName) ?? null
         : null;
+    const snapshotItemAlreadySettled = Boolean(
+      snapshotItem &&
+      (
+        snapshotItem.confirmationState === "confirmed" ||
+        snapshotItem.status === "done" ||
+        snapshotItem.status === "error" ||
+        hasVisibleImportData(snapshotItem, localPreparseSummaryByItemIdRef.current.get(snapshotItem.id))
+      )
+    );
     const snapshotImportFileId =
       typeof snapshot.importFileId === "string" && snapshot.importFileId.trim()
         ? snapshot.importFileId.trim()
@@ -490,12 +499,7 @@ export function ImportFilesModal({
     const shouldCountSnapshotFile =
       snapshotSettlesCurrentFile &&
       snapshotItem !== null &&
-      !(
-        snapshotItem.confirmationState === "confirmed" ||
-        snapshotItem.status === "done" ||
-        snapshotItem.status === "error" ||
-        hasVisibleImportData(snapshotItem, localPreparseSummaryByItemIdRef.current.get(snapshotItem.id))
-      );
+      !snapshotItemAlreadySettled;
     const normalizedCompletedFiles = Math.min(
       normalizedFileTotal || Number.POSITIVE_INFINITY,
       Math.max(Number(snapshot.completedFiles ?? 0), liveSettledFileCount + (shouldCountSnapshotFile ? 1 : 0))
@@ -518,6 +522,16 @@ export function ImportFilesModal({
       normalizedFileTotal > 0
         ? Math.min(100, ((normalizedCompletedFiles + liveActiveContribution) / normalizedFileTotal) * 100)
         : 0;
+    const reportedProgress = Math.max(0, Math.min(100, Number(snapshot.progress ?? 0)));
+    const batchScopedReportedProgress =
+      normalizedFileTotal > 1 && snapshotItem
+        ? normalizeBatchImportProgress({
+            fileTotal: normalizedFileTotal,
+            completedFiles: normalizedCompletedFiles,
+            fileProgress: reportedProgress,
+            fileSettled: snapshotSettlesCurrentFile || snapshotItemAlreadySettled,
+          })
+        : reportedProgress;
     const nextSnapshot: ImportActivitySnapshot = {
       workspaceId: snapshot.workspaceId ?? workspaceId,
       surface: snapshot.surface ?? importActivitySurfaceRef.current,
@@ -533,7 +547,7 @@ export function ImportFilesModal({
       fileIndex: Number(snapshot.fileIndex ?? 0),
       fileTotal: normalizedFileTotal,
       completedFiles: normalizedCompletedFiles,
-      progress: Math.max(Number(snapshot.progress ?? 0), liveBatchProgress),
+      progress: Math.max(batchScopedReportedProgress, liveBatchProgress),
       detail: snapshot.detail ?? "",
       summary: snapshot.summary ?? null,
       errorCode: snapshot.errorCode ?? null,
@@ -591,7 +605,8 @@ export function ImportFilesModal({
       previousSnapshot &&
       nextSnapshot.status === "active" &&
       previousSnapshot.workspaceId === nextSnapshot.workspaceId &&
-      previousSnapshot.fileName === nextSnapshot.fileName
+      previousSnapshot.fileTotal === nextSnapshot.fileTotal &&
+      liveItems.length > 0
     ) {
       nextSnapshot.progress = Math.max(previousSnapshot.progress ?? 0, nextSnapshot.progress ?? 0);
     }
@@ -1542,6 +1557,12 @@ export function ImportFilesModal({
 
     if (additions.length > 0) {
       primaryVisibilityCompletedRef.current = false;
+      if (itemsRef.current.length === additions.length) {
+        // A new batch must not inherit a completed batch's progress merely
+        // because both selections contain the same number of files.
+        lastImportActivityRef.current = null;
+        clearImportActivity();
+      }
     }
 
     if (additions.length > 0) {

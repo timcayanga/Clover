@@ -1,6 +1,12 @@
 @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Raleway:wght@500;600;700&display=swap");
 @import url("/admin.css");
 
+@property --progress {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+
 :root {
   color-scheme: light;
   --font-body: "Poppins", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -19524,6 +19530,7 @@ body[data-clover-page-modal] .modal-card {
   display: grid;
   place-items: center;
   flex: none;
+  transition: --progress 180ms ease-out;
 }
 
 .import-progress-donut::after {
@@ -19608,6 +19615,8 @@ body[data-clover-page-modal] .modal-card {
   background: rgba(255, 255, 255, 0.98);
   display: grid;
   gap: 8px;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .import-upload-dock__header {

@@ -307,6 +307,28 @@ export const inferAccountTypeFromStatement = (
   return fallback;
 };
 
+export const detectExplicitAccountTypeFromStatementText = (
+  text?: string | null
+): ImportedAccountType | null => {
+  const normalized = String(text ?? "").replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  // Product labels outrank a generic parser default. Keep the patterns tied to
+  // account/statement language so a merchant row such as "wallet transfer"
+  // cannot reclassify an ordinary bank account.
+  if (
+    /\b(?:account|product|facility)\s*(?:type|category|class)\s*[:\-]?\s*(?:digital\s+|e-?\s*)?wallet\b/i.test(normalized) ||
+    /\b(?:digital\s+wallet|e-?wallet|wallet\s+account)\s+(?:statement|summary|activity|transaction\s+history)\b/i.test(normalized) ||
+    /\b(?:statement|summary|activity|transaction\s+history)\s+(?:for|of)\s+(?:the\s+)?(?:digital\s+|e-?\s*)?wallet\b/i.test(normalized)
+  ) {
+    return "wallet";
+  }
+
+  return null;
+};
+
 export const normalizePayPalAccountType = (
   institution?: string | null,
   accountName?: string | null,
@@ -20941,6 +20963,7 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
           : null);
   const refinedAccountType =
     normalizePayPalAccountType(institution, provisionalAccountName, normalized) ??
+    detectExplicitAccountTypeFromStatementText(normalized) ??
     ((paymentDueDate || totalAmountDue !== null) &&
     /payment\s+due\s+date|due\s+date|total\s+amount\s+due|minimum\s+amount\s+due|credit\s+limit|statement\s+date/i.test(normalized)
       ? "credit_card"

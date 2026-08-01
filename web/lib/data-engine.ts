@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import {
   detectStatementMetadata,
+  detectExplicitAccountTypeFromStatementText,
   type DetectedStatementMetadata,
   type ImportedAccountType,
   inferAccountTypeFromStatement,
@@ -1985,6 +1986,7 @@ export const detectStatementMetadataFromText = (text: string, fileName = ""): St
       : metadata?.endingBalance ?? (institution === "Security Bank" ? extractTrailingMoneyFromText(normalizedText) : null);
   const refinedAccountType =
     normalizePayPalAccountType(institution, accountName, normalizedText) ??
+    detectExplicitAccountTypeFromStatementText(normalizedText) ??
     metadata?.accountType ??
     (institution && /maya/i.test(institution)
       ? /\b(maya\s+easy\s+credit|maya\s+credit|easy\s+credit|billing\s+statement|payment\s+due\s+date|total\s+amount\s+due|minimum\s+amount\s+due|credit\s+limit|credit\s*card|card\s+ending|visa|mastercard|amex)\b/i.test(normalizedText)

@@ -10,6 +10,23 @@ export const IMPORT_PROGRESS = {
   done: 100,
 } as const;
 
+export const normalizeBatchImportProgress = (params: {
+  fileTotal: number;
+  completedFiles: number;
+  fileProgress: number;
+  fileSettled: boolean;
+}) => {
+  const fileTotal = Math.max(0, Math.floor(params.fileTotal));
+  const fileProgress = Math.max(0, Math.min(100, Number(params.fileProgress) || 0));
+  if (fileTotal <= 1) {
+    return fileProgress;
+  }
+
+  const completedFiles = Math.min(fileTotal, Math.max(0, Math.floor(params.completedFiles)));
+  const activeContribution = params.fileSettled ? 0 : fileProgress / 100;
+  return Math.min(100, ((completedFiles + activeContribution) / fileTotal) * 100);
+};
+
 export const friendlyImportPhaseLabel = (label: string, fileName?: string | null, _importMode?: ImportImageMode | null) => {
   const fileSuffix = fileName ? ` ${fileName}` : "";
 

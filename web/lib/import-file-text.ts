@@ -26,6 +26,35 @@ const isPdfPasswordError = (error: unknown) => {
 const PDF_PASSWORD_PROBE = "__clover_password_probe__";
 const CLIENT_PDF_TEXT_EXTRACTION_TIMEOUT_MS = 12_000;
 const CLIENT_PDF_PASSWORD_PROBE_TIMEOUT_MS = 4_000;
+const pdfFileBufferCache = new WeakMap<File, Promise<ArrayBuffer>>();
+let pdfJsModulePromise: Promise<typeof import("@/lib/pdfjs")> | null = null;
+
+const loadPdfJs = () => {
+  pdfJsModulePromise ??= import("@/lib/pdfjs");
+  return pdfJsModulePromise;
+};
+
+const readFileBuffer = (file: File) => {
+  const cached = pdfFileBufferCache.get(file);
+  if (cached) {
+    return cached;
+  }
+
+  const pending = file.arrayBuffer();
+  pdfFileBufferCache.set(file, pending);
+  return pending;
+};
+
+const readFreshFileBytes = async (file: File) =>
+  new Uint8Array((await readFileBuffer(file)).slice(0));
+
+export const hasPdfEncryptionMarker = (bytes: Uint8Array) => {
+  // The PDF trailer references an encryption dictionary with `/Encrypt`.
+  // This marker is readable before decryption and avoids waiting for PDF.js
+  // merely to decide whether Clover should show the password prompt.
+  const decoder = new TextDecoder("latin1");
+  return /\/Encrypt\b/.test(decoder.decode(bytes));
+};
 
 const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number) => {
   let timeoutId: number | null = null;
@@ -50,8 +79,15 @@ export const probeFilePasswordProtection = async (file: File) => {
   }
 
   try {
-    const { pdfjs } = await import("@/lib/pdfjs");
-    const data = new Uint8Array(await file.arrayBuffer());
+    const data = await readFreshFileBytes(file);
+    if (hasPdfEncryptionMarker(data)) {
+      // Warm the reader while the user enters the password so validation does
+      // not pay the chunk-loading cost after they press Unlock file.
+      void loadPdfJs();
+      return true;
+    }
+
+    const { pdfjs } = await loadPdfJs();
     const loadingTask = pdfjs.getDocument({
       data,
       password: PDF_PASSWORD_PROBE,
@@ -78,8 +114,8 @@ export const validatePdfPassword = async (file: File, password: string): Promise
   }
 
   try {
-    const { pdfjs } = await import("@/lib/pdfjs");
-    const data = new Uint8Array(await file.arrayBuffer());
+    const { pdfjs } = await loadPdfJs();
+    const data = await readFreshFileBytes(file);
     const loadingTask = pdfjs.getDocument({
       data,
       password,
@@ -108,7 +144,7 @@ export const extractTextFromFile = async (
   const lowerName = file.name.toLowerCase();
 
   if (/\.(?:csv|tsv)$/.test(lowerName)) {
-    return decodeStructuredDelimitedBytes(new Uint8Array(await file.arrayBuffer()));
+    return decodeStructuredDelimitedBytes(await readFreshFileBytes(file));
   }
 
   if (isImageFileName(lowerName)) {
@@ -116,8 +152,8 @@ export const extractTextFromFile = async (
   }
 
   if (lowerName.endsWith(".pdf")) {
-    const { pdfjs } = await import("@/lib/pdfjs");
-    const data = new Uint8Array(await file.arrayBuffer());
+    const { pdfjs } = await loadPdfJs();
+    const data = await readFreshFileBytes(file);
     if (!password) {
       const probeTask = pdfjs.getDocument({
         data,

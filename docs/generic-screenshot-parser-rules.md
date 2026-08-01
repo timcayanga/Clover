@@ -36,6 +36,7 @@ These rules apply when an uploaded screenshot does not match a trained instituti
 - Bare `$` and `¥` are ambiguous. Leave currency unset and retain the ambiguity evidence for review unless an explicit code, currency name, or labeled statement field resolves it.
 - Statement-level currency labels outrank transaction-level foreign/original-currency amounts. Conflicting high-confidence labels must remain unresolved instead of selecting the first match.
 - Preserve institution/currency confidence and evidence in detected metadata so cold-layout QA and Admin diagnostics can explain the decision.
+- Treat explicit product labels such as `Account Type: Wallet`, `Wallet Account`, or `E-wallet Statement` as stronger account-type evidence than the generic `bank` fallback. A transaction description that merely mentions a wallet or wallet transfer is not enough to reclassify the account.
 
 ## Investment semantics
 
