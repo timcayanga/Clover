@@ -1,18 +1,20 @@
 import assert from "node:assert/strict";
 import { CONTEXT_CORPUS_VERSION, deriveTravelEpisodes, getContextCorpusCoverageReport, getContextCorpusEntries, getContextCorpusQualityReport, parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
+import { WORLD_EVERYDAY_GAP_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-everyday-gaps";
 import { WORLD_ESSENTIAL_GAP_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-essential-gaps";
 import { WORLD_ESSENTIAL_SERVICE_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-essential-services";
 import { WORLD_FISCAL_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-fiscal";
+import { WORLD_FISCAL_CONTEXT_ENTRIES_2 } from "@/lib/world-context-corpus-fiscal-2";
 
 assert.ok(CONTEXT_CORPUS_VERSION);
-assert.ok(getContextCorpusEntries().length >= 2281);
+assert.ok(getContextCorpusEntries().length >= 2462);
 assert.ok(getContextCorpusQualityReport().profileCount >= 197);
 assert.equal(getContextCorpusQualityReport().valid, true);
 const coverage = getContextCorpusCoverageReport();
 assert.equal(coverage.corpusVersion, CONTEXT_CORPUS_VERSION);
-assert.ok(coverage.canonicalEntryCount >= 2281);
-assert.ok(coverage.descriptorVariantEntryCount >= 130992);
-assert.ok(coverage.aliasCount >= 5790);
+assert.ok(coverage.canonicalEntryCount >= 2462);
+assert.ok(coverage.descriptorVariantEntryCount >= 139584);
+assert.ok(coverage.aliasCount >= 6146);
 assert.ok(Object.keys(coverage.countryCounts).length >= 198);
 assert.ok(coverage.currencies.length >= 144);
 assert.ok((coverage.canonicalCountryCounts.PH ?? 0) > 0);
@@ -31,9 +33,11 @@ assert.ok((coverage.canonicalCountryPurposeCounts.EG?.groceries ?? 0) > 0);
 assert.ok((coverage.canonicalCountryPurposeCounts.ET?.utilities ?? 0) > 0);
 
 assert.equal(WORLD_ESSENTIAL_GAP_CONTEXT_ENTRIES.length, 95);
+assert.equal(WORLD_EVERYDAY_GAP_CONTEXT_ENTRIES.length, 61);
 assert.equal(WORLD_FISCAL_CONTEXT_ENTRIES.length, 120);
+assert.equal(WORLD_FISCAL_CONTEXT_ENTRIES_2.length, 120);
 
-for (const entry of [...WORLD_ESSENTIAL_GAP_CONTEXT_ENTRIES, ...WORLD_FISCAL_CONTEXT_ENTRIES]) {
+for (const entry of [...WORLD_ESSENTIAL_GAP_CONTEXT_ENTRIES, ...WORLD_EVERYDAY_GAP_CONTEXT_ENTRIES, ...WORLD_FISCAL_CONTEXT_ENTRIES, ...WORLD_FISCAL_CONTEXT_ENTRIES_2]) {
   const context = resolveTransactionContext({ merchantRaw: entry.aliases[0], currency: entry.currency });
   assert.equal(context.countryCode, entry.countryCode, entry.id);
   assert.equal(context.purposeHint, entry.purposeHint, entry.id);
@@ -45,9 +49,12 @@ for (const country of realCountries) {
   assert.ok((coverage.canonicalCountryPurposeCounts[country]?.telecom ?? 0) > 0, `${country} is missing telecom context`);
   assert.ok((coverage.canonicalCountryPurposeCounts[country]?.healthcare ?? 0) > 0, `${country} is missing healthcare context`);
   assert.ok((coverage.canonicalCountryPurposeCounts[country]?.education ?? 0) > 0, `${country} is missing education context`);
+  assert.ok((coverage.canonicalCountryPurposeCounts[country]?.transport ?? 0) > 0, `${country} is missing transport context`);
+  assert.ok((coverage.canonicalCountryPurposeCounts[country]?.groceries ?? 0) > 0, `${country} is missing grocery context`);
+  assert.ok((coverage.canonicalCountryPurposeCounts[country]?.utilities ?? 0) > 0, `${country} is missing utility context`);
 }
 
-for (const description of ["SAT CLASS", "NAVIGATION NOTE", "FLOW CHART", "SUN AT NOON", "POST LETTER", "TEAM MEETING"]) {
+for (const description of ["SAT CLASS", "NAVIGATION NOTE", "FLOW CHART", "SUN AT NOON", "POST LETTER", "TEAM MEETING", "Revenue Forecast", "Social Gathering", "Metro Design", "Fresh Start"]) {
   const context = resolveTransactionContext({ description });
   assert.equal(context.countryCode, null, `${description} must remain geographically neutral`);
 }

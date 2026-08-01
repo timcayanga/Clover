@@ -15,9 +15,11 @@ import { WORLD_COMMERCE_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-comme
 import { WORLD_TRAVEL_HEALTH_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-travel-health";
 import { WORLD_ESSENTIAL_SERVICE_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-essential-services";
 import { WORLD_ESSENTIAL_GAP_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-essential-gaps";
+import { WORLD_EVERYDAY_GAP_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-everyday-gaps";
 import { WORLD_FISCAL_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-fiscal";
+import { WORLD_FISCAL_CONTEXT_ENTRIES_2 } from "@/lib/world-context-corpus-fiscal-2";
 
-export const CONTEXT_CORPUS_VERSION = "2026.08.01.8";
+export const CONTEXT_CORPUS_VERSION = "2026.08.01.9";
 
 export type ContextSignal = {
   id: string;
@@ -389,7 +391,7 @@ const baseEntries: ContextEntry[] = [
   { id: "ch-public-transit", aliases: ["sbb mobile", "cff ticket", "zvv zurich", "tpg geneva"], signalKind: "travel", countryCode: "CH", regionCode: "EUR", currency: "CHF", categoryHint: "Transport", counterpartyType: "transport_provider", purposeHint: "transport", travelLikely: true, confidence: 82 },
   { id: "ie-public-transit", aliases: ["leap top up", "irish rail ticket", "dublin bus", "luas"], signalKind: "travel", countryCode: "IE", regionCode: "EUR", currency: "EUR", categoryHint: "Transport", counterpartyType: "transport_provider", purposeHint: "transport", travelLikely: true, confidence: 82 },
   { id: "nl-be-payment-rails", aliases: ["ideal netherlands", "tikkie netherlands", "ing netherlands", "abn amro", "kbc belgium", "bancontact belgium"], signalKind: "payment_rail", countryCode: "EU", regionCode: "EUR", paymentRail: "benelux_bank_rail", currency: "EUR", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 74 },
-  { id: "nl-be-commerce-transit", aliases: ["ns nederland", "ret belgium", "albert heijn", "jumbo supermarkets", "bol.com", "brussels airlines"], signalKind: "travel", countryCode: "EU", regionCode: "EUR", currency: "EUR", categoryHint: "Travel & Lifestyle", counterpartyType: "travel_provider", purposeHint: "travel", travelLikely: true, confidence: 72 },
+  { id: "nl-be-commerce-transit", aliases: ["ns nederland", "ret belgium", "brussels airlines"], signalKind: "travel", countryCode: "EU", regionCode: "EUR", currency: "EUR", categoryHint: "Travel & Lifestyle", counterpartyType: "travel_provider", purposeHint: "travel", travelLikely: true, confidence: 72 },
   { id: "pt-payment-rails", aliases: ["sibs portugal"], signalKind: "payment_rail", countryCode: "PT", regionCode: "EUR", paymentRail: "portugal_bank_rail", currency: "EUR", counterpartyType: "financial_institution", purposeHint: "transfer", confidence: 82 },
   { id: "pt-commerce-transit", aliases: ["metro lisboa", "cp comboios portugal", "continente portugal", "pingo doce", "tap air portugal"], signalKind: "travel", countryCode: "EU", regionCode: "EUR", currency: "EUR", categoryHint: "Travel & Lifestyle", counterpartyType: "travel_provider", purposeHint: "travel", travelLikely: true, confidence: 72 },
   { id: "bd-payment-rails", aliases: ["bkash bangladesh", "nagad bangladesh", "rocket bangladesh", "upay bangladesh", "npsb bangladesh"], signalKind: "payment_rail", countryCode: "BD", regionCode: "SAS", paymentRail: "bangladesh_wallet", currency: "BDT", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 70 },
@@ -403,7 +405,7 @@ const baseEntries: ContextEntry[] = [
   { id: "be-payment-rails", aliases: ["payconiq belgium", "belfius", "argenta belgium"], signalKind: "payment_rail", countryCode: "BE", regionCode: "EUR", paymentRail: "belgium_bank_rail", currency: "EUR", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 68 },
   { id: "be-commerce-transit", aliases: ["sncb belgium", "delhaize belgium", "colruyt belgium", "carrefour belgium"], signalKind: "travel", countryCode: "BE", regionCode: "EUR", currency: "EUR", categoryHint: "Travel & Lifestyle", counterpartyType: "travel_provider", purposeHint: "travel", travelLikely: true, confidence: 68 },
   { id: "nl-payment-rails", aliases: ["abn amro netherlands", "rabobank netherlands"], signalKind: "payment_rail", countryCode: "NL", regionCode: "EUR", paymentRail: "netherlands_bank_rail", currency: "EUR", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 70 },
-  { id: "nl-commerce-transit", aliases: ["ns netherlands", "gvb amsterdam", "albert heijn netherlands", "jumbo netherlands", "coolblue"], signalKind: "travel", countryCode: "NL", regionCode: "EUR", currency: "EUR", categoryHint: "Travel & Lifestyle", counterpartyType: "travel_provider", purposeHint: "travel", travelLikely: true, confidence: 70 },
+  { id: "nl-commerce-transit", aliases: ["ns netherlands", "gvb amsterdam"], signalKind: "travel", countryCode: "NL", regionCode: "EUR", currency: "EUR", categoryHint: "Travel & Lifestyle", counterpartyType: "travel_provider", purposeHint: "travel", travelLikely: true, confidence: 70 },
   { id: "se-payment-rails", aliases: ["swish sweden", "bankid sweden", "klarna sweden", "seb sweden", "swedbank"], signalKind: "payment_rail", countryCode: "SE", regionCode: "EUR", paymentRail: "sweden_bank_rail", currency: "SEK", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 68 },
   { id: "se-commerce-transit", aliases: ["sl stockholm", "sj sweden", "ica sweden", "coop sverige", "volvo cars"], signalKind: "travel", countryCode: "SE", regionCode: "EUR", currency: "SEK", categoryHint: "Travel & Lifestyle", counterpartyType: "travel_provider", purposeHint: "travel", travelLikely: true, confidence: 66 },
   { id: "no-payment-rails", aliases: ["vipps norway", "bankid norway", "dnb norway", "sparebank norway", "nordea norway"], signalKind: "payment_rail", countryCode: "NO", regionCode: "EUR", paymentRail: "norway_bank_rail", currency: "NOK", categoryHint: "Transfers", transactionTypeHint: "transfer", confidence: 68 },
@@ -651,7 +653,7 @@ const deduplicatedAdditionalCanonicalEntries = additionalCanonicalEntries
   }))
   .filter((entry) => entry.aliases.length > 0);
 const usedExtendedAliases = new Set([...usedCanonicalAliases]);
-const deduplicatedWorldEntries = [...WORLD_CONTEXT_ENTRIES, ...WORLD_CONTEXT_ENTRIES_2, ...WORLD_CONTEXT_ENTRIES_3, ...WORLD_CONTEXT_ENTRIES_4, ...WORLD_CONTEXT_ENTRIES_5, ...WORLD_VERTICAL_CONTEXT_ENTRIES, ...WORLD_COMMERCE_CONTEXT_ENTRIES, ...WORLD_TRAVEL_HEALTH_CONTEXT_ENTRIES, ...WORLD_ESSENTIAL_SERVICE_CONTEXT_ENTRIES, ...WORLD_ESSENTIAL_GAP_CONTEXT_ENTRIES, ...WORLD_FISCAL_CONTEXT_ENTRIES]
+const deduplicatedWorldEntries = [...WORLD_CONTEXT_ENTRIES, ...WORLD_CONTEXT_ENTRIES_2, ...WORLD_CONTEXT_ENTRIES_3, ...WORLD_CONTEXT_ENTRIES_4, ...WORLD_CONTEXT_ENTRIES_5, ...WORLD_VERTICAL_CONTEXT_ENTRIES, ...WORLD_COMMERCE_CONTEXT_ENTRIES, ...WORLD_TRAVEL_HEALTH_CONTEXT_ENTRIES, ...WORLD_ESSENTIAL_SERVICE_CONTEXT_ENTRIES, ...WORLD_ESSENTIAL_GAP_CONTEXT_ENTRIES, ...WORLD_EVERYDAY_GAP_CONTEXT_ENTRIES, ...WORLD_FISCAL_CONTEXT_ENTRIES, ...WORLD_FISCAL_CONTEXT_ENTRIES_2]
   .map((entry) => ({
     ...entry,
     aliases: entry.aliases.filter((alias) => {
