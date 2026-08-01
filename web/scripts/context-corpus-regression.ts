@@ -2,15 +2,15 @@ import assert from "node:assert/strict";
 import { CONTEXT_CORPUS_VERSION, deriveTravelEpisodes, getContextCorpusCoverageReport, getContextCorpusEntries, getContextCorpusQualityReport, parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionContext } from "@/lib/context-corpus";
 
 assert.ok(CONTEXT_CORPUS_VERSION);
-assert.ok(getContextCorpusEntries().length >= 800);
-assert.ok(getContextCorpusQualityReport().profileCount >= 119);
+assert.ok(getContextCorpusEntries().length >= 1000);
+assert.ok(getContextCorpusQualityReport().profileCount >= 149);
 assert.equal(getContextCorpusQualityReport().valid, true);
 const coverage = getContextCorpusCoverageReport();
 assert.equal(coverage.corpusVersion, CONTEXT_CORPUS_VERSION);
-assert.ok(coverage.canonicalEntryCount >= 800);
-assert.ok(coverage.descriptorVariantEntryCount > 60000);
-assert.ok(Object.keys(coverage.countryCounts).length >= 120);
-assert.ok(coverage.currencies.length >= 95);
+assert.ok(coverage.canonicalEntryCount >= 1000);
+assert.ok(coverage.descriptorVariantEntryCount > 70000);
+assert.ok(Object.keys(coverage.countryCounts).length >= 150);
+assert.ok(coverage.currencies.length >= 120);
 assert.ok((coverage.canonicalCountryCounts.PH ?? 0) > 0);
 assert.ok(coverage.localizedAliasCount >= 20);
 assert.ok(coverage.canonicalLocalizedAliasCount >= 30);
@@ -263,6 +263,75 @@ for (const fixture of worldwidePhaseTwoFixtures) {
   assert.equal(context.paymentRail, fixture.paymentRail);
   assert.equal(context.purposeHint, fixture.purposeHint);
   assert.notEqual(context.transactionTypeHint, "expense");
+}
+
+const worldwidePhaseThreeFixtures = [
+  { input: { description: "PAGO MOVIL VENEZUELA", currency: "VES" }, countryCode: "VE", paymentRail: "venezuela_pago_movil", purposeHint: "transfer" },
+  { input: { merchantRaw: "BARBADOS LIGHT AND POWER", currency: "BBD" }, countryCode: "BB", paymentRail: null, purposeHint: "utilities" },
+  { input: { description: "SAND DOLLAR BAHAMAS", currency: "BSD" }, countryCode: "BS", paymentRail: "bahamas_sand_dollar", purposeHint: "transfer" },
+  { input: { merchantRaw: "BELIZE ELECTRICITY LIMITED", currency: "BZD" }, countryCode: "BZ", paymentRail: null, purposeHint: "utilities" },
+  { input: { description: "MMG MOBILE MONEY GUYANA", currency: "GYD" }, countryCode: "GY", paymentRail: "guyana_mmg", purposeHint: "transfer" },
+  { input: { merchantRaw: "ENERGIEBEDRIJVEN SURINAME", currency: "SRD" }, countryCode: "SR", paymentRail: null, purposeHint: "utilities" },
+  { input: { description: "DIGICEL MONCASH HAITI", currency: "HTG" }, countryCode: "HT", paymentRail: "haiti_moncash", purposeHint: "transfer" },
+  { input: { description: "MULTICAIXA EXPRESS ANGOLA", currency: "AOA" }, countryCode: "AO", paymentRail: "angola_multicaixa", purposeHint: "transfer" },
+  { input: { merchantRaw: "NAMPOWER NAMIBIA", currency: "NAD" }, countryCode: "NA", paymentRail: null, purposeHint: "utilities" },
+  { input: { description: "ZIM SWITCH ZIPIT", currency: "USD" }, countryCode: "ZW", paymentRail: "zimbabwe_zipit", purposeHint: "transfer" },
+  { input: { description: "GIMAC PAY CAMEROUN", currency: "XAF" }, countryCode: "CM", paymentRail: "cemac_gimacpay", purposeHint: "transfer" },
+  { input: { merchantRaw: "SEEG GABON", currency: "XAF" }, countryCode: "GA", paymentRail: null, purposeHint: "utilities" },
+  { input: { description: "M-PESA DR CONGO", currency: "CDF" }, countryCode: "CD", paymentRail: "drc_mobile_money", purposeHint: "transfer" },
+  { input: { description: "TELMA MVOLA MADAGASCAR", currency: "MGA" }, countryCode: "MG", paymentRail: "madagascar_mvola", purposeHint: "transfer" },
+  { input: { merchantRaw: "SPTC SEYCHELLES", currency: "SCR" }, countryCode: "SC", paymentRail: null, purposeHint: "transport" },
+  { input: { description: "REDE VINTI4 CAPE VERDE", currency: "CVE" }, countryCode: "CV", paymentRail: "cabo_verde_vinti4", purposeHint: "transfer" },
+  { input: { merchantRaw: "SBEE BENIN", currency: "XOF" }, countryCode: "BJ", paymentRail: null, purposeHint: "utilities" },
+  { input: { description: "T MONEY TOGOCOM", currency: "XOF" }, countryCode: "TG", paymentRail: "togo_tmoney", purposeHint: "transfer" },
+  { input: { merchantRaw: "EDSA SIERRA LEONE", currency: "SLE" }, countryCode: "SL", paymentRail: null, purposeHint: "utilities" },
+  { input: { description: "OMT PAY LEBANON", currency: "LBP" }, countryCode: "LB", paymentRail: "lebanon_omt_pay", purposeHint: "transfer" },
+  { input: { description: "زين كاش العراق", currency: "IQD" }, countryCode: "IQ", paymentRail: "iraq_zaincash", purposeHint: "transfer" },
+  { input: { description: "FAVARA TRANSFER MALDIVES", currency: "MVR" }, countryCode: "MV", paymentRail: "maldives_favara", purposeHint: "transfer" },
+  { input: { description: "RMA BHUTAN QR", currency: "BTN" }, countryCode: "BT", paymentRail: "bhutan_qr", purposeHint: "transfer" },
+  { input: { merchantRaw: "PNG POWER LIMITED", currency: "PGK" }, countryCode: "PG", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "FARMER JOE SUPERMARKET SAMOA", currency: "WST" }, countryCode: "WS", paymentRail: null, purposeHint: "groceries" },
+  { input: { merchantRaw: "TONGA POWER LIMITED", currency: "TOP" }, countryCode: "TO", paymentRail: null, purposeHint: "utilities" },
+  { input: { description: "VODAFONE MVATU VANUATU", currency: "VUV" }, countryCode: "VU", paymentRail: "vanuatu_mvatu", purposeHint: "transfer" },
+  { input: { merchantRaw: "SOLOMON ISLANDS ELECTRICITY AUTHORITY", currency: "SBD" }, countryCode: "SB", paymentRail: null, purposeHint: "utilities" },
+  { input: { merchantRaw: "VOLI CRNA GORA", currency: "EUR" }, countryCode: "ME", paymentRail: null, purposeHint: "groceries" },
+  { input: { description: "ALIF MOBI TAJIKISTAN", currency: "TJS" }, countryCode: "TJ", paymentRail: "tajikistan_alif", purposeHint: "transfer" },
+] as const;
+for (const fixture of worldwidePhaseThreeFixtures) {
+  const context = resolveTransactionContext(fixture.input);
+  assert.equal(context.countryCode, fixture.countryCode);
+  assert.equal(context.paymentRail, fixture.paymentRail);
+  assert.equal(context.purposeHint, fixture.purposeHint);
+  assert.notEqual(context.transactionTypeHint, "expense");
+}
+
+const worldwideDepthFixtures = [
+  { merchantRaw: "AMERICAN HOSPITAL ALBANIA", currency: "ALL", countryCode: "AL", purposeHint: "healthcare" },
+  { merchantRaw: "EDESUR ARGENTINA", currency: "ARS", countryCode: "AR", purposeHint: "utilities" },
+  { merchantRaw: "BH TELECOM BIH", currency: "BAM", countryCode: "BA", purposeHint: "telecom" },
+  { merchantRaw: "SHWAPNO BANGLADESH", currency: "BDT", countryCode: "BD", purposeHint: "groceries" },
+  { merchantRaw: "ROYAL BAHRAIN HOSPITAL", currency: "BHD", countryCode: "BH", purposeHint: "healthcare" },
+  { merchantRaw: "JPMC BRUNEI", currency: "BND", countryCode: "BN", purposeHint: "healthcare" },
+  { merchantRaw: "BILHETE UNICO SAO PAULO", currency: "BRL", countryCode: "BR", purposeHint: "transport" },
+  { merchantRaw: "BOKAMOSO HOSPITAL BOTSWANA", currency: "BWP", countryCode: "BW", purposeHint: "healthcare" },
+  { merchantRaw: "UNIVERSITY HOSPITAL MOTOL", currency: "CZK", countryCode: "CZ", purposeHint: "healthcare" },
+  { merchantRaw: "ETHIO TELECOM", currency: "ETB", countryCode: "ET", purposeHint: "telecom" },
+  { merchantRaw: "EVEX MEDICAL GEORGIA", currency: "GEL", countryCode: "GE", purposeHint: "healthcare" },
+  { merchantRaw: "MELCOM GHANA SUPERMARKET", currency: "GHS", countryCode: "GH", purposeHint: "groceries" },
+  { merchantRaw: "CLALIT HEALTH SERVICES", currency: "ILS", countryCode: "IL", purposeHint: "healthcare" },
+  { merchantRaw: "JORDAN ELECTRIC POWER COMPANY", currency: "JOD", countryCode: "JO", purposeHint: "utilities" },
+  { merchantRaw: "AKDITAL HOSPITAL MOROCCO", currency: "MAD", countryCode: "MA", purposeHint: "healthcare" },
+  { merchantRaw: "CITY MART SUPERMARKET YANGON", currency: "MMK", countryCode: "MM", purposeHint: "groceries" },
+  { merchantRaw: "REDDINGTON HOSPITAL LAGOS", currency: "NGN", countryCode: "NG", purposeHint: "healthcare" },
+  { merchantRaw: "SAJHA BUS KATHMANDU", currency: "NPR", countryCode: "NP", purposeHint: "transport" },
+  { merchantRaw: "SPARK NEW ZEALAND TELECOM", currency: "NZD", countryCode: "NZ", purposeHint: "telecom" },
+  { merchantRaw: "AGA KHAN UNIVERSITY HOSPITAL PAKISTAN", currency: "PKR", countryCode: "PK", purposeHint: "healthcare" },
+] as const;
+for (const fixture of worldwideDepthFixtures) {
+  const context = resolveTransactionContext(fixture);
+  assert.equal(context.countryCode, fixture.countryCode);
+  assert.equal(context.purposeHint, fixture.purposeHint);
+  assert.equal(context.transactionTypeHint, null);
 }
 
 for (const description of ["A BIT OF SOFTWARE", "WAVE HOTEL", "METRO MARKET", "MODE PAYMENT"]) {

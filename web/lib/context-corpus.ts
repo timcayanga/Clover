@@ -7,8 +7,9 @@
 
 import { WORLD_CONTEXT_ENTRIES, WORLD_REGIONAL_PROFILES } from "@/lib/world-context-corpus-packs";
 import { WORLD_CONTEXT_ENTRIES_2, WORLD_REGIONAL_PROFILES_2 } from "@/lib/world-context-corpus-packs-2";
+import { WORLD_CONTEXT_ENTRIES_3, WORLD_REGIONAL_PROFILES_3 } from "@/lib/world-context-corpus-packs-3";
 
-export const CONTEXT_CORPUS_VERSION = "2026.08.01";
+export const CONTEXT_CORPUS_VERSION = "2026.08.01.2";
 
 export type ContextSignal = {
   id: string;
@@ -195,7 +196,7 @@ const baseEntries: ContextEntry[] = [
   { id: "jp-transit-expanded", aliases: ["kitaca", "toica", "manaca", "sugoca", "hayakaken", "tokyo metro", "osaka metro", "jr west", "jr kyushu"], signalKind: "travel", countryCode: "JP", regionCode: "EAS", paymentRail: "japan_transit", currency: "JPY", categoryHint: "Transport", counterpartyType: "transport_provider", purposeHint: "transport", travelLikely: true, confidence: 90 },
   { id: "kr-banks", aliases: ["shinhan bank", "kb kookmin", "hana bank korea", "woori bank", "nh bank korea", "kakao bank", "toss bank"], signalKind: "institution", countryCode: "KR", regionCode: "EAS", institutionType: "bank", currency: "KRW", confidence: 88 },
   { id: "kr-wallets", aliases: ["kakao pay", "카카오페이", "naver pay", "네이버페이", "toss pay", "토스페이", "samsung pay korea", "payco korea", "ssg pay"], signalKind: "payment_rail", countryCode: "KR", regionCode: "EAS", paymentRail: "korea_wallet", currency: "KRW", institutionType: "wallet", confidence: 88 },
-  { id: "kr-transit", aliases: ["t money", "tmoney", "티머니", "cashbee", "캐시비", "korea subway", "korail", "kakao t", "seoul metro"], signalKind: "travel", countryCode: "KR", regionCode: "EAS", paymentRail: "korea_transit", currency: "KRW", categoryHint: "Transport", counterpartyType: "transport_provider", purposeHint: "transport", travelLikely: true, confidence: 88 },
+  { id: "kr-transit", aliases: ["t money", "tmoney", "티머니", "cashbee", "캐시비", "korea subway", "korail", "kakao t", "seoul metro"], negativeAliases: ["togocom", "t money togo"], signalKind: "travel", countryCode: "KR", regionCode: "EAS", paymentRail: "korea_transit", currency: "KRW", categoryHint: "Transport", counterpartyType: "transport_provider", purposeHint: "transport", travelLikely: true, confidence: 88 },
   { id: "kr-commerce", aliases: ["coupang", "gmarket korea", "olive young", "emart korea", "lotte korea", "cu korea", "gs25 korea", "daiso korea"], signalKind: "merchant", countryCode: "KR", regionCode: "EAS", currency: "KRW", categoryHint: "Shopping", counterpartyType: "merchant", purposeHint: "retail", confidence: 84 },
   { id: "hk-banks", aliases: ["hsbc hong kong", "hang seng bank", "bank of china hong kong", "bochk", "standard chartered hong kong", "za bank hong kong"], signalKind: "institution", countryCode: "HK", regionCode: "EAS", institutionType: "bank", currency: "HKD", confidence: 88 },
   { id: "hk-wallets", aliases: ["octopus wallet", "payme hong kong", "alipayhk", "wechat pay hk", "tap and go hong kong"], signalKind: "payment_rail", countryCode: "HK", regionCode: "EAS", paymentRail: "hong_kong_wallet", currency: "HKD", institutionType: "wallet", confidence: 88 },
@@ -642,7 +643,7 @@ const deduplicatedAdditionalCanonicalEntries = additionalCanonicalEntries
   }))
   .filter((entry) => entry.aliases.length > 0);
 const usedExtendedAliases = new Set([...usedCanonicalAliases]);
-const deduplicatedWorldEntries = [...WORLD_CONTEXT_ENTRIES, ...WORLD_CONTEXT_ENTRIES_2]
+const deduplicatedWorldEntries = [...WORLD_CONTEXT_ENTRIES, ...WORLD_CONTEXT_ENTRIES_2, ...WORLD_CONTEXT_ENTRIES_3]
   .map((entry) => ({
     ...entry,
     aliases: entry.aliases.filter((alias) => {
@@ -742,6 +743,7 @@ const regionalProfiles: RegionalParsingProfile[] = [
   { countryCode: "KW", regionCode: "MEA", locales: ["ar-KW", "en-KW"], primaryLocale: "en-KW", languages: ["ar", "en"], dateOrder: "dmy", decimalSeparator: ".", groupingSeparator: ",", defaultCurrency: "KWD", legalEntitySuffixes: ["wll", "k s c", "co"], confidence: 74 },
   ...WORLD_REGIONAL_PROFILES,
   ...WORLD_REGIONAL_PROFILES_2,
+  ...WORLD_REGIONAL_PROFILES_3,
 ];
 
 const getRegionalProfile = (countryCode: string | null | undefined) =>
