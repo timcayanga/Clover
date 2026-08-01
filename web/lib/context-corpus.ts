@@ -14,8 +14,10 @@ import { WORLD_VERTICAL_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-verti
 import { WORLD_COMMERCE_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-commerce";
 import { WORLD_TRAVEL_HEALTH_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-travel-health";
 import { WORLD_ESSENTIAL_SERVICE_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-essential-services";
+import { WORLD_ESSENTIAL_GAP_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-essential-gaps";
+import { WORLD_FISCAL_CONTEXT_ENTRIES } from "@/lib/world-context-corpus-fiscal";
 
-export const CONTEXT_CORPUS_VERSION = "2026.08.01.7";
+export const CONTEXT_CORPUS_VERSION = "2026.08.01.8";
 
 export type ContextSignal = {
   id: string;
@@ -482,7 +484,7 @@ const baseEntries: ContextEntry[] = [
   { id: "my-insurance-investment", aliases: ["etiqa malaysia", "takaful malaysia", "kenanga investors malaysia", "stashaway malaysia", "propertyguru malaysia"], signalKind: "merchant", countryCode: "MY", regionCode: "SEA", currency: "MYR", categoryHint: "Insurance", counterpartyType: "insurer", purposeHint: "insurance", confidence: 70 },
   { id: "jp-subscriptions-services", aliases: ["softbank hikari japan", "au hikari japan", "japan netflix", "line music japan", "nintendo switch online japan"], signalKind: "merchant", countryCode: "JP", regionCode: "EAS", currency: "JPY", categoryHint: "Subscriptions", counterpartyType: "merchant", purposeHint: "subscription", confidence: 70 },
   { id: "kr-healthcare-education", aliases: ["samsung medical center", "asiana medical korea", "yonsei university fees", "korea university tuition", "olive young clinic korea"], signalKind: "merchant", countryCode: "KR", regionCode: "EAS", currency: "KRW", categoryHint: "Health & Wellness", counterpartyType: "healthcare_provider", purposeHint: "healthcare", confidence: 70 },
-  { id: "tw-healthcare-education", aliases: ["taipei veterans general hospital", "chang gung memorial hospital", "national taiwan university tuition", "taiwan university fees", "康是美 taiwan"], signalKind: "merchant", countryCode: "TW", regionCode: "EAS", currency: "TWD", categoryHint: "Health & Wellness", counterpartyType: "healthcare_provider", purposeHint: "healthcare", confidence: 68 },
+  { id: "tw-healthcare-education", aliases: ["taipei veterans general hospital", "chang gung memorial hospital", "康是美 taiwan"], signalKind: "merchant", countryCode: "TW", regionCode: "EAS", currency: "TWD", categoryHint: "Health & Wellness", counterpartyType: "healthcare_provider", purposeHint: "healthcare", confidence: 68 },
   { id: "hk-healthcare-education", aliases: ["hong kong sanatorium hospital", "queen mary hospital hong kong", "hong kong university fees", "city university hong kong fees", "mannings pharmacy hong kong"], signalKind: "merchant", countryCode: "HK", regionCode: "EAS", currency: "HKD", categoryHint: "Health & Wellness", counterpartyType: "healthcare_provider", purposeHint: "healthcare", confidence: 68 },
   { id: "us-investment-insurance", aliases: ["fidelity investments", "vanguard brokerage", "charles schwab", "state farm insurance", "geico insurance"], signalKind: "merchant", countryCode: "US", regionCode: "NAM", currency: "USD", categoryHint: "Investments", counterpartyType: "investment_platform", purposeHint: "investment", confidence: 74 },
   { id: "us-subscriptions-housing", aliases: ["hulu subscription", "hbo max subscription", "at&t internet", "verizon home internet", "rent payment us"], signalKind: "merchant", countryCode: "US", regionCode: "NAM", currency: "USD", categoryHint: "Subscriptions", counterpartyType: "merchant", purposeHint: "subscription", confidence: 70 },
@@ -649,7 +651,7 @@ const deduplicatedAdditionalCanonicalEntries = additionalCanonicalEntries
   }))
   .filter((entry) => entry.aliases.length > 0);
 const usedExtendedAliases = new Set([...usedCanonicalAliases]);
-const deduplicatedWorldEntries = [...WORLD_CONTEXT_ENTRIES, ...WORLD_CONTEXT_ENTRIES_2, ...WORLD_CONTEXT_ENTRIES_3, ...WORLD_CONTEXT_ENTRIES_4, ...WORLD_CONTEXT_ENTRIES_5, ...WORLD_VERTICAL_CONTEXT_ENTRIES, ...WORLD_COMMERCE_CONTEXT_ENTRIES, ...WORLD_TRAVEL_HEALTH_CONTEXT_ENTRIES, ...WORLD_ESSENTIAL_SERVICE_CONTEXT_ENTRIES]
+const deduplicatedWorldEntries = [...WORLD_CONTEXT_ENTRIES, ...WORLD_CONTEXT_ENTRIES_2, ...WORLD_CONTEXT_ENTRIES_3, ...WORLD_CONTEXT_ENTRIES_4, ...WORLD_CONTEXT_ENTRIES_5, ...WORLD_VERTICAL_CONTEXT_ENTRIES, ...WORLD_COMMERCE_CONTEXT_ENTRIES, ...WORLD_TRAVEL_HEALTH_CONTEXT_ENTRIES, ...WORLD_ESSENTIAL_SERVICE_CONTEXT_ENTRIES, ...WORLD_ESSENTIAL_GAP_CONTEXT_ENTRIES, ...WORLD_FISCAL_CONTEXT_ENTRIES]
   .map((entry) => ({
     ...entry,
     aliases: entry.aliases.filter((alias) => {
