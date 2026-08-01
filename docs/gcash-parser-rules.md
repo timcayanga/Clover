@@ -40,6 +40,10 @@ This document captures the GCash parsing rules learned from the training bundles
   - `Transfer from 09173009926 to 09175308181` with a debit means the wallet account is `09173009926`.
   - `Transfer from 09178303926 to 09173009926` with a credit means the wallet account is `09173009926`.
   - Preserve the source and destination phone numbers in the parsed row payload for downstream matching and learning.
+- Prefer an explicitly labeled `GCash Number`, `Wallet Number`, `Mobile Number`, `Phone Number`, or `Account Number` over phone numbers found inside transaction descriptions.
+- Normalize Philippine mobile-number variants such as `0917 300 9926`, `+63 917 300 9926`, and `63-917-300-9926` to the canonical `09173009926` form before account matching.
+- Run both the cleaned merchant and the preserved transaction description through the shared category corpus. Wrapper text such as `Payment to` must not hide an otherwise recognizable merchant.
+- Keep outgoing `Sent GCash`, `Send Money`, and `Cash Out` activity in the `Transfers` category while retaining `expense` direction unless another user-owned account is matched.
 - Some GCash statements span multiple pages and only print the final `0.00` ending balance on the last page; if the deterministic parser only recovers a small fraction of the expected rows, the import pipeline should treat it as incomplete and let the vision fallback inspect more pages.
 - GCash OCR commonly wraps a single transaction across multiple lines, with a description fragment before the date line and another fragment after the balance; the parser should stitch those fragments back into one row instead of dropping them as separate records.
 - Some OCR exports also merge multiple GCash rows into a single line or spill a bare `reference + amount + balance` tail onto the next line; the parser should split those fragments back into individual records before row assembly.

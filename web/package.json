@@ -42,6 +42,7 @@
     "qa:gsave-uno-screenshots": "tsx scripts/gsave-uno-screenshot-regression.ts",
     "qa:gsave-uno-process": "tsx scripts/gsave-uno-process-route-regression.ts",
     "qa:gcash-mobile-screenshot": "tsx scripts/gcash-mobile-screenshot-regression.ts",
+    "qa:gcash-identity-category": "tsx scripts/gcash-identity-category-regression.ts",
     "qa:gcrypto-screenshot-import": "tsx scripts/gcrypto-screenshot-import-regression.ts",
     "qa:pdax-screenshot": "tsx scripts/pdax-screenshot-regression.ts",
     "qa:pdax-account-repair": "tsx scripts/pdax-portfolio-account-repair-regression.ts",

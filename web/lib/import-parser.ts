@@ -10533,6 +10533,41 @@ const parsePnbImportText = (text: string) => {
   };
 };
 
+const gcashPhoneCandidateSource = String.raw`(?:\+?63|0)[\s().-]*9(?:[\s().-]*\d){9}`;
+
+const normalizeGcashPhoneNumber = (value?: string | null) => {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (/^09\d{9}$/.test(digits)) {
+    return digits;
+  }
+  if (/^639\d{9}$/.test(digits)) {
+    return `0${digits.slice(2)}`;
+  }
+  return null;
+};
+
+const extractGcashPhoneNumbers = (value: string) =>
+  Array.from(value.matchAll(new RegExp(gcashPhoneCandidateSource, "g")), (match) => normalizeGcashPhoneNumber(match[0])).filter(
+    (phone): phone is string => Boolean(phone)
+  );
+
+const extractExplicitGcashAccountNumber = (value: string) => {
+  const labelPattern = new RegExp(
+    String.raw`\b(?:GCash|Wallet|Mobile|Phone|Account)(?:\s+(?:wallet|mobile|phone|account))?\s*(?:No\.?|Number)?\s*[:#-]?\s*(${gcashPhoneCandidateSource})`,
+    "i"
+  );
+
+  for (const line of value.replace(/\u00a0/g, " ").split(/\r?\n/)) {
+    const match = normalizeWhitespace(line).match(labelPattern);
+    const phone = normalizeGcashPhoneNumber(match?.[1]);
+    if (phone) {
+      return phone;
+    }
+  }
+
+  return null;
+};
+
 const gcashStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = text.replace(/\u00a0/g, " ");
   const compact = normalizeWhitespace(normalized);
@@ -10555,18 +10590,21 @@ const gcashStatementMetadata = (text: string): DetectedStatementMetadata | null 
     return null;
   }
 
-  const phoneMatches = Array.from(compact.matchAll(/\b09\d{9}\b/g), (match) => match[0]);
+  const explicitAccountNumber = extractExplicitGcashAccountNumber(normalized);
+  const phoneMatches = extractGcashPhoneNumbers(compact);
   const phoneCounts = new Map<string, number>();
   for (const phone of phoneMatches) {
     phoneCounts.set(phone, (phoneCounts.get(phone) ?? 0) + 1);
   }
 
-  let accountNumber: string | null = null;
+  let accountNumber: string | null = explicitAccountNumber;
   let bestCount = 0;
-  for (const [phone, count] of phoneCounts.entries()) {
-    if (count > bestCount) {
-      accountNumber = phone;
-      bestCount = count;
+  if (!accountNumber) {
+    for (const [phone, count] of phoneCounts.entries()) {
+      if (count > bestCount) {
+        accountNumber = phone;
+        bestCount = count;
+      }
     }
   }
 
@@ -15483,8 +15521,6 @@ const knownMobileWalletScreenshotRows = (
   return null;
 };
 
-const extractGcashPhoneNumbers = (value: string) => Array.from(new Set(value.match(/\b09\d{9}\b/g) ?? []));
-
 const getParsedRowBalance = (row: ParsedImportRow) => {
   if (!row.rawPayload || typeof row.rawPayload !== "object") {
     return NaN;
@@ -15502,16 +15538,16 @@ const inferGcashAccountNumberFromRows = (rows: ParsedImportRow[], fallback?: str
       return;
     }
 
-    const digits = value.replace(/\D/g, "").slice(-11);
-    if (digits.length !== 11 || !digits.startsWith("09")) {
+    const digits = normalizeGcashPhoneNumber(value);
+    if (!digits) {
       return;
     }
 
     scores.set(digits, (scores.get(digits) ?? 0) + points);
   };
 
-  const fallbackDigits = fallback?.replace(/\D/g, "").slice(-11) ?? null;
-  if (fallbackDigits && fallbackDigits.startsWith("09")) {
+  const fallbackDigits = normalizeGcashPhoneNumber(fallback);
+  if (fallbackDigits) {
     bump(fallbackDigits, 2);
   }
 
@@ -15527,10 +15563,12 @@ const inferGcashAccountNumberFromRows = (rows: ParsedImportRow[], fallback?: str
     const previousBalance = index > 0 ? getParsedRowBalance(rows[index - 1]) : NaN;
     const balanceDelta = Number.isFinite(balance) && Number.isFinite(previousBalance) ? balance - previousBalance : null;
 
-    const transferMatch = rawLine.match(/\bTransfer\s+from\s+(09\d{9})\s+to\s+(09\d{9})\b/i);
+    const transferMatch = rawLine.match(
+      new RegExp(String.raw`\bTransfer\s+from\s+(${gcashPhoneCandidateSource})\s+to\s+(${gcashPhoneCandidateSource})`, "i")
+    );
     if (transferMatch) {
-      const source = transferMatch[1];
-      const destination = transferMatch[2];
+      const source = normalizeGcashPhoneNumber(transferMatch[1]);
+      const destination = normalizeGcashPhoneNumber(transferMatch[2]);
       const transferDirection = balanceDelta !== null ? (balanceDelta > 0 ? "incoming" : "outgoing") : null;
       if (transferDirection === "incoming") {
         bump(destination, 6);
@@ -15568,7 +15606,7 @@ const inferGcashAccountNumberFromRows = (rows: ParsedImportRow[], fallback?: str
   const secondScore = sorted[1]?.[1] ?? 0;
 
   if (!bestNumber || (bestScore ?? 0) < 3) {
-    return fallback?.replace(/\D/g, "").slice(-11) ?? null;
+    return fallbackDigits;
   }
 
   if (bestScore !== undefined && bestScore - secondScore < 2 && fallbackDigits && fallbackDigits !== bestNumber) {
@@ -15797,7 +15835,11 @@ const guessGcashCategoryName = (description: string, type: TransactionType) => {
     return "Transfers";
   }
 
-  const merchantHint = getStrongMerchantCategoryHint(merchant) ?? getSharedMerchantCategoryHint(merchant);
+  const merchantHint =
+    getStrongMerchantCategoryHint(merchant) ??
+    getStrongMerchantCategoryHint(description) ??
+    getSharedMerchantCategoryHint(merchant) ??
+    getSharedMerchantCategoryHint(description);
 
   if (merchantHint && merchantHint !== "Transfers" && merchantHint !== "Other") {
     return merchantHint;
@@ -15830,11 +15872,11 @@ const guessGcashCategoryName = (description: string, type: TransactionType) => {
   }
 
   if (/^(?:sent gcash to|send money|cash out)\b/i.test(description) && type === "expense") {
-    return "Other";
+    return "Transfers";
   }
 
   if (/^(?:cash in|add money)\b/i.test(description)) {
-    return type === "transfer" ? "Transfers" : "Income";
+    return "Transfers";
   }
 
   if (type === "transfer") {
@@ -15899,7 +15941,11 @@ const parseGcashTransactionRecord = (record: string, institution?: string | null
   const categoryName = guessGcashCategoryName(description, type);
   const date = parseDateValue(dateMatch[0]);
   const amount = parseMoney(amountText);
-  const transferMatch = description.match(/\bTransfer\s+from\s+(09\d{9})\s+to\s+(09\d{9})\b/i);
+  const transferMatch = description.match(
+    new RegExp(String.raw`\bTransfer\s+from\s+(${gcashPhoneCandidateSource})\s+to\s+(${gcashPhoneCandidateSource})`, "i")
+  );
+  const transferFromAccountNumber = normalizeGcashPhoneNumber(transferMatch?.[1]);
+  const transferToAccountNumber = normalizeGcashPhoneNumber(transferMatch?.[2]);
   const gsaveMatch = /(?:Deposit to|Withdraw from) GSave Account/i.test(description);
   const seamoneyMatch = /\bSeamoney Credit\b/i.test(description);
   const gsaveAccountMatch = description.match(/\baccount ending in\s+(\d{4,})\b/i);
@@ -15932,8 +15978,8 @@ const parseGcashTransactionRecord = (record: string, institution?: string | null
       balanceText,
       timeText,
       balance: parseMoney(balanceText),
-      transferFromAccountNumber: transferMatch?.[1] ?? null,
-      transferToAccountNumber: transferMatch?.[2] ?? null,
+      transferFromAccountNumber,
+      transferToAccountNumber,
       notes: gsaveMatch
         ? `GSave savings account${gsaveAccountMatch?.[1] ? ` ending in ${gsaveAccountMatch[1]}` : ""}`
         : seamoneyMatch
@@ -22047,6 +22093,8 @@ const reconstructGenericSparseSummaryRows = (
 const classifyGenericWalletHistoryTransaction = (description: string, previousBalance: number | null, balance: number | null) => {
   const lower = description.toLowerCase();
   const balanceDelta = previousBalance !== null && balance !== null ? balance - previousBalance : null;
+  const merchantCategoryHint =
+    getStrongMerchantCategoryHint(description) ?? getSharedMerchantCategoryHint(description);
 
   if (isStandaloneCashPaymentDescription(description)) {
     return { type: "expense" as TransactionType, categoryName: "Shopping" };
@@ -22069,7 +22117,7 @@ const classifyGenericWalletHistoryTransaction = (description: string, previousBa
   }
 
   if (/^sent gcash to\b|^send money\b/.test(lower)) {
-    return { type: "expense" as TransactionType, categoryName: "Other" };
+    return { type: "expense" as TransactionType, categoryName: "Transfers" };
   }
 
   if (/^payment to\b/.test(lower)) {
@@ -22077,18 +22125,24 @@ const classifyGenericWalletHistoryTransaction = (description: string, previousBa
       return { type: "transfer" as TransactionType, categoryName: "Transfers" };
     }
 
-    return { type: "expense" as TransactionType, categoryName: guessCategoryName(description, "expense") };
+    return {
+      type: "expense" as TransactionType,
+      categoryName:
+        merchantCategoryHint && merchantCategoryHint !== "Transfers" && merchantCategoryHint !== "Other"
+          ? merchantCategoryHint
+          : guessCategoryName(description, "expense"),
+    };
   }
 
   if (/^transfer from\b|^transfer to\b|^send money\b|^cash out\b/.test(lower)) {
     if (balanceDelta !== null) {
       return {
         type: balanceDelta > 0 ? ("income" as TransactionType) : ("expense" as TransactionType),
-        categoryName: balanceDelta > 0 ? "Income" : "Other",
+        categoryName: "Transfers",
       };
     }
 
-    return { type: "expense" as TransactionType, categoryName: "Other" };
+    return { type: "expense" as TransactionType, categoryName: "Transfers" };
   }
 
   if (/refund|reversal|cashback|reward|rebate|interest/.test(lower)) {
@@ -22237,6 +22291,12 @@ const reconstructGenericWalletHistoryRows = (
     }
 
     const { type, categoryName } = classifyGenericWalletHistoryTransaction(descriptionSeed, previousBalance, balance);
+    const gcashTransferMatch =
+      metadata.institution === "GCash"
+        ? descriptionSeed.match(
+            new RegExp(String.raw`\bTransfer\s+from\s+(${gcashPhoneCandidateSource})\s+to\s+(${gcashPhoneCandidateSource})`, "i")
+          )
+        : null;
     rows.push({
       date: datedMatch.groups.date,
       amount: amount.toFixed(2),
@@ -22257,6 +22317,8 @@ const reconstructGenericWalletHistoryRows = (
         amountText: datedMatch.groups.amount,
         balanceText: datedMatch.groups.balance,
         balance,
+        transferFromAccountNumber: normalizeGcashPhoneNumber(gcashTransferMatch?.[1]),
+        transferToAccountNumber: normalizeGcashPhoneNumber(gcashTransferMatch?.[2]),
       },
     });
     previousBalance = balance;
