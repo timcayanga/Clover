@@ -3,6 +3,7 @@ import { getInvestmentAssetBrand, getInvestmentAssetLogoCandidates } from "@/lib
 import { inferInvestmentClassification, isActivityOnlyGcryptoAccount } from "@/lib/investments";
 import {
   getInvestmentActivityAmountTone,
+  getInvestmentActivityAssetName,
   getInvestmentActivityNote,
   getInvestmentActivityType,
   getInvestmentActivityUnits,
@@ -34,6 +35,36 @@ assert.equal(getInvestmentActivityType(importedCryptoSale), "Sell");
 assert.equal(getInvestmentActivityUnits(importedCryptoSale), "0.00725");
 assert.equal(getInvestmentActivityNote(importedCryptoSale), null, "Parser narration should not appear as a user note");
 assert.equal(getInvestmentActivityAmountTone(importedCryptoSale), "positive");
+
+const legacyAiCryptoSale = {
+  type: "income" as const,
+  merchantRaw: "Sell Solana",
+  merchantClean: "Sell Solana",
+  description:
+    'Crypto sale: "Sell 12:23 PM Solana" with amounts "4.4838" and "PHP 14,591.50" and status Successful. 4.4838 presumed SOL units.',
+  rawPayload: {
+    source: "openai",
+    sourceLine: "Sell 12:23 PM\nSolana\n4.4838\nPHP 14,591.50\nSuccessful",
+  },
+  normalizedPayload: {},
+};
+assert.equal(getInvestmentActivityAssetName(legacyAiCryptoSale), "Solana");
+assert.equal(getInvestmentActivityUnits(legacyAiCryptoSale), "4.4838");
+
+const legacyAiCryptoPurchase = {
+  type: "expense" as const,
+  merchantRaw: "Buy Bitcoin 0.001598",
+  merchantClean: "Bitcoin purchase",
+  description: 'Crypto buy transaction. Asset: Bitcoin. Quantity: 0.001598 BTC. Status: Successful.',
+  rawPayload: {
+    source: "openai",
+    sourceLine: "Feb 06, 2023\nBuy 1:15 PM\nBitcoin\nSuccessful\n0.001598\nPHP 2,023.00",
+  },
+  normalizedPayload: {},
+};
+assert.equal(getInvestmentActivityAssetName(legacyAiCryptoPurchase), "Bitcoin");
+assert.equal(getInvestmentActivityUnits(legacyAiCryptoPurchase), "0.001598");
+assert.equal(getInvestmentActivityNote(legacyAiCryptoPurchase), null);
 
 const importedCryptoPurchase = {
   type: "expense" as const,

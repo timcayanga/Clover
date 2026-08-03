@@ -9,12 +9,14 @@ import { getAccountBrand } from "@/lib/account-brand";
 import { extractInvestmentInstitutionFromPathSegment, getAccountPath, getInvestmentInstitutionPath } from "@/lib/account-path";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import {
+  isActivityOnlyGcryptoAccount,
   getInvestmentFieldConfigs,
   getInvestmentSubtypeLabel,
   INVESTMENT_SUBTYPES,
   type InvestmentSubtype,
 } from "@/lib/investments";
 import {
+  getInvestmentActivityAssetName,
   getInvestmentActivityAmountTone,
   getInvestmentActivityNote,
   getInvestmentActivityType,
@@ -179,36 +181,8 @@ const isGenericInvestmentAssetLabel = (name: string | null | undefined, institut
 };
 
 const readTransactionAssetName = (transaction: Transaction) => {
-  const rawPayload =
-    transaction.rawPayload && typeof transaction.rawPayload === "object" && !Array.isArray(transaction.rawPayload)
-      ? (transaction.rawPayload as Record<string, unknown>)
-      : null;
-  const rawAssetName = typeof rawPayload?.assetName === "string" ? rawPayload.assetName.trim() : "";
-  if (rawAssetName && !isGenericInvestmentAssetLabel(rawAssetName, transaction.institution)) {
-    return rawAssetName;
-  }
-
-  const rawFundName = typeof rawPayload?.fundName === "string" ? rawPayload.fundName.trim() : "";
-  if (rawFundName && !isGenericInvestmentAssetLabel(rawFundName, transaction.institution)) {
-    return rawFundName;
-  }
-
-  const description = transaction.description?.trim() ?? "";
-  const trailingStatusMatch = description.match(/^(.+?)\s*-\s*(?:buy|sell)\s+order\s+completed$/i);
-  if (trailingStatusMatch?.[1]?.trim() && !isGenericInvestmentAssetLabel(trailingStatusMatch[1], transaction.institution)) {
-    return trailingStatusMatch[1].trim();
-  }
-  const descriptionMatch = description.match(/^(?:buy|sell|withdraw)\s*-\s*(.+?)(?:\s+\(|$)/i);
-  if (descriptionMatch?.[1]?.trim() && !isGenericInvestmentAssetLabel(descriptionMatch[1], transaction.institution)) {
-    return descriptionMatch[1].trim();
-  }
-
-  const merchantText = transaction.merchantRaw?.trim() ?? "";
-  const merchantMatch = merchantText.match(/^(?:buy|sell|withdraw)\s+(.+)$/i);
-  const merchantAssetName = merchantMatch?.[1]?.trim() || null;
-  return merchantAssetName && !isGenericInvestmentAssetLabel(merchantAssetName, transaction.institution)
-    ? merchantAssetName
-    : null;
+  const assetName = getInvestmentActivityAssetName(transaction);
+  return assetName && !isGenericInvestmentAssetLabel(assetName, transaction.institution) ? assetName : null;
 };
 
 const buildAssetDraft = (account: Account): AssetDraft => ({
@@ -469,11 +443,6 @@ export default function InvestmentInstitutionDetailPage() {
     return () => window.removeEventListener("storage", handleStorage);
   }, [matchesInstitution, workspaceId]);
 
-  const totalValue = useMemo(
-    () => accounts.reduce((sum, account) => sum + Math.abs(parseAmount(account.balance)), 0),
-    [accounts]
-  );
-
   const institutionBrand = useMemo(
     () => {
       const brand = getAccountBrand({
@@ -513,6 +482,33 @@ export default function InvestmentInstitutionDetailPage() {
   const sortedAccounts = useMemo(
     () => accounts.slice().sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()),
     [accounts]
+  );
+
+  const holdingAccounts = useMemo(
+    () =>
+      sortedAccounts.filter((account) => {
+        const matchingTransactionCount = transactions.filter((transaction) => transaction.accountId === account.id).length;
+        const hasPositionEvidence = Boolean(
+          account.investmentSymbol?.trim() ||
+          account.investmentQuantity !== null ||
+          account.investmentCostBasis !== null ||
+          account.investmentPrincipal !== null
+        );
+        return !isActivityOnlyGcryptoAccount({
+          source: account.source,
+          name: account.name,
+          institution: account.institution,
+          transactionCount: matchingTransactionCount,
+          hasSnapshotHoldings: false,
+          hasPositionEvidence,
+        });
+      }),
+    [sortedAccounts, transactions]
+  );
+
+  const holdingsValue = useMemo(
+    () => holdingAccounts.reduce((sum, account) => sum + Math.abs(parseAmount(account.balance)), 0),
+    [holdingAccounts]
   );
 
   const accountAssetNameMap = useMemo(() => {
@@ -929,11 +925,11 @@ export default function InvestmentInstitutionDetailPage() {
           <div className="institution-detail-hero__metrics">
             <article className="institution-detail-metric">
               <span>Total value</span>
-              <strong>{formatMoney(totalValue, routeCurrency)}</strong>
+              <strong>{formatMoney(holdingsValue, routeCurrency)}</strong>
             </article>
             <article className="institution-detail-metric">
               <span>Holdings</span>
-              <strong>{accounts.length}</strong>
+              <strong>{holdingAccounts.length}</strong>
             </article>
           </div>
         </section>
@@ -946,7 +942,7 @@ export default function InvestmentInstitutionDetailPage() {
             </div>
           </div>
 
-          {sortedAccounts.length === 0 ? (
+          {holdingAccounts.length === 0 ? (
             <p className="institution-detail-empty">No investment assets are linked to this institution in {routeCurrency}.</p>
           ) : (
             <div className="institution-assets-table-wrap">
@@ -960,7 +956,7 @@ export default function InvestmentInstitutionDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedAccounts.map((account) => (
+                  {holdingAccounts.map((account) => (
                     <tr
                       key={account.id}
                       className="institution-assets-table__row"
