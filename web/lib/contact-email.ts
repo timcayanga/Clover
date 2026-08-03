@@ -29,6 +29,8 @@ export async function sendContactInquiryEmail(input: {
   message: string;
   attachment?: ContactInquiryAttachment | null;
   sourcePage?: string | null;
+  kind?: "contact" | "bug_report";
+  diagnostics?: string | null;
 }) {
   const env = getEnv();
   const username = env.ZOHO_SMTP_USER ?? CONTACT_ADDRESS;
@@ -50,16 +52,19 @@ export async function sendContactInquiryEmail(input: {
 
   const safeName = stripNewlines(input.name);
   const mailAttachment = attachmentToMailAttachment(input.attachment ?? null);
+  const isBugReport = input.kind === "bug_report";
 
   await transporter.sendMail({
-    from: `Clover Contact <${username}>`,
+    from: `${isBugReport ? "Clover Bug Reports" : "Clover Contact"} <${username}>`,
     to: CONTACT_ADDRESS,
     replyTo: input.email.trim().toLowerCase(),
-    subject: `New Clover support request from ${safeName}`,
+    subject: `${isBugReport ? "Bug report" : "New Clover support request"} from ${safeName}`,
     text: [
       "Hi Clover team,",
       "",
-      "You received a new message through the Clover Contact page.",
+      isBugReport
+        ? "A user submitted a bug report from inside Clover."
+        : "You received a new message through the Clover Contact page.",
       "",
       "From:",
       safeName,
@@ -67,6 +72,8 @@ export async function sendContactInquiryEmail(input: {
       "",
       "Message:",
       input.message.trim(),
+      ...(input.sourcePage ? ["", "Page:", input.sourcePage] : []),
+      ...(input.diagnostics ? ["", "Diagnostics:", input.diagnostics] : []),
       ...(mailAttachment ? ["", "Attachment:", mailAttachment.filename] : []),
     ].join("\n"),
     ...(mailAttachment ? { attachments: [mailAttachment] } : {}),

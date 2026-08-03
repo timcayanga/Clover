@@ -47,6 +47,8 @@ import {
   SETTINGS_GUIDANCE_MENU_KEY,
   type GuidanceMenuVisibility,
 } from "@/lib/guidance-menu";
+import { installClientDiagnostics, recordClientDiagnostic } from "@/lib/client-diagnostics";
+import { BugReportWidget } from "@/components/bug-report-widget";
 
 const DashboardManualTransactionModal = dynamic(
   () => import("@/components/dashboard-top-actions").then((module) => module.DashboardManualTransactionModal),
@@ -828,6 +830,15 @@ export function CloverShell({
     [searchAccounts]
   );
   const displayName = user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Account";
+  const reporterEmail = user?.primaryEmailAddress?.emailAddress ?? readAccountIdentityCache()?.email ?? "";
+
+  useEffect(() => installClientDiagnostics(), []);
+
+  useEffect(() => {
+    if (pathname) {
+      recordClientDiagnostic("navigation", `Opened ${pathname}`, pathname);
+    }
+  }, [pathname]);
   const profileImage = user?.imageUrl ?? cachedProfileImage;
   const isProfileActive = active === "profile" || pathname?.startsWith("/profile");
   const isMoreActive = active === "more" || pathname?.startsWith("/more");
@@ -1882,6 +1893,19 @@ export function CloverShell({
           </div>,
           document.body
         )
+      ) : null}
+
+      {searchWorkspaceId && reporterEmail ? (
+        <BugReportWidget
+          workspaceId={searchWorkspaceId}
+          reporterName={displayName}
+          reporterEmail={reporterEmail}
+          onOpenChange={(reportOpen) => {
+            if (reportOpen) {
+              setIsQuickAddOpen(false);
+            }
+          }}
+        />
       ) : null}
 
       <button
