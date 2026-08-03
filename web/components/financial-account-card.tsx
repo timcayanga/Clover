@@ -84,7 +84,13 @@ export function FinancialAccountCard({
         </div>
 
         <div className="financial-account-card__meta">
-          {accountNumber ? <span className="financial-account-card__number">{accountNumber}</span> : <span aria-hidden="true" />}
+          {accountNumber ? (
+            <span className="financial-account-card__number" title={accountNumber}>
+              {accountNumber}
+            </span>
+          ) : (
+            <span aria-hidden="true" />
+          )}
         </div>
 
         {amountInteractive ? (

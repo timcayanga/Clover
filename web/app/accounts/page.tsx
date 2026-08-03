@@ -756,12 +756,18 @@ const getInvestmentInstitutionPreviewLabel = (account: Account) => {
   return name.replace(/^pdax\s+/i, "");
 };
 
-const getInvestmentInstitutionPreview = (accounts: Account[]) =>
-  accounts
-    .map(getInvestmentInstitutionPreviewLabel)
-    .filter(Boolean)
-    .slice(0, 4)
-    .join(", ");
+const getInvestmentInstitutionPreview = (accounts: Account[]) => {
+  const assetLabels = Array.from(
+    new Set(accounts.map(getInvestmentInstitutionPreviewLabel).map((label) => label.trim()).filter(Boolean))
+  );
+
+  if (assetLabels.length === 1) {
+    return assetLabels[0];
+  }
+
+  const assetCount = assetLabels.length || accounts.length;
+  return `${assetCount} asset${assetCount === 1 ? "" : "s"}`;
+};
 
 const formatAggregateAmount = (value: number, accounts: Array<{ currency: string }>) => {
   const currencies = getCurrencyCodes(accounts);
@@ -3478,6 +3484,7 @@ function AccountsPageContent() {
           amount={formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}
           onOpen={() => openInvestmentInstitution(row)}
           openLabel={`Open ${row.institution} investment institution`}
+          className="financial-account-card--investment-institution"
         />
       );
     }

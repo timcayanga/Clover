@@ -25079,12 +25079,23 @@ button.investments-portfolio-inline-edit {
 
 .financial-account-card__number {
   display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.12em;
+  line-height: 1.25;
+  text-overflow: ellipsis;
   text-transform: capitalize;
+  white-space: nowrap;
   color: inherit;
   padding-left: 2px;
+}
+
+.financial-account-card--investment-institution .financial-account-card__number {
+  letter-spacing: 0.04em;
+  text-transform: none;
 }
 
 .financial-account-card__amount {
