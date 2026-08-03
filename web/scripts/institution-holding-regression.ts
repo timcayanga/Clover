@@ -21,6 +21,8 @@ const checks = [
   [accountsPage.includes('(?:gfunds|atram)\\s+investments?'), "Generic GFunds labels are excluded from the asset count"],
   [accountsPage.includes('effectiveType === "bank" && !isGSaveInstitutionAccount(account)'), "GSave savings products do not render as stray bank cards"],
   [accountsPage.includes('getEffectiveAccountType(account) === "investment" || isGSaveInstitutionAccount(account)'), "All GSave products join one institution group"],
+  [accountsPage.includes('\\b(?:unoready|unoboost)\\b'), "Stale UNO product names are recognized as GSave accounts"],
+  [accountsPage.includes('? "GSave"'), "Stale UNO products use the canonical GSave institution title"],
   [institutionPage.includes('routeInstitution.toLowerCase() === "gsave"'), "The GSave institution page includes linked savings products"],
   [accountsPage.includes('className="financial-account-card--investment-institution"'), "Institution cards have concise preview styling"],
   [styles.includes(".financial-account-card--investment-institution .financial-account-card__number"), "Institution preview stays on one line"],

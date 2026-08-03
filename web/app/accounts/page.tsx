@@ -741,6 +741,9 @@ const getAccountCardEyebrow = (account: Account) => {
   }).label;
 };
 
+const isGSaveInstitutionAccount = (account: Account) =>
+  /\bgsave\b|\b(?:unoready|unoboost)\b/i.test(`${account.institution ?? ""} ${account.name}`);
+
 const getInvestmentInstitutionPreviewLabel = (account: Account) => {
   const symbol = account.investmentSymbol?.trim();
   if (symbol) {
@@ -825,10 +828,9 @@ const getNetWorthTone = (value: number) => {
 };
 
 const getInvestmentInstitutionName = (account: Account) =>
-  account.institution?.trim() || account.name.trim() || "Investment institution";
-
-const isGSaveInstitutionAccount = (account: Account) =>
-  /\bgsave\b/i.test(`${account.institution ?? ""} ${account.name}`);
+  isGSaveInstitutionAccount(account)
+    ? "GSave"
+    : account.institution?.trim() || account.name.trim() || "Investment institution";
 
 const buildInvestmentInstitutionCards = (
   accounts: Account[],

@@ -969,8 +969,8 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
 export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
   const rawBrandText = [params.institution, params.name].filter(Boolean).join(" ");
   const isGSaveBackedUnoAccount =
-    /\bgsave\b/i.test(rawBrandText) &&
-    /\b(?:uno|unoready|unoboost)\b/i.test(rawBrandText);
+    /\b(?:unoready|unoboost)\b/i.test(rawBrandText) ||
+    (/\bgsave\b/i.test(rawBrandText) && /\buno\b/i.test(rawBrandText));
   const isGSaveBackedCimbAccount =
     (/\bgsave\b/i.test(rawBrandText) && /\bcimb\b/i.test(rawBrandText)) ||
     (/\bcimb\b/i.test(rawBrandText) && /\bgcash\b/i.test(rawBrandText));

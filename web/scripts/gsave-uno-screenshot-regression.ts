@@ -23,6 +23,11 @@ assert.ok(
     .logoSrcs.some((source) => /gcash/i.test(source)),
   "UNO-backed GSave products should use the GSave/GCash mark."
 );
+assert.ok(
+  getAccountBrand({ institution: "UNO Digital Bank", name: "#UNOboost 1330", type: "investment" })
+    .logoSrcs.some((source) => /gcash/i.test(source)),
+  "Stale UNOboost cache records should use the GSave/GCash mark before server repair."
+);
 
 const overviewScreenshotText = `10:18
 Regular Savings Balance As Of 10:18 AM
