@@ -7,6 +7,15 @@ export type PdaxPortfolioAccount = {
   quantity: number | null;
 };
 
+export type PdaxInvestmentHoldingInput = {
+  assetName: string;
+  assetSymbol?: string | null;
+  assetType?: string | null;
+  quantity?: string | number | null;
+  marketValue?: string | number | null;
+  currentValue?: string | number | null;
+};
+
 type PdaxPortfolioEvidence = Record<string, unknown>;
 
 const accountNames = new Set<PdaxPortfolioAccount["name"]>(["Wallet", "BTC", "XRP", "Gold"]);
@@ -65,4 +74,71 @@ export const readPublishedPdaxPortfolioAccount = (summary: PdaxPortfolioEvidence
     return null;
   }
   return readPdaxPortfolioAccount(summary);
+};
+
+const normalizeHoldingLabel = (value: string | null | undefined) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ");
+
+export const isPdaxWalletHoldingLabel = (holding: PdaxInvestmentHoldingInput) => {
+  const name = normalizeHoldingLabel(holding.assetName);
+  const symbol = normalizeHoldingLabel(holding.assetSymbol);
+  return (
+    symbol === "php" ||
+    new Set(["wallet", "pdax wallet", "php wallet", "cash", "cash balance", "fiat wallet"]).has(name)
+  );
+};
+
+export const getCanonicalPdaxHoldingIdentity = (holding: PdaxInvestmentHoldingInput) => {
+  const symbol = normalizeHoldingLabel(holding.assetSymbol).toUpperCase();
+  const name = normalizeHoldingLabel(holding.assetName);
+  if (symbol === "XRP" || name === "xrp" || name === "ripple") {
+    return { key: "XRP", assetName: "XRP", assetSymbol: "XRP", assetType: "crypto" };
+  }
+  if (symbol === "BTC" || name === "btc" || /^bitcoin(?: segwit)?$/.test(name)) {
+    return { key: "BTC", assetName: "BTC", assetSymbol: "BTC", assetType: "crypto" };
+  }
+
+  const fallbackKey = symbol || name;
+  return {
+    key: fallbackKey,
+    assetName: holding.assetName.trim(),
+    assetSymbol: holding.assetSymbol?.trim() || null,
+    assetType: holding.assetType ?? null,
+  };
+};
+
+const holdingEvidenceScore = (holding: PdaxInvestmentHoldingInput) =>
+  Number(Boolean(holding.assetSymbol?.trim())) * 4 +
+  Number(finiteAmount(holding.quantity) !== null) * 3 +
+  Number(finiteAmount(holding.currentValue ?? holding.marketValue) !== null) * 2;
+
+export const canonicalizePdaxInvestmentHoldings = <T extends PdaxInvestmentHoldingInput>(holdings: T[]) => {
+  const canonicalByKey = new Map<string, T>();
+  for (const holding of holdings) {
+    if (isPdaxWalletHoldingLabel(holding)) {
+      continue;
+    }
+
+    const identity = getCanonicalPdaxHoldingIdentity(holding);
+    if (!identity.key) {
+      continue;
+    }
+
+    const canonical = {
+      ...holding,
+      assetName: identity.assetName,
+      assetSymbol: identity.assetSymbol,
+      assetType: identity.assetType ?? holding.assetType ?? null,
+    } as T;
+    const current = canonicalByKey.get(identity.key);
+    if (!current || holdingEvidenceScore(canonical) > holdingEvidenceScore(current)) {
+      canonicalByKey.set(identity.key, canonical);
+    }
+  }
+
+  return Array.from(canonicalByKey.values());
 };

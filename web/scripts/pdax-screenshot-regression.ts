@@ -4,6 +4,7 @@ import {
   resolveMobileWalletIdentityFromParsedRows,
   resolveStatementIdentityFromParsedRows,
 } from "@/lib/import-statement-identity";
+import { canonicalizePdaxInvestmentHoldings } from "@/lib/pdax-portfolio-accounts";
 
 const pdaxPortfolioText = `
 PDAX
@@ -147,6 +148,21 @@ assert.doesNotMatch(
   `${actionControlsRows[0]?.accountName} ${actionControlsRows[0]?.description}`,
   /cash in|cash out|deposit send/i,
   "PDAX action controls must never become an account or asset name."
+);
+
+const canonicalHoldings = canonicalizePdaxInvestmentHoldings([
+  { assetName: "PDAX Wallet", assetSymbol: null, marketValue: 7969.73 },
+  { assetName: "Ripple", assetSymbol: null, quantity: 125.492, currentValue: 10644.04 },
+  { assetName: "XRP", assetSymbol: "XRP", quantity: 125.492, currentValue: 10644.04 },
+  { assetName: "Bitcoin SegWit", assetSymbol: "BTC", quantity: 0.018005, currentValue: 86511.42 },
+]);
+assert.deepEqual(
+  canonicalHoldings.map((holding) => [holding.assetName, holding.assetSymbol, holding.currentValue]),
+  [
+    ["XRP", "XRP", 10644.04],
+    ["BTC", "BTC", 86511.42],
+  ],
+  "PDAX wallet evidence must stay out of holdings, while Ripple and XRP collapse to one canonical asset."
 );
 
 console.log("[PASS] PDAX portfolio screenshots retain canonical identity and safe snapshot holdings.");

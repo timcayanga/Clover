@@ -33,7 +33,13 @@ import {
 import { summarizeErrorForLog } from "@/lib/security-logging";
 import { getLiveCryptoPhpPrices } from "@/lib/crypto-market-prices";
 import { prefersLiveInvestmentBalance } from "@/lib/investment-balance";
-import { readPdaxPortfolioAccount, readPublishedPdaxPortfolioAccount, type PdaxPortfolioAccount } from "@/lib/pdax-portfolio-accounts";
+import {
+  getCanonicalPdaxHoldingIdentity,
+  isPdaxWalletHoldingLabel,
+  readPdaxPortfolioAccount,
+  readPublishedPdaxPortfolioAccount,
+  type PdaxPortfolioAccount,
+} from "@/lib/pdax-portfolio-accounts";
 
 export const dynamic = "force-dynamic";
 
@@ -1049,6 +1055,197 @@ const cleanupPdaxPortfolioBucketHoldings = async (workspaceId: string) => {
   return staleIds.length;
 };
 
+const repairGeneratedPdaxSnapshotHoldings = async (workspaceId: string) => {
+  if (!(await hasCompatibleTable("InvestmentHolding")) || !(await hasCompatibleTable("InvestmentSnapshot"))) {
+    return 0;
+  }
+
+  const candidates = await prisma.investmentHolding.findMany({
+    where: {
+      workspaceId,
+      OR: [
+        { account: { institution: { equals: "PDAX", mode: "insensitive" } } },
+        { documentImport: { institution: { equals: "PDAX", mode: "insensitive" } } },
+        { investmentSnapshot: { account: { institution: { equals: "PDAX", mode: "insensitive" } } } },
+        { investmentSnapshot: { documentImport: { institution: { equals: "PDAX", mode: "insensitive" } } } },
+      ],
+    },
+    select: {
+      id: true,
+      investmentSnapshotId: true,
+      assetName: true,
+      assetSymbol: true,
+      assetType: true,
+      quantity: true,
+      marketValue: true,
+      currentValue: true,
+      currency: true,
+      status: true,
+      confidence: true,
+    },
+  }).catch(() => []);
+
+  const generated = candidates.filter((holding) => holding.status !== "confirmed");
+  const walletHoldingIds = generated
+    .filter((holding) => isPdaxWalletHoldingLabel(holding))
+    .map((holding) => holding.id);
+  let repaired = 0;
+  if (walletHoldingIds.length > 0) {
+    const removed = await prisma.investmentHolding.deleteMany({
+      where: {
+        workspaceId,
+        id: { in: walletHoldingIds },
+        OR: [{ status: null }, { status: { not: "confirmed" } }],
+      },
+    }).catch(() => ({ count: 0 }));
+    repaired += removed.count;
+  }
+
+  const aliasGroups = new Map<string, typeof generated>();
+  const numericSignature = (value: { toString(): string } | null | undefined) => {
+    const parsed = Number(value?.toString() ?? "");
+    return Number.isFinite(parsed) ? parsed.toString() : "";
+  };
+  for (const holding of generated) {
+    if (walletHoldingIds.includes(holding.id)) {
+      continue;
+    }
+    const identity = getCanonicalPdaxHoldingIdentity(holding);
+    if (identity.key !== "XRP") {
+      continue;
+    }
+    const groupKey = `${holding.investmentSnapshotId}:${identity.key}`;
+    const group = aliasGroups.get(groupKey) ?? [];
+    group.push(holding);
+    aliasGroups.set(groupKey, group);
+  }
+
+  for (const group of aliasGroups.values()) {
+    const signatures = new Set(
+      group.map((holding) =>
+        [
+          numericSignature(holding.quantity),
+          numericSignature(holding.currentValue ?? holding.marketValue),
+          holding.currency,
+        ].join(":")
+      )
+    );
+    if (group.length > 1 && signatures.size > 1) {
+      continue;
+    }
+
+    const canonical = [...group].sort((left, right) => {
+      const leftCanonical = Number(left.assetSymbol?.toUpperCase() === "XRP") + Number(left.assetName.toUpperCase() === "XRP");
+      const rightCanonical = Number(right.assetSymbol?.toUpperCase() === "XRP") + Number(right.assetName.toUpperCase() === "XRP");
+      return rightCanonical - leftCanonical || right.confidence - left.confidence;
+    })[0];
+    if (!canonical) {
+      continue;
+    }
+
+    await prisma.investmentHolding.update({
+      where: { id: canonical.id },
+      data: { assetName: "XRP", assetSymbol: "XRP", assetType: "crypto" },
+    }).catch(() => null);
+    repaired += 1;
+
+    const duplicateIds = group.filter((holding) => holding.id !== canonical.id).map((holding) => holding.id);
+    if (duplicateIds.length > 0) {
+      const removed = await prisma.investmentHolding.deleteMany({
+        where: {
+          workspaceId,
+          id: { in: duplicateIds },
+          OR: [{ status: null }, { status: { not: "confirmed" } }],
+        },
+      }).catch(() => ({ count: 0 }));
+      repaired += removed.count;
+    }
+  }
+
+  return repaired;
+};
+
+const repairGeneratedPdaxXrpAccountAliases = async (workspaceId: string) => {
+  const candidates = await prisma.account.findMany({
+    where: {
+      workspaceId,
+      source: "upload",
+      institution: { equals: "PDAX", mode: "insensitive" },
+      type: "investment",
+      OR: [
+        { investmentSymbol: { equals: "XRP", mode: "insensitive" } },
+        { name: { in: ["XRP", "Ripple"], mode: "insensitive" } },
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      investmentSymbol: true,
+      investmentQuantity: true,
+      balance: true,
+      currency: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  }).catch(() => []);
+  if (candidates.length <= 1) {
+    return 0;
+  }
+
+  const numericSignature = (value: { toString(): string } | null | undefined) => {
+    const parsed = Number(value?.toString() ?? "");
+    return Number.isFinite(parsed) ? parsed.toString() : "";
+  };
+  const signatures = new Set(
+    candidates.map((account) =>
+      [
+        numericSignature(account.investmentQuantity),
+        numericSignature(account.balance),
+        account.currency,
+      ].join(":")
+    )
+  );
+  if (signatures.size > 1) {
+    return 0;
+  }
+
+  const canonical = [...candidates].sort((left, right) => {
+    const leftCanonical = Number(left.investmentSymbol?.toUpperCase() === "XRP") + Number(left.name.toUpperCase() === "XRP");
+    const rightCanonical = Number(right.investmentSymbol?.toUpperCase() === "XRP") + Number(right.name.toUpperCase() === "XRP");
+    const rightTime = Math.max(right.updatedAt.getTime(), right.createdAt.getTime());
+    const leftTime = Math.max(left.updatedAt.getTime(), left.createdAt.getTime());
+    return rightCanonical - leftCanonical || rightTime - leftTime;
+  })[0];
+  if (!canonical) {
+    return 0;
+  }
+
+  const duplicateIds = candidates.filter((account) => account.id !== canonical.id).map((account) => account.id);
+  await prisma.$transaction(async (tx) => {
+    await tx.account.update({
+      where: { id: canonical.id },
+      data: { name: "XRP", investmentSymbol: "XRP", investmentSubtype: "crypto" },
+    });
+    await tx.transaction.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.importFile.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.documentImport.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.accountStatementCheckpoint.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.financialCommitment.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.receiptDocument.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.investmentSnapshot.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.investmentHolding.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.investmentPurchase.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.investmentDividend.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.recurringPattern.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.accountRule.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.budget.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.circleInvestmentShare.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.account.deleteMany({ where: { id: { in: duplicateIds }, source: "upload", type: "investment" } });
+  });
+
+  return duplicateIds.length + 1;
+};
+
 const repairGeneratedPdaxPortfolioAssetLabels = async (workspaceId: string) => {
   // These are exact labels emitted by earlier deterministic PDAX screenshot
   // parsers. Repair only upload-created matches so a user-edited account is
@@ -2052,6 +2249,20 @@ export async function GET(request: Request) {
     });
     await repairLegacyUploadedGcryptoAccountSplits(workspaceId).catch((error) => {
       console.warn("[accounts] unable to repair legacy GCrypto account splits", {
+        workspaceId,
+        error,
+      });
+      return 0;
+    });
+    await repairGeneratedPdaxXrpAccountAliases(workspaceId).catch((error) => {
+      console.warn("[accounts] unable to repair generated PDAX XRP account aliases", {
+        workspaceId,
+        error,
+      });
+      return 0;
+    });
+    await repairGeneratedPdaxSnapshotHoldings(workspaceId).catch((error) => {
+      console.warn("[accounts] unable to repair generated PDAX snapshot holdings", {
         workspaceId,
         error,
       });

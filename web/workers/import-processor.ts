@@ -111,6 +111,7 @@ import { normalizeBankName, sanitizeBankNameLabel } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { inferInvestmentClassification } from "@/lib/investments";
 import { getLiveCryptoPhpPrices } from "@/lib/crypto-market-prices";
+import { canonicalizePdaxInvestmentHoldings } from "@/lib/pdax-portfolio-accounts";
 import { buildImportedReceivableCommitmentCandidate } from "@/lib/imported-receivables";
 import { shouldLoadReceiptVisionAssets, shouldUseReceiptPreviewFastPath } from "@/lib/import-visual-recovery";
 import { isProtectedTransactionReviewStatus } from "@/lib/data-engine-safety";
@@ -11087,7 +11088,7 @@ export const processImportFileText = async (
       rawPayload?: Prisma.InputJsonValue | null;
       source: "openai" | "pdax_portfolio_screenshot";
     };
-    const investmentHoldings: PersistedInvestmentHolding[] = isDeterministicPdaxPortfolioSnapshot
+    const parsedInvestmentHoldings: PersistedInvestmentHolding[] = isDeterministicPdaxPortfolioSnapshot
       ? (deterministicPdaxHoldings ?? []).map((holding) => ({ ...holding, source: "pdax_portfolio_screenshot" as const }))
       : (openAiParsed?.holdings ?? []).map((holding) => ({
           assetName: holding.asset_name,
@@ -11106,6 +11107,11 @@ export const processImportFileText = async (
           rawPayload: holding.parser_evidence as Prisma.InputJsonValue,
           source: "openai" as const,
         }));
+    const investmentHoldings = isDeterministicPdaxPortfolioSnapshot || /\bPDAX\b/i.test(
+      `${resolvedMetadata.institution ?? ""} ${resolvedMetadata.accountName ?? ""}`
+    )
+      ? canonicalizePdaxInvestmentHoldings(parsedInvestmentHoldings)
+      : parsedInvestmentHoldings;
 
     if (investmentSnapshot && (isDeterministicPdaxPortfolioSnapshot || investmentHoldings.length > 0)) {
       await replaceInvestmentHoldingsCompat({
