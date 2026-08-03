@@ -25519,6 +25519,38 @@ button.investments-portfolio-inline-edit {
   white-space: nowrap;
 }
 
+.institution-trade-history__date,
+.institution-trade-history__units,
+.institution-trade-history__amount {
+  white-space: nowrap;
+}
+
+.institution-trade-history__units {
+  font-variant-numeric: tabular-nums;
+}
+
+.institution-trade-history__amount {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.institution-trade-history__amount.positive {
+  color: var(--good);
+}
+
+.institution-trade-history__amount.negative {
+  color: var(--bad);
+}
+
+.institution-trade-history__amount.neutral {
+  color: var(--text);
+}
+
+.institution-trade-history__notes {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
 .institution-assets-table__actions .button + .button {
   margin-left: 8px;
 }

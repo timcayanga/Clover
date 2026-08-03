@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { getInvestmentAssetBrand, getInvestmentAssetLogoCandidates } from "@/lib/investment-assets";
 import { inferInvestmentClassification, isActivityOnlyGcryptoAccount } from "@/lib/investments";
+import {
+  getInvestmentActivityAmountTone,
+  getInvestmentActivityNote,
+  getInvestmentActivityType,
+  getInvestmentActivityUnits,
+} from "@/lib/investment-activity";
 
 const classificationCases = [
   { name: "ATRAM Peso Money Market Fund", expected: "money_market_fund" },
@@ -14,6 +20,44 @@ const classificationCases = [
   { name: "Ayala REIT", symbol: "AREIT", expected: "reit" },
   { name: "BPI Unit Investment Trust Fund", expected: "uitf" },
 ] as const;
+
+const importedCryptoSale = {
+  type: "income" as const,
+  merchantRaw: "Sell Bitcoin",
+  merchantClean: "Sell Bitcoin",
+  description:
+    'Crypto sale: "Sell 12:22 PM Bitcoin" with amounts "0.00725" and partially visible "PHP 14,653.28" and status Successful.',
+  rawPayload: { action: "Sell", assetName: "Bitcoin", quantity: "0.00725000" },
+  normalizedPayload: null,
+};
+assert.equal(getInvestmentActivityType(importedCryptoSale), "Sell");
+assert.equal(getInvestmentActivityUnits(importedCryptoSale), "0.00725");
+assert.equal(getInvestmentActivityNote(importedCryptoSale), null, "Parser narration should not appear as a user note");
+assert.equal(getInvestmentActivityAmountTone(importedCryptoSale), "positive");
+
+const importedCryptoPurchase = {
+  type: "expense" as const,
+  merchantRaw: "Buy Bitcoin",
+  merchantClean: null,
+  description: "Buy - Bitcoin (0.001598)",
+  rawPayload: { action: "Buy", assetName: "Bitcoin", quantity: "0.001598" },
+  normalizedPayload: null,
+};
+assert.equal(getInvestmentActivityType(importedCryptoPurchase), "Buy");
+assert.equal(getInvestmentActivityUnits(importedCryptoPurchase), "0.001598");
+assert.equal(getInvestmentActivityAmountTone(importedCryptoPurchase), "negative");
+
+assert.equal(
+  getInvestmentActivityNote({
+    type: "transfer",
+    merchantRaw: "Move funds",
+    description: "Moved to cold storage",
+    rawPayload: null,
+    normalizedPayload: null,
+  }),
+  "Moved to cold storage",
+  "Concise user-authored notes should remain visible"
+);
 
 for (const testCase of classificationCases) {
   const result = inferInvestmentClassification(testCase);

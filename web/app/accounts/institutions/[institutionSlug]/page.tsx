@@ -15,6 +15,12 @@ import {
   type InvestmentSubtype,
 } from "@/lib/investments";
 import {
+  getInvestmentActivityAmountTone,
+  getInvestmentActivityNote,
+  getInvestmentActivityType,
+  getInvestmentActivityUnits,
+} from "@/lib/investment-activity";
+import {
   accountsWorkspaceCacheKey,
   applyOptimisticWorkspaceAccountDeletion,
   getCachedAccountsWorkspace,
@@ -1199,8 +1205,8 @@ export default function InvestmentInstitutionDetailPage() {
                   <tr>
                     <th>Date</th>
                     <th>Asset</th>
-                    <th>Entry</th>
                     <th>Type</th>
+                    <th>Units</th>
                     <th>Amount</th>
                     <th>Notes</th>
                     <th>Actions</th>
@@ -1209,17 +1215,19 @@ export default function InvestmentInstitutionDetailPage() {
                 <tbody>
                   {transactions.map((transaction) => (
                     <tr key={transaction.id}>
-                      <td>{formatTradeDate(transaction.date)}</td>
+                      <td className="institution-trade-history__date">{formatTradeDate(transaction.date)}</td>
                       <td>
                         {readTransactionAssetName(transaction) ??
                           accountAssetNameMap.get(transaction.accountId) ??
                           accounts.find((account) => account.id === transaction.accountId)?.name ??
                           transaction.accountName}
                       </td>
-                      <td>{transaction.merchantClean ?? transaction.merchantRaw}</td>
-                      <td>{transaction.type}</td>
-                      <td>{formatMoney(parseAmount(transaction.amount), transaction.currency)}</td>
-                      <td>{transaction.description ?? "—"}</td>
+                      <td>{getInvestmentActivityType(transaction)}</td>
+                      <td className="institution-trade-history__units">{getInvestmentActivityUnits(transaction) ?? "—"}</td>
+                      <td className={`institution-trade-history__amount ${getInvestmentActivityAmountTone(transaction)}`}>
+                        {formatMoney(parseAmount(transaction.amount), transaction.currency)}
+                      </td>
+                      <td className="institution-trade-history__notes">{getInvestmentActivityNote(transaction) ?? "—"}</td>
                       <td className="institution-assets-table__actions">
                         <button className="button button-secondary button-small" type="button" onClick={() => startEditingTrade(transaction)}>
                           Edit
