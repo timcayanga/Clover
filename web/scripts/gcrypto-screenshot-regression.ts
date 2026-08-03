@@ -91,6 +91,7 @@ const allRows = samples.flatMap((sample) => {
   const metadata = detectStatementMetadata(sample.text, sample.fileName);
   assert.equal(metadata?.institution, "GCrypto", `${sample.fileName} should detect GCrypto metadata.`);
   assert.equal(metadata?.accountType, "investment", `${sample.fileName} should detect an investment import.`);
+  assert.equal(metadata?.currency, "PHP", `${sample.fileName} should keep the PHP activity currency.`);
 
   const rows = parseImportText(sample.text, sample.fileName, sample.fileType, {
     institution: metadata?.institution ?? "GCrypto",

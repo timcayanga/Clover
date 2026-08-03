@@ -13963,6 +13963,7 @@ const gcryptoScreenshotMetadata = (text: string, fileName = ""): DetectedStateme
     accountNumber: null,
     accountName: "GCrypto",
     accountType: "investment",
+    currency: "PHP",
     openingBalance: null,
     endingBalance: null,
     paymentDueDate: null,
