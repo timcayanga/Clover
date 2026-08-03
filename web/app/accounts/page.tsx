@@ -773,6 +773,11 @@ const getInvestmentInstitutionPreview = (accounts: Account[]) => {
     : expandedLabels;
   const assetLabels = meaningfulLabels.length > 0 ? meaningfulLabels : expandedLabels;
 
+  if (accounts.length > 0 && accounts.every(isGSaveInstitutionAccount)) {
+    const productCount = assetLabels.length || accounts.length;
+    return `${productCount} product${productCount === 1 ? "" : "s"}`;
+  }
+
   if (assetLabels.length === 1) {
     return assetLabels[0];
   }
@@ -822,35 +827,16 @@ const getNetWorthTone = (value: number) => {
 const getInvestmentInstitutionName = (account: Account) =>
   account.institution?.trim() || account.name.trim() || "Investment institution";
 
-const shouldKeepSeparateInvestmentCard = (account: Account) => {
-  if (account.source !== "upload") {
-    return false;
-  }
-
-  if (!isFixedIncomeInvestmentSubtype(account.investmentSubtype)) {
-    return false;
-  }
-
-  if (!account.accountNumber?.trim()) {
-    return false;
-  }
-
-  return /\bgsave\b/i.test(`${account.institution ?? ""} ${account.name}`);
-};
+const isGSaveInstitutionAccount = (account: Account) =>
+  /\bgsave\b/i.test(`${account.institution ?? ""} ${account.name}`);
 
 const buildInvestmentInstitutionCards = (
   accounts: Account[],
   readBalance: (account: Account) => string | null | undefined = (account) => account.balance
 ): Array<Account | InvestmentInstitutionCard> => {
   const groups = new Map<string, InvestmentInstitutionCard>();
-  const separateCards: Account[] = [];
 
   for (const account of accounts) {
-    if (shouldKeepSeparateInvestmentCard(account)) {
-      separateCards.push(account);
-      continue;
-    }
-
     const institution = getInvestmentInstitutionName(account);
     const currency = formatCurrencyCode(account.currency);
     const key = `${institution.toLowerCase()}::${currency}`;
@@ -872,7 +858,7 @@ const buildInvestmentInstitutionCards = (
     });
   }
 
-  return [...separateCards, ...Array.from(groups.values())].sort(
+  return Array.from(groups.values()).sort(
     (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
   );
 };
@@ -3040,7 +3026,7 @@ function AccountsPageContent() {
         itemLabel: "account",
         rows: visibleAccounts.filter((account) => {
           const effectiveType = getEffectiveAccountType(account);
-          return effectiveType === "bank";
+          return effectiveType === "bank" && !isGSaveInstitutionAccount(account);
         }),
       },
       {
@@ -3073,7 +3059,9 @@ function AccountsPageContent() {
         tone: "assets",
         itemLabel: "institution",
         rows: buildInvestmentInstitutionCards(
-          visibleAccounts.filter((account) => getEffectiveAccountType(account) === "investment"),
+          visibleAccounts.filter(
+            (account) => getEffectiveAccountType(account) === "investment" || isGSaveInstitutionAccount(account)
+          ),
           getDisplayedAccountBalance
         ),
       },

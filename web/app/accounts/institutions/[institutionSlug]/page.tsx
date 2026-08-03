@@ -280,7 +280,9 @@ export default function InvestmentInstitutionDetailPage() {
 
   const matchesInstitution = useCallback(
     (account: Account) =>
-      account.type === "investment" &&
+      (account.type === "investment" ||
+        (routeInstitution.toLowerCase() === "gsave" &&
+          /\bgsave\b/i.test(`${account.institution ?? ""} ${account.name}`))) &&
       formatCurrencyCode(account.currency) === routeCurrency &&
       getInstitutionDisplayName(account).toLowerCase() === routeInstitution.toLowerCase(),
     [routeCurrency, routeInstitution]

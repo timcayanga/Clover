@@ -12,6 +12,7 @@ This document captures the GSave parsing rules learned from the screenshot train
 ## Identity Rules
 
 - Show `GSave` as the Clover institution for GSave-hosted products.
+- Group GSave savings products and time deposits under one GSave institution card in Accounts while preserving each underlying account and account number.
 - Preserve the provider institution separately in raw payloads:
   - `CIMB` for GSave savings screenshots
   - `UNO Digital Bank` for `#UNOready@GCash` and `#UNOboost@GCash`
