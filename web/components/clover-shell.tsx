@@ -1562,6 +1562,12 @@ export function CloverShell({
   };
 
   const openQuickAddTransaction = () => {
+    if (pathname?.startsWith("/accounts/institutions/")) {
+      setIsQuickAddOpen(false);
+      window.dispatchEvent(new Event("clover:open-institution-investment-add"));
+      return;
+    }
+
     if (pathname?.startsWith("/split-bill")) {
       setIsQuickAddOpen(false);
       window.dispatchEvent(new CustomEvent("clover:open-split-bill-add", { detail: { mode: "manual" } }));
@@ -1912,8 +1918,20 @@ export function CloverShell({
         ref={quickAddButtonRef}
         className="shell-quick-add-button"
         type="button"
-        aria-label={isQuickAddOpen ? "Close quick add" : "Open quick add"}
-        title={isQuickAddOpen ? "Close quick add" : "Open quick add"}
+        aria-label={
+          pathname?.startsWith("/accounts/institutions/")
+            ? "Add investment"
+            : isQuickAddOpen
+              ? "Close quick add"
+              : "Open quick add"
+        }
+        title={
+          pathname?.startsWith("/accounts/institutions/")
+            ? "Add investment"
+            : isQuickAddOpen
+              ? "Close quick add"
+              : "Open quick add"
+        }
         onClick={openQuickAddTransaction}
       >
         <MenuIcon name="plus" />

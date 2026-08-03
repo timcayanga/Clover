@@ -268,6 +268,8 @@ export default function InvestmentInstitutionDetailPage() {
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
   const [assetDraft, setAssetDraft] = useState<AssetDraft | null>(null);
   const [savingAssetId, setSavingAssetId] = useState<string | null>(null);
+  const [newHoldingDraft, setNewHoldingDraft] = useState<AssetDraft | null>(null);
+  const [savingNewHolding, setSavingNewHolding] = useState(false);
   const [tradeDraft, setTradeDraft] = useState<TradeDraft>(buildTradeDraft([], routeCurrency));
   const [editingTradeId, setEditingTradeId] = useState<string | null>(null);
   const [savingTrade, setSavingTrade] = useState(false);
@@ -522,6 +524,11 @@ export default function InvestmentInstitutionDetailPage() {
     [assetDraft?.investmentSubtype, editingAsset?.investmentSubtype]
   );
 
+  const newHoldingFieldConfigs = useMemo(
+    () => getInvestmentFieldConfigs(newHoldingDraft?.investmentSubtype ?? "stock"),
+    [newHoldingDraft?.investmentSubtype]
+  );
+
   const editingTrade = useMemo(
     () => transactions.find((transaction) => transaction.id === editingTradeId) ?? null,
     [editingTradeId, transactions]
@@ -588,6 +595,30 @@ export default function InvestmentInstitutionDetailPage() {
     setEditingAssetId(account.id);
     setAssetDraft(buildAssetDraft(account));
   };
+
+  const openNewHolding = useCallback(() => {
+    setEditingAssetId(null);
+    setAssetDraft(null);
+    setNewHoldingDraft({
+      name: "",
+      investmentSubtype: "stock",
+      investmentSymbol: "",
+      investmentQuantity: "",
+      investmentCostBasis: "",
+      investmentPrincipal: "",
+      investmentStartDate: "",
+      investmentMaturityDate: "",
+      investmentInterestRate: "",
+      investmentMaturityValue: "",
+      balance: "",
+    });
+  }, []);
+
+  useEffect(() => {
+    const handleOpenNewHolding = () => openNewHolding();
+    window.addEventListener("clover:open-institution-investment-add", handleOpenNewHolding);
+    return () => window.removeEventListener("clover:open-institution-investment-add", handleOpenNewHolding);
+  }, [openNewHolding]);
 
   const startEditingTrade = (transaction: Transaction) => {
     setEditingTradeId(transaction.id);
@@ -742,6 +773,62 @@ export default function InvestmentInstitutionDetailPage() {
       setMessage(error instanceof Error ? error.message : "Unable to update this asset.");
     } finally {
       setSavingAssetId(null);
+    }
+  };
+
+  const createHolding = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!workspaceId || !newHoldingDraft) {
+      return;
+    }
+
+    const name = newHoldingDraft.name.trim();
+    if (!name) {
+      setMessage("Holding name is required.");
+      return;
+    }
+
+    setSavingNewHolding(true);
+    try {
+      const response = await fetch("/api/accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId,
+          name,
+          institution: institutionDraft.trim() || routeInstitution,
+          investmentSubtype: newHoldingDraft.investmentSubtype,
+          investmentSymbol: newHoldingDraft.investmentSymbol.trim() || null,
+          investmentQuantity: parseNullableNumberInput(newHoldingDraft.investmentQuantity),
+          investmentCostBasis: parseNullableNumberInput(newHoldingDraft.investmentCostBasis),
+          investmentPrincipal: parseNullableNumberInput(newHoldingDraft.investmentPrincipal),
+          investmentStartDate: parseNullableDateInput(newHoldingDraft.investmentStartDate),
+          investmentMaturityDate: parseNullableDateInput(newHoldingDraft.investmentMaturityDate),
+          investmentInterestRate: parseNullableNumberInput(newHoldingDraft.investmentInterestRate),
+          investmentMaturityValue: parseNullableNumberInput(newHoldingDraft.investmentMaturityValue),
+          balance: newHoldingDraft.balance.trim() ? Number(newHoldingDraft.balance) : 0,
+          type: "investment",
+          currency: routeCurrency,
+          source: "manual",
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.account) {
+        throw new Error(payload?.error || "Unable to add this holding.");
+      }
+
+      const createdAccount = payload.account as Account;
+      const nextAccounts = [createdAccount, ...accounts];
+      setAccounts(nextAccounts);
+      setTradeDraft((current) => ({ ...current, accountId: current.accountId || createdAccount.id }));
+      syncWorkspaceCache(nextAccounts, transactions);
+      setNewHoldingDraft(null);
+      setMessage(`Added ${createdAccount.name} to ${routeInstitution}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to add this holding.");
+    } finally {
+      setSavingNewHolding(false);
     }
   };
 
@@ -988,6 +1075,9 @@ export default function InvestmentInstitutionDetailPage() {
               <p className="eyebrow">Assets</p>
               <h2>Holdings</h2>
             </div>
+            <button className="button button-primary button-small" type="button" onClick={openNewHolding}>
+              Add Holding
+            </button>
           </div>
 
           {holdingAccounts.length === 0 ? (
@@ -1042,6 +1132,97 @@ export default function InvestmentInstitutionDetailPage() {
             </div>
           )}
         </section>
+
+        {newHoldingDraft ? (
+          <div className="modal-backdrop institution-asset-drawer-backdrop" role="presentation" onClick={() => setNewHoldingDraft(null)}>
+            <aside
+              className="institution-asset-drawer glass"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="institution-new-holding-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="institution-asset-drawer__head">
+                <div>
+                  <p className="eyebrow">Assets</p>
+                  <h2 id="institution-new-holding-title">Add Holding</h2>
+                  <p className="institution-asset-drawer__context">{routeInstitution} · {routeCurrency}</p>
+                </div>
+                <button className="icon-button" type="button" onClick={() => setNewHoldingDraft(null)} aria-label="Close add holding">
+                  ×
+                </button>
+              </div>
+              <form className="institution-asset-editor institution-asset-drawer__form" onSubmit={createHolding}>
+                <label className="settings-field">
+                  <span>Holding name</span>
+                  <input
+                    autoFocus
+                    required
+                    placeholder="e.g. Bitcoin or Apple"
+                    value={newHoldingDraft.name}
+                    onChange={(event) =>
+                      setNewHoldingDraft((current) => (current ? { ...current, name: event.target.value } : current))
+                    }
+                  />
+                </label>
+                <label className="settings-field">
+                  <span>Subtype</span>
+                  <select
+                    value={newHoldingDraft.investmentSubtype}
+                    onChange={(event) =>
+                      setNewHoldingDraft((current) =>
+                        current ? { ...current, investmentSubtype: event.target.value as InvestmentSubtype } : current
+                      )
+                    }
+                  >
+                    {INVESTMENT_SUBTYPES.map((subtype) => (
+                      <option key={subtype} value={subtype}>
+                        {getInvestmentSubtypeLabel(subtype)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="institution-asset-editor__grid">
+                  {newHoldingFieldConfigs.map((field) => (
+                    <label key={field.key} className="settings-field">
+                      <span>{field.label}</span>
+                      <input
+                        type={field.type === "date" ? "date" : "text"}
+                        inputMode={field.inputMode === "decimal" ? "decimal" : undefined}
+                        placeholder={field.placeholder}
+                        value={newHoldingDraft[field.key as keyof AssetDraft] as string}
+                        onChange={(event) =>
+                          setNewHoldingDraft((current) =>
+                            current ? { ...current, [field.key]: event.target.value } : current
+                          )
+                        }
+                      />
+                    </label>
+                  ))}
+                  <label className="settings-field">
+                    <span>Current value</span>
+                    <input
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      value={newHoldingDraft.balance}
+                      onChange={(event) =>
+                        setNewHoldingDraft((current) => (current ? { ...current, balance: event.target.value } : current))
+                      }
+                    />
+                  </label>
+                </div>
+                <div className="institution-asset-editor__actions">
+                  <button className="button button-secondary button-small" type="button" onClick={() => setNewHoldingDraft(null)}>
+                    Cancel
+                  </button>
+                  <button className="button button-primary button-small" type="submit" disabled={savingNewHolding}>
+                    {savingNewHolding ? "Adding..." : "Add Holding"}
+                  </button>
+                </div>
+              </form>
+            </aside>
+          </div>
+        ) : null}
 
         {editingAsset && assetDraft ? (
           <div
