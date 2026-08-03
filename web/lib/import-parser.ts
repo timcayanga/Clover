@@ -14009,27 +14009,29 @@ const knownGcryptoMobileScreenshotRows = (
       merchantRaw: humanizeMerchantText(`${params.action} ${params.assetName}`),
       merchantClean: summarizeMerchantText(
         isWalletMovement ? `GCrypto ${params.action.toLowerCase()}` : `${params.action} ${params.assetName}`,
-        isWalletMovement ? "GCash" : "GCrypto"
+        "GCrypto"
       ),
       description: isWalletMovement
         ? `${params.action} - GCrypto Wallet`
         : `${params.action} - ${params.assetName}${params.quantity ? ` (${params.quantity})` : ""}`,
       categoryName: params.categoryName,
-      accountName: isWalletMovement ? "GCash" : metadata.accountName ?? "GCrypto",
+      accountName: metadata.accountName ?? "GCrypto",
       accountNumber: metadata.accountNumber ?? undefined,
-      institution: isWalletMovement ? "GCash" : metadata.institution ?? "GCrypto",
+      institution: metadata.institution ?? "GCrypto",
       type: params.type,
       confidence: 96,
       parserConfidence: 95,
       categoryConfidence: 92,
       rawPayload: {
-        bank: isWalletMovement ? "GCash" : "GCrypto",
-        providerInstitution: isWalletMovement ? "GCrypto / PDAX" : "PDAX",
+        bank: "GCrypto",
+        providerInstitution: "GCrypto / PDAX",
         kind: isWalletMovement ? "gcrypto_wallet_movement" : "gcrypto_mobile_screenshot_transaction",
         source: "gcrypto_mobile_screenshot",
         knownSampleFileName: baseName,
         sourceRowIndex: params.sourceRowIndex,
         action: params.action,
+        transferCounterpartyInstitution: isWalletMovement ? "GCash" : null,
+        parsedDirectionType: params.type,
         assetName: params.assetName,
         quantity: params.quantity ?? null,
         timeText: params.timeText,
@@ -14048,7 +14050,7 @@ const knownGcryptoMobileScreenshotRows = (
         action: "Withdraw",
         assetName: "Trading Wallet",
         amount: 33791.22,
-        type: "income",
+        type: "expense",
         categoryName: "Transfers",
       }),
       buildRow({
@@ -14225,7 +14227,13 @@ const parseGcryptoTransactionHistoryImportText = (text: string, fileName: string
     const isWalletMovement =
       (params.action === "Withdraw" || params.action === "Deposit") &&
       /\b(?:trading|gcrypto)\s+wallet\b/i.test(params.assetName);
-    const type: TransactionType = params.action === "Buy" || params.action === "Deposit" ? "expense" : "income";
+    const type: TransactionType = isWalletMovement
+      ? params.action === "Deposit"
+        ? "income"
+        : "expense"
+      : params.action === "Buy"
+        ? "expense"
+        : "income";
     const categoryName = isWalletMovement ? "Transfers" : "Investments";
     const dedupeKey = [
       params.date,
@@ -14246,25 +14254,27 @@ const parseGcryptoTransactionHistoryImportText = (text: string, fileName: string
       merchantRaw: humanizeMerchantText(`${params.action} ${params.assetName}`),
       merchantClean: summarizeMerchantText(
         isWalletMovement ? `GCrypto ${params.action.toLowerCase()}` : `${params.action} ${params.assetName}`,
-        isWalletMovement ? "GCash" : "GCrypto"
+        "GCrypto"
       ),
       description: isWalletMovement
         ? `${params.action} - GCrypto Wallet`
         : `${params.action} - ${params.assetName}${params.quantity ? ` (${params.quantity})` : ""}`,
       categoryName,
-      accountName: isWalletMovement ? "GCash" : metadata.accountName ?? "GCrypto",
+      accountName: metadata.accountName ?? "GCrypto",
       accountNumber: metadata.accountNumber ?? undefined,
-      institution: isWalletMovement ? "GCash" : metadata.institution ?? "GCrypto",
+      institution: metadata.institution ?? "GCrypto",
       type,
       confidence: 88,
       parserConfidence: 86,
       categoryConfidence: 90,
       rawPayload: {
-        bank: isWalletMovement ? "GCash" : "GCrypto",
-        providerInstitution: isWalletMovement ? "GCrypto / PDAX" : "PDAX",
+        bank: "GCrypto",
+        providerInstitution: "GCrypto / PDAX",
         kind: isWalletMovement ? "gcrypto_wallet_movement" : "gcrypto_transaction_screenshot",
         source: "gcrypto_transaction_screenshot",
         action: params.action,
+        transferCounterpartyInstitution: isWalletMovement ? "GCash" : null,
+        parsedDirectionType: type,
         assetName: params.assetName,
         quantity: params.quantity ?? null,
         timeText: params.timeText,

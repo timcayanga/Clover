@@ -131,8 +131,7 @@ const main = async () => {
     assert.equal(gcryptoAccounts[0]?.type, "investment", "Expected GCrypto to land in Investments.");
     assert.equal(gcryptoAccounts[0]?.balance, null, "GCrypto transaction-history screenshots should not invent an account balance.");
     const gcashAccounts = uploadedAccounts.filter((account) => account.institution === "GCash");
-    assert.equal(gcashAccounts.length, 1, "Expected wallet movements to resolve to one GCash account.");
-    assert.equal(gcashAccounts[0]?.type, "wallet", "Expected GCrypto wallet movements to remain in GCash.");
+    assert.equal(gcashAccounts.length, 0, "GCrypto screenshots must not synthesize a GCash account.");
 
     const filenameAccounts = uploadedAccounts.filter((account) => String(account.name ?? "").startsWith("IMG_"));
     assert.equal(
@@ -158,7 +157,7 @@ const main = async () => {
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     });
 
-    assert.equal(visibleTransactions.length, 8, `Expected 8 visible deduped GCrypto trades, got ${visibleTransactions.length}.`);
+    assert.equal(visibleTransactions.length, 9, `Expected 9 visible deduped GCrypto activities, got ${visibleTransactions.length}.`);
     assert.ok(
       visibleTransactions.some((row) => row.merchantClean === "Buy Bitcoin" && row.type === "expense"),
       "Expected a GCrypto buy transaction to remain an investment expense."
@@ -167,16 +166,12 @@ const main = async () => {
       visibleTransactions.some((row) => row.merchantClean === "Sell Solana" && row.type === "income"),
       "Expected a GCrypto sell transaction to remain investment income."
     );
-    const walletMovements = await prisma.transaction.findMany({
-      where: {
-        workspaceId,
-        accountId: gcashAccounts[0]!.id,
-        deletedAt: null,
-      },
-      select: { merchantClean: true, amount: true, type: true, rawPayload: true },
-    });
-    assert.equal(walletMovements.length, 1, "Expected one deduped GCrypto wallet movement in GCash.");
-    assert.equal(walletMovements[0]?.type, "income", "Expected a GCrypto wallet withdrawal to increase GCash.");
+    const walletMovements = visibleTransactions.filter(
+      (transaction) =>
+        (transaction.rawPayload as Record<string, unknown> | null)?.kind === "gcrypto_wallet_movement"
+    );
+    assert.equal(walletMovements.length, 1, "Expected one deduped wallet movement in GCrypto.");
+    assert.equal(walletMovements[0]?.type, "expense", "Expected a GCrypto wallet withdrawal to leave GCrypto.");
     assert.equal(walletMovements[0]?.amount.toString(), "33791.22", "Expected the visible wallet withdrawal amount.");
     for (const fileName of files) {
       const snapshot = await loadImportStatusSnapshot(importFileIds.get(fileName)!, { promoteFailedVisibleImport: true });
@@ -205,7 +200,7 @@ const main = async () => {
       );
     }
 
-    console.log("[PASS] GCrypto screenshot import regression keeps 8 investment trades and 1 GCash wallet movement end-to-end.");
+    console.log("[PASS] GCrypto screenshot import regression keeps all 9 activities in GCrypto without synthesizing GCash.");
   } finally {
     await prisma.user.delete({
       where: { id: user.id },

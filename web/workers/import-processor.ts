@@ -1311,7 +1311,7 @@ const reconcileWorkspaceInternalTransfers = async (
   const [accounts, transactions] = await Promise.all([
     tx.account.findMany({
       where: { workspaceId },
-      select: { id: true, accountNumber: true },
+      select: { id: true, name: true, institution: true, accountNumber: true, type: true, currency: true },
     }),
     tx.transaction.findMany({
       where: {

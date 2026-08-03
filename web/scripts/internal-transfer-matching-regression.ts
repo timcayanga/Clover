@@ -85,6 +85,64 @@ assert.deepEqual(
   "Uploading the destination account later must retroactively promote both matching movements."
 );
 
+const gcryptoWithdrawal: WorkspaceTransferCandidate = {
+  id: "gcrypto-withdrawal",
+  accountId: "gcrypto",
+  date: "2023-11-20",
+  amount: "33791.22",
+  currency: "PHP",
+  type: "expense",
+  categoryName: "Transfers",
+  merchantRaw: "Withdraw Trading Wallet",
+  rawPayload: {
+    bank: "GCrypto",
+    kind: "gcrypto_wallet_movement",
+    transferCounterpartyInstitution: "GCash",
+    parsedDirectionType: "expense",
+  },
+};
+const unrelatedIncoming: WorkspaceTransferCandidate = {
+  id: "unrelated-incoming",
+  accountId: "bpi",
+  date: "2023-11-20",
+  amount: "33791.22",
+  currency: "PHP",
+  type: "income",
+  categoryName: "Transfers",
+  merchantRaw: "Incoming transfer",
+};
+assert.equal(
+  classifyWorkspaceInternalTransfers(
+    [gcryptoWithdrawal, unrelatedIncoming],
+    [
+      { id: "gcrypto", institution: "GCrypto" },
+      { id: "bpi", institution: "BPI" },
+    ]
+  ).internalIds.size,
+  0,
+  "A GCrypto wallet movement must not pair with an unrelated account just because amount and date match."
+);
+
+const gcashIncoming: WorkspaceTransferCandidate = {
+  ...unrelatedIncoming,
+  id: "gcash-incoming",
+  accountId: "gcash",
+  merchantRaw: "GCrypto cash in",
+};
+assert.deepEqual(
+  Array.from(
+    classifyWorkspaceInternalTransfers(
+      [gcryptoWithdrawal, gcashIncoming],
+      [
+        { id: "gcrypto", institution: "GCrypto" },
+        { id: "gcash", institution: "GCash" },
+      ]
+    ).internalIds
+  ).sort(),
+  ["gcash-incoming", "gcrypto-withdrawal"],
+  "A real equal-and-opposite GCash entry should retroactively link the GCrypto movement."
+);
+
 const unrelatedExpense: WorkspaceTransferCandidate = {
   ...laterUploadedCounterpart,
   id: "utility-expense",

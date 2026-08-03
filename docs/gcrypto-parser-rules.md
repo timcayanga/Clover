@@ -25,7 +25,9 @@ This document captures Clover's current parsing rules for GCrypto mobile screens
 
 - `Buy` rows map to `type = expense` and category `Investments`.
 - `Sell` rows map to `type = income` and category `Investments`.
-- `Withdraw - Trading Wallet` and other clearly internal wallet-withdrawal rows map to Transfers rather than spending.
+- GCrypto wallet deposits and withdrawals remain activity on the canonical `GCrypto` investment account; they must not create or move into a synthetic `GCash` account.
+- `Withdraw - Trading Wallet` maps to an outgoing expense-direction row in `Transfers`; a deposit maps to an incoming income-direction row in `Transfers`.
+- Mark a GCrypto wallet movement as an internal transfer only when Clover finds a real equal-and-opposite entry in an existing GCash account. Preserve both source rows and link them through transfer classification rather than duplicating either entry.
 - Internal wallet funding, settlement transfers, and wallet-to-wallet movement should stay in Transfers unless the screenshot clearly shows external spending or income.
 
 ## OCR Recovery

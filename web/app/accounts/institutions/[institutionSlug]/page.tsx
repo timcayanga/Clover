@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
@@ -27,6 +27,8 @@ import {
   applyOptimisticWorkspaceAccountDeletion,
   getCachedAccountsWorkspace,
   persistAccountsWorkspaceCache,
+  workspaceCacheUpdatedEventName,
+  type WorkspaceCacheUpdatedEventDetail,
 } from "@/lib/workspace-cache";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 
@@ -220,6 +222,26 @@ const sortTransactionsDesc = (rows: Transaction[]) =>
     return right.id.localeCompare(left.id);
   });
 
+const fetchInstitutionTransactions = async (institutionAccounts: Account[]) => {
+  if (institutionAccounts.length === 0) {
+    return [];
+  }
+
+  const payloads = await Promise.all(
+    institutionAccounts.map(async (account) => {
+      const response = await fetch(`/api/accounts/${encodeURIComponent(account.id)}/transactions?pageSize=500`);
+      if (!response.ok) {
+        return [] as Transaction[];
+      }
+      const payload = await response.json();
+      return Array.isArray(payload.transactions) ? (payload.transactions as Transaction[]) : [];
+    })
+  );
+  const transactionsById = new Map<string, Transaction>();
+  payloads.flat().forEach((transaction) => transactionsById.set(transaction.id, transaction));
+  return sortTransactionsDesc(Array.from(transactionsById.values()));
+};
+
 export default function InvestmentInstitutionDetailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -238,6 +260,7 @@ export default function InvestmentInstitutionDetailPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [transactionsLoading, setTransactionsLoading] = useState(true);
   const [institutionDraft, setInstitutionDraft] = useState(routeInstitution);
   const [editingInstitutionName, setEditingInstitutionName] = useState(false);
   const [customInstitutionPhoto, setCustomInstitutionPhoto] = useState<string | null>(null);
@@ -253,10 +276,13 @@ export default function InvestmentInstitutionDetailPage() {
   const [deletingInstitution, setDeletingInstitution] = useState(false);
   const institutionPhotoInputRef = useRef<HTMLInputElement | null>(null);
 
-  const matchesInstitution = (account: Account) =>
-    account.type === "investment" &&
-    formatCurrencyCode(account.currency) === routeCurrency &&
-    getInstitutionDisplayName(account).toLowerCase() === routeInstitution.toLowerCase();
+  const matchesInstitution = useCallback(
+    (account: Account) =>
+      account.type === "investment" &&
+      formatCurrencyCode(account.currency) === routeCurrency &&
+      getInstitutionDisplayName(account).toLowerCase() === routeInstitution.toLowerCase(),
+    [routeCurrency, routeInstitution]
+  );
 
   const syncWorkspaceCache = (nextAccounts: Account[], nextTransactions: Transaction[]) => {
     if (!workspaceId) {
@@ -308,7 +334,7 @@ export default function InvestmentInstitutionDetailPage() {
 
     const hydrateFromCache = () => {
       if (!workspaceId) {
-        return false;
+        return null;
       }
 
       const cachedSnapshot = getCachedAccountsWorkspace(workspaceId);
@@ -319,12 +345,13 @@ export default function InvestmentInstitutionDetailPage() {
       const matchedTransactions = cachedTransactions.filter((transaction) => scopedAccountIds.has(transaction.accountId));
 
       if (!cachedSnapshot || matchedAccounts.length === 0) {
-        return false;
+        return null;
       }
 
       if (!cancelled) {
         setAccounts(matchedAccounts);
         setTransactions(sortTransactionsDesc(matchedTransactions));
+        setTransactionsLoading(matchedTransactions.length === 0);
         setTradeDraft((current) => ({
           ...buildTradeDraft(matchedAccounts, routeCurrency),
           accountId: current.accountId && scopedAccountIds.has(current.accountId) ? current.accountId : matchedAccounts[0]?.id ?? "",
@@ -338,24 +365,25 @@ export default function InvestmentInstitutionDetailPage() {
         setLoading(false);
       }
 
-      return true;
+      return matchedAccounts;
     };
 
     const load = async () => {
       if (!workspaceId) {
         if (!cancelled) {
           setLoading(false);
+          setTransactionsLoading(false);
         }
         return;
       }
 
-      hydrateFromCache();
+      const cachedMatchedAccounts = hydrateFromCache();
+      const cachedTransactionsRequest = cachedMatchedAccounts
+        ? fetchInstitutionTransactions(cachedMatchedAccounts)
+        : null;
 
       try {
-        const [accountsResponse, transactionsResponse] = await Promise.all([
-          fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`),
-          fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}&pageSize=all&summaryMode=light`),
-        ]);
+        const accountsResponse = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
 
         if (!accountsResponse.ok) {
           throw new Error("Unable to load this institution.");
@@ -365,12 +393,14 @@ export default function InvestmentInstitutionDetailPage() {
         const fetchedAccounts = Array.isArray(accountsPayload.accounts) ? (accountsPayload.accounts as Account[]) : [];
         const matchedAccounts = fetchedAccounts.filter(matchesInstitution);
         const scopedAccountIds = new Set(matchedAccounts.map((account) => account.id));
-
-        const transactionsPayload = transactionsResponse.ok ? await transactionsResponse.json() : null;
-        const fetchedTransactions = Array.isArray(transactionsPayload?.transactions)
-          ? (transactionsPayload.transactions as Transaction[])
-          : [];
-        const matchedTransactions = fetchedTransactions.filter((transaction) => scopedAccountIds.has(transaction.accountId));
+        const cachedAccountIds = new Set((cachedMatchedAccounts ?? []).map((account) => account.id));
+        const cacheMatchesFetchedAccounts =
+          cachedAccountIds.size === scopedAccountIds.size &&
+          Array.from(scopedAccountIds).every((accountId) => cachedAccountIds.has(accountId));
+        const matchedTransactions =
+          cacheMatchesFetchedAccounts && cachedTransactionsRequest
+            ? await cachedTransactionsRequest
+            : await fetchInstitutionTransactions(matchedAccounts);
 
         if (cancelled) {
           return;
@@ -378,6 +408,7 @@ export default function InvestmentInstitutionDetailPage() {
 
         setAccounts(matchedAccounts);
         setTransactions(sortTransactionsDesc(matchedTransactions));
+        setTransactionsLoading(false);
         setTradeDraft((current) => ({
           ...buildTradeDraft(matchedAccounts, routeCurrency),
           accountId: current.accountId && scopedAccountIds.has(current.accountId) ? current.accountId : matchedAccounts[0]?.id ?? "",
@@ -396,6 +427,7 @@ export default function InvestmentInstitutionDetailPage() {
         }
 
         setLoading(false);
+        setTransactionsLoading(false);
         setMessage(error instanceof Error ? error.message : "Unable to load this institution.");
       }
     };
@@ -405,21 +437,14 @@ export default function InvestmentInstitutionDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [routeCurrency, routeInstitution, workspaceId]);
+  }, [matchesInstitution, routeCurrency, workspaceId]);
 
   useEffect(() => {
     if (!workspaceId || typeof window === "undefined") {
       return;
     }
 
-    const handleStorage = (event: StorageEvent) => {
-      if (
-        event.storageArea !== window.localStorage ||
-        (event.key !== accountsWorkspaceCacheKey && event.key !== "clover.selected-workspace-id.v1")
-      ) {
-        return;
-      }
-
+    const refreshFromCache = () => {
       const activeWorkspaceId = readSelectedWorkspaceId() || workspaceId;
       if (activeWorkspaceId !== workspaceId) {
         return;
@@ -436,11 +461,34 @@ export default function InvestmentInstitutionDetailPage() {
       setTransactions((current) =>
         matchedTransactions.length > 0 || current.length === 0 ? sortTransactionsDesc(matchedTransactions) : current
       );
+      if (matchedTransactions.length > 0) {
+        setTransactionsLoading(false);
+      }
       setLoading(false);
     };
 
+    const handleStorage = (event: StorageEvent) => {
+      if (
+        event.storageArea !== window.localStorage ||
+        (event.key !== accountsWorkspaceCacheKey && event.key !== "clover.selected-workspace-id.v1")
+      ) {
+        return;
+      }
+      refreshFromCache();
+    };
+    const handleWorkspaceCacheUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<WorkspaceCacheUpdatedEventDetail>).detail;
+      if (detail?.key === accountsWorkspaceCacheKey) {
+        refreshFromCache();
+      }
+    };
+
     window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
+    window.addEventListener(workspaceCacheUpdatedEventName, handleWorkspaceCacheUpdated as EventListener);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(workspaceCacheUpdatedEventName, handleWorkspaceCacheUpdated as EventListener);
+    };
   }, [matchesInstitution, workspaceId]);
 
   const institutionBrand = useMemo(
@@ -1193,7 +1241,9 @@ export default function InvestmentInstitutionDetailPage() {
           </form>
 
           {transactions.length === 0 ? (
-            <p className="institution-detail-empty">No Trading History Yet</p>
+            <p className="institution-detail-empty">
+              {transactionsLoading ? "Loading trading history..." : "No Trading History Yet"}
+            </p>
           ) : (
             <div className="institution-assets-table-wrap">
               <table className="institution-assets-table">

@@ -24,6 +24,12 @@ export type WorkspaceTransferAccount = {
   currency?: string | null;
 };
 
+const normalizeInstitution = (value: unknown) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+
 const normalizeDigits = (value: unknown) => String(value ?? "").replace(/\D/g, "");
 
 const readPayloadRecord = (value: unknown) =>
@@ -183,12 +189,18 @@ const hasExplicitWorkspaceCounterpart = (
 
 export const classifyWorkspaceInternalTransfers = (
   candidates: WorkspaceTransferCandidate[],
-  accounts: Array<{ id: string; accountNumber?: string | null }>
+  accounts: WorkspaceTransferAccount[]
 ) => {
   const accountNumberById = new Map(
     accounts
       .map((account) => [account.id, normalizeDigits(account.accountNumber)] as const)
       .filter((entry): entry is readonly [string, string] => Boolean(entry[1]))
+  );
+  const institutionByAccountId = new Map(
+    accounts.map((account) => [
+      account.id,
+      normalizeInstitution(account.institution ?? account.name),
+    ])
   );
   const transferCandidates = candidates
     .filter((candidate) => isTransfersCategory(candidate.categoryName))
@@ -219,14 +231,24 @@ export const classifyWorkspaceInternalTransfers = (
 
     const counterpart = transferCandidates
       .filter(
-        (candidate) =>
-          !usedIds.has(candidate.candidate.id) &&
+        (candidate) => {
+          const entryPayload = readPayloadRecord(entry.candidate.rawPayload);
+          const candidatePayload = readPayloadRecord(candidate.candidate.rawPayload);
+          const entryExpectedInstitution = normalizeInstitution(entryPayload?.transferCounterpartyInstitution);
+          const candidateExpectedInstitution = normalizeInstitution(candidatePayload?.transferCounterpartyInstitution);
+          const candidateInstitution = institutionByAccountId.get(candidate.candidate.accountId) ?? "";
+          const entryInstitution = institutionByAccountId.get(entry.candidate.accountId) ?? "";
+
+          return !usedIds.has(candidate.candidate.id) &&
           candidate.candidate.id !== entry.candidate.id &&
           candidate.candidate.accountId !== entry.candidate.accountId &&
           candidate.direction !== entry.direction &&
           candidate.candidate.currency.toUpperCase() === entry.candidate.currency.toUpperCase() &&
           Math.abs(candidate.amount - entry.amount) < 0.005 &&
-          Math.abs(candidate.dateTime - entry.dateTime) <= maxDateDifferenceMs
+          Math.abs(candidate.dateTime - entry.dateTime) <= maxDateDifferenceMs &&
+          (!entryExpectedInstitution || candidateInstitution === entryExpectedInstitution) &&
+          (!candidateExpectedInstitution || entryInstitution === candidateExpectedInstitution);
+        }
       )
       .sort(
         (left, right) =>
