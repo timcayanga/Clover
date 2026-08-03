@@ -10,6 +10,7 @@ import { getInvestmentAssetBrand } from "@/lib/investment-assets";
 import { extractInvestmentInstitutionFromPathSegment, getAccountPath, getInvestmentInstitutionPath } from "@/lib/account-path";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import {
+  inferInvestmentClassification,
   isActivityOnlyGcryptoAccount,
   getInvestmentFieldConfigs,
   getInvestmentSubtypeLabel,
@@ -88,6 +89,45 @@ type Transaction = {
   normalizedPayload: unknown;
   importFileId?: string | null;
   source: "upload" | "manual";
+};
+
+type InvestmentSnapshotHolding = {
+  id: string;
+  assetName: string;
+  assetSymbol: string | null;
+  assetType: string | null;
+  quantity: string | null;
+  marketValue: string | null;
+  currentValue: string | null;
+  currency: string;
+};
+
+type InvestmentSnapshot = {
+  id: string;
+  portfolioName: string | null;
+  currency: string;
+  updatedAt: string;
+  account: {
+    id: string;
+    name: string;
+    institution: string | null;
+    type: string;
+  } | null;
+  documentImport: {
+    institution: string | null;
+    currency: string;
+  } | null;
+  holdings: InvestmentSnapshotHolding[];
+};
+
+type InstitutionHoldingRow = {
+  key: string;
+  account: Account | null;
+  name: string;
+  symbol: string | null;
+  subtype: InvestmentSubtype;
+  currency: string;
+  value: number;
 };
 
 type AssetDraft = {
@@ -183,6 +223,32 @@ const isGenericInvestmentAssetLabel = (name: string | null | undefined, institut
   ]).has(normalizedName);
 };
 
+const isInstitutionOnlySnapshotHolding = (
+  holding: InvestmentSnapshotHolding,
+  snapshot: InvestmentSnapshot,
+  account: Account | null
+) => {
+  const holdingName = normalizeInvestmentLabel(holding.assetName);
+  if (!holdingName) {
+    return true;
+  }
+
+  const institutionLabels = [
+    account?.institution,
+    snapshot.account?.institution,
+    snapshot.documentImport?.institution,
+    snapshot.portfolioName,
+    account && isGenericInvestmentAssetLabel(account.name, account.institution) ? account.name : null,
+  ]
+    .map(normalizeInvestmentLabel)
+    .filter(Boolean);
+
+  return (
+    institutionLabels.includes(holdingName) ||
+    new Set(["portfolio", "investment", "investments", "holdings", "assets"]).has(holdingName)
+  );
+};
+
 const readTransactionAssetName = (transaction: Transaction) => {
   const assetName = getInvestmentActivityAssetName(transaction);
   return assetName && !isGenericInvestmentAssetLabel(assetName, transaction.institution) ? assetName : null;
@@ -258,10 +324,12 @@ export default function InvestmentInstitutionDetailPage() {
   });
 
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [investmentSnapshots, setInvestmentSnapshots] = useState<InvestmentSnapshot[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [transactionsLoading, setTransactionsLoading] = useState(true);
+  const [snapshotsLoading, setSnapshotsLoading] = useState(true);
   const [institutionDraft, setInstitutionDraft] = useState(routeInstitution);
   const [editingInstitutionName, setEditingInstitutionName] = useState(false);
   const [customInstitutionPhoto, setCustomInstitutionPhoto] = useState<string | null>(null);
@@ -378,8 +446,13 @@ export default function InvestmentInstitutionDetailPage() {
         if (!cancelled) {
           setLoading(false);
           setTransactionsLoading(false);
+          setSnapshotsLoading(false);
         }
         return;
+      }
+
+      if (!cancelled) {
+        setSnapshotsLoading(true);
       }
 
       const cachedMatchedAccounts = hydrateFromCache();
@@ -397,6 +470,9 @@ export default function InvestmentInstitutionDetailPage() {
         const accountsPayload = await accountsResponse.json();
         const fetchedAccounts = Array.isArray(accountsPayload.accounts) ? (accountsPayload.accounts as Account[]) : [];
         const matchedAccounts = fetchedAccounts.filter(matchesInstitution);
+        const fetchedSnapshots = Array.isArray(accountsPayload.investmentSnapshots)
+          ? (accountsPayload.investmentSnapshots as InvestmentSnapshot[])
+          : [];
         const scopedAccountIds = new Set(matchedAccounts.map((account) => account.id));
         const cachedAccountIds = new Set((cachedMatchedAccounts ?? []).map((account) => account.id));
         const cacheMatchesFetchedAccounts =
@@ -411,9 +487,13 @@ export default function InvestmentInstitutionDetailPage() {
           return;
         }
 
-        setAccounts(matchedAccounts);
+        setAccounts((current) => (matchedAccounts.length > 0 || current.length === 0 ? matchedAccounts : current));
+        setInvestmentSnapshots((current) =>
+          fetchedSnapshots.length > 0 || current.length === 0 ? fetchedSnapshots : current
+        );
         setTransactions(sortTransactionsDesc(matchedTransactions));
         setTransactionsLoading(false);
+        setSnapshotsLoading(false);
         setTradeDraft((current) => ({
           ...buildTradeDraft(matchedAccounts, routeCurrency),
           accountId: current.accountId && scopedAccountIds.has(current.accountId) ? current.accountId : matchedAccounts[0]?.id ?? "",
@@ -433,6 +513,7 @@ export default function InvestmentInstitutionDetailPage() {
 
         setLoading(false);
         setTransactionsLoading(false);
+        setSnapshotsLoading(false);
         setMessage(error instanceof Error ? error.message : "Unable to load this institution.");
       }
     };
@@ -462,7 +543,7 @@ export default function InvestmentInstitutionDetailPage() {
       const cachedTransactions = Array.isArray(cachedSnapshot?.transactions) ? (cachedSnapshot.transactions as Transaction[]) : [];
       const matchedTransactions = cachedTransactions.filter((transaction) => scopedAccountIds.has(transaction.accountId));
 
-      setAccounts(matchedAccounts);
+      setAccounts((current) => (matchedAccounts.length > 0 || current.length === 0 ? matchedAccounts : current));
       setTransactions((current) =>
         matchedTransactions.length > 0 || current.length === 0 ? sortTransactionsDesc(matchedTransactions) : current
       );
@@ -564,11 +645,6 @@ export default function InvestmentInstitutionDetailPage() {
     [sortedAccounts, transactions]
   );
 
-  const holdingsValue = useMemo(
-    () => holdingAccounts.reduce((sum, account) => sum + Math.abs(parseAmount(account.balance)), 0),
-    [holdingAccounts]
-  );
-
   const accountAssetNameMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const account of accounts) {
@@ -593,6 +669,106 @@ export default function InvestmentInstitutionDetailPage() {
     }
     return map;
   }, [accounts, transactions]);
+
+  const institutionHoldingRows = useMemo<InstitutionHoldingRow[]>(() => {
+    const accountById = new Map(accounts.map((account) => [account.id, account]));
+    const latestSnapshotByIdentity = new Map<string, InvestmentSnapshot>();
+
+    const matchesSnapshotInstitution = (snapshot: InvestmentSnapshot) => {
+      const snapshotCurrency = formatCurrencyCode(
+        snapshot.currency || snapshot.documentImport?.currency || routeCurrency
+      );
+      if (snapshotCurrency !== routeCurrency) {
+        return false;
+      }
+
+      if (snapshot.account?.id && accountById.has(snapshot.account.id)) {
+        return true;
+      }
+
+      const routeLabel = normalizeInvestmentLabel(routeInstitution);
+      return [snapshot.account?.institution, snapshot.documentImport?.institution, snapshot.portfolioName]
+        .map(normalizeInvestmentLabel)
+        .some((label) => label === routeLabel);
+    };
+
+    for (const snapshot of investmentSnapshots) {
+      if (!matchesSnapshotInstitution(snapshot)) {
+        continue;
+      }
+
+      const identity = snapshot.account?.id || normalizeInvestmentLabel(
+        snapshot.account?.institution ?? snapshot.documentImport?.institution ?? snapshot.portfolioName
+      );
+      if (!identity) {
+        continue;
+      }
+
+      const current = latestSnapshotByIdentity.get(identity);
+      if (!current || new Date(snapshot.updatedAt).getTime() > new Date(current.updatedAt).getTime()) {
+        latestSnapshotByIdentity.set(identity, snapshot);
+      }
+    }
+
+    const rows: InstitutionHoldingRow[] = [];
+    const accountsRepresentedBySnapshots = new Set<string>();
+    for (const snapshot of latestSnapshotByIdentity.values()) {
+      const account = snapshot.account?.id ? accountById.get(snapshot.account.id) ?? null : null;
+      const holdings = snapshot.holdings.filter(
+        (holding) => !isInstitutionOnlySnapshotHolding(holding, snapshot, account)
+      );
+      if (holdings.length === 0) {
+        continue;
+      }
+
+      if (account) {
+        accountsRepresentedBySnapshots.add(account.id);
+      }
+
+      for (const holding of holdings) {
+        const classification = inferInvestmentClassification({
+          subtype: INVESTMENT_SUBTYPES.includes(holding.assetType as InvestmentSubtype)
+            ? holding.assetType
+            : null,
+          assetType: holding.assetType,
+          name: holding.assetName,
+          symbol: holding.assetSymbol,
+          institution: account?.institution ?? snapshot.documentImport?.institution,
+        });
+        rows.push({
+          key: `holding:${holding.id}`,
+          account,
+          name: holding.assetName,
+          symbol: holding.assetSymbol,
+          subtype: classification.subtype,
+          currency: formatCurrencyCode(holding.currency || snapshot.currency || routeCurrency),
+          value: Math.abs(parseAmount(holding.currentValue ?? holding.marketValue)),
+        });
+      }
+    }
+
+    for (const account of holdingAccounts) {
+      if (accountsRepresentedBySnapshots.has(account.id)) {
+        continue;
+      }
+      rows.push({
+        key: `account:${account.id}`,
+        account,
+        name: accountAssetNameMap.get(account.id) ?? account.name,
+        symbol: account.investmentSymbol,
+        subtype: account.investmentSubtype ?? "other",
+        currency: formatCurrencyCode(account.currency),
+        value: Math.abs(parseAmount(account.balance)),
+      });
+    }
+
+    return rows.sort((left, right) => right.value - left.value || left.name.localeCompare(right.name));
+  }, [accountAssetNameMap, accounts, holdingAccounts, investmentSnapshots, routeCurrency, routeInstitution]);
+
+  const holdingsValue = useMemo(
+    () => institutionHoldingRows.reduce((sum, row) => sum + row.value, 0),
+    [institutionHoldingRows]
+  );
 
   const openAssetEditor = (account: Account) => {
     setEditingAssetId(account.id);
@@ -1067,7 +1243,7 @@ export default function InvestmentInstitutionDetailPage() {
             </article>
             <article className="institution-detail-metric">
               <span>Holdings</span>
-              <strong>{holdingAccounts.length}</strong>
+              <strong>{institutionHoldingRows.length}</strong>
             </article>
           </div>
         </section>
@@ -1083,7 +1259,9 @@ export default function InvestmentInstitutionDetailPage() {
             </button>
           </div>
 
-          {holdingAccounts.length === 0 ? (
+          {institutionHoldingRows.length === 0 && snapshotsLoading ? (
+            <p className="institution-detail-empty">Loading investment assets...</p>
+          ) : institutionHoldingRows.length === 0 ? (
             <p className="institution-detail-empty">No investment assets are linked to this institution in {routeCurrency}.</p>
           ) : (
             <div className="institution-assets-table-wrap">
@@ -1097,51 +1275,57 @@ export default function InvestmentInstitutionDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {holdingAccounts.map((account) => {
-                    const assetName = accountAssetNameMap.get(account.id) ?? account.name;
+                  {institutionHoldingRows.map((row) => {
                     const assetBrand = getInvestmentAssetBrand({
-                      symbol: account.investmentSymbol,
-                      name: assetName,
-                      subtype: account.investmentSubtype,
-                      currency: account.currency,
-                      institution: account.institution,
+                      symbol: row.symbol,
+                      name: row.name,
+                      subtype: row.subtype,
+                      currency: row.currency,
+                      institution: row.account?.institution ?? routeInstitution,
                     });
+                    const canOpenAsset = Boolean(row.account);
 
                     return (
                       <tr
-                        key={account.id}
-                        className="institution-assets-table__row"
-                        tabIndex={0}
-                        onClick={() => openAssetEditor(account)}
+                        key={row.key}
+                        className={`institution-assets-table__row${canOpenAsset ? "" : " institution-assets-table__row--snapshot"}`}
+                        tabIndex={canOpenAsset ? 0 : undefined}
+                        onClick={() => {
+                          if (row.account) {
+                            openAssetEditor(row.account);
+                          }
+                        }}
                         onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
+                          if (row.account && (event.key === "Enter" || event.key === " ")) {
                             event.preventDefault();
-                            openAssetEditor(account);
+                            openAssetEditor(row.account);
                           }
                         }}
                       >
                         <td>
                           <span className="institution-assets-table__asset-name">
-                            <AccountBrandMark accountBrand={assetBrand} label={assetName} />
-                            <strong>{assetName}</strong>
+                            <AccountBrandMark accountBrand={assetBrand} label={row.name} />
+                            <strong>{row.name}</strong>
                           </span>
                         </td>
-                        <td>{getInvestmentSubtypeLabel(account.investmentSubtype)}</td>
-                        <td>{formatMoney(Math.abs(parseAmount(account.balance)), account.currency)}</td>
+                        <td>{getInvestmentSubtypeLabel(row.subtype)}</td>
+                        <td>{formatMoney(row.value, row.currency)}</td>
                         <td className="institution-assets-table__chevron-cell">
-                          <button
-                            className="institution-assets-table__chevron"
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              openAssetEditor(account);
-                            }}
-                            aria-label={`Open ${assetName} details`}
-                          >
-                            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="m9 18 6-6-6-6" />
-                            </svg>
-                          </button>
+                          {row.account ? (
+                            <button
+                              className="institution-assets-table__chevron"
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openAssetEditor(row.account!);
+                              }}
+                              aria-label={`Open ${row.name} details`}
+                            >
+                              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="m9 18 6-6-6-6" />
+                              </svg>
+                            </button>
+                          ) : null}
                         </td>
                       </tr>
                     );
