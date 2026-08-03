@@ -58,12 +58,20 @@ export const inferCanonicalImportedAccountProduct = ({
   name,
   institution,
 }: ImportedAccountProductEvidence): {
-  type: "bank" | "wallet";
+  type: "bank" | "wallet" | "credit_card";
   institution: string;
   name: string;
 } | null => {
   const fileIdentity = normalizeMerchantText(fileName);
   const accountIdentity = normalizeMerchantText(`${institution ?? ""} ${name ?? ""}`);
+
+  if (/\bpaypal\s+credit\b/.test(accountIdentity)) {
+    return { type: "credit_card", institution: "PayPal", name: "PayPal Credit" };
+  }
+
+  if (/\bpaypal\b/.test(accountIdentity)) {
+    return { type: "wallet", institution: "PayPal", name: "PayPal" };
+  }
 
   if (/\bmaya\s*savings\b|\bconsumer\s+savings\b/.test(`${fileIdentity} ${accountIdentity}`)) {
     return { type: "bank", institution: "Maya Bank", name: "Maya Savings" };
@@ -140,7 +148,7 @@ export const buildUploadedAccountLastFourDedupeKey = (account: ImportedAccountId
     account.currency
   );
 
-const isOrdinaryPayPalAccountIdentity = (account: ImportedAccountIdentityLike) => {
+export const isOrdinaryPayPalAccountIdentity = (account: ImportedAccountIdentityLike) => {
   const identity = normalizeWhitespace(`${account.institution ?? ""} ${account.name ?? ""}`);
   return /\bpaypal\b/i.test(identity) && !/\bpaypal\s+credit\b/i.test(identity);
 };

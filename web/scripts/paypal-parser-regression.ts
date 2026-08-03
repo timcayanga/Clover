@@ -6,7 +6,10 @@ import {
   inferAccountTypeFromStatement,
   normalizePayPalAccountType,
 } from "@/lib/import-parser";
-import { matchesLegacyPayPalWalletDuplicate } from "@/lib/imported-account-identity";
+import {
+  inferCanonicalImportedAccountProduct,
+  matchesLegacyPayPalWalletDuplicate,
+} from "@/lib/imported-account-identity";
 
 const ordinaryActivityText = `
 PayPal
@@ -28,6 +31,24 @@ assert.equal(
   normalizePayPalAccountType("PayPal", "PayPal", ordinaryActivityText),
   "wallet",
   "Ordinary PayPal activity must remain a wallet even when its table contains a Credit column."
+);
+assert.deepEqual(
+  inferCanonicalImportedAccountProduct({
+    name: "PayPal 5067",
+    institution: "PayPal",
+    type: "credit_card",
+  }),
+  { type: "wallet", institution: "PayPal", name: "PayPal" },
+  "A stale parser type must not move an ordinary PayPal account back into Credit Cards."
+);
+assert.deepEqual(
+  inferCanonicalImportedAccountProduct({
+    name: "PayPal Credit 5067",
+    institution: "PayPal",
+    type: "credit_card",
+  }),
+  { type: "credit_card", institution: "PayPal", name: "PayPal Credit" },
+  "The canonical product rule must preserve explicitly branded PayPal Credit accounts."
 );
 assert.equal(
   inferAccountTypeFromStatement("PayPal", "PayPal Activity", "bank"),
@@ -122,6 +143,11 @@ const visibleAccountQuery = accountsRouteSource.indexOf("const [accounts, accoun
 assert.ok(
   eagerRepairCall > 0 && visibleAccountQuery > eagerRepairCall,
   "PayPal duplicate repair must run before the Accounts API returns visible accounts."
+);
+assert.match(
+  accountsRouteSource,
+  /const staleStandaloneCards = uploadedAccounts\.filter/,
+  "Accounts maintenance must repair a standalone stale PayPal credit-card record."
 );
 
 console.log("PayPal account-classification regression passed.");

@@ -19,6 +19,7 @@ import {
   buildUploadedAccountDedupeKey,
   buildUploadedAccountLastFourDedupeKey,
   inferCanonicalImportedAccountProduct,
+  isOrdinaryPayPalAccountIdentity,
   isWiseWalletWithoutVisibleAccountNumber,
   matchesLegacyPayPalWalletDuplicate,
   normalizeImportedCurrencyCode,
@@ -1753,6 +1754,7 @@ const repairLegacyUploadedPayPalAccountSplits = async (workspaceId: string, comp
     select: getCompatibleAccountSelect(compatibleColumns),
   }).catch(() => []);
   const wallets = uploadedAccounts.filter((account) => account.type === "wallet");
+  const mergedCardIds = new Set<string>();
   let repairedCount = 0;
 
   for (const wallet of wallets) {
@@ -1795,6 +1797,7 @@ const repairLegacyUploadedPayPalAccountSplits = async (workspaceId: string, comp
         await tx.accountRule.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: wallet.id } });
         await tx.account.deleteMany({ where: { id: { in: duplicateIds }, source: "upload", type: "credit_card" } });
       });
+      duplicateIds.forEach((id) => mergedCardIds.add(id));
       repairedCount += duplicateIds.length;
     } catch (error) {
       console.warn("[accounts] unable to repair legacy PayPal wallet split", {
@@ -1804,6 +1807,29 @@ const repairLegacyUploadedPayPalAccountSplits = async (workspaceId: string, comp
         error,
       });
     }
+  }
+
+  // Earlier imports could leave an ordinary PayPal account as the only
+  // credit-card record. There is no wallet duplicate to trigger the merge
+  // above, so normalize that surviving uploaded account in place. Explicitly
+  // branded PayPal Credit accounts remain untouched.
+  const staleStandaloneCards = uploadedAccounts.filter(
+    (account) =>
+      account.type === "credit_card" &&
+      !mergedCardIds.has(account.id) &&
+      isOrdinaryPayPalAccountIdentity(account)
+  );
+  if (staleStandaloneCards.length > 0) {
+    const result = await prisma.account.updateMany({
+      where: {
+        id: { in: staleStandaloneCards.map((account) => account.id) },
+        workspaceId,
+        source: "upload",
+        type: "credit_card",
+      },
+      data: { type: "wallet" },
+    });
+    repairedCount += result.count;
   }
 
   return repairedCount;
