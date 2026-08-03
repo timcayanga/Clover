@@ -6,6 +6,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { getAccountBrand } from "@/lib/account-brand";
+import { getInvestmentAssetBrand } from "@/lib/investment-assets";
 import { extractInvestmentInstitutionFromPathSegment, getAccountPath, getInvestmentInstitutionPath } from "@/lib/account-path";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import {
@@ -1096,39 +1097,55 @@ export default function InvestmentInstitutionDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {holdingAccounts.map((account) => (
-                    <tr
-                      key={account.id}
-                      className="institution-assets-table__row"
-                      tabIndex={0}
-                      onClick={() => openAssetEditor(account)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          openAssetEditor(account);
-                        }
-                      }}
-                    >
-                      <td>{accountAssetNameMap.get(account.id) ?? account.name}</td>
-                      <td>{getInvestmentSubtypeLabel(account.investmentSubtype)}</td>
-                      <td>{formatMoney(Math.abs(parseAmount(account.balance)), account.currency)}</td>
-                      <td className="institution-assets-table__chevron-cell">
-                        <button
-                          className="institution-assets-table__chevron"
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
+                  {holdingAccounts.map((account) => {
+                    const assetName = accountAssetNameMap.get(account.id) ?? account.name;
+                    const assetBrand = getInvestmentAssetBrand({
+                      symbol: account.investmentSymbol,
+                      name: assetName,
+                      subtype: account.investmentSubtype,
+                      currency: account.currency,
+                      institution: account.institution,
+                    });
+
+                    return (
+                      <tr
+                        key={account.id}
+                        className="institution-assets-table__row"
+                        tabIndex={0}
+                        onClick={() => openAssetEditor(account)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
                             openAssetEditor(account);
-                          }}
-                          aria-label={`Open ${accountAssetNameMap.get(account.id) ?? account.name} details`}
-                        >
-                          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="m9 18 6-6-6-6" />
-                          </svg>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                          }
+                        }}
+                      >
+                        <td>
+                          <span className="institution-assets-table__asset-name">
+                            <AccountBrandMark accountBrand={assetBrand} label={assetName} />
+                            <strong>{assetName}</strong>
+                          </span>
+                        </td>
+                        <td>{getInvestmentSubtypeLabel(account.investmentSubtype)}</td>
+                        <td>{formatMoney(Math.abs(parseAmount(account.balance)), account.currency)}</td>
+                        <td className="institution-assets-table__chevron-cell">
+                          <button
+                            className="institution-assets-table__chevron"
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openAssetEditor(account);
+                            }}
+                            aria-label={`Open ${assetName} details`}
+                          >
+                            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="m9 18 6-6-6-6" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

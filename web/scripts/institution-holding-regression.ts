@@ -24,6 +24,9 @@ const checks = [
   [accountsPage.includes('\\b(?:unoready|unoboost)\\b'), "Stale UNO product names are recognized as GSave accounts"],
   [accountsPage.includes('? "GSave"'), "Stale UNO products use the canonical GSave institution title"],
   [institutionPage.includes('routeInstitution.toLowerCase() === "gsave"'), "The GSave institution page includes linked savings products"],
+  [institutionPage.includes("getInvestmentAssetBrand"), "Institution holdings resolve stable asset branding"],
+  [institutionPage.includes('className="institution-assets-table__asset-name"'), "Asset names render with compact icons"],
+  [styles.includes(".institution-assets-table__asset-name .accounts-brand-mark"), "Institution asset marks match transaction row sizing"],
   [accountsPage.includes('className="financial-account-card--investment-institution"'), "Institution cards have concise preview styling"],
   [styles.includes(".financial-account-card--investment-institution .financial-account-card__number"), "Institution preview stays on one line"],
 ] as const;
