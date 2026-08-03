@@ -248,8 +248,18 @@ async function main() {
   );
   assert.match(
     globalStyles,
-    /\.dashboard-home__report-flow-segment \{[\s\S]{0,140}border-radius: 999px;/,
-    "Home report bars must remain rounded even when a value produces a short segment."
+    /\.dashboard-home__report-flow-segment\[data-edge="only"\] \{[\s\S]{0,80}border-radius: 4px;/,
+    "Single-value Home report bars must keep compact rounded edges."
+  );
+  assert.match(
+    globalStyles,
+    /\.dashboard-home__report-flow-segment\[data-edge="bottom"\][\s\S]{0,180}\.dashboard-home__report-flow-segment\[data-edge="top"\]/,
+    "Mixed Home report bars must round only the outside edges of one continuous stack."
+  );
+  assert.match(
+    dashboardSource,
+    /days\.map\(\(day\) => day\.income \+ day\.expense\)[\s\S]{0,1800}\.filter\(\(segment\) => segment\.value > 0\)/,
+    "Home report bars must scale combined daily movement and omit empty colored segments."
   );
   assert.match(
     globalStyles,

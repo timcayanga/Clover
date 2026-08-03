@@ -190,7 +190,7 @@ const buildDailyFlow = (transactions: DashboardTransaction[], start: Date, dayCo
 };
 
 function DailyFlowChart({ days, label, currency }: { days: DailyFlow[]; label: string; currency: string }) {
-  const scale = Math.max(1, ...days.flatMap((day) => [day.income, day.expense]));
+  const scale = Math.max(1, ...days.map((day) => day.income + day.expense));
   const isMonthly = days.length > 7;
   const monthlyTimelineIndexes = new Set(
     Array.from({ length: 5 }, (_, index) => Math.round((index * Math.max(days.length - 1, 0)) / 4))
@@ -203,15 +203,10 @@ function DailyFlowChart({ days, label, currency }: { days: DailyFlow[]; label: s
         {days.map((day, index) => {
           const hasMovement = day.income > 0 || day.expense > 0;
           const detailLabel = `${day.dayLabel}, ${day.dateLabel}: ${formatCurrency(day.income, currency)} income, ${formatCurrency(day.expense, currency)} expenses`;
-          const segments = day.income > day.expense
-            ? [
-                { kind: "expense", value: day.expense },
-                { kind: "income", value: day.income },
-              ]
-            : [
-                { kind: "income", value: day.income },
-                { kind: "expense", value: day.expense },
-              ];
+          const segments = [
+            { kind: "income", value: day.income },
+            { kind: "expense", value: day.expense },
+          ].filter((segment) => segment.value > 0);
 
           return (
             <div
@@ -222,10 +217,11 @@ function DailyFlowChart({ days, label, currency }: { days: DailyFlow[]; label: s
               title={detailLabel}
             >
               <div className="dashboard-home__report-flow-track" data-active={hasMovement ? "true" : "false"}>
-                {segments.map((segment) => (
+                {segments.map((segment, segmentIndex) => (
                   <span
                     className={`dashboard-home__report-flow-segment dashboard-home__report-flow-segment--${segment.kind}`}
                     data-active={segment.value > 0 ? "true" : "false"}
+                    data-edge={segments.length === 1 ? "only" : segmentIndex === 0 ? "bottom" : "top"}
                     key={segment.kind}
                     style={{ height: `${(segment.value / scale) * 100}%` }}
                   />

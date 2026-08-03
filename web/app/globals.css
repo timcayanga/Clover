@@ -5600,7 +5600,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   min-height: 0;
   height: 100%;
   overflow: hidden;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
 }
 
@@ -5609,8 +5609,20 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   width: 100%;
   min-height: 0;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: 0;
   transition: height 180ms ease;
+}
+
+.dashboard-home__report-flow-segment[data-edge="only"] {
+  border-radius: 4px;
+}
+
+.dashboard-home__report-flow-segment[data-edge="bottom"] {
+  border-radius: 0 0 4px 4px;
+}
+
+.dashboard-home__report-flow-segment[data-edge="top"] {
+  border-radius: 4px 4px 0 0;
 }
 
 .dashboard-home__report-flow-segment[data-active="true"] {
