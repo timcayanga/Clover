@@ -28,6 +28,16 @@ import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
 import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
 import { buildVisibleWorkspaceTransactionWhere } from "@/lib/transaction-query";
 import { DashboardBudgetPulse } from "@/components/dashboard-budget-pulse";
+import {
+  HomeRecurringPaymentsCard,
+  type HomeRecurringPaymentItem,
+  type HomeRecurringSuggestionItem,
+} from "@/components/home-recurring-payments-card";
+import {
+  resolveRelevantCommitmentDueDate,
+  toCommitmentOccurrenceKey,
+} from "@/lib/commitment-occurrences";
+import { hasCompatibleTable } from "@/lib/data-engine";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -813,15 +823,102 @@ async function DashboardStream({
       : "No spending was recorded this week.";
   const nextSevenDays = new Date(now);
   nextSevenDays.setDate(nextSevenDays.getDate() + 7);
-  const plannedPaymentSuggestions = await getPlannedPaymentSuggestions(workspaceSummary.id).catch(() => []);
+  const [plannedPaymentSuggestions, recurringCommitments] = await Promise.all([
+    getPlannedPaymentSuggestions(workspaceSummary.id).catch(() => []),
+    prisma.financialCommitment.findMany({
+      where: {
+        workspaceId: workspaceSummary.id,
+        status: "active",
+        kind: { in: ["planned_payment", "reminder"] },
+        OR: [
+          { dueDate: { not: null } },
+          { nextDueDate: { not: null } },
+        ],
+      },
+      orderBy: [{ nextDueDate: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        title: true,
+        amount: true,
+        currency: true,
+        dueDate: true,
+        nextDueDate: true,
+        recurrence: true,
+      },
+      take: 30,
+    }).catch(() => []),
+  ]);
   const plannedPaymentsDueSoon = plannedPaymentSuggestions.filter(
     (suggestion) => suggestion.dueDate && new Date(suggestion.dueDate) <= nextSevenDays
   );
-  const recurringSuggestionCount = plannedPaymentSuggestions.filter(
+  const recurringSuggestions = plannedPaymentSuggestions.filter(
     (suggestion) => suggestion.sourceKind === "recurring_transaction" || suggestion.sourceKind === "installment"
-  ).length;
-  const recurringWatchCount = Math.max(recurringSuggestionCount, plannedPaymentsDueSoon.length);
-  const recurringWatchProgress = recurringWatchCount > 0 ? Math.min(recurringWatchCount * 30, 100) : 18;
+  );
+  const recurringSuggestionCount = recurringSuggestions.length;
+  const recurringPaymentOccurrences = recurringCommitments
+    .map((commitment) => ({
+      commitment,
+      dueDate: resolveRelevantCommitmentDueDate({
+        dueDate: commitment.dueDate,
+        nextDueDate: commitment.nextDueDate,
+        recurrence: commitment.recurrence,
+        now,
+      }),
+    }))
+    .filter((entry): entry is typeof entry & { dueDate: Date } => Boolean(entry.dueDate))
+    .sort((left, right) => left.dueDate.getTime() - right.dueDate.getTime())
+    .slice(0, 4);
+  const hasCommitmentOccurrenceTable = await hasCompatibleTable("FinancialCommitmentOccurrence").catch(() => false);
+  const completedOccurrences = hasCommitmentOccurrenceTable && recurringPaymentOccurrences.length > 0
+    ? await prisma.financialCommitmentOccurrence.findMany({
+        where: {
+          workspaceId: workspaceSummary.id,
+          OR: recurringPaymentOccurrences.map((entry) => ({
+            commitmentId: entry.commitment.id,
+            dueDate: entry.dueDate,
+          })),
+        },
+        select: { commitmentId: true, dueDate: true },
+      }).catch(() => [])
+    : [];
+  const completedOccurrenceKeys = new Set(
+    completedOccurrences.map((occurrence) => `${occurrence.commitmentId}:${toCommitmentOccurrenceKey(occurrence.dueDate)}`)
+  );
+  const formatPaymentDate = (value: Date) => value.toLocaleDateString("en-PH", {
+    month: "short",
+    day: "numeric",
+    ...(value.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}),
+    timeZone: "UTC",
+  });
+  const homeRecurringPayments: HomeRecurringPaymentItem[] = recurringPaymentOccurrences.map(({ commitment, dueDate }) => {
+    const occurrenceKey = toCommitmentOccurrenceKey(dueDate);
+    const amountLabel = commitment.amount !== null
+      ? formatCurrencyAmount(Number(commitment.amount), commitment.currency)
+      : null;
+    return {
+      id: commitment.id,
+      title: commitment.title,
+      detail: [formatPaymentDate(dueDate), amountLabel].filter(Boolean).join(" · "),
+      dueDate: occurrenceKey,
+      completed: completedOccurrenceKeys.has(`${commitment.id}:${occurrenceKey}`),
+    };
+  });
+  const homeRecurringSuggestions: HomeRecurringSuggestionItem[] = recurringSuggestions
+    .slice()
+    .sort((left, right) => {
+      if (!left.dueDate) return 1;
+      if (!right.dueDate) return -1;
+      return new Date(left.dueDate).getTime() - new Date(right.dueDate).getTime();
+    })
+    .slice(0, 4)
+    .map((suggestion) => ({
+      id: suggestion.id,
+      title: suggestion.title,
+      detail: [
+        suggestion.dueDate ? formatPaymentDate(new Date(suggestion.dueDate)) : "Date to confirm",
+        suggestion.amount ? formatCurrencyAmount(Number(suggestion.amount), suggestion.currency) : null,
+      ].filter(Boolean).join(" · "),
+    }));
   const insightCandidates: Array<HomeAdviserItem | null> = [
     daysSinceLastImport === null || daysSinceLastImport >= 7
       ? {
@@ -1114,39 +1211,10 @@ async function DashboardStream({
         </div>
 
         <div className="dashboard-home__snapshot-grid dashboard-home__snapshot-grid--lower">
-          <div className="dashboard-home__goal-card dashboard-home__recurring-card">
-            <div className="dashboard-home__goal-card-head">
-                <p className="eyebrow">What&apos;s coming up</p>
-            </div>
-            <div className="dashboard-home__goal-card-body">
-              <div
-                className="dashboard-home__ring dashboard-home__ring--compact"
-                style={{
-                  background: `conic-gradient(var(--accent) 0 ${Math.min(
-                    recurringWatchProgress,
-                    100
-                  )}%, rgba(15, 23, 42, 0.08) ${Math.min(recurringWatchProgress, 100)}% 100%)`,
-                }}
-              >
-                <div className="dashboard-home__ring-inner">
-                  <strong>{recurringWatchCount}</strong>
-                </div>
-              </div>
-              <div className="dashboard-home__goal-card-copy">
-                <strong>{recurringWatchCount > 0 ? "Recurring payments" : "Repeat bills surface here"}</strong>
-                <small>
-                  {plannedPaymentsDueSoon.length > 0
-                    ? `${plannedPaymentsDueSoon.length} planned payment${plannedPaymentsDueSoon.length === 1 ? "" : "s"} due soon`
-                    : recurringSuggestionCount > 0
-                      ? `${recurringSuggestionCount} potential recurring payment${recurringSuggestionCount === 1 ? "" : "s"} found`
-                      : "Clover will surface repeat costs and upcoming payments here."}
-                </small>
-              </div>
-            </div>
-            <Link className="dashboard-home__report-link" href="/recurring">
-              Open recurring
-            </Link>
-          </div>
+          <HomeRecurringPaymentsCard
+            payments={homeRecurringPayments}
+            suggestions={homeRecurringSuggestions}
+          />
           {shouldShowStarterCard ? (
             <div className="dashboard-home__starter-card">
               <p className="eyebrow">Get started</p>
@@ -1166,29 +1234,42 @@ async function DashboardStream({
               <div className="dashboard-home__goal-card-head">
                 <p className="eyebrow">Things to review</p>
               </div>
-              <div className="dashboard-home__goal-card-body">
-                <div
-                  className="dashboard-home__ring dashboard-home__ring--compact"
-                  style={{
-                    background: `conic-gradient(var(--accent) 0 ${Math.min(reviewAttentionCount * 12, 100)}%, rgba(15, 23, 42, 0.08) ${Math.min(
-                      reviewAttentionCount * 12,
-                      100
-                    )}% 100%)`,
-                  }}
-                >
-                  <div className="dashboard-home__ring-inner">
-                    <strong>{reviewAttentionCount > 0 ? `${reviewAttentionCount}` : "0"}</strong>
-                  </div>
-                </div>
-                <div className="dashboard-home__goal-card-copy">
-                  <strong>{reviewAttentionCount > 0 ? `${reviewAttentionCount} transactions need review` : "Transactions look tidy"}</strong>
+              <div className="dashboard-home__action-card-heading">
+                <span className={`dashboard-home__status-check${reviewAttentionCount > 0 ? " dashboard-home__status-check--attention" : ""}`} aria-hidden="true">
+                  {reviewAttentionCount > 0 ? "!" : "✓"}
+                </span>
+                <div>
+                  <strong>{reviewAttentionCount > 0 ? "Transactions to review" : "Transactions look tidy"}</strong>
                   <small>
                     {reviewAttentionCount > 0
-                      ? "Low-confidence rows and uncategorized items are ready for cleanup."
-                      : "Clover is keeping the transaction list clean and ready for reports."}
+                      ? "Review these details before using them in reports."
+                      : "Everything is categorized and ready for reports."}
                   </small>
                 </div>
               </div>
+              {reviewAttentionCount > 0 ? (
+                <div className="dashboard-home__action-list">
+                  {reviewAttentionTransactions.slice(0, 3).map((transaction) => {
+                    const transactionTitle = transaction.merchantClean?.trim() || transaction.merchantRaw?.trim() || "Imported transaction";
+                    const transactionCurrency = transaction.account?.currency ?? displayCurrency;
+                    return (
+                      <div className="dashboard-home__action-row" key={transaction.id}>
+                        <span className="dashboard-home__review-dot" aria-hidden="true" />
+                        <div className="dashboard-home__action-row-copy">
+                          <strong>{transactionTitle}</strong>
+                          <small>
+                            {transaction.date.toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                            {" · "}{formatCurrencyAmount(Math.abs(Number(transaction.amount)), transactionCurrency)}
+                          </small>
+                        </div>
+                        <Link className="dashboard-home__mini-action" href={`/transactions?review=${encodeURIComponent(transaction.id)}`}>
+                          Review
+                        </Link>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
               <Link className="dashboard-home__report-link" href={reviewAttentionCount > 0 ? "/review" : "/transactions"}>
                 {reviewAttentionCount > 0 ? "Open review" : "Open transactions"}
               </Link>

@@ -490,37 +490,38 @@ model ContactInquiry {
 }
 
 model Workspace {
-  id                         String                       @id @default(cuid())
-  userId                     String
-  name                       String
-  type                       WorkspaceType                @default(personal)
-  createdAt                  DateTime                     @default(now())
-  updatedAt                  DateTime                     @updatedAt
-  user                       User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accounts                   Account[]
-  accountTombstones          AccountTombstone[]
-  categories                 Category[]
-  transactions               Transaction[]
-  importFiles                ImportFile[]
-  importFileExtractionCaches ImportFileExtractionCache[]
-  importEnrichmentJobs       ImportEnrichmentJob[]
-  documentImports            DocumentImport[]
-  statementCheckpoints       AccountStatementCheckpoint[]
-  financialCommitments       FinancialCommitment[]
-  auditLogs                  AuditLog[]
-  statementTemplates         StatementTemplate[]
-  merchantRules              MerchantRule[]
-  accountRules               AccountRule[]
-  trainingSignals            TrainingSignal[]
-  dataQaRuns                 DataQaRun[]
-  dataQaFindings             DataQaFinding[]
-  brankasStatementSessions   BrankasStatementSession[]
-  receiptDocuments           ReceiptDocument[]
-  investmentSnapshots        InvestmentSnapshot[]
-  investmentHoldings         InvestmentHolding[]
-  recurringPatterns          RecurringPattern[]
-  budgets                    Budget[]
-  tags                       Tag[]
+  id                             String                          @id @default(cuid())
+  userId                         String
+  name                           String
+  type                           WorkspaceType                   @default(personal)
+  createdAt                      DateTime                        @default(now())
+  updatedAt                      DateTime                        @updatedAt
+  user                           User                            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accounts                       Account[]
+  accountTombstones              AccountTombstone[]
+  categories                     Category[]
+  transactions                   Transaction[]
+  importFiles                    ImportFile[]
+  importFileExtractionCaches     ImportFileExtractionCache[]
+  importEnrichmentJobs           ImportEnrichmentJob[]
+  documentImports                DocumentImport[]
+  statementCheckpoints           AccountStatementCheckpoint[]
+  financialCommitments           FinancialCommitment[]
+  financialCommitmentOccurrences FinancialCommitmentOccurrence[]
+  auditLogs                      AuditLog[]
+  statementTemplates             StatementTemplate[]
+  merchantRules                  MerchantRule[]
+  accountRules                   AccountRule[]
+  trainingSignals                TrainingSignal[]
+  dataQaRuns                     DataQaRun[]
+  dataQaFindings                 DataQaFinding[]
+  brankasStatementSessions       BrankasStatementSession[]
+  receiptDocuments               ReceiptDocument[]
+  investmentSnapshots            InvestmentSnapshot[]
+  investmentHoldings             InvestmentHolding[]
+  recurringPatterns              RecurringPattern[]
+  budgets                        Budget[]
+  tags                           Tag[]
 
   @@index([userId])
 }
@@ -1531,29 +1532,30 @@ model SplitBillTransferSettlement {
 }
 
 model FinancialCommitment {
-  id                    String                      @id @default(cuid())
+  id                    String                          @id @default(cuid())
   workspaceId           String
   kind                  CommitmentKind
   title                 String
   counterparty          String?
-  amount                Decimal?                    @db.Decimal(18, 2)
-  currency              String                      @default("PHP")
+  amount                Decimal?                        @db.Decimal(18, 2)
+  currency              String                          @default("PHP")
   dueDate               DateTime?
-  recurrence            CommitmentRecurrence        @default(once)
+  recurrence            CommitmentRecurrence            @default(once)
   nextDueDate           DateTime?
   notes                 String?
   accountId             String?
   transactionId         String?
   statementCheckpointId String?
-  status                CommitmentStatus            @default(active)
-  source                String                      @default("manual")
-  confidence            Int                         @default(100)
-  createdAt             DateTime                    @default(now())
-  updatedAt             DateTime                    @updatedAt
-  workspace             Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  account               Account?                    @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  transaction           Transaction?                @relation(fields: [transactionId], references: [id], onDelete: SetNull)
-  statementCheckpoint   AccountStatementCheckpoint? @relation(fields: [statementCheckpointId], references: [id], onDelete: SetNull)
+  status                CommitmentStatus                @default(active)
+  source                String                          @default("manual")
+  confidence            Int                             @default(100)
+  createdAt             DateTime                        @default(now())
+  updatedAt             DateTime                        @updatedAt
+  workspace             Workspace                       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account               Account?                        @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  transaction           Transaction?                    @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  statementCheckpoint   AccountStatementCheckpoint?     @relation(fields: [statementCheckpointId], references: [id], onDelete: SetNull)
+  occurrences           FinancialCommitmentOccurrence[]
 
   @@index([workspaceId])
   @@index([kind])
@@ -1564,6 +1566,22 @@ model FinancialCommitment {
   @@index([accountId])
   @@index([transactionId])
   @@index([statementCheckpointId])
+}
+
+model FinancialCommitmentOccurrence {
+  id           String              @id @default(cuid())
+  workspaceId  String
+  commitmentId String
+  dueDate      DateTime
+  completedAt  DateTime
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  workspace    Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  commitment   FinancialCommitment @relation(fields: [commitmentId], references: [id], onDelete: Cascade)
+
+  @@unique([commitmentId, dueDate])
+  @@index([workspaceId, dueDate])
+  @@index([commitmentId])
 }
 
 model DataQaConfig {
