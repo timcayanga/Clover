@@ -9,6 +9,22 @@ import {
   isAtmCashWithdrawalCandidate,
   type WorkspaceTransferCandidate,
 } from "@/lib/internal-transfer-matching";
+
+assert.equal(
+  isAtmCashWithdrawalCandidate({
+    type: "transfer",
+    merchantRaw: "Trading Wallet Withdraw",
+    merchantClean: "ATM Withdrawal",
+    description: "Withdraw - GCrypto Wallet",
+    rawPayload: {
+      bank: "GCrypto",
+      providerInstitution: "PDAX",
+      kind: "gcrypto_mobile_screenshot_transaction",
+    },
+  }),
+  false,
+  "GCrypto wallet movements must never create ATM Cash transfers"
+);
 import { buildOptimisticPreviewTransactions } from "@/lib/import-preview-transactions";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 

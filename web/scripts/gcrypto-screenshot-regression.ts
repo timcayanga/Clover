@@ -99,8 +99,11 @@ const allRows = samples.flatMap((sample) => {
   });
 
   assert.equal(rows.length, sample.expectedRows, `${sample.fileName} visible row count mismatch.`);
-  assert.ok(rows.every((row) => row.institution === "GCrypto"), `${sample.fileName} should keep GCrypto as institution.`);
-  assert.ok(rows.every((row) => row.accountName === "GCrypto"), `${sample.fileName} should keep a canonical GCrypto account name.`);
+  const walletRows = rows.filter((row) => (row.rawPayload as Record<string, unknown> | undefined)?.kind === "gcrypto_wallet_movement");
+  const investmentRows = rows.filter((row) => !walletRows.includes(row));
+  assert.ok(investmentRows.every((row) => row.institution === "GCrypto"), `${sample.fileName} crypto trades should keep GCrypto as institution.`);
+  assert.ok(investmentRows.every((row) => row.accountName === "GCrypto"), `${sample.fileName} crypto trades should keep a canonical GCrypto account name.`);
+  assert.ok(walletRows.every((row) => row.institution === "GCash" && row.accountName === "GCash"), `${sample.fileName} wallet movements should stay within GCash.`);
   assert.ok(rows.every((row) => row.accountName && !/^IMG_/i.test(String(row.accountName))), `${sample.fileName} should never surface IMG_* as the account name.`);
 
   return rows;
@@ -149,19 +152,27 @@ const uniqueRows = new Map(allRows.map((row) => [dedupeKeyFor(row), row]));
 assert.equal(uniqueRows.size, 9, "Overlapping GCrypto screenshots should collapse to 9 unique visible transactions.");
 
 const uniqueDescriptions = new Set(Array.from(uniqueRows.values()).map((row) => row.description));
-assert.ok(uniqueDescriptions.has("Withdraw - Trading Wallet"), "The trading wallet withdrawal should be preserved.");
+assert.ok(uniqueDescriptions.has("Withdraw - GCrypto Wallet"), "The trading wallet withdrawal should be preserved within GCash.");
 assert.ok(uniqueDescriptions.has("Sell - The Graph (411.25)"), "The Graph sell row should be preserved.");
 assert.ok(uniqueDescriptions.has("Buy - Ripple (95.54)"), "The visible Ripple buy row should be preserved.");
 
 const buyRows = Array.from(uniqueRows.values()).filter((row) => row.description?.startsWith("Buy - "));
 const sellRows = Array.from(uniqueRows.values()).filter((row) => row.description?.startsWith("Sell - "));
-const withdrawRows = Array.from(uniqueRows.values()).filter((row) => row.description === "Withdraw - Trading Wallet");
+const withdrawRows = Array.from(uniqueRows.values()).filter((row) => row.description === "Withdraw - GCrypto Wallet");
 
 assert.ok(buyRows.length > 0 && buyRows.every((row) => row.type === "expense" && row.categoryName === "Investments"), "GCrypto buys should map to investment expenses.");
 assert.ok(sellRows.length > 0 && sellRows.every((row) => row.type === "income" && row.categoryName === "Investments"), "GCrypto sells should map to investment income.");
-assert.ok(withdrawRows.length === 1 && withdrawRows[0]?.type === "income" && withdrawRows[0]?.categoryName === "Transfers", "GCrypto withdrawals should map to transfer-like income.");
+assert.ok(
+  withdrawRows.length === 1 &&
+    withdrawRows[0]?.type === "income" &&
+    withdrawRows[0]?.categoryName === "Transfers" &&
+    withdrawRows[0]?.accountName === "GCash" &&
+    withdrawRows[0]?.institution === "GCash",
+  "GCrypto wallet withdrawals should map to transfer-like income in GCash."
+);
 
-const screenshotIdentity = resolveMobileWalletIdentityFromParsedRows(allRows as Array<Record<string, unknown>>);
+const gcryptoTradeRows = allRows.filter((row) => row.institution === "GCrypto");
+const screenshotIdentity = resolveMobileWalletIdentityFromParsedRows(gcryptoTradeRows as Array<Record<string, unknown>>);
 assert.deepEqual(
   screenshotIdentity,
   {

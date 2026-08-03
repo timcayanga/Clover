@@ -15,6 +15,7 @@ import {
   parseDateValue,
   parseImportText,
   parseImportTextGenericOnly,
+  isGcryptoTransactionHistoryScreenshotText,
   type ParsedImportRow,
 } from "@/lib/import-parser";
 import { isTrustedMetadataOnlyWiseStatement } from "@/lib/metadata-only-statement";
@@ -8498,6 +8499,14 @@ export const processImportFileText = async (
     }
   }
 
+  const recognizedGcryptoActivityScreenshot =
+    imageImport && isGcryptoTransactionHistoryScreenshotText(text);
+  if (recognizedGcryptoActivityScreenshot) {
+    importMode = "statement";
+    isDocumentImport = false;
+    trainedReceiptDetails = null;
+  }
+
   const cachedParsedRows = Array.isArray(textCacheInfo?.cacheRecord?.parsedRows)
     ? ((textCacheInfo?.cacheRecord?.parsedRows ?? []) as Array<Record<string, unknown>>)
     : [];
@@ -9598,6 +9607,8 @@ export const processImportFileText = async (
   const receiptPreview = imageImport ? parseReceiptText(textForParse) : null;
   const receiptPreviewDetails = receiptPreview ? buildReceiptDetailsFromPreview(receiptPreview) : null;
   const receiptPreviewQuality = receiptPreview ? assessReceiptPreviewQuality(receiptPreview) : null;
+  const suppressReceiptPreviewForInvestmentActivity =
+    imageImport && isGcryptoTransactionHistoryScreenshotText(textForParse);
   const suppressReceiptPreviewForGsaveStatement =
     imageImport &&
     importMode === "statement" &&
@@ -9607,6 +9618,7 @@ export const processImportFileText = async (
   const receiptPreviewLooksLikeReceipt =
     Boolean(
       !suppressReceiptPreviewForGsaveStatement &&
+        !suppressReceiptPreviewForInvestmentActivity &&
         receiptPreview &&
         receiptPreview.confidence >= 80 &&
         (
@@ -9614,7 +9626,10 @@ export const processImportFileText = async (
           (receiptPreview.total !== null && (receiptPreview.receiptAccountMatch || receiptPreview.paymentMethod))
         )
     );
-  const receiptPreviewIsUsable = !suppressReceiptPreviewForGsaveStatement && isReceiptPreviewUsable(receiptPreview);
+  const receiptPreviewIsUsable =
+    !suppressReceiptPreviewForGsaveStatement &&
+    !suppressReceiptPreviewForInvestmentActivity &&
+    isReceiptPreviewUsable(receiptPreview);
   const receiptPreviewCanSkipBackup = shouldUseReceiptPreviewFastPath({
     receiptPreviewIsUsable,
     transactionDate: receiptPreview?.billDate ?? null,
@@ -9623,10 +9638,11 @@ export const processImportFileText = async (
   });
   const receiptPreviewHasReviewableDetails = Boolean(
     !suppressReceiptPreviewForGsaveStatement &&
-      receiptPreview &&
-      receiptPreview.total !== null &&
-      (receiptPreview.billDate || receiptPreview.items.length > 0) &&
-      (receiptPreviewQuality?.score ?? 0) >= 4
+    !suppressReceiptPreviewForInvestmentActivity &&
+    receiptPreview &&
+    receiptPreview.total !== null &&
+    (receiptPreview.billDate || receiptPreview.items.length > 0) &&
+    (receiptPreviewQuality?.score ?? 0) >= 4
   );
   const strongReceiptTextStructure =
     /\btotal\s+amount\b/i.test(textForParse) &&

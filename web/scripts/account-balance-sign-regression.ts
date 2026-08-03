@@ -52,7 +52,7 @@ const importedCurrentBalance = Number(
 assert.equal(expenseBalance, -123.45);
 assert.equal(manualOpeningBalance, 13_700);
 assert.equal(importedCurrentBalance, 3_700);
-assert.equal(normalizeAccountBalanceSign("cash", expenseBalance), -123.45);
+assert.equal(normalizeAccountBalanceSign("cash", expenseBalance), 0);
 assert.equal(normalizeAccountBalanceSign("bank", -500), -500);
 assert.equal(normalizeAccountBalanceSign("credit_card", 500), -500);
 

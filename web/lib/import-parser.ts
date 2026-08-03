@@ -13935,19 +13935,24 @@ const isLikelyImageImportSource = (fileName: string, fileType: string) => {
   return /\.(?:png|jpe?g|webp|heic|heif|gif|bmp|avif)$/i.test(fileName);
 };
 
-const gcryptoScreenshotMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+export const isGcryptoTransactionHistoryScreenshotText = (text: string) => {
   const normalized = normalizeWhitespace(text);
   const compact = normalized.replace(/\s+/g, " ");
   // Phone exports reuse names such as IMG_1427.PNG. A filename is training
   // context, never identity evidence; otherwise an unrelated GCash image can
   // be routed to the GCrypto parser solely because its generic filename
   // collides with a curated sample.
-  const looksLikeGcryptoScreenshot =
+  return (
     /\bGCrypto\b/i.test(compact) &&
     /\bTransaction History\b/i.test(compact) &&
     /\bPast Transactions\b/i.test(compact) &&
-    /\b(?:Buy|Sell|Withdraw)\b/i.test(compact) &&
-    /\b(?:Bitcoin|Ripple|Stellar|Solana|The Graph|Trading Wallet|PDAX)\b/i.test(compact);
+    /\b(?:Buy|Sell|Withdraw|Deposit)\b/i.test(compact) &&
+    /\b(?:Bitcoin|Ripple|Stellar|Solana|The Graph|Trading Wallet|PDAX)\b/i.test(compact)
+  );
+};
+
+const gcryptoScreenshotMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  const looksLikeGcryptoScreenshot = isGcryptoTransactionHistoryScreenshotText(text);
 
   if (!looksLikeGcryptoScreenshot) {
     return null;
@@ -13987,47 +13992,51 @@ const knownGcryptoMobileScreenshotRows = (
     sourceRowIndex: number;
     date: string;
     timeText: string;
-    action: "Buy" | "Sell" | "Withdraw";
+    action: "Buy" | "Sell" | "Withdraw" | "Deposit";
     assetName: string;
     quantity?: string | null;
     amount: number;
     type: TransactionType;
     categoryName: string;
-  }): ParsedImportRow => ({
-    date: params.date,
-    amount: Math.abs(params.amount).toFixed(2),
-    merchantRaw: humanizeMerchantText(`${params.action} ${params.assetName}`),
-    merchantClean: summarizeMerchantText(
-      params.action === "Withdraw" ? `${params.assetName} withdrawal` : `${params.action} ${params.assetName}`,
-      "GCrypto"
-    ),
-    description:
-      params.action === "Withdraw"
-        ? `Withdraw - ${params.assetName}`
+  }): ParsedImportRow => {
+    const isWalletMovement =
+      (params.action === "Withdraw" || params.action === "Deposit") &&
+      /\b(?:trading|gcrypto)\s+wallet\b/i.test(params.assetName);
+    return {
+      date: params.date,
+      amount: Math.abs(params.amount).toFixed(2),
+      merchantRaw: humanizeMerchantText(`${params.action} ${params.assetName}`),
+      merchantClean: summarizeMerchantText(
+        isWalletMovement ? `GCrypto ${params.action.toLowerCase()}` : `${params.action} ${params.assetName}`,
+        isWalletMovement ? "GCash" : "GCrypto"
+      ),
+      description: isWalletMovement
+        ? `${params.action} - GCrypto Wallet`
         : `${params.action} - ${params.assetName}${params.quantity ? ` (${params.quantity})` : ""}`,
-    categoryName: params.categoryName,
-    accountName: metadata.accountName ?? "GCrypto",
-    accountNumber: metadata.accountNumber ?? undefined,
-    institution: metadata.institution ?? "GCrypto",
-    type: params.type,
-    confidence: 96,
-    parserConfidence: 95,
-    categoryConfidence: 92,
-    rawPayload: {
-      bank: "GCrypto",
-      providerInstitution: "PDAX",
-      kind: "gcrypto_mobile_screenshot_transaction",
-      source: "gcrypto_mobile_screenshot",
-      knownSampleFileName: baseName,
-      sourceRowIndex: params.sourceRowIndex,
-      action: params.action,
-      assetName: params.assetName,
-      quantity: params.quantity ?? null,
-      timeText: params.timeText,
-      signedAmountText: `${params.type === "income" ? "+" : "-"}PHP ${Math.abs(params.amount).toFixed(2)}`,
-      line: `${params.date} ${params.timeText} ${params.action} ${params.assetName} ${params.quantity ?? ""} PHP ${Math.abs(params.amount).toFixed(2)}`.trim(),
-    },
-  });
+      categoryName: params.categoryName,
+      accountName: isWalletMovement ? "GCash" : metadata.accountName ?? "GCrypto",
+      accountNumber: metadata.accountNumber ?? undefined,
+      institution: isWalletMovement ? "GCash" : metadata.institution ?? "GCrypto",
+      type: params.type,
+      confidence: 96,
+      parserConfidence: 95,
+      categoryConfidence: 92,
+      rawPayload: {
+        bank: isWalletMovement ? "GCash" : "GCrypto",
+        providerInstitution: isWalletMovement ? "GCrypto / PDAX" : "PDAX",
+        kind: isWalletMovement ? "gcrypto_wallet_movement" : "gcrypto_mobile_screenshot_transaction",
+        source: "gcrypto_mobile_screenshot",
+        knownSampleFileName: baseName,
+        sourceRowIndex: params.sourceRowIndex,
+        action: params.action,
+        assetName: params.assetName,
+        quantity: params.quantity ?? null,
+        timeText: params.timeText,
+        signedAmountText: `${params.type === "income" ? "+" : "-"}PHP ${Math.abs(params.amount).toFixed(2)}`,
+        line: `${params.date} ${params.timeText} ${params.action} ${params.assetName} ${params.quantity ?? ""} PHP ${Math.abs(params.amount).toFixed(2)}`.trim(),
+      },
+    };
+  };
 
   if (baseName === "img_1427.png") {
     return [
@@ -14198,7 +14207,7 @@ const parseGcryptoTransactionHistoryImportText = (text: string, fileName: string
   let activeDate: string | null = null;
   const dateHeaderPattern = new RegExp(`^${monthNamePattern}\\s+\\d{1,2},\\s*\\d{4}$`, "i");
   const timestampPattern = /^\d{1,2}:\d{2}\s*(?:AM|PM)$/i;
-  const actionLinePattern = /^(Buy|Sell|Withdraw)\s+(\d{1,2}:\s*\d{2}\s*(?:AM|PM))(?:\s+Successful)?$/i;
+  const actionLinePattern = /^(Buy|Sell|Withdraw|Deposit)\s+(\d{1,2}:\s*\d{2}\s*(?:AM|PM))(?:\s+Successful)?$/i;
   const quantityPattern = /^(?:[0-9]+(?:\.[0-9]+)?)$/;
   const amountPattern = /^(?:-?\s*PHP\s*)?([0-9][0-9,]*\.\d{2})$/i;
   const structuralLinePattern =
@@ -14207,14 +14216,16 @@ const parseGcryptoTransactionHistoryImportText = (text: string, fileName: string
   const buildParsedRow = (params: {
     date: string;
     timeText: string;
-    action: "Buy" | "Sell" | "Withdraw";
+    action: "Buy" | "Sell" | "Withdraw" | "Deposit";
     assetName: string;
     quantity?: string | null;
     amount: number;
   }) => {
-    const type: TransactionType =
-      params.action === "Buy" ? "expense" : "income";
-    const categoryName = params.action === "Withdraw" ? "Transfers" : "Investments";
+    const isWalletMovement =
+      (params.action === "Withdraw" || params.action === "Deposit") &&
+      /\b(?:trading|gcrypto)\s+wallet\b/i.test(params.assetName);
+    const type: TransactionType = params.action === "Buy" || params.action === "Deposit" ? "expense" : "income";
+    const categoryName = isWalletMovement ? "Transfers" : "Investments";
     const dedupeKey = [
       params.date,
       params.timeText,
@@ -14233,25 +14244,24 @@ const parseGcryptoTransactionHistoryImportText = (text: string, fileName: string
       amount: Math.abs(params.amount).toFixed(2),
       merchantRaw: humanizeMerchantText(`${params.action} ${params.assetName}`),
       merchantClean: summarizeMerchantText(
-        params.action === "Withdraw" ? `${params.assetName} withdrawal` : `${params.action} ${params.assetName}`,
-        "GCrypto"
+        isWalletMovement ? `GCrypto ${params.action.toLowerCase()}` : `${params.action} ${params.assetName}`,
+        isWalletMovement ? "GCash" : "GCrypto"
       ),
-      description:
-        params.action === "Withdraw"
-          ? `Withdraw - ${params.assetName}`
-          : `${params.action} - ${params.assetName}${params.quantity ? ` (${params.quantity})` : ""}`,
+      description: isWalletMovement
+        ? `${params.action} - GCrypto Wallet`
+        : `${params.action} - ${params.assetName}${params.quantity ? ` (${params.quantity})` : ""}`,
       categoryName,
-      accountName: metadata.accountName ?? "GCrypto",
+      accountName: isWalletMovement ? "GCash" : metadata.accountName ?? "GCrypto",
       accountNumber: metadata.accountNumber ?? undefined,
-      institution: metadata.institution ?? "GCrypto",
+      institution: isWalletMovement ? "GCash" : metadata.institution ?? "GCrypto",
       type,
       confidence: 88,
       parserConfidence: 86,
       categoryConfidence: 90,
       rawPayload: {
-        bank: "GCrypto",
-        providerInstitution: "PDAX",
-        kind: "gcrypto_transaction_screenshot",
+        bank: isWalletMovement ? "GCash" : "GCrypto",
+        providerInstitution: isWalletMovement ? "GCrypto / PDAX" : "PDAX",
+        kind: isWalletMovement ? "gcrypto_wallet_movement" : "gcrypto_transaction_screenshot",
         source: "gcrypto_transaction_screenshot",
         action: params.action,
         assetName: params.assetName,
@@ -14277,14 +14287,14 @@ const parseGcryptoTransactionHistoryImportText = (text: string, fileName: string
       continue;
     }
 
-    const action = actionMatch[1] as "Buy" | "Sell" | "Withdraw";
+    const action = actionMatch[1] as "Buy" | "Sell" | "Withdraw" | "Deposit";
     const timeText = normalizeWhitespace(actionMatch[2]);
     const assetName = normalizedLines[index + 1] ?? "";
     if (!assetName || structuralLinePattern.test(assetName) || actionLinePattern.test(assetName)) {
       continue;
     }
 
-    if (action === "Withdraw") {
+    if (action === "Withdraw" || action === "Deposit") {
       const amountText = normalizedLines[index + 2] ?? "";
       const amount =
         parseMoney(amountText.replace(/^\-\s*/i, "").replace(/^PHP\s*/i, "")) ??

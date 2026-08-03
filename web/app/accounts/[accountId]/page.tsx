@@ -2243,6 +2243,10 @@ function AccountDetailPageContent() {
 
     const isAddingBalance = balanceAdjustmentMode === "add";
     const isCashAdjustment = account.type === "cash";
+    if (isCashAdjustment && !isAddingBalance && amount > Math.max(0, currentBalance)) {
+      setBalanceAdjustmentError("Cash cannot go below zero.");
+      return;
+    }
     const merchantLabel = isCashAdjustment
       ? isAddingBalance
         ? "Cash added"

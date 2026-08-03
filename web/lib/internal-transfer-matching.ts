@@ -73,6 +73,21 @@ export const isAtmCashWithdrawalCandidate = (
     return false;
   }
 
+  const payload = readPayloadRecord(candidate.rawPayload);
+  const sourceContext = [
+    payload?.bank,
+    payload?.providerInstitution,
+    payload?.institutionRaw,
+    payload?.source,
+    payload?.kind,
+    payload?.documentType,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  if (/\b(?:gcrypto|pdax|crypto|investment)\b/i.test(sourceContext)) {
+    return false;
+  }
+
   const isReversal = /\b(?:reversal|reversed|refund|refunded|reversal credit)\b/i.test(text);
   const isFeeOnly = /\b(?:fee|charges?|surcharge|service\s+fee|acquirer\s+fee|inquiry)\b/i.test(text);
   if (isReversal || isFeeOnly) {

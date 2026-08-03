@@ -387,7 +387,32 @@ export const resolveStatementIdentityFromParsedRows = (
   rows: ParsedImportRow[],
   options: { fileName?: string | null } = {}
 ) => {
-  const screenshotIdentity = resolveMobileWalletIdentityFromParsedRows(rows);
+  // GCrypto history screenshots can mix investment trades with movements to
+  // and from the user's GCash wallet. Keep the document identity investment-
+  // scoped so confirmation can split the row-level GCrypto and GCash groups.
+  const gcryptoTradeRows = rows.filter((row) => {
+    const rawPayload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    const identityText = [
+      row.institution,
+      row.accountName,
+      rawPayload?.bank,
+      rawPayload?.providerInstitution,
+      rawPayload?.source,
+      rawPayload?.kind,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return /gcrypto|pdax/i.test(identityText) && rawPayload?.kind !== "gcrypto_wallet_movement";
+  });
+  const screenshotIdentity = resolveMobileWalletIdentityFromParsedRows(
+    gcryptoTradeRows.length > 0 ? gcryptoTradeRows : rows
+  );
+  if (gcryptoTradeRows.length > 0 && gcryptoTradeRows.length < rows.length && screenshotIdentity) {
+    return screenshotIdentity;
+  }
 
   for (const row of rows) {
     const accountName = readParsedRowString(row, "accountName");

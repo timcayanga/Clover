@@ -91,10 +91,15 @@ const getTransactionAmountDelta = (transaction: BalanceLikeTransaction) => {
   return 0;
 };
 
-export const normalizeAccountBalanceSign = (type: string, value: number) =>
-  isLiabilityAccountType(type as Parameters<typeof isLiabilityAccountType>[0])
+export const normalizeAccountBalanceSign = (type: string, value: number) => {
+  if (type === "cash") {
+    return Math.max(0, value);
+  }
+
+  return isLiabilityAccountType(type as Parameters<typeof isLiabilityAccountType>[0])
     ? -Math.abs(value)
     : value;
+};
 
 export const deriveReconciledBalance = ({
   balance,
