@@ -10375,7 +10375,12 @@ export const processImportFileText = async (
       (openAiMetadata
         ? (openAiMetadata?.confidence ?? 0) >= (metadataForParse.confidence ?? 0)
         : parsedRows.length === 0));
-  const effectiveMetadataSource = useOpenAiParse && openAiMetadata ? openAiMetadata : metadataForParse;
+  const effectiveMetadataSource =
+    recognizedGcryptoActivityScreenshot
+      ? metadataForParse
+      : useOpenAiParse && openAiMetadata
+        ? openAiMetadata
+        : metadataForParse;
   const knownBpiMobileScreenshotFallbackRows =
     importMode === "statement" &&
     (isKnownBpiMobileScreenshotFile(fileName) || Boolean(buildGfundsScreenshotFallbackText(fileName))) &&
@@ -10400,7 +10405,7 @@ export const processImportFileText = async (
         ? []
         : knownBpiMobileScreenshotFallbackRows.length > 0
         ? knownBpiMobileScreenshotFallbackRows
-        : hasLocalDeterministicPdaxPortfolioSnapshot
+        : recognizedGcryptoActivityScreenshot || hasLocalDeterministicPdaxPortfolioSnapshot
           ? parsedRows
           : useOpenAiParse && openAiParsed
           ? openAiParsed.rows
