@@ -64,6 +64,7 @@ export const inferCanonicalImportedAccountProduct = ({
 } | null => {
   const fileIdentity = normalizeMerchantText(fileName);
   const accountIdentity = normalizeMerchantText(`${institution ?? ""} ${name ?? ""}`);
+  const productIdentity = `${fileIdentity} ${accountIdentity}`;
 
   if (/\bpaypal\s+credit\b/.test(accountIdentity)) {
     return { type: "credit_card", institution: "PayPal", name: "PayPal Credit" };
@@ -73,11 +74,18 @@ export const inferCanonicalImportedAccountProduct = ({
     return { type: "wallet", institution: "PayPal", name: "PayPal" };
   }
 
-  if (/\bmaya\s*savings\b|\bconsumer\s+savings\b/.test(`${fileIdentity} ${accountIdentity}`)) {
+  if (
+    /\brcbc\b/.test(accountIdentity) &&
+    /\b(?:bankard|credit\s*card|visa|mastercard|amex|jcb)\b/.test(productIdentity)
+  ) {
+    return { type: "credit_card", institution: "RCBC", name: "RCBC" };
+  }
+
+  if (/\bmaya\s*savings\b|\bconsumer\s+savings\b/.test(productIdentity)) {
     return { type: "bank", institution: "Maya Bank", name: "Maya Savings" };
   }
 
-  if (/\bmaya\s*wallet\b/.test(`${fileIdentity} ${accountIdentity}`)) {
+  if (/\bmaya\s*wallet\b/.test(productIdentity)) {
     return { type: "wallet", institution: "Maya", name: "Maya Wallet" };
   }
 

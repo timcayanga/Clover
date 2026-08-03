@@ -1835,6 +1835,49 @@ const repairLegacyUploadedPayPalAccountSplits = async (workspaceId: string, comp
   return repairedCount;
 };
 
+const repairMisclassifiedUploadedRcbcCreditCards = async (workspaceId: string) => {
+  const candidates = await prisma.account.findMany({
+    where: {
+      workspaceId,
+      source: "upload",
+      type: "bank",
+      OR: [
+        { institution: { contains: "RCBC", mode: "insensitive" } },
+        { name: { contains: "RCBC", mode: "insensitive" } },
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      type: true,
+      importFiles: { select: { fileName: true } },
+    },
+  }).catch(() => []);
+
+  const cardIds = candidates
+    .filter((account) =>
+      account.importFiles.some(
+        (file) => inferCanonicalImportedAccountProduct({ ...account, fileName: file.fileName })?.type === "credit_card"
+      )
+    )
+    .map((account) => account.id);
+  if (cardIds.length === 0) {
+    return 0;
+  }
+
+  const result = await prisma.account.updateMany({
+    where: {
+      id: { in: cardIds },
+      workspaceId,
+      source: "upload",
+      type: "bank",
+    },
+    data: { type: "credit_card" },
+  });
+  return result.count;
+};
+
 export async function GET(request: Request) {
   try {
     const userId = await resolveAccountsRouteUserId();
@@ -1862,6 +1905,13 @@ export async function GET(request: Request) {
     // accounts so stale client caches cannot keep the obsolete card copy alive.
     await repairLegacyUploadedPayPalAccountSplits(workspaceId, compatibleColumns).catch((error) => {
       console.warn("[accounts] unable to repair legacy PayPal wallet split", {
+        workspaceId,
+        error,
+      });
+      return 0;
+    });
+    await repairMisclassifiedUploadedRcbcCreditCards(workspaceId).catch((error) => {
+      console.warn("[accounts] unable to repair misclassified RCBC credit card", {
         workspaceId,
         error,
       });
