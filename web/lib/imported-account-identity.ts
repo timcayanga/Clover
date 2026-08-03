@@ -57,6 +57,7 @@ export const inferCanonicalImportedAccountProduct = ({
   fileName,
   name,
   institution,
+  accountNumber,
 }: ImportedAccountProductEvidence): {
   type: "bank" | "wallet" | "credit_card" | "investment";
   institution: string;
@@ -65,6 +66,25 @@ export const inferCanonicalImportedAccountProduct = ({
   const fileIdentity = normalizeMerchantText(fileName);
   const accountIdentity = normalizeMerchantText(`${institution ?? ""} ${name ?? ""}`);
   const productIdentity = `${fileIdentity} ${accountIdentity}`;
+  const accountSuffix = getImportedAccountLastFour(accountNumber) ?? getImportedAccountLastFour(name);
+
+  // GSave is the customer-facing institution. UNO Digital Bank remains source
+  // metadata, but must not split each GCash product into an UNO-branded card.
+  if (/\bunoboost\b/.test(productIdentity)) {
+    return {
+      type: "investment",
+      institution: "GSave",
+      name: `GSave #UNOboost${accountSuffix ? ` ${accountSuffix}` : ""}`,
+    };
+  }
+
+  if (/\bunoready\b/.test(productIdentity)) {
+    return {
+      type: "bank",
+      institution: "GSave",
+      name: `GSave #UNOready${accountSuffix ? ` ${accountSuffix}` : ""}`,
+    };
+  }
 
   if (/\bpaypal\s+credit\b/.test(accountIdentity)) {
     return { type: "credit_card", institution: "PayPal", name: "PayPal Credit" };

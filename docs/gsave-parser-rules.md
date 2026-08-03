@@ -15,7 +15,7 @@ This document captures the GSave parsing rules learned from the screenshot train
 - Preserve the provider institution separately in raw payloads:
   - `CIMB` for GSave savings screenshots
   - `UNO Digital Bank` for `#UNOready@GCash` and `#UNOboost@GCash`
-- For account-inventory files labeled `GSave (UNO)`, persist `GSave` as the displayed institution and retain `UNO Digital Bank` only as provider metadata. Use GSave branding and a real GCash/UNO provider logo instead of a generic investment icon.
+- For account-inventory files labeled `GSave (UNO)`, persist `GSave` as the displayed institution and retain `UNO Digital Bank` only as provider metadata. Use the customer-facing GSave/GCash mark instead of an UNO Bank or generic investment icon.
 - Do not invent missing account numbers.
 - If only the visible last four digits are shown, use only the visible suffix.
 - Do not let screenshot filenames become account numbers.

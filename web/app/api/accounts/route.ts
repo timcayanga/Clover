@@ -1740,6 +1740,69 @@ const repairLegacyUploadedMayaWiseAccountSplits = async (
   return repairedCount;
 };
 
+const repairLegacyUploadedGsaveUnoIdentities = async (workspaceId: string) => {
+  const uploadedAccounts = await prisma.account.findMany({
+    where: {
+      workspaceId,
+      source: "upload",
+      OR: [
+        { institution: { contains: "GSave", mode: "insensitive" } },
+        { institution: { contains: "UNO", mode: "insensitive" } },
+        { name: { contains: "GSave", mode: "insensitive" } },
+        { name: { contains: "UNOready", mode: "insensitive" } },
+        { name: { contains: "UNOboost", mode: "insensitive" } },
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      accountNumber: true,
+      type: true,
+      currency: true,
+      source: true,
+      importFiles: { select: { fileName: true } },
+    },
+  }).catch(() => []);
+
+  let repairedCount = 0;
+  for (const account of uploadedAccounts) {
+    const productEvidence = account.importFiles
+      .map((file) => inferCanonicalImportedAccountProduct({ ...account, fileName: file.fileName }))
+      .find(Boolean) ?? inferCanonicalImportedAccountProduct(account);
+    if (!productEvidence || productEvidence.institution !== "GSave") {
+      continue;
+    }
+
+    const accountDigits = normalizeImportAccountNumber(account.accountNumber);
+    const canonicalName = formatUploadAccountDisplayName(
+      productEvidence.name,
+      productEvidence.institution,
+      accountDigits,
+      productEvidence.type
+    );
+    if (
+      account.type === productEvidence.type &&
+      account.institution === productEvidence.institution &&
+      account.name === canonicalName
+    ) {
+      continue;
+    }
+
+    await prisma.account.update({
+      where: { id: account.id },
+      data: {
+        type: productEvidence.type,
+        institution: productEvidence.institution,
+        name: canonicalName,
+      },
+    });
+    repairedCount += 1;
+  }
+
+  return repairedCount;
+};
+
 const repairLegacyUploadedPayPalAccountSplits = async (workspaceId: string, compatibleColumns: Set<string>) => {
   if (!compatibleColumns.has("accountNumber")) {
     return 0;
@@ -1996,6 +2059,13 @@ export async function GET(request: Request) {
     });
     await repairLegacyUploadedMayaWiseAccountSplits(workspaceId, compatibleColumns).catch((error) => {
       console.warn("[accounts] unable to repair legacy Maya/Wise account splits", {
+        workspaceId,
+        error,
+      });
+      return 0;
+    });
+    await repairLegacyUploadedGsaveUnoIdentities(workspaceId).catch((error) => {
+      console.warn("[accounts] unable to repair legacy GSave / UNO account identities", {
         workspaceId,
         error,
       });

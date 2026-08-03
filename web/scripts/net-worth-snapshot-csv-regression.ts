@@ -57,8 +57,8 @@ const gsaveUnoBrand = getAccountBrand({
 });
 assert.equal(gsaveUnoBrand.label, "GSave");
 assert.ok(
-  gsaveUnoBrand.logoSrcs.some((source) => /uno bank/i.test(source)),
-  "An UNO-backed GSave product should use the real UNO provider logo."
+  gsaveUnoBrand.logoSrcs.some((source) => /gcash/i.test(source)),
+  "An UNO-backed GSave product should use the customer-facing GSave/GCash mark."
 );
 assert.equal(byName.get("BPI Time Deposit")?.institution, "BPI Time Deposit");
 assert.equal(byName.get("Cash")?.rawPayload?.accountType, "cash");

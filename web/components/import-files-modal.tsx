@@ -214,6 +214,7 @@ type QaRunSummary = {
 };
 
 const MIN_FULLSCREEN_IMPORT_MODAL_MS = 1200;
+const COMPLETED_IMPORT_AUTO_CLOSE_MS = 10_000;
 const IN_FLIGHT_IMPORT_PROGRESS_INITIAL_DELAY_MS = 400;
 const IN_FLIGHT_IMPORT_PROGRESS_POLL_INTERVAL_MS = 500;
 
@@ -418,6 +419,7 @@ export function ImportFilesModal({
   const uploadPausedRef = useRef(false);
   const uploadCancelRequestedRef = useRef(false);
   const primaryVisibilityCompletedRef = useRef(false);
+  const completedBatchStartedAtRef = useRef<number | null>(null);
   const activeUploadAbortControllersRef = useRef<Set<AbortController>>(new Set());
   const busyRef = useRef(false);
   const uploadRunnerActiveRef = useRef(false);
@@ -6943,9 +6945,32 @@ export function ImportFilesModal({
     ? activitySnapshotForDisplay?.summary ?? buildVisibleImportSummary(items)
     : null;
   const progressSessionActive = busy || Boolean(activeItem) || hasCompletedBatch || Boolean(currentErrorItem);
-  // Standard uploads stay in the modal until there is an explicit outcome.
-  // The compact dock is reserved for imports the caller intentionally sends to
-  // the background, so a completed import cannot silently disappear.
+  useEffect(() => {
+    if (
+      !open ||
+      backgroundOnly ||
+      launchInBackground ||
+      !hasCompletedBatch ||
+      Boolean(currentErrorItem)
+    ) {
+      completedBatchStartedAtRef.current = null;
+      return;
+    }
+
+    const completedAt = completedBatchStartedAtRef.current ?? Date.now();
+    completedBatchStartedAtRef.current = completedAt;
+    const remainingMs = Math.max(0, COMPLETED_IMPORT_AUTO_CLOSE_MS - (Date.now() - completedAt));
+    const timer = window.setTimeout(() => {
+      clearImportActivity();
+      lastImportActivityRef.current = null;
+      completedBatchStartedAtRef.current = null;
+      onClose();
+    }, remainingMs);
+
+    return () => window.clearTimeout(timer);
+  }, [backgroundOnly, currentErrorItem, hasCompletedBatch, launchInBackground, onClose, open]);
+  // Standard uploads show their explicit outcome for ten seconds. The compact
+  // dock remains reserved for imports intentionally sent to the background.
   const showCompactProgress = launchInBackground && compactProgressUnlocked && progressSessionActive;
   // Once a file has entered the queue, the file picker is no longer useful and
   // obscures the only progress the user needs to see. Keep the password prompt

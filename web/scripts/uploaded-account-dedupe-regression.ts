@@ -117,12 +117,19 @@ const accountsRouteSource = readFileSync(resolve(process.cwd(), "app/api/account
 const eagerMayaWiseRepair = accountsRouteSource.indexOf(
   "await repairLegacyUploadedMayaWiseAccountSplits(workspaceId, compatibleColumns)"
 );
+const eagerGsaveUnoRepair = accountsRouteSource.indexOf(
+  "await repairLegacyUploadedGsaveUnoIdentities(workspaceId)"
+);
 const visibleAccountsQuery = accountsRouteSource.indexOf(
   "const [accounts, accountRules, statementCheckpoints, investmentSnapshots]"
 );
 assert.ok(
   eagerMayaWiseRepair > 0 && visibleAccountsQuery > eagerMayaWiseRepair,
   "Maya/Wise split repair must finish before the Accounts API returns visible cards."
+);
+assert.ok(
+  eagerGsaveUnoRepair > 0 && visibleAccountsQuery > eagerGsaveUnoRepair,
+  "GSave/UNO identity repair must finish before the Accounts API returns visible cards."
 );
 assert.match(
   accountsRouteSource,

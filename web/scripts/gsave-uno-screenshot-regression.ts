@@ -1,5 +1,28 @@
 import assert from "node:assert/strict";
 import { detectStatementMetadata, parseImportText } from "@/lib/import-parser";
+import { getAccountBrand } from "@/lib/account-brand";
+import { inferCanonicalImportedAccountProduct } from "@/lib/imported-account-identity";
+
+assert.deepEqual(
+  inferCanonicalImportedAccountProduct({
+    fileName: "IMG_1409.PNG",
+    institution: "UNO Digital Bank",
+    name: "#UNOboost@GCash",
+    accountNumber: "40001000551330",
+    type: "bank",
+  }),
+  {
+    type: "investment",
+    institution: "GSave",
+    name: "GSave #UNOboost 1330",
+  },
+  "Shared account identity fallback should retain GSave as the customer-facing institution."
+);
+assert.ok(
+  getAccountBrand({ institution: "UNO Digital Bank", name: "GSave #UNOboost 1330", type: "investment" })
+    .logoSrcs.some((source) => /gcash/i.test(source)),
+  "UNO-backed GSave products should use the GSave/GCash mark."
+);
 
 const overviewScreenshotText = `10:18
 Regular Savings Balance As Of 10:18 AM

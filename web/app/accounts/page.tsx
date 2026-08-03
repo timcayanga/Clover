@@ -757,9 +757,21 @@ const getInvestmentInstitutionPreviewLabel = (account: Account) => {
 };
 
 const getInvestmentInstitutionPreview = (accounts: Account[]) => {
-  const assetLabels = Array.from(
+  const storedLabels = Array.from(
     new Set(accounts.map(getInvestmentInstitutionPreviewLabel).map((label) => label.trim()).filter(Boolean))
   );
+  const expandedLabels = Array.from(
+    new Set(
+      storedLabels
+        .flatMap((label) => label.split(/\s*,\s*/))
+        .map((label) => label.trim())
+        .filter(Boolean)
+    )
+  );
+  const meaningfulLabels = expandedLabels.length > 1
+    ? expandedLabels.filter((label) => !/^(?:gfunds|atram)\s+investments?$/i.test(label))
+    : expandedLabels;
+  const assetLabels = meaningfulLabels.length > 0 ? meaningfulLabels : expandedLabels;
 
   if (assetLabels.length === 1) {
     return assetLabels[0];

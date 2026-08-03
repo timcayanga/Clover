@@ -17,6 +17,8 @@ const checks = [
   [shell.includes('pathname?.startsWith("/accounts/institutions/")'), "Shell recognizes institution detail routes"],
   [shell.includes('new Event("clover:open-institution-investment-add")'), "Floating Add opens the holding flow"],
   [accountsPage.includes('return `${assetCount} asset${assetCount === 1 ? "" : "s"}`'), "Grouped institution cards summarize asset count"],
+  [accountsPage.includes('label.split(/\\s*,\\s*/)'), "Comma-joined investment labels are counted as separate assets"],
+  [accountsPage.includes('(?:gfunds|atram)\\s+investments?'), "Generic GFunds labels are excluded from the asset count"],
   [accountsPage.includes('className="financial-account-card--investment-institution"'), "Institution cards have concise preview styling"],
   [styles.includes(".financial-account-card--investment-institution .financial-account-card__number"), "Institution preview stays on one line"],
 ] as const;

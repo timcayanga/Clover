@@ -38,6 +38,16 @@ const main = async () => {
     readFile(join(webRoot, "vercel.json"), "utf8"),
   ]);
   const optimisticSummarySource = await readFile(join(webRoot, "lib/import-optimistic-summary.ts"), "utf8");
+  assert.match(
+    modalSource,
+    /const COMPLETED_IMPORT_AUTO_CLOSE_MS = 10_000;/,
+    "A successful foreground import should remain visible for ten seconds before closing."
+  );
+  assert.match(
+    modalSource,
+    /COMPLETED_IMPORT_AUTO_CLOSE_MS - \(Date\.now\(\) - completedAt\)[\s\S]{0,500}clearImportActivity\(\)[\s\S]{0,300}onClose\(\)/,
+    "Completed foreground imports should clear their activity and close automatically."
+  );
   const accountDetailsSource = await readFile(join(webRoot, "app/accounts/[accountId]/page.tsx"), "utf8");
   const accountsRouteSource = await readFile(join(webRoot, "app/api/accounts/route.ts"), "utf8");
   const uploadDockSource = await readFile(join(webRoot, "components/import-upload-dock.tsx"), "utf8");
