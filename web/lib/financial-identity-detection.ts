@@ -72,6 +72,7 @@ const CURRENCY_ALIASES: Record<string, string> = {
 };
 
 const ISO_CODES = new Set(Object.values(CURRENCY_ALIASES));
+const CRYPTO_ASSET_CODES = new Set(["ADA", "BNB", "BTC", "DOGE", "ETH", "SOL", "USDC", "USDT", "XRP"]);
 const COMPACT_CURRENCY_ALIASES = new Map(
   Object.entries(CURRENCY_ALIASES).map(([alias, code]) => [alias.replace(/[^A-Z0-9]/g, ""), code])
 );
@@ -95,6 +96,11 @@ export const normalizeGlobalCurrencyCode = (value?: string | null) => {
   const normalized = normalizeAliasKey(value);
   if (normalized === "U S DOLLAR" || normalized === "U S DOLLARS") return "USD";
   return CURRENCY_ALIASES[normalized] ?? COMPACT_CURRENCY_ALIASES.get(normalized.replace(/[^A-Z0-9]/g, "")) ?? (ISO_CODES.has(normalized) ? normalized : null);
+};
+
+export const isCryptoAssetCurrencyCode = (value?: string | null) => {
+  const normalized = normalizeGlobalCurrencyCode(value);
+  return normalized ? CRYPTO_ASSET_CODES.has(normalized) : false;
 };
 
 export type CurrencyDetectionResult = {

@@ -377,7 +377,7 @@ export function ImportFilesModal({
   onInitialFilesConsumed,
   backgroundOnly = false,
   onClose,
-  onImported,
+  onImported: onImportedProp,
 }: ImportFilesModalProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -428,6 +428,15 @@ export function ImportFilesModal({
   const wasOpenRef = useRef(open);
   const itemsRef = useRef<QueuedFile[]>([]);
   const visibleBatchProgressFloorRef = useRef(0);
+
+  const onImported = (summary: UploadInsightsSummary) => {
+    // Multi-image portfolios are reconciled as one batch. Publishing a local
+    // per-file guess exposes temporary cards that disappear after settlement.
+    if (itemsRef.current.length > 1 && summary.optimistic) {
+      return Promise.resolve();
+    }
+    return Promise.resolve(onImportedProp(summary));
+  };
 
   useEffect(() => {
     itemsRef.current = items;
@@ -6961,6 +6970,9 @@ export function ImportFilesModal({
     completedBatchStartedAtRef.current = completedAt;
     const remainingMs = Math.max(0, COMPLETED_IMPORT_AUTO_CLOSE_MS - (Date.now() - completedAt));
     const timer = window.setTimeout(() => {
+      // Ignore late monitor results from this completed batch so the global
+      // progress dock cannot reappear after foreground success auto-closes.
+      primaryVisibilityCompletedRef.current = true;
       clearImportActivity();
       lastImportActivityRef.current = null;
       completedBatchStartedAtRef.current = null;

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { DEFAULT_CATEGORY_ROWS } from "@/lib/default-categories";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { isCryptoAssetCurrencyCode } from "@/lib/financial-identity-detection";
 
 type StarterWorkspaceUser = Pick<User, "id" | "clerkUserId" | "email" | "verified" | "dataWipedAt">;
 
@@ -56,7 +57,8 @@ const starterWorkspaceSelect = {
 } as const;
 
 export const ensureWorkspaceCashAccount = async (workspaceId: string, currency = "PHP") => {
-  const normalizedCurrency = String(currency || "PHP").trim().toUpperCase() || "PHP";
+  const requestedCurrency = String(currency || "PHP").trim().toUpperCase() || "PHP";
+  const normalizedCurrency = isCryptoAssetCurrencyCode(requestedCurrency) ? "PHP" : requestedCurrency;
 
   await prisma.account.updateMany({
     where: {

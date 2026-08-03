@@ -12,6 +12,7 @@ import { parseRegionalAmountValue, parseRegionalDateValue, resolveTransactionCon
 import {
   detectCurrencyEvidence,
   detectUnknownInstitutionEvidence,
+  isCryptoAssetCurrencyCode,
   normalizeGlobalCurrencyCode,
 } from "@/lib/financial-identity-detection";
 
@@ -296,7 +297,7 @@ export const inferAccountTypeFromStatement = (
     return "credit_card";
   }
 
-  if (/(invest|investment|broker|stocks?|gstocks|fund|gfunds|atram|ab capital|investatrade|gcrypto|pdax|crypto|portfolio|trading wallet)/.test(normalized)) {
+  if (/(invest|investment|broker|stocks?|gstocks|fund|gfunds|atram|ab capital|investatrade|gcrypto|pdax|crypto|portfolio|trading wallet|bitcoin|\bbtc\b|ethereum|\beth\b|\bxrp\b|\bsolana\b)/.test(normalized)) {
     return "investment";
   }
 
@@ -2122,7 +2123,7 @@ const isPhpFirstInstitution = (institution?: string | null, accountName?: string
     return false;
   }
 
-  return /\b(BPI|BANK OF THE PHILIPPINE ISLANDS|BDO|BANCO DE ORO|RCBC|METROBANK|UNIONBANK|SECURITY BANK|MAYA(?: BANK)?|GCASH|GOTYME|MARI ?BANK|CIMB|AUB|PNB|PSBANK|EASTWEST|LANDBANK|UCPB|CHINA\s*BANK|CHINABANK)\b/.test(
+  return /\b(BPI|BANK OF THE PHILIPPINE ISLANDS|BDO|BANCO DE ORO|RCBC|METROBANK|UNIONBANK|SECURITY BANK|MAYA(?: BANK)?|GCASH|GCRYPTO|GFUNDS|PDAX|GOTYME|MARI ?BANK|CIMB|AUB|PNB|PSBANK|EASTWEST|LANDBANK|UCPB|CHINA\s*BANK|CHINABANK)\b/.test(
     identity
   );
 };
@@ -2135,6 +2136,12 @@ export const normalizeInstitutionCurrency = (
   const normalizedCurrency = normalizeCurrencyCode(currency) ?? (currency ? normalizeWhitespace(currency).toUpperCase() : null);
   if (isPhpFirstInstitution(institution, accountName)) {
     return "PHP";
+  }
+
+  // A crypto ticker identifies the held asset, not an account's reporting
+  // currency. Let the caller use institution or workspace fiat instead.
+  if (isCryptoAssetCurrencyCode(normalizedCurrency)) {
+    return null;
   }
 
   return normalizedCurrency;

@@ -317,10 +317,15 @@ const main = async () => {
     /successfulImportAutoCloseTimerRef|scheduleSuccessfulImportAutoClose/,
     "A verified foreground import must keep its success confirmation visible until the user dismisses it."
   );
-  assert.doesNotMatch(
+  assert.match(
     modalSource,
-    /primaryVisibilityCompletedRef\.current = true;[\s\S]{0,300}onClose\(\)/,
-    "Completing the visibility contract must not automatically close the foreground success state."
+    /late monitor results from this completed batch[\s\S]{0,220}primaryVisibilityCompletedRef\.current = true;[\s\S]{0,220}clearImportActivity\(\);[\s\S]{0,220}onClose\(\)/i,
+    "Auto-closing a completed foreground batch must retire late status polls before removing its progress UI."
+  );
+  assert.match(
+    modalSource,
+    /itemsRef\.current\.length > 1 && summary\.optimistic/,
+    "Multi-file imports must not publish provisional per-file account cards before batch reconciliation."
   );
   assert.match(
     modalSource,

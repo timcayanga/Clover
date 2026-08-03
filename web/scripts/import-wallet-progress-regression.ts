@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { detectStatementMetadataFromText } from "../lib/data-engine";
-import { detectExplicitAccountTypeFromStatementText } from "../lib/import-parser";
+import {
+  detectExplicitAccountTypeFromStatementText,
+  inferAccountTypeFromStatement,
+  normalizeInstitutionCurrency,
+} from "../lib/import-parser";
 import { hasPdfEncryptionMarker } from "../lib/import-file-text";
 import { normalizeBatchImportProgress, preserveMonotonicImportProgress } from "../lib/import-progress";
 
@@ -60,6 +64,17 @@ assert.equal(
   "A batch status transition must never make visible progress move backward."
 );
 assert.equal(preserveMonotonicImportProgress(87, 100), 100);
+assert.equal(
+  inferAccountTypeFromStatement(null, "BTC Cash", "cash"),
+  "investment",
+  "A crypto ticker must outrank the generic Cash label when resolving account type."
+);
+assert.equal(normalizeInstitutionCurrency("PDAX", "BTC", "BTC"), "PHP");
+assert.equal(
+  normalizeInstitutionCurrency(null, "BTC", "BTC"),
+  null,
+  "A crypto asset ticker must never become an account currency."
+);
 
 const mayaSavingsStatement = `
   Maya

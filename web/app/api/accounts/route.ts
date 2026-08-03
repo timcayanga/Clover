@@ -33,6 +33,7 @@ import {
 import { summarizeErrorForLog } from "@/lib/security-logging";
 import { getLiveCryptoPhpPrices } from "@/lib/crypto-market-prices";
 import { prefersLiveInvestmentBalance } from "@/lib/investment-balance";
+import { isCryptoAssetCurrencyCode } from "@/lib/financial-identity-detection";
 import {
   getCanonicalPdaxHoldingIdentity,
   isPdaxWalletHoldingLabel,
@@ -1278,6 +1279,87 @@ const repairGeneratedPdaxPortfolioAssetLabels = async (workspaceId: string) => {
   return repaired;
 };
 
+const repairCryptoDenominatedCashAccounts = async (workspaceId: string) => {
+  const cashAccounts = await prisma.account.findMany({
+    where: { workspaceId, type: "cash" },
+    select: { id: true, name: true, institution: true, currency: true },
+  }).catch(() => []);
+  const malformed = cashAccounts.filter((account) => isCryptoAssetCurrencyCode(account.currency));
+  let repaired = 0;
+
+  for (const account of malformed) {
+    const symbol = account.currency.trim().toUpperCase();
+    const target = await prisma.account.findFirst({
+      where: {
+        workspaceId,
+        type: "investment",
+        OR: [
+          { investmentSymbol: { equals: symbol, mode: "insensitive" } },
+          { name: { equals: symbol, mode: "insensitive" } },
+        ],
+      },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, institution: true, currency: true },
+    }).catch(() => null);
+
+    if (!target) {
+      const sourceDocument = await prisma.documentImport.findFirst({
+        where: { workspaceId, accountId: account.id, institution: { not: null } },
+        orderBy: { updatedAt: "desc" },
+        select: { institution: true },
+      }).catch(() => null);
+      const resolvedInstitution = account.institution === "Cash"
+        ? sourceDocument?.institution ?? null
+        : account.institution;
+      const isPhilippinePlatform = /\b(?:PDAX|GCrypto|GCash)\b/i.test(`${resolvedInstitution ?? ""} ${account.name}`);
+      const updated = await prisma.account.update({
+        where: { id: account.id },
+        data: {
+          name: symbol,
+          institution: resolvedInstitution,
+          type: "investment",
+          currency: isPhilippinePlatform ? "PHP" : "USD",
+          investmentSubtype: "crypto",
+          investmentSymbol: symbol,
+        },
+        select: { id: true },
+      }).catch(() => null);
+      repaired += Number(Boolean(updated));
+      continue;
+    }
+
+    const merged = await prisma.$transaction(async (tx) => {
+      await tx.transaction.updateMany({ where: { accountId: account.id }, data: { accountId: target.id } });
+      await tx.importFile.updateMany({ where: { accountId: account.id }, data: { accountId: target.id } });
+      await tx.documentImport.updateMany({ where: { accountId: account.id }, data: { accountId: target.id } });
+      await tx.accountStatementCheckpoint.updateMany({ where: { accountId: account.id }, data: { accountId: target.id } });
+      await tx.financialCommitment.updateMany({ where: { accountId: account.id }, data: { accountId: target.id } });
+      await tx.receiptDocument.updateMany({ where: { accountId: account.id }, data: { accountId: target.id } });
+      await tx.investmentSnapshot.updateMany({ where: { accountId: account.id }, data: { accountId: target.id } });
+      await tx.investmentHolding.updateMany({ where: { accountId: account.id }, data: { accountId: target.id } });
+      await tx.investmentPurchase.updateMany({ where: { accountId: account.id }, data: { accountId: target.id } });
+      await tx.investmentDividend.updateMany({ where: { accountId: account.id }, data: { accountId: target.id } });
+      await tx.recurringPattern.updateMany({ where: { accountId: account.id }, data: { accountId: target.id } });
+      await tx.accountRule.updateMany({ where: { accountId: account.id }, data: { accountId: target.id } });
+      await tx.budget.updateMany({ where: { accountId: account.id }, data: { accountId: target.id } });
+      await tx.circleInvestmentShare.updateMany({ where: { accountId: account.id }, data: { accountId: target.id } });
+      await tx.account.delete({ where: { id: account.id } });
+      return true;
+    }).catch((error) => {
+      console.warn("[accounts] unable to merge crypto-denominated Cash account", {
+        workspaceId,
+        accountId: account.id,
+        targetAccountId: target.id,
+        error: summarizeErrorForLog(error),
+      });
+      return false;
+    });
+    repaired += Number(merged);
+  }
+
+  return repaired;
+};
+
 const repairPdaxPortfolioAccountsFromParsedRows = async (workspaceId: string) => {
   // Snapshot imports retain one deterministic raw row per visible PDAX group.
   // Earlier multi-account finalization leaked the portfolio type and final
@@ -2325,6 +2407,13 @@ export async function GET(request: Request) {
       });
       repairedPdaxPortfolioAccounts = await repairPdaxPortfolioAccountsFromParsedRows(workspaceId).catch((error) => {
         console.warn("[accounts] unable to repair PDAX portfolio accounts from parsed evidence", {
+          workspaceId,
+          error,
+        });
+        return 0;
+      });
+      await repairCryptoDenominatedCashAccounts(workspaceId).catch((error) => {
+        console.warn("[accounts] unable to repair crypto-denominated Cash accounts", {
           workspaceId,
           error,
         });
