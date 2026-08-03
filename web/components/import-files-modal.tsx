@@ -50,7 +50,13 @@ import {
   loadOrGetKnownPreviewTransactions,
   loadOptimisticPreviewTransactions,
 } from "@/lib/import-preview-transactions";
-import { friendlyImportPhaseLabel, friendlyImportProgressLabel, IMPORT_PROGRESS, normalizeBatchImportProgress } from "@/lib/import-progress";
+import {
+  friendlyImportPhaseLabel,
+  friendlyImportProgressLabel,
+  IMPORT_PROGRESS,
+  normalizeBatchImportProgress,
+  preserveMonotonicImportProgress,
+} from "@/lib/import-progress";
 import { getLocalPreparseProgressPatch, resolveImportModalStatusDecision } from "@/lib/import-modal-status";
 import { waitForImportSettledVisibility } from "@/lib/import-settled-visibility";
 import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
@@ -419,6 +425,7 @@ export function ImportFilesModal({
   const importModalInstanceIdRef = useRef(crypto.randomUUID());
   const wasOpenRef = useRef(open);
   const itemsRef = useRef<QueuedFile[]>([]);
+  const visibleBatchProgressFloorRef = useRef(0);
 
   useEffect(() => {
     itemsRef.current = items;
@@ -1561,6 +1568,7 @@ export function ImportFilesModal({
         // A new batch must not inherit a completed batch's progress merely
         // because both selections contain the same number of files.
         lastImportActivityRef.current = null;
+        visibleBatchProgressFloorRef.current = 0;
         clearImportActivity();
       }
     }
@@ -6924,7 +6932,12 @@ export function ImportFilesModal({
   // `displayedOverallProgress` is intentionally animated only for the compact
   // background surface. A foreground upload must render the durable item
   // progress directly; otherwise its dock is reset to 0% for the whole import.
-  const visibleOverallProgress = Math.max(overallProgress, activityProgressFloor);
+  const nextVisibleOverallProgress = Math.max(overallProgress, activityProgressFloor);
+  visibleBatchProgressFloorRef.current = preserveMonotonicImportProgress(
+    visibleBatchProgressFloorRef.current,
+    nextVisibleOverallProgress
+  );
+  const visibleOverallProgress = visibleBatchProgressFloorRef.current;
   const hasCompletedBatch = items.length > 0 && items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
   const completedImportSummary = hasCompletedBatch
     ? activitySnapshotForDisplay?.summary ?? buildVisibleImportSummary(items)

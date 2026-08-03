@@ -259,8 +259,8 @@ const main = async () => {
   );
   assert.match(
     modalSource,
-    /const visibleOverallProgress = Math\.max\(overallProgress, activityProgressFloor\);/,
-    "Foreground uploads must render their durable item progress instead of the background-only animated value."
+    /visibleBatchProgressFloorRef\.current = preserveMonotonicImportProgress\(/,
+    "Foreground batch progress must remain monotonic while file states reconcile."
   );
   assert.match(
     modalSource,

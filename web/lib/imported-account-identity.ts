@@ -58,7 +58,7 @@ export const inferCanonicalImportedAccountProduct = ({
   name,
   institution,
 }: ImportedAccountProductEvidence): {
-  type: "bank" | "wallet" | "credit_card";
+  type: "bank" | "wallet" | "credit_card" | "investment";
   institution: string;
   name: string;
 } | null => {
@@ -79,6 +79,11 @@ export const inferCanonicalImportedAccountProduct = ({
     /\b(?:bankard|credit\s*card|visa|mastercard|amex|jcb)\b/.test(productIdentity)
   ) {
     return { type: "credit_card", institution: "RCBC", name: "RCBC" };
+  }
+
+  // "Powered by PDAX" identifies GCrypto's provider, not a second account.
+  if (/\bgcrypto\b/.test(accountIdentity)) {
+    return { type: "investment", institution: "GCrypto", name: "GCrypto" };
   }
 
   if (/\bmaya\s*savings\b|\bconsumer\s+savings\b/.test(productIdentity)) {

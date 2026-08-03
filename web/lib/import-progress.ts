@@ -27,6 +27,12 @@ export const normalizeBatchImportProgress = (params: {
   return Math.min(100, ((completedFiles + activeContribution) / fileTotal) * 100);
 };
 
+export const preserveMonotonicImportProgress = (previousProgress: number, nextProgress: number) =>
+  Math.max(
+    Math.max(0, Math.min(100, Number(previousProgress) || 0)),
+    Math.max(0, Math.min(100, Number(nextProgress) || 0))
+  );
+
 export const friendlyImportPhaseLabel = (label: string, fileName?: string | null, _importMode?: ImportImageMode | null) => {
   const fileSuffix = fileName ? ` ${fileName}` : "";
 

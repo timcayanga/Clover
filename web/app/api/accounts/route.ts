@@ -1878,6 +1878,76 @@ const repairMisclassifiedUploadedRcbcCreditCards = async (workspaceId: string) =
   return result.count;
 };
 
+const repairLegacyUploadedGcryptoAccountSplits = async (workspaceId: string) => {
+  const candidates = await prisma.account.findMany({
+    where: {
+      workspaceId,
+      source: "upload",
+      type: "investment",
+      OR: [
+        { institution: { contains: "GCrypto", mode: "insensitive" } },
+        { name: { contains: "GCrypto", mode: "insensitive" } },
+      ],
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      balance: true,
+      createdAt: true,
+      _count: { select: { investmentSnapshots: true } },
+    },
+  }).catch(() => []);
+  if (candidates.length === 0) {
+    return 0;
+  }
+
+  const canonical = candidates[0];
+  const duplicateIds = candidates.slice(1).map((account) => account.id);
+  const activityOnly = candidates.every((account) => account._count.investmentSnapshots === 0);
+  const needsCanonicalUpdate =
+    canonical.name !== "GCrypto" ||
+    canonical.institution !== "GCrypto" ||
+    (activityOnly && canonical.balance !== null);
+  if (!needsCanonicalUpdate && duplicateIds.length === 0) {
+    return 0;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.account.update({
+      where: { id: canonical.id },
+      data: {
+        name: "GCrypto",
+        institution: "GCrypto",
+        type: "investment",
+        ...(activityOnly ? { balance: null } : {}),
+      },
+    });
+    if (duplicateIds.length === 0) {
+      return;
+    }
+
+    await tx.transaction.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.importFile.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.documentImport.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.accountStatementCheckpoint.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.financialCommitment.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.receiptDocument.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.investmentSnapshot.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.investmentHolding.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.investmentPurchase.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.investmentDividend.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.recurringPattern.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.accountRule.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.budget.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.circleInvestmentShare.updateMany({ where: { accountId: { in: duplicateIds } }, data: { accountId: canonical.id } });
+    await tx.account.deleteMany({ where: { id: { in: duplicateIds }, source: "upload", type: "investment" } });
+  });
+
+  return duplicateIds.length + 1;
+};
+
 export async function GET(request: Request) {
   try {
     const userId = await resolveAccountsRouteUserId();
@@ -1912,6 +1982,13 @@ export async function GET(request: Request) {
     });
     await repairMisclassifiedUploadedRcbcCreditCards(workspaceId).catch((error) => {
       console.warn("[accounts] unable to repair misclassified RCBC credit card", {
+        workspaceId,
+        error,
+      });
+      return 0;
+    });
+    await repairLegacyUploadedGcryptoAccountSplits(workspaceId).catch((error) => {
+      console.warn("[accounts] unable to repair legacy GCrypto account splits", {
         workspaceId,
         error,
       });

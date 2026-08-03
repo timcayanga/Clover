@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { detectStatementMetadataFromText } from "../lib/data-engine";
 import { detectExplicitAccountTypeFromStatementText } from "../lib/import-parser";
 import { hasPdfEncryptionMarker } from "../lib/import-file-text";
-import { normalizeBatchImportProgress } from "../lib/import-progress";
+import { normalizeBatchImportProgress, preserveMonotonicImportProgress } from "../lib/import-progress";
 
 const unknownWalletStatement = `
   Northstar Pay
@@ -54,6 +54,12 @@ assert.equal(
   normalizeBatchImportProgress({ fileTotal: 1, completedFiles: 0, fileProgress: 70, fileSettled: false }),
   70
 );
+assert.equal(
+  preserveMonotonicImportProgress(87, 33),
+  87,
+  "A batch status transition must never make visible progress move backward."
+);
+assert.equal(preserveMonotonicImportProgress(87, 100), 100);
 
 const mayaSavingsStatement = `
   Maya

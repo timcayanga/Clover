@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { detectStatementMetadata, parseImportText } from "@/lib/import-parser";
+import { inferCanonicalImportedAccountProduct } from "@/lib/imported-account-identity";
 import { getAccountCardName } from "@/lib/account-display";
 import { resolveKnownStatementImageFallbackText } from "@/lib/import-file-text.server";
 import {
@@ -202,6 +203,25 @@ assert.equal(
   }),
   "GCrypto",
   "Investment account cards should not surface IMG_* filenames when the institution is known."
+);
+
+assert.deepEqual(
+  inferCanonicalImportedAccountProduct({
+    name: "GCrypto - Transaction History",
+    institution: "GCrypto / PDAX",
+    type: "investment",
+  }),
+  { type: "investment", institution: "GCrypto", name: "GCrypto" },
+  "PDAX provider branding inside GCrypto must not create a second investment account."
+);
+assert.deepEqual(
+  inferCanonicalImportedAccountProduct({
+    name: "Trading",
+    institution: "GCrypto",
+    type: "investment",
+  }),
+  { type: "investment", institution: "GCrypto", name: "GCrypto" },
+  "Generic AI fallback labels must resolve to the canonical GCrypto account."
 );
 
 console.log("[PASS] GCrypto screenshot parser surfaces one investment account and deduped visible transaction rows.");
