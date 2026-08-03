@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { getInvestmentAssetBrand, getInvestmentAssetLogoCandidates } from "@/lib/investment-assets";
-import { inferInvestmentClassification } from "@/lib/investments";
+import { inferInvestmentClassification, isActivityOnlyGcryptoAccount } from "@/lib/investments";
 
 const classificationCases = [
   { name: "ATRAM Peso Money Market Fund", expected: "money_market_fund" },
@@ -60,4 +60,29 @@ const gsaveBrand = getInvestmentAssetBrand({
 });
 assert.match(gsaveBrand.logoSrcs.join(" "), /gcash/i, "GSave investment rows should use the GSave/GCash mark");
 
-console.log(`Investment regression passed: ${classificationCases.length + 6} checks.`);
+assert.equal(
+  isActivityOnlyGcryptoAccount({
+    source: "upload",
+    name: "GCrypto Transaction History",
+    institution: "GCrypto / PDAX",
+    transactionCount: 12,
+    hasSnapshotHoldings: false,
+    hasPositionEvidence: false,
+  }),
+  true,
+  "GCrypto transaction history must not become a portfolio asset."
+);
+assert.equal(
+  isActivityOnlyGcryptoAccount({
+    source: "upload",
+    name: "Bitcoin",
+    institution: "GCrypto",
+    transactionCount: 12,
+    hasSnapshotHoldings: false,
+    hasPositionEvidence: true,
+  }),
+  false,
+  "A GCrypto account with explicit position evidence should remain a visible holding."
+);
+
+console.log(`Investment regression passed: ${classificationCases.length + 8} checks.`);

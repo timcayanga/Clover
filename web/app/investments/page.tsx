@@ -42,6 +42,7 @@ import {
   getInvestmentSubtypeLabel,
   INVESTMENT_SUBTYPES,
   isFixedIncomeInvestmentSubtype,
+  isActivityOnlyGcryptoAccount,
   isMarketInvestmentSubtype,
   type InvestmentClassification,
   type InvestmentSubtype,
@@ -252,6 +253,10 @@ const isGenericInvestmentAssetLabel = (name: string | null | undefined, institut
     "atram",
     "pdax portfolio",
     "pdax",
+    "gcrypto",
+    "gcrypto transaction history",
+    "gcrypto - transaction history",
+    "trading",
     "gotrade",
     "gstocks philippines",
     "gsave (uno)",
@@ -1325,6 +1330,25 @@ export default function InvestmentsPage() {
             });
           }
         }
+        continue;
+      }
+
+      const hasPositionEvidence = Boolean(
+        account.investmentSymbol?.trim() ||
+        account.investmentQuantity !== null ||
+        account.investmentCostBasis !== null ||
+        account.investmentPrincipal !== null
+      );
+      if (
+        isActivityOnlyGcryptoAccount({
+          source: account.source,
+          name: account.name,
+          institution: account.institution,
+          transactionCount: matchingTransactions.length,
+          hasSnapshotHoldings: snapshotHoldings.length > 0,
+          hasPositionEvidence,
+        })
+      ) {
         continue;
       }
 
@@ -2852,8 +2876,8 @@ export default function InvestmentsPage() {
                 </div>
               ) : (
                 <div className="investments-portfolio-table__empty">
-                  <strong>{portfolioSourceRows.length > 0 && (activeInvestmentFilters || portfolioCurrencyFilter !== "all") ? "No portfolio assets match this view." : "No portfolio assets yet."}</strong>
-                  <p>{portfolioSourceRows.length > 0 && (activeInvestmentFilters || portfolioCurrencyFilter !== "all") ? "Try another currency or reset the filters." : "Add an investment to start building your portfolio."}</p>
+                  <strong>{portfolioSourceRows.length > 0 && (activeInvestmentFilters || portfolioCurrencyFilter !== "all") ? "No portfolio assets match this view." : investmentTransactions.length > 0 ? "No current holdings yet." : "No portfolio assets yet."}</strong>
+                  <p>{portfolioSourceRows.length > 0 && (activeInvestmentFilters || portfolioCurrencyFilter !== "all") ? "Try another currency or reset the filters." : investmentTransactions.length > 0 ? "Your investment activity is available in Transactions. Upload a portfolio or holdings screen when you have assets to track." : "Add an investment to start building your portfolio."}</p>
                 </div>
               )}
             </section>

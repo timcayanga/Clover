@@ -39,6 +39,21 @@ export type InvestmentFieldConfig = {
   type?: "text" | "date";
 };
 
+export const isActivityOnlyGcryptoAccount = (params: {
+  source?: string | null;
+  name?: string | null;
+  institution?: string | null;
+  transactionCount: number;
+  hasSnapshotHoldings: boolean;
+  hasPositionEvidence: boolean;
+}) => {
+  if (params.source !== "upload" || params.transactionCount <= 0 || params.hasSnapshotHoldings || params.hasPositionEvidence) {
+    return false;
+  }
+
+  return /\bgcrypto\b/i.test(`${params.institution ?? ""} ${params.name ?? ""}`);
+};
+
 const MARKET_SUBTYPES = new Set<InvestmentSubtype>(["stock", "etf", "mutual_fund", "money_market_fund", "uitf", "reit", "crypto"]);
 const FIXED_INCOME_SUBTYPES = new Set<InvestmentSubtype>(["bond", "time_deposit"]);
 const DIVIDEND_SUBTYPES = new Set<InvestmentSubtype>(["stock", "etf", "mutual_fund", "money_market_fund", "uitf", "reit"]);
