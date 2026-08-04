@@ -44,6 +44,8 @@ try {
   assert.match(nextConfig, /Content-Security-Policy-Report-Only/);
   assert.match(nextConfig, /X-Content-Type-Options/);
   assert.match(nextConfig, /X-Frame-Options/);
+  assert.match(nextConfig, /source: "\/favicon\.ico"/);
+  assert.match(nextConfig, /destination: "\/favicon\.svg"/);
   assert.match(middleware, /clerkMiddleware/);
   assert.match(middleware, /\/\(api\|trpc\)\(\.\*\)/);
 

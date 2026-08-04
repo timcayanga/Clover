@@ -57,6 +57,10 @@ const nextConfig = {
   async rewrites() {
     return [
       {
+        source: "/favicon.ico",
+        destination: "/favicon.svg",
+      },
+      {
         source: "/ph/:path*",
         destination: "https://us.i.posthog.com/:path*",
       },
