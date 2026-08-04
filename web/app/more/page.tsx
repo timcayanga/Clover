@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CloverShell } from "@/components/clover-shell";
+import { MoreSignOutButton } from "@/components/more-sign-out-button";
 import { ensureOnboardingAccess } from "@/lib/onboarding-access";
 
 export const dynamic = "force-dynamic";
@@ -142,6 +143,13 @@ async function MorePageContent() {
               </div>
             </section>
           ))}
+          <section className="more-page__section more-page__section--account">
+            <div className="more-page__section-divider" aria-hidden="true" />
+            <p className="more-page__section-label">Account</p>
+            <div className="more-page__links">
+              <MoreSignOutButton />
+            </div>
+          </section>
         </div>
       </section>
     </CloverShell>

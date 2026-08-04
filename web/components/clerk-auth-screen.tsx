@@ -18,6 +18,7 @@ type ClerkAuthScreenProps = {
 };
 
 type SocialStrategy = "oauth_google" | "oauth_facebook";
+type SecondFactorStrategy = "totp" | "phone_code" | "email_code" | "backup_code";
 
 const socialProviders: Array<{
   label: string;
@@ -72,6 +73,51 @@ function getFirstClerkError(error: unknown) {
     code: first?.code ?? clerkError.code ?? "",
     message: first?.longMessage ?? first?.message ?? clerkError.message ?? "",
   };
+}
+
+function getSignInErrorMessage(error: unknown, context: "password" | "verification" | "reset" = "password") {
+  const firstError = getFirstClerkError(error);
+  const code = firstError.code.toLowerCase();
+
+  if (code.includes("too_many") || code.includes("rate_limit")) {
+    return "Too many attempts were made. Please wait a few minutes, then try again.";
+  }
+
+  if (code.includes("identifier_not_found") || code.includes("incorrect_password") || code.includes("password_incorrect")) {
+    return "We couldn’t match that email and password. Check both fields, or reset your password below.";
+  }
+
+  if (code.includes("identifier_invalid")) {
+    return "That email address doesn’t look quite right. Please check it and try again.";
+  }
+
+  if (code.includes("strategy_for_user_invalid") || code.includes("password_not_set")) {
+    return "This account may use Google or Facebook sign-in instead of a password. Try the same method you used when creating it.";
+  }
+
+  if (code.includes("verification") || code.includes("code_incorrect") || code.includes("code_expired")) {
+    return context === "reset"
+      ? "That reset code is incorrect or has expired. Request a new code and try again."
+      : "That verification code is incorrect or has expired. Please try again.";
+  }
+
+  if (code.includes("session_exists") || code.includes("already_signed_in")) {
+    return "You’re already signed in. Refresh the page to continue to Clover.";
+  }
+
+  if (code.includes("network") || code.includes("fetch")) {
+    return "Clover couldn’t reach the secure sign-in service. Check your connection and try again.";
+  }
+
+  if (context === "verification") {
+    return "We couldn’t verify that code yet. Please try again or use another available code.";
+  }
+
+  if (context === "reset") {
+    return "We couldn’t complete the password reset yet. Please request a new code and try again.";
+  }
+
+  return "We couldn’t sign you in yet. Try again, reset your password, or use Google or Facebook below.";
 }
 
 function isValidEmail(email: string) {
@@ -171,24 +217,16 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
   const router = useRouter();
   const auth = useAuth();
   const signInState = useSignIn();
-  const legacySignIn = signInState.signIn as unknown as {
-    reset: () => Promise<void>;
-    resetPasswordEmailCode: {
-      sendCode: () => Promise<{ error?: unknown }>;
-      verifyCode: (input: { code: string }) => Promise<{ error?: unknown }>;
-      submitPassword: (input: { password: string }) => Promise<{ error?: unknown }>;
-    };
-    status?: string;
-    finalize: (input: { navigate: (args: { session?: { currentTask?: unknown }; decorateUrl: (url: string) => string }) => Promise<void> }) => Promise<void>;
-  };
   const signUpState = useSignUp();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
-  const [phase, setPhase] = useState<"form" | "verify-email" | "reset-request" | "reset-code" | "reset-password">(
+  const [phase, setPhase] = useState<"form" | "verify-email" | "verify-second-factor" | "reset-request" | "reset-code" | "reset-password">(
     "form",
   );
+  const [secondFactorStrategy, setSecondFactorStrategy] = useState<SecondFactorStrategy | null>(null);
+  const [secondFactorCode, setSecondFactorCode] = useState("");
   const [resetEmailAddress, setResetEmailAddress] = useState("");
   const [resetVerificationCode, setResetVerificationCode] = useState("");
   const [resetPassword, setResetPassword] = useState("");
@@ -259,6 +297,8 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
     setResetEmailAddress("");
     setResetVerificationCode("");
     setResetPassword("");
+    setSecondFactorStrategy(null);
+    setSecondFactorCode("");
     setError(null);
     setNotice(null);
     setBusy(false);
@@ -307,27 +347,55 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
         return;
       }
 
-      setError("We couldn’t sign you in just yet. Please double-check your email and password.");
+      if (response.status === "needs_second_factor") {
+        const factors = response.supportedSecondFactors ?? [];
+        const factor =
+          factors.find((candidate) => candidate.strategy === "totp") ??
+          factors.find((candidate) => candidate.strategy === "email_code") ??
+          factors.find((candidate) => candidate.strategy === "phone_code") ??
+          factors.find((candidate) => candidate.strategy === "backup_code");
+
+        if (!factor) {
+          setError("This account needs an additional verification method that Clover cannot show yet. Please use Google or Facebook sign-in.");
+          return;
+        }
+
+        if (factor.strategy === "email_code") {
+          await signInState.signIn.prepareSecondFactor({ strategy: "email_code", emailAddressId: factor.emailAddressId });
+          setNotice("We sent a verification code to your account email.");
+        } else if (factor.strategy === "phone_code") {
+          await signInState.signIn.prepareSecondFactor({ strategy: "phone_code", phoneNumberId: factor.phoneNumberId });
+          setNotice("We sent a verification code to your phone.");
+        } else if (factor.strategy === "totp") {
+          setNotice("Enter the current code from your authenticator app.");
+        } else {
+          setNotice("Enter one of your backup codes.");
+        }
+
+        setSecondFactorStrategy(factor.strategy);
+        setSecondFactorCode("");
+        setPhase("verify-second-factor");
+        return;
+      }
+
+      if (response.status === "needs_first_factor") {
+        const strategies = (response.supportedFirstFactors ?? []).map((factor) => factor.strategy);
+        if (!strategies.includes("password")) {
+          setError("This account does not use a password. Sign in with Google or Facebook below.");
+          return;
+        }
+      }
+
+      setError("Your sign-in needs another step. Please try again or reset your password below.");
 
     } catch (err) {
-      const firstError = getFirstClerkError(err);
-
-      if (firstError.code.includes("form_identifier_not_found") || firstError.code.includes("identifier_not_found")) {
-        setError("We couldn’t find an account for that email. Please double-check it or sign up first.");
-      } else if (firstError.code.includes("form_identifier_invalid") || firstError.code.includes("identifier_invalid")) {
-        setError("That email address doesn’t look quite right. Please check it and try again.");
-      } else if (firstError.code.includes("incorrect_password") || firstError.code.includes("password")) {
-        setError("That password doesn’t look right. Please try again or use a different sign-in method.");
-      } else {
-        setError("We couldn’t sign you in just yet. Please double-check your email and password.");
-      }
+      setError(getSignInErrorMessage(err));
     } finally {
       setBusy(false);
     }
   };
 
   const startPasswordReset = async () => {
-    await legacySignIn.reset();
     setPhase("reset-request");
     setError(null);
     setNotice(null);
@@ -341,7 +409,6 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
   };
 
   const cancelPasswordReset = async () => {
-    await legacySignIn.reset();
     setPhase("form");
     setError(null);
     setNotice(null);
@@ -352,6 +419,8 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
     setTouchedResetEmail(false);
     setTouchedResetPassword(false);
     setAttemptedSubmit(false);
+    setSecondFactorStrategy(null);
+    setSecondFactorCode("");
   };
 
   const sendPasswordResetCode = async () => {
@@ -368,20 +437,14 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
 
     try {
       await signInState.signIn.create({
+        strategy: "reset_password_email_code",
         identifier: trimmedResetEmail,
       });
-
-      const { error: sendCodeError } = await legacySignIn.resetPasswordEmailCode.sendCode();
-
-      if (sendCodeError) {
-        setError(formatError(sendCodeError));
-        return;
-      }
 
       setPhase("reset-code");
       setNotice(`We sent a reset code to ${trimmedResetEmail}.`);
     } catch (err) {
-      setError(formatError(err));
+      setError(getSignInErrorMessage(err, "reset"));
     } finally {
       setBusy(false);
     }
@@ -394,18 +457,19 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
     setAttemptedSubmit(true);
 
     try {
-      const { error: verifyCodeError } = await legacySignIn.resetPasswordEmailCode.verifyCode({
+      const response = await signInState.signIn.attemptFirstFactor({
+        strategy: "reset_password_email_code",
         code: resetVerificationCode.trim(),
       });
 
-      if (verifyCodeError) {
-        setError(formatError(verifyCodeError));
+      if (response.status === "needs_new_password") {
+        setPhase("reset-password");
         return;
       }
 
-      setPhase("reset-password");
+      setError("That reset code could not be confirmed. Request a new code and try again.");
     } catch (err) {
-      setError(formatError(err));
+      setError(getSignInErrorMessage(err, "reset"));
     } finally {
       setBusy(false);
     }
@@ -424,29 +488,16 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
     }
 
     try {
-      const { error: passwordError } = await legacySignIn.resetPasswordEmailCode.submitPassword({
+      const response = await signInState.signIn.resetPassword({
         password: resetPassword,
+        signOutOfOtherSessions: true,
       });
 
-      if (passwordError) {
-        setError(formatError(passwordError));
-        return;
-      }
-
-      if (legacySignIn.status === "complete") {
-        await legacySignIn.finalize({
-          navigate: async ({ session, decorateUrl }) => {
-            if (session?.currentTask) {
-              return;
-            }
-
-            const url = decorateUrl(completeRedirectUrl);
-            if (url.startsWith("http")) {
-              window.location.href = url;
-            } else {
-              router.replace(url);
-            }
-          },
+      if (response.status === "complete" && response.createdSessionId) {
+        persistRememberedSessionId(staySignedIn ? response.createdSessionId : null);
+        await signInState.setActive({
+          session: response.createdSessionId,
+          redirectUrl: completeRedirectUrl,
         });
         return;
       }
@@ -458,7 +509,39 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
 
       setError("We couldn’t finish the password reset just yet. Please try again.");
     } catch (err) {
-      setError(formatError(err));
+      setError(getSignInErrorMessage(err, "reset"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const verifySecondFactor = async () => {
+    if (!secondFactorStrategy || !secondFactorCode.trim()) {
+      setError("Enter your verification code to continue.");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+
+    try {
+      const response = await signInState.signIn.attemptSecondFactor({
+        strategy: secondFactorStrategy,
+        code: secondFactorCode.trim(),
+      });
+
+      if (response.status === "complete" && response.createdSessionId) {
+        persistRememberedSessionId(staySignedIn ? response.createdSessionId : null);
+        await signInState.setActive({
+          session: response.createdSessionId,
+          redirectUrl: completeRedirectUrl,
+        });
+        return;
+      }
+
+      setError("That verification did not complete sign-in. Please try another code.");
+    } catch (err) {
+      setError(getSignInErrorMessage(err, "verification"));
     } finally {
       setBusy(false);
     }
@@ -562,6 +645,11 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
     }
 
     if (mode === "sign-in") {
+      if (phase === "verify-second-factor") {
+        await verifySecondFactor();
+        return;
+      }
+
       if (phase === "reset-request") {
         await sendPasswordResetCode();
         return;
@@ -631,7 +719,8 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
     }
   };
 
-  const isResetFlow = mode === "sign-in" && phase !== "form";
+  const isResetFlow = mode === "sign-in" && phase.startsWith("reset-");
+  const isSignInContinuation = mode === "sign-in" && phase === "verify-second-factor";
   const title =
     mode === "sign-in"
       ? phase === "reset-request"
@@ -640,6 +729,8 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
           ? "Check your email"
           : phase === "reset-password"
             ? "Set a new password"
+            : phase === "verify-second-factor"
+              ? "Verify it’s you"
             : "Welcome back"
       : "Create your Clover account";
   const subtitle =
@@ -650,11 +741,13 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
           ? "Enter the 6-digit code we sent to your email."
           : phase === "reset-password"
             ? "Choose a new password to get back into Clover."
+            : phase === "verify-second-factor"
+              ? "Complete your account’s extra security check to sign in."
             : "Sign in to pick up where you left off and keep moving."
       : "Create your account once, then import a statement, connect an account, or start manually.";
   const footerText =
     mode === "sign-in" ? (
-      isResetFlow ? (
+      isResetFlow || isSignInContinuation ? (
         <button
           type="button"
           className="clover-auth-card__link clover-auth-card__link-button"
@@ -755,14 +848,13 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
                 setNotice(null);
                 setBusy(true);
                 try {
-                  const { error: resendCodeError } = await legacySignIn.resetPasswordEmailCode.sendCode();
-                  if (resendCodeError) {
-                    setError(formatError(resendCodeError));
-                    return;
-                  }
+                  await signInState.signIn.create({
+                    strategy: "reset_password_email_code",
+                    identifier: trimmedResetEmail,
+                  });
                   setNotice(`We sent a new reset code to ${trimmedResetEmail}.`);
                 } catch (err) {
-                  setError(formatError(err));
+                  setError(getSignInErrorMessage(err, "reset"));
                 } finally {
                   setBusy(false);
                 }
@@ -820,6 +912,26 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
               {busy ? "Saving..." : "Set new password"}
             </button>
           </>
+        ) : mode === "sign-in" && phase === "verify-second-factor" ? (
+          <>
+            <label className="clover-auth-field">
+              <span>{secondFactorStrategy === "backup_code" ? "Backup code" : "Verification code"}</span>
+              <input
+                type="text"
+                inputMode={secondFactorStrategy === "backup_code" ? "text" : "numeric"}
+                autoComplete="one-time-code"
+                placeholder={secondFactorStrategy === "backup_code" ? "Enter a backup code" : "Enter the 6-digit code"}
+                value={secondFactorCode}
+                onChange={(event) => setSecondFactorCode(event.target.value)}
+                required
+                autoFocus
+              />
+            </label>
+
+            <button className="clover-auth-primary" type="submit" disabled={busy || !secondFactorCode.trim()}>
+              {busy ? "Verifying..." : "Verify and sign in"}
+            </button>
+          </>
         ) : phase === "form" ? (
           <>
             <label className="clover-auth-field">
@@ -844,7 +956,21 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
             ) : null}
 
             <label className="clover-auth-field">
-              <span>Password</span>
+              <span className="clover-auth-field__label-row">
+                <span>Password</span>
+                {mode === "sign-in" ? (
+                  <button
+                    type="button"
+                    className="clover-auth-card__link clover-auth-card__link-button clover-auth-forgot-password"
+                    onClick={() => {
+                      void startPasswordReset();
+                    }}
+                    disabled={busy}
+                  >
+                    Forgot password?
+                  </button>
+                ) : null}
+              </span>
               <div className="clover-auth-password">
                 <input
                   type={showPassword ? "text" : "password"}
@@ -904,18 +1030,6 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
               </label>
             ) : null}
 
-            {mode === "sign-in" ? (
-              <button
-                type="button"
-                className="clover-auth-card__link clover-auth-card__link-button clover-auth-forgot-password"
-                onClick={() => {
-                  void startPasswordReset();
-                }}
-                disabled={busy}
-              >
-                Forgot password?
-              </button>
-            ) : null}
           </>
         ) : (
           <>
@@ -963,7 +1077,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
       {error ? <p className="clover-auth-card__message clover-auth-card__message--error">{error}</p> : null}
       {notice ? <p className="clover-auth-card__message clover-auth-card__message--notice">{notice}</p> : null}
 
-      {!isResetFlow ? (
+      {!isResetFlow && !isSignInContinuation ? (
         <>
           <div className="clover-auth-card__divider">
             <span>or continue with</span>
