@@ -97,15 +97,23 @@ type InvestmentSnapshotHolding = {
   assetSymbol: string | null;
   assetType: string | null;
   quantity: string | null;
+  unitPrice: string | null;
+  costBasis: string | null;
   marketValue: string | null;
   currentValue: string | null;
+  gainLossValue: string | null;
+  gainLossPercent: string | null;
   currency: string;
+  updatedAt: string;
 };
 
 type InvestmentSnapshot = {
   id: string;
   portfolioName: string | null;
   currency: string;
+  costBasis: string | null;
+  gainLossValue: string | null;
+  gainLossPercent: string | null;
   updatedAt: string;
   account: {
     id: string;
@@ -128,6 +136,12 @@ type InstitutionHoldingRow = {
   subtype: InvestmentSubtype;
   currency: string;
   value: number;
+  quantity: number | null;
+  unitPrice: number | null;
+  costBasis: number | null;
+  gainLossValue: number | null;
+  gainLossPercent: number | null;
+  updatedAt: string;
 };
 
 type AssetDraft = {
@@ -157,6 +171,36 @@ type TradeDraft = {
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 
 const formatMoney = (value: number, currency: string) => formatCurrencyAmount(value, currency);
+
+const parseNullableAmount = (value: string | null | undefined) => {
+  if (value === null || value === undefined || value.trim() === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const formatUnits = (value: number | null) =>
+  value === null
+    ? "—"
+    : new Intl.NumberFormat("en-PH", {
+        maximumFractionDigits: 8,
+      }).format(value);
+
+const formatPercent = (value: number | null) =>
+  value === null
+    ? "—"
+    : `${value > 0 ? "+" : ""}${new Intl.NumberFormat("en-PH", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(value)}%`;
+
+const deriveGainLossPercent = (value: number, costBasis: number | null, savedPercent: number | null) => {
+  if (savedPercent !== null) {
+    return savedPercent;
+  }
+  return costBasis !== null && costBasis > 0 ? ((value - costBasis) / costBasis) * 100 : null;
+};
 
 const institutionPhotoStorageKey = (workspaceId: string, institution: string, currency: string) =>
   `clover.investment-institution-photo.v1:${workspaceId}:${currency}:${institution.trim().toLowerCase()}`;
@@ -735,6 +779,11 @@ export default function InvestmentInstitutionDetailPage() {
           symbol: holding.assetSymbol,
           institution: account?.institution ?? snapshot.documentImport?.institution,
         });
+        const value = Math.abs(parseAmount(holding.currentValue ?? holding.marketValue));
+        const quantity = parseNullableAmount(holding.quantity);
+        const costBasis = parseNullableAmount(holding.costBasis);
+        const savedGainLossValue = parseNullableAmount(holding.gainLossValue);
+        const savedGainLossPercent = parseNullableAmount(holding.gainLossPercent);
         rows.push({
           key: `holding:${holding.id}`,
           account,
@@ -742,7 +791,13 @@ export default function InvestmentInstitutionDetailPage() {
           symbol: holding.assetSymbol,
           subtype: classification.subtype,
           currency: formatCurrencyCode(holding.currency || snapshot.currency || routeCurrency),
-          value: Math.abs(parseAmount(holding.currentValue ?? holding.marketValue)),
+          value,
+          quantity,
+          unitPrice: parseNullableAmount(holding.unitPrice) ?? (quantity !== null && quantity > 0 ? value / quantity : null),
+          costBasis,
+          gainLossValue: savedGainLossValue ?? (costBasis !== null ? value - costBasis : null),
+          gainLossPercent: deriveGainLossPercent(value, costBasis, savedGainLossPercent),
+          updatedAt: holding.updatedAt || snapshot.updatedAt,
         });
       }
     }
@@ -751,6 +806,9 @@ export default function InvestmentInstitutionDetailPage() {
       if (accountsRepresentedBySnapshots.has(account.id)) {
         continue;
       }
+      const value = Math.abs(parseAmount(account.balance));
+      const quantity = parseNullableAmount(account.investmentQuantity);
+      const costBasis = parseNullableAmount(account.investmentCostBasis);
       rows.push({
         key: `account:${account.id}`,
         account,
@@ -758,7 +816,13 @@ export default function InvestmentInstitutionDetailPage() {
         symbol: account.investmentSymbol,
         subtype: account.investmentSubtype ?? "other",
         currency: formatCurrencyCode(account.currency),
-        value: Math.abs(parseAmount(account.balance)),
+        value,
+        quantity,
+        unitPrice: quantity !== null && quantity > 0 ? value / quantity : null,
+        costBasis,
+        gainLossValue: costBasis !== null ? value - costBasis : null,
+        gainLossPercent: deriveGainLossPercent(value, costBasis, null),
+        updatedAt: account.updatedAt,
       });
     }
 
@@ -769,6 +833,15 @@ export default function InvestmentInstitutionDetailPage() {
     () => institutionHoldingRows.reduce((sum, row) => sum + row.value, 0),
     [institutionHoldingRows]
   );
+  const institutionPerformance = useMemo(() => {
+    const comparableRows = institutionHoldingRows.filter((row) => row.costBasis !== null && row.costBasis > 0);
+    if (comparableRows.length === 0) {
+      return null;
+    }
+    const totalCostBasis = comparableRows.reduce((sum, row) => sum + (row.costBasis ?? 0), 0);
+    const currentValue = comparableRows.reduce((sum, row) => sum + row.value, 0);
+    return totalCostBasis > 0 ? ((currentValue - totalCostBasis) / totalCostBasis) * 100 : null;
+  }, [institutionHoldingRows]);
 
   const openAssetEditor = (account: Account) => {
     setEditingAssetId(account.id);
@@ -1245,6 +1318,12 @@ export default function InvestmentInstitutionDetailPage() {
               <span>Holdings</span>
               <strong>{institutionHoldingRows.length}</strong>
             </article>
+            <article className="institution-detail-metric">
+              <span>Total return</span>
+              <strong className={institutionPerformance === null ? "neutral" : institutionPerformance >= 0 ? "positive" : "negative"}>
+                {formatPercent(institutionPerformance)}
+              </strong>
+            </article>
           </div>
         </section>
 
@@ -1270,6 +1349,8 @@ export default function InvestmentInstitutionDetailPage() {
                   <tr>
                     <th>Asset</th>
                     <th>Subtype</th>
+                    <th>Units</th>
+                    <th>Return</th>
                     <th>Value</th>
                     <th aria-label="Open asset details" />
                   </tr>
@@ -1309,6 +1390,15 @@ export default function InvestmentInstitutionDetailPage() {
                           </span>
                         </td>
                         <td>{getInvestmentSubtypeLabel(row.subtype)}</td>
+                        <td className="institution-assets-table__units" title={row.unitPrice === null ? undefined : `${formatMoney(row.unitPrice, row.currency)} per unit`}>
+                          {formatUnits(row.quantity)}
+                        </td>
+                        <td
+                          className={`institution-assets-table__return ${row.gainLossPercent === null ? "neutral" : row.gainLossPercent >= 0 ? "positive" : "negative"}`}
+                          title={row.gainLossValue === null ? "Return needs cost or gain data from the source" : formatMoney(row.gainLossValue, row.currency)}
+                        >
+                          {formatPercent(row.gainLossPercent)}
+                        </td>
                         <td>{formatMoney(row.value, row.currency)}</td>
                         <td className="institution-assets-table__chevron-cell">
                           {row.account ? (

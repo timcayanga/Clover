@@ -28,6 +28,7 @@ This document captures the deterministic rules for GoTrade investment screenshot
 - `Buy - Market by Dollars` is an expense in `Investments`.
 - `Sell - Market by Dollars` is income in `Investments`.
 - Preserve ticker, fractional share quantity, execution price, and gross trade amount in raw payload evidence.
+- Preserve the visible holding gain/loss percentage. When both market value and return percentage are visible, Clover may derive cost basis mathematically for performance reporting; otherwise return must remain unavailable rather than estimated.
 - Do not turn the brokerage trade into a transfer unless the screen explicitly shows a cash movement.
 
 ## Dividends
@@ -35,6 +36,7 @@ This document captures the deterministic rules for GoTrade investment screenshot
 - Cash dividend rows are income in `Income` and preserve per-share rate and share quantity.
 - `Withholding tax 25% (PHL)` rows are expenses in `Financial` and preserve the 25% tax indicator.
 - Keep gross dividend and tax withholding as separate transactions.
+- GoTrade screenshots containing several securities must be confirmed as separate asset groups under one GoTrade institution so no trade or dividend row is dropped.
 
 ## OCR And Review
 

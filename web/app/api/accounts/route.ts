@@ -1088,7 +1088,14 @@ const repairGeneratedPdaxSnapshotHoldings = async (workspaceId: string) => {
 
   const generated = candidates.filter((holding) => holding.status !== "confirmed");
   const walletHoldingIds = generated
-    .filter((holding) => isPdaxWalletHoldingLabel(holding))
+    .filter((holding) =>
+      isPdaxWalletHoldingLabel({
+        ...holding,
+        quantity: holding.quantity?.toString() ?? null,
+        marketValue: holding.marketValue?.toString() ?? null,
+        currentValue: holding.currentValue?.toString() ?? null,
+      })
+    )
     .map((holding) => holding.id);
   let repaired = 0;
   if (walletHoldingIds.length > 0) {
@@ -1111,7 +1118,12 @@ const repairGeneratedPdaxSnapshotHoldings = async (workspaceId: string) => {
     if (walletHoldingIds.includes(holding.id)) {
       continue;
     }
-    const identity = getCanonicalPdaxHoldingIdentity(holding);
+    const identity = getCanonicalPdaxHoldingIdentity({
+      ...holding,
+      quantity: holding.quantity?.toString() ?? null,
+      marketValue: holding.marketValue?.toString() ?? null,
+      currentValue: holding.currentValue?.toString() ?? null,
+    });
     if (identity.key !== "XRP") {
       continue;
     }
@@ -2019,6 +2031,40 @@ const repairLegacyUploadedMayaWiseAccountSplits = async (
   return repairedCount;
 };
 
+const mergeUploadedAccountRecords = async (params: {
+  workspaceId: string;
+  canonicalId: string;
+  duplicateIds: string[];
+  canonicalData: Prisma.AccountUpdateInput;
+}) => {
+  await prisma.$transaction(async (tx) => {
+    await tx.account.update({ where: { id: params.canonicalId }, data: params.canonicalData });
+    if (params.duplicateIds.length === 0) {
+      return;
+    }
+
+    const duplicateFilter = { accountId: { in: params.duplicateIds } };
+    const canonicalAccount = { accountId: params.canonicalId };
+    await tx.transaction.updateMany({ where: duplicateFilter, data: canonicalAccount });
+    await tx.importFile.updateMany({ where: duplicateFilter, data: canonicalAccount });
+    await tx.documentImport.updateMany({ where: duplicateFilter, data: canonicalAccount });
+    await tx.accountStatementCheckpoint.updateMany({ where: duplicateFilter, data: canonicalAccount });
+    await tx.financialCommitment.updateMany({ where: duplicateFilter, data: canonicalAccount });
+    await tx.receiptDocument.updateMany({ where: duplicateFilter, data: canonicalAccount });
+    await tx.investmentSnapshot.updateMany({ where: duplicateFilter, data: canonicalAccount });
+    await tx.investmentHolding.updateMany({ where: duplicateFilter, data: canonicalAccount });
+    await tx.investmentPurchase.updateMany({ where: duplicateFilter, data: canonicalAccount });
+    await tx.investmentDividend.updateMany({ where: duplicateFilter, data: canonicalAccount });
+    await tx.recurringPattern.updateMany({ where: duplicateFilter, data: canonicalAccount });
+    await tx.accountRule.updateMany({ where: duplicateFilter, data: canonicalAccount });
+    await tx.budget.updateMany({ where: duplicateFilter, data: canonicalAccount });
+    await tx.circleInvestmentShare.updateMany({ where: duplicateFilter, data: canonicalAccount });
+    await tx.account.deleteMany({
+      where: { id: { in: params.duplicateIds }, workspaceId: params.workspaceId, source: "upload" },
+    });
+  });
+};
+
 const repairLegacyUploadedGsaveUnoIdentities = async (workspaceId: string) => {
   const uploadedAccounts = await prisma.account.findMany({
     where: {
@@ -2039,12 +2085,20 @@ const repairLegacyUploadedGsaveUnoIdentities = async (workspaceId: string) => {
       accountNumber: true,
       type: true,
       currency: true,
+      balance: true,
       source: true,
+      createdAt: true,
+      updatedAt: true,
       importFiles: { select: { fileName: true } },
+      _count: { select: { transactions: true, importFiles: true, statementCheckpoints: true } },
     },
   }).catch(() => []);
 
   let repairedCount = 0;
+  const canonicalIdentityByAccountId = new Map<
+    string,
+    { name: string; type: "bank" | "investment"; accountNumber: string | null }
+  >();
   for (const account of uploadedAccounts) {
     const productEvidence = account.importFiles
       .map((file) => inferCanonicalImportedAccountProduct({ ...account, fileName: file.fileName }))
@@ -2060,10 +2114,16 @@ const repairLegacyUploadedGsaveUnoIdentities = async (workspaceId: string) => {
       accountDigits,
       productEvidence.type
     );
+    canonicalIdentityByAccountId.set(account.id, {
+      name: canonicalName,
+      type: productEvidence.type as "bank" | "investment",
+      accountNumber: accountDigits,
+    });
     if (
       account.type === productEvidence.type &&
       account.institution === productEvidence.institution &&
-      account.name === canonicalName
+      account.name === canonicalName &&
+      normalizeImportedCurrencyCode(account.currency) === "PHP"
     ) {
       continue;
     }
@@ -2074,9 +2134,178 @@ const repairLegacyUploadedGsaveUnoIdentities = async (workspaceId: string) => {
         type: productEvidence.type,
         institution: productEvidence.institution,
         name: canonicalName,
+        currency: "PHP",
       },
     });
     repairedCount += 1;
+  }
+
+  const groups = new Map<string, typeof uploadedAccounts>();
+  for (const account of uploadedAccounts) {
+    const identity = canonicalIdentityByAccountId.get(account.id);
+    if (!identity) {
+      continue;
+    }
+    const key = [identity.name.toLowerCase(), identity.type, identity.accountNumber ?? "no-number"].join("|");
+    groups.set(key, [...(groups.get(key) ?? []), account]);
+  }
+
+  for (const group of groups.values()) {
+    if (group.length < 2) {
+      continue;
+    }
+    const sorted = [...group].sort((left, right) => {
+      const rightEvidence = right._count.transactions + right._count.importFiles + right._count.statementCheckpoints;
+      const leftEvidence = left._count.transactions + left._count.importFiles + left._count.statementCheckpoints;
+      return rightEvidence - leftEvidence || right.updatedAt.getTime() - left.updatedAt.getTime();
+    });
+    const canonical = sorted[0];
+    const duplicateIds = sorted.slice(1).map((account) => account.id);
+    const freshestBalance = [...sorted]
+      .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())
+      .find((account) => account.balance !== null)?.balance?.toString() ?? null;
+
+    await mergeUploadedAccountRecords({
+      workspaceId,
+      canonicalId: canonical.id,
+      duplicateIds,
+      canonicalData: {
+        name: canonicalIdentityByAccountId.get(canonical.id)?.name ?? canonical.name,
+        institution: "GSave",
+        type: canonicalIdentityByAccountId.get(canonical.id)?.type ?? canonical.type,
+        currency: "PHP",
+        ...(freshestBalance !== null ? { balance: freshestBalance } : {}),
+      },
+    });
+    repairedCount += duplicateIds.length;
+  }
+
+  return repairedCount;
+};
+
+const repairLegacyWiseWalletDuplicates = async (workspaceId: string) => {
+  const accounts = await prisma.account.findMany({
+    where: {
+      workspaceId,
+      source: "upload",
+      OR: [
+        { institution: { equals: "Wise", mode: "insensitive" } },
+        { name: { equals: "Wise", mode: "insensitive" } },
+      ],
+    },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      accountNumber: true,
+      type: true,
+      currency: true,
+      balance: true,
+      createdAt: true,
+      updatedAt: true,
+      _count: { select: { transactions: true, importFiles: true, statementCheckpoints: true } },
+    },
+  }).catch(() => []);
+
+  const groups = new Map<string, typeof accounts>();
+  for (const account of accounts) {
+    const accountNumber = normalizeImportAccountNumber(account.accountNumber);
+    const key = [normalizeImportedCurrencyCode(account.currency), accountNumber ?? "no-visible-number"].join("|");
+    groups.set(key, [...(groups.get(key) ?? []), account]);
+  }
+
+  let repairedCount = 0;
+  for (const group of groups.values()) {
+    const sorted = [...group].sort((left, right) => {
+      const rightEvidence = right._count.transactions + right._count.importFiles + right._count.statementCheckpoints;
+      const leftEvidence = left._count.transactions + left._count.importFiles + left._count.statementCheckpoints;
+      return rightEvidence - leftEvidence || right.updatedAt.getTime() - left.updatedAt.getTime();
+    });
+    const canonical = sorted[0];
+    if (!canonical) {
+      continue;
+    }
+    const duplicateIds = sorted.slice(1).map((account) => account.id);
+    const freshestBalance = [...sorted]
+      .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())
+      .find((account) => account.balance !== null)?.balance?.toString() ?? null;
+
+    await mergeUploadedAccountRecords({
+      workspaceId,
+      canonicalId: canonical.id,
+      duplicateIds,
+      canonicalData: {
+        name: "Wise",
+        institution: "Wise",
+        type: "wallet",
+        currency: normalizeImportedCurrencyCode(canonical.currency) ?? "PHP",
+        ...(freshestBalance !== null ? { balance: freshestBalance } : {}),
+      },
+    });
+    repairedCount += duplicateIds.length;
+  }
+
+  return repairedCount;
+};
+
+const repairLegacyGotradeActivityImports = async (workspaceId: string) => {
+  if (!(await hasCompatibleTable("ParsedTransaction"))) {
+    return 0;
+  }
+
+  const imports = await prisma.importFile.findMany({
+    where: {
+      workspaceId,
+      status: "done",
+      parsedRows: {
+        some: {
+          OR: [
+            { institution: { equals: "GoTrade", mode: "insensitive" } },
+            { rawPayload: { path: ["providerInstitution"], equals: "GoTrade" } },
+          ],
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 40,
+    select: {
+      id: true,
+      confirmedTransactionsCount: true,
+      _count: { select: { transactions: true } },
+      parsedRows: {
+        select: { rawPayload: true },
+      },
+    },
+  }).catch(() => []);
+
+  const incompleteImports = imports.filter((entry) => {
+    const visibleRows = entry.parsedRows.filter((row) => {
+      const payload =
+        row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+          ? (row.rawPayload as Record<string, unknown>)
+          : null;
+      return payload?.kind === "gotrade_trade_transaction" || payload?.kind === "gotrade_dividend_transaction";
+    }).length;
+    return visibleRows > 0 && entry._count.transactions < visibleRows && entry.confirmedTransactionsCount < visibleRows;
+  });
+  if (incompleteImports.length === 0) {
+    return 0;
+  }
+
+  const { confirmImportFile } = await import("@/workers/import-processor");
+  let repairedCount = 0;
+  for (const entry of incompleteImports) {
+    try {
+      await confirmImportFile(entry.id, null);
+      repairedCount += 1;
+    } catch (error) {
+      console.warn("[accounts] unable to recover preserved GoTrade activity", {
+        workspaceId,
+        importFileId: entry.id,
+        error: summarizeErrorForLog(error),
+      });
+    }
   }
 
   return repairedCount;
@@ -2357,8 +2586,22 @@ export async function GET(request: Request) {
       });
       return 0;
     });
+    await repairLegacyWiseWalletDuplicates(workspaceId).catch((error) => {
+      console.warn("[accounts] unable to repair duplicate Wise wallets", {
+        workspaceId,
+        error,
+      });
+      return 0;
+    });
     await repairLegacyUploadedGsaveUnoIdentities(workspaceId).catch((error) => {
       console.warn("[accounts] unable to repair legacy GSave / UNO account identities", {
+        workspaceId,
+        error,
+      });
+      return 0;
+    });
+    await repairLegacyGotradeActivityImports(workspaceId).catch((error) => {
+      console.warn("[accounts] unable to recover GoTrade activity imports", {
         workspaceId,
         error,
       });

@@ -25607,7 +25607,7 @@ button.investments-portfolio-inline-edit {
 
 .institution-detail-hero__metrics {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -25640,6 +25640,21 @@ button.investments-portfolio-inline-edit {
 .institution-detail-metric strong {
   font-size: 1.18rem;
   letter-spacing: -0.03em;
+}
+
+.institution-detail-metric strong.positive,
+.institution-assets-table__return.positive {
+  color: var(--good);
+}
+
+.institution-detail-metric strong.negative,
+.institution-assets-table__return.negative {
+  color: var(--bad);
+}
+
+.institution-detail-metric strong.neutral,
+.institution-assets-table__return.neutral {
+  color: var(--muted);
 }
 
 .institution-detail-panel {
@@ -25746,6 +25761,16 @@ button.investments-portfolio-inline-edit {
 .institution-trade-history__units,
 .institution-trade-history__amount {
   white-space: nowrap;
+}
+
+.institution-assets-table__units,
+.institution-assets-table__return {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.institution-assets-table__return {
+  font-weight: 700;
 }
 
 .institution-trade-history__units {
@@ -31966,6 +31991,10 @@ button.accounts-detail__transaction-head-cell {
 
   .institution-detail-hero__metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .institution-detail-hero__metrics .institution-detail-metric:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
 
   .institution-detail-hero__name-editor {
@@ -47476,13 +47505,17 @@ html[data-theme="dark"] .investments-portfolio-table__total {
 
   .institution-detail-panel--assets .institution-assets-table th:nth-child(2),
   .institution-detail-panel--assets .institution-assets-table td:nth-child(2),
-  .institution-detail-panel--assets .institution-assets-table th:nth-child(4),
-  .institution-detail-panel--assets .institution-assets-table td:nth-child(4) {
+  .institution-detail-panel--assets .institution-assets-table th:nth-child(6),
+  .institution-detail-panel--assets .institution-assets-table td:nth-child(6) {
     display: none;
   }
 
   .institution-detail-panel--assets .institution-assets-table th:nth-child(3),
-  .institution-detail-panel--assets .institution-assets-table td:nth-child(3) {
+  .institution-detail-panel--assets .institution-assets-table td:nth-child(3),
+  .institution-detail-panel--assets .institution-assets-table th:nth-child(4),
+  .institution-detail-panel--assets .institution-assets-table td:nth-child(4),
+  .institution-detail-panel--assets .institution-assets-table th:nth-child(5),
+  .institution-detail-panel--assets .institution-assets-table td:nth-child(5) {
     text-align: right;
   }
 

@@ -120,6 +120,12 @@ const eagerMayaWiseRepair = accountsRouteSource.indexOf(
 const eagerGsaveUnoRepair = accountsRouteSource.indexOf(
   "await repairLegacyUploadedGsaveUnoIdentities(workspaceId)"
 );
+const eagerWiseDuplicateRepair = accountsRouteSource.indexOf(
+  "await repairLegacyWiseWalletDuplicates(workspaceId)"
+);
+const eagerGotradeRecovery = accountsRouteSource.indexOf(
+  "await repairLegacyGotradeActivityImports(workspaceId)"
+);
 const visibleAccountsQuery = accountsRouteSource.indexOf(
   "const [accounts, accountRules, statementCheckpoints, investmentSnapshots]"
 );
@@ -130,6 +136,19 @@ assert.ok(
 assert.ok(
   eagerGsaveUnoRepair > 0 && visibleAccountsQuery > eagerGsaveUnoRepair,
   "GSave/UNO identity repair must finish before the Accounts API returns visible cards."
+);
+assert.ok(
+  eagerWiseDuplicateRepair > 0 && visibleAccountsQuery > eagerWiseDuplicateRepair,
+  "Currency-scoped Wise duplicate repair must finish before visible cards are returned."
+);
+assert.ok(
+  eagerGotradeRecovery > 0 && visibleAccountsQuery > eagerGotradeRecovery,
+  "Preserved GoTrade activity must be recovered before institution data is returned."
+);
+assert.match(
+  accountsRouteSource,
+  /institution: "GSave"[\s\S]+currency: "PHP"/,
+  "GSave repair must normalize upload-created products to their supported PHP currency."
 );
 assert.match(
   accountsRouteSource,

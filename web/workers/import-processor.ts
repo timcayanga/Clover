@@ -12898,7 +12898,8 @@ export const confirmImportFile = async (
     .join(" ");
   const hasMultipleInvestmentAccountGroups =
     nonDefaultParsedAccountGroups.length > 1 &&
-    (baseStatementMetadata.accountType === "investment" || /\bgfunds\b|\batram\b|\bgcrypto\b|\bpdax\b/i.test(investmentInstitutionHint));
+    (baseStatementMetadata.accountType === "investment" ||
+      /\bgfunds\b|\batram\b|\bgcrypto\b|\bpdax\b|\bgotrade\b/i.test(investmentInstitutionHint));
   // PDAX portfolio OCR can be recovered after the initial screenshot metadata
   // was produced. Its raw rows explicitly identify Wallet, BTC, XRP, and
   // Gold, so never collapse those records just because the fast transcript

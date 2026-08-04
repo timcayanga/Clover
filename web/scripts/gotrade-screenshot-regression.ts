@@ -66,7 +66,24 @@ assert.deepEqual(
 );
 assert.equal(positionRows.find((row) => row.accountName === "Amazon")?.rawPayload?.marketValue, 222.71);
 assert.equal(positionRows.find((row) => row.accountName === "Exxon Mobil")?.rawPayload?.quantity, 1.600956696);
+assert.equal(positionRows.find((row) => row.accountName === "Amazon")?.rawPayload?.gainLossPercent, 31.33);
+assert.ok(
+  Number(positionRows.find((row) => row.accountName === "Amazon")?.rawPayload?.totalCost) > 0,
+  "Position gain evidence should retain an evidence-backed cost basis for return calculations."
+);
 assert.ok(positionRows.every((row) => row.rawPayload?.kind === "account_snapshot_marker"));
+
+const flexibleTradeRows = parseImportText(
+  `Trade history
+30 March 2026 · Filled
+Buy — Market by Dollars
+-$3.07
++ SCHD · 0.097192224 shares at $30.56`,
+  "gotrade-trade-layout-variant.png",
+  "image/png"
+);
+assert.equal(flexibleTradeRows.length, 1, "GoTrade trade OCR punctuation and split amount lines should remain parseable.");
+assert.equal(flexibleTradeRows[0]?.rawPayload?.investmentSymbol, "SCHD");
 
 const tradeRows = parseImportText(tradesText, "renamed-gotrade-trades.png", "image/png");
 assert.equal(tradeRows.length, 4, "Expected four visible GoTrade trades.");

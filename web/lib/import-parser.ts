@@ -14458,7 +14458,8 @@ const parseGotradePositionRows = (lines: string[], metadata: DetectedStatementMe
   const positionLines = lines.slice(positionStart >= 0 ? positionStart : 0, positionEnd);
 
   for (let index = 0; index < positionLines.length; index += 1) {
-    const sharesMatch = normalizeWhitespace(positionLines[index] ?? "").match(
+    const positionDetailLine = normalizeWhitespace(positionLines[index] ?? "");
+    const sharesMatch = positionDetailLine.match(
       /\b([0-9]+(?:\.[0-9]+)?)\s+shares?\b/i
     );
     if (!sharesMatch || /per\s+shares?/i.test(positionLines[index] ?? "")) {
@@ -14508,6 +14509,15 @@ const parseGotradePositionRows = (lines: string[], metadata: DetectedStatementMe
       continue;
     }
 
+    const gainLossPercentMatch = positionDetailLine.match(
+      /\bshares?\s+([+-]?[0-9]+(?:\.[0-9]+)?)\s*%/i
+    );
+    const gainLossPercent = gainLossPercentMatch ? Number(gainLossPercentMatch[1]) : null;
+    const costBasis =
+      gainLossPercent !== null && Number.isFinite(gainLossPercent) && 1 + gainLossPercent / 100 > 0
+        ? marketValue / (1 + gainLossPercent / 100)
+        : null;
+
     const canonicalName = gotradeSecurityName(name);
     const symbol = gotradeSecuritySymbol(name);
     if (!symbol && canonicalName.length < 4) {
@@ -14546,7 +14556,11 @@ const parseGotradePositionRows = (lines: string[], metadata: DetectedStatementMe
         investmentSubtype: "stock",
         investmentSymbol: symbol,
         quantity,
+        unitPrice: quantity > 0 ? marketValue / quantity : null,
+        totalCost: costBasis,
         marketValue,
+        gainLossValue: costBasis === null ? null : marketValue - costBasis,
+        gainLossPercent,
         balance: marketValue,
         statementEndingBalance: marketValue,
         currency: "USD",
@@ -14570,14 +14584,21 @@ const parseGotradeTradeRows = (lines: string[], metadata: DetectedStatementMetad
       continue;
     }
 
-    const actionMatch = line.match(/\b(Buy|Sell)\s*[-~]\s*Market\s+by\s+Dollars\b/i);
+    const actionMatch = line.match(/\b(Buy|Sell)\s*(?:[-~–—·•]|\s)\s*Market\s+by\s+Dollars\b/i);
     if (!activeDate || !actionMatch) {
       continue;
     }
 
-    const detailLine = normalizeWhitespace(lines[index + 1] ?? "");
-    const detailMatch = detailLine.match(/(?:^|[+\-])\s*([A-Z]{1,6})\s*-\s*([0-9]+(?:\.[0-9]+)?)\s+shares?\s+@\s*\$?\s*([0-9][0-9,]*(?:\.\d+)?)/i);
-    const amount = parseGotradeAmount(line);
+    const detailLine = [1, 2, 3]
+      .map((offset) => normalizeWhitespace(lines[index + offset] ?? ""))
+      .find((candidate) => /\b[A-Z]{1,6}\b.*\bshares?\b.*(?:@|\bat\b)/i.test(candidate)) ?? "";
+    const detailMatch = detailLine.match(
+      /(?:^|[+\-])?\s*([A-Z]{1,6})\s*(?:[-–—·•]|\s)\s*([0-9]+(?:\.[0-9]+)?)\s+shares?\s+(?:@|at)\s*\$?\s*([0-9][0-9,]*(?:\.\d+)?)/i
+    );
+    const amount =
+      parseGotradeAmount(line) ??
+      [1, 2].map((offset) => parseGotradeAmount(lines[index + offset] ?? "")).find((value) => value !== null) ??
+      null;
     if (!detailMatch || amount === null) {
       continue;
     }
@@ -14715,7 +14736,9 @@ const parseGotradeDividendRows = (lines: string[], metadata: DetectedStatementMe
 
     const detailIndex = [1, 2, 3].find((offset) => /per\s+shares?/i.test(lines[index + offset] ?? ""));
     const detailLine = detailIndex ? normalizeWhitespace(lines[index + detailIndex] ?? "") : "";
-    const detailMatch = detailLine.match(/(?:\$|£|₱)\s*([0-9][0-9,.]*)\s+per\s+shares?\s+([0-9]+(?:\.[0-9]+)?)\s+shares?/i);
+    const detailMatch = detailLine.match(
+      /(?:\$|£|₱)?\s*([0-9][0-9,.]*)\s+per\s+shares?\s+([0-9]+(?:\.[0-9]+)?)\s+shares?/i
+    );
     if (!detailMatch) {
       continue;
     }
