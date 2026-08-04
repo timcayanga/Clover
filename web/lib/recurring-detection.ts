@@ -1143,6 +1143,7 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
       }
 
       const familyKey = [
+        pattern.accountId ?? "workspace",
         (pattern.currency ?? "PHP").trim().toUpperCase() || "PHP",
         buildRecurringMerchantFamilySignature(pattern.merchantClean ?? pattern.merchantRaw ?? ""),
       ].join("::");

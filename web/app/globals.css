@@ -768,6 +768,30 @@ label {
   height: 0;
 }
 
+.route-loading-fallback {
+  position: fixed;
+  z-index: 120;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  overflow: hidden;
+  color: transparent;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(90deg, transparent, var(--accent), var(--mint), transparent);
+  background-size: 220% 100%;
+  animation: route-loading-reveal 0.01s 0.3s forwards, route-loading-progress 1s linear 0.3s infinite;
+}
+
+@keyframes route-loading-reveal {
+  to { opacity: 1; }
+}
+
+@keyframes route-loading-progress {
+  to { background-position: -220% 0; }
+}
+
 body[data-clover-page-modal] .app-shell {
   grid-template-columns: 236px minmax(0, 1fr);
 }
@@ -2222,6 +2246,10 @@ body.transactions-manual-open .shell-bug-report-button {
 }
 
 @media (min-width: 1101px) {
+  .content--recurring .commitments-table-wrap {
+    overflow: visible;
+  }
+
   .sidebar {
     padding: 8px 8px;
     gap: 2px;
@@ -6995,6 +7023,32 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   text-transform: none;
 }
 
+@media (min-width: 1101px) {
+  .transactions-table.commitments-table thead th {
+    position: sticky;
+    top: 62px;
+    z-index: 8;
+    background: var(--surface);
+    box-shadow: 0 1px 0 var(--stroke);
+  }
+}
+
+.commitments-review-section {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.commitments-review-section__heading h3,
+.commitments-review-section__heading p {
+  margin: 0;
+}
+
+.commitments-review-section__heading h3 {
+  margin-top: 3px;
+  font-size: 1rem;
+}
+
 .commitments-table td strong,
 .commitments-table__secondary {
   display: block;
@@ -7644,19 +7698,9 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
 }
 
 .recurring-suggestion-row__dismiss {
-  display: inline-grid;
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  place-items: center;
-  border: 1px solid var(--stroke);
-  border-radius: 50%;
-  background: var(--surface);
-  color: var(--muted);
-  font: inherit;
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
+  width: auto;
+  height: auto;
+  font-size: 12px;
 }
 
 .recurring-suggestion-row__dismiss:hover,

@@ -943,20 +943,31 @@ export function CommitmentsPanel({
   };
 
   const tabCommitments = useMemo(() => {
+    const bySubscriptionThenDate = (items: FinancialCommitmentSummary[]) =>
+      [...items].sort((left, right) => {
+        const leftRepeats = left.recurrence === "once" ? 1 : 0;
+        const rightRepeats = right.recurrence === "once" ? 1 : 0;
+        const leftDateValue = getCommitmentDateValue(left);
+        const rightDateValue = getCommitmentDateValue(right);
+        const leftDate = leftDateValue ? new Date(leftDateValue).getTime() : Number.POSITIVE_INFINITY;
+        const rightDate = rightDateValue ? new Date(rightDateValue).getTime() : Number.POSITIVE_INFINITY;
+        return leftRepeats - rightRepeats || leftDate - rightDate || left.title.localeCompare(right.title);
+      });
+
     switch (activeTab) {
       case "planned":
-        return visibleCommitments.filter((commitment) => commitment.kind === "planned_payment");
+        return bySubscriptionThenDate(visibleCommitments.filter((commitment) => commitment.kind === "planned_payment"));
       case "debt":
-        return visibleCommitments.filter((commitment) => commitment.kind === "debt");
+        return bySubscriptionThenDate(visibleCommitments.filter((commitment) => commitment.kind === "debt"));
       case "owed":
-        return visibleCommitments.filter((commitment) => commitment.kind === "receivable");
+        return bySubscriptionThenDate(visibleCommitments.filter((commitment) => commitment.kind === "receivable"));
       case "installments":
-        return visibleCommitments.filter(
+        return bySubscriptionThenDate(visibleCommitments.filter(
           (commitment) =>
             commitment.kind === "reminder" ||
             commitment.notes?.toLowerCase().includes("installment") ||
             Boolean(commitment.notes?.toLowerCase().match(/payment\s+\d+\s+of\s+\d+/))
-        );
+        ));
       default:
         return [];
     }
@@ -1120,7 +1131,7 @@ export function CommitmentsPanel({
               </tr>
             </thead>
             <tbody>
-              {!hasRows ? (
+              {tabCommitments.length === 0 ? (
                 <tr>
                   <td colSpan={columnCount} className="commitments-table__empty">
                     <strong>{tabLabel === "money owed" ? "No money owed yet" : `No ${tabLabel}s yet`}</strong>
@@ -1131,25 +1142,6 @@ export function CommitmentsPanel({
                   </td>
                 </tr>
               ) : null}
-              {tabSuggestions.map((suggestion) => (
-                <tr key={suggestion.id}>
-                  <td>
-                    <strong>{suggestion.title}</strong>
-                    <span className="commitments-table__secondary">{suggestion.sourceLabel}</span>
-                  </td>
-                  {showsPerson ? <td>{suggestion.counterparty ?? "Add person"}</td> : null}
-                  <td>{activeTab === "owed" && !suggestion.dueDate ? "" : formatDate(suggestion.dueDate)}</td>
-                  <td>{suggestion.recurrence === "once" ? "One-time" : commitmentRecurrenceLabels[suggestion.recurrence]}</td>
-                  <td>{formatCurrency(suggestion.amount)}</td>
-                  {showsAccount ? <td>{suggestion.accountName ?? "Not linked"}</td> : null}
-                  <td>
-                    <button className="button button-primary button-small recurring-compact-action" type="button" onClick={() => openPlannedPaymentReview(suggestion)}>
-                      Review and add
-                    </button>
-                  </td>
-                  <td />
-                </tr>
-              ))}
               {tabCommitments.map((commitment) => (
                 <tr key={commitment.id} className="commitments-table__row">
                   <td>
@@ -1343,6 +1335,51 @@ export function CommitmentsPanel({
             </tbody>
           </table>
         </div>
+        {tabSuggestions.length > 0 ? (
+          <section className="commitments-review-section" aria-label="Items to review">
+            <div className="commitments-review-section__heading">
+              <p className="eyebrow">Needs review</p>
+              <h3>Suggestions to review</h3>
+            </div>
+            <div className="table-wrap commitments-table-wrap">
+              <table className="transactions-table commitments-table commitments-table--suggestions">
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    {showsPerson ? <th>{personHeading}</th> : null}
+                    <th>Due Date</th>
+                    <th>Type</th>
+                    <th>Amount</th>
+                    {showsAccount ? <th>Source Account</th> : null}
+                    <th>Action</th>
+                    <th aria-label="Actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {tabSuggestions.map((suggestion) => (
+                    <tr key={suggestion.id}>
+                      <td>
+                        <strong>{suggestion.title}</strong>
+                        <span className="commitments-table__secondary">{suggestion.sourceLabel}</span>
+                      </td>
+                      {showsPerson ? <td>{suggestion.counterparty ?? "Add person"}</td> : null}
+                      <td>{formatDate(suggestion.dueDate)}</td>
+                      <td>{suggestion.recurrence === "once" ? "One-time" : commitmentRecurrenceLabels[suggestion.recurrence]}</td>
+                      <td>{formatCurrency(suggestion.amount)}</td>
+                      {showsAccount ? <td>{suggestion.accountName ?? "Not linked"}</td> : null}
+                      <td>
+                        <button className="button button-primary button-small recurring-compact-action" type="button" onClick={() => openPlannedPaymentReview(suggestion)}>
+                          Review
+                        </button>
+                      </td>
+                      <td />
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ) : null}
         {mobileDetailCommitment ? (
           <section className="recurring-mobile-detail" aria-label={`${mobileDetailCommitment.title} details`}>
             <header className="recurring-mobile-detail__header">
@@ -1474,17 +1511,17 @@ export function CommitmentsPanel({
                     onClick={() => handleQuickAddPattern(pattern)}
                     disabled={confirmingPatternId === pattern.id}
                   >
-                    {confirmingPatternId === pattern.id ? "Adding..." : "Add"}
+                    {confirmingPatternId === pattern.id ? "Keeping..." : "Keep"}
                   </button>
                   <button
                     type="button"
-                    className="recurring-suggestion-row__dismiss"
+                    className="button button-secondary button-small recurring-suggestion-row__dismiss"
                     onClick={() => handleDismissPattern(pattern.id)}
                     disabled={dismissingPatternId === pattern.id}
                     aria-label={`Delete ${pattern.merchantClean ?? pattern.merchantRaw} suggestion`}
                     title="Delete suggestion"
                   >
-                    <span aria-hidden="true">×</span>
+                    {dismissingPatternId === pattern.id ? "Deleting..." : "Delete"}
                   </button>
                 </div>
               </article>

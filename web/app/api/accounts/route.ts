@@ -1110,10 +1110,6 @@ const repairGeneratedPdaxSnapshotHoldings = async (workspaceId: string) => {
   }
 
   const aliasGroups = new Map<string, typeof generated>();
-  const numericSignature = (value: { toString(): string } | null | undefined) => {
-    const parsed = Number(value?.toString() ?? "");
-    return Number.isFinite(parsed) ? parsed.toString() : "";
-  };
   for (const holding of generated) {
     if (walletHoldingIds.includes(holding.id)) {
       continue;
@@ -1134,19 +1130,6 @@ const repairGeneratedPdaxSnapshotHoldings = async (workspaceId: string) => {
   }
 
   for (const group of aliasGroups.values()) {
-    const signatures = new Set(
-      group.map((holding) =>
-        [
-          numericSignature(holding.quantity),
-          numericSignature(holding.currentValue ?? holding.marketValue),
-          holding.currency,
-        ].join(":")
-      )
-    );
-    if (group.length > 1 && signatures.size > 1) {
-      continue;
-    }
-
     const canonical = [...group].sort((left, right) => {
       const leftCanonical = Number(left.assetSymbol?.toUpperCase() === "XRP") + Number(left.assetName.toUpperCase() === "XRP");
       const rightCanonical = Number(right.assetSymbol?.toUpperCase() === "XRP") + Number(right.assetName.toUpperCase() === "XRP");
@@ -1156,9 +1139,22 @@ const repairGeneratedPdaxSnapshotHoldings = async (workspaceId: string) => {
       continue;
     }
 
+    const strongestValue = [...group].sort((left, right) => {
+      const leftValue = Number(left.currentValue ?? left.marketValue ?? 0);
+      const rightValue = Number(right.currentValue ?? right.marketValue ?? 0);
+      return rightValue - leftValue || right.confidence - left.confidence;
+    })[0] ?? canonical;
     await prisma.investmentHolding.update({
       where: { id: canonical.id },
-      data: { assetName: "XRP", assetSymbol: "XRP", assetType: "crypto" },
+      data: {
+        assetName: "XRP",
+        assetSymbol: "XRP",
+        assetType: "crypto",
+        quantity: strongestValue.quantity,
+        marketValue: strongestValue.marketValue,
+        currentValue: strongestValue.currentValue,
+        currency: strongestValue.currency,
+      },
     }).catch(() => null);
     repaired += 1;
 
@@ -1267,7 +1263,7 @@ const repairGeneratedPdaxPortfolioAssetLabels = async (workspaceId: string) => {
     { from: "PDAX BTC", to: "BTC", subtype: "crypto" },
     { from: "PDAX XRP", to: "XRP", subtype: "crypto" },
     { from: "PDAX Gold RWA", to: "Gold", subtype: "real_world_asset" },
-    { from: "PDAX Wallet", to: "Wallet", subtype: null },
+    { from: "Wallet", to: "PDAX Wallet", subtype: null },
   ] as const;
 
   let repaired = 0;
@@ -2207,7 +2203,34 @@ const repairLegacyUploadedGsaveUnoIdentities = async (workspaceId: string) => {
     },
   }).catch(() => []);
 
+  const gsaveAccountIds = uploadedAccounts
+    .filter((account) => /\bGSave\b/i.test(`${account.institution ?? ""} ${account.name}`))
+    .map((account) => account.id);
   let repairedCount = 0;
+  if (gsaveAccountIds.length > 0) {
+    const normalized = await prisma.account.updateMany({
+      where: { workspaceId, id: { in: gsaveAccountIds }, currency: { not: "PHP" } },
+      data: { currency: "PHP" },
+    }).catch(() => ({ count: 0 }));
+    repairedCount += normalized.count;
+    await Promise.all([
+      prisma.investmentSnapshot.updateMany({
+        where: { workspaceId, accountId: { in: gsaveAccountIds }, currency: { not: "PHP" } },
+        data: { currency: "PHP" },
+      }),
+      prisma.investmentHolding.updateMany({
+        where: {
+          workspaceId,
+          currency: { not: "PHP" },
+          OR: [
+            { accountId: { in: gsaveAccountIds } },
+            { investmentSnapshot: { accountId: { in: gsaveAccountIds } } },
+          ],
+        },
+        data: { currency: "PHP" },
+      }),
+    ]).catch(() => null);
+  }
   const canonicalIdentityByAccountId = new Map<
     string,
     { name: string; type: "bank" | "investment"; accountNumber: string | null }
@@ -2844,6 +2867,113 @@ const repairLegacyUploadedGcryptoAccountSplits = async (workspaceId: string) => 
   return duplicateIds.length + 1;
 };
 
+const materializeGcryptoActivityAssets = async (workspaceId: string) => {
+  if (!(await hasCompatibleTable("InvestmentHolding")) || !(await hasCompatibleTable("InvestmentSnapshot"))) {
+    return 0;
+  }
+
+  const accounts = await prisma.account.findMany({
+    where: {
+      workspaceId,
+      source: "upload",
+      type: "investment",
+      OR: [
+        { institution: { equals: "GCrypto", mode: "insensitive" } },
+        { name: { equals: "GCrypto", mode: "insensitive" } },
+      ],
+    },
+    select: {
+      id: true,
+      balance: true,
+      transactions: {
+        where: { deletedAt: null },
+        select: { date: true, merchantRaw: true, merchantClean: true, description: true },
+      },
+      investmentSnapshots: {
+        orderBy: [{ snapshotDate: "desc" }, { createdAt: "desc" }],
+        take: 1,
+        select: { id: true },
+      },
+      investmentHoldings: {
+        select: { assetName: true, assetSymbol: true },
+      },
+    },
+  }).catch(() => []);
+
+  const assetCatalog = [
+    { name: "Bitcoin", symbol: "BTC", pattern: /\b(?:bitcoin|btc)\b/i },
+    { name: "Stellar", symbol: "XLM", pattern: /\b(?:stellar|xlm)\b/i },
+    { name: "XRP", symbol: "XRP", pattern: /\b(?:ripple|xrp)\b/i },
+    { name: "Solana", symbol: "SOL", pattern: /\b(?:solana|sol)\b/i },
+    { name: "The Graph", symbol: "GRT", pattern: /\b(?:the graph|grt)\b/i },
+  ] as const;
+  let repaired = 0;
+
+  for (const account of accounts) {
+    const activityText = account.transactions
+      .flatMap((transaction) => [transaction.merchantClean, transaction.merchantRaw, transaction.description])
+      .filter(Boolean)
+      .join(" ");
+    const detectedAssets = assetCatalog.filter((asset) => asset.pattern.test(activityText));
+    if (detectedAssets.length === 0) {
+      continue;
+    }
+
+    const existingSymbols = new Set(
+      account.investmentHoldings.flatMap((holding) => [holding.assetSymbol, holding.assetName]).filter(Boolean).map((value) => value!.toUpperCase())
+    );
+    const missingAssets = detectedAssets.filter(
+      (asset) => !existingSymbols.has(asset.symbol) && !existingSymbols.has(asset.name.toUpperCase())
+    );
+    if (missingAssets.length === 0) {
+      continue;
+    }
+
+    let snapshotId = account.investmentSnapshots[0]?.id ?? null;
+    if (!snapshotId) {
+      const latestActivityDate = account.transactions.reduce<Date | null>(
+        (latest, transaction) => (!latest || transaction.date > latest ? transaction.date : latest),
+        null
+      );
+      const snapshot = await prisma.investmentSnapshot.create({
+        data: {
+          workspaceId,
+          accountId: account.id,
+          portfolioName: "GCrypto",
+          snapshotDate: latestActivityDate,
+          currency: "PHP",
+          totalValue: account.balance,
+          confidence: 100,
+          rawPayload: { source: "derived_gcrypto_activity_assets" },
+        },
+        select: { id: true },
+      });
+      snapshotId = snapshot.id;
+    }
+
+    await prisma.investmentHolding.createMany({
+      data: missingAssets.map((asset) => ({
+        workspaceId,
+        investmentSnapshotId: snapshotId as string,
+        accountId: account.id,
+        assetName: asset.name,
+        assetSymbol: asset.symbol,
+        assetType: "crypto",
+        quantity: "0",
+        marketValue: "0",
+        currentValue: "0",
+        currency: "PHP",
+        status: "suggested",
+        confidence: 100,
+        rawPayload: { source: "derived_gcrypto_activity_assets", zeroValuePosition: true },
+      })),
+    });
+    repaired += missingAssets.length;
+  }
+
+  return repaired;
+};
+
 export async function GET(request: Request) {
   try {
     const userId = await resolveAccountsRouteUserId();
@@ -2867,6 +2997,7 @@ export async function GET(request: Request) {
       });
     }
     const compatibleColumns = await getCompatibleAccountColumns();
+    if (shouldRunAccountMaintenance) {
     // Run the narrow PayPal type-migration repair before returning visible
     // accounts so stale client caches cannot keep the obsolete card copy alive.
     await repairLegacyUploadedPayPalAccountSplits(workspaceId, compatibleColumns).catch((error) => {
@@ -2890,6 +3021,13 @@ export async function GET(request: Request) {
       });
       return 0;
     });
+    await materializeGcryptoActivityAssets(workspaceId).catch((error) => {
+      console.warn("[accounts] unable to materialize GCrypto activity assets", {
+        workspaceId,
+        error,
+      });
+      return 0;
+    });
     await repairGeneratedPdaxXrpAccountAliases(workspaceId).catch((error) => {
       console.warn("[accounts] unable to repair generated PDAX XRP account aliases", {
         workspaceId,
@@ -2899,6 +3037,20 @@ export async function GET(request: Request) {
     });
     await repairGeneratedPdaxSnapshotHoldings(workspaceId).catch((error) => {
       console.warn("[accounts] unable to repair generated PDAX snapshot holdings", {
+        workspaceId,
+        error,
+      });
+      return 0;
+    });
+    await cleanupPdaxPortfolioBucketHoldings(workspaceId).catch((error) => {
+      console.warn("[accounts] unable to clean generated PDAX bucket holdings", {
+        workspaceId,
+        error,
+      });
+      return 0;
+    });
+    await repairGeneratedPdaxPortfolioAssetLabels(workspaceId).catch((error) => {
+      console.warn("[accounts] unable to normalize PDAX portfolio labels", {
         workspaceId,
         error,
       });
@@ -2953,6 +3105,7 @@ export async function GET(request: Request) {
       });
       return 0;
     });
+    }
     const shouldRepairImportedAccounts = ["1", "true"].includes(
       (searchParams.get("repairImportedAccounts") ?? "").trim().toLowerCase()
     );

@@ -716,10 +716,11 @@ export const combineLikelySameRecurringSuggestions = (
     const accountIds = Array.from(
       new Set(group.map((suggestion) => suggestion.accountId).filter((value): value is string => Boolean(value)))
     );
-    const sharedAccountId =
-      accountIds.length === 1 && group.every((suggestion) => suggestion.accountId === accountIds[0])
-        ? accountIds[0] ?? null
-        : null;
+    // Similar subscriptions can legitimately appear on more than one card.
+    // Keep the representative import's source account for the review form
+    // instead of discarding all account evidence when the group spans cards.
+    const linkedAccountId = representative.accountId ?? accountIds[0] ?? null;
+    const linkedAccountName = representative.accountName ?? accountNames[0] ?? null;
     const amounts = group
       .map((suggestion) => Number(suggestion.amount))
       .filter((amount) => Number.isFinite(amount) && amount > 0);
@@ -743,8 +744,8 @@ export const combineLikelySameRecurringSuggestions = (
       ...representative,
       id: `combined_recurring_transaction::${key}`,
       dueDate: earliestDueDate,
-      accountId: sharedAccountId,
-      accountName: accountNames.length === 1 ? accountNames[0] ?? null : "Multiple accounts",
+      accountId: linkedAccountId,
+      accountName: linkedAccountName,
       notes: mergedNotes,
       sourceLabel: `${representative.sourceLabel} · ${group.length} similar`,
       sourceDetail: [

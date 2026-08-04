@@ -363,20 +363,20 @@ type IconName =
   | "sign-out";
 
 const MENU_ICON_SRC: Partial<Record<IconName, string>> = {
-  dashboard: "/assets/3d%20icons/home.png?v=20260723",
+  dashboard: "/assets/3d%20icons/menu/home.png",
   accounts: "/assets/3d%20icons/menu/bank-account.png",
   investments: "/assets/3d%20icons/menu/investments.png",
-  "split-bill": "/assets/3d%20icons/menu/split-bills.png?v=20260724",
-  circles: "/assets/3d%20icons/circles.png?v=20260723",
-  transactions: "/assets/3d%20icons/transactions.png?v=20260723",
-  recurring: "/assets/3d%20icons/recurring.png?v=20260723",
+  "split-bill": "/assets/3d%20icons/menu/split-bills.png",
+  circles: "/assets/3d%20icons/menu/profiles.png",
+  transactions: "/assets/3d%20icons/menu/transactions.png",
+  recurring: "/assets/3d%20icons/menu/recurring.png",
   reports: "/assets/3d%20icons/menu/reports.png",
-  adviser: "/assets/3d%20icons/adviser.png?v=20260726a",
+  adviser: "/assets/3d%20icons/menu/adviser.png",
   budgeting: "/assets/3d%20icons/menu/budgeting.png",
-  goals: "/assets/icons/goals.png",
+  goals: "/assets/3d%20icons/menu/plan.png",
   more: "/assets/3d%20icons/menu/more.png",
-  notifications: `/assets/3d%20icons/notifications.png?v=${MENU_ICON_VERSION}`,
-  settings: `/assets/3d%20icons/settings.png?v=${MENU_ICON_VERSION}`,
+  notifications: `/assets/3d%20icons/menu/notifications-v2.png?v=${MENU_ICON_VERSION}`,
+  settings: `/assets/3d%20icons/menu/settings-v2.png?v=${MENU_ICON_VERSION}`,
   help: "/assets/3d%20icons/menu/help.png",
   search: "/assets/3d%20icons/menu/search.png",
   profile: "/assets/3d%20icons/menu/account.png",
@@ -413,7 +413,7 @@ function MenuIcon({ name }: { name: IconName }) {
         width={96}
         height={96}
         loading="eager"
-        decoding="async"
+        decoding="sync"
         fetchPriority="high"
         draggable={false}
         className={`menu-icon-3d${name === "dashboard" ? " menu-icon-3d--home" : ""}${name === "adviser" ? " menu-icon-3d--adviser" : ""}`}
@@ -1561,6 +1561,23 @@ export function CloverShell({
     void router.prefetch(href);
   };
 
+  useEffect(() => {
+    const coreRoutes = ["/home", "/accounts", "/transactions", "/recurring", "/adviser", "/more"];
+    const prefetchCoreRoutes = () => coreRoutes.forEach((href) => void router.prefetch(href));
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+
+    if (idleWindow.requestIdleCallback) {
+      const handle = idleWindow.requestIdleCallback(prefetchCoreRoutes, { timeout: 1500 });
+      return () => idleWindow.cancelIdleCallback?.(handle);
+    }
+
+    const handle = window.setTimeout(prefetchCoreRoutes, 350);
+    return () => window.clearTimeout(handle);
+  }, [router]);
+
   const openQuickAddTransaction = () => {
     if (pathname?.startsWith("/accounts/institutions/")) {
       setIsQuickAddOpen(false);
@@ -1664,7 +1681,7 @@ export function CloverShell({
             return null;
           }
 
-          return <img key={iconName} src={imageSrc} alt="" width={96} height={96} loading="eager" decoding="async" fetchPriority="high" />;
+          return <img key={iconName} src={imageSrc} alt="" width={96} height={96} loading="eager" decoding="sync" fetchPriority="high" />;
         })}
       </div>
       <div

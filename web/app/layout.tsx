@@ -84,6 +84,27 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       data-theme={serverTheme ?? undefined}
       style={serverTheme ? { colorScheme: serverTheme } : undefined}
     >
+      <head>
+        {[
+          "home",
+          "bank-account",
+          "transactions",
+          "recurring",
+          "adviser",
+          "plan",
+          "more",
+          "notifications-v2",
+          "settings-v2",
+        ].map((icon) => (
+          <link
+            key={icon}
+            rel="preload"
+            href={`/assets/3d%20icons/menu/${icon}.png`}
+            as="image"
+            type="image/png"
+          />
+        ))}
+      </head>
       <body
         data-build-id={buildInfo.buildId}
         data-deployment-id={buildInfo.deploymentId ?? undefined}
