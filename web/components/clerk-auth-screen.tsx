@@ -955,9 +955,9 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
               </p>
             ) : null}
 
-            <label className="clover-auth-field">
+            <div className="clover-auth-field">
               <span className="clover-auth-field__label-row">
-                <span>Password</span>
+                <label htmlFor="clover-auth-password">Password</label>
                 {mode === "sign-in" ? (
                   <button
                     type="button"
@@ -973,6 +973,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
               </span>
               <div className="clover-auth-password">
                 <input
+                  id="clover-auth-password"
                   type={showPassword ? "text" : "password"}
                   autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
                   placeholder="Enter your password"
@@ -992,7 +993,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
                   <PasswordIcon visible={showPassword} />
                 </button>
               </div>
-            </label>
+            </div>
             {mode === "sign-up" && password.length > 0 ? (
               <p
                 className={`clover-auth-field__hint clover-auth-field__hint--status ${passwordMatchesRequirements ? "is-ok" : "is-missing"}`}
