@@ -152,6 +152,11 @@ assert.match(
 );
 assert.match(
   accountsRouteSource,
+  /investmentSnapshot\.updateMany\([\s\S]+investmentHolding\.updateMany\([\s\S]+data: \{ currency: "PHP" \}/,
+  "GSave repair must normalize linked investment snapshot and holding currency metadata."
+);
+assert.match(
+  accountsRouteSource,
   /Wise exposes different local account details for the same currency wallet[\s\S]+const key = normalizeImportedCurrencyCode\(account\.currency\)/,
   "Wise repair must consolidate upload-created wallets by currency rather than trailing local account details."
 );

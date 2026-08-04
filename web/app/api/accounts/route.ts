@@ -2119,6 +2119,16 @@ const repairLegacyUploadedGsaveUnoIdentities = async (workspaceId: string) => {
       type: productEvidence.type as "bank" | "investment",
       accountNumber: accountDigits,
     });
+    await Promise.all([
+      prisma.investmentSnapshot.updateMany({
+        where: { workspaceId, accountId: account.id, currency: { not: "PHP" } },
+        data: { currency: "PHP" },
+      }),
+      prisma.investmentHolding.updateMany({
+        where: { workspaceId, accountId: account.id, currency: { not: "PHP" } },
+        data: { currency: "PHP" },
+      }),
+    ]);
     if (
       account.type === productEvidence.type &&
       account.institution === productEvidence.institution &&
