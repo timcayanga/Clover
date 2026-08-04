@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
-import { requireAdminAuth } from "@/lib/admin";
+import { getAdminDataEnvironment, requireAdminAuth } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import {
   applyDataQaReviewLearning,
@@ -16,6 +16,15 @@ import { readImportedFileText } from "@/lib/import-file-text.server";
 import { processImportFileText } from "@/workers/import-processor";
 
 export const dynamic = "force-dynamic";
+
+const getCurrentProductionRunWhere = (runId: string): Prisma.DataQaRunWhereInput => ({
+  id: runId,
+  workspace: { user: { environment: getAdminDataEnvironment() } },
+  OR: [
+    { importFileId: null },
+    { importFile: { status: { not: "deleted" } } },
+  ],
+});
 
 const updateSchema = z.object({
   manualFeedback: z.string().trim().max(10_000).optional(),
@@ -321,8 +330,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
     const { runId } = await params;
     const pdfJsBaseUrl = new URL(_request.url).origin;
 
-    const run = await prisma.dataQaRun.findUnique({
-      where: { id: runId },
+    const run = await prisma.dataQaRun.findFirst({
+      where: getCurrentProductionRunWhere(runId),
       include: {
         workspace: {
           select: {
@@ -476,8 +485,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ru
     const pdfJsBaseUrl = new URL(request.url).origin;
     const payload = updateSchema.parse(await request.json());
 
-    const existingRun = await prisma.dataQaRun.findUnique({
-      where: { id: runId },
+    const existingRun = await prisma.dataQaRun.findFirst({
+      where: getCurrentProductionRunWhere(runId),
     });
 
     if (!existingRun) {
@@ -676,8 +685,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
     const pdfJsBaseUrl = new URL(request.url).origin;
     const payload = reparseSchema.parse(await request.json());
 
-    const existingRun = await prisma.dataQaRun.findUnique({
-      where: { id: runId },
+    const existingRun = await prisma.dataQaRun.findFirst({
+      where: getCurrentProductionRunWhere(runId),
     });
 
     if (!existingRun) {

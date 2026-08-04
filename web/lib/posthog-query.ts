@@ -138,13 +138,14 @@ const errorCodeForResponse = (status: number): PostHogLiveAnalytics["errorCode"]
   return "query_failed";
 };
 
-export async function getPostHogLiveAnalytics(): Promise<PostHogLiveAnalytics> {
+export async function getPostHogLiveAnalytics(
+  environment = getAnalyticsEnvironment()
+): Promise<PostHogLiveAnalytics> {
   const config = getQueryConfig();
   if (!config) {
     return emptyResult("not_configured", "missing_credentials");
   }
 
-  const environment = getAnalyticsEnvironment();
   const betaStartedAt = getAnalyticsBetaStartedAt();
   const escapedBetaStartedAt = betaStartedAt.toISOString().replaceAll("'", "''");
   const distinctIdPrefix = `${environment.replaceAll("'", "''")}:%`;

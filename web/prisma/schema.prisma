@@ -476,6 +476,7 @@ model ContactInquiry {
   attachment        Json?
   sourcePage        String?
   userAgent         String?
+  environment       String               @default("production")
   status            ContactInquiryStatus @default(open)
   adminReplySubject String?
   adminReplyBody    String?
@@ -487,6 +488,7 @@ model ContactInquiry {
   @@index([status])
   @@index([createdAt])
   @@index([email])
+  @@index([environment, createdAt])
 }
 
 model Workspace {

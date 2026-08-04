@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { getAdminRealWorkspaceWhere } from "@/lib/admin-data-scope";
 import { prisma } from "@/lib/prisma";
 
 export type AdminDataQaSourceFilter =
@@ -118,7 +119,17 @@ const buildWhere = (filters: AdminDataQaFilters): Prisma.DataQaRunWhereInput => 
   const query = normalizeSearch(filters.query);
   const source = filters.source && filters.source !== "all" ? filters.source : null;
 
-  const where: Prisma.DataQaRunWhereInput = {};
+  const where: Prisma.DataQaRunWhereInput = {
+    AND: [
+      { workspace: getAdminRealWorkspaceWhere() },
+      {
+        OR: [
+          { importFileId: null },
+          { importFile: { status: { not: "deleted" } } },
+        ],
+      },
+    ],
+  };
 
   if (source) {
     where.source = source;
@@ -202,12 +213,17 @@ const deriveTrainingStatus = (params: {
 
 const buildImportFileWhere = (filters: AdminDataQaFilters): Prisma.ImportFileWhereInput => {
   const query = normalizeSearch(filters.query);
+  const currentProductionImport: Prisma.ImportFileWhereInput = {
+    status: { not: "deleted" },
+    workspace: getAdminRealWorkspaceWhere(),
+  };
 
   if (!query) {
-    return {};
+    return currentProductionImport;
   }
 
   return {
+    ...currentProductionImport,
     OR: [
       { fileName: { contains: query, mode: "insensitive" } },
       { workspace: { name: { contains: query, mode: "insensitive" } } },
@@ -324,6 +340,7 @@ export async function getAdminDataQaRuns(filters: AdminDataQaFilters = {}): Prom
       },
     }),
     prisma.workspace.findMany({
+      where: getAdminRealWorkspaceWhere(),
       select: {
         id: true,
         name: true,

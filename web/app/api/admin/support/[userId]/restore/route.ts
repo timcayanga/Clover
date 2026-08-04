@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAdminAuth } from "@/lib/admin";
+import { getAdminDataEnvironment, requireAdminAuth } from "@/lib/admin";
 import { recordAdminSupportAction, restoreAdminDataSnapshot } from "@/lib/admin-support";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { prisma } from "@/lib/prisma";
@@ -15,15 +15,18 @@ export async function POST(request: Request) {
     assertTrustedRequestOrigin(request);
     const admin = await requireAdminAuth();
     const payload = schema.parse(await request.json());
-    const snapshot = await prisma.adminDataSnapshot.findUnique({
-      where: { id: payload.snapshotId },
-      select: { targetClerkUserId: true, restoredAt: true },
+    const snapshot = await prisma.adminDataSnapshot.findFirst({
+      where: {
+        id: payload.snapshotId,
+        targetUser: { environment: getAdminDataEnvironment() },
+      },
+      select: { targetUserId: true, targetClerkUserId: true, restoredAt: true },
     });
     if (!snapshot) return NextResponse.json({ error: "Snapshot not found" }, { status: 404 });
     if (snapshot.restoredAt) return NextResponse.json({ error: "This snapshot was already restored." }, { status: 409 });
     await wipeLocalUserData(snapshot.targetClerkUserId, { reseedStarterWorkspace: false });
     const result = await restoreAdminDataSnapshot(payload.snapshotId, admin.userId);
-    await recordAdminSupportAction({ actorUserId: admin.userId, action: "restore_data", metadata: { snapshot_id: payload.snapshotId } });
+    await recordAdminSupportAction({ actorUserId: admin.userId, targetUserId: snapshot.targetUserId, action: "restore_data", metadata: { snapshot_id: payload.snapshotId } });
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to restore data.";

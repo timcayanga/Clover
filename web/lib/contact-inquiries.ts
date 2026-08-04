@@ -1,4 +1,6 @@
 import { Prisma, type ContactInquiry, type ContactInquiryStatus } from "@prisma/client";
+import { getAdminDataEnvironment } from "@/lib/admin";
+import { getDeploymentEnvironment } from "@/lib/deployment-environment";
 import { prisma } from "@/lib/prisma";
 
 export const contactInquiryStatuses = ["open", "in_progress", "responded", "closed"] as const satisfies readonly ContactInquiryStatus[];
@@ -94,6 +96,7 @@ export async function createContactInquiry(input: {
       attachment: input.attachment ? (input.attachment as Prisma.InputJsonValue) : Prisma.DbNull,
       sourcePage: input.sourcePage?.trim() ? input.sourcePage.trim().slice(0, 255) : null,
       userAgent: input.userAgent?.trim() ? input.userAgent.trim().slice(0, 255) : null,
+      environment: getDeploymentEnvironment(),
       status: "open",
     },
   });
@@ -125,6 +128,7 @@ export async function getAdminContactInquiries(filters: ContactInquiryFilters = 
 
   try {
     const where: Prisma.ContactInquiryWhereInput = {
+      environment: getAdminDataEnvironment(),
       ...(filters.status && filters.status !== "all" ? { status: filters.status } : {}),
       ...(query
         ? {
@@ -148,9 +152,9 @@ export async function getAdminContactInquiries(filters: ContactInquiryFilters = 
         take: pageSize,
       }),
       contactInquiry.count({ where }),
-      contactInquiry.count({ where: { status: "open" } }),
-      contactInquiry.count({ where: { status: "in_progress" } }),
-      contactInquiry.count({ where: { status: "responded" } }),
+      contactInquiry.count({ where: { environment: getAdminDataEnvironment(), status: "open" } }),
+      contactInquiry.count({ where: { environment: getAdminDataEnvironment(), status: "in_progress" } }),
+      contactInquiry.count({ where: { environment: getAdminDataEnvironment(), status: "responded" } }),
     ]);
 
     return {
@@ -184,8 +188,16 @@ export async function updateContactInquiry(id: string, input: ContactInquiryUpda
     throw new Error("Contact inquiry storage is unavailable in this database.");
   }
 
+  const inquiry = await prisma.contactInquiry.findFirst({
+    where: { id, environment: getAdminDataEnvironment() },
+    select: { id: true },
+  });
+  if (!inquiry) {
+    throw new Error("Inquiry not found");
+  }
+
   return contactInquiry.update({
-    where: { id },
+    where: { id: inquiry.id },
     data: {
       ...(input.status ? { status: input.status } : {}),
       ...(input.adminReplySubject !== undefined ? { adminReplySubject: input.adminReplySubject?.trim() || null } : {}),
@@ -197,8 +209,8 @@ export async function updateContactInquiry(id: string, input: ContactInquiryUpda
 }
 
 export async function getAdminContactInquiryAttachment(id: string) {
-  const inquiry = await prisma.contactInquiry.findUnique({
-    where: { id },
+  const inquiry = await prisma.contactInquiry.findFirst({
+    where: { id, environment: getAdminDataEnvironment() },
     select: { attachment: true },
   });
 

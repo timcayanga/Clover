@@ -289,7 +289,7 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
           <div><span>Imports total</span><strong>{snapshot.product.imports.toLocaleString()}</strong></div>
           <div><span>Current deploy errors, 7d</span><strong>{snapshot.reliability.errors7d.toLocaleString()}</strong></div>
         </div>
-        <p className="admin-analytics__footnote">Generated {formatDate(snapshot.generatedAt)}. Counts are scoped to the current environment and beta epoch.</p>
+        <p className="admin-analytics__footnote">Generated {formatDate(snapshot.generatedAt)}. Counts are scoped to production and the beta epoch.</p>
       </section>
 
       <section className="admin-hub__panel glass" aria-labelledby="admin-top-errors-title">

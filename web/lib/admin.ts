@@ -11,8 +11,8 @@ const normalizeList = (value: string | undefined) =>
 
 export const getAdminUserIds = () => new Set(normalizeList(getEnv().ADMIN_USER_IDS));
 
-// Preview deployments represent staging; local Admin work continues to inspect production data.
-export const getAdminDataEnvironment = () => (process.env.VERCEL_ENV === "preview" ? "staging" : "production");
+// Admin is Clover's production control plane, even when opened from staging or local development.
+export const getAdminDataEnvironment = () => "production" as const;
 
 export const isAdminUserId = (userId: string | null | undefined) => {
   if (!userId) {

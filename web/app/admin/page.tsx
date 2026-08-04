@@ -23,7 +23,7 @@ export default async function AdminPage() {
       active="home"
       title="Admin"
       kicker="Internal tools"
-      subtitle="Repository for operations, analytics, user management, data QA, support, and environment-scoped error review."
+      subtitle="Production operations, analytics, user management, data QA, support, and error review."
     >
       <AdminCommandCenter snapshot={snapshot} />
     </AdminPageChrome>

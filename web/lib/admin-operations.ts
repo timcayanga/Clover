@@ -61,10 +61,10 @@ export async function getAdminOperationsSnapshot(): Promise<AdminOperationsSnaps
     prisma.importEnrichmentJob.count({ where: { status: "queued", workspace: scopedWorkspace } }),
     prisma.importEnrichmentJob.count({ where: { status: "failed", workspace: scopedWorkspace } }),
     prisma.importFile.findMany({ where: { status: { in: ["processing", "failed"] }, workspace: scopedWorkspace }, orderBy: { updatedAt: "desc" }, take: 15, include: { workspace: { include: { user: { select: { email: true } } } }, enrichmentJob: { select: { phase: true } } } }),
-    prisma.adminSupportAction.count({ where: { createdAt: { gte: dayAgo } } }),
-    prisma.adminSupportNote.count({ where: { createdAt: { gte: weekAgo } } }),
-    prisma.adminDataSnapshot.count({ where: { restoredAt: null } }),
-    prisma.adminSupportAction.findMany({ orderBy: { createdAt: "desc" }, take: 15, include: { targetUser: { select: { email: true } } } }),
+    prisma.adminSupportAction.count({ where: { createdAt: { gte: dayAgo }, targetUser: realUser } }),
+    prisma.adminSupportNote.count({ where: { createdAt: { gte: weekAgo }, targetUser: realUser } }),
+    prisma.adminDataSnapshot.count({ where: { restoredAt: null, targetUser: realUser } }),
+    prisma.adminSupportAction.findMany({ where: { targetUser: realUser }, orderBy: { createdAt: "desc" }, take: 15, include: { targetUser: { select: { email: true } } } }),
   ]);
 
   const alerts: AdminOperationsSnapshot["alerts"] = [];

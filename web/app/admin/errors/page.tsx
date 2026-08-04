@@ -20,7 +20,7 @@ export default async function AdminErrorsPage({ searchParams }: { searchParams: 
   const data = await getAdminErrorLogs({ query, page });
 
   return (
-    <AdminPageChrome active="errors" title="Error Logs" kicker="Internal tools" subtitle="Inspect errors, builds, routes, users, and stack traces in this environment.">
+    <AdminPageChrome active="errors" title="Error Logs" kicker="Internal tools" subtitle="Inspect production errors, builds, routes, users, and stack traces.">
       <AdminErrorLogsTable data={data} query={query} />
     </AdminPageChrome>
   );

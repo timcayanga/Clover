@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdminAuth } from "@/lib/admin";
+import { getAdminDataEnvironment, requireAdminAuth } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { fetchImportFileCompat } from "@/lib/data-engine";
 import { downloadImportObject } from "@/lib/import-storage.server";
@@ -30,8 +30,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
     await requireAdminAuth();
     const { runId } = await params;
 
-    const run = await prisma.dataQaRun.findUnique({
-      where: { id: runId },
+    const run = await prisma.dataQaRun.findFirst({
+      where: {
+        id: runId,
+        workspace: { user: { environment: getAdminDataEnvironment() } },
+        importFile: { status: { not: "deleted" } },
+      },
       select: {
         importFileId: true,
       },

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAdminAuth } from "@/lib/admin";
-import { listAllImportFilesCompat } from "@/lib/data-engine";
+import { getAdminDataEnvironment, requireAdminAuth } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { processImportFileText } from "@/workers/import-processor";
 
@@ -23,21 +22,21 @@ export async function GET(request: Request) {
     const { limit } = querySchema.parse({
       limit: searchParams.get("limit") ?? undefined,
     });
+    const currentProductionRun = {
+      source: { in: ["local_training", "replay"] },
+      workspace: { user: { environment: getAdminDataEnvironment() } },
+      OR: [
+        { importFileId: null },
+        { importFile: { status: { not: "deleted" as const } } },
+      ],
+    };
 
     const [sampleRuns, sampleAverage] = await Promise.all([
       prisma.dataQaRun.count({
-        where: {
-          source: {
-            in: ["local_training", "replay"],
-          },
-        },
+        where: currentProductionRun,
       }),
       prisma.dataQaRun.aggregate({
-        where: {
-          source: {
-            in: ["local_training", "replay"],
-          },
-        },
+        where: currentProductionRun,
         _avg: { score: true },
       }),
     ]);
@@ -64,10 +63,16 @@ export async function POST(request: Request) {
     await requireAdminAuth();
     const payload = replaySchema.parse(await request.json().catch(() => ({})));
 
-    const allImports = await listAllImportFilesCompat(payload.limit ?? 5);
-    const imports = payload.importFileIds?.length
-      ? allImports.filter((importFile) => payload.importFileIds?.includes(importFile.id))
-      : allImports;
+    const imports = await prisma.importFile.findMany({
+      where: {
+        ...(payload.importFileIds?.length ? { id: { in: payload.importFileIds } } : {}),
+        status: { not: "deleted" },
+        workspace: { user: { environment: getAdminDataEnvironment() } },
+      },
+      orderBy: { uploadedAt: "desc" },
+      take: payload.limit ?? 5,
+      select: { id: true, fileName: true },
+    });
 
     const results: Array<{
       importFileId: string;

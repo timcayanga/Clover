@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { isLocalDevHost, requireAuth } from "@/lib/auth";
-import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { getAdminDataEnvironment, requireAdminAuth } from "@/lib/admin";
 import { fetchImportFileCompat, fetchParsedTransactionRows, hasCompatibleTable } from "@/lib/data-engine";
 import { prisma } from "@/lib/prisma";
 
@@ -9,16 +8,29 @@ export const dynamic = "force-dynamic";
 export async function GET(_request: Request, { params }: { params: Promise<{ importFileId: string }> }) {
   try {
     const { importFileId } = await params;
-    const localDev = await isLocalDevHost();
-    const { userId } = localDev ? { userId: "local-admin" } : await requireAuth();
+    await requireAdminAuth();
+
+    const currentProductionImport = await prisma.importFile.findFirst({
+      where: {
+        id: importFileId,
+        status: { not: "deleted" },
+        workspace: {
+          user: {
+            environment: getAdminDataEnvironment(),
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!currentProductionImport) {
+      return NextResponse.json({ error: "Import not found" }, { status: 404 });
+    }
+
     const importFile = await fetchImportFileCompat(importFileId);
 
     if (!importFile) {
       return NextResponse.json({ error: "Import not found" }, { status: 404 });
-    }
-
-    if (!localDev) {
-      await assertWorkspaceAccess(userId, String(importFile.workspaceId));
     }
 
     const [run, parsedRows, statementCheckpoint] = await Promise.all([

@@ -239,7 +239,13 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
     }),
     prisma.appErrorLog.count({ where: getCurrentDeploymentErrorWhere(oneDayAgo) }),
     prisma.appErrorLog.count({ where: getCurrentDeploymentErrorWhere(sevenDaysAgo) }),
-    prisma.contactInquiry.count({ where: { status: "open", createdAt: { gte: betaStartedAt } } }),
+    prisma.contactInquiry.count({
+      where: {
+        environment: getAdminDataEnvironment(),
+        status: "open",
+        createdAt: { gte: betaStartedAt },
+      },
+    }),
     prisma.appErrorLog.findMany({
       where: getCurrentDeploymentErrorWhere(oneDayAgo),
       orderBy: { occurredAt: "desc" },
@@ -268,7 +274,7 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
         ],
       },
     }),
-    getPostHogLiveAnalytics(),
+    getPostHogLiveAnalytics(getAdminDataEnvironment()),
   ]);
 
   const posthogConfig = getPostHogConfig();

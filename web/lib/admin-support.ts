@@ -53,7 +53,9 @@ export async function createAdminDataSnapshot(targetUserId: string, actorUserId:
         include: {
           accounts: true,
           categories: true,
-          transactions: true,
+          transactions: {
+            where: { deletedAt: null },
+          },
         },
       },
     },
@@ -81,7 +83,12 @@ export async function createAdminDataSnapshot(targetUserId: string, actorUserId:
 const asDate = (value: unknown) => (typeof value === "string" ? new Date(value) : value instanceof Date ? value : null);
 
 export async function restoreAdminDataSnapshot(snapshotId: string, actorUserId: string) {
-  const snapshot = await prisma.adminDataSnapshot.findUnique({ where: { id: snapshotId } });
+  const snapshot = await prisma.adminDataSnapshot.findFirst({
+    where: {
+      id: snapshotId,
+      targetUser: { environment: getAdminDataEnvironment() },
+    },
+  });
   if (!snapshot) throw new Error("Snapshot not found");
   if (snapshot.restoredAt) throw new Error("Snapshot was already restored");
 

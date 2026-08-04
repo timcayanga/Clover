@@ -202,13 +202,8 @@ export type AdminUserSearchFilters = {
 
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
-const PRODUCTION_USER_WHERE: Prisma.UserWhereInput = {
-  environment: getAdminDataEnvironment(),
-};
 const ACTIVE_TRANSACTION_WHERE: Prisma.TransactionWhereInput = {
   deletedAt: null,
-  isExcluded: false,
-  isTransfer: false,
 };
 const ACTIVE_IMPORT_WHERE: Prisma.ImportFileWhereInput = {
   status: {
@@ -788,7 +783,7 @@ export async function getAdminUsers(filters: AdminUserListFilters = {}): Promise
   const query = filters.query?.trim() ?? "";
 
   const where: Prisma.UserWhereInput = {
-    ...PRODUCTION_USER_WHERE,
+    ...getAdminRealUserWhere(),
     ...(query
       ? {
           OR: [
@@ -1268,7 +1263,7 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
 export async function exportAdminUsers(filters: AdminUserListFilters = {}) {
   const query = filters.query?.trim() ?? "";
   const where: Prisma.UserWhereInput = {
-    ...PRODUCTION_USER_WHERE,
+    ...getAdminRealUserWhere(),
     ...(query
       ? {
           OR: [

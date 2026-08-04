@@ -6,6 +6,9 @@ const readSource = (path: string) =>
   readFileSync(resolve(process.cwd(), path), "utf8");
 
 const scopeSource = readSource("lib/admin-data-scope.ts");
+const adminSource = readSource("lib/admin.ts");
+assert.match(adminSource, /getAdminDataEnvironment = \(\) => "production" as const/);
+assert.doesNotMatch(adminSource, /VERCEL_ENV === "preview" \? "staging"/);
 assert.match(scopeSource, /@placeholder\.local/);
 assert.match(scopeSource, /@example\.com/);
 assert.match(scopeSource, /local-admin/);
@@ -33,6 +36,8 @@ assert.match(analyticsSource, /getAnalyticsBetaStartedAt/);
 assert.match(analyticsSource, /betaParticipantUser/);
 assert.match(analyticsSource, /betaTransaction/);
 assert.match(analyticsSource, /betaImport/);
+assert.match(analyticsSource, /getPostHogLiveAnalytics\(getAdminDataEnvironment\(\)\)/);
+assert.match(analyticsSource, /environment: getAdminDataEnvironment\(\)/);
 assert.match(
   analyticsSource,
   /Users who reviewed a transaction/,
@@ -43,17 +48,42 @@ assert.doesNotMatch(
 );
 
 const usersSource = readSource("lib/admin-users.ts");
+assert.match(usersSource, /const ACTIVE_TRANSACTION_WHERE:[\s\S]*?deletedAt: null,[\s\S]*?\};/);
 assert.match(usersSource, /const realUserWhere = getAdminRealUserWhere\(\)/);
 assert.match(usersSource, /adminRealUserSqlPredicate/);
 assert.match(usersSource, /getCurrentDeploymentErrorWhere/);
 assert.match(
   usersSource,
-  /const where: Prisma\.UserWhereInput = \{\s*\.\.\.PRODUCTION_USER_WHERE,/,
+  /const where: Prisma\.UserWhereInput = \{\s*\.\.\.getAdminRealUserWhere\(\),/,
 );
 
 const inquiriesSource = readSource("lib/contact-inquiries.ts");
 assert.match(inquiriesSource, /items: items\.map\(toAdminContactInquiry\)/);
 assert.match(inquiriesSource, /getAdminContactInquiryAttachment/);
+assert.match(inquiriesSource, /environment: getDeploymentEnvironment\(\)/);
+assert.match(inquiriesSource, /environment: getAdminDataEnvironment\(\)/);
+
+const dataQaSource = readSource("lib/admin-data-qa.ts");
+assert.match(dataQaSource, /workspace: getAdminRealWorkspaceWhere\(\)/);
+assert.match(dataQaSource, /status: \{ not: "deleted" \}/);
+
+const dataQaRunRouteSource = readSource("app/api/admin/data-qa/[runId]/route.ts");
+assert.match(dataQaRunRouteSource, /getCurrentProductionRunWhere/);
+assert.match(dataQaRunRouteSource, /workspace: \{ user: \{ environment: getAdminDataEnvironment\(\) \} \}/);
+
+const dataQaFileRouteSource = readSource("app/api/admin/data-qa/file/[importFileId]/route.ts");
+assert.match(dataQaFileRouteSource, /await requireAdminAuth\(\)/);
+assert.match(dataQaFileRouteSource, /status: \{ not: "deleted" \}/);
+assert.match(dataQaFileRouteSource, /environment: getAdminDataEnvironment\(\)/);
+assert.doesNotMatch(dataQaFileRouteSource, /assertWorkspaceAccess/);
+
+const sampleCorpusRouteSource = readSource("app/api/admin/data-qa/sample-corpus/route.ts");
+assert.match(sampleCorpusRouteSource, /environment: getAdminDataEnvironment\(\)/);
+assert.match(sampleCorpusRouteSource, /status: \{ not: "deleted" \}/);
+assert.doesNotMatch(sampleCorpusRouteSource, /listAllImportFilesCompat/);
+
+const supportSource = readSource("lib/admin-support.ts");
+assert.match(supportSource, /transactions: \{\s*where: \{ deletedAt: null \}/);
 
 const inquiriesComponentSource = readSource(
   "components/admin-inquiries-console.tsx",

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getAdminRealWorkspaceWhere } from "@/lib/admin-data-scope";
 import { BANK_PRIORITY, getBankPriorityIndex, getBankSlug, inferBankNameFromText, normalizeBankName } from "@/lib/data-qa-banks";
 import { dedupeBankFilesByName, normalizeFileNameKey } from "@/lib/data-qa-files";
 
@@ -120,13 +121,18 @@ const deriveBankTrainingStatus = (files: AdminDataQaBankFile[]) => {
 };
 
 const buildAdminDataQaBankSummary = async (): Promise<AdminDataQaSummaryResponse> => {
+  const productionWorkspace = getAdminRealWorkspaceWhere();
+  const currentDataQaRun = {
+    workspace: productionWorkspace,
+    OR: [
+      { importFileId: null },
+      { importFile: { status: { not: "deleted" as const } } },
+    ],
+  };
   const importFiles = await prisma.importFile.findMany({
     where: {
-      workspace: {
-        user: {
-          environment: "production",
-        },
-      },
+      status: { not: "deleted" },
+      workspace: productionWorkspace,
     },
     select: {
       id: true,
@@ -149,11 +155,7 @@ const buildAdminDataQaBankSummary = async (): Promise<AdminDataQaSummaryResponse
 
   const accounts = await prisma.account.findMany({
     where: {
-      workspace: {
-        user: {
-          environment: "production",
-        },
-      },
+      workspace: productionWorkspace,
     },
     select: {
       id: true,
@@ -163,11 +165,8 @@ const buildAdminDataQaBankSummary = async (): Promise<AdminDataQaSummaryResponse
 
   const statementCheckpoints = await prisma.accountStatementCheckpoint.findMany({
     where: {
-      workspace: {
-        user: {
-          environment: "production",
-        },
-      },
+      workspace: productionWorkspace,
+      importFile: { status: { not: "deleted" } },
     },
     select: {
       importFileId: true,
@@ -176,13 +175,7 @@ const buildAdminDataQaBankSummary = async (): Promise<AdminDataQaSummaryResponse
   });
 
   const dataQaRuns = await prisma.dataQaRun.findMany({
-    where: {
-      workspace: {
-        user: {
-          environment: "production",
-        },
-      },
-    },
+    where: currentDataQaRun,
     select: {
       id: true,
       importFileId: true,
@@ -194,13 +187,7 @@ const buildAdminDataQaBankSummary = async (): Promise<AdminDataQaSummaryResponse
   });
 
   const totalRuns = await prisma.dataQaRun.count({
-    where: {
-      workspace: {
-        user: {
-          environment: "production",
-        },
-      },
-    },
+    where: currentDataQaRun,
   });
   const accountById = new Map(accounts.map((account) => [account.id, account]));
   const statementCheckpointByImportFileId = new Map(
@@ -253,10 +240,6 @@ const buildAdminDataQaBankSummary = async (): Promise<AdminDataQaSummaryResponse
   let latestUpdatedAt: Date | null = null;
 
   for (const importFile of importFiles) {
-    if (importFile.status === "deleted") {
-      continue;
-    }
-
     visibleFiles += 1;
 
     const account = importFile.accountId ? accountById.get(importFile.accountId) ?? null : null;
