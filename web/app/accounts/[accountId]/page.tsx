@@ -58,6 +58,7 @@ import {
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   applyOptimisticWorkspaceTransactionDeletion,
+  applyOptimisticWorkspaceTransactionUpsert,
   applyOptimisticWorkspaceAccountDeletion,
   accountsWorkspaceCacheKey,
   clearDeletedWorkspaceAccount,
@@ -2272,6 +2273,45 @@ function AccountDetailPageContent() {
     setBalanceAdjustmentSaving(true);
     setBalanceAdjustmentError(null);
 
+    const optimisticTransactionId = `optimistic-balance-adjustment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const optimisticTransaction: Transaction = {
+      id: optimisticTransactionId,
+      workspaceId: account.workspaceId,
+      accountId: account.id,
+      accountName: account.name,
+      categoryId: categoryId ?? null,
+      amount: amount.toFixed(2),
+      currency: account.currency,
+      type: isAddingBalance ? "income" : "expense",
+      date: transactionDate,
+      merchantRaw: merchantLabel,
+      merchantClean: merchantLabel,
+      categoryName: categoryId ? categories.find((category) => category.id === categoryId)?.name ?? null : null,
+      reviewStatus: "confirmed",
+      parserConfidence: 100,
+      categoryConfidence: categoryId ? 100 : 0,
+      accountMatchConfidence: 100,
+      duplicateConfidence: 0,
+      transferConfidence: 0,
+      description: adjustmentDescription,
+      isExcluded: false,
+      isTransfer: false,
+      institution: account.institution,
+      accountNumber: account.accountNumber,
+      source: "manual",
+      importFileId: null,
+      warningReason: null,
+      splitBill: null,
+      rawPayload: { source: "manual", optimistic: true },
+    };
+
+    setTransactions((current) => [optimisticTransaction, ...current.filter((transaction) => transaction.id !== optimisticTransactionId)]);
+    setTransactionTotalCount((current) => current + 1);
+    applyOptimisticWorkspaceTransactionUpsert(account.workspaceId, optimisticTransaction);
+    setBalanceAdjustmentOpen(false);
+    setBalanceAdjustmentAmount("");
+    setMessage(isCashAdjustment ? (isAddingBalance ? "Cash added." : "Cash removed.") : isAddingBalance ? "Balance added." : "Balance removed.");
+
     try {
       const response = await fetch("/api/transactions", {
         method: "POST",
@@ -2329,13 +2369,21 @@ function AccountDetailPageContent() {
         rawPayload: payload.transaction.rawPayload,
       };
 
-      setTransactions((current) => [createdTransaction, ...current.filter((transaction) => transaction.id !== createdTransaction.id)]);
-      setTransactionTotalCount((current) => current + 1);
-      setBalanceAdjustmentOpen(false);
-      setBalanceAdjustmentAmount("");
-      setMessage(isCashAdjustment ? (isAddingBalance ? "Cash added." : "Cash removed.") : isAddingBalance ? "Balance added." : "Balance removed.");
-      router.refresh();
+      setTransactions((current) => [
+        createdTransaction,
+        ...current.filter(
+          (transaction) => transaction.id !== optimisticTransactionId && transaction.id !== createdTransaction.id
+        ),
+      ]);
+      applyOptimisticWorkspaceTransactionUpsert(account.workspaceId, createdTransaction, {
+        replaceTransactionId: optimisticTransactionId,
+      });
     } catch (error) {
+      setTransactions((current) => current.filter((transaction) => transaction.id !== optimisticTransactionId));
+      setTransactionTotalCount((current) => Math.max(0, current - 1));
+      applyOptimisticWorkspaceTransactionDeletion(account.workspaceId, optimisticTransactionId);
+      setBalanceAdjustmentOpen(true);
+      setMessage("");
       setBalanceAdjustmentError(error instanceof Error ? error.message : "Unable to save balance adjustment.");
     } finally {
       setBalanceAdjustmentSaving(false);
