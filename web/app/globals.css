@@ -35946,6 +35946,29 @@ button.accounts-detail__transaction-head-cell {
   background: transparent;
 }
 
+body[data-clover-shell-ready="true"] .clover-loading-screen::before {
+  content: "";
+  position: fixed;
+  z-index: 2;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  opacity: 0;
+  background: linear-gradient(90deg, transparent, var(--accent), var(--mint), transparent);
+  background-size: 220% 100%;
+  animation: route-loading-reveal 0.01s 0.25s forwards, route-loading-progress 1s linear 0.25s infinite;
+}
+
+body[data-clover-shell-ready="true"] .clover-loading-screen__card {
+  opacity: 0;
+  animation: clover-loading-card-reveal 0.01s 1.6s forwards;
+}
+
+@keyframes clover-loading-card-reveal {
+  to { opacity: 1; }
+}
+
 .clover-loading-screen__logo {
   position: relative;
   width: var(--splash-logo-mark-size);

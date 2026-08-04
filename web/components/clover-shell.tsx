@@ -1211,6 +1211,10 @@ export function CloverShell({
   useEffect(() => subscribeImportActivity(() => setImportActivity(readImportActivity())), []);
 
   useEffect(() => {
+    document.body.dataset.cloverShellReady = "true";
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
 
     const loadReviewQueueCount = async () => {
