@@ -2065,6 +2065,119 @@ const mergeUploadedAccountRecords = async (params: {
   });
 };
 
+const repairLegacyMisclassifiedGotradeAccounts = async (workspaceId: string) => {
+  const candidates = await prisma.account.findMany({
+    where: {
+      workspaceId,
+      source: "upload",
+      currency: "USD",
+      OR: [
+        { institution: { equals: "GSave", mode: "insensitive" } },
+        { name: { equals: "GSave", mode: "insensitive" } },
+        { name: { equals: "Dividends", mode: "insensitive" } },
+      ],
+    },
+    select: {
+      id: true,
+      transactions: {
+        where: { deletedAt: null },
+        select: { merchantClean: true, description: true },
+      },
+      investmentHoldings: { select: { assetType: true } },
+      investmentSnapshots: {
+        orderBy: [{ snapshotDate: "desc" }, { updatedAt: "desc" }],
+        select: { totalValue: true },
+      },
+      importFiles: {
+        select: {
+          id: true,
+          parsedRows: {
+            select: { accountNumber: true, accountName: true, rawPayload: true },
+          },
+        },
+      },
+    },
+  }).catch(() => []);
+
+  let repairedCount = 0;
+  for (const account of candidates) {
+    const activityCount = account.transactions.filter((transaction) =>
+      /^(?:buy|sell)\s+[a-z][a-z0-9.]{0,9}\b|(?:dividend|withholding tax)\b/i.test(
+        transaction.merchantClean ?? transaction.description ?? ""
+      )
+    ).length;
+    const hasStockHoldings = account.investmentHoldings.some(
+      (holding) => holding.assetType?.trim().toLowerCase() === "stock"
+    );
+    if (!hasStockHoldings && activityCount < 2) {
+      continue;
+    }
+
+    const realGsaveAccounts = await prisma.account.findMany({
+      where: {
+        workspaceId,
+        id: { not: account.id },
+        currency: "PHP",
+        OR: [
+          { institution: { equals: "GSave", mode: "insensitive" } },
+          { name: { contains: "GSave", mode: "insensitive" } },
+        ],
+      },
+      select: { id: true, accountNumber: true },
+    });
+    for (const file of account.importFiles) {
+      const gsaveRow = file.parsedRows.find((row) => {
+        const provider = readImportedJsonText(row.rawPayload, "providerInstitution");
+        return /UNO(?:\s+Digital\s+Bank)?/i.test(provider ?? "") || /^GSave\s+#/i.test(row.accountName ?? "");
+      });
+      if (!gsaveRow) {
+        continue;
+      }
+      const rowAccountNumber = normalizeImportAccountNumber(gsaveRow.accountNumber);
+      const target = realGsaveAccounts.find(
+        (candidate) => normalizeImportAccountNumber(candidate.accountNumber) === rowAccountNumber
+      );
+      await prisma.importFile.update({
+        where: { id: file.id },
+        data: { accountId: target?.id ?? null },
+      });
+    }
+
+    const latestPortfolioValue = account.investmentSnapshots.find(
+      (snapshot) => snapshot.totalValue !== null
+    )?.totalValue;
+    await prisma.$transaction([
+      prisma.account.update({
+        where: { id: account.id },
+        data: {
+          name: "GoTrade Activity",
+          institution: "GoTrade",
+          type: "investment",
+          currency: "USD",
+          balance: latestPortfolioValue?.toString() ?? "0",
+        },
+      }),
+      prisma.investmentSnapshot.updateMany({
+        where: { workspaceId, accountId: account.id },
+        data: { currency: "USD" },
+      }),
+      prisma.investmentHolding.updateMany({
+        where: {
+          workspaceId,
+          OR: [
+            { accountId: account.id },
+            { investmentSnapshot: { accountId: account.id } },
+          ],
+        },
+        data: { accountId: account.id, currency: "USD" },
+      }),
+    ]);
+    repairedCount += 1;
+  }
+
+  return repairedCount;
+};
+
 const repairLegacyUploadedGsaveUnoIdentities = async (workspaceId: string) => {
   const uploadedAccounts = await prisma.account.findMany({
     where: {
@@ -2606,6 +2719,13 @@ export async function GET(request: Request) {
     });
     await repairLegacyWiseWalletDuplicates(workspaceId).catch((error) => {
       console.warn("[accounts] unable to repair duplicate Wise wallets", {
+        workspaceId,
+        error,
+      });
+      return 0;
+    });
+    await repairLegacyMisclassifiedGotradeAccounts(workspaceId).catch((error) => {
+      console.warn("[accounts] unable to repair legacy GoTrade accounts", {
         workspaceId,
         error,
       });

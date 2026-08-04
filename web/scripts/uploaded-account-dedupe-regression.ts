@@ -123,6 +123,9 @@ const eagerGsaveUnoRepair = accountsRouteSource.indexOf(
 const eagerWiseDuplicateRepair = accountsRouteSource.indexOf(
   "await repairLegacyWiseWalletDuplicates(workspaceId)"
 );
+const eagerMisclassifiedGotradeRepair = accountsRouteSource.indexOf(
+  "await repairLegacyMisclassifiedGotradeAccounts(workspaceId)"
+);
 const eagerGotradeRecovery = accountsRouteSource.indexOf(
   "await repairLegacyGotradeActivityImports(workspaceId)"
 );
@@ -140,6 +143,15 @@ assert.ok(
 assert.ok(
   eagerWiseDuplicateRepair > 0 && visibleAccountsQuery > eagerWiseDuplicateRepair,
   "Currency-scoped Wise duplicate repair must finish before visible cards are returned."
+);
+assert.ok(
+  eagerMisclassifiedGotradeRepair > 0 && visibleAccountsQuery > eagerMisclassifiedGotradeRepair,
+  "Legacy GoTrade activity mislabeled as GSave must be repaired before visible cards are returned."
+);
+assert.match(
+  accountsRouteSource,
+  /providerInstitution[\s\S]+data: \{ accountId: target\?\.id \?\? null \}[\s\S]+GoTrade Activity/,
+  "GoTrade repair must preserve activity while detaching UNO-evidenced imports from the mislabeled account."
 );
 assert.ok(
   eagerGotradeRecovery > 0 && visibleAccountsQuery > eagerGotradeRecovery,
