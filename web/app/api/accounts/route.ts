@@ -2125,7 +2125,14 @@ const repairLegacyUploadedGsaveUnoIdentities = async (workspaceId: string) => {
         data: { currency: "PHP" },
       }),
       prisma.investmentHolding.updateMany({
-        where: { workspaceId, accountId: account.id, currency: { not: "PHP" } },
+        where: {
+          workspaceId,
+          currency: { not: "PHP" },
+          OR: [
+            { accountId: account.id },
+            { investmentSnapshot: { accountId: account.id } },
+          ],
+        },
         data: { currency: "PHP" },
       }),
     ]);

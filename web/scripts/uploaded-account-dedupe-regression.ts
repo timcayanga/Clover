@@ -152,7 +152,7 @@ assert.match(
 );
 assert.match(
   accountsRouteSource,
-  /investmentSnapshot\.updateMany\([\s\S]+investmentHolding\.updateMany\([\s\S]+data: \{ currency: "PHP" \}/,
+  /investmentSnapshot\.updateMany\([\s\S]+investmentHolding\.updateMany\([\s\S]+investmentSnapshot: \{ accountId: account\.id \}[\s\S]+data: \{ currency: "PHP" \}/,
   "GSave repair must normalize linked investment snapshot and holding currency metadata."
 );
 assert.match(
