@@ -267,11 +267,26 @@ const formatRelativeTime = (timestamp: number) => {
 
 export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, focusAssetId }: InvestmentMarketChartProps) {
   const trackablePortfolioAssets = useMemo(
-    () =>
-      investmentAccounts
+    () => {
+      const seenSymbols = new Set<string>();
+      return investmentAccounts
         .filter((account) => isMarketTrackableSubtype(account.investmentSubtype))
         .slice()
-        .sort((left, right) => Number(right.balance ?? 0) - Number(left.balance ?? 0)),
+        .sort((left, right) => Number(right.balance ?? 0) - Number(left.balance ?? 0))
+        .filter((account) => {
+          const symbol = normalizeMarketSymbol(account.investmentSymbol ?? "");
+          if (!symbol) {
+            return true;
+          }
+
+          const key = `${getMarketForInvestment(account)}:${symbol}`;
+          if (seenSymbols.has(key)) {
+            return false;
+          }
+          seenSymbols.add(key);
+          return true;
+        });
+    },
     [investmentAccounts]
   );
   const defaultMarketAsset = useMemo(

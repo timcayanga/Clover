@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { getInvestmentAssetBrand, getInvestmentAssetLogoCandidates } from "@/lib/investment-assets";
 import { inferInvestmentClassification, isActivityOnlyGcryptoAccount } from "@/lib/investments";
 import {
@@ -160,4 +162,17 @@ assert.equal(
   "A GCrypto account with explicit position evidence should remain a visible holding."
 );
 
-console.log(`Investment regression passed: ${classificationCases.length + 8} checks.`);
+const investmentsPageSource = readFileSync(resolve(process.cwd(), "app/investments/page.tsx"), "utf8");
+const investmentsStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
+const marketChartSource = readFileSync(resolve(process.cwd(), "components/investment-market-chart.tsx"), "utf8");
+
+assert.doesNotMatch(investmentsPageSource, /allLabel="All currencies"/, "Investments must require one real currency.");
+assert.doesNotMatch(investmentsPageSource, /\["neutral", "Neutral"\]/, "Portfolio Outlook must not render a neutral column.");
+assert.match(investmentsPageSource, /\/api\/market-news\?/, "Asset news must load inside Clover.");
+assert.doesNotMatch(investmentsPageSource, /news\.google\.com/, "Asset news must not navigate users away from Clover.");
+assert.match(investmentsStyles, /\.content--investments\s*\{[\s\S]*?height:\s*100dvh;/, "Investments must own a scrollable viewport.");
+assert.match(investmentsStyles, /\.content--investments\s*>\s*\.topbar\s*\{[\s\S]*?position:\s*sticky;/, "The desktop Investments header must be sticky.");
+assert.match(investmentsStyles, /\.investments-mobile-header\s*\{[\s\S]*?position:\s*sticky;/, "The mobile Investments header must be sticky.");
+assert.match(marketChartSource, /seenSymbols\.has\(key\)/, "Portfolio market tickers must be deduplicated.");
+
+console.log(`Investment regression passed: ${classificationCases.length + 16} checks.`);

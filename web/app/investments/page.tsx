@@ -143,6 +143,15 @@ type InvestmentSnapshot = {
   holdings: InvestmentSnapshotHolding[];
 };
 
+type InvestmentNewsItem = {
+  id: string;
+  title: string;
+  summary: string;
+  source: string;
+  publishedAt: string | null;
+  sentiment: "positive" | "negative" | "neutral";
+};
+
 const getCachedInvestmentWorkspace = (workspaceId: string) => {
   const cachedSnapshot = getCachedAccountsWorkspace(workspaceId);
   const cachedAccounts = Array.isArray(cachedSnapshot?.accounts) ? (cachedSnapshot.accounts as Account[]) : [];
@@ -454,11 +463,21 @@ function InvestmentGrowthChart({
   points: Array<{ date: string; value: number }>;
   currency: string;
 }) {
-  if (points.length < 2) {
+  if (points.length === 0) {
     return (
       <div className="investments-growth-chart__empty">
         <strong>Investment history will appear here.</strong>
         <span>Upload another dated statement or record a new valuation to start the timeline.</span>
+      </div>
+    );
+  }
+
+  if (points.length === 1) {
+    return (
+      <div className="investments-growth-chart__single">
+        <span className="investments-growth-chart__single-label">Current recorded value</span>
+        <strong>{formatInvestmentAmount(points[0].value, currency)}</strong>
+        <span>{new Date(points[0].date).toLocaleDateString("en-PH", { day: "numeric", month: "short", year: "numeric" })}</span>
       </div>
     );
   }
@@ -1000,7 +1019,7 @@ export default function InvestmentsPage() {
   const [investmentSearch, setInvestmentSearch] = useState(searchQueryFromUrl);
   const [investmentSubtypeFilter, setInvestmentSubtypeFilter] = useState<InvestmentSubtype | "all">("all");
   const [investmentSortKey, setInvestmentSortKey] = useState<InvestmentSortKey>("value_desc");
-  const [portfolioCurrencyFilter, setPortfolioCurrencyFilter] = useState("all");
+  const [portfolioCurrencyFilter, setPortfolioCurrencyFilter] = useState("");
   const [portfolioView, setPortfolioView] = useState<PortfolioView>("all");
   const [selectedOverviewMixKey, setSelectedOverviewMixKey] = useState("");
   const [addOpen, setAddOpen] = useState(false);
@@ -1030,6 +1049,11 @@ export default function InvestmentsPage() {
   const [manualMoreOpen, setManualMoreOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState<InvestmentTab>(requestedTab);
   const [marketFocusAssetId, setMarketFocusAssetId] = useState<string | null>(null);
+  const [newsAsset, setNewsAsset] = useState<PortfolioDisplayRow | null>(null);
+  const [newsItems, setNewsItems] = useState<InvestmentNewsItem[]>([]);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [newsError, setNewsError] = useState("");
+  const newsPanelRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     document.title = "Clover | Investments";
@@ -1071,7 +1095,7 @@ export default function InvestmentsPage() {
   }, [addOpen]);
 
   useEffect(() => {
-    setPortfolioCurrencyFilter("all");
+    setPortfolioCurrencyFilter("");
   }, [selectedWorkspaceId]);
 
   useEffect(() => {
@@ -1597,8 +1621,28 @@ export default function InvestmentsPage() {
       pointsByDate.set(dateKey, Array.from(latestByAccount.values()).reduce((sum, value) => sum + value, 0));
     }
 
-    return Array.from(pointsByDate, ([date, value]) => ({ date, value }));
-  }, [canAggregateSelectedCurrency, investmentSnapshots, selectedCurrencyCodes]);
+    const points = Array.from(pointsByDate, ([date, value]) => ({ date, value }));
+    const currentValue = selectedCurrencyInvestmentAccounts.reduce(
+      (sum, account) => sum + (parseNullableAmount(account.balance) ?? 0),
+      0
+    );
+    const latestAccountDate = selectedCurrencyInvestmentAccounts.reduce(
+      (latest, account) => Math.max(latest, new Date(account.updatedAt).getTime()),
+      0
+    );
+
+    if (currentValue > 0 && latestAccountDate > 0) {
+      const date = new Date(latestAccountDate).toISOString().slice(0, 10);
+      const existingIndex = points.findIndex((point) => point.date === date);
+      if (existingIndex >= 0) {
+        points[existingIndex] = { date, value: currentValue };
+      } else {
+        points.push({ date, value: currentValue });
+      }
+    }
+
+    return points.sort((left, right) => left.date.localeCompare(right.date));
+  }, [canAggregateSelectedCurrency, investmentSnapshots, selectedCurrencyCodes, selectedCurrencyInvestmentAccounts]);
 
   const investmentGroups = useMemo<InvestmentGroup[]>(
     () => (canAggregateSelectedCurrency ? buildInvestmentGroups(selectedCurrencyInvestmentAccounts) : []),
@@ -1883,9 +1927,19 @@ export default function InvestmentsPage() {
   const manualCanTrackDividends = canTrackInvestmentDividends(manualInvestmentSubtype);
 
   const portfolioCurrencyOptions = useMemo(() => {
-    const currencies = getCurrencyCodes(investmentAccounts);
-    return ["all", ...currencies];
+    return getCurrencyCodes(investmentAccounts);
   }, [investmentAccounts]);
+
+  useEffect(() => {
+    if (portfolioCurrencyOptions.length === 0) {
+      return;
+    }
+
+    const selectedCurrency = portfolioCurrencyFilter.trim().toUpperCase();
+    if (!selectedCurrency || !portfolioCurrencyOptions.includes(selectedCurrency)) {
+      setPortfolioCurrencyFilter(portfolioCurrencyOptions[0]);
+    }
+  }, [portfolioCurrencyFilter, portfolioCurrencyOptions]);
   const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
 
   const activeInvestmentFilters = Boolean(
@@ -1983,6 +2037,32 @@ export default function InvestmentsPage() {
 
     setMarketFocusAssetId(row.assetId);
     selectInvestmentTab("market");
+  };
+
+  const openOutlookNews = async (row: PortfolioDisplayRow) => {
+    setNewsAsset(row);
+    setNewsItems([]);
+    setNewsError("");
+    setNewsLoading(true);
+    window.requestAnimationFrame(() => newsPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+
+    try {
+      const params = new URLSearchParams({
+        name: row.name,
+        symbol: row.symbol?.trim() ?? "",
+        market: row.subtype === "crypto" ? "crypto" : formatCurrencyCode(row.currency) === "PHP" ? "ph" : "us",
+      });
+      const response = await fetch(`/api/market-news?${params.toString()}`, { cache: "no-store" });
+      const payload = (await response.json()) as { items?: InvestmentNewsItem[]; error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "News is unavailable right now.");
+      }
+      setNewsItems(Array.isArray(payload.items) ? payload.items : []);
+    } catch (error) {
+      setNewsError(error instanceof Error ? error.message : "News is unavailable right now.");
+    } finally {
+      setNewsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -2466,9 +2546,7 @@ export default function InvestmentsPage() {
           <CurrencySelector
             value={portfolioCurrencyFilter}
             onChange={setPortfolioCurrencyFilter}
-            options={portfolioCurrencyOptions.filter((currency) => currency !== "all")}
-            includeAllOption
-            allLabel="All currencies"
+            options={portfolioCurrencyOptions}
             ariaLabel="Select investment currency"
             className="transactions-currency-filter investments-currency-filter"
             buttonClassName="button button-secondary button-small investments-page__toolbar-button"
@@ -2945,7 +3023,6 @@ export default function InvestmentsPage() {
               <div className="investments-portfolio-outlook__columns">
                 {([
                   ["positive", "Positive"],
-                  ["neutral", "Neutral"],
                   ["negative", "Negative"],
                 ] as Array<[PortfolioOutlookTone, string]>).map(([tone, label]) => {
                   const items = portfolioOutlook[tone];
@@ -2998,13 +3075,9 @@ export default function InvestmentsPage() {
                                 <button type="button" onClick={() => openOutlookMarketData(row)}>
                                   {row.symbol?.trim() ? "Market data" : "Add ticker"}
                                 </button>
-                                <a
-                                  href={`https://news.google.com/search?q=${encodeURIComponent(`${row.name} ${row.symbol ?? ""}`.trim())}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
+                                <button type="button" onClick={() => void openOutlookNews(row)}>
                                   News
-                                </a>
+                                </button>
                               </div>
                             </article>
                           ))
@@ -3026,6 +3099,54 @@ export default function InvestmentsPage() {
                 })}
               </div>
             </article>
+            {newsAsset ? (
+              <article className="investments-news-panel glass" ref={newsPanelRef} aria-live="polite">
+                <div className="investments-allocation__head">
+                  <div className="investments-allocation__head-title">
+                    <p className="eyebrow">Asset News</p>
+                    <h5>{newsAsset.name}</h5>
+                  </div>
+                  <button
+                    className="investments-news-panel__close"
+                    type="button"
+                    onClick={() => {
+                      setNewsAsset(null);
+                      setNewsItems([]);
+                      setNewsError("");
+                    }}
+                    aria-label="Close asset news"
+                  >
+                    ×
+                  </button>
+                </div>
+                {newsLoading ? (
+                  <p className="panel-muted">Loading current coverage...</p>
+                ) : newsError ? (
+                  <div className="investments-news-panel__empty">
+                    <strong>Current coverage is unavailable.</strong>
+                    <p>{newsError}</p>
+                  </div>
+                ) : newsItems.length > 0 ? (
+                  <div className="investments-news-panel__grid">
+                    {newsItems.map((item) => (
+                      <article className={`investments-news-card investments-news-card--${item.sentiment}`} key={item.id}>
+                        <div className="investments-news-card__meta">
+                          <span>{item.source}</span>
+                          <span>{item.publishedAt ? formatDate(item.publishedAt) : "Recent"}</span>
+                        </div>
+                        <h6>{item.title}</h6>
+                        <p>{item.summary}</p>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="investments-news-panel__empty">
+                    <strong>No recent coverage found.</strong>
+                    <p>Clover could not find a reliable current article for this asset.</p>
+                  </div>
+                )}
+              </article>
+            ) : null}
             <article className="investments-allocation glass">
               <div className="investments-allocation__head">
                 <div className="investments-allocation__head-title">
