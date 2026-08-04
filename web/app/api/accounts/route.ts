@@ -2210,8 +2210,9 @@ const repairLegacyWiseWalletDuplicates = async (workspaceId: string) => {
 
   const groups = new Map<string, typeof accounts>();
   for (const account of accounts) {
-    const accountNumber = normalizeImportAccountNumber(account.accountNumber);
-    const key = [normalizeImportedCurrencyCode(account.currency), accountNumber ?? "no-visible-number"].join("|");
+    // Wise exposes different local account details for the same currency wallet.
+    // Clover models that as one wallet per currency, not one card per trailing identifier.
+    const key = normalizeImportedCurrencyCode(account.currency) ?? "PHP";
     groups.set(key, [...(groups.get(key) ?? []), account]);
   }
 

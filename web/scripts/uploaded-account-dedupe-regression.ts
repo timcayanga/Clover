@@ -152,6 +152,11 @@ assert.match(
 );
 assert.match(
   accountsRouteSource,
+  /Wise exposes different local account details for the same currency wallet[\s\S]+const key = normalizeImportedCurrencyCode\(account\.currency\)/,
+  "Wise repair must consolidate upload-created wallets by currency rather than trailing local account details."
+);
+assert.match(
+  accountsRouteSource,
   /transaction\.updateMany[\s\S]+importFile\.updateMany[\s\S]+accountStatementCheckpoint\.updateMany[\s\S]+account\.deleteMany/,
   "Account repair must repoint financial history and import evidence before deleting an orphan account."
 );
