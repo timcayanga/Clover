@@ -255,6 +255,8 @@ const isGenericInvestmentAssetLabel = (name: string | null | undefined, institut
   return new Set([
     "gfunds investments",
     "gfunds",
+    "gstocks philippines",
+    "gstocks",
     "atram investments",
     "atram",
     // Portfolio buckets describe an aggregate, not a holding. In particular,
@@ -677,6 +679,9 @@ export default function InvestmentInstitutionDetailPage() {
           account.investmentCostBasis !== null ||
           account.investmentPrincipal !== null
         );
+        if (isGenericInvestmentAssetLabel(account.name, account.institution) && !hasPositionEvidence) {
+          return false;
+        }
         return !isActivityOnlyGcryptoAccount({
           source: account.source,
           name: account.name,
@@ -758,9 +763,15 @@ export default function InvestmentInstitutionDetailPage() {
     const accountsRepresentedBySnapshots = new Set<string>();
     for (const snapshot of latestSnapshotByIdentity.values()) {
       const account = snapshot.account?.id ? accountById.get(snapshot.account.id) ?? null : null;
-      const holdings = snapshot.holdings.filter(
-        (holding) => !isInstitutionOnlySnapshotHolding(holding, snapshot, account)
-      );
+      // GSave investments are individual time-deposit accounts. Snapshot
+      // holdings belong to products such as GCrypto/GFunds and must never be
+      // rendered inside the GSave institution when an old import was linked
+      // to the wrong account.
+      const holdings = routeInstitution.toLowerCase() === "gsave"
+        ? []
+        : snapshot.holdings.filter(
+            (holding) => !isInstitutionOnlySnapshotHolding(holding, snapshot, account)
+          );
       if (holdings.length === 0) {
         continue;
       }

@@ -52,6 +52,8 @@ This document captures the GSave parsing rules learned from the screenshot train
   - `GSave #UNOready 4132`
   - `GSave #UNOboost 1330`
 - Time-deposit detail screens should preserve maturity metadata without fabricating transactions.
+- Render each `#UNOboost` time-deposit account as a GSave holding using its deposit amount. Do not treat unrelated GCash investment snapshots, including GCrypto holdings, as GSave assets.
+- Repair a legacy uploaded time deposit from its preserved snapshot row only when its time-deposit subtype or principal metadata was never materialized. Do not overwrite a complete time deposit that a user later changes or closes.
 
 ## Review Gating
 

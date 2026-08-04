@@ -33,6 +33,8 @@ This document captures the current Clover parsing rules for ATRAM-backed investm
 - When a GFunds or ATRAM screen shows holdings metrics such as `Current Value`, `Market Value`, `Subscribed Amount`, `Invested Amount`, `Gain/Loss`, `Units`, or `NAVPU`, treat it as a portfolio snapshot.
 - Persist the document family as `portfolio` so the import worker saves an investment snapshot and holdings instead of only creating parsed rows.
 - Use `GFunds Investments` as the portfolio account label when the screenshot is portfolio-wide rather than tied to a single visible fund account card.
+- Treat `GFunds Investments` as an institution-level portfolio label, not an asset holding. Show the actual named funds as holdings and suppress the portfolio label from the holdings table.
+- Apply the same boundary to GStocks: `GStocks Philippines` identifies the institution or portfolio and must not appear as a stock holding without separate position evidence.
 - Use `GFunds` as the institution for current GFunds portfolio screens.
 - For each visible fund holding:
   - `asset_type`: `mutual_fund`

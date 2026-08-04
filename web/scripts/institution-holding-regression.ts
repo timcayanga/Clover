@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 const root = resolve(process.cwd());
 const institutionPage = readFileSync(resolve(root, "app/accounts/institutions/[institutionSlug]/page.tsx"), "utf8");
 const accountsPage = readFileSync(resolve(root, "app/accounts/page.tsx"), "utf8");
+const accountsRoute = readFileSync(resolve(root, "app/api/accounts/route.ts"), "utf8");
 const styles = readFileSync(resolve(root, "app/globals.css"), "utf8");
 const shell = readFileSync(resolve(root, "components/clover-shell.tsx"), "utf8");
 
@@ -25,6 +26,12 @@ const checks = [
   [accountsPage.includes('? "GSave"'), "Stale UNO products use the canonical GSave institution title"],
   [institutionPage.includes('routeInstitution.toLowerCase() === "gsave"'), "The GSave institution page includes linked savings products"],
   [institutionPage.includes("getInvestmentAssetBrand"), "Institution holdings resolve stable asset branding"],
+  [institutionPage.includes('"gstocks philippines"'), "GStocks institution placeholders are not rendered as assets"],
+  [institutionPage.includes("isGenericInvestmentAssetLabel(account.name, account.institution) && !hasPositionEvidence"), "Institution portfolio containers without position evidence are not rendered as holdings"],
+  [institutionPage.includes("GSave investments are individual time-deposit accounts"), "GSave rejects investment snapshots that belong to other GCash products"],
+  [accountsRoute.includes("repairIncompleteGsaveTimeDeposits"), "Accounts maintenance restores incomplete GSave time-deposit metadata"],
+  [accountsRoute.includes('account.investmentSubtype === "time_deposit" && account.investmentPrincipal !== null'), "Complete or user-adjusted GSave time deposits are preserved"],
+  [accountsRoute.includes("repairExplicitlyMislinkedGsaveSnapshots"), "Explicit non-GSave snapshot links are repaired at read time"],
   [institutionPage.includes("accountsPayload.investmentSnapshots"), "Institution details loads imported snapshot holdings"],
   [institutionPage.includes("institutionHoldingRows.map"), "Imported and manual holdings share the asset table"],
   [institutionPage.includes("<th>Units</th>"), "Institution holdings expose units"],

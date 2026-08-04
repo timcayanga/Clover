@@ -2313,6 +2313,200 @@ const repairLegacyUploadedGsaveUnoIdentities = async (workspaceId: string) => {
   return repairedCount;
 };
 
+const repairIncompleteGsaveTimeDeposits = async (workspaceId: string) => {
+  if (!(await hasCompatibleTable("ParsedTransaction"))) {
+    return 0;
+  }
+
+  const [accounts, parsedRows] = await Promise.all([
+    prisma.account.findMany({
+      where: {
+        workspaceId,
+        source: "upload",
+        type: "investment",
+        OR: [
+          { institution: { equals: "GSave", mode: "insensitive" } },
+          { name: { contains: "UNOboost", mode: "insensitive" } },
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        institution: true,
+        accountNumber: true,
+        balance: true,
+        investmentSubtype: true,
+        investmentPrincipal: true,
+        investmentInterestRate: true,
+        investmentMaturityValue: true,
+        investmentMaturityDate: true,
+      },
+    }),
+    prisma.parsedTransaction.findMany({
+      where: {
+        workspaceId,
+        OR: [
+          { institution: { equals: "GSave", mode: "insensitive" } },
+          { accountName: { contains: "UNOboost", mode: "insensitive" } },
+        ],
+      },
+      orderBy: { createdAt: "desc" },
+      take: 500,
+      select: {
+        accountName: true,
+        accountNumber: true,
+        rawPayload: true,
+      },
+    }),
+  ]);
+
+  const evidence = parsedRows.flatMap((row) => {
+    const payload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    if (
+      !payload ||
+      payload.kind !== "account_snapshot_marker" ||
+      !/unoboost|time deposit/i.test(
+        [row.accountName, payload.accountName, payload.providerProduct, payload.accountLabel]
+          .filter(Boolean)
+          .join(" ")
+      )
+    ) {
+      return [];
+    }
+
+    const principal = readImportedJsonNumber(
+      payload.depositAmount ?? payload.statementEndingBalance ?? payload.balance
+    );
+    if (principal === null || principal <= 0) {
+      return [];
+    }
+
+    const interestRateText = typeof payload.interestRate === "string" ? payload.interestRate : null;
+    const interestRate = interestRateText
+      ? readImportedJsonNumber(interestRateText.replace(/[^0-9.]/g, ""))
+      : null;
+    const maturityDateText = typeof payload.maturityDate === "string" ? payload.maturityDate : null;
+    const maturityDate = maturityDateText ? new Date(maturityDateText) : null;
+
+    return [{
+      accountName: row.accountName ?? readImportedJsonText(payload, "accountName"),
+      accountNumber:
+        normalizeImportAccountNumber(row.accountNumber) ??
+        normalizeImportAccountNumber(readImportedJsonText(payload, "accountNumber")),
+      principal,
+      interestRate,
+      maturityValue: readImportedJsonNumber(payload.maturityAmount),
+      maturityDate: maturityDate && !Number.isNaN(maturityDate.getTime()) ? maturityDate : null,
+    }];
+  });
+
+  let repairedCount = 0;
+  for (const account of accounts) {
+    // Complete time deposits may legitimately be set to zero later by the
+    // user. Only repair records that never received their import metadata.
+    if (account.investmentSubtype === "time_deposit" && account.investmentPrincipal !== null) {
+      continue;
+    }
+
+    const accountNumber = normalizeImportAccountNumber(account.accountNumber);
+    const accountName = normalizeImportInstitution(account.name).toLowerCase();
+    const match = evidence.find((candidate) => {
+      if (importAccountNumbersMayMatch(accountNumber, candidate.accountNumber)) {
+        return true;
+      }
+      const candidateName = normalizeImportInstitution(candidate.accountName).toLowerCase();
+      return Boolean(candidateName && candidateName === accountName);
+    });
+    if (!match) {
+      continue;
+    }
+
+    const currentBalance = readImportedJsonNumber(account.balance?.toString() ?? null);
+    await prisma.account.update({
+      where: { id: account.id },
+      data: {
+        institution: "GSave",
+        investmentSubtype: "time_deposit",
+        ...(accountNumber && match.accountNumber && accountNumber.length < match.accountNumber.length
+          ? { accountNumber: match.accountNumber }
+          : {}),
+        ...(currentBalance === null || currentBalance === 0 ? { balance: match.principal.toString() } : {}),
+        ...(account.investmentPrincipal === null ? { investmentPrincipal: match.principal.toString() } : {}),
+        ...(account.investmentInterestRate === null && match.interestRate !== null
+          ? { investmentInterestRate: match.interestRate.toString() }
+          : {}),
+        ...(account.investmentMaturityValue === null && match.maturityValue !== null
+          ? { investmentMaturityValue: match.maturityValue.toString() }
+          : {}),
+        ...(account.investmentMaturityDate === null && match.maturityDate
+          ? { investmentMaturityDate: match.maturityDate }
+          : {}),
+      },
+    });
+    repairedCount += 1;
+  }
+
+  return repairedCount;
+};
+
+const repairExplicitlyMislinkedGsaveSnapshots = async (workspaceId: string) => {
+  if (!(await hasCompatibleTable("InvestmentSnapshot")) || !(await hasCompatibleTable("InvestmentHolding"))) {
+    return 0;
+  }
+
+  const snapshots = await prisma.investmentSnapshot.findMany({
+    where: {
+      workspaceId,
+      account: { institution: { equals: "GSave", mode: "insensitive" } },
+      documentImport: {
+        institution: { not: null },
+      },
+      holdings: { some: {} },
+    },
+    select: {
+      id: true,
+      documentImport: { select: { institution: true } },
+    },
+  }).catch(() => []);
+
+  let repairedCount = 0;
+  for (const snapshot of snapshots) {
+    const sourceInstitution = normalizeImportInstitution(snapshot.documentImport?.institution);
+    if (!sourceInstitution || sourceInstitution.toLowerCase() === "gsave") {
+      continue;
+    }
+    const target = await prisma.account.findFirst({
+      where: {
+        workspaceId,
+        type: "investment",
+        institution: { equals: sourceInstitution, mode: "insensitive" },
+      },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      select: { id: true },
+    });
+    if (!target) {
+      continue;
+    }
+
+    await prisma.$transaction([
+      prisma.investmentSnapshot.update({
+        where: { id: snapshot.id },
+        data: { accountId: target.id },
+      }),
+      prisma.investmentHolding.updateMany({
+        where: { workspaceId, investmentSnapshotId: snapshot.id },
+        data: { accountId: target.id },
+      }),
+    ]);
+    repairedCount += 1;
+  }
+
+  return repairedCount;
+};
+
 const repairLegacyWiseWalletDuplicates = async (workspaceId: string) => {
   const accounts = await prisma.account.findMany({
     where: {
@@ -2733,6 +2927,20 @@ export async function GET(request: Request) {
     });
     await repairLegacyUploadedGsaveUnoIdentities(workspaceId).catch((error) => {
       console.warn("[accounts] unable to repair legacy GSave / UNO account identities", {
+        workspaceId,
+        error,
+      });
+      return 0;
+    });
+    await repairIncompleteGsaveTimeDeposits(workspaceId).catch((error) => {
+      console.warn("[accounts] unable to restore incomplete GSave time deposits", {
+        workspaceId,
+        error,
+      });
+      return 0;
+    });
+    await repairExplicitlyMislinkedGsaveSnapshots(workspaceId).catch((error) => {
+      console.warn("[accounts] unable to repair mislinked GSave investment snapshots", {
         workspaceId,
         error,
       });
