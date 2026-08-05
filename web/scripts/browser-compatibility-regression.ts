@@ -308,6 +308,16 @@ async function main() {
   );
   assert.match(
     globalStyles,
+    /\.settings-hub__menu-item \{[\s\S]{0,260}font-family: var\(--font-body\);[\s\S]{0,100}font-size: 14px;[\s\S]{0,80}font-weight: 400;/,
+    "Settings navigation must inherit the primary menu's font family and regular weight."
+  );
+  assert.match(
+    globalStyles,
+    /@media \(min-width: 1101px\) \{[\s\S]{0,220}\.settings-hub__menu-item \{[\s\S]{0,180}min-height: 32px;[\s\S]{0,80}height: 32px;[\s\S]{0,100}padding: 0 5px;[\s\S]{0,80}gap: 8px;[\s\S]{0,80}font-size: 13px;/,
+    "Desktop Settings rows must share the primary sidebar's size, padding, and spacing."
+  );
+  assert.match(
+    globalStyles,
     /@media \(max-width: 1100px\) \{[\s\S]{0,140}\.content > :is\(\.topbar, \.shell-compact-bar\):has\(\.shell-back-button\) \{[\s\S]{0,100}grid-template-columns: auto minmax\(0, 1fr\) auto !important;/,
     "Compact headers must reserve separate columns for leading controls, titles, and actions."
   );

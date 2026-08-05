@@ -51848,6 +51848,27 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   }
 }
 
+/* Settings navigation shares the primary menu's type and row rhythm. */
+.settings-hub__menu-list {
+  gap: 4px;
+}
+
+.settings-hub__menu-item {
+  min-height: 40px;
+  padding: 7px 12px 7px 11px;
+  gap: 12px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.settings-hub__menu-item strong {
+  color: inherit;
+  font: inherit;
+  letter-spacing: normal;
+}
+
 /* Keep menu labels compact while giving the 3D artwork enough visual weight. */
 .settings-hub__menu-icon {
   width: 32px;
@@ -51855,6 +51876,19 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
 }
 
 @media (min-width: 1101px) {
+  .settings-hub__menu-list {
+    gap: 0;
+  }
+
+  .settings-hub__menu-item {
+    min-height: 32px;
+    height: 32px;
+    padding: 0 5px;
+    gap: 8px;
+    font-size: 13px;
+    line-height: 1.1;
+  }
+
   .nav-link__icon {
     width: 34px;
     height: 34px;
@@ -51879,6 +51913,21 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
 }
 
 @media (max-width: 1100px) {
+  .settings-hub--mobile-menu .settings-hub__menu-list {
+    gap: 0;
+  }
+
+  .settings-hub--mobile-menu .settings-hub__menu-item,
+  .settings-hub--mobile-menu .settings-hub__menu-item:hover,
+  .settings-hub--mobile-menu .settings-hub__menu-item.is-active {
+    min-height: 42px;
+    padding: 8px 2px;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.1;
+  }
+
   .shell-bottom-nav__icon {
     width: 42px;
     height: 42px;
