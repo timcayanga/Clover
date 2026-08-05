@@ -80,6 +80,13 @@ If `docs/product-spec.md` is added later, it should become the primary product s
 - Schema changes belong in `web/prisma/schema.prisma`.
 - When behavior changes, prefer updating the relevant tests or check scripts in `scripts/` or `web/scripts/`.
 
+## Branching And Deployment
+
+- Use `staging` as the only shared development and Vercel preview branch.
+- Do not push temporary `codex/*`, task, or worktree branches to GitHub.
+- Push completed changes directly to `staging`; production deployments must use the tested `staging` commit.
+- Do not create or deploy to alternate Vercel projects for Clover.
+
 ## Safety
 
 - If a task could change confirmed financial records, pause and verify the intended behavior before making the change.
