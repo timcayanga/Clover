@@ -8033,9 +8033,14 @@ export function ImportFilesModal({
         summary={completedImportSummary}
         detail={
           (currentErrorItem ? compactErrorSpec?.message ?? currentErrorItem.errorTitle ?? "Clover could not finish this import." : null) ??
-          (activityProgressFloor > overallProgress && activitySnapshotForDisplay?.detail
-            ? activitySnapshotForDisplay.detail
+          (activeProgressItem
+            ? friendlyImportProgressLabel(
+                activeProgressItem.progressLabel,
+                activeProgressItem.file.name,
+                activeProgressItem.importMode
+              )
             : null) ??
+          activitySnapshotForDisplay?.detail ??
           ((!activeProgressItem && hasCompletedBatch && message)
             ? message
             : friendlyImportProgressLabel(

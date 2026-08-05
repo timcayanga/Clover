@@ -289,6 +289,11 @@ const main = async () => {
   );
   assert.match(
     modalSource,
+    /detail=\{[\s\S]{0,500}\(activeProgressItem[\s\S]{0,250}friendlyImportProgressLabel\([\s\S]{0,250}activitySnapshotForDisplay\?\.detail/,
+    "Foreground progress copy must prefer the active file phase so polling snapshots cannot make the modal flicker."
+  );
+  assert.match(
+    modalSource,
     /await monitorQueuedImportAndConfirm\(itemId, importFileId, null,[\s\S]{0,10000}backgroundOnly: false/,
     "An import without an account ID must stay in foreground reconciliation until the monitor verifies visible rows."
   );
