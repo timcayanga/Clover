@@ -79,10 +79,33 @@ const withLaterOwnedCounterpart = classifyWorkspaceInternalTransfers(
     { id: "wise", accountNumber: "87654321" },
   ]
 );
+assert.equal(
+  withLaterOwnedCounterpart.internalIds.size,
+  0,
+  "Equal amount and date alone must not establish that both accounts belong to the user."
+);
+
+const withExplicitOwnedCounterpart = classifyWorkspaceInternalTransfers(
+  [
+    {
+      ...outgoing,
+      rawPayload: {
+        ...outgoing.rawPayload,
+        transferFromAccountNumber: "12345678",
+        transferToAccountNumber: "87654321",
+      },
+    },
+    laterUploadedCounterpart,
+  ],
+  [
+    { id: "hsbc", accountNumber: "12345678" },
+    { id: "wise", accountNumber: "87654321" },
+  ]
+);
 assert.deepEqual(
-  Array.from(withLaterOwnedCounterpart.internalIds).sort(),
+  Array.from(withExplicitOwnedCounterpart.internalIds).sort(),
   ["hsbc-outgoing", "wise-incoming"],
-  "Uploading the destination account later must retroactively promote both matching movements."
+  "Explicit statement account evidence must retroactively promote both matching movements."
 );
 
 const gcryptoWithdrawal: WorkspaceTransferCandidate = {
@@ -128,6 +151,7 @@ const gcashIncoming: WorkspaceTransferCandidate = {
   id: "gcash-incoming",
   accountId: "gcash",
   merchantRaw: "GCrypto cash in",
+  rawPayload: { sourceTransactionId: "gcrypto-withdrawal" },
 };
 assert.deepEqual(
   Array.from(
@@ -141,6 +165,23 @@ assert.deepEqual(
   ).sort(),
   ["gcash-incoming", "gcrypto-withdrawal"],
   "A real equal-and-opposite GCash entry should retroactively link the GCrypto movement."
+);
+
+const metrobankExternalTransfer: WorkspaceTransferCandidate = {
+  id: "metrobank-external",
+  accountId: "metrobank",
+  date: "2026-07-06",
+  amount: "100.00",
+  currency: "PHP",
+  type: "transfer",
+  categoryName: "Transfers",
+  merchantRaw: "Interbank Fund Transfer Credit Received From Other",
+  rawPayload: { bank: "Metrobank", parsedDirectionType: "income" },
+};
+assert.equal(
+  inferTransferCandidateDirection(metrobankExternalTransfer),
+  "expense",
+  "Metrobank's unspecified external fund-transfer wording must remain an expense unless ownership is explicit."
 );
 
 const unrelatedExpense: WorkspaceTransferCandidate = {

@@ -126,11 +126,24 @@ export const findSameCurrencyCashAccount = (
 export const inferTransferCandidateDirection = (
   candidate: WorkspaceTransferCandidate
 ): "income" | "expense" => {
+  const payload = readPayloadRecord(candidate.rawPayload);
+  const userConfirmedDirection = String(payload?.userConfirmedDirectionType ?? "").toLowerCase();
+  if (userConfirmedDirection === "income" || userConfirmedDirection === "expense") {
+    return userConfirmedDirection;
+  }
+
+  const candidateText = buildCandidateText(candidate);
+  if (
+    /\bmetrobank\b/i.test(String(payload?.bank ?? payload?.institutionRaw ?? "")) &&
+    /\binterbank\s+fund\s+transfer\s+credit\s+received\s+from\s+other\b/i.test(candidateText)
+  ) {
+    return "expense";
+  }
+
   if (candidate.type === "income" || candidate.type === "expense") {
     return candidate.type;
   }
 
-  const payload = readPayloadRecord(candidate.rawPayload);
   const parsedDirection = String(
     payload?.parsedDirectionType ?? payload?.direction ?? payload?.transactionDirection ?? ""
   ).toLowerCase();
@@ -186,6 +199,53 @@ const hasExplicitWorkspaceCounterpart = (
     ([accountId, accountNumber]) => accountId !== candidate.accountId && accountNumber === counterpart
   );
 };
+
+const hasLinkedTransactionCounterpart = (
+  candidate: WorkspaceTransferCandidate,
+  counterpart: WorkspaceTransferCandidate
+) => {
+  const payload = readPayloadRecord(candidate.rawPayload);
+  if (!payload) {
+    return false;
+  }
+
+  return [
+    payload.sourceTransactionId,
+    payload.linkedTransactionId,
+    payload.counterpartTransactionId,
+    payload.transferSourceTransactionId,
+  ].some((value) => String(value ?? "").trim() === counterpart.id);
+};
+
+const explicitlyMentionsCounterpartAccount = (
+  candidate: WorkspaceTransferCandidate,
+  counterpart: WorkspaceTransferCandidate,
+  accountNumberById: Map<string, string>
+) => {
+  const counterpartNumber = accountNumberById.get(counterpart.accountId) ?? normalizeDigits(counterpart.accountNumber);
+  const lastFour = counterpartNumber.slice(-4);
+  if (lastFour.length !== 4) {
+    return false;
+  }
+
+  const text = buildCandidateText(candidate);
+  return new RegExp(
+    `(?:account|acct|card|wallet|number|no\\.?|ending(?:\\s+in)?|last\\s+(?:4|four))[^\\n\\r]{0,24}\\b${lastFour}\\b`,
+    "i"
+  ).test(text);
+};
+
+const hasOwnershipEvidenceForPair = (
+  left: WorkspaceTransferCandidate,
+  right: WorkspaceTransferCandidate,
+  accountNumberById: Map<string, string>
+) =>
+  hasExplicitWorkspaceCounterpart(left, accountNumberById) ||
+  hasExplicitWorkspaceCounterpart(right, accountNumberById) ||
+  hasLinkedTransactionCounterpart(left, right) ||
+  hasLinkedTransactionCounterpart(right, left) ||
+  explicitlyMentionsCounterpartAccount(left, right, accountNumberById) ||
+  explicitlyMentionsCounterpartAccount(right, left, accountNumberById);
 
 export const classifyWorkspaceInternalTransfers = (
   candidates: WorkspaceTransferCandidate[],
@@ -246,6 +306,7 @@ export const classifyWorkspaceInternalTransfers = (
           candidate.candidate.currency.toUpperCase() === entry.candidate.currency.toUpperCase() &&
           Math.abs(candidate.amount - entry.amount) < 0.005 &&
           Math.abs(candidate.dateTime - entry.dateTime) <= maxDateDifferenceMs &&
+          hasOwnershipEvidenceForPair(entry.candidate, candidate.candidate, accountNumberById) &&
           (!entryExpectedInstitution || candidateInstitution === entryExpectedInstitution) &&
           (!candidateExpectedInstitution || entryInstitution === candidateExpectedInstitution);
         }

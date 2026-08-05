@@ -33,6 +33,20 @@ const cardPayment = rows.find((row) => /pymt\s*-\s*credit card/i.test(row.mercha
 assert.equal(cardPayment?.type, "expense");
 assert.equal(cardPayment?.categoryName, "Transfers");
 
+const unspecifiedFundTransfers = rows.filter((row) =>
+  /interbank fund transfer credit received from other/i.test(row.merchantRaw ?? "")
+);
+assert.equal(unspecifiedFundTransfers.length, 2);
+assert.ok(
+  unspecifiedFundTransfers.every(
+    (row) =>
+      row.type === "expense" &&
+      row.categoryName === "Transfers" &&
+      row.rawPayload?.directionEvidence === "external_transfer_without_owned_account"
+  ),
+  "Unspecified external fund transfers must stay expenses until account ownership is explicit."
+);
+
 const metadata = detectStatementMetadata(newestFirstMetrobankStatement, "new-metrobank-layout.pdf");
 assert.equal(metadata?.institution, "Metrobank");
 assert.equal(metadata?.endingBalance, 51539.61, "The newest dated balance must win for a newest-first ledger.");

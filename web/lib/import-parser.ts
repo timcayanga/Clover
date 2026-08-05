@@ -9677,6 +9677,20 @@ const reconcileMetrobankSavingsRowsFromRunningBalances = (rows: ParsedImportRow[
 
   const sourceRunsNewestFirst = datedRows[0].date.getTime() > datedRows.at(-1)!.date.getTime();
   return rows.map((row, index) => {
+    const description = row.description ?? row.merchantRaw ?? row.merchantClean ?? "";
+    if (/\binterbank\s+fund\s+transfer\s+credit\s+received\s+from\s+other\b/i.test(description)) {
+      return {
+        ...row,
+        type: "expense" as TransactionType,
+        categoryName: "Transfers",
+        rawPayload: {
+          ...(row.rawPayload ?? {}),
+          directionEvidence: "external_transfer_without_owned_account",
+          parsedDirectionType: "expense",
+        },
+      };
+    }
+
     const comparisonIndex = sourceRunsNewestFirst ? index + 1 : index - 1;
     const currentBalance = readParsedLedgerBalance(row);
     const previousBalance = comparisonIndex >= 0 && comparisonIndex < rows.length
@@ -9694,7 +9708,6 @@ const reconcileMetrobankSavingsRowsFromRunningBalances = (rows: ParsedImportRow[
     }
 
     const type: TransactionType = balanceDelta > 0 ? "income" : "expense";
-    const description = row.description ?? row.merchantRaw ?? row.merchantClean ?? "";
     const categoryName = guessMetrobankSavingsCategoryName(description, type);
     return {
       ...row,

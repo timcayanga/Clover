@@ -23,6 +23,7 @@ This document captures the Metrobank parsing rules learned from the synthetic tr
 - Keep salary credits as `Income`.
 - Treat both `Payroll` and `Salary Credit` as income when the running-balance movement confirms a credit.
 - Keep `Fund Transfer` rows as `Transfers`.
+- `INTERBANK FUND TRANSFER CREDIT RECEIVED FROM OTHER` remains in the `Transfers` category but is an expense unless the statement explicitly identifies another account owned by the user. Matching amount and date alone are not ownership evidence.
 - Keep `InstaPay Fee` as `Financial`.
 - Keep `Bills Payment - Meralco` and similar utility payments as `Bills & Utilities`.
 - Keep `ATM Withdrawal` and `ATM Fee` as separate rows.
