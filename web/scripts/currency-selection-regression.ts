@@ -63,21 +63,31 @@ assert.equal(readSelectedCurrency("workspace-a"), null, "Corrupt browser storage
 
 const accountsPageSource = readFileSync(resolve(process.cwd(), "app/accounts/page.tsx"), "utf8");
 assert.ok(
-  accountsPageSource.includes("const usesFxEstimates = isAllCurrenciesView && visibleAccountCurrencies.length > 1"),
-  "Accounts should only show FX estimates for a mixed-currency All Currencies view."
+  accountsPageSource.includes("visibleAccountCurrencies.some((currency) => currency !== defaultCurrencyCode)"),
+  "Accounts should show FX estimates whenever All Currencies includes a non-default currency."
 );
 assert.ok(
   accountsPageSource.includes("convertAmount(signedValue, row.currency, accountExchangeRates.rates)"),
   "Each Accounts section should use the shared FX rates instead of adding unlike currencies."
 );
 assert.ok(
-  accountsPageSource.includes('accounts-overview-card__info--fx') &&
+  !accountsPageSource.includes('accounts-overview-card__info--fx') &&
+    accountsPageSource.includes('<button className="accounts-overview-card__info"') &&
     accountsPageSource.includes('Values are estimated in ${defaultCurrency} using the latest available exchange rates.'),
-  "Mixed-currency summary cards should identify and explain their FX estimates."
+  "Mixed-currency summary cards should explain FX through Clover's standard information icon."
 );
 assert.ok(
-  accountsPageSource.includes(': formatAggregateAmount(group.total, group.rows)'),
-  "Specific-currency section totals should retain their normal exact-currency display."
+  accountsPageSource.includes("const usesFxEstimate =") &&
+    accountsPageSource.includes("groupCurrencies.some((currency) => currency !== defaultCurrencyCode)") &&
+    accountsPageSource.includes(': formatAggregateAmount(group.total, group.rows)'),
+  "Sections containing only the default currency should retain their exact total without an estimate label."
+);
+
+const exchangeRateSource = readFileSync(resolve(process.cwd(), "lib/use-exchange-rates.ts"), "utf8");
+assert.ok(
+  exchangeRateSource.includes('const rateCacheStorageKey = "clover.exchange-rates.v1"') &&
+    exchangeRateSource.includes("const missingSources = sources.filter"),
+  "Exchange rates should render from a bounded browser cache before refreshing missing rates."
 );
 
 console.log("Currency selection regression passed.");

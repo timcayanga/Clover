@@ -4,9 +4,56 @@ import { useEffect, useMemo, useState } from "react";
 import { formatCurrencyCode } from "@/lib/currency-format";
 
 type ExchangeRate = { rate: number; date: string | null };
-const rateCache = new Map<string, ExchangeRate>();
+type CachedExchangeRate = ExchangeRate & { cachedAt: number };
+
+const rateCache = new Map<string, CachedExchangeRate>();
+const rateCacheStorageKey = "clover.exchange-rates.v1";
+const rateCacheMaxAgeMs = 12 * 60 * 60 * 1000;
 
 const rateKey = (base: string, quote: string) => `${base}:${quote}`;
+
+const isFreshRate = (value: unknown): value is CachedExchangeRate => {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<CachedExchangeRate>;
+  return (
+    typeof candidate.rate === "number" &&
+    Number.isFinite(candidate.rate) &&
+    typeof candidate.cachedAt === "number" &&
+    Date.now() - candidate.cachedAt < rateCacheMaxAgeMs
+  );
+};
+
+const readStoredRate = (key: string) => {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(rateCacheStorageKey) ?? "{}") as Record<string, unknown>;
+    return isFreshRate(stored[key]) ? stored[key] : null;
+  } catch {
+    return null;
+  }
+};
+
+const getCachedRate = (base: string, quote: string) => {
+  if (base === quote) return { rate: 1, date: null, cachedAt: Date.now() };
+  const key = rateKey(base, quote);
+  const memoryRate = rateCache.get(key);
+  if (memoryRate && isFreshRate(memoryRate)) return memoryRate;
+  const storedRate = readStoredRate(key);
+  if (storedRate) rateCache.set(key, storedRate);
+  return storedRate;
+};
+
+const storeRate = (key: string, value: CachedExchangeRate) => {
+  rateCache.set(key, value);
+  if (typeof window === "undefined") return;
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(rateCacheStorageKey) ?? "{}") as Record<string, unknown>;
+    const freshEntries = Object.fromEntries(Object.entries(stored).filter(([, rate]) => isFreshRate(rate)));
+    window.localStorage.setItem(rateCacheStorageKey, JSON.stringify({ ...freshEntries, [key]: value }));
+  } catch {
+    // FX values are an optional speed cache; memory caching remains available if storage is unavailable.
+  }
+};
 
 const loadRate = async (base: string, quote: string) => {
   if (base === quote) {
@@ -14,7 +61,7 @@ const loadRate = async (base: string, quote: string) => {
   }
 
   const key = rateKey(base, quote);
-  const cached = rateCache.get(key);
+  const cached = getCachedRate(base, quote);
   if (cached) {
     return cached;
   }
@@ -29,8 +76,8 @@ const loadRate = async (base: string, quote: string) => {
     throw new Error(`Invalid exchange rate for ${base}/${quote}.`);
   }
 
-  const result = { rate: payload.rate, date: payload.date ?? null };
-  rateCache.set(key, result);
+  const result = { rate: payload.rate, date: payload.date ?? null, cachedAt: Date.now() };
+  storeRate(key, result);
   return result;
 };
 
@@ -55,17 +102,29 @@ export const useExchangeRates = (sourceCurrencies: string[], targetCurrency: str
     }
 
     let cancelled = false;
-    setState((current) => ({ ...current, loading: true, unavailable: [] }));
-    void Promise.allSettled(sources.map(async (source) => ({ source, ...(await loadRate(source, target)) }))).then((results) => {
+    const cachedRates: Record<string, number> = { [target]: 1 };
+    let cachedAsOf: string | null = null;
+    const missingSources = sources.filter((source) => {
+      const cached = getCachedRate(source, target);
+      if (!cached) return true;
+      cachedRates[source] = cached.rate;
+      if (cached.date && (!cachedAsOf || cached.date > cachedAsOf)) cachedAsOf = cached.date;
+      return false;
+    });
+
+    setState({ rates: cachedRates, loading: missingSources.length > 0, unavailable: [], asOf: cachedAsOf });
+    if (missingSources.length === 0) return;
+
+    void Promise.allSettled(missingSources.map(async (source) => ({ source, ...(await loadRate(source, target)) }))).then((results) => {
       if (cancelled) {
         return;
       }
 
-      const rates: Record<string, number> = { [target]: 1 };
+      const rates: Record<string, number> = { ...cachedRates };
       const unavailable: string[] = [];
       let asOf: string | null = null;
       results.forEach((result, index) => {
-        const source = sources[index];
+        const source = missingSources[index];
         if (result.status === "fulfilled") {
           rates[source] = result.value.rate;
           if (result.value.date && (!asOf || result.value.date > asOf)) {
@@ -90,4 +149,3 @@ export const convertAmount = (amount: number, currency: string, rates: Record<st
   const rate = rates[formatCurrencyCode(currency)];
   return typeof rate === "number" && Number.isFinite(rate) ? amount * rate : null;
 };
-

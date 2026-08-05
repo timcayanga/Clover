@@ -3027,7 +3027,9 @@ function AccountsPageContent() {
     () => getCurrencyCodes(visibleAccounts),
     [visibleAccounts]
   );
-  const usesFxEstimates = isAllCurrenciesView && visibleAccountCurrencies.length > 1;
+  const defaultCurrencyCode = formatCurrencyCode(defaultCurrency);
+  const usesFxEstimates =
+    isAllCurrenciesView && visibleAccountCurrencies.some((currency) => currency !== defaultCurrencyCode);
   const accountExchangeRates = useExchangeRates(
     visibleAccountCurrencies,
     defaultCurrency,
@@ -3060,9 +3062,13 @@ function AccountsPageContent() {
       { assets: 0, liabilities: 0, netWorth: 0, spendable: 0 }
     );
   }, [accountExchangeRates.rates, totals, usesFxEstimates, visibleAccounts]);
-  const accountEstimateUnavailable = usesFxEstimates && accountExchangeRates.unavailable.length > 0;
+  const accountEstimateUnavailable =
+    usesFxEstimates &&
+    visibleAccountCurrencies.some(
+      (currency) => currency !== defaultCurrencyCode && !Number.isFinite(accountExchangeRates.rates[currency])
+    );
   const formatAccountSummary = (value: number, signed = false) => {
-    if (accountExchangeRates.loading || accountEstimateUnavailable) {
+    if (accountEstimateUnavailable) {
       return "—";
     }
     if (usesFxEstimates) {
@@ -3148,13 +3154,16 @@ function AccountsPageContent() {
 
     return groups
       .map((group) => {
+        const groupCurrencies = getCurrencyCodes(group.rows);
+        const usesFxEstimate =
+          isAllCurrenciesView && groupCurrencies.some((currency) => currency !== defaultCurrencyCode);
         let estimateUnavailable = false;
         const total = group.rows.reduce((sum, row) => {
           const signedValue = normalizeAccountBalanceSign(
             "kind" in row && row.kind === "investment_institution" ? "investment" : getEffectiveAccountType(row as Account),
             parseAmount(row.balance)
           );
-          if (!usesFxEstimates) {
+          if (!usesFxEstimate) {
             return sum + signedValue;
           }
 
@@ -3166,10 +3175,10 @@ function AccountsPageContent() {
           return sum + convertedValue;
         }, 0);
 
-        return { ...group, total, estimateUnavailable };
+        return { ...group, total, usesFxEstimate, estimateUnavailable };
       })
       .filter((group) => group.rows.length > 0 || draggedAccountId !== null);
-  }, [accountExchangeRates.rates, draggedAccountId, usesFxEstimates, visibleAccounts]);
+  }, [accountExchangeRates.rates, defaultCurrencyCode, draggedAccountId, isAllCurrenciesView, visibleAccounts]);
 
   const selectedAccount = useMemo(
     () => reconciledAccounts.find((account) => account.id === drawerAccountId) ?? null,
@@ -4240,8 +4249,8 @@ function AccountsPageContent() {
         {visibleAccounts.length > 0 ? (
           <section className="accounts-overview-grid" aria-label="Account summary">
             <article className="accounts-overview-card glass">
-              <button className={`accounts-overview-card__info${usesFxEstimates ? " accounts-overview-card__info--fx" : ""}`} type="button" aria-label={usesFxEstimates ? "How the Net Worth FX estimate is calculated" : "How Net Worth is calculated"}>
-                {usesFxEstimates ? "FX" : "i"}
+              <button className="accounts-overview-card__info" type="button" aria-label={usesFxEstimates ? "How the Net Worth FX estimate is calculated" : "How Net Worth is calculated"}>
+                i
                 <span className="accounts-overview-card__info-tooltip" role="tooltip">
                   {getAccountSummaryTooltip("Assets minus liabilities across visible accounts. Positive balances add to net worth; credit cards, loans, and other debts subtract from it.")}
                 </span>
@@ -4252,8 +4261,8 @@ function AccountsPageContent() {
               </strong>
             </article>
             <article className="accounts-overview-card glass">
-              <button className={`accounts-overview-card__info${usesFxEstimates ? " accounts-overview-card__info--fx" : ""}`} type="button" aria-label={usesFxEstimates ? "How the Spendable FX estimate is calculated" : "How Spendable is calculated"}>
-                {usesFxEstimates ? "FX" : "i"}
+              <button className="accounts-overview-card__info" type="button" aria-label={usesFxEstimates ? "How the Spendable FX estimate is calculated" : "How Spendable is calculated"}>
+                i
                 <span className="accounts-overview-card__info-tooltip" role="tooltip">
                   {getAccountSummaryTooltip("Positive balances from spendable accounts, such as bank, wallet, and cash accounts. Debts and tracked assets are excluded.")}
                 </span>
@@ -4264,8 +4273,8 @@ function AccountsPageContent() {
               </strong>
             </article>
             <article className="accounts-overview-card glass">
-              <button className={`accounts-overview-card__info${usesFxEstimates ? " accounts-overview-card__info--fx" : ""}`} type="button" aria-label={usesFxEstimates ? "How the Assets FX estimate is calculated" : "How Assets is calculated"}>
-                {usesFxEstimates ? "FX" : "i"}
+              <button className="accounts-overview-card__info" type="button" aria-label={usesFxEstimates ? "How the Assets FX estimate is calculated" : "How Assets is calculated"}>
+                i
                 <span className="accounts-overview-card__info-tooltip" role="tooltip">
                   {getAccountSummaryTooltip("Sum of visible account balances that count as positive value after Clover applies each account type's balance rules.")}
                 </span>
@@ -4276,8 +4285,8 @@ function AccountsPageContent() {
               </strong>
             </article>
             <article className="accounts-overview-card glass">
-              <button className={`accounts-overview-card__info${usesFxEstimates ? " accounts-overview-card__info--fx" : ""}`} type="button" aria-label={usesFxEstimates ? "How the Liabilities FX estimate is calculated" : "How Liabilities is calculated"}>
-                {usesFxEstimates ? "FX" : "i"}
+              <button className="accounts-overview-card__info" type="button" aria-label={usesFxEstimates ? "How the Liabilities FX estimate is calculated" : "How Liabilities is calculated"}>
+                i
                 <span className="accounts-overview-card__info-tooltip" role="tooltip">
                   {getAccountSummaryTooltip("Sum of visible credit card, loan, and other debt balances. Clover shows this as a positive total so the amount is easy to scan.")}
                 </span>
@@ -4355,8 +4364,8 @@ function AccountsPageContent() {
                       <div className="accounts-group__title-row">
                         <h5>{group.title}</h5>
                         <strong title={group.estimateUnavailable ? "An exchange rate is unavailable for this section." : undefined}>
-                          {usesFxEstimates
-                            ? accountExchangeRates.loading || group.estimateUnavailable
+                          {group.usesFxEstimate
+                            ? group.estimateUnavailable
                               ? "Est. —"
                               : `Est. ${formatDisplayAccountAmount(group.total, defaultCurrency)}`
                             : formatAggregateAmount(group.total, group.rows)}

@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   url.searchParams.set("base", base);
   url.searchParams.set("quotes", quote);
 
-  const response = await fetch(url.toString(), { cache: "no-store" });
+  const response = await fetch(url.toString(), { next: { revalidate: 6 * 60 * 60 } });
   if (!response.ok) {
     return NextResponse.json({ error: "Unable to load exchange rate." }, { status: 502 });
   }
@@ -33,10 +33,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "No exchange rate found." }, { status: 404 });
   }
 
-  return NextResponse.json({
-    base: entry.base,
-    quote: entry.quote,
-    rate: entry.rate,
-    date: entry.date,
-  });
+  return NextResponse.json(
+    {
+      base: entry.base,
+      quote: entry.quote,
+      rate: entry.rate,
+      date: entry.date,
+    },
+    {
+      headers: {
+        "Cache-Control": "public, s-maxage=21600, stale-while-revalidate=86400",
+      },
+    }
+  );
 }
