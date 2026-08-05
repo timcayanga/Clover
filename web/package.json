@@ -39,6 +39,7 @@
     "qa:wise-screenshots": "tsx scripts/wise-screenshot-regression.ts",
     "qa:wise-metadata-only": "tsx scripts/wise-metadata-only-statement-regression.ts",
     "qa:hsbc-pdf": "tsx scripts/hsbc-pdf-regression.ts",
+    "qa:metrobank": "tsx scripts/metrobank-new-layout-regression.ts",
     "qa:paypal": "tsx scripts/paypal-parser-regression.ts",
     "qa:gsave-uno-screenshots": "tsx scripts/gsave-uno-screenshot-regression.ts",
     "qa:gsave-uno-process": "tsx scripts/gsave-uno-process-route-regression.ts",
@@ -103,7 +104,7 @@
     "qa:institution-deletion": "tsx scripts/institution-deletion-regression.ts",
     "qa:admin-operational-scope": "tsx scripts/admin-operational-scope-regression.ts",
     "qa:circles": "tsx scripts/circles-regression.ts",
-    "qa:release": "npm run qa:production-readiness && npm run qa:auth-access && npm run qa:onboarding && npm run qa:billing-lifecycle && npm run qa:critical-page-loading && npm run qa:browser-compatibility && npm run qa:title-case && npm run qa:header-cta-typography && npm run qa:navigation-icons && npm run qa:integration-security && npm run qa:data-engine-safety && npm run qa:data-engine-validation && npm run qa:account-balance-sign && npm run qa:account-card-drag && npm run qa:account-deletion-markers && npm run qa:institution-deletion && npm run qa:confirmed-data && npm run qa:goal-intent && npm run qa:goal-persistence && npm run qa:split-bill-quick-add && npm run qa:budgeting && npm run qa:investments && npm run qa:circles && npm run qa:parser-routing && npm run qa:financial-identity && npm run qa:rcbc-credit-metadata && npm run qa:paypal && npm run qa:wise-metadata-only && npm run qa:structured-csv && npm run qa:spreadsheet-import && npm run qa:import-quality && npm run qa:import-upload-handoff && npm run qa:large-import-cache",
+    "qa:release": "npm run qa:production-readiness && npm run qa:auth-access && npm run qa:onboarding && npm run qa:billing-lifecycle && npm run qa:critical-page-loading && npm run qa:browser-compatibility && npm run qa:title-case && npm run qa:header-cta-typography && npm run qa:navigation-icons && npm run qa:integration-security && npm run qa:data-engine-safety && npm run qa:data-engine-validation && npm run qa:account-balance-sign && npm run qa:account-card-drag && npm run qa:account-deletion-markers && npm run qa:institution-deletion && npm run qa:confirmed-data && npm run qa:goal-intent && npm run qa:goal-persistence && npm run qa:split-bill-quick-add && npm run qa:budgeting && npm run qa:investments && npm run qa:circles && npm run qa:parser-routing && npm run qa:financial-identity && npm run qa:rcbc-credit-metadata && npm run qa:metrobank && npm run qa:paypal && npm run qa:wise-metadata-only && npm run qa:structured-csv && npm run qa:spreadsheet-import && npm run qa:import-quality && npm run qa:import-upload-handoff && npm run qa:large-import-cache",
     "qa:release:live": "npm run qa:environment-readiness && npm run qa:supabase-security && tsx scripts/reconcile-workspace-data.ts",
     "train:image-labels": "tsx --tsconfig tsconfig.json scripts/train-image-label-corpus.ts"
   },

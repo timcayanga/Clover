@@ -26573,6 +26573,19 @@ button.investments-portfolio-inline-edit {
   gap: 8px;
 }
 
+.accounts-detail__transaction-list--compact .line-item-header-cell--name {
+  padding-left: 0;
+}
+
+.accounts-detail__transaction-list--compact .line-item-header-cell--category {
+  padding-left: 0;
+}
+
+.accounts-detail__transaction-list--compact .line-item-header-cell--amount {
+  justify-content: flex-end;
+  text-align: right;
+}
+
 .accounts-detail__transaction-header,
 .accounts-detail__transaction-row {
   display: grid;

@@ -12,6 +12,8 @@ This document captures the Metrobank parsing rules learned from the synthetic tr
 ## Savings Statement Rules
 
 - Use running balance as a first-class field.
+- Statements may list transactions newest-first. Choose the balance attached to the newest dated row as the account balance instead of assuming the physically last row is current.
+- Reconcile unsigned transaction amounts against adjacent running-balance movements before using description fallbacks. A positive movement is income and a negative movement is expense.
 - Treat Metrobank savings statements with `DATE DESCRIPTION DEBIT CREDIT BALANCE`, `DATE DESCRIPTION CHECK DEBIT CREDIT BALANCE`, or `DATE DESCRIPTION CHECK NO DEBIT CREDIT BALANCE` as the canonical savings shape.
 - Treat Metrobank certificate-style savings statements that repeat `STATEMENT DATE`, `ACCOUNT NUMBER ... BALANCE`, and month/day transaction lines as savings ledgers too.
 - In certificate-style savings statements, ignore branch/city/footer boilerplate, statement banners, `NEW RATE`, `RATE`, `YTD INTEREST`, `YEAR-TO-DATE FEDERAL TAX WITHHELD`, `GRAND TOTAL`, and `TOTAL CURRENT/SAVINGS` summary lines.
@@ -19,6 +21,7 @@ This document captures the Metrobank parsing rules learned from the synthetic tr
 - Prefer the Metrobank savings detector over generic RCBC savings logic when the statement has Metrobank branding and account-type savings or retail metadata.
 - Do not let `BANKARD/RCBC` text inside a Metrobank transfer description override the Metrobank detector.
 - Keep salary credits as `Income`.
+- Treat both `Payroll` and `Salary Credit` as income when the running-balance movement confirms a credit.
 - Keep `Fund Transfer` rows as `Transfers`.
 - Keep `InstaPay Fee` as `Financial`.
 - Keep `Bills Payment - Meralco` and similar utility payments as `Bills & Utilities`.

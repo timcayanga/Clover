@@ -1075,6 +1075,14 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
   ],
   Metrobank: [
     {
+      patterns: [/\bpayroll\b/i, /salary\s+credit/i],
+      replacement: "Payroll Credit",
+    },
+    {
+      patterns: [/pymt\s*[-:]?\s*credit\s+card/i, /credit\s+card\s+payment/i],
+      replacement: "Credit Card Payment",
+    },
+    {
       patterns: [/mercury\s+drug/i],
       replacement: "Mercury Drug",
     },

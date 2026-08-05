@@ -3441,6 +3441,38 @@ export const getTrailingBalanceFromParsedRows = (rows: ParsedImportRow[]) => {
   return parseMoney(typeof lastBalanceText === "string" ? lastBalanceText.replace(/^PHP\s*/i, "") : null);
 };
 
+const readParsedLedgerBalance = (row: ParsedImportRow) => {
+  const payload = row.rawPayload && typeof row.rawPayload === "object" ? row.rawPayload : null;
+  const value =
+    row.runningBalance ??
+    row.balance ??
+    payload?.runningBalance ??
+    payload?.balanceText ??
+    payload?.balance;
+  return parseMoney(value === null || value === undefined ? null : String(value).replace(/^PHP\s*/i, ""));
+};
+
+export const getLatestDatedBalanceFromParsedRows = (rows: ParsedImportRow[]) => {
+  const candidates = rows
+    .map((row, index) => ({
+      index,
+      date: parseDateValue(row.date ?? row.transactionDate ?? row.postedDate ?? null),
+      balance: readParsedLedgerBalance(row),
+    }))
+    .filter(
+      (candidate): candidate is { index: number; date: Date; balance: number } =>
+        candidate.date !== null && candidate.balance !== null
+    );
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const latestTime = Math.max(...candidates.map((candidate) => candidate.date.getTime()));
+  const latestCandidates = candidates.filter((candidate) => candidate.date.getTime() === latestTime);
+  const sourceRunsNewestFirst = candidates[0].date.getTime() > candidates.at(-1)!.date.getTime();
+  return (sourceRunsNewestFirst ? latestCandidates[0] : latestCandidates.at(-1))?.balance ?? null;
+};
+
 const normalizeBpiText = (text: string) =>
   text
     .split(/\r?\n/)
@@ -9570,12 +9602,13 @@ const parseMetrobankCertificateTransactionLine = (
 
 const guessMetrobankSavingsCategoryName = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
+  if (/\b(?:payroll|salary(?:\s+credit)?)\b/.test(lower) && type === "income") return "Income";
   if (/svchg|fee|charge|tax/.test(lower)) return "Financial";
   if (/st\s+dm\s+gen|mo\s+dm|system\s+debit|miscellaneous\s+debit/.test(lower)) return "Financial";
   if (/system\s+credit|st\s+cm\s+gen/.test(lower)) return "Income";
   if (/interest\s+earned/.test(lower)) return "Income";
   if (/wdl|withdrawal/.test(lower)) return "Cash & ATM";
-  if (/bills?\s+payment|card payment|payment to metrobank credit card|payment to bdo credit card|payment to bankard\/rcbc/i.test(lower)) {
+  if (/bills?\s+payment|card payment|pymt\s*[-:]?\s*credit\s+card|credit\s+card\s+payment|payment to metrobank credit card|payment to bdo credit card|payment to bankard\/rcbc/i.test(lower)) {
     return "Transfers";
   }
   if (/cr ibft|wa cr|cash deposit|deposit|received|credit/.test(lower)) return "Transfers";
@@ -9585,6 +9618,10 @@ const guessMetrobankSavingsCategoryName = (description: string, type: Transactio
 
 const classifyMetrobankSavingsTransaction = (description: string): { type: TransactionType; categoryName: string } => {
   const lower = description.toLowerCase();
+
+  if (/\b(?:payroll|salary(?:\s+credit)?)\b/.test(lower)) {
+    return { type: "income", categoryName: "Income" };
+  }
 
   if (/svchg|service\s+charge|fee|charge|tax\s+withheld/.test(lower)) {
     return { type: "expense", categoryName: "Financial" };
@@ -9606,7 +9643,7 @@ const classifyMetrobankSavingsTransaction = (description: string): { type: Trans
     return { type: "income", categoryName: "Income" };
   }
 
-  if (/bills?\s+payment|card payment|payment to metrobank credit card|payment to bdo credit card|payment to bankard\/rcbc/i.test(lower)) {
+  if (/bills?\s+payment|card payment|pymt\s*[-:]?\s*credit\s+card|credit\s+card\s+payment|payment to metrobank credit card|payment to bdo credit card|payment to bankard\/rcbc/i.test(lower)) {
     return { type: "expense", categoryName: "Transfers" };
   }
 
@@ -9628,6 +9665,51 @@ const classifyMetrobankSavingsTransaction = (description: string): { type: Trans
 
   const type: TransactionType = "expense";
   return { type, categoryName: guessMetrobankSavingsCategoryName(description, type) };
+};
+
+const reconcileMetrobankSavingsRowsFromRunningBalances = (rows: ParsedImportRow[]) => {
+  const datedRows = rows
+    .map((row, index) => ({ index, date: parseDateValue(row.date ?? null) }))
+    .filter((entry): entry is { index: number; date: Date } => entry.date !== null);
+  if (datedRows.length < 2) {
+    return rows;
+  }
+
+  const sourceRunsNewestFirst = datedRows[0].date.getTime() > datedRows.at(-1)!.date.getTime();
+  return rows.map((row, index) => {
+    const comparisonIndex = sourceRunsNewestFirst ? index + 1 : index - 1;
+    const currentBalance = readParsedLedgerBalance(row);
+    const previousBalance = comparisonIndex >= 0 && comparisonIndex < rows.length
+      ? readParsedLedgerBalance(rows[comparisonIndex])
+      : null;
+    const amount = parseMoney(row.amount ?? null);
+    if (currentBalance === null || previousBalance === null || amount === null) {
+      return row;
+    }
+
+    const balanceDelta = currentBalance - previousBalance;
+    const tolerance = Math.max(0.01, Math.abs(amount) * 0.0001);
+    if (Math.abs(Math.abs(balanceDelta) - Math.abs(amount)) > tolerance || Math.abs(balanceDelta) < 0.005) {
+      return row;
+    }
+
+    const type: TransactionType = balanceDelta > 0 ? "income" : "expense";
+    const description = row.description ?? row.merchantRaw ?? row.merchantClean ?? "";
+    const categoryName = guessMetrobankSavingsCategoryName(description, type);
+    return {
+      ...row,
+      type,
+      categoryName,
+      rawPayload: {
+        ...(row.rawPayload ?? {}),
+        previousBalance,
+        runningBalance: currentBalance,
+        balanceDelta,
+        directionEvidence: "running_balance_delta",
+        parsedDirectionType: type,
+      },
+    };
+  });
 };
 
 const parseMetrobankSavingsTransactionLine = (
@@ -9771,10 +9853,12 @@ const parseMetrobankSavingsImportText = (text: string) => {
     return null;
   }
 
+  const reconciledRows = reconcileMetrobankSavingsRowsFromRunningBalances(rows);
   const endingBalance =
     metadata.endingBalance ??
-    getTrailingBalanceFromParsedRows(rows) ??
-    parseMoney((rows.at(-1)?.rawPayload as Record<string, unknown> | undefined)?.balanceText as string | null);
+    getLatestDatedBalanceFromParsedRows(reconciledRows) ??
+    getTrailingBalanceFromParsedRows(reconciledRows) ??
+    parseMoney((reconciledRows.at(-1)?.rawPayload as Record<string, unknown> | undefined)?.balanceText as string | null);
 
   return {
     metadata: {
@@ -9782,7 +9866,7 @@ const parseMetrobankSavingsImportText = (text: string) => {
       endingBalance,
       confidence: Math.min(100, metadata.confidence + 4),
     },
-    rows,
+    rows: reconciledRows,
   };
 };
 

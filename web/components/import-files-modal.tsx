@@ -7211,7 +7211,7 @@ export function ImportFilesModal({
         const target = Math.max(0, Math.min(100, targetDisplayProgress));
 
         if (target < current) {
-          return target;
+          return current;
         }
 
         if (Math.abs(target - current) < 0.5) {

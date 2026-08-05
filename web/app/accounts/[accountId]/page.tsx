@@ -4512,7 +4512,7 @@ function AccountDetailPageContent() {
                       Name{transactionSortField === "name" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
                     </button>
                     <button
-                      className="line-item-header-cell"
+                      className="line-item-header-cell line-item-header-cell--date"
                       type="button"
                       onClick={() => {
                         if (transactionSortField === "date") {
@@ -4528,7 +4528,7 @@ function AccountDetailPageContent() {
                       Date{transactionSortField === "date" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
                     </button>
                     <button
-                      className="line-item-header-cell"
+                      className="line-item-header-cell line-item-header-cell--category"
                       type="button"
                       onClick={() => {
                         if (transactionSortField === "category") {
