@@ -1,4 +1,6 @@
 import { strict as assert } from "node:assert";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   clearSelectedCurrencyPreferences,
   persistSelectedCurrency,
@@ -58,5 +60,24 @@ assert.equal(readSelectedCurrency("workspace-b"), null, "The new default must ap
 
 localStorage.setItem(selectedCurrencyByWorkspaceKey, "{invalid");
 assert.equal(readSelectedCurrency("workspace-a"), null, "Corrupt browser storage must safely fall back to page defaults.");
+
+const accountsPageSource = readFileSync(resolve(process.cwd(), "app/accounts/page.tsx"), "utf8");
+assert.ok(
+  accountsPageSource.includes("const usesFxEstimates = isAllCurrenciesView && visibleAccountCurrencies.length > 1"),
+  "Accounts should only show FX estimates for a mixed-currency All Currencies view."
+);
+assert.ok(
+  accountsPageSource.includes("convertAmount(signedValue, row.currency, accountExchangeRates.rates)"),
+  "Each Accounts section should use the shared FX rates instead of adding unlike currencies."
+);
+assert.ok(
+  accountsPageSource.includes('accounts-overview-card__info--fx') &&
+    accountsPageSource.includes('Values are estimated in ${defaultCurrency} using the latest available exchange rates.'),
+  "Mixed-currency summary cards should identify and explain their FX estimates."
+);
+assert.ok(
+  accountsPageSource.includes(': formatAggregateAmount(group.total, group.rows)'),
+  "Specific-currency section totals should retain their normal exact-currency display."
+);
 
 console.log("Currency selection regression passed.");

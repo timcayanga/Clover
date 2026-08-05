@@ -24420,6 +24420,16 @@ button.investments-portfolio-inline-edit {
   transform: translateY(-1px);
 }
 
+.accounts-overview-card__info--fx {
+  width: 25px;
+  border-color: rgba(0, 169, 191, 0.34);
+  background: rgba(0, 169, 191, 0.1);
+  color: var(--brand);
+  font-size: 0.57rem;
+  letter-spacing: 0.04em;
+  opacity: 1;
+}
+
 .accounts-overview-card__info:focus-visible {
   outline: 2px solid rgba(0, 169, 191, 0.3);
   outline-offset: 2px;

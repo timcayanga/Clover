@@ -3027,13 +3027,14 @@ function AccountsPageContent() {
     () => getCurrencyCodes(visibleAccounts),
     [visibleAccounts]
   );
+  const usesFxEstimates = isAllCurrenciesView && visibleAccountCurrencies.length > 1;
   const accountExchangeRates = useExchangeRates(
     visibleAccountCurrencies,
     defaultCurrency,
-    isAllCurrenciesView && visibleAccountCurrencies.length > 1
+    usesFxEstimates
   );
   const estimatedTotals = useMemo(() => {
-    if (!isAllCurrenciesView || visibleAccountCurrencies.length <= 1) {
+    if (!usesFxEstimates) {
       return totals;
     }
 
@@ -3058,17 +3059,27 @@ function AccountsPageContent() {
       },
       { assets: 0, liabilities: 0, netWorth: 0, spendable: 0 }
     );
-  }, [accountExchangeRates.rates, isAllCurrenciesView, totals, visibleAccountCurrencies.length, visibleAccounts]);
-  const accountEstimateUnavailable = isAllCurrenciesView && accountExchangeRates.unavailable.length > 0;
+  }, [accountExchangeRates.rates, totals, usesFxEstimates, visibleAccounts]);
+  const accountEstimateUnavailable = usesFxEstimates && accountExchangeRates.unavailable.length > 0;
   const formatAccountSummary = (value: number, signed = false) => {
     if (accountExchangeRates.loading || accountEstimateUnavailable) {
       return "—";
     }
-    if (isAllCurrenciesView && visibleAccountCurrencies.length > 1) {
+    if (usesFxEstimates) {
       const amount = formatDisplayAccountAmount(value, defaultCurrency);
       return signed && value !== 0 ? `${value > 0 ? "+" : "-"}${amount}` : amount;
     }
     return signed ? formatSignedAggregateAmount(value, visibleAccounts) : formatAggregateAmount(value, visibleAccounts);
+  };
+  const getAccountSummaryTooltip = (calculation: string) => {
+    if (!usesFxEstimates) {
+      return calculation;
+    }
+
+    const rateDate = accountExchangeRates.asOf
+      ? ` Rates are current as of ${formatDate(accountExchangeRates.asOf)}.`
+      : "";
+    return `${calculation} Values are estimated in ${defaultCurrency} using the latest available exchange rates.${rateDate}`;
   };
 
   const accountGroups = useMemo(() => {
@@ -3136,20 +3147,29 @@ function AccountsPageContent() {
     ];
 
     return groups
-      .map((group) => ({
-        ...group,
-        total: group.rows.reduce(
-          (sum, row) =>
-            sum +
-            normalizeAccountBalanceSign(
-              "kind" in row && row.kind === "investment_institution" ? "investment" : getEffectiveAccountType(row as Account),
-              parseAmount(row.balance)
-            ),
-          0
-        ),
-      }))
+      .map((group) => {
+        let estimateUnavailable = false;
+        const total = group.rows.reduce((sum, row) => {
+          const signedValue = normalizeAccountBalanceSign(
+            "kind" in row && row.kind === "investment_institution" ? "investment" : getEffectiveAccountType(row as Account),
+            parseAmount(row.balance)
+          );
+          if (!usesFxEstimates) {
+            return sum + signedValue;
+          }
+
+          const convertedValue = convertAmount(signedValue, row.currency, accountExchangeRates.rates);
+          if (convertedValue === null) {
+            estimateUnavailable = true;
+            return sum;
+          }
+          return sum + convertedValue;
+        }, 0);
+
+        return { ...group, total, estimateUnavailable };
+      })
       .filter((group) => group.rows.length > 0 || draggedAccountId !== null);
-  }, [draggedAccountId, visibleAccounts]);
+  }, [accountExchangeRates.rates, draggedAccountId, usesFxEstimates, visibleAccounts]);
 
   const selectedAccount = useMemo(
     () => reconciledAccounts.find((account) => account.id === drawerAccountId) ?? null,
@@ -4220,49 +4240,49 @@ function AccountsPageContent() {
         {visibleAccounts.length > 0 ? (
           <section className="accounts-overview-grid" aria-label="Account summary">
             <article className="accounts-overview-card glass">
-              <button className="accounts-overview-card__info" type="button" aria-label="How Net Worth is calculated">
-                i
+              <button className={`accounts-overview-card__info${usesFxEstimates ? " accounts-overview-card__info--fx" : ""}`} type="button" aria-label={usesFxEstimates ? "How the Net Worth FX estimate is calculated" : "How Net Worth is calculated"}>
+                {usesFxEstimates ? "FX" : "i"}
                 <span className="accounts-overview-card__info-tooltip" role="tooltip">
-                  Assets minus liabilities across visible accounts. Positive balances add to net worth; credit cards, loans, and other debts subtract from it.
+                  {getAccountSummaryTooltip("Assets minus liabilities across visible accounts. Positive balances add to net worth; credit cards, loans, and other debts subtract from it.")}
                 </span>
               </button>
-              <p className="eyebrow">{isAllCurrenciesView && visibleAccountCurrencies.length > 1 ? "Est. Net Worth" : "Net Worth"}</p>
+              <p className="eyebrow">{usesFxEstimates ? "Est. Net Worth" : "Net Worth"}</p>
               <strong className={`accounts-overview-card__amount ${getNetWorthTone(estimatedTotals.netWorth)}`} title={accountEstimateUnavailable ? `Exchange rate unavailable for ${accountExchangeRates.unavailable.join(", ")}` : undefined}>
                 {formatAccountSummary(estimatedTotals.netWorth, true)}
               </strong>
             </article>
             <article className="accounts-overview-card glass">
-              <button className="accounts-overview-card__info" type="button" aria-label="How Spendable is calculated">
-                i
+              <button className={`accounts-overview-card__info${usesFxEstimates ? " accounts-overview-card__info--fx" : ""}`} type="button" aria-label={usesFxEstimates ? "How the Spendable FX estimate is calculated" : "How Spendable is calculated"}>
+                {usesFxEstimates ? "FX" : "i"}
                 <span className="accounts-overview-card__info-tooltip" role="tooltip">
-                  Positive balances from spendable accounts, such as bank, wallet, and cash accounts. Debts and tracked assets are excluded.
+                  {getAccountSummaryTooltip("Positive balances from spendable accounts, such as bank, wallet, and cash accounts. Debts and tracked assets are excluded.")}
                 </span>
               </button>
-              <p className="eyebrow">{isAllCurrenciesView && visibleAccountCurrencies.length > 1 ? "Est. Spendable" : "Spendable"}</p>
+              <p className="eyebrow">{usesFxEstimates ? "Est. Spendable" : "Spendable"}</p>
               <strong className="accounts-overview-card__amount is-good">
                 {formatAccountSummary(estimatedTotals.spendable)}
               </strong>
             </article>
             <article className="accounts-overview-card glass">
-              <button className="accounts-overview-card__info" type="button" aria-label="How Assets is calculated">
-                i
+              <button className={`accounts-overview-card__info${usesFxEstimates ? " accounts-overview-card__info--fx" : ""}`} type="button" aria-label={usesFxEstimates ? "How the Assets FX estimate is calculated" : "How Assets is calculated"}>
+                {usesFxEstimates ? "FX" : "i"}
                 <span className="accounts-overview-card__info-tooltip" role="tooltip">
-                  Sum of visible account balances that count as positive value after Clover applies each account type's balance rules.
+                  {getAccountSummaryTooltip("Sum of visible account balances that count as positive value after Clover applies each account type's balance rules.")}
                 </span>
               </button>
-              <p className="eyebrow">{isAllCurrenciesView && visibleAccountCurrencies.length > 1 ? "Est. Assets" : "Assets"}</p>
+              <p className="eyebrow">{usesFxEstimates ? "Est. Assets" : "Assets"}</p>
               <strong className="accounts-overview-card__amount is-good">
                 {formatAccountSummary(estimatedTotals.assets)}
               </strong>
             </article>
             <article className="accounts-overview-card glass">
-              <button className="accounts-overview-card__info" type="button" aria-label="How Liabilities is calculated">
-                i
+              <button className={`accounts-overview-card__info${usesFxEstimates ? " accounts-overview-card__info--fx" : ""}`} type="button" aria-label={usesFxEstimates ? "How the Liabilities FX estimate is calculated" : "How Liabilities is calculated"}>
+                {usesFxEstimates ? "FX" : "i"}
                 <span className="accounts-overview-card__info-tooltip" role="tooltip">
-                  Sum of visible credit card, loan, and other debt balances. Clover shows this as a positive total so the amount is easy to scan.
+                  {getAccountSummaryTooltip("Sum of visible credit card, loan, and other debt balances. Clover shows this as a positive total so the amount is easy to scan.")}
                 </span>
               </button>
-              <p className="eyebrow">{isAllCurrenciesView && visibleAccountCurrencies.length > 1 ? "Est. Liabilities" : "Liabilities"}</p>
+              <p className="eyebrow">{usesFxEstimates ? "Est. Liabilities" : "Liabilities"}</p>
               <strong className="accounts-overview-card__amount is-danger">
                 {formatAccountSummary(estimatedTotals.liabilities)}
               </strong>
@@ -4334,7 +4354,13 @@ function AccountsPageContent() {
                     <div className="accounts-group__head">
                       <div className="accounts-group__title-row">
                         <h5>{group.title}</h5>
-                        <strong>{formatAggregateAmount(group.total, group.rows)}</strong>
+                        <strong title={group.estimateUnavailable ? "An exchange rate is unavailable for this section." : undefined}>
+                          {usesFxEstimates
+                            ? accountExchangeRates.loading || group.estimateUnavailable
+                              ? "Est. —"
+                              : `Est. ${formatDisplayAccountAmount(group.total, defaultCurrency)}`
+                            : formatAggregateAmount(group.total, group.rows)}
+                        </strong>
                       </div>
                     </div>
 
