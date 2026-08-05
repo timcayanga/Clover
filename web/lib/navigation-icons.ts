@@ -11,7 +11,7 @@ export const NAVIGATION_ICON_SOURCE_FILES = {
   reports: "reports.png",
   adviser: "adviser.png",
   budgeting: "budgeting.png",
-  goals: "plan.png",
+  goals: "goals.png",
   more: "more.png",
   notifications: "notifications.png",
   settings: "settings.png",
