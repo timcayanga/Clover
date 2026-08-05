@@ -11,6 +11,12 @@ assert.match(authScreen, /reset_password_email_code/u, "Password recovery must u
 assert.match(authScreen, /needs_second_factor/u, "Password sign-in must continue into MFA when Clerk requires it");
 assert.match(authScreen, /attemptSecondFactor/u, "MFA codes must be submitted to Clerk");
 assert.match(authScreen, /strategy_for_user_invalid/u, "Sign-in errors must explain social-only accounts");
+assert.doesNotMatch(
+  authScreen,
+  /continueSign(In|Up): true/u,
+  "Social sign-in must start a fresh Clerk attempt instead of continuing stale authentication state",
+);
+assert.match(authScreen, /message\.includes\("response: 0"\)/u, "Clerk response-state errors must be handled safely");
 assert.match(morePage, /MoreSignOutButton/u, "The mobile More page must expose logout");
 assert.match(signOutButton, /signOutToLanding/u, "Mobile logout must use the safe Clover sign-out flow");
 assert.match(signOutButton, /clearAllWorkspaceCaches/u, "Mobile logout must clear private workspace caches");

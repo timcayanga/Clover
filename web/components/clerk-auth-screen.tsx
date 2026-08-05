@@ -39,13 +39,13 @@ const socialProviders: Array<{
 
 const callbackUrl = "/sso-callback";
 function formatError(error: unknown) {
-  if (typeof error === "string") {
-    return error;
+  const message = typeof error === "string" ? error : error instanceof Error ? error.message : "";
+
+  if (/clerkjs:\s*response:\s*0\s*not supported yet/i.test(message)) {
+    return "The secure sign-in attempt expired or was interrupted. Please try again.";
   }
 
-  if (error instanceof Error) {
-    return error.message;
-  }
+  if (message) return message;
 
   return "Something went wrong. Please try again.";
 }
@@ -78,6 +78,7 @@ function getFirstClerkError(error: unknown) {
 function getSignInErrorMessage(error: unknown, context: "password" | "verification" | "reset" = "password") {
   const firstError = getFirstClerkError(error);
   const code = firstError.code.toLowerCase();
+  const message = firstError.message.toLowerCase();
 
   if (code.includes("too_many") || code.includes("rate_limit")) {
     return "Too many attempts were made. Please wait a few minutes, then try again.";
@@ -105,7 +106,13 @@ function getSignInErrorMessage(error: unknown, context: "password" | "verificati
     return "You’re already signed in. Refresh the page to continue to Clover.";
   }
 
-  if (code.includes("network") || code.includes("fetch")) {
+  if (
+    code.includes("network") ||
+    code.includes("fetch") ||
+    message.includes("response: 0") ||
+    message.includes("network") ||
+    message.includes("fetch")
+  ) {
     return "Clover couldn’t reach the secure sign-in service. Check your connection and try again.";
   }
 
@@ -700,8 +707,6 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
           strategy,
           redirectUrl: callbackUrl,
           redirectUrlComplete: completeRedirectUrl,
-          continueSignIn: true,
-          continueSignUp: true,
         });
         return;
       }
@@ -710,11 +715,9 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
         strategy,
         redirectUrl: callbackUrl,
         redirectUrlComplete: completeRedirectUrl,
-        continueSignIn: true,
-        continueSignUp: true,
       });
     } catch (err) {
-      setError(formatError(err));
+      setError(getSignInErrorMessage(err));
       setSocialBusy(null);
     }
   };
