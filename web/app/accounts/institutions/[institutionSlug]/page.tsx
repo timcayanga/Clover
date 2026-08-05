@@ -1209,19 +1209,17 @@ export default function InvestmentInstitutionDetailPage() {
     setDeletingInstitution(true);
     setMessage("");
     try {
-      const results = await Promise.all(
-        accounts.map((account) =>
-          fetch(`/api/accounts/${account.id}`, {
-            method: "DELETE",
-          }).then(async (response) => ({
-            response,
-            error: response.ok ? null : ((await response.json().catch(() => null)) as { error?: string } | null)?.error,
-          }))
-        )
-      );
-      const failed = results.find(({ response }) => !response.ok);
-      if (failed) {
-        throw new Error(failed.error || "Unable to delete this institution.");
+      const response = await fetch("/api/accounts/institution", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: workspaceId || accounts[0]?.workspaceId,
+          accountIds: accounts.map((account) => account.id),
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "Unable to delete this institution.");
       }
 
       const cacheWorkspaceId = workspaceId || accounts[0]?.workspaceId || "";
@@ -1230,6 +1228,7 @@ export default function InvestmentInstitutionDetailPage() {
       }
       syncWorkspaceCache([], []);
       router.replace("/accounts");
+      router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to delete this institution.");
       setDeletingInstitution(false);
