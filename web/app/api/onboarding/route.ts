@@ -24,7 +24,6 @@ export async function POST(request: Request) {
       const userUpdate = await tx.user.update({
         where: { id: user.id },
         data: {
-          planTier: "free",
           financialExperience: payload.experience ?? user.financialExperience,
           onboardingCompletedAt: new Date(),
         },

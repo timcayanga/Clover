@@ -14,6 +14,7 @@ export function ClerkAppProvider({ publishableKey, localization, children }: Cle
   return (
     <ClerkProvider
       publishableKey={publishableKey}
+      supportEmail="hello@clover.ph"
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
       localization={localization}

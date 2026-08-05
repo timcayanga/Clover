@@ -4,6 +4,7 @@ import {
   isAdminOnlyUserId,
   isConfiguredAdminEmail,
 } from "@/lib/admin-access";
+import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 export const metadata = {
   title: "Opening Clover",
@@ -20,5 +21,10 @@ export default async function ContinuePage() {
     isAdminOnlyUserId(session.userId) ||
     (await isConfiguredAdminEmail(session.userId));
 
-  redirect(isAdmin ? "/admin" : "/home");
+  if (isAdmin) {
+    redirect("/admin");
+  }
+
+  const user = await getOrCreateCurrentUser(session.userId);
+  redirect(hasCompletedOnboarding(user) ? "/home" : "/onboarding");
 }

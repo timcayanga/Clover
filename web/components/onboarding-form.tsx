@@ -125,9 +125,6 @@ export function OnboardingForm({
     }
 
     startTransition(() => {
-      void persistOnboarding("import").catch(() => {
-        // The import flow also persists onboarding after a completed upload.
-      });
       setMessage(`Opening ${files.length === 1 ? files[0].name : `${files.length} files`}...`);
       setImportSeedFiles(files);
       setImportOpen(true);
