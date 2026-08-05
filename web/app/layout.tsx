@@ -12,6 +12,7 @@ import { HelperTextSync } from "@/components/helper-text-sync";
 import { StagingBrowserStateReset } from "@/components/staging-browser-state-reset";
 import { AdminOnlyRedirect } from "@/components/admin-only-redirect";
 import { ModalKeyboardController } from "@/components/modal-keyboard-controller";
+import { CRITICAL_NAVIGATION_ICON_NAMES, getNavigationIconSrc } from "@/lib/navigation-icons";
 
 const clerkLocalization = {
   userProfile: {
@@ -85,23 +86,13 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       style={serverTheme ? { colorScheme: serverTheme } : undefined}
     >
       <head>
-        {[
-          "home",
-          "bank-account",
-          "transactions",
-          "recurring",
-          "adviser",
-          "plan",
-          "more",
-          "notifications-v2",
-          "settings-v2",
-        ].map((icon) => (
+        {CRITICAL_NAVIGATION_ICON_NAMES.map((icon) => (
           <link
             key={icon}
             rel="preload"
-            href={`/assets/3d%20icons/menu/${icon}.png`}
+            href={getNavigationIconSrc(icon)}
             as="image"
-            type="image/png"
+            type="image/webp"
           />
         ))}
       </head>

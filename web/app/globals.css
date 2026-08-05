@@ -753,21 +753,6 @@ label {
     linear-gradient(180deg, #ffffff 0%, #f5f8fa 100%);
 }
 
-.menu-icon-preload {
-  position: fixed;
-  width: 0;
-  height: 0;
-  overflow: hidden;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.menu-icon-preload img {
-  display: block;
-  width: 0;
-  height: 0;
-}
-
 .route-loading-fallback {
   position: fixed;
   z-index: 120;

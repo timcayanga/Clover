@@ -49,6 +49,7 @@ import {
 } from "@/lib/guidance-menu";
 import { installClientDiagnostics, recordClientDiagnostic } from "@/lib/client-diagnostics";
 import { BugReportWidget } from "@/components/bug-report-widget";
+import { getNavigationIconSrc, type NavigationIconName } from "@/lib/navigation-icons";
 
 const DashboardManualTransactionModal = dynamic(
   () => import("@/components/dashboard-top-actions").then((module) => module.DashboardManualTransactionModal),
@@ -336,8 +337,6 @@ const desktopNavSections = [
 ];
 
 const shouldPrefetchNavHref = (href: string) => href !== "/split-bill";
-const MENU_ICON_VERSION = "20260726";
-
 type IconName =
   | "dashboard"
   | "accounts"
@@ -362,53 +361,33 @@ type IconName =
   | "help"
   | "sign-out";
 
-const MENU_ICON_SRC: Partial<Record<IconName, string>> = {
-  dashboard: "/assets/3d%20icons/menu/home.png",
-  accounts: "/assets/3d%20icons/menu/bank-account.png",
-  investments: "/assets/3d%20icons/menu/investments.png",
-  "split-bill": "/assets/3d%20icons/menu/split-bills.png",
-  circles: "/assets/3d%20icons/menu/profiles.png",
-  transactions: "/assets/3d%20icons/menu/transactions.png",
-  recurring: "/assets/3d%20icons/menu/recurring.png",
-  reports: "/assets/3d%20icons/menu/reports.png",
-  adviser: "/assets/3d%20icons/menu/adviser.png",
-  budgeting: "/assets/3d%20icons/menu/budgeting.png",
-  goals: "/assets/3d%20icons/menu/plan.png",
-  more: "/assets/3d%20icons/menu/more.png",
-  notifications: `/assets/3d%20icons/menu/notifications-v2.png?v=${MENU_ICON_VERSION}`,
-  settings: `/assets/3d%20icons/menu/settings-v2.png?v=${MENU_ICON_VERSION}`,
-  help: "/assets/3d%20icons/menu/help.png",
-  search: "/assets/3d%20icons/menu/search.png",
-  profile: "/assets/3d%20icons/menu/account.png",
-  "sign-out": "/assets/3d%20icons/menu/log-out.png",
+const MENU_ICON_NAMES: Partial<Record<IconName, NavigationIconName>> = {
+  dashboard: "home",
+  accounts: "accounts",
+  investments: "investments",
+  "split-bill": "splitBills",
+  circles: "circles",
+  transactions: "transactions",
+  recurring: "recurring",
+  reports: "reports",
+  adviser: "adviser",
+  budgeting: "budgeting",
+  goals: "goals",
+  more: "more",
+  notifications: "notifications",
+  settings: "settings",
+  help: "help",
+  search: "search",
+  profile: "profile",
+  "sign-out": "signOut",
 };
 
-const PRELOADED_MENU_ICON_NAMES: IconName[] = [
-  "dashboard",
-  "accounts",
-  "transactions",
-  "recurring",
-  "adviser",
-  "notifications",
-  "settings",
-  "sign-out",
-  "investments",
-  "split-bill",
-  "circles",
-  "goals",
-  "budgeting",
-  "reports",
-  "help",
-  "more",
-  "profile",
-];
-
 function MenuIcon({ name }: { name: IconName }) {
-  const imageSrc = MENU_ICON_SRC[name];
-  if (imageSrc) {
+  const navigationIconName = MENU_ICON_NAMES[name];
+  if (navigationIconName) {
     return (
       <img
-        src={imageSrc}
+        src={getNavigationIconSrc(navigationIconName)}
         alt=""
         width={96}
         height={96}
@@ -1678,16 +1657,6 @@ export function CloverShell({
   return (
     <CloverChromeContext.Provider value={{ closeChrome }}>
       <div className={`app-shell ${isSidebarOpen ? "is-sidebar-open" : ""}`} ref={shellRef}>
-      <div className="menu-icon-preload" aria-hidden="true">
-        {PRELOADED_MENU_ICON_NAMES.map((iconName) => {
-          const imageSrc = MENU_ICON_SRC[iconName];
-          if (!imageSrc) {
-            return null;
-          }
-
-          return <img key={iconName} src={imageSrc} alt="" width={96} height={96} loading="eager" decoding="sync" fetchPriority="high" />;
-        })}
-      </div>
       <div
         className="sidebar-backdrop"
         role="presentation"
@@ -1795,7 +1764,7 @@ export function CloverShell({
                 />
             ) : (
               <span className="sidebar-profile__avatar" aria-hidden="true">
-                <img src="/assets/3d%20icons/menu/account.png" alt="" width={96} height={96} loading="eager" decoding="async" className="sidebar-profile__avatar-icon" />
+                <img src={getNavigationIconSrc("profile")} alt="" width={96} height={96} loading="eager" decoding="sync" fetchPriority="high" className="sidebar-profile__avatar-icon" />
               </span>
             )}
             <span className="sr-only">{displayName}</span>

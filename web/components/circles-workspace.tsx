@@ -19,6 +19,7 @@ import {
   type CircleTypeValue,
 } from "@/lib/circles";
 import { isSplitBillBuiltInAvatarUrl } from "@/lib/split-bill-avatars";
+import { getNavigationIconSrc } from "@/lib/navigation-icons";
 
 const tabs = [
   "overview",
@@ -524,7 +525,7 @@ export function CirclesWorkspace({
       {data.circles.length === 0 ? (
         <section className="circles-empty panel glass">
           <img
-            src="/assets/3d%20icons/menu/profiles.png"
+            src={getNavigationIconSrc("profiles")}
             alt=""
             width={120}
             height={120}
@@ -870,7 +871,7 @@ function CircleOverview({
             ))
           ) : (
             <CircleEmptyState
-              image="/assets/3d%20icons/menu/recurring.png"
+              image={getNavigationIconSrc("recurring")}
               title="No commitments yet"
             >
               Add rent, utilities, tuition, family support, or another recurring
@@ -1151,7 +1152,7 @@ function CircleBudgets({
           ))
         ) : (
           <CircleEmptyState
-            image="/assets/3d%20icons/menu/budgeting.png"
+            image={getNavigationIconSrc("budgeting")}
             title="No shared budgets yet"
             plain
           >

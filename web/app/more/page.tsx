@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CloverShell } from "@/components/clover-shell";
 import { MoreSignOutButton } from "@/components/more-sign-out-button";
 import { ensureOnboardingAccess } from "@/lib/onboarding-access";
+import { getNavigationIconSrc, type NavigationIconName } from "@/lib/navigation-icons";
 
 export const dynamic = "force-dynamic";
 
@@ -18,23 +19,23 @@ type MoreSection = {
 
 type PageIconName = "dashboard" | "adviser" | "accounts" | "transactions" | "recurring" | "circles" | "investments" | "goals" | "budgeting" | "notifications" | "settings" | "help";
 
-const MORE_ICON_SRC: Record<PageIconName, string> = {
-  dashboard: "/assets/3d%20icons/home.png?v=20260723",
-  adviser: "/assets/3d%20icons/adviser.png?v=20260726a",
-  accounts: "/assets/3d%20icons/menu/bank-account.png",
-  transactions: "/assets/3d%20icons/transactions.png?v=20260723",
-  recurring: "/assets/3d%20icons/recurring.png?v=20260723",
-  circles: "/assets/3d%20icons/circles.png?v=20260723",
-  investments: "/assets/3d%20icons/menu/investments.png",
-  goals: "/assets/icons/goals.png",
-  budgeting: "/assets/3d%20icons/menu/budgeting.png",
-  notifications: "/assets/3d%20icons/menu/notifications-v2.png",
-  settings: "/assets/3d%20icons/menu/settings-v2.png",
-  help: "/assets/3d%20icons/menu/help.png",
+const MORE_ICON_NAMES: Record<PageIconName, NavigationIconName> = {
+  dashboard: "home",
+  adviser: "adviser",
+  accounts: "accounts",
+  transactions: "transactions",
+  recurring: "recurring",
+  circles: "circles",
+  investments: "investments",
+  goals: "goals",
+  budgeting: "budgeting",
+  notifications: "notifications",
+  settings: "settings",
+  help: "help",
 };
 
 function PageIcon({ name }: { name: PageIconName }) {
-  return <img src={MORE_ICON_SRC[name]} alt="" width={96} height={96} loading="eager" decoding="async" className="more-page__link-icon-image" aria-hidden="true" />;
+  return <img src={getNavigationIconSrc(MORE_ICON_NAMES[name])} alt="" width={96} height={96} loading="eager" decoding="sync" fetchPriority="high" className="more-page__link-icon-image" aria-hidden="true" />;
 }
 
 const moreSections: MoreSection[] = [

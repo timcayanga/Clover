@@ -26,6 +26,7 @@ import { signOutToLanding } from "@/lib/sign-out";
 import { readAccountIdentityCache, writeAccountIdentityCache } from "@/lib/account-identity-cache";
 import { MOBILE_LAYOUT_MEDIA_QUERY } from "@/lib/responsive-layout";
 import { notifyDefaultCurrencyChanged, regionalPreferencesStorageKey } from "@/lib/regional-preferences";
+import { getNavigationIconSrc, type NavigationIconName } from "@/lib/navigation-icons";
 
 const SettingsCategoriesPanel = dynamic(
   () => import("@/components/settings-categories-panel").then((module) => module.SettingsCategoriesPanel),
@@ -440,9 +441,8 @@ function SettingsToggleRow({
   );
 }
 
-function SettingsIcon({ src }: { src: string }) {
-  const nextSrc = src.includes("notifications.png") ? `${src}?v=20260709` : src;
-  return <img aria-hidden="true" src={nextSrc} alt="" className="settings-hub__menu-icon" loading="eager" decoding="async" />;
+function SettingsIcon({ name }: { name: NavigationIconName }) {
+  return <img aria-hidden="true" src={getNavigationIconSrc(name)} alt="" className="settings-hub__menu-icon" loading="eager" decoding="sync" />;
 }
 
 const sectionCopy: Record<
@@ -454,43 +454,43 @@ const sectionCopy: Record<
 > = {
   account: {
     title: "Account",
-    icon: <SettingsIcon src="/assets/3d%20icons/account.png" />,
+    icon: <SettingsIcon name="profile" />,
   },
   profiles: {
     title: "Profiles",
-    icon: <SettingsIcon src="/assets/3d%20icons/profiles.png" />,
+    icon: <SettingsIcon name="profiles" />,
   },
   display: {
     title: "Display",
-    icon: <SettingsIcon src="/assets/3d%20icons/display.png" />,
+    icon: <SettingsIcon name="display" />,
   },
   data: {
     title: "Data",
-    icon: <SettingsIcon src="/assets/3d%20icons/data.png" />,
+    icon: <SettingsIcon name="data" />,
   },
   imports: {
     title: "Review",
-    icon: <SettingsIcon src="/assets/3d%20icons/review.png" />,
+    icon: <SettingsIcon name="review" />,
   },
   categories: {
     title: "Categories",
-    icon: <SettingsIcon src="/assets/3d%20icons/categories.png" />,
+    icon: <SettingsIcon name="categories" />,
   },
   notifications: {
     title: "Notifications",
-    icon: <SettingsIcon src="/assets/3d%20icons/notifications.png" />,
+    icon: <SettingsIcon name="notifications" />,
   },
   security: {
     title: "Security",
-    icon: <SettingsIcon src="/assets/3d%20icons/security.png" />,
+    icon: <SettingsIcon name="security" />,
   },
   regional: {
     title: "Region",
-    icon: <SettingsIcon src="/assets/3d%20icons/region.png" />,
+    icon: <SettingsIcon name="region" />,
   },
   plan: {
     title: "Plan",
-    icon: <SettingsIcon src="/assets/3d%20icons/plan.png" />,
+    icon: <SettingsIcon name="goals" />,
   },
 };
 
