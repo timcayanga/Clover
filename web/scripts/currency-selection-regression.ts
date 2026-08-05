@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert";
 import {
+  clearSelectedCurrencyPreferences,
   persistSelectedCurrency,
   readSelectedCurrency,
   selectedCurrencyByWorkspaceKey,
@@ -20,6 +21,10 @@ class MemoryStorage {
 
   setItem(key: string, value: string) {
     this.values.set(key, value);
+  }
+
+  removeItem(key: string) {
+    this.values.delete(key);
   }
 }
 
@@ -46,6 +51,10 @@ assert.equal(readSelectedCurrency("workspace-b"), "USD");
 persistSelectedCurrency("workspace-a", "");
 assert.equal(readSelectedCurrency("workspace-a"), "", "All currencies must persist distinctly from a missing preference.");
 assert.equal(readSelectedCurrency("workspace-b"), "USD", "Currency preferences must remain isolated by workspace.");
+
+clearSelectedCurrencyPreferences();
+assert.equal(readSelectedCurrency("workspace-a"), null, "Changing the default currency must reset older workspace view overrides.");
+assert.equal(readSelectedCurrency("workspace-b"), null, "The new default must apply consistently across workspaces.");
 
 localStorage.setItem(selectedCurrencyByWorkspaceKey, "{invalid");
 assert.equal(readSelectedCurrency("workspace-a"), null, "Corrupt browser storage must safely fall back to page defaults.");

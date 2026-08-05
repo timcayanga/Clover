@@ -55,6 +55,18 @@ export const persistSelectedCurrency = (workspaceId: string, currency: string) =
   }
 };
 
+export const clearSelectedCurrencyPreferences = () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.removeItem(selectedCurrencyByWorkspaceKey);
+  } catch {
+    // Disabled storage should not prevent the Settings preference from changing.
+  }
+};
+
 const captureWorkspaceSwitch = (previousWorkspaceId: string, workspaceId: string) => {
   if (typeof window === "undefined") {
     return;

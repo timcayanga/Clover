@@ -20,7 +20,7 @@ import { applyHelperTextPreference, HELPER_TEXT_STORAGE_KEY, readStoredHelperTex
 import { applyThemeMode, readStoredThemeMode, THEME_STORAGE_KEY, type ThemeMode } from "@/lib/theme-preference";
 import { getCurrencyCatalogCodes, getCurrencyCatalogOption } from "@/lib/currencies";
 import { clearAllWorkspaceCaches } from "@/lib/workspace-cache";
-import { persistSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
+import { clearSelectedCurrencyPreferences, persistSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
 import type { BillingInterval } from "@/lib/billing-plans";
 import { signOutToLanding } from "@/lib/sign-out";
 import { readAccountIdentityCache, writeAccountIdentityCache } from "@/lib/account-identity-cache";
@@ -2162,12 +2162,13 @@ export function SettingsHub({
                   <span>Default currency</span>
                   <select
                     value={regionalPreferences.baseCurrency}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      clearSelectedCurrencyPreferences();
                       setRegionalPreferences((current) => ({
                         ...current,
                         baseCurrency: event.target.value as RegionalPreferences["baseCurrency"],
-                      }))
-                    }
+                      }));
+                    }}
                   >
                     {currencyOptions.map((option) => (
                       <option key={option.code} value={option.code}>
