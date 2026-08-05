@@ -909,7 +909,7 @@ export async function GET(request: Request) {
         }),
         prisma.transaction.groupBy({
           where: visibleWhere,
-          by: ["type", "isTransfer", "categoryId", "accountId"],
+          by: ["type", "isTransfer", "categoryId", "accountId", "currency"],
           _sum: {
             amount: true,
           },
@@ -925,6 +925,7 @@ export async function GET(request: Request) {
               },
               select: {
                 amount: true,
+                currency: true,
                 type: true,
                 isTransfer: true,
                 merchantRaw: true,
@@ -1051,6 +1052,14 @@ export async function GET(request: Request) {
         spending: 0,
         transfers: 0,
       };
+      const currencyTotals: Record<string, { income: number; spending: number; transfers: number }> = {};
+      const addCurrencyTotal = (currencyValue: string, type: "income" | "expense" | "transfer", amount: number) => {
+        const currency = normalizeInstitutionCurrency(currencyValue || "PHP") ?? "PHP";
+        currencyTotals[currency] ??= { income: 0, spending: 0, transfers: 0 };
+        if (type === "income") currencyTotals[currency].income += amount;
+        else if (type === "transfer") currencyTotals[currency].transfers += amount;
+        else currencyTotals[currency].spending += amount;
+      };
       const categoryNameById = new Map(summaryCategories.map((category) => [category.id, category.name] as const));
       const bdoAccountIdSet = new Set(bdoAccountIds);
       for (const group of summaryGroups) {
@@ -1072,6 +1081,7 @@ export async function GET(request: Request) {
         } else {
           lightSummary.spending += amount;
         }
+        addCurrencyTotal(group.currency, effectiveType, amount);
       }
       for (const transaction of bdoSummaryRows) {
         const amount = Math.abs(Number(transaction.amount));
@@ -1088,6 +1098,7 @@ export async function GET(request: Request) {
         if (effectiveType === "income") lightSummary.income += amount;
         else if (effectiveType === "transfer") lightSummary.transfers += amount;
         else lightSummary.spending += amount;
+        addCurrencyTotal(transaction.currency, effectiveType, amount);
       }
       const lightSummaryOverrides = getTransactionSummaryTypeOverrides(
         summaryMatchingRows.map((transaction) => ({
@@ -1120,6 +1131,8 @@ export async function GET(request: Request) {
         if (overrideType === "income") lightSummary.income += amount;
         else if (overrideType === "transfer") lightSummary.transfers += amount;
         else lightSummary.spending += amount;
+        addCurrencyTotal(transaction.currency, originalType, -amount);
+        addCurrencyTotal(transaction.currency, overrideType, amount);
       }
 
       return NextResponse.json({
@@ -1135,6 +1148,7 @@ export async function GET(request: Request) {
           transfers: lightSummary.transfers,
           review: 0,
           currencyCodes,
+          currencyTotals,
           topCategory: null,
           topAccount: null,
           firstTransactionDate: null,
@@ -1403,6 +1417,7 @@ export async function GET(request: Request) {
       lastTransactionDate: transactions[0]?.date ?? null,
       firstReviewTransaction: null as TransactionApiRow | null,
       firstReviewTransactionIndex: null as number | null,
+      currencyTotals: {} as Record<string, { income: number; spending: number; transfers: number }>,
     };
 
     transactions.forEach((mappedTransaction, index) => {
@@ -1432,6 +1447,11 @@ export async function GET(request: Request) {
         } else {
           summaryState.spending += amount;
         }
+        const currency = normalizeInstitutionCurrency(mappedTransaction.currency || "PHP") ?? "PHP";
+        summaryState.currencyTotals[currency] ??= { income: 0, spending: 0, transfers: 0 };
+        if (effectiveType === "income") summaryState.currencyTotals[currency].income += amount;
+        else if (effectiveType === "transfer") summaryState.currencyTotals[currency].transfers += amount;
+        else summaryState.currencyTotals[currency].spending += amount;
 
         const summaryCategoryName = mappedTransaction.categoryName ?? "Other";
         summaryState.topCategories.set(summaryCategoryName, (summaryState.topCategories.get(summaryCategoryName) ?? 0) + amount);
@@ -1465,6 +1485,7 @@ export async function GET(request: Request) {
         transfers: summaryState.transfers,
         review: summaryState.review,
         currencyCodes,
+        currencyTotals: summaryState.currencyTotals,
         topCategory,
         topAccount,
         firstTransactionDate: summaryState.firstTransactionDate,

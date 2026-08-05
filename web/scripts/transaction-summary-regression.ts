@@ -72,10 +72,13 @@ const pageSource = readFileSync(path.join(process.cwd(), "app/transactions/page.
 const footerSnapshot = pageSource.match(
   /<div className="transactions-footer-snapshot"[\s\S]*?<\/div>\s*<\/div>\s*\) : null}/
 )?.[0] ?? "";
-assert.match(footerSnapshot, />Income<\/span>/);
-assert.match(footerSnapshot, />Spending<\/span>/);
-assert.match(footerSnapshot, />Net Cash Flow<\/span>/);
+assert.match(footerSnapshot, /"Est\. Income" : "Income"/);
+assert.match(footerSnapshot, /"Est\. Spending" : "Spending"/);
+assert.match(footerSnapshot, /"Est\. Net Cash Flow" : "Net Cash Flow"/);
 assert.doesNotMatch(footerSnapshot, />Transfers<\/span>/);
-assert.match(pageSource, /const netCashFlow = displayedTransactionsSummary\.income - displayedTransactionsSummary\.spending;/);
+assert.match(pageSource, /const netCashFlow = estimatedTransactionTotals\.income - estimatedTransactionTotals\.spending;/);
+
+const routeSource = readFileSync(path.join(process.cwd(), "app/api/transactions/route.ts"), "utf8");
+assert.match(routeSource, /currencyTotals/, "The API must preserve per-currency totals before conversion.");
 
 console.log("[PASS] transaction summaries exclude repayments and show income, spending, and net cash flow");

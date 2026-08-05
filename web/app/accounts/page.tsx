@@ -28,6 +28,8 @@ import { getAccountPath, getInvestmentInstitutionPath } from "@/lib/account-path
 import { countNonCashAccounts } from "@/lib/account-limit-count";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
+import { useDefaultCurrency } from "@/lib/use-default-currency";
+import { convertAmount, useExchangeRates } from "@/lib/use-exchange-rates";
 import { fetchJsonOnce } from "@/lib/request-dedupe";
 import {
   applyOptimisticWorkspaceAccountDeletion,
@@ -1384,6 +1386,7 @@ function AccountsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { closeChrome } = useCloverChrome();
+  const defaultCurrency = useDefaultCurrency();
   const addRef = useRef<HTMLDivElement>(null);
   const balanceInputRef = useRef<HTMLInputElement>(null);
   const workspaceLoadSeqRef = useRef(0);
@@ -2327,8 +2330,8 @@ function AccountsPageContent() {
       return;
     }
 
-    setSelectedCurrency(readSelectedCurrency(selectedWorkspaceId) ?? "PHP");
-  }, [selectedWorkspaceId]);
+    setSelectedCurrency(readSelectedCurrency(selectedWorkspaceId) ?? defaultCurrency);
+  }, [defaultCurrency, selectedWorkspaceId]);
 
   useEffect(() => {
     setImportActivitySnapshot(readImportActivity());
@@ -3018,6 +3021,55 @@ function AccountsPageContent() {
       { assets: 0, liabilities: 0, netWorth: 0, spendable: 0 }
     );
   }, [visibleAccounts, statementCheckpoints]);
+
+  const isAllCurrenciesView = !selectedCurrency || selectedCurrency.toLowerCase() === "all";
+  const visibleAccountCurrencies = useMemo(
+    () => getCurrencyCodes(visibleAccounts),
+    [visibleAccounts]
+  );
+  const accountExchangeRates = useExchangeRates(
+    visibleAccountCurrencies,
+    defaultCurrency,
+    isAllCurrenciesView && visibleAccountCurrencies.length > 1
+  );
+  const estimatedTotals = useMemo(() => {
+    if (!isAllCurrenciesView || visibleAccountCurrencies.length <= 1) {
+      return totals;
+    }
+
+    return visibleAccounts.reduce(
+      (accumulator, account) => {
+        const displayedBalance = getDisplayedAccountBalance(account);
+        const signedValue = normalizeAccountBalanceSign(getEffectiveAccountType(account), parseAmount(displayedBalance));
+        const convertedValue = convertAmount(signedValue, account.currency, accountExchangeRates.rates);
+        if (convertedValue === null) {
+          return accumulator;
+        }
+        if (isSpendableAccountType(getEffectiveAccountType(account)) && convertedValue > 0) {
+          accumulator.spendable += convertedValue;
+        }
+        if (convertedValue >= 0) {
+          accumulator.assets += convertedValue;
+        } else {
+          accumulator.liabilities += Math.abs(convertedValue);
+        }
+        accumulator.netWorth += convertedValue;
+        return accumulator;
+      },
+      { assets: 0, liabilities: 0, netWorth: 0, spendable: 0 }
+    );
+  }, [accountExchangeRates.rates, isAllCurrenciesView, totals, visibleAccountCurrencies.length, visibleAccounts]);
+  const accountEstimateUnavailable = isAllCurrenciesView && accountExchangeRates.unavailable.length > 0;
+  const formatAccountSummary = (value: number, signed = false) => {
+    if (accountExchangeRates.loading || accountEstimateUnavailable) {
+      return "—";
+    }
+    if (isAllCurrenciesView && visibleAccountCurrencies.length > 1) {
+      const amount = formatDisplayAccountAmount(value, defaultCurrency);
+      return signed && value !== 0 ? `${value > 0 ? "+" : "-"}${amount}` : amount;
+    }
+    return signed ? formatSignedAggregateAmount(value, visibleAccounts) : formatAggregateAmount(value, visibleAccounts);
+  };
 
   const accountGroups = useMemo(() => {
     const groups = [
@@ -4174,9 +4226,9 @@ function AccountsPageContent() {
                   Assets minus liabilities across visible accounts. Positive balances add to net worth; credit cards, loans, and other debts subtract from it.
                 </span>
               </button>
-              <p className="eyebrow">Net Worth</p>
-              <strong className={`accounts-overview-card__amount ${getNetWorthTone(totals.netWorth)}`}>
-                {formatSignedAggregateAmount(totals.netWorth, visibleAccounts)}
+              <p className="eyebrow">{isAllCurrenciesView && visibleAccountCurrencies.length > 1 ? "Est. Net Worth" : "Net Worth"}</p>
+              <strong className={`accounts-overview-card__amount ${getNetWorthTone(estimatedTotals.netWorth)}`} title={accountEstimateUnavailable ? `Exchange rate unavailable for ${accountExchangeRates.unavailable.join(", ")}` : undefined}>
+                {formatAccountSummary(estimatedTotals.netWorth, true)}
               </strong>
             </article>
             <article className="accounts-overview-card glass">
@@ -4186,9 +4238,9 @@ function AccountsPageContent() {
                   Positive balances from spendable accounts, such as bank, wallet, and cash accounts. Debts and tracked assets are excluded.
                 </span>
               </button>
-              <p className="eyebrow">Spendable</p>
+              <p className="eyebrow">{isAllCurrenciesView && visibleAccountCurrencies.length > 1 ? "Est. Spendable" : "Spendable"}</p>
               <strong className="accounts-overview-card__amount is-good">
-                {formatAggregateAmount(totals.spendable, visibleAccounts)}
+                {formatAccountSummary(estimatedTotals.spendable)}
               </strong>
             </article>
             <article className="accounts-overview-card glass">
@@ -4198,9 +4250,9 @@ function AccountsPageContent() {
                   Sum of visible account balances that count as positive value after Clover applies each account type's balance rules.
                 </span>
               </button>
-              <p className="eyebrow">Assets</p>
+              <p className="eyebrow">{isAllCurrenciesView && visibleAccountCurrencies.length > 1 ? "Est. Assets" : "Assets"}</p>
               <strong className="accounts-overview-card__amount is-good">
-                {formatAggregateAmount(totals.assets, visibleAccounts)}
+                {formatAccountSummary(estimatedTotals.assets)}
               </strong>
             </article>
             <article className="accounts-overview-card glass">
@@ -4210,9 +4262,9 @@ function AccountsPageContent() {
                   Sum of visible credit card, loan, and other debt balances. Clover shows this as a positive total so the amount is easy to scan.
                 </span>
               </button>
-              <p className="eyebrow">Liabilities</p>
+              <p className="eyebrow">{isAllCurrenciesView && visibleAccountCurrencies.length > 1 ? "Est. Liabilities" : "Liabilities"}</p>
               <strong className="accounts-overview-card__amount is-danger">
-                {formatAggregateAmount(totals.liabilities, visibleAccounts)}
+                {formatAccountSummary(estimatedTotals.liabilities)}
               </strong>
             </article>
           </section>

@@ -38,6 +38,7 @@ import {
   toCommitmentOccurrenceKey,
 } from "@/lib/commitment-occurrences";
 import { hasCompatibleTable } from "@/lib/data-engine";
+import { defaultCurrencyCookieKey, normalizeDefaultCurrency } from "@/lib/regional-preferences";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -582,9 +583,11 @@ async function resolveDashboardWorkspaceSummary(user: Awaited<ReturnType<typeof 
 async function DashboardStream({
   user,
   workspaceSummary,
+  defaultCurrency,
 }: {
   user: Awaited<ReturnType<typeof getOrCreateCurrentUser>>;
   workspaceSummary: WorkspaceSummary;
+  defaultCurrency: string;
 }) {
   try {
   const cashAccountCount = workspaceSummary.accounts.filter((account) => account.type === "cash").length;
@@ -595,8 +598,8 @@ async function DashboardStream({
       new Set(workspaceSummary.accounts.map((account) => formatCurrencyCode(account.currency)).filter(Boolean))
     ).sort((left, right) => left.localeCompare(right));
 
-    if (currencies.includes("PHP")) {
-      return "PHP";
+    if (currencies.includes(defaultCurrency)) {
+      return defaultCurrency;
     }
 
     return currencies[0] ?? "PHP";
@@ -1316,6 +1319,8 @@ async function DashboardPageStream() {
       redirect("/onboarding");
     }
     const workspaceSummary = await resolveDashboardWorkspaceSummary(user);
+    const cookieStore = await cookies();
+    const defaultCurrency = normalizeDefaultCurrency(cookieStore.get(defaultCurrencyCookieKey)?.value);
 
     return (
       <CloverShell
@@ -1336,7 +1341,7 @@ async function DashboardPageStream() {
       }
       >
       <Suspense fallback={<DashboardStreamFallback />}>
-        <DashboardStream user={user} workspaceSummary={workspaceSummary} />
+        <DashboardStream user={user} workspaceSummary={workspaceSummary} defaultCurrency={defaultCurrency} />
       </Suspense>
     </CloverShell>
     );

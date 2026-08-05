@@ -25,6 +25,7 @@ import type { BillingInterval } from "@/lib/billing-plans";
 import { signOutToLanding } from "@/lib/sign-out";
 import { readAccountIdentityCache, writeAccountIdentityCache } from "@/lib/account-identity-cache";
 import { MOBILE_LAYOUT_MEDIA_QUERY } from "@/lib/responsive-layout";
+import { notifyDefaultCurrencyChanged, regionalPreferencesStorageKey } from "@/lib/regional-preferences";
 
 const SettingsCategoriesPanel = dynamic(
   () => import("@/components/settings-categories-panel").then((module) => module.SettingsCategoriesPanel),
@@ -178,7 +179,7 @@ type SettingsHubProps = {
 
 const SETTINGS_NOTIFICATIONS_KEY = "clover.settings.notifications.v1";
 const SETTINGS_IMPORTS_KEY = "clover.settings.imports.v1";
-const SETTINGS_REGIONAL_KEY = "clover.settings.regional.v1";
+const SETTINGS_REGIONAL_KEY = regionalPreferencesStorageKey;
 const SETTINGS_DATA_USE_KEY = "clover.settings.data-use.v1";
 const SETTINGS_WORKSPACE_DEFAULTS_KEY = "clover.settings.workspace-defaults.v1";
 const SETTINGS_GUIDANCE_KEY = "clover.settings.guidance-level.v1";
@@ -1112,6 +1113,7 @@ export function SettingsHub({
 
   useEffect(() => {
     writeStoredJsonValue(SETTINGS_REGIONAL_KEY, regionalPreferences);
+    notifyDefaultCurrencyChanged(regionalPreferences.baseCurrency);
   }, [regionalPreferences]);
 
   useEffect(() => {
@@ -2157,7 +2159,7 @@ export function SettingsHub({
             <div className="settings-preference-grid">
               <article className="settings-action-card settings-preference-card">
                 <label className="settings-inline-field">
-                  <span>Base currency</span>
+                  <span>Default currency</span>
                   <select
                     value={regionalPreferences.baseCurrency}
                     onChange={(event) =>
@@ -2173,6 +2175,7 @@ export function SettingsHub({
                       </option>
                     ))}
                   </select>
+                  <small>Used as the initial currency view and for estimated totals when All currencies is selected.</small>
                 </label>
                 <label className="settings-inline-field">
                   <span>Number format</span>

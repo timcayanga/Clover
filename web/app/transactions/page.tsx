@@ -105,6 +105,8 @@ import {
 } from "@/lib/workspace-cache";
 import { fetchJsonOnce } from "@/lib/request-dedupe";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
+import { useDefaultCurrency } from "@/lib/use-default-currency";
+import { convertAmount, useExchangeRates } from "@/lib/use-exchange-rates";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import type { UserLimits } from "@/lib/user-limits";
 import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
@@ -386,6 +388,7 @@ type TransactionPageMeta = {
   transfers: number;
   review: number;
   currencyCodes: string[];
+  currencyTotals?: Record<string, { income: number; spending: number; transfers: number }>;
   topCategory: [string, number] | null;
   topAccount: [string, number] | null;
   firstTransactionDate: string | null;
@@ -2112,6 +2115,7 @@ export default function TransactionsPage() {
 }
 
 function TransactionsPageContent() {
+  const defaultCurrency = useDefaultCurrency();
   const { closeChrome } = useCloverChrome();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -3372,8 +3376,8 @@ function TransactionsPageContent() {
       return;
     }
 
-    setCurrencyFilter(readSelectedCurrency(selectedWorkspaceId) ?? "");
-  }, [selectedWorkspaceId]);
+    setCurrencyFilter(readSelectedCurrency(selectedWorkspaceId) ?? defaultCurrency);
+  }, [defaultCurrency, selectedWorkspaceId]);
 
   useLayoutEffect(() => {
     setSelectedTransactionIds([]);
@@ -3788,7 +3792,7 @@ function TransactionsPageContent() {
 
       drilldownParamRef.current = drilldownSignature;
       setQuery("");
-      setCurrencyFilter(readSelectedCurrency(selectedWorkspaceId) ?? "");
+      setCurrencyFilter(readSelectedCurrency(selectedWorkspaceId) ?? defaultCurrency);
       setCategoryFilters([]);
       setAccountFilters([]);
       setTypeFilters([]);
@@ -3823,7 +3827,7 @@ function TransactionsPageContent() {
     setFilterOpen(false);
     setHeaderMenuOpen(null);
     setHeaderMenuPosition(null);
-  }, [accounts, categories, isWorkspaceDataReady, searchParams, selectedWorkspaceId]);
+  }, [accounts, categories, defaultCurrency, isWorkspaceDataReady, searchParams, selectedWorkspaceId]);
 
   const ensureDefaultAccount = async (workspaceId: string) => {
     const cashAccount = accounts.find((account) => account.type === "cash" || account.name.trim().toLowerCase() === "cash");
@@ -3956,6 +3960,38 @@ function TransactionsPageContent() {
   );
   const shouldUseVisibleFilteredSummary = hasActiveServerSideFilters && visibleTransactions.length === 0;
   const displayedTransactionsSummary = shouldUseVisibleFilteredSummary ? visibleFilteredSummary : transactionsSummary;
+  const isAllCurrenciesView = !currencyFilter;
+  const transactionSummaryCurrencies = useMemo(
+    () => {
+      const currencies = Object.keys(displayedTransactionsSummary.currencyTotals ?? {});
+      return currencies.length > 0 ? currencies : displayedTransactionsSummary.currencyCodes;
+    },
+    [displayedTransactionsSummary.currencyCodes, displayedTransactionsSummary.currencyTotals]
+  );
+  const transactionExchangeRates = useExchangeRates(
+    transactionSummaryCurrencies,
+    defaultCurrency,
+    isAllCurrenciesView && transactionSummaryCurrencies.length > 1
+  );
+  const estimatedTransactionTotals = useMemo(() => {
+    if (!isAllCurrenciesView || transactionSummaryCurrencies.length <= 1) {
+      return {
+        income: displayedTransactionsSummary.income,
+        spending: displayedTransactionsSummary.spending,
+        transfers: displayedTransactionsSummary.transfers,
+      };
+    }
+
+    return Object.entries(displayedTransactionsSummary.currencyTotals ?? {}).reduce(
+      (totals, [currency, values]) => {
+        totals.income += convertAmount(values.income, currency, transactionExchangeRates.rates) ?? 0;
+        totals.spending += convertAmount(values.spending, currency, transactionExchangeRates.rates) ?? 0;
+        totals.transfers += convertAmount(values.transfers, currency, transactionExchangeRates.rates) ?? 0;
+        return totals;
+      },
+      { income: 0, spending: 0, transfers: 0 }
+    );
+  }, [displayedTransactionsSummary, isAllCurrenciesView, transactionExchangeRates.rates, transactionSummaryCurrencies.length]);
   const totalTransactionCountForDisplay = searchText || shouldUseVisibleFilteredSummary ? visibleTransactions.length : transactionsSummary.totalCount;
   const activeFinalizingImportIds = useMemo(
     () => new Set(imports.filter(isActiveEnrichmentJob).map((importFile) => importFile.id)),
@@ -6416,7 +6452,17 @@ function TransactionsPageContent() {
     }
   };
 
-  const netCashFlow = displayedTransactionsSummary.income - displayedTransactionsSummary.spending;
+  const netCashFlow = estimatedTransactionTotals.income - estimatedTransactionTotals.spending;
+  const transactionEstimateUnavailable = isAllCurrenciesView && transactionExchangeRates.unavailable.length > 0;
+  const formatTransactionSummary = (value: number) => {
+    if (transactionExchangeRates.loading || transactionEstimateUnavailable) {
+      return "—";
+    }
+    if (isAllCurrenciesView && transactionSummaryCurrencies.length > 1) {
+      return formatTransactionAmount(value, defaultCurrency);
+    }
+    return formatTransactionAggregate(value, visibleTransactions);
+  };
   const visibleWarningTransactionCount = visibleTransactions.filter(isReviewableTransaction).length;
   const warningTransactionCount = Math.max(displayedTransactionsSummary.review, visibleWarningTransactionCount);
   const hasReviewItems = warningTransactionCount > 0;
@@ -7717,21 +7763,21 @@ function TransactionsPageContent() {
               <div className="transactions-footer-snapshot" aria-label="Cash flow snapshot for all filtered transactions">
                 <div className="transactions-footer-snapshot__metrics">
                   <div className="transactions-footer-snapshot__metric">
-                    <span className="transactions-footer-snapshot__metric-label">Income</span>
+                    <span className="transactions-footer-snapshot__metric-label">{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Income" : "Income"}</span>
                     <span className="transactions-footer-snapshot__metric-value positive">
-                      {formatTransactionAggregate(displayedTransactionsSummary.income, visibleTransactions)}
+                      {formatTransactionSummary(estimatedTransactionTotals.income)}
                     </span>
                   </div>
                   <div className="transactions-footer-snapshot__metric">
-                    <span className="transactions-footer-snapshot__metric-label">Spending</span>
+                    <span className="transactions-footer-snapshot__metric-label">{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Spending" : "Spending"}</span>
                     <span className="transactions-footer-snapshot__metric-value negative">
-                      {formatTransactionAggregate(displayedTransactionsSummary.spending, visibleTransactions)}
+                      {formatTransactionSummary(estimatedTransactionTotals.spending)}
                     </span>
                   </div>
                   <div className="transactions-footer-snapshot__metric transactions-footer-snapshot__metric--net" style={transactionsFooterNetMetricStyle}>
-                    <span className="transactions-footer-snapshot__metric-label">Net Cash Flow</span>
+                    <span className="transactions-footer-snapshot__metric-label">{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Net Cash Flow" : "Net Cash Flow"}</span>
                     <span className={`transactions-footer-snapshot__metric-value ${netCashFlow >= 0 ? "positive" : "negative"}`}>
-                      {formatTransactionAggregate(netCashFlow, visibleTransactions)}
+                      {formatTransactionSummary(netCashFlow)}
                     </span>
                   </div>
                 </div>
@@ -7756,20 +7802,20 @@ function TransactionsPageContent() {
               <dd>{totalTransactionCountForDisplay}</dd>
             </div>
             <div>
-              <dt>Income</dt>
-              <dd className="positive">{formatTransactionAggregate(displayedTransactionsSummary.income, visibleTransactions)}</dd>
+              <dt>{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Income" : "Income"}</dt>
+              <dd className="positive">{formatTransactionSummary(estimatedTransactionTotals.income)}</dd>
             </div>
             <div>
-              <dt>Spending</dt>
-              <dd className="negative">{formatTransactionAggregate(displayedTransactionsSummary.spending, visibleTransactions)}</dd>
+              <dt>{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Spending" : "Spending"}</dt>
+              <dd className="negative">{formatTransactionSummary(estimatedTransactionTotals.spending)}</dd>
             </div>
             <div>
               <dt>Transfers</dt>
-              <dd>{formatTransactionAggregate(displayedTransactionsSummary.transfers, visibleTransactions)}</dd>
+              <dd>{formatTransactionSummary(estimatedTransactionTotals.transfers)}</dd>
             </div>
             <div>
-              <dt>Net cash flow</dt>
-              <dd className={netCashFlow >= 0 ? "positive" : "negative"}>{formatTransactionAggregate(netCashFlow, visibleTransactions)}</dd>
+              <dt>{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Net cash flow" : "Net cash flow"}</dt>
+              <dd className={netCashFlow >= 0 ? "positive" : "negative"}>{formatTransactionSummary(netCashFlow)}</dd>
             </div>
             <div>
               <dt>Review items</dt>

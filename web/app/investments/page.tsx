@@ -15,12 +15,16 @@ import { InfoTooltip } from "@/components/info-tooltip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { InvestmentMarketChart } from "@/components/investment-market-chart";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
+import { useDefaultCurrency } from "@/lib/use-default-currency";
+import { convertAmount, useExchangeRates } from "@/lib/use-exchange-rates";
 import { BETA_FULL_ACCESS_ENABLED, hasFullFeatureAccess } from "@/lib/beta-access";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
 import {
   chooseWorkspaceId,
+  persistSelectedCurrency,
   persistSelectedWorkspaceId,
+  readSelectedCurrency,
   readSelectedWorkspaceId,
 } from "@/lib/workspace-selection";
 import {
@@ -997,6 +1001,7 @@ const serializeInvestmentEditDraft = (account: Account): InvestmentEditDraft => 
 
 export default function InvestmentsPage() {
   const router = useRouter();
+  const defaultCurrency = useDefaultCurrency();
   const initialWorkspaceId = readSelectedWorkspaceId();
   const initialCachedWorkspace = initialWorkspaceId ? getCachedInvestmentWorkspace(initialWorkspaceId).cachedSnapshot : null;
   const initialCachedAccounts = Array.isArray(initialCachedWorkspace?.accounts) ? (initialCachedWorkspace.accounts as Account[]) : [];
@@ -1575,6 +1580,31 @@ export default function InvestmentsPage() {
   const selectedCurrencyCodes = useMemo(() => getCurrencyCodes(selectedCurrencyInvestmentAccounts), [selectedCurrencyInvestmentAccounts]);
   const hasVisibleCurrencySelection = selectedCurrencyInvestmentAccounts.length > 0;
   const canAggregateSelectedCurrency = selectedCurrencyCodes.length <= 1;
+  const isAllCurrenciesView = portfolioCurrencyFilter === "all";
+  const investmentExchangeRates = useExchangeRates(
+    selectedCurrencyCodes,
+    defaultCurrency,
+    isAllCurrenciesView && selectedCurrencyCodes.length > 1
+  );
+  const estimatedPortfolioTotals = useMemo(() => {
+    if (!isAllCurrenciesView || selectedCurrencyCodes.length <= 1) {
+      return portfolioTotals;
+    }
+
+    return selectedCurrencyInvestmentAccounts.reduce(
+      (totals, account) => {
+        const currentValue = parseNullableAmount(account.balance);
+        const purchaseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
+        const convertedCurrent = currentValue === null ? null : convertAmount(currentValue, account.currency, investmentExchangeRates.rates);
+        const convertedPurchase = purchaseValue === null ? null : convertAmount(purchaseValue, account.currency, investmentExchangeRates.rates);
+        if (convertedCurrent !== null) totals.currentValue += convertedCurrent;
+        if (convertedPurchase !== null) totals.purchaseValue += convertedPurchase;
+        if (convertedCurrent !== null && convertedPurchase !== null) totals.gainLoss += convertedCurrent - convertedPurchase;
+        return totals;
+      },
+      { currentValue: 0, purchaseValue: 0, gainLoss: 0 }
+    );
+  }, [investmentExchangeRates.rates, isAllCurrenciesView, portfolioTotals, selectedCurrencyCodes.length, selectedCurrencyInvestmentAccounts]);
   const currencyBreakdown = useMemo(
     () =>
       selectedCurrencyCodes.map((currency) => {
@@ -1693,8 +1723,8 @@ export default function InvestmentsPage() {
       }),
     [canAggregateSelectedCurrency, selectedCurrencyInvestmentAccounts]
   );
-  const portfolioRoi = portfolioTotals.purchaseValue > 0
-    ? portfolioTotals.gainLoss / portfolioTotals.purchaseValue
+  const portfolioRoi = estimatedPortfolioTotals.purchaseValue > 0
+    ? estimatedPortfolioTotals.gainLoss / estimatedPortfolioTotals.purchaseValue
     : null;
   const portfolioRisk = useMemo(() => {
     const riskWeights: Record<InvestmentSubtype, number> = {
@@ -1935,11 +1965,13 @@ export default function InvestmentsPage() {
       return;
     }
 
+    const storedCurrency = readSelectedCurrency(selectedWorkspaceId);
+    const preferredCurrency = storedCurrency === "" ? "all" : storedCurrency ?? defaultCurrency;
     const selectedCurrency = portfolioCurrencyFilter.trim().toUpperCase();
-    if (!selectedCurrency || !portfolioCurrencyOptions.includes(selectedCurrency)) {
-      setPortfolioCurrencyFilter(portfolioCurrencyOptions[0]);
+    if (!selectedCurrency || (selectedCurrency !== "ALL" && !portfolioCurrencyOptions.includes(selectedCurrency))) {
+      setPortfolioCurrencyFilter(portfolioCurrencyOptions.includes(preferredCurrency) || preferredCurrency === "all" ? preferredCurrency : portfolioCurrencyOptions[0]);
     }
-  }, [portfolioCurrencyFilter, portfolioCurrencyOptions]);
+  }, [defaultCurrency, portfolioCurrencyFilter, portfolioCurrencyOptions, selectedWorkspaceId]);
   const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
 
   const activeInvestmentFilters = Boolean(
@@ -2545,8 +2577,14 @@ export default function InvestmentsPage() {
         <>
           <CurrencySelector
             value={portfolioCurrencyFilter}
-            onChange={setPortfolioCurrencyFilter}
+            onChange={(next) => {
+              const currency = next.toLowerCase() === "all" ? "all" : formatCurrencyCode(next);
+              setPortfolioCurrencyFilter(currency);
+              persistSelectedCurrency(selectedWorkspaceId, currency);
+            }}
             options={portfolioCurrencyOptions}
+            includeAllOption={portfolioCurrencyOptions.length > 1}
+            allLabel="All currencies"
             ariaLabel="Select investment currency"
             className="transactions-currency-filter investments-currency-filter"
             buttonClassName="button button-secondary button-small investments-page__toolbar-button"
@@ -2633,24 +2671,24 @@ export default function InvestmentsPage() {
             <section className="investments-overview-metrics" aria-label="Portfolio totals">
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
                 <InfoTooltip className="summary-card-info" label="The total value of the visible investment holdings for the selected currency view." />
-                <p className="eyebrow">Estimated value</p>
+                <p className="eyebrow">{isAllCurrenciesView && selectedCurrencyCodes.length > 1 ? "Est. Value" : "Estimated value"}</p>
                 <strong className="accounts-overview-card__amount is-good">
-                  {hasVisibleCurrencySelection && canAggregateSelectedCurrency
-                    ? formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)
-                    : hasVisibleCurrencySelection
-                      ? "Select a currency"
-                      : "—"}
+                  {hasVisibleCurrencySelection && (!investmentExchangeRates.loading && investmentExchangeRates.unavailable.length === 0)
+                    ? isAllCurrenciesView && selectedCurrencyCodes.length > 1
+                      ? formatInvestmentAmount(estimatedPortfolioTotals.currentValue, defaultCurrency)
+                      : formatInvestmentAggregate(estimatedPortfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)
+                    : "—"}
                 </strong>
               </article>
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
                 <InfoTooltip className="summary-card-info" label="Recorded gain or loss for visible holdings with an available purchase value." />
-                <p className="eyebrow">Total returns</p>
-                <strong className={`accounts-overview-card__amount ${portfolioTotals.gainLoss > 0 ? "is-good" : portfolioTotals.gainLoss < 0 ? "is-danger" : "is-neutral"}`}>
-                  {hasVisibleCurrencySelection && canAggregateSelectedCurrency
-                    ? formatInvestmentAggregate(portfolioTotals.gainLoss, selectedCurrencyInvestmentAccounts)
-                    : hasVisibleCurrencySelection
-                      ? "Select a currency"
-                      : "—"}
+                <p className="eyebrow">{isAllCurrenciesView && selectedCurrencyCodes.length > 1 ? "Est. Total Returns" : "Total returns"}</p>
+                <strong className={`accounts-overview-card__amount ${estimatedPortfolioTotals.gainLoss > 0 ? "is-good" : estimatedPortfolioTotals.gainLoss < 0 ? "is-danger" : "is-neutral"}`}>
+                  {hasVisibleCurrencySelection && (!investmentExchangeRates.loading && investmentExchangeRates.unavailable.length === 0)
+                    ? isAllCurrenciesView && selectedCurrencyCodes.length > 1
+                      ? formatInvestmentAmount(estimatedPortfolioTotals.gainLoss, defaultCurrency)
+                      : formatInvestmentAggregate(estimatedPortfolioTotals.gainLoss, selectedCurrencyInvestmentAccounts)
+                    : "—"}
                 </strong>
               </article>
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
@@ -2696,7 +2734,7 @@ export default function InvestmentsPage() {
             {hasVisibleCurrencySelection && !canAggregateSelectedCurrency ? (
               <div className="investments-valuation-note is-warning">
                 <span>
-                  Clover does not add unlike currencies together. Choose one currency to compare allocation and performance.
+                  Estimated totals above are shown in {defaultCurrency}. Choose one currency to compare allocation and performance in detail.
                   {currencyBreakdown.length > 0
                     ? ` ${currencyBreakdown.map((item) => formatInvestmentAmount(item.value, item.currency)).join(" · ")}`
                     : ""}

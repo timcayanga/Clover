@@ -4,6 +4,12 @@ import {
   readSelectedCurrency,
   selectedCurrencyByWorkspaceKey,
 } from "@/lib/workspace-selection";
+import {
+  fallbackDefaultCurrency,
+  readDefaultCurrency,
+  regionalPreferencesStorageKey,
+} from "@/lib/regional-preferences";
+import { convertAmount } from "@/lib/use-exchange-rates";
 
 class MemoryStorage {
   private values = new Map<string, string>();
@@ -24,6 +30,13 @@ Object.defineProperty(globalThis, "window", {
 });
 
 assert.equal(readSelectedCurrency("workspace-a"), null);
+assert.equal(readDefaultCurrency(), fallbackDefaultCurrency, "Default currency should safely fall back to PHP.");
+
+localStorage.setItem(regionalPreferencesStorageKey, JSON.stringify({ baseCurrency: "usd", dateFormat: "MM/DD/YYYY" }));
+assert.equal(readDefaultCurrency(), "USD", "The Settings currency should be normalized for every page.");
+assert.equal(convertAmount(100, "USD", { USD: 1, GBP: 1.25 }), 100);
+assert.equal(convertAmount(100, "GBP", { USD: 1, GBP: 1.25 }), 125);
+assert.equal(convertAmount(100, "EUR", { USD: 1, GBP: 1.25 }), null, "Missing rates must not produce a mixed total.");
 
 persistSelectedCurrency("workspace-a", "gbp");
 persistSelectedCurrency("workspace-b", "usd");

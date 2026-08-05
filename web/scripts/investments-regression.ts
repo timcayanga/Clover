@@ -166,7 +166,8 @@ const investmentsPageSource = readFileSync(resolve(process.cwd(), "app/investmen
 const investmentsStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
 const marketChartSource = readFileSync(resolve(process.cwd(), "components/investment-market-chart.tsx"), "utf8");
 
-assert.doesNotMatch(investmentsPageSource, /allLabel="All currencies"/, "Investments must require one real currency.");
+assert.match(investmentsPageSource, /allLabel="All currencies"/, "Investments must support a converted all-currencies summary.");
+assert.match(investmentsPageSource, /estimatedPortfolioTotals/, "Mixed investment totals must be converted before display.");
 assert.doesNotMatch(investmentsPageSource, /\["neutral", "Neutral"\]/, "Portfolio Outlook must not render a neutral column.");
 assert.match(investmentsPageSource, /\/api\/market-news\?/, "Asset news must load inside Clover.");
 assert.doesNotMatch(investmentsPageSource, /news\.google\.com/, "Asset news must not navigate users away from Clover.");
