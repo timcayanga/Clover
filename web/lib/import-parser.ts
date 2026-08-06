@@ -15,6 +15,7 @@ import {
   isCryptoAssetCurrencyCode,
   normalizeGlobalCurrencyCode,
 } from "@/lib/financial-identity-detection";
+import { getGotradeSecurityName, getGotradeSecuritySymbol } from "@/lib/gotrade-securities";
 
 export type ImportedAccountType =
   | "bank"
@@ -14461,55 +14462,10 @@ const parseGcryptoTransactionHistoryImportText = (text: string, fileName: string
   };
 };
 
-const gotradeSecurityCatalog = [
-  { symbol: "AMZN", name: "Amazon" },
-  { symbol: "GOOGL", name: "Alphabet Inc Class A - Google" },
-  { symbol: "O", name: "Realty Income" },
-  { symbol: "PG", name: "Procter & Gamble" },
-  { symbol: "SCHD", name: "Schwab US Dividend Equity ETF" },
-  { symbol: "VOO", name: "Vanguard S&P 500 ETF" },
-  { symbol: "VZ", name: "Verizon" },
-  { symbol: "XOM", name: "Exxon Mobil" },
-] as const;
-
 const looksLikeGotradeScreenshotText = (text: string) =>
   /\b(?:my positions|recent trades|trade history|dividends|cash earnings|buy\s*-\s*market by dollars|withholding tax\s+25%\s*\(phl\)|per\s+shares?)\b/i.test(
     normalizeWhitespace(text)
   );
-
-const gotradeSecurityName = (symbolOrName: string) => {
-  const normalized = normalizeWhitespace(symbolOrName).toLowerCase();
-  if (normalized.includes("alphabet") && normalized.includes("google")) {
-    return "Alphabet Inc Class A - Google";
-  }
-  if (normalized.includes("schwab us dividend")) {
-    return "Schwab US Dividend Equity ETF";
-  }
-  const catalogMatch = gotradeSecurityCatalog.find(
-    (security) =>
-      security.symbol.toLowerCase() === normalized ||
-      security.name.toLowerCase() === normalized ||
-      normalized.includes(security.name.toLowerCase())
-  );
-  return catalogMatch?.name ?? normalizeWhitespace(symbolOrName);
-};
-
-const gotradeSecuritySymbol = (symbolOrName: string) => {
-  const normalized = normalizeWhitespace(symbolOrName).toLowerCase();
-  if (normalized.includes("alphabet") && normalized.includes("google")) {
-    return "GOOGL";
-  }
-  if (normalized.includes("schwab us dividend")) {
-    return "SCHD";
-  }
-  const catalogMatch = gotradeSecurityCatalog.find(
-    (security) =>
-      security.symbol.toLowerCase() === normalized ||
-      security.name.toLowerCase() === normalized ||
-      normalized.includes(security.name.toLowerCase())
-  );
-  return catalogMatch?.symbol ?? null;
-};
 
 const gotradeScreenshotMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
   if (!looksLikeGotradeScreenshotText(text)) {
@@ -14578,7 +14534,7 @@ const parseGotradePositionRows = (lines: string[], metadata: DetectedStatementMe
       }
       if (!/\$|%|shares?|^\d/.test(candidate)) {
         nameParts.unshift(candidate);
-        if (gotradeSecuritySymbol(candidate)) {
+        if (getGotradeSecuritySymbol(candidate)) {
           break;
         }
       }
@@ -14587,7 +14543,7 @@ const parseGotradePositionRows = (lines: string[], metadata: DetectedStatementMe
       .replace(gotradeMoneyPattern, "")
       .replace(/\s+\d+(?:\.\d+)?%.*$/i, "")
       .trim();
-    const name = gotradeSecuritySymbol(immediateName) ? immediateName : nameParts.join(" ");
+    const name = getGotradeSecuritySymbol(immediateName) ? immediateName : nameParts.join(" ");
 
     if (!name) {
       continue;
@@ -14615,8 +14571,8 @@ const parseGotradePositionRows = (lines: string[], metadata: DetectedStatementMe
         ? marketValue / (1 + gainLossPercent / 100)
         : null;
 
-    const canonicalName = gotradeSecurityName(name);
-    const symbol = gotradeSecuritySymbol(name);
+    const canonicalName = getGotradeSecurityName(name);
+    const symbol = getGotradeSecuritySymbol(name);
     if (!symbol && canonicalName.length < 4) {
       continue;
     }
@@ -14704,7 +14660,7 @@ const parseGotradeTradeRows = (lines: string[], metadata: DetectedStatementMetad
     const symbol = detailMatch[1].toUpperCase();
     const quantity = Number(detailMatch[2]);
     const executionPrice = Number(detailMatch[3].replace(/,/g, ""));
-    const canonicalName = gotradeSecurityName(symbol);
+    const canonicalName = getGotradeSecurityName(symbol);
     const dedupeKey = [activeDate, action.toLowerCase(), symbol, quantity, amount.toFixed(2), executionPrice].join("|");
     if (seen.has(dedupeKey)) {
       continue;
@@ -14793,8 +14749,8 @@ const parseGotradeDividendRows = (lines: string[], metadata: DetectedStatementMe
       if (!name || amount === null) {
         continue;
       }
-      const canonicalName = gotradeSecurityName(name);
-      const symbol = gotradeSecuritySymbol(name);
+      const canonicalName = getGotradeSecurityName(name);
+      const symbol = getGotradeSecuritySymbol(name);
       const dedupeKey = [activeDate, "withholding", symbol ?? canonicalName, amount.toFixed(2)].join("|");
       if (seen.has(dedupeKey)) {
         continue;
@@ -14846,8 +14802,8 @@ const parseGotradeDividendRows = (lines: string[], metadata: DetectedStatementMe
     if (amount === null) {
       continue;
     }
-    const canonicalName = gotradeSecurityName(nameCandidate);
-    const symbol = gotradeSecuritySymbol(nameCandidate);
+    const canonicalName = getGotradeSecurityName(nameCandidate);
+    const symbol = getGotradeSecuritySymbol(nameCandidate);
     const perShare = Number(detailMatch[1].replace(/,/g, ""));
     const quantity = Number(detailMatch[2]);
     const dedupeKey = [activeDate, "dividend", symbol ?? canonicalName, amount.toFixed(2), quantity].join("|");

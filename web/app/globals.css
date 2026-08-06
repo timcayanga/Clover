@@ -47444,6 +47444,18 @@ html[data-theme="dark"] .investments-portfolio-table__row--head {
   .investments-portfolio-table__table {
     overflow-x: visible;
   }
+
+  .content--investments .investments-portfolio-table__row--head {
+    position: sticky;
+    top: 52px;
+    z-index: 50;
+    background: #fff;
+    background-clip: padding-box;
+  }
+
+  html[data-theme="dark"] .content--investments .investments-portfolio-table__row--head {
+    background: #0e1725;
+  }
 }
 
 html[data-theme="dark"] .investments-filters__search,

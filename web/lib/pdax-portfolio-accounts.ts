@@ -111,13 +111,20 @@ export const getCanonicalPdaxHoldingIdentity = (holding: PdaxInvestmentHoldingIn
   };
 };
 
-const holdingEvidenceScore = (holding: PdaxInvestmentHoldingInput) =>
-  Number(Boolean(holding.assetSymbol?.trim())) * 4 +
-  Number(finiteAmount(holding.quantity) !== null) * 3 +
-  Number(finiteAmount(holding.currentValue ?? holding.marketValue) !== null) * 2;
+const holdingEvidenceScore = (holding: PdaxInvestmentHoldingInput) => {
+  const identity = getCanonicalPdaxHoldingIdentity(holding);
+  return (
+    Number(holding.assetSymbol?.trim().toUpperCase() === identity.assetSymbol) * 5 +
+    Number(holding.assetName.trim().toUpperCase() === identity.assetName.toUpperCase()) * 4 +
+    Number(Boolean(holding.assetSymbol?.trim())) * 3 +
+    Number(finiteAmount(holding.quantity) !== null) * 2 +
+    Number(finiteAmount(holding.currentValue ?? holding.marketValue) !== null)
+  );
+};
 
 export const canonicalizePdaxInvestmentHoldings = <T extends PdaxInvestmentHoldingInput>(holdings: T[]) => {
   const canonicalByKey = new Map<string, T>();
+  const evidenceScoreByKey = new Map<string, number>();
   for (const holding of holdings) {
     if (isPdaxWalletHoldingLabel(holding)) {
       continue;
@@ -134,9 +141,10 @@ export const canonicalizePdaxInvestmentHoldings = <T extends PdaxInvestmentHoldi
       assetSymbol: identity.assetSymbol,
       assetType: identity.assetType ?? holding.assetType ?? null,
     } as T;
-    const current = canonicalByKey.get(identity.key);
-    if (!current || holdingEvidenceScore(canonical) > holdingEvidenceScore(current)) {
+    const evidenceScore = holdingEvidenceScore(holding);
+    if (!canonicalByKey.has(identity.key) || evidenceScore > (evidenceScoreByKey.get(identity.key) ?? -1)) {
       canonicalByKey.set(identity.key, canonical);
+      evidenceScoreByKey.set(identity.key, evidenceScore);
     }
   }
 

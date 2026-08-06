@@ -50,6 +50,7 @@ export const getInvestmentAssetBrand = (params: InvestmentAssetBrandInput): Acco
   const isRealWorldAsset = params.subtype === "real_world_asset";
   const isFixedIncome = isFixedIncomeInvestmentSubtype(params.subtype);
   const isGSaveAsset = /\bgsave\b/i.test(params.name ?? "");
+  const isGotradeAsset = /\bgo\s*trade\b/i.test(params.institution ?? "");
   const brandingInstitution = isGSaveAsset ? "GSave" : params.institution;
   const institutionBrand = brandingInstitution
     ? getAccountBrand({
@@ -59,7 +60,7 @@ export const getInvestmentAssetBrand = (params: InvestmentAssetBrandInput): Acco
       })
     : null;
   const shouldPreferInstitutionLogo =
-    !params.symbol?.trim() || !params.subtype || params.subtype === "other" || isFixedIncome;
+    isGotradeAsset || !params.symbol?.trim() || !params.subtype || params.subtype === "other" || isFixedIncome;
   const institutionLogoCandidates = uniqueValues([
     ...(institutionBrand?.logoSrcs ?? []),
     ...(institutionBrand?.logoSrc ? [institutionBrand.logoSrc] : []),

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { getInvestmentAssetBrand, getInvestmentAssetLogoCandidates } from "@/lib/investment-assets";
+import { getGotradeSecurityName, resolveGotradeSecuritySymbol } from "@/lib/gotrade-securities";
 import { inferInvestmentClassification, isActivityOnlyGcryptoAccount } from "@/lib/investments";
 import {
   getInvestmentActivityAmountTone,
@@ -11,6 +12,7 @@ import {
   getInvestmentActivityUnits,
 } from "@/lib/investment-activity";
 import { buildPortfolioGrowthSeries, getPortfolioGrowthMarket } from "@/lib/investment-portfolio-growth";
+import { canonicalizePdaxInvestmentHoldings } from "@/lib/pdax-portfolio-accounts";
 
 const classificationCases = [
   { name: "ATRAM Peso Money Market Fund", expected: "money_market_fund" },
@@ -138,6 +140,27 @@ const gsaveBrand = getInvestmentAssetBrand({
 });
 assert.match(gsaveBrand.logoSrcs.join(" "), /gcash/i, "GSave investment rows should use the GSave/GCash mark");
 
+const gotradeBrand = getInvestmentAssetBrand({
+  name: "Exxon Mobil",
+  symbol: "XOM",
+  institution: "GoTrade",
+  subtype: "stock",
+  currency: "USD",
+});
+assert.match(gotradeBrand.logoSrcs[0] ?? "", /gotrade/i, "Every GoTrade holding should prefer the GoTrade mark.");
+assert.equal(resolveGotradeSecuritySymbol({ institution: "GoTrade", name: "Exxon Mobil" }), "XOM");
+assert.equal(resolveGotradeSecuritySymbol({ institution: "GoTrade", name: "Verizon" }), "VZ");
+assert.equal(getGotradeSecurityName("VZ"), "Verizon");
+
+const canonicalPdaxHoldings = canonicalizePdaxInvestmentHoldings([
+  { assetName: "PDAX Wallet", assetType: "crypto", quantity: null, currentValue: 18_675.92 },
+  { assetName: "Ripple", assetType: "crypto", quantity: 100, currentValue: 5_000 },
+  { assetName: "XRP", assetSymbol: "XRP", assetType: "crypto", quantity: 100, currentValue: 4_800 },
+]);
+assert.equal(canonicalPdaxHoldings.length, 1, "PDAX Wallet and duplicate Ripple aliases must not render as holdings.");
+assert.equal(canonicalPdaxHoldings[0]?.assetName, "XRP");
+assert.equal(canonicalPdaxHoldings[0]?.currentValue, 4_800, "The explicit canonical XRP position should win stale aliases.");
+
 assert.equal(
   isActivityOnlyGcryptoAccount({
     source: "upload",
@@ -180,6 +203,10 @@ assert.doesNotMatch(investmentsPageSource, /news\.google\.com/, "Asset news must
 assert.match(investmentsStyles, /\.content--investments\s*\{[\s\S]*?height:\s*100dvh;/, "Investments must own a scrollable viewport.");
 assert.match(investmentsStyles, /\.content--investments\s*>\s*\.topbar\s*\{[\s\S]*?position:\s*sticky;/, "The desktop Investments header must be sticky.");
 assert.match(investmentsStyles, /\.investments-mobile-header\s*\{[\s\S]*?position:\s*sticky;/, "The mobile Investments header must be sticky.");
+assert.match(investmentsPageSource, /canonicalizePdaxInvestmentHoldings/, "Portfolio rows must hide PDAX wallet balances and collapse XRP aliases.");
+assert.match(investmentsPageSource, /isInvestmentActivityOnlyLabel/, "Dividend activity must not render as a portfolio holding.");
+assert.match(investmentsPageSource, /parseNullableAmount\(holding\.currentValue \?\? holding\.marketValue\) !== null/, "Incomplete imported holdings must stay out of the Portfolio table.");
+assert.match(investmentsStyles, /\.content--investments \.investments-portfolio-table__row--head\s*\{[\s\S]*?position:\s*sticky;[\s\S]*?background:\s*#fff;/, "Desktop Portfolio headers must remain sticky and opaque.");
 assert.match(marketChartSource, /seenSymbols\.has\(key\)/, "Portfolio market tickers must be deduplicated.");
 
 assert.equal(getPortfolioGrowthMarket("crypto", "PHP"), "crypto");
@@ -201,4 +228,4 @@ assert.deepEqual(growthSeries, [
   { date: "2026-08-02", value: 1400 },
 ]);
 
-console.log(`Investment regression passed: ${classificationCases.length + 29} checks.`);
+console.log(`Investment regression passed: ${classificationCases.length + 42} checks.`);

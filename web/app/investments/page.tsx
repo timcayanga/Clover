@@ -20,7 +20,9 @@ import { useDefaultCurrency } from "@/lib/use-default-currency";
 import { BETA_FULL_ACCESS_ENABLED, hasFullFeatureAccess } from "@/lib/beta-access";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
+import { resolveGotradeSecuritySymbol } from "@/lib/gotrade-securities";
 import { getPortfolioGrowthMarket, type PortfolioGrowthAsset } from "@/lib/investment-portfolio-growth";
+import { canonicalizePdaxInvestmentHoldings } from "@/lib/pdax-portfolio-accounts";
 import {
   chooseWorkspaceId,
   persistSelectedCurrency,
@@ -300,6 +302,59 @@ const isInstitutionOnlySnapshotHolding = (
     institutionLabels.includes(holdingName) ||
     new Set(["portfolio", "investment", "investments", "holdings", "assets"]).has(holdingName)
   );
+};
+
+const isInvestmentActivityOnlyLabel = (value: string | null | undefined) =>
+  /^(?:(?:cash\s+)?dividends?|dividend income|cash earnings?|withholding tax(?:es)?)$/i.test(
+    String(value ?? "").trim()
+  );
+
+const canonicalizePortfolioRows = (rows: PortfolioDisplayRow[]) => {
+  const pdaxGroups = new Map<string, PortfolioDisplayRow[]>();
+  for (const row of rows) {
+    if (!/\bpdax\b/i.test(row.institution ?? "")) {
+      continue;
+    }
+    const groupKey = `${normalizeInvestmentLabel(row.institution)}:${row.currency.toUpperCase()}`;
+    const group = pdaxGroups.get(groupKey) ?? [];
+    group.push(row);
+    pdaxGroups.set(groupKey, group);
+  }
+
+  const canonicalByKey = new Map<string, PortfolioDisplayRow & {
+    assetName: string;
+    assetSymbol: string | null;
+    assetType: InvestmentSubtype | null;
+  }>();
+  for (const group of pdaxGroups.values()) {
+    const canonicalRows = canonicalizePdaxInvestmentHoldings(
+      group.map((row) => ({
+        ...row,
+        assetName: row.name,
+        assetSymbol: row.symbol,
+        assetType: row.subtype,
+        quantity: row.detail,
+        currentValue: row.currentValue,
+      }))
+    );
+    for (const row of canonicalRows) {
+      canonicalByKey.set(row.key, row);
+    }
+  }
+
+  return rows
+    .filter((row) => !/\bpdax\b/i.test(row.institution ?? "") || canonicalByKey.has(row.key))
+    .map((row) => {
+      const canonical = canonicalByKey.get(row.key);
+      return canonical
+        ? {
+            ...row,
+            name: canonical.assetName,
+            symbol: canonical.assetSymbol,
+            subtype: canonical.assetType as InvestmentSubtype | null,
+          }
+        : row;
+    });
 };
 
 const extractInvestmentAssetNameFromTransaction = (transaction: InvestmentTransaction) => {
@@ -1246,10 +1301,16 @@ export default function InvestmentsPage() {
         (isGeneric && account.institution
           ? latestSnapshotByInstitution.get(normalizeInvestmentLabel(account.institution))
           : undefined);
-      const snapshotHoldings =
+      const rawSnapshotHoldings =
         matchingSnapshot?.holdings.filter(
-          (holding) => !isInstitutionOnlySnapshotHolding(holding, matchingSnapshot, account)
+          (holding) =>
+            !isInstitutionOnlySnapshotHolding(holding, matchingSnapshot, account) &&
+            !isInvestmentActivityOnlyLabel(holding.assetName) &&
+            parseNullableAmount(holding.currentValue ?? holding.marketValue) !== null
         ) ?? [];
+      const snapshotHoldings = /\bpdax\b/i.test(account.institution ?? matchingSnapshot?.documentImport?.institution ?? "")
+        ? canonicalizePdaxInvestmentHoldings(rawSnapshotHoldings)
+        : rawSnapshotHoldings;
 
       if (matchingSnapshot && snapshotHoldings.length > 0) {
         if (!usedSnapshotIds.has(matchingSnapshot.id)) {
@@ -1263,13 +1324,18 @@ export default function InvestmentsPage() {
               (holdingCurrentValue !== null && holdingPurchaseValue !== null
                 ? holdingCurrentValue - holdingPurchaseValue
                 : null);
+            const holdingSymbol = resolveGotradeSecuritySymbol({
+              institution: account.institution ?? matchingSnapshot.documentImport?.institution,
+              name: holding.assetName,
+              symbol: holding.assetSymbol,
+            });
             const classification = inferInvestmentClassification({
               subtype: INVESTMENT_SUBTYPES.includes(holding.assetType as InvestmentSubtype)
                 ? holding.assetType
                 : null,
               assetType: holding.assetType,
               name: holding.assetName,
-              symbol: holding.assetSymbol,
+              symbol: holdingSymbol,
               institution: account.institution ?? matchingSnapshot.documentImport?.institution,
             });
 
@@ -1281,7 +1347,7 @@ export default function InvestmentsPage() {
               name: holding.assetName,
               institution: account.institution ?? matchingSnapshot.documentImport?.institution ?? null,
               subtype: classification.subtype,
-              symbol: holding.assetSymbol,
+              symbol: holdingSymbol,
               detail: holding.quantity,
               currentValue: holdingCurrentValue,
               purchaseValue: holdingPurchaseValue,
@@ -1300,6 +1366,9 @@ export default function InvestmentsPage() {
         account.investmentCostBasis !== null ||
         account.investmentPrincipal !== null
       );
+      if (account.source !== "manual" && isInvestmentActivityOnlyLabel(account.name)) {
+        continue;
+      }
       if (
         isActivityOnlyGcryptoAccount({
           source: account.source,
@@ -1330,6 +1399,12 @@ export default function InvestmentsPage() {
         continue;
       }
 
+      // Uploaded portfolio rows without a value are incomplete extraction
+      // fragments, not positions. Keep manually added rows editable.
+      if (account.source !== "manual" && currentValue === null) {
+        continue;
+      }
+
       if (!isGeneric || distinctAssetNames.length <= 1) {
         const preferredAssetName = distinctAssetNames[0] ?? account.name;
         const classification = getInvestmentClassificationForAccount(account, distinctAssetNames);
@@ -1342,10 +1417,14 @@ export default function InvestmentsPage() {
           name: preferredAssetName,
           institution: account.institution,
           subtype,
-          symbol:
-            account.investmentSymbol && normalizeInvestmentLabel(account.investmentSymbol) !== normalizeInvestmentLabel(account.currency)
-              ? account.investmentSymbol
-              : null,
+          symbol: resolveGotradeSecuritySymbol({
+            institution: account.institution,
+            name: preferredAssetName,
+            symbol:
+              account.investmentSymbol && normalizeInvestmentLabel(account.investmentSymbol) !== normalizeInvestmentLabel(account.currency)
+                ? account.investmentSymbol
+                : null,
+          }),
           detail: account.investmentQuantity,
           currentValue,
           purchaseValue,
@@ -1357,6 +1436,9 @@ export default function InvestmentsPage() {
       }
 
       for (const assetName of distinctAssetNames) {
+        if (isInvestmentActivityOnlyLabel(assetName)) {
+          continue;
+        }
         const assetClassification = inferInvestmentClassification({
           name: assetName,
           institution: account.institution,
@@ -1374,7 +1456,7 @@ export default function InvestmentsPage() {
           name: assetName,
           institution: account.institution,
           subtype: inferInvestmentSubtypeFromAssetName(assetName) ?? classification.subtype,
-          symbol: null,
+          symbol: resolveGotradeSecuritySymbol({ institution: account.institution, name: assetName }),
           detail: null,
           currentValue: null,
           purchaseValue: null,
@@ -1385,7 +1467,7 @@ export default function InvestmentsPage() {
       }
     }
 
-    return rows;
+    return canonicalizePortfolioRows(rows);
   }, [investmentAccounts, investmentSnapshots, investmentTransactions]);
 
   const visibleInvestmentAccounts = useMemo(() => {
