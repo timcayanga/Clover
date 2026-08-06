@@ -81,6 +81,21 @@ export const buildMarketLinePath = (
   return { points: renderedPoints, linePath };
 };
 
+export const findClosestMarketPointIndex = <T extends { x: number }>(points: T[], chartX: number) => {
+  if (points.length === 0 || !Number.isFinite(chartX)) return -1;
+
+  let closestIndex = 0;
+  let closestDistance = Math.abs(points[0].x - chartX);
+  for (let index = 1; index < points.length; index += 1) {
+    const distance = Math.abs(points[index].x - chartX);
+    if (distance < closestDistance) {
+      closestIndex = index;
+      closestDistance = distance;
+    }
+  }
+  return closestIndex;
+};
+
 export const filterMarketHistoryByRange = (points: MarketHistoryPoint[], range: MarketRange) => {
   if (points.length === 0 || range === "MAX") {
     return points;

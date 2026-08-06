@@ -13,6 +13,7 @@ import {
 } from "@/lib/investment-activity";
 import { buildPortfolioGrowthSeries, getPortfolioGrowthMarket } from "@/lib/investment-portfolio-growth";
 import { canonicalizePdaxInvestmentHoldings } from "@/lib/pdax-portfolio-accounts";
+import { findClosestMarketPointIndex } from "@/lib/market-data";
 
 const classificationCases = [
   { name: "ATRAM Peso Money Market Fund", expected: "money_market_fund" },
@@ -200,6 +201,8 @@ assert.match(portfolioGrowthSource, /type="checkbox"/, "Portfolio growth picker 
 assert.match(portfolioGrowthSource, /useState<MarketRange>\("MAX"\)/, "Portfolio growth must open with the full recorded period.");
 assert.doesNotMatch(portfolioGrowthSource, /<strong>\{asset\.symbol\}<\/strong>/, "Investment picker labels must not be bold.");
 assert.match(portfolioGrowthSource, /onPointerMove/, "Portfolio growth must expose hover and pointer values.");
+assert.match(portfolioGrowthSource, /preserveAspectRatio="none"/, "Portfolio growth must not letterbox chart coordinates at short browser heights.");
+assert.match(portfolioGrowthSource, /findClosestMarketPointIndex/, "Portfolio hover must resolve the nearest rendered point.");
 assert.doesNotMatch(investmentsPageSource, /\["neutral", "Neutral"\]/, "Portfolio Outlook must not render a neutral column.");
 assert.match(investmentsPageSource, /\/api\/market-news\?/, "Asset news must load inside Clover.");
 assert.doesNotMatch(investmentsPageSource, /news\.google\.com/, "Asset news must not navigate users away from Clover.");
@@ -246,5 +249,10 @@ assert.deepEqual(activityBoundGrowthSeries, [
   { date: "2026-02-10", value: 11 },
   { date: "2026-03-01", value: 34 },
 ]);
+assert.equal(
+  findClosestMarketPointIndex([{ x: 30 }, { x: 245 }, { x: 460 }], 238),
+  1,
+  "Hover coordinates must resolve to the visually nearest chart date."
+);
 
-console.log(`Investment regression passed: ${classificationCases.length + 47} checks.`);
+console.log(`Investment regression passed: ${classificationCases.length + 50} checks.`);

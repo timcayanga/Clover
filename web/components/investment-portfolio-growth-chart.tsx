@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildMarketLinePath,
+  findClosestMarketPointIndex,
   MARKET_RANGES,
   type MarketHistoryPoint,
   type MarketRange,
@@ -165,8 +166,8 @@ export function InvestmentPortfolioGrowthChart({ assets, currency }: Props) {
   const handlePointerMove = (clientX: number) => {
     const rect = chartRef.current?.getBoundingClientRect();
     if (!rect || chart.points.length === 0) return;
-    const relative = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
-    setHoverIndex(Math.round(relative * (chart.points.length - 1)));
+    const chartX = Math.min(Math.max(((clientX - rect.left) / rect.width) * chartWidth, 0), chartWidth);
+    setHoverIndex(findClosestMarketPointIndex(chart.points, chartX));
   };
 
   if (assets.length === 0) {
@@ -240,6 +241,7 @@ export function InvestmentPortfolioGrowthChart({ assets, currency }: Props) {
           <svg
             ref={chartRef}
             viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+            preserveAspectRatio="none"
             role="img"
             aria-label={`${range} portfolio value chart`}
             onPointerMove={(event) => handlePointerMove(event.clientX)}
