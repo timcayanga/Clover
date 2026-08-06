@@ -1597,6 +1597,17 @@ export default function InvestmentsPage() {
   const estimatedPortfolioTotals = portfolioTotals;
   const growthAssets = useMemo<PortfolioGrowthAsset[]>(() => {
     const seen = new Set<string>();
+    const earliestActivityByAccount = new Map<string, string>();
+    for (const transaction of investmentTransactions) {
+      const parsed = new Date(transaction.date);
+      if (!Number.isFinite(parsed.getTime())) continue;
+      const date = parsed.toISOString();
+      const current = earliestActivityByAccount.get(transaction.accountId);
+      if (!current || date < current) earliestActivityByAccount.set(transaction.accountId, date);
+    }
+    const accountStartDateById = new Map(
+      investmentAccounts.map((account) => [account.id, account.investmentStartDate] as const)
+    );
     return portfolioSourceRows.flatMap((row) => {
       if (formatCurrencyCode(row.currency) !== portfolioCurrencyFilter || !row.symbol?.trim()) return [];
       if (row.subtype !== "stock" && row.subtype !== "etf" && row.subtype !== "reit" && row.subtype !== "crypto") return [];
@@ -1613,9 +1624,10 @@ export default function InvestmentsPage() {
         market,
         units,
         currency: formatCurrencyCode(row.currency),
+        startDate: earliestActivityByAccount.get(row.accountId) ?? accountStartDateById.get(row.accountId) ?? null,
       }];
     });
-  }, [portfolioCurrencyFilter, portfolioSourceRows]);
+  }, [investmentAccounts, investmentTransactions, portfolioCurrencyFilter, portfolioSourceRows]);
 
   const investmentGroups = useMemo<InvestmentGroup[]>(
     () => (canAggregateSelectedCurrency ? buildInvestmentGroups(selectedCurrencyInvestmentAccounts) : []),

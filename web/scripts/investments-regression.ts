@@ -195,7 +195,10 @@ assert.match(investmentsPageSource, /includeAllOption=\{false\}/, "Investments m
 assert.doesNotMatch(investmentsPageSource, /allLabel="All currencies"/, "Investments must not show an aggregate currency option.");
 assert.match(investmentsPageSource, /InvestmentPortfolioGrowthChart/, "Overview must render market-priced portfolio growth.");
 assert.match(portfolioGrowthSource, /MARKET_RANGES\.map/, "Portfolio growth must support the same date ranges as Markets.");
-assert.match(portfolioGrowthSource, /aria-pressed=\{selectedIds\.includes/, "Portfolio growth holdings must support multi-selection.");
+assert.match(portfolioGrowthSource, /portfolio-growth__asset-picker/, "Portfolio growth investments must use one compact picker.");
+assert.match(portfolioGrowthSource, /type="checkbox"/, "Portfolio growth picker must retain multi-selection.");
+assert.match(portfolioGrowthSource, /useState<MarketRange>\("MAX"\)/, "Portfolio growth must open with the full recorded period.");
+assert.doesNotMatch(portfolioGrowthSource, /<strong>\{asset\.symbol\}<\/strong>/, "Investment picker labels must not be bold.");
 assert.match(portfolioGrowthSource, /onPointerMove/, "Portfolio growth must expose hover and pointer values.");
 assert.doesNotMatch(investmentsPageSource, /\["neutral", "Neutral"\]/, "Portfolio Outlook must not render a neutral column.");
 assert.match(investmentsPageSource, /\/api\/market-news\?/, "Asset news must load inside Clover.");
@@ -228,4 +231,20 @@ assert.deepEqual(growthSeries, [
   { date: "2026-08-02", value: 1400 },
 ]);
 
-console.log(`Investment regression passed: ${classificationCases.length + 42} checks.`);
+const activityBoundGrowthSeries = buildPortfolioGrowthSeries({
+  assets: [
+    { id: "early", name: "Early", symbol: "EARLY", market: "us", units: 1, currency: "USD", startDate: "2026-02-10" },
+    { id: "later", name: "Later", symbol: "LATER", market: "us", units: 1, currency: "USD", startDate: "2026-03-01" },
+  ],
+  histories: [
+    { assetId: "early", currency: "USD", points: [{ date: "2026-02-01", value: 10 }, { date: "2026-02-10", value: 11 }, { date: "2026-03-01", value: 12 }] },
+    { assetId: "later", currency: "USD", points: [{ date: "2026-03-01", value: 22 }] },
+  ],
+  exchangeRates: { USD: 1 },
+});
+assert.deepEqual(activityBoundGrowthSeries, [
+  { date: "2026-02-10", value: 11 },
+  { date: "2026-03-01", value: 34 },
+]);
+
+console.log(`Investment regression passed: ${classificationCases.length + 47} checks.`);

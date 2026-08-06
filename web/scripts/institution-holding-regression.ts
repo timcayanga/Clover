@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { sortInvestmentTransactionsNewestFirst } from "@/lib/investment-transaction-order";
 
 const root = resolve(process.cwd());
 const institutionPage = readFileSync(resolve(root, "app/accounts/institutions/[institutionSlug]/page.tsx"), "utf8");
@@ -7,6 +8,15 @@ const accountsPage = readFileSync(resolve(root, "app/accounts/page.tsx"), "utf8"
 const accountsRoute = readFileSync(resolve(root, "app/api/accounts/route.ts"), "utf8");
 const styles = readFileSync(resolve(root, "app/globals.css"), "utf8");
 const shell = readFileSync(resolve(root, "components/clover-shell.tsx"), "utf8");
+
+const orderedTransactions = sortInvestmentTransactionsNewestFirst([
+  { id: "older-imported-later", date: "2026-02-01", createdAt: "2026-08-05" },
+  { id: "newer-imported-earlier", date: "2026-07-01", createdAt: "2026-07-02" },
+]);
+if (orderedTransactions.map((transaction) => transaction.id).join(",") !== "newer-imported-earlier,older-imported-later") {
+  console.error("[FAIL] Institution history must follow transaction date rather than import time");
+  process.exit(1);
+}
 
 const checks = [
   [institutionPage.includes("Add Holding"), "Institution Assets exposes Add Holding"],
@@ -45,6 +55,7 @@ const checks = [
   [styles.includes(".institution-assets-table__asset-name .accounts-brand-mark"), "Institution asset marks match transaction row sizing"],
   [accountsPage.includes('className="financial-account-card--investment-institution"'), "Institution cards have concise preview styling"],
   [styles.includes(".financial-account-card--investment-institution .financial-account-card__number"), "Institution preview stays on one line"],
+  [institutionPage.includes("sortInvestmentTransactionsNewestFirst"), "Institution trading history uses chronological transaction ordering"],
 ] as const;
 
 const failed = checks.filter(([passed]) => !passed);

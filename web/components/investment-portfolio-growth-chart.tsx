@@ -59,7 +59,7 @@ const loadAssetHistory = async (asset: PortfolioGrowthAsset, range: MarketRange,
 
 export function InvestmentPortfolioGrowthChart({ assets, currency }: Props) {
   const currencyCode = formatCurrencyCode(currency) || "PHP";
-  const [range, setRange] = useState<MarketRange>("1M");
+  const [range, setRange] = useState<MarketRange>("MAX");
   const [selectedIds, setSelectedIds] = useState<string[]>(() => assets.map((asset) => asset.id));
   const [histories, setHistories] = useState<PortfolioGrowthHistory[]>([]);
   const [loading, setLoading] = useState(false);
@@ -181,20 +181,25 @@ export function InvestmentPortfolioGrowthChart({ assets, currency }: Props) {
   return (
     <div className={`portfolio-growth portfolio-growth--${tone}`}>
       <div className="portfolio-growth__controls">
-        <div className="portfolio-growth__assets" aria-label="Assets included in growth chart">
-          {assets.map((asset) => (
-            <button
-              key={asset.id}
-              type="button"
-              className={`portfolio-growth__asset ${selectedIds.includes(asset.id) ? "is-active" : ""}`}
-              aria-pressed={selectedIds.includes(asset.id)}
-              onClick={() => toggleAsset(asset.id)}
-            >
-              <strong>{asset.symbol}</strong>
-              <span>{asset.name}</span>
-            </button>
-          ))}
-        </div>
+        <details className="portfolio-growth__asset-picker">
+          <summary aria-label="Choose investments for the growth chart">
+            <span>Investments</span>
+            <span>{selectedIds.length} selected</span>
+          </summary>
+          <div className="portfolio-growth__asset-options" role="group" aria-label="Investments included in growth chart">
+            {assets.map((asset) => (
+              <label key={asset.id} className="portfolio-growth__asset-option">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(asset.id)}
+                  onChange={() => toggleAsset(asset.id)}
+                />
+                <span>{asset.symbol}</span>
+                <small>{asset.name}</small>
+              </label>
+            ))}
+          </div>
+        </details>
         <div className="portfolio-growth__ranges" aria-label="Investment growth period">
           {MARKET_RANGES.map((option) => (
             <button

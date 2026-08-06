@@ -33,6 +33,7 @@ import {
   type WorkspaceCacheUpdatedEventDetail,
 } from "@/lib/workspace-cache";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
+import { sortInvestmentTransactionsNewestFirst } from "@/lib/investment-transaction-order";
 
 type Account = {
   id: string;
@@ -324,17 +325,6 @@ const buildTradeDraft = (accounts: Account[], currency: string): TradeDraft => (
   description: "",
 });
 
-const sortTransactionsDesc = (rows: Transaction[]) =>
-  rows.slice().sort((left, right) => {
-    const rightTime = Math.max(new Date(right.date).getTime(), new Date(right.createdAt).getTime());
-    const leftTime = Math.max(new Date(left.date).getTime(), new Date(left.createdAt).getTime());
-    if (rightTime !== leftTime) {
-      return rightTime - leftTime;
-    }
-
-    return right.id.localeCompare(left.id);
-  });
-
 const fetchInstitutionTransactions = async (institutionAccounts: Account[]) => {
   if (institutionAccounts.length === 0) {
     return [];
@@ -352,7 +342,7 @@ const fetchInstitutionTransactions = async (institutionAccounts: Account[]) => {
   );
   const transactionsById = new Map<string, Transaction>();
   payloads.flat().forEach((transaction) => transactionsById.set(transaction.id, transaction));
-  return sortTransactionsDesc(Array.from(transactionsById.values()));
+  return sortInvestmentTransactionsNewestFirst(Array.from(transactionsById.values()));
 };
 
 export default function InvestmentInstitutionDetailPage() {
@@ -469,7 +459,7 @@ export default function InvestmentInstitutionDetailPage() {
 
       if (!cancelled) {
         setAccounts(matchedAccounts);
-        setTransactions(sortTransactionsDesc(matchedTransactions));
+        setTransactions(sortInvestmentTransactionsNewestFirst(matchedTransactions));
         setTransactionsLoading(matchedTransactions.length === 0);
         setTradeDraft((current) => ({
           ...buildTradeDraft(matchedAccounts, routeCurrency),
@@ -537,7 +527,7 @@ export default function InvestmentInstitutionDetailPage() {
         setInvestmentSnapshots((current) =>
           fetchedSnapshots.length > 0 || current.length === 0 ? fetchedSnapshots : current
         );
-        setTransactions(sortTransactionsDesc(matchedTransactions));
+        setTransactions(sortInvestmentTransactionsNewestFirst(matchedTransactions));
         setTransactionsLoading(false);
         setSnapshotsLoading(false);
         setTradeDraft((current) => ({
@@ -550,7 +540,7 @@ export default function InvestmentInstitutionDetailPage() {
           merchantRaw: current.merchantRaw,
           description: current.description,
         }));
-        syncWorkspaceCache(matchedAccounts, sortTransactionsDesc(matchedTransactions));
+        syncWorkspaceCache(matchedAccounts, sortInvestmentTransactionsNewestFirst(matchedTransactions));
         setLoading(false);
       } catch (error) {
         if (cancelled) {
@@ -591,7 +581,7 @@ export default function InvestmentInstitutionDetailPage() {
 
       setAccounts((current) => (matchedAccounts.length > 0 || current.length === 0 ? matchedAccounts : current));
       setTransactions((current) =>
-        matchedTransactions.length > 0 || current.length === 0 ? sortTransactionsDesc(matchedTransactions) : current
+        matchedTransactions.length > 0 || current.length === 0 ? sortInvestmentTransactionsNewestFirst(matchedTransactions) : current
       );
       if (matchedTransactions.length > 0) {
         setTransactionsLoading(false);
@@ -1126,7 +1116,7 @@ export default function InvestmentInstitutionDetailPage() {
 
         const payload = await response.json();
         const nextTransaction = payload.transaction as Transaction;
-        const nextTransactions = sortTransactionsDesc(
+        const nextTransactions = sortInvestmentTransactionsNewestFirst(
           transactions.map((transaction) => (transaction.id === nextTransaction.id ? nextTransaction : transaction))
         );
         setTransactions(nextTransactions);
@@ -1160,7 +1150,7 @@ export default function InvestmentInstitutionDetailPage() {
 
         const payload = await response.json();
         const nextTransaction = payload.transaction as Transaction;
-        const nextTransactions = sortTransactionsDesc([nextTransaction, ...transactions]);
+        const nextTransactions = sortInvestmentTransactionsNewestFirst([nextTransaction, ...transactions]);
         setTransactions(nextTransactions);
         syncWorkspaceCache(accounts, nextTransactions);
         resetTradeDraft();

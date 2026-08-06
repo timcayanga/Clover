@@ -7,6 +7,7 @@ export type PortfolioGrowthAsset = {
   market: MarketRegion;
   units: number;
   currency: string;
+  startDate?: string | null;
 };
 
 export type PortfolioGrowthHistory = {
@@ -50,17 +51,30 @@ export const buildPortfolioGrowthSeries = ({
       const daily = history ? toPriceMap(history.points, granularity) : new Map<string, number>();
       const dates = [...daily.keys()].sort();
       if (!history || daily.size === 0 || !Number.isFinite(rate) || rate <= 0 || asset.units <= 0) return null;
-      return { asset, daily, dates, rate };
+      const parsedStartDate = asset.startDate ? new Date(asset.startDate) : null;
+      const startDate = parsedStartDate && Number.isFinite(parsedStartDate.getTime())
+        ? parsedStartDate.toISOString().slice(0, granularity === "timestamp" ? undefined : 10)
+        : null;
+      return { asset, daily, dates, rate, startDate };
     })
     .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 
   if (usable.length === 0) return [];
 
-  // Start only once every selected holding has a price so totals never mix partial portfolios.
-  const firstSharedDate = usable.reduce(
-    (latest, entry) => (entry.dates[0] > latest ? entry.dates[0] : latest),
+  const recordedStartDates = usable.map((entry) => entry.startDate).filter((date): date is string => Boolean(date));
+  const firstRecordedActivity = recordedStartDates.sort()[0] ?? null;
+  // Prefer the user's recorded activity period. Market history still bounds the
+  // chart when no selected provider has prices as far back as the first trade.
+  const earliestMarketDate = usable.reduce(
+    (earliest, entry) => entry.dates[0] < earliest ? entry.dates[0] : earliest,
     usable[0].dates[0]
   );
+  const firstSharedDate = firstRecordedActivity
+    ? (earliestMarketDate > firstRecordedActivity ? earliestMarketDate : firstRecordedActivity)
+    : usable.reduce(
+        (latest, entry) => (entry.dates[0] > latest ? entry.dates[0] : latest),
+        usable[0].dates[0]
+      );
   const lastSharedDate = usable.reduce(
     (earliest, entry) => (entry.dates[entry.dates.length - 1] < earliest ? entry.dates[entry.dates.length - 1] : earliest),
     usable[0].dates[usable[0].dates.length - 1]
@@ -81,13 +95,19 @@ export const buildPortfolioGrowthSeries = ({
   // Carry the last daily close through weekends and exchange-specific holidays.
   return dates.flatMap((date) => {
     let value = 0;
+    let valuedAssets = 0;
     for (const entry of usable) {
+      if (entry.startDate && date < entry.startDate) continue;
       const price = entry.daily.get(date);
       if (price !== undefined) latestPriceByAsset.set(entry.asset.id, price);
       const latestPrice = latestPriceByAsset.get(entry.asset.id);
-      if (latestPrice === undefined) return [];
+      if (latestPrice === undefined) {
+        if (firstRecordedActivity) continue;
+        return [];
+      }
       value += latestPrice * entry.asset.units * entry.rate;
+      valuedAssets += 1;
     }
-    return [{ date, value }];
+    return valuedAssets > 0 ? [{ date, value }] : [];
   });
 };
