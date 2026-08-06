@@ -60,6 +60,10 @@ const checks = [
   [institutionPage.includes('institution-assets-table institution-assets-table--history'), "Trading history uses the compact transaction-style table"],
   [institutionPage.includes('AccountBrandMark accountBrand={assetBrand} label={assetName}'), "Trading history rows include compact asset marks"],
   [styles.includes(".institution-assets-table tbody tr:hover td"), "Institution table rows share the Transactions hover treatment"],
+  [institutionPage.includes("<span>Units</span>"), "Trading History replaces Title with Units"],
+  [institutionPage.includes('<option value="expense">Buy</option>'), "Trading History uses the simple Buy action"],
+  [institutionPage.includes('<option value="income">Sell</option>'), "Trading History uses the simple Sell action"],
+  [institutionPage.includes("receiptLineItems: tradeDraft.units.trim()"), "Manual trade units persist as structured metadata"],
 ] as const;
 
 const failed = checks.filter(([passed]) => !passed);

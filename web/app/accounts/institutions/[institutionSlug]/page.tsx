@@ -163,9 +163,9 @@ type TradeDraft = {
   accountId: string;
   date: string;
   amount: string;
+  units: string;
   currency: string;
   type: TransactionType;
-  merchantRaw: string;
   description: string;
 };
 
@@ -319,11 +319,23 @@ const buildTradeDraft = (accounts: Account[], currency: string): TradeDraft => (
   accountId: accounts[0]?.id ?? "",
   date: new Date().toISOString().slice(0, 10),
   amount: "",
+  units: "",
   currency,
   type: "expense",
-  merchantRaw: "",
   description: "",
 });
+
+const getTradeActionLabel = (type: TransactionType) =>
+  type === "income" ? "Sell" : type === "transfer" ? "Transfer" : "Buy";
+
+const mergeTradeMetadata = (rawPayload: unknown, type: TransactionType, units: string) => {
+  const existing = rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
+    ? rawPayload as Record<string, unknown>
+    : {};
+  const next: Record<string, unknown> = { ...existing, action: getTradeActionLabel(type) };
+  if (units.trim()) next.quantity = units.trim();
+  return next;
+};
 
 const fetchInstitutionTransactions = async (institutionAccounts: Account[]) => {
   if (institutionAccounts.length === 0) {
@@ -466,9 +478,9 @@ export default function InvestmentInstitutionDetailPage() {
           accountId: current.accountId && scopedAccountIds.has(current.accountId) ? current.accountId : matchedAccounts[0]?.id ?? "",
           date: current.date || new Date().toISOString().slice(0, 10),
           amount: current.amount,
+          units: current.units,
           currency: current.currency || routeCurrency,
           type: current.type,
-          merchantRaw: current.merchantRaw,
           description: current.description,
         }));
         setLoading(false);
@@ -535,9 +547,9 @@ export default function InvestmentInstitutionDetailPage() {
           accountId: current.accountId && scopedAccountIds.has(current.accountId) ? current.accountId : matchedAccounts[0]?.id ?? "",
           date: current.date || new Date().toISOString().slice(0, 10),
           amount: current.amount,
+          units: current.units,
           currency: current.currency || routeCurrency,
           type: current.type,
-          merchantRaw: current.merchantRaw,
           description: current.description,
         }));
         syncWorkspaceCache(matchedAccounts, sortInvestmentTransactionsNewestFirst(matchedTransactions));
@@ -884,9 +896,9 @@ export default function InvestmentInstitutionDetailPage() {
       accountId: transaction.accountId,
       date: transaction.date.slice(0, 10),
       amount: String(Math.abs(parseAmount(transaction.amount))),
+      units: getInvestmentActivityUnits(transaction) ?? "",
       currency: transaction.currency,
       type: transaction.type,
-      merchantRaw: transaction.merchantRaw,
       description: transaction.description ?? "",
     });
   };
@@ -1092,12 +1104,15 @@ export default function InvestmentInstitutionDetailPage() {
 
   const saveTrade = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!workspaceId || !tradeDraft.accountId || !tradeDraft.date || !tradeDraft.amount || !tradeDraft.merchantRaw.trim()) {
+    if (!workspaceId || !tradeDraft.accountId || !tradeDraft.date || !tradeDraft.amount) {
       return;
     }
 
     setSavingTrade(true);
     try {
+      const actionLabel = getTradeActionLabel(tradeDraft.type);
+      const assetLabel = accountAssetNameMap.get(tradeDraft.accountId) ?? accountById.get(tradeDraft.accountId)?.name ?? "Investment";
+      const generatedTitle = `${actionLabel} ${assetLabel}`;
       if (editingTrade) {
         const response = await fetch(`/api/transactions/${editingTrade.id}`, {
           method: "PATCH",
@@ -1108,10 +1123,11 @@ export default function InvestmentInstitutionDetailPage() {
             amount: Number(tradeDraft.amount),
             currency: tradeDraft.currency,
             type: tradeDraft.type,
-            merchantRaw: tradeDraft.merchantRaw.trim(),
-            merchantClean: tradeDraft.merchantRaw.trim(),
+            merchantRaw: editingTrade.merchantRaw || generatedTitle,
+            merchantClean: editingTrade.merchantClean || generatedTitle,
             description: tradeDraft.description.trim() || null,
             isTransfer: tradeDraft.type === "transfer",
+            rawPayload: mergeTradeMetadata(editingTrade.rawPayload, tradeDraft.type, tradeDraft.units),
           }),
         });
 
@@ -1142,9 +1158,12 @@ export default function InvestmentInstitutionDetailPage() {
             amount: Number(tradeDraft.amount),
             currency: tradeDraft.currency,
             type: tradeDraft.type,
-            merchantRaw: tradeDraft.merchantRaw.trim(),
-            merchantClean: tradeDraft.merchantRaw.trim(),
+            merchantRaw: generatedTitle,
+            merchantClean: generatedTitle,
             description: tradeDraft.description.trim() || null,
+            receiptLineItems: tradeDraft.units.trim()
+              ? [{ description: generatedTitle, quantity: tradeDraft.units.trim() }]
+              : [],
             preserveType: true,
           }),
         });
@@ -1669,10 +1688,26 @@ export default function InvestmentInstitutionDetailPage() {
                   value={tradeDraft.type}
                   onChange={(event) => setTradeDraft((current) => ({ ...current, type: event.target.value as TransactionType }))}
                 >
-                  <option value="expense">Buy / cash out</option>
-                  <option value="income">Sell / cash in</option>
+                  <option value="expense">Buy</option>
+                  <option value="income">Sell</option>
                   <option value="transfer">Transfer</option>
                 </select>
+              </label>
+              <label className="settings-field">
+                <span>Units</span>
+                <input
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={tradeDraft.units}
+                  onChange={(event) => setTradeDraft((current) => ({ ...current, units: event.target.value }))}
+                />
+              </label>
+              <label className="settings-field">
+                <span>Currency</span>
+                <input
+                  value={tradeDraft.currency}
+                  onChange={(event) => setTradeDraft((current) => ({ ...current, currency: event.target.value.toUpperCase() }))}
+                />
               </label>
               <label className="settings-field">
                 <span>Amount</span>
@@ -1681,21 +1716,6 @@ export default function InvestmentInstitutionDetailPage() {
                   placeholder="0.00"
                   value={tradeDraft.amount}
                   onChange={(event) => setTradeDraft((current) => ({ ...current, amount: event.target.value }))}
-                />
-              </label>
-              <label className="settings-field">
-                <span>Title</span>
-                <input
-                  placeholder="Buy Order Completed"
-                  value={tradeDraft.merchantRaw}
-                  onChange={(event) => setTradeDraft((current) => ({ ...current, merchantRaw: event.target.value }))}
-                />
-              </label>
-              <label className="settings-field">
-                <span>Currency</span>
-                <input
-                  value={tradeDraft.currency}
-                  onChange={(event) => setTradeDraft((current) => ({ ...current, currency: event.target.value.toUpperCase() }))}
                 />
               </label>
             </div>

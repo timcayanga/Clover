@@ -108,6 +108,15 @@ export const getInvestmentActivityUnits = (transaction: InvestmentActivityInput)
   );
   if (structuredUnits) return structuredUnits;
 
+  for (const record of records) {
+    const lineItems = record?.receiptLineItems;
+    if (!Array.isArray(lineItems)) continue;
+    for (const item of lineItems) {
+      const quantity = normalizeUnits(readFirstText([asRecord(item)], ["quantity", "units"]));
+      if (quantity) return quantity;
+    }
+  }
+
   const sourceLineUnits = getSourceLines(transaction)
     .map((line) => normalizeUnits(line))
     .find((value): value is string => Boolean(value));

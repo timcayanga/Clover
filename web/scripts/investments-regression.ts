@@ -85,6 +85,17 @@ assert.equal(getInvestmentActivityUnits(importedCryptoPurchase), "0.001598");
 assert.equal(getInvestmentActivityAmountTone(importedCryptoPurchase), "negative");
 
 assert.equal(
+  getInvestmentActivityUnits({
+    type: "expense",
+    merchantRaw: "Buy Vanguard S&P 500 ETF",
+    rawPayload: { receiptLineItems: [{ description: "Buy Vanguard S&P 500 ETF", quantity: "1.2500" }] },
+    normalizedPayload: null,
+  }),
+  "1.25",
+  "Manual investment units must survive transaction creation metadata."
+);
+
+assert.equal(
   getInvestmentActivityNote({
     type: "transfer",
     merchantRaw: "Move funds",
@@ -255,4 +266,4 @@ assert.equal(
   "Hover coordinates must resolve to the visually nearest chart date."
 );
 
-console.log(`Investment regression passed: ${classificationCases.length + 50} checks.`);
+console.log(`Investment regression passed: ${classificationCases.length + 51} checks.`);
