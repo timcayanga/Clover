@@ -10,6 +10,7 @@ import {
   getInvestmentActivityType,
   getInvestmentActivityUnits,
 } from "@/lib/investment-activity";
+import { buildPortfolioGrowthSeries, getPortfolioGrowthMarket } from "@/lib/investment-portfolio-growth";
 
 const classificationCases = [
   { name: "ATRAM Peso Money Market Fund", expected: "money_market_fund" },
@@ -165,9 +166,14 @@ assert.equal(
 const investmentsPageSource = readFileSync(resolve(process.cwd(), "app/investments/page.tsx"), "utf8");
 const investmentsStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
 const marketChartSource = readFileSync(resolve(process.cwd(), "components/investment-market-chart.tsx"), "utf8");
+const portfolioGrowthSource = readFileSync(resolve(process.cwd(), "components/investment-portfolio-growth-chart.tsx"), "utf8");
 
-assert.match(investmentsPageSource, /allLabel="All currencies"/, "Investments must support a converted all-currencies summary.");
-assert.match(investmentsPageSource, /estimatedPortfolioTotals/, "Mixed investment totals must be converted before display.");
+assert.match(investmentsPageSource, /includeAllOption=\{false\}/, "Investments must require one portfolio currency.");
+assert.doesNotMatch(investmentsPageSource, /allLabel="All currencies"/, "Investments must not show an aggregate currency option.");
+assert.match(investmentsPageSource, /InvestmentPortfolioGrowthChart/, "Overview must render market-priced portfolio growth.");
+assert.match(portfolioGrowthSource, /MARKET_RANGES\.map/, "Portfolio growth must support the same date ranges as Markets.");
+assert.match(portfolioGrowthSource, /aria-pressed=\{selectedIds\.includes/, "Portfolio growth holdings must support multi-selection.");
+assert.match(portfolioGrowthSource, /onPointerMove/, "Portfolio growth must expose hover and pointer values.");
 assert.doesNotMatch(investmentsPageSource, /\["neutral", "Neutral"\]/, "Portfolio Outlook must not render a neutral column.");
 assert.match(investmentsPageSource, /\/api\/market-news\?/, "Asset news must load inside Clover.");
 assert.doesNotMatch(investmentsPageSource, /news\.google\.com/, "Asset news must not navigate users away from Clover.");
@@ -176,4 +182,23 @@ assert.match(investmentsStyles, /\.content--investments\s*>\s*\.topbar\s*\{[\s\S
 assert.match(investmentsStyles, /\.investments-mobile-header\s*\{[\s\S]*?position:\s*sticky;/, "The mobile Investments header must be sticky.");
 assert.match(marketChartSource, /seenSymbols\.has\(key\)/, "Portfolio market tickers must be deduplicated.");
 
-console.log(`Investment regression passed: ${classificationCases.length + 16} checks.`);
+assert.equal(getPortfolioGrowthMarket("crypto", "PHP"), "crypto");
+assert.equal(getPortfolioGrowthMarket("stock", "PHP"), "ph");
+assert.equal(getPortfolioGrowthMarket("stock", "USD"), "us");
+const growthSeries = buildPortfolioGrowthSeries({
+  assets: [
+    { id: "a", name: "Alpha", symbol: "AAA", market: "us", units: 2, currency: "PHP" },
+    { id: "b", name: "Beta", symbol: "BBB", market: "us", units: 1, currency: "PHP" },
+  ],
+  histories: [
+    { assetId: "a", currency: "USD", points: [{ date: "2026-08-01", value: 10 }, { date: "2026-08-02", value: 12 }] },
+    { assetId: "b", currency: "USD", points: [{ date: "2026-08-01", value: 5 }, { date: "2026-08-02", value: 4 }] },
+  ],
+  exchangeRates: { USD: 50 },
+});
+assert.deepEqual(growthSeries, [
+  { date: "2026-08-01", value: 1250 },
+  { date: "2026-08-02", value: 1400 },
+]);
+
+console.log(`Investment regression passed: ${classificationCases.length + 29} checks.`);

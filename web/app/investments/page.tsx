@@ -14,12 +14,13 @@ import { CurrencySelector } from "@/components/currency-selector";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { InvestmentMarketChart } from "@/components/investment-market-chart";
+import { InvestmentPortfolioGrowthChart } from "@/components/investment-portfolio-growth-chart";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { useDefaultCurrency } from "@/lib/use-default-currency";
-import { convertAmount, useExchangeRates } from "@/lib/use-exchange-rates";
 import { BETA_FULL_ACCESS_ENABLED, hasFullFeatureAccess } from "@/lib/beta-access";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
+import { getPortfolioGrowthMarket, type PortfolioGrowthAsset } from "@/lib/investment-portfolio-growth";
 import {
   chooseWorkspaceId,
   persistSelectedCurrency,
@@ -459,75 +460,6 @@ const investmentAdviserPrompts = [
     prompt: "Based on my full Clover data, what is the most important investment decision or data gap I should review next?",
   },
 ];
-
-function InvestmentGrowthChart({
-  points,
-  currency,
-}: {
-  points: Array<{ date: string; value: number }>;
-  currency: string;
-}) {
-  if (points.length === 0) {
-    return (
-      <div className="investments-growth-chart__empty">
-        <strong>Investment history will appear here.</strong>
-        <span>Upload another dated statement or record a new valuation to start the timeline.</span>
-      </div>
-    );
-  }
-
-  if (points.length === 1) {
-    return (
-      <div className="investments-growth-chart__single">
-        <span className="investments-growth-chart__single-label">Current recorded value</span>
-        <strong>{formatInvestmentAmount(points[0].value, currency)}</strong>
-        <span>{new Date(points[0].date).toLocaleDateString("en-PH", { day: "numeric", month: "short", year: "numeric" })}</span>
-      </div>
-    );
-  }
-
-  const width = 760;
-  const height = 210;
-  const padding = 24;
-  const minValue = Math.min(...points.map((point) => point.value));
-  const maxValue = Math.max(...points.map((point) => point.value));
-  const span = Math.max(maxValue - minValue, 1);
-  const path = points
-    .map((point, index) => {
-      const x = padding + (index / Math.max(points.length - 1, 1)) * (width - padding * 2);
-      const y = padding + (1 - (point.value - minValue) / span) * (height - padding * 2);
-      return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .join(" ");
-
-  return (
-    <div className="investments-growth-chart">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Investments over time">
-        <defs>
-          <linearGradient id="investment-growth-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="rgba(3, 168, 192, 0.22)" />
-            <stop offset="100%" stopColor="rgba(3, 168, 192, 0.01)" />
-          </linearGradient>
-        </defs>
-        <path
-          d={`${path} L ${width - padding} ${height - padding} L ${padding} ${height - padding} Z`}
-          fill="url(#investment-growth-fill)"
-        />
-        <path d={path} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-        {points.map((point, index) => {
-          const x = padding + (index / Math.max(points.length - 1, 1)) * (width - padding * 2);
-          const y = padding + (1 - (point.value - minValue) / span) * (height - padding * 2);
-          return <circle key={`${point.date}-${index}`} cx={x} cy={y} r="4" fill="var(--accent)" />;
-        })}
-      </svg>
-      <div className="investments-growth-chart__labels">
-        <span>{new Date(points[0].date).toLocaleDateString("en-PH", { month: "short", year: "numeric" })}</span>
-        <strong>{formatInvestmentAmount(points[points.length - 1].value, currency)}</strong>
-        <span>{new Date(points[points.length - 1].date).toLocaleDateString("en-PH", { month: "short", year: "numeric" })}</span>
-      </div>
-    </div>
-  );
-}
 
 function PortfolioInlineEdit({
   value,
@@ -1491,17 +1423,14 @@ export default function InvestmentsPage() {
   }, [investmentAccounts, investmentSearch, investmentSortKey, investmentSubtypeFilter]);
 
   const selectedCurrencyInvestmentAccounts = useMemo(
-    () =>
-      portfolioCurrencyFilter === "all"
-        ? visibleInvestmentAccounts
-        : visibleInvestmentAccounts.filter((account) => formatCurrencyCode(account.currency) === portfolioCurrencyFilter),
+    () => visibleInvestmentAccounts.filter((account) => formatCurrencyCode(account.currency) === portfolioCurrencyFilter),
     [portfolioCurrencyFilter, visibleInvestmentAccounts]
   );
 
   const visiblePortfolioRows = useMemo(() => {
     const search = normalizeInvestmentSearchText(investmentSearch);
     const filtered = portfolioSourceRows.filter((row) => {
-      if (portfolioCurrencyFilter !== "all" && formatCurrencyCode(row.currency) !== portfolioCurrencyFilter) {
+      if (formatCurrencyCode(row.currency) !== portfolioCurrencyFilter) {
         return false;
       }
 
@@ -1577,102 +1506,34 @@ export default function InvestmentsPage() {
     [visiblePortfolioRows]
   );
 
-  const selectedCurrencyCodes = useMemo(() => getCurrencyCodes(selectedCurrencyInvestmentAccounts), [selectedCurrencyInvestmentAccounts]);
+  const selectedCurrencyCodes = useMemo(
+    () => portfolioCurrencyFilter ? [portfolioCurrencyFilter] : getCurrencyCodes(selectedCurrencyInvestmentAccounts).slice(0, 1),
+    [portfolioCurrencyFilter, selectedCurrencyInvestmentAccounts]
+  );
   const hasVisibleCurrencySelection = selectedCurrencyInvestmentAccounts.length > 0;
-  const canAggregateSelectedCurrency = selectedCurrencyCodes.length <= 1;
-  const isAllCurrenciesView = portfolioCurrencyFilter === "all";
-  const investmentExchangeRates = useExchangeRates(
-    selectedCurrencyCodes,
-    defaultCurrency,
-    isAllCurrenciesView && selectedCurrencyCodes.length > 1
-  );
-  const estimatedPortfolioTotals = useMemo(() => {
-    if (!isAllCurrenciesView || selectedCurrencyCodes.length <= 1) {
-      return portfolioTotals;
-    }
-
-    return selectedCurrencyInvestmentAccounts.reduce(
-      (totals, account) => {
-        const currentValue = parseNullableAmount(account.balance);
-        const purchaseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
-        const convertedCurrent = currentValue === null ? null : convertAmount(currentValue, account.currency, investmentExchangeRates.rates);
-        const convertedPurchase = purchaseValue === null ? null : convertAmount(purchaseValue, account.currency, investmentExchangeRates.rates);
-        if (convertedCurrent !== null) totals.currentValue += convertedCurrent;
-        if (convertedPurchase !== null) totals.purchaseValue += convertedPurchase;
-        if (convertedCurrent !== null && convertedPurchase !== null) totals.gainLoss += convertedCurrent - convertedPurchase;
-        return totals;
-      },
-      { currentValue: 0, purchaseValue: 0, gainLoss: 0 }
-    );
-  }, [investmentExchangeRates.rates, isAllCurrenciesView, portfolioTotals, selectedCurrencyCodes.length, selectedCurrencyInvestmentAccounts]);
-  const currencyBreakdown = useMemo(
-    () =>
-      selectedCurrencyCodes.map((currency) => {
-        const currencyAccounts = selectedCurrencyInvestmentAccounts.filter(
-          (account) => formatCurrencyCode(account.currency) === currency
-        );
-        return {
-          currency,
-          value: currencyAccounts.reduce((sum, account) => sum + (parseNullableAmount(account.balance) ?? 0), 0),
-        };
-      }),
-    [selectedCurrencyCodes, selectedCurrencyInvestmentAccounts]
-  );
-
-  const investmentGrowthPoints = useMemo(() => {
-    if (!canAggregateSelectedCurrency || selectedCurrencyCodes.length !== 1) {
-      return [];
-    }
-
-    const selectedCurrency = selectedCurrencyCodes[0];
-    const events = investmentSnapshots
-      .filter((snapshot) => formatCurrencyCode(snapshot.currency) === selectedCurrency)
-      .map((snapshot) => {
-        const holdingsValue = snapshot.holdings.reduce(
-          (sum, holding) => sum + (parseNullableAmount(holding.currentValue ?? holding.marketValue) ?? 0),
-          0
-        );
-        return {
-          key:
-            snapshot.account?.id ??
-            (normalizeInvestmentLabel(snapshot.account?.institution ?? snapshot.documentImport?.institution) || snapshot.id),
-          date: snapshot.snapshotDate ?? snapshot.updatedAt,
-          value: parseNullableAmount(snapshot.totalValue) ?? holdingsValue,
-        };
-      })
-      .filter((event) => event.value > 0 && Number.isFinite(new Date(event.date).getTime()))
-      .sort((left, right) => new Date(left.date).getTime() - new Date(right.date).getTime());
-
-    const latestByAccount = new Map<string, number>();
-    const pointsByDate = new Map<string, number>();
-    for (const event of events) {
-      latestByAccount.set(event.key, event.value);
-      const dateKey = new Date(event.date).toISOString().slice(0, 10);
-      pointsByDate.set(dateKey, Array.from(latestByAccount.values()).reduce((sum, value) => sum + value, 0));
-    }
-
-    const points = Array.from(pointsByDate, ([date, value]) => ({ date, value }));
-    const currentValue = selectedCurrencyInvestmentAccounts.reduce(
-      (sum, account) => sum + (parseNullableAmount(account.balance) ?? 0),
-      0
-    );
-    const latestAccountDate = selectedCurrencyInvestmentAccounts.reduce(
-      (latest, account) => Math.max(latest, new Date(account.updatedAt).getTime()),
-      0
-    );
-
-    if (currentValue > 0 && latestAccountDate > 0) {
-      const date = new Date(latestAccountDate).toISOString().slice(0, 10);
-      const existingIndex = points.findIndex((point) => point.date === date);
-      if (existingIndex >= 0) {
-        points[existingIndex] = { date, value: currentValue };
-      } else {
-        points.push({ date, value: currentValue });
-      }
-    }
-
-    return points.sort((left, right) => left.date.localeCompare(right.date));
-  }, [canAggregateSelectedCurrency, investmentSnapshots, selectedCurrencyCodes, selectedCurrencyInvestmentAccounts]);
+  const canAggregateSelectedCurrency = selectedCurrencyCodes.length === 1;
+  const estimatedPortfolioTotals = portfolioTotals;
+  const growthAssets = useMemo<PortfolioGrowthAsset[]>(() => {
+    const seen = new Set<string>();
+    return portfolioSourceRows.flatMap((row) => {
+      if (formatCurrencyCode(row.currency) !== portfolioCurrencyFilter || !row.symbol?.trim()) return [];
+      if (row.subtype !== "stock" && row.subtype !== "etf" && row.subtype !== "reit" && row.subtype !== "crypto") return [];
+      const units = parseNullableAmount(row.detail);
+      if (units === null || units <= 0) return [];
+      const market = getPortfolioGrowthMarket(row.subtype, row.currency);
+      const identity = `${row.key}:${market}:${row.symbol.trim().toUpperCase()}`;
+      if (seen.has(identity)) return [];
+      seen.add(identity);
+      return [{
+        id: row.key,
+        name: row.name,
+        symbol: row.symbol.trim().toUpperCase(),
+        market,
+        units,
+        currency: formatCurrencyCode(row.currency),
+      }];
+    });
+  }, [portfolioCurrencyFilter, portfolioSourceRows]);
 
   const investmentGroups = useMemo<InvestmentGroup[]>(
     () => (canAggregateSelectedCurrency ? buildInvestmentGroups(selectedCurrencyInvestmentAccounts) : []),
@@ -1803,10 +1664,7 @@ export default function InvestmentsPage() {
     };
 
     for (const row of portfolioSourceRows) {
-      if (
-        portfolioCurrencyFilter !== "all" &&
-        formatCurrencyCode(row.currency) !== formatCurrencyCode(portfolioCurrencyFilter)
-      ) {
+      if (formatCurrencyCode(row.currency) !== formatCurrencyCode(portfolioCurrencyFilter)) {
         continue;
       }
 
@@ -1966,10 +1824,13 @@ export default function InvestmentsPage() {
     }
 
     const storedCurrency = readSelectedCurrency(selectedWorkspaceId);
-    const preferredCurrency = storedCurrency === "" ? "all" : storedCurrency ?? defaultCurrency;
+    const preferredCurrency = storedCurrency && storedCurrency !== "all" ? storedCurrency : defaultCurrency;
     const selectedCurrency = portfolioCurrencyFilter.trim().toUpperCase();
-    if (!selectedCurrency || (selectedCurrency !== "ALL" && !portfolioCurrencyOptions.includes(selectedCurrency))) {
-      setPortfolioCurrencyFilter(portfolioCurrencyOptions.includes(preferredCurrency) || preferredCurrency === "all" ? preferredCurrency : portfolioCurrencyOptions[0]);
+    if (!selectedCurrency || selectedCurrency === "ALL" || !portfolioCurrencyOptions.includes(selectedCurrency)) {
+      const validPreferred = preferredCurrency && preferredCurrency !== "all" && portfolioCurrencyOptions.includes(formatCurrencyCode(preferredCurrency));
+      const nextCurrency = validPreferred ? formatCurrencyCode(preferredCurrency) : portfolioCurrencyOptions[0];
+      setPortfolioCurrencyFilter(nextCurrency);
+      persistSelectedCurrency(selectedWorkspaceId, nextCurrency);
     }
   }, [defaultCurrency, portfolioCurrencyFilter, portfolioCurrencyOptions, selectedWorkspaceId]);
   const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
@@ -1978,7 +1839,6 @@ export default function InvestmentsPage() {
     normalizeInvestmentSearchText(investmentSearch) ||
       investmentSubtypeFilter !== "all" ||
       investmentSortKey !== "value_desc" ||
-      portfolioCurrencyFilter !== "all" ||
       portfolioView !== "all"
   );
   const canUseProTabs = hasFullFeatureAccess(planTier);
@@ -2578,13 +2438,12 @@ export default function InvestmentsPage() {
           <CurrencySelector
             value={portfolioCurrencyFilter}
             onChange={(next) => {
-              const currency = next.toLowerCase() === "all" ? "all" : formatCurrencyCode(next);
+              const currency = formatCurrencyCode(next);
               setPortfolioCurrencyFilter(currency);
               persistSelectedCurrency(selectedWorkspaceId, currency);
             }}
             options={portfolioCurrencyOptions}
-            includeAllOption={portfolioCurrencyOptions.length > 1}
-            allLabel="All currencies"
+            includeAllOption={false}
             ariaLabel="Select investment currency"
             className="transactions-currency-filter investments-currency-filter"
             buttonClassName="button button-secondary button-small investments-page__toolbar-button"
@@ -2671,23 +2530,19 @@ export default function InvestmentsPage() {
             <section className="investments-overview-metrics" aria-label="Portfolio totals">
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
                 <InfoTooltip className="summary-card-info" label="The total value of the visible investment holdings for the selected currency view." />
-                <p className="eyebrow">{isAllCurrenciesView && selectedCurrencyCodes.length > 1 ? "Est. Value" : "Estimated value"}</p>
+                <p className="eyebrow">Estimated value</p>
                 <strong className="accounts-overview-card__amount is-good">
-                  {hasVisibleCurrencySelection && (!investmentExchangeRates.loading && investmentExchangeRates.unavailable.length === 0)
-                    ? isAllCurrenciesView && selectedCurrencyCodes.length > 1
-                      ? formatInvestmentAmount(estimatedPortfolioTotals.currentValue, defaultCurrency)
-                      : formatInvestmentAggregate(estimatedPortfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)
+                  {hasVisibleCurrencySelection
+                    ? formatInvestmentAggregate(estimatedPortfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)
                     : "—"}
                 </strong>
               </article>
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
                 <InfoTooltip className="summary-card-info" label="Recorded gain or loss for visible holdings with an available purchase value." />
-                <p className="eyebrow">{isAllCurrenciesView && selectedCurrencyCodes.length > 1 ? "Est. Total Returns" : "Total returns"}</p>
+                <p className="eyebrow">Total returns</p>
                 <strong className={`accounts-overview-card__amount ${estimatedPortfolioTotals.gainLoss > 0 ? "is-good" : estimatedPortfolioTotals.gainLoss < 0 ? "is-danger" : "is-neutral"}`}>
-                  {hasVisibleCurrencySelection && (!investmentExchangeRates.loading && investmentExchangeRates.unavailable.length === 0)
-                    ? isAllCurrenciesView && selectedCurrencyCodes.length > 1
-                      ? formatInvestmentAmount(estimatedPortfolioTotals.gainLoss, defaultCurrency)
-                      : formatInvestmentAggregate(estimatedPortfolioTotals.gainLoss, selectedCurrencyInvestmentAccounts)
+                  {hasVisibleCurrencySelection
+                    ? formatInvestmentAggregate(estimatedPortfolioTotals.gainLoss, selectedCurrencyInvestmentAccounts)
                     : "—"}
                 </strong>
               </article>
@@ -2711,36 +2566,12 @@ export default function InvestmentsPage() {
                 <div className="investments-allocation__head-title">
                   <div className="investments-allocation__title-row">
                     <h5>Investment Growth</h5>
-                    <InfoTooltip label="Tracks the total recorded portfolio value across dated investment statements and snapshots for the selected currency." />
+                    <InfoTooltip label="Uses daily closing prices and recorded units for the selected holdings. Historical values use the latest recorded units and current FX rates when conversion is needed." />
                   </div>
                 </div>
-                {investmentGrowthPoints.length > 1 ? (
-                  <div className="investments-growth-hero__change">
-                    <span>Recorded change</span>
-                    <strong>
-                      {formatInvestmentAmount(
-                        investmentGrowthPoints[investmentGrowthPoints.length - 1].value - investmentGrowthPoints[0].value,
-                        selectedCurrencyCodes[0] ?? "PHP"
-                      )}
-                    </strong>
-                  </div>
-                ) : null}
               </div>
-              <InvestmentGrowthChart
-                points={investmentGrowthPoints}
-                currency={selectedCurrencyCodes[0] ?? "PHP"}
-              />
+              <InvestmentPortfolioGrowthChart assets={growthAssets} currency={selectedCurrencyCodes[0] ?? portfolioCurrencyFilter ?? "PHP"} />
             </section>
-            {hasVisibleCurrencySelection && !canAggregateSelectedCurrency ? (
-              <div className="investments-valuation-note is-warning">
-                <span>
-                  Estimated totals above are shown in {defaultCurrency}. Choose one currency to compare allocation and performance in detail.
-                  {currencyBreakdown.length > 0
-                    ? ` ${currencyBreakdown.map((item) => formatInvestmentAmount(item.value, item.currency)).join(" · ")}`
-                    : ""}
-                </span>
-              </div>
-            ) : null}
             <section className="investments-allocation investments-allocation--overview glass">
               {!canAggregateSelectedCurrency && selectedCurrencyInvestmentAccounts.length > 0 ? (
                 <div className="investments-currency-comparison-state">
