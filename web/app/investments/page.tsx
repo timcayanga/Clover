@@ -828,6 +828,9 @@ const blendInvestmentColor = (hex: string, target = "#ffffff", amount = 0.24) =>
   return `#${channel(0)}${channel(2)}${channel(4)}`;
 };
 
+const formatInvestmentChartLabel = (value: string, maxLength = 23) =>
+  value.length > maxLength ? `${value.slice(0, maxLength - 1).trimEnd()}…` : value;
+
 function InvestmentInsightDonut({
   ariaLabel,
   centerValue,
@@ -847,9 +850,9 @@ function InvestmentInsightDonut({
   const [activeSliceKey, setActiveSliceKey] = useState<string | null>(null);
   const positiveSlices = slices.filter((slice) => slice.value > 0);
   const total = positiveSlices.reduce((sum, slice) => sum + slice.value, 0);
-  const radius = 78;
-  const centerX = 170;
-  const centerY = 118;
+  const radius = 74;
+  const centerX = 220;
+  const centerY = 126;
   let angle = -Math.PI / 2;
   const activeSlice = slices.find((slice) => slice.key === activeSliceKey) ?? null;
   const sliceGeometry = positiveSlices.map((slice, index) => {
@@ -864,15 +867,15 @@ function InvestmentInsightDonut({
       .filter(({ midAngle }) => (Math.cos(midAngle) < 0 ? "left" : "right") === side)
       .map((item) => ({ ...item, y: centerY + Math.sin(item.midAngle) * (radius + 34) }))
       .sort((left, right) => left.y - right.y);
-    const minimumGap = 32;
+    const minimumGap = 30;
     candidates.forEach((item, index) => {
       if (index > 0) {
         item.y = Math.max(item.y, candidates[index - 1].y + minimumGap);
       }
     });
     const overflow = candidates.at(-1)?.y ?? 0;
-    if (overflow > 220) {
-      const shift = overflow - 220;
+    if (overflow > 236) {
+      const shift = overflow - 236;
       candidates.forEach((item) => {
         item.y -= shift;
       });
@@ -887,6 +890,10 @@ function InvestmentInsightDonut({
   const piePath = (startAngle: number, endAngle: number) => {
     const start = polarPoint(startAngle, radius);
     const end = polarPoint(endAngle, radius);
+    if (endAngle - startAngle >= Math.PI * 2 - 0.0001) {
+      const opposite = polarPoint(startAngle + Math.PI, radius);
+      return `M ${centerX} ${centerY} L ${start.x} ${start.y} A ${radius} ${radius} 0 1 1 ${opposite.x} ${opposite.y} A ${radius} ${radius} 0 1 1 ${start.x} ${start.y} Z`;
+    }
     const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
     return `M ${centerX} ${centerY} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 1 ${end.x} ${end.y} Z`;
   };
@@ -894,7 +901,7 @@ function InvestmentInsightDonut({
   return (
     <div className={`report-donut${className ? ` ${className}` : ""}`}>
       <div className="report-donut__chart" role="img" aria-label={ariaLabel}>
-        <svg viewBox="0 0 340 240" aria-hidden="true">
+        <svg viewBox="0 0 440 260" aria-hidden="true">
           <defs>
             {positiveSlices.map((slice, index) => (
               <linearGradient
@@ -930,9 +937,10 @@ function InvestmentInsightDonut({
             const side = Math.cos(midAngle) < 0 ? "left" : "right";
             const edge = polarPoint(midAngle, radius);
             const elbow = polarPoint(midAngle, radius + 15);
-            const labelX = side === "left" ? 12 : 328;
-            const lineEndX = side === "left" ? 62 : 278;
-            const anchor = side === "left" ? "start" : "end";
+            const labelX = side === "left" ? 132 : 308;
+            const lineEndX = side === "left" ? 144 : 296;
+            const anchor = side === "left" ? "end" : "start";
+            const displayLabel = formatInvestmentChartLabel(slice.label);
             return (
               <g
                 key={`${slice.key}-label`}
@@ -943,7 +951,10 @@ function InvestmentInsightDonut({
               >
                 <path d={`M ${edge.x} ${edge.y} L ${elbow.x} ${elbow.y} L ${lineEndX} ${y}`} fill="none" stroke={slice.color} />
                 <circle cx={lineEndX} cy={y} r="2.5" fill={slice.color} />
-                <text x={labelX} y={y - 3} textAnchor={anchor}>{slice.label}</text>
+                <text x={labelX} y={y - 3} textAnchor={anchor}>
+                  <title>{slice.label}</title>
+                  {displayLabel}
+                </text>
                 <text className="report-donut__callout-percent" x={labelX} y={y + 12} textAnchor={anchor}>
                   {wholePercentFormatter.format(slice.value / total)}
                 </text>
@@ -1891,11 +1902,9 @@ export default function InvestmentsPage() {
       const tone: PortfolioOutlookTone =
         returnPercent === null
           ? "neutral"
-          : returnPercent > 0.02
+          : returnPercent >= 0
             ? "positive"
-            : returnPercent < -0.02
-              ? "negative"
-              : "neutral";
+            : "negative";
 
       columns[tone].push({ row, returnPercent });
     }
@@ -3186,6 +3195,22 @@ export default function InvestmentsPage() {
                   );
                 })}
               </div>
+              {portfolioOutlook.neutral.length > 0 ? (
+                <div className="investments-portfolio-outlook__unrated">
+                  <div>
+                    <strong>Awaiting purchase value</strong>
+                    <span>Add a purchase value to calculate a positive or negative outlook.</span>
+                  </div>
+                  <div className="investments-portfolio-outlook__unrated-list" aria-label="Holdings awaiting purchase value">
+                    {portfolioOutlook.neutral.slice(0, 8).map(({ row }) => (
+                      <button type="button" key={row.key} onClick={() => openInvestmentAsset(row)}>
+                        {row.symbol?.trim() || row.name}
+                      </button>
+                    ))}
+                    {portfolioOutlook.neutral.length > 8 ? <span>+{portfolioOutlook.neutral.length - 8} more</span> : null}
+                  </div>
+                </div>
+              ) : null}
             </article>
             {newsAsset ? (
               <article className="investments-news-panel glass" ref={newsPanelRef} aria-live="polite">

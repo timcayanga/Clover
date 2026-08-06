@@ -234,6 +234,9 @@ assert.match(investmentsPageSource, /canonicalizePdaxInvestmentHoldings/, "Portf
 assert.match(investmentsPageSource, /isInvestmentActivityOnlyLabel/, "Dividend activity must not render as a portfolio holding.");
 assert.match(investmentsPageSource, /parseNullableAmount\(holding\.currentValue \?\? holding\.marketValue\) !== null/, "Incomplete imported holdings must stay out of the Portfolio table.");
 assert.match(investmentsStyles, /\.content--investments \.investments-portfolio-table__row--head\s*\{[\s\S]*?position:\s*sticky;[\s\S]*?background:\s*#fff;/, "Desktop Portfolio headers must remain sticky and opaque.");
+assert.match(investmentsPageSource, /endAngle - startAngle >= Math\.PI \* 2/, "A single 100% portfolio allocation must render as a full pie.");
+assert.match(investmentsPageSource, /investments-portfolio-outlook__unrated/, "Holdings without purchase values must remain visible without restoring a Neutral outlook column.");
+assert.match(investmentsStyles, /\.investments-portfolio-outlook__unrated\s*\{/, "Unrated portfolio holdings must have a compact visible treatment.");
 assert.match(marketChartSource, /seenSymbols\.has\(key\)/, "Portfolio market tickers must be deduplicated.");
 
 assert.equal(getPortfolioGrowthMarket("crypto", "PHP"), "crypto");

@@ -49111,8 +49111,9 @@ body:has(.landing-page) {
 .content--investments .report-donut__chart,
 .content--investments .investments-overview-mix-panel .report-donut__chart,
 .content--investments .investments-insights-grid .investments-analysis-donut .report-donut__chart {
-  width: min(100%, 430px);
-  min-height: 260px;
+  width: min(100%, 520px);
+  min-height: 0;
+  aspect-ratio: 22 / 13;
 }
 
 .content--investments .report-donut__chart svg {
@@ -49156,8 +49157,8 @@ body:has(.landing-page) {
   .content--investments .report-donut__chart,
   .content--investments .investments-overview-mix-panel .report-donut__chart,
   .content--investments .investments-insights-grid .investments-analysis-donut .report-donut__chart {
-    width: min(100%, 370px);
-    min-height: 230px;
+    width: min(100%, 440px);
+    min-height: 0;
   }
 }
 
@@ -49424,6 +49425,53 @@ body:has(.landing-page) {
   justify-self: start;
 }
 
+.investments-portfolio-outlook__unrated {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.78);
+}
+
+.investments-portfolio-outlook__unrated > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.investments-portfolio-outlook__unrated strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.investments-portfolio-outlook__unrated span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.investments-portfolio-outlook__unrated-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.investments-portfolio-outlook__unrated-list button {
+  appearance: none;
+  padding: 4px 7px;
+  border: 1px solid rgba(0, 169, 191, 0.2);
+  border-radius: 999px;
+  background: rgba(0, 169, 191, 0.06);
+  color: var(--accent-strong);
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 @media (max-width: 960px) {
   .investments-portfolio-outlook__columns {
     grid-template-columns: 1fr;
@@ -49431,6 +49479,15 @@ body:has(.landing-page) {
 
   .investments-news-panel__grid {
     grid-template-columns: 1fr;
+  }
+
+  .investments-portfolio-outlook__unrated {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .investments-portfolio-outlook__unrated-list {
+    justify-content: flex-start;
   }
 }
 
