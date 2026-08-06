@@ -283,7 +283,7 @@ export function InvestmentPortfolioGrowthChart({ assets, currency }: Props) {
       {exchangeRates.unavailable.length > 0 ? (
         <p className="portfolio-growth__notice">Currency conversion is unavailable for part of this chart.</p>
       ) : null}
-      <p className="portfolio-growth__method">Daily closing prices × recorded units. Historical values use the latest recorded units for each selected holding.</p>
+      <p className="portfolio-growth__method">Daily closing prices × units held on each date. Buys and sells change the portfolio from their recorded trade date.</p>
     </div>
   );
 }

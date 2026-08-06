@@ -272,6 +272,66 @@ assert.equal(activityBoundGrowthSeries[1]?.date, "2026-02-11", "MAX growth must 
 assert.equal(activityBoundGrowthSeries.at(-1)?.date, "2026-03-01");
 assert.equal(activityBoundGrowthSeries.at(-1)?.value, 34);
 
+const datedPositionGrowthSeries = buildPortfolioGrowthSeries({
+  assets: [
+    {
+      id: "traded",
+      name: "Traded asset",
+      symbol: "TRADE",
+      market: "us",
+      units: 1,
+      currency: "USD",
+      unitActivities: [
+        { date: "2026-01-02", unitsDelta: 2 },
+        { date: "2026-01-04", unitsDelta: -1 },
+      ],
+    },
+  ],
+  histories: [
+    {
+      assetId: "traded",
+      currency: "USD",
+      points: [
+        { date: "2026-01-01", value: 10 },
+        { date: "2026-01-02", value: 11 },
+        { date: "2026-01-03", value: 12 },
+        { date: "2026-01-04", value: 13 },
+      ],
+    },
+  ],
+  exchangeRates: { USD: 1 },
+});
+assert.deepEqual(datedPositionGrowthSeries, [
+  { date: "2026-01-02", value: 22 },
+  { date: "2026-01-03", value: 24 },
+  { date: "2026-01-04", value: 13 },
+]);
+
+const fullySoldGrowthSeries = buildPortfolioGrowthSeries({
+  assets: [{
+    id: "sold",
+    name: "Sold asset",
+    symbol: "SOLD",
+    market: "us",
+    units: 0,
+    currency: "USD",
+    unitActivities: [
+      { date: "2026-01-01", unitsDelta: 1 },
+      { date: "2026-01-02", unitsDelta: -1 },
+    ],
+  }],
+  histories: [{
+    assetId: "sold",
+    currency: "USD",
+    points: [{ date: "2026-01-01", value: 10 }, { date: "2026-01-02", value: 12 }],
+  }],
+  exchangeRates: { USD: 1 },
+});
+assert.deepEqual(fullySoldGrowthSeries, [
+  { date: "2026-01-01", value: 10 },
+  { date: "2026-01-02", value: 0 },
+]);
+
 const manualPositionActivities = getManualInvestmentPositionActivities([
   {
     id: "buy",

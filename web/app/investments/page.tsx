@@ -25,6 +25,7 @@ import { getPortfolioGrowthMarket, type PortfolioGrowthAsset } from "@/lib/inves
 import { canonicalizePdaxInvestmentHoldings } from "@/lib/pdax-portfolio-accounts";
 import {
   getFirstManualInvestmentDate,
+  getInvestmentPositionActivities,
   getManualInvestmentPositionActivities,
   normalizeInvestmentPositionName,
   sumManualInvestmentUnits,
@@ -1295,6 +1296,10 @@ export default function InvestmentsPage() {
     () => getManualInvestmentPositionActivities(investmentTransactions),
     [investmentTransactions]
   );
+  const positionActivities = useMemo(
+    () => getInvestmentPositionActivities(investmentTransactions),
+    [investmentTransactions]
+  );
 
   const portfolioSourceRows = useMemo<PortfolioDisplayRow[]>(() => {
     const rows: PortfolioDisplayRow[] = [];
@@ -1720,7 +1725,18 @@ export default function InvestmentsPage() {
       if (formatCurrencyCode(row.currency) !== portfolioCurrencyFilter || !row.symbol?.trim()) return [];
       if (row.subtype !== "stock" && row.subtype !== "etf" && row.subtype !== "reit" && row.subtype !== "crypto") return [];
       const units = parseNullableAmount(row.detail);
-      if (units === null || units <= 0) return [];
+      if (units === null || units < 0) return [];
+      const normalizedNames = new Set([
+        normalizeInvestmentPositionName(row.name),
+        normalizeInvestmentPositionName(row.symbol),
+      ].filter(Boolean));
+      const unitActivities = positionActivities
+        .filter(
+          (activity) =>
+            activity.accountId === row.accountId && normalizedNames.has(activity.normalizedAssetName)
+        )
+        .map((activity) => ({ date: activity.tradeDate, unitsDelta: activity.unitsDelta }));
+      if (units === 0 && unitActivities.length === 0) return [];
       const market = getPortfolioGrowthMarket(row.subtype, row.currency);
       const identity = `${row.key}:${market}:${row.symbol.trim().toUpperCase()}`;
       if (seen.has(identity)) return [];
@@ -1733,9 +1749,10 @@ export default function InvestmentsPage() {
         units,
         currency: formatCurrencyCode(row.currency),
         startDate: row.startDate ?? earliestActivityByAccount.get(row.accountId) ?? accountStartDateById.get(row.accountId) ?? null,
+        unitActivities,
       }];
     });
-  }, [investmentAccounts, investmentTransactions, portfolioCurrencyFilter, portfolioSourceRows]);
+  }, [investmentAccounts, investmentTransactions, portfolioCurrencyFilter, portfolioSourceRows, positionActivities]);
 
   const investmentGroups = useMemo<InvestmentGroup[]>(
     () => (canAggregateSelectedCurrency ? buildInvestmentGroups(selectedCurrencyInvestmentAccounts) : []),

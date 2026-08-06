@@ -43,11 +43,12 @@ const isManualInvestmentActivity = (transaction: ManualInvestmentActivityInput) 
   return (transaction.rawPayload as Record<string, unknown>).source === "manual";
 };
 
-export const getManualInvestmentPositionActivities = (
-  transactions: ManualInvestmentActivityInput[]
+export const getInvestmentPositionActivities = (
+  transactions: ManualInvestmentActivityInput[],
+  options: { manualOnly?: boolean } = {}
 ): ManualInvestmentPositionActivity[] =>
   transactions.flatMap((transaction) => {
-    if (!isManualInvestmentActivity(transaction)) return [];
+    if (options.manualOnly && !isManualInvestmentActivity(transaction)) return [];
 
     const assetName = getInvestmentActivityAssetName(transaction)?.trim() ?? "";
     const normalizedAssetName = normalizeInvestmentPositionName(assetName);
@@ -66,6 +67,10 @@ export const getManualInvestmentPositionActivities = (
       recordedAt: transaction.createdAt,
     }];
   });
+
+export const getManualInvestmentPositionActivities = (
+  transactions: ManualInvestmentActivityInput[]
+): ManualInvestmentPositionActivity[] => getInvestmentPositionActivities(transactions, { manualOnly: true });
 
 export const sumManualInvestmentUnits = (
   activities: ManualInvestmentPositionActivity[],
