@@ -649,6 +649,7 @@ const transactionSchema = z.object({
   type: z.enum(["income", "expense", "transfer"]),
   merchantRaw: z.string().min(1),
   merchantClean: z.string().optional().nullable(),
+  investmentAssetName: z.string().trim().min(1).optional(),
   description: z.string().optional().nullable(),
   receiptLineItems: z.array(receiptLineItemSchema).optional(),
   isTransfer: z.boolean().optional(),
@@ -1587,6 +1588,7 @@ export async function POST(request: Request) {
           source: "manual",
           merchantRaw: payload.merchantRaw,
           merchantClean: payload.merchantClean ?? null,
+          assetName: payload.investmentAssetName ?? null,
           description: payload.description ?? null,
           receiptLineItems:
             payload.receiptLineItems?.map((item) => ({
@@ -1598,6 +1600,7 @@ export async function POST(request: Request) {
         },
         normalizedPayload: {
           merchantClean: payload.merchantClean ?? payload.merchantRaw,
+          assetName: payload.investmentAssetName ?? null,
           categoryId: resolvedCategoryId,
           type: resolvedType,
         },

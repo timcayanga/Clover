@@ -8,6 +8,10 @@ const accountsPage = readFileSync(resolve(root, "app/accounts/page.tsx"), "utf8"
 const accountsRoute = readFileSync(resolve(root, "app/api/accounts/route.ts"), "utf8");
 const styles = readFileSync(resolve(root, "app/globals.css"), "utf8");
 const shell = readFileSync(resolve(root, "components/clover-shell.tsx"), "utf8");
+const tradeEditor = institutionPage.slice(
+  institutionPage.indexOf('<form className="institution-trade-editor"'),
+  institutionPage.indexOf("</form>", institutionPage.indexOf('<form className="institution-trade-editor"'))
+);
 
 const orderedTransactions = sortInvestmentTransactionsNewestFirst([
   { id: "older-imported-later", date: "2026-02-01", createdAt: "2026-08-05" },
@@ -64,6 +68,10 @@ const checks = [
   [institutionPage.includes('<option value="expense">Buy</option>'), "Trading History uses the simple Buy action"],
   [institutionPage.includes('<option value="income">Sell</option>'), "Trading History uses the simple Sell action"],
   [institutionPage.includes("receiptLineItems: tradeDraft.units.trim()"), "Manual trade units persist as structured metadata"],
+  [institutionPage.includes('list="institution-trade-assets"'), "Trading History accepts known or custom asset names"],
+  [institutionPage.includes("investmentAssetName: assetLabel"), "Custom trade asset names persist through the transaction API"],
+  [tradeEditor.indexOf("<span>Currency</span>") < tradeEditor.indexOf("<span>Amount</span>"), "Currency appears before Amount"],
+  [tradeEditor.indexOf("<span>Amount</span>") < tradeEditor.indexOf("<span>Units</span>"), "Amount appears before Units"],
 ] as const;
 
 const failed = checks.filter(([passed]) => !passed);

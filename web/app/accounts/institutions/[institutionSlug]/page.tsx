@@ -161,6 +161,7 @@ type AssetDraft = {
 
 type TradeDraft = {
   accountId: string;
+  assetName: string;
   date: string;
   amount: string;
   units: string;
@@ -317,6 +318,7 @@ const buildAssetDraft = (account: Account): AssetDraft => ({
 
 const buildTradeDraft = (accounts: Account[], currency: string): TradeDraft => ({
   accountId: accounts[0]?.id ?? "",
+  assetName: accounts[0]?.name ?? "",
   date: new Date().toISOString().slice(0, 10),
   amount: "",
   units: "",
@@ -328,11 +330,15 @@ const buildTradeDraft = (accounts: Account[], currency: string): TradeDraft => (
 const getTradeActionLabel = (type: TransactionType) =>
   type === "income" ? "Sell" : type === "transfer" ? "Transfer" : "Buy";
 
-const mergeTradeMetadata = (rawPayload: unknown, type: TransactionType, units: string) => {
+const mergeTradeMetadata = (rawPayload: unknown, type: TransactionType, units: string, assetName: string) => {
   const existing = rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
     ? rawPayload as Record<string, unknown>
     : {};
-  const next: Record<string, unknown> = { ...existing, action: getTradeActionLabel(type) };
+  const next: Record<string, unknown> = {
+    ...existing,
+    action: getTradeActionLabel(type),
+    assetName: assetName.trim(),
+  };
   if (units.trim()) next.quantity = units.trim();
   return next;
 };
@@ -476,6 +482,7 @@ export default function InvestmentInstitutionDetailPage() {
         setTradeDraft((current) => ({
           ...buildTradeDraft(matchedAccounts, routeCurrency),
           accountId: current.accountId && scopedAccountIds.has(current.accountId) ? current.accountId : matchedAccounts[0]?.id ?? "",
+          assetName: current.assetName || matchedAccounts[0]?.name || "",
           date: current.date || new Date().toISOString().slice(0, 10),
           amount: current.amount,
           units: current.units,
@@ -545,6 +552,7 @@ export default function InvestmentInstitutionDetailPage() {
         setTradeDraft((current) => ({
           ...buildTradeDraft(matchedAccounts, routeCurrency),
           accountId: current.accountId && scopedAccountIds.has(current.accountId) ? current.accountId : matchedAccounts[0]?.id ?? "",
+          assetName: current.assetName || matchedAccounts[0]?.name || "",
           date: current.date || new Date().toISOString().slice(0, 10),
           amount: current.amount,
           units: current.units,
@@ -894,6 +902,11 @@ export default function InvestmentInstitutionDetailPage() {
     setEditingTradeId(transaction.id);
     setTradeDraft({
       accountId: transaction.accountId,
+      assetName:
+        readTransactionAssetName(transaction) ??
+        accountAssetNameMap.get(transaction.accountId) ??
+        accountById.get(transaction.accountId)?.name ??
+        transaction.accountName,
       date: transaction.date.slice(0, 10),
       amount: String(Math.abs(parseAmount(transaction.amount))),
       units: getInvestmentActivityUnits(transaction) ?? "",
@@ -1104,14 +1117,14 @@ export default function InvestmentInstitutionDetailPage() {
 
   const saveTrade = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!workspaceId || !tradeDraft.accountId || !tradeDraft.date || !tradeDraft.amount) {
+    if (!workspaceId || !tradeDraft.accountId || !tradeDraft.assetName.trim() || !tradeDraft.date || !tradeDraft.amount) {
       return;
     }
 
     setSavingTrade(true);
     try {
       const actionLabel = getTradeActionLabel(tradeDraft.type);
-      const assetLabel = accountAssetNameMap.get(tradeDraft.accountId) ?? accountById.get(tradeDraft.accountId)?.name ?? "Investment";
+      const assetLabel = tradeDraft.assetName.trim();
       const generatedTitle = `${actionLabel} ${assetLabel}`;
       if (editingTrade) {
         const response = await fetch(`/api/transactions/${editingTrade.id}`, {
@@ -1127,7 +1140,7 @@ export default function InvestmentInstitutionDetailPage() {
             merchantClean: editingTrade.merchantClean || generatedTitle,
             description: tradeDraft.description.trim() || null,
             isTransfer: tradeDraft.type === "transfer",
-            rawPayload: mergeTradeMetadata(editingTrade.rawPayload, tradeDraft.type, tradeDraft.units),
+            rawPayload: mergeTradeMetadata(editingTrade.rawPayload, tradeDraft.type, tradeDraft.units, assetLabel),
           }),
         });
 
@@ -1160,6 +1173,7 @@ export default function InvestmentInstitutionDetailPage() {
             type: tradeDraft.type,
             merchantRaw: generatedTitle,
             merchantClean: generatedTitle,
+            investmentAssetName: assetLabel,
             description: tradeDraft.description.trim() || null,
             receiptLineItems: tradeDraft.units.trim()
               ? [{ description: generatedTitle, quantity: tradeDraft.units.trim() }]
@@ -1663,16 +1677,29 @@ export default function InvestmentInstitutionDetailPage() {
             <div className="institution-asset-editor__grid">
               <label className="settings-field">
                 <span>Asset</span>
-                <select
-                  value={tradeDraft.accountId}
-                  onChange={(event) => setTradeDraft((current) => ({ ...current, accountId: event.target.value }))}
-                >
+                <input
+                  list="institution-trade-assets"
+                  placeholder="Select or enter an asset"
+                  value={tradeDraft.assetName}
+                  onChange={(event) => {
+                    const assetName = event.target.value;
+                    const matchedAccount = sortedAccounts.find(
+                      (account) =>
+                        (accountAssetNameMap.get(account.id) ?? account.name).trim().toLowerCase() === assetName.trim().toLowerCase()
+                    );
+                    setTradeDraft((current) => ({
+                      ...current,
+                      assetName,
+                      accountId: matchedAccount?.id ?? current.accountId,
+                    }));
+                  }}
+                  required
+                />
+                <datalist id="institution-trade-assets">
                   {sortedAccounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {accountAssetNameMap.get(account.id) ?? account.name}
-                    </option>
+                    <option key={account.id} value={accountAssetNameMap.get(account.id) ?? account.name} />
                   ))}
-                </select>
+                </datalist>
               </label>
               <label className="settings-field">
                 <span>Date</span>
@@ -1694,15 +1721,6 @@ export default function InvestmentInstitutionDetailPage() {
                 </select>
               </label>
               <label className="settings-field">
-                <span>Units</span>
-                <input
-                  inputMode="decimal"
-                  placeholder="0"
-                  value={tradeDraft.units}
-                  onChange={(event) => setTradeDraft((current) => ({ ...current, units: event.target.value }))}
-                />
-              </label>
-              <label className="settings-field">
                 <span>Currency</span>
                 <input
                   value={tradeDraft.currency}
@@ -1716,6 +1734,15 @@ export default function InvestmentInstitutionDetailPage() {
                   placeholder="0.00"
                   value={tradeDraft.amount}
                   onChange={(event) => setTradeDraft((current) => ({ ...current, amount: event.target.value }))}
+                />
+              </label>
+              <label className="settings-field">
+                <span>Units</span>
+                <input
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={tradeDraft.units}
+                  onChange={(event) => setTradeDraft((current) => ({ ...current, units: event.target.value }))}
                 />
               </label>
             </div>
