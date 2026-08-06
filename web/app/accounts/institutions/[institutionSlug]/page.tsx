@@ -709,6 +709,11 @@ export default function InvestmentInstitutionDetailPage() {
     return map;
   }, [accounts, transactions]);
 
+  const accountById = useMemo(
+    () => new Map(accounts.map((account) => [account.id, account])),
+    [accounts]
+  );
+
   const institutionHoldingRows = useMemo<InstitutionHoldingRow[]>(() => {
     const accountById = new Map(accounts.map((account) => [account.id, account]));
     const latestSnapshotByIdentity = new Map<string, InvestmentSnapshot>();
@@ -1344,7 +1349,7 @@ export default function InvestmentInstitutionDetailPage() {
             <p className="institution-detail-empty">No investment assets are linked to this institution in {routeCurrency}.</p>
           ) : (
             <div className="institution-assets-table-wrap">
-              <table className="institution-assets-table">
+              <table className="institution-assets-table institution-assets-table--holdings">
                 <thead>
                   <tr>
                     <th>Asset</th>
@@ -1399,7 +1404,7 @@ export default function InvestmentInstitutionDetailPage() {
                         >
                           {formatPercent(row.gainLossPercent)}
                         </td>
-                        <td>{formatMoney(row.value, row.currency)}</td>
+                        <td className="institution-assets-table__value">{formatMoney(row.value, row.currency)}</td>
                         <td className="institution-assets-table__chevron-cell">
                           {row.account ? (
                             <button
@@ -1720,7 +1725,7 @@ export default function InvestmentInstitutionDetailPage() {
             </p>
           ) : (
             <div className="institution-assets-table-wrap">
-              <table className="institution-assets-table">
+              <table className="institution-assets-table institution-assets-table--history">
                 <thead>
                   <tr>
                     <th>Date</th>
@@ -1733,36 +1738,52 @@ export default function InvestmentInstitutionDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {transactions.map((transaction) => (
-                    <tr key={transaction.id}>
-                      <td className="institution-trade-history__date">{formatTradeDate(transaction.date)}</td>
-                      <td>
-                        {readTransactionAssetName(transaction) ??
-                          accountAssetNameMap.get(transaction.accountId) ??
-                          accounts.find((account) => account.id === transaction.accountId)?.name ??
-                          transaction.accountName}
-                      </td>
-                      <td>{getInvestmentActivityType(transaction)}</td>
-                      <td className="institution-trade-history__units">{getInvestmentActivityUnits(transaction) ?? "—"}</td>
-                      <td className={`institution-trade-history__amount ${getInvestmentActivityAmountTone(transaction)}`}>
-                        {formatMoney(parseAmount(transaction.amount), transaction.currency)}
-                      </td>
-                      <td className="institution-trade-history__notes">{getInvestmentActivityNote(transaction) ?? "—"}</td>
-                      <td className="institution-assets-table__actions">
-                        <button className="button button-secondary button-small" type="button" onClick={() => startEditingTrade(transaction)}>
-                          Edit
-                        </button>
-                        <button
-                          className="button button-danger button-small"
-                          type="button"
-                          onClick={() => void deleteTrade(transaction)}
-                          disabled={deletingTradeId === transaction.id}
-                        >
-                          {deletingTradeId === transaction.id ? "Deleting..." : "Delete"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {transactions.map((transaction) => {
+                    const transactionAccount = accountById.get(transaction.accountId) ?? null;
+                    const assetName =
+                      readTransactionAssetName(transaction) ??
+                      accountAssetNameMap.get(transaction.accountId) ??
+                      transactionAccount?.name ??
+                      transaction.accountName;
+                    const assetBrand = getInvestmentAssetBrand({
+                      symbol: transactionAccount?.investmentSymbol,
+                      name: assetName,
+                      subtype: transactionAccount?.investmentSubtype,
+                      currency: transaction.currency,
+                      institution: transactionAccount?.institution ?? transaction.institution ?? routeInstitution,
+                    });
+
+                    return (
+                      <tr key={transaction.id}>
+                        <td className="institution-trade-history__date">{formatTradeDate(transaction.date)}</td>
+                        <td>
+                          <span className="institution-assets-table__asset-name">
+                            <AccountBrandMark accountBrand={assetBrand} label={assetName} />
+                            <strong>{assetName}</strong>
+                          </span>
+                        </td>
+                        <td>{getInvestmentActivityType(transaction)}</td>
+                        <td className="institution-trade-history__units">{getInvestmentActivityUnits(transaction) ?? "—"}</td>
+                        <td className={`institution-trade-history__amount ${getInvestmentActivityAmountTone(transaction)}`}>
+                          {formatMoney(parseAmount(transaction.amount), transaction.currency)}
+                        </td>
+                        <td className="institution-trade-history__notes">{getInvestmentActivityNote(transaction) ?? "—"}</td>
+                        <td className="institution-assets-table__actions">
+                          <button className="button button-secondary button-small" type="button" onClick={() => startEditingTrade(transaction)}>
+                            Edit
+                          </button>
+                          <button
+                            className="button button-danger button-small"
+                            type="button"
+                            onClick={() => void deleteTrade(transaction)}
+                            disabled={deletingTradeId === transaction.id}
+                          >
+                            {deletingTradeId === transaction.id ? "Deleting..." : "Delete"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

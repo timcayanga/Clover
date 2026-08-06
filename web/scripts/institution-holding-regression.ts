@@ -56,6 +56,10 @@ const checks = [
   [accountsPage.includes('className="financial-account-card--investment-institution"'), "Institution cards have concise preview styling"],
   [styles.includes(".financial-account-card--investment-institution .financial-account-card__number"), "Institution preview stays on one line"],
   [institutionPage.includes("sortInvestmentTransactionsNewestFirst"), "Institution trading history uses chronological transaction ordering"],
+  [institutionPage.includes('institution-assets-table institution-assets-table--holdings'), "Holdings uses the compact transaction-style table"],
+  [institutionPage.includes('institution-assets-table institution-assets-table--history'), "Trading history uses the compact transaction-style table"],
+  [institutionPage.includes('AccountBrandMark accountBrand={assetBrand} label={assetName}'), "Trading history rows include compact asset marks"],
+  [styles.includes(".institution-assets-table tbody tr:hover td"), "Institution table rows share the Transactions hover treatment"],
 ] as const;
 
 const failed = checks.filter(([passed]) => !passed);
