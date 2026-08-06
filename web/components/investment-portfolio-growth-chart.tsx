@@ -238,36 +238,42 @@ export function InvestmentPortfolioGrowthChart({ assets, currency }: Props) {
         </div>
       ) : (
         <div className="portfolio-growth__plot">
-          <svg
-            ref={chartRef}
-            viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-            preserveAspectRatio="none"
-            role="img"
-            aria-label={`${range} portfolio value chart`}
-            onPointerMove={(event) => handlePointerMove(event.clientX)}
-            onPointerLeave={() => setHoverIndex(null)}
-            onTouchMove={(event) => handlePointerMove(event.touches[0]?.clientX ?? 0)}
-          >
-            <defs>
-              <linearGradient id={`portfolio-growth-fill-${tone}`} x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor={positive ? "rgba(34, 197, 94, 0.22)" : "rgba(239, 68, 68, 0.2)"} />
-                <stop offset="100%" stopColor={positive ? "rgba(34, 197, 94, 0.01)" : "rgba(239, 68, 68, 0.01)"} />
-              </linearGradient>
-            </defs>
-            {chart.linePath ? (
-              <path
-                d={`${chart.linePath} L ${chart.points[chart.points.length - 1].x} ${chartHeight - chartPadding} L ${chart.points[0].x} ${chartHeight - chartPadding} Z`}
-                fill={`url(#portfolio-growth-fill-${tone})`}
+          <div className="portfolio-growth__canvas">
+            <svg
+              ref={chartRef}
+              viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+              preserveAspectRatio="none"
+              role="img"
+              aria-label={`${range} portfolio value chart`}
+              onPointerMove={(event) => handlePointerMove(event.clientX)}
+              onPointerLeave={() => setHoverIndex(null)}
+              onTouchMove={(event) => handlePointerMove(event.touches[0]?.clientX ?? 0)}
+            >
+              <defs>
+                <linearGradient id={`portfolio-growth-fill-${tone}`} x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor={positive ? "rgba(34, 197, 94, 0.22)" : "rgba(239, 68, 68, 0.2)"} />
+                  <stop offset="100%" stopColor={positive ? "rgba(34, 197, 94, 0.01)" : "rgba(239, 68, 68, 0.01)"} />
+                </linearGradient>
+              </defs>
+              {chart.linePath ? (
+                <path
+                  d={`${chart.linePath} L ${chart.points[chart.points.length - 1].x} ${chartHeight - chartPadding} L ${chart.points[0].x} ${chartHeight - chartPadding} Z`}
+                  fill={`url(#portfolio-growth-fill-${tone})`}
+                />
+              ) : null}
+              <path className="portfolio-growth__line" d={chart.linePath} fill="none" />
+              {hovered ? (
+                <line className="portfolio-growth__hover-line" x1={hovered.x} x2={hovered.x} y1={chartPadding} y2={chartHeight - chartPadding} />
+              ) : null}
+            </svg>
+            {hovered ? (
+              <span
+                className="portfolio-growth__hover-dot"
+                style={{ left: `${(hovered.x / chartWidth) * 100}%`, top: `${(hovered.y / chartHeight) * 100}%` }}
+                aria-hidden="true"
               />
             ) : null}
-            <path className="portfolio-growth__line" d={chart.linePath} fill="none" />
-            {hovered ? (
-              <>
-                <line className="portfolio-growth__hover-line" x1={hovered.x} x2={hovered.x} y1={chartPadding} y2={chartHeight - chartPadding} />
-                <circle className="portfolio-growth__hover-dot" cx={hovered.x} cy={hovered.y} r="5" />
-              </>
-            ) : null}
-          </svg>
+          </div>
           <div className="portfolio-growth__axis" aria-hidden="true">
             {tickIndexes.map((index) => <span key={points[index]?.date}>{formatChartDate(points[index]?.date ?? "", range)}</span>)}
           </div>

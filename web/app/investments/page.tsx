@@ -24,6 +24,12 @@ import { resolveGotradeSecuritySymbol } from "@/lib/gotrade-securities";
 import { getPortfolioGrowthMarket, type PortfolioGrowthAsset } from "@/lib/investment-portfolio-growth";
 import { canonicalizePdaxInvestmentHoldings } from "@/lib/pdax-portfolio-accounts";
 import {
+  getFirstManualInvestmentDate,
+  getManualInvestmentPositionActivities,
+  normalizeInvestmentPositionName,
+  sumManualInvestmentUnits,
+} from "@/lib/manual-investment-positions";
+import {
   chooseWorkspaceId,
   persistSelectedCurrency,
   persistSelectedWorkspaceId,
@@ -279,6 +285,9 @@ const isGenericInvestmentAssetLabel = (name: string | null | undefined, institut
   ]).has(normalizedName);
 };
 
+const isGSaveInvestmentAccount = (account: Pick<Account, "name" | "institution">) =>
+  /\bgsave\b|\b(?:unoready|unoboost)\b/i.test(`${account.institution ?? ""} ${account.name}`);
+
 const isInstitutionOnlySnapshotHolding = (
   holding: InvestmentSnapshotHolding,
   snapshot: InvestmentSnapshot,
@@ -477,6 +486,8 @@ type PortfolioDisplayRow = {
   gainLoss: number | null;
   currency: string;
   classification: InvestmentClassification;
+  updatedAt: string;
+  startDate: string | null;
 };
 
 type PortfolioOutlookTone = "positive" | "neutral" | "negative";
@@ -1183,9 +1194,22 @@ export default function InvestmentsPage() {
           ? (payload.investmentSnapshots as InvestmentSnapshot[])
           : [];
         const transactionPayload = transactionsResponse.ok ? await transactionsResponse.json() : null;
-        const nextTransactions = Array.isArray(transactionPayload?.transactions)
+        const investmentOnlyTransactions = Array.isArray(transactionPayload?.transactions)
           ? (transactionPayload.transactions as InvestmentTransaction[])
           : cachedWorkspace.cachedSnapshot?.transactions ?? [];
+        const gsaveAccountIds = nextAccounts.filter(isGSaveInvestmentAccount).map((account) => account.id);
+        const gsaveTransactionsResponse = gsaveAccountIds.length > 0
+          ? await fetch(
+              `/api/transactions?workspaceId=${encodeURIComponent(selectedWorkspaceId)}&accounts=${encodeURIComponent(gsaveAccountIds.join(","))}&pageSize=all&summaryMode=light`
+            )
+          : null;
+        const gsaveTransactionsPayload = gsaveTransactionsResponse?.ok ? await gsaveTransactionsResponse.json() : null;
+        const gsaveTransactions = Array.isArray(gsaveTransactionsPayload?.transactions)
+          ? (gsaveTransactionsPayload.transactions as InvestmentTransaction[])
+          : [];
+        const nextTransactions = Array.from(
+          new Map([...investmentOnlyTransactions, ...gsaveTransactions].map((transaction) => [transaction.id, transaction])).values()
+        );
         setAccounts(nextAccounts);
         setTransactions(nextTransactions as InvestmentTransaction[]);
         setInvestmentSnapshots(nextInvestmentSnapshots);
@@ -1258,7 +1282,7 @@ export default function InvestmentsPage() {
   }, [selectedWorkspaceId]);
 
   const investmentAccounts = useMemo(
-    () => accounts.filter((account) => account.type === "investment"),
+    () => accounts.filter((account) => account.type === "investment" || isGSaveInvestmentAccount(account)),
     [accounts]
   );
 
@@ -1266,6 +1290,11 @@ export default function InvestmentsPage() {
     const investmentAccountIds = new Set(investmentAccounts.map((account) => account.id));
     return transactions.filter((transaction) => investmentAccountIds.has(transaction.accountId));
   }, [investmentAccounts, transactions]);
+
+  const manualPositionActivities = useMemo(
+    () => getManualInvestmentPositionActivities(investmentTransactions),
+    [investmentTransactions]
+  );
 
   const portfolioSourceRows = useMemo<PortfolioDisplayRow[]>(() => {
     const rows: PortfolioDisplayRow[] = [];
@@ -1354,6 +1383,8 @@ export default function InvestmentsPage() {
               gainLoss: holdingGainLoss,
               currency: holding.currency || matchingSnapshot.currency || account.currency,
               classification,
+              updatedAt: holding.updatedAt || matchingSnapshot.updatedAt,
+              startDate: matchingSnapshot.snapshotDate,
             });
           }
         }
@@ -1431,6 +1462,8 @@ export default function InvestmentsPage() {
           gainLoss,
           currency: account.currency,
           classification,
+          updatedAt: account.updatedAt,
+          startDate: account.investmentStartDate,
         });
         continue;
       }
@@ -1463,12 +1496,87 @@ export default function InvestmentsPage() {
           gainLoss: null,
           currency: account.currency,
           classification,
+          updatedAt: account.updatedAt,
+          startDate: account.investmentStartDate,
         });
       }
     }
 
+    for (const row of rows) {
+      const unitsDelta = sumManualInvestmentUnits(manualPositionActivities, {
+        accountId: row.accountId,
+        assetName: row.name,
+        recordedAfter: row.updatedAt,
+      });
+      const firstManualDate = getFirstManualInvestmentDate(manualPositionActivities, {
+        accountId: row.accountId,
+        assetName: row.name,
+      });
+      if (unitsDelta !== 0) {
+        row.detail = String(Math.max(0, (parseNullableAmount(row.detail) ?? 0) + unitsDelta));
+      }
+      if (firstManualDate && (!row.startDate || firstManualDate < row.startDate)) {
+        row.startDate = firstManualDate;
+      }
+    }
+
+    const manualActivityGroups = new Map<string, typeof manualPositionActivities>();
+    for (const activity of manualPositionActivities) {
+      const key = `${activity.accountId}:${activity.normalizedAssetName}`;
+      const group = manualActivityGroups.get(key) ?? [];
+      group.push(activity);
+      manualActivityGroups.set(key, group);
+    }
+    for (const group of manualActivityGroups.values()) {
+      const first = group[0];
+      if (
+        rows.some(
+          (row) =>
+            row.accountId === first.accountId &&
+            normalizeInvestmentPositionName(row.name) === first.normalizedAssetName
+        )
+      ) {
+        continue;
+      }
+
+      const units = group.reduce((sum, activity) => sum + activity.unitsDelta, 0);
+      const account = investmentAccounts.find((candidate) => candidate.id === first.accountId);
+      if (!account || units <= 0) continue;
+      const classification = inferInvestmentClassification({
+        name: first.assetName,
+        institution: account.institution,
+        subtype: account.investmentSubtype,
+        symbol: account.investmentSymbol,
+      });
+      const tickerLikeName = /^[A-Z][A-Z0-9.-]{0,9}$/.test(first.assetName.trim())
+        ? first.assetName.trim().toUpperCase()
+        : null;
+      rows.push({
+        key: `manual:${first.accountId}:${first.normalizedAssetName}`,
+        accountId: first.accountId,
+        assetId: `manual:${first.accountId}:${first.normalizedAssetName}`,
+        source: "derived",
+        name: first.assetName,
+        institution: account.institution,
+        subtype: classification.subtype,
+        symbol: resolveGotradeSecuritySymbol({
+          institution: account.institution,
+          name: first.assetName,
+          symbol: tickerLikeName,
+        }),
+        detail: String(units),
+        currentValue: null,
+        purchaseValue: null,
+        gainLoss: null,
+        currency: account.currency,
+        classification,
+        updatedAt: group.map((activity) => activity.recordedAt).sort().at(-1) ?? account.updatedAt,
+        startDate: group.filter((activity) => activity.unitsDelta > 0).map((activity) => activity.tradeDate).sort()[0] ?? null,
+      });
+    }
+
     return canonicalizePortfolioRows(rows);
-  }, [investmentAccounts, investmentSnapshots, investmentTransactions]);
+  }, [investmentAccounts, investmentSnapshots, investmentTransactions, manualPositionActivities]);
 
   const visibleInvestmentAccounts = useMemo(() => {
     const search = normalizeInvestmentSearchText(investmentSearch);
@@ -1624,7 +1732,7 @@ export default function InvestmentsPage() {
         market,
         units,
         currency: formatCurrencyCode(row.currency),
-        startDate: earliestActivityByAccount.get(row.accountId) ?? accountStartDateById.get(row.accountId) ?? null,
+        startDate: row.startDate ?? earliestActivityByAccount.get(row.accountId) ?? accountStartDateById.get(row.accountId) ?? null,
       }];
     });
   }, [investmentAccounts, investmentTransactions, portfolioCurrencyFilter, portfolioSourceRows]);

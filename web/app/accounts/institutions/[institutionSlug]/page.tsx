@@ -34,6 +34,11 @@ import {
 } from "@/lib/workspace-cache";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { sortInvestmentTransactionsNewestFirst } from "@/lib/investment-transaction-order";
+import {
+  getManualInvestmentPositionActivities,
+  normalizeInvestmentPositionName,
+  sumManualInvestmentUnits,
+} from "@/lib/manual-investment-positions";
 
 type Account = {
   id: string;
@@ -734,6 +739,11 @@ export default function InvestmentInstitutionDetailPage() {
     [accounts]
   );
 
+  const manualPositionActivities = useMemo(
+    () => getManualInvestmentPositionActivities(transactions),
+    [transactions]
+  );
+
   const institutionHoldingRows = useMemo<InstitutionHoldingRow[]>(() => {
     const accountById = new Map(accounts.map((account) => [account.id, account]));
     const latestSnapshotByIdentity = new Map<string, InvestmentSnapshot>();
@@ -852,8 +862,62 @@ export default function InvestmentInstitutionDetailPage() {
       });
     }
 
+    for (const row of rows) {
+      if (!row.account) continue;
+      const unitsDelta = sumManualInvestmentUnits(manualPositionActivities, {
+        accountId: row.account.id,
+        assetName: row.name,
+        recordedAfter: row.updatedAt,
+      });
+      if (unitsDelta !== 0) {
+        row.quantity = Math.max(0, (row.quantity ?? 0) + unitsDelta);
+      }
+    }
+
+    const activityGroups = new Map<string, typeof manualPositionActivities>();
+    for (const activity of manualPositionActivities) {
+      const key = `${activity.accountId}:${activity.normalizedAssetName}`;
+      const group = activityGroups.get(key) ?? [];
+      group.push(activity);
+      activityGroups.set(key, group);
+    }
+    for (const group of activityGroups.values()) {
+      const first = group[0];
+      const alreadyRepresented = rows.some(
+        (row) =>
+          row.account?.id === first.accountId &&
+          normalizeInvestmentPositionName(row.name) === first.normalizedAssetName
+      );
+      if (alreadyRepresented) continue;
+
+      const quantity = group.reduce((sum, activity) => sum + activity.unitsDelta, 0);
+      const account = accountById.get(first.accountId) ?? null;
+      if (!account || quantity <= 0) continue;
+      const classification = inferInvestmentClassification({
+        subtype: account.investmentSubtype,
+        name: first.assetName,
+        symbol: account.investmentSymbol,
+        institution: account.institution,
+      });
+      rows.push({
+        key: `manual:${first.accountId}:${first.normalizedAssetName}`,
+        account,
+        name: first.assetName,
+        symbol: account.investmentSymbol,
+        subtype: classification.subtype,
+        currency: formatCurrencyCode(account.currency),
+        value: 0,
+        quantity,
+        unitPrice: null,
+        costBasis: null,
+        gainLossValue: null,
+        gainLossPercent: null,
+        updatedAt: group.map((activity) => activity.recordedAt).sort().at(-1) ?? account.updatedAt,
+      });
+    }
+
     return rows.sort((left, right) => right.value - left.value || left.name.localeCompare(right.name));
-  }, [accountAssetNameMap, accounts, holdingAccounts, investmentSnapshots, routeCurrency, routeInstitution]);
+  }, [accountAssetNameMap, accounts, holdingAccounts, investmentSnapshots, manualPositionActivities, routeCurrency, routeInstitution]);
 
   const holdingsValue = useMemo(
     () => institutionHoldingRows.reduce((sum, row) => sum + row.value, 0),

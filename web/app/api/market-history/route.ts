@@ -68,7 +68,7 @@ const YAHOO_RANGE_CONFIG: Record<MarketRange, YahooRangeConfig> = {
   YTD: { range: "ytd", interval: "1d" },
   "1Y": { range: "1y", interval: "1d" },
   "5Y": { range: "5y", interval: "1wk" },
-  MAX: { range: "max", interval: "1wk" },
+  MAX: { range: "max", interval: "1d" },
 };
 
 const parseMarket = (value: string | null): MarketRegion => {

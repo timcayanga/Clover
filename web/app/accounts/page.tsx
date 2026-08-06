@@ -2839,7 +2839,10 @@ function AccountsPageContent() {
     // checkpoint is historical evidence and must never override that current
     // value on Accounts; doing so makes the institution card disagree with its
     // own Holdings page until another refresh arrives.
-    if (prefersLiveInvestmentBalance(getEffectiveAccountType(account)) && hasResolvedBalance(account.balance)) {
+    if (
+      (prefersLiveInvestmentBalance(getEffectiveAccountType(account)) || isGSaveInstitutionAccount(account)) &&
+      hasResolvedBalance(account.balance)
+    ) {
       return account.balance;
     }
 

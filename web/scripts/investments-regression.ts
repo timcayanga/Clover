@@ -14,6 +14,11 @@ import {
 import { buildPortfolioGrowthSeries, getPortfolioGrowthMarket } from "@/lib/investment-portfolio-growth";
 import { canonicalizePdaxInvestmentHoldings } from "@/lib/pdax-portfolio-accounts";
 import { findClosestMarketPointIndex } from "@/lib/market-data";
+import {
+  getFirstManualInvestmentDate,
+  getManualInvestmentPositionActivities,
+  sumManualInvestmentUnits,
+} from "@/lib/manual-investment-positions";
 
 const classificationCases = [
   { name: "ATRAM Peso Money Market Fund", expected: "money_market_fund" },
@@ -202,10 +207,12 @@ const investmentsPageSource = readFileSync(resolve(process.cwd(), "app/investmen
 const investmentsStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
 const marketChartSource = readFileSync(resolve(process.cwd(), "components/investment-market-chart.tsx"), "utf8");
 const portfolioGrowthSource = readFileSync(resolve(process.cwd(), "components/investment-portfolio-growth-chart.tsx"), "utf8");
+const marketHistoryRouteSource = readFileSync(resolve(process.cwd(), "app/api/market-history/route.ts"), "utf8");
 
 assert.match(investmentsPageSource, /includeAllOption=\{false\}/, "Investments must require one portfolio currency.");
 assert.doesNotMatch(investmentsPageSource, /allLabel="All currencies"/, "Investments must not show an aggregate currency option.");
 assert.match(investmentsPageSource, /InvestmentPortfolioGrowthChart/, "Overview must render market-priced portfolio growth.");
+assert.match(investmentsPageSource, /account\.type === "investment" \|\| isGSaveInvestmentAccount\(account\)/, "GSave manual activity must remain available to Investments.");
 assert.match(portfolioGrowthSource, /MARKET_RANGES\.map/, "Portfolio growth must support the same date ranges as Markets.");
 assert.match(portfolioGrowthSource, /portfolio-growth__asset-picker/, "Portfolio growth investments must use one compact picker.");
 assert.match(portfolioGrowthSource, /type="checkbox"/, "Portfolio growth picker must retain multi-selection.");
@@ -214,6 +221,9 @@ assert.doesNotMatch(portfolioGrowthSource, /<strong>\{asset\.symbol\}<\/strong>/
 assert.match(portfolioGrowthSource, /onPointerMove/, "Portfolio growth must expose hover and pointer values.");
 assert.match(portfolioGrowthSource, /preserveAspectRatio="none"/, "Portfolio growth must not letterbox chart coordinates at short browser heights.");
 assert.match(portfolioGrowthSource, /findClosestMarketPointIndex/, "Portfolio hover must resolve the nearest rendered point.");
+assert.match(marketHistoryRouteSource, /MAX:\s*\{\s*range:\s*"max",\s*interval:\s*"1d"\s*\}/, "MAX portfolio history must request daily prices.");
+assert.match(portfolioGrowthSource, /className="portfolio-growth__canvas"/, "Portfolio hover markers must use an unstretched overlay canvas.");
+assert.doesNotMatch(portfolioGrowthSource, /<circle className="portfolio-growth__hover-dot"/, "The hover marker must not be distorted by SVG scaling.");
 assert.doesNotMatch(investmentsPageSource, /\["neutral", "Neutral"\]/, "Portfolio Outlook must not render a neutral column.");
 assert.match(investmentsPageSource, /\/api\/market-news\?/, "Asset news must load inside Clover.");
 assert.doesNotMatch(investmentsPageSource, /news\.google\.com/, "Asset news must not navigate users away from Clover.");
@@ -256,14 +266,38 @@ const activityBoundGrowthSeries = buildPortfolioGrowthSeries({
   ],
   exchangeRates: { USD: 1 },
 });
-assert.deepEqual(activityBoundGrowthSeries, [
-  { date: "2026-02-10", value: 11 },
-  { date: "2026-03-01", value: 34 },
+assert.equal(activityBoundGrowthSeries[0]?.date, "2026-02-10");
+assert.equal(activityBoundGrowthSeries[0]?.value, 11);
+assert.equal(activityBoundGrowthSeries[1]?.date, "2026-02-11", "MAX growth must expose each calendar day.");
+assert.equal(activityBoundGrowthSeries.at(-1)?.date, "2026-03-01");
+assert.equal(activityBoundGrowthSeries.at(-1)?.value, 34);
+
+const manualPositionActivities = getManualInvestmentPositionActivities([
+  {
+    id: "buy",
+    accountId: "gstocks",
+    date: "2026-02-10",
+    createdAt: "2026-08-06T01:00:00Z",
+    type: "expense",
+    merchantRaw: "Buy MER",
+    rawPayload: { source: "manual", action: "Buy", assetName: "MER", quantity: "5" },
+  },
+  {
+    id: "sell",
+    accountId: "gstocks",
+    date: "2026-04-10",
+    createdAt: "2026-08-06T02:00:00Z",
+    type: "income",
+    merchantRaw: "Sell MER",
+    rawPayload: { source: "manual", action: "Sell", assetName: "MER", quantity: "2" },
+  },
 ]);
+assert.equal(sumManualInvestmentUnits(manualPositionActivities, { accountId: "gstocks", assetName: "MER" }), 3);
+assert.equal(getFirstManualInvestmentDate(manualPositionActivities, { accountId: "gstocks", assetName: "MER" }), "2026-02-10");
 assert.equal(
   findClosestMarketPointIndex([{ x: 30 }, { x: 245 }, { x: 460 }], 238),
   1,
   "Hover coordinates must resolve to the visually nearest chart date."
 );
 
-console.log(`Investment regression passed: ${classificationCases.length + 51} checks.`);
+console.log(`Investment regression passed: ${classificationCases.length + 60} checks.`);

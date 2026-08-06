@@ -38,6 +38,7 @@ const checks = [
   [accountsPage.includes('getEffectiveAccountType(account) === "investment" || isGSaveInstitutionAccount(account)'), "All GSave products join one institution group"],
   [accountsPage.includes('\\b(?:unoready|unoboost)\\b'), "Stale UNO product names are recognized as GSave accounts"],
   [accountsPage.includes('? "GSave"'), "Stale UNO products use the canonical GSave institution title"],
+  [accountsPage.includes("prefersLiveInvestmentBalance(getEffectiveAccountType(account)) || isGSaveInstitutionAccount(account)"), "GSave institution cards prefer the same live balances as Institution Details"],
   [institutionPage.includes('routeInstitution.toLowerCase() === "gsave"'), "The GSave institution page includes linked savings products"],
   [institutionPage.includes("getInvestmentAssetBrand"), "Institution holdings resolve stable asset branding"],
   [institutionPage.includes('"gstocks philippines"'), "GStocks institution placeholders are not rendered as assets"],
@@ -70,6 +71,7 @@ const checks = [
   [institutionPage.includes("receiptLineItems: tradeDraft.units.trim()"), "Manual trade units persist as structured metadata"],
   [institutionPage.includes('list="institution-trade-assets"'), "Trading History accepts known or custom asset names"],
   [institutionPage.includes("investmentAssetName: assetLabel"), "Custom trade asset names persist through the transaction API"],
+  [institutionPage.includes("getManualInvestmentPositionActivities(transactions)"), "Manual Buy and Sell history updates institution holding units"],
   [tradeEditor.indexOf("<span>Currency</span>") < tradeEditor.indexOf("<span>Amount</span>"), "Currency appears before Amount"],
   [tradeEditor.indexOf("<span>Amount</span>") < tradeEditor.indexOf("<span>Units</span>"), "Amount appears before Units"],
 ] as const;

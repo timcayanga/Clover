@@ -32,6 +32,17 @@ const toPriceMap = (points: MarketHistoryPoint[], granularity: "daily" | "timest
   return prices;
 };
 
+const buildDailyDateRange = (start: string, end: string) => {
+  const dates: string[] = [];
+  const cursor = new Date(`${start}T12:00:00Z`);
+  const last = new Date(`${end}T12:00:00Z`);
+  while (cursor <= last) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+};
+
 export const buildPortfolioGrowthSeries = ({
   assets,
   histories,
@@ -81,9 +92,11 @@ export const buildPortfolioGrowthSeries = ({
   );
   if (firstSharedDate > lastSharedDate) return [];
 
-  const dates = Array.from(
-    new Set(usable.flatMap((entry) => entry.dates.filter((date) => date >= firstSharedDate && date <= lastSharedDate)))
-  ).sort();
+  const dates = granularity === "daily"
+    ? buildDailyDateRange(firstSharedDate, lastSharedDate)
+    : Array.from(
+        new Set(usable.flatMap((entry) => entry.dates.filter((date) => date >= firstSharedDate && date <= lastSharedDate)))
+      ).sort();
   const latestPriceByAsset = new Map<string, number>();
   for (const entry of usable) {
     const seedDates = entry.dates.filter((date) => date <= firstSharedDate);
