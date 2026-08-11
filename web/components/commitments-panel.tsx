@@ -973,20 +973,9 @@ export function CommitmentsPanel({
     }
   }, [activeTab, visibleCommitments]);
 
-  const tabSuggestions = useMemo(() => {
-    switch (activeTab) {
-      case "planned":
-        return plannedPaymentSuggestions.filter((suggestion) => suggestion.sourceKind !== "installment");
-      case "debt":
-        return plannedPaymentSuggestions.filter((suggestion) =>
-          suggestion.reasonTags.some((tag) => ["loan", "statement payment", "installment terms"].includes(tag))
-        );
-      case "installments":
-        return plannedPaymentSuggestions.filter((suggestion) => suggestion.sourceKind === "installment");
-      default:
-        return [];
-    }
-  }, [activeTab, plannedPaymentSuggestions]);
+  // Suggestions belong to Overview. Subtabs contain only items the user has
+  // already kept, which prevents candidates from looking like saved payments.
+  const tabSuggestions: PlannedPaymentSuggestion[] = [];
 
   const renderRecurringTable = () => {
     const tabLabel = activeTab === "planned" ? "planned payment" : activeTab === "debt" ? "debt or loan" : activeTab === "owed" ? "money owed" : "installment";

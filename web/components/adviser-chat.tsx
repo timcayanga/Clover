@@ -102,6 +102,7 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
   const [suggestedPrompts, setSuggestedPrompts] = useState<AdviserPrompt[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
   const [feedbackByMessage, setFeedbackByMessage] = useState<Record<number, "helpful" | "not_helpful">>({});
+  const threadRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const visiblePrompts = useMemo(() => (suggestedPrompts.length > 0 ? suggestedPrompts : prompts).slice(0, 6), [prompts, suggestedPrompts]);
@@ -146,7 +147,12 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
   }, [grounding, isHydrated, messages, storageKey, suggestedPrompts]);
 
   const scrollToBottom = () => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const thread = threadRef.current;
+    if (!thread) {
+      return;
+    }
+
+    thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" });
   };
 
   const sendMessage = async (text: string) => {
@@ -423,7 +429,7 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
         </>
       ) : null}
       {messages.length > 0 ? (
-        <div className="adviser-chat__thread" role="log" aria-live="polite" aria-relevant="additions text">
+        <div ref={threadRef} className="adviser-chat__thread" role="log" aria-live="polite" aria-relevant="additions text">
           {messages.map((message, index) => (
             <article
               key={`${message.role}-${index}`}
@@ -506,7 +512,13 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
           <button type="submit" className="button button-primary button-small" disabled={hasReachedLimit || isSending || input.trim().length === 0}>
             {isSending ? "Sending" : "Send"}
           </button>
-          {isSending || error ? <span className="adviser-chat__status">{isSending ? "Thinking..." : error}</span> : null}
+          {isSending || error ? (
+            <span className={`adviser-chat__status${isSending ? " adviser-chat__status--thinking" : ""}`}>
+              {isSending ? (
+                <><span>Thinking</span><span className="adviser-chat__thinking-dots" aria-hidden="true"><i /><i /><i /></span></>
+              ) : error}
+            </span>
+          ) : null}
         </div>
       </form>
     </div>

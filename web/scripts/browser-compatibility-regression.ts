@@ -25,6 +25,8 @@ async function main() {
     modalKeyboardSource,
     rootLayoutSource,
     commitmentsSource,
+    investmentsSource,
+    investmentMarketSource,
   ] = await Promise.all([
     readSource("components/clover-shell.tsx"),
     readSource("app/dashboard/page.tsx"),
@@ -44,6 +46,8 @@ async function main() {
     readSource("components/modal-keyboard-controller.tsx"),
     readSource("app/layout.tsx"),
     readSource("components/commitments-panel.tsx"),
+    readSource("app/investments/page.tsx"),
+    readSource("components/investment-market-chart.tsx"),
   ]);
   const protectedPageSources = await Promise.all(
     [
@@ -238,6 +242,21 @@ async function main() {
     commitmentsSource,
     /className="panel glass recurring-add-modal__card recurring-suggestion-review-modal"[\s\S]{0,300}role="dialog"[\s\S]{0,500}data-modal-close/,
     "Recurring suggestion review must use Clover's visible, keyboard-dismissible modal structure."
+  );
+  assert.match(
+    investmentsSource,
+    /className="investments-mobile-currency-filter"/,
+    "The Investments mobile header must keep an accessible currency selector."
+  );
+  assert.match(
+    investmentMarketSource,
+    /className="investments-market__range-select"[\s\S]{0,240}<select value=\{range\}/,
+    "Mobile Markets must expose one compact time-period selector."
+  );
+  assert.match(
+    globalStyles,
+    /\.content--investments \.investments-portfolio-table__header \{[\s\S]{0,140}position: sticky;[\s\S]{0,180}background: var\(--surface\);/,
+    "Mobile portfolio filters must stay sticky with an opaque theme-aware background."
   );
   const transactionDesktopColumns =
     "28px 40px minmax(0, 1.8fr) minmax(110px, 0.85fr) minmax(170px, 1.55fr) minmax(140px, 0.9fr) minmax(110px, 0.8fr) 40px 40px";

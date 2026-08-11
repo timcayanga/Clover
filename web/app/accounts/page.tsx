@@ -3001,8 +3001,7 @@ function AccountsPageContent() {
 
         return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
       });
-    const favoriteAccounts = amountSortedAccounts.filter((account) => Boolean(account.favorite));
-    return favoriteAccounts.length > 0 ? favoriteAccounts : amountSortedAccounts;
+    return amountSortedAccounts.sort((left, right) => Number(Boolean(right.favorite)) - Number(Boolean(left.favorite)));
   }, [visibleAccounts, statementCheckpoints]);
 
   const totals = useMemo(() => {

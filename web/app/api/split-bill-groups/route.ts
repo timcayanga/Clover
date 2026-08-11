@@ -18,6 +18,7 @@ const createGroupSchema = z.object({
   name: z.string().trim().min(1),
   avatarUrl: z.string().trim().nullable().optional(),
   members: z.array(groupMemberSchema).default([]),
+  createCircle: z.boolean().optional().default(false),
 });
 
 export async function GET() {
@@ -52,35 +53,37 @@ export async function POST(request: Request) {
 
     const { group, people } = await prisma.$transaction(async (tx) => {
       const avatarUrl = body.avatarUrl?.trim() || pickSplitBillAvatarUrl(body.name);
-      const circle = await tx.circle.create({
-        data: {
-          ownerUserId: user.id,
-          name: body.name,
-          type: "custom",
-          avatarUrl,
-          memberships: {
-            create: [
-              {
-                userId: user.id,
-                displayName: getUserDisplayName(user),
-                email: user.email,
-                role: "organizer",
-                status: "active",
-                joinedAt: new Date(),
+      const circle = body.createCircle
+        ? await tx.circle.create({
+            data: {
+              ownerUserId: user.id,
+              name: body.name,
+              type: "custom",
+              avatarUrl,
+              memberships: {
+                create: [
+                  {
+                    userId: user.id,
+                    displayName: getUserDisplayName(user),
+                    email: user.email,
+                    role: "organizer",
+                    status: "active",
+                    joinedAt: new Date(),
+                  },
+                  ...body.members.map((member) => ({
+                    displayName: member.name,
+                    role: "participant" as const,
+                    status: "invited" as const,
+                  })),
+                ],
               },
-              ...body.members.map((member) => ({
-                displayName: member.name,
-                role: "participant" as const,
-                status: "invited" as const,
-              })),
-            ],
-          },
-        },
-      });
+            },
+          })
+        : null;
       const group = await tx.splitBillGroup.create({
         data: {
           userId: user.id,
-          circleId: circle.id,
+          circleId: circle?.id ?? null,
           name: body.name,
           avatarUrl,
           members: {
@@ -108,16 +111,18 @@ export async function POST(request: Request) {
         body.members.map((member) => member.name)
       );
 
-      await tx.circleActivity.create({
-        data: {
-          circleId: circle.id,
-          actorUserId: user.id,
-          action: "circle_created_from_split_bills",
-          entityType: "circle",
-          entityId: circle.id,
-          summary: `${getUserDisplayName(user)} created ${circle.name} from Split Bills.`,
-        },
-      });
+      if (circle) {
+        await tx.circleActivity.create({
+          data: {
+            circleId: circle.id,
+            actorUserId: user.id,
+            action: "circle_created_from_split_bills",
+            entityType: "circle",
+            entityId: circle.id,
+            summary: `${getUserDisplayName(user)} created ${circle.name} from Split Bills.`,
+          },
+        });
+      }
 
       return { group, people };
     });

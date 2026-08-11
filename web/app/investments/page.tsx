@@ -2722,6 +2722,24 @@ export default function InvestmentsPage() {
             }))}
           />
           <div className="investments-mobile-header__actions">
+            <CurrencySelector
+              value={portfolioCurrencyFilter}
+              onChange={(next) => {
+                const currency = formatCurrencyCode(next);
+                setPortfolioCurrencyFilter(currency);
+                persistSelectedCurrency(selectedWorkspaceId, currency);
+              }}
+              options={portfolioCurrencyOptions}
+              includeAllOption={false}
+              ariaLabel="Select investment currency"
+              className="investments-mobile-currency-filter"
+              buttonClassName="button button-secondary button-small investments-mobile-icon-button investments-mobile-currency-filter__button"
+              menuClassName="transactions-currency-filter__menu"
+              optionClassName="transactions-currency-filter__option"
+              compact
+              menuAlignment="end"
+              showChevron={false}
+            />
             <button
               className="button button-primary button-small investments-page__add-button investments-mobile-icon-button investments-mobile-icon-button--primary investments-mobile-icon-button--compact"
               type="button"

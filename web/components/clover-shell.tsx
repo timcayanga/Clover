@@ -336,7 +336,7 @@ const desktopNavSections = [
   },
 ];
 
-const shouldPrefetchNavHref = (href: string) => href !== "/split-bill";
+const shouldPrefetchNavHref = (_href: string) => true;
 type IconName =
   | "dashboard"
   | "accounts"

@@ -51,6 +51,8 @@ assert.deepEqual(
 
 const editorSource = fs.readFileSync(path.join(process.cwd(), "components/split-bill-editor.tsx"), "utf8");
 const workspaceSource = fs.readFileSync(path.join(process.cwd(), "components/split-bill-workspace.tsx"), "utf8");
+const pageActionsSource = fs.readFileSync(path.join(process.cwd(), "components/split-bill-page-actions.tsx"), "utf8");
+const groupRouteSource = fs.readFileSync(path.join(process.cwd(), "app/api/split-bill-groups/route.ts"), "utf8");
 assert.match(
   editorSource,
   /draft\.items = draft\.items\.map\(\(item, index\) => \(\{[\s\S]{0,120}id: item\.id \?\? `draft-item-\$\{index \+ 1\}`/,
@@ -70,6 +72,22 @@ assert.match(
   workspaceSource,
   /const persistedTotals = deriveSplitBillDraftTotals\(\{[\s\S]{0,120}items,/,
   "The inline split-bill editor must derive missing persisted totals from its item rows."
+);
+assert.match(
+  workspaceSource,
+  /clover:open-split-bill-group/,
+  "Existing Split Bill groups must expose their member editor."
+);
+assert.match(workspaceSource, />\s*Edit people\s*</, "The existing group member editor must have a visible action.");
+assert.match(
+  pageActionsSource,
+  /group\?\.members\.map\(\(member\) => member\.name\)/,
+  "Editing a Split Bill group must preload its current people."
+);
+assert.match(
+  groupRouteSource,
+  /createCircle: z\.boolean\(\)\.optional\(\)\.default\(false\)/,
+  "Temporary Split Bill groups must not become permanent Circles by default."
 );
 assert.match(
   workspaceSource,

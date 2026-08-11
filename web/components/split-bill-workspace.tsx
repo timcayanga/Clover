@@ -1658,6 +1658,22 @@ export function SplitBillWorkspace({
                 {renderDetailTabs()}
                 {detailTab === "overview" ? (
                   <>
+                    <div className="split-bill-detail-modal__section-head split-bill-detail-modal__section-head--members">
+                      <div>
+                        <strong>People</strong>
+                        <span>{selectedGroup.members.map((member) => member.name).join(", ") || "No people added yet"}</span>
+                      </div>
+                      <button
+                        className="button button-secondary button-small"
+                        type="button"
+                        onClick={() => {
+                          window.dispatchEvent(new CustomEvent("clover:open-split-bill-group", { detail: { groupId: selectedGroup.id } }));
+                          setSelected(null);
+                        }}
+                      >
+                        Edit people
+                      </button>
+                    </div>
                     <div className="split-bill-balance-dashboard">
                       <article>
                         <span>You owe</span>

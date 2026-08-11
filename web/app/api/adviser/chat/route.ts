@@ -2251,6 +2251,9 @@ export async function POST(request: Request) {
       "Everyday questions should get a useful first answer even when data is partial. Label the limitation, use a conservative range instead of false precision, and ask at most one focused follow-up only when the missing input would materially change the answer.",
       "For 'how much should I spend' questions, distinguish a conservative target from the maximum supported by protected cash. Never present the full account balance as spendable.",
       "For saving questions, translate the answer into a per-payday, weekly, or monthly amount and name one concrete spending lever from the user's data when available.",
+      "For transfer questions, identify the largest relevant transactions with dates and source accounts. Distinguish confirmed transfers between the user's own Clover accounts from external payments categorized as Transfers, and give one specific review action.",
+      "For portfolio questions, lead with portfolio value, recorded gain or loss, concentration, and cash that may be investable. Do not repeat unrelated balances or spending unless they materially constrain the decision.",
+      "For savings questions, never infer income from transfers or balances. Use confirmed income transactions, state the period used, and say plainly when reliable income is missing.",
       "For bank accounts and credit cards, recommend selection criteria rather than inventing products, approval odds, fees, interest rates, rewards, or eligibility. Named offers require the user's country and current issuer information that Clover can verify.",
       "For ways to make more money, use income patterns only to size the gap. Do not infer the user's profession, skills, available time, or legal ability to perform a job.",
       "For food questions, use the daily spending plan and typical food spending when available. Offer flexible meal formats rather than medical, nutrition, allergy, or dietary claims, and invite the user to mention restrictions if relevant.",
@@ -2314,6 +2317,7 @@ export async function POST(request: Request) {
       /overall money picture|money overview|overview of my balances|balances.*spending.*(?:upcoming|pressure|focus)|balances.*upcoming.*focus/.test(
         latestQuestionLower
       );
+    const asksAboutTransfers = /transfer|transfers|money sent|money moved/.test(latestQuestionLower);
     const latestHasExplicitTheme = /goal|target|track|progress|save|invest|portfolio|dividend|gain|loss|snapshot|stock|transaction|spend|merchant|bill|recurr|due|loan|balance|cash flow|budget|owe|payment|pressure|account|afford|purchase|phone|car|travel|safe to spend|payday|credit card|bank|income|earn|food|meal|eat/.test(latestQuestionLower);
     const asksForSuggestedGoal =
       !goalValue
@@ -2431,6 +2435,22 @@ export async function POST(request: Request) {
     const everydayFallbackReply = (() => {
       const dailyPlan = getDailySpendingPlan();
       const monthlySavingsCapacity = getEstimatedMonthlySavingsCapacity();
+      if (asksAboutTransfers) {
+        const transferRows = normalizedAllTransactions
+          .filter((transaction) => transaction.type === "transfer" || transaction.category?.name?.toLowerCase() === "transfers")
+          .sort((left, right) => Math.abs(Number(right.amount ?? 0)) - Math.abs(Number(left.amount ?? 0)))
+          .slice(0, 3);
+        if (transferRows.length === 0) {
+          return "I cannot find a transfer in the current transaction history. If one is categorized incorrectly, confirm whether it moved between two of your own Clover accounts or went to someone else.";
+        }
+        const examples = transferRows.map((transaction) => {
+          const title = transaction.merchantClean?.trim() || transaction.description?.trim() || transaction.merchantRaw.trim() || "Transfer";
+          const date = transaction.date.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+          const ownership = transaction.type === "transfer" ? "linked transfer" : "external payment";
+          return `${date}: ${title}, ${formatCurrency(Math.abs(Number(transaction.amount ?? 0)), displayCurrency)} from ${transaction.account.name} (${ownership})`;
+        });
+        return `The largest transfer-related entries I can see are:\n\n${examples.join("\n")}\n\nReview the first item first. Keep it as a transfer only if the destination is another account you own in Clover; otherwise keep the Transfers category but mark the type as an expense.`;
+      }
       if (everydayIntent === "daily_spending") {
         if (dailyPlan.coverage === "missing") {
           return "I can turn this into a daily amount, but Clover does not have a usable balance or spending history yet.\n\nHow much cash needs to last until your next income? I’ll protect known bills first and divide only the remainder.";

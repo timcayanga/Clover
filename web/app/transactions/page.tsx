@@ -2262,6 +2262,8 @@ function TransactionsPageContent() {
   const transactionsLoadRequestRef = useRef(0);
   const transactionsHydrationVersionRef = useRef(new Map<string, number>());
   const mobileLoadMoreRef = useRef<HTMLDivElement | null>(null);
+  const mobileLoadMoreInFlightRef = useRef(false);
+  const transactionDetailScrollYRef = useRef<number | null>(null);
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
   const importRefreshInFlightRef = useRef(false);
   const handledImportedSummaryKeysRef = useRef(new Set<string>());
@@ -4284,11 +4286,12 @@ function TransactionsPageContent() {
       return;
     }
 
-    if (isMobileLoadingMore || !selectedWorkspaceId || transactions.length >= transactionsSummary.totalCount) {
+    if (mobileLoadMoreInFlightRef.current || isMobileLoadingMore || !selectedWorkspaceId || transactions.length >= transactionsSummary.totalCount) {
       return;
     }
 
     const nextPage = Math.max(1, Math.ceil(transactions.length / MOBILE_TRANSACTIONS_BATCH_SIZE)) + 1;
+    mobileLoadMoreInFlightRef.current = true;
     setIsMobileLoadingMore(true);
     try {
       await loadTransactionsPage(selectedWorkspaceId, {
@@ -4299,6 +4302,7 @@ function TransactionsPageContent() {
         summaryMode: "light",
       });
     } finally {
+      mobileLoadMoreInFlightRef.current = false;
       setIsMobileLoadingMore(false);
     }
   }, [
@@ -4654,6 +4658,9 @@ function TransactionsPageContent() {
   };
 
   const openTransactionDetail = (transaction: Transaction, { syncRoute = true }: { syncRoute?: boolean } = {}) => {
+    if (isCompactViewport && transactionDetailScrollYRef.current === null) {
+      transactionDetailScrollYRef.current = window.scrollY;
+    }
     setActiveWarningTransactionId(null);
     setSelectedTransaction(transaction);
     setTransactionDeleteConfirmOpen(false);
@@ -4808,6 +4815,12 @@ function TransactionsPageContent() {
       const nextUrl = new URL(window.location.href);
       nextUrl.searchParams.delete("detail");
       router.replace(`${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`, { scroll: false });
+    }
+
+    if (isCompactViewport && transactionDetailScrollYRef.current !== null) {
+      const scrollY = transactionDetailScrollYRef.current;
+      transactionDetailScrollYRef.current = null;
+      window.requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: "auto" }));
     }
   };
 

@@ -815,6 +815,16 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
           </button>
         ))}
       </div>
+      <label className="investments-market__range-select">
+        <span>Time period</span>
+        <select value={range} onChange={(event) => setRange(event.target.value as MarketRange)}>
+          {MARKET_RANGES.map((option) => (
+            <option key={option.key} value={option.key}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
 
       {!usePhLiveChart && benchmarkError ? <p className="panel-muted">Benchmark unavailable: {benchmarkError}</p> : null}
 

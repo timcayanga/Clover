@@ -1,4 +1,6 @@
 import { ClerkAuthScreen } from "@/components/clerk-auth-screen";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 import {
   getCircleInvitationPath,
   isCircleInvitationToken,
@@ -18,6 +20,10 @@ export default async function SignInPage({ searchParams }: { searchParams?: Prom
   const completeRedirectUrl = isCircleInvitationToken(circleInvite)
     ? getCircleInvitationPath(circleInvite, { accept: true })
     : "/continue";
+  const session = await auth();
+  if (session.userId) {
+    redirect(completeRedirectUrl);
+  }
   return (
     <main className="auth-page auth-page--signin">
       <ClerkAuthScreen enabled={Boolean(publishableKey)} mode="sign-in" completeRedirectUrl={completeRedirectUrl} />

@@ -17,7 +17,7 @@ type MoreSection = {
   items: MoreLink[];
 };
 
-type PageIconName = "dashboard" | "adviser" | "accounts" | "transactions" | "recurring" | "circles" | "investments" | "goals" | "budgeting" | "notifications" | "settings" | "help";
+type PageIconName = "dashboard" | "adviser" | "accounts" | "transactions" | "recurring" | "circles" | "split-bill" | "investments" | "goals" | "budgeting" | "notifications" | "settings" | "help";
 
 const MORE_ICON_NAMES: Record<PageIconName, NavigationIconName> = {
   dashboard: "home",
@@ -26,6 +26,7 @@ const MORE_ICON_NAMES: Record<PageIconName, NavigationIconName> = {
   transactions: "transactions",
   recurring: "recurring",
   circles: "circles",
+  "split-bill": "splitBills",
   investments: "investments",
   goals: "goals",
   budgeting: "budgeting",
@@ -76,6 +77,11 @@ const moreSections: MoreSection[] = [
         href: "/circles",
         title: "Circles",
         icon: "circles",
+      },
+      {
+        href: "/split-bill",
+        title: "Split Bills",
+        icon: "split-bill",
       },
     ],
   },

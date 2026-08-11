@@ -8,7 +8,9 @@ import {
   type AnalyticsEventName,
 } from "@/lib/analytics";
 
-const POSTHOG_QUERY_TIMEOUT_MS = 5_000;
+// PostHog's blocking query can exceed five seconds during cold periods. Admin
+// analytics should wait a little longer instead of reporting a false outage.
+const POSTHOG_QUERY_TIMEOUT_MS = 12_000;
 const POSTHOG_QUERY_EVENT_LIMIT = 250;
 
 type PostHogQueryResponse = {

@@ -89,6 +89,7 @@ function SplitBillPeoplePicker({
 export function SplitBillPageActions({ currentUserName, people, groups, onBillSaved, onGroupSaved, onPersonSaved }: SplitBillPageActionsProps) {
   const [openAddMode, setOpenAddMode] = useState<"manual" | "import" | null>(null);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [isPersonModalOpen, setIsPersonModalOpen] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [groupPeople, setGroupPeople] = useState<string[]>([]);
@@ -102,6 +103,7 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
 
   const closeGroupModal = () => {
     setIsGroupModalOpen(false);
+    setEditingGroupId(null);
     setGroupName("");
     setGroupPeople([]);
     setGroupError(null);
@@ -126,7 +128,12 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
       setOpenAddMode(detail?.mode === "import" ? "import" : "manual");
     };
 
-    const handleOpenGroup = () => {
+    const handleOpenGroup = (event: Event) => {
+      const detail = event instanceof CustomEvent ? (event.detail as { groupId?: string } | undefined) : undefined;
+      const group = detail?.groupId ? groups.find((entry) => entry.id === detail.groupId) : null;
+      setEditingGroupId(group?.id ?? null);
+      setGroupName(group?.name ?? "");
+      setGroupPeople(group?.members.map((member) => member.name) ?? []);
       setIsGroupModalOpen(true);
     };
 
@@ -142,7 +149,7 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
       window.removeEventListener("clover:open-split-bill-group", handleOpenGroup);
       window.removeEventListener("clover:open-split-bill-people", handleOpenPeople);
     };
-  }, []);
+  }, [groups]);
 
   const saveGroup = async () => {
     setIsSavingGroup(true);
@@ -151,8 +158,8 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
     try {
       const members = groupPeople.map((name, index) => ({ name, sortOrder: index }));
 
-      const response = await fetch("/api/split-bill-groups", {
-        method: "POST",
+      const response = await fetch(editingGroupId ? `/api/split-bill-groups/${editingGroupId}` : "/api/split-bill-groups", {
+        method: editingGroupId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: groupName.trim(),
@@ -188,7 +195,7 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
           <section className="split-bill-modal__card glass split-bill-group-modal" role="dialog" aria-modal="true" aria-label="Add group" onClick={(event) => event.stopPropagation()}>
             <div className="split-bill-manual-modal__head">
               <div>
-                <p className="eyebrow">Add group</p>
+                <p className="eyebrow">{editingGroupId ? "Edit group" : "Add group"}</p>
               </div>
               <button className="split-bill-icon-button" type="button" onClick={closeGroupModal} aria-label="Close group window">
                 ×
@@ -209,7 +216,7 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
 
             <div className="split-bill-manual-modal__actions">
               <button className="button button-primary" type="button" onClick={() => void saveGroup()} disabled={isSavingGroup || !groupName.trim()}>
-                {isSavingGroup ? "Saving..." : "Create group"}
+                {isSavingGroup ? "Saving..." : editingGroupId ? "Save group" : "Create group"}
               </button>
             </div>
           </section>
