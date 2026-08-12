@@ -165,8 +165,13 @@ async function main() {
   );
   assert.match(
     globalStyles,
-    /@media \(min-width: 1101px\) \{[\s\S]{0,180}\.accounts-card-grid\.accounts-card-grid--desktop \{[\s\S]{0,180}repeat\(auto-fit, minmax\(min\(100%, 240px\), 272px\)\)/,
-    "Desktop account grids must add columns instead of stretching cards beyond their intended width."
+    /@media \(min-width: 1101px\) \{[\s\S]{0,180}\.accounts-card-grid\.accounts-card-grid--desktop \{[\s\S]{0,180}grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);[\s\S]{0,120}gap: 8px;/,
+    "Desktop account cards must follow the same responsive four-column width as the summary cards."
+  );
+  assert.match(
+    globalStyles,
+    /\.accounts-card-grid--desktop \.accounts-card-drag-shell \{[\s\S]{0,80}max-width: none;/,
+    "Desktop account card wrappers must fill their responsive grid columns."
   );
   assert.match(
     globalStyles,
