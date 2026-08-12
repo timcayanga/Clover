@@ -118,6 +118,13 @@ import { isProtectedTransactionReviewStatus } from "@/lib/data-engine-safety";
 import { applyImportValidationToRows, validateParsedImportRows } from "@/lib/data-engine-validation";
 import { assessStatementExtractionQuality, compareStatementExtractionCandidates } from "@/lib/import-quality";
 import {
+  arbitrateImportCandidates,
+  assessImportCandidate,
+  assessStatementLayoutDrift,
+  type ImportCandidateArbitration,
+  type ImportCandidateSource,
+} from "@/lib/import-candidate-arbitration";
+import {
   isGenericMobileScreenshotFileName,
   resolveStatementIdentityFromMetadata,
   resolveStatementIdentityFromParsedRows,
@@ -7733,7 +7740,7 @@ export const processImportFileText = async (
     crypto.randomUUID();
   const traceUpdatePromise = updateImportProgress({ traceId }).catch(() => null);
   const emitImportProcessingEvent = (
-    event: "import_processing_started" | "import_processing_completed" | "import_processing_stalled",
+    event: "import_processing_started" | "import_processing_completed" | "import_processing_stalled" | "import_parser_arbitrated",
     properties: Record<string, unknown> = {}
   ) => {
     if (!options.actorUserId) {
@@ -9423,6 +9430,77 @@ export const processImportFileText = async (
     });
     parsedRows = [];
   }
+  const candidateValidationMetadata =
+    metadataForParse.accountType === "credit_card"
+      ? { ...metadataForParse, startDate: null, endDate: null }
+      : metadataForParse;
+  const templateParserConfig =
+    institutionTemplate?.parserConfig &&
+    typeof institutionTemplate.parserConfig === "object" &&
+    !Array.isArray(institutionTemplate.parserConfig)
+      ? (institutionTemplate.parserConfig as Record<string, unknown>)
+      : null;
+  const templateFamilySignature =
+    typeof templateParserConfig?.statementFamilySignature === "string"
+      ? templateParserConfig.statementFamilySignature
+      : null;
+  const layoutDriftAssessment = assessStatementLayoutDrift({
+    currentSignature: statementFamilySignature,
+    templateSignature: templateFamilySignature,
+    templateScore: existingTemplate ? 100 : scoredInstitutionTemplates[0]?.score ?? null,
+  });
+  const trainedCandidateRows = parsedRows;
+  const trainedCandidateAssessment =
+    importMode === "statement"
+      ? assessImportCandidate({
+          source: "trained",
+          rows: trainedCandidateRows,
+          metadata: candidateValidationMetadata,
+          pageCount: pageImages?.length ?? null,
+        })
+      : null;
+  const shouldRunGenericChallenger =
+    importMode === "statement" &&
+    (importFile.fileType === "application/pdf" || imageImport) &&
+    Boolean(textForParse.trim()) &&
+    !hasStructuredWorkbookRows &&
+    (
+      parsedRows.length === 0 ||
+      trainedCandidateAssessment?.critical === true ||
+      (trainedCandidateAssessment?.score ?? 0) < 88 ||
+      !hasTemplateMemory ||
+      layoutDriftAssessment.drifted
+    );
+  const genericCandidateRows = shouldRunGenericChallenger
+    ? parseImportTextGenericOnly(textForParse, importFile.fileName, importFile.fileType, {
+        institution: metadataForParse.institution,
+        accountName: metadataForParse.accountName,
+        accountNumber: metadataForParse.accountNumber,
+      })
+    : [];
+  let localCandidateSource: ImportCandidateSource = "trained";
+  let localCandidateArbitration: ImportCandidateArbitration | null = null;
+  if (importMode === "statement" && genericCandidateRows.length > 0) {
+    localCandidateArbitration = arbitrateImportCandidates({
+      candidates: [
+        { source: "trained", rows: trainedCandidateRows, metadata: candidateValidationMetadata },
+        { source: "generic", rows: genericCandidateRows, metadata: candidateValidationMetadata },
+      ],
+      pageCount: pageImages?.length ?? null,
+      preferredSource: "trained",
+    });
+    if (localCandidateArbitration.winner === "generic" && localCandidateArbitration.materiallyBetter) {
+      parsedRows = genericCandidateRows;
+      localCandidateSource = "generic";
+      console.info("[import-arbitration] generic parser replaced unsafe local candidate", {
+        importFileId,
+        trainedScore: trainedCandidateAssessment?.score ?? null,
+        genericScore: localCandidateArbitration.assessment.score,
+        agreement: localCandidateArbitration.agreement,
+        reasons: localCandidateArbitration.reasons,
+      });
+    }
+  }
   const parsedRowsHaveMultipleAccountNumbers = hasMultipleParsedAccountNumbers(parsedRows as Array<Record<string, unknown>>);
   const hasKnownUnionBankSampleRows = parsedRows.some((row) => {
     const rawPayload = row.rawPayload;
@@ -9514,7 +9592,11 @@ export const processImportFileText = async (
     !hasStrongChinaBankDeterministicParse;
   const genericParseLooksSuspicious =
     (importFile.fileType === "application/pdf" || imageImport) &&
-    ((looksCharacterSpacedOcr && !strongStructuredPdfParse) || genericIdentityLooksWeak || (metadataForParse.confidence ?? 0) < 75);
+    ((looksCharacterSpacedOcr && !strongStructuredPdfParse) ||
+      genericIdentityLooksWeak ||
+      (metadataForParse.confidence ?? 0) < 75 ||
+      trainedCandidateAssessment?.critical === true ||
+      layoutDriftAssessment.drifted);
   const screenshotLikeFile = isLikelyScreenshotImageFile(fileName);
   const suspiciousDateCoverage =
     (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 6 && parsedRowsWithDates === 0
@@ -9562,6 +9644,8 @@ export const processImportFileText = async (
       Boolean(metadataForParse.accountNumber || parsedRowsHaveMultipleAccountNumbers) &&
       !prefersVisionFallbackForInstitution &&
       !genericParseLooksSuspicious &&
+      trainedCandidateAssessment?.critical !== true &&
+      !layoutDriftAssessment.drifted &&
       !screenshotRowsLookStructurallyWeak &&
       !suspiciousDateCoverage);
   const parserRoutingDecision = buildParserRoutingDecision({
@@ -9885,6 +9969,14 @@ export const processImportFileText = async (
     backupParserRaceResolved,
     backupParserRaceTimedOut,
     backupParserDecisionDurationMs,
+    layoutDriftDetected: layoutDriftAssessment.drifted,
+    layoutSignatureOverlap: layoutDriftAssessment.overlap,
+    localCandidateSource,
+    localCandidateScores: localCandidateArbitration?.assessments.map((assessment) => ({
+      source: assessment.source,
+      score: assessment.score,
+      critical: assessment.critical,
+    })) ?? null,
   } as const;
   let receiptDetails =
     (effectiveImportMode === "receipt" || effectiveImportMode === "notes") &&
@@ -10336,6 +10428,27 @@ export const processImportFileText = async (
           pageCount: pageImages?.length ?? null,
         })
       : null;
+  const finalCandidateArbitration =
+    importMode === "statement"
+      ? arbitrateImportCandidates({
+          candidates: [
+            { source: "trained", rows: trainedCandidateRows, metadata: candidateValidationMetadata },
+            ...(genericCandidateRows.length > 0
+              ? [{ source: "generic" as const, rows: genericCandidateRows, metadata: candidateValidationMetadata }]
+              : []),
+            ...(openAiParsed?.audit.schemaValidated && openAiParsed.rows.length > 0
+              ? [{ source: "backup" as const, rows: openAiParsed.rows, metadata: openAiMetadata ?? candidateValidationMetadata }]
+              : []),
+          ],
+          pageCount: pageImages?.length ?? null,
+          preferredSource:
+            openAiParsed?.audit.schemaValidated &&
+            openAiParsed.rows.length > 0 &&
+            (openAiPrimaryMode || Boolean(pageImages?.length) || isDocumentImport)
+              ? "backup"
+              : localCandidateSource,
+        })
+      : null;
   const openAiQualityAdvantage =
     localStatementQuality && openAiStatementQuality
       ? openAiStatementQuality.score - localStatementQuality.score
@@ -10347,7 +10460,9 @@ export const processImportFileText = async (
     importMode !== "statement" ||
     parsedRows.length === 0 ||
     (openAiParsed?.rows.length ?? 0) >= Math.max(1, Math.floor(parsedRows.length * 0.9)) ||
-    openAiQualityAdvantage >= 8 || statementCandidateComparison?.winner === "backup";
+    openAiQualityAdvantage >= 8 ||
+    statementCandidateComparison?.winner === "backup" ||
+    (finalCandidateArbitration?.winner === "backup" && finalCandidateArbitration.materiallyBetter);
   const openAiStatementQualityIsAcceptable =
     importMode !== "statement" ||
     !openAiParsed?.audit.quality ||
@@ -10369,6 +10484,7 @@ export const processImportFileText = async (
     Boolean(openAiParsed?.audit.schemaValidated) &&
     openAiStatementQualityIsAcceptable &&
     shouldAdoptOpenAiStatementParse &&
+    (importMode !== "statement" || finalCandidateArbitration?.winner === "backup") &&
     (!parsedRowsHaveMultipleAccountNumbers || hasMultipleParsedAccountNumbers((openAiParsed?.rows ?? []) as Array<Record<string, unknown>>)) &&
     (openAiPrimaryMode ||
       Boolean(pageImages?.length) ||
@@ -10410,7 +10526,11 @@ export const processImportFileText = async (
           ? parsedRows
           : useOpenAiParse && openAiParsed
           ? openAiParsed.rows
-          : parsedRows
+          : finalCandidateArbitration?.winner === "generic" && genericCandidateRows.length > 0
+            ? genericCandidateRows
+            : finalCandidateArbitration?.winner === "trained"
+              ? trainedCandidateRows
+              : parsedRows
     ) as Array<Record<string, unknown>>,
     effectiveMetadataSource
   ) as typeof parsedRows;
@@ -10435,13 +10555,43 @@ export const processImportFileText = async (
           };
         })
       : effectiveRowsBaseRaw;
-  const effectiveRows = isLikelyBpiScreenshotStatement
+  const effectiveRowsSelected = isLikelyBpiScreenshotStatement
     ? normalizeBpiScreenshotOpenAiRows(effectiveRowsBase as Array<Record<string, unknown>>, {
         fileName,
         institution: effectiveMetadataSource.institution,
         accountName: effectiveMetadataSource.accountName,
       })
     : effectiveRowsBase;
+  const effectiveRows =
+    importMode === "statement" && finalCandidateArbitration
+      ? effectiveRowsSelected.map((row) => ({
+          ...row,
+          ...(finalCandidateArbitration.requiresReview ? { reviewStatus: "pending_review" as const } : {}),
+          rawPayload: {
+            ...(row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+              ? (row.rawPayload as Record<string, unknown>)
+              : {}),
+            parserArbitration: {
+              winner: finalCandidateArbitration.winner,
+              winnerScore: finalCandidateArbitration.assessment.score,
+              materiallyBetter: finalCandidateArbitration.materiallyBetter,
+              requiresReview: finalCandidateArbitration.requiresReview,
+              agreement: finalCandidateArbitration.agreement,
+              reasons: finalCandidateArbitration.reasons,
+              candidates: finalCandidateArbitration.assessments.map((assessment) => ({
+                source: assessment.source,
+                score: assessment.score,
+                critical: assessment.critical,
+                validationScore: assessment.validation.score,
+                balanceReconciled: assessment.balanceReconciliation.reconciled,
+                currencyConsistency: assessment.currencyConsistency,
+              })),
+              layoutDriftDetected: layoutDriftAssessment.drifted,
+              layoutSignatureOverlap: layoutDriftAssessment.overlap,
+            },
+          },
+        }))
+      : effectiveRowsSelected;
   const effectiveRowsHaveMultipleAccountNumbers = hasMultipleParsedAccountNumbers(effectiveRows as Array<Record<string, unknown>>);
   const parsedEndingBalance = getTrailingBalanceFromParsedRows(effectiveRows);
   const ucpbKnownSampleMetadata = (() => {
@@ -10669,6 +10819,23 @@ export const processImportFileText = async (
         })()
       : resolvedMetadata;
   const importValidation = validateParsedImportRows({ rows: rawRows, metadata: validationMetadata });
+  if (importMode === "statement" && finalCandidateArbitration) {
+    emitImportProcessingEvent("import_parser_arbitrated", {
+      parser_winner: finalCandidateArbitration.winner,
+      parser_winner_score: finalCandidateArbitration.assessment.score,
+      parser_candidate_count: finalCandidateArbitration.assessments.length,
+      parser_materially_better: finalCandidateArbitration.materiallyBetter,
+      parser_requires_review: finalCandidateArbitration.requiresReview,
+      parser_candidate_agreement: finalCandidateArbitration.agreement,
+      parser_layout_drift: layoutDriftAssessment.drifted,
+      parser_layout_overlap: layoutDriftAssessment.overlap,
+      parser_candidate_scores: finalCandidateArbitration.assessments.map((assessment) => ({
+        source: assessment.source,
+        score: assessment.score,
+        critical: assessment.critical,
+      })),
+    });
+  }
   const hasStructurallyUnsafeStatementRows =
     importMode === "statement" &&
     importValidation.findings.some((finding) =>
