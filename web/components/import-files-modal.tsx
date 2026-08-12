@@ -216,7 +216,10 @@ type QaRunSummary = {
 const MIN_FULLSCREEN_IMPORT_MODAL_MS = 1200;
 const COMPLETED_IMPORT_AUTO_CLOSE_MS = 10_000;
 const IN_FLIGHT_IMPORT_PROGRESS_INITIAL_DELAY_MS = 400;
-const IN_FLIGHT_IMPORT_PROGRESS_POLL_INTERVAL_MS = 500;
+// The status stream already updates every 1.5 seconds. Polling twice per
+// second multiplied Supabase reads without making the progress UI perceptibly
+// faster, especially for multi-file imports.
+const IN_FLIGHT_IMPORT_PROGRESS_POLL_INTERVAL_MS = 1_500;
 
 type ImportStatusPayload = {
   importFile?: {

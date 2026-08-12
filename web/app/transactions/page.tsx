@@ -2654,8 +2654,6 @@ function TransactionsPageContent() {
       setIsWorkspaceDataReady(hasImmediateFallbackRows);
     }
 
-    const compactViewport = isCompactViewport;
-
     const requestPage = options?.pageOverride ?? transactionsPage;
     // The Rows selector must remain stable across numbered pages. Mobile load-more
     // requests pass their smaller batch explicitly through pageSizeOverride.
@@ -3021,28 +3019,10 @@ function TransactionsPageContent() {
         setIsMobileLoadingMore(false);
       }
 
-      if (!options?.background && (options?.summaryMode ?? "light") === "light" && Number(payload?.totalCount ?? 0) > 0) {
-        void loadTransactionsPage(workspaceId, {
-          background: true,
-          includeAll: options?.includeAll,
-          pageOverride: options?.pageOverride ?? transactionsPage,
-          pageSizeOverride: options?.pageSizeOverride ?? transactionsPageSize,
-          summaryMode: "full",
-          preserveKnownTotal: options?.preserveKnownTotal,
-        });
-
-        if (!options?.append && !compactViewport && !hasServerSideFilters && requestPage === 1 && Number(requestPageSize) <= 25) {
-          window.setTimeout(() => {
-            void loadTransactionsPage(workspaceId, {
-              background: true,
-              prefetchOnly: true,
-              pageOverride: 1,
-              pageSizeOverride: 200,
-              summaryMode: "light",
-            });
-          }, 0);
-        }
-      }
+      // The lightweight response already contains the visible page and
+      // database-side financial totals. Do not immediately repeat the request
+      // with a full-history scan or a hidden 200-row prefetch; both multiplied
+      // Supabase egress whenever Transactions opened or refreshed after import.
     } catch {
       if (requestId !== transactionsLoadRequestRef.current) {
         return;

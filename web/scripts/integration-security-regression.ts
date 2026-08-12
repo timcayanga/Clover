@@ -26,6 +26,9 @@ try {
   const webhook = await readFile(join(root, "app/api/billing/paypal/webhook/route.ts"), "utf8");
   const marketHistory = await readFile(join(root, "app/api/market-history/route.ts"), "utf8");
   const analytics = await readFile(join(root, "components/posthog-analytics.tsx"), "utf8");
+  const importModal = await readFile(join(root, "components/import-files-modal.tsx"), "utf8");
+  const transactionsPage = await readFile(join(root, "app/transactions/page.tsx"), "utf8");
+  const transactionsRoute = await readFile(join(root, "app/api/transactions/route.ts"), "utf8");
   const nextConfig = await readFile(join(root, "next.config.mjs"), "utf8");
   const middleware = await readFile(join(root, "middleware.ts"), "utf8");
 
@@ -53,6 +56,10 @@ try {
   assert.doesNotMatch(middleware, /\/\(\(\?!_next/);
   assert.match(middleware, /\/\(api\|trpc\)\(\.\*\)/);
   assert.match(middleware, /"\/admin\(\.\*\)"/);
+  assert.match(importModal, /IN_FLIGHT_IMPORT_PROGRESS_POLL_INTERVAL_MS = 1_500/);
+  assert.match(transactionsRoute, /SELECT DISTINCT "currency"/);
+  assert.doesNotMatch(transactionsRoute, /distinct: \["currency"\]/);
+  assert.doesNotMatch(transactionsPage, /pageSizeOverride: 200/);
 
   console.log("Integration security regression passed.");
 } finally {

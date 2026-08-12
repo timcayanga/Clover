@@ -658,19 +658,16 @@ const transactionSchema = z.object({
 });
 
 const getWorkspaceCurrencyCodes = async (workspaceId: string) => {
-  const rows = await prisma.transaction.findMany({
-    where: {
-      workspaceId,
-      deletedAt: null,
-    },
-    select: {
-      currency: true,
-    },
-    distinct: ["currency"],
-    orderBy: {
-      currency: "asc",
-    },
-  });
+  // Prisma's distinct option deduplicates in the client for this query shape,
+  // transferring every transaction currency from Supabase on every page load.
+  // Keep the distinct operation inside Postgres so only a few codes leave it.
+  const rows = await prisma.$queryRaw<Array<{ currency: string | null }>>`
+    SELECT DISTINCT "currency"
+    FROM "Transaction"
+    WHERE "workspaceId" = ${workspaceId}
+      AND "deletedAt" IS NULL
+    ORDER BY "currency" ASC
+  `;
 
   const codes = Array.from(
     new Set(
