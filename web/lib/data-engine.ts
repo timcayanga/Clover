@@ -32,6 +32,9 @@ export const DATA_ENGINE_VERSION = "v2";
 export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v12";
 export const resolveImportFileExtractionCacheVersion = (fileName?: string | null) => {
   const normalizedFileName = String(fileName ?? "");
+  if (/^BE\d{8}\.pdf$/i.test(normalizedFileName.trim())) {
+    return "v12-bpi-card-ledger-r2";
+  }
   if (/union[\s_-]*bank/i.test(normalizedFileName)) {
     return "v12-unionbank-ledger-r2";
   }

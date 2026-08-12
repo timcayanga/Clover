@@ -3984,7 +3984,6 @@ const bpiCreditCardStatementMetadata = (text: string): DetectedStatementMetadata
   const paymentDueDate =
     parseBpiDate(normalized.match(/PAYMENT\s+DUE\s+DATE\s+([A-Z]+\s+\d{1,2},\s*\d{4})/i)?.[1] ?? null) ??
     parseBpiDate(compact.match(/PAYMENTDUEDATE([A-Z]+\d{1,2},\d{4})/i)?.[1] ?? null);
-
   const previousBalance =
     parseMoney(compact.match(/PREVIOUSBALANCE([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(lines.find((line) => /BPISIGNATURE/i.test(line))?.match(/\b([0-9][0-9,]*\.\d{2})\b/)?.[1] ?? null);
@@ -7051,10 +7050,10 @@ const recoverBpiCreditCardMergedAmount = (amountText: string | null) => {
     };
   }
 
-  // Compact OCR has no separator in some statements. An 11–12 digit prefix
+  // Compact OCR has no separator in some statements. A 10–12 digit prefix
   // followed by a 3–6 digit currency amount is a reference-number shape, not
   // a plausible single card charge.
-  const compactMerged = normalized.match(/^(?<sign>-?)(?<approvalCode>\d{11,12})(?<amountInteger>\d{3,6}\.\d{2})$/);
+  const compactMerged = normalized.match(/^(?<sign>-?)(?<approvalCode>\d{10,12})(?<amountInteger>\d{3,6}\.\d{2})$/);
   if (compactMerged?.groups?.approvalCode && compactMerged.groups.amountInteger) {
     return {
       amountText: `${compactMerged.groups.sign ?? ""}${compactMerged.groups.amountInteger}`,
@@ -7120,14 +7119,15 @@ const parseBpiCreditCardTransactionLine = (
   let type: TransactionType = "expense";
   const descriptionCompact = descriptionLower.replace(/[^a-z0-9]+/g, "");
   if (descriptionCompact.includes("paymentthankyou") || descriptionCompact.includes("cardpayment")) {
-    type = "transfer";
+    type = "expense";
   } else if (/refund|reversal|credit memo|cashback|cash back/.test(descriptionLower)) {
     type = "income";
   }
 
-  const merchantRaw = humanizeMerchantText(descriptionSource);
-  const merchantClean = summarizeMerchantText(descriptionSource, state.institution);
-  const categoryName = guessBpiCreditCategoryName(descriptionSource, type);
+  const isStatementPaymentCredit = isBpiStatementPaymentCredit(descriptionSource);
+  const merchantRaw = isStatementPaymentCredit ? "Statement Payment Credit" : humanizeMerchantText(descriptionSource);
+  const merchantClean = isStatementPaymentCredit ? "Statement Payment Credit" : summarizeMerchantText(descriptionSource, state.institution);
+  const categoryName = isStatementPaymentCredit ? "Financial" : guessBpiCreditCategoryName(descriptionSource, type);
 
   return {
     date: postDateResult.date.toISOString().slice(0, 10),
@@ -7198,10 +7198,21 @@ const parseBpiCreditCardImportText = (
     .filter(Boolean);
 
   const startYear = metadata.startDate ? new Date(metadata.startDate).getUTCFullYear() : metadata.endDate ? new Date(metadata.endDate).getUTCFullYear() : new Date().getUTCFullYear();
+  const ledgerBoundaryIndex = lines.findIndex((line) => {
+    const compact = collapseBpiCreditCardOcrLine(line).replace(/\s+/g, "").toUpperCase();
+    return (
+      compact.startsWith("RATESANDFEESTABLE") ||
+      compact.startsWith("RATES&FEESTABLE") ||
+      compact.startsWith("IMPORTANTREMINDERS") ||
+      compact.startsWith("IMPORTANTNOTICE") ||
+      compact.startsWith("TERMSANDCONDITIONS")
+    );
+  });
+  const ledgerLines = ledgerBoundaryIndex >= 0 ? lines.slice(0, ledgerBoundaryIndex) : lines;
   const segments: string[][] = [];
   let current: string[] = [];
 
-  for (const line of lines) {
+  for (const line of ledgerLines) {
     if (isBpiCreditCardBoilerplateLine(line)) {
       if (current.length > 0) {
         segments.push(current);
@@ -7240,7 +7251,7 @@ const parseBpiCreditCardImportText = (
     )
     .filter(Boolean) as ParsedImportRow[];
 
-  const financeChargeLine = lines.find((line) => {
+  const financeChargeLine = ledgerLines.find((line) => {
     const compactLine = collapseBpiCreditCardOcrLine(line).replace(/\s+/g, "").toUpperCase();
     return compactLine.startsWith("FINANCECHARGE");
   });
@@ -7324,7 +7335,12 @@ const isBpiCreditCardBoilerplateLine = (line: string) => {
     compact.startsWith("BPISIGNATURECARD") ||
     compact.includes("BALANCESUMMARY") ||
     compact.includes("TRANSACTIONLASTPAYMENTDESCRIPTIONPURCHASEAMOUNTREMAININGDATEBALANCE") ||
-    compact.includes("SIPBALANCESUMMARY")
+    compact.includes("SIPBALANCESUMMARY") ||
+    compact.startsWith("RATESANDFEESTABLE") ||
+    compact.startsWith("RATES&FEESTABLE") ||
+    compact.startsWith("IMPORTANTREMINDERS") ||
+    compact.startsWith("IMPORTANTNOTICE") ||
+    compact.startsWith("TERMSANDCONDITIONS")
   );
 };
 
@@ -7349,102 +7365,21 @@ const parseBpiCreditCardSegment = (
     return null;
   }
 
+  // Keep token boundaries intact. Compacting an entire segment can join a
+  // ten-digit approval code with the following amount and create a huge value.
   const segmentText = segmentLines.map((line) => collapseBpiCreditCardOcrLine(line)).join(" ").trim();
-  const compact = segmentText.replace(/\s+/g, "");
-  const dateTokenPattern = `(?:${monthNamePattern}\\d{1,2}|\\d{1,2}${monthNamePattern})(?:,?\\d{4})?`;
-  const match = compact.match(new RegExp(`^(${dateTokenPattern})(${dateTokenPattern})(.+)$`, "i"));
-  if (!match) {
+  const parsed = parseBpiCreditCardTransactionLine(segmentText, state);
+  if (!parsed) {
     return null;
   }
-
-  const saleDate = parseBpiDate(match[1], state.year);
-  const postDate = parseBpiDate(match[2], state.year);
-  if (!saleDate || !postDate) {
-    return null;
-  }
-
-  const body = match[3];
-  const moneyMatches = body.match(/-?[0-9][0-9,]*\.\d{2}/g) ?? [];
-  if (moneyMatches.length === 0) {
-    return null;
-  }
-  const amountText = moneyMatches.at(-1) ?? null;
-  const mergedAmount = recoverBpiCreditCardMergedAmount(amountText);
-  const recoveredAmountText = mergedAmount?.amountText ?? null;
-  const amount = parseMoney(recoveredAmountText ?? amountText);
-  if (amount === null) {
-    return null;
-  }
-
-  const currencyLabelMatch = body.match(/(?:USDollar|Baht|THB|USD|EUR|GBP|SGD|JPY|HKD|Philippine\s*Peso)/i);
-  const foreignAmountText = moneyMatches.length > 1 ? moneyMatches[moneyMatches.length - 2] : null;
-  const formatCurrencyLabel = (label: string) =>
-    label
-      .replace(/USDollar/i, "U.S. Dollar")
-      .replace(/Philippine\s*Peso/i, "Philippine Peso")
-      .replace(/\s+/g, " ");
-  const fxNote = currencyLabelMatch && foreignAmountText
-    ? `${formatCurrencyLabel(currencyLabelMatch[0])} ${Math.abs(parseMoney(foreignAmountText) ?? 0).toFixed(2)}`
-    : null;
-
-  const amountIndex = amountText ? body.lastIndexOf(amountText) : -1;
-  let descriptionSource = amountIndex >= 0 ? body.slice(0, amountIndex) : body;
-  if (currencyLabelMatch && foreignAmountText) {
-    const fxPattern = new RegExp(
-      `${currencyLabelMatch[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*${foreignAmountText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
-      "i"
-    );
-    descriptionSource = descriptionSource.replace(fxPattern, " ");
-  }
-  descriptionSource = descriptionSource
-    .replace(/-?[0-9][0-9,]*\.\d{2}/g, " ")
-    .replace(/\s*\/\s*/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!descriptionSource) {
-    return null;
-  }
-
-  const descriptionLower = descriptionSource.toLowerCase();
-  let type: TransactionType = "expense";
-  const isStatementPaymentCredit = isBpiStatementPaymentCredit(descriptionSource);
-  if (isStatementPaymentCredit) {
-    type = "expense";
-  } else if (/refund|reversal|credit memo|cashback|cash back/.test(descriptionLower)) {
-    type = "income";
-  }
-
-  const merchantRaw = isStatementPaymentCredit ? "Statement Payment Credit" : humanizeMerchantText(descriptionSource);
-  const merchantClean = isStatementPaymentCredit ? "Statement Payment Credit" : summarizeMerchantText(descriptionSource, state.institution);
-  const categoryName = isStatementPaymentCredit ? "Financial" : guessBpiCreditCategoryName(descriptionSource, type);
 
   return {
-    date: postDate.toISOString().slice(0, 10),
-    amount: Math.abs(amount).toFixed(2),
-    merchantRaw,
-    merchantClean,
-    description: descriptionSource,
-    categoryName,
-    accountName: state.accountName,
-    institution: state.institution ?? undefined,
-    type,
+    ...parsed,
+    accountNumber: state.accountNumber ?? undefined,
     rawPayload: {
-      bank: "BPI",
-      accountName: state.accountName,
-      accountNumber: state.accountNumber ?? state.accountName.replace(/\D/g, "").slice(-4) ?? null,
-      statementDate: state.statementDate,
-      paymentDueDate: state.paymentDueDate,
-      saleDate: saleDate.toISOString().slice(0, 10),
-      postDate: postDate.toISOString().slice(0, 10),
-      amountText,
-      mergedAmountText: mergedAmount ? amountText : null,
-      recoveredAmountText,
-      approvalCode: mergedAmount?.approvalCode ?? null,
-      foreignAmountText,
-      fxNote,
+      ...(parsed.rawPayload ?? {}),
+      accountNumber: state.accountNumber,
       line: segmentText,
-      notes: fxNote || (isStatementPaymentCredit ? "Statement payment credit" : null),
     },
   } satisfies ParsedImportRow;
 };

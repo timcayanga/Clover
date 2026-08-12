@@ -188,10 +188,73 @@ export function GlobalImportActivity() {
     }
 
     const remainingMs = Math.max(0, getStaleActiveImportTimeoutMs(activity) - (Date.now() - activity.updatedAt));
-    const timeout = window.setTimeout(() => {
+    const timeout = window.setTimeout(async () => {
       const current = readImportActivity();
       if (!current || current.status !== "active" || current.updatedAt !== activity.updatedAt) {
         return;
+      }
+
+      // Local activity can become stale after navigation or a remount. Ask the
+      // server for the durable result before turning that stale state into a
+      // timeout, otherwise a parser rejection is incorrectly shown as I-107.
+      if (current.importFileId) {
+        try {
+          const response = await fetch(`/api/imports/${current.importFileId}/status`, { cache: "no-store" });
+          if (response.ok) {
+            const payload = (await response.json()) as {
+              importFile?: {
+                status?: string | null;
+                processingPhase?: string | null;
+                processingMessage?: string | null;
+              } | null;
+              confirmedTransactionsCount?: number | null;
+              visibleImportComplete?: boolean | null;
+            };
+            const importFile = payload.importFile;
+            const processingPhase = importFile?.processingPhase ?? null;
+            if (importFile?.status === "failed" || processingPhase === "repair_needed") {
+              const message =
+                importFile?.processingMessage?.trim() ||
+                "Clover safely stopped this import because the file needs a parser update. Nothing was added.";
+              const repairSnapshot: ImportActivitySnapshot = {
+                ...current,
+                status: "error",
+                progress: Math.min(Math.max(current.progress, 0), 90),
+                detail: "Review needed",
+                errorCode: "I-104",
+                errorTitle: "File needs another read",
+                errorMessage: message,
+                errorNextSteps: [
+                  "Retry the original file after Clover has been updated.",
+                  "Your existing data is unchanged, and no partial rows were added.",
+                ],
+                updatedAt: Date.now(),
+              };
+              setImportActivity(repairSnapshot);
+              setActivity(repairSnapshot);
+              return;
+            }
+            if (
+              importFile?.status === "done" ||
+              payload.visibleImportComplete ||
+              Number(payload.confirmedTransactionsCount ?? 0) > 0
+            ) {
+              const doneSnapshot: ImportActivitySnapshot = {
+                ...current,
+                status: "done",
+                progress: 100,
+                detail: "Import complete",
+                updatedAt: Date.now(),
+              };
+              setImportActivity(doneSnapshot);
+              setActivity(doneSnapshot);
+              return;
+            }
+          }
+        } catch {
+          // A status refresh is best-effort. Fall through to the timeout state
+          // only when Clover cannot establish a durable terminal result.
+        }
       }
 
       const timedOutSnapshot: ImportActivitySnapshot = {

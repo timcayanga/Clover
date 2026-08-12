@@ -32,6 +32,9 @@ Use these rules for BPI savings and related statement imports.
 - Ignore footer / compliance boilerplate such as `Regulated by Bangko Sentral ng Pilipinas`, `consumeraffairs@bsp.gov.ph`, and similar BSP contact lines. These are not transaction rows even when OCR merges them into ledger text.
 - BPI Signature credit-card rows are two-date ledger lines: sale date, post date, merchant, amount.
 - For BPI Signature credit-card rows, normalize the transaction date to the post date.
+- Treat `RATES AND FEES TABLE`, important reminders, notices, and terms pages as hard credit-card ledger boundaries. Percentages and sample fee amounts on those pages are never transactions.
+- Preserve whitespace between a BPI card approval/reference number and its amount. A reference such as `4029357733` must not be concatenated with the following monetary token.
+- Keep statement date and payment due date as separate card metadata. Derive the transaction period from the earliest and latest parsed ledger rows instead of validating purchases against the statement-to-due-date window.
 - Use the PHP equivalent as the primary amount when a foreign-currency line shows both the source currency and the PHP conversion.
 - Keep the original source-currency amount in notes or raw payload metadata instead of making it a second transaction row.
 - Treat `Payment - Thank You` as a card payment / transfer-style credit, not an expense.

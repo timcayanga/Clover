@@ -10652,7 +10652,23 @@ export const processImportFileText = async (
     return { imported: 0, duplicate: true, metadata: resolvedMetadata };
   }
   const rawRows = effectiveRows as EnrichedParsedImportRow[];
-  const importValidation = validateParsedImportRows({ rows: rawRows, metadata: resolvedMetadata });
+  const validationMetadata =
+    resolvedMetadata.accountType === "credit_card" && rawRows.length > 0
+      ? (() => {
+          const transactionDates = rawRows
+            .map((row) => parseDateValue(row.date ?? row.transactionDate ?? row.postedDate ?? null))
+            .filter((date): date is Date => Boolean(date));
+          if (transactionDates.length === 0) {
+            return resolvedMetadata;
+          }
+          return {
+            ...resolvedMetadata,
+            startDate: new Date(Math.min(...transactionDates.map((date) => date.getTime()))).toISOString(),
+            endDate: new Date(Math.max(...transactionDates.map((date) => date.getTime()))).toISOString(),
+          };
+        })()
+      : resolvedMetadata;
+  const importValidation = validateParsedImportRows({ rows: rawRows, metadata: validationMetadata });
   const hasStructurallyUnsafeStatementRows =
     importMode === "statement" &&
     importValidation.findings.some((finding) =>
