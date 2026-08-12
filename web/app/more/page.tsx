@@ -56,7 +56,7 @@ const moreSections: MoreSection[] = [
     ],
   },
   {
-    title: "Manage",
+    title: "Money",
     items: [
       {
         href: "/accounts",
@@ -73,6 +73,11 @@ const moreSections: MoreSection[] = [
         title: "Recurring",
         icon: "recurring",
       },
+    ],
+  },
+  {
+    title: "Together",
+    items: [
       {
         href: "/circles",
         title: "Circles",
