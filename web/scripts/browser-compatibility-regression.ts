@@ -27,6 +27,7 @@ async function main() {
     commitmentsSource,
     investmentsSource,
     investmentMarketSource,
+    accountsSource,
   ] = await Promise.all([
     readSource("components/clover-shell.tsx"),
     readSource("app/dashboard/page.tsx"),
@@ -48,6 +49,7 @@ async function main() {
     readSource("components/commitments-panel.tsx"),
     readSource("app/investments/page.tsx"),
     readSource("components/investment-market-chart.tsx"),
+    readSource("app/accounts/page.tsx"),
   ]);
   const protectedPageSources = await Promise.all(
     [
@@ -307,8 +309,23 @@ async function main() {
   );
   assert.match(
     globalStyles,
-    /@media \(max-width: 1100px\) \{[\s\S]{0,500}\.accounts-card-grid\.accounts-card-grid--desktop \{[\s\S]{0,80}display: none !important;[\s\S]{0,240}\.accounts-mobile-featured,[\s\S]{0,120}display: grid !important;/,
+    /@media \(max-width: 1100px\) \{[\s\S]{0,500}\.accounts-card-grid\.accounts-card-grid--desktop \{[\s\S]{0,80}display: none !important;[\s\S]{0,240}\.accounts-mobile-list,[\s\S]{0,120}display: grid !important;/,
     "Accounts must switch its desktop cards and mobile list together at the shared mobile breakpoint."
+  );
+  assert.match(
+    accountsSource,
+    /aria-expanded=\{isExpanded\}[\s\S]{0,220}setExpandedMobileAccount\(rowKey\)/,
+    "Mobile account rows must expose an accessible vertical accordion interaction."
+  );
+  assert.match(
+    accountsSource,
+    /MOBILE_EXPANDED_ACCOUNT_STORAGE_KEY[\s\S]{0,1800}sessionStorage\.getItem\(storageKey\)/,
+    "Mobile Accounts must remember the expanded row for each workspace and currency."
+  );
+  assert.doesNotMatch(
+    accountsSource,
+    /Favorite accounts carousel/,
+    "Mobile Accounts must not restore the duplicate horizontal favorites carousel."
   );
   assert.doesNotMatch(
     globalStyles,

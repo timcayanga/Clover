@@ -132,6 +132,7 @@ const ACCOUNT_LOADING_TIMEOUT_MS = 45_000;
 const ACCOUNT_LOADING_PULSE_MS = 5_000;
 const PAGE_LOADING_TIMEOUT_MS = 12_000;
 const WORKSPACE_RETRY_AFTER_TRANSIENT_FAILURE_MS = 2_500;
+const MOBILE_EXPANDED_ACCOUNT_STORAGE_KEY = "clover.accounts.mobile-expanded.v1";
 
 const isImageImportFile = (file: File) =>
   /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name.toLowerCase()) || file.type.startsWith("image/");
@@ -1439,6 +1440,7 @@ function AccountsPageContent() {
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
   const [importBackgroundOnly, setImportBackgroundOnly] = useState(false);
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null);
+  const [mobileExpandedAccountKey, setMobileExpandedAccountKey] = useState<string | null>(null);
   const [manualType, setManualType] = useState<Account["type"]>("bank");
   const [manualName, setManualName] = useState("");
   const [manualInstitution, setManualInstitution] = useState("");
@@ -2988,22 +2990,6 @@ function AccountsPageContent() {
     });
   }, [currencyFilteredAccounts, selectedCurrency]);
 
-  const featuredAccounts = useMemo(() => {
-    const swipableAccountTypes = new Set<SupportedAccountType>(["bank", "credit_card", "wallet", "cash"]);
-    const amountSortedAccounts = visibleAccounts
-      .filter((account) => swipableAccountTypes.has(getEffectiveAccountType(account)))
-      .sort((left, right) => {
-        const leftAmount = Math.abs(normalizeAccountBalanceSign(getEffectiveAccountType(left), parseAmount(getDisplayedAccountBalance(left))));
-        const rightAmount = Math.abs(normalizeAccountBalanceSign(getEffectiveAccountType(right), parseAmount(getDisplayedAccountBalance(right))));
-        if (rightAmount !== leftAmount) {
-          return rightAmount - leftAmount;
-        }
-
-        return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
-      });
-    return amountSortedAccounts.sort((left, right) => Number(Boolean(right.favorite)) - Number(Boolean(left.favorite)));
-  }, [visibleAccounts, statementCheckpoints]);
-
   const totals = useMemo(() => {
     return visibleAccounts.reduce(
       (accumulator, account) => {
@@ -3156,6 +3142,11 @@ function AccountsPageContent() {
 
     return groups
       .map((group) => {
+        const rows = [...group.rows].sort((left, right) => {
+          const leftFavorite = !isInvestmentInstitutionCard(left) && Boolean(left.favorite);
+          const rightFavorite = !isInvestmentInstitutionCard(right) && Boolean(right.favorite);
+          return Number(rightFavorite) - Number(leftFavorite);
+        });
         const groupCurrencies = getCurrencyCodes(group.rows);
         const usesFxEstimate =
           isAllCurrenciesView && groupCurrencies.some((currency) => currency !== defaultCurrencyCode);
@@ -3177,10 +3168,57 @@ function AccountsPageContent() {
           return sum + convertedValue;
         }, 0);
 
-        return { ...group, total, usesFxEstimate, estimateUnavailable };
+        return { ...group, rows, total, usesFxEstimate, estimateUnavailable };
       })
       .filter((group) => group.rows.length > 0 || draggedAccountId !== null);
   }, [accountExchangeRates.rates, defaultCurrencyCode, draggedAccountId, isAllCurrenciesView, visibleAccounts]);
+
+  const mobileAccountRows = useMemo(
+    () => accountGroups.flatMap((group) => group.rows),
+    [accountGroups]
+  );
+
+  useEffect(() => {
+    if (mobileAccountRows.length === 0) {
+      setMobileExpandedAccountKey(null);
+      return;
+    }
+
+    const availableKeys = new Set(mobileAccountRows.map((row) => row.id));
+    const storageKey = `${MOBILE_EXPANDED_ACCOUNT_STORAGE_KEY}:${selectedWorkspaceId}:${selectedCurrency || "all"}`;
+    let rememberedKey: string | null = null;
+
+    try {
+      rememberedKey = window.sessionStorage.getItem(storageKey);
+    } catch {
+      rememberedKey = null;
+    }
+
+    const favoriteKey = mobileAccountRows.find(
+      (row) => !isInvestmentInstitutionCard(row) && Boolean(row.favorite)
+    )?.id;
+    const nextKey = rememberedKey && availableKeys.has(rememberedKey)
+      ? rememberedKey
+      : favoriteKey ?? mobileAccountRows[0]?.id ?? null;
+
+    setMobileExpandedAccountKey((current) => current && availableKeys.has(current) ? current : nextKey);
+  }, [mobileAccountRows, selectedCurrency, selectedWorkspaceId]);
+
+  const setExpandedMobileAccount = (rowKey: string) => {
+    const nextKey = mobileExpandedAccountKey === rowKey ? null : rowKey;
+    setMobileExpandedAccountKey(nextKey);
+
+    const storageKey = `${MOBILE_EXPANDED_ACCOUNT_STORAGE_KEY}:${selectedWorkspaceId}:${selectedCurrency || "all"}`;
+    try {
+      if (nextKey) {
+        window.sessionStorage.setItem(storageKey, nextKey);
+      } else {
+        window.sessionStorage.removeItem(storageKey);
+      }
+    } catch {
+      // The accordion still works when private browsing blocks storage.
+    }
+  };
 
   const selectedAccount = useMemo(
     () => reconciledAccounts.find((account) => account.id === drawerAccountId) ?? null,
@@ -3664,6 +3702,9 @@ function AccountsPageContent() {
   };
 
   const renderMobileListRow = (row: Account | InvestmentInstitutionCard, key: string) => {
+    const rowKey = row.id;
+    const isExpanded = mobileExpandedAccountKey === rowKey;
+
     if (isInvestmentInstitutionCard(row)) {
       const accountBrand = getAccountBrand({
         institution: row.institution,
@@ -3672,26 +3713,33 @@ function AccountsPageContent() {
       });
 
       return (
-        <button
-          key={key}
-          type="button"
-          className="accounts-mobile-list-row"
-          onClick={() => openInvestmentInstitution(row)}
-        >
-          <span className="accounts-mobile-list-row__brand">
-            <AccountBrandMark accountBrand={accountBrand} label={row.institution} />
-            <span>
-              <strong>{row.institution}</strong>
-              <small>{getInvestmentInstitutionPreview(row.accounts)}</small>
+        <div key={key} className={`accounts-mobile-list-item${isExpanded ? " is-expanded" : ""}`}>
+          <button
+            type="button"
+            className="accounts-mobile-list-row"
+            aria-expanded={isExpanded}
+            onClick={() => setExpandedMobileAccount(rowKey)}
+          >
+            <span className="accounts-mobile-list-row__brand">
+              <AccountBrandMark accountBrand={accountBrand} label={row.institution} />
+              <span>
+                <strong>{row.institution}</strong>
+                <small>{getInvestmentInstitutionPreview(row.accounts)}</small>
+              </span>
             </span>
-          </span>
-          <span className="accounts-mobile-list-row__end">
-            <strong>{formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}</strong>
-            <span className="accounts-mobile-list-row__chevron" aria-hidden="true">
-              ›
+            <span className="accounts-mobile-list-row__end">
+              <strong>{formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}</strong>
+              <span className="accounts-mobile-list-row__chevron" aria-hidden="true">
+                ⌄
+              </span>
             </span>
-          </span>
-        </button>
+          </button>
+          {isExpanded ? (
+            <div className="accounts-mobile-list-item__card">
+              {renderAccountCard(row, `${key}-card`)}
+            </div>
+          ) : null}
+        </div>
       );
     }
 
@@ -3708,32 +3756,39 @@ function AccountsPageContent() {
     const loadingContext = getUploadAccountLoadingContext(row);
 
     return (
-      <button
-        key={key}
-        type="button"
-        className="accounts-mobile-list-row"
-        onClick={() => openAccountDrawer(row)}
-      >
-        <span className="accounts-mobile-list-row__brand">
-          <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
-          <span>
-            <strong>{accountDisplayName}</strong>
-            {showAccountEyebrow ? <small>{accountEyebrow}</small> : null}
+      <div key={key} className={`accounts-mobile-list-item${isExpanded ? " is-expanded" : ""}`}>
+        <button
+          type="button"
+          className="accounts-mobile-list-row"
+          aria-expanded={isExpanded}
+          onClick={() => setExpandedMobileAccount(rowKey)}
+        >
+          <span className="accounts-mobile-list-row__brand">
+            <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
+            <span>
+              <strong>{accountDisplayName}</strong>
+              {showAccountEyebrow ? <small>{accountEyebrow}</small> : null}
+            </span>
           </span>
-        </span>
-        <span className="accounts-mobile-list-row__end">
-          <strong>
-            {loadingContext.isLoading
-              ? "Loading..."
-              : loadingContext.isTimedOut
-                ? "Pending review"
-                : formatAccountAmount(Math.abs(parseAmount(loadingContext.displayedBalance ?? row.balance)), row.currency)}
-          </strong>
-          <span className="accounts-mobile-list-row__chevron" aria-hidden="true">
-            ›
+          <span className="accounts-mobile-list-row__end">
+            <strong>
+              {loadingContext.isLoading
+                ? "Loading..."
+                : loadingContext.isTimedOut
+                  ? "Pending review"
+                  : formatAccountAmount(Math.abs(parseAmount(loadingContext.displayedBalance ?? row.balance)), row.currency)}
+            </strong>
+            <span className="accounts-mobile-list-row__chevron" aria-hidden="true">
+              ⌄
+            </span>
           </span>
-        </span>
-      </button>
+        </button>
+        {isExpanded ? (
+          <div className="accounts-mobile-list-item__card">
+            {renderAccountCard(row, `${key}-card`)}
+          </div>
+        ) : null}
+      </div>
     );
   };
 
@@ -4303,13 +4358,6 @@ function AccountsPageContent() {
         <section className="accounts-main-grid">
           <div className="accounts-list-column">
             <div className="accounts-sections">
-              {featuredAccounts.length > 0 ? (
-                <section className="accounts-mobile-featured" aria-label="Favorite accounts">
-                  <div className="accounts-mobile-featured__rail" aria-label="Favorite accounts carousel">
-                    {featuredAccounts.map((row) => renderAccountCard(row, `featured-${row.id}`))}
-                  </div>
-                </section>
-              ) : null}
               {accountsLoadFailed ? (
                 <div className="empty-state accounts-empty-state accounts-empty-state--error">
                   <strong>Couldn&apos;t load accounts.</strong>
