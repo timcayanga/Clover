@@ -96,7 +96,7 @@ export const probeFilePasswordProtection = async (file: File) => {
 
     try {
       const pdf = await withTimeout(loadingTask.promise, CLIENT_PDF_PASSWORD_PROBE_TIMEOUT_MS);
-      await pdf.destroy();
+      await loadingTask.destroy();
       return false;
     } catch (error) {
       await loadingTask.destroy().catch(() => undefined);
@@ -124,7 +124,7 @@ export const validatePdfPassword = async (file: File, password: string): Promise
 
     try {
       const pdf = await withTimeout(loadingTask.promise, CLIENT_PDF_PASSWORD_PROBE_TIMEOUT_MS);
-      await pdf.destroy();
+      await loadingTask.destroy();
       return true;
     } catch (error) {
       await loadingTask.destroy().catch(() => undefined);
@@ -162,7 +162,7 @@ export const extractTextFromFile = async (
       } as any);
       try {
         const probePdf = await withTimeout(probeTask.promise, CLIENT_PDF_TEXT_EXTRACTION_TIMEOUT_MS);
-        await probePdf.destroy();
+        await probeTask.destroy();
       } catch (error) {
         await probeTask.destroy().catch(() => undefined);
         if (isPdfPasswordError(error)) {

@@ -209,10 +209,8 @@ export const getPostHogConfig = () => {
 export const shouldTrackAnalytics = () => Boolean(getPostHogConfig().key);
 
 export const getPostHogClientHost = () => {
-  if (process.env.NODE_ENV === "production") {
-    return "/ph";
-  }
-
+  // Sending browser analytics directly avoids turning every PostHog event,
+  // feature-flag check, and session ping into a Vercel Edge request.
   return getPostHogConfig().host;
 };
 

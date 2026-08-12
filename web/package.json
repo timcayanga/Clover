@@ -120,7 +120,7 @@
     "jszip": "^3.10.1",
     "next": "^15.5.22",
     "nodemailer": "^9.0.3",
-    "pdfjs-dist": "^5.7.284",
+    "pdfjs-dist": "6.2.108",
     "pdfjs-serverless": "^1.2.2",
     "pg": "^8.20.0",
     "prisma": "^7.9.1",
@@ -134,7 +134,8 @@
   },
   "overrides": {
     "postcss": "8.5.23",
-    "sharp": "0.35.3"
+    "sharp": "0.35.3",
+    "nanoid": "3.3.17"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

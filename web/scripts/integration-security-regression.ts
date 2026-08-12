@@ -46,8 +46,13 @@ try {
   assert.match(nextConfig, /X-Frame-Options/);
   assert.match(nextConfig, /source: "\/favicon\.ico"/);
   assert.match(nextConfig, /destination: "\/favicon\.svg"/);
+  assert.doesNotMatch(nextConfig, /source: "\/ph\/:path\*"/);
+  assert.doesNotMatch(nextConfig, /us\.i\.posthog\.com\/:path\*/);
+  assert.doesNotMatch(analytics, /return "\/ph"/);
   assert.match(middleware, /clerkMiddleware/);
+  assert.doesNotMatch(middleware, /\/\(\(\?!_next/);
   assert.match(middleware, /\/\(api\|trpc\)\(\.\*\)/);
+  assert.match(middleware, /"\/admin\(\.\*\)"/);
 
   console.log("Integration security regression passed.");
 } finally {

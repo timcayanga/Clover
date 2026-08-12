@@ -2059,7 +2059,7 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
     try {
       return pages.join("\n");
     } finally {
-      await pdf.destroy().catch(() => null);
+      await loadingTask.destroy().catch(() => null);
     }
   };
 

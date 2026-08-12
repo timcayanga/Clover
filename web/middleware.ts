@@ -21,6 +21,7 @@ const isProtectedAppRoute = createRouteMatcher([
   "/imports(.*)",
   "/onboarding(.*)",
   "/continue(.*)",
+  "/admin(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
@@ -33,7 +34,27 @@ export default clerkMiddleware(async (auth, request) => {
 
 export const config = {
   matcher: [
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    "/home(.*)",
+    "/dashboard(.*)",
+    "/accounts(.*)",
+    "/transactions(.*)",
+    "/recurring(.*)",
+    "/adviser(.*)",
+    "/split-bill(.*)",
+    "/budgeting(.*)",
+    "/goals(.*)",
+    "/investments(.*)",
+    "/settings(.*)",
+    "/reports(.*)",
+    "/review(.*)",
+    "/profile(.*)",
+    "/circles(.*)",
+    "/more(.*)",
+    "/notifications(.*)",
+    "/imports(.*)",
+    "/onboarding(.*)",
+    "/continue(.*)",
+    "/admin(.*)",
     "/(api|trpc)(.*)",
     "/__clerk/(.*)",
   ],
