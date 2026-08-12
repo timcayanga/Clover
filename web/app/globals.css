@@ -26552,30 +26552,6 @@ html[data-theme="dark"] .institution-assets-table tbody tr:focus-visible td {
   margin-bottom: -2px;
 }
 
-.accounts-detail__favorite-toggle {
-  display: none;
-  color: #8a97ab;
-  transition:
-    color 160ms ease,
-    border-color 160ms ease,
-    background-color 160ms ease,
-    transform 160ms ease;
-}
-
-.accounts-detail__favorite-toggle:hover,
-.accounts-detail__favorite-toggle:focus-visible {
-  color: #d39b00;
-  border-color: rgba(211, 155, 0, 0.32);
-  background: rgba(255, 248, 225, 0.96);
-  transform: translateY(-1px);
-}
-
-.accounts-detail__favorite-toggle.is-active {
-  color: #d39b00;
-  border-color: rgba(211, 155, 0, 0.32);
-  background: rgba(255, 248, 225, 0.96);
-}
-
 .accounts-detail__balance-adjust-button {
   align-self: center;
   width: fit-content;
@@ -26711,12 +26687,6 @@ html[data-theme="dark"] .institution-assets-table tbody tr:focus-visible td {
 .accounts-detail__balance-adjustment-amount-row input {
   width: 100%;
   min-width: 0;
-}
-
-@media (min-width: 1101px) {
-  .accounts-detail__favorite-toggle {
-    display: none !important;
-  }
 }
 
   .accounts-detail__hero-card {
@@ -33959,7 +33929,45 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .accounts-overview-grid {
-    display: none !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .accounts-overview-card {
+    min-height: 64px;
+    padding: 8px 20px 8px 9px;
+    border-radius: 13px;
+    place-items: start;
+    align-content: center;
+    gap: 3px;
+    text-align: left;
+  }
+
+  .accounts-overview-card .eyebrow {
+    max-width: 100%;
+    font-size: 0.55rem;
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .accounts-overview-card__amount {
+    max-width: 100%;
+    font-size: 0.96rem;
+    line-height: 1.05;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .accounts-overview-card__info {
+    top: 6px;
+    right: 6px;
+    width: 15px;
+    height: 15px;
+    font-size: 0.58rem;
   }
 
   .accounts-add-grid {
@@ -34092,6 +34100,15 @@ button.accounts-detail__transaction-head-cell {
     text-align: left;
     cursor: pointer;
     width: 100%;
+    max-height: 72px;
+    overflow: hidden;
+    opacity: 1;
+    transform: translateY(0);
+    transition:
+      max-height 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      padding 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      opacity 140ms ease,
+      transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
   .accounts-mobile-list-item:first-child .accounts-mobile-list-row {
@@ -34152,6 +34169,16 @@ button.accounts-detail__transaction-head-cell {
     transform: rotate(180deg);
   }
 
+  .accounts-mobile-list-item.is-expanded .accounts-mobile-list-row,
+  .accounts-mobile-list-item:first-child.is-expanded .accounts-mobile-list-row {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-6px);
+  }
+
   .accounts-account-card {
     gap: 10px;
     padding: 12px;
@@ -34167,11 +34194,48 @@ button.accounts-detail__transaction-head-cell {
     min-height: 0;
   }
 
+  .accounts-mobile-list-item__reveal {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transform: translateY(-6px) scale(0.99);
+    transition:
+      grid-template-rows 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      opacity 180ms ease,
+      transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .accounts-mobile-list-item.is-expanded .accounts-mobile-list-item__reveal {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  .accounts-mobile-list-item__reveal-inner {
+    min-height: 0;
+    overflow: hidden;
+  }
+
   .accounts-mobile-list-item__card {
     display: grid;
     justify-items: center;
-    padding: 2px 8px 16px;
-    animation: accounts-mobile-card-reveal 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    padding: 4px 8px 8px;
+  }
+
+  .accounts-mobile-list-item__collapse {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    width: 100%;
+    padding: 3px 8px 12px;
+    border: 0;
+    background: transparent;
+    color: var(--accent-strong);
+    font: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
   }
 
   .accounts-mobile-list-item__card .accounts-card-drag-shell,
@@ -34184,23 +34248,10 @@ button.accounts-detail__transaction-head-cell {
     width: 100%;
   }
 
-  @keyframes accounts-mobile-card-reveal {
-    from {
-      opacity: 0;
-      transform: translateY(-8px) scale(0.985);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
-
   @media (prefers-reduced-motion: reduce) {
-    .accounts-mobile-list-item__card {
-      animation: none;
-    }
-
-    .accounts-mobile-list-row__chevron {
+    .accounts-mobile-list-row,
+    .accounts-mobile-list-row__chevron,
+    .accounts-mobile-list-item__reveal {
       transition: none;
     }
   }
@@ -34317,32 +34368,6 @@ button.accounts-detail__transaction-head-cell {
 
   .accounts-detail__hero-tools {
     display: none;
-  }
-
-  .accounts-detail__favorite-toggle {
-    display: inline-flex;
-    position: absolute;
-    top: 12px;
-    right: calc(50% - 124px);
-    z-index: 3;
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
-    min-height: 28px;
-    margin: 0;
-    border: 0;
-    background: transparent;
-    box-shadow: none;
-    color: rgba(255, 255, 255, 0.9);
-  }
-
-  .accounts-detail__favorite-toggle:hover,
-  .accounts-detail__favorite-toggle:focus-visible,
-  .accounts-detail__favorite-toggle.is-active {
-    border: 0;
-    background: transparent;
-    box-shadow: none;
-    color: #f3b600;
   }
 
   .accounts-detail__balance-adjust-button {
@@ -52432,6 +52457,31 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
 
   .investments-mobile-header {
     display: block !important;
+  }
+
+  .content--accounts .accounts-overview-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 6px;
+  }
+
+  .content--accounts .accounts-overview-card {
+    min-height: 64px;
+    padding: 8px 20px 8px 9px;
+    border-radius: 13px;
+    place-items: start;
+    align-content: center;
+    gap: 3px;
+    text-align: left;
+  }
+
+  .content--accounts .accounts-overview-card .eyebrow {
+    font-size: 0.55rem;
+    letter-spacing: 0.1em;
+  }
+
+  .content--accounts .accounts-overview-card__amount {
+    font-size: clamp(0.8rem, 4vw, 0.96rem);
   }
 }
 

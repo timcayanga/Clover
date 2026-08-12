@@ -1441,6 +1441,8 @@ function AccountsPageContent() {
   const [importBackgroundOnly, setImportBackgroundOnly] = useState(false);
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null);
   const [mobileExpandedAccountKey, setMobileExpandedAccountKey] = useState<string | null>(null);
+  const [mobileClosingAccountKey, setMobileClosingAccountKey] = useState<string | null>(null);
+  const mobileDrawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [manualType, setManualType] = useState<Account["type"]>("bank");
   const [manualName, setManualName] = useState("");
   const [manualInstitution, setManualInstitution] = useState("");
@@ -3143,9 +3145,25 @@ function AccountsPageContent() {
     return groups
       .map((group) => {
         const rows = [...group.rows].sort((left, right) => {
-          const leftFavorite = !isInvestmentInstitutionCard(left) && Boolean(left.favorite);
-          const rightFavorite = !isInvestmentInstitutionCard(right) && Boolean(right.favorite);
-          return Number(rightFavorite) - Number(leftFavorite);
+          const comparableValue = (row: Account | InvestmentInstitutionCard) => {
+            const accountType = isInvestmentInstitutionCard(row)
+              ? "investment"
+              : getEffectiveAccountType(row);
+            const signedValue = normalizeAccountBalanceSign(accountType, parseAmount(row.balance));
+            if (!isAllCurrenciesView) {
+              return Math.abs(signedValue);
+            }
+
+            return Math.abs(convertAmount(signedValue, row.currency, accountExchangeRates.rates) ?? signedValue);
+          };
+          const valueDifference = comparableValue(right) - comparableValue(left);
+          if (valueDifference !== 0) {
+            return valueDifference;
+          }
+
+          const leftName = isInvestmentInstitutionCard(left) ? left.institution : getAccountDisplayName(left);
+          const rightName = isInvestmentInstitutionCard(right) ? right.institution : getAccountDisplayName(right);
+          return leftName.localeCompare(rightName) || left.id.localeCompare(right.id);
         });
         const groupCurrencies = getCurrencyCodes(group.rows);
         const usesFxEstimate =
@@ -3194,19 +3212,30 @@ function AccountsPageContent() {
       rememberedKey = null;
     }
 
-    const favoriteKey = mobileAccountRows.find(
-      (row) => !isInvestmentInstitutionCard(row) && Boolean(row.favorite)
-    )?.id;
     const nextKey = rememberedKey && availableKeys.has(rememberedKey)
       ? rememberedKey
-      : favoriteKey ?? mobileAccountRows[0]?.id ?? null;
+      : null;
 
     setMobileExpandedAccountKey((current) => current && availableKeys.has(current) ? current : nextKey);
   }, [mobileAccountRows, selectedCurrency, selectedWorkspaceId]);
 
+  useEffect(() => () => {
+    if (mobileDrawerCloseTimerRef.current) {
+      clearTimeout(mobileDrawerCloseTimerRef.current);
+    }
+  }, []);
+
   const setExpandedMobileAccount = (rowKey: string) => {
     const nextKey = mobileExpandedAccountKey === rowKey ? null : rowKey;
+    if (mobileDrawerCloseTimerRef.current) {
+      clearTimeout(mobileDrawerCloseTimerRef.current);
+    }
+    setMobileClosingAccountKey(mobileExpandedAccountKey);
     setMobileExpandedAccountKey(nextKey);
+    mobileDrawerCloseTimerRef.current = setTimeout(() => {
+      setMobileClosingAccountKey(null);
+      mobileDrawerCloseTimerRef.current = null;
+    }, 280);
 
     const storageKey = `${MOBILE_EXPANDED_ACCOUNT_STORAGE_KEY}:${selectedWorkspaceId}:${selectedCurrency || "all"}`;
     try {
@@ -3704,6 +3733,7 @@ function AccountsPageContent() {
   const renderMobileListRow = (row: Account | InvestmentInstitutionCard, key: string) => {
     const rowKey = row.id;
     const isExpanded = mobileExpandedAccountKey === rowKey;
+    const shouldRenderCard = isExpanded || mobileClosingAccountKey === rowKey;
 
     if (isInvestmentInstitutionCard(row)) {
       const accountBrand = getAccountBrand({
@@ -3718,6 +3748,8 @@ function AccountsPageContent() {
             type="button"
             className="accounts-mobile-list-row"
             aria-expanded={isExpanded}
+            aria-hidden={isExpanded}
+            tabIndex={isExpanded ? -1 : 0}
             onClick={() => setExpandedMobileAccount(rowKey)}
           >
             <span className="accounts-mobile-list-row__brand">
@@ -3734,11 +3766,21 @@ function AccountsPageContent() {
               </span>
             </span>
           </button>
-          {isExpanded ? (
-            <div className="accounts-mobile-list-item__card">
-              {renderAccountCard(row, `${key}-card`)}
+          <div className="accounts-mobile-list-item__reveal" aria-hidden={!isExpanded} inert={!isExpanded}>
+            <div className="accounts-mobile-list-item__reveal-inner">
+              <div className="accounts-mobile-list-item__card">
+                {shouldRenderCard ? renderAccountCard(row, `${key}-card`) : null}
+              </div>
+              <button
+                className="accounts-mobile-list-item__collapse"
+                type="button"
+                tabIndex={isExpanded ? 0 : -1}
+                onClick={() => setExpandedMobileAccount(rowKey)}
+              >
+                Hide card <span aria-hidden="true">⌃</span>
+              </button>
             </div>
-          ) : null}
+          </div>
         </div>
       );
     }
@@ -3761,6 +3803,8 @@ function AccountsPageContent() {
           type="button"
           className="accounts-mobile-list-row"
           aria-expanded={isExpanded}
+          aria-hidden={isExpanded}
+          tabIndex={isExpanded ? -1 : 0}
           onClick={() => setExpandedMobileAccount(rowKey)}
         >
           <span className="accounts-mobile-list-row__brand">
@@ -3783,11 +3827,21 @@ function AccountsPageContent() {
             </span>
           </span>
         </button>
-        {isExpanded ? (
-          <div className="accounts-mobile-list-item__card">
-            {renderAccountCard(row, `${key}-card`)}
+        <div className="accounts-mobile-list-item__reveal" aria-hidden={!isExpanded} inert={!isExpanded}>
+          <div className="accounts-mobile-list-item__reveal-inner">
+            <div className="accounts-mobile-list-item__card">
+              {shouldRenderCard ? renderAccountCard(row, `${key}-card`) : null}
+            </div>
+            <button
+              className="accounts-mobile-list-item__collapse"
+              type="button"
+              tabIndex={isExpanded ? 0 : -1}
+              onClick={() => setExpandedMobileAccount(rowKey)}
+            >
+              Hide card <span aria-hidden="true">⌃</span>
+            </button>
           </div>
-        ) : null}
+        </div>
       </div>
     );
   };

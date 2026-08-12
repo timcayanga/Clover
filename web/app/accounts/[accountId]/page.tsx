@@ -1040,7 +1040,6 @@ function AccountDetailPageContent() {
   const accountInvestmentDraftSyncKeyRef = useRef<string | null>(null);
   const creditSettingsBaselineRef = useRef("");
   const creditSettingsAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [favoriteSaving, setFavoriteSaving] = useState(false);
   const [workspaceAccounts, setWorkspaceAccounts] = useState<Account[]>([]);
   const [mergeDirection, setMergeDirection] = useState<"into_other" | "into_current" | null>(null);
   const [mergeAccountId, setMergeAccountId] = useState("");
@@ -3542,42 +3541,6 @@ function AccountDetailPageContent() {
     }
   };
 
-  const toggleFavoriteAccount = async () => {
-    if (!account || favoriteSaving) {
-      return;
-    }
-
-    const previousFavorite = Boolean(account.favorite);
-    const nextFavorite = !previousFavorite;
-    setFavoriteSaving(true);
-    setAccount((current) => (current ? { ...current, favorite: nextFavorite } : current));
-
-    try {
-      const response = await fetch(`/api/accounts/${account.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workspaceId: account.workspaceId,
-          favorite: nextFavorite,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Unable to update favorite account.");
-      }
-
-      const payload = await response.json();
-      if (payload.account) {
-        setAccount(payload.account as Account);
-      }
-    } catch (error) {
-      setAccount((current) => (current ? { ...current, favorite: previousFavorite } : current));
-      setMessage(error instanceof Error ? error.message : "Unable to update favorite account.");
-    } finally {
-      setFavoriteSaving(false);
-    }
-  };
-
   const changeAccountType = async (nextType: SupportedAccountType) => {
     if (!account || nextType === account.type || accountTypeSaveState === "saving") {
       return;
@@ -3999,16 +3962,6 @@ function AccountDetailPageContent() {
                   </label>
                 ) : null}
 
-                <button
-                  className={`icon-button accounts-detail__favorite-toggle${account.favorite ? " is-active" : ""}`}
-                  type="button"
-                  onClick={() => void toggleFavoriteAccount()}
-                  aria-pressed={Boolean(account.favorite)}
-                  aria-label={account.favorite ? "Remove account from favorites" : "Mark account as favorite"}
-                  disabled={favoriteSaving}
-                >
-                  <ActionIcon name={account.favorite ? "star-filled" : "star"} />
-                </button>
               </div>
 
               {isCreditAccount ? (

@@ -324,6 +324,21 @@ async function main() {
   );
   assert.doesNotMatch(
     accountsSource,
+    /favoriteKey|leftFavorite|rightFavorite/,
+    "Accounts must use value-based ordering rather than a separate favorites hierarchy."
+  );
+  assert.match(
+    accountsSource,
+    /comparableValue[\s\S]{0,700}valueDifference/,
+    "Desktop and mobile account sections must place their highest-value cards first."
+  );
+  assert.match(
+    globalStyles,
+    /\.accounts-mobile-list-item__reveal \{[\s\S]{0,500}grid-template-rows: 0fr;[\s\S]{0,800}\.accounts-mobile-list-item\.is-expanded \.accounts-mobile-list-item__reveal \{[\s\S]{0,120}grid-template-rows: 1fr;/,
+    "Mobile account drawers must animate between collapsed and expanded states."
+  );
+  assert.doesNotMatch(
+    accountsSource,
     /Favorite accounts carousel/,
     "Mobile Accounts must not restore the duplicate horizontal favorites carousel."
   );
