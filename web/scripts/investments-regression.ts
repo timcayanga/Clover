@@ -178,6 +178,13 @@ assert.equal(canonicalPdaxHoldings.length, 1, "PDAX Wallet and duplicate Ripple 
 assert.equal(canonicalPdaxHoldings[0]?.assetName, "XRP");
 assert.equal(canonicalPdaxHoldings[0]?.currentValue, 4_800, "The explicit canonical XRP position should win stale aliases.");
 
+const latestCanonicalPdaxHoldings = canonicalizePdaxInvestmentHoldings([
+  { assetName: "XRP", assetSymbol: "XRP", assetType: "crypto", quantity: 125.492, currentValue: 8_264.9 },
+  { assetName: "XRP", assetSymbol: "XRP", assetType: "crypto", quantity: 125.492, currentValue: 7_729.05 },
+]);
+assert.equal(latestCanonicalPdaxHoldings.length, 1, "Equivalent XRP positions across snapshots must collapse.");
+assert.equal(latestCanonicalPdaxHoldings[0]?.currentValue, 7_729.05, "The later equally strong XRP position should win.");
+
 assert.equal(
   isActivityOnlyGcryptoAccount({
     source: "upload",
@@ -204,6 +211,7 @@ assert.equal(
 );
 
 const investmentsPageSource = readFileSync(resolve(process.cwd(), "app/investments/page.tsx"), "utf8");
+const institutionPageSource = readFileSync(resolve(process.cwd(), "app/accounts/institutions/[institutionSlug]/page.tsx"), "utf8");
 const investmentsStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
 const marketChartSource = readFileSync(resolve(process.cwd(), "components/investment-market-chart.tsx"), "utf8");
 const portfolioGrowthSource = readFileSync(resolve(process.cwd(), "components/investment-portfolio-growth-chart.tsx"), "utf8");
@@ -231,6 +239,10 @@ assert.match(investmentsStyles, /\.content--investments\s*\{[\s\S]*?height:\s*10
 assert.match(investmentsStyles, /\.content--investments\s*>\s*\.topbar\s*\{[\s\S]*?position:\s*sticky;/, "The desktop Investments header must be sticky.");
 assert.match(investmentsStyles, /\.investments-mobile-header\s*\{[\s\S]*?position:\s*sticky;/, "The mobile Investments header must be sticky.");
 assert.match(investmentsPageSource, /canonicalizePdaxInvestmentHoldings/, "Portfolio rows must hide PDAX wallet balances and collapse XRP aliases.");
+assert.match(institutionPageSource, /canonicalizePdaxInvestmentHoldings/, "Institution holdings must canonicalize PDAX rows across snapshots and accounts.");
+assert.match(institutionPageSource, /routeInstitution\.toLowerCase\(\) !== "pdax"/, "PDAX Institution Details must compare live account values with immutable snapshot evidence.");
+assert.match(investmentsPageSource, /!\/\\bpdax\\b\/i\.test\(account\.institution/, "The Investments portfolio must compare live PDAX account values with snapshots.");
+assert.match(investmentsPageSource, /duplicatesSnapshotHolding && !\/\\bpdax\\b\/i\.test/, "A live PDAX account row must be allowed to supersede its older snapshot row.");
 assert.match(investmentsPageSource, /isInvestmentActivityOnlyLabel/, "Dividend activity must not render as a portfolio holding.");
 assert.match(investmentsPageSource, /parseNullableAmount\(holding\.currentValue \?\? holding\.marketValue\) !== null/, "Incomplete imported holdings must stay out of the Portfolio table.");
 assert.match(investmentsStyles, /\.content--investments \.investments-portfolio-table__row--head\s*\{[\s\S]*?position:\s*sticky;[\s\S]*?background:\s*#fff;/, "Desktop Portfolio headers must remain sticky and opaque.");

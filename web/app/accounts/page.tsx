@@ -1991,6 +1991,7 @@ function AccountsPageContent() {
               (Number(maintenancePayload?.maintenance?.removedStalePdaxBucketHoldings ?? 0) > 0 ||
                 Number(maintenancePayload?.maintenance?.repairedPdaxPortfolioAssetLabels ?? 0) > 0 ||
                 Number(maintenancePayload?.maintenance?.repairedPdaxPortfolioAccounts ?? 0) > 0 ||
+                Number(maintenancePayload?.maintenance?.repairedDuplicatePdaxWalletAccounts ?? 0) > 0 ||
                 Number(maintenancePayload?.maintenance?.refreshedPdaxCryptoMarketValues ?? 0) > 0)
             ) {
               void loadWorkspaceData(workspaceId, { silent: true, awaitHydration: true });

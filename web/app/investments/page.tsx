@@ -1404,7 +1404,9 @@ export default function InvestmentsPage() {
             });
           }
         }
-        continue;
+        if (!/\bpdax\b/i.test(account.institution ?? matchingSnapshot.documentImport?.institution ?? "")) {
+          continue;
+        }
       }
 
       const hasPositionEvidence = Boolean(
@@ -1435,7 +1437,7 @@ export default function InvestmentsPage() {
           normalizeInvestmentLabel(row.institution) === normalizeInvestmentLabel(account.institution) &&
           normalizeInvestmentLabel(row.symbol ?? row.name) === accountAssetIdentity
       );
-      if (duplicatesSnapshotHolding) {
+      if (duplicatesSnapshotHolding && !/\bpdax\b/i.test(account.institution ?? "")) {
         continue;
       }
 

@@ -142,7 +142,10 @@ export const canonicalizePdaxInvestmentHoldings = <T extends PdaxInvestmentHoldi
       assetType: identity.assetType ?? holding.assetType ?? null,
     } as T;
     const evidenceScore = holdingEvidenceScore(holding);
-    if (!canonicalByKey.has(identity.key) || evidenceScore > (evidenceScoreByKey.get(identity.key) ?? -1)) {
+    // Equal-strength rows can occur when an older snapshot and the current
+    // account position both contain the same canonical asset. Callers order
+    // those rows oldest to newest, so the later live position should win.
+    if (!canonicalByKey.has(identity.key) || evidenceScore >= (evidenceScoreByKey.get(identity.key) ?? -1)) {
       canonicalByKey.set(identity.key, canonical);
       evidenceScoreByKey.set(identity.key, evidenceScore);
     }

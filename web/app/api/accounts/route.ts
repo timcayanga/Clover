@@ -1287,6 +1287,78 @@ const repairGeneratedPdaxPortfolioAssetLabels = async (workspaceId: string) => {
   return repaired;
 };
 
+const repairDuplicatePdaxWalletAccounts = async (workspaceId: string) => {
+  const candidates = await prisma.account.findMany({
+    where: {
+      workspaceId,
+      source: "upload",
+      institution: { equals: "PDAX", mode: "insensitive" },
+      name: { in: ["Wallet", "PDAX Wallet"], mode: "insensitive" },
+      investmentSymbol: null,
+      investmentQuantity: null,
+    },
+    select: {
+      id: true,
+      type: true,
+      balance: true,
+      createdAt: true,
+      updatedAt: true,
+      _count: {
+        select: {
+          transactions: true,
+          importFiles: true,
+          documentImports: true,
+          statementCheckpoints: true,
+        },
+      },
+    },
+  }).catch(() => []);
+  if (candidates.length === 0) {
+    return 0;
+  }
+
+  const canonical = [...candidates].sort((left, right) => {
+    const leftWallet = Number(left.type === "wallet");
+    const rightWallet = Number(right.type === "wallet");
+    const leftEvidence = left._count.importFiles + left._count.documentImports + left._count.statementCheckpoints;
+    const rightEvidence = right._count.importFiles + right._count.documentImports + right._count.statementCheckpoints;
+    return rightWallet - leftWallet || rightEvidence - leftEvidence || left.createdAt.getTime() - right.createdAt.getTime();
+  })[0];
+  if (!canonical) {
+    return 0;
+  }
+
+  const duplicateIds = candidates.filter((account) => account.id !== canonical.id).map((account) => account.id);
+  const walletBalances = candidates
+    .filter((account) => account.type === "wallet" && account.balance !== null)
+    .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime());
+  const walletBalance = walletBalances[0]?.balance?.toString() ?? canonical.balance?.toString() ?? null;
+
+  await mergeUploadedAccountRecords({
+    workspaceId,
+    canonicalId: canonical.id,
+    duplicateIds,
+    canonicalData: {
+      name: "PDAX Wallet",
+      institution: "PDAX",
+      type: "wallet",
+      currency: "PHP",
+      balance: walletBalance,
+      investmentSubtype: null,
+      investmentSymbol: null,
+      investmentQuantity: null,
+      investmentCostBasis: null,
+      investmentPrincipal: null,
+      investmentStartDate: null,
+      investmentMaturityDate: null,
+      investmentInterestRate: null,
+      investmentMaturityValue: null,
+    },
+  });
+
+  return duplicateIds.length + Number(canonical.type !== "wallet");
+};
+
 const repairCryptoDenominatedCashAccounts = async (workspaceId: string) => {
   const cashAccounts = await prisma.account.findMany({
     where: { workspaceId, type: "cash" },
@@ -1468,7 +1540,13 @@ const repairPdaxPortfolioAccountsFromParsedRows = async (workspaceId: string) =>
   let repaired = 0;
   for (const [name, expected] of expectedAccounts) {
     const existingAccount = await prisma.account.findFirst({
-      where: { workspaceId, institution: "PDAX", name },
+      where: {
+        workspaceId,
+        institution: "PDAX",
+        ...(name === "Wallet"
+          ? { type: "wallet", name: { in: ["Wallet", "PDAX Wallet"], mode: "insensitive" } }
+          : { name }),
+      },
       select: { id: true, source: true },
     }).catch(() => null);
     if (!existingAccount) {
@@ -1506,7 +1584,7 @@ const repairPdaxPortfolioAccountsFromParsedRows = async (workspaceId: string) =>
       continue;
     }
     const result = await prisma.account.updateMany({
-      where: { workspaceId, source: "upload", institution: "PDAX", name },
+      where: { id: existingAccount.id, workspaceId, source: "upload" },
       data: {
         type: expected.type,
         balance: expected.balance.toString(),
@@ -3056,6 +3134,13 @@ export async function GET(request: Request) {
       });
       return 0;
     });
+    await repairDuplicatePdaxWalletAccounts(workspaceId).catch((error) => {
+      console.warn("[accounts] unable to collapse duplicate PDAX wallets", {
+        workspaceId,
+        error,
+      });
+      return 0;
+    });
     await repairLegacyUploadedMayaWiseAccountSplits(workspaceId, compatibleColumns).catch((error) => {
       console.warn("[accounts] unable to repair legacy Maya/Wise account splits", {
         workspaceId,
@@ -3124,6 +3209,7 @@ export async function GET(request: Request) {
     let repairedPdaxPortfolioAssetLabels = 0;
     let repairedMalformedPdaxActionControlAccounts = 0;
     let repairedPdaxPortfolioAccounts = 0;
+    let repairedDuplicatePdaxWalletAccounts = 0;
     let refreshedPdaxCryptoMarketValues = 0;
     let removedMalformedPdaxPortfolioOverviewAccounts = 0;
     if (shouldCleanupImportedAccounts) {
@@ -3149,6 +3235,13 @@ export async function GET(request: Request) {
       });
       repairedPdaxPortfolioAccounts = await repairPdaxPortfolioAccountsFromParsedRows(workspaceId).catch((error) => {
         console.warn("[accounts] unable to repair PDAX portfolio accounts from parsed evidence", {
+          workspaceId,
+          error,
+        });
+        return 0;
+      });
+      repairedDuplicatePdaxWalletAccounts = await repairDuplicatePdaxWalletAccounts(workspaceId).catch((error) => {
+        console.warn("[accounts] unable to repair duplicate PDAX wallets", {
           workspaceId,
           error,
         });
@@ -3552,7 +3645,11 @@ export async function GET(request: Request) {
           ? latestCheckpoint.endingBalance.toString()
           : null;
       const effectiveAccountNumber = account.accountNumber ?? checkpointAccountNumber ?? null;
-      const uploadedInstitution = resolveUploadedAccountInstitution(account.institution, checkpointBankHint, checkpointInstitution);
+      const hasCorrectedGotradeIdentity =
+        account.institution?.trim().toLowerCase() === "gotrade" && /^gotrade activity$/i.test(account.name.trim());
+      const uploadedInstitution = hasCorrectedGotradeIdentity
+        ? account.institution
+        : resolveUploadedAccountInstitution(account.institution, checkpointBankHint, checkpointInstitution);
       const effectiveInstitution = uploadedInstitution ?? account.institution ?? checkpointInstitution ?? null;
       const effectiveSource =
         account.source === "upload"
@@ -3568,7 +3665,9 @@ export async function GET(request: Request) {
           ? formatUploadAccountDisplayName(
               shouldReplaceGenericImageFilename
                 ? checkpointAccountName ?? effectiveInstitution ?? account.name
-                : checkpointAccountName ?? account.name,
+                : hasCorrectedGotradeIdentity
+                  ? account.name
+                  : checkpointAccountName ?? account.name,
               effectiveInstitution,
               effectiveAccountNumber,
               account.type
@@ -3625,6 +3724,7 @@ export async function GET(request: Request) {
             repairedPdaxPortfolioAssetLabels,
             repairedMalformedPdaxActionControlAccounts,
             repairedPdaxPortfolioAccounts,
+            repairedDuplicatePdaxWalletAccounts,
             refreshedPdaxCryptoMarketValues,
             removedMalformedPdaxPortfolioOverviewAccounts,
           }

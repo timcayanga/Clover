@@ -39,6 +39,7 @@ import {
   normalizeInvestmentPositionName,
   sumManualInvestmentUnits,
 } from "@/lib/manual-investment-positions";
+import { canonicalizePdaxInvestmentHoldings } from "@/lib/pdax-portfolio-accounts";
 
 type Account = {
   id: string;
@@ -839,7 +840,10 @@ export default function InvestmentInstitutionDetailPage() {
     }
 
     for (const account of holdingAccounts) {
-      if (accountsRepresentedBySnapshots.has(account.id)) {
+      // PDAX account rows are refreshed from live quotes, while their linked
+      // snapshot remains immutable import evidence. Include both here and let
+      // the canonical pass prefer the later live row.
+      if (accountsRepresentedBySnapshots.has(account.id) && routeInstitution.toLowerCase() !== "pdax") {
         continue;
       }
       const value = Math.abs(parseAmount(account.balance));
@@ -916,7 +920,25 @@ export default function InvestmentInstitutionDetailPage() {
       });
     }
 
-    return rows.sort((left, right) => right.value - left.value || left.name.localeCompare(right.name));
+    const canonicalRows = routeInstitution.toLowerCase() === "pdax"
+      ? canonicalizePdaxInvestmentHoldings(
+          rows.map((row) => ({
+            ...row,
+            assetName: row.name,
+            assetSymbol: row.symbol,
+            assetType: row.subtype,
+            quantity: row.quantity,
+            currentValue: row.value,
+          }))
+        ).map((row) => ({
+          ...row,
+          name: row.assetName,
+          symbol: row.assetSymbol ?? null,
+          subtype: row.assetType as InvestmentSubtype,
+        }))
+      : rows;
+
+    return canonicalRows.sort((left, right) => right.value - left.value || left.name.localeCompare(right.name));
   }, [accountAssetNameMap, accounts, holdingAccounts, investmentSnapshots, manualPositionActivities, routeCurrency, routeInstitution]);
 
   const holdingsValue = useMemo(
