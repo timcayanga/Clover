@@ -736,8 +736,8 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
             ? "Choose a new password to get back into Clover."
             : phase === "verify-second-factor"
               ? "Complete your account’s extra security check to sign in."
-            : "Sign in to pick up where you left off and keep moving."
-      : "Create your account once, then import a statement, connect an account, or start manually.";
+              : null
+      : null;
   const footerText =
     mode === "sign-in" ? (
       isResetFlow || isSignInContinuation ? (
@@ -773,7 +773,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
 
       <header className="clover-auth-card__header">
         <h1>{title}</h1>
-        <p>{subtitle}</p>
+        {subtitle ? <p>{subtitle}</p> : null}
       </header>
 
       <form className="clover-auth-card__form" onSubmit={handleSubmit}>

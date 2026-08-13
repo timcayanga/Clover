@@ -8,6 +8,7 @@ const middleware = readFileSync(resolve(process.cwd(), "middleware.ts"), "utf8")
 const signInPage = readFileSync(resolve(process.cwd(), "app/sign-in/[[...sign-in]]/page.tsx"), "utf8");
 const morePage = readFileSync(resolve(process.cwd(), "app/more/page.tsx"), "utf8");
 const signOutButton = readFileSync(resolve(process.cwd(), "components/more-sign-out-button.tsx"), "utf8");
+const globalStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
 const protectedRouteMatcher = middleware.match(
   /const isProtectedAppRoute = createRouteMatcher\(\[([\s\S]*?)\]\);/u,
 )?.[1] ?? "";
@@ -25,6 +26,27 @@ assert.doesNotMatch(
   "Sign-in must execute Clerk middleware without becoming a protected route",
 );
 assert.match(authScreen, /Forgot password\?/u, "Sign-in must expose password recovery");
+assert.doesNotMatch(
+  authScreen,
+  /Sign in to pick up where you left off and keep moving\./u,
+  "Sign-in should not show the removed helper sentence",
+);
+assert.doesNotMatch(
+  authScreen,
+  /Create your account once, then import a statement, connect an account, or start manually\./u,
+  "Sign-up should not show the removed helper sentence",
+);
+assert.match(authScreen, /\{subtitle \? <p>\{subtitle\}<\/p> : null\}/u, "Auth subtitles must render only when a recovery step needs guidance");
+assert.match(
+  globalStyles,
+  /\.landing-signup-modal \.clover-auth-card\s*\{[\s\S]*?overflow:\s*visible;/u,
+  "The landing sign-up form must not create a clipped nested scroll region",
+);
+assert.match(
+  globalStyles,
+  /\.landing-signup-modal__panel\s*\{[\s\S]*?-webkit-overflow-scrolling:\s*touch;/u,
+  "The landing sign-up panel must remain smoothly scrollable on mobile Safari",
+);
 assert.ok(
   authScreen.indexOf("Forgot password?") > authScreen.indexOf('className="clover-auth-password"'),
   "Password recovery must appear below the password input",
