@@ -20,6 +20,17 @@ import {
   sumManualInvestmentUnits,
 } from "@/lib/manual-investment-positions";
 
+const investmentHoldingRouteSource = readFileSync(
+  resolve(process.cwd(), "app/api/investment-holdings/[holdingId]/route.ts"),
+  "utf8"
+);
+
+assert.match(investmentHoldingRouteSource, /export async function DELETE/, "Imported holdings need a delete endpoint.");
+assert.match(
+  investmentHoldingRouteSource,
+  /prisma\.investmentHolding\.delete/,
+  "Deleting an imported asset should remove only its normalized holding row."
+);
 const classificationCases = [
   { name: "ATRAM Peso Money Market Fund", expected: "money_market_fund" },
   { name: "ATRAM Medium Term Peso Bond Fund", expected: "bond" },
@@ -217,6 +228,13 @@ const marketChartSource = readFileSync(resolve(process.cwd(), "components/invest
 const portfolioGrowthSource = readFileSync(resolve(process.cwd(), "components/investment-portfolio-growth-chart.tsx"), "utf8");
 const marketHistoryRouteSource = readFileSync(resolve(process.cwd(), "app/api/market-history/route.ts"), "utf8");
 
+assert.match(investmentsPageSource, /deleteSelectedInvestmentAsset/, "Asset details should expose the delete workflow.");
+assert.match(investmentsPageSource, /"Delete asset"/, "Asset details should render a clear delete action.");
+assert.match(
+  investmentsPageSource,
+  /selectedPortfolioRow\.source === "derived"/,
+  "Activity-derived rows must not expose a misleading destructive action."
+);
 assert.match(investmentsPageSource, /includeAllOption=\{false\}/, "Investments must require one portfolio currency.");
 assert.doesNotMatch(investmentsPageSource, /allLabel="All currencies"/, "Investments must not show an aggregate currency option.");
 assert.match(investmentsPageSource, /InvestmentPortfolioGrowthChart/, "Overview must render market-priced portfolio growth.");

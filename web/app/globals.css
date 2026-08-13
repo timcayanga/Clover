@@ -28481,6 +28481,10 @@ button.accounts-detail__transaction-head-cell {
   margin-top: 6px;
 }
 
+.investments-asset-detail-modal__delete {
+  margin-right: auto;
+}
+
 .accounts-detail__history-stack {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));

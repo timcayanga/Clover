@@ -156,3 +156,36 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ho
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
+
+export async function DELETE(request: Request, { params }: { params: Promise<{ holdingId: string }> }) {
+  try {
+    const userId = await resolveUserId();
+    const { holdingId } = await params;
+    const payload = z.object({ workspaceId: z.string().min(1) }).parse(await request.json());
+    const existing = await prisma.investmentHolding.findUnique({
+      where: { id: holdingId },
+      select: {
+        id: true,
+        workspaceId: true,
+        assetName: true,
+      },
+    });
+
+    if (!existing || existing.workspaceId !== payload.workspaceId) {
+      return NextResponse.json({ error: "Investment holding not found." }, { status: 404 });
+    }
+
+    await assertWorkspaceAccess(userId, existing.workspaceId);
+    await prisma.investmentHolding.delete({ where: { id: existing.id } });
+
+    return NextResponse.json({
+      holding: {
+        id: existing.id,
+        assetName: existing.assetName,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to delete investment holding.";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}

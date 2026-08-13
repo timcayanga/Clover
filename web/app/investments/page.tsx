@@ -2526,6 +2526,79 @@ export default function InvestmentsPage() {
     }
   };
 
+  const deleteSelectedInvestmentAsset = async () => {
+    if (!selectedPortfolioRow || selectedPortfolioRow.source === "derived" || !selectedWorkspaceId) {
+      return;
+    }
+
+    const assetName = selectedPortfolioRow.name;
+    const isImportedHolding = selectedPortfolioRow.source === "holding";
+    const confirmationMessage = isImportedHolding
+      ? `Delete asset "${assetName}"? Its source import and trading history will stay in Clover.`
+      : `Delete asset "${assetName}"? This also removes its investment account and linked transactions.`;
+
+    if (!window.confirm(confirmationMessage)) {
+      return;
+    }
+
+    const deletionId = isImportedHolding
+      ? selectedPortfolioRow.assetId
+      : selectedInvestmentAsset?.id ?? selectedPortfolioRow.accountId;
+    setIsDeleting(deletionId);
+
+    try {
+      if (isImportedHolding) {
+        const response = await fetch(`/api/investment-holdings/${selectedPortfolioRow.assetId}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workspaceId: selectedWorkspaceId }),
+        });
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Unable to delete asset.");
+        }
+
+        setInvestmentSnapshots((current) =>
+          current.map((snapshot) => ({
+            ...snapshot,
+            holdings: snapshot.holdings.filter((holding) => holding.id !== selectedPortfolioRow.assetId),
+          }))
+        );
+      } else {
+        if (!selectedInvestmentAsset) {
+          throw new Error("Investment account not found.");
+        }
+
+        clearDeletingWorkspaceAccount(selectedWorkspaceId, selectedInvestmentAsset.id);
+        markDeletedWorkspaceAccount(selectedWorkspaceId, selectedInvestmentAsset.id);
+        applyOptimisticWorkspaceAccountDeletion(selectedWorkspaceId, selectedInvestmentAsset.id);
+
+        const response = await fetch(`/api/accounts/${selectedInvestmentAsset.id}`, {
+          method: "DELETE",
+          keepalive: true,
+        });
+
+        if (!response.ok) {
+          throw new Error("Unable to delete asset.");
+        }
+
+        setAccounts((current) => current.filter((account) => account.id !== selectedInvestmentAsset.id));
+      }
+
+      closeInvestmentAsset();
+      setMessage(`"${assetName}" deleted.`);
+    } catch (error) {
+      if (!isImportedHolding && selectedInvestmentAsset) {
+        clearDeletedWorkspaceAccount(selectedWorkspaceId, selectedInvestmentAsset.id);
+        clearDeletingWorkspaceAccount(selectedWorkspaceId, selectedInvestmentAsset.id);
+      }
+      setMessage(error instanceof Error ? error.message : "Unable to delete asset.");
+    } finally {
+      setIsDeleting(null);
+    }
+  };
+
   const getManualInvestmentFieldValue = (key: string) => {
     if (key === "investmentSymbol") return manualInvestmentSymbol;
     if (key === "investmentQuantity") return manualInvestmentQuantity;
@@ -3614,10 +3687,18 @@ export default function InvestmentsPage() {
                   </div>
 
                   <div className="modal-actions investments-asset-detail-modal__actions">
-                    <button className="button button-secondary button-small" type="button" onClick={closeInvestmentAsset} disabled={isUpdating}>
+                    <button
+                      className="button button-danger button-small investments-asset-detail-modal__delete"
+                      type="button"
+                      onClick={() => void deleteSelectedInvestmentAsset()}
+                      disabled={isUpdating || Boolean(isDeleting)}
+                    >
+                      {isDeleting === selectedPortfolioRow.assetId ? "Deleting..." : "Delete asset"}
+                    </button>
+                    <button className="button button-secondary button-small" type="button" onClick={closeInvestmentAsset} disabled={isUpdating || Boolean(isDeleting)}>
                       Close
                     </button>
-                    <button className="button button-primary button-small" type="submit" disabled={isUpdating}>
+                    <button className="button button-primary button-small" type="submit" disabled={isUpdating || Boolean(isDeleting)}>
                       {isUpdating ? "Saving..." : "Save changes"}
                     </button>
                   </div>
@@ -3718,10 +3799,18 @@ export default function InvestmentsPage() {
                 </div>
 
                 <div className="modal-actions investments-asset-detail-modal__actions">
-                  <button className="button button-secondary button-small" type="button" onClick={closeInvestmentAsset} disabled={isUpdating}>
+                  <button
+                    className="button button-danger button-small investments-asset-detail-modal__delete"
+                    type="button"
+                    onClick={() => void deleteSelectedInvestmentAsset()}
+                    disabled={isUpdating || Boolean(isDeleting)}
+                  >
+                    {isDeleting === selectedInvestmentAsset.id ? "Deleting..." : "Delete asset"}
+                  </button>
+                  <button className="button button-secondary button-small" type="button" onClick={closeInvestmentAsset} disabled={isUpdating || Boolean(isDeleting)}>
                     Close
                   </button>
-                  <button className="button button-primary button-small" type="submit" disabled={isUpdating}>
+                  <button className="button button-primary button-small" type="submit" disabled={isUpdating || Boolean(isDeleting)}>
                     {isUpdating ? "Saving..." : "Save changes"}
                   </button>
                 </div>
