@@ -37,6 +37,7 @@ const querySource = readSource("lib/posthog-query.ts");
 assert.match(querySource, /getPostHogFeatureFunnels/);
 assert.match(querySource, /countIf\(.*_hit/s);
 assert.match(querySource, /GROUP BY person_id/);
+assert.match(querySource, /_at >= .*_at/);
 
 const commandCenterSource = readSource("components/admin-command-center.tsx");
 assert.match(commandCenterSource, /<details className="admin-feature-funnel"/);

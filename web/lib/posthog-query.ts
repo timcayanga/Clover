@@ -175,17 +175,24 @@ export async function getPostHogFeatureFunnels(
       .filter((step) => step.criteria?.length)
       .map((step) => ({ alias: `${feature.key}__${step.key}`, criteria: step.criteria ?? [] }))
   );
-  const hitExpressions = measurableSteps.map(({ alias, criteria }) => {
+  const stepExpressions = measurableSteps.flatMap(({ alias, criteria }) => {
     const condition = criteria.map(criterionCondition).join(" OR ");
-    return `countIf(${condition}) > 0 AS ${alias}_hit`;
+    return [
+      `countIf(${condition}) > 0 AS ${alias}_hit`,
+      `minIf(timestamp, ${condition}) AS ${alias}_at`,
+    ];
   });
   const selectExpressions = FEATURE_FUNNEL_DEFINITIONS.flatMap((feature) => {
     const measurableFeatureSteps = feature.steps.filter((step) => step.criteria?.length);
     return measurableFeatureSteps.map((step, index) => {
-      const progression = measurableFeatureSteps
-        .slice(0, index + 1)
-        .map((priorStep) => `${feature.key}__${priorStep.key}_hit`)
-        .join(" AND ");
+      const stepsThroughCurrent = measurableFeatureSteps.slice(0, index + 1);
+      const progression = [
+        ...stepsThroughCurrent.map((priorStep) => `${feature.key}__${priorStep.key}_hit`),
+        ...stepsThroughCurrent.slice(1).map((currentStep, stepIndex) => {
+          const priorStep = stepsThroughCurrent[stepIndex];
+          return `${feature.key}__${currentStep.key}_at >= ${feature.key}__${priorStep.key}_at`;
+        }),
+      ].join(" AND ");
       return `countIf(${progression}) AS ${feature.key}__${step.key}`;
     });
   });
@@ -196,7 +203,7 @@ export async function getPostHogFeatureFunnels(
     FROM (
       SELECT
         toString(distinct_id) AS person_id,
-        ${hitExpressions.join(",\n        ")}
+        ${stepExpressions.join(",\n        ")}
       FROM events
       WHERE timestamp >= toDateTime('${betaStartedAt}')
         AND toString(distinct_id) LIKE '${distinctIdPrefix}'
