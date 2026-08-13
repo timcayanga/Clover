@@ -20065,6 +20065,10 @@ body[data-clover-page-modal] .modal-card {
   -webkit-backdrop-filter: none;
 }
 
+.import-upload-dock__mobile-progress {
+  display: none;
+}
+
 .import-upload-dock__header {
   display: flex;
   align-items: flex-start;
@@ -33873,6 +33877,7 @@ button.accounts-detail__transaction-head-cell {
   .import-upload-dock {
     left: 12px;
     right: 12px;
+    bottom: calc(94px + env(safe-area-inset-bottom));
     width: auto;
   }
 
@@ -33884,14 +33889,68 @@ button.accounts-detail__transaction-head-cell {
     bottom: 12px;
   }
 
-  .import-upload-dock__body {
-    grid-template-columns: 1fr;
-    justify-items: start;
+  .import-upload-dock:not(.import-upload-dock--error) .import-upload-dock__inner {
+    min-height: 54px;
+    padding: 10px 12px;
+    border-radius: 16px;
+    gap: 0;
   }
 
-  .import-upload-dock__donut {
-    width: 118px;
-    height: 118px;
+  .import-upload-dock:not(.import-upload-dock--error) .import-upload-dock__mobile-progress {
+    display: grid;
+    gap: 7px;
+  }
+
+  .import-upload-dock__mobile-progress-copy {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--text);
+    font-size: 0.78rem;
+    line-height: 1;
+  }
+
+  .import-upload-dock__mobile-progress-copy span {
+    font-weight: 600;
+  }
+
+  .import-upload-dock__mobile-progress-copy strong {
+    color: var(--accent-hover);
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+
+  .import-upload-dock__mobile-progress-track {
+    height: 4px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(3, 168, 192, 0.14);
+  }
+
+  .import-upload-dock__mobile-progress-track span {
+    display: block;
+    height: 100%;
+    min-width: 3px;
+    border-radius: inherit;
+    background: var(--brand-gradient);
+    transition: width 180ms ease-out;
+  }
+
+  .import-upload-dock:not(.import-upload-dock--error) .import-upload-dock__header,
+  .import-upload-dock:not(.import-upload-dock--error) .import-upload-dock__body,
+  .import-upload-dock:not(.import-upload-dock--error) .import-upload-dock__checklist {
+    display: none;
+  }
+
+  .import-upload-dock--error .import-upload-dock__body {
+    grid-template-columns: auto minmax(0, 1fr);
+    justify-items: stretch;
+  }
+
+  .import-upload-dock--error .import-upload-dock__donut {
+    width: 72px;
+    height: 72px;
   }
 
   .accounts-page__headline,

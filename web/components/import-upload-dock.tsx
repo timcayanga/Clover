@@ -176,6 +176,22 @@ export function ImportUploadDock({
   return (
     <div className={`import-upload-dock import-upload-dock--${tone}`} role={tone === "error" ? "alert" : "status"} aria-live={tone === "error" ? "assertive" : "polite"}>
       <div className="import-upload-dock__inner glass">
+        <div
+          className="import-upload-dock__mobile-progress"
+          role="progressbar"
+          aria-label={isComplete ? "Import complete" : "Import progress"}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(value)}
+        >
+          <div className="import-upload-dock__mobile-progress-copy">
+            <span>{isComplete ? "Import complete" : "Importing"}</span>
+            <strong>{Math.round(value)}%</strong>
+          </div>
+          <div className="import-upload-dock__mobile-progress-track">
+            <span style={{ width: `${value}%` }} />
+          </div>
+        </div>
         <div className="import-upload-dock__header">
           <div className="import-upload-dock__copy">
             <p className="eyebrow">Import progress</p>
