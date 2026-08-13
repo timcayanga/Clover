@@ -53260,3 +53260,183 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   padding: 5px 11px;
   font-size: 0.7rem;
 }
+
+/* Lightweight interaction delight
+   Keep editable surfaces discoverable without adding layout work or continuous motion. */
+:where(input, select, textarea) {
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+:where(input, select, textarea):focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 54%, var(--stroke));
+  background-color: color-mix(in srgb, var(--surface) 96%, var(--accent) 4%);
+}
+
+:where(
+  .button,
+  .pill-interactive,
+  .icon-button,
+  .commitments-table__editable,
+  .settings-category-icon-button,
+  .settings-category-icon-action,
+  .transactions-manual-picker__button
+) {
+  transition:
+    transform 150ms ease,
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(input, select, textarea):not(:disabled):hover {
+    border-color: color-mix(in srgb, var(--accent) 34%, var(--stroke));
+    background-color: color-mix(in srgb, var(--surface) 97%, var(--accent) 3%);
+  }
+
+  :where(.button, .pill-interactive, .icon-button):not(:disabled):hover {
+    transform: translateY(-1px);
+  }
+
+  /* Every visible value in the desktop transaction ledger is directly editable. */
+  .content--transactions .line-item:not(.transactions-loading-row)
+    :where(
+      .transaction-category-icon,
+      .transaction-inline-edit,
+      .transaction-account-cell .accounts-brand-mark,
+      .transaction-amount-type-select
+    ) {
+    transition:
+      transform 145ms ease,
+      background-color 145ms ease,
+      box-shadow 145ms ease,
+      border-color 145ms ease;
+  }
+
+  .content--transactions .line-item:not(.transactions-loading-row)
+    :where(
+      .transaction-category-icon,
+      .transaction-account-cell .accounts-brand-mark
+    ):hover {
+    transform: translateY(-1px) scale(1.045);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.82),
+      0 6px 12px rgba(15, 23, 42, 0.16),
+      0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+
+  .content--transactions .line-item:not(.transactions-loading-row)
+    :where(
+      button.transaction-inline-edit--name,
+      .transaction-inline-edit--date,
+      .transaction-account-cell .transaction-inline-edit--select,
+      .transaction-category-cell .transaction-inline-edit--select,
+      .transaction-inline-edit--amount,
+      .transaction-amount-type-select
+    ):hover {
+    background: color-mix(in srgb, var(--accent) 7%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 7%, transparent);
+    transform: translateY(-1px);
+  }
+
+  .content--transactions .line-item:not(.transactions-loading-row):hover {
+    background: color-mix(in srgb, var(--surface) 96%, var(--accent) 4%);
+  }
+
+  /* Account cards feel tangible while keeping the branded artwork unchanged. */
+  .content--accounts :is(.financial-account-card.is-interactive, .accounts-account-card):not([data-state="deleting"]):hover {
+    transform: translateY(-3px) scale(1.006);
+    box-shadow: 0 14px 26px rgba(15, 23, 42, 0.11);
+  }
+
+  .content--accounts .financial-account-card.is-interactive:hover::before {
+    opacity: 1;
+  }
+
+  /* Reuse the same quiet cue on frequently editable planning surfaces. */
+  :where(
+    .commitments-table__editable,
+    .settings-category-icon-button,
+    .settings-category-icon-action,
+    .transactions-manual-picker__button
+  ):not(:disabled):hover {
+    transform: translateY(-1px);
+  }
+
+  :where(.onboarding-mission, .budget-card):hover {
+    border-color: color-mix(in srgb, var(--accent) 22%, var(--stroke));
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+    transform: translateY(-1px);
+  }
+}
+
+:where(
+  .content--transactions .transaction-inline-edit,
+  .content--transactions .transaction-amount-type-select,
+  .commitments-table__editable,
+  .transactions-manual-picker__button
+):focus-visible {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent);
+  outline: none;
+}
+
+:where(.budget-card, .onboarding-mission) {
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.content--accounts .financial-account-card.is-interactive::before {
+  transition: opacity 160ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(
+    input,
+    select,
+    textarea,
+    .button,
+    .pill-interactive,
+    .icon-button,
+    .commitments-table__editable,
+    .settings-category-icon-button,
+    .settings-category-icon-action,
+    .transactions-manual-picker__button,
+    .content--transactions .transaction-category-icon,
+    .content--transactions .transaction-inline-edit,
+    .content--transactions .accounts-brand-mark,
+    .content--transactions .transaction-amount-type-select,
+    .content--accounts .financial-account-card,
+    .content--accounts .accounts-account-card,
+    .budget-card,
+    .onboarding-mission
+  ) {
+    transition: none !important;
+  }
+
+  :where(
+    .button,
+    .pill-interactive,
+    .icon-button,
+    .commitments-table__editable,
+    .settings-category-icon-button,
+    .settings-category-icon-action,
+    .transactions-manual-picker__button,
+    .content--transactions .transaction-category-icon,
+    .content--transactions .transaction-inline-edit,
+    .content--transactions .accounts-brand-mark,
+    .content--transactions .transaction-amount-type-select,
+    .content--accounts .financial-account-card,
+    .content--accounts .accounts-account-card,
+    .budget-card,
+    .onboarding-mission
+  ) {
+    transform: none !important;
+  }
+}
