@@ -1,25 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
-import { z } from "zod";
-
-const profileSchema = z.object({
-  label: z.string().trim().min(1).max(80),
-  provider: z.string().trim().min(1).max(80),
-  currency: z.string().trim().min(3).max(8),
-  personName: z.string().trim().max(120).nullable().optional(),
-  accountName: z.string().trim().max(120).nullable().optional(),
-  accountNumber: z.string().trim().max(120).nullable().optional(),
-  qrPayload: z.string().trim().max(10000).nullable().optional(),
-  qrImageData: z.string().trim().max(1500000).nullable().optional(),
-  isDefault: z.boolean().optional(),
-});
+import { splitBillPaymentProfileSchema } from "@/lib/split-bill-payment-profile-schema";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ profileId: string }> }) {
   try {
     const user = await getSplitBillCurrentUser();
     const { profileId } = await params;
-    const body = profileSchema.parse(await request.json());
+    const body = splitBillPaymentProfileSchema.parse(await request.json());
     const existing = await prisma.splitBillPaymentProfile.findFirst({ where: { id: profileId, userId: user.id } });
     if (!existing) return NextResponse.json({ error: "Payment method not found" }, { status: 404 });
     const profile = await prisma.$transaction(async (tx) => {
@@ -45,7 +33,19 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     if (!profile) {
       return NextResponse.json({ error: "Payment method not found" }, { status: 404 });
     }
-    await prisma.splitBillPaymentProfile.delete({ where: { id: profile.id } });
+    await prisma.$transaction(async (tx) => {
+      const deleted = await tx.splitBillPaymentProfile.delete({ where: { id: profile.id } });
+      if (deleted.isDefault) {
+        const replacement = await tx.splitBillPaymentProfile.findFirst({
+          where: { userId: user.id },
+          orderBy: { updatedAt: "desc" },
+          select: { id: true },
+        });
+        if (replacement) {
+          await tx.splitBillPaymentProfile.update({ where: { id: replacement.id }, data: { isDefault: true } });
+        }
+      }
+    });
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to remove payment method" }, { status: 400 });

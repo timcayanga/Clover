@@ -116,6 +116,12 @@ export type AnalyticsEventName =
   | "split_bill_created"
   | "split_bill_completed"
   | "split_bill_settled"
+  | "split_bill_qr_viewed"
+  | "split_bill_qr_uploaded"
+  | "split_bill_qr_saved"
+  | "split_bill_qr_updated"
+  | "split_bill_qr_deleted"
+  | "split_bill_qr_detection_failed"
   | "circle_created"
   | "circle_updated"
   | "circle_deleted"
@@ -172,6 +178,7 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "report_viewed", "report_filtered", "report_exported", "cashflow_viewed", "category_mix_viewed", "top_sources_viewed", "trend_line_viewed",
   "insight_generated", "insight_opened", "insight_action_taken", "weekly_summary_viewed", "recurring_item_reviewed", "recurring_item_confirmed", "recurring_occurrence_updated",
   "adviser_question_asked", "adviser_recommendation_opened", "adviser_action_completed", "split_bill_created", "split_bill_completed", "split_bill_settled",
+  "split_bill_qr_viewed", "split_bill_qr_uploaded", "split_bill_qr_saved", "split_bill_qr_updated", "split_bill_qr_deleted", "split_bill_qr_detection_failed",
   "circle_created", "circle_updated", "circle_deleted", "circle_invitation_created", "circle_invitation_accepted", "circle_member_updated",
   "circle_budget_created", "circle_goal_created", "circle_contribution_recorded", "circle_commitment_created", "circle_transaction_shared", "circle_investment_shared",
   "session_started", "session_returned", "feature_used", "settings_updated", "goal_target_saved", "goal_updated", "goal_target_reached",

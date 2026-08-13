@@ -12,6 +12,7 @@ import {
 import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
 import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
 import { readAccountIdentityCache } from "@/lib/account-identity-cache";
+import { SplitBillQrLibrary } from "@/components/split-bill-qr-library";
 
 type SplitBillHomeProps = {
   bills: SplitBillSerializedBill[];
@@ -275,6 +276,8 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
           </div>
         </section>
       ) : null}
+
+      <SplitBillQrLibrary />
 
       <section className="split-bill-panel panel glass">
         <div className="split-bill-panel__head">

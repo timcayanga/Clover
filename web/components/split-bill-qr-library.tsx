@@ -1,0 +1,451 @@
+"use client";
+
+import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
+import { capturePostHogClientEvent } from "@/components/posthog-analytics";
+import {
+  PAYMENT_QR_PROVIDERS,
+  detectPaymentQrProvider,
+  getPaymentQrTheme,
+} from "@/lib/payment-qr";
+
+type PaymentProfile = {
+  id: string;
+  label: string;
+  provider: string;
+  currency: string;
+  personName: string | null;
+  accountName: string | null;
+  accountNumber: string | null;
+  qrPayload: string | null;
+  qrImageData: string | null;
+  isDefault: boolean;
+};
+
+type QrDraft = {
+  label: string;
+  provider: string;
+  currency: string;
+  personName: string;
+  accountName: string;
+  accountNumber: string;
+  qrPayload: string;
+  qrImageData: string;
+  isDefault: boolean;
+};
+
+type BarcodeDetectorConstructor = new (options: { formats: string[] }) => {
+  detect: (source: CanvasImageSource) => Promise<Array<{ rawValue?: string }>>;
+};
+
+const emptyDraft: QrDraft = {
+  label: "",
+  provider: "Other",
+  currency: "PHP",
+  personName: "",
+  accountName: "",
+  accountNumber: "",
+  qrPayload: "",
+  qrImageData: "",
+  isDefault: false,
+};
+
+const MAX_SOURCE_BYTES = 12 * 1024 * 1024;
+const MAX_SAVED_DATA_LENGTH = 1_450_000;
+
+const loadImage = (file: File) =>
+  new Promise<HTMLImageElement>((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("This image could not be opened."));
+    };
+    image.src = url;
+  });
+
+const drawImageToCanvas = (image: HTMLImageElement, maxDimension: number) => {
+  const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) throw new Error("This browser could not prepare the QR image.");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return { canvas, context };
+};
+
+async function decodeQr(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
+  const BarcodeDetector = (window as typeof window & { BarcodeDetector?: BarcodeDetectorConstructor }).BarcodeDetector;
+  if (BarcodeDetector) {
+    try {
+      const results = await new BarcodeDetector({ formats: ["qr_code"] }).detect(canvas);
+      const payload = results.find((result) => result.rawValue)?.rawValue;
+      if (payload) return payload;
+    } catch {
+      // The pure JavaScript decoder below covers browsers without a working detector.
+    }
+  }
+
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const { default: jsQR } = await import("jsqr");
+  const direct = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" });
+  if (direct?.data) return direct.data;
+
+  const contrasted = new Uint8ClampedArray(imageData.data);
+  for (let index = 0; index < contrasted.length; index += 4) {
+    const luminance = contrasted[index] * 0.299 + contrasted[index + 1] * 0.587 + contrasted[index + 2] * 0.114;
+    const value = luminance > 148 ? 255 : 0;
+    contrasted[index] = value;
+    contrasted[index + 1] = value;
+    contrasted[index + 2] = value;
+  }
+  return jsQR(contrasted, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" })?.data ?? null;
+}
+
+const compressQrImage = (image: HTMLImageElement) => {
+  let maxDimension = 1_200;
+  let quality = 0.9;
+  let encoded = "";
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const { canvas } = drawImageToCanvas(image, maxDimension);
+    encoded = canvas.toDataURL("image/jpeg", quality);
+    if (encoded.length <= MAX_SAVED_DATA_LENGTH) break;
+    maxDimension = Math.round(maxDimension * 0.82);
+    quality = Math.max(0.7, quality - 0.05);
+  }
+
+  if (!encoded || encoded.length > MAX_SAVED_DATA_LENGTH) {
+    throw new Error("This image is too large. Please crop it closer to the QR code and try again.");
+  }
+  return encoded;
+};
+
+const profileToDraft = (profile: PaymentProfile): QrDraft => ({
+  label: profile.label,
+  provider: profile.provider,
+  currency: profile.currency,
+  personName: profile.personName ?? "",
+  accountName: profile.accountName ?? "",
+  accountNumber: profile.accountNumber ?? "",
+  qrPayload: profile.qrPayload ?? "",
+  qrImageData: profile.qrImageData ?? "",
+  isDefault: profile.isDefault,
+});
+
+export function SplitBillQrLibrary() {
+  const [profiles, setProfiles] = useState<PaymentProfile[]>([]);
+  const [draft, setDraft] = useState<QrDraft>(emptyDraft);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [viewingProfile, setViewingProfile] = useState<PaymentProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isReading, setIsReading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const chooseInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/split-bill-payment-profiles")
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error ?? "Unable to load saved QR codes.");
+        if (active) setProfiles(payload.profiles ?? []);
+      })
+      .catch(() => active && setError("Saved QR codes could not load. Please try again."))
+      .finally(() => active && setIsLoading(false));
+    capturePostHogClientEvent("split_bill_qr_viewed");
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isEditorOpen && !viewingProfile) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setIsEditorOpen(false);
+        setViewingProfile(null);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isEditorOpen, viewingProfile]);
+
+  const openCreate = () => {
+    setDraft({ ...emptyDraft, isDefault: profiles.length === 0 });
+    setEditingId(null);
+    setNotice(null);
+    setError(null);
+    setIsEditorOpen(true);
+  };
+
+  const openEdit = (profile: PaymentProfile) => {
+    setDraft(profileToDraft(profile));
+    setEditingId(profile.id);
+    setNotice(null);
+    setError(null);
+    setIsEditorOpen(true);
+  };
+
+  const readImage = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    const source = cameraInputRef.current === event.currentTarget ? "camera" : "file";
+    event.target.value = "";
+    if (!file) return;
+    setError(null);
+    setNotice(null);
+    if (!/^image\/(?:png|jpeg|webp)$/i.test(file.type)) {
+      setError("Choose a PNG, JPEG, or WebP image.");
+      return;
+    }
+    if (file.size > MAX_SOURCE_BYTES) {
+      setError("This image is too large. Choose an image under 12 MB.");
+      return;
+    }
+
+    setIsReading(true);
+    try {
+      const image = await loadImage(file);
+      const { canvas, context } = drawImageToCanvas(image, 1_600);
+      const payload = await decodeQr(canvas, context);
+      const detection = detectPaymentQrProvider(payload, file.name);
+      const imageData = compressQrImage(image);
+      setDraft((current) => ({
+        ...current,
+        label: current.label || (detection.provider === "Other" ? "Payment QR" : `${detection.provider} QR`),
+        provider: detection.provider,
+        qrPayload: payload ?? "",
+        qrImageData: imageData,
+      }));
+      setNotice(payload ? detection.reason : "Image added. Choose the payment app so it is easy to recognize.");
+      capturePostHogClientEvent("split_bill_qr_uploaded", {
+        provider: detection.provider,
+        detection_confidence: detection.confidence,
+        qr_decoded: Boolean(payload),
+        source,
+      });
+      if (!payload) capturePostHogClientEvent("split_bill_qr_detection_failed", { file_type: file.type });
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "This QR image could not be read.");
+      capturePostHogClientEvent("split_bill_qr_detection_failed", { file_type: file.type });
+    } finally {
+      setIsReading(false);
+    }
+  };
+
+  const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!draft.qrImageData) {
+      setError("Add a QR image before saving.");
+      return;
+    }
+    setError(null);
+    setIsSaving(true);
+    try {
+      const response = await fetch(
+        editingId ? `/api/split-bill-payment-profiles/${editingId}` : "/api/split-bill-payment-profiles",
+        {
+          method: editingId ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(draft),
+        }
+      );
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Unable to save this QR code.");
+      setProfiles((current) => {
+        const next = editingId
+          ? current.map((profile) => (profile.id === editingId ? payload.profile : profile))
+          : [payload.profile, ...current];
+        return payload.profile.isDefault
+          ? next.map((profile) => ({ ...profile, isDefault: profile.id === payload.profile.id }))
+          : next;
+      });
+      capturePostHogClientEvent(editingId ? "split_bill_qr_updated" : "split_bill_qr_saved", {
+        provider: payload.profile.provider,
+        qr_decoded: Boolean(payload.profile.qrPayload),
+      });
+      setIsEditorOpen(false);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to save this QR code.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const deleteProfile = async (profile: PaymentProfile) => {
+    if (!window.confirm(`Delete ${profile.label}? This QR will no longer be available for payment requests.`)) return;
+    setError(null);
+    try {
+      const response = await fetch(`/api/split-bill-payment-profiles/${profile.id}`, { method: "DELETE" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Unable to delete this QR code.");
+      setProfiles((current) => {
+        const next = current.filter((item) => item.id !== profile.id);
+        if (profile.isDefault && next[0]) next[0] = { ...next[0], isDefault: true };
+        return next;
+      });
+      capturePostHogClientEvent("split_bill_qr_deleted", { provider: profile.provider });
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to delete this QR code.");
+    }
+  };
+
+  return (
+    <section className="split-bill-qr-library panel glass" aria-labelledby="split-bill-qr-title">
+      <div className="split-bill-qr-library__head">
+        <div>
+          <h2 id="split-bill-qr-title">Payment QR codes</h2>
+          <p>Save your codes once, then reuse them when someone needs to pay you.</p>
+        </div>
+        <button className="button button-primary button-small transactions-action-button" type="button" onClick={openCreate}>
+          <span aria-hidden="true">+</span> Add QR code
+        </button>
+      </div>
+
+      {error && !isEditorOpen ? <p className="split-bill-qr-library__error" role="alert">{error}</p> : null}
+      {isLoading ? (
+        <div className="split-bill-qr-library__loading" aria-label="Loading saved QR codes">
+          <span /><span /><span />
+        </div>
+      ) : profiles.length > 0 ? (
+        <div className="split-bill-qr-library__grid">
+          {profiles.map((profile) => {
+            const theme = getPaymentQrTheme(profile.provider);
+            return (
+              <article
+                className="split-bill-qr-card"
+                key={profile.id}
+                style={{ "--qr-start": theme.start, "--qr-end": theme.end, "--qr-accent": theme.accent } as CSSProperties}
+              >
+                <div className="split-bill-qr-card__copy">
+                  <div className="split-bill-qr-card__provider">
+                    <span aria-hidden="true">▦</span>
+                    <strong>{profile.provider}</strong>
+                    {profile.isDefault ? <small>Default</small> : null}
+                  </div>
+                  <h3>{profile.label}</h3>
+                  <p>{profile.accountName || profile.personName || "Ready to share"}</p>
+                  {profile.accountNumber ? <span>{profile.accountNumber}</span> : null}
+                </div>
+                <button className="split-bill-qr-card__image" type="button" onClick={() => setViewingProfile(profile)} aria-label={`View ${profile.label}`}>
+                  {profile.qrImageData ? <img src={profile.qrImageData} alt={`${profile.provider} payment QR code`} /> : <span>QR</span>}
+                </button>
+                <div className="split-bill-qr-card__actions">
+                  <button type="button" onClick={() => openEdit(profile)}>Edit</button>
+                  <button type="button" onClick={() => void deleteProfile(profile)}>Delete</button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <button className="split-bill-qr-library__empty" type="button" onClick={openCreate}>
+          <span aria-hidden="true">▦</span>
+          <strong>Keep your payment QR codes ready</strong>
+          <small>Upload an image, screenshot, or photo to add your first one.</small>
+        </button>
+      )}
+
+      {isEditorOpen ? (
+        <div className="split-bill-modal split-bill-qr-modal" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setIsEditorOpen(false)}>
+          <form className="split-bill-modal__card split-bill-qr-editor panel glass" onSubmit={saveProfile} role="dialog" aria-modal="true" aria-labelledby="split-bill-qr-editor-title">
+            <div className="split-bill-qr-editor__head">
+              <div>
+                <h3 id="split-bill-qr-editor-title">{editingId ? "Edit QR code" : "Add QR code"}</h3>
+                <p>Choose an image, screenshot, or take a clear photo.</p>
+              </div>
+              <button className="split-bill-qr-editor__close" type="button" aria-label="Close" onClick={() => setIsEditorOpen(false)}>×</button>
+            </div>
+
+            <div className="split-bill-qr-editor__upload-row">
+              <input ref={chooseInputRef} className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={readImage} />
+              <input ref={cameraInputRef} className="sr-only" type="file" accept="image/*" capture="environment" onChange={readImage} />
+              <button className="button button-secondary button-small" type="button" disabled={isReading} onClick={() => chooseInputRef.current?.click()}>
+                {draft.qrImageData ? "Replace image" : "Choose image"}
+              </button>
+              <button className="button button-secondary button-small split-bill-qr-editor__camera" type="button" disabled={isReading} onClick={() => cameraInputRef.current?.click()}>
+                Take photo
+              </button>
+              {isReading ? <span className="split-bill-qr-editor__reading">Reading QR…</span> : null}
+            </div>
+
+            {draft.qrImageData ? (
+              <div className="split-bill-qr-editor__preview">
+                <img src={draft.qrImageData} alt="QR preview" />
+                <div>
+                  <strong>{draft.provider}</strong>
+                  <span>{notice ?? (draft.qrPayload ? "QR code verified" : "Image ready")}</span>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="split-bill-qr-editor__fields">
+              <label>
+                <span>Name</span>
+                <input value={draft.label} maxLength={80} required placeholder="My GCash" onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))} />
+              </label>
+              <label>
+                <span>Payment app</span>
+                <select value={draft.provider} onChange={(event) => setDraft((current) => ({ ...current, provider: event.target.value }))}>
+                  {PAYMENT_QR_PROVIDERS.map((provider) => <option key={provider} value={provider}>{provider}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Currency</span>
+                <input value={draft.currency} maxLength={8} required onChange={(event) => setDraft((current) => ({ ...current, currency: event.target.value.toUpperCase() }))} />
+              </label>
+              <label>
+                <span>Account name <small>Optional</small></span>
+                <input value={draft.accountName} maxLength={120} placeholder="Name shown to payers" onChange={(event) => setDraft((current) => ({ ...current, accountName: event.target.value }))} />
+              </label>
+              <label>
+                <span>Account number <small>Optional</small></span>
+                <input value={draft.accountNumber} maxLength={120} inputMode="numeric" placeholder="Mobile or account number" onChange={(event) => setDraft((current) => ({ ...current, accountNumber: event.target.value }))} />
+              </label>
+              <label>
+                <span>Payee <small>Optional</small></span>
+                <input value={draft.personName} maxLength={120} placeholder="Who receives the payment" onChange={(event) => setDraft((current) => ({ ...current, personName: event.target.value }))} />
+              </label>
+            </div>
+
+            <label className="split-bill-qr-editor__default">
+              <input type="checkbox" checked={draft.isDefault} onChange={(event) => setDraft((current) => ({ ...current, isDefault: event.target.checked }))} />
+              <span>Use this QR by default</span>
+            </label>
+            {error ? <p className="split-bill-qr-library__error" role="alert">{error}</p> : null}
+            <div className="split-bill-qr-editor__actions">
+              <button className="button button-secondary button-small" type="button" onClick={() => setIsEditorOpen(false)}>Cancel</button>
+              <button className="button button-primary button-small" type="submit" disabled={isSaving || isReading || !draft.qrImageData}>
+                {isSaving ? "Saving…" : "Save QR code"}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+
+      {viewingProfile ? (
+        <div className="split-bill-modal split-bill-qr-modal" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setViewingProfile(null)}>
+          <div className="split-bill-modal__card split-bill-qr-viewer panel glass" role="dialog" aria-modal="true" aria-label={viewingProfile.label}>
+            <button className="split-bill-qr-editor__close" type="button" aria-label="Close" onClick={() => setViewingProfile(null)}>×</button>
+            <img src={viewingProfile.qrImageData ?? ""} alt={`${viewingProfile.provider} payment QR code`} />
+            <div>
+              <strong>{viewingProfile.label}</strong>
+              <span>{viewingProfile.provider}{viewingProfile.accountNumber ? ` · ${viewingProfile.accountNumber}` : ""}</span>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
