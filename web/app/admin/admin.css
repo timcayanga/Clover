@@ -165,11 +165,12 @@
 
 .admin-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 1px;
   overflow: hidden;
   border: 1px solid var(--stroke);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--stroke);
 }
 
 .admin-kpi {
@@ -177,7 +178,7 @@
   gap: 3px;
   min-width: 0;
   padding: 12px;
-  border-right: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .admin-kpi:last-child {
@@ -200,6 +201,15 @@
   font-size: 19px;
   line-height: 1.15;
   letter-spacing: -0.03em;
+}
+
+.admin-kpi small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .admin-dashboard-grid {
@@ -504,17 +514,8 @@
 }
 
 @media (max-width: 1180px) {
-  .admin-kpi-grid,
   .admin-page__content .admin-analytics-metric-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .admin-kpi:nth-child(3) {
-    border-right: 0;
-  }
-
-  .admin-kpi:nth-child(-n + 3) {
-    border-bottom: 1px solid var(--stroke);
   }
 }
 
@@ -543,21 +544,12 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .admin-kpi-grid,
-  .admin-page__content .admin-analytics-metric-grid {
+  .admin-kpi-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .admin-kpi:nth-child(3) {
-    border-right: 1px solid var(--stroke);
-  }
-
-  .admin-kpi:nth-child(2n) {
-    border-right: 0;
-  }
-
-  .admin-kpi:nth-child(-n + 4) {
-    border-bottom: 1px solid var(--stroke);
+  .admin-page__content .admin-analytics-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .admin-compact-funnel {

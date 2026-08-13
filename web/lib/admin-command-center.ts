@@ -1,6 +1,8 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { AdminCommandCenterSnapshot } from "@/components/admin-command-center";
 import {
+  adminRealUserSqlPredicate,
   getAdminRealUserWhere,
   getAdminRealWorkspaceWhere,
   getCurrentDeploymentErrorWhere,
@@ -10,6 +12,15 @@ import { getPostHogFeatureFunnels } from "@/lib/posthog-query";
 import { getAdminDataEnvironment } from "@/lib/admin";
 
 const formatCount = (value: number) => value.toLocaleString();
+const formatTrackedAmount = (value: Prisma.Decimal | string | number | null) => {
+  const amount = Number(value ?? 0);
+  return Number.isFinite(amount)
+    ? new Intl.NumberFormat("en-PH", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(amount)
+    : "0.00";
+};
 
 export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCenterSnapshot> {
   const now = new Date();
@@ -59,7 +70,7 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
     users,
     workspaces,
     bankAccounts,
-    transactions,
+    transactionSummaryRows,
     imports,
     errors24h,
     analytics,
@@ -79,9 +90,20 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
     prisma.account.count({
       where: { workspace: realWorkspace },
     }),
-    prisma.transaction.count({
-      where: { ...activeTransaction, workspace: realWorkspace },
-    }),
+    prisma.$queryRaw<
+      Array<{
+        transactionCount: bigint;
+        trackedAmount: Prisma.Decimal | string | number | null;
+      }>
+    >(Prisma.sql`
+      SELECT
+        COUNT(*)::bigint AS "transactionCount",
+        COALESCE(SUM(ABS(t."amount")), 0) AS "trackedAmount"
+      FROM "Transaction" t
+      INNER JOIN "Workspace" w ON w."id" = t."workspaceId"
+      INNER JOIN "User" u ON u."id" = w."userId" AND ${adminRealUserSqlPredicate("u")}
+      WHERE t."deletedAt" IS NULL
+    `),
     prisma.importFile.count({
       where: { ...activeImport, workspace: realWorkspace },
     }),
@@ -256,6 +278,12 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
     }),
   ]);
 
+  const transactionSummary = transactionSummaryRows[0] ?? {
+    transactionCount: 0n,
+    trackedAmount: 0,
+  };
+  const transactions = Number(transactionSummary.transactionCount);
+
   const activity = Array.from({ length: 8 }, (_, index) => {
     const start = new Date(
       eightWeeksAgo.getTime() + index * 7 * 24 * 60 * 60 * 1000,
@@ -323,6 +351,12 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
       {
         label: "Transactions",
         value: formatCount(transactions),
+        href: "/admin/users",
+      },
+      {
+        label: "Amount tracked",
+        value: formatTrackedAmount(transactionSummary.trackedAmount),
+        note: "Absolute total · mixed currencies",
         href: "/admin/users",
       },
       { label: "Imports", value: formatCount(imports), href: "/admin/data-qa" },

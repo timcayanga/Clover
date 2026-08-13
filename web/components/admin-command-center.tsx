@@ -5,6 +5,7 @@ export type AdminCommandCenterSnapshot = {
   metrics: Array<{
     label: string;
     value: string;
+    note?: string | null;
     href?: string | null;
   }>;
   funnels: Array<{
@@ -71,6 +72,7 @@ export function AdminCommandCenter({ snapshot }: Props) {
           >
             <span>{metric.label}</span>
             <strong>{metric.value}</strong>
+            {metric.note ? <small>{metric.note}</small> : null}
           </Link>
         ))}
       </div>
