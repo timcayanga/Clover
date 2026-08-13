@@ -357,16 +357,16 @@ const main = async () => {
     /if \(\(backgroundOnly \|\| launchInBackground\) && !activePasswordItem\) \{\s*return null;/,
     "A visible import launched in the background must render its progress dock instead of disappearing."
   );
-  assert.match(settledVisibilitySource, /\/progress`/);
-  assert.match(
+  assert.match(settledVisibilitySource, /\/status`/);
+  assert.doesNotMatch(
     settledVisibilitySource,
     /if \(params\.importedRows > 0 && params\.importFileId\) \{\s*return true;\s*\}/,
-    "A row-backed import returned by process/confirm must use that durable response as its visibility boundary."
+    "A row-backed process response must not bypass the server-certified settlement boundary."
   );
   assert.match(
     settledVisibilitySource,
-    /if \(accountId && params\.importedRows <= 0\) \{[\s\S]{0,400}waitWithStatusStream/,
-    "An account-only import must still verify that its account and expected balance were published."
+    /if \(accountId\) \{[\s\S]{0,400}waitWithStatusStream/,
+    "Every account-backed import must verify that its account and expected balance were published."
   );
   assert.doesNotMatch(
     settledVisibilitySource,
@@ -374,6 +374,7 @@ const main = async () => {
     "Historical statement imports must not wait for their rows to appear on page 1 of a date-sorted account feed."
   );
   assert.match(settledVisibilitySource, /params\.importedRows > 0 \? null : expectedBalance/);
+  assert.match(settledVisibilitySource, /statusPayload\?\.settledImportComplete !== true/);
   assert.doesNotMatch(
     settledVisibilitySource,
     /parsedRowsCount >= params\.importedRows/,
@@ -791,10 +792,10 @@ const main = async () => {
   );
   assert.match(importProcessorSource, /countTransactionsByImportFileCompat\(sourceMatch\.id\)/);
   assert.match(importProcessorSource, /already imported and skipped the duplicate/);
-  assert.match(
+  assert.doesNotMatch(
     settledVisibilitySource,
     /if \(params\.importedRows > 0 && params\.importFileId\) \{\s*return true;/,
-    "A committed statement result should not wait for an additional client-side visibility poll."
+    "A committed statement result must still wait for its settled read projection."
   );
   assert.match(
     importProcessorSource,

@@ -79,22 +79,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
             }
 
             const visible =
-              snapshot.visibleImportComplete ||
-              Boolean(snapshot.receiptTransaction) ||
-              Boolean(snapshot.receiptDocument);
+              snapshot.settledImportComplete ||
+              Boolean(snapshot.receiptTransaction);
 
             if (visible && !visibleEventSent) {
               visibleEventSent = true;
               send("visible", snapshot);
             }
 
-            const terminalStatus =
-              snapshot.importFile.status === "done" ||
-              snapshot.importFile.status === "failed";
-            const finished =
-              snapshot.confirmationStatus === "confirmed" ||
-              visible ||
-              terminalStatus;
+            const failed = snapshot.importFile.status === "failed";
+            const finished = visible || failed;
 
             if (finished) {
               send(snapshot.importFile.status === "failed" ? "error" : "complete", snapshot);

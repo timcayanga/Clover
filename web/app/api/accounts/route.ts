@@ -32,7 +32,7 @@ import {
 } from "@/lib/transient-data";
 import { summarizeErrorForLog } from "@/lib/security-logging";
 import { getLiveCryptoPhpPrices } from "@/lib/crypto-market-prices";
-import { prefersLiveInvestmentBalance } from "@/lib/investment-balance";
+import { resolveEffectiveAccountBalance } from "@/lib/account-balance-projection";
 import { isCryptoAssetCurrencyCode } from "@/lib/financial-identity-detection";
 import {
   getCanonicalPdaxHoldingIdentity,
@@ -3684,7 +3684,12 @@ export async function GET(request: Request) {
         // time. Do not publish it as the current balance: it can overwrite a
         // freshly revalued BTC/XRP holding and make Accounts disagree with the
         // institution Holdings total.
-        balance: prefersLiveInvestmentBalance(account.type) ? account.balance : checkpointBalance ?? account.balance,
+        balance: resolveEffectiveAccountBalance({
+          accountType: account.type,
+          liveBalance: account.balance,
+          checkpointStatus: latestCheckpoint?.status ?? null,
+          checkpointBalance,
+        }),
       };
     });
     const responseAccounts = accountsWithCheckpointBackfill.filter(

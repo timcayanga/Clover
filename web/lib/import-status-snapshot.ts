@@ -10,6 +10,7 @@ import {
 import { getImportEnrichmentJobByImportFileId, MAX_IMPORT_ENRICHMENT_ATTEMPTS } from "@/lib/import-enrichment-jobs";
 import { findBestImportedAccountMatch } from "@/lib/workspace-cache";
 import type { AccountType } from "@/lib/domain-types";
+import { balancesMatch } from "@/lib/account-balance-projection";
 
 type ImportAccountSummary = {
   accountId: string;
@@ -136,6 +137,8 @@ export type ImportStatusSnapshot = {
   parsedRowsCount: number;
   confirmedTransactionsCount: number;
   visibleImportComplete: boolean;
+  settledImportComplete: boolean;
+  settlementIssues: string[];
   accountDetailOnlyImport: boolean;
   accountSummaries: ImportAccountSummary[];
   confirmationStatus: string;
@@ -679,16 +682,45 @@ export const loadImportStatusSnapshot = async (
       : receiptDocumentAccountSummaries.length > 0
         ? receiptDocumentAccountSummaries
       : checkpointAccountSummaries;
-  const accountSummaries = mergePublishedAccountSummaries(
-    readPublishedAccountSummaries(statementCheckpoint?.sourceMetadata),
-    computedAccountSummaries
-  );
+  const publishedAccountSummaries = readPublishedAccountSummaries(statementCheckpoint?.sourceMetadata);
+  const accountSummaries = mergePublishedAccountSummaries(publishedAccountSummaries, computedAccountSummaries);
   const resolvedAccountId =
     importFile.accountId ??
     receiptTransaction?.accountId ??
     receiptDocument?.accountId ??
     statementCheckpoint?.accountId ??
     (accountSummaries.length === 1 ? accountSummaries[0]?.accountId ?? null : null);
+  const settlementIssues: string[] = [];
+  if (visibleImportComplete && accountSummaries.length === 0) {
+    settlementIssues.push("missing_account_projection");
+  }
+  for (const summary of accountSummaries) {
+    if (!summary.accountId || !summary.accountName || !summary.accountType || !summary.currency) {
+      settlementIssues.push(`incomplete_account_projection:${summary.accountId || "unknown"}`);
+    }
+    const persistedAccount = computedAccountSummaries.find((entry) => entry.accountId === summary.accountId);
+    if (!persistedAccount) {
+      settlementIssues.push(`account_not_visible:${summary.accountId}`);
+      continue;
+    }
+    if (summary.balance !== null && !balancesMatch(summary.balance, persistedAccount.balance)) {
+      settlementIssues.push(`balance_not_settled:${summary.accountId}`);
+    }
+  }
+  for (const publishedSummary of publishedAccountSummaries) {
+    const persistedAccount = computedAccountSummaries.find((entry) => entry.accountId === publishedSummary.accountId);
+    if (
+      persistedAccount &&
+      publishedSummary.balance !== null &&
+      !balancesMatch(publishedSummary.balance, persistedAccount.balance)
+    ) {
+      settlementIssues.push(`published_balance_not_settled:${publishedSummary.accountId}`);
+    }
+  }
+  if (confirmedTransactionsCount > 0 && savedTransactionsCount < confirmedTransactionsCount) {
+    settlementIssues.push("transaction_count_not_settled");
+  }
+  const settledImportComplete = visibleImportComplete && settlementIssues.length === 0;
 
   const shouldPersistResolvedAccountId =
     Boolean(resolvedAccountId) &&
@@ -870,6 +902,8 @@ export const loadImportStatusSnapshot = async (
     parsedRowsCount,
     confirmedTransactionsCount,
     visibleImportComplete,
+    settledImportComplete,
+    settlementIssues,
     accountDetailOnlyImport,
     accountSummaries,
     confirmationStatus,

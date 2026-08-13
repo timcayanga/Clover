@@ -14,6 +14,7 @@ import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { BANK_PRIORITY, normalizeBankName } from "@/lib/data-qa-banks";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { isWiseWalletWithoutVisibleAccountNumber, normalizeImportedCurrencyCode } from "@/lib/imported-account-identity";
+import { resolveEffectiveAccountBalance } from "@/lib/account-balance-projection";
 
 export const dynamic = "force-dynamic";
 
@@ -341,6 +342,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
           statementEndDate: Date | null;
           createdAt: Date;
           endingBalance: { toString: () => string } | null;
+          status: string;
           sourceMetadata: unknown;
         }
       | null = null;
@@ -481,7 +483,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
             account.type
           )
         : account.name;
-    const effectiveBalance = latestCheckpointBalance ?? account.balance?.toString() ?? null;
+    const effectiveBalance = resolveEffectiveAccountBalance({
+      accountType: account.type,
+      liveBalance: account.balance,
+      checkpointStatus: latestCheckpoint?.status ?? null,
+      checkpointBalance: latestCheckpointBalance,
+    });
 
     return NextResponse.json({
       account: serializeAccount({

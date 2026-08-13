@@ -12,6 +12,7 @@ type ImportStatusSnapshot = {
   confirmedTransactionsCount?: number | null;
   parsedRowsCount?: number | null;
   visibleImportComplete?: boolean | null;
+  settledImportComplete?: boolean | null;
   confirmationStatus?: string | null;
   receiptTransaction?: unknown;
   receiptDocument?: unknown;
@@ -105,7 +106,10 @@ const waitWithStatusStream = async (params: {
         !accountLooksSettled({
           account,
           accountId: params.accountId,
-          expectedBalance: params.expectedBalance,
+          // A historical statement can settle without replacing the current
+          // balance from a newer statement. The server snapshot validates the
+          // persisted projection for row-backed imports.
+          expectedBalance: params.importedRows > 0 ? null : params.expectedBalance,
         })
       ) {
         return false;
@@ -113,11 +117,10 @@ const waitWithStatusStream = async (params: {
 
       if (params.importedRows > 0 && params.importFileId) {
         const confirmedTransactionsCount = Number(latestStatusRef.current?.confirmedTransactionsCount ?? 0);
-        const hasVisibleReceiptOrImport =
-          latestStatusRef.current?.visibleImportComplete === true ||
-          latestStatusRef.current?.confirmationStatus === "confirmed" ||
-          Boolean(latestStatusRef.current?.receiptTransaction);
-        return confirmedTransactionsCount >= params.importedRows || hasVisibleReceiptOrImport;
+        return (
+          confirmedTransactionsCount >= params.importedRows &&
+          latestStatusRef.current?.settledImportComplete === true
+        );
       }
 
       return true;
@@ -128,6 +131,7 @@ const waitWithStatusStream = async (params: {
         confirmedTransactionsCount: Number(payload.confirmedTransactionsCount ?? 0),
         parsedRowsCount: Number(payload.parsedRowsCount ?? 0),
         visibleImportComplete: payload.visibleImportComplete === true,
+        settledImportComplete: payload.settledImportComplete === true,
         confirmationStatus: typeof payload.confirmationStatus === "string" ? payload.confirmationStatus : null,
         receiptTransaction: payload.receiptTransaction ?? null,
         receiptDocument: payload.receiptDocument ?? null,
@@ -189,14 +193,6 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
     return true;
   }
 
-  // A process/confirm response with committed rows is already the durable
-  // visibility boundary. Imported workspace caches are seeded before this
-  // helper runs, so polling the same status again only delays the success UI.
-  // Account-only imports still verify the published account and balance below.
-  if (params.importedRows > 0 && params.importFileId) {
-    return true;
-  }
-
   const expectedBalance = toBalanceString(params.expectedBalance);
   const timeoutMs = params.timeoutMs ?? 10_000;
   const startedAt = Date.now();
@@ -204,10 +200,10 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
   // comfortably below the server's stream cadence to avoid connection storms.
   const pollDelayMs = 1_500;
 
-  // Receipts and account-only imports can use the status stream. Statement rows
-  // use the lightweight progress endpoint below so an older statement does not
-  // wait for its rows to appear on page 1 of a date-sorted account feed.
-  if (accountId && params.importedRows <= 0) {
+  // The server emits `visible` only after the persisted account projection,
+  // balance and confirmed-row count agree. Keep the progress poll below as a
+  // fallback for browsers or networks that do not sustain EventSource.
+  if (accountId) {
     const streamResult = await waitWithStatusStream({
       accountId,
       importFileId: params.importFileId ?? null,
@@ -226,7 +222,7 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
       const accountResponsePromise = accountId ? fetchAccountPayload(accountId) : Promise.resolve(null);
       const statusResponsePromise =
         params.importedRows > 0 && params.importFileId
-          ? fetch(`/api/imports/${encodeURIComponent(params.importFileId)}/progress`, {
+          ? fetch(`/api/imports/${encodeURIComponent(params.importFileId)}/status`, {
               cache: "no-store",
             })
           : null;
@@ -249,8 +245,6 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
       if (accountId && !accountLooksSettled({
         account: accountPayload?.account ?? null,
         accountId,
-        // Row-backed imports can legitimately change an existing account whose
-        // aggregate balance differs from one statement's ending balance.
         expectedBalance: params.importedRows > 0 ? null : expectedBalance,
       })) {
         await sleep(pollDelayMs);
@@ -264,11 +258,10 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
 
       if (params.importedRows > 0 && params.importFileId) {
         const confirmedTransactionsCount = Number(statusPayload?.confirmedTransactionsCount ?? 0);
-        const hasVisibleReceiptOrImport =
-          statusPayload?.visibleImportComplete === true ||
-          statusPayload?.confirmationStatus === "confirmed" ||
-          Boolean(statusPayload?.receiptTransaction);
-        if (confirmedTransactionsCount < params.importedRows && !hasVisibleReceiptOrImport) {
+        if (
+          confirmedTransactionsCount < params.importedRows ||
+          statusPayload?.settledImportComplete !== true
+        ) {
           await sleep(pollDelayMs);
           continue;
         }

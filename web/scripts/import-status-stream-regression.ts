@@ -22,6 +22,12 @@ const main = async () => {
     "The status stream must reload the import record instead of polling a stale upload snapshot."
   );
   assert.match(routeSource, /snapshot\.importFile\.status\s*===\s*"failed"/);
+  assert.match(routeSource, /snapshot\.settledImportComplete/);
+  assert.doesNotMatch(
+    routeSource,
+    /snapshot\.importFile\.status\s*===\s*"done"\s*\|\|\s*snapshot\.importFile\.status\s*===\s*"failed"/,
+    "A done write status must not close the stream before the read projection settles."
+  );
   assert.match(routeSource, /consecutiveErrors\s*>=\s*IMPORT_STATUS_STREAM_MAX_ERRORS/);
   assert.match(visibilitySource, /const pollDelayMs\s*=\s*1_500/);
   assert.match(modalSource, /const statusPollDelayMs\s*=\s*1_500/);
@@ -37,7 +43,7 @@ const main = async () => {
   );
   assert.match(modalSource, /const queuedImportPollDelayMs = \(\) => Math\.min\(1_000, 500/);
 
-  console.log("[PASS] Import status reads stay bounded and return visibility before deferred cleanup work.");
+  console.log("[PASS] Import status reads stay bounded and close only after settled visibility.");
 };
 
 main().catch((error) => {
