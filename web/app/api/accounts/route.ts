@@ -2149,6 +2149,7 @@ const repairLegacyMisclassifiedGotradeAccounts = async (workspaceId: string) => 
         { institution: { equals: "GSave", mode: "insensitive" } },
         { name: { equals: "GSave", mode: "insensitive" } },
         { name: { equals: "Dividends", mode: "insensitive" } },
+        { name: { equals: "GoTrade Activity", mode: "insensitive" } },
       ],
     },
     select: {
@@ -2160,7 +2161,23 @@ const repairLegacyMisclassifiedGotradeAccounts = async (workspaceId: string) => 
       investmentHoldings: { select: { assetType: true } },
       investmentSnapshots: {
         orderBy: [{ snapshotDate: "desc" }, { updatedAt: "desc" }],
-        select: { totalValue: true },
+        select: {
+          id: true,
+          totalValue: true,
+          documentImport: {
+            select: {
+              institution: true,
+              accountName: true,
+              accountNumber: true,
+            },
+          },
+          holdings: {
+            select: {
+              assetName: true,
+              assetType: true,
+            },
+          },
+        },
       },
       importFiles: {
         select: {
@@ -2183,7 +2200,10 @@ const repairLegacyMisclassifiedGotradeAccounts = async (workspaceId: string) => 
     const hasStockHoldings = account.investmentHoldings.some(
       (holding) => holding.assetType?.trim().toLowerCase() === "stock"
     );
-    if (!hasStockHoldings && activityCount < 2) {
+    const isPreviouslyCorrectedGotradeAccount = account.investmentSnapshots.some((snapshot) =>
+      snapshot.holdings.some((holding) => holding.assetType?.trim().toLowerCase() === "stock")
+    );
+    if (!hasStockHoldings && activityCount < 2 && !isPreviouslyCorrectedGotradeAccount) {
       continue;
     }
 
@@ -2197,8 +2217,36 @@ const repairLegacyMisclassifiedGotradeAccounts = async (workspaceId: string) => 
           { name: { contains: "GSave", mode: "insensitive" } },
         ],
       },
-      select: { id: true, accountNumber: true },
+      select: { id: true, name: true, accountNumber: true, type: true },
     });
+    const gsaveTargetBySnapshotId = new Map<string, string | null>();
+    for (const snapshot of account.investmentSnapshots) {
+      const snapshotEvidence = [
+        snapshot.documentImport?.institution,
+        snapshot.documentImport?.accountName,
+        ...snapshot.holdings.flatMap((holding) => [holding.assetName, holding.assetType]),
+      ]
+        .filter(Boolean)
+        .join(" ");
+      if (!/\b(?:GSave|UNOready|UNOboost|UNO\s+Digital\s+Bank|time\s+deposit)\b/i.test(snapshotEvidence)) {
+        continue;
+      }
+
+      const snapshotAccountNumber = normalizeImportAccountNumber(snapshot.documentImport?.accountNumber);
+      const target =
+        realGsaveAccounts.find(
+          (candidate) =>
+            snapshotAccountNumber && normalizeImportAccountNumber(candidate.accountNumber) === snapshotAccountNumber
+        ) ??
+        realGsaveAccounts.find((candidate) => {
+          const candidateEvidence = `${candidate.name} ${candidate.type}`;
+          return /UNOboost|time deposit/i.test(snapshotEvidence)
+            ? /UNOboost/i.test(candidateEvidence) || candidate.type === "investment"
+            : !/UNOboost/i.test(candidateEvidence);
+        }) ??
+        null;
+      gsaveTargetBySnapshotId.set(snapshot.id, target?.id ?? null);
+    }
     for (const file of account.importFiles) {
       const gsaveRow = file.parsedRows.find((row) => {
         const provider = readImportedJsonText(row.rawPayload, "providerInstitution");
@@ -2217,11 +2265,25 @@ const repairLegacyMisclassifiedGotradeAccounts = async (workspaceId: string) => 
       });
     }
 
-    const latestPortfolioValue = account.investmentSnapshots.find(
+    const gotradeSnapshots = account.investmentSnapshots.filter(
+      (snapshot) => !gsaveTargetBySnapshotId.has(snapshot.id)
+    );
+    const latestPortfolioValue = gotradeSnapshots.find(
       (snapshot) => snapshot.totalValue !== null
     )?.totalValue;
-    await prisma.$transaction([
-      prisma.account.update({
+    await prisma.$transaction(async (tx) => {
+      for (const [snapshotId, targetAccountId] of gsaveTargetBySnapshotId) {
+        await tx.investmentSnapshot.update({
+          where: { id: snapshotId },
+          data: { accountId: targetAccountId, currency: "PHP" },
+        });
+        await tx.investmentHolding.updateMany({
+          where: { workspaceId, investmentSnapshotId: snapshotId },
+          data: { accountId: targetAccountId, currency: "PHP" },
+        });
+      }
+
+      await tx.account.update({
         where: { id: account.id },
         data: {
           name: "GoTrade Activity",
@@ -2230,22 +2292,24 @@ const repairLegacyMisclassifiedGotradeAccounts = async (workspaceId: string) => 
           currency: "USD",
           balance: latestPortfolioValue?.toString() ?? "0",
         },
-      }),
-      prisma.investmentSnapshot.updateMany({
-        where: { workspaceId, accountId: account.id },
-        data: { currency: "USD" },
-      }),
-      prisma.investmentHolding.updateMany({
+      });
+      await tx.investmentSnapshot.updateMany({
         where: {
           workspaceId,
-          OR: [
-            { accountId: account.id },
-            { investmentSnapshot: { accountId: account.id } },
-          ],
+          accountId: account.id,
+          ...(gotradeSnapshots.length > 0 ? { id: { in: gotradeSnapshots.map((snapshot) => snapshot.id) } } : {}),
+        },
+        data: { currency: "USD" },
+      });
+      await tx.investmentHolding.updateMany({
+        where: {
+          workspaceId,
+          investmentSnapshot: { accountId: account.id },
+          assetType: { equals: "stock", mode: "insensitive" },
         },
         data: { accountId: account.id, currency: "USD" },
-      }),
-    ]);
+      });
+    });
     repairedCount += 1;
   }
 
@@ -3066,6 +3130,8 @@ export async function GET(request: Request) {
     const shouldRunAccountMaintenance = ["1", "true"].includes(
       (searchParams.get("maintenance") ?? "").trim().toLowerCase()
     );
+    let repairedLegacyGotradeAccounts = 0;
+    let repairedLegacyWiseWallets = 0;
     if (shouldRunAccountMaintenance) {
       await repairWorkspaceDataVisibility(workspaceId).catch((error) => {
         console.warn("[accounts] unable to repair workspace data visibility", {
@@ -3148,14 +3214,14 @@ export async function GET(request: Request) {
       });
       return 0;
     });
-    await repairLegacyWiseWalletDuplicates(workspaceId).catch((error) => {
+    repairedLegacyWiseWallets = await repairLegacyWiseWalletDuplicates(workspaceId).catch((error) => {
       console.warn("[accounts] unable to repair duplicate Wise wallets", {
         workspaceId,
         error,
       });
       return 0;
     });
-    await repairLegacyMisclassifiedGotradeAccounts(workspaceId).catch((error) => {
+    repairedLegacyGotradeAccounts = await repairLegacyMisclassifiedGotradeAccounts(workspaceId).catch((error) => {
       console.warn("[accounts] unable to repair legacy GoTrade accounts", {
         workspaceId,
         error,
@@ -3485,22 +3551,22 @@ export async function GET(request: Request) {
       return account.type === "bank" || account.type === "credit_card" || account.type === "line_of_credit";
     };
 
-    const numberedInstitutionKeys = new Set(
+    const numberedInstitutionCurrencyKeys = new Set(
       accounts
         .filter((account) => normalizeImportAccountNumber(account.accountNumber ?? null))
-        .map((account) => importedAccountInstitutionKey(account))
+        .map((account) => importedAccountInstitutionCurrencyKey(account))
         .filter(Boolean)
     );
     const visibleAccounts = accounts.filter(
       (account) => {
-        const institutionKey = importedAccountInstitutionKey(account);
+        const institutionCurrencyKey = importedAccountInstitutionCurrencyKey(account);
         return (
           !looksLikeReceiptImageFilenameAccount(account) &&
           !isOrphanUploadedAccountPlaceholder(account) &&
           !isTransientUploadedAccountPlaceholder(account) &&
           !(
-            institutionKey &&
-            numberedInstitutionKeys.has(institutionKey) &&
+            institutionCurrencyKey &&
+            numberedInstitutionCurrencyKeys.has(institutionCurrencyKey) &&
             isGenericUploadedAccountForInstitution(account)
           )
         );
@@ -3732,6 +3798,8 @@ export async function GET(request: Request) {
             repairedDuplicatePdaxWalletAccounts,
             refreshedPdaxCryptoMarketValues,
             removedMalformedPdaxPortfolioOverviewAccounts,
+            repairedLegacyGotradeAccounts,
+            repairedLegacyWiseWallets,
           }
         : undefined,
     });

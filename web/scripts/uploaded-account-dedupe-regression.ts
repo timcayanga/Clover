@@ -153,6 +153,21 @@ assert.match(
   /providerInstitution[\s\S]+data: \{ accountId: target\?\.id \?\? null \}[\s\S]+GoTrade Activity/,
   "GoTrade repair must preserve activity while detaching UNO-evidenced imports from the mislabeled account."
 );
+assert.match(
+  accountsRouteSource,
+  /gsaveTargetBySnapshotId[\s\S]+investmentSnapshot\.update[\s\S]+accountId: targetAccountId[\s\S]+investmentHolding\.updateMany[\s\S]+currency: "PHP"/,
+  "GoTrade repair must return contaminated GSave time-deposit snapshots and holdings to GSave."
+);
+assert.match(
+  accountsRouteSource,
+  /name: \{ equals: "GoTrade Activity"[\s\S]+isPreviouslyCorrectedGotradeAccount/,
+  "Previously renamed GoTrade activity accounts must remain eligible for contamination cleanup."
+);
+assert.match(
+  accountsRouteSource,
+  /investmentSnapshot: \{ accountId: account\.id \}[\s\S]+assetType: \{ equals: "stock"/,
+  "GoTrade repair must only attach stock holdings to the GoTrade activity account."
+);
 assert.ok(
   eagerGotradeRecovery > 0 && visibleAccountsQuery > eagerGotradeRecovery,
   "Preserved GoTrade activity must be recovered before institution data is returned."
@@ -171,6 +186,16 @@ assert.match(
   accountsRouteSource,
   /Wise exposes different local account details for the same currency wallet[\s\S]+const key = normalizeImportedCurrencyCode\(account\.currency\)/,
   "Wise repair must consolidate upload-created wallets by currency rather than trailing local account details."
+);
+assert.match(
+  accountsRouteSource,
+  /numberedInstitutionCurrencyKeys[\s\S]+importedAccountInstitutionCurrencyKey\(account\)/,
+  "A numbered Wise wallet in one currency must not hide an unnumbered Wise wallet in another currency."
+);
+assert.match(
+  accountsRouteSource,
+  /repairedLegacyWiseWallets[\s\S]+maintenance:/,
+  "Wise identity changes must be reported so the Accounts client can refresh stale account IDs."
 );
 assert.match(
   accountsRouteSource,
