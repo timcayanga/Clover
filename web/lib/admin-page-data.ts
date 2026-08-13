@@ -11,8 +11,11 @@ import { getAdminContactInquiries } from "@/lib/contact-inquiries";
 // Admin reads are expensive aggregates, but they do not need millisecond-level
 // freshness. Short TTLs keep navigation warm without caching any mutations.
 const cachedCommandCenter = unstable_cache(
-  async (_environment: string) => getAdminCommandCenterSnapshot(),
-  ["admin-command-center-v3"],
+  async (_environment: string, from: string, to: string) =>
+    getAdminCommandCenterSnapshot(
+      from && to ? { from: new Date(from), to: new Date(to) } : undefined,
+    ),
+  ["admin-command-center-v4"],
   { revalidate: 30 },
 );
 
@@ -63,7 +66,8 @@ const cachedInquiries = unstable_cache(
 
 const environment = () => getAdminDataEnvironment();
 
-export const getCachedAdminCommandCenterSnapshot = () => cachedCommandCenter(environment());
+export const getCachedAdminCommandCenterSnapshot = (from = "", to = "") =>
+  cachedCommandCenter(environment(), from, to);
 export const getCachedAdminAnalyticsSnapshot = () => cachedAnalytics(environment());
 export const getCachedAdminOperationsSnapshot = () => cachedOperations(environment());
 export const getCachedAdminDataQaBankSummary = () => cachedDataQaSummary(environment());

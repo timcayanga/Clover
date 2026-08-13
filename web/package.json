@@ -116,6 +116,7 @@
     "qa:admin-account-count": "tsx scripts/admin-account-count-regression.ts",
     "qa:admin-home-tracked-amount": "tsx scripts/admin-home-tracked-amount-regression.ts",
     "qa:admin-core-funnel": "tsx scripts/admin-core-funnel-regression.ts",
+    "qa:admin-analysis": "tsx scripts/admin-analysis-regression.ts",
     "qa:interaction-delight": "tsx scripts/interaction-delight-regression.ts",
     "qa:recurring-ledger": "tsx scripts/recurring-ledger-regression.ts",
     "qa:circles": "tsx scripts/circles-regression.ts",

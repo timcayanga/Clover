@@ -22,6 +22,7 @@ assert.match(read("components/admin-users-console.tsx"), /skipInitialUsersLoad/)
 for (const page of [
   "app/admin/page.tsx",
   "app/admin/analytics/page.tsx",
+  "app/admin/analysis/page.tsx",
   "app/admin/users/page.tsx",
   "app/admin/operations/page.tsx",
   "app/admin/logs/page.tsx",

@@ -10,6 +10,7 @@ import {
 import { FEATURE_FUNNEL_DEFINITIONS } from "@/lib/feature-adoption";
 import { getPostHogFeatureFunnels } from "@/lib/posthog-query";
 import { getAdminDataEnvironment } from "@/lib/admin";
+import { getAnalyticsBetaStartedAt } from "@/lib/analytics";
 
 const formatCount = (value: number) => value.toLocaleString();
 const formatTrackedAmount = (value: Prisma.Decimal | string | number | null) => {
@@ -22,7 +23,14 @@ const formatTrackedAmount = (value: Prisma.Decimal | string | number | null) => 
     : "0.00";
 };
 
-export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCenterSnapshot> {
+export type AdminAdoptionRange = {
+  from: Date;
+  to: Date;
+};
+
+export async function getAdminCommandCenterSnapshot(
+  adoptionRange?: AdminAdoptionRange,
+): Promise<AdminCommandCenterSnapshot> {
   const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -296,7 +304,7 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
         where: { ...realUser, splitBills: { some: {} } },
       }),
     ]),
-    getPostHogFeatureFunnels(getAdminDataEnvironment()),
+    getPostHogFeatureFunnels(getAdminDataEnvironment(), adoptionRange),
     prisma.user.findMany({
       where: { ...realUser, createdAt: { gte: eightWeeksAgo } },
       select: { createdAt: true },
@@ -378,6 +386,11 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
 
   return {
     adoptionBase: users,
+    adoptionRange: {
+      from: (adoptionRange?.from ?? getAnalyticsBetaStartedAt()).toISOString(),
+      to: (adoptionRange?.to ?? now).toISOString(),
+      isFiltered: Boolean(adoptionRange),
+    },
     metrics: [
       { label: "Users", value: formatCount(users), href: "/admin/users" },
       {

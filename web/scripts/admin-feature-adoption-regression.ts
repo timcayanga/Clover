@@ -38,12 +38,15 @@ assert.match(querySource, /getPostHogFeatureFunnels/);
 assert.match(querySource, /countIf\(.*_hit/s);
 assert.match(querySource, /GROUP BY person_id/);
 assert.match(querySource, /_at >= .*_at/);
+assert.match(querySource, /timestamp < toDateTime\('\$\{rangeEnd\}'\)/);
 
 const commandCenterSource = readSource("components/admin-command-center.tsx");
-assert.match(commandCenterSource, /<details className="admin-feature-funnel"/);
-assert.match(commandCenterSource, /% of viewers/);
-assert.match(commandCenterSource, /% from prior tracked step/);
-assert.match(commandCenterSource, /% of current production users/);
-assert.match(commandCenterSource, /data-tooltip=/);
+assert.match(commandCenterSource, /className="admin-feature-line"/);
+assert.match(commandCenterSource, /className="admin-feature-line__chart"/);
+assert.match(commandCenterSource, /viewers are 100%/);
+assert.match(commandCenterSource, /name="adoptionFrom"/);
+assert.match(commandCenterSource, /name="adoptionTo"/);
+assert.match(commandCenterSource, /type="date"/);
+assert.match(commandCenterSource, /point\.rate/);
 
 console.log("Admin feature adoption regression passed.");

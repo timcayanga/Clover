@@ -27,6 +27,11 @@ export type PostHogFeatureFunnelResult = {
   errorCode: PostHogLiveAnalytics["errorCode"];
 };
 
+export type PostHogFeatureFunnelRange = {
+  from: Date;
+  to: Date;
+};
+
 export type PostHogEventAggregate = {
   name: string;
   count: number;
@@ -163,7 +168,8 @@ const criterionCondition = (criterion: { event: string; pathPrefixes?: string[] 
 };
 
 export async function getPostHogFeatureFunnels(
-  environment = getAnalyticsEnvironment()
+  environment = getAnalyticsEnvironment(),
+  range?: PostHogFeatureFunnelRange,
 ): Promise<PostHogFeatureFunnelResult> {
   const config = getQueryConfig();
   if (!config) {
@@ -196,7 +202,9 @@ export async function getPostHogFeatureFunnels(
       return `countIf(${progression}) AS ${feature.key}__${step.key}`;
     });
   });
-  const betaStartedAt = escapeHogQl(getAnalyticsBetaStartedAt().toISOString());
+  const betaStartedAt = getAnalyticsBetaStartedAt();
+  const rangeStart = escapeHogQl((range?.from ?? betaStartedAt).toISOString());
+  const rangeEnd = escapeHogQl((range?.to ?? new Date()).toISOString());
   const distinctIdPrefix = `${escapeHogQl(environment)}:%`;
   const query = `
     SELECT ${selectExpressions.join(",\n      ")}
@@ -205,7 +213,8 @@ export async function getPostHogFeatureFunnels(
         toString(distinct_id) AS person_id,
         ${stepExpressions.join(",\n        ")}
       FROM events
-      WHERE timestamp >= toDateTime('${betaStartedAt}')
+      WHERE timestamp >= toDateTime('${rangeStart}')
+        AND timestamp < toDateTime('${rangeEnd}')
         AND toString(distinct_id) LIKE '${distinctIdPrefix}'
       GROUP BY person_id
     )
@@ -222,7 +231,7 @@ export async function getPostHogFeatureFunnels(
       },
       body: JSON.stringify({
         query: { kind: "HogQLQuery", query },
-        name: `clover_admin_feature_funnels_${environment}_${ANALYTICS_BETA_EPOCH}`,
+        name: `clover_admin_feature_funnels_${environment}_${ANALYTICS_BETA_EPOCH}_${rangeStart.slice(0, 10)}_${rangeEnd.slice(0, 10)}`,
         refresh: "blocking",
       }),
       cache: "no-store",

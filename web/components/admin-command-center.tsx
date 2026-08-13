@@ -2,6 +2,11 @@ import Link from "next/link";
 
 export type AdminCommandCenterSnapshot = {
   adoptionBase: number;
+  adoptionRange: {
+    from: string;
+    to: string;
+    isFiltered: boolean;
+  };
   metrics: Array<{
     label: string;
     value: string;
@@ -60,6 +65,8 @@ export function AdminCommandCenter({ snapshot }: Props) {
         (snapshot.retention.returning7d / snapshot.retention.active30d) * 100,
       )
     : 0;
+  const adoptionFrom = snapshot.adoptionRange.from.slice(0, 10);
+  const adoptionTo = snapshot.adoptionRange.to.slice(0, 10);
 
   return (
     <section className="admin-command-center">
@@ -203,75 +210,76 @@ export function AdminCommandCenter({ snapshot }: Props) {
           aria-labelledby="admin-adoption-title"
         >
           <div className="admin-compact-panel__head">
-            <h2 id="admin-adoption-title">Feature adoption</h2>
-            <span>Unique users · click to expand</span>
+            <div>
+              <h2 id="admin-adoption-title">Feature adoption</h2>
+              <span>Unique users · viewers are 100%</span>
+            </div>
+            <form className="admin-adoption-range" action="/admin" method="get">
+              <label>
+                <span>From</span>
+                <input name="adoptionFrom" type="date" defaultValue={adoptionFrom} max={adoptionTo} />
+              </label>
+              <label>
+                <span>To</span>
+                <input name="adoptionTo" type="date" defaultValue={adoptionTo} min={adoptionFrom} />
+              </label>
+              <button type="submit">Apply</button>
+              {snapshot.adoptionRange.isFiltered ? <Link href="/admin">Reset</Link> : null}
+            </form>
           </div>
           <div className="admin-feature-funnels">
             {snapshot.adoption.map((feature) => {
               const posthogSteps = feature.steps.filter((step) => step.source === "PostHog");
               const databaseSteps = feature.steps.filter((step) => step.source === "Database");
               const firstTracked = posthogSteps[0];
-              const lastTracked = posthogSteps.at(-1);
               const fallbackCount = Math.max(0, ...databaseSteps.map((step) => step.count));
-              const liveConversion = firstTracked?.count
-                ? Math.round(((lastTracked?.count ?? 0) / firstTracked.count) * 100)
-                : 0;
-              const fallbackRate = snapshot.adoptionBase
-                ? Math.round((fallbackCount / snapshot.adoptionBase) * 100)
-                : 0;
+              const displayedSteps = posthogSteps.length
+                ? posthogSteps
+                : snapshot.adoptionRange.isFiltered
+                  ? []
+                  : databaseSteps;
+              const baseline = firstTracked?.count ?? snapshot.adoptionBase;
+              const chartWidth = 420;
+              const chartHeight = 82;
+              const points = displayedSteps.map((step, index) => {
+                const rate = baseline ? Math.min(100, Math.round((step.count / baseline) * 100)) : 0;
+                return {
+                  ...step,
+                  rate,
+                  x: displayedSteps.length === 1 ? chartWidth / 2 : (index / (displayedSteps.length - 1)) * chartWidth,
+                  y: 8 + ((100 - rate) / 100) * (chartHeight - 22),
+                };
+              });
+              const pointString = points.map((point) => `${point.x},${point.y}`).join(" ");
               return (
-                <details className="admin-feature-funnel" key={feature.key}>
-                  <summary>
-                    <span>
-                      <strong>{feature.label}</strong>
-                      <small>{feature.description}</small>
-                    </span>
-                    <span className="admin-feature-funnel__reach">
-                      <strong>{(firstTracked?.count ?? fallbackCount).toLocaleString()}</strong>
-                      <small>
-                        {firstTracked
-                          ? `${liveConversion}% deepest-step conversion`
-                          : `${fallbackRate}% current adoption`}
-                      </small>
-                      <em>{feature.status === "live" ? "Live PostHog funnel" : "Database fallback"}</em>
-                    </span>
-                  </summary>
-                  <div className="admin-feature-funnel__steps">
-                    {feature.steps.map((step, index) => {
-                      const priorTrackedSteps = feature.steps
-                        .slice(0, index)
-                        .filter((candidate) => candidate.source === "PostHog");
-                      const previousTracked = priorTrackedSteps.at(-1);
-                      const fromFirst = step.source === "PostHog" && firstTracked?.count
-                        ? Math.round((step.count / firstTracked.count) * 100)
-                        : step.source === "Database" && snapshot.adoptionBase
-                          ? Math.round((step.count / snapshot.adoptionBase) * 100)
-                          : 0;
-                      const fromPrevious = step.source === "PostHog"
-                        ? previousTracked?.count
-                          ? Math.round((step.count / previousTracked.count) * 100)
-                          : 100
-                        : null;
-                      return (
-                        <div className="admin-feature-funnel__step" key={`${feature.key}-${step.label}`}>
-                          <div>
-                            <span>{index + 1}. {step.label}</span>
-                            <small>{step.source}</small>
-                          </div>
-                          <div className="admin-feature-funnel__track"><i style={{ width: `${Math.min(100, fromFirst)}%` }} /></div>
-                          <strong>{step.count.toLocaleString()}</strong>
-                          <small>
-                            {step.source === "PostHog"
-                              ? `${fromFirst}% of viewers · ${fromPrevious}% from prior tracked step`
-                              : step.source === "Database"
-                                ? `${fromFirst}% of current production users`
-                                : "Historical event not available"}
-                          </small>
-                        </div>
-                      );
-                    })}
+                <article className="admin-feature-line" key={feature.key}>
+                  <div className="admin-feature-line__head">
+                    <strong>{feature.label}</strong>
+                    <span>{(firstTracked?.count ?? fallbackCount).toLocaleString()} viewers</span>
                   </div>
-                </details>
+                  {points.length ? (
+                    <>
+                      <svg className="admin-feature-line__chart" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label={`${feature.label} funnel`}>
+                        <line x1="0" x2={chartWidth} y1="8" y2="8" className="admin-feature-line__guide" />
+                        <polyline points={pointString} className="admin-feature-line__path" />
+                        {points.map((point) => (
+                          <g key={`${feature.key}-${point.label}`}>
+                            <circle cx={point.x} cy={point.y} r="4" className="admin-feature-line__point" />
+                            <title>{`${point.label}: ${point.count.toLocaleString()} users · ${point.rate}% of viewers`}</title>
+                          </g>
+                        ))}
+                      </svg>
+                      <div className="admin-feature-line__steps" style={{ gridTemplateColumns: `repeat(${points.length}, minmax(0, 1fr))` }}>
+                        {points.map((point, index) => (
+                          <span key={`${feature.key}-${point.label}-step`}>
+                            <strong>{index + 1}. {point.label}</strong>
+                            <small>{point.rate}%</small>
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  ) : <p className="admin-feature-line__empty">No tracked steps in this period.</p>}
+                </article>
               );
             })}
           </div>
