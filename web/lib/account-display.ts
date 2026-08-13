@@ -102,6 +102,16 @@ export const formatUploadAccountDisplayName = (
     type: type ?? null,
   });
 
+  // A legacy recovery used "Activity" as an internal bucket name. It is not
+  // a separate account and should never surface in account pickers or tables.
+  if (
+    type === "investment" &&
+    /^gotrade$/i.test(normalizeWhitespace(institution ?? "")) &&
+    /^gotrade(?: activity)?$/i.test(normalizeWhitespace(name ?? ""))
+  ) {
+    return "GoTrade";
+  }
+
   if (type === "cash" || resolvedLabel.toLowerCase() === "cash") {
     const explicitCurrency = safeName?.match(/\b([A-Z]{3})$/i)?.[1]?.toUpperCase() ?? null;
     return explicitCurrency && explicitCurrency !== "PHP" ? `Cash ${explicitCurrency}` : "Cash";

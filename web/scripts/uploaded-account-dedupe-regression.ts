@@ -150,7 +150,7 @@ assert.ok(
 );
 assert.match(
   accountsRouteSource,
-  /providerInstitution[\s\S]+data: \{ accountId: target\?\.id \?\? null \}[\s\S]+GoTrade Activity/,
+  /providerInstitution[\s\S]+data: \{ accountId: target\?\.id \?\? null \}[\s\S]+name: "GoTrade"/,
   "GoTrade repair must preserve activity while detaching UNO-evidenced imports from the mislabeled account."
 );
 assert.match(
@@ -162,6 +162,11 @@ assert.match(
   accountsRouteSource,
   /name: \{ equals: "GoTrade Activity"[\s\S]+isPreviouslyCorrectedGotradeAccount/,
   "Previously renamed GoTrade activity accounts must remain eligible for contamination cleanup."
+);
+assert.match(
+  accountsRouteSource,
+  /hasCorrectedGotradeIdentity[\s\S]+\^gotrade\(\?: activity\)\?\$/,
+  "Canonical and legacy GoTrade names must both retain their corrected institution identity."
 );
 assert.match(
   accountsRouteSource,

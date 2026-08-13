@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { detectStatementMetadata, parseImportText } from "@/lib/import-parser";
+import { formatUploadAccountDisplayName } from "@/lib/account-display";
 
 const positionsText = `
 My positions
@@ -57,6 +58,11 @@ const positionMetadata = detectStatementMetadata(positionsText, "renamed-gotrade
 assert.equal(positionMetadata?.institution, "GoTrade");
 assert.equal(positionMetadata?.accountType, "investment");
 assert.equal(positionMetadata?.currency, "USD");
+assert.equal(
+  formatUploadAccountDisplayName("GoTrade Activity", "GoTrade", null, "investment"),
+  "GoTrade",
+  "Legacy internal GoTrade activity labels must render as the canonical institution name."
+);
 
 const positionRows = parseImportText(positionsText, "renamed-gotrade-positions.png", "image/png");
 assert.equal(positionRows.length, 8, "Expected eight GoTrade holdings.");

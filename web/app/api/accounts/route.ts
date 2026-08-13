@@ -2286,7 +2286,7 @@ const repairLegacyMisclassifiedGotradeAccounts = async (workspaceId: string) => 
       await tx.account.update({
         where: { id: account.id },
         data: {
-          name: "GoTrade Activity",
+          name: "GoTrade",
           institution: "GoTrade",
           type: "investment",
           currency: "USD",
@@ -3712,7 +3712,7 @@ export async function GET(request: Request) {
           : null;
       const effectiveAccountNumber = account.accountNumber ?? checkpointAccountNumber ?? null;
       const hasCorrectedGotradeIdentity =
-        account.institution?.trim().toLowerCase() === "gotrade" && /^gotrade activity$/i.test(account.name.trim());
+        account.institution?.trim().toLowerCase() === "gotrade" && /^gotrade(?: activity)?$/i.test(account.name.trim());
       const uploadedInstitution = hasCorrectedGotradeIdentity
         ? account.institution
         : resolveUploadedAccountInstitution(account.institution, checkpointBankHint, checkpointInstitution);

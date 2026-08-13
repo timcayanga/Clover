@@ -12,6 +12,7 @@ This document captures the deterministic rules for GoTrade investment screenshot
 ## Identity And Currency
 
 - Use `GoTrade` as the institution and USD as the screenshot currency.
+- Use `GoTrade` as the brokerage account name. Never expose internal labels such as `GoTrade Activity` to users.
 - Use the security as the investment account name when the screen identifies a holding, for example `Amazon`, `Verizon`, or `Vanguard S&P 500 ETF`.
 - Preserve the ticker in `investmentSymbol` and fractional shares in `investmentQuantity`.
 - Do not create a principal or maturity value for market securities when the screenshot only shows market value.
