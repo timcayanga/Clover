@@ -20,8 +20,8 @@ export default async function SignInPage({ searchParams }: { searchParams?: Prom
   const completeRedirectUrl = isCircleInvitationToken(circleInvite)
     ? getCircleInvitationPath(circleInvite, { accept: true })
     : "/continue";
-  const session = await auth();
-  if (session.userId) {
+  const session = await auth().catch(() => null);
+  if (session?.userId) {
     redirect(completeRedirectUrl);
   }
   return (

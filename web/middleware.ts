@@ -34,6 +34,7 @@ export default clerkMiddleware(async (auth, request) => {
 
 export const config = {
   matcher: [
+    "/sign-in(.*)",
     "/home(.*)",
     "/dashboard(.*)",
     "/accounts(.*)",

@@ -4,9 +4,26 @@ import { resolve } from "node:path";
 
 const authScreen = readFileSync(resolve(process.cwd(), "components/clerk-auth-screen.tsx"), "utf8");
 const clerkProvider = readFileSync(resolve(process.cwd(), "components/clerk-app-provider.tsx"), "utf8");
+const middleware = readFileSync(resolve(process.cwd(), "middleware.ts"), "utf8");
+const signInPage = readFileSync(resolve(process.cwd(), "app/sign-in/[[...sign-in]]/page.tsx"), "utf8");
 const morePage = readFileSync(resolve(process.cwd(), "app/more/page.tsx"), "utf8");
 const signOutButton = readFileSync(resolve(process.cwd(), "components/more-sign-out-button.tsx"), "utf8");
+const protectedRouteMatcher = middleware.match(
+  /const isProtectedAppRoute = createRouteMatcher\(\[([\s\S]*?)\]\);/u,
+)?.[1] ?? "";
 
+assert.match(signInPage, /await auth\(\)\.catch\(\(\) => null\)/u, "Sign-in must survive missing Clerk middleware");
+assert.match(signInPage, /session\?\.userId/u, "Signed-in users must bypass the sign-in screen safely");
+assert.match(
+  middleware,
+  /matcher:\s*\[[\s\S]*["']\/sign-in\(\.\*\)["']/u,
+  "Clerk middleware must run on sign-in before the Server Component calls auth()",
+);
+assert.doesNotMatch(
+  protectedRouteMatcher,
+  /["']\/sign-in\(\.\*\)["']/u,
+  "Sign-in must execute Clerk middleware without becoming a protected route",
+);
 assert.match(authScreen, /Forgot password\?/u, "Sign-in must expose password recovery");
 assert.ok(
   authScreen.indexOf("Forgot password?") > authScreen.indexOf('className="clover-auth-password"'),
