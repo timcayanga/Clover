@@ -27,6 +27,9 @@ export type AdminUserListItem = {
   lastName: string | null;
   fullName: string;
   verified: boolean;
+  isBlocked: boolean;
+  blockedReason: string | null;
+  blockedAt: string | null;
   planTier: PlanTier;
   planTierLocked: boolean;
   planLabel: string;
@@ -47,7 +50,6 @@ export type AdminUserListItem = {
   activeAccountCount: number;
   investmentAccountCount: number;
   investmentValue: string;
-  transactionVolume: string;
   monthlyUploads: number;
   renewalAt: string | null;
   lastActivityAt: string | null;
@@ -61,6 +63,8 @@ export type AdminUserListItem = {
     currentPeriodEnd: string | null;
   } | null;
 };
+
+type AdminUserAccessState = Pick<AdminUserListItem, "isBlocked" | "blockedReason" | "blockedAt">;
 
 export type AdminUserListResponse = {
   users: AdminUserListItem[];
@@ -111,7 +115,6 @@ export type AdminUserDetail = {
   activeAccountCount: number;
   investmentAccountCount: number;
   investmentValue: string;
-  transactionVolume: string;
   monthlyUploads: number;
   renewalAt: string | null;
   createdAt: string;
@@ -316,7 +319,6 @@ type AdminUserListRow = User & {
   activeAccountCount?: number;
   investmentAccountCount?: number;
   investmentValue?: string;
-  transactionVolume?: string;
   monthlyUploads?: number;
   recentErrorCount?: number;
   lastActivityAt?: Date | null;
@@ -347,6 +349,9 @@ function mapUser(user: AdminUserListRow): AdminUserListItem {
     lastName: user.lastName,
     fullName: getFullName(user),
     verified: user.verified,
+    isBlocked: false,
+    blockedReason: null,
+    blockedAt: null,
     planTier: user.planTier,
     planTierLocked: user.planTierLocked,
     planLabel: getPlanDisplayLabel(user.planTier, user.billingSubscription?.interval ?? null),
@@ -367,7 +372,6 @@ function mapUser(user: AdminUserListRow): AdminUserListItem {
     activeAccountCount: user.activeAccountCount ?? 0,
     investmentAccountCount: user.investmentAccountCount ?? 0,
     investmentValue: user.investmentValue ?? "0",
-    transactionVolume: user.transactionVolume ?? "0",
     monthlyUploads: user.monthlyUploads ?? 0,
     renewalAt: user.billingSubscription?.currentPeriodEnd ? user.billingSubscription.currentPeriodEnd.toISOString() : null,
     lastActivityAt: user.lastActivityAt ? user.lastActivityAt.toISOString() : null,
@@ -395,7 +399,6 @@ async function fetchUserMetrics(userIds: string[]) {
       activeAccountCounts: new Map<string, number>(),
       investmentAccountCounts: new Map<string, number>(),
       investmentValues: new Map<string, string>(),
-      transactionVolumes: new Map<string, string>(),
       monthlyUploads: new Map<string, number>(),
       recentErrorCounts: new Map<string, number>(),
       lastActivityAt: new Map<string, Date | null>(),
@@ -417,7 +420,6 @@ async function fetchUserMetrics(userIds: string[]) {
     activeAccountRows,
     investmentAccountRows,
     investmentValueRows,
-    transactionVolumeRows,
     monthlyUploadRows,
     recentErrorRows,
     lastActivityRows,
@@ -460,16 +462,6 @@ async function fetchUserMetrics(userIds: string[]) {
       INNER JOIN "Workspace" w ON w."id" = a."workspaceId"
       WHERE w."userId" IN (${Prisma.join(userIdFragments)})
         AND a."type" = 'investment'::"AccountType"
-      GROUP BY w."userId"
-    `),
-    prisma.$queryRaw<Array<{ userId: string; transactionVolume: Prisma.Decimal | string | number | null }>>(Prisma.sql`
-      SELECT w."userId" AS "userId", COALESCE(SUM(ABS(t."amount")), 0) AS "transactionVolume"
-      FROM "Transaction" t
-      INNER JOIN "Workspace" w ON w."id" = t."workspaceId"
-      WHERE w."userId" IN (${Prisma.join(userIdFragments)})
-        AND t."isExcluded" = false
-        AND t."isTransfer" = false
-        AND t."deletedAt" IS NULL
       GROUP BY w."userId"
     `),
     prisma.$queryRaw<Array<{ userId: string; monthlyUploads: bigint }>>(Prisma.sql`
@@ -525,9 +517,6 @@ async function fetchUserMetrics(userIds: string[]) {
     investmentValues: new Map(
       investmentValueRows.map((row) => [row.userId, row.investmentValue === null ? "0" : String(row.investmentValue)])
     ),
-    transactionVolumes: new Map(
-      transactionVolumeRows.map((row) => [row.userId, row.transactionVolume === null ? "0" : String(row.transactionVolume)])
-    ),
     monthlyUploads: new Map(
       monthlyUploadRows.map((row) => [row.userId, Number(row.monthlyUploads)])
     ),
@@ -538,6 +527,42 @@ async function fetchUserMetrics(userIds: string[]) {
       lastActivityRows.map((row) => [row.userId, row.lastActivityAt])
     ),
   };
+}
+
+async function fetchUserAccessStates(userIds: string[]) {
+  const states = new Map<string, AdminUserAccessState>();
+  if (userIds.length === 0) {
+    return states;
+  }
+
+  const actions = await prisma.adminSupportAction.findMany({
+    where: {
+      targetUserId: { in: userIds },
+      action: { in: ["block_user", "unblock_user"] },
+    },
+    orderBy: [{ createdAt: "desc" }],
+    select: {
+      targetUserId: true,
+      action: true,
+      reason: true,
+      createdAt: true,
+    },
+  });
+
+  for (const action of actions) {
+    if (!action.targetUserId || states.has(action.targetUserId)) {
+      continue;
+    }
+
+    const isBlocked = action.action === "block_user";
+    states.set(action.targetUserId, {
+      isBlocked,
+      blockedReason: isBlocked ? action.reason : null,
+      blockedAt: isBlocked ? action.createdAt.toISOString() : null,
+    });
+  }
+
+  return states;
 }
 
 async function fetchAdminOverview(): Promise<AdminUserOverview> {
@@ -827,7 +852,11 @@ export async function getAdminUsers(filters: AdminUserListFilters = {}): Promise
     fetchAdminOverview(),
   ]);
 
-  const metrics = await fetchUserMetrics(users.map((user) => user.id));
+  const userIds = users.map((user) => user.id);
+  const [metrics, accessStates] = await Promise.all([
+    fetchUserMetrics(userIds),
+    fetchUserAccessStates(userIds),
+  ]);
 
   const enrichedUsers: AdminUserListRow[] = users.map((user) => ({
     ...user,
@@ -836,14 +865,20 @@ export async function getAdminUsers(filters: AdminUserListFilters = {}): Promise
     activeAccountCount: metrics.activeAccountCounts.get(user.id) ?? 0,
     investmentAccountCount: metrics.investmentAccountCounts.get(user.id) ?? 0,
     investmentValue: metrics.investmentValues.get(user.id) ?? "0",
-    transactionVolume: metrics.transactionVolumes.get(user.id) ?? "0",
     monthlyUploads: metrics.monthlyUploads.get(user.id) ?? 0,
     recentErrorCount: metrics.recentErrorCounts.get(user.id) ?? 0,
     lastActivityAt: metrics.lastActivityAt.get(user.id) ?? null,
   }));
 
   return {
-    users: enrichedUsers.map(mapUser),
+    users: enrichedUsers.map((user) => ({
+      ...mapUser(user),
+      ...(accessStates.get(user.id) ?? {
+        isBlocked: false,
+        blockedReason: null,
+        blockedAt: null,
+      }),
+    })),
     page,
     pageSize,
     totalCount,
@@ -1197,7 +1232,6 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
     activeAccountCount: metrics.activeAccountCounts.get(user.id) ?? 0,
     investmentAccountCount: metrics.investmentAccountCounts.get(user.id) ?? 0,
     investmentValue: metrics.investmentValues.get(user.id) ?? "0",
-    transactionVolume: metrics.transactionVolumes.get(user.id) ?? "0",
     monthlyUploads: metrics.monthlyUploads.get(user.id) ?? 0,
     renewalAt: user.billingSubscription?.currentPeriodEnd ? user.billingSubscription.currentPeriodEnd.toISOString() : null,
     lastActivityAt: metrics.lastActivityAt.get(user.id)?.toISOString() ?? null,
@@ -1311,7 +1345,6 @@ export async function exportAdminUsers(filters: AdminUserListFilters = {}) {
       activeAccountCount: metrics.activeAccountCounts.get(user.id) ?? 0,
       investmentAccountCount: metrics.investmentAccountCounts.get(user.id) ?? 0,
       investmentValue: metrics.investmentValues.get(user.id) ?? "0",
-      transactionVolume: metrics.transactionVolumes.get(user.id) ?? "0",
       monthlyUploads: metrics.monthlyUploads.get(user.id) ?? 0,
     })
   );
@@ -1333,7 +1366,6 @@ export async function exportAdminUsers(filters: AdminUserListFilters = {}) {
     "activeAccountCount",
     "investmentAccountCount",
     "investmentValue",
-    "transactionVolume",
     "monthlyUploads",
     "renewalAt",
     "createdAt",
@@ -1368,7 +1400,6 @@ export async function exportAdminUsers(filters: AdminUserListFilters = {}) {
         row.activeAccountCount,
         row.investmentAccountCount,
         row.investmentValue,
-        row.transactionVolume,
         row.monthlyUploads,
         row.renewalAt ?? "",
         row.createdAt,

@@ -376,7 +376,16 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
   const applyUpdatedUser = (updatedUser: AdminUserListItem) => {
     setData((current) => ({
       ...current,
-      users: current.users.map((entry) => (entry.id === updatedUser.id ? updatedUser : entry)),
+      users: current.users.map((entry) =>
+        entry.id === updatedUser.id
+          ? {
+              ...updatedUser,
+              isBlocked: entry.isBlocked,
+              blockedReason: entry.blockedReason,
+              blockedAt: entry.blockedAt,
+            }
+          : entry
+      ),
     }));
     setDrafts((current) => ({
       ...current,
@@ -421,25 +430,58 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
     })();
   };
 
-  const blockUser = (user: AdminUserListItem) => {
+  const changeUserAccess = (user: AdminUserListItem) => {
+    const action = user.isBlocked ? "unblock" : "block";
+    const reason = user.isBlocked
+      ? window.prompt(`Optional note for unblocking ${user.fullName || user.email}:`, "Access restored by Admin")
+      : window.prompt(`Why should ${user.fullName || user.email} be blocked?`);
+
+    if (reason === null || (action === "block" && reason.trim().length < 3)) {
+      if (action === "block" && reason !== null) {
+        setSaveMessage("Enter a short reason before blocking this user.");
+      }
+      return;
+    }
+
     setBlockingUserId(user.id);
     setSaveMessage(null);
 
     void (async () => {
       try {
-        const updatedUser = await patchUser(user.id, { verified: false, planTierLocked: true });
-        applyUpdatedUser(updatedUser);
-        setSaveMessage(`Blocked ${updatedUser.fullName || updatedUser.email}.`);
+        const response = await fetch(`/api/admin/users/${user.id}/access`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action, reason: reason.trim() || undefined }),
+        });
+        const result = (await response.json()) as { error?: string };
+        if (!response.ok) {
+          throw new Error(result.error ?? `Unable to ${action} user.`);
+        }
+        setSaveMessage(`${action === "block" ? "Blocked" : "Unblocked"} ${user.fullName || user.email}.`);
+        setRefreshNonce((value) => value + 1);
       } catch (blockError) {
-        setSaveMessage(blockError instanceof Error ? blockError.message : "Unable to block user.");
+        setSaveMessage(blockError instanceof Error ? blockError.message : `Unable to ${action} user.`);
       } finally {
         setBlockingUserId((current) => (current === user.id ? null : current));
       }
     })();
   };
 
-  const deleteUser = (user: AdminUserListItem) => {
-    if (!window.confirm(`Delete ${user.fullName || user.email}? This will mark the user as wiped in Clover.`)) {
+  const deleteUserData = (user: AdminUserListItem, scope: "transactions" | "accounts" | "all") => {
+    const confirmation = {
+      transactions: "DELETE TRANSACTIONS",
+      accounts: "DELETE ACCOUNTS",
+      all: "DELETE ALL DATA",
+    }[scope];
+    const label = {
+      transactions: "transaction data",
+      accounts: "accounts and their related transaction/import data",
+      all: "all Clover data",
+    }[scope];
+    const entered = window.prompt(
+      `Delete ${label} for ${user.fullName || user.email}? Clover will create an audit snapshot first. Type ${confirmation} to continue.`
+    );
+    if (entered !== confirmation) {
       return;
     }
 
@@ -448,14 +490,25 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
 
     void (async () => {
       try {
-        const updatedUser = await patchUser(user.id, {
-          verified: false,
-          dataWipedAt: new Date().toISOString(),
+        const response = await fetch(`/api/admin/users/${user.id}/data`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scope, confirmation }),
         });
-        applyUpdatedUser(updatedUser);
-        setSaveMessage(`Deleted ${updatedUser.fullName || updatedUser.email}.`);
+        const result = (await response.json()) as {
+          error?: string;
+          deletedAccounts?: number;
+          deletedTransactions?: number;
+        };
+        if (!response.ok) {
+          throw new Error(result.error ?? `Unable to delete ${label}.`);
+        }
+        setSaveMessage(
+          `Deleted ${label} for ${user.fullName || user.email}. Snapshot saved; ${result.deletedAccounts ?? 0} accounts and ${result.deletedTransactions ?? 0} transactions removed.`
+        );
+        setRefreshNonce((value) => value + 1);
       } catch (deleteError) {
-        setSaveMessage(deleteError instanceof Error ? deleteError.message : "Unable to delete user.");
+        setSaveMessage(deleteError instanceof Error ? deleteError.message : `Unable to delete ${label}.`);
       } finally {
         setDeletingUserId((current) => (current === user.id ? null : current));
       }
@@ -557,7 +610,7 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
             </div>
             <div className="admin-users__stat">
               <strong>{formatMoney(data.overview.totalTransactionVolume)}</strong>
-              <span>Tx volume</span>
+              <span>All-user tracked volume</span>
             </div>
             <div className="admin-users__stat">
               <strong>{data.overview.productionErrors7d.toLocaleString()}</strong>
@@ -751,9 +804,15 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
                       <td className="admin-users__status-cell">
                         <span className={`admin-users__pill admin-users__pill--${user.planTier}`}>{user.planLabel}</span>
                         <span className={`admin-users__pill ${user.verified ? "admin-users__pill--success" : "admin-users__pill--warn"}`}>
-                          {user.verified ? "Verified" : "Blocked"}
+                          {user.verified ? "Email verified" : "Email unverified"}
                         </span>
+                        {user.isBlocked ? <span className="admin-users__pill admin-users__pill--locked">Blocked</span> : null}
                         {user.dataWipedAt ? <span className="admin-users__pill admin-users__pill--locked">Deleted</span> : null}
+                        {user.isBlocked ? (
+                          <small className="admin-users__cell-note" title={user.blockedReason ?? undefined}>
+                            {user.blockedReason ?? "No reason recorded"} · {formatDate(user.blockedAt)}
+                          </small>
+                        ) : null}
                         {user.attentionLevel !== "low" ? <small className="admin-users__cell-note">{user.attentionFlags[0] ?? "Needs attention"}</small> : null}
                       </td>
                       <td className="admin-users__usage-cell">
@@ -767,7 +826,7 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
                       <td className="admin-users__activity-cell">
                         <strong>{formatDate(user.updatedAt)}</strong>
                         <small className="admin-users__cell-note">
-                          Renewal: {formatDate(user.renewalAt)} · Volume: {formatMoney(user.transactionVolume)}
+                          Renewal: {formatDate(user.renewalAt)}
                         </small>
                       </td>
                       <td>
@@ -783,19 +842,27 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
                           <button
                             className="button button-secondary button-small"
                             type="button"
-                            onClick={() => blockUser(user)}
-                            disabled={busy || !user.verified}
+                            onClick={() => changeUserAccess(user)}
+                            disabled={busy}
                           >
-                            {blocking ? "Blocking..." : "Block"}
+                            {blocking ? "Updating..." : user.isBlocked ? "Unblock" : "Block"}
                           </button>
-                          <button
-                            className="button button-secondary button-small"
-                            type="button"
-                            onClick={() => deleteUser(user)}
-                            disabled={busy || Boolean(user.dataWipedAt)}
-                          >
-                            {deleting ? "Deleting..." : "Delete"}
-                          </button>
+                          <details className="admin-users__data-actions">
+                            <summary className="button button-secondary button-small">
+                              {deleting ? "Deleting..." : "Data"}
+                            </summary>
+                            <div className="admin-users__data-actions-menu">
+                              <button type="button" onClick={() => deleteUserData(user, "transactions")} disabled={busy}>
+                                Delete Transaction Data
+                              </button>
+                              <button type="button" onClick={() => deleteUserData(user, "accounts")} disabled={busy}>
+                                Delete Accounts
+                              </button>
+                              <button className="is-danger" type="button" onClick={() => deleteUserData(user, "all")} disabled={busy}>
+                                Delete All Data
+                              </button>
+                            </div>
+                          </details>
                         </div>
                       </td>
                     </tr>
