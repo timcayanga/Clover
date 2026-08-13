@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
@@ -17,7 +18,7 @@ import { AdviserChat } from "@/components/adviser-chat";
 import { AdviserSectionCarousel, type AdviserSectionCard } from "@/components/adviser-section-carousel";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { isLiabilityAccountType, isSpendableAccountType, isTrackedAssetAccountType } from "@/lib/account-types";
-import { deriveReconciledBalance } from "@/lib/account-balance";
+import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
 import { isTransientDataError } from "@/lib/transient-data";
@@ -73,6 +74,7 @@ type WorkspaceAccount = {
 };
 
 type AdviserWorkspaceAccountSource = {
+  id: string;
   name: string;
   type: string;
   currency: string | null;
@@ -86,17 +88,6 @@ type AdviserWorkspaceAccountSource = {
   investmentMaturityDate: Date | null;
   investmentInterestRate: unknown;
   investmentMaturityValue: unknown;
-  transactions: Array<{
-    amount: unknown;
-    type: "income" | "expense" | "transfer";
-    isExcluded: boolean;
-    merchantRaw: string;
-    merchantClean: string | null;
-    description: string | null;
-    date: Date;
-    createdAt: Date;
-    rawPayload: unknown;
-  }>;
   statementCheckpoints: Array<{
     endingBalance: unknown;
     status: string;
@@ -1120,6 +1111,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
   const workspaceInclude = {
     accounts: {
       select: {
+        id: true,
         name: true,
         type: true,
         currency: true,
@@ -1133,21 +1125,6 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
         investmentMaturityDate: true,
         investmentInterestRate: true,
         investmentMaturityValue: true,
-        transactions: {
-          where: { isExcluded: false, deletedAt: null },
-          select: {
-            amount: true,
-            type: true,
-            isExcluded: true,
-            merchantRaw: true,
-            merchantClean: true,
-            description: true,
-            date: true,
-            createdAt: true,
-            rawPayload: true,
-          },
-          orderBy: { date: "desc" },
-        },
         statementCheckpoints: {
           select: {
             endingBalance: true,
@@ -1205,6 +1182,9 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
   nextSevenDays.setDate(nextSevenDays.getDate() + 7);
   const nextFourteenDays = new Date(now);
   nextFourteenDays.setDate(nextFourteenDays.getDate() + 14);
+  const manualAccountIds = (resolvedWorkspace.accounts as AdviserWorkspaceAccountSource[])
+    .filter((account) => account.source === "manual")
+    .map((account) => account.id);
 
   const [
     allTransactionsQuery,
@@ -1213,6 +1193,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     goalHistoryRows,
     investmentSnapshots,
     splitBillWorkspaceData,
+    manualAccountTransactions,
   ] = await Promise.all([
     prisma.transaction.findMany({
       where: {
@@ -1300,23 +1281,53 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
       },
     }),
     loadSplitBillWorkspaceData(user.id),
+    manualAccountIds.length > 0
+      ? prisma.transaction.findMany({
+          where: {
+            workspaceId: resolvedWorkspace.id,
+            accountId: { in: manualAccountIds },
+            isExcluded: false,
+            deletedAt: null,
+          },
+          select: {
+            accountId: true,
+            amount: true,
+            type: true,
+            isExcluded: true,
+            merchantRaw: true,
+            merchantClean: true,
+            description: true,
+            date: true,
+            createdAt: true,
+            rawPayload: true,
+          },
+        })
+      : Promise.resolve([]),
   ]);
 
   const allTransactions = allTransactionsQuery as AdviserTransaction[];
+  const manualTransactionsByAccount = new Map<string, BalanceLikeTransaction[]>();
+  for (const transaction of manualAccountTransactions) {
+    const existing = manualTransactionsByAccount.get(transaction.accountId) ?? [];
+    existing.push(transaction as unknown as BalanceLikeTransaction);
+    manualTransactionsByAccount.set(transaction.accountId, existing);
+  }
   const reconcileWorkspaceAccountBalance = (account: AdviserWorkspaceAccountSource) => {
     const latestCheckpoint = account.statementCheckpoints[0] ?? null;
-    const checkpointBalance =
-      latestCheckpoint?.status !== "mismatch" && latestCheckpoint?.endingBalance ? latestCheckpoint.endingBalance : null;
+    const checkpointBalance = latestCheckpoint?.status !== "mismatch" ? latestCheckpoint?.endingBalance : null;
     const reconciledBalance =
       checkpointBalance ??
-      deriveReconciledBalance({
-        balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
-        transactions: account.transactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
-        checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
-        treatStoredBalanceAsOpening: account.source === "manual",
-      });
-
-    const parsed = Number(reconciledBalance ?? account.balance ?? 0);
+      (account.source === "manual"
+        ? deriveReconciledBalance({
+            balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
+            transactions: manualTransactionsByAccount.get(account.id) ?? [],
+            checkpoints: latestCheckpoint
+              ? ([latestCheckpoint] as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"])
+              : [],
+            treatStoredBalanceAsOpening: true,
+          })
+        : account.balance);
+    const parsed = Number(reconciledBalance ?? 0);
     return Number.isFinite(parsed) ? parsed : null;
   };
 
@@ -3388,7 +3399,9 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
 
       </section>
       </ReportsSectionPanel>
-      <ReportsStream active="adviser" searchParams={resolvedSearchParams} />
+      <Suspense fallback={null}>
+        <ReportsStream active="adviser" searchParams={resolvedSearchParams} />
+      </Suspense>
       {!hasCompleteAccess ? (
         <ReportsSectionPanel section="advanced">
           <PlanUpgradeCallout

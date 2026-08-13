@@ -1546,7 +1546,9 @@ export function CloverShell({
   };
 
   useEffect(() => {
-    const coreRoutes = ["/home", "/accounts", "/transactions", "/recurring", "/adviser", "/more"];
+    // Adviser is dynamic and query-heavy. Prefetch it on direct intent below instead
+    // of paying its database and origin-transfer cost in every Clover session.
+    const coreRoutes = ["/home", "/accounts", "/transactions", "/recurring", "/more"];
     const prefetchCoreRoutes = () => coreRoutes.forEach((href) => void router.prefetch(href));
     const idleWindow = window as Window & {
       requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;

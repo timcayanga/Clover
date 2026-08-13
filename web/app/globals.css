@@ -36634,6 +36634,14 @@ body[data-clover-shell-ready="true"] .clover-loading-screen__card {
   animation: clover-loading-card-reveal 0.01s 4s forwards;
 }
 
+body[data-clover-shell-ready="true"] .clover-loading-screen--prompt::before {
+  animation-delay: 0.08s;
+}
+
+body[data-clover-shell-ready="true"] .clover-loading-screen--prompt .clover-loading-screen__card {
+  animation-delay: 0.7s;
+}
+
 @keyframes clover-loading-card-reveal {
   to { opacity: 1; }
 }

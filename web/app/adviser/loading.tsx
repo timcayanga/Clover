@@ -1,5 +1,5 @@
-import { CloverLoadingScreen } from "@/components/clover-loading-screen";
+import { CloverRouteLoadingScreen } from "@/components/clover-route-loading-screen";
 
 export default function AdviserLoading() {
-  return <CloverLoadingScreen label="adviser" />;
+  return <CloverRouteLoadingScreen label="adviser" prompt />;
 }

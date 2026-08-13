@@ -26,6 +26,13 @@ assert.match(lazyActionsSource, /dynamic\(\s*\(\) => import\("@\/components\/imp
 const accountsSource = readSource("app/accounts/page.tsx");
 assert.match(accountsSource, /awaitHydration: !hydratedFromCache/);
 
+const adviserSource = readSource("app/adviser/page.tsx");
+const adviserLoadingSource = readSource("app/adviser/loading.tsx");
+assert.doesNotMatch(adviserSource, /accounts:\s*\{[\s\S]{0,900}transactions:\s*\{/);
+assert.match(adviserSource, /<Suspense fallback=\{null\}>\s*<ReportsStream/);
+assert.match(adviserLoadingSource, /CloverRouteLoadingScreen label="adviser" prompt/);
+assert.doesNotMatch(shellSource, /const coreRoutes = \[[^\]]*"\/adviser"/);
+
 const commitmentsSource = readSource("components/commitments-panel.tsx");
 assert.match(commitmentsSource, /Why Clover suggested this/);
 assert.match(commitmentsSource, /<span>Paid to<\/span>/);
