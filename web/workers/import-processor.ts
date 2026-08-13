@@ -115,6 +115,7 @@ import { canonicalizePdaxInvestmentHoldings } from "@/lib/pdax-portfolio-account
 import { buildImportedReceivableCommitmentCandidate } from "@/lib/imported-receivables";
 import { shouldLoadReceiptVisionAssets, shouldUseReceiptPreviewFastPath } from "@/lib/import-visual-recovery";
 import { isProtectedTransactionReviewStatus } from "@/lib/data-engine-safety";
+import { reconcileStatementTransactionYears } from "@/lib/import-date-reconciliation";
 import { applyImportValidationToRows, validateParsedImportRows } from "@/lib/data-engine-validation";
 import { assessStatementExtractionQuality, compareStatementExtractionCandidates } from "@/lib/import-quality";
 import {
@@ -10801,7 +10802,14 @@ export const processImportFileText = async (
     });
     return { imported: 0, duplicate: true, metadata: resolvedMetadata };
   }
-  const rawRows = effectiveRows as EnrichedParsedImportRow[];
+  const rawRows =
+    importMode === "statement"
+      ? reconcileStatementTransactionYears({
+          rows: effectiveRows as EnrichedParsedImportRow[],
+          sourceMetadata: metadata,
+          resolvedMetadata,
+        })
+      : (effectiveRows as EnrichedParsedImportRow[]);
   const validationMetadata =
     resolvedMetadata.accountType === "credit_card" && rawRows.length > 0
       ? (() => {
