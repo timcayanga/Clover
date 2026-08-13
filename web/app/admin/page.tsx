@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { AdminPageChrome } from "@/components/admin-page-chrome";
 import { AdminCommandCenter } from "@/components/admin-command-center";
 import { requireAdminAuth } from "@/lib/admin";
-import { getAdminCommandCenterSnapshot } from "@/lib/admin-command-center";
+import { getCachedAdminCommandCenterSnapshot } from "@/lib/admin-page-data";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -16,7 +16,7 @@ export default async function AdminPage() {
     redirect("/dashboard");
   }
 
-  const snapshot = await getAdminCommandCenterSnapshot();
+  const snapshot = await getCachedAdminCommandCenterSnapshot();
 
   return (
     <AdminPageChrome

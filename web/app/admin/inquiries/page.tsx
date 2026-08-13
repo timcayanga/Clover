@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { AdminPageChrome } from "@/components/admin-page-chrome";
 import { AdminInquiriesConsole } from "@/components/admin-inquiries-console";
 import { requireAdminAuth } from "@/lib/admin";
-import { getAdminContactInquiries } from "@/lib/contact-inquiries";
+import { getCachedAdminInquiries } from "@/lib/admin-page-data";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ export default async function AdminInquiriesPage() {
     redirect("/dashboard");
   }
 
-  const data = await getAdminContactInquiries({ pageSize: 200 });
+  const data = await getCachedAdminInquiries();
 
   return (
     <AdminPageChrome

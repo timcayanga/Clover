@@ -2,11 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AdminPageChrome } from "@/components/admin-page-chrome";
 import { requireAdminAuth } from "@/lib/admin";
-import { getAdminDataQaBankSummary } from "@/lib/admin-data-qa-summary";
+import { getCachedAdminDataQaBankSummary } from "@/lib/admin-page-data";
 import { AdminDataQaSummary } from "@/components/admin-data-qa-summary";
 import { AdminDataQaGenericTraining } from "@/components/admin-data-qa-generic-training";
 import { AdminImageLabelCorpusTraining } from "@/components/admin-image-label-corpus-training";
-import { synchronizeDataQaTraining } from "@/lib/data-qa-training-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -21,11 +20,7 @@ export default async function AdminDataQaPage() {
     redirect("/dashboard");
   }
 
-  await synchronizeDataQaTraining({
-    force: false,
-    actorUserId: null,
-  }).catch(() => null);
-  const data = await getAdminDataQaBankSummary();
+  const data = await getCachedAdminDataQaBankSummary();
 
   return (
     <AdminPageChrome

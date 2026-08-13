@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { AdminErrorLogsTable } from "@/components/admin-error-logs-table";
 import { AdminPageChrome } from "@/components/admin-page-chrome";
 import { requireAdminAuth } from "@/lib/admin";
-import { getAdminErrorLogs } from "@/lib/admin-error-logs";
+import { getCachedAdminErrorLogs } from "@/lib/admin-page-data";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Admin - Errors" };
@@ -17,7 +17,7 @@ export default async function AdminErrorsPage({ searchParams }: { searchParams: 
   const params = await searchParams;
   const query = params.query ?? "";
   const page = Math.max(Number(params.page ?? "1") || 1, 1);
-  const data = await getAdminErrorLogs({ query, page });
+  const data = await getCachedAdminErrorLogs(query, page);
 
   return (
     <AdminPageChrome active="errors" title="Error Logs" kicker="Internal tools" subtitle="Inspect production errors, builds, routes, users, and stack traces.">

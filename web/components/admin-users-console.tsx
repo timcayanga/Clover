@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import type { AdminUserListItem, AdminUserListResponse, AdminUserOverview, AdminUserUpdateInput } from "@/lib/admin-users";
 import type { AdminErrorLogListResponse } from "@/lib/admin-error-logs";
@@ -157,6 +157,8 @@ async function patchUser(userId: string, payload: AdminUserUpdateInput) {
 }
 
 export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUsersConsoleProps) {
+  const skipInitialUsersLoad = useRef(Boolean(initialData));
+  const skipInitialErrorsLoad = useRef(Boolean(initialErrorLogData));
   const [data, setData] = useState<AdminUserListResponse>(initialData ?? emptyResponse());
   const [errorLogData, setErrorLogData] = useState<AdminErrorLogListResponse>(
     initialErrorLogData ?? {
@@ -206,6 +208,11 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
   }, [errorQueryInput]);
 
   useEffect(() => {
+    if (skipInitialUsersLoad.current) {
+      skipInitialUsersLoad.current = false;
+      return;
+    }
+
     const controller = new AbortController();
 
     const load = async () => {
@@ -298,6 +305,11 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
   }, [query, planFilter, verifiedFilter, lockedFilter, refreshNonce]);
 
   useEffect(() => {
+    if (skipInitialErrorsLoad.current) {
+      skipInitialErrorsLoad.current = false;
+      return;
+    }
+
     const controller = new AbortController();
 
     const load = async () => {

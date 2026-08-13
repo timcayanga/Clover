@@ -2,8 +2,7 @@ import { redirect } from "next/navigation";
 import { AdminPageChrome } from "@/components/admin-page-chrome";
 import { AdminUsersConsole } from "@/components/admin-users-console";
 import { requireAdminAuth } from "@/lib/admin";
-import { getAdminErrorLogs } from "@/lib/admin-error-logs";
-import { getAdminUsers } from "@/lib/admin-users";
+import { getCachedAdminInitialUsers } from "@/lib/admin-page-data";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -17,10 +16,7 @@ export default async function AdminUsersPage() {
     redirect("/dashboard");
   }
 
-  const [initialData, initialErrorLogData] = await Promise.all([
-    getAdminUsers({ page: 1, pageSize: 25 }),
-    getAdminErrorLogs({ page: 1, pageSize: 25 }),
-  ]);
+  const [initialData, initialErrorLogData] = await getCachedAdminInitialUsers();
 
   return (
     <AdminPageChrome

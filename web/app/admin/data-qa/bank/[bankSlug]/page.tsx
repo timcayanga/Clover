@@ -1,10 +1,9 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { requireAdminAuth } from "@/lib/admin";
-import { getAdminDataQaBankSummary } from "@/lib/admin-data-qa-summary";
+import { getCachedAdminDataQaBankSummary } from "@/lib/admin-page-data";
 import { AdminDataQaBankDetail } from "@/components/admin-data-qa-bank-detail";
 import { normalizeBankName } from "@/lib/data-qa-banks";
-import { synchronizeDataQaTraining } from "@/lib/data-qa-training-sync";
 import { AdminPageChrome } from "@/components/admin-page-chrome";
 import Link from "next/link";
 
@@ -17,12 +16,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminDataQaBankPage({ params }: { params: Promise<{ bankSlug: string }> }) {
   await requireAdminAuth();
   const { bankSlug } = await params;
-  await synchronizeDataQaTraining({
-    bankName: normalizeBankName(bankSlug.replace(/-/g, " ")),
-    force: false,
-    actorUserId: null,
-  }).catch(() => null);
-  const data = await getAdminDataQaBankSummary();
+  const data = await getCachedAdminDataQaBankSummary();
   const bank = data.banks.find((entry) => entry.bankSlug === bankSlug) ?? null;
 
   if (!bank) {

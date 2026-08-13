@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AdminPageChrome } from "@/components/admin-page-chrome";
 import { AdminDataQaSummary } from "@/components/admin-data-qa-summary";
-import { getAdminDataQaBankSummary } from "@/lib/admin-data-qa-summary";
+import { getCachedAdminDataQaBankSummary } from "@/lib/admin-page-data";
 import { requireAdminAuth } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ export default async function AdminDataQaSummaryPage() {
     redirect("/dashboard");
   }
 
-  const data = await getAdminDataQaBankSummary();
+  const data = await getCachedAdminDataQaBankSummary();
 
   return (
     <AdminPageChrome

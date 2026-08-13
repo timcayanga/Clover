@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { AdminAnalyticsWorkspace } from "@/components/admin-analytics-workspace";
 import { AdminPageChrome } from "@/components/admin-page-chrome";
 import { requireAdminAuth } from "@/lib/admin";
-import { getAdminAnalyticsSnapshot } from "@/lib/admin-analytics";
+import { getCachedAdminAnalyticsSnapshot } from "@/lib/admin-page-data";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Admin - Analytics" };
@@ -14,7 +14,7 @@ export default async function AdminAnalyticsPage() {
     redirect("/dashboard");
   }
 
-  const snapshot = await getAdminAnalyticsSnapshot();
+  const snapshot = await getCachedAdminAnalyticsSnapshot();
 
   return (
     <AdminPageChrome
