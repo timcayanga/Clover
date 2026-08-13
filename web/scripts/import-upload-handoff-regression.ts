@@ -538,8 +538,8 @@ const main = async () => {
   );
   assert.match(
     accountsPageSource,
-    /removedStalePdaxBucketHoldings[\s\S]{0,700}void loadWorkspaceData\(workspaceId, \{ silent: true, awaitHydration: true \}\);/,
-    "Accounts must adopt a maintenance repair that removes stale PDAX portfolio buckets without a manual reload."
+    /removedStalePdaxBucketHoldings[\s\S]{0,1200}void loadWorkspaceData\(workspaceId, \{[\s\S]{0,180}silent: true,[\s\S]{0,180}awaitHydration: true,[\s\S]{0,180}forceFresh: true,[\s\S]{0,80}\}\);/,
+    "Accounts must adopt imported-account maintenance repairs with a fresh hydration pass instead of requiring a manual reload."
   );
   assert.match(
     accountsPageSource,

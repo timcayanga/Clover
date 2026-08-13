@@ -24215,7 +24215,6 @@ input.transaction-inline-edit--amount::placeholder {
   font-style: normal;
   font-weight: 700;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .admin-feature-funnel__steps {
