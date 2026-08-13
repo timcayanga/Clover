@@ -12,6 +12,32 @@ const IMPORT_STATUS_STREAM_MAX_ERRORS = 3;
 
 const formatSseEvent = (event: string, data: unknown) => encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 
+const compactImportSnapshot = (snapshot: Awaited<ReturnType<typeof loadImportStatusSnapshot>>) => {
+  if (!snapshot) return null;
+
+  return {
+    importFile: snapshot.importFile,
+    parsedRowsCount: snapshot.parsedRowsCount,
+    confirmedTransactionsCount: snapshot.confirmedTransactionsCount,
+    visibleImportComplete: snapshot.visibleImportComplete,
+    settledImportComplete: snapshot.settledImportComplete,
+    settlementIssues: snapshot.settlementIssues,
+    accountDetailOnlyImport: snapshot.accountDetailOnlyImport,
+    accountSummaries: snapshot.accountSummaries,
+    confirmationStatus: snapshot.confirmationStatus,
+    receiptTransaction: snapshot.receiptTransaction
+      ? {
+          id: snapshot.receiptTransaction.id,
+          accountId: snapshot.receiptTransaction.accountId,
+        }
+      : null,
+    finalizationStatus: snapshot.finalizationStatus,
+    finalizationPhase: snapshot.finalizationPhase,
+    finalizationProcessedRows: snapshot.finalizationProcessedRows,
+    finalizationTotalRows: snapshot.finalizationTotalRows,
+  };
+};
+
 export async function GET(request: Request, { params }: { params: Promise<{ importId: string }> }) {
   try {
     const { importId } = await params;
@@ -72,10 +98,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
             }
             consecutiveErrors = 0;
 
-            const serialized = JSON.stringify(snapshot);
+            const compactSnapshot = compactImportSnapshot(snapshot);
+            const serialized = JSON.stringify(compactSnapshot);
             if (serialized !== lastSerializedSnapshot) {
               lastSerializedSnapshot = serialized;
-              send("snapshot", snapshot);
+              send("snapshot", compactSnapshot);
             }
 
             const visible =
@@ -84,14 +111,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
 
             if (visible && !visibleEventSent) {
               visibleEventSent = true;
-              send("visible", snapshot);
+              send("visible", compactSnapshot);
             }
 
             const failed = snapshot.importFile.status === "failed";
             const finished = visible || failed;
 
             if (finished) {
-              send(snapshot.importFile.status === "failed" ? "error" : "complete", snapshot);
+              send(snapshot.importFile.status === "failed" ? "error" : "complete", compactSnapshot);
               close();
             }
           } catch (error) {

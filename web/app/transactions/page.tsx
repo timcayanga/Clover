@@ -4027,7 +4027,7 @@ function TransactionsPageContent() {
         background: true,
         pageOverride: transactionsPage,
         pageSizeOverride: transactionsPageSize,
-        summaryMode: "full",
+        summaryMode: "light",
       });
     };
 
@@ -5341,7 +5341,7 @@ function TransactionsPageContent() {
         background: true,
         pageOverride: 1,
         pageSizeOverride: transactionsPageSize,
-        summaryMode: "full",
+        summaryMode: "light",
       });
       setMessage(`Transaction "${created.merchantRaw}" added.`);
 
@@ -5622,7 +5622,7 @@ function TransactionsPageContent() {
         background: true,
         pageOverride: transactionsPage,
         pageSizeOverride: transactionsPageSize,
-        summaryMode: "full",
+        summaryMode: "light",
       });
       setMessage(error instanceof Error ? error.message : "Unable to delete transaction.");
     }
@@ -5638,7 +5638,7 @@ function TransactionsPageContent() {
       background: true,
       pageOverride: transactionsPage,
       pageSizeOverride: transactionsPageSize,
-      summaryMode: "full",
+      summaryMode: "light",
     });
   };
 
@@ -5989,7 +5989,7 @@ function TransactionsPageContent() {
           background: true,
           pageOverride: transactionsPage,
           pageSizeOverride: transactionsPageSize,
-          summaryMode: "full",
+          summaryMode: "light",
         });
         setMessage(
           `${count - failedCount} transaction${count - failedCount === 1 ? "" : "s"} deleted. ${failedCount} could not be deleted.`
@@ -6003,7 +6003,7 @@ function TransactionsPageContent() {
         background: true,
         pageOverride: transactionsPage,
         pageSizeOverride: transactionsPageSize,
-        summaryMode: "full",
+        summaryMode: "light",
       });
       setMessage(error instanceof Error ? error.message : "Unable to delete transactions.");
     } finally {

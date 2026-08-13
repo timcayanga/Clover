@@ -23,6 +23,13 @@ const main = async () => {
   );
   assert.match(routeSource, /snapshot\.importFile\.status\s*===\s*"failed"/);
   assert.match(routeSource, /snapshot\.settledImportComplete/);
+  assert.match(routeSource, /const compactImportSnapshot/);
+  assert.match(routeSource, /send\("snapshot", compactSnapshot\)/);
+  assert.doesNotMatch(
+    routeSource,
+    /send\("snapshot", snapshot\)/,
+    "The import stream must not repeatedly serialize trace-rich status payloads."
+  );
   assert.doesNotMatch(
     routeSource,
     /snapshot\.importFile\.status\s*===\s*"done"\s*\|\|\s*snapshot\.importFile\.status\s*===\s*"failed"/,
