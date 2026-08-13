@@ -19,7 +19,7 @@ type Detail = User & {
   lastName: string | null;
   planTier: "free" | "pro";
   planTierLocked: boolean;
-  bankAccountCount: number;
+  accountCount: number;
   investmentAccountCount: number;
   monthlyUploads: number;
   attentionLevel: string;
@@ -205,7 +205,7 @@ export function AdminSupportConsole() {
         {!detail ? <div className="admin-support__empty"><p className="eyebrow">Support workspace</p><h3>Select a user to view account controls.</h3><p className="panel-muted">Profile changes are synced to Clerk and Clover. Financial data is never changed by saving profile information.</p></div> : <>
           <div className="admin-users__table-head"><div><p className="eyebrow">{detail.attentionLevel} attention</p><h3>{detail.fullName}</h3><p className="panel-muted">{detail.email} · {detail.clerkUserId}</p></div><span className={`admin-users__pill ${detail.verified ? "admin-users__pill--success" : "admin-users__pill--warn"}`}>{detail.verified ? "Active" : "Blocked"}</span></div>
           {message ? <p className="admin-users__notice">{message}</p> : null}
-          <div className="admin-support__stats"><div><strong>{detail.workspaceCount}</strong><span>Workspaces</span></div><div><strong>{detail.bankAccountCount}</strong><span>Accounts</span></div><div><strong>{detail.transactionCount.toLocaleString()}</strong><span>Transactions</span></div><div><strong>{detail.monthlyUploads}</strong><span>Uploads this month</span></div></div>
+          <div className="admin-support__stats"><div><strong>{detail.workspaceCount}</strong><span>Workspaces</span></div><div><strong>{detail.accountCount}</strong><span>Accounts</span></div><div><strong>{detail.transactionCount.toLocaleString()}</strong><span>Transactions</span></div><div><strong>{detail.monthlyUploads}</strong><span>Uploads this month</span></div></div>
           <div className="admin-support__form"><label>First name<input value={firstName} onChange={(event) => setFirstName(event.target.value)} /></label><label>Last name<input value={lastName} onChange={(event) => setLastName(event.target.value)} /></label><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label></div>
           <div className="admin-support__actions"><button className="button button-primary" type="button" onClick={() => void saveInfo()} disabled={busy !== null}>{busy === "save" ? "Saving..." : "Save user info"}</button><button className="button button-secondary" type="button" onClick={() => void setAccess(!detail.verified)} disabled={busy !== null}>{busy === "access" ? "Updating..." : detail.verified ? "Block access" : "Restore access"}</button><button className="button button-secondary" type="button" onClick={() => void resetPassword()} disabled={busy !== null}>{busy === "password" ? "Resetting..." : "Reset password"}</button></div>
           <div className="admin-support__actions"><a className="button button-secondary button-small" href={`/api/admin/support/${detail.id}/export`}>Export user data</a></div>

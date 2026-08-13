@@ -35,7 +35,7 @@ const EMPTY_OVERVIEW: AdminUserOverview = {
   verifiedUsers: 0,
   lockedUsers: 0,
   totalWorkspaces: 0,
-  totalBankAccounts: 0,
+  totalAccounts: 0,
   totalTransactionCount: 0,
   totalTransactionVolume: "0",
   totalInvestmentAccounts: 0,
@@ -817,7 +817,7 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
                       </td>
                       <td className="admin-users__usage-cell">
                         <strong>
-                          {user.workspaceCount} ws · {user.bankAccountCount} acct
+                          {user.workspaceCount} ws · {user.accountCount} acct
                         </strong>
                         <small className="admin-users__cell-note">
                           {user.transactionCount.toLocaleString()} transactions · {user.monthlyUploads} uploads

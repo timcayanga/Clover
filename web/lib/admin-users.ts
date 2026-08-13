@@ -45,7 +45,7 @@ export type AdminUserListItem = {
   createdAt: string;
   updatedAt: string;
   workspaceCount: number;
-  bankAccountCount: number;
+  accountCount: number;
   transactionCount: number;
   activeAccountCount: number;
   investmentAccountCount: number;
@@ -81,7 +81,7 @@ export type AdminUserOverview = {
   verifiedUsers: number;
   lockedUsers: number;
   totalWorkspaces: number;
-  totalBankAccounts: number;
+  totalAccounts: number;
   totalTransactionCount: number;
   totalTransactionVolume: string;
   totalInvestmentAccounts: number;
@@ -110,7 +110,7 @@ export type AdminUserDetail = {
   planLabel: string;
   verified: boolean;
   workspaceCount: number;
-  bankAccountCount: number;
+  accountCount: number;
   transactionCount: number;
   activeAccountCount: number;
   investmentAccountCount: number;
@@ -266,7 +266,7 @@ function classifyAttentionFlags(user: {
   accountLimit: number;
   monthlyUploadLimit: number;
   transactionLimit: number | null;
-  bankAccountCount: number;
+  accountCount: number;
   transactionCount: number;
   monthlyUploads: number;
   recentErrorCount: number;
@@ -281,7 +281,7 @@ function classifyAttentionFlags(user: {
     flags.push("Has recent errors");
   }
 
-  if (user.accountLimit > 0 && user.bankAccountCount >= Math.max(1, Math.ceil(user.accountLimit * 0.8))) {
+  if (user.accountLimit > 0 && user.accountCount >= Math.max(1, Math.ceil(user.accountLimit * 0.8))) {
     flags.push("Near account limit");
   }
 
@@ -314,7 +314,7 @@ type AdminUserListRow = User & {
   _count: {
     workspaces: number;
   };
-  bankAccountCount?: number;
+  accountCount?: number;
   transactionCount?: number;
   activeAccountCount?: number;
   investmentAccountCount?: number;
@@ -330,7 +330,7 @@ function mapUser(user: AdminUserListRow): AdminUserListItem {
     accountLimit: effectiveLimits.accountLimit ?? 0,
     monthlyUploadLimit: effectiveLimits.monthlyUploadLimit ?? 0,
     transactionLimit: effectiveLimits.transactionLimit,
-    bankAccountCount: user.bankAccountCount ?? 0,
+    accountCount: user.accountCount ?? 0,
     transactionCount: user.transactionCount ?? 0,
     monthlyUploads: user.monthlyUploads ?? 0,
     recentErrorCount: user.recentErrorCount ?? 0,
@@ -367,7 +367,7 @@ function mapUser(user: AdminUserListRow): AdminUserListItem {
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
     workspaceCount: user._count.workspaces,
-    bankAccountCount: user.bankAccountCount ?? 0,
+    accountCount: user.accountCount ?? 0,
     transactionCount: user.transactionCount ?? 0,
     activeAccountCount: user.activeAccountCount ?? 0,
     investmentAccountCount: user.investmentAccountCount ?? 0,
@@ -394,7 +394,7 @@ function mapUser(user: AdminUserListRow): AdminUserListItem {
 async function fetchUserMetrics(userIds: string[]) {
   if (userIds.length === 0) {
     return {
-      bankAccountCounts: new Map<string, number>(),
+      accountCounts: new Map<string, number>(),
       transactionCounts: new Map<string, number>(),
       activeAccountCounts: new Map<string, number>(),
       investmentAccountCounts: new Map<string, number>(),
@@ -415,7 +415,7 @@ async function fetchUserMetrics(userIds: string[]) {
   const userIdFragments = userIds.map((userId) => Prisma.sql`${userId}`);
 
   const [
-    bankAccountRows,
+    accountRows,
     transactionCountRows,
     activeAccountRows,
     investmentAccountRows,
@@ -424,12 +424,11 @@ async function fetchUserMetrics(userIds: string[]) {
     recentErrorRows,
     lastActivityRows,
   ] = await Promise.all([
-    prisma.$queryRaw<Array<{ userId: string; bankAccountCount: bigint }>>(Prisma.sql`
-      SELECT w."userId" AS "userId", COUNT(*)::bigint AS "bankAccountCount"
+    prisma.$queryRaw<Array<{ userId: string; accountCount: bigint }>>(Prisma.sql`
+      SELECT w."userId" AS "userId", COUNT(*)::bigint AS "accountCount"
       FROM "Account" a
       INNER JOIN "Workspace" w ON w."id" = a."workspaceId"
       WHERE w."userId" IN (${Prisma.join(userIdFragments)})
-        AND a."type" = 'bank'::"AccountType"
       GROUP BY w."userId"
     `),
     prisma.$queryRaw<Array<{ userId: string; transactionCount: bigint }>>(Prisma.sql`
@@ -502,8 +501,8 @@ async function fetchUserMetrics(userIds: string[]) {
   ]);
 
   return {
-    bankAccountCounts: new Map(
-      bankAccountRows.map((row) => [row.userId, Number(row.bankAccountCount)])
+    accountCounts: new Map(
+      accountRows.map((row) => [row.userId, Number(row.accountCount)])
     ),
     transactionCounts: new Map(
       transactionCountRows.map((row) => [row.userId, Number(row.transactionCount)])
@@ -577,7 +576,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
   const [
     userCounts,
     workspaceCount,
-    bankAccountCount,
+    accountCount,
     investmentAccountCount,
     transactionCounts,
     transactionVolumeRows,
@@ -606,7 +605,6 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
     }),
     prisma.account.count({
       where: {
-        type: "bank",
         workspace: {
           user: realUserWhere,
         },
@@ -781,7 +779,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
     verifiedUsers,
     lockedUsers,
     totalWorkspaces: workspaceCount,
-    totalBankAccounts: bankAccountCount,
+    totalAccounts: accountCount,
     totalTransactionCount: transactionCounts,
     totalTransactionVolume: String(totalTransactionVolume),
     totalInvestmentAccounts: investmentAccountCount,
@@ -860,7 +858,7 @@ export async function getAdminUsers(filters: AdminUserListFilters = {}): Promise
 
   const enrichedUsers: AdminUserListRow[] = users.map((user) => ({
     ...user,
-    bankAccountCount: metrics.bankAccountCounts.get(user.id) ?? 0,
+    accountCount: metrics.accountCounts.get(user.id) ?? 0,
     transactionCount: metrics.transactionCounts.get(user.id) ?? 0,
     activeAccountCount: metrics.activeAccountCounts.get(user.id) ?? 0,
     investmentAccountCount: metrics.investmentAccountCounts.get(user.id) ?? 0,
@@ -1106,7 +1104,7 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
     accountLimit: effectiveLimits.accountLimit ?? 0,
     monthlyUploadLimit: effectiveLimits.monthlyUploadLimit ?? 0,
     transactionLimit: effectiveLimits.transactionLimit,
-    bankAccountCount: metrics.bankAccountCounts.get(user.id) ?? 0,
+    accountCount: metrics.accountCounts.get(user.id) ?? 0,
     transactionCount: metrics.transactionCounts.get(user.id) ?? 0,
     monthlyUploads: metrics.monthlyUploads.get(user.id) ?? 0,
     recentErrorCount: metrics.recentErrorCounts.get(user.id) ?? 0,
@@ -1227,7 +1225,7 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
     planLabel: getPlanDisplayLabel(user.planTier, user.billingSubscription?.interval ?? null),
     verified: user.verified,
     workspaceCount: user._count.workspaces,
-    bankAccountCount: metrics.bankAccountCounts.get(user.id) ?? 0,
+    accountCount: metrics.accountCounts.get(user.id) ?? 0,
     transactionCount: metrics.transactionCounts.get(user.id) ?? 0,
     activeAccountCount: metrics.activeAccountCounts.get(user.id) ?? 0,
     investmentAccountCount: metrics.investmentAccountCounts.get(user.id) ?? 0,
@@ -1340,7 +1338,7 @@ export async function exportAdminUsers(filters: AdminUserListFilters = {}) {
   const rows = users.map((user) =>
     mapUser({
       ...user,
-      bankAccountCount: metrics.bankAccountCounts.get(user.id) ?? 0,
+      accountCount: metrics.accountCounts.get(user.id) ?? 0,
       transactionCount: metrics.transactionCounts.get(user.id) ?? 0,
       activeAccountCount: metrics.activeAccountCounts.get(user.id) ?? 0,
       investmentAccountCount: metrics.investmentAccountCounts.get(user.id) ?? 0,
@@ -1361,7 +1359,7 @@ export async function exportAdminUsers(filters: AdminUserListFilters = {}) {
     "planLabel",
     "verified",
     "workspaceCount",
-    "bankAccountCount",
+    "accountCount",
     "transactionCount",
     "activeAccountCount",
     "investmentAccountCount",
@@ -1395,7 +1393,7 @@ export async function exportAdminUsers(filters: AdminUserListFilters = {}) {
         row.planLabel,
         row.verified,
         row.workspaceCount,
-        row.bankAccountCount,
+        row.accountCount,
         row.transactionCount,
         row.activeAccountCount,
         row.investmentAccountCount,
