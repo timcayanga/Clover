@@ -7,6 +7,7 @@ import {
   getAnalyticsEnvironment,
   type AnalyticsEventName,
 } from "@/lib/analytics";
+import { FEATURE_FUNNEL_DEFINITIONS } from "@/lib/feature-adoption";
 
 // PostHog's blocking query can exceed five seconds during cold periods. Admin
 // analytics should wait a little longer instead of reporting a false outage.
@@ -17,6 +18,13 @@ type PostHogQueryResponse = {
   columns?: unknown;
   results?: unknown;
   is_cached?: unknown;
+};
+
+export type PostHogFeatureFunnelResult = {
+  status: "not_configured" | "ready" | "unavailable";
+  counts: Record<string, number>;
+  isCached: boolean;
+  errorCode: PostHogLiveAnalytics["errorCode"];
 };
 
 export type PostHogEventAggregate = {
@@ -139,6 +147,103 @@ const errorCodeForResponse = (status: number): PostHogLiveAnalytics["errorCode"]
 
   return "query_failed";
 };
+
+const escapeHogQl = (value: string) => value.replaceAll("'", "''");
+
+const criterionCondition = (criterion: { event: string; pathPrefixes?: string[] }) => {
+  const eventCondition = `event = '${escapeHogQl(criterion.event)}'`;
+  if (!criterion.pathPrefixes?.length) {
+    return eventCondition;
+  }
+
+  const paths = criterion.pathPrefixes
+    .map((path) => `startsWith(toString(properties.$pathname), '${escapeHogQl(path)}')`)
+    .join(" OR ");
+  return `(${eventCondition} AND (${paths}))`;
+};
+
+export async function getPostHogFeatureFunnels(
+  environment = getAnalyticsEnvironment()
+): Promise<PostHogFeatureFunnelResult> {
+  const config = getQueryConfig();
+  if (!config) {
+    return { status: "not_configured", counts: {}, isCached: false, errorCode: "missing_credentials" };
+  }
+
+  const measurableSteps = FEATURE_FUNNEL_DEFINITIONS.flatMap((feature) =>
+    feature.steps
+      .filter((step) => step.criteria?.length)
+      .map((step) => ({ alias: `${feature.key}__${step.key}`, criteria: step.criteria ?? [] }))
+  );
+  const hitExpressions = measurableSteps.map(({ alias, criteria }) => {
+    const condition = criteria.map(criterionCondition).join(" OR ");
+    return `countIf(${condition}) > 0 AS ${alias}_hit`;
+  });
+  const selectExpressions = FEATURE_FUNNEL_DEFINITIONS.flatMap((feature) => {
+    const measurableFeatureSteps = feature.steps.filter((step) => step.criteria?.length);
+    return measurableFeatureSteps.map((step, index) => {
+      const progression = measurableFeatureSteps
+        .slice(0, index + 1)
+        .map((priorStep) => `${feature.key}__${priorStep.key}_hit`)
+        .join(" AND ");
+      return `countIf(${progression}) AS ${feature.key}__${step.key}`;
+    });
+  });
+  const betaStartedAt = escapeHogQl(getAnalyticsBetaStartedAt().toISOString());
+  const distinctIdPrefix = `${escapeHogQl(environment)}:%`;
+  const query = `
+    SELECT ${selectExpressions.join(",\n      ")}
+    FROM (
+      SELECT
+        toString(distinct_id) AS person_id,
+        ${hitExpressions.join(",\n        ")}
+      FROM events
+      WHERE timestamp >= toDateTime('${betaStartedAt}')
+        AND toString(distinct_id) LIKE '${distinctIdPrefix}'
+      GROUP BY person_id
+    )
+  `;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), POSTHOG_QUERY_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${config.appUrl}/api/projects/${encodeURIComponent(config.projectId)}/query/`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.personalApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query: { kind: "HogQLQuery", query },
+        name: `clover_admin_feature_funnels_${environment}_${ANALYTICS_BETA_EPOCH}`,
+        refresh: "blocking",
+      }),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      return { status: "unavailable", counts: {}, isCached: false, errorCode: errorCodeForResponse(response.status) };
+    }
+
+    const payload = (await response.json()) as PostHogQueryResponse;
+    const columns = Array.isArray(payload.columns) ? payload.columns.filter((value): value is string => typeof value === "string") : [];
+    const row = Array.isArray(payload.results) && Array.isArray(payload.results[0]) ? payload.results[0] : [];
+    const counts = Object.fromEntries(
+      measurableSteps.map(({ alias }) => [alias, toFiniteNumber(row[columns.indexOf(alias)])])
+    );
+    return { status: "ready", counts, isCached: payload.is_cached === true, errorCode: null };
+  } catch (error) {
+    return {
+      status: "unavailable",
+      counts: {},
+      isCached: false,
+      errorCode: error instanceof Error && error.name === "AbortError" ? "timeout" : "query_failed",
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 export async function getPostHogLiveAnalytics(
   environment = getAnalyticsEnvironment()

@@ -5,6 +5,9 @@ import {
   getAdminRealWorkspaceWhere,
   getCurrentDeploymentErrorWhere,
 } from "@/lib/admin-data-scope";
+import { FEATURE_FUNNEL_DEFINITIONS } from "@/lib/feature-adoption";
+import { getPostHogFeatureFunnels } from "@/lib/posthog-query";
+import { getAdminDataEnvironment } from "@/lib/admin";
 
 const formatCount = (value: number) => value.toLocaleString();
 
@@ -63,6 +66,7 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
     funnelCounts,
     retentionCounts,
     adoptionCounts,
+    posthogFeatureFunnels,
     recentSignups,
     recentImports,
   ] = await Promise.all([
@@ -233,7 +237,11 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
           ],
         },
       }),
+      prisma.user.count({
+        where: { ...realUser, splitBills: { some: {} } },
+      }),
     ]),
+    getPostHogFeatureFunnels(getAdminDataEnvironment()),
     prisma.user.findMany({
       where: { ...realUser, createdAt: { gte: eightWeeksAgo } },
       select: { createdAt: true },
@@ -267,7 +275,39 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
     };
   });
 
+  const databaseFallbacks = {
+    users,
+    accounts: funnelCounts[1],
+    transactions: funnelCounts[4],
+    imports: funnelCounts[2],
+    recurring: adoptionCounts[0],
+    budgets: adoptionCounts[1],
+    goals: adoptionCounts[2],
+    investments: adoptionCounts[3],
+    circles: adoptionCounts[4],
+    splitBills: adoptionCounts[5],
+  } as const;
+  const adoption = FEATURE_FUNNEL_DEFINITIONS.map((feature) => ({
+    key: feature.key,
+    label: feature.label,
+    description: feature.description,
+    status: posthogFeatureFunnels.status === "ready" ? "live" as const : "fallback" as const,
+    steps: feature.steps.map((step) => {
+      const eventCount = posthogFeatureFunnels.counts[`${feature.key}__${step.key}`];
+      if (posthogFeatureFunnels.status === "ready" && eventCount !== undefined) {
+        return { label: step.label, count: eventCount, source: "PostHog" as const };
+      }
+
+      if (step.databaseFallback) {
+        return { label: step.label, count: databaseFallbacks[step.databaseFallback], source: "Database" as const };
+      }
+
+      return { label: step.label, count: 0, source: "Unavailable" as const };
+    }),
+  }));
+
   return {
+    adoptionBase: users,
     metrics: [
       { label: "Users", value: formatCount(users), href: "/admin/users" },
       {
@@ -326,13 +366,7 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
       returning7d: retentionCounts[2],
     },
     activity,
-    adoption: [
-      { label: "Recurring", users: adoptionCounts[0] },
-      { label: "Budgeting", users: adoptionCounts[1] },
-      { label: "Goals", users: adoptionCounts[2] },
-      { label: "Investments", users: adoptionCounts[3] },
-      { label: "Circles", users: adoptionCounts[4] },
-    ],
+    adoption,
     attention: [
       {
         label: "Processing imports",
