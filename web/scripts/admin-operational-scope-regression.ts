@@ -5,6 +5,19 @@ import { resolve } from "node:path";
 const readSource = (path: string) =>
   readFileSync(resolve(process.cwd(), path), "utf8");
 
+const adminLayoutSource = readSource("app/admin/layout.tsx");
+const adminStyles = readSource("app/admin/admin.css");
+const globalStyles = readSource("app/globals.css");
+
+assert.match(adminLayoutSource, /import "\.\/admin\.css"/);
+assert.match(adminLayoutSource, /className="admin-root"/);
+assert.doesNotMatch(globalStyles, /@import url\("\/admin\.css"\)/);
+assert.match(adminStyles, /\.admin-root\s*\{/);
+assert.match(adminStyles, /\.admin-kpi-grid\s*\{/);
+assert.match(adminStyles, /\.admin-dashboard-grid\s*\{/);
+assert.match(adminStyles, /@media \(max-width: 760px\)/);
+assert.match(adminStyles, /overflow-x: auto/);
+
 const scopeSource = readSource("lib/admin-data-scope.ts");
 const adminSource = readSource("lib/admin.ts");
 assert.match(adminSource, /getAdminDataEnvironment = \(\) => "production" as const/);
