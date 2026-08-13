@@ -33,6 +33,17 @@ assert.match(adviserSource, /<Suspense fallback=\{null\}>\s*<ReportsStream/);
 assert.match(adviserLoadingSource, /CloverRouteLoadingScreen label="adviser" prompt/);
 assert.doesNotMatch(shellSource, /const coreRoutes = \[[^\]]*"\/adviser"/);
 
+const errorBoundarySource = readSource("app/error.tsx");
+const errorScreenSource = readSource("components/error-recovery-screen.tsx");
+const adminErrorLogsSource = readSource("components/admin-error-logs-table.tsx");
+assert.doesNotMatch(errorBoundarySource, /<p>\{error\.message\}<\/p>/);
+assert.match(errorBoundarySource, /message: error\.message/);
+assert.match(errorBoundarySource, /errorCode/);
+assert.match(errorScreenSource, /Something went wrong/);
+assert.match(errorScreenSource, /Refresh page/);
+assert.match(errorScreenSource, /\/assets\/error-clover\.webp/);
+assert.match(adminErrorLogsSource, /Frontend reference/);
+
 const commitmentsSource = readSource("components/commitments-panel.tsx");
 assert.match(commitmentsSource, /Why Clover suggested this/);
 assert.match(commitmentsSource, /<span>Paid to<\/span>/);

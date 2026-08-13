@@ -1,19 +1,12 @@
 import type { NextPageContext } from "next";
+import { ErrorRecoveryScreen } from "@/components/error-recovery-screen";
 
 type ErrorPageProps = {
   statusCode?: number;
 };
 
 export default function ErrorPage({ statusCode = 500 }: ErrorPageProps) {
-  return (
-    <main className="error-screen">
-      <div className="error-screen__card glass">
-        <p className="eyebrow">Something broke</p>
-        <h1>{statusCode === 404 ? "Page not found." : "We hit an unexpected error."}</h1>
-        <p>{statusCode === 404 ? "This page does not exist." : "Please try again in a moment."}</p>
-      </div>
-    </main>
-  );
+  return <ErrorRecoveryScreen errorCode={`CLV-HTTP-${statusCode}`} recoveryHref="/" recoveryLabel="Go to Landing Page" />;
 }
 
 ErrorPage.getInitialProps = ({ res, err }: NextPageContext): ErrorPageProps => ({

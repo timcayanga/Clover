@@ -19,6 +19,15 @@ const formatValue = (value: string | null | undefined) => {
   return value;
 };
 
+const getErrorCode = (metadata: AdminErrorLogListResponse["logs"][number]["metadata"]) => {
+  if (!metadata || Array.isArray(metadata) || typeof metadata !== "object") {
+    return null;
+  }
+
+  const errorCode = metadata.errorCode;
+  return typeof errorCode === "string" ? errorCode : null;
+};
+
 export function AdminErrorLogsTable({ data, query }: AdminErrorLogsTableProps) {
   const buildPageHref = (page: number) => {
     const params = new URLSearchParams();
@@ -105,44 +114,55 @@ export function AdminErrorLogsTable({ data, query }: AdminErrorLogsTableProps) {
             </thead>
             <tbody>
               {data.logs.length ? (
-                data.logs.map((log) => (
-                  <tr key={log.id}>
-                    <td>
-                      <span className="admin-users__mono">{formatDateTime.format(new Date(log.occurredAt))}</span>
-                    </td>
-                    <td>
-                      <strong>{log.message}</strong>
-                      {log.name ? <div className="admin-error-logs__subtle">{log.name}</div> : null}
-                    </td>
-                    <td>{log.source}</td>
-                    <td>{formatValue(log.route)}</td>
-                    <td className="admin-users__mono">{log.buildId}</td>
-                    <td className="admin-users__mono">{formatValue(log.deploymentId)}</td>
-                    <td>{formatValue(log.statusCode !== null ? String(log.statusCode) : null)}</td>
-                    <td>{formatValue(log.clerkUserId ?? log.userId)}</td>
-                    <td>{formatValue(log.workspaceId)}</td>
-                    <td>
-                      <details className="admin-error-logs__details">
-                        <summary>View stack</summary>
-                        <div className="admin-error-logs__detail-body">
-                          <div>
-                            <span>URL</span>
-                            <strong>{formatValue(log.url)}</strong>
+                data.logs.map((log) => {
+                  const errorCode = getErrorCode(log.metadata);
+
+                  return (
+                    <tr key={log.id}>
+                      <td>
+                        <span className="admin-users__mono">{formatDateTime.format(new Date(log.occurredAt))}</span>
+                      </td>
+                      <td>
+                        <strong>{log.message}</strong>
+                        {log.name ? <div className="admin-error-logs__subtle">{log.name}</div> : null}
+                        {errorCode ? <div className="admin-users__mono">Frontend reference: {errorCode}</div> : null}
+                      </td>
+                      <td>{log.source}</td>
+                      <td>{formatValue(log.route)}</td>
+                      <td className="admin-users__mono">{log.buildId}</td>
+                      <td className="admin-users__mono">{formatValue(log.deploymentId)}</td>
+                      <td>{formatValue(log.statusCode !== null ? String(log.statusCode) : null)}</td>
+                      <td>{formatValue(log.clerkUserId ?? log.userId)}</td>
+                      <td>{formatValue(log.workspaceId)}</td>
+                      <td>
+                        <details className="admin-error-logs__details">
+                          <summary>View stack</summary>
+                          <div className="admin-error-logs__detail-body">
+                            <div>
+                              <span>URL</span>
+                              <strong>{formatValue(log.url)}</strong>
+                            </div>
+                            <div>
+                              <span>User agent</span>
+                              <strong>{formatValue(log.userAgent)}</strong>
+                            </div>
+                            <div>
+                              <span>Environment</span>
+                              <strong>{log.environment}</strong>
+                            </div>
+                            {errorCode ? (
+                              <div>
+                                <span>Frontend reference</span>
+                                <strong>{errorCode}</strong>
+                              </div>
+                            ) : null}
+                            <pre>{log.stack ?? "No stack available."}</pre>
                           </div>
-                          <div>
-                            <span>User agent</span>
-                            <strong>{formatValue(log.userAgent)}</strong>
-                          </div>
-                          <div>
-                            <span>Environment</span>
-                            <strong>{log.environment}</strong>
-                          </div>
-                          <pre>{log.stack ?? "No stack available."}</pre>
-                        </div>
-                      </details>
-                    </td>
-                  </tr>
-                ))
+                        </details>
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
                   <td className="admin-error-logs__empty" colSpan={10}>

@@ -50181,6 +50181,106 @@ html[data-theme="dark"] .content--adviser .adviser-summary .adviser-summary-card
   font-size: 0.76rem;
 }
 
+/* Unexpected failures use a calm, self-contained recovery screen. */
+.error-screen {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: clamp(20px, 5vw, 64px);
+  background:
+    radial-gradient(circle at 15% 15%, rgba(51, 196, 196, 0.14), transparent 34%),
+    radial-gradient(circle at 90% 82%, rgba(255, 92, 92, 0.1), transparent 30%),
+    var(--surface, #f7fbfc);
+  color: var(--ink, #17202d);
+}
+
+.error-screen__card {
+  width: min(880px, 100%);
+  display: grid;
+  grid-template-columns: minmax(220px, 0.82fr) minmax(280px, 1fr);
+  align-items: center;
+  gap: clamp(24px, 5vw, 56px);
+  overflow: hidden;
+  padding: clamp(20px, 4vw, 48px);
+  border: 1px solid var(--stroke, #d9e6e9);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 24px 70px rgba(34, 58, 66, 0.12);
+}
+
+.error-screen__art {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 22px;
+  object-fit: cover;
+}
+
+.error-screen__copy {
+  display: grid;
+  gap: 14px;
+}
+
+.error-screen__copy h1,
+.error-screen__copy p {
+  margin: 0;
+}
+
+.error-screen__copy h1 {
+  font-size: clamp(1.9rem, 4vw, 3rem);
+  line-height: 1.05;
+}
+
+.error-screen__copy > p:not(.eyebrow):not(.error-screen__code) {
+  max-width: 48ch;
+  color: var(--muted, #667480);
+  line-height: 1.6;
+}
+
+.error-screen__code {
+  width: fit-content;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: #f2f7f8;
+  color: #566670;
+  font-size: 0.76rem;
+  letter-spacing: 0.03em;
+}
+
+.error-screen__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+@media (max-width: 700px) {
+  .error-screen {
+    align-items: start;
+    padding: 18px;
+  }
+
+  .error-screen__card {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    padding: 18px;
+    border-radius: 22px;
+  }
+
+  .error-screen__art {
+    max-height: 230px;
+  }
+
+  .error-screen__actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .error-screen__actions .button {
+    width: 100%;
+  }
+}
+
 .split-bill-detail-modal__section-head--members > div {
   display: grid;
   gap: 3px;
