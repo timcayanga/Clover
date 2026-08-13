@@ -79,6 +79,40 @@ export const resolveRelevantCommitmentDueDate = (params: {
   return occurrenceDate;
 };
 
+export const resolveTrackedCommitmentDueDate = (params: {
+  dueDate: Date | null;
+  nextDueDate: Date | null;
+  recurrence: CommitmentRecurrence;
+  now?: Date;
+  activationWindowDays?: number;
+}) => {
+  const sourceDate = params.nextDueDate ?? params.dueDate;
+  if (!sourceDate || Number.isNaN(sourceDate.getTime())) {
+    return null;
+  }
+
+  let occurrenceDate = toUtcDateOnly(sourceDate);
+  if (params.recurrence === "once") {
+    return occurrenceDate;
+  }
+
+  const today = toUtcDateOnly(params.now ?? new Date());
+  const activationDate = new Date(
+    today.getTime() + Math.max(0, params.activationWindowDays ?? 7) * DAY_IN_MS
+  );
+  const preferredDay = occurrenceDate.getUTCDate();
+
+  for (let guard = 0; guard < 600; guard += 1) {
+    const nextDate = addCommitmentRecurrence(occurrenceDate, params.recurrence, preferredDay);
+    if (nextDate.getTime() <= occurrenceDate.getTime() || nextDate > activationDate) {
+      break;
+    }
+    occurrenceDate = nextDate;
+  }
+
+  return occurrenceDate;
+};
+
 export const toCommitmentOccurrenceKey = (value: Date) =>
   toUtcDateOnly(value).toISOString().slice(0, 10);
 

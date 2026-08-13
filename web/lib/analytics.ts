@@ -109,6 +109,7 @@ export type AnalyticsEventName =
   | "weekly_summary_viewed"
   | "recurring_item_reviewed"
   | "recurring_item_confirmed"
+  | "recurring_occurrence_updated"
   | "adviser_question_asked"
   | "adviser_recommendation_opened"
   | "adviser_action_completed"
@@ -169,7 +170,7 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "merchant_rule_created", "merchant_rule_updated", "merchant_rule_applied", "category_rule_created", "category_rule_updated",
   "category_rule_deleted", "category_rule_reverted", "category_rule_applied", "ai_suggestion_shown", "ai_suggestion_accepted", "ai_suggestion_rejected",
   "report_viewed", "report_filtered", "report_exported", "cashflow_viewed", "category_mix_viewed", "top_sources_viewed", "trend_line_viewed",
-  "insight_generated", "insight_opened", "insight_action_taken", "weekly_summary_viewed", "recurring_item_reviewed", "recurring_item_confirmed",
+  "insight_generated", "insight_opened", "insight_action_taken", "weekly_summary_viewed", "recurring_item_reviewed", "recurring_item_confirmed", "recurring_occurrence_updated",
   "adviser_question_asked", "adviser_recommendation_opened", "adviser_action_completed", "split_bill_created", "split_bill_completed", "split_bill_settled",
   "circle_created", "circle_updated", "circle_deleted", "circle_invitation_created", "circle_invitation_accepted", "circle_member_updated",
   "circle_budget_created", "circle_goal_created", "circle_contribution_recorded", "circle_commitment_created", "circle_transaction_shared", "circle_investment_shared",

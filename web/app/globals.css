@@ -7176,7 +7176,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
 }
 
 .commitments-table {
-  min-width: 760px;
+  min-width: 1080px;
 }
 
 .transactions-table.commitments-table th,
@@ -7227,6 +7227,44 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
 .commitments-table td strong,
 .commitments-table__secondary {
   display: block;
+}
+
+.commitments-table__category {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.commitments-table__inferred {
+  display: block;
+  margin-top: 2px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.recurring-occurrence-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.recurring-occurrence-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.recurring-occurrence-check.is-complete {
+  color: var(--good);
 }
 
 .commitments-table__empty {
@@ -7581,8 +7619,42 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
     border-bottom: 1px solid var(--stroke);
     background: transparent;
     color: var(--text);
+    cursor: default;
+    text-align: left;
+  }
+
+  .recurring-mobile-row__open {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
     cursor: pointer;
     text-align: left;
+  }
+
+  .recurring-mobile-row__open small {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 400;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .recurring-occurrence-check--mobile {
+    display: grid;
+    justify-items: center;
+    gap: 1px;
+    font-size: 9px;
+  }
+
+  .recurring-occurrence-check--mobile input {
+    width: 17px;
+    height: 17px;
   }
 
   .recurring-mobile-row:active {

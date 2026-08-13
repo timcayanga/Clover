@@ -9,7 +9,6 @@ import {
   commitmentRecurrenceLabels,
   commitmentRecurrenceOptions,
   commitmentStatusLabels,
-  commitmentStatusOptions,
   type FinancialCommitmentSummary,
 } from "@/lib/commitments";
 import type { RecurringPatternSummary } from "@/lib/recurring-page";
@@ -18,6 +17,7 @@ import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { formatAccountTypeLabel, getRecurringKindSuggestionForAccountType, isLiabilityAccountType } from "@/lib/account-types";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { getAccountBrand } from "@/lib/account-brand";
 
 type CommitmentAccountOption = {
@@ -109,13 +109,25 @@ const reasonBadgeStyle: CSSProperties = {
   background: "rgba(3, 168, 192, 0.08)",
 };
 
-const formatCurrency = (value: string | null) => {
+const formatCurrency = (value: string | null, currency = "PHP") => {
   if (!value) {
     return "No amount set";
   }
 
   const numeric = Number(value);
-  return Number.isFinite(numeric) ? currencyFormatter.format(numeric) : value;
+  if (!Number.isFinite(numeric)) {
+    return value;
+  }
+
+  try {
+    return new Intl.NumberFormat("en-PH", {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+    }).format(numeric);
+  } catch {
+    return currencyFormatter.format(numeric);
+  }
 };
 
 const formatDate = (value: string | null) => {
@@ -344,6 +356,7 @@ export function CommitmentsPanel({
   const [editingCell, setEditingCell] = useState<{ commitmentId: string; field: EditableCommitmentField } | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [savingCommitmentId, setSavingCommitmentId] = useState<string | null>(null);
+  const [completingCommitmentId, setCompletingCommitmentId] = useState<string | null>(null);
   const [mobileDetailId, setMobileDetailId] = useState<string | null>(null);
   const overviewStats = useMemo(() => {
     const start = new Date();
@@ -627,6 +640,44 @@ export function CommitmentsPanel({
       });
   };
 
+  const handleOccurrenceCompletion = async (commitment: FinancialCommitmentSummary, completed: boolean) => {
+    if (!commitment.occurrenceDueDate || commitment.id.startsWith("optimistic-")) {
+      return;
+    }
+
+    setCompletingCommitmentId(commitment.id);
+    try {
+      const response = await fetch(`/api/commitments/${commitment.id}/completion`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dueDate: commitment.occurrenceDueDate, completed }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        completedAt?: string | null;
+        error?: string;
+      } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Unable to update this payment");
+      }
+
+      setVisibleCommitments((current) => current.map((item) =>
+        item.id === commitment.id
+          ? { ...item, occurrenceCompletedAt: completed ? payload?.completedAt ?? new Date().toISOString() : null }
+          : item
+      ));
+      capturePostHogClientEvent("recurring_occurrence_updated", {
+        workspace_id: workspaceId,
+        recurring_kind: commitment.kind,
+        recurrence: commitment.recurrence,
+        completed,
+      });
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Unable to update this payment");
+    } finally {
+      setCompletingCommitmentId(null);
+    }
+  };
+
   const getEditableValue = (commitment: FinancialCommitmentSummary, field: EditableCommitmentField) => {
     switch (field) {
       case "title":
@@ -696,7 +747,7 @@ export function CommitmentsPanel({
       }
 
       setVisibleCommitments((current) =>
-        current.map((item) => (item.id === commitment.id ? payload.commitment as FinancialCommitmentSummary : item))
+        current.map((item) => (item.id === commitment.id ? { ...item, ...payload.commitment as FinancialCommitmentSummary } : item))
       );
       cancelCellEdit();
       router.refresh();
@@ -981,9 +1032,9 @@ export function CommitmentsPanel({
     const tabLabel = activeTab === "planned" ? "planned payment" : activeTab === "debt" ? "debt or loan" : activeTab === "owed" ? "money owed" : "installment";
     const hasRows = tabCommitments.length > 0 || tabSuggestions.length > 0;
     const showsPerson = activeTab === "debt" || activeTab === "owed";
-    const showsAccount = activeTab !== "owed";
+    const showsAccount = true;
     const personHeading = activeTab === "debt" ? "Owed To" : "Owed From";
-    const columnCount = 6 + (showsPerson ? 1 : 0) + (showsAccount ? 1 : 0);
+    const columnCount = 7 + (showsPerson ? 1 : 0) + (showsAccount ? 1 : 0);
     const isEditing = (commitmentId: string, field: EditableCommitmentField) =>
       editingCell?.commitmentId === commitmentId && editingCell.field === field;
 
@@ -1000,22 +1051,6 @@ export function CommitmentsPanel({
     const mobileDetailCommitment = mobileDetailId
       ? tabCommitments.find((commitment) => commitment.id === mobileDetailId) ?? null
       : null;
-    const renderStatusIcon = (status: FinancialCommitmentSummary["status"]) => {
-      if (status === "resolved") {
-        return <path d="m6.5 12.5 3.2 3.2 7.8-8" />;
-      }
-      if (status === "paused") {
-        return <>
-          <path d="M9 8v8" />
-          <path d="M15 8v8" />
-        </>;
-      }
-      return <>
-        <circle cx="12" cy="12" r="7.5" />
-        <path d="M12 8v4l2.5 1.5" />
-      </>;
-    };
-
     return (
       <article className="commitments-detail-panel">
         <div className="recurring-mobile-list" aria-label={`${tabLabel} list`}>
@@ -1031,37 +1066,47 @@ export function CommitmentsPanel({
             <section className="recurring-mobile-group" key={group.key}>
               <div className="recurring-mobile-group__date"><span>{group.label}</span></div>
               {group.commitments.map((commitment) => {
+                const displayedAccount = commitment.account ?? commitment.inferredAccount ?? null;
                 const brand = getAccountBrand({
-                  institution: commitment.account?.institution ?? null,
-                  name: commitment.account?.name ?? "Recurring",
-                  type: commitment.account?.type ?? null,
+                  institution: displayedAccount?.institution ?? null,
+                  name: displayedAccount?.name ?? "Recurring",
+                  type: displayedAccount?.type ?? null,
                 });
+                const occurrenceCompleted = Boolean(commitment.occurrenceCompletedAt);
+                const completionLabel = commitment.kind === "receivable"
+                  ? occurrenceCompleted ? "Received" : "Pending"
+                  : occurrenceCompleted ? "Paid" : "Pending";
                 return (
-                  <button
+                  <div
                     className="recurring-mobile-row"
-                    type="button"
                     key={commitment.id}
-                    onClick={() => openMobileDetail(commitment.id)}
-                    aria-label={`Open ${commitment.title}`}
                   >
                     <span className="recurring-mobile-row__account" aria-hidden="true">
-                      <AccountBrandMark accountBrand={brand} label={commitment.account?.name ?? commitment.title} />
+                      <AccountBrandMark accountBrand={brand} label={displayedAccount?.name ?? commitment.title} />
                     </span>
-                    <strong className="recurring-mobile-row__name">{commitment.title}</strong>
-                    <span className="recurring-mobile-row__amount">{formatCurrency(commitment.amount)}</span>
-                    <span
-                      className={`recurring-mobile-row__status recurring-mobile-row__status--${commitment.status}`}
-                      title={commitmentStatusLabels[commitment.status]}
-                      aria-label={commitmentStatusLabels[commitment.status]}
+                    <button
+                      type="button"
+                      className="recurring-mobile-row__open"
+                      onClick={() => openMobileDetail(commitment.id)}
+                      aria-label={`Open ${commitment.title}`}
                     >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        {renderStatusIcon(commitment.status)}
-                      </svg>
-                    </span>
+                      <strong className="recurring-mobile-row__name">{commitment.title}</strong>
+                      <small>{commitment.categoryName ?? "Other"} · {displayedAccount?.name ?? "Account to confirm"}</small>
+                    </button>
+                    <span className="recurring-mobile-row__amount">{formatCurrency(commitment.amount, commitment.currency)}</span>
+                    <label className={`recurring-occurrence-check recurring-occurrence-check--mobile${occurrenceCompleted ? " is-complete" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={occurrenceCompleted}
+                        disabled={commitment.status !== "active" || !commitment.occurrenceDueDate || completingCommitmentId === commitment.id}
+                        onChange={(event) => void handleOccurrenceCompletion(commitment, event.target.checked)}
+                      />
+                      <span>{completionLabel}</span>
+                    </label>
                     <svg className="recurring-mobile-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="m9 6 6 6-6 6" />
                     </svg>
-                  </button>
+                  </div>
                 );
               })}
             </section>
@@ -1113,6 +1158,7 @@ export function CommitmentsPanel({
                 {showsPerson ? <th>{personHeading}</th> : null}
                 <th>Due Date</th>
                 <th>Type</th>
+                <th>Category</th>
                 <th>Amount</th>
                 {showsAccount ? <th>Account</th> : null}
                 <th>Status</th>
@@ -1233,6 +1279,12 @@ export function CommitmentsPanel({
                     )}
                   </td>
                   <td>
+                    <span className="commitments-table__category">
+                      <CategoryBrandMark categoryName={commitment.categoryName ?? "Other"} size={28} radius={8} />
+                      <span>{commitment.categoryName ?? "Other"}</span>
+                    </span>
+                  </td>
+                  <td>
                     {isEditing(commitment.id, "amount") ? (
                       <input
                         autoFocus
@@ -1246,7 +1298,7 @@ export function CommitmentsPanel({
                       />
                     ) : (
                       <button className="commitments-table__editable" type="button" onClick={() => beginCellEdit(commitment, "amount")}>
-                        {formatCurrency(commitment.amount)}
+                        {formatCurrency(commitment.amount, commitment.currency)}
                       </button>
                     )}
                   </td>
@@ -1255,7 +1307,7 @@ export function CommitmentsPanel({
                       <select
                         autoFocus
                         className="commitments-table__editor"
-                        value={editingValue}
+                        value={editingValue || commitment.inferredAccountId || ""}
                         onChange={(event) => {
                           setEditingValue(event.target.value);
                           void saveCommitmentField(commitment, "accountId", event.target.value);
@@ -1272,40 +1324,33 @@ export function CommitmentsPanel({
                           ))}
                       </select>
                     ) : (
-                      <button className="commitments-table__editable" type="button" onClick={() => beginCellEdit(commitment, "accountId")}>
-                        {commitment.account?.name ?? "Not linked"}
+                      <button
+                        className="commitments-table__editable"
+                        type="button"
+                        onClick={() => commitment.inferredAccountId
+                          ? void saveCommitmentField(commitment, "accountId", commitment.inferredAccountId)
+                          : beginCellEdit(commitment, "accountId")}
+                        title={commitment.inferredAccountId ? "Use Clover's suggested account" : "Edit linked account"}
+                      >
+                        {commitment.account?.name ?? commitment.inferredAccount?.name ?? "Not linked"}
+                        {!commitment.account && commitment.inferredAccount ? <span className="commitments-table__inferred">Suggested</span> : null}
                       </button>
                     )}
                   </td> : null}
                   <td>
-                    {isEditing(commitment.id, "status") ? (
-                      <select
-                        autoFocus
-                        className="commitments-table__editor"
-                        value={editingValue}
-                        onChange={(event) => {
-                          setEditingValue(event.target.value);
-                          void saveCommitmentField(commitment, "status", event.target.value);
-                        }}
-                        aria-label="Edit status"
-                      >
-                        {commitmentStatusOptions.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <button
-                        className={`commitments-table__editable${
-                          activeTab === "owed"
-                            ? ` commitments-table__status commitments-table__status--${commitment.status}`
-                            : ""
-                        }`}
-                        type="button"
-                        onClick={() => beginCellEdit(commitment, "status")}
-                      >
-                        {commitmentStatusLabels[commitment.status]}
-                      </button>
-                    )}
+                    <label className={`recurring-occurrence-check${commitment.occurrenceCompletedAt ? " is-complete" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(commitment.occurrenceCompletedAt)}
+                        disabled={commitment.status !== "active" || !commitment.occurrenceDueDate || completingCommitmentId === commitment.id}
+                        onChange={(event) => void handleOccurrenceCompletion(commitment, event.target.checked)}
+                      />
+                      <span>
+                        {commitment.kind === "receivable"
+                          ? commitment.occurrenceCompletedAt ? "Received" : "Pending"
+                          : commitment.occurrenceCompletedAt ? "Paid" : "Pending"}
+                      </span>
+                    </label>
                   </td>
                   <td className="commitments-table__actions">
                     <button
@@ -1383,11 +1428,12 @@ export function CommitmentsPanel({
               </div>
             </header>
             <dl className="recurring-mobile-detail__fields">
-              <div><dt>Status</dt><dd>{commitmentStatusLabels[mobileDetailCommitment.status]}</dd></div>
+              <div><dt>Status</dt><dd>{mobileDetailCommitment.kind === "receivable" ? mobileDetailCommitment.occurrenceCompletedAt ? "Received" : "Pending" : mobileDetailCommitment.occurrenceCompletedAt ? "Paid" : "Pending"}</dd></div>
               <div><dt>Amount</dt><dd>{formatCurrency(mobileDetailCommitment.amount)}</dd></div>
               <div><dt>Due date</dt><dd>{formatDate(getCommitmentDateValue(mobileDetailCommitment))}</dd></div>
               <div><dt>Repeats</dt><dd>{mobileDetailCommitment.recurrence === "once" ? "One-time" : commitmentRecurrenceLabels[mobileDetailCommitment.recurrence]}</dd></div>
-              {mobileDetailCommitment.account ? <div><dt>Account</dt><dd>{mobileDetailCommitment.account.name}</dd></div> : null}
+              <div><dt>Category</dt><dd>{mobileDetailCommitment.categoryName ?? "Other"}</dd></div>
+              {mobileDetailCommitment.account || mobileDetailCommitment.inferredAccount ? <div><dt>Account</dt><dd>{mobileDetailCommitment.account?.name ?? mobileDetailCommitment.inferredAccount?.name}</dd></div> : null}
               {mobileDetailCommitment.counterparty ? <div><dt>{activeTab === "owed" ? "Owed from" : "Payee"}</dt><dd>{mobileDetailCommitment.counterparty}</dd></div> : null}
               {mobileDetailCommitment.notes ? <div className="recurring-mobile-detail__field--wide"><dt>Notes</dt><dd>{mobileDetailCommitment.notes}</dd></div> : null}
             </dl>

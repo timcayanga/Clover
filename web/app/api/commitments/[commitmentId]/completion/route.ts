@@ -66,6 +66,7 @@ export async function PATCH(
 
       revalidatePath("/home");
       revalidatePath("/dashboard");
+      revalidatePath("/recurring");
       return NextResponse.json({ completed: true, completedAt: occurrence.completedAt.toISOString() });
     }
 
@@ -79,6 +80,7 @@ export async function PATCH(
 
     revalidatePath("/home");
     revalidatePath("/dashboard");
+    revalidatePath("/recurring");
     return NextResponse.json({ completed: false, completedAt: null });
   } catch (error) {
     console.error("Unable to update recurring payment completion", error);

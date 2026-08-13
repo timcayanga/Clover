@@ -7,6 +7,7 @@ import { hasCompatibleTable } from "@/lib/data-engine";
 import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
 import { getPlannedPaymentSuggestions, getRecurringConfidenceTier, type PlannedPaymentSuggestion } from "@/lib/planned-payment-suggestions";
 import { syncReceivableAccountCommitments } from "@/lib/imported-receivables.server";
+import { resolveTrackedCommitmentDueDate, toCommitmentOccurrenceKey } from "@/lib/commitment-occurrences";
 
 export type RecurringPageAccount = {
   id: string;
@@ -71,6 +72,92 @@ export type RecurringPageData = {
   commitments: FinancialCommitmentSummary[];
   recurringPatterns: RecurringPatternSummary[];
   liabilityAccountCount: number;
+};
+
+type CommitmentForEnrichment = FinancialCommitmentSummary;
+
+const normalizeRecurringMatchText = (value: string | null | undefined) =>
+  (value ?? "")
+    .toLowerCase()
+    .replace(/\b(payment|payments|subscription|monthly|annual|bill|bills|recurring)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const inferCommitmentCategory = (commitment: CommitmentForEnrichment) => {
+  const text = `${commitment.title} ${commitment.counterparty ?? ""}`.toLowerCase();
+  if (/subscription|membership|netflix|spotify|openai|chatgpt|icloud|youtube|adobe/.test(text)) return "Subscriptions";
+  if (/electric|water|utility|utilities|internet|broadband|phone|mobile|globe|smart|pldt|meralco|maynilad/.test(text)) return "Bills & Utilities";
+  if (/rent|lease|mortgage/.test(text)) return "Housing";
+  if (/tuition|school|education/.test(text)) return "Education";
+  if (/insurance|loan|credit|debt|installment|amortization/.test(text)) return "Financial";
+  if (commitment.kind === "receivable") return "Income";
+  if (commitment.kind === "debt" || commitment.kind === "reminder") return "Financial";
+  return "Other";
+};
+
+export const enrichRecurringCommitments = (params: {
+  commitments: CommitmentForEnrichment[];
+  transactions: RecurringPageTransaction[];
+  accounts: RecurringPageAccount[];
+  now?: Date;
+}) => {
+  const accountById = new Map(params.accounts.map((account) => [account.id, account]));
+
+  return params.commitments.map((commitment) => {
+    const titleKey = normalizeRecurringMatchText(`${commitment.title} ${commitment.counterparty ?? ""}`);
+    const titleTokens = new Set(titleKey.split(" ").filter((token) => token.length >= 3));
+    const amount = Number(commitment.amount);
+    const candidates = params.transactions
+      .map((transaction) => {
+        const transactionKey = normalizeRecurringMatchText(
+          `${transaction.merchantClean ?? ""} ${transaction.merchantRaw} ${transaction.description ?? ""}`
+        );
+        const transactionTokens = new Set(transactionKey.split(" ").filter((token) => token.length >= 3));
+        const sharedTokens = [...titleTokens].filter((token) => transactionTokens.has(token)).length;
+        const exactText = Boolean(titleKey) && (transactionKey.includes(titleKey) || titleKey.includes(transactionKey));
+        const transactionAmount = Math.abs(Number(transaction.amount));
+        const amountMatches = Number.isFinite(amount) && amount > 0 && Math.abs(transactionAmount - Math.abs(amount)) <= Math.max(1, amount * 0.02);
+        const currencyMatches = transaction.currency.toUpperCase() === commitment.currency.toUpperCase();
+        const score = (exactText ? 6 : 0) + sharedTokens * 2 + (amountMatches ? 3 : 0) + (currencyMatches ? 1 : -4);
+        return { transaction, score };
+      })
+      .filter((candidate) => candidate.score >= 5)
+      .sort((left, right) => right.score - left.score || new Date(right.transaction.date).getTime() - new Date(left.transaction.date).getTime());
+
+    const bestMatch = candidates[0] ?? null;
+    const runnerUp = candidates[1] ?? null;
+    const hasReliableMatch = Boolean(bestMatch && (!runnerUp || bestMatch.score >= runnerUp.score + 2 || bestMatch.transaction.account.id === runnerUp.transaction.account.id));
+    const matchedTransaction = hasReliableMatch ? bestMatch?.transaction ?? null : null;
+    const explicitTransaction = commitment.transactionId
+      ? params.transactions.find((transaction) => transaction.id === commitment.transactionId) ?? null
+      : null;
+    const evidenceTransaction = explicitTransaction ?? matchedTransaction;
+    const inferredAccountId = commitment.accountId ? null : evidenceTransaction?.account.id ?? null;
+    const inferredAccountRecord = inferredAccountId ? accountById.get(inferredAccountId) ?? null : null;
+    const occurrenceDate = resolveTrackedCommitmentDueDate({
+      dueDate: commitment.dueDate ? new Date(commitment.dueDate) : null,
+      nextDueDate: commitment.nextDueDate ? new Date(commitment.nextDueDate) : null,
+      recurrence: commitment.recurrence,
+      now: params.now,
+    });
+
+    return {
+      ...commitment,
+      categoryName: evidenceTransaction?.category?.name ?? inferCommitmentCategory(commitment),
+      categorySource: evidenceTransaction?.category?.name ? "transaction" as const : "inferred" as const,
+      inferredAccountId,
+      inferredAccount: inferredAccountRecord
+        ? {
+            id: inferredAccountRecord.id,
+            name: inferredAccountRecord.name,
+            institution: inferredAccountRecord.institution,
+            type: inferredAccountRecord.type,
+          }
+        : null,
+      occurrenceDueDate: occurrenceDate ? toCommitmentOccurrenceKey(occurrenceDate) : null,
+    };
+  });
 };
 
 const RECURRING_ENRICHMENT_TIMEOUT_MS = 2500;
@@ -225,12 +312,20 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
             amount: true,
             merchantRaw: true,
             merchantClean: true,
+            category: {
+              select: { name: true },
+            },
             account: {
               select: {
                 name: true,
               },
             },
           },
+        },
+        occurrences: {
+          orderBy: { dueDate: "desc" },
+          take: 24,
+          select: { dueDate: true, completedAt: true },
         },
       },
     }),
@@ -353,12 +448,29 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
       : null,
   }));
 
+  const enrichedCommitments = enrichRecurringCommitments({
+    commitments: commitments.map((commitment) => serializeFinancialCommitment(commitment)),
+    transactions: serializedTransactions,
+    accounts: serializedAccounts,
+  }).map((commitment) => {
+    const sourceCommitment = commitments.find((item) => item.id === commitment.id);
+    const completedOccurrence = commitment.occurrenceDueDate
+      ? sourceCommitment?.occurrences.find(
+          (occurrence) => toCommitmentOccurrenceKey(occurrence.dueDate) === commitment.occurrenceDueDate
+        )
+      : null;
+    return {
+      ...commitment,
+      occurrenceCompletedAt: completedOccurrence?.completedAt.toISOString() ?? null,
+    };
+  });
+
   return {
     reminders,
     accounts: serializedAccounts,
     transactions: serializedTransactions,
     recurringItems,
-    commitments: commitments.map((commitment) => serializeFinancialCommitment(commitment)),
+    commitments: enrichedCommitments,
     recurringPatterns: serializedRecurringPatterns,
     plannedPaymentSuggestions,
     liabilityAccountCount,

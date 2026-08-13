@@ -114,6 +114,7 @@ export const FEATURE_FUNNEL_DEFINITIONS: FeatureFunnelDefinition[] = [
       { key: "available", label: "Has recurring records", databaseFallback: "recurring" },
       { key: "reviewed", label: "Reviewed a suggestion", criteria: events("recurring_item_reviewed") },
       { key: "confirmed", label: "Kept or confirmed recurring item", criteria: events("recurring_item_confirmed") },
+      { key: "completed", label: "Marked a recurring occurrence complete", criteria: events("recurring_occurrence_updated") },
     ],
   },
   {

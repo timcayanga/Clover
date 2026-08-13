@@ -13,6 +13,9 @@ export type FinancialCommitmentTransaction = {
   amount: string | null;
   merchantRaw: string;
   merchantClean: string | null;
+  category?: {
+    name: string;
+  } | null;
   account: {
     name: string;
   };
@@ -40,6 +43,12 @@ export type FinancialCommitmentSummary = {
   updatedAt: string;
   account: FinancialCommitmentAccount | null;
   transaction: FinancialCommitmentTransaction | null;
+  categoryName?: string | null;
+  categorySource?: "transaction" | "inferred" | null;
+  inferredAccountId?: string | null;
+  inferredAccount?: FinancialCommitmentAccount | null;
+  occurrenceDueDate?: string | null;
+  occurrenceCompletedAt?: string | null;
 };
 
 export const commitmentKindLabels: Record<CommitmentKind, string> = {
@@ -147,6 +156,9 @@ export const serializeFinancialCommitment = <T extends {
     amount: { toString: () => string } | null;
     merchantRaw: string;
     merchantClean: string | null;
+    category?: {
+      name: string;
+    } | null;
     account: {
       name: string;
     };
@@ -179,6 +191,7 @@ export const serializeFinancialCommitment = <T extends {
         amount: commitment.transaction.amount?.toString() ?? null,
         merchantRaw: commitment.transaction.merchantRaw,
         merchantClean: commitment.transaction.merchantClean,
+        category: commitment.transaction.category ?? null,
         account: {
           name: commitment.transaction.account.name,
         },
