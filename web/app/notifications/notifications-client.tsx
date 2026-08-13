@@ -10,6 +10,7 @@ import {
 } from "@/lib/import-activity";
 import { formatImportResultHeadline } from "@/lib/import-result-summary";
 import { formatCurrencyAmount } from "@/lib/currency-format";
+import { OnboardingMissions } from "@/components/onboarding-missions";
 
 type BudgetAlert = {
   id: string;
@@ -184,6 +185,7 @@ export function NotificationsClient() {
     >
       <section className="notifications-layout">
         <div className="notifications-list">
+          <OnboardingMissions surface="notifications" />
           {circleInvitations.length > 0 ? (
             <section className="notifications-budget">
               <div className="report-card__head report-card__head--compact">

@@ -39,6 +39,7 @@ import {
 } from "@/lib/commitment-occurrences";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { defaultCurrencyCookieKey, normalizeDefaultCurrency } from "@/lib/regional-preferences";
+import { OnboardingMissions } from "@/components/onboarding-missions";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -1121,6 +1122,8 @@ async function DashboardStream({
             </article>
           ))}
         </section>
+
+        <OnboardingMissions surface="home" />
 
         <article className="dashboard-home__insight-strip glass" aria-label="Home Adviser">
           <p className="eyebrow">Adviser</p>

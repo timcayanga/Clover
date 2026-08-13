@@ -50,6 +50,7 @@ import {
 import { installClientDiagnostics, recordClientDiagnostic } from "@/lib/client-diagnostics";
 import { BugReportWidget } from "@/components/bug-report-widget";
 import { getNavigationIconSrc, type NavigationIconName } from "@/lib/navigation-icons";
+import { OnboardingMissionTracker } from "@/components/onboarding-mission-tracker";
 
 const DashboardManualTransactionModal = dynamic(
   () => import("@/components/dashboard-top-actions").then((module) => module.DashboardManualTransactionModal),
@@ -1656,6 +1657,7 @@ export function CloverShell({
 
   return (
     <CloverChromeContext.Provider value={{ closeChrome }}>
+      <OnboardingMissionTracker />
       <div className={`app-shell ${isSidebarOpen ? "is-sidebar-open" : ""}`} ref={shellRef}>
       <div
         className="sidebar-backdrop"

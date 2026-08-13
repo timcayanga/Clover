@@ -9,6 +9,10 @@ export type AnalyticsEventName =
   | "signup_completed"
   | "onboarding_started"
   | "onboarding_completed"
+  | "onboarding_missions_viewed"
+  | "onboarding_mission_started"
+  | "onboarding_mission_completed"
+  | "onboarding_missions_dismissed"
   | "first_login"
   | "workspace_created"
   | "workspace_updated"
@@ -146,7 +150,8 @@ export type AnalyticsEventName =
 // Keep the Admin event inventory aligned with the compile-time event contract.
 // This is intentionally data-free: event names are safe to expose in internal tooling.
 export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
-  "signup_started", "signup_completed", "onboarding_started", "onboarding_completed", "first_login",
+  "signup_started", "signup_completed", "onboarding_started", "onboarding_completed", "onboarding_missions_viewed",
+  "onboarding_mission_started", "onboarding_mission_completed", "onboarding_missions_dismissed", "first_login",
   "workspace_created", "workspace_updated", "workspace_deleted", "workspace_switched",
   "account_created", "account_updated", "account_deleted", "account_wiped", "account_reset",
   "category_created", "category_updated", "category_deleted", "merchant_rule_deleted", "merchant_rule_reverted",
