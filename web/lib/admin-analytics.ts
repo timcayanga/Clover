@@ -116,6 +116,7 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
                 OR: [
                   { transactions: { some: { ...activeTransaction, createdAt: { gte: betaStartedAt } } } },
                   { importFiles: { some: { ...activeImport, uploadedAt: { gte: betaStartedAt } } } },
+                  { accounts: { some: { createdAt: { gte: betaStartedAt } } } },
                 ],
               },
             },
@@ -132,6 +133,7 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
           { createdAt: { gte: betaStartedAt } },
           { transactions: { some: { ...activeTransaction, createdAt: { gte: betaStartedAt } } } },
           { importFiles: { some: { ...activeImport, uploadedAt: { gte: betaStartedAt } } } },
+          { accounts: { some: { createdAt: { gte: betaStartedAt } } } },
         ],
       },
     ],
@@ -161,10 +163,11 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
     errors7d,
     openInquiries,
     recentErrors,
-    usersWithImports,
-    usersWithCompletedImports,
+    onboardedUsersStartedTracking,
+    onboardedUsersWithTransactions,
+    usersStartedTracking,
     usersWithTransactions,
-    usersWithReviewedTransactions,
+    usersWithRecentTransactions,
     posthogLive,
   ] = await Promise.all([
     prisma.user.count({ where: betaParticipantUser }),
@@ -252,8 +255,50 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
       take: 100,
       select: { source: true, route: true, message: true, occurredAt: true },
     }),
-    prisma.user.count({ where: { AND: [betaParticipantUser, { workspaces: { some: { importFiles: { some: betaImport } } } }] } }),
-    prisma.user.count({ where: { AND: [betaParticipantUser, { workspaces: { some: { importFiles: { some: { ...betaImport, status: "done" } } } } }] } }),
+    prisma.user.count({
+      where: {
+        AND: [
+          betaParticipantUser,
+          { onboardingCompletedAt: { not: null } },
+          {
+            workspaces: {
+              some: {
+                OR: [
+                  { accounts: { some: { createdAt: { gte: betaStartedAt } } } },
+                  { transactions: { some: betaTransaction } },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    }),
+    prisma.user.count({
+      where: {
+        AND: [
+          betaParticipantUser,
+          { onboardingCompletedAt: { not: null } },
+          { workspaces: { some: { transactions: { some: betaTransaction } } } },
+        ],
+      },
+    }),
+    prisma.user.count({
+      where: {
+        AND: [
+          betaParticipantUser,
+          {
+            workspaces: {
+              some: {
+                OR: [
+                  { accounts: { some: { createdAt: { gte: betaStartedAt } } } },
+                  { transactions: { some: betaTransaction } },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    }),
     prisma.user.count({ where: { AND: [betaParticipantUser, { workspaces: { some: { transactions: { some: betaTransaction } } } }] } }),
     prisma.user.count({
       where: {
@@ -263,10 +308,7 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
             workspaces: {
               some: {
                 transactions: {
-                  some: {
-                    ...betaTransaction,
-                    reviewStatus: { in: ["confirmed", "edited"] },
-                  },
+                  some: { ...activeTransaction, createdAt: { gte: thirtyDaysAgo } },
                 },
               },
             },
@@ -316,23 +358,21 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
     funnels: [
       {
         name: "Activation",
-        description: "From account creation to a completed first workspace action.",
+        description: "From account creation to usable financial records, whether entered manually or imported.",
         steps: [
           { label: "Accounts created", count: totalUsers },
           { label: "Onboarding completed", count: onboardingCompleted },
-          { label: "First import uploaded", count: usersWithImports },
-          { label: "Import completed", count: usersWithCompletedImports },
-          { label: "Transactions available", count: usersWithTransactions },
+          { label: "Started tracking", count: onboardedUsersStartedTracking },
+          { label: "Transactions available", count: onboardedUsersWithTransactions },
         ],
       },
       {
-        name: "Import magic",
-        description: "The core loop from uploaded documents to usable records.",
+        name: "Core tracking",
+        description: "Users who created financial records and kept their transaction data current.",
         steps: [
-          { label: "Users with an upload", count: usersWithImports },
-          { label: "Users with a completed import", count: usersWithCompletedImports },
+          { label: "Started tracking", count: usersStartedTracking },
           { label: "Transactions available", count: usersWithTransactions },
-          { label: "Users who reviewed a transaction", count: usersWithReviewedTransactions },
+          { label: "Added data in 30d", count: usersWithRecentTransactions },
         ],
       },
     ],

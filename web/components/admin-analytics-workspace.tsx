@@ -14,7 +14,8 @@ const categoryLabels: Record<string, string> = {
   reliability: "Reliability",
 };
 
-const percent = (value: number, total: number) => (total > 0 ? `${Math.round((value / total) * 100)}%` : "—");
+const percent = (value: number, total: number) =>
+  total > 0 ? `${Math.min(100, Math.round((value / total) * 100))}%` : "—";
 
 const posthogStatusCopy = (snapshot: AdminAnalyticsSnapshot) => {
   const live = snapshot.posthog.live;
@@ -113,7 +114,7 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
           <div className="admin-hub__panel-head">
             <div>
               <p className="eyebrow">Funnels</p>
-              <h3 id="admin-funnels-title">Activation and import magic</h3>
+              <h3 id="admin-funnels-title">Activation and core tracking</h3>
             </div>
             <span className="admin-analytics__caption">Live database counts</span>
           </div>

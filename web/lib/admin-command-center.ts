@@ -163,7 +163,15 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
       prisma.user.count({
         where: {
           ...realUser,
-          workspaces: { some: { accounts: { some: {} } } },
+          onboardingCompletedAt: { not: null },
+          workspaces: {
+            some: {
+              OR: [
+                { accounts: { some: {} } },
+                { transactions: { some: activeTransaction } },
+              ],
+            },
+          },
         },
       }),
       prisma.user.count({
@@ -175,9 +183,19 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
       prisma.user.count({
         where: {
           ...realUser,
+          onboardingCompletedAt: { not: null },
+          workspaces: { some: { transactions: { some: activeTransaction } } },
+        },
+      }),
+      prisma.user.count({
+        where: {
+          ...realUser,
           workspaces: {
             some: {
-              importFiles: { some: { ...activeImport, status: "done" } },
+              OR: [
+                { accounts: { some: {} } },
+                { transactions: { some: activeTransaction } },
+              ],
             },
           },
         },
@@ -186,6 +204,21 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
         where: {
           ...realUser,
           workspaces: { some: { transactions: { some: activeTransaction } } },
+        },
+      }),
+      prisma.user.count({
+        where: {
+          ...realUser,
+          workspaces: {
+            some: {
+              transactions: {
+                some: {
+                  ...activeTransaction,
+                  createdAt: { gte: thirtyDaysAgo },
+                },
+              },
+            },
+          },
         },
       }),
     ]),
@@ -283,6 +316,15 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
     trackedAmount: 0,
   };
   const transactions = Number(transactionSummary.transactionCount);
+  const [
+    onboardedUsers,
+    activatedUsers,
+    usersWithImports,
+    activatedUsersWithTransactions,
+    usersStartedTracking,
+    usersWithTransactions,
+    usersWithRecentTransactions,
+  ] = funnelCounts;
 
   const activity = Array.from({ length: 8 }, (_, index) => {
     const start = new Date(
@@ -305,9 +347,9 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
 
   const databaseFallbacks = {
     users,
-    accounts: funnelCounts[1],
-    transactions: funnelCounts[4],
-    imports: funnelCounts[2],
+    accounts: usersStartedTracking,
+    transactions: usersWithTransactions,
+    imports: usersWithImports,
     recurring: adoptionCounts[0],
     budgets: adoptionCounts[1],
     goals: adoptionCounts[2],
@@ -371,18 +413,17 @@ export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCente
         name: "Activation",
         steps: [
           { label: "Signed up", count: users },
-          { label: "Onboarded", count: funnelCounts[0] },
-          { label: "Added account", count: funnelCounts[1] },
-          { label: "Uploaded", count: funnelCounts[2] },
-          { label: "Has transactions", count: funnelCounts[4] },
+          { label: "Onboarded", count: onboardedUsers },
+          { label: "Started tracking", count: activatedUsers },
+          { label: "Has transactions", count: activatedUsersWithTransactions },
         ],
       },
       {
-        name: "Import success",
+        name: "Core tracking",
         steps: [
-          { label: "Uploaded", count: funnelCounts[2] },
-          { label: "Completed", count: funnelCounts[3] },
-          { label: "Has transactions", count: funnelCounts[4] },
+          { label: "Started tracking", count: usersStartedTracking },
+          { label: "Has transactions", count: usersWithTransactions },
+          { label: "Added data in 30d", count: usersWithRecentTransactions },
         ],
       },
       {

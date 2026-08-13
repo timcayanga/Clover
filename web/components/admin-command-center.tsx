@@ -167,15 +167,15 @@ export function AdminCommandCenter({ snapshot }: Props) {
           {snapshot.funnels.map((funnel) => {
             const firstCount = funnel.steps[0]?.count ?? 0;
             const lastCount = funnel.steps.at(-1)?.count ?? 0;
+            const conversion = firstCount
+              ? Math.min(100, Math.round((lastCount / firstCount) * 100))
+              : 0;
             return (
               <article className="admin-compact-funnel" key={funnel.name}>
                 <div className="admin-compact-funnel__title">
                   <strong>{funnel.name}</strong>
                   <span>
-                    {firstCount
-                      ? Math.round((lastCount / firstCount) * 100)
-                      : 0}
-                    %
+                    {conversion}%
                   </span>
                 </div>
                 {funnel.steps.map((step) => (
@@ -184,7 +184,7 @@ export function AdminCommandCenter({ snapshot }: Props) {
                     <div>
                       <i
                         style={{
-                          width: `${firstCount ? Math.max(2, (step.count / firstCount) * 100) : 0}%`,
+                          width: `${firstCount ? Math.min(100, Math.max(2, (step.count / firstCount) * 100)) : 0}%`,
                         }}
                       />
                     </div>

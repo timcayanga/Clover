@@ -44,7 +44,8 @@ assert.match(commandCenterSource, /getCurrentDeploymentErrorWhere/);
 assert.match(commandCenterSource, /Current deploy errors/);
 
 const analyticsSource = readSource("lib/admin-analytics.ts");
-assert.match(analyticsSource, /usersWithReviewedTransactions/);
+assert.match(analyticsSource, /usersStartedTracking/);
+assert.match(analyticsSource, /usersWithRecentTransactions/);
 assert.match(analyticsSource, /getAnalyticsBetaStartedAt/);
 assert.match(analyticsSource, /betaParticipantUser/);
 assert.match(analyticsSource, /betaTransaction/);
@@ -53,8 +54,9 @@ assert.match(analyticsSource, /getPostHogLiveAnalytics\(getAdminDataEnvironment\
 assert.match(analyticsSource, /environment: getAdminDataEnvironment\(\)/);
 assert.match(
   analyticsSource,
-  /Users who reviewed a transaction/,
+  /Added data in 30d/,
 );
+assert.doesNotMatch(analyticsSource, /name: "Import magic"/);
 assert.doesNotMatch(
   analyticsSource,
   /\{ label: "Items awaiting review", count: reviewQueueItems \}/,
