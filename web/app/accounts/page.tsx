@@ -4357,7 +4357,10 @@ function AccountsPageContent() {
         menuAlignment="end"
         showChevron={false}
       />
-      <FinverseConnectButton workspaceId={selectedWorkspaceId} />
+      <FinverseConnectButton
+        workspaceId={selectedWorkspaceId}
+        onSynced={() => loadWorkspaceData(selectedWorkspaceId, { forceFresh: true })}
+      />
       <button className="button button-secondary button-small accounts-toolbar-add" type="button" onClick={openAddAccount}>
         <ActionIcon name="plus" />
         <span>Add account</span>

@@ -198,7 +198,10 @@ export async function POST(request: Request) {
       },
     });
     if (status === "ERROR") return NextResponse.json({ error: "Finverse could not retrieve data from this institution.", status }, { status: 422 });
-    if (!isFinverseDataReady(status)) return NextResponse.json({ status: "retrieving", providerStatus: status });
+    if (!isFinverseDataReady(status)) {
+      console.info("[finverse-sync] retrieving", { connectionId: connection.id, providerStatus: status });
+      return NextResponse.json({ status: "retrieving", providerStatus: status });
+    }
 
     const accountResult = await getFinverseAccounts(token);
     const resolvedInstitutionName = institutionName || (typeof accountResult.institution?.institution_name === "string" ? accountResult.institution.institution_name : undefined);
@@ -219,6 +222,13 @@ export async function POST(request: Request) {
     await prisma.finverseConnection.update({
       where: { id: connection.id },
       data: { status: "ready", lastSyncedAt: new Date(), syncError: null },
+    });
+    console.info("[finverse-sync] complete", {
+      connectionId: connection.id,
+      accountCount: accountResult.accounts?.length ?? 0,
+      importedTransactions: imported,
+      existingTransactions: existing,
+      skippedTransactions: skipped,
     });
     return NextResponse.json({
       status: "ready",

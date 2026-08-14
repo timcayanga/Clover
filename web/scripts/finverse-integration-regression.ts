@@ -61,5 +61,9 @@ const finverseSource = readFileSync(new URL("../lib/finverse.ts", import.meta.ur
 assert.match(finverseSource, /ui_mode: "auto_redirect"/);
 const callbackSource = readFileSync(new URL("../app/api/integrations/finverse/callback/route.ts", import.meta.url), "utf8");
 assert.match(callbackSource, /export const OPTIONS/);
+const connectButtonSource = readFileSync(new URL("../components/finverse-connect-button.tsx", import.meta.url), "utf8");
+assert.match(connectButtonSource, /FINVERSE_MAX_POLL_ATTEMPTS = 30/);
+assert.match(connectButtonSource, /await onSyncedRef\.current\?\.\(\)/);
+assert.doesNotMatch(connectButtonSource, /window\.location\.assign\("\/accounts"\)/);
 
 console.log("Finverse integration regression checks passed.");
