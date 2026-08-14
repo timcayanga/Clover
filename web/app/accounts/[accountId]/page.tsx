@@ -9,6 +9,7 @@ import { AccountBrandMark } from "@/components/account-brand-mark";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { CurrencySelector } from "@/components/currency-selector";
 import { FinancialAccountCard } from "@/components/financial-account-card";
+import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
 import { formatUploadAccountDisplayName, getAccountCardName, getAccountDisplayName } from "@/lib/account-display";
 import { getAccountBrand } from "@/lib/account-brand";
@@ -3225,6 +3226,24 @@ function AccountDetailPageContent() {
     }
   };
 
+  const deleteTransactionFromMobileRow = async (transaction: Transaction) => {
+    if (!account || !window.confirm("Delete this transaction? This cannot be undone.")) {
+      return;
+    }
+
+    try {
+      await deleteTransactionRemote(transaction.id);
+      applyOptimisticWorkspaceTransactionDeletion(account.workspaceId, transaction.id);
+      setTransactions((current) => current.filter((entry) => entry.id !== transaction.id));
+      setTransactionTotalCount((current) => Math.max(0, current - 1));
+      setSelectedTransactionIds((current) => current.filter((id) => id !== transaction.id));
+      setMessage("Transaction deleted.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to delete transaction.");
+      throw error;
+    }
+  };
+
   const deleteSelectedTransactions = async () => {
     if (!account || selectedTransactionIds.length === 0) {
       return;
@@ -4631,8 +4650,12 @@ function AccountDetailPageContent() {
                               }) ?? "Transaction";
 
                             return (
-                              <article
+                              <MobileSwipeDelete
                                 key={transaction.id}
+                                deleteLabel={`Delete ${normalizedName}`}
+                                onDelete={() => deleteTransactionFromMobileRow(transaction)}
+                              >
+                              <article
                                 className={`transactions-mobile-simple-row${transaction.isExcluded ? " is-muted" : ""}`}
                                 tabIndex={0}
                                 role="button"
@@ -4674,6 +4697,7 @@ function AccountDetailPageContent() {
                                   <ActionIcon name="chevron-right" />
                                 </button>
                               </article>
+                              </MobileSwipeDelete>
                             );
                           })}
                         </div>

@@ -1372,6 +1372,9 @@ export function SplitBillWorkspace({
         onOpenBill={openBill}
         onOpenGroup={openGroup}
         onOpenPerson={openPerson}
+        onDeleteBill={removeBill}
+        onDeleteGroup={removeGroup}
+        onDeletePerson={removePerson}
       />
 
       {selected ? (

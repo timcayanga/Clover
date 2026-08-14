@@ -13,6 +13,7 @@ import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
 import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
 import { readAccountIdentityCache } from "@/lib/account-identity-cache";
 import { SplitBillQrLibrary } from "@/components/split-bill-qr-library";
+import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 
 type SplitBillHomeProps = {
   bills: SplitBillSerializedBill[];
@@ -22,6 +23,9 @@ type SplitBillHomeProps = {
   onOpenBill: (billId: string) => void;
   onOpenGroup: (groupId: string) => void;
   onOpenPerson: (personId: string) => void;
+  onDeleteBill: (billId: string) => void | Promise<void>;
+  onDeleteGroup: (groupId: string) => void | Promise<void>;
+  onDeletePerson: (personId: string) => void | Promise<void>;
 };
 
 const formatDate = (value: string) =>
@@ -88,7 +92,7 @@ const addCurrencyTotal = (totals: Map<string, number>, currency: string, amount:
   totals.set(currency, (totals.get(currency) ?? 0) + amount);
 };
 
-export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBill, onOpenGroup, onOpenPerson }: SplitBillHomeProps) {
+export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBill, onOpenGroup, onOpenPerson, onDeleteBill, onDeleteGroup, onDeletePerson }: SplitBillHomeProps) {
   const { user } = useUser();
   const [cachedProfileImage] = useState(() => readAccountIdentityCache()?.imageUrl ?? null);
   const [showAllBills, setShowAllBills] = useState(false);
@@ -328,7 +332,8 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
                   const sourceLabel = bill.sourceType === "receipt" ? "Receipt" : "Manual";
 
                   return (
-                    <div key={bill.id} className="split-bill-table__row split-bill-table__row--interactive" role="row">
+                    <MobileSwipeDelete key={bill.id} deleteLabel={`Delete ${bill.title}`} onDelete={() => onDeleteBill(bill.id)}>
+                    <div className="split-bill-table__row split-bill-table__row--interactive" role="row">
                       <div role="cell" className="split-bill-table__bill">
                         <strong>{bill.title}</strong>
                         <span>
@@ -369,6 +374,7 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
                         </button>
                       </div>
                     </div>
+                    </MobileSwipeDelete>
                   );
                 })
               ) : (
@@ -403,7 +409,8 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
               ) : null}
               {visiblePeople.length > 0 ? (
                 visiblePeople.map((person) => (
-                  <button key={person.id} type="button" className="split-bill-mobile-home__person-button" onClick={() => onOpenPerson(person.id)}>
+                  <MobileSwipeDelete key={person.id} deleteLabel={`Delete ${person.name}`} onDelete={() => onDeletePerson(person.id)}>
+                  <button type="button" className="split-bill-mobile-home__person-button" onClick={() => onOpenPerson(person.id)}>
                     <SplitBillEntityAvatar
                       name={person.name}
                       avatarUrl={isSamePersonName(person.name, currentUserName) ? currentUserAvatarUrl : person.avatarUrl}
@@ -411,6 +418,7 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
                     <strong className="split-bill-home__person-name">{person.name}</strong>
                     <small className="split-bill-home__person-balance">{person.balanceLabel}</small>
                   </button>
+                  </MobileSwipeDelete>
                 ))
               ) : (
                 <span className="split-bill-subtle-empty">No saved names yet</span>
@@ -438,7 +446,8 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
             <div className="split-bill-mobile-home__groups">
               {visibleGroups.length > 0 ? (
                 visibleGroups.map((group) => (
-                  <button key={group.id} type="button" className="split-bill-mobile-group-card" onClick={() => onOpenGroup(group.id)}>
+                  <MobileSwipeDelete key={group.id} deleteLabel={`Delete ${group.name}`} onDelete={() => onDeleteGroup(group.id)}>
+                  <button type="button" className="split-bill-mobile-group-card" onClick={() => onOpenGroup(group.id)}>
                     <div className="split-bill-mobile-group-card__head">
                       <strong className="split-bill-mobile-group-card__name">
                         <SplitBillEntityAvatar name={group.name} avatarUrl={group.avatarUrl} />
@@ -460,6 +469,7 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
                       )}
                     </div>
                   </button>
+                  </MobileSwipeDelete>
                 ))
               ) : (
                 <span className="split-bill-subtle-empty">No groups yet</span>

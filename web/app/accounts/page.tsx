@@ -14,6 +14,7 @@ import { FinancialAccountCard } from "@/components/financial-account-card";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
+import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
 import { deriveReconciledBalance, normalizeAccountBalanceSign } from "@/lib/account-balance";
 import {
@@ -3805,7 +3806,16 @@ function AccountsPageContent() {
     const loadingContext = getUploadAccountLoadingContext(row);
 
     return (
-      <div key={key} className={`accounts-mobile-list-item${isExpanded ? " is-expanded" : ""}`}>
+      <MobileSwipeDelete
+        key={key}
+        deleteLabel={`Delete ${accountDisplayName}`}
+        disabled={accountDeleteBusy || deletingAccountIdsSet.has(row.id) || isCashFallbackAccount(row)}
+        onDelete={() => {
+          if (!window.confirm(`Delete account "${accountDisplayName}" and its linked transactions?`)) return;
+          return deleteAccount(row);
+        }}
+      >
+      <div className={`accounts-mobile-list-item${isExpanded ? " is-expanded" : ""}`}>
         <button
           type="button"
           className="accounts-mobile-list-row"
@@ -3850,6 +3860,7 @@ function AccountsPageContent() {
           </div>
         </div>
       </div>
+      </MobileSwipeDelete>
     );
   };
 
@@ -3996,10 +4007,10 @@ function AccountsPageContent() {
     }
   };
 
-  const deleteAccount = async () => {
-    if (!selectedWorkspaceId || !selectedAccount) return;
+  const deleteAccount = async (accountOverride?: Account) => {
+    const accountToDelete = accountOverride ?? selectedAccount;
+    if (!selectedWorkspaceId || !accountToDelete) return;
 
-    const accountToDelete = selectedAccount;
     setAccountDeleteBusy(true);
     try {
       clearDeletingWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);

@@ -15,6 +15,7 @@ import { InfoTooltip } from "@/components/info-tooltip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { InvestmentMarketChart } from "@/components/investment-market-chart";
 import { InvestmentPortfolioGrowthChart } from "@/components/investment-portfolio-growth-chart";
+import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { useDefaultCurrency } from "@/lib/use-default-currency";
 import { BETA_FULL_ACCESS_ENABLED, hasFullFeatureAccess } from "@/lib/beta-access";
@@ -2526,13 +2527,17 @@ export default function InvestmentsPage() {
     }
   };
 
-  const deleteSelectedInvestmentAsset = async () => {
-    if (!selectedPortfolioRow || selectedPortfolioRow.source === "derived" || !selectedWorkspaceId) {
+  const deletePortfolioRow = async (row: PortfolioDisplayRow) => {
+    if (row.source === "derived" || !selectedWorkspaceId) {
       return;
     }
 
-    const assetName = selectedPortfolioRow.name;
-    const isImportedHolding = selectedPortfolioRow.source === "holding";
+    const assetName = row.name;
+    const isImportedHolding = row.source === "holding";
+    const investmentAsset =
+      visibleInvestmentAccounts.find((account) => account.id === row.accountId) ??
+      accounts.find((account) => account.id === row.accountId) ??
+      null;
     const confirmationMessage = isImportedHolding
       ? `Delete asset "${assetName}"? Its source import and trading history will stay in Clover.`
       : `Delete asset "${assetName}"? This also removes its investment account and linked transactions.`;
@@ -2542,13 +2547,13 @@ export default function InvestmentsPage() {
     }
 
     const deletionId = isImportedHolding
-      ? selectedPortfolioRow.assetId
-      : selectedInvestmentAsset?.id ?? selectedPortfolioRow.accountId;
+      ? row.assetId
+      : investmentAsset?.id ?? row.accountId;
     setIsDeleting(deletionId);
 
     try {
       if (isImportedHolding) {
-        const response = await fetch(`/api/investment-holdings/${selectedPortfolioRow.assetId}`, {
+        const response = await fetch(`/api/investment-holdings/${row.assetId}`, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ workspaceId: selectedWorkspaceId }),
@@ -2562,19 +2567,19 @@ export default function InvestmentsPage() {
         setInvestmentSnapshots((current) =>
           current.map((snapshot) => ({
             ...snapshot,
-            holdings: snapshot.holdings.filter((holding) => holding.id !== selectedPortfolioRow.assetId),
+            holdings: snapshot.holdings.filter((holding) => holding.id !== row.assetId),
           }))
         );
       } else {
-        if (!selectedInvestmentAsset) {
+        if (!investmentAsset) {
           throw new Error("Investment account not found.");
         }
 
-        clearDeletingWorkspaceAccount(selectedWorkspaceId, selectedInvestmentAsset.id);
-        markDeletedWorkspaceAccount(selectedWorkspaceId, selectedInvestmentAsset.id);
-        applyOptimisticWorkspaceAccountDeletion(selectedWorkspaceId, selectedInvestmentAsset.id);
+        clearDeletingWorkspaceAccount(selectedWorkspaceId, investmentAsset.id);
+        markDeletedWorkspaceAccount(selectedWorkspaceId, investmentAsset.id);
+        applyOptimisticWorkspaceAccountDeletion(selectedWorkspaceId, investmentAsset.id);
 
-        const response = await fetch(`/api/accounts/${selectedInvestmentAsset.id}`, {
+        const response = await fetch(`/api/accounts/${investmentAsset.id}`, {
           method: "DELETE",
           keepalive: true,
         });
@@ -2583,20 +2588,25 @@ export default function InvestmentsPage() {
           throw new Error("Unable to delete asset.");
         }
 
-        setAccounts((current) => current.filter((account) => account.id !== selectedInvestmentAsset.id));
+        setAccounts((current) => current.filter((account) => account.id !== investmentAsset.id));
       }
 
-      closeInvestmentAsset();
+      if (selectedInvestmentAssetId === row.key) closeInvestmentAsset();
       setMessage(`"${assetName}" deleted.`);
     } catch (error) {
-      if (!isImportedHolding && selectedInvestmentAsset) {
-        clearDeletedWorkspaceAccount(selectedWorkspaceId, selectedInvestmentAsset.id);
-        clearDeletingWorkspaceAccount(selectedWorkspaceId, selectedInvestmentAsset.id);
+      if (!isImportedHolding && investmentAsset) {
+        clearDeletedWorkspaceAccount(selectedWorkspaceId, investmentAsset.id);
+        clearDeletingWorkspaceAccount(selectedWorkspaceId, investmentAsset.id);
       }
       setMessage(error instanceof Error ? error.message : "Unable to delete asset.");
     } finally {
       setIsDeleting(null);
     }
+  };
+
+  const deleteSelectedInvestmentAsset = async () => {
+    if (!selectedPortfolioRow) return;
+    await deletePortfolioRow(selectedPortfolioRow);
   };
 
   const getManualInvestmentFieldValue = (key: string) => {
@@ -3051,7 +3061,13 @@ export default function InvestmentsPage() {
                   </div>
                   {portfolioTableRows.map((row) => {
                     return (
-                      <div key={row.key} className="investments-portfolio-table__row" role="row">
+                      <MobileSwipeDelete
+                        key={row.key}
+                        deleteLabel={`Delete ${row.name}`}
+                        disabled={row.source === "derived" || isDeleting === row.assetId || isDeleting === row.accountId}
+                        onDelete={() => deletePortfolioRow(row)}
+                      >
+                      <div className="investments-portfolio-table__row" role="row">
                         <div className="investments-portfolio-table__cell investments-portfolio-table__cell--asset">
                           <AccountBrandMark
                             accountBrand={getInvestmentAssetBrand({
@@ -3139,6 +3155,7 @@ export default function InvestmentsPage() {
                           </svg>
                         </button>
                       </div>
+                      </MobileSwipeDelete>
                     );
                   })}
                 </div>

@@ -23,6 +23,7 @@ import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { CurrencySelector } from "@/components/currency-selector";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
+import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
 import { getCategoryIconTone } from "@/lib/category-icons";
 import { MOBILE_LAYOUT_MEDIA_QUERY } from "@/lib/responsive-layout";
@@ -7538,8 +7539,15 @@ function TransactionsPageContent() {
                         );
 
                         return (
-                          <article
+                          <MobileSwipeDelete
                             key={transaction.id}
+                            deleteLabel={`Delete ${merchantSummary}`}
+                            onDelete={() => {
+                              if (!window.confirm(`Delete transaction "${merchantSummary}"?`)) return;
+                              return deleteWarningTransaction(transaction);
+                            }}
+                          >
+                          <article
                             ref={(node) => {
                               if (node) {
                                 transactionRowRefs.current.set(transaction.id, node);
@@ -7592,6 +7600,7 @@ function TransactionsPageContent() {
                               <ActionIcon name="chevron-right" />
                             </button>
                           </article>
+                          </MobileSwipeDelete>
                         );
                       })}
                     </div>

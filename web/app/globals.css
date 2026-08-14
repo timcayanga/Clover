@@ -54299,3 +54299,73 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     transform: none !important;
   }
 }
+.mobile-swipe-delete,
+.mobile-swipe-delete__content {
+  display: contents;
+}
+
+.mobile-swipe-delete__action {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .mobile-swipe-delete {
+    position: relative;
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .mobile-swipe-delete__action {
+    position: absolute;
+    z-index: 0;
+    inset: 0 0 0 auto;
+    display: grid;
+    width: 82px;
+    min-height: 100%;
+    place-content: center;
+    justify-items: center;
+    gap: 3px;
+    padding: 6px;
+    border: 0;
+    border-radius: 0;
+    background: #e6464f;
+    color: #fff;
+    font: inherit;
+    font-size: 0.7rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .mobile-swipe-delete__action svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .mobile-swipe-delete__action:focus-visible {
+    outline: 3px solid color-mix(in srgb, #e6464f 35%, white);
+    outline-offset: -3px;
+  }
+
+  .mobile-swipe-delete__content {
+    position: relative;
+    z-index: 1;
+    display: block;
+    min-width: 0;
+    background: var(--surface);
+    transform: translate3d(var(--mobile-swipe-offset, 0), 0, 0);
+    transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    touch-action: pan-y;
+    will-change: transform;
+  }
+
+  .mobile-swipe-delete.is-dragging .mobile-swipe-delete__content {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-swipe-delete__content {
+    transition: none;
+  }
+}

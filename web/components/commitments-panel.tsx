@@ -19,6 +19,7 @@ import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { getAccountBrand } from "@/lib/account-brand";
+import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 
 type CommitmentAccountOption = {
   id: string;
@@ -613,31 +614,27 @@ export function CommitmentsPanel({
       });
   };
 
-  const handleDelete = (commitmentId: string) => {
+  const handleDelete = async (commitmentId: string) => {
     if (!window.confirm("Delete this recurring item?")) {
       return;
     }
 
     setIsSaving(true);
-    void fetch(`/api/commitments/${commitmentId}`, {
-      method: "DELETE",
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(payload?.error ?? "Unable to delete commitment");
-        }
+    try {
+      const response = await fetch(`/api/commitments/${commitmentId}`, { method: "DELETE" });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "Unable to delete commitment");
+      }
 
-        setVisibleCommitments((current) => current.filter((commitment) => commitment.id !== commitmentId));
-        router.refresh();
-      })
-      .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : "Unable to delete commitment";
-        window.alert(message);
-      })
-      .finally(() => {
-        setIsSaving(false);
-      });
+      setVisibleCommitments((current) => current.filter((commitment) => commitment.id !== commitmentId));
+      router.refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to delete commitment";
+      window.alert(message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleOccurrenceCompletion = async (commitment: FinancialCommitmentSummary, completed: boolean) => {
@@ -1077,9 +1074,14 @@ export function CommitmentsPanel({
                   ? occurrenceCompleted ? "Received" : "Pending"
                   : occurrenceCompleted ? "Paid" : "Pending";
                 return (
+                  <MobileSwipeDelete
+                    key={commitment.id}
+                    deleteLabel={`Delete ${commitment.title}`}
+                    disabled={isSaving}
+                    onDelete={() => handleDelete(commitment.id)}
+                  >
                   <div
                     className="recurring-mobile-row"
-                    key={commitment.id}
                   >
                     <span className="recurring-mobile-row__account" aria-hidden="true">
                       <AccountBrandMark accountBrand={brand} label={displayedAccount?.name ?? commitment.title} />
@@ -1107,6 +1109,7 @@ export function CommitmentsPanel({
                       <path d="m9 6 6 6-6 6" />
                     </svg>
                   </div>
+                  </MobileSwipeDelete>
                 );
               })}
             </section>
