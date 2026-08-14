@@ -135,7 +135,7 @@ export const createFinverseLink = async (userId: string, state: string) => {
       user_id: userId,
       redirect_uri: config.redirectUri,
       state,
-      ui_mode: "standalone",
+      ui_mode: "auto_redirect",
       countries: ["PHL"],
       products_requested: ["ACCOUNTS", "TRANSACTIONS"],
     }),

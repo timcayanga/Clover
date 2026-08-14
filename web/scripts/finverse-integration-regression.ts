@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   decryptFinverseToken,
   encryptFinverseToken,
@@ -55,5 +56,10 @@ const credit = normalizeFinverseTransaction({
 });
 assert.equal(credit?.type, "income");
 assert.equal(normalizeFinverseTransaction({ transaction_id: "bad", account_id: "acc_test", posted_date: "bad" }), null);
+
+const finverseSource = readFileSync(new URL("../lib/finverse.ts", import.meta.url), "utf8");
+assert.match(finverseSource, /ui_mode: "auto_redirect"/);
+const callbackSource = readFileSync(new URL("../app/api/integrations/finverse/callback/route.ts", import.meta.url), "utf8");
+assert.match(callbackSource, /export const OPTIONS/);
 
 console.log("Finverse integration regression checks passed.");

@@ -9,6 +9,12 @@ import {
 
 export const dynamic = "force-dynamic";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
 const callbackValues = async (request: Request) => {
   if (request.method === "POST") {
     const form = await request.formData();
@@ -23,7 +29,7 @@ const redirectToAccounts = (status: string, connectionId?: string) => {
   const url = new URL("/accounts", new URL(configured).origin);
   url.searchParams.set("finverse", status);
   if (connectionId) url.searchParams.set("finverseConnection", connectionId);
-  return NextResponse.redirect(url, 303);
+  return NextResponse.redirect(url, { status: 303, headers: corsHeaders });
 };
 
 const handleCallback = async (request: Request) => {
@@ -57,3 +63,4 @@ const handleCallback = async (request: Request) => {
 
 export const GET = handleCallback;
 export const POST = handleCallback;
+export const OPTIONS = () => new NextResponse(null, { status: 204, headers: corsHeaders });
