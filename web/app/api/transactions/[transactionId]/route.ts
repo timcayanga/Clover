@@ -93,6 +93,78 @@ const buildTransactionTagWrites = (workspaceId: string, tags: readonly string[])
     },
   }));
 
+export async function GET(_request: Request, { params }: { params: Promise<{ transactionId: string }> }) {
+  try {
+    const { transactionId } = await params;
+    const userId = await resolveTransactionRouteUserId();
+    const transaction = await prisma.transaction.findFirst({
+      where: { id: transactionId, deletedAt: null },
+      include: {
+        account: true,
+        category: true,
+        splitBill: { select: { id: true, title: true } },
+        transactionTags: { select: { tag: { select: { id: true, name: true } } } },
+      },
+    });
+
+    if (!transaction) {
+      return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
+    }
+
+    await assertWorkspaceAccess(userId, transaction.workspaceId);
+    const [accounts, categories] = await Promise.all([
+      prisma.account.findMany({
+        where: { workspaceId: transaction.workspaceId },
+        orderBy: [{ name: "asc" }],
+        select: { id: true, name: true, institution: true, accountNumber: true, type: true, currency: true },
+      }),
+      prisma.category.findMany({
+        where: { workspaceId: transaction.workspaceId, isArchived: false },
+        orderBy: [{ isSystem: "desc" }, { name: "asc" }],
+        select: { id: true, name: true, type: true },
+      }),
+    ]);
+
+    return NextResponse.json({
+      transaction: {
+        id: transaction.id,
+        workspaceId: transaction.workspaceId,
+        accountId: transaction.accountId,
+        accountName: transaction.account.name,
+        institution: transaction.account.institution,
+        accountNumber: transaction.account.accountNumber,
+        categoryId: transaction.categoryId,
+        categoryName: transaction.category?.name ?? null,
+        reviewStatus: transaction.reviewStatus,
+        parserConfidence: transaction.parserConfidence,
+        categoryConfidence: transaction.categoryConfidence,
+        accountMatchConfidence: transaction.accountMatchConfidence,
+        duplicateConfidence: transaction.duplicateConfidence,
+        transferConfidence: transaction.transferConfidence,
+        date: transaction.date.toISOString(),
+        amount: transaction.amount.toString(),
+        currency: transaction.currency,
+        type: transaction.type,
+        merchantRaw: transaction.merchantRaw,
+        merchantClean: transaction.merchantClean,
+        description: transaction.description,
+        isTransfer: transaction.isTransfer,
+        isExcluded: transaction.isExcluded,
+        source: transaction.importFileId ? "upload" : "manual",
+        importFileId: transaction.importFileId,
+        rawPayload: transaction.rawPayload,
+        normalizedPayload: transaction.normalizedPayload,
+        splitBill: transaction.splitBill,
+        tags: transaction.transactionTags.map((entry) => entry.tag),
+      },
+      accounts,
+      categories,
+    });
+  } catch {
+    return NextResponse.json({ error: "Unable to load transaction" }, { status: 400 });
+  }
+}
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ transactionId: string }> }) {
   try {
     const { transactionId } = await params;

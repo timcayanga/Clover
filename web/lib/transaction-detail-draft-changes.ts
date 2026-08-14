@@ -39,7 +39,8 @@ export const hasTransactionDetailDraftChanges = (
     detailDraft.categoryId !== options.baselineCategoryId ||
     detailDraft.amount !== selectedTransaction.amount ||
     detailDraft.currency !== options.baselineCurrency ||
-    detailDraft.type !== (selectedTransaction.type === "income" ? "credit" : "debit") ||
+    detailDraft.type !==
+      (selectedTransaction.type === "income" ? "credit" : selectedTransaction.type === "transfer" ? "transfer" : "debit") ||
     normalizeTransactionNoteValue(detailDraft.description) !==
       getTransactionUserNoteValue({
         normalizedPayload: selectedTransaction.normalizedPayload,

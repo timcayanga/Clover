@@ -9,7 +9,7 @@ export type TransactionDetailDraftValue = {
   categoryId: string;
   amount: string;
   currency: string;
-  type: "debit" | "credit";
+  type: "debit" | "credit" | "transfer";
   description: string;
   isExcluded: boolean;
   isTransfer: boolean;
@@ -50,7 +50,7 @@ export const buildTransactionDetailDraft = (
   categoryId: options.categoryId ?? transaction.categoryId ?? "",
   amount: transaction.amount,
   currency: transaction.currency ?? options.currencyFallback ?? "PHP",
-  type: options.effectiveType === "income" ? "credit" : "debit",
+  type: options.effectiveType === "income" ? "credit" : options.effectiveType === "transfer" ? "transfer" : "debit",
   description: getTransactionUserNoteValue({
     normalizedPayload: transaction.normalizedPayload,
     description: transaction.description,
@@ -63,4 +63,4 @@ export const buildTransactionDetailDraft = (
 });
 
 export const detailDraftTypeToTransactionType = (type: TransactionDetailDraftValue["type"]) =>
-  type === "credit" ? "income" : "expense";
+  type === "credit" ? "income" : type === "transfer" ? "transfer" : "expense";

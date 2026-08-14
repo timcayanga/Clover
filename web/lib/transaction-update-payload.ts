@@ -30,7 +30,7 @@ export const buildTransactionUpdatePayload = (
     type: detailDraftTypeToTransactionType(detailDraft.type),
     userNote: detailDraft.description || null,
     isExcluded: detailDraft.isExcluded,
-    isTransfer: detailDraft.isTransfer,
+    isTransfer: detailDraft.type === "transfer",
     rawPayload: mergeReceiptLineItemsIntoPayload(
       selectedTransaction.rawPayload,
       detailDraft.receiptLineItems,

@@ -4818,16 +4818,26 @@ function AccountDetailPageContent() {
                   </span>
                   <div className="transactions-manual-type-control transaction-drawer-type-control">
                     <span className="transactions-manual-type-symbol" aria-hidden="true">
-                      {(detailDraft?.type ?? (selectedTransaction.type === "income" ? "credit" : "debit")) === "credit" ? "+" : "-"}
+                      {(detailDraft?.type ??
+                        (selectedTransaction.type === "income" ? "credit" : selectedTransaction.type === "transfer" ? "transfer" : "debit")) ===
+                      "credit"
+                        ? "+"
+                        : (detailDraft?.type ?? selectedTransaction.type) === "transfer"
+                          ? "↔"
+                          : "-"}
                     </span>
                     <select
-                      value={detailDraft?.type ?? (selectedTransaction.type === "income" ? "credit" : "debit")}
+                      value={
+                        detailDraft?.type ??
+                        (selectedTransaction.type === "income" ? "credit" : selectedTransaction.type === "transfer" ? "transfer" : "debit")
+                      }
                       onChange={(event) =>
                         setDetailDraft((current) =>
                           current
                             ? {
                                 ...current,
                                 type: event.target.value as TransactionDetailDraft["type"],
+                                isTransfer: event.target.value === "transfer",
                               }
                             : current
                         )
@@ -4835,6 +4845,7 @@ function AccountDetailPageContent() {
                     >
                       <option value="debit">Expenses</option>
                       <option value="credit">Income</option>
+                      <option value="transfer">Transfer</option>
                     </select>
                   </div>
                 </label>
