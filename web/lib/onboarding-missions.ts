@@ -76,7 +76,7 @@ export const getOnboardingMissionSnapshot = async (
       },
     }),
     prisma.account.count({ where: { workspaceId, source: "manual" } }),
-    prisma.transaction.count({ where: { workspaceId, importFileId: null, deletedAt: null } }),
+    prisma.transaction.count({ where: { workspaceId, importFileId: null, deletedAt: null, isExcluded: false } }),
     prisma.auditLog.findMany({
       where: {
         workspaceId,

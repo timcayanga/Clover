@@ -124,6 +124,20 @@ export const buildVisibleWorkspaceTransactionWhere = (
   return appendWorkspaceTransactionScope(where, workspaceId);
 };
 
+/**
+ * Canonical scope for transactions that contribute to user-facing financial
+ * totals. Deleted rows and rows explicitly excluded by the user must never
+ * leak into Home, Adviser, Recurring, budgets, goals, or reports.
+ */
+export const buildActiveWorkspaceTransactionWhere = (
+  workspaceId: string,
+  filters: Prisma.TransactionWhereInput = {}
+): Prisma.TransactionWhereInput =>
+  buildVisibleWorkspaceTransactionWhere(workspaceId, {
+    ...filters,
+    isExcluded: filters.isExcluded ?? false,
+  });
+
 const splitFilterValues = (value: string) =>
   value
     .split(/[,;\n]/)
@@ -270,7 +284,7 @@ const buildMerchantFilters = (merchantFilters: string[]) =>
     }));
 
 export const buildTransactionQueryWhere = (workspaceId: string, filters: TransactionQueryFilters): Prisma.TransactionWhereInput => {
-  const where = buildWorkspaceTransactionScopeWhere(workspaceId);
+  const where = buildActiveWorkspaceTransactionWhere(workspaceId);
 
   const query = filters.query?.trim();
   const categoryIds = (filters.categoryIds ?? []).filter(Boolean);

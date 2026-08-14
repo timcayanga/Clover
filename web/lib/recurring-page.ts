@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { getUpcomingStatementReminders } from "@/lib/statement-reminders";
 import { buildRecurringTransactionSummaries, type RecurringTransactionLike } from "@/lib/recurring";
@@ -254,13 +255,11 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
       },
     }),
     prisma.transaction.findMany({
-      where: {
-        workspaceId,
-        deletedAt: null,
-      date: {
+      where: buildActiveWorkspaceTransactionWhere(workspaceId, {
+        date: {
           gte: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000),
         },
-      },
+      }),
       orderBy: { date: "desc" },
       take: 1200,
       select: {

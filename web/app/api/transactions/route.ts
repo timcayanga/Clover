@@ -728,7 +728,6 @@ export async function GET(request: Request) {
     );
     const visibleWhere = {
       ...where,
-      isExcluded: false,
       ...(searchParams.get("accountType") === "investment"
         ? { account: { is: { type: "investment" as const } } }
         : {}),

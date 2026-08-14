@@ -31,6 +31,7 @@ import { hasFullFeatureAccess } from "@/lib/beta-access";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { ReportsRangeMenu } from "@/components/reports-range-menu";
 import { resolveReportWindow } from "@/lib/report-window";
+import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
 
 export const dynamic = "force-dynamic";
 
@@ -1196,11 +1197,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     manualAccountTransactions,
   ] = await Promise.all([
     prisma.transaction.findMany({
-      where: {
-        workspaceId: resolvedWorkspace.id,
-        isExcluded: false,
-        deletedAt: null,
-      },
+      where: buildActiveWorkspaceTransactionWhere(resolvedWorkspace.id),
       select: {
         id: true,
         date: true,
@@ -1283,12 +1280,9 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     loadSplitBillWorkspaceData(user.id),
     manualAccountIds.length > 0
       ? prisma.transaction.findMany({
-          where: {
-            workspaceId: resolvedWorkspace.id,
+          where: buildActiveWorkspaceTransactionWhere(resolvedWorkspace.id, {
             accountId: { in: manualAccountIds },
-            isExcluded: false,
-            deletedAt: null,
-          },
+          }),
           select: {
             accountId: true,
             amount: true,

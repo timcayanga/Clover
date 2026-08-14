@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  startTransition,
   useContext,
   useEffect,
   useMemo,
@@ -51,6 +52,11 @@ import { installClientDiagnostics, recordClientDiagnostic } from "@/lib/client-d
 import { BugReportWidget } from "@/components/bug-report-widget";
 import { getNavigationIconSrc, type NavigationIconName } from "@/lib/navigation-icons";
 import { OnboardingMissionTracker } from "@/components/onboarding-mission-tracker";
+import {
+  getWorkspaceDataDomainForPath,
+  installWorkspaceMutationObserver,
+  subscribeWorkspaceDataChanges,
+} from "@/lib/workspace-data-sync";
 
 const DashboardManualTransactionModal = dynamic(
   () => import("@/components/dashboard-top-actions").then((module) => module.DashboardManualTransactionModal),
@@ -814,6 +820,28 @@ export function CloverShell({
   const reporterEmail = user?.primaryEmailAddress?.emailAddress ?? readAccountIdentityCache()?.email ?? "";
 
   useEffect(() => installClientDiagnostics(), []);
+
+  useEffect(() => installWorkspaceMutationObserver(), []);
+
+  useEffect(() => {
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const currentDomain = getWorkspaceDataDomainForPath(pathname ?? "");
+
+    const unsubscribe = subscribeWorkspaceDataChanges((change) => {
+      if (!currentDomain || !change.affected.includes(currentDomain)) return;
+      if (workspaceId && change.workspaceId && workspaceId !== change.workspaceId) return;
+
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        startTransition(() => router.refresh());
+      }, 180);
+    });
+
+    return () => {
+      unsubscribe();
+      if (refreshTimer) clearTimeout(refreshTimer);
+    };
+  }, [pathname, router, workspaceId]);
 
   useEffect(() => {
     if (pathname) {

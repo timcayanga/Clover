@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { buildBudgetOverview, buildBudgetSuggestions } from "@/lib/budgeting";
+import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
 
 export const budgetLookbackDays = 400;
 
@@ -52,13 +53,11 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
   const [budgets, transactions, categories, accounts, commitments] = await Promise.all([
     budgetsPromise,
     prisma.transaction.findMany({
-      where: {
-        workspaceId,
-        deletedAt: null,
+      where: buildActiveWorkspaceTransactionWhere(workspaceId, {
         date: {
           gte: lookbackStart,
         },
-      },
+      }),
       select: {
         accountId: true,
         categoryId: true,

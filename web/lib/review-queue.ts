@@ -1,8 +1,7 @@
 import { Prisma } from "@prisma/client";
-import { buildVisibleWorkspaceTransactionWhere } from "@/lib/transaction-query";
+import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
 
-export const buildReviewQueueWhere = (workspaceId: string): Prisma.TransactionWhereInput => buildVisibleWorkspaceTransactionWhere(workspaceId, {
-  isExcluded: false,
+export const buildReviewQueueWhere = (workspaceId: string): Prisma.TransactionWhereInput => buildActiveWorkspaceTransactionWhere(workspaceId, {
   reviewStatus: {
     in: ["pending_review", "suggested"],
   },

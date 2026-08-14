@@ -25,6 +25,7 @@ import {
   normalizeGoalPlan,
   type GoalKey,
 } from "@/lib/goals";
+import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -300,8 +301,10 @@ async function GoalsPageStream() {
         "type",
         COALESCE(SUM("amount"), 0)::float8 AS total
       FROM "Transaction"
-      WHERE "workspaceId" = ${resolvedWorkspace.id}
+      WHERE ("workspaceId" = ${resolvedWorkspace.id}
+        OR "accountId" IN (SELECT "id" FROM "Account" WHERE "workspaceId" = ${resolvedWorkspace.id}))
         AND "isExcluded" = false
+        AND "deletedAt" IS NULL
         AND "date" >= ${thirtyDaysAgo}
       GROUP BY "type"
     `,
@@ -310,8 +313,10 @@ async function GoalsPageStream() {
         "type",
         COALESCE(SUM("amount"), 0)::float8 AS total
       FROM "Transaction"
-      WHERE "workspaceId" = ${resolvedWorkspace.id}
+      WHERE ("workspaceId" = ${resolvedWorkspace.id}
+        OR "accountId" IN (SELECT "id" FROM "Account" WHERE "workspaceId" = ${resolvedWorkspace.id}))
         AND "isExcluded" = false
+        AND "deletedAt" IS NULL
         AND "date" >= ${sixtyDaysAgo}
         AND "date" < ${thirtyDaysAgo}
       GROUP BY "type"
@@ -322,8 +327,10 @@ async function GoalsPageStream() {
         COALESCE(SUM(ABS("amount")), 0)::float8 AS amount,
         COUNT(*)::int AS count
       FROM "Transaction"
-      WHERE "workspaceId" = ${resolvedWorkspace.id}
+      WHERE ("workspaceId" = ${resolvedWorkspace.id}
+        OR "accountId" IN (SELECT "id" FROM "Account" WHERE "workspaceId" = ${resolvedWorkspace.id}))
         AND "isExcluded" = false
+        AND "deletedAt" IS NULL
         AND "type" = 'expense'
         AND "date" >= ${ninetyDaysAgo}
       GROUP BY 1
@@ -337,8 +344,10 @@ async function GoalsPageStream() {
         "type",
         COALESCE(SUM("amount"), 0)::float8 AS total
       FROM "Transaction"
-      WHERE "workspaceId" = ${resolvedWorkspace.id}
+      WHERE ("workspaceId" = ${resolvedWorkspace.id}
+        OR "accountId" IN (SELECT "id" FROM "Account" WHERE "workspaceId" = ${resolvedWorkspace.id}))
         AND "isExcluded" = false
+        AND "deletedAt" IS NULL
         AND "date" >= ${sixMonthsAgo}
       GROUP BY 1, 2
       ORDER BY 1 ASC, 2 ASC
@@ -360,11 +369,9 @@ async function GoalsPageStream() {
       },
     }),
     prisma.transaction.findMany({
-      where: {
-        workspaceId: resolvedWorkspace.id,
-        isExcluded: false,
+      where: buildActiveWorkspaceTransactionWhere(resolvedWorkspace.id, {
         date: { gte: thirtyDaysAgo },
-      },
+      }),
       select: {
         date: true,
         amount: true,

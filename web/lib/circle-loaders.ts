@@ -59,7 +59,7 @@ export const loadCirclesWorkspaceData = async (
         take: 200,
       },
       sharedTransactions: {
-        where: { transaction: { deletedAt: null, type: "expense" } },
+        where: { transaction: { deletedAt: null, isExcluded: false, type: "expense" } },
         orderBy: { createdAt: "desc" },
         include: {
           transaction: { include: { category: true } },
@@ -403,6 +403,7 @@ export const loadCirclesWorkspaceData = async (
       where: {
         workspace: { userId: user.id },
         deletedAt: null,
+        isExcluded: false,
         type: "expense",
       },
       orderBy: { date: "desc" },

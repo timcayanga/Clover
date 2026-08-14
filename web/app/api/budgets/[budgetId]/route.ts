@@ -167,6 +167,7 @@ export async function GET(_request: Request, { params }: Params) {
       where: {
         workspaceId: context.workspaceId,
         deletedAt: null,
+        isExcluded: false,
         date: {
           gte: lookbackStart,
         },

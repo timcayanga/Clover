@@ -26,7 +26,7 @@ import { TransientDataRecovery } from "@/components/transient-data-recovery";
 import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
 import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
 import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
-import { buildVisibleWorkspaceTransactionWhere } from "@/lib/transaction-query";
+import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
 import { DashboardBudgetPulse } from "@/components/dashboard-budget-pulse";
 import {
   HomeRecurringPaymentsCard,
@@ -681,8 +681,7 @@ async function DashboardStream({
 
   const transactionsPromise = shouldLoadTransactions
     ? prisma.transaction.findMany({
-        where: buildVisibleWorkspaceTransactionWhere(workspaceSummary.id, {
-          isExcluded: false,
+        where: buildActiveWorkspaceTransactionWhere(workspaceSummary.id, {
           date: { gte: ninetyDaysAgo, lt: tomorrowStart },
         }),
         select: {
@@ -734,14 +733,14 @@ async function DashboardStream({
     const latestCheckpoint = account.statementCheckpoints[0] ?? null;
     const checkpointBalance =
       latestCheckpoint?.status !== "mismatch" && latestCheckpoint?.endingBalance ? latestCheckpoint.endingBalance : null;
-    const reconciledBalance =
-      checkpointBalance ??
-      deriveReconciledBalance({
-        balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
-        transactions: account.transactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
-        checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
-        treatStoredBalanceAsOpening: account.source === "manual",
-      });
+    const reconciledBalance = checkpointBalance ?? (account.source === "manual"
+      ? deriveReconciledBalance({
+          balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
+          transactions: account.transactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
+          checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
+          treatStoredBalanceAsOpening: true,
+        })
+      : account.balance);
 
     return Number(reconciledBalance ?? account.balance ?? 0);
   };

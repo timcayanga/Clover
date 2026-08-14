@@ -466,6 +466,7 @@ export async function POST(
               id: body.transactionId,
               workspace: { userId: user.id },
               deletedAt: null,
+              isExcluded: false,
               type: "expense",
             },
           });

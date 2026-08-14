@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { buildVisibleWorkspaceTransactionWhere } from "@/lib/transaction-query";
+import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +47,7 @@ export async function GET(request: Request) {
         },
       }),
       prisma.transaction.count({
-        where: buildVisibleWorkspaceTransactionWhere(workspaceId),
+        where: buildActiveWorkspaceTransactionWhere(workspaceId),
       }),
     ]);
 

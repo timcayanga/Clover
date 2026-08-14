@@ -37,6 +37,7 @@ export async function GET(request: Request) {
       where: {
         workspaceId,
         deletedAt: null,
+        isExcluded: false,
         reviewStatus: { not: "rejected" },
         OR: [
           { merchantClean: { contains: query, mode: "insensitive" } },

@@ -24,7 +24,7 @@ import { getCategoryIconTone } from "@/lib/category-icons";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
-import { buildVisibleWorkspaceTransactionWhere } from "@/lib/transaction-query";
+import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
 import { hasFullFeatureAccess } from "@/lib/beta-access";
 import { resolveReportWindow } from "@/lib/report-window";
 
@@ -494,9 +494,7 @@ export async function ReportsStream({
       deletedImportCount,
     ] = await Promise.all([
       prisma.transaction.findMany({
-        where: buildVisibleWorkspaceTransactionWhere(selectedWorkspaceId, {
-          isExcluded: false,
-        }),
+        where: buildActiveWorkspaceTransactionWhere(selectedWorkspaceId),
         select: {
           id: true,
           date: true,
@@ -526,8 +524,7 @@ export async function ReportsStream({
       }),
       needsAdvancedData
         ? prisma.transaction.aggregate({
-            where: buildVisibleWorkspaceTransactionWhere(selectedWorkspaceId, {
-              isExcluded: false,
+            where: buildActiveWorkspaceTransactionWhere(selectedWorkspaceId, {
               importFileId: { not: null },
             }),
             _count: { id: true },
@@ -536,8 +533,7 @@ export async function ReportsStream({
         : Promise.resolve({ _count: { id: 0 }, _sum: { amount: 0 } }),
       needsAdvancedData
         ? prisma.transaction.aggregate({
-            where: buildVisibleWorkspaceTransactionWhere(selectedWorkspaceId, {
-              isExcluded: false,
+            where: buildActiveWorkspaceTransactionWhere(selectedWorkspaceId, {
               importFileId: null,
             }),
             _count: { id: true },

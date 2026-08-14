@@ -152,6 +152,7 @@ const resolveLinkedTransactionId = async (userId: string, transactionId: string 
     where: {
       id: normalizedTransactionId,
       deletedAt: null,
+      isExcluded: false,
     },
     select: {
       id: true,
