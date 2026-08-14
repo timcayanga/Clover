@@ -267,6 +267,7 @@ model User {
   adminSupportNotes            AdminSupportNote[]           @relation("SupportNoteTarget")
   adminDataSnapshots           AdminDataSnapshot[]          @relation("DataSnapshotTarget")
   brankasStatementSessions     BrankasStatementSession[]
+  finverseConnections          FinverseConnection[]
   appErrorLogs                 AppErrorLog[]
 }
 
@@ -518,6 +519,8 @@ model Workspace {
   dataQaRuns                     DataQaRun[]
   dataQaFindings                 DataQaFinding[]
   brankasStatementSessions       BrankasStatementSession[]
+  finverseConnections            FinverseConnection[]
+  finverseAccountLinks           FinverseAccountLink[]
   receiptDocuments               ReceiptDocument[]
   investmentSnapshots            InvestmentSnapshot[]
   investmentHoldings             InvestmentHolding[]
@@ -570,6 +573,7 @@ model Account {
   recurringPatterns       RecurringPattern[]
   budgets                 Budget[]
   circleInvestmentShares  CircleInvestmentShare[]
+  finverseAccountLink     FinverseAccountLink?
 
   @@index([workspaceId])
 }
@@ -662,47 +666,48 @@ model Tag {
 }
 
 model Transaction {
-  id                     String                    @id @default(cuid())
-  workspaceId            String
-  accountId              String
-  importFileId           String?
-  categoryId             String?
-  reviewStatus           ReviewStatus              @default(suggested)
-  reviewPriority         String                    @default("none")
-  reviewReasons          Json?
-  parserConfidence       Int                       @default(0)
-  categoryConfidence     Int                       @default(0)
-  accountMatchConfidence Int                       @default(0)
-  duplicateConfidence    Int                       @default(0)
-  transferConfidence     Int                       @default(0)
-  rawPayload             Json?
-  normalizedPayload      Json?
-  learnedRuleIdsApplied  Json?
-  sourceRowKey           String?
-  date                   DateTime
-  amount                 Decimal                   @db.Decimal(18, 2)
-  currency               String                    @default("PHP")
-  type                   TransactionType
-  merchantRaw            String
-  merchantClean          String?
-  description            String?
-  isTransfer             Boolean                   @default(false)
-  isExcluded             Boolean                   @default(false)
-  deletedAt              DateTime?
-  createdAt              DateTime                  @default(now())
-  updatedAt              DateTime                  @updatedAt
-  workspace              Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  account                Account                   @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  financialCommitments   FinancialCommitment[]
-  importFile             ImportFile?               @relation(fields: [importFileId], references: [id], onDelete: SetNull)
-  category               Category?                 @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  trainingSignals        TrainingSignal[]
-  dataQaFindings         DataQaFinding[]
-  receiptDocument        ReceiptDocument?
-  splitBill              SplitBill?
-  transactionTags        TransactionTag[]
-  circleSharedEntries    CircleSharedTransaction[]
-  circleContributions    CircleContribution[]
+  id                        String                     @id @default(cuid())
+  workspaceId               String
+  accountId                 String
+  importFileId              String?
+  categoryId                String?
+  reviewStatus              ReviewStatus               @default(suggested)
+  reviewPriority            String                     @default("none")
+  reviewReasons             Json?
+  parserConfidence          Int                        @default(0)
+  categoryConfidence        Int                        @default(0)
+  accountMatchConfidence    Int                        @default(0)
+  duplicateConfidence       Int                        @default(0)
+  transferConfidence        Int                        @default(0)
+  rawPayload                Json?
+  normalizedPayload         Json?
+  learnedRuleIdsApplied     Json?
+  sourceRowKey              String?
+  date                      DateTime
+  amount                    Decimal                    @db.Decimal(18, 2)
+  currency                  String                     @default("PHP")
+  type                      TransactionType
+  merchantRaw               String
+  merchantClean             String?
+  description               String?
+  isTransfer                Boolean                    @default(false)
+  isExcluded                Boolean                    @default(false)
+  deletedAt                 DateTime?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  workspace                 Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account                   Account                    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  financialCommitments      FinancialCommitment[]
+  importFile                ImportFile?                @relation(fields: [importFileId], references: [id], onDelete: SetNull)
+  category                  Category?                  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  trainingSignals           TrainingSignal[]
+  dataQaFindings            DataQaFinding[]
+  receiptDocument           ReceiptDocument?
+  splitBill                 SplitBill?
+  transactionTags           TransactionTag[]
+  circleSharedEntries       CircleSharedTransaction[]
+  circleContributions       CircleContribution[]
+  finverseTransactionRecord FinverseTransactionRecord?
 
   @@index([workspaceId])
   @@index([accountId])
@@ -716,6 +721,71 @@ model Transaction {
   @@index([importFileId, sourceRowKey])
   @@index([accountId, deletedAt])
   @@index([workspaceId, deletedAt, accountId])
+}
+
+model FinverseConnection {
+  id                    String                      @id @default(cuid())
+  userId                String
+  workspaceId           String
+  stateHash             String                      @unique
+  stateExpiresAt        DateTime
+  status                String                      @default("link_pending")
+  loginIdentityId       String?                     @unique
+  institutionId         String?
+  institutionName       String?
+  encryptedAccessToken  String?
+  encryptedRefreshToken String?
+  accessTokenExpiresAt  DateTime?
+  rawLoginIdentity      Json?
+  lastSyncedAt          DateTime?
+  syncError             String?
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  user                  User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace             Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  accountLinks          FinverseAccountLink[]
+  transactionRecords    FinverseTransactionRecord[]
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([workspaceId, status])
+}
+
+model FinverseAccountLink {
+  id                String             @id @default(cuid())
+  connectionId      String
+  workspaceId       String
+  externalAccountId String
+  accountId         String?            @unique
+  rawPayload        Json
+  normalizedPayload Json
+  lastSeenAt        DateTime           @default(now())
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  connection        FinverseConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  workspace         Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account           Account?           @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@unique([connectionId, externalAccountId])
+  @@index([workspaceId])
+}
+
+model FinverseTransactionRecord {
+  id                    String             @id @default(cuid())
+  connectionId          String
+  externalTransactionId String
+  externalAccountId     String
+  transactionId         String?            @unique
+  rawPayload            Json
+  normalizedPayload     Json
+  lastSeenAt            DateTime           @default(now())
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  connection            FinverseConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  transaction           Transaction?       @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@unique([connectionId, externalTransactionId])
+  @@index([connectionId, externalAccountId])
 }
 
 model TransactionTag {

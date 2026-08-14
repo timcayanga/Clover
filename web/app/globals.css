@@ -25731,6 +25731,29 @@ html[data-theme="dark"] .portfolio-growth__ranges button.is-active {
   padding: 0 16px;
 }
 
+.finverse-connect {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.finverse-connect__status {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  width: min(300px, 75vw);
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  color: var(--text-secondary, #52606d);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
 .accounts-main-grid {
   position: relative;
   z-index: 1;
