@@ -92,8 +92,8 @@ async function main() {
   );
   assert.match(
     shellSource,
-    /\{shouldShowBackButton && !mobileFallbackBackOnly \? \([\s\S]{0,900}className="shell-menu-button"/,
-    "Compact tablet headers must show the menu when only a phone fallback Back target exists."
+    /className=\{`shell-mobile-more-link[\s\S]{0,500}aria-label="Open More"/,
+    "Mobile headers must expose the More page from a stable leading burger control."
   );
   assert.match(
     dashboardSource,

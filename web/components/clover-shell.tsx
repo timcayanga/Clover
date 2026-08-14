@@ -797,6 +797,7 @@ export function CloverShell({
   const [circleInvitations, setCircleInvitations] = useState<ShellCircleInvitation[]>([]);
   const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(() => readDismissedNotifications());
   const [cachedProfileImage] = useState<string | null>(() => readAccountIdentityCache()?.imageUrl ?? null);
+  const [isBottomNavCompact, setIsBottomNavCompact] = useState(false);
   const [previousPathname, setPreviousPathname] = useState<string | null>(null);
   const quickAddAccounts = useMemo(
     () =>
@@ -818,6 +819,54 @@ export function CloverShell({
     if (pathname) {
       recordClientDiagnostic("navigation", `Opened ${pathname}`, pathname);
     }
+  }, [pathname]);
+
+  useEffect(() => {
+    setIsBottomNavCompact(false);
+
+    const mobileQuery = window.matchMedia("(max-width: 1100px)");
+    const previousScrollPositions = new WeakMap<EventTarget, number>();
+
+    const updateFromScroll = (target: EventTarget | null) => {
+      if (!mobileQuery.matches) {
+        setIsBottomNavCompact(false);
+        return;
+      }
+
+      const scrollTarget = target instanceof Document ? document.scrollingElement : target;
+      const scrollTop = scrollTarget instanceof Element
+        ? scrollTarget.scrollTop
+        : window.scrollY;
+      const trackingTarget = scrollTarget instanceof EventTarget ? scrollTarget : window;
+      const previousScrollTop = previousScrollPositions.get(trackingTarget) ?? scrollTop;
+      previousScrollPositions.set(trackingTarget, scrollTop);
+
+      if (scrollTop <= 16) {
+        setIsBottomNavCompact(false);
+      } else if (scrollTop - previousScrollTop >= 5) {
+        setIsBottomNavCompact(true);
+      } else if (previousScrollTop - scrollTop >= 8) {
+        setIsBottomNavCompact(false);
+      }
+    };
+
+    const handleWindowScroll = () => updateFromScroll(document);
+    const handleDocumentScroll = (event: Event) => updateFromScroll(event.target);
+    const handleViewportChange = () => {
+      if (!mobileQuery.matches) {
+        setIsBottomNavCompact(false);
+      }
+    };
+
+    window.addEventListener("scroll", handleWindowScroll, { passive: true });
+    document.addEventListener("scroll", handleDocumentScroll, { passive: true, capture: true });
+    mobileQuery.addEventListener("change", handleViewportChange);
+
+    return () => {
+      window.removeEventListener("scroll", handleWindowScroll);
+      document.removeEventListener("scroll", handleDocumentScroll, true);
+      mobileQuery.removeEventListener("change", handleViewportChange);
+    };
   }, [pathname]);
   const profileImage = user?.imageUrl ?? cachedProfileImage;
   const isProfileActive = active === "profile" || pathname?.startsWith("/profile");
@@ -845,8 +894,26 @@ export function CloverShell({
     !pathname?.startsWith("/home") &&
     previousPathname !== "/home" &&
     previousPathname !== pathname;
+  const isMobileRootRoute = new Set([
+    "/home",
+    "/dashboard",
+    "/adviser",
+    "/accounts",
+    "/transactions",
+    "/recurring",
+    "/circles",
+    "/split-bill",
+    "/budgeting",
+    "/goals",
+    "/investments",
+    "/reports",
+    "/more",
+    "/profile",
+    "/notifications",
+    "/settings",
+  ]).has(pathname ?? "");
   const resolvedMobileBackHref = mobileBackHref ?? (active === "dashboard" ? undefined : "/home");
-  const shouldShowBackButton = active !== "dashboard";
+  const shouldShowBackButton = active !== "dashboard" && (!isMobileRootRoute || mobileBackHref === "/settings");
   const mobileFallbackBackOnly = !hasHistoryBackTarget && Boolean(resolvedMobileBackHref);
   const handleBack = () => {
     closeChrome();
@@ -2035,7 +2102,7 @@ export function CloverShell({
         />
       ) : null}
 
-      <nav className="shell-bottom-nav glass" aria-label="Primary mobile navigation">
+      <nav className={`shell-bottom-nav glass${isBottomNavCompact ? " is-compact" : ""}`} aria-label="Primary mobile navigation">
         <Link
           href="/home"
           prefetch={false}
@@ -2070,7 +2137,10 @@ export function CloverShell({
           type="button"
           aria-label={isQuickAddOpen ? "Close quick add" : "Open quick add"}
           title={isQuickAddOpen ? "Close quick add" : "Open quick add"}
-          onClick={openQuickAddTransaction}
+          onClick={() => {
+            setIsBottomNavCompact(false);
+            openQuickAddTransaction();
+          }}
         >
           <MenuIcon name="plus" />
         </button>
@@ -2089,18 +2159,22 @@ export function CloverShell({
           <span className="shell-bottom-nav__label">Adviser</span>
         </Link>
         <Link
-          href="/more"
+          href="/profile"
           prefetch={false}
-          className={`shell-bottom-nav__item${isMoreActive ? " is-active" : ""}`}
-          aria-current={isMoreActive ? "page" : undefined}
-          onClick={(event) => handleNavigationLinkClick(event, "/more")}
-          onMouseEnter={() => prefetchNavTarget("/more")}
-          onTouchStart={() => prefetchNavTarget("/more")}
+          className={`shell-bottom-nav__item${isProfileActive ? " is-active" : ""}`}
+          aria-current={isProfileActive ? "page" : undefined}
+          onClick={(event) => handleNavigationLinkClick(event, "/profile")}
+          onMouseEnter={() => prefetchNavTarget("/profile")}
+          onTouchStart={() => prefetchNavTarget("/profile")}
         >
           <span className="shell-bottom-nav__icon" aria-hidden="true">
-            <MenuIcon name="more" />
+            {profileImage ? (
+              <img className="shell-bottom-nav__profile-photo" src={profileImage} alt="" width={96} height={96} loading="eager" decoding="sync" fetchPriority="high" />
+            ) : (
+              <MenuIcon name="profile" />
+            )}
           </span>
-          <span className="shell-bottom-nav__label">More</span>
+          <span className="shell-bottom-nav__label">Profile</span>
         </Link>
       </nav>
 
@@ -2116,8 +2190,20 @@ export function CloverShell({
       >
         {!showTopbar ? (
           <div className="shell-compact-bar glass">
-            {shouldShowBackButton && !mobileFallbackBackOnly ? (
-              <div className="shell-topbar-leading">
+            <div className="shell-topbar-leading">
+              <Link
+                href="/more"
+                prefetch={false}
+                className={`shell-mobile-more-link${isMoreActive ? " is-active" : ""}`}
+                aria-label="Open More"
+                aria-current={isMoreActive ? "page" : undefined}
+                onClick={(event) => handleNavigationLinkClick(event, "/more")}
+                onMouseEnter={() => prefetchNavTarget("/more")}
+                onTouchStart={() => prefetchNavTarget("/more")}
+              >
+                <MenuIcon name="menu" />
+              </Link>
+              {shouldShowBackButton && !mobileFallbackBackOnly ? (
                 <button
                   className="shell-back-button"
                   type="button"
@@ -2126,23 +2212,9 @@ export function CloverShell({
                 >
                   <MenuIcon name="chevron-left" />
                 </button>
-                {mobileLeadingAction ? <div className="shell-topbar-leading__actions">{mobileLeadingAction}</div> : null}
-              </div>
-            ) : (
-              <button
-                className="shell-menu-button"
-                type="button"
-                aria-label="Open menu"
-                aria-expanded={isSidebarOpen}
-                aria-controls="primary-navigation"
-                onClick={() => {
-                  setOpenMenu(null);
-                  setIsSidebarOpen((current) => !current);
-                }}
-              >
-                <MenuIcon name="menu" />
-              </button>
-            )}
+              ) : null}
+              {mobileLeadingAction ? <div className="shell-topbar-leading__actions">{mobileLeadingAction}</div> : null}
+            </div>
             <div
               className={`shell-compact-bar__copy ${hideCompactBarCopyOnMobile ? "shell-compact-bar__copy--hide-mobile" : ""} ${
                 hideCompactBarKickerAndSubtitleOnMobile ? "shell-compact-bar__copy--hide-chrome-on-mobile" : ""
@@ -2165,8 +2237,20 @@ export function CloverShell({
         ) : null}
         {showTopbar ? (
           <header className="topbar glass">
-            {shouldShowBackButton ? (
-              <div className="shell-topbar-leading">
+            <div className="shell-topbar-leading">
+              <Link
+                href="/more"
+                prefetch={false}
+                className={`shell-mobile-more-link${isMoreActive ? " is-active" : ""}`}
+                aria-label="Open More"
+                aria-current={isMoreActive ? "page" : undefined}
+                onClick={(event) => handleNavigationLinkClick(event, "/more")}
+                onMouseEnter={() => prefetchNavTarget("/more")}
+                onTouchStart={() => prefetchNavTarget("/more")}
+              >
+                <MenuIcon name="menu" />
+              </Link>
+              {shouldShowBackButton ? (
                 <button
                   className={`shell-back-button${mobileFallbackBackOnly ? " shell-back-button--mobile-only" : ""}`}
                   type="button"
@@ -2175,9 +2259,9 @@ export function CloverShell({
                 >
                   <MenuIcon name="chevron-left" />
                 </button>
-                {mobileLeadingAction ? <div className="shell-topbar-leading__actions">{mobileLeadingAction}</div> : null}
-              </div>
-            ) : null}
+              ) : null}
+              {mobileLeadingAction ? <div className="shell-topbar-leading__actions">{mobileLeadingAction}</div> : null}
+            </div>
             <div className="topbar__title-wrap">
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
               <div className="topbar__title-row">
@@ -2188,19 +2272,6 @@ export function CloverShell({
             </div>
             <div className="topbar-actions">
               {homeNotificationsAction}
-              <button
-                className="shell-menu-button"
-                type="button"
-                aria-label="Open menu"
-                aria-expanded={isSidebarOpen}
-                aria-controls="primary-navigation"
-                onClick={() => {
-                  setOpenMenu(null);
-                  setIsSidebarOpen((current) => !current);
-                }}
-              >
-                <MenuIcon name="menu" />
-              </button>
               {actions}
             </div>
           </header>

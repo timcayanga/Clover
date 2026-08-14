@@ -46,6 +46,7 @@ export const CRITICAL_NAVIGATION_ICON_NAMES: NavigationIconName[] = [
   "goals",
   "investments",
   "more",
+  "profile",
   "notifications",
   "help",
 ];
