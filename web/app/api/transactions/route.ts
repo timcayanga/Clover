@@ -28,6 +28,7 @@ import {
   isUnauthorizedDataError,
 } from "@/lib/transient-data";
 import { summarizeErrorForLog } from "@/lib/security-logging";
+import { sanitizeTransactionTagNames } from "@/lib/transaction-tags";
 import {
   getTransactionSummaryTypeOverrides,
   type TransactionSummaryCandidate,
@@ -655,7 +656,10 @@ const transactionSchema = z.object({
   isTransfer: z.boolean().optional(),
   isExcluded: z.boolean().optional(),
   preserveType: z.boolean().optional(),
+  tags: z.array(z.string()).optional(),
 });
+
+const normalizeTransactionTag = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
 
 const getWorkspaceCurrencyCodes = async (workspaceId: string) => {
   // Prisma's distinct option deduplicates in the client for this query shape,
@@ -1602,6 +1606,27 @@ export async function POST(request: Request) {
           type: resolvedType,
         },
         learnedRuleIdsApplied: [],
+        transactionTags: payload.tags?.length
+          ? {
+              create: sanitizeTransactionTagNames(payload.tags).map((name) => ({
+                tag: {
+                  connectOrCreate: {
+                    where: {
+                      workspaceId_normalizedName: {
+                        workspaceId: payload.workspaceId,
+                        normalizedName: normalizeTransactionTag(name),
+                      },
+                    },
+                    create: {
+                      workspaceId: payload.workspaceId,
+                      name,
+                      normalizedName: normalizeTransactionTag(name),
+                    },
+                  },
+                },
+              })),
+            }
+          : undefined,
       },
       include: {
         account: {

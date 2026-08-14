@@ -31,9 +31,21 @@ const updateCategorySchema = z.object({
   name: z.string().min(1).optional(),
   type: z.enum(["income", "expense", "transfer"]).optional(),
   isArchived: z.boolean().optional(),
+  parentCategoryId: z.string().optional().nullable(),
 });
 
 const normalizeCategoryName = (value: string) => value.trim().toLowerCase();
+
+const assertValidParentCategory = async (workspaceId: string, parentCategoryId: string | null | undefined, categoryId?: string) => {
+  if (!parentCategoryId) return;
+  if (parentCategoryId === categoryId) throw new Error("A category cannot be its own group.");
+
+  const parent = await prisma.category.findFirst({
+    where: { id: parentCategoryId, workspaceId, isArchived: false },
+    select: { id: true, parentCategoryId: true },
+  });
+  if (!parent || parent.parentCategoryId) throw new Error("Choose an active top-level category group.");
+};
 
 export async function GET(request: Request) {
   try {
@@ -76,7 +88,18 @@ export async function GET(request: Request) {
       ],
     });
 
-    return NextResponse.json({ categories });
+    const orderedCategories = [...categories].sort((left, right) => {
+      const leftOther = normalizeCategoryName(left.name) === "other";
+      const rightOther = normalizeCategoryName(right.name) === "other";
+      if (leftOther !== rightOther) return leftOther ? 1 : -1;
+      if (left.parentCategoryId !== right.parentCategoryId) {
+        if (!left.parentCategoryId) return -1;
+        if (!right.parentCategoryId) return 1;
+      }
+      return left.name.localeCompare(right.name);
+    });
+
+    return NextResponse.json({ categories: orderedCategories });
   } catch {
     return NextResponse.json({ error: "Unable to load categories" }, { status: 400 });
   }
@@ -89,6 +112,7 @@ export async function POST(request: Request) {
     const payload = createCategorySchema.parse(await request.json());
 
     await assertWorkspaceAccess(userId, payload.workspaceId);
+    await assertValidParentCategory(payload.workspaceId, payload.parentCategoryId);
 
     const normalizedName = normalizeCategoryName(payload.name);
     const existingCategories = await prisma.category.findMany({
@@ -179,6 +203,7 @@ export async function PATCH(request: Request) {
     }
 
     await assertWorkspaceAccess(userId, existingCategory.workspaceId);
+    await assertValidParentCategory(existingCategory.workspaceId, payload.parentCategoryId, existingCategory.id);
 
     const category = await prisma.category.update({
       where: { id: payload.id },
@@ -186,13 +211,15 @@ export async function PATCH(request: Request) {
         ...(payload.name !== undefined ? { name: payload.name.trim() } : {}),
         ...(payload.type !== undefined ? { type: payload.type } : {}),
         ...(payload.isArchived !== undefined ? { isArchived: payload.isArchived } : {}),
+        ...(payload.parentCategoryId !== undefined ? { parentCategoryId: payload.parentCategoryId } : {}),
       },
     });
 
     const categoryChanged =
       (payload.name !== undefined && payload.name.trim() !== existingCategory.name) ||
       (payload.type !== undefined && payload.type !== existingCategory.type) ||
-      (payload.isArchived !== undefined && payload.isArchived !== existingCategory.isArchived);
+      (payload.isArchived !== undefined && payload.isArchived !== existingCategory.isArchived) ||
+      (payload.parentCategoryId !== undefined && payload.parentCategoryId !== existingCategory.parentCategoryId);
 
     if (categoryChanged) {
       void capturePostHogServerEvent("category_updated", userId, {

@@ -8,6 +8,8 @@ import { AccountBrandMark } from "@/components/account-brand-mark";
 import { CurrencySelector } from "@/components/currency-selector";
 import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
 import { TransactionTagsEditor } from "@/components/transaction-tags-editor";
+import { TransactionCategoryPicker, type TransactionPickerCategory } from "@/components/transaction-category-picker";
+import { TransactionNameAutocomplete, type TransactionNameSuggestion } from "@/components/transaction-name-autocomplete";
 import { getAccountBrand } from "@/lib/account-brand";
 import { getAccountDisplayName } from "@/lib/account-display";
 import { getCategoryIconSrc, getCategoryIconTone } from "@/lib/category-icons";
@@ -28,11 +30,7 @@ type DashboardTopActionsProps = {
   }>;
 };
 
-type DashboardCategory = {
-  id: string;
-  name: string;
-  type: string;
-};
+type DashboardCategory = TransactionPickerCategory;
 
 type ManualFormState = {
   accountId: string;
@@ -41,7 +39,9 @@ type ManualFormState = {
   date: string;
   merchantRaw: string;
   categoryId: string;
-  type: "debit" | "credit";
+  type: "debit" | "credit" | "transfer";
+  destinationAccountId: string;
+  feeAmount: string;
   description: string;
   tags: string[];
   receiptLineItems: Array<{
@@ -109,12 +109,15 @@ export function DashboardManualTransactionModal({
     merchantRaw: "",
     categoryId: "",
     type: initialType,
+    destinationAccountId: "",
+    feeAmount: "",
     description: "",
     tags: [],
     receiptLineItems: [],
   }));
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
+  const [manualCategoryTouched, setManualCategoryTouched] = useState(false);
   const [manualMoreOpen, setManualMoreOpen] = useState(false);
   const [manualSplitBillOpen, setManualSplitBillOpen] = useState(false);
   const [manualSplitBillDraft, setManualSplitBillDraft] = useState<SplitBillTransactionLinkDraft>({
@@ -124,6 +127,7 @@ export function DashboardManualTransactionModal({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const rootRef = useRef<HTMLElement | null>(null);
+  const categoryButtonRef = useRef<HTMLButtonElement | null>(null);
   const manualModalStyle = useMemo<CSSProperties>(
     () => ({
       width: "min(420px, calc(100vw - 24px))",
@@ -276,6 +280,15 @@ export function DashboardManualTransactionModal({
       return [{ account, label: getManualAccountOptionLabel(account, cashCurrencyCount) }];
     });
   }, [accounts]);
+  const transferDestinationOptions = useMemo(
+    () =>
+      manualAccountOptions.filter(
+        ({ account }) =>
+          account.id !== form.accountId &&
+          formatCurrencyCode(account.currency || "PHP") === formatCurrencyCode(form.currency || selectedAccount?.currency || "PHP")
+      ),
+    [form.accountId, form.currency, manualAccountOptions, selectedAccount?.currency]
+  );
   const otherCategoryId = getOtherCategoryId(categories);
   const previewLabel = formatCurrencyAmount(Number(form.amount || 0), form.currency || selectedAccount?.currency || "PHP");
 
@@ -345,30 +358,47 @@ export function DashboardManualTransactionModal({
       const currency = formatCurrencyCode(form.currency || account?.currency || "PHP");
       const categoryId = form.categoryId || otherCategoryId || null;
 
-      const response = await fetch("/api/transactions", {
+      const isTransfer = form.type === "transfer";
+      if (isTransfer && !form.destinationAccountId) {
+        throw new Error("Choose where the money is going.");
+      }
+
+      const response = await fetch(isTransfer ? "/api/transactions/manual-transfer" : "/api/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workspaceId,
-          accountId,
-          categoryId,
-          date: form.date,
-          amount: form.amount,
-          currency,
-          type: form.type === "credit" ? "income" : "expense",
-          merchantRaw: form.merchantRaw,
-          merchantClean: null,
-          description: form.description.trim() || null,
-          tags: sanitizeTransactionTagNames(form.tags),
-          receiptLineItems: form.receiptLineItems
-            .filter((entry) => entry.description.trim() || entry.amount.trim())
-            .map((entry) => ({
-              description: entry.description,
-              amount: entry.amount,
-            })),
-          isTransfer: false,
-          isExcluded: false,
-        }),
+        body: JSON.stringify(
+          isTransfer
+            ? {
+                workspaceId,
+                sourceAccountId: accountId,
+                destinationAccountId: form.destinationAccountId,
+                date: form.date,
+                amount: form.amount,
+                currency,
+                name: form.merchantRaw.trim() || null,
+                description: form.description.trim() || null,
+                feeAmount: form.feeAmount || null,
+                tags: sanitizeTransactionTagNames(form.tags),
+              }
+            : {
+                workspaceId,
+                accountId,
+                categoryId,
+                date: form.date,
+                amount: form.amount,
+                currency,
+                type: form.type === "credit" ? "income" : "expense",
+                merchantRaw: form.merchantRaw,
+                merchantClean: null,
+                description: form.description.trim() || null,
+                tags: sanitizeTransactionTagNames(form.tags),
+                receiptLineItems: form.receiptLineItems
+                  .filter((entry) => entry.description.trim() || entry.amount.trim())
+                  .map((entry) => ({ description: entry.description, amount: entry.amount })),
+                isTransfer: false,
+                isExcluded: false,
+              }
+        ),
       });
 
       const payload = (await response.json().catch(() => null)) as
@@ -410,6 +440,7 @@ export function DashboardManualTransactionModal({
           ...current,
           amount: "",
           merchantRaw: "",
+          feeAmount: "",
           description: "",
           tags: [],
           receiptLineItems: [],
@@ -476,6 +507,15 @@ export function DashboardManualTransactionModal({
                 </span>
                 <span>Income</span>
               </button>
+              <button
+                type="button"
+                className={`transactions-manual-type-toggle__button ${form.type === "transfer" ? "is-active" : ""}`}
+                onClick={() => setForm((current) => ({ ...current, type: "transfer" }))}
+                aria-pressed={form.type === "transfer"}
+              >
+                <span className="transactions-manual-type-symbol" aria-hidden="true">↔</span>
+                <span>Transfer</span>
+              </button>
             </div>
 
             <div className="transactions-manual-row transactions-manual-row--name">
@@ -485,12 +525,21 @@ export function DashboardManualTransactionModal({
                 </span>
               </span>
               <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-name-field">
-                <span className="transactions-manual-field__label">Name</span>
-                <input
+                <span className="transactions-manual-field__label">{form.type === "transfer" ? "Name (optional)" : "Name"}</span>
+                <TransactionNameAutocomplete
+                  workspaceId={workspaceId}
                   value={form.merchantRaw}
-                  onChange={(event) => setForm((current) => ({ ...current, merchantRaw: event.target.value }))}
-                  placeholder="Salary, groceries, rent..."
-                  required
+                  onChange={(merchantRaw) => setForm((current) => ({ ...current, merchantRaw }))}
+                  onSelect={(suggestion: TransactionNameSuggestion) => {
+                    setForm((current) => ({
+                      ...current,
+                      merchantRaw: suggestion.name,
+                      ...(!manualCategoryTouched && suggestion.categoryId ? { categoryId: suggestion.categoryId } : {}),
+                    }));
+                    categoryButtonRef.current?.focus();
+                  }}
+                  placeholder={form.type === "transfer" ? "Transfer between my accounts" : "Salary, groceries, rent..."}
+                  required={form.type !== "transfer"}
                 />
               </label>
             </div>
@@ -529,7 +578,7 @@ export function DashboardManualTransactionModal({
                 <AccountBrandMark accountBrand={selectedAccountBrand} label={selectedAccount ? getAccountDisplayName(selectedAccount) : "Cash"} />
               </span>
               <div className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-inline-row__field">
-                <span className="transactions-manual-field__label">Account</span>
+                <span className="transactions-manual-field__label">{form.type === "transfer" ? "From account" : "Account"}</span>
                 <div className="transactions-manual-picker">
                   <div className="transactions-manual-picker__control">
                     <button
@@ -574,52 +623,37 @@ export function DashboardManualTransactionModal({
               </div>
             </div>
 
-            <div className="transactions-manual-field transactions-manual-field--embedded-label">
-              <span className="transactions-manual-field__label">Category</span>
-              <div className="transactions-manual-picker">
-                <div className="transactions-manual-picker__control">
-                  <button
-                    type="button"
-                    className="transactions-manual-picker__button transactions-manual-picker__button--plain"
-                    aria-expanded={categoryMenuOpen}
-                    onClick={() => {
-                      setAccountMenuOpen(false);
-                      setCategoryMenuOpen((current) => !current);
-                    }}
-                  >
-                    <span className="transactions-manual-picker__text">{selectedCategory?.name ?? "Other"}</span>
-                    <span className="transactions-manual-picker__chevron" aria-hidden="true">
-                      ▾
-                    </span>
-                  </button>
-                  {categoryMenuOpen ? (
-                    <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose category">
-                      {categories.map((category) => (
-                        <button
-                          key={category.id}
-                          type="button"
-                          className={`transactions-manual-picker__option ${category.id === form.categoryId ? "is-selected" : ""}`}
-                          onClick={() => {
-                            setForm((current) => ({ ...current, categoryId: category.id }));
-                            setCategoryMenuOpen(false);
-                          }}
-                        >
-                          <span className="transactions-manual-picker__category-icon" aria-hidden="true">
-                            <span className="transaction-category-icon transaction-category-icon--manual" style={getCategoryIconTone(category.name)}>
-                              <img src={getCategoryIconSrc(category.name)} alt="" aria-hidden="true" />
-                            </span>
-                          </span>
-                          <span className="transactions-manual-picker__option-text">
-                            <strong>{category.name}</strong>
-                            <span>{category.type}</span>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
+            {form.type === "transfer" ? (
+              <div className="transactions-manual-field transactions-manual-field--embedded-label">
+                <span className="transactions-manual-field__label">To account</span>
+                <select
+                  value={form.destinationAccountId}
+                  onChange={(event) => setForm((current) => ({ ...current, destinationAccountId: event.target.value }))}
+                  required
+                >
+                  <option value="">Choose destination account</option>
+                  {transferDestinationOptions.map(({ account, label }) => (
+                    <option key={account.id} value={account.id}>{label}</option>
+                  ))}
+                </select>
+                {transferDestinationOptions.length === 0 ? (
+                  <small className="field-help">Add another account in {form.currency} to record an internal transfer.</small>
+                ) : null}
               </div>
-            </div>
+            ) : null}
+
+            {form.type !== "transfer" ? <div className="transactions-manual-field transactions-manual-field--embedded-label">
+              <span className="transactions-manual-field__label">Category</span>
+              <TransactionCategoryPicker
+                categories={categories}
+                selectedId={form.categoryId}
+                buttonRef={categoryButtonRef}
+                onSelect={(category) => {
+                  setManualCategoryTouched(true);
+                  setForm((current) => ({ ...current, categoryId: category.id }));
+                }}
+              />
+            </div> : null}
 
             <div className="transactions-manual-field transactions-manual-field--embedded-label">
               <span className="transactions-manual-field__label">Preview</span>
@@ -635,7 +669,7 @@ export function DashboardManualTransactionModal({
                 onClick={() => setManualMoreOpen((current) => !current)}
                 aria-expanded={manualMoreOpen}
               >
-                <span>{manualMoreOpen ? "Less" : "More"}</span>
+                <span>{manualMoreOpen ? "Hide optional details" : "Optional details"}</span>
                 <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
                   ▾
                 </span>
@@ -656,6 +690,19 @@ export function DashboardManualTransactionModal({
             {manualMoreOpen ? (
               <>
                 <div className="manual-more-panel manual-more-panel--compact">
+                  {form.type === "transfer" ? (
+                    <label className="transactions-manual-field transactions-manual-field--embedded-label">
+                      <span className="transactions-manual-field__label">Transfer fee (optional)</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={form.feeAmount}
+                        onChange={(event) => setForm((current) => ({ ...current, feeAmount: event.target.value }))}
+                        placeholder="0.00"
+                      />
+                    </label>
+                  ) : null}
                   <label className="transactions-manual-field transactions-manual-field--embedded-label">
                     <span className="transactions-manual-field__label">Notes</span>
                     <textarea
@@ -675,7 +722,7 @@ export function DashboardManualTransactionModal({
                     />
                   </div>
 
-                  <div className="transactions-split-bill-link-panel__toggle-row">
+                  {form.type !== "transfer" ? <div className="transactions-split-bill-link-panel__toggle-row">
                     <button
                       type="button"
                       className="transactions-manual-more"
@@ -697,7 +744,7 @@ export function DashboardManualTransactionModal({
                         helperText="This split bill will be created after you save the transaction."
                       />
                     ) : null}
-                  </div>
+                  </div> : null}
 
                   <div className="manual-more-panel__receipt-line-items">
                     <div className="manual-more-panel__section-head">

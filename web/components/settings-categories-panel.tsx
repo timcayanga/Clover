@@ -10,11 +10,13 @@ type CategoryRecord = {
   type: TransactionType;
   isSystem: boolean;
   isArchived: boolean;
+  parentCategoryId: string | null;
 };
 
 type CategoryDraft = {
   name: string;
   type: TransactionType;
+  parentCategoryId: string;
 };
 
 const CATEGORY_TYPE_OPTIONS: Array<{ value: TransactionType; label: string }> = [
@@ -34,6 +36,7 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
   const [drafts, setDrafts] = useState<Record<string, CategoryDraft>>({});
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryType, setNewCategoryType] = useState<TransactionType>("expense");
+  const [newCategoryParentId, setNewCategoryParentId] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -65,7 +68,7 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
           const next: Record<string, CategoryDraft> = { ...current };
           for (const category of nextCategories) {
             if (!next[category.id]) {
-              next[category.id] = { name: category.name, type: category.type };
+              next[category.id] = { name: category.name, type: category.type, parentCategoryId: category.parentCategoryId ?? "" };
             }
           }
           return next;
@@ -111,6 +114,7 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
       [category.id]: {
         name: category.name,
         type: category.type,
+        parentCategoryId: category.parentCategoryId ?? "",
       },
     }));
   };
@@ -136,6 +140,7 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
           workspaceId,
           name,
           type: newCategoryType,
+          parentCategoryId: newCategoryParentId || null,
         }),
       });
 
@@ -147,6 +152,7 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
       upsertCategory(payload.category);
       setNewCategoryName("");
       setNewCategoryType("expense");
+      setNewCategoryParentId("");
       setStatusMessage(`${payload.category.name} is now available in Transactions.`);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to create category.");
@@ -186,6 +192,7 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
           id: categoryId,
           name: nextName,
           type: draft.type,
+          parentCategoryId: draft.parentCategoryId || null,
         }),
       });
 
@@ -237,8 +244,11 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
   };
 
   const renderCategoryRow = (category: CategoryRecord) => {
-    const draft = drafts[category.id] ?? { name: category.name, type: category.type };
-    const hasChanges = normalizeName(draft.name) !== normalizeName(category.name) || draft.type !== category.type;
+    const draft = drafts[category.id] ?? { name: category.name, type: category.type, parentCategoryId: category.parentCategoryId ?? "" };
+    const hasChanges =
+      normalizeName(draft.name) !== normalizeName(category.name) ||
+      draft.type !== category.type ||
+      draft.parentCategoryId !== (category.parentCategoryId ?? "");
     const busy = busyCategoryId === category.id;
     const inputId = `settings-category-name-${category.id}`;
 
@@ -276,6 +286,28 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
             />
           </div>
         </div>
+
+        {!category.isSystem ? (
+          <label className="settings-category-table__group">
+            <span className="sr-only">Group for {category.name}</span>
+            <select
+              value={draft.parentCategoryId}
+              onChange={(event) =>
+                setDrafts((current) => ({
+                  ...current,
+                  [category.id]: { ...draft, parentCategoryId: event.target.value },
+                }))
+              }
+              disabled={busy}
+              aria-label={`Group for ${category.name}`}
+            >
+              <option value="">Top level</option>
+              {categories
+                .filter((entry) => !entry.isArchived && !entry.parentCategoryId && entry.id !== category.id)
+                .map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+            </select>
+          </label>
+        ) : null}
 
         <div className="settings-category-table__actions">
           <button
@@ -340,6 +372,15 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
                     {option.label}
                   </option>
                 ))}
+              </select>
+            </label>
+            <label className="settings-inline-field">
+              <span>Group</span>
+              <select value={newCategoryParentId} onChange={(event) => setNewCategoryParentId(event.target.value)}>
+                <option value="">Top level</option>
+                {categories
+                  .filter((category) => !category.isArchived && !category.parentCategoryId)
+                  .map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
               </select>
             </label>
             <button type="button" className="button button-primary button-small" onClick={() => void createCategory()} disabled={isSavingNewCategory}>

@@ -25,6 +25,9 @@ import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
+import { TransactionCategoryPicker, type TransactionPickerCategory } from "@/components/transaction-category-picker";
+import { TransactionNameAutocomplete, type TransactionNameSuggestion } from "@/components/transaction-name-autocomplete";
+import { TransactionTagsEditor } from "@/components/transaction-tags-editor";
 import { getCategoryIconTone } from "@/lib/category-icons";
 import { MOBILE_LAYOUT_MEDIA_QUERY } from "@/lib/responsive-layout";
 import {
@@ -68,6 +71,7 @@ import {
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { getTransactionDisplayType } from "@/lib/transaction-display-type";
+import { sanitizeTransactionTagNames } from "@/lib/transaction-tags";
 import {
   chooseWorkspaceId,
   persistSelectedCurrency,
@@ -345,11 +349,7 @@ const pickPreferredAccountBrand = (
   return primaryBrand;
 };
 
-type Category = {
-  id: string;
-  name: string;
-  type: "income" | "expense" | "transfer";
-};
+type Category = TransactionPickerCategory & { type: "income" | "expense" | "transfer" };
 
 type Transaction = {
   id: string;
@@ -455,16 +455,19 @@ type ManualTransactionForm = {
   categoryId: string;
   currency: string;
   amount: string;
-  type: "debit" | "credit";
+  type: "debit" | "credit" | "transfer";
+  destinationAccountId: string;
+  feeAmount: string;
   merchantRaw: string;
   description: string;
+  tags: string[];
   receiptLineItems: ReceiptLineItemDraft[];
 };
 
 type BulkEditForm = {
   accountId: string;
   categoryId: string;
-  type: "" | "debit" | "credit";
+  type: "" | "debit" | "credit" | "transfer";
 };
 
 type TransactionDetailDraft = TransactionDetailDraftValue;
@@ -646,8 +649,11 @@ const createEmptyManualForm = (accountId = "", categoryId = "", currency = "PHP"
   currency,
   amount: "",
   type: "debit",
+  destinationAccountId: "",
+  feeAmount: "",
   merchantRaw: "",
   description: "",
+  tags: [],
   receiptLineItems: [],
 });
 
@@ -2122,6 +2128,7 @@ function TransactionsPageContent() {
   const searchParams = useSearchParams();
   const urlSearchParams = useMemo(() => searchParams ?? new URLSearchParams(), [searchParams]);
   const manualNameInputRef = useRef<HTMLInputElement>(null);
+  const manualCategoryButtonRef = useRef<HTMLButtonElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const addMenuPanelRef = useRef<HTMLDivElement>(null);
   const addFileInputRef = useRef<HTMLInputElement>(null);
@@ -2253,6 +2260,7 @@ function TransactionsPageContent() {
   }, [selectedWorkspaceId]);
   const [merchantRenameBusy, setMerchantRenameBusy] = useState(false);
   const [manualMoreOpen, setManualMoreOpen] = useState(false);
+  const [manualCategoryTouched, setManualCategoryTouched] = useState(false);
   const [manualAccountMenuOpen, setManualAccountMenuOpen] = useState(false);
   const [manualCategoryMenuOpen, setManualCategoryMenuOpen] = useState(false);
   const [mobileVisibleCount, setMobileVisibleCount] = useState(MOBILE_TRANSACTIONS_BATCH_SIZE);
@@ -2481,6 +2489,16 @@ function TransactionsPageContent() {
         type: manualSelectedAccount?.type ?? "cash",
       }),
     [accountBrandById, manualForm.accountId, manualSelectedAccount]
+  );
+  const manualTransferDestinationOptions = useMemo(
+    () =>
+      manualAccountOptions.filter(
+        ({ account }) =>
+          account.id !== manualForm.accountId &&
+          formatCurrencyCode(account.currency || "PHP") ===
+            formatCurrencyCode(manualForm.currency || manualSelectedAccount?.currency || "PHP")
+      ),
+    [manualAccountOptions, manualForm.accountId, manualForm.currency, manualSelectedAccount?.currency]
   );
   const expandedAccountFilters = useMemo(() => {
     if (accountFilters.length === 0) {
@@ -5234,12 +5252,59 @@ function TransactionsPageContent() {
     try {
       const accountId = manualForm.accountId || (await ensureDefaultAccount(activeWorkspaceId));
       resolvedAccountId = accountId;
-      const categoryId = manualForm.categoryId || getOtherCategoryId(categories) || undefined;
-      const categoryName = getCategoryNameById(categories, categoryId ?? null);
       const account = accounts.find((entry) => entry.id === accountId) ?? null;
-      const accountName = account?.name ?? accountId;
       const accountCurrency = formatCurrencyCode(account?.currency ?? "PHP");
       const transactionCurrency = formatCurrencyCode(manualForm.currency || accountCurrency);
+
+      if (manualForm.type === "transfer") {
+        if (!manualForm.destinationAccountId) {
+          throw new Error("Choose where the money is going.");
+        }
+
+        const transferResponse = await fetch("/api/transactions/manual-transfer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId: activeWorkspaceId,
+            sourceAccountId: accountId,
+            destinationAccountId: manualForm.destinationAccountId,
+            date: manualForm.date,
+            amount: manualForm.amount,
+            currency: transactionCurrency,
+            name: manualForm.merchantRaw.trim() || null,
+            description: manualForm.description.trim() || null,
+            feeAmount: manualForm.feeAmount || null,
+            tags: sanitizeTransactionTagNames(manualForm.tags),
+          }),
+        });
+        const transferPayload = (await transferResponse.json().catch(() => ({}))) as { error?: string };
+        if (!transferResponse.ok) {
+          throw new Error(transferPayload.error ?? "Unable to create transfer.");
+        }
+
+        clearAccountsWorkspaceCache(activeWorkspaceId);
+        setManualAccountMenuOpen(false);
+        setManualCategoryMenuOpen(false);
+        setManualMoreOpen(false);
+        if (keepOpenAfterSave) {
+          setManualForm(createEmptyManualForm(accountId, getOtherCategoryId(categories), transactionCurrency));
+          window.requestAnimationFrame(() => manualNameInputRef.current?.focus());
+        } else {
+          setManualOpen(false);
+        }
+        setMessage("Transfer added between your accounts.");
+        await loadTransactionsPage(activeWorkspaceId, {
+          background: true,
+          pageOverride: 1,
+          pageSizeOverride: transactionsPageSize,
+          summaryMode: "light",
+        });
+        return;
+      }
+
+      const categoryId = manualForm.categoryId || getOtherCategoryId(categories) || undefined;
+      const categoryName = getCategoryNameById(categories, categoryId ?? null);
+      const accountName = account?.name ?? accountId;
       const receiptLineItems = sanitizeReceiptLineItems(manualForm.receiptLineItems);
       const optimisticTransaction: Transaction = {
         id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
@@ -5266,6 +5331,7 @@ function TransactionsPageContent() {
           merchantRaw: manualForm.merchantRaw,
           merchantClean: null,
           description: manualForm.description.trim() || null,
+          tags: sanitizeTransactionTagNames(manualForm.tags),
           receiptLineItems,
         },
       };
@@ -5860,7 +5926,7 @@ function TransactionsPageContent() {
       payload: {
         accountId?: string;
         categoryId?: string;
-        type?: "income" | "expense";
+        type?: "income" | "expense" | "transfer";
       };
     }> = selected.map((transaction) => ({
       transaction,
@@ -5870,7 +5936,9 @@ function TransactionsPageContent() {
         type:
           bulkEditForm.type === ""
             ? undefined
-            : bulkEditForm.type === "credit"
+            : bulkEditForm.type === "transfer"
+              ? "transfer"
+              : bulkEditForm.type === "credit"
               ? "income"
               : "expense",
       },
@@ -7899,6 +7967,7 @@ function TransactionsPageContent() {
                     <option value="">Leave unchanged</option>
                     <option value="debit">Debit</option>
                     <option value="credit">Credit</option>
+                    <option value="transfer">Transfer</option>
                   </select>
                 </label>
               </div>
@@ -7961,17 +8030,35 @@ function TransactionsPageContent() {
                     </span>
                     <span>Income</span>
                   </button>
+                  <button
+                    type="button"
+                    className={`transactions-manual-type-toggle__button ${manualForm.type === "transfer" ? "is-active" : ""}`}
+                    onClick={() => setManualForm((current) => ({ ...current, type: "transfer" }))}
+                    aria-pressed={manualForm.type === "transfer"}
+                  >
+                    <span className="transactions-manual-type-symbol" aria-hidden="true">↔</span>
+                    <span>Transfer</span>
+                  </button>
                 </div>
 
                 <div className="transactions-manual-row transactions-manual-row--name">
                   <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-name-field">
-                    <span className="transactions-manual-field__label">Name</span>
-                    <input
-                      ref={manualNameInputRef}
+                    <span className="transactions-manual-field__label">{manualForm.type === "transfer" ? "Name (optional)" : "Name"}</span>
+                    <TransactionNameAutocomplete
+                      workspaceId={selectedWorkspaceId}
+                      inputRef={manualNameInputRef}
                       value={manualForm.merchantRaw}
-                      onChange={(event) => setManualForm((current) => ({ ...current, merchantRaw: event.target.value }))}
-                      placeholder="Lunch in Makati"
-                      required
+                      onChange={(merchantRaw) => setManualForm((current) => ({ ...current, merchantRaw }))}
+                      onSelect={(suggestion: TransactionNameSuggestion) => {
+                        setManualForm((current) => ({
+                          ...current,
+                          merchantRaw: suggestion.name,
+                          ...(!manualCategoryTouched && suggestion.categoryId ? { categoryId: suggestion.categoryId } : {}),
+                        }));
+                        manualCategoryButtonRef.current?.focus();
+                      }}
+                      placeholder={manualForm.type === "transfer" ? "Transfer between my accounts" : "Lunch in Makati"}
+                      required={manualForm.type !== "transfer"}
                     />
                   </label>
                 </div>
@@ -8011,7 +8098,7 @@ function TransactionsPageContent() {
                     <AccountBrandMark accountBrand={manualSelectedAccountBrand} label={manualSelectedAccount ? getAccountDisplayName(manualSelectedAccount) : "Cash"} />
                   </span>
                   <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-inline-row__field">
-                    <span className="transactions-manual-field__label">Account</span>
+                    <span className="transactions-manual-field__label">{manualForm.type === "transfer" ? "From account" : "Account"}</span>
                     <div className="transactions-manual-picker">
                       <div className="transactions-manual-picker__control">
                         <button
@@ -8068,7 +8155,26 @@ function TransactionsPageContent() {
                   </label>
                 </div>
 
-                <div className="transactions-manual-inline-row transactions-manual-inline-row--category">
+                {manualForm.type === "transfer" ? (
+                  <label className="transactions-manual-field transactions-manual-field--embedded-label">
+                    <span className="transactions-manual-field__label">To account</span>
+                    <select
+                      value={manualForm.destinationAccountId}
+                      onChange={(event) => setManualForm((current) => ({ ...current, destinationAccountId: event.target.value }))}
+                      required
+                    >
+                      <option value="">Choose destination account</option>
+                      {manualTransferDestinationOptions.map(({ account, label }) => (
+                        <option key={account.id} value={account.id}>{label}</option>
+                      ))}
+                    </select>
+                    {manualTransferDestinationOptions.length === 0 ? (
+                      <small className="field-help">Add another account in {manualForm.currency} to record an internal transfer.</small>
+                    ) : null}
+                  </label>
+                ) : null}
+
+                {manualForm.type !== "transfer" ? <div className="transactions-manual-inline-row transactions-manual-inline-row--category">
                   <span className="transactions-manual-inline-row__icon transactions-manual-inline-row__icon--category" aria-hidden="true">
                     <CategoryBrandMark
                       categoryName={manualSelectedCategory?.name ?? "Other"}
@@ -8079,51 +8185,17 @@ function TransactionsPageContent() {
                   </span>
                   <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-inline-row__field">
                     <span className="transactions-manual-field__label">Category</span>
-                    <div className="transactions-manual-picker">
-                      <div className="transactions-manual-picker__control">
-                        <button
-                          type="button"
-                          className="transactions-manual-picker__button transactions-manual-picker__button--plain"
-                          aria-expanded={manualCategoryMenuOpen}
-                          onClick={() => {
-                            setManualAccountMenuOpen(false);
-                            setManualCategoryMenuOpen((current) => !current);
-                          }}
-                        >
-                          <span className="transactions-manual-picker__text">{manualSelectedCategory?.name ?? "Other"}</span>
-                          <span className="transactions-manual-picker__chevron" aria-hidden="true">
-                            <ActionIcon name="chevron-down" />
-                          </span>
-                        </button>
-                        {manualCategoryMenuOpen ? (
-                          <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose category">
-                            {categories.map((category) => (
-                              <button
-                                key={category.id}
-                                type="button"
-                                className={`transactions-manual-picker__option ${
-                                  category.id === manualSelectedCategoryId ? "is-selected" : ""
-                                }`}
-                                onClick={() => {
-                                  setManualForm((current) => ({ ...current, categoryId: category.id }));
-                                  setManualCategoryMenuOpen(false);
-                                }}
-                              >
-                                <span className="transactions-manual-picker__category-icon" aria-hidden="true">
-                                  <CategoryBrandMark categoryName={category.name} size="100%" radius={10} />
-                                </span>
-                                <span className="transactions-manual-picker__option-text">
-                                  <strong>{category.name}</strong>
-                                  <span>{category.type}</span>
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
+                    <TransactionCategoryPicker
+                      categories={categories}
+                      selectedId={manualSelectedCategoryId}
+                      buttonRef={manualCategoryButtonRef}
+                      onSelect={(category) => {
+                        setManualCategoryTouched(true);
+                        setManualForm((current) => ({ ...current, categoryId: category.id }));
+                      }}
+                    />
                   </label>
-                </div>
+                </div> : null}
 
                 <label className="transactions-manual-field transactions-manual-field--embedded-label">
                   <span className="transactions-manual-field__label">Date</span>
@@ -8142,7 +8214,7 @@ function TransactionsPageContent() {
                     onClick={() => setManualMoreOpen((current) => !current)}
                     aria-expanded={manualMoreOpen}
                   >
-                    <span>{manualMoreOpen ? "Less" : "More"}</span>
+                    <span>{manualMoreOpen ? "Hide optional details" : "Optional details"}</span>
                     <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
                       <ActionIcon name="chevron-down" />
                     </span>
@@ -8155,7 +8227,7 @@ function TransactionsPageContent() {
                       onClick={() => setManualMoreOpen((current) => !current)}
                       aria-expanded={manualMoreOpen}
                     >
-                      <span>{manualMoreOpen ? "Less" : "More"}</span>
+                      <span>{manualMoreOpen ? "Hide optional details" : "Optional details"}</span>
                       <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
                         <ActionIcon name="chevron-down" />
                       </span>
@@ -8179,6 +8251,19 @@ function TransactionsPageContent() {
                 {manualMoreOpen ? (
                   <>
                     <div className="manual-more-panel manual-more-panel--compact">
+                      {manualForm.type === "transfer" ? (
+                        <label className="transactions-manual-field transactions-manual-field--embedded-label">
+                          <span className="transactions-manual-field__label">Transfer fee (optional)</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={manualForm.feeAmount}
+                            onChange={(event) => setManualForm((current) => ({ ...current, feeAmount: event.target.value }))}
+                            placeholder="0.00"
+                          />
+                        </label>
+                      ) : null}
                       <label className="transactions-manual-field transactions-manual-field--embedded-label">
                         <span className="transactions-manual-field__label">Notes</span>
                         <textarea
@@ -8187,6 +8272,16 @@ function TransactionsPageContent() {
                           placeholder="Optional note or review context"
                         />
                       </label>
+
+                      <div className="transactions-manual-field transactions-manual-field--embedded-label">
+                        <span className="transactions-manual-field__label">Tags</span>
+                        <TransactionTagsEditor
+                          tags={manualForm.tags}
+                          onChange={(tags) => setManualForm((current) => ({ ...current, tags }))}
+                          placeholder="Examples: Bills, Work, Family"
+                          inputAriaLabel="Add tags to transaction"
+                        />
+                      </div>
 
                       <div className="manual-more-panel__receipt-line-items">
                         <div className="manual-more-panel__section-head">
