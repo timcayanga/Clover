@@ -3862,7 +3862,7 @@ function AccountsPageContent() {
           accountBrand={accountBrand}
           name={row.institution}
           accountNumber={row.assetCount ? `${row.assetCount} asset${row.assetCount === 1 ? "" : "s"}` : getInvestmentInstitutionPreview(row.accounts)}
-          amount={`Est. ${formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}`}
+          amount={formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}
           onOpen={() => openInvestmentInstitution(row)}
           openLabel={`Open ${row.institution} investment institution`}
           className="financial-account-card--investment-institution"
@@ -3997,7 +3997,7 @@ function AccountsPageContent() {
               </span>
             </span>
             <span className="accounts-mobile-list-row__end">
-              <strong>Est. {formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}</strong>
+              <strong>{formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}</strong>
               <span className="accounts-mobile-list-row__chevron" aria-hidden="true">
                 ⌄
               </span>
@@ -4037,6 +4037,7 @@ function AccountsPageContent() {
     return (
       <MobileSwipeDelete
         key={key}
+        className={`accounts-mobile-swipe${isExpanded ? " is-expanded" : ""}`}
         deleteLabel={`Delete ${accountDisplayName}`}
         disabled={accountDeleteBusy || deletingAccountIdsSet.has(row.id) || isCashFallbackAccount(row)}
         onDelete={() => {

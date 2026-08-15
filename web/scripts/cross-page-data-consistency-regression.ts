@@ -78,11 +78,16 @@ assert.match(
   "Home must derive Spendable from all accounts and estimate foreign currencies in the user's default currency."
 );
 assert.match(dashboardSource, /loadDashboardExchangeRate[\s\S]{0,800}revalidate: 6 \* 60 \* 60/);
-assert.match(dashboardSource, /usesBalanceFxEstimate \? "Est\. Spendable" : "Spendable"/);
-assert.doesNotMatch(
-  dashboardSource,
-  /<p className="eyebrow">My balance<\/p>/i,
-  "Home must not use the ambiguous My Balance label."
+assert.match(dashboardSource, /<p className="eyebrow">My Balance<\/p>/);
+assert.doesNotMatch(dashboardSource, /Across currencies in/);
+
+const adviserSource = source("app/adviser/page.tsx");
+assert.match(adviserSource, /defaultCurrencyCookieKey/);
+assert.match(adviserSource, /loadAdviserExchangeRate/);
+assert.match(
+  adviserSource,
+  /const spendableAccounts = workspaceAccounts\.filter[\s\S]{0,1200}normalizeAccountBalanceSign/,
+  "Adviser must use the same all-currency spendable balance basis as Home and Accounts."
 );
 
 const circleSource = source("lib/circle-loaders.ts");

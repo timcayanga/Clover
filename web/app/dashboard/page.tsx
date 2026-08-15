@@ -40,6 +40,7 @@ import {
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { defaultCurrencyCookieKey, normalizeDefaultCurrency } from "@/lib/regional-preferences";
 import { OnboardingMissions } from "@/components/onboarding-missions";
+import { BalanceVisibilityToggle } from "@/components/balance-visibility-toggle";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -780,7 +781,6 @@ async function DashboardStream({
   const spendableCurrencies = Array.from(
     new Set(spendableAccounts.map((account) => formatCurrencyCode(account.currency)).filter(Boolean))
   );
-  const usesBalanceFxEstimate = spendableCurrencies.some((currency) => currency !== balanceCurrency);
   const balanceRateEntries = await Promise.all(
     spendableCurrencies.map(async (currency) => [currency, await loadDashboardExchangeRate(currency, balanceCurrency)] as const)
   );
@@ -1099,11 +1099,11 @@ async function DashboardStream({
           style={{ background: "linear-gradient(135deg, #03A8C0 0%, #5ED3D0 100%)" }}
         >
           <div className="dashboard-home__hero-main">
-            <p className="eyebrow">{usesBalanceFxEstimate ? "Est. Spendable" : "Spendable"}</p>
+            <div className="dashboard-home__balance-heading">
+              <p className="eyebrow">My Balance</p>
+              <BalanceVisibilityToggle />
+            </div>
             <strong>{totalBalanceLabel}</strong>
-            {usesBalanceFxEstimate ? (
-              <small className="dashboard-home__hero-balance-note">Across currencies in {balanceCurrency}</small>
-            ) : null}
           </div>
           <div className="dashboard-home__hero-aside" aria-label="Monthly balance summary">
             {balanceHighlights.map((pill) => (

@@ -18,7 +18,7 @@ import { AdviserChat } from "@/components/adviser-chat";
 import { AdviserSectionCarousel, type AdviserSectionCard } from "@/components/adviser-section-carousel";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { isLiabilityAccountType, isSpendableAccountType, isTrackedAssetAccountType } from "@/lib/account-types";
-import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
+import { deriveReconciledBalance, normalizeAccountBalanceSign, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
 import { isTransientDataError } from "@/lib/transient-data";
@@ -32,6 +32,7 @@ import { InfoTooltip } from "@/components/info-tooltip";
 import { ReportsRangeMenu } from "@/components/reports-range-menu";
 import { resolveReportWindow } from "@/lib/report-window";
 import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
+import { defaultCurrencyCookieKey, normalizeDefaultCurrency } from "@/lib/regional-preferences";
 
 export const dynamic = "force-dynamic";
 
@@ -159,6 +160,27 @@ const monthFormatter = new Intl.DateTimeFormat("en-PH", {
 });
 
 const formatCurrency = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "MIXED");
+
+type AdviserExchangeRateResponse = Array<{ rate: number }>;
+
+const loadAdviserExchangeRate = async (baseCurrency: string, quoteCurrency: string) => {
+  const base = formatCurrencyCode(baseCurrency);
+  const quote = formatCurrencyCode(quoteCurrency);
+  if (base === quote) return 1;
+
+  try {
+    const url = new URL("https://api.frankfurter.dev/v2/rates");
+    url.searchParams.set("base", base);
+    url.searchParams.set("quotes", quote);
+    const response = await fetch(url.toString(), { next: { revalidate: 6 * 60 * 60 } });
+    if (!response.ok) return null;
+    const payload = (await response.json()) as AdviserExchangeRateResponse;
+    const rate = payload[0]?.rate;
+    return typeof rate === "number" && Number.isFinite(rate) && rate > 0 ? rate : null;
+  } catch {
+    return null;
+  }
+};
 const formatSignedCurrency = (value: number, currency?: string | null) =>
   `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency ?? "MIXED")}`;
 const formatPercent = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(0)}%`;
@@ -1503,6 +1525,8 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     workspaceAccounts.map((account) => formatCurrencyCode(account.currency)).filter((currency) => currency.length > 0)
   );
   const displayCurrency = (() => {
+    const preferredCurrency = normalizeDefaultCurrency(cookieStore.get(defaultCurrencyCookieKey)?.value);
+    if (preferredCurrency) return preferredCurrency;
     const currencies = Array.from(currencyCandidates).sort((left, right) => left.localeCompare(right));
     if (currencies.includes("PHP")) {
       return "PHP";
@@ -1614,12 +1638,23 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
         ? formatCurrency(Number(latestInvestmentSnapshot.totalValue ?? 0), latestInvestmentSnapshot.currency)
         : null;
   const accountBalances = accountAnalysisAccounts.filter((account) => account.balance !== null);
-  const spendableAccounts = accountAnalysisAccounts.filter((account) => isSpendableAccountType(account.type));
+  const spendableAccounts = workspaceAccounts.filter((account) => isSpendableAccountType(account.type));
+  const spendableCurrencies = Array.from(
+    new Set(spendableAccounts.map((account) => formatCurrencyCode(account.currency)))
+  );
+  const spendableRateEntries = await Promise.all(
+    spendableCurrencies.map(async (currency) => [currency, await loadAdviserExchangeRate(currency, displayCurrency)] as const)
+  );
+  const spendableRates = new Map(spendableRateEntries);
   const liabilityAccounts = accountAnalysisAccounts.filter((account) => isLiabilityAccountType(account.type));
   const trackedAssetAccounts = accountAnalysisAccounts.filter((account) => isTrackedAssetAccountType(account.type));
   const totalAccountBalance = accountBalances.reduce((sum, account) => sum + (account.balance ?? 0), 0);
   const totalAccountMagnitude = accountBalances.reduce((sum, account) => sum + Math.abs(account.balance ?? 0), 0);
-  const spendableAccountBalance = spendableAccounts.reduce((sum, account) => sum + (account.balance ?? 0), 0);
+  const spendableAccountBalance = spendableAccounts.reduce((sum, account) => {
+    const rate = spendableRates.get(formatCurrencyCode(account.currency));
+    if (rate === null || rate === undefined) return sum;
+    return sum + Math.max(normalizeAccountBalanceSign(account.type, account.balance ?? 0), 0) * rate;
+  }, 0);
   const liabilityAccountBalance = liabilityAccounts.reduce((sum, account) => sum + Math.abs(account.balance ?? 0), 0);
   const trackedAssetBalance = trackedAssetAccounts.reduce((sum, account) => sum + (account.balance ?? 0), 0);
   const largestAccountBalance = [...accountBalances].sort((left, right) => Math.abs(right.balance ?? 0) - Math.abs(left.balance ?? 0))[0] ?? null;
@@ -1631,9 +1666,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
       largestAccountShare > 0.55 ? clamp(45 + largestAccountShare * 55) : 30,
     ])
   );
-  const liquidBalance = accountAnalysisAccounts
-    .filter((account) => ["bank", "wallet", "cash"].includes(account.type))
-    .reduce((sum, account) => sum + (account.balance ?? 0), 0);
+  const liquidBalance = spendableAccountBalance;
   const billCoverageRatio = knownBillsDueSoonAmount > 0 ? liquidBalance / knownBillsDueSoonAmount : null;
   const hasTransactionFlow = currentSummary.income > 0 || currentSummary.expense > 0;
   const accountCoverageScore = clamp(

@@ -4702,6 +4702,9 @@ function AccountDetailPageContent() {
                                 }}
                               >
                                 <div className="transactions-mobile-simple-row__name accounts-detail__mobile-transaction-name">
+                                  <span className="transactions-mobile-simple-row__account-brand" aria-hidden="true">
+                                    <AccountBrandMark accountBrand={accountBrand} label={account?.name ?? "Account"} />
+                                  </span>
                                   <CategoryBrandMark
                                     categoryName={categoryLabel}
                                     size={20}

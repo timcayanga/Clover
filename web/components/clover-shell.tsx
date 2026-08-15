@@ -344,6 +344,19 @@ const desktopNavSections = [
   },
 ];
 
+const mobileSettingsSections = [
+  { href: "/settings?section=account", label: "Account", icon: "profile" as const },
+  { href: "/settings?section=profiles", label: "Profiles", icon: "profile" as const },
+  { href: "/settings?section=notifications", label: "Notifications", icon: "notifications" as const },
+  { href: "/settings?section=security", label: "Security", icon: "settings" as const },
+  { href: "/settings?section=imports", label: "Review", icon: "transactions" as const },
+  { href: "/settings?section=regional", label: "Region & currency", icon: "settings" as const },
+  { href: "/settings?section=display", label: "Display", icon: "settings" as const },
+  { href: "/settings?section=data", label: "Data", icon: "settings" as const },
+  { href: "/settings?section=categories", label: "Categories", icon: "transactions" as const },
+  { href: "/settings?section=plan", label: "Plan", icon: "settings" as const },
+];
+
 const shouldPrefetchNavHref = (_href: string) => true;
 type IconName =
   | "dashboard"
@@ -788,6 +801,7 @@ export function CloverShell({
     getGuidanceMenuPreset("very-comfortable")
   );
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [notificationsPopoverStyle, setNotificationsPopoverStyle] = useState<{ left: number; bottom: number } | null>(null);
   const [quickAddModal, setQuickAddModal] = useState<"transaction" | "import" | null>(null);
@@ -898,7 +912,7 @@ export function CloverShell({
     };
   }, [pathname]);
   const profileImage = user?.imageUrl ?? cachedProfileImage;
-  const isProfileActive = active === "profile" || pathname?.startsWith("/profile");
+  const isProfileActive = isProfileDrawerOpen || active === "profile" || pathname?.startsWith("/profile") || pathname?.startsWith("/settings");
   const isMoreActive = active === "more" || pathname?.startsWith("/more");
   const isNotificationsActive = openMenu === "notifications";
   const isProfileMenuOpen = openMenu === "profile";
@@ -916,6 +930,7 @@ export function CloverShell({
     setOpenMenu(null);
     setIsSearchOpen(false);
     setIsSidebarOpen(false);
+    setIsProfileDrawerOpen(false);
     setNotificationsPopoverStyle(null);
   };
   const hasHistoryBackTarget =
@@ -996,6 +1011,7 @@ export function CloverShell({
 
   useEffect(() => {
     setIsSidebarOpen(false);
+    setIsProfileDrawerOpen(false);
     syncSelectedWorkspaceCookie();
     setSearchWorkspaceId(readSelectedWorkspaceId());
     clearLegacyWorkspaceCaches();
@@ -1052,6 +1068,7 @@ export function CloverShell({
         setIsSearchOpen(false);
         setNotificationsPopoverStyle(null);
         setIsSidebarOpen(false);
+        setIsProfileDrawerOpen(false);
       }
     };
 
@@ -1067,7 +1084,7 @@ export function CloverShell({
   }, [pathname, isSearchOpen, openMenu, isQuickAddOpen]);
 
   useEffect(() => {
-    if (!isSidebarOpen || window.matchMedia("(min-width: 1101px)").matches) {
+    if ((!isSidebarOpen && !isProfileDrawerOpen) || window.matchMedia("(min-width: 1101px)").matches) {
       return;
     }
 
@@ -1077,7 +1094,7 @@ export function CloverShell({
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [isSidebarOpen]);
+  }, [isProfileDrawerOpen, isSidebarOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1814,7 +1831,7 @@ export function CloverShell({
           </button>
         </div>
 
-        <nav className="sidebar-nav" aria-label="Primary" id="primary-navigation">
+        <nav className="sidebar-nav sidebar-nav--desktop" aria-label="Primary" id="primary-navigation">
           {visibleDesktopNavSections.map((section) => (
             <div key={section.label} className="sidebar-nav__section">
               <p className="sidebar-nav__section-label">{section.label}</p>
@@ -1855,6 +1872,31 @@ export function CloverShell({
               </Link>
             </div>
           ) : null}
+        </nav>
+
+        <nav className="sidebar-nav sidebar-nav--mobile" aria-label="Primary mobile menu">
+          {desktopNavSections.map((section) => (
+            <div key={section.label} className="sidebar-nav__section">
+              <p className="sidebar-nav__section-label">{section.label}</p>
+              {section.items.map((item) => (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  prefetch={false}
+                  className={`nav-link ${active === item.key ? "is-active" : ""}`}
+                  aria-current={active === item.key ? "page" : undefined}
+                  onClick={(event) => handleNavigationLinkClick(event, item.href)}
+                  onMouseEnter={() => prefetchNavTarget(item.href)}
+                  onTouchStart={() => prefetchNavTarget(item.href)}
+                >
+                  <span className="nav-link__icon" aria-hidden="true">
+                    <MenuIcon name={item.key} />
+                  </span>
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          ))}
         </nav>
 
         <div className="sidebar-footer">
@@ -1954,6 +1996,42 @@ export function CloverShell({
 
         </div>
 
+      </aside>
+
+      <div
+        className={`shell-profile-drawer-backdrop${isProfileDrawerOpen ? " is-open" : ""}`}
+        role="presentation"
+        aria-hidden={!isProfileDrawerOpen}
+        onClick={() => setIsProfileDrawerOpen(false)}
+      />
+      <aside id="mobile-settings-drawer" className={`shell-profile-drawer${isProfileDrawerOpen ? " is-open" : ""}`} aria-label="Settings" aria-hidden={!isProfileDrawerOpen}>
+        <div className="shell-profile-drawer__head">
+          <div>
+            <span>Profile</span>
+            <strong>{displayName}</strong>
+          </div>
+          <button type="button" aria-label="Close settings menu" onClick={() => setIsProfileDrawerOpen(false)}>
+            <MenuIcon name="menu" open />
+          </button>
+        </div>
+        <nav className="shell-profile-drawer__nav" aria-label="Settings sections">
+          {mobileSettingsSections.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              prefetch={false}
+              onClick={(event) => handleNavigationLinkClick(event, item.href)}
+            >
+              <span aria-hidden="true"><MenuIcon name={item.icon} /></span>
+              {item.label}
+              <span aria-hidden="true">›</span>
+            </Link>
+          ))}
+        </nav>
+        <button className="shell-profile-drawer__sign-out" type="button" onClick={handleSignOut}>
+          <MenuIcon name="sign-out" />
+          Log Out
+        </button>
       </aside>
 
       {typeof document !== "undefined" && isNotificationsActive && notificationsPopoverStyle ? (
@@ -2210,14 +2288,15 @@ export function CloverShell({
           </span>
           <span className="shell-bottom-nav__label">Adviser</span>
         </Link>
-        <Link
-          href="/profile"
-          prefetch={false}
+        <button
+          type="button"
           className={`shell-bottom-nav__item${isProfileActive ? " is-active" : ""}`}
-          aria-current={isProfileActive ? "page" : undefined}
-          onClick={(event) => handleNavigationLinkClick(event, "/profile")}
-          onMouseEnter={() => prefetchNavTarget("/profile")}
-          onTouchStart={() => prefetchNavTarget("/profile")}
+          aria-expanded={isProfileDrawerOpen}
+          aria-controls="mobile-settings-drawer"
+          onClick={() => {
+            setIsSidebarOpen(false);
+            setIsProfileDrawerOpen((current) => !current);
+          }}
         >
           <span className="shell-bottom-nav__icon" aria-hidden="true">
             {profileImage ? (
@@ -2227,7 +2306,7 @@ export function CloverShell({
             )}
           </span>
           <span className="shell-bottom-nav__label">Profile</span>
-        </Link>
+        </button>
       </nav>
 
       <main

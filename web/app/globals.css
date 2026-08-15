@@ -51450,6 +51450,328 @@ html[data-theme="dark"] .content--adviser .adviser-summary .adviser-summary-card
   }
 }
 
+/* Mobile shell final pass: one square full-width header, one vertical product
+   drawer, and one right-side settings drawer across every product page. */
+.sidebar-nav--mobile,
+.shell-profile-drawer,
+.shell-profile-drawer-backdrop {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .sidebar-nav--desktop {
+    display: none !important;
+  }
+
+  .sidebar-nav--mobile {
+    display: grid;
+  }
+
+  .content > :is(.topbar, .shell-compact-bar),
+  .investments-mobile-header,
+  .investments-mobile-header__bar {
+    border-radius: 0 !important;
+  }
+
+  .content > :is(.topbar, .shell-compact-bar) {
+    width: calc(100% + 24px) !important;
+    margin-inline: -12px !important;
+    padding-inline: 8px !important;
+    grid-template-columns: minmax(44px, auto) minmax(0, 1fr) minmax(44px, auto) !important;
+  }
+
+  .content > :is(.topbar, .shell-compact-bar) :is(.topbar__title-wrap, .shell-compact-bar__copy),
+  .content > :is(.topbar, .shell-compact-bar):has(.shell-back-button) :is(.topbar__title-wrap, .shell-compact-bar__copy) {
+    position: absolute !important;
+    inset: auto 25% !important;
+    grid-column: auto !important;
+    width: 50% !important;
+    max-width: 50% !important;
+    justify-items: center !important;
+    text-align: center !important;
+    transform: none !important;
+    pointer-events: none;
+  }
+
+  .content > :is(.topbar, .shell-compact-bar) .topbar__title-row {
+    width: 100%;
+    justify-content: center !important;
+  }
+
+  .content > :is(.topbar, .shell-compact-bar) .topbar__title-row h1,
+  .content > :is(.topbar, .shell-compact-bar) .shell-compact-bar__copy h1 {
+    width: 100%;
+    overflow: hidden;
+    text-align: center !important;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .content > :is(.topbar, .shell-compact-bar) :is(.topbar-actions, .shell-compact-bar__actions) {
+    justify-self: end;
+  }
+
+  .shell-profile-drawer-backdrop {
+    position: fixed;
+    z-index: 119;
+    inset: 0;
+    display: block;
+    background: rgba(15, 23, 42, 0.3);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 180ms ease;
+  }
+
+  .shell-profile-drawer-backdrop.is-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .shell-profile-drawer {
+    position: fixed;
+    z-index: 120;
+    inset: 0 0 0 auto;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    width: min(340px, 90vw);
+    padding: max(16px, env(safe-area-inset-top)) 14px max(20px, env(safe-area-inset-bottom));
+    border-left: 1px solid var(--stroke);
+    background: var(--surface);
+    box-shadow: -18px 0 44px rgba(15, 23, 42, 0.18);
+    transform: translate3d(102%, 0, 0);
+    visibility: hidden;
+    transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 220ms;
+  }
+
+  .shell-profile-drawer.is-open {
+    transform: translate3d(0, 0, 0);
+    visibility: visible;
+  }
+
+  .shell-profile-drawer__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 2px 14px;
+    border-bottom: 1px solid var(--stroke);
+  }
+
+  .shell-profile-drawer__head > div {
+    display: grid;
+    gap: 2px;
+  }
+
+  .shell-profile-drawer__head span {
+    color: var(--muted);
+    font-size: 0.72rem;
+  }
+
+  .shell-profile-drawer__head strong {
+    font-size: 1rem;
+  }
+
+  .shell-profile-drawer__head button {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text);
+  }
+
+  .shell-profile-drawer__nav {
+    align-content: start;
+    display: grid;
+    overflow-y: auto;
+    padding-block: 8px;
+  }
+
+  .shell-profile-drawer__nav a {
+    min-height: 48px;
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 8px;
+    border-radius: 12px;
+    color: var(--text);
+    font-size: 0.9rem;
+    font-weight: 650;
+    text-decoration: none;
+  }
+
+  .shell-profile-drawer__nav a:hover,
+  .shell-profile-drawer__nav a:focus-visible {
+    background: rgba(3, 168, 192, 0.08);
+    outline: none;
+  }
+
+  .shell-profile-drawer__nav a > span:first-child,
+  .shell-profile-drawer__nav .menu-icon-3d {
+    width: 30px;
+    height: 30px;
+  }
+
+  .shell-profile-drawer__sign-out {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border: 0;
+    border-top: 1px solid var(--stroke);
+    background: transparent;
+    color: var(--bad);
+    font: inherit;
+    font-size: 0.86rem;
+    font-weight: 700;
+  }
+
+  .accounts-mobile-swipe.is-expanded .mobile-swipe-delete__action {
+    inset: 0 0 auto auto;
+    min-height: 48px;
+    height: 48px;
+    border-radius: 0 12px 12px 0;
+  }
+
+  .accounts-detail__hero-card-row,
+  .accounts-detail__hero-card-row .accounts-detail__hero-card {
+    place-self: center !important;
+    margin-inline: auto !important;
+    transform: none !important;
+  }
+
+  .accounts-detail__transactions .transactions-mobile-simple-row__account-brand {
+    display: inline-flex !important;
+  }
+
+  .accounts-detail__transactions .accounts-detail__mobile-transaction-name {
+    grid-template-columns: 20px 20px minmax(0, 1fr) !important;
+    gap: 6px !important;
+  }
+
+  .financial-account-card__name,
+  .financial-account-card__inline-input.financial-account-card__name {
+    font-size: 1.08rem !important;
+    font-weight: 700 !important;
+  }
+
+  .financial-account-card__number,
+  .financial-account-card__inline-input.financial-account-card__number {
+    font-size: 0.8rem !important;
+    font-weight: 650 !important;
+  }
+
+  .financial-account-card__amount,
+  .financial-account-card__inline-input.financial-account-card__amount {
+    font-size: 1.34rem !important;
+    font-weight: 750 !important;
+  }
+}
+
+.financial-account-card input.financial-account-card__inline-input {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.72) !important;
+  border-radius: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  caret-color: #fff;
+  box-shadow: none !important;
+}
+
+.dashboard-home__hero--balance {
+  position: sticky;
+  top: 58px;
+  z-index: 44;
+}
+
+.dashboard-home__balance-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.dashboard-home__balance-heading .eyebrow {
+  margin: 0;
+}
+
+.dashboard-home__balance-visibility {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  cursor: pointer;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.dashboard-home__balance-visibility:hover,
+.dashboard-home__balance-visibility:focus-visible {
+  background: rgba(255, 255, 255, 0.26);
+  outline: none;
+  transform: scale(1.05);
+}
+
+.dashboard-home__balance-visibility svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.dashboard-home__balance-visibility-slash {
+  opacity: 0;
+  transform-origin: center;
+  transition: opacity 140ms ease, transform 160ms ease;
+  transform: scale(0.7);
+}
+
+.dashboard-home__balance-visibility.is-hidden .dashboard-home__balance-visibility-slash {
+  opacity: 1;
+  transform: scale(1);
+}
+
+body[data-clover-home-balances-hidden] :is(
+  .dashboard-home__hero-main > strong,
+  .dashboard-home__hero-mini-value,
+  .dashboard-home__report-metrics strong
+) {
+  color: transparent !important;
+  text-shadow: 0 0 9px rgba(15, 23, 42, 0.54);
+  user-select: none;
+  transition: color 160ms ease, text-shadow 160ms ease;
+}
+
+@media (max-width: 1100px) {
+  .dashboard-home__hero--balance {
+    top: 64px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-profile-drawer,
+  .shell-profile-drawer-backdrop,
+  .dashboard-home__balance-visibility,
+  .dashboard-home__balance-visibility-slash {
+    transition: none !important;
+  }
+}
+
 .split-bill-detail-modal__section-head--members > div {
   display: grid;
   gap: 3px;

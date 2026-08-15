@@ -29,9 +29,11 @@ async function main() {
   );
   assert.match(
     shell,
-    /href="\/profile"[\s\S]{0,900}<span className="shell-bottom-nav__label">Profile<\/span>/,
-    "Profile must replace More as the fifth mobile bottom destination.",
+    /aria-controls="mobile-settings-drawer"[\s\S]{0,900}<span className="shell-bottom-nav__label">Profile<\/span>/,
+    "Profile must open the right-side Settings drawer from the fifth mobile navigation slot.",
   );
+  assert.match(shell, /className="sidebar-nav sidebar-nav--mobile"[\s\S]*desktopNavSections\.map/);
+  assert.match(shell, /id="mobile-settings-drawer"[\s\S]{0,300}shell-profile-drawer/);
   assert.doesNotMatch(
     shell,
     /href="\/more"[\s\S]{0,700}<span className="shell-bottom-nav__label">More<\/span>/,
