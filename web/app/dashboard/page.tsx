@@ -647,7 +647,13 @@ async function DashboardStream({
             source: true,
             balance: true,
             transactions: {
-              where: { isExcluded: false, deletedAt: null },
+              // Uploaded accounts already use their persisted/checkpoint
+              // balance below. Only manual accounts need ledger replay here.
+              where: {
+                isExcluded: false,
+                deletedAt: null,
+                account: { source: "manual" },
+              },
               select: {
                 amount: true,
                 type: true,

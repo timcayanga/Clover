@@ -2851,6 +2851,35 @@ export const fetchImportFileCompat = async (importFileId: string): Promise<any |
   return rows[0] ?? null;
 };
 
+const IMPORT_STATUS_COLUMNS = [
+  "id",
+  "workspaceId",
+  "status",
+  "processingPhase",
+  "processingMessage",
+  "processingAttempt",
+  "processingTargetScore",
+  "processingCurrentScore",
+  "parsedRowsCount",
+  "confirmedTransactionsCount",
+  "accountId",
+  "updatedAt",
+] as const;
+
+export const fetchImportFileStatusCompat = async (importFileId: string): Promise<any | null> => {
+  const compatibleColumns = new Set(await getCompatibleImportFileColumns());
+  const columns = IMPORT_STATUS_COLUMNS.filter((column) => compatibleColumns.has(column));
+  if (!columns.includes("id") || !columns.includes("workspaceId")) {
+    return null;
+  }
+
+  const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT ${columns.map((column) => `"${column}"`).join(", ")} FROM "ImportFile" WHERE "id" = $1 LIMIT 1`,
+    importFileId
+  );
+  return rows[0] ?? null;
+};
+
 export const listImportFilesCompat = async (workspaceId: string): Promise<any[]> => {
   const columns = await getCompatibleImportFileColumns();
   if (columns.length === 0) {
@@ -3303,18 +3332,22 @@ export const countTransactionsByImportFileCompat = async (importFileId: string) 
     return 0;
   }
 
+  const directCount = await prisma.transaction.count({
+    where: { importFileId, deletedAt: null },
+  });
+  if (directCount > 0) {
+    return directCount;
+  }
+
+  // Older imports stored the relationship only in rawPayload. Keep that
+  // compatibility path off the indexed hot path used by current imports.
   const result = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
     `
       SELECT COUNT(*)::bigint AS count
       FROM "Transaction"
       WHERE "deletedAt" IS NULL
-        AND (
-          "importFileId" = $1
-          OR (
-            "rawPayload" IS NOT NULL
-            AND "rawPayload"::jsonb->>'sourceImportFileId' = $1
-          )
-        )
+        AND "rawPayload" IS NOT NULL
+        AND "rawPayload"::jsonb->>'sourceImportFileId' = $1
     `,
     importFileId
   );

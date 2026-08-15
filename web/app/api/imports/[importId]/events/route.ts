@@ -1,5 +1,5 @@
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
-import { fetchImportFileCompat } from "@/lib/data-engine";
+import { fetchImportFileStatusCompat } from "@/lib/data-engine";
 import { loadImportStatusSnapshot } from "@/lib/import-status-snapshot";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
@@ -7,7 +7,7 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 const encoder = new TextEncoder();
-const IMPORT_STATUS_STREAM_POLL_MS = 1_500;
+const IMPORT_STATUS_STREAM_POLL_MS = 2_500;
 const IMPORT_STATUS_STREAM_MAX_ERRORS = 3;
 
 const formatSseEvent = (event: string, data: unknown) => encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -44,7 +44,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
     const localDev = await isLocalDevHost();
     const { userId } = localDev ? { userId: "local-admin" } : await requireAuth();
 
-    const importFile = await fetchImportFileCompat(importId);
+    const importFile = await fetchImportFileStatusCompat(importId);
     if (!importFile) {
       return NextResponse.json({ error: "Import not found" }, { status: 404 });
     }
@@ -60,6 +60,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
         let timer: ReturnType<typeof setTimeout> | null = null;
         let lastSerializedSnapshot = "";
         let visibleEventSent = false;
+        let fullSnapshotLoaded = false;
+        let nextFinalizationCheckAt = 0;
         let consecutiveErrors = 0;
         const close = () => {
           if (closed) {
@@ -87,34 +89,65 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
           }
 
           try {
-            const snapshot = await loadImportStatusSnapshot(importId, {
-              promoteFailedVisibleImport: true,
-            });
-
-            if (!snapshot) {
+            const progress = await fetchImportFileStatusCompat(importId);
+            if (!progress) {
               send("error", { error: "Import not found" });
               close();
               return;
             }
             consecutiveErrors = 0;
 
-            const compactSnapshot = compactImportSnapshot(snapshot);
-            const serialized = JSON.stringify(compactSnapshot);
+            const progressSnapshot = {
+              importFile: {
+                id: progress.id,
+                status: progress.status,
+                processingPhase: progress.processingPhase,
+                processingMessage: progress.processingMessage,
+                processingAttempt: progress.processingAttempt,
+                processingTargetScore: progress.processingTargetScore,
+                processingCurrentScore: progress.processingCurrentScore,
+                accountId: progress.accountId,
+                updatedAt: progress.updatedAt,
+              },
+              parsedRowsCount: Number(progress.parsedRowsCount ?? 0),
+              confirmedTransactionsCount: Number(progress.confirmedTransactionsCount ?? 0),
+              visibleImportComplete: Number(progress.confirmedTransactionsCount ?? 0) > 0,
+            };
+            const serialized = JSON.stringify(progressSnapshot);
             if (serialized !== lastSerializedSnapshot) {
               lastSerializedSnapshot = serialized;
-              send("snapshot", compactSnapshot);
+              send("snapshot", progressSnapshot);
             }
 
-            const visible =
-              snapshot.settledImportComplete ||
-              Boolean(snapshot.receiptTransaction);
+            const shouldFinalize =
+              progress.status === "failed" ||
+              (!fullSnapshotLoaded && Number(progress.confirmedTransactionsCount ?? 0) > 0) ||
+              (progress.status === "done" && Date.now() >= nextFinalizationCheckAt);
+            if (!shouldFinalize) {
+              return;
+            }
+
+            // Load account summaries and settlement checks once at handoff,
+            // not on every progress heartbeat.
+            const snapshot = await loadImportStatusSnapshot(importId, {
+              promoteFailedVisibleImport: true,
+            });
+            fullSnapshotLoaded = true;
+            nextFinalizationCheckAt = Date.now() + 5_000;
+            if (!snapshot) {
+              send("error", { error: "Import not found" });
+              close();
+              return;
+            }
+            const compactSnapshot = compactImportSnapshot(snapshot);
+            const visible = snapshot.settledImportComplete || Boolean(snapshot.receiptTransaction);
 
             if (visible && !visibleEventSent) {
               visibleEventSent = true;
               send("visible", compactSnapshot);
             }
 
-            const failed = snapshot.importFile.status === "failed";
+            const failed = progress.status === "failed";
             const finished = visible || failed;
 
             if (finished) {

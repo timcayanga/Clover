@@ -14,17 +14,18 @@ const main = async () => {
     readFile(join(webRoot, "components/import-files-modal.tsx"), "utf8"),
   ]);
 
-  assert.match(routeSource, /IMPORT_STATUS_STREAM_POLL_MS\s*=\s*1_500/);
+  assert.match(routeSource, /IMPORT_STATUS_STREAM_POLL_MS\s*=\s*2_500/);
+  assert.match(routeSource, /fetchImportFileStatusCompat/);
   assert.doesNotMatch(routeSource, /setInterval\([^)]*poll/);
   assert.doesNotMatch(
     routeSource,
     /loadImportStatusSnapshot\(importId,\s*\{\s*importFile,/,
     "The status stream must reload the import record instead of polling a stale upload snapshot."
   );
-  assert.match(routeSource, /snapshot\.importFile\.status\s*===\s*"failed"/);
+  assert.match(routeSource, /progress\.status\s*===\s*"failed"/);
   assert.match(routeSource, /snapshot\.settledImportComplete/);
   assert.match(routeSource, /const compactImportSnapshot/);
-  assert.match(routeSource, /send\("snapshot", compactSnapshot\)/);
+  assert.match(routeSource, /send\("snapshot", progressSnapshot\)/);
   assert.doesNotMatch(
     routeSource,
     /send\("snapshot", snapshot\)/,

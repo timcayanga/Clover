@@ -18,6 +18,7 @@
     "qa:imports": "tsx scripts/import-smoke-regression.ts",
     "qa:import-status-stream": "tsx scripts/import-status-stream-regression.ts",
     "qa:origin-transfer": "tsx scripts/origin-transfer-regression.ts",
+    "qa:supabase-query-budget": "tsx scripts/supabase-query-budget-regression.ts",
     "qa:data-consistency-settlement": "tsx scripts/data-consistency-settlement-regression.ts",
     "qa:cross-page-consistency": "tsx scripts/cross-page-data-consistency-regression.ts",
     "qa:import-upload-handoff": "tsx scripts/import-upload-handoff-regression.ts",

@@ -114,6 +114,31 @@ type PlanUsage = {
 const IMPORT_ACTIVITY_DATA_SETTLE_WINDOW_MS = 2 * 60 * 1000;
 const SYNCING_EMPTY_STATE_REFRESH_DELAY_MS = 250;
 const POST_IMPORT_RECONCILIATION_DELAYS_MS = [2_500, 7_500, 15_000] as const;
+const ACCOUNTS_MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const POST_IMPORT_ACCOUNTS_MAINTENANCE_INTERVAL_MS = 2 * 60 * 1000;
+
+const accountsMaintenanceStorageKey = (workspaceId: string) =>
+  `clover.accounts.maintenance.v1:${workspaceId}`;
+
+const shouldRunAccountsMaintenance = (workspaceId: string, forceFresh: boolean) => {
+  try {
+    const lastRun = Number(window.localStorage.getItem(accountsMaintenanceStorageKey(workspaceId)) ?? 0);
+    const interval = forceFresh
+      ? POST_IMPORT_ACCOUNTS_MAINTENANCE_INTERVAL_MS
+      : ACCOUNTS_MAINTENANCE_INTERVAL_MS;
+    return !Number.isFinite(lastRun) || Date.now() - lastRun >= interval;
+  } catch {
+    return true;
+  }
+};
+
+const markAccountsMaintenanceComplete = (workspaceId: string) => {
+  try {
+    window.localStorage.setItem(accountsMaintenanceStorageKey(workspaceId), String(Date.now()));
+  } catch {
+    // Storage restrictions should not block account loading.
+  }
+};
 
 const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
@@ -1978,7 +2003,7 @@ function AccountsPageContent() {
         }
       }
 
-      if (!options?.silent) {
+      if (!options?.silent && shouldRunAccountsMaintenance(workspaceId, options?.forceFresh === true)) {
         void (async () => {
           try {
             const maintenanceResponse = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}&repairImportedAccounts=1&cleanupImportedAccounts=1&maintenance=1`, {
@@ -1987,6 +2012,9 @@ function AccountsPageContent() {
             const maintenancePayload = maintenanceResponse.ok
               ? await maintenanceResponse.json().catch(() => null)
               : null;
+            if (maintenanceResponse.ok) {
+              markAccountsMaintenanceComplete(workspaceId);
+            }
             if (
               workspaceLoadSeqRef.current === loadSeq &&
               (Number(maintenancePayload?.maintenance?.removedStalePdaxBucketHoldings ?? 0) > 0 ||

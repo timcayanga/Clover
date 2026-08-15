@@ -817,19 +817,22 @@ const repairParsedImportedAccounts = async (workspaceId: string, compatibleColum
         sourceRowIndex: readImportedSourceRowIndex(row.rawPayload),
       }))
       .filter((row): row is { importFileId: string; sourceRowIndex: number } => Boolean(row.importFileId && row.sourceRowIndex !== null));
+    const sourceRowsByImport = new Map<string, Set<string>>();
     for (const row of importRows) {
-      await prisma.transaction.updateMany({
-        where: {
-          workspaceId,
-          importFileId: row.importFileId,
-          deletedAt: null,
-          rawPayload: {
-            path: ["sourceRowIndex"],
-            equals: row.sourceRowIndex,
-          },
-        },
-        data: { accountId: account.id },
-      }).catch(() => null);
+      const sourceRows = sourceRowsByImport.get(row.importFileId) ?? new Set<string>();
+      sourceRows.add(String(row.sourceRowIndex));
+      sourceRowsByImport.set(row.importFileId, sourceRows);
+    }
+    for (const [importFileId, sourceRows] of sourceRowsByImport) {
+      await prisma.$executeRaw(Prisma.sql`
+        UPDATE "Transaction"
+        SET "accountId" = ${account.id}, "updatedAt" = NOW()
+        WHERE "workspaceId" = ${workspaceId}
+          AND "importFileId" = ${importFileId}
+          AND "deletedAt" IS NULL
+          AND "accountId" IS DISTINCT FROM ${account.id}
+          AND ("rawPayload" #>> '{sourceRowIndex}') IN (${Prisma.join(Array.from(sourceRows))})
+      `).catch(() => null);
     }
   }
 
