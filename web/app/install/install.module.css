@@ -1,0 +1,236 @@
+.page {
+  box-sizing: border-box;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top)) 18px max(24px, env(safe-area-inset-bottom));
+  color: #1f2933;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(110, 231, 183, 0.32), transparent 31%),
+    radial-gradient(circle at 88% 92%, rgba(3, 168, 192, 0.22), transparent 34%),
+    #f5f9fa;
+}
+
+.card {
+  box-sizing: border-box;
+  width: min(100%, 520px);
+  padding: clamp(26px, 6vw, 42px);
+  border: 1px solid rgba(3, 168, 192, 0.16);
+  border-radius: 32px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 30px 80px rgba(31, 41, 51, 0.12);
+  backdrop-filter: blur(18px);
+}
+
+.card * {
+  box-sizing: border-box;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  color: #03a8c0;
+  font-family: var(--font-heading);
+  font-size: 1.55rem;
+  font-weight: 700;
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  padding: 8px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(3, 168, 192, 0.15);
+}
+
+.mark img {
+  width: 100%;
+  height: 100%;
+}
+
+.copy {
+  margin-top: 42px;
+}
+
+.eyebrow {
+  margin: 0 0 9px;
+  color: #0289a0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.copy h1 {
+  max-width: 420px;
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(2.15rem, 8vw, 3.35rem);
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+}
+
+.copy > p:last-child {
+  margin: 22px 0 0;
+  color: #5f6d78;
+  font-size: 0.98rem;
+  line-height: 1.7;
+}
+
+.steps {
+  display: grid;
+  gap: 10px;
+  margin: 30px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.steps li {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 13px;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid #e3ecef;
+  border-radius: 18px;
+  background: #fbfdfd;
+}
+
+.stepIcon,
+.number {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  color: #0289a0;
+  background: rgba(3, 168, 192, 0.09);
+  font-weight: 700;
+}
+
+.stepIcon svg {
+  width: 23px;
+  height: 23px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.steps strong,
+.steps small {
+  display: block;
+}
+
+.steps strong {
+  font-size: 0.9rem;
+}
+
+.steps small {
+  margin-top: 2px;
+  color: #71808b;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.note {
+  margin: 30px 0 0;
+  padding: 14px 16px;
+  border-radius: 16px;
+  color: #53626d;
+  background: rgba(3, 168, 192, 0.08);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 9px;
+  margin-top: 30px;
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 11px 18px;
+  border: 0;
+  border-radius: 16px;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary {
+  color: #ffffff;
+  background: linear-gradient(135deg, #03a8c0, #55cec9);
+  box-shadow: 0 14px 28px rgba(3, 168, 192, 0.2);
+}
+
+.secondary {
+  color: #51616d;
+  background: transparent;
+}
+
+.primary:focus-visible,
+.secondary:focus-visible {
+  outline: 3px solid rgba(3, 168, 192, 0.25);
+  outline-offset: 3px;
+}
+
+.footnote {
+  margin: 12px 0 0;
+  color: #95a1a9;
+  font-size: 0.68rem;
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  .page {
+    align-items: stretch;
+    padding-inline: 0;
+    padding-block: 0;
+    background: #ffffff;
+  }
+
+  .card {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .card {
+    animation: arrive 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  .primary {
+    transition: transform 160ms ease, box-shadow 160ms ease;
+  }
+
+  .primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 18px 34px rgba(3, 168, 192, 0.24);
+  }
+}
+
+@keyframes arrive {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 import Script from "next/script";
 import "./globals.css";
@@ -13,6 +13,7 @@ import { StagingBrowserStateReset } from "@/components/staging-browser-state-res
 import { AdminOnlyRedirect } from "@/components/admin-only-redirect";
 import { ModalKeyboardController } from "@/components/modal-keyboard-controller";
 import { CRITICAL_NAVIGATION_ICON_NAMES, getNavigationIconSrc } from "@/lib/navigation-icons";
+import { PwaServiceWorker } from "@/components/pwa-service-worker";
 
 const clerkLocalization = {
   userProfile: {
@@ -62,11 +63,32 @@ export const metadata: Metadata = {
     template: "Clover | %s",
   },
   description: "Clover helps you understand your money visually, review transactions faster, and get to action with less stress.",
-  icons: {
-    icon: "/icon.svg",
-    shortcut: "/icon.svg",
-    apple: "/icon.svg",
+  applicationName: "Clover",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Clover",
   },
+  formatDetection: {
+    telephone: false,
+  },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/pwa/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/pwa/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    shortcut: "/icon.svg",
+    apple: [{ url: "/pwa/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#ffffff",
 };
 
 export const dynamic = "force-dynamic";
@@ -102,6 +124,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         data-git-sha={buildInfo.gitSha ?? undefined}
         data-environment={buildInfo.environment}
       >
+        <PwaServiceWorker />
         <ThemeSync />
         <HelperTextSync />
         <ModalKeyboardController />
@@ -134,6 +157,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               const pathname = window.location.pathname;
               const isLightOnlyRoute =
                 pathname === "/" ||
+                pathname === "/install" ||
                 pathname.startsWith("/sign-in") ||
                 pathname.startsWith("/sign-up") ||
                 pathname === "/onboarding";
