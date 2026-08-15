@@ -56,6 +56,32 @@ const relativeTimeFormatter = new Intl.RelativeTimeFormat("en-PH", {
   numeric: "auto",
 });
 
+type ExchangeRateResponse = Array<{
+  date: string;
+  base: string;
+  quote: string;
+  rate: number;
+}>;
+
+const loadDashboardExchangeRate = async (baseCurrency: string, quoteCurrency: string) => {
+  const base = formatCurrencyCode(baseCurrency);
+  const quote = formatCurrencyCode(quoteCurrency);
+  if (base === quote) return 1;
+
+  try {
+    const url = new URL("https://api.frankfurter.dev/v2/rates");
+    url.searchParams.set("base", base);
+    url.searchParams.set("quotes", quote);
+    const response = await fetch(url.toString(), { next: { revalidate: 6 * 60 * 60 } });
+    if (!response.ok) return null;
+    const payload = (await response.json()) as ExchangeRateResponse;
+    const rate = payload[0]?.rate;
+    return typeof rate === "number" && Number.isFinite(rate) && rate > 0 ? rate : null;
+  } catch {
+    return null;
+  }
+};
+
 type DashboardTransaction = {
   id: string;
   date: Date;
@@ -731,10 +757,6 @@ async function DashboardStream({
   const formatSignedCurrency = (value: number, currency: string | null = displayCurrency) =>
     `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency)}`;
 
-  const normalizedDashboardAccounts = dashboardAccounts.filter(
-    (account) => formatCurrencyCode(account.currency) === displayCurrency
-  );
-
   const reconcileAccountBalance = (account: (typeof dashboardAccounts)[number]) => {
     const latestCheckpoint = account.statementCheckpoints[0] ?? null;
     const checkpointBalance =
@@ -751,21 +773,24 @@ async function DashboardStream({
     return Number(reconciledBalance ?? account.balance ?? 0);
   };
 
-  const savingsTotal = normalizedDashboardAccounts.reduce((sum, account) => {
+  const spendableAccounts = dashboardAccounts.filter((account) =>
+    isSpendableAccountType(account.type as Parameters<typeof isSpendableAccountType>[0])
+  );
+  const balanceCurrency = formatCurrencyCode(defaultCurrency);
+  const spendableCurrencies = Array.from(
+    new Set(spendableAccounts.map((account) => formatCurrencyCode(account.currency)).filter(Boolean))
+  );
+  const usesBalanceFxEstimate = spendableCurrencies.some((currency) => currency !== balanceCurrency);
+  const balanceRateEntries = await Promise.all(
+    spendableCurrencies.map(async (currency) => [currency, await loadDashboardExchangeRate(currency, balanceCurrency)] as const)
+  );
+  const balanceRates = Object.fromEntries(balanceRateEntries);
+  const balanceEstimateUnavailable = balanceRateEntries.some(([, rate]) => rate === null);
+  const savingsTotal = spendableAccounts.reduce((sum, account) => {
     const signedBalance = normalizeAccountBalanceSign(account.type, reconcileAccountBalance(account));
-    if (!isSpendableAccountType(account.type as Parameters<typeof isSpendableAccountType>[0])) {
-      return sum;
-    }
-
-    return sum + Math.max(signedBalance, 0);
-  }, 0);
-  const investmentsTotal = normalizedDashboardAccounts.reduce((sum, account) => {
-    if (account.type !== "investment") {
-      return sum;
-    }
-
-    const signedBalance = normalizeAccountBalanceSign(account.type, reconcileAccountBalance(account));
-    return sum + Math.max(signedBalance, 0);
+    const rate = balanceRates[formatCurrencyCode(account.currency)];
+    if (rate === null || rate === undefined) return sum;
+    return sum + Math.max(signedBalance, 0) * rate;
   }, 0);
   const currentThirtyDayTransactions = currentTransactions.filter(
     (transaction) => transaction.date >= thirtyDaysAgo && transaction.date < tomorrowStart
@@ -939,11 +964,11 @@ async function DashboardStream({
           tone: daysSinceLastImport === null ? "neutral" : "warning",
         }
       : null,
-    savingsTotal > 0
+    !balanceEstimateUnavailable && savingsTotal > 0
       ? {
           emoji: "💚",
           label: "Balance in view",
-          copy: `${formatCurrency(savingsTotal)} is currently tracked across your spendable accounts.`,
+          copy: `${formatCurrency(savingsTotal, balanceCurrency)} is currently tracked across your spendable accounts.`,
           href: "/accounts",
           actionLabel: "View accounts",
           tone: "positive",
@@ -1021,7 +1046,9 @@ async function DashboardStream({
       : null,
   ];
   const insightItems = insightCandidates.filter((item): item is HomeAdviserItem => Boolean(item)).slice(0, 3);
-  const totalBalanceLabel = formatCurrency(savingsTotal, displayCurrency);
+  const totalBalanceLabel = balanceEstimateUnavailable
+    ? "—"
+    : formatCurrency(savingsTotal, balanceCurrency);
   const balanceHighlights = [
     {
       key: "income",
@@ -1046,8 +1073,8 @@ async function DashboardStream({
           workspace_name: workspaceSummary.name,
           account_count: workspaceSummary._count.accounts,
           cash_account_count: cashAccountCount,
-          tracked_balance_total: Number(savingsTotal.toFixed(2)),
-          tracked_balance_currency: displayCurrency,
+          tracked_balance_total: balanceEstimateUnavailable ? null : Number(savingsTotal.toFixed(2)),
+          tracked_balance_currency: balanceCurrency,
           transaction_count: workspaceSummary._count.transactions,
           import_count: workspaceSummary._count.importFiles,
           review_attention_count: reviewAttentionCount,
@@ -1072,8 +1099,11 @@ async function DashboardStream({
           style={{ background: "linear-gradient(135deg, #03A8C0 0%, #5ED3D0 100%)" }}
         >
           <div className="dashboard-home__hero-main">
-            <p className="eyebrow">My balance</p>
+            <p className="eyebrow">{usesBalanceFxEstimate ? "Est. Spendable" : "Spendable"}</p>
             <strong>{totalBalanceLabel}</strong>
+            {usesBalanceFxEstimate ? (
+              <small className="dashboard-home__hero-balance-note">Across currencies in {balanceCurrency}</small>
+            ) : null}
           </div>
           <div className="dashboard-home__hero-aside" aria-label="Monthly balance summary">
             {balanceHighlights.map((pill) => (

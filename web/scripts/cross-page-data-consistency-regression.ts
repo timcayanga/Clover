@@ -72,6 +72,18 @@ assert.ok(
 const dashboardSource = source("app/dashboard/page.tsx");
 assert.match(dashboardSource, /account\.source === "manual"/);
 assert.match(dashboardSource, /: account\.balance\);/);
+assert.match(
+  dashboardSource,
+  /const spendableAccounts = dashboardAccounts\.filter[\s\S]{0,1400}balanceRateEntries = await Promise\.all/,
+  "Home must derive Spendable from all accounts and estimate foreign currencies in the user's default currency."
+);
+assert.match(dashboardSource, /loadDashboardExchangeRate[\s\S]{0,800}revalidate: 6 \* 60 \* 60/);
+assert.match(dashboardSource, /usesBalanceFxEstimate \? "Est\. Spendable" : "Spendable"/);
+assert.doesNotMatch(
+  dashboardSource,
+  /<p className="eyebrow">My balance<\/p>/i,
+  "Home must not use the ambiguous My Balance label."
+);
 
 const circleSource = source("lib/circle-loaders.ts");
 assert.match(circleSource, /isExcluded: false/);

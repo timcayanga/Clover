@@ -47,7 +47,7 @@ async function main() {
   );
   assert.match(
     styles,
-    /\.shell-bottom-nav\.is-compact \.shell-bottom-nav__item \{[\s\S]{0,100}min-height: 44px;/,
+    /\.shell-bottom-nav\.is-compact \.shell-bottom-nav__item \{[\s\S]{0,180}min-height: 44px;[\s\S]{0,180}place-content: center;/,
     "Compact mobile navigation must retain accessible touch targets.",
   );
   assert.match(

@@ -5654,6 +5654,13 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   letter-spacing: -0.06em;
 }
 
+.dashboard-home__hero-balance-note {
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
 .dashboard-home__hero-add {
   flex: none;
   min-height: 34px;
@@ -54744,6 +54751,9 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   .shell-bottom-nav.is-compact .shell-bottom-nav__item {
     min-height: 44px;
     padding: 0 2px;
+    align-items: center;
+    justify-items: center;
+    place-content: center;
   }
 
   .shell-bottom-nav.is-compact .shell-bottom-nav__icon {
