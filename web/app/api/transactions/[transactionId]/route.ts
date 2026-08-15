@@ -10,6 +10,7 @@ import { hasCompatibleTable } from "@/lib/data-engine";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
 import { normalizeTransactionTagKey, sanitizeTransactionTagNames } from "@/lib/transaction-tags";
+import { revalidateTag } from "next/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -455,6 +456,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       }
     }
 
+    revalidateTag("admin-financial-totals");
+
     return NextResponse.json({
       transaction: {
         id: updated.id,
@@ -617,6 +620,8 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
       currency: transaction.currency,
       transaction_type: transaction.type,
     });
+
+    revalidateTag("admin-financial-totals");
 
     return NextResponse.json({ ok: true });
   } catch {

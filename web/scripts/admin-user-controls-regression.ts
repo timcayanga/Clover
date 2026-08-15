@@ -24,6 +24,7 @@ assertNotContains(consoleSource, "user.transactionVolume", "Per-user transaction
 
 assertContains(usersSource, "fetchUserAccessStates", "Admin user loading must include audited access state.");
 assertContains(usersSource, "totalTransactionVolume", "The all-user tracked-volume aggregate must remain available.");
+assertContains(usersSource, "totalTransactionVolumeByCurrency", "Admin Users must expose exact currency totals.");
 assertNotContains(usersSource, '"transactionVolume",', "Per-user transaction volume must not be exported.");
 
 assertContains(accessRoute, "banUser", "Blocking must disable the Clerk account.");

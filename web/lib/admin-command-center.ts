@@ -1,8 +1,6 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { AdminCommandCenterSnapshot } from "@/components/admin-command-center";
 import {
-  adminRealUserSqlPredicate,
   getAdminRealUserWhere,
   getAdminRealWorkspaceWhere,
   getCurrentDeploymentErrorWhere,
@@ -11,17 +9,21 @@ import { FEATURE_FUNNEL_DEFINITIONS } from "@/lib/feature-adoption";
 import { getPostHogFeatureFunnels } from "@/lib/posthog-query";
 import { getAdminDataEnvironment } from "@/lib/admin";
 import { getAnalyticsBetaStartedAt } from "@/lib/analytics";
+import { getAdminTransactionVolumeSnapshot } from "@/lib/admin-transaction-volume";
+import { formatCurrencyAmount } from "@/lib/currency-format";
 
 const formatCount = (value: number) => value.toLocaleString();
-const formatTrackedAmount = (value: Prisma.Decimal | string | number | null) => {
-  const amount = Number(value ?? 0);
-  return Number.isFinite(amount)
-    ? new Intl.NumberFormat("en-PH", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(amount)
+const formatTrackedVolume = (
+  rows: Awaited<ReturnType<typeof getAdminTransactionVolumeSnapshot>>["trackedVolumeByCurrency"],
+) =>
+  rows.length
+    ? rows
+        .map((row) => {
+          const amount = Number(row.amount);
+          return `${row.currency} ${formatCurrencyAmount(Number.isFinite(amount) ? amount : 0, row.currency)}`;
+        })
+        .join(" · ")
     : "0.00";
-};
 
 export type AdminAdoptionRange = {
   from: Date;
@@ -78,7 +80,7 @@ export async function getAdminCommandCenterSnapshot(
     users,
     workspaces,
     bankAccounts,
-    transactionSummaryRows,
+    transactionVolume,
     imports,
     errors24h,
     analytics,
@@ -98,20 +100,7 @@ export async function getAdminCommandCenterSnapshot(
     prisma.account.count({
       where: { workspace: realWorkspace },
     }),
-    prisma.$queryRaw<
-      Array<{
-        transactionCount: bigint;
-        trackedAmount: Prisma.Decimal | string | number | null;
-      }>
-    >(Prisma.sql`
-      SELECT
-        COUNT(*)::bigint AS "transactionCount",
-        COALESCE(SUM(ABS(t."amount")), 0) AS "trackedAmount"
-      FROM "Transaction" t
-      INNER JOIN "Workspace" w ON w."id" = t."workspaceId"
-      INNER JOIN "User" u ON u."id" = w."userId" AND ${adminRealUserSqlPredicate("u")}
-      WHERE t."deletedAt" IS NULL
-    `),
+    getAdminTransactionVolumeSnapshot(),
     prisma.importFile.count({
       where: { ...activeImport, workspace: realWorkspace },
     }),
@@ -319,11 +308,7 @@ export async function getAdminCommandCenterSnapshot(
     }),
   ]);
 
-  const transactionSummary = transactionSummaryRows[0] ?? {
-    transactionCount: 0n,
-    trackedAmount: 0,
-  };
-  const transactions = Number(transactionSummary.transactionCount);
+  const transactions = transactionVolume.transactionCount;
   const [
     onboardedUsers,
     activatedUsers,
@@ -410,8 +395,8 @@ export async function getAdminCommandCenterSnapshot(
       },
       {
         label: "Amount tracked",
-        value: formatTrackedAmount(transactionSummary.trackedAmount),
-        note: "Absolute total · mixed currencies",
+        value: formatTrackedVolume(transactionVolume.trackedVolumeByCurrency),
+        note: "Current entries by currency · transfers excluded",
         href: "/admin/users",
       },
       { label: "Imports", value: formatCount(imports), href: "/admin/data-qa" },

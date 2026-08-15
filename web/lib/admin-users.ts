@@ -7,6 +7,10 @@ import {
   getAdminRealUserWhere,
   getCurrentDeploymentErrorWhere,
 } from "@/lib/admin-data-scope";
+import {
+  getAdminTransactionVolumeSnapshot,
+  type AdminTrackedVolumeCurrency,
+} from "@/lib/admin-transaction-volume";
 import { cancelPayPalSubscription, reconcileBillingPlanTier } from "@/lib/paypal-billing";
 import { getEffectiveUserLimits, getPlanDisplayLabel } from "@/lib/user-limits";
 
@@ -84,6 +88,7 @@ export type AdminUserOverview = {
   totalAccounts: number;
   totalTransactionCount: number;
   totalTransactionVolume: string;
+  totalTransactionVolumeByCurrency: AdminTrackedVolumeCurrency[];
   totalInvestmentAccounts: number;
   totalInvestmentValue: string;
   monthlyUploads: number;
@@ -578,8 +583,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
     workspaceCount,
     accountCount,
     investmentAccountCount,
-    transactionCounts,
-    transactionVolumeRows,
+    transactionVolume,
     investmentValueRows,
     monthlyUploadCounts,
     failedImportCounts,
@@ -618,23 +622,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
         },
       },
     }),
-    prisma.transaction.count({
-      where: {
-        ...ACTIVE_TRANSACTION_WHERE,
-        workspace: {
-          user: realUserWhere,
-        },
-      },
-    }),
-    prisma.$queryRaw<Array<{ total: Prisma.Decimal | string | number | null }>>(Prisma.sql`
-      SELECT COALESCE(SUM(ABS(t."amount")), 0) AS total
-      FROM "Transaction" t
-      INNER JOIN "Workspace" w ON w."id" = t."workspaceId"
-      INNER JOIN "User" u ON u."id" = w."userId" AND ${adminRealUserSqlPredicate("u")}
-      WHERE t."isExcluded" = false
-        AND t."isTransfer" = false
-        AND t."deletedAt" IS NULL
-    `),
+    getAdminTransactionVolumeSnapshot(),
     prisma.$queryRaw<Array<{ total: Prisma.Decimal | string | number | null }>>(Prisma.sql`
       SELECT COALESCE(SUM(GREATEST(COALESCE(a."balance", 0), 0)), 0) AS total
       FROM "Account" a
@@ -770,7 +758,9 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
     }
   }
 
-  const totalTransactionVolume = transactionVolumeRows[0]?.total ?? "0";
+  const totalTransactionVolume = transactionVolume.trackedVolumeByCurrency.length === 1
+    ? transactionVolume.trackedVolumeByCurrency[0].amount
+    : "0";
   const totalInvestmentValue = investmentValueRows[0]?.total ?? "0";
 
   return {
@@ -780,8 +770,9 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
     lockedUsers,
     totalWorkspaces: workspaceCount,
     totalAccounts: accountCount,
-    totalTransactionCount: transactionCounts,
+    totalTransactionCount: transactionVolume.transactionCount,
     totalTransactionVolume: String(totalTransactionVolume),
+    totalTransactionVolumeByCurrency: transactionVolume.trackedVolumeByCurrency,
     totalInvestmentAccounts: investmentAccountCount,
     totalInvestmentValue: String(totalInvestmentValue),
     monthlyUploads: monthlyUploadCounts,

@@ -38,6 +38,7 @@ const EMPTY_OVERVIEW: AdminUserOverview = {
   totalAccounts: 0,
   totalTransactionCount: 0,
   totalTransactionVolume: "0",
+  totalTransactionVolumeByCurrency: [],
   totalInvestmentAccounts: 0,
   totalInvestmentValue: "0",
   monthlyUploads: 0,
@@ -102,6 +103,20 @@ function formatMoney(value: string | null) {
   }
 
   return formatCurrencyAmount(amount, "MIXED");
+}
+
+function formatTrackedVolume(overview: AdminUserOverview) {
+  const rows = overview.totalTransactionVolumeByCurrency ?? [];
+  if (rows.length === 0) {
+    return "0.00";
+  }
+
+  return rows
+    .map((row) => {
+      const amount = Number(row.amount);
+      return `${row.currency} ${formatCurrencyAmount(Number.isFinite(amount) ? amount : 0, row.currency)}`;
+    })
+    .join(" · ");
 }
 
 function formatTrendValue(current: number, previous: number) {
@@ -609,8 +624,8 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
               <span>Transactions</span>
             </div>
             <div className="admin-users__stat">
-              <strong>{formatMoney(data.overview.totalTransactionVolume)}</strong>
-              <span>All-user tracked volume</span>
+              <strong>{formatTrackedVolume(data.overview)}</strong>
+              <span>Tracked volume by currency</span>
             </div>
             <div className="admin-users__stat">
               <strong>{data.overview.productionErrors7d.toLocaleString()}</strong>

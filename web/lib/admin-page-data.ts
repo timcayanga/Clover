@@ -15,8 +15,8 @@ const cachedCommandCenter = unstable_cache(
     getAdminCommandCenterSnapshot(
       from && to ? { from: new Date(from), to: new Date(to) } : undefined,
     ),
-  ["admin-command-center-v4"],
-  { revalidate: 30 },
+  ["admin-command-center-v5"],
+  { revalidate: 30, tags: ["admin-financial-totals"] },
 );
 
 const cachedAnalytics = unstable_cache(
@@ -42,8 +42,8 @@ const cachedInitialUsers = unstable_cache(
     getAdminUsers({ page: 1, pageSize: 25 }),
     getAdminErrorLogs({ page: 1, pageSize: 25 }),
   ]),
-  ["admin-initial-users-v2"],
-  { revalidate: 5 },
+  ["admin-initial-users-v3"],
+  { revalidate: 5, tags: ["admin-financial-totals"] },
 );
 
 const cachedAuditLogs = unstable_cache(
