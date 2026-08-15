@@ -3,11 +3,15 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { createFinverseLink, hashFinverseState } from "@/lib/finverse";
+import { createFinverseLink, hashFinverseState, isFinverseEnabled } from "@/lib/finverse";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  if (!isFinverseEnabled()) {
+    return NextResponse.json({ error: "Bank connections are not available yet." }, { status: 404 });
+  }
+
   try {
     const { userId } = await requireAuth();
     const body = await request.json().catch(() => ({})) as { workspaceId?: string };

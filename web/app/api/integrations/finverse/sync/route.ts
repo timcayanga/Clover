@@ -10,6 +10,7 @@ import {
   getFinverseAccounts,
   getFinverseConfig,
   getFinverseLoginIdentity,
+  isFinverseEnabled,
   isFinverseDataReady,
   normalizeFinverseAccount,
   normalizeFinverseTransaction,
@@ -163,6 +164,10 @@ const importTransaction = async (
 };
 
 export async function POST(request: Request) {
+  if (!isFinverseEnabled()) {
+    return NextResponse.json({ error: "Bank connections are not available yet." }, { status: 404 });
+  }
+
   try {
     const { userId } = await requireAuth();
     const body = await request.json().catch(() => ({})) as { workspaceId?: string; connectionId?: string };
