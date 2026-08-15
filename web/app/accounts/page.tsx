@@ -11,7 +11,6 @@ import { EmptyDataCta } from "@/components/empty-data-cta";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { CurrencySelector } from "@/components/currency-selector";
 import { FinancialAccountCard } from "@/components/financial-account-card";
-import { FinverseConnectButton } from "@/components/finverse-connect-button";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
@@ -4356,10 +4355,6 @@ function AccountsPageContent() {
         optionClassName="accounts-currency-filter__option"
         menuAlignment="end"
         showChevron={false}
-      />
-      <FinverseConnectButton
-        workspaceId={selectedWorkspaceId}
-        onSynced={() => loadWorkspaceData(selectedWorkspaceId, { forceFresh: true })}
       />
       <button className="button button-secondary button-small accounts-toolbar-add" type="button" onClick={openAddAccount}>
         <ActionIcon name="plus" />

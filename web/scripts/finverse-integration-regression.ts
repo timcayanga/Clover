@@ -65,5 +65,9 @@ const connectButtonSource = readFileSync(new URL("../components/finverse-connect
 assert.match(connectButtonSource, /FINVERSE_MAX_POLL_ATTEMPTS = 30/);
 assert.match(connectButtonSource, /await onSyncedRef\.current\?\.\(\)/);
 assert.doesNotMatch(connectButtonSource, /window\.location\.assign\("\/accounts"\)/);
+const accountsPageSource = readFileSync(new URL("../app/accounts/page.tsx", import.meta.url), "utf8");
+assert.doesNotMatch(accountsPageSource, /FinverseConnectButton/);
+assert.doesNotMatch(accountsPageSource, />Connect bank</);
+assert.doesNotMatch(accountsPageSource, />Sync bank</);
 
 console.log("Finverse integration regression checks passed.");
