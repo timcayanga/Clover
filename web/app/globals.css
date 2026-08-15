@@ -28992,6 +28992,32 @@ button.accounts-detail__transaction-head-cell {
   background: rgba(255, 255, 255, 0.88);
 }
 
+.accounts-detail__reinvest-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+}
+
+.accounts-detail__reinvest-option input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent, #09afbd);
+}
+
+.investments-asset-detail-modal__activity-cta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.investments-asset-detail-modal__activity-cta > span {
+  color: var(--muted-text, #687386);
+  font-size: 0.82rem;
+}
+
 .accounts-detail__history-form {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

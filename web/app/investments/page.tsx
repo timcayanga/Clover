@@ -51,6 +51,7 @@ import {
 import {
   canTrackInvestmentDividends,
   canTrackInvestmentPurchaseHistory,
+  canTrackInvestmentUnits,
   inferInvestmentClassification,
   getInvestmentFieldConfigs,
   getInvestmentPurchaseSummaryLabel,
@@ -2457,8 +2458,9 @@ export default function InvestmentsPage() {
 
     setIsUpdating(true);
     try {
-      const isMarket = isMarketInvestmentSubtype(editingDraft.investmentSubtype);
+      const tracksUnits = canTrackInvestmentUnits(editingDraft.investmentSubtype);
       const isFixedIncome = isFixedIncomeInvestmentSubtype(editingDraft.investmentSubtype);
+      const tracksPurchaseValue = canTrackInvestmentPurchaseHistory(editingDraft.investmentSubtype) && !isFixedIncome;
       const response = await fetch(`/api/accounts/${editingAccountId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -2467,10 +2469,10 @@ export default function InvestmentsPage() {
           name: editingDraft.name.trim(),
           institution: editingDraft.institution.trim() || null,
           investmentSubtype: editingDraft.investmentSubtype,
-          investmentSymbol: isMarket || editingDraft.investmentSubtype === "other" ? editingDraft.investmentSymbol.trim() || null : null,
-          investmentQuantity: isMarket ? parseNullableNumberInput(editingDraft.investmentQuantity) : null,
+          investmentSymbol: tracksUnits || editingDraft.investmentSubtype === "other" ? editingDraft.investmentSymbol.trim() || null : null,
+          investmentQuantity: tracksUnits ? parseNullableNumberInput(editingDraft.investmentQuantity) : null,
           investmentCostBasis:
-            isMarket || editingDraft.investmentSubtype === "other"
+            tracksPurchaseValue
               ? parseNullableNumberInput(editingDraft.investmentCostBasis)
               : null,
           investmentPrincipal: isFixedIncome ? parseNullableNumberInput(editingDraft.investmentPrincipal) : null,
@@ -2674,8 +2676,9 @@ export default function InvestmentsPage() {
 
     setIsSaving(true);
     try {
-      const manualIsMarket = isMarketInvestmentSubtype(manualInvestmentSubtype);
       const manualIsFixedIncome = isFixedIncomeInvestmentSubtype(manualInvestmentSubtype);
+      const manualTracksUnits = canTrackInvestmentUnits(manualInvestmentSubtype);
+      const manualTracksPurchaseValue = manualCanTrackPurchases && !manualIsFixedIncome;
       const response = await fetch("/api/accounts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2685,10 +2688,10 @@ export default function InvestmentsPage() {
           institution: manualInstitution.trim() || null,
           investmentSubtype: manualInvestmentSubtype,
           investmentSymbol:
-            manualIsMarket || manualInvestmentSubtype === "other" ? manualInvestmentSymbol.trim() || null : null,
-          investmentQuantity: manualIsMarket ? parseNullableNumberInput(manualInvestmentQuantity) : null,
+            manualTracksUnits || manualInvestmentSubtype === "other" ? manualInvestmentSymbol.trim() || null : null,
+          investmentQuantity: manualTracksUnits ? parseNullableNumberInput(manualInvestmentQuantity) : null,
           investmentCostBasis:
-            manualIsMarket || manualInvestmentSubtype === "other"
+            manualTracksPurchaseValue
               ? parseNullableNumberInput(manualInvestmentCostBasis)
               : null,
           investmentPrincipal: manualIsFixedIncome ? parseNullableNumberInput(manualInvestmentPrincipal) : null,
@@ -3643,6 +3646,18 @@ export default function InvestmentsPage() {
                   </p>
                 ) : null}
               </section>
+
+              {selectedInvestmentAsset ? (
+                <div className="investments-asset-detail-modal__activity-cta">
+                  <Link
+                    className="button button-primary button-small"
+                    href={`/accounts/${encodeURIComponent(selectedInvestmentAsset.id)}#investment-activity`}
+                  >
+                    Add activity
+                  </Link>
+                  <span>Record a purchase, dividend, or reinvested dividend.</span>
+                </div>
+              ) : null}
 
               {selectedPortfolioRow.source === "holding" && holdingEditDraft ? (
                 <form

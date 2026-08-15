@@ -84,6 +84,7 @@ import {
   getInvestmentFieldConfigs,
   canTrackInvestmentDividends,
   canTrackInvestmentPurchaseHistory,
+  canTrackInvestmentUnits,
   getInvestmentPurchaseSummaryLabel,
   getInvestmentSubtypeLabel,
   SORTED_INVESTMENT_SUBTYPES,
@@ -1074,6 +1075,8 @@ function AccountDetailPageContent() {
     currency: "PHP",
     note: "",
   });
+  const [reinvestDividend, setReinvestDividend] = useState(false);
+  const [reinvestedDividendUnits, setReinvestedDividendUnits] = useState("");
   const [purchaseBusy, setPurchaseBusy] = useState(false);
   const [dividendBusy, setDividendBusy] = useState(false);
   const [purchaseDeleteBusy, setPurchaseDeleteBusy] = useState<string | null>(null);
@@ -3432,7 +3435,11 @@ function AccountDetailPageContent() {
     }
   };
 
-  const updateInvestmentSummaryFromPurchase = (totalCost: string, direction: "add" | "subtract") => {
+  const updateInvestmentSummaryFromPurchase = (
+    totalCost: string,
+    quantity: string | null | undefined,
+    direction: "add" | "subtract"
+  ) => {
     const delta = Number(totalCost);
     if (!Number.isFinite(delta)) {
       return;
@@ -3446,10 +3453,18 @@ function AccountDetailPageContent() {
       const summaryField = isFixedIncomeInvestmentSubtype(current.investmentSubtype) ? "investmentPrincipal" : "investmentCostBasis";
       const currentValue = Number(summaryField === "investmentPrincipal" ? current.investmentPrincipal ?? 0 : current.investmentCostBasis ?? 0);
       const nextValue = Math.max(0, direction === "add" ? currentValue + delta : currentValue - delta);
+      const quantityDelta = Number(quantity ?? 0);
+      const currentQuantity = Number(current.investmentQuantity ?? 0);
+      const nextQuantity = Number.isFinite(quantityDelta)
+        ? Math.max(0, direction === "add" ? currentQuantity + quantityDelta : currentQuantity - quantityDelta)
+        : currentQuantity;
+      const quantityUpdate = canTrackInvestmentUnits(current.investmentSubtype) && quantity
+        ? { investmentQuantity: nextQuantity.toString() }
+        : {};
 
       return summaryField === "investmentPrincipal"
-        ? { ...current, investmentPrincipal: nextValue.toString() }
-        : { ...current, investmentCostBasis: nextValue.toString() };
+        ? { ...current, investmentPrincipal: nextValue.toString(), ...quantityUpdate }
+        : { ...current, investmentCostBasis: nextValue.toString(), ...quantityUpdate };
     });
   };
 
@@ -3485,7 +3500,11 @@ function AccountDetailPageContent() {
       const payload = (await response.json()) as { purchase?: InvestmentPurchase } | null;
       if (payload?.purchase) {
         setInvestmentPurchases((current) => [payload.purchase as InvestmentPurchase, ...current]);
-        updateInvestmentSummaryFromPurchase(String(payload.purchase.totalCost ?? purchaseDraft.totalCost), "add");
+        updateInvestmentSummaryFromPurchase(
+          String(payload.purchase.totalCost ?? purchaseDraft.totalCost),
+          payload.purchase.quantity,
+          "add"
+        );
       }
 
       setPurchaseDraft({
@@ -3519,7 +3538,7 @@ function AccountDetailPageContent() {
       }
 
       setInvestmentPurchases((current) => current.filter((entry) => entry.id !== purchase.id));
-      updateInvestmentSummaryFromPurchase(String(purchase.totalCost ?? 0), "subtract");
+      updateInvestmentSummaryFromPurchase(String(purchase.totalCost ?? 0), purchase.quantity, "subtract");
       setMessage("Purchase deleted.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to delete purchase.");
@@ -3538,6 +3557,10 @@ function AccountDetailPageContent() {
       setMessage("Dividend date and amount are required.");
       return;
     }
+    if (reinvestDividend && !reinvestedDividendUnits) {
+      setMessage("Add the units received from the reinvested dividend.");
+      return;
+    }
 
     setDividendBusy(true);
     try {
@@ -3549,6 +3572,7 @@ function AccountDetailPageContent() {
           amount: dividendDraft.amount,
           currency: dividendDraft.currency || account.currency,
           note: dividendDraft.note || null,
+          reinvestedQuantity: reinvestDividend ? reinvestedDividendUnits : null,
         }),
       });
 
@@ -3556,9 +3580,17 @@ function AccountDetailPageContent() {
         throw new Error("Unable to add dividend.");
       }
 
-      const payload = (await response.json()) as { dividend?: InvestmentDividend } | null;
+      const payload = (await response.json()) as { dividend?: InvestmentDividend; purchase?: InvestmentPurchase | null } | null;
       if (payload?.dividend) {
         setInvestmentDividends((current) => [payload.dividend as InvestmentDividend, ...current]);
+      }
+      if (payload?.purchase) {
+        setInvestmentPurchases((current) => [payload.purchase as InvestmentPurchase, ...current]);
+        updateInvestmentSummaryFromPurchase(
+          String(payload.purchase.totalCost ?? dividendDraft.amount),
+          payload.purchase.quantity,
+          "add"
+        );
       }
 
       setDividendDraft({
@@ -3567,7 +3599,9 @@ function AccountDetailPageContent() {
         currency: account.currency,
         note: "",
       });
-      setMessage("Dividend added.");
+      setReinvestDividend(false);
+      setReinvestedDividendUnits("");
+      setMessage(reinvestDividend ? "Reinvested dividend added." : "Dividend added.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to add dividend.");
     } finally {
@@ -3818,8 +3852,9 @@ function AccountDetailPageContent() {
 
     setInvestmentAutosaveState("saving");
     const timeout = window.setTimeout(() => {
-      const isMarket = isMarketInvestmentSubtype(investmentEditDraft.investmentSubtype);
+      const tracksUnits = canTrackInvestmentUnits(investmentEditDraft.investmentSubtype);
       const isFixedIncome = isFixedIncomeInvestmentSubtype(investmentEditDraft.investmentSubtype);
+      const tracksPurchaseValue = canTrackInvestmentPurchaseHistory(investmentEditDraft.investmentSubtype) && !isFixedIncome;
       void fetch(`/api/accounts/${account.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -3828,10 +3863,10 @@ function AccountDetailPageContent() {
           name: investmentEditDraft.name.trim(),
           institution: investmentEditDraft.institution.trim() || null,
           investmentSubtype: investmentEditDraft.investmentSubtype,
-          investmentSymbol: isMarket || investmentEditDraft.investmentSubtype === "other" ? investmentEditDraft.investmentSymbol.trim() || null : null,
-          investmentQuantity: isMarket ? parseNullableNumber(investmentEditDraft.investmentQuantity) : null,
+          investmentSymbol: tracksUnits || investmentEditDraft.investmentSubtype === "other" ? investmentEditDraft.investmentSymbol.trim() || null : null,
+          investmentQuantity: tracksUnits ? parseNullableNumber(investmentEditDraft.investmentQuantity) : null,
           investmentCostBasis:
-            isMarket || investmentEditDraft.investmentSubtype === "other"
+            tracksPurchaseValue
               ? parseNullableNumber(investmentEditDraft.investmentCostBasis)
               : null,
           investmentPrincipal: isFixedIncome ? parseNullableNumber(investmentEditDraft.investmentPrincipal) : null,
@@ -4193,12 +4228,13 @@ function AccountDetailPageContent() {
             ) : null}
 
             {canShowInvestmentPurchases ? (
-              <div className="accounts-detail__history-stack" style={{ marginTop: 20 }}>
+              <div id="investment-activity" className="accounts-detail__history-stack" style={{ marginTop: 20 }}>
               <section className="accounts-detail__history-section glass">
                 <div className="accounts-detail__reconciliation-head">
                   <div>
-                    <p className="eyebrow">Purchases</p>
-                    <h4>Purchase history</h4>
+                    <p className="eyebrow">Asset activity</p>
+                    <h4>Add purchase history</h4>
+                    <p className="panel-muted">Record the date, units, and total purchase value.</p>
                   </div>
                 </div>
                 <form className="accounts-detail__history-form" onSubmit={createInvestmentPurchase}>
@@ -4211,7 +4247,7 @@ function AccountDetailPageContent() {
                     />
                   </label>
                   <label>
-                    Units / shares
+                    Units
                     <input
                       inputMode="decimal"
                       value={purchaseDraft.quantity}
@@ -4219,7 +4255,7 @@ function AccountDetailPageContent() {
                     />
                   </label>
                   <label>
-                    Total cost
+                    Purchase value
                     <input
                       inputMode="decimal"
                       value={purchaseDraft.totalCost}
@@ -4234,7 +4270,7 @@ function AccountDetailPageContent() {
                     />
                   </label>
                   <label className="accounts-detail__history-form-note">
-                    Note
+                    Note <span className="panel-muted">(optional)</span>
                     <input
                       value={purchaseDraft.note}
                       onChange={(event) => setPurchaseDraft((current) => ({ ...current, note: event.target.value }))}
@@ -4249,7 +4285,7 @@ function AccountDetailPageContent() {
                     <div className="accounts-detail__history-row accounts-detail__history-row--header" role="row">
                       <div role="columnheader">Date</div>
                       <div role="columnheader">Units</div>
-                      <div role="columnheader">Total cost</div>
+                      <div role="columnheader">Purchase value</div>
                       <div role="columnheader">Currency</div>
                       <div role="columnheader">Note</div>
                       <div role="columnheader" aria-hidden="true" />
@@ -4285,8 +4321,8 @@ function AccountDetailPageContent() {
                 <section className="accounts-detail__history-section glass">
                   <div className="accounts-detail__reconciliation-head">
                     <div>
-                      <p className="eyebrow">Dividends</p>
-                      <h4>Dividend history</h4>
+                      <p className="eyebrow">Income</p>
+                      <h4>Add dividend or distribution</h4>
                     </div>
                   </div>
                   <form className="accounts-detail__history-form" onSubmit={createInvestmentDividend}>
@@ -4299,7 +4335,7 @@ function AccountDetailPageContent() {
                       />
                     </label>
                     <label>
-                      Amount
+                      Amount received
                       <input
                         inputMode="decimal"
                         data-investment-field="dividendAmount"
@@ -4307,6 +4343,29 @@ function AccountDetailPageContent() {
                         onChange={(event) => setDividendDraft((current) => ({ ...current, amount: event.target.value }))}
                       />
                     </label>
+                    {canTrackInvestmentUnits(investmentSubtype) ? (
+                      <label className="accounts-detail__history-form-note">
+                        <span>Reinvested</span>
+                        <span className="accounts-detail__reinvest-option">
+                          <input
+                            type="checkbox"
+                            checked={reinvestDividend}
+                            onChange={(event) => setReinvestDividend(event.target.checked)}
+                          />
+                          Add the dividend back to this asset
+                        </span>
+                      </label>
+                    ) : null}
+                    {reinvestDividend ? (
+                      <label>
+                        Units received
+                        <input
+                          inputMode="decimal"
+                          value={reinvestedDividendUnits}
+                          onChange={(event) => setReinvestedDividendUnits(event.target.value)}
+                        />
+                      </label>
+                    ) : null}
                     <label>
                       Currency
                       <input
@@ -4315,14 +4374,14 @@ function AccountDetailPageContent() {
                       />
                     </label>
                     <label className="accounts-detail__history-form-note">
-                      Note
+                      Note <span className="panel-muted">(optional)</span>
                       <input
                         value={dividendDraft.note}
                         onChange={(event) => setDividendDraft((current) => ({ ...current, note: event.target.value }))}
                       />
                     </label>
                     <button className="button button-primary button-small" type="submit" disabled={dividendBusy}>
-                      {dividendBusy ? "Adding..." : "Add dividend"}
+                      {dividendBusy ? "Adding..." : reinvestDividend ? "Add reinvested dividend" : "Add dividend"}
                     </button>
                   </form>
                   {investmentDividends.length > 0 ? (

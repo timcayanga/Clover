@@ -168,6 +168,8 @@ type AssetDraft = {
   balance: string;
 };
 
+type InvestmentActivityKind = "buy" | "sell" | "dividend" | "reinvested_dividend" | "transfer";
+
 type TradeDraft = {
   accountId: string;
   assetName: string;
@@ -175,7 +177,7 @@ type TradeDraft = {
   amount: string;
   units: string;
   currency: string;
-  type: TransactionType;
+  type: InvestmentActivityKind;
   description: string;
 };
 
@@ -361,20 +363,44 @@ const buildTradeDraft = (accounts: Account[], currency: string): TradeDraft => (
   amount: "",
   units: "",
   currency,
-  type: "expense",
+  type: "buy",
   description: "",
 });
 
-const getTradeActionLabel = (type: TransactionType) =>
-  type === "income" ? "Sell" : type === "transfer" ? "Transfer" : "Buy";
+const getTradeActionLabel = (type: InvestmentActivityKind) => {
+  if (type === "sell") return "Sell";
+  if (type === "dividend") return "Dividend";
+  if (type === "reinvested_dividend") return "Buy";
+  if (type === "transfer") return "Transfer";
+  return "Buy";
+};
 
-const mergeTradeMetadata = (rawPayload: unknown, type: TransactionType, units: string, assetName: string) => {
+const getTradeTransactionType = (type: InvestmentActivityKind): TransactionType => {
+  if (type === "sell" || type === "dividend") return "income";
+  if (type === "reinvested_dividend" || type === "transfer") return "transfer";
+  return "expense";
+};
+
+const getTradeDraftKind = (transaction: Transaction): InvestmentActivityKind => {
+  const activity = getInvestmentActivityType(transaction);
+  const payload = transaction.rawPayload && typeof transaction.rawPayload === "object" && !Array.isArray(transaction.rawPayload)
+    ? transaction.rawPayload as Record<string, unknown>
+    : null;
+  if (payload?.activityKind === "reinvested_dividend") return "reinvested_dividend";
+  if (activity === "Sell") return "sell";
+  if (activity === "Dividend") return "dividend";
+  if (activity === "Transfer") return "transfer";
+  return "buy";
+};
+
+const mergeTradeMetadata = (rawPayload: unknown, type: InvestmentActivityKind, units: string, assetName: string) => {
   const existing = rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
     ? rawPayload as Record<string, unknown>
     : {};
   const next: Record<string, unknown> = {
     ...existing,
     action: getTradeActionLabel(type),
+    activityKind: type,
     assetName: assetName.trim(),
   };
   if (units.trim()) next.quantity = units.trim();
@@ -1056,7 +1082,7 @@ export default function InvestmentInstitutionDetailPage() {
       amount: String(Math.abs(parseAmount(transaction.amount))),
       units: getInvestmentActivityUnits(transaction) ?? "",
       currency: transaction.currency,
-      type: transaction.type,
+      type: getTradeDraftKind(transaction),
       description: transaction.description ?? "",
     });
   };
@@ -1351,7 +1377,10 @@ export default function InvestmentInstitutionDetailPage() {
     try {
       const actionLabel = getTradeActionLabel(tradeDraft.type);
       const assetLabel = tradeDraft.assetName.trim();
-      const generatedTitle = `${actionLabel} ${assetLabel}`;
+      const generatedTitle = tradeDraft.type === "reinvested_dividend"
+        ? `Buy ${assetLabel} · Reinvested dividend`
+        : `${actionLabel} ${assetLabel}`;
+      const transactionType = getTradeTransactionType(tradeDraft.type);
       if (editingTrade) {
         const response = await fetch(`/api/transactions/${editingTrade.id}`, {
           method: "PATCH",
@@ -1361,11 +1390,11 @@ export default function InvestmentInstitutionDetailPage() {
             date: tradeDraft.date,
             amount: Number(tradeDraft.amount),
             currency: tradeDraft.currency,
-            type: tradeDraft.type,
+            type: transactionType,
             merchantRaw: editingTrade.merchantRaw || generatedTitle,
             merchantClean: editingTrade.merchantClean || generatedTitle,
             description: tradeDraft.description.trim() || null,
-            isTransfer: tradeDraft.type === "transfer",
+            isTransfer: transactionType === "transfer",
             rawPayload: mergeTradeMetadata(editingTrade.rawPayload, tradeDraft.type, tradeDraft.units, assetLabel),
           }),
         });
@@ -1396,7 +1425,7 @@ export default function InvestmentInstitutionDetailPage() {
             date: tradeDraft.date,
             amount: Number(tradeDraft.amount),
             currency: tradeDraft.currency,
-            type: tradeDraft.type,
+            type: transactionType,
             merchantRaw: generatedTitle,
             merchantClean: generatedTitle,
             investmentAssetName: assetLabel,
@@ -1951,10 +1980,12 @@ export default function InvestmentInstitutionDetailPage() {
                 <span>Type</span>
                 <select
                   value={tradeDraft.type}
-                  onChange={(event) => setTradeDraft((current) => ({ ...current, type: event.target.value as TransactionType }))}
+                  onChange={(event) => setTradeDraft((current) => ({ ...current, type: event.target.value as InvestmentActivityKind }))}
                 >
-                  <option value="expense">Buy</option>
-                  <option value="income">Sell</option>
+                  <option value="buy">Buy</option>
+                  <option value="sell">Sell</option>
+                  <option value="dividend">Dividend</option>
+                  <option value="reinvested_dividend">Reinvested dividend</option>
                   <option value="transfer">Transfer</option>
                 </select>
               </label>
@@ -2079,7 +2110,7 @@ export default function InvestmentInstitutionDetailPage() {
               type="button"
               onClick={() => router.push(`${institutionPath}?trade=1`)}
             >
-              Add Trade
+              Add Activity
             </button>
           ) : null}
         </section>

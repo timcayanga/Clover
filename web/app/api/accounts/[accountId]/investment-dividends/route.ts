@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
+import { canTrackInvestmentUnits } from "@/lib/investments";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ const dividendSchema = z.object({
   amount: z.union([z.string(), z.number(), z.null()]).optional(),
   currency: z.string().optional(),
   note: z.string().nullable().optional(),
+  reinvestedQuantity: z.union([z.string(), z.number(), z.null()]).optional(),
 });
 
 const parseNullableDecimal = (value: unknown) => {
@@ -94,7 +96,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ acc
 
     const account = await prisma.account.findUnique({
       where: { id: accountId },
-      select: { id: true, workspaceId: true, type: true },
+      select: {
+        id: true,
+        workspaceId: true,
+        type: true,
+        investmentSubtype: true,
+        investmentCostBasis: true,
+        investmentQuantity: true,
+      },
     });
 
     if (!account) {
@@ -111,20 +120,56 @@ export async function POST(request: Request, { params }: { params: Promise<{ acc
     const amount = parseNullableDecimal(payload.amount);
     const currency = payload.currency ? payload.currency.trim().toUpperCase() : "PHP";
     const note = payload.note?.trim() || null;
+    const reinvestedQuantity = parseNullableDecimal(payload.reinvestedQuantity);
 
-    if (amount === null) {
-      return NextResponse.json({ error: "amount is required" }, { status: 400 });
+    if (amount === null || Number(amount) <= 0) {
+      return NextResponse.json({ error: "amount must be greater than zero" }, { status: 400 });
+    }
+    if (reinvestedQuantity !== null && Number(reinvestedQuantity) <= 0) {
+      return NextResponse.json({ error: "reinvestedQuantity must be greater than zero" }, { status: 400 });
     }
 
-    const dividend = await prisma.investmentDividend.create({
-      data: {
-        accountId,
-        paidAt,
-        amount,
-        currency,
-        note,
-      },
+    const result = await prisma.$transaction(async (tx) => {
+      const dividend = await tx.investmentDividend.create({
+        data: {
+          accountId,
+          paidAt,
+          amount,
+          currency,
+          note,
+        },
+      });
+
+      if (reinvestedQuantity === null) {
+        return { dividend, purchase: null };
+      }
+
+      if (!canTrackInvestmentUnits(account.investmentSubtype)) {
+        throw new Error("This investment type does not support unit-based reinvestment.");
+      }
+
+      const purchase = await tx.investmentPurchase.create({
+        data: {
+          accountId,
+          purchasedAt: paidAt,
+          quantity: reinvestedQuantity,
+          totalCost: amount,
+          currency,
+          note: note ? `Reinvested dividend · ${note}` : "Reinvested dividend",
+        },
+      });
+      const nextCostBasis = new Prisma.Decimal(account.investmentCostBasis?.toString() ?? 0).plus(new Prisma.Decimal(amount));
+      const nextQuantity = new Prisma.Decimal(account.investmentQuantity?.toString() ?? 0).plus(new Prisma.Decimal(reinvestedQuantity));
+      await tx.account.update({
+        where: { id: accountId },
+        data: {
+          investmentCostBasis: nextCostBasis.toString(),
+          investmentQuantity: nextQuantity.toString(),
+        },
+      });
+      return { dividend, purchase };
     });
+    const { dividend, purchase } = result;
 
     await recordAdviserActionCompletion({
       workspaceId: account.workspaceId,
@@ -137,7 +182,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ acc
       pathname: `/accounts/${accountId}`,
     });
 
-    return NextResponse.json({ dividend: serializeDividend(dividend) });
+    return NextResponse.json({
+      dividend: serializeDividend(dividend),
+      purchase: purchase
+        ? {
+            ...purchase,
+            quantity: purchase.quantity?.toString() ?? null,
+            totalCost: purchase.totalCost?.toString() ?? null,
+            purchasedAt: purchase.purchasedAt.toISOString(),
+            createdAt: purchase.createdAt.toISOString(),
+            updatedAt: purchase.updatedAt.toISOString(),
+          }
+        : null,
+    });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to add dividend." }, { status: 400 });
   }

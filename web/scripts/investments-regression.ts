@@ -3,7 +3,13 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { getInvestmentAssetBrand, getInvestmentAssetLogoCandidates } from "@/lib/investment-assets";
 import { getGotradeSecurityName, resolveGotradeSecuritySymbol } from "@/lib/gotrade-securities";
-import { inferInvestmentClassification, isActivityOnlyGcryptoAccount } from "@/lib/investments";
+import {
+  canTrackInvestmentDividends,
+  canTrackInvestmentPurchaseHistory,
+  canTrackInvestmentUnits,
+  inferInvestmentClassification,
+  isActivityOnlyGcryptoAccount,
+} from "@/lib/investments";
 import {
   getInvestmentActivityAmountTone,
   getInvestmentActivityAssetName,
@@ -31,6 +37,9 @@ assert.match(
   /prisma\.investmentHolding\.delete/,
   "Deleting an imported asset should remove only its normalized holding row."
 );
+assert.equal(canTrackInvestmentPurchaseHistory("real_world_asset"), true, "Real-world assets support purchase history.");
+assert.equal(canTrackInvestmentUnits("real_world_asset"), true, "Real-world assets persist units.");
+assert.equal(canTrackInvestmentDividends("crypto"), true, "Crypto assets can record distributions.");
 const classificationCases = [
   { name: "ATRAM Peso Money Market Fund", expected: "money_market_fund" },
   { name: "ATRAM Medium Term Peso Bond Fund", expected: "bond" },

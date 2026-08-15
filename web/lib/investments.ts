@@ -179,10 +179,13 @@ export const isFixedIncomeInvestmentSubtype = (value: string | null | undefined)
   !!value && FIXED_INCOME_SUBTYPES.has(value as InvestmentSubtype);
 
 export const canTrackInvestmentPurchaseHistory = (value: string | null | undefined) =>
-  isMarketInvestmentSubtype(value) || isFixedIncomeInvestmentSubtype(value) || value === "other";
+  isMarketInvestmentSubtype(value) || isFixedIncomeInvestmentSubtype(value) || value === "real_world_asset" || value === "other";
 
 export const canTrackInvestmentDividends = (value: string | null | undefined) =>
-  !!value && DIVIDEND_SUBTYPES.has(value as InvestmentSubtype);
+  !!value && (DIVIDEND_SUBTYPES.has(value as InvestmentSubtype) || value === "crypto" || value === "real_world_asset");
+
+export const canTrackInvestmentUnits = (value: string | null | undefined) =>
+  isMarketInvestmentSubtype(value) || value === "real_world_asset";
 
 export const getInvestmentSubtypeLabel = (value: string | null | undefined) => {
   switch (value) {

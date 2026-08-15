@@ -69,6 +69,8 @@ import { mergeImportedWorkspaceTransactions } from "@/lib/workspace-cache";
 import {
   getInvestmentFieldConfigs,
   getInvestmentSubtypeLabel,
+  canTrackInvestmentPurchaseHistory,
+  canTrackInvestmentUnits,
   INVESTMENT_SUBTYPES,
   type InvestmentSubtype,
   isFixedIncomeInvestmentSubtype,
@@ -4302,8 +4304,9 @@ function AccountsPageContent() {
     setIsSaving(true);
     try {
       const manualIsInvestment = manualType === "investment";
-      const manualIsMarket = manualIsInvestment && isMarketInvestmentSubtype(manualInvestmentSubtype);
       const manualIsFixedIncome = manualIsInvestment && isFixedIncomeInvestmentSubtype(manualInvestmentSubtype);
+      const manualTracksUnits = manualIsInvestment && canTrackInvestmentUnits(manualInvestmentSubtype);
+      const manualTracksPurchaseValue = manualIsInvestment && canTrackInvestmentPurchaseHistory(manualInvestmentSubtype) && !manualIsFixedIncome;
       const response = await fetch("/api/accounts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -4319,12 +4322,12 @@ function AccountsPageContent() {
           accountNumber: manualAccountNumber.trim() || null,
           investmentSubtype: manualIsInvestment ? manualInvestmentSubtype : null,
           investmentSymbol:
-            manualIsInvestment && (manualIsMarket || manualInvestmentSubtype === "other")
+            manualIsInvestment && (manualTracksUnits || manualInvestmentSubtype === "other")
               ? manualInvestmentSymbol.trim() || null
               : null,
-          investmentQuantity: manualIsMarket ? parseNullableNumberInput(manualInvestmentQuantity) : null,
+          investmentQuantity: manualTracksUnits ? parseNullableNumberInput(manualInvestmentQuantity) : null,
           investmentCostBasis:
-            manualIsInvestment && (manualIsMarket || manualInvestmentSubtype === "other")
+            manualTracksPurchaseValue
               ? parseNullableNumberInput(manualInvestmentCostBasis)
               : null,
           investmentPrincipal: manualIsFixedIncome ? parseNullableNumberInput(manualInvestmentPrincipal) : null,

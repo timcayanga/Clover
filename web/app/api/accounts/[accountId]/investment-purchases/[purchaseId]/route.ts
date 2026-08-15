@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { isFixedIncomeInvestmentSubtype } from "@/lib/investments";
+import { canTrackInvestmentUnits, isFixedIncomeInvestmentSubtype } from "@/lib/investments";
 import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +31,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
         investmentSubtype: true,
         investmentCostBasis: true,
         investmentPrincipal: true,
+        investmentQuantity: true,
       },
     });
 
@@ -66,13 +67,20 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
         summaryField === "investmentPrincipal" ? account.investmentPrincipal?.toString() ?? 0 : account.investmentCostBasis?.toString() ?? 0
       );
       const nextSummary = Math.max(0, currentSummary - Number(totalCost.toString()));
+      const currentQuantity = new Prisma.Decimal(account.investmentQuantity?.toString() ?? 0);
+      const purchaseQuantity = new Prisma.Decimal(purchase.quantity?.toString() ?? 0);
+      const nextQuantity = Prisma.Decimal.max(0, currentQuantity.minus(purchaseQuantity));
 
       await tx.account.update({
         where: { id: accountId },
-        data:
-          summaryField === "investmentPrincipal"
+        data: {
+          ...(summaryField === "investmentPrincipal"
             ? { investmentPrincipal: nextSummary.toString() }
-            : { investmentCostBasis: nextSummary.toString() },
+            : { investmentCostBasis: nextSummary.toString() }),
+          ...(canTrackInvestmentUnits(account.investmentSubtype) && purchase.quantity !== null
+            ? { investmentQuantity: nextQuantity.toString() }
+            : {}),
+        },
       });
     });
 

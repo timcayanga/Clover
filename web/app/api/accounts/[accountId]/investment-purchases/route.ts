@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { isFixedIncomeInvestmentSubtype } from "@/lib/investments";
+import { canTrackInvestmentUnits, isFixedIncomeInvestmentSubtype } from "@/lib/investments";
 import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
 
 export const dynamic = "force-dynamic";
@@ -105,6 +105,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ acc
         investmentSubtype: true,
         investmentCostBasis: true,
         investmentPrincipal: true,
+        investmentQuantity: true,
       },
     });
 
@@ -124,8 +125,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ acc
     const currency = payload.currency ? payload.currency.trim().toUpperCase() : "PHP";
     const note = payload.note?.trim() || null;
 
-    if (totalCost === null) {
-      return NextResponse.json({ error: "totalCost is required" }, { status: 400 });
+    if (totalCost === null || Number(totalCost) <= 0) {
+      return NextResponse.json({ error: "totalCost must be greater than zero" }, { status: 400 });
+    }
+    if (quantity !== null && Number(quantity) <= 0) {
+      return NextResponse.json({ error: "quantity must be greater than zero" }, { status: 400 });
     }
 
     const purchase = await prisma.$transaction(async (tx) => {
@@ -145,13 +149,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ acc
         summaryField === "investmentPrincipal" ? account.investmentPrincipal?.toString() ?? 0 : account.investmentCostBasis?.toString() ?? 0
       );
       const nextSummary = new Prisma.Decimal(currentSummary).plus(new Prisma.Decimal(totalCost));
+      const currentQuantity = new Prisma.Decimal(account.investmentQuantity?.toString() ?? 0);
+      const nextQuantity = quantity === null ? currentQuantity : currentQuantity.plus(new Prisma.Decimal(quantity));
 
       await tx.account.update({
         where: { id: accountId },
-        data:
-          summaryField === "investmentPrincipal"
+        data: {
+          ...(summaryField === "investmentPrincipal"
             ? { investmentPrincipal: nextSummary.toString() }
-            : { investmentCostBasis: nextSummary.toString() },
+            : { investmentCostBasis: nextSummary.toString() }),
+          ...(canTrackInvestmentUnits(account.investmentSubtype) && quantity !== null
+            ? { investmentQuantity: nextQuantity.toString() }
+            : {}),
+        },
       });
 
       return created;
