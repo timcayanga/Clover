@@ -15,6 +15,10 @@ type TransactionCategoryPickerProps = {
   selectedId: string;
   onSelect: (category: TransactionPickerCategory) => void;
   buttonRef?: React.RefObject<HTMLButtonElement | null>;
+  className?: string;
+  buttonClassName?: string;
+  menuClassName?: string;
+  ariaLabel?: string;
 };
 
 const normalize = (value: string) => value.trim().toLowerCase();
@@ -25,7 +29,16 @@ const sortOtherLast = (left: TransactionPickerCategory, right: TransactionPicker
   return left.name.localeCompare(right.name);
 };
 
-export function TransactionCategoryPicker({ categories, selectedId, onSelect, buttonRef }: TransactionCategoryPickerProps) {
+export function TransactionCategoryPicker({
+  categories,
+  selectedId,
+  onSelect,
+  buttonRef,
+  className,
+  buttonClassName,
+  menuClassName,
+  ariaLabel = "Choose category",
+}: TransactionCategoryPickerProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -96,11 +109,12 @@ export function TransactionCategoryPicker({ categories, selectedId, onSelect, bu
   );
 
   return (
-    <div className="transaction-category-picker" ref={rootRef}>
+    <div className={`transaction-category-picker ${className ?? ""}`.trim()} ref={rootRef}>
       <button
         ref={buttonRef}
         type="button"
-        className="transactions-manual-picker__button transactions-manual-picker__button--plain"
+        className={`transactions-manual-picker__button transactions-manual-picker__button--plain ${buttonClassName ?? ""}`.trim()}
+        aria-label={ariaLabel}
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
       >
@@ -108,7 +122,7 @@ export function TransactionCategoryPicker({ categories, selectedId, onSelect, bu
         <span className="transactions-manual-picker__chevron" aria-hidden="true">▾</span>
       </button>
       {open ? (
-        <div className="transaction-category-picker__menu" role="listbox" aria-label="Choose category">
+        <div className={`transaction-category-picker__menu ${menuClassName ?? ""}`.trim()} role="listbox" aria-label={ariaLabel}>
           <div className="transaction-category-picker__head">
             <strong>Choose category</strong>
             <button type="button" onClick={() => setOpen(false)} aria-label="Close categories">×</button>

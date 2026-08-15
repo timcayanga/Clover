@@ -25538,6 +25538,13 @@ html[data-theme="dark"] .portfolio-growth__ranges button.is-active {
   color: var(--accent);
 }
 
+.currency-selector__all-icon {
+  display: none;
+  width: 19px;
+  height: 19px;
+  flex: 0 0 auto;
+}
+
 .currency-selector__chevron {
   display: inline-flex;
   align-items: center;
@@ -51385,6 +51392,22 @@ html[data-theme="dark"] .content--adviser .adviser-summary .adviser-summary-card
     text-overflow: ellipsis;
   }
 
+  .content--accounts .accounts-currency-filter .currency-selector__trigger-all,
+  .content--transactions .transactions-currency-filter .currency-selector__trigger-all {
+    max-width: none;
+    overflow: visible;
+  }
+
+  .content--accounts .accounts-currency-filter .currency-selector__all-label,
+  .content--transactions .transactions-currency-filter .currency-selector__all-label {
+    display: none;
+  }
+
+  .content--accounts .accounts-currency-filter .currency-selector__all-icon,
+  .content--transactions .transactions-currency-filter .currency-selector__all-icon {
+    display: block;
+  }
+
   .accounts-detail__hero-card-row,
   .accounts-detail__hero-card-row .accounts-detail__hero-card {
     justify-self: center;
@@ -54511,14 +54534,16 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
 
 /* Shared manual-entry affordances keep Dashboard and Transactions behavior aligned. */
 .transaction-name-autocomplete,
-.transaction-category-picker {
+.transaction-category-picker,
+.transaction-account-picker {
   position: relative;
   min-width: 0;
   width: 100%;
 }
 
 .transaction-name-autocomplete__menu,
-.transaction-category-picker__menu {
+.transaction-category-picker__menu,
+.transaction-account-picker__menu {
   position: absolute;
   z-index: 80;
   top: calc(100% + 7px);
@@ -54529,6 +54554,130 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.99);
   box-shadow: 0 18px 48px rgba(20, 48, 62, 0.16);
+}
+
+.transaction-account-picker__head {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px 6px;
+}
+
+.transaction-account-picker__head button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 1.35rem;
+  cursor: pointer;
+}
+
+.transaction-account-picker__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.transaction-account-picker__search input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 0.84rem;
+}
+
+.transaction-account-picker__list {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 7px;
+}
+
+.transaction-account-picker__option {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.transaction-account-picker__option:hover,
+.transaction-account-picker__option:focus-visible,
+.transaction-account-picker__option.is-selected {
+  background: rgba(3, 168, 192, 0.08);
+  outline: none;
+}
+
+.transaction-account-picker__option .accounts-brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+}
+
+.transaction-account-picker__option-text {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.transaction-account-picker__option-text strong,
+.transaction-account-picker__option-text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transaction-account-picker__option-text strong { font-size: 0.82rem; }
+.transaction-account-picker__option-text span { color: var(--muted); font-size: 0.72rem; text-transform: capitalize; }
+.transaction-account-picker__check { color: var(--accent); font-weight: 800; }
+.transaction-account-picker__empty { margin: 0; padding: 18px 10px; color: var(--muted); text-align: center; font-size: 0.8rem; }
+
+.transaction-inline-relation-picker .transactions-manual-picker__button {
+  min-height: 28px;
+  height: 28px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  font-size: 0.84rem;
+}
+
+.transaction-inline-relation-picker .transactions-manual-picker__chevron {
+  display: none;
+}
+
+.transaction-inline-relation-picker .transaction-account-picker__menu,
+.transaction-inline-relation-picker .transaction-category-picker__menu {
+  width: min(340px, calc(100vw - 24px));
+}
+
+.transaction-drawer-select--picker .transactions-manual-picker__button {
+  min-height: 44px;
+  padding-left: 42px;
+}
+
+.transaction-detail-page__relation-picker .transactions-manual-picker__button {
+  min-height: 44px;
 }
 
 .transaction-name-autocomplete__option {
@@ -54635,7 +54784,8 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
 }
 
 @media (max-width: 1100px) {
-  .transaction-category-picker__menu {
+  .transaction-category-picker__menu,
+  .transaction-account-picker__menu {
     position: fixed;
     z-index: 10020;
     top: auto;
@@ -54648,9 +54798,12 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     animation: clover-category-sheet-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
-  .transaction-category-picker__head { display: flex; }
-  .transaction-category-picker__list { max-height: calc(min(72dvh, 620px) - 112px); }
-  .transaction-category-picker__option { min-height: 48px; font-size: 0.9rem; }
+  .transaction-category-picker__head,
+  .transaction-account-picker__head { display: flex; }
+  .transaction-category-picker__list,
+  .transaction-account-picker__list { max-height: calc(min(72dvh, 620px) - 112px); }
+  .transaction-category-picker__option,
+  .transaction-account-picker__option { min-height: 48px; font-size: 0.9rem; }
 
   .dashboard-home__report-card .eyebrow { font-size: 13px; letter-spacing: 0.1em; }
   .dashboard-home__report-card .dashboard-home__report-note { font-size: 14px; line-height: 1.45; }
@@ -54671,7 +54824,8 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .transaction-category-picker__menu { animation: none; }
+  .transaction-category-picker__menu,
+  .transaction-account-picker__menu { animation: none; }
 }
 
 .settings-category-table--plain .settings-category-table__row--compact.settings-category-table__row--custom {

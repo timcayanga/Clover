@@ -115,7 +115,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tra
     await assertWorkspaceAccess(userId, transaction.workspaceId);
     const [accounts, categories] = await Promise.all([
       prisma.account.findMany({
-        where: { workspaceId: transaction.workspaceId },
+        where: { workspaceId: transaction.workspaceId, type: { not: "investment" } },
         orderBy: [{ name: "asc" }],
         select: { id: true, name: true, institution: true, accountNumber: true, type: true, currency: true },
       }),

@@ -287,7 +287,13 @@ export function CurrencySelector({
             {selectedOption.symbol}
           </span>
         ) : (
-          <span className="currency-selector__trigger-all">{allLabel}</span>
+          <span className="currency-selector__trigger-all" aria-hidden="true">
+            <svg className="currency-selector__all-icon" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.7" />
+              <path d="M3.5 12h17M12 3.5c2.2 2.35 3.3 5.18 3.3 8.5S14.2 18.15 12 20.5C9.8 18.15 8.7 15.32 8.7 12S9.8 5.85 12 3.5Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+            </svg>
+            <span className="currency-selector__all-label">{allLabel}</span>
+          </span>
         )}
         {showChevron ? (
           <span className="currency-selector__chevron" aria-hidden="true">

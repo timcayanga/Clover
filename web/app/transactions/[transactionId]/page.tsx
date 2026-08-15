@@ -4,7 +4,11 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
+import { TransactionAccountPicker, type TransactionPickerAccount } from "@/components/transaction-account-picker";
+import { TransactionCategoryPicker } from "@/components/transaction-category-picker";
 import { CurrencySelector } from "@/components/currency-selector";
+import { getAccountBrand } from "@/lib/account-brand";
+import type { AccountType } from "@/lib/domain-types";
 import { buildTransactionDetailDraft, type TransactionDetailDraftValue } from "@/lib/transaction-detail-draft";
 import { buildTransactionUpdatePayload } from "@/lib/transaction-update-payload";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
@@ -39,6 +43,7 @@ type AccountOption = {
   name: string;
   institution: string | null;
   accountNumber: string | null;
+  type: AccountType;
   currency: string;
 };
 
@@ -150,6 +155,18 @@ export default function TransactionDetailPage() {
   const selectedCategory = useMemo(
     () => categories.find((category) => category.id === draft?.categoryId) ?? null,
     [categories, draft?.categoryId]
+  );
+  const accountPickerOptions = useMemo<TransactionPickerAccount[]>(
+    () =>
+      accounts
+        .filter((account) => account.type !== "investment")
+        .map((account) => ({
+          id: account.id,
+          label: displayAccountName(account),
+          subtitle: account.institution ?? account.type.replaceAll("_", " "),
+          brand: getAccountBrand(account),
+        })),
+    [accounts]
   );
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
@@ -283,20 +300,23 @@ export default function TransactionDetailPage() {
               </label>
               <label>
                 Account
-                <select value={draft.accountId} onChange={(event) => setDraft({ ...draft, accountId: event.target.value })}>
-                  {accounts.map((account) => (
-                    <option key={account.id} value={account.id}>{displayAccountName(account)}</option>
-                  ))}
-                </select>
+                <TransactionAccountPicker
+                  accounts={accountPickerOptions}
+                  selectedId={draft.accountId}
+                  onSelect={(account) => setDraft({ ...draft, accountId: account.id })}
+                  ariaLabel="Choose transaction account"
+                  className="transaction-detail-page__relation-picker"
+                />
               </label>
               <label>
                 Category
-                <select value={draft.categoryId} onChange={(event) => setDraft({ ...draft, categoryId: event.target.value })}>
-                  <option value="">Other</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>{category.name}</option>
-                  ))}
-                </select>
+                <TransactionCategoryPicker
+                  categories={categories}
+                  selectedId={draft.categoryId}
+                  onSelect={(category) => setDraft({ ...draft, categoryId: category.id })}
+                  ariaLabel="Choose transaction category"
+                  className="transaction-detail-page__relation-picker"
+                />
               </label>
               <label>
                 Amount

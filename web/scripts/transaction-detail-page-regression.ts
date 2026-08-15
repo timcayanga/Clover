@@ -39,7 +39,10 @@ assert.match(transactionsPage, /router\.push\(`\/transactions\/\$\{encodeURIComp
 assert.match(detailPage, /<option value="transfer">Transfer<\/option>/);
 assert.match(detailPage, /method: "PATCH"/);
 assert.match(detailPage, /method: "DELETE"/);
+assert.match(detailPage, /TransactionAccountPicker/, "The full details page must show institution icons in account choices.");
+assert.match(detailPage, /TransactionCategoryPicker/, "The full details page must show category icons in category choices.");
 assert.match(detailRoute, /export async function GET/);
 assert.match(detailRoute, /assertWorkspaceAccess\(userId, transaction\.workspaceId\)/);
+assert.match(detailRoute, /type: \{ not: "investment" \}/, "Investment holdings must not be returned as transaction accounts.");
 
 console.log("Transaction detail page regression passed.");

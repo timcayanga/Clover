@@ -62,6 +62,14 @@ localStorage.setItem(selectedCurrencyByWorkspaceKey, "{invalid");
 assert.equal(readSelectedCurrency("workspace-a"), null, "Corrupt browser storage must safely fall back to page defaults.");
 
 const accountsPageSource = readFileSync(resolve(process.cwd(), "app/accounts/page.tsx"), "utf8");
+const currencySelectorSource = readFileSync(resolve(process.cwd(), "components/currency-selector.tsx"), "utf8");
+const globalStylesSource = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
+assert.ok(
+  currencySelectorSource.includes("currency-selector__all-icon") &&
+    globalStylesSource.includes(".content--accounts .accounts-currency-filter .currency-selector__all-label") &&
+    globalStylesSource.includes(".content--transactions .transactions-currency-filter .currency-selector__all-icon"),
+  "All Currencies must use an unclipped icon in compact Accounts and Transactions headers."
+);
 assert.ok(
   accountsPageSource.includes("visibleAccountCurrencies.some((currency) => currency !== defaultCurrencyCode)"),
   "Accounts should show FX estimates whenever All Currencies includes a non-default currency."

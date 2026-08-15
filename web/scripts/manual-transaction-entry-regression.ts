@@ -10,6 +10,7 @@ const transferRoute = read("app/api/transactions/manual-transfer/route.ts");
 const suggestionsRoute = read("app/api/transaction-name-suggestions/route.ts");
 const categoryRoute = read("app/api/categories/route.ts");
 const categoryPicker = read("components/transaction-category-picker.tsx");
+const accountPicker = read("components/transaction-account-picker.tsx");
 const categorySettings = read("components/settings-categories-panel.tsx");
 const styles = read("app/globals.css");
 
@@ -33,10 +34,15 @@ assert.match(read("components/transaction-name-autocomplete.tsx"), /suppressQuer
 assert.match(categoryPicker, /setOpen\(false\)/, "Category choices must dismiss after selection.");
 assert.match(categoryPicker, /sortOtherLast/, "Other must remain the final category choice.");
 assert.match(categoryPicker, /label: type === "expense" \? "Expenses"/, "Categories must be grouped into readable transaction types.");
+assert.match(categoryPicker, /CategoryBrandMark/, "Category choices must show the same category marks as transaction rows.");
+assert.match(accountPicker, /AccountBrandMark/, "Account choices must show the same institution marks as transaction rows.");
+assert.match(transactions, /filter\(isTransactionAccount\)/, "Manual and edited transactions must not offer investment holdings as payment accounts.");
+assert.match(transactions, /TransactionAccountPicker/, "Transaction account edits must use the icon-rich account picker.");
 assert.match(categorySettings, /parentCategoryId/, "Custom categories must support user-selected groups.");
 assert.match(categoryRoute, /assertValidParentCategory/, "Category groups must be validated server-side.");
 
 assert.match(styles, /@media \(max-width: 1100px\)[\s\S]*?\.dashboard-home__report-card \.eyebrow \{ font-size: 13px/, "Mobile report labels must meet the new readability floor.");
 assert.match(styles, /\.transaction-category-picker__menu[\s\S]*?position: fixed/, "The mobile category picker must use a navigable bottom sheet.");
+assert.match(styles, /\.transaction-account-picker__menu[\s\S]*?position: fixed/, "The mobile account picker must use a navigable bottom sheet.");
 
 console.log("Manual transaction entry regression passed.");

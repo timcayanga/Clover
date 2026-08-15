@@ -26,6 +26,7 @@ import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
 import { TransactionCategoryPicker, type TransactionPickerCategory } from "@/components/transaction-category-picker";
+import { TransactionAccountPicker, type TransactionPickerAccount } from "@/components/transaction-account-picker";
 import { TransactionNameAutocomplete, type TransactionNameSuggestion } from "@/components/transaction-name-autocomplete";
 import { TransactionTagsEditor } from "@/components/transaction-tags-editor";
 import { getCategoryIconTone } from "@/lib/category-icons";
@@ -159,6 +160,8 @@ type Account = {
   source?: string;
   balance?: string | null;
 };
+
+const isTransactionAccount = (account: Pick<Account, "type">) => account.type !== "investment";
 
 const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account | null => {
   const optimisticAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
@@ -2355,29 +2358,6 @@ function TransactionsPageContent() {
       formatTransactionAccountDisplayName(transaction, accountById.get(transaction.accountId) ?? null),
     [accountById, accountNameById]
   );
-  const getAccountOptionsForTransaction = useCallback(
-    (transaction: Transaction) => {
-      const options = accounts
-        .map((account) => ({
-          value: account.id,
-          label: formatTransactionAccountName(account),
-        }))
-        .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base", numeric: true }));
-
-      if (options.some((option) => option.value === transaction.accountId)) {
-        return options;
-      }
-
-      return [
-        {
-          value: transaction.accountId,
-          label: getDisplayAccountNameForTransaction(transaction),
-        },
-        ...options,
-      ];
-    },
-    [accounts, getDisplayAccountNameForTransaction]
-  );
   const accountBrandById = useMemo(
     () => {
       const brandById = new Map(
@@ -2419,6 +2399,19 @@ function TransactionsPageContent() {
     },
     [accounts, transactions, accountInstitutionById, accountNameById]
   );
+  const transactionAccountPickerOptions = useMemo<TransactionPickerAccount[]>(
+    () =>
+      accounts
+        .filter(isTransactionAccount)
+        .map((account) => ({
+          id: account.id,
+          label: formatTransactionAccountName(account),
+          subtitle: account.institution ?? account.type.replaceAll("_", " "),
+          brand: accountBrandById.get(account.id) ?? getAccountBrand(account),
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base", numeric: true })),
+    [accountBrandById, accounts]
+  );
 
   useEffect(() => {
     const sources = new Set<string>();
@@ -2453,7 +2446,7 @@ function TransactionsPageContent() {
     ).size;
     const seenKeys = new Set<string>();
 
-    return accounts.flatMap((account) => {
+    return accounts.filter(isTransactionAccount).flatMap((account) => {
       const key = getTransactionAccountFilterKey(account);
       if (seenKeys.has(key)) {
         return [];
@@ -2499,6 +2492,16 @@ function TransactionsPageContent() {
             formatCurrencyCode(manualForm.currency || manualSelectedAccount?.currency || "PHP")
       ),
     [manualAccountOptions, manualForm.accountId, manualForm.currency, manualSelectedAccount?.currency]
+  );
+  const manualTransferDestinationPickerOptions = useMemo<TransactionPickerAccount[]>(
+    () =>
+      manualTransferDestinationOptions.map(({ account, label }) => ({
+        id: account.id,
+        label,
+        subtitle: account.institution ?? account.type.replaceAll("_", " "),
+        brand: accountBrandById.get(account.id) ?? getAccountBrand(account),
+      })),
+    [accountBrandById, manualTransferDestinationOptions]
   );
   const expandedAccountFilters = useMemo(() => {
     if (accountFilters.length === 0) {
@@ -7420,28 +7423,23 @@ function TransactionsPageContent() {
                     </div>
                     <div className="transaction-account-cell">
                       <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
-                      <InlineEditableCell
-                        value={transaction.accountId}
-                        displayValue={accountDisplayName}
+                      <TransactionAccountPicker
+                        accounts={transactionAccountPickerOptions}
+                        selectedId={transaction.accountId}
                         ariaLabel={`Edit account for ${transaction.merchantRaw}`}
-                        kind="select"
-                        className="transaction-inline-edit transaction-inline-edit--select"
-                        options={getAccountOptionsForTransaction(transaction)}
-                        onCommit={(value) => commitInlineEdit(transaction, "accountId", value)}
+                        className="transaction-inline-relation-picker transaction-inline-relation-picker--account"
+                        buttonClassName="transaction-inline-edit transaction-inline-edit--select"
+                        onSelect={(account) => void commitInlineEdit(transaction, "accountId", account.id)}
                       />
                     </div>
                     <div className="transaction-category-cell">
-                      <InlineEditableCell
-                        value={effectiveCategoryValue}
-                        displayValue={categoryLabel}
+                      <TransactionCategoryPicker
+                        categories={categories}
+                        selectedId={effectiveCategoryValue}
                         ariaLabel={`Edit category for ${transaction.merchantRaw}`}
-                        kind="select"
-                        className="transaction-inline-edit transaction-inline-edit--select"
-                        options={categories.map((category) => ({
-                          value: category.id,
-                          label: category.name,
-                        }))}
-                        onCommit={(value) => commitInlineEdit(transaction, "categoryId", value)}
+                        className="transaction-inline-relation-picker transaction-inline-relation-picker--category"
+                        buttonClassName="transaction-inline-edit transaction-inline-edit--select"
+                        onSelect={(category) => void commitInlineEdit(transaction, "categoryId", category.id)}
                       />
                     </div>
                     <div className={`transaction-amount-cell ${amountToneClass}`}>
@@ -8158,16 +8156,15 @@ function TransactionsPageContent() {
                 {manualForm.type === "transfer" ? (
                   <label className="transactions-manual-field transactions-manual-field--embedded-label">
                     <span className="transactions-manual-field__label">To account</span>
-                    <select
-                      value={manualForm.destinationAccountId}
-                      onChange={(event) => setManualForm((current) => ({ ...current, destinationAccountId: event.target.value }))}
-                      required
-                    >
-                      <option value="">Choose destination account</option>
-                      {manualTransferDestinationOptions.map(({ account, label }) => (
-                        <option key={account.id} value={account.id}>{label}</option>
-                      ))}
-                    </select>
+                    <TransactionAccountPicker
+                      accounts={manualTransferDestinationPickerOptions}
+                      selectedId={manualForm.destinationAccountId}
+                      placeholder="Choose destination account"
+                      ariaLabel="Choose destination account"
+                      onSelect={(account) =>
+                        setManualForm((current) => ({ ...current, destinationAccountId: account.id }))
+                      }
+                    />
                     {manualTransferDestinationOptions.length === 0 ? (
                       <small className="field-help">Add another account in {manualForm.currency} to record an internal transfer.</small>
                     ) : null}
@@ -8532,7 +8529,7 @@ function TransactionsPageContent() {
                 <span className="transaction-drawer-field-label">
                   <span>Account</span>
                 </span>
-                <div className="transaction-drawer-select">
+                <div className="transaction-drawer-select transaction-drawer-select--picker">
                   <span className="transaction-drawer-select__icon" aria-hidden="true">
                     {detailSelectedAccountBrand ? (
                       <AccountBrandMark
@@ -8541,21 +8538,13 @@ function TransactionsPageContent() {
                       />
                     ) : null}
                   </span>
-                  <select
-                    value={detailDraft?.accountId ?? ""}
-                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, accountId: event.target.value } : current))}
-                  >
-                    {(selectedTransaction
-                      ? getAccountOptionsForTransaction(selectedTransaction)
-                      : accounts.map((account) => ({
-                          value: account.id,
-                          label: formatTransactionAccountName(account),
-                        }))).map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  <TransactionAccountPicker
+                    accounts={transactionAccountPickerOptions}
+                    selectedId={detailDraft?.accountId ?? ""}
+                    onSelect={(account) => setDetailDraft((current) => (current ? { ...current, accountId: account.id } : current))}
+                    ariaLabel="Choose transaction account"
+                    className="transaction-drawer-relation-picker"
+                  />
                 </div>
               </label>
 
@@ -8563,20 +8552,17 @@ function TransactionsPageContent() {
                 <span className="transaction-drawer-field-label">
                   <span>Category</span>
                 </span>
-                <div className="transaction-drawer-select">
+                <div className="transaction-drawer-select transaction-drawer-select--picker">
                   <span className="transaction-drawer-select__icon" aria-hidden="true">
                     <CategoryBrandMark categoryName={detailSelectedCategory?.name ?? "Other"} size={24} radius={8} className="transaction-drawer-category-icon" />
                   </span>
-                  <select
-                    value={detailDraft?.categoryId ?? otherCategoryId}
-                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, categoryId: event.target.value } : current))}
-                  >
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
+                  <TransactionCategoryPicker
+                    categories={categories}
+                    selectedId={detailDraft?.categoryId ?? otherCategoryId}
+                    onSelect={(category) => setDetailDraft((current) => (current ? { ...current, categoryId: category.id } : current))}
+                    ariaLabel="Choose transaction category"
+                    className="transaction-drawer-relation-picker"
+                  />
                 </div>
               </label>
 
