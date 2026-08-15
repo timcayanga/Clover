@@ -92,8 +92,8 @@ async function main() {
   );
   assert.match(
     shellSource,
-    /className=\{`shell-mobile-more-link[\s\S]{0,500}aria-label="Open More"/,
-    "Mobile headers must expose the More page from a stable leading burger control."
+    /className=\{`shell-mobile-more-link[\s\S]{0,500}aria-expanded=\{isSidebarOpen\}[\s\S]{0,160}aria-controls="primary-navigation"/,
+    "Mobile headers must expose the vertical primary navigation from a stable leading burger control."
   );
   assert.match(
     dashboardSource,

@@ -82,11 +82,11 @@ export function SplitBillPersonModal({ open, onClose, onSaved }: SplitBillPerson
   };
 
   return (
-    <div className="split-bill-modal" role="presentation" onClick={closeModal}>
-      <section className="split-bill-modal__card glass split-bill-person-modal" role="dialog" aria-modal="true" aria-label="Add person" onClick={(event) => event.stopPropagation()}>
+    <div className="split-bill-modal split-bill-simple-entry-modal" role="presentation" onClick={closeModal}>
+      <form className="split-bill-modal__card glass split-bill-person-modal" role="dialog" aria-modal="true" aria-label="Add person" onSubmit={(event) => { event.preventDefault(); void savePerson(); }} onClick={(event) => event.stopPropagation()}>
         <div className="split-bill-manual-modal__head">
           <div>
-            <p className="eyebrow">Add People</p>
+            <p className="eyebrow">Add Person</p>
           </div>
           <button className="split-bill-icon-button" type="button" onClick={closeModal} aria-label="Close people window">
             ×
@@ -107,11 +107,11 @@ export function SplitBillPersonModal({ open, onClose, onSaved }: SplitBillPerson
         {error ? <p className="split-bill-editor__error">{error}</p> : null}
 
         <div className="split-bill-manual-modal__actions">
-          <button className="button button-primary" type="button" onClick={() => void savePerson()} disabled={isSaving}>
+          <button className="button button-primary" type="submit" disabled={isSaving}>
             {isSaving ? "Saving..." : "Add person"}
           </button>
         </div>
-      </section>
+      </form>
     </div>
   );
 }

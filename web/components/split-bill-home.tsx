@@ -431,7 +431,8 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
                 </button>
               ) : null}
               <button className="button button-secondary button-small transactions-action-button split-bill-action-button" type="button" onClick={() => window.dispatchEvent(new Event("clover:open-split-bill-people"))}>
-                Add person
+                <span className="split-bill-action-label split-bill-action-label--desktop">Add person</span>
+                <span className="split-bill-action-label split-bill-action-label--mobile">Add</span>
               </button>
             </div>
           </section>
@@ -477,7 +478,8 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
             </div>
             <div className="split-bill-mobile-home__footer">
               <button className="button button-secondary button-small transactions-action-button split-bill-action-button" type="button" onClick={() => window.dispatchEvent(new Event("clover:open-split-bill-group"))}>
-                Add group
+                <span className="split-bill-action-label split-bill-action-label--desktop">Add group</span>
+                <span className="split-bill-action-label split-bill-action-label--mobile">Add</span>
               </button>
             </div>
           </section>

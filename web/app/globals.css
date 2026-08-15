@@ -44879,6 +44879,19 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   gap: 8px;
 }
 
+.split-bill-payment-tools__request-form label {
+  display: grid;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.split-bill-payment-tools__request-form label small {
+  font-size: 0.68rem;
+  font-weight: 400;
+}
+
 .split-bill-payment-tools__file-field {
   display: grid;
   gap: 4px;
@@ -45042,10 +45055,10 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   --qr-accent: #e4fffb;
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 108px;
+  grid-template-columns: minmax(0, 1fr) 82px;
   gap: 14px;
-  min-height: 190px;
-  padding: 18px;
+  min-height: 152px;
+  padding: 16px;
   overflow: hidden;
   border: 0;
   border-radius: 24px;
@@ -45116,7 +45129,7 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 }
 
 .split-bill-qr-card__copy h3 {
-  margin: 26px 0 4px;
+  margin: 18px 0 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -45139,14 +45152,24 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   align-self: center;
   display: grid;
   place-items: center;
-  width: 108px;
-  height: 108px;
-  padding: 7px;
+  width: 82px;
+  height: 82px;
+  padding: 6px;
   border: 0;
   border-radius: 18px;
   background: #fff;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
   cursor: zoom-in;
+}
+
+.split-bill-qr-card__image--details {
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: none;
+  color: #fff;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
 }
 
 .split-bill-qr-card__image img {
@@ -45283,6 +45306,31 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   gap: 8px;
 }
 
+.split-bill-qr-editor__upload-block {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid rgba(3, 168, 192, 0.14);
+  border-radius: 16px;
+  background: rgba(3, 168, 192, 0.035);
+}
+
+.split-bill-qr-editor__upload-block > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.split-bill-qr-editor__upload-block strong {
+  font-size: 0.82rem;
+}
+
+.split-bill-qr-editor__upload-block strong small,
+.split-bill-qr-editor__upload-block > div:first-child > span {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 400;
+}
+
 .split-bill-qr-editor__reading {
   color: var(--text-secondary);
   font-size: 0.8rem;
@@ -45367,6 +45415,14 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.split-bill-qr-modal {
+  z-index: 55;
+}
+
+.split-bill-action-label--mobile {
+  display: none;
 }
 
 .split-bill-qr-viewer {
@@ -45515,6 +45571,15 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 
   .split-bill-qr-library {
     padding: 16px;
+    order: 100;
+  }
+
+  .split-bill-action-label--desktop {
+    display: none;
+  }
+
+  .split-bill-action-label--mobile {
+    display: inline;
   }
 
   .split-bill-qr-library__head {
@@ -45531,13 +45596,9 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   }
 
   .split-bill-qr-library__grid {
-    display: flex;
-    gap: 12px;
-    margin-inline: -16px;
-    padding-inline: 16px;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    scrollbar-width: none;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 
   .split-bill-qr-library__grid::-webkit-scrollbar {
@@ -45545,9 +45606,7 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   }
 
   .split-bill-qr-card {
-    flex: 0 0 min(88vw, 330px);
-    min-height: 174px;
-    scroll-snap-align: start;
+    min-height: 148px;
   }
 
   .split-bill-qr-library__loading span:nth-child(n + 2) {
@@ -47275,6 +47334,63 @@ body[data-split-bill-modal-open="true"] .app-shell {
 }
 
 @media (max-width: 1100px) {
+  .split-bill-home > .split-bill-qr-library {
+    order: 100;
+  }
+
+  .split-bill-simple-entry-modal {
+    place-items: end center;
+    padding: 14px 0 0;
+    background: rgba(15, 23, 42, 0.38);
+    backdrop-filter: blur(8px);
+  }
+
+  .split-bill-simple-entry-modal .split-bill-person-modal,
+  .split-bill-simple-entry-modal .split-bill-group-modal {
+    width: 100%;
+    min-height: 0;
+    max-height: 92dvh;
+    padding: 20px 18px calc(20px + env(safe-area-inset-bottom));
+    border: 0;
+    border-radius: 26px 26px 0 0;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+
+  .split-bill-simple-entry-modal .split-bill-manual-modal__head {
+    min-height: auto;
+    padding-left: 0;
+  }
+
+  .split-bill-simple-entry-modal .split-bill-manual-modal__head > div {
+    display: block;
+  }
+
+  .split-bill-simple-entry-modal .split-bill-manual-modal__head .eyebrow {
+    display: block;
+    font-size: 0.72rem;
+  }
+
+  .split-bill-simple-entry-modal .settings-field {
+    gap: 6px;
+    font-size: 0.78rem;
+  }
+
+  .split-bill-simple-entry-modal .settings-input {
+    min-height: 42px;
+    font-size: 0.88rem;
+  }
+
+  .split-bill-simple-entry-modal .split-bill-manual-modal__actions {
+    margin-top: 4px;
+  }
+
+  .split-bill-simple-entry-modal .split-bill-manual-modal__actions .button {
+    width: 100%;
+    min-height: 42px;
+    font-size: 0.84rem;
+  }
+
   .split-bill-empty-cta__actions {
     width: 100%;
     flex-wrap: nowrap;
@@ -54843,6 +54959,29 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   display: none;
 }
 
+.sidebar-mobile-close {
+  display: none;
+}
+
+.shell-menu-icon__line {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 120ms ease;
+}
+
+.shell-menu-icon.is-open .shell-menu-icon__line--top {
+  transform: translateY(5px) rotate(45deg);
+}
+
+.shell-menu-icon.is-open .shell-menu-icon__line--middle {
+  opacity: 0;
+  transform: scaleX(0.35);
+}
+
+.shell-menu-icon.is-open .shell-menu-icon__line--bottom {
+  transform: translateY(-5px) rotate(-45deg);
+}
+
 @media (max-width: 1100px) {
   .shell-topbar-leading {
     display: flex !important;
@@ -54866,8 +55005,57 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     color: var(--text);
     box-shadow: var(--shadow-soft);
     text-decoration: none;
+    padding: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
     transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
   }
+
+  .sidebar-header {
+    justify-content: space-between;
+    padding-inline: 8px 4px;
+  }
+
+  .sidebar-brand-link {
+    width: auto;
+  }
+
+  .sidebar-mobile-close {
+    display: inline-flex;
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+  }
+
+  .sidebar-mobile-close:hover,
+  .sidebar-mobile-close:focus-visible {
+    background: rgba(3, 168, 192, 0.1);
+    color: var(--accent);
+    outline: none;
+  }
+
+  .sidebar-backdrop {
+    opacity: 1;
+    transition: opacity 180ms ease;
+  }
+
+  .app-shell.is-sidebar-open .sidebar-nav__section,
+  .app-shell.is-sidebar-open .sidebar-footer {
+    animation: clover-mobile-drawer-item-in 220ms both cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .app-shell.is-sidebar-open .sidebar-nav__section:nth-child(2) { animation-delay: 25ms; }
+  .app-shell.is-sidebar-open .sidebar-nav__section:nth-child(3) { animation-delay: 50ms; }
+  .app-shell.is-sidebar-open .sidebar-nav__section:nth-child(4) { animation-delay: 75ms; }
+  .app-shell.is-sidebar-open .sidebar-footer { animation-delay: 90ms; }
 
   .shell-mobile-more-link:hover,
   .shell-mobile-more-link:focus-visible,
@@ -54967,6 +55155,21 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     height: 44px;
     min-height: 44px;
     box-shadow: 0 10px 22px rgba(3, 168, 192, 0.2);
+  }
+}
+
+@keyframes clover-mobile-drawer-item-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-menu-icon__line,
+  .sidebar-backdrop,
+  .app-shell.is-sidebar-open .sidebar-nav__section,
+  .app-shell.is-sidebar-open .sidebar-footer {
+    animation: none;
+    transition: none;
   }
 }
 

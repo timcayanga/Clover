@@ -390,7 +390,7 @@ const MENU_ICON_NAMES: Partial<Record<IconName, NavigationIconName>> = {
   "sign-out": "signOut",
 };
 
-function MenuIcon({ name }: { name: IconName }) {
+function MenuIcon({ name, open = false }: { name: IconName; open?: boolean }) {
   const navigationIconName = MENU_ICON_NAMES[name];
   if (navigationIconName) {
     return (
@@ -439,10 +439,10 @@ function MenuIcon({ name }: { name: IconName }) {
       );
     case "menu":
       return (
-        <svg {...common}>
-          <path d="M4 7h16" />
-          <path d="M4 12h16" />
-          <path d="M4 17h16" />
+        <svg {...common} className={`shell-menu-icon${open ? " is-open" : ""}`}>
+          <path className="shell-menu-icon__line shell-menu-icon__line--top" d="M4 7h16" />
+          <path className="shell-menu-icon__line shell-menu-icon__line--middle" d="M4 12h16" />
+          <path className="shell-menu-icon__line shell-menu-icon__line--bottom" d="M4 17h16" />
         </svg>
       );
     case "chevron-left":
@@ -1051,6 +1051,7 @@ export function CloverShell({
         setOpenMenu(null);
         setIsSearchOpen(false);
         setNotificationsPopoverStyle(null);
+        setIsSidebarOpen(false);
       }
     };
 
@@ -1064,6 +1065,19 @@ export function CloverShell({
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [pathname, isSearchOpen, openMenu, isQuickAddOpen]);
+
+  useEffect(() => {
+    if (!isSidebarOpen || window.matchMedia("(min-width: 1101px)").matches) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isSidebarOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1790,6 +1804,14 @@ export function CloverShell({
               fetchPriority="high"
             />
           </Link>
+          <button
+            className="sidebar-mobile-close"
+            type="button"
+            aria-label="Close menu"
+            onClick={() => setIsSidebarOpen(false)}
+          >
+            <MenuIcon name="menu" open />
+          </button>
         </div>
 
         <nav className="sidebar-nav" aria-label="Primary" id="primary-navigation">
@@ -2212,7 +2234,10 @@ export function CloverShell({
         className={`content content--${active} ${titleAddon ? "content--has-title-addon" : "content--plain-title"}${
           mobileLeadingAction ? " content--has-mobile-leading-action" : ""
         }`}
-        onClickCapture={() => {
+        onClickCapture={(event) => {
+          if (event.target instanceof Element && event.target.closest(".shell-mobile-more-link")) {
+            return;
+          }
           if (isSidebarOpen) {
             setIsSidebarOpen(false);
           }
@@ -2221,18 +2246,16 @@ export function CloverShell({
         {!showTopbar ? (
           <div className="shell-compact-bar glass">
             <div className="shell-topbar-leading">
-              <Link
-                href="/more"
-                prefetch={false}
-                className={`shell-mobile-more-link${isMoreActive ? " is-active" : ""}`}
-                aria-label="Open More"
-                aria-current={isMoreActive ? "page" : undefined}
-                onClick={(event) => handleNavigationLinkClick(event, "/more")}
-                onMouseEnter={() => prefetchNavTarget("/more")}
-                onTouchStart={() => prefetchNavTarget("/more")}
+              <button
+                className={`shell-mobile-more-link${isSidebarOpen ? " is-active" : ""}`}
+                type="button"
+                aria-label={isSidebarOpen ? "Close menu" : "Open menu"}
+                aria-expanded={isSidebarOpen}
+                aria-controls="primary-navigation"
+                onClick={() => setIsSidebarOpen((current) => !current)}
               >
-                <MenuIcon name="menu" />
-              </Link>
+                <MenuIcon name="menu" open={isSidebarOpen} />
+              </button>
               {shouldShowBackButton && !mobileFallbackBackOnly ? (
                 <button
                   className="shell-back-button"
@@ -2268,18 +2291,16 @@ export function CloverShell({
         {showTopbar ? (
           <header className="topbar glass">
             <div className="shell-topbar-leading">
-              <Link
-                href="/more"
-                prefetch={false}
-                className={`shell-mobile-more-link${isMoreActive ? " is-active" : ""}`}
-                aria-label="Open More"
-                aria-current={isMoreActive ? "page" : undefined}
-                onClick={(event) => handleNavigationLinkClick(event, "/more")}
-                onMouseEnter={() => prefetchNavTarget("/more")}
-                onTouchStart={() => prefetchNavTarget("/more")}
+              <button
+                className={`shell-mobile-more-link${isSidebarOpen ? " is-active" : ""}`}
+                type="button"
+                aria-label={isSidebarOpen ? "Close menu" : "Open menu"}
+                aria-expanded={isSidebarOpen}
+                aria-controls="primary-navigation"
+                onClick={() => setIsSidebarOpen((current) => !current)}
               >
-                <MenuIcon name="menu" />
-              </Link>
+                <MenuIcon name="menu" open={isSidebarOpen} />
+              </button>
               {shouldShowBackButton ? (
                 <button
                   className={`shell-back-button${mobileFallbackBackOnly ? " shell-back-button--mobile-only" : ""}`}

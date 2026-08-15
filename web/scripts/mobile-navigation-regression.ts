@@ -14,8 +14,18 @@ async function main() {
 
   assert.match(
     shell,
-    /href="\/more"[\s\S]{0,180}className=\{`shell-mobile-more-link/,
-    "The mobile header burger must open More directly.",
+    /className=\{`shell-mobile-more-link[\s\S]{0,300}aria-expanded=\{isSidebarOpen\}[\s\S]{0,160}aria-controls="primary-navigation"/,
+    "The mobile header burger must control the primary navigation drawer.",
+  );
+  assert.match(
+    shell,
+    /<MenuIcon name="menu" open=\{isSidebarOpen\} \/>/,
+    "The burger icon must reflect the drawer's open state.",
+  );
+  assert.match(
+    shell,
+    /<button[\s\S]{0,180}className="sidebar-mobile-close"[\s\S]{0,180}<MenuIcon name="menu" open \/>/,
+    "The drawer must expose an animated close control.",
   );
   assert.match(
     shell,
@@ -44,6 +54,16 @@ async function main() {
   assert.match(
     styles,
     /@media \(max-width: 1100px\) \{[\s\S]*?\.shell-mobile-more-link \{[\s\S]{0,140}display: inline-flex;/,
+  );
+  assert.match(
+    styles,
+    /\.shell-menu-icon\.is-open \.shell-menu-icon__line--top[\s\S]{0,160}rotate\(45deg\)/,
+    "The burger lines must animate into a close icon.",
+  );
+  assert.match(
+    styles,
+    /\.sidebar-backdrop \{[\s\S]{0,160}opacity: 1;[\s\S]{0,160}transition: opacity 180ms ease/,
+    "The mobile drawer must animate over an interactive backdrop.",
   );
   assert.match(
     styles,

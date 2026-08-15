@@ -191,11 +191,11 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
       <SplitBillPersonModal open={isPersonModalOpen} onClose={closePersonModal} onSaved={onPersonSaved} />
 
       {isGroupModalOpen ? (
-        <div className="split-bill-modal" role="presentation" onClick={closeGroupModal}>
-          <section className="split-bill-modal__card glass split-bill-group-modal" role="dialog" aria-modal="true" aria-label="Add group" onClick={(event) => event.stopPropagation()}>
+        <div className="split-bill-modal split-bill-simple-entry-modal" role="presentation" onClick={closeGroupModal}>
+          <form className="split-bill-modal__card glass split-bill-group-modal" role="dialog" aria-modal="true" aria-label="Add group" onSubmit={(event) => { event.preventDefault(); void saveGroup(); }} onClick={(event) => event.stopPropagation()}>
             <div className="split-bill-manual-modal__head">
               <div>
-                <p className="eyebrow">{editingGroupId ? "Edit group" : "Add group"}</p>
+                <p className="eyebrow">{editingGroupId ? "Edit Group" : "Add Group"}</p>
               </div>
               <button className="split-bill-icon-button" type="button" onClick={closeGroupModal} aria-label="Close group window">
                 ×
@@ -215,11 +215,11 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
             {groupError ? <p className="split-bill-group-form__error">{groupError}</p> : null}
 
             <div className="split-bill-manual-modal__actions">
-              <button className="button button-primary" type="button" onClick={() => void saveGroup()} disabled={isSavingGroup || !groupName.trim()}>
+              <button className="button button-primary" type="submit" disabled={isSavingGroup || !groupName.trim()}>
                 {isSavingGroup ? "Saving..." : editingGroupId ? "Save group" : "Create group"}
               </button>
             </div>
-          </section>
+          </form>
         </div>
       ) : null}
     </>

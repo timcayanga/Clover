@@ -158,10 +158,10 @@ export function SplitBillQrLibrary() {
     void fetch("/api/split-bill-payment-profiles")
       .then(async (response) => {
         const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error ?? "Unable to load saved QR codes.");
+        if (!response.ok) throw new Error(payload.error ?? "Unable to load saved payment options.");
         if (active) setProfiles(payload.profiles ?? []);
       })
-      .catch(() => active && setError("Saved QR codes could not load. Please try again."))
+      .catch(() => active && setError("Saved payment options could not load. Please try again."))
       .finally(() => active && setIsLoading(false));
     capturePostHogClientEvent("split_bill_qr_viewed");
     return () => {
@@ -189,6 +189,18 @@ export function SplitBillQrLibrary() {
     setError(null);
     setIsEditorOpen(true);
   };
+
+  useEffect(() => {
+    const handleOpenPaymentOption = () => {
+      setDraft({ ...emptyDraft, isDefault: profiles.length === 0 });
+      setEditingId(null);
+      setNotice(null);
+      setError(null);
+      setIsEditorOpen(true);
+    };
+    window.addEventListener("clover:open-payment-option", handleOpenPaymentOption);
+    return () => window.removeEventListener("clover:open-payment-option", handleOpenPaymentOption);
+  }, [profiles.length]);
 
   const openEdit = (profile: PaymentProfile) => {
     setDraft(profileToDraft(profile));
@@ -228,7 +240,7 @@ export function SplitBillQrLibrary() {
         qrPayload: payload ?? "",
         qrImageData: imageData,
       }));
-      setNotice(payload ? detection.reason : "Image added. Choose the payment app so it is easy to recognize.");
+      setNotice(payload ? detection.reason : "Image added. Confirm the bank so it is easy to recognize.");
       capturePostHogClientEvent("split_bill_qr_uploaded", {
         provider: detection.provider,
         detection_confidence: detection.confidence,
@@ -246,10 +258,6 @@ export function SplitBillQrLibrary() {
 
   const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!draft.qrImageData) {
-      setError("Add a QR image before saving.");
-      return;
-    }
     setError(null);
     setIsSaving(true);
     try {
@@ -262,7 +270,7 @@ export function SplitBillQrLibrary() {
         }
       );
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? "Unable to save this QR code.");
+      if (!response.ok) throw new Error(payload.error ?? "Unable to save this payment option.");
       setProfiles((current) => {
         const next = editingId
           ? current.map((profile) => (profile.id === editingId ? payload.profile : profile))
@@ -275,29 +283,31 @@ export function SplitBillQrLibrary() {
         provider: payload.profile.provider,
         qr_decoded: Boolean(payload.profile.qrPayload),
       });
+      window.dispatchEvent(new Event("clover:payment-options-changed"));
       setIsEditorOpen(false);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Unable to save this QR code.");
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to save this payment option.");
     } finally {
       setIsSaving(false);
     }
   };
 
   const deleteProfile = async (profile: PaymentProfile) => {
-    if (!window.confirm(`Delete ${profile.label}? This QR will no longer be available for payment requests.`)) return;
+    if (!window.confirm(`Delete ${profile.label}? This payment option will no longer be available for requests.`)) return;
     setError(null);
     try {
       const response = await fetch(`/api/split-bill-payment-profiles/${profile.id}`, { method: "DELETE" });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? "Unable to delete this QR code.");
+      if (!response.ok) throw new Error(payload.error ?? "Unable to delete this payment option.");
       setProfiles((current) => {
         const next = current.filter((item) => item.id !== profile.id);
         if (profile.isDefault && next[0]) next[0] = { ...next[0], isDefault: true };
         return next;
       });
       capturePostHogClientEvent("split_bill_qr_deleted", { provider: profile.provider });
+      window.dispatchEvent(new Event("clover:payment-options-changed"));
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Unable to delete this QR code.");
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to delete this payment option.");
     }
   };
 
@@ -305,11 +315,11 @@ export function SplitBillQrLibrary() {
     <section className="split-bill-qr-library panel glass" aria-labelledby="split-bill-qr-title">
       <div className="split-bill-qr-library__head">
         <div>
-          <h2 id="split-bill-qr-title">Payment QR codes</h2>
-          <p>Save your codes once, then reuse them when someone needs to pay you.</p>
+          <h2 id="split-bill-qr-title">Payment Options</h2>
+          <p>Save bank details or a QR code once, then share the right option with a payment request.</p>
         </div>
         <button className="button button-primary button-small transactions-action-button" type="button" onClick={openCreate}>
-          <span aria-hidden="true">+</span> Add QR code
+          <span aria-hidden="true">+</span> Add option
         </button>
       </div>
 
@@ -335,12 +345,16 @@ export function SplitBillQrLibrary() {
                     {profile.isDefault ? <small>Default</small> : null}
                   </div>
                   <h3>{profile.label}</h3>
-                  <p>{profile.accountName || profile.personName || "Ready to share"}</p>
+                  <p>{profile.accountName || "Ready to share"}</p>
                   {profile.accountNumber ? <span>{profile.accountNumber}</span> : null}
                 </div>
-                <button className="split-bill-qr-card__image" type="button" onClick={() => setViewingProfile(profile)} aria-label={`View ${profile.label}`}>
-                  {profile.qrImageData ? <img src={profile.qrImageData} alt={`${profile.provider} payment QR code`} /> : <span>QR</span>}
-                </button>
+                {profile.qrImageData ? (
+                  <button className="split-bill-qr-card__image" type="button" onClick={() => setViewingProfile(profile)} aria-label={`View ${profile.label} QR code`}>
+                    <img src={profile.qrImageData} alt={`${profile.provider} payment QR code`} />
+                  </button>
+                ) : (
+                  <div className="split-bill-qr-card__image split-bill-qr-card__image--details" aria-hidden="true">BANK</div>
+                )}
                 <div className="split-bill-qr-card__actions">
                   <button type="button" onClick={() => openEdit(profile)}>Edit</button>
                   <button type="button" onClick={() => void deleteProfile(profile)}>Delete</button>
@@ -352,8 +366,8 @@ export function SplitBillQrLibrary() {
       ) : (
         <button className="split-bill-qr-library__empty" type="button" onClick={openCreate}>
           <span aria-hidden="true">▦</span>
-          <strong>Keep your payment QR codes ready</strong>
-          <small>Upload an image, screenshot, or photo to add your first one.</small>
+          <strong>Keep your payment details ready</strong>
+          <small>Add bank details, a QR image, or both.</small>
         </button>
       )}
 
@@ -362,22 +376,50 @@ export function SplitBillQrLibrary() {
           <form className="split-bill-modal__card split-bill-qr-editor panel glass" onSubmit={saveProfile} role="dialog" aria-modal="true" aria-labelledby="split-bill-qr-editor-title">
             <div className="split-bill-qr-editor__head">
               <div>
-                <h3 id="split-bill-qr-editor-title">{editingId ? "Edit QR code" : "Add QR code"}</h3>
-                <p>Choose an image, screenshot, or take a clear photo.</p>
+                <h3 id="split-bill-qr-editor-title">{editingId ? "Edit Payment Option" : "Add Payment Option"}</h3>
+                <p>Add bank details, a QR code, or both.</p>
               </div>
               <button className="split-bill-qr-editor__close" type="button" aria-label="Close" onClick={() => setIsEditorOpen(false)}>×</button>
             </div>
 
-            <div className="split-bill-qr-editor__upload-row">
-              <input ref={chooseInputRef} className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={readImage} />
-              <input ref={cameraInputRef} className="sr-only" type="file" accept="image/*" capture="environment" onChange={readImage} />
-              <button className="button button-secondary button-small" type="button" disabled={isReading} onClick={() => chooseInputRef.current?.click()}>
-                {draft.qrImageData ? "Replace image" : "Choose image"}
-              </button>
-              <button className="button button-secondary button-small split-bill-qr-editor__camera" type="button" disabled={isReading} onClick={() => cameraInputRef.current?.click()}>
-                Take photo
-              </button>
-              {isReading ? <span className="split-bill-qr-editor__reading">Reading QR…</span> : null}
+            <div className="split-bill-qr-editor__fields">
+              <label>
+                <span>Name</span>
+                <input value={draft.label} maxLength={80} required placeholder="My GCash" onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))} />
+              </label>
+              <label>
+                <span>Bank</span>
+                <input list="split-bill-payment-banks" value={draft.provider} maxLength={80} required placeholder="GCash, BPI, Maya" onChange={(event) => setDraft((current) => ({ ...current, provider: event.target.value }))} />
+                <datalist id="split-bill-payment-banks">
+                  {PAYMENT_QR_PROVIDERS.map((provider) => <option key={provider} value={provider} />)}
+                </datalist>
+              </label>
+              <label>
+                <span>Account name <small>Optional</small></span>
+                <input value={draft.accountName} maxLength={120} placeholder="Name shown to payers" onChange={(event) => setDraft((current) => ({ ...current, accountName: event.target.value }))} />
+              </label>
+              <label>
+                <span>Account number <small>Optional</small></span>
+                <input value={draft.accountNumber} maxLength={120} placeholder="Mobile or account number" onChange={(event) => setDraft((current) => ({ ...current, accountNumber: event.target.value }))} />
+              </label>
+            </div>
+
+            <div className="split-bill-qr-editor__upload-block">
+              <div>
+                <strong>QR Code <small>Optional</small></strong>
+                <span>Upload a saved image, screenshot, or clear photo.</span>
+              </div>
+              <div className="split-bill-qr-editor__upload-row">
+                <input ref={chooseInputRef} className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={readImage} />
+                <input ref={cameraInputRef} className="sr-only" type="file" accept="image/*" capture="environment" onChange={readImage} />
+                <button className="button button-secondary button-small" type="button" disabled={isReading} onClick={() => chooseInputRef.current?.click()}>
+                  {draft.qrImageData ? "Replace QR" : "Upload QR"}
+                </button>
+                <button className="button button-secondary button-small split-bill-qr-editor__camera" type="button" disabled={isReading} onClick={() => cameraInputRef.current?.click()}>
+                  Take photo
+                </button>
+                {isReading ? <span className="split-bill-qr-editor__reading">Reading QR…</span> : null}
+              </div>
             </div>
 
             {draft.qrImageData ? (
@@ -389,45 +431,10 @@ export function SplitBillQrLibrary() {
                 </div>
               </div>
             ) : null}
-
-            <div className="split-bill-qr-editor__fields">
-              <label>
-                <span>Name</span>
-                <input value={draft.label} maxLength={80} required placeholder="My GCash" onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))} />
-              </label>
-              <label>
-                <span>Payment app</span>
-                <select value={draft.provider} onChange={(event) => setDraft((current) => ({ ...current, provider: event.target.value }))}>
-                  {PAYMENT_QR_PROVIDERS.map((provider) => <option key={provider} value={provider}>{provider}</option>)}
-                </select>
-              </label>
-              <label>
-                <span>Currency</span>
-                <input value={draft.currency} maxLength={8} required onChange={(event) => setDraft((current) => ({ ...current, currency: event.target.value.toUpperCase() }))} />
-              </label>
-              <label>
-                <span>Account name <small>Optional</small></span>
-                <input value={draft.accountName} maxLength={120} placeholder="Name shown to payers" onChange={(event) => setDraft((current) => ({ ...current, accountName: event.target.value }))} />
-              </label>
-              <label>
-                <span>Account number <small>Optional</small></span>
-                <input value={draft.accountNumber} maxLength={120} inputMode="numeric" placeholder="Mobile or account number" onChange={(event) => setDraft((current) => ({ ...current, accountNumber: event.target.value }))} />
-              </label>
-              <label>
-                <span>Payee <small>Optional</small></span>
-                <input value={draft.personName} maxLength={120} placeholder="Who receives the payment" onChange={(event) => setDraft((current) => ({ ...current, personName: event.target.value }))} />
-              </label>
-            </div>
-
-            <label className="split-bill-qr-editor__default">
-              <input type="checkbox" checked={draft.isDefault} onChange={(event) => setDraft((current) => ({ ...current, isDefault: event.target.checked }))} />
-              <span>Use this QR by default</span>
-            </label>
             {error ? <p className="split-bill-qr-library__error" role="alert">{error}</p> : null}
             <div className="split-bill-qr-editor__actions">
-              <button className="button button-secondary button-small" type="button" onClick={() => setIsEditorOpen(false)}>Cancel</button>
-              <button className="button button-primary button-small" type="submit" disabled={isSaving || isReading || !draft.qrImageData}>
-                {isSaving ? "Saving…" : "Save QR code"}
+              <button className="button button-primary button-small" type="submit" disabled={isSaving || isReading || !draft.label.trim() || !draft.provider.trim()}>
+                {isSaving ? "Saving…" : "Save"}
               </button>
             </div>
           </form>

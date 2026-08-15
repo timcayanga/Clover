@@ -117,16 +117,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ bil
     if (body.paymentProfileId) {
       const profile = await prisma.splitBillPaymentProfile.findFirst({
         where: { id: body.paymentProfileId, userId: user.id },
-        select: { id: true, personName: true, currency: true },
+        select: { id: true },
       });
       if (!profile) {
-        throw new Error("Payment method not found.");
-      }
-      if (profile.personName && profile.personName !== payee.name) {
-        throw new Error("Choose a payment method saved for this person.");
-      }
-      if (profile.currency.toUpperCase() !== bill.currency.toUpperCase()) {
-        throw new Error(`Choose a ${bill.currency.toUpperCase()} payment method for this request.`);
+        throw new Error("Payment option not found.");
       }
     }
 
