@@ -5,7 +5,7 @@
   "scripts": {
     "predev": "tsx scripts/sync-public-assets.ts",
     "dev": "next dev",
-    "prebuild": "tsx scripts/sync-public-assets.ts && node -e \"require('fs').rmSync('.next', { recursive: true, force: true })\"",
+    "prebuild": "tsx scripts/check-environment-isolation.ts && tsx scripts/sync-public-assets.ts && node -e \"require('fs').rmSync('.next', { recursive: true, force: true })\"",
     "build": "next build",
     "db:migrate": "prisma migrate deploy --schema prisma/schema.prisma",
     "start": "next start",
@@ -102,6 +102,7 @@
     "qa:split-bill-qr": "tsx scripts/split-bill-qr-regression.ts",
     "qa:production-readiness": "tsx scripts/production-readiness-regression.ts",
     "qa:environment-readiness": "tsx scripts/check-environment-readiness.ts",
+    "qa:environment-isolation": "tsx scripts/environment-isolation-regression.ts",
     "qa:critical-page-loading": "tsx scripts/critical-page-loading-regression.ts",
     "qa:browser-compatibility": "tsx scripts/browser-compatibility-regression.ts",
     "qa:title-case": "tsx scripts/title-case-regression.ts",

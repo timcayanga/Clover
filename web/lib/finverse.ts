@@ -9,6 +9,14 @@ const READY_STATUSES = new Set([
 
 type JsonRecord = Record<string, unknown>;
 
+export const isFinverseEnabled = () => process.env.FINVERSE_ENABLED === "true";
+
+export const assertFinverseEnabled = () => {
+  if (!isFinverseEnabled()) {
+    throw new Error("FINVERSE_DISABLED");
+  }
+};
+
 export type FinverseAccount = JsonRecord & {
   account_id: string;
   account_name?: string;
@@ -31,6 +39,7 @@ export type FinverseTransaction = JsonRecord & {
 };
 
 export const getFinverseConfig = () => {
+  assertFinverseEnabled();
   const clientId = process.env.FINVERSE_CLIENT_ID?.trim();
   const clientSecret = process.env.FINVERSE_CLIENT_SECRET?.trim();
   const redirectUri = process.env.FINVERSE_REDIRECT_URI?.trim();

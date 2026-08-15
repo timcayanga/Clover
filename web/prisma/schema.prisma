@@ -1833,3 +1833,10 @@ model AuditLog {
   @@index([workspaceId])
   @@index([actorUserId])
 }
+
+model CloverDeploymentEnvironment {
+  id          String   @id @default("primary")
+  environment String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

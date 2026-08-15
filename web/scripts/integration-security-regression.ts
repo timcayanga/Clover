@@ -31,6 +31,9 @@ try {
   const transactionsRoute = await readFile(join(root, "app/api/transactions/route.ts"), "utf8");
   const nextConfig = await readFile(join(root, "next.config.mjs"), "utf8");
   const middleware = await readFile(join(root, "middleware.ts"), "utf8");
+  const userContext = await readFile(join(root, "lib/user-context.ts"), "utf8");
+  const finverse = await readFile(join(root, "lib/finverse.ts"), "utf8");
+  const finverseCallback = await readFile(join(root, "app/api/integrations/finverse/callback/route.ts"), "utf8");
 
   assert.match(paypal, /getBillingPlanTierForSubscription\(snapshot\.status, snapshot\.interval\)/);
   assert.match(paypal, /status === BillingSubscriptionStatus\.active && interval !== null/);
@@ -60,6 +63,11 @@ try {
   assert.match(transactionsRoute, /SELECT DISTINCT "currency"/);
   assert.doesNotMatch(transactionsRoute, /distinct: \["currency"\]/);
   assert.doesNotMatch(transactionsPage, /pageSizeOverride: 200/);
+  assert.match(userContext, /IDENTITY_ENVIRONMENT_CONFLICT/);
+  assert.doesNotMatch(userContext, /clerkUserId: clerkUser\.clerkUserId,[\s\S]{0,500}recovered_existing_email/);
+  assert.match(finverse, /process\.env\.FINVERSE_ENABLED === "true"/);
+  assert.match(finverse, /assertFinverseEnabled\(\);/);
+  assert.match(finverseCallback, /if \(!isFinverseEnabled\(\)\)/);
 
   console.log("Integration security regression passed.");
 } finally {

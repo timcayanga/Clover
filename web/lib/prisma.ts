@@ -4,6 +4,7 @@ import { loadEnvConfig } from "@next/env";
 import { existsSync } from "fs";
 import path from "path";
 import { Pool } from "pg";
+import { assertStaticEnvironmentIsolation } from "@/lib/environment-isolation";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
@@ -24,6 +25,7 @@ const loadLocalDatabaseEnv = () => {
 };
 
 loadLocalDatabaseEnv();
+assertStaticEnvironmentIsolation(process.env);
 
 const resolveDatabaseUrl = () => {
   const configuredUrl = process.env.DATABASE_URL?.trim() || process.env.DIRECT_URL?.trim();

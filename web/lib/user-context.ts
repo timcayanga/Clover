@@ -70,31 +70,16 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
       throw error;
     }
 
-    const updated = await prisma.user.update({
-      where: { id: existingByEmail.id },
-      data: {
-        clerkUserId: clerkUser.clerkUserId,
-        firstName: clerkUser.firstName ?? existingByEmail.firstName,
-        lastName: clerkUser.lastName ?? existingByEmail.lastName,
-        verified: clerkUser.verified,
-        environment: resolvePersistedUserEnvironment(
-          currentEnvironment,
-          existingByEmail.environment
-        ),
-        ...(isLocalEnvironment ? { planTier: "pro" } : {}),
-      },
+    console.error("Clerk identity conflicts with an existing email", {
+      currentEnvironment,
+      existingUserEnvironment: existingByEmail.environment,
+      existingUserId: existingByEmail.id,
     });
-
-    void capturePostHogServerEvent("signup_completed", clerkUser.clerkUserId, {
-      email_verified: clerkUser.verified,
-      recovered_existing_email: true,
+    void capturePostHogServerEvent("identity_environment_conflict", clerkUser.clerkUserId, {
+      environment: currentEnvironment,
+      existing_user_environment: existingByEmail.environment,
     });
-    void capturePostHogServerEvent("first_login", clerkUser.clerkUserId, {
-      email_verified: clerkUser.verified,
-      recovered_existing_email: true,
-    });
-
-    return updated;
+    throw new Error("IDENTITY_ENVIRONMENT_CONFLICT");
   }
 };
 

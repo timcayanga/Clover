@@ -5,6 +5,7 @@ import {
   exchangeFinverseCode,
   getFinverseConfig,
   hashFinverseState,
+  isFinverseEnabled,
 } from "@/lib/finverse";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +33,17 @@ const redirectToAccounts = (status: string, connectionId?: string) => {
   return NextResponse.redirect(url, { status: 303, headers: corsHeaders });
 };
 
+const redirectDisabledToAccounts = (request: Request) => {
+  const url = new URL("/accounts", request.url);
+  url.searchParams.set("finverse", "disabled");
+  return NextResponse.redirect(url, { status: 303, headers: corsHeaders });
+};
+
 const handleCallback = async (request: Request) => {
+  if (!isFinverseEnabled()) {
+    return redirectDisabledToAccounts(request);
+  }
+
   try {
     const { code, state } = await callbackValues(request);
     if (!code || !state) return redirectToAccounts("invalid_callback");
