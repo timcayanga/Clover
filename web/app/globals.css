@@ -26973,8 +26973,13 @@ html[data-theme="dark"] .institution-assets-table tbody tr:focus-visible td {
 
 .institution-asset-editor__actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.institution-asset-editor__delete {
+  margin-right: auto;
 }
 
 .institution-asset-drawer-backdrop {

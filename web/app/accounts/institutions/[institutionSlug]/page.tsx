@@ -397,6 +397,7 @@ export default function InvestmentInstitutionDetailPage() {
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
   const [assetDraft, setAssetDraft] = useState<AssetDraft | null>(null);
   const [savingAssetId, setSavingAssetId] = useState<string | null>(null);
+  const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   const [newHoldingDraft, setNewHoldingDraft] = useState<AssetDraft | null>(null);
   const [savingNewHolding, setSavingNewHolding] = useState(false);
   const [tradeDraft, setTradeDraft] = useState<TradeDraft>(buildTradeDraft([], routeCurrency));
@@ -664,6 +665,17 @@ export default function InvestmentInstitutionDetailPage() {
     () => accounts.find((account) => account.id === editingAssetId) ?? null,
     [accounts, editingAssetId]
   );
+
+  const assetDraftHasChanges = useMemo(() => {
+    if (!editingAsset || !assetDraft) {
+      return false;
+    }
+
+    const initialDraft = buildAssetDraft(editingAsset);
+    return (Object.keys(initialDraft) as Array<keyof AssetDraft>).some(
+      (field) => initialDraft[field] !== assetDraft[field]
+    );
+  }, [assetDraft, editingAsset]);
 
   const editingFieldConfigs = useMemo(
     () => getInvestmentFieldConfigs(assetDraft?.investmentSubtype ?? editingAsset?.investmentSubtype ?? "stock"),
@@ -1098,7 +1110,7 @@ export default function InvestmentInstitutionDetailPage() {
 
   const saveAsset = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!workspaceId || !editingAsset || !assetDraft) {
+    if (!workspaceId || !editingAsset || !assetDraft || !assetDraftHasChanges) {
       return;
     }
 
@@ -1142,6 +1154,50 @@ export default function InvestmentInstitutionDetailPage() {
       setMessage(error instanceof Error ? error.message : "Unable to update this asset.");
     } finally {
       setSavingAssetId(null);
+    }
+  };
+
+  const deleteAsset = async () => {
+    if (!workspaceId || !editingAsset) {
+      return;
+    }
+
+    const assetName = accountAssetNameMap.get(editingAsset.id) ?? editingAsset.name;
+    const confirmed = window.confirm(
+      `Delete ${assetName}? This will also remove its linked transactions. This action cannot be undone.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingAssetId(editingAsset.id);
+    try {
+      const response = await fetch(`/api/accounts/${editingAsset.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId }),
+      });
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Unable to delete this asset.");
+      }
+
+      const nextAccounts = accounts.filter((account) => account.id !== editingAsset.id);
+      const nextTransactions = transactions.filter((transaction) => transaction.accountId !== editingAsset.id);
+      setAccounts(nextAccounts);
+      setTransactions(nextTransactions);
+      setInvestmentSnapshots((current) =>
+        current.filter((snapshot) => snapshot.account?.id !== editingAsset.id)
+      );
+      syncWorkspaceCache(nextAccounts, nextTransactions);
+      setEditingAssetId(null);
+      setAssetDraft(null);
+      setMessage(`Deleted ${assetName}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to delete this asset.");
+    } finally {
+      setDeletingAssetId(null);
     }
   };
 
@@ -1729,22 +1785,31 @@ export default function InvestmentInstitutionDetailPage() {
               </div>
 
               <div className="institution-asset-editor__actions">
-                <button className="button button-secondary button-small" type="button" onClick={() => router.push(getAccountPath(editingAsset))}>
-                  Open full asset
+                <button
+                  className="button button-danger button-small institution-asset-editor__delete"
+                  type="button"
+                  onClick={deleteAsset}
+                  disabled={deletingAssetId === editingAsset.id || savingAssetId === editingAsset.id}
+                >
+                  {deletingAssetId === editingAsset.id ? "Deleting..." : "Delete"}
                 </button>
                 <button
                   className="button button-secondary button-small"
                   type="button"
-                  onClick={() => {
-                    setEditingAssetId(null);
-                    setAssetDraft(null);
-                  }}
+                  onClick={() => router.push(getAccountPath(editingAsset))}
+                  disabled={deletingAssetId === editingAsset.id || savingAssetId === editingAsset.id}
                 >
-                  Cancel
+                  Open full asset
                 </button>
-                <button className="button button-primary button-small" type="submit" disabled={savingAssetId === editingAsset.id}>
-                  {savingAssetId === editingAsset.id ? "Saving..." : "Save holding"}
-                </button>
+                {assetDraftHasChanges ? (
+                  <button
+                    className="button button-primary button-small"
+                    type="submit"
+                    disabled={savingAssetId === editingAsset.id || deletingAssetId === editingAsset.id}
+                  >
+                    {savingAssetId === editingAsset.id ? "Saving..." : "Save"}
+                  </button>
+                ) : null}
               </div>
               </form>
             </aside>

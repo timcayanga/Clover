@@ -12,6 +12,17 @@ const tradeEditor = institutionPage.slice(
   institutionPage.indexOf('<form className="institution-trade-editor"'),
   institutionPage.indexOf("</form>", institutionPage.indexOf('<form className="institution-trade-editor"'))
 );
+const assetEditor = institutionPage.slice(
+  institutionPage.indexOf(
+    '<form className="institution-asset-editor institution-asset-drawer__form" onSubmit={saveAsset}'
+  ),
+  institutionPage.indexOf(
+    "</form>",
+    institutionPage.indexOf(
+      '<form className="institution-asset-editor institution-asset-drawer__form" onSubmit={saveAsset}'
+    )
+  )
+);
 
 const orderedTransactions = sortInvestmentTransactionsNewestFirst([
   { id: "older-imported-later", date: "2026-02-01", createdAt: "2026-08-05" },
@@ -75,6 +86,13 @@ const checks = [
   [institutionPage.includes('list="institution-trade-assets"'), "Trading History accepts known or custom asset names"],
   [institutionPage.includes("investmentAssetName: assetLabel"), "Custom trade asset names persist through the transaction API"],
   [institutionPage.includes("getManualInvestmentPositionActivities(transactions)"), "Manual Buy and Sell history updates institution holding units"],
+  [institutionPage.includes("const assetDraftHasChanges = useMemo"), "Asset details detects real edits before offering Save"],
+  [assetEditor.includes('{assetDraftHasChanges ? ('), "Asset details hides Save until a field changes"],
+  [assetEditor.includes('"Saving..." : "Save"'), "Asset details uses the concise Save label"],
+  [!assetEditor.includes("Cancel"), "Asset details does not render a redundant Cancel action"],
+  [assetEditor.includes('onClick={deleteAsset}'), "Asset details exposes asset deletion"],
+  [institutionPage.includes('method: "DELETE"'), "Asset deletion uses the guarded account deletion endpoint"],
+  [institutionPage.includes("This action cannot be undone."), "Asset deletion requires explicit confirmation"],
   [tradeEditor.indexOf("<span>Currency</span>") < tradeEditor.indexOf("<span>Amount</span>"), "Currency appears before Amount"],
   [tradeEditor.indexOf("<span>Amount</span>") < tradeEditor.indexOf("<span>Units</span>"), "Amount appears before Units"],
 ] as const;
