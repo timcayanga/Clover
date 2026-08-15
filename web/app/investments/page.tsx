@@ -22,6 +22,7 @@ import { BETA_FULL_ACCESS_ENABLED, hasFullFeatureAccess } from "@/lib/beta-acces
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
 import { resolveGotradeSecuritySymbol } from "@/lib/gotrade-securities";
+import { useLiveInvestmentValues } from "@/lib/use-live-investment-values";
 import { getPortfolioGrowthMarket, type PortfolioGrowthAsset } from "@/lib/investment-portfolio-growth";
 import { canonicalizePdaxInvestmentHoldings } from "@/lib/pdax-portfolio-accounts";
 import {
@@ -56,6 +57,7 @@ import {
   getInvestmentSubtypeDescription,
   getInvestmentSubtypeLabel,
   INVESTMENT_SUBTYPES,
+  SORTED_INVESTMENT_SUBTYPES,
   isFixedIncomeInvestmentSubtype,
   isActivityOnlyGcryptoAccount,
   isMarketInvestmentSubtype,
@@ -1298,6 +1300,7 @@ export default function InvestmentsPage() {
     () => accounts.filter((account) => account.type === "investment" || isGSaveInvestmentAccount(account)),
     [accounts]
   );
+  const liveInvestmentValues = useLiveInvestmentValues(investmentAccounts);
 
   const investmentTransactions = useMemo(() => {
     const investmentAccountIds = new Set(investmentAccounts.map((account) => account.id));
@@ -1339,7 +1342,7 @@ export default function InvestmentsPage() {
         new Set(matchingTransactions.map(extractInvestmentAssetNameFromTransaction).filter((value): value is string => Boolean(value?.trim())))
       );
       const isGeneric = isGenericInvestmentAssetLabel(account.name, account.institution);
-      const currentValue = parseNullableAmount(account.balance);
+      const currentValue = liveInvestmentValues[account.id] ?? parseNullableAmount(account.balance);
       const purchaseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
       const gainLoss = currentValue === null || purchaseValue === null ? null : currentValue - purchaseValue;
       const matchingSnapshot =
@@ -1362,7 +1365,31 @@ export default function InvestmentsPage() {
         if (!usedSnapshotIds.has(matchingSnapshot.id)) {
           usedSnapshotIds.add(matchingSnapshot.id);
           for (const holding of snapshotHoldings) {
-            const holdingCurrentValue = parseNullableAmount(holding.currentValue ?? holding.marketValue);
+            const holdingSymbol = resolveGotradeSecuritySymbol({
+              institution: account.institution ?? matchingSnapshot.documentImport?.institution,
+              name: holding.assetName,
+              symbol: holding.assetSymbol,
+            });
+            const normalizedHoldingIdentity = normalizeInvestmentLabel(holdingSymbol ?? holding.assetName);
+            const matchingPositionAccount = investmentAccounts.find((candidate) => {
+              if (
+                normalizeInvestmentLabel(candidate.institution) !==
+                normalizeInvestmentLabel(account.institution ?? matchingSnapshot.documentImport?.institution)
+              ) {
+                return false;
+              }
+              const candidateSymbol = resolveGotradeSecuritySymbol({
+                institution: candidate.institution,
+                name: candidate.name,
+                symbol: candidate.investmentSymbol,
+              });
+              return normalizeInvestmentLabel(candidateSymbol ?? candidate.name) === normalizedHoldingIdentity;
+            });
+            const liveHoldingValue = matchingPositionAccount
+              ? liveInvestmentValues[matchingPositionAccount.id]
+              : undefined;
+            const holdingCurrentValue =
+              liveHoldingValue ?? parseNullableAmount(holding.currentValue ?? holding.marketValue);
             const holdingPurchaseValue = parseNullableAmount(holding.costBasis);
             const recordedGainLoss = parseNullableAmount(holding.gainLossValue);
             const holdingGainLoss =
@@ -1370,11 +1397,6 @@ export default function InvestmentsPage() {
               (holdingCurrentValue !== null && holdingPurchaseValue !== null
                 ? holdingCurrentValue - holdingPurchaseValue
                 : null);
-            const holdingSymbol = resolveGotradeSecuritySymbol({
-              institution: account.institution ?? matchingSnapshot.documentImport?.institution,
-              name: holding.assetName,
-              symbol: holding.assetSymbol,
-            });
             const classification = inferInvestmentClassification({
               subtype: INVESTMENT_SUBTYPES.includes(holding.assetType as InvestmentSubtype)
                 ? holding.assetType
@@ -1387,7 +1409,7 @@ export default function InvestmentsPage() {
 
             rows.push({
               key: `holding:${holding.id}`,
-              accountId: matchingSnapshot.account?.id ?? account.id,
+              accountId: matchingPositionAccount?.id ?? matchingSnapshot.account?.id ?? account.id,
               assetId: holding.id,
               source: "holding",
               name: holding.assetName,
@@ -1400,7 +1422,7 @@ export default function InvestmentsPage() {
               gainLoss: holdingGainLoss,
               currency: holding.currency || matchingSnapshot.currency || account.currency,
               classification,
-              updatedAt: holding.updatedAt || matchingSnapshot.updatedAt,
+              updatedAt: liveHoldingValue === undefined ? holding.updatedAt || matchingSnapshot.updatedAt : new Date().toISOString(),
               startDate: matchingSnapshot.snapshotDate,
             });
           }
@@ -1595,7 +1617,7 @@ export default function InvestmentsPage() {
     }
 
     return canonicalizePortfolioRows(rows);
-  }, [investmentAccounts, investmentSnapshots, investmentTransactions, manualPositionActivities]);
+  }, [investmentAccounts, investmentSnapshots, investmentTransactions, liveInvestmentValues, manualPositionActivities]);
 
   const visibleInvestmentAccounts = useMemo(() => {
     const search = normalizeInvestmentSearchText(investmentSearch);
@@ -2892,6 +2914,9 @@ export default function InvestmentsPage() {
                 </strong>
               </article>
             </section>
+            <p className="investments-estimate-note">
+              Portfolio values are estimates. Check your investment apps for the latest amounts.
+            </p>
             <section className="investments-growth-hero glass">
               <div className="investments-allocation__head">
                 <div className="investments-allocation__head-title">
@@ -3012,7 +3037,7 @@ export default function InvestmentsPage() {
                   <label aria-label="Filter by investment type">
                     <select value={investmentSubtypeFilter} onChange={(event) => setInvestmentSubtypeFilter(event.target.value as InvestmentSubtype | "all")}>
                       <option value="all">All subtypes</option>
-                      {INVESTMENT_SUBTYPES.map((subtype) => (
+                      {SORTED_INVESTMENT_SUBTYPES.map((subtype) => (
                         <option key={subtype} value={subtype}>
                           {getInvestmentSubtypeLabel(subtype)}
                         </option>
@@ -3103,7 +3128,7 @@ export default function InvestmentsPage() {
                             displayValue={row.subtype ? getInvestmentSubtypeLabel(row.subtype) : "Other"}
                             ariaLabel={`Edit type for ${row.name}`}
                             kind="select"
-                            options={INVESTMENT_SUBTYPES.map((subtype) => ({
+                            options={SORTED_INVESTMENT_SUBTYPES.map((subtype) => ({
                               value: subtype,
                               label: getInvestmentSubtypeLabel(subtype),
                             }))}
@@ -3653,7 +3678,7 @@ export default function InvestmentsPage() {
                           updateHoldingEditDraft("assetType", event.target.value as InvestmentSubtype)
                         }
                       >
-                        {INVESTMENT_SUBTYPES.map((subtype) => (
+                        {SORTED_INVESTMENT_SUBTYPES.map((subtype) => (
                           <option key={subtype} value={subtype}>
                             {getInvestmentSubtypeLabel(subtype)}
                           </option>
@@ -3762,7 +3787,7 @@ export default function InvestmentsPage() {
                         );
                       }}
                     >
-                      {INVESTMENT_SUBTYPES.map((subtype) => (
+                      {SORTED_INVESTMENT_SUBTYPES.map((subtype) => (
                         <option key={subtype} value={subtype}>
                           {getInvestmentSubtypeLabel(subtype)}
                         </option>
@@ -3892,7 +3917,7 @@ export default function InvestmentsPage() {
                     value={manualInvestmentSubtype}
                     onChange={(event) => setManualInvestmentSubtype(event.target.value as InvestmentSubtype)}
                   >
-                    {INVESTMENT_SUBTYPES.map((subtype) => (
+                    {SORTED_INVESTMENT_SUBTYPES.map((subtype) => (
                       <option key={subtype} value={subtype}>
                         {getInvestmentSubtypeLabel(subtype)}
                       </option>

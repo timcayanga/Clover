@@ -200,14 +200,14 @@ async function main() {
     "Credit-card detail headers must use one centered column at desktop widths."
   );
   assert.match(
-    globalStyles,
-    /\.accounts-detail__account-identity-editor--inline \.accounts-inline-edit__grid input \{[\s\S]{0,240}border: 0;[\s\S]{0,100}border-bottom:/,
-    "Inline account identity fields must use flat underline styling instead of input containers."
-  );
-  assert.match(
     accountDetailsSource,
-    /className="accounts-detail__account-identity-close"[\s\S]{0,120}>\s*Close\s*<\/button>/,
-    "The account identity editor must expose a compact text-only Close action."
+    /editableName=\{account\.type === "investment" \? undefined : account\.name\}[\s\S]{0,500}onNameCommit=/,
+    "Account identity fields must be editable directly on the account card."
+  );
+  assert.doesNotMatch(
+    accountDetailsSource,
+    /className="accounts-detail__account-identity-editor--inline"|className="accounts-detail__account-identity-close"/,
+    "Account identity editing must not restore the redundant editor container or Close action."
   );
   assert.match(
     responsiveLayoutSource,

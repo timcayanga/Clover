@@ -14,7 +14,9 @@ import {
   isActivityOnlyGcryptoAccount,
   getInvestmentFieldConfigs,
   getInvestmentSubtypeLabel,
+  isMarketInvestmentSubtype,
   INVESTMENT_SUBTYPES,
+  SORTED_INVESTMENT_SUBTYPES,
   type InvestmentSubtype,
 } from "@/lib/investments";
 import {
@@ -40,6 +42,7 @@ import {
   sumManualInvestmentUnits,
 } from "@/lib/manual-investment-positions";
 import { canonicalizePdaxInvestmentHoldings } from "@/lib/pdax-portfolio-accounts";
+import { useLiveInvestmentValues } from "@/lib/use-live-investment-values";
 
 type Account = {
   id: string;
@@ -186,6 +189,35 @@ const parseNullableAmount = (value: string | null | undefined) => {
   }
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+};
+
+const inferHoldingMarket = (subtype: InvestmentSubtype, institution: string, currency: string) => {
+  if (subtype === "crypto") return "crypto";
+  if (currency === "PHP" || /gstocks|pse|philippine/i.test(institution)) return "ph";
+  return "us";
+};
+
+const fetchEstimatedMarketValue = async (params: {
+  symbol: string;
+  subtype: InvestmentSubtype;
+  institution: string;
+  currency: string;
+  quantity: number;
+}) => {
+  if (!params.symbol || !Number.isFinite(params.quantity) || params.quantity <= 0) return null;
+  const market = inferHoldingMarket(params.subtype, params.institution, params.currency);
+  const response = await fetch(
+    `/api/market-history?symbol=${encodeURIComponent(params.symbol)}&market=${market}&range=5D`
+  );
+  if (!response.ok) return null;
+  const payload = (await response.json().catch(() => null)) as {
+    currency?: string;
+    latest?: { value?: number };
+  } | null;
+  const unitPrice = Number(payload?.latest?.value);
+  if (!Number.isFinite(unitPrice) || unitPrice <= 0) return null;
+  if (formatCurrencyCode(payload?.currency ?? params.currency) !== formatCurrencyCode(params.currency)) return null;
+  return Number((unitPrice * params.quantity).toFixed(2));
 };
 
 const formatUnits = (value: number | null) =>
@@ -721,6 +753,7 @@ export default function InvestmentInstitutionDetailPage() {
       }),
     [sortedAccounts, transactions]
   );
+  const liveInvestmentValues = useLiveInvestmentValues(holdingAccounts);
 
   const accountAssetNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -855,10 +888,15 @@ export default function InvestmentInstitutionDetailPage() {
       // PDAX account rows are refreshed from live quotes, while their linked
       // snapshot remains immutable import evidence. Include both here and let
       // the canonical pass prefer the later live row.
-      if (accountsRepresentedBySnapshots.has(account.id) && routeInstitution.toLowerCase() !== "pdax") {
+      if (
+        accountsRepresentedBySnapshots.has(account.id) &&
+        routeInstitution.toLowerCase() !== "pdax" &&
+        !Number.isFinite(liveInvestmentValues[account.id])
+      ) {
         continue;
       }
-      const value = Math.abs(parseAmount(account.balance));
+      const liveValue = liveInvestmentValues[account.id];
+      const value = Number.isFinite(liveValue) ? liveValue : Math.abs(parseAmount(account.balance));
       const quantity = parseNullableAmount(account.investmentQuantity);
       const costBasis = parseNullableAmount(account.investmentCostBasis);
       rows.push({
@@ -874,7 +912,7 @@ export default function InvestmentInstitutionDetailPage() {
         costBasis,
         gainLossValue: costBasis !== null ? value - costBasis : null,
         gainLossPercent: deriveGainLossPercent(value, costBasis, null),
-        updatedAt: account.updatedAt,
+        updatedAt: Number.isFinite(liveValue) ? new Date().toISOString() : account.updatedAt,
       });
     }
 
@@ -948,10 +986,19 @@ export default function InvestmentInstitutionDetailPage() {
           symbol: row.assetSymbol ?? null,
           subtype: row.assetType as InvestmentSubtype,
         }))
-      : rows;
+      : Array.from(
+          rows.reduce((canonical, row) => {
+            const key = normalizeInvestmentPositionName(row.symbol || row.name);
+            const current = canonical.get(key);
+            if (!current || new Date(row.updatedAt).getTime() >= new Date(current.updatedAt).getTime()) {
+              canonical.set(key, row);
+            }
+            return canonical;
+          }, new Map<string, InstitutionHoldingRow>()).values()
+        );
 
     return canonicalRows.sort((left, right) => right.value - left.value || left.name.localeCompare(right.name));
-  }, [accountAssetNameMap, accounts, holdingAccounts, investmentSnapshots, manualPositionActivities, routeCurrency, routeInstitution]);
+  }, [accountAssetNameMap, accounts, holdingAccounts, investmentSnapshots, liveInvestmentValues, manualPositionActivities, routeCurrency, routeInstitution]);
 
   const holdingsValue = useMemo(
     () => institutionHoldingRows.reduce((sum, row) => sum + row.value, 0),
@@ -1215,6 +1262,10 @@ export default function InvestmentInstitutionDetailPage() {
 
     setSavingNewHolding(true);
     try {
+      const quantity = parseNullableNumberInput(newHoldingDraft.investmentQuantity);
+      const costBasis = parseNullableNumberInput(newHoldingDraft.investmentCostBasis);
+      const enteredCurrentValue = parseNullableNumberInput(newHoldingDraft.balance);
+      const initialCurrentValue = enteredCurrentValue ?? costBasis ?? 0;
       const response = await fetch("/api/accounts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1224,14 +1275,14 @@ export default function InvestmentInstitutionDetailPage() {
           institution: institutionDraft.trim() || routeInstitution,
           investmentSubtype: newHoldingDraft.investmentSubtype,
           investmentSymbol: newHoldingDraft.investmentSymbol.trim() || null,
-          investmentQuantity: parseNullableNumberInput(newHoldingDraft.investmentQuantity),
-          investmentCostBasis: parseNullableNumberInput(newHoldingDraft.investmentCostBasis),
+          investmentQuantity: quantity,
+          investmentCostBasis: costBasis,
           investmentPrincipal: parseNullableNumberInput(newHoldingDraft.investmentPrincipal),
           investmentStartDate: parseNullableDateInput(newHoldingDraft.investmentStartDate),
           investmentMaturityDate: parseNullableDateInput(newHoldingDraft.investmentMaturityDate),
           investmentInterestRate: parseNullableNumberInput(newHoldingDraft.investmentInterestRate),
           investmentMaturityValue: parseNullableNumberInput(newHoldingDraft.investmentMaturityValue),
-          balance: newHoldingDraft.balance.trim() ? Number(newHoldingDraft.balance) : 0,
+          balance: initialCurrentValue,
           type: "investment",
           currency: routeCurrency,
           source: "manual",
@@ -1250,6 +1301,39 @@ export default function InvestmentInstitutionDetailPage() {
       syncWorkspaceCache(nextAccounts, transactions);
       setNewHoldingDraft(null);
       setMessage(`Added ${createdAccount.name} to ${routeInstitution}.`);
+
+      if (
+        enteredCurrentValue === null &&
+        isMarketInvestmentSubtype(createdAccount.investmentSubtype) &&
+        createdAccount.investmentSymbol &&
+        quantity !== null &&
+        quantity > 0
+      ) {
+        void fetchEstimatedMarketValue({
+          symbol: createdAccount.investmentSymbol,
+          subtype: createdAccount.investmentSubtype,
+          institution: createdAccount.institution ?? routeInstitution,
+          currency: formatCurrencyCode(createdAccount.currency),
+          quantity,
+        }).then(async (estimatedValue) => {
+          if (estimatedValue === null) return;
+          const valueResponse = await fetch(`/api/accounts/${createdAccount.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ workspaceId, balance: estimatedValue }),
+          });
+          const valuePayload = await valueResponse.json().catch(() => null);
+          if (!valueResponse.ok || !valuePayload?.account) return;
+          setAccounts((current) => {
+            const updated = current.map((account) =>
+              account.id === createdAccount.id ? (valuePayload.account as Account) : account
+            );
+            syncWorkspaceCache(updated, transactions);
+            return updated;
+          });
+          setMessage(`Added ${createdAccount.name}. Clover estimated its current value from the latest available market price.`);
+        });
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to add this holding.");
     } finally {
@@ -1491,7 +1575,7 @@ export default function InvestmentInstitutionDetailPage() {
 
           <div className="institution-detail-hero__metrics">
             <article className="institution-detail-metric">
-              <span>Total value</span>
+              <span>Estimated value</span>
               <strong>{formatMoney(holdingsValue, routeCurrency)}</strong>
             </article>
             <article className="institution-detail-metric">
@@ -1505,6 +1589,9 @@ export default function InvestmentInstitutionDetailPage() {
               </strong>
             </article>
           </div>
+          <p className="institution-detail-hero__estimate-note">
+            Market values are estimates. Check {routeInstitution} for the latest amount.
+          </p>
         </section>
 
         <section className="institution-detail-panel institution-detail-panel--assets glass">
@@ -1648,7 +1735,7 @@ export default function InvestmentInstitutionDetailPage() {
                       )
                     }
                   >
-                    {INVESTMENT_SUBTYPES.map((subtype) => (
+                    {SORTED_INVESTMENT_SUBTYPES.map((subtype) => (
                       <option key={subtype} value={subtype}>
                         {getInvestmentSubtypeLabel(subtype)}
                       </option>
@@ -1748,7 +1835,7 @@ export default function InvestmentInstitutionDetailPage() {
                     )
                   }
                 >
-                  {INVESTMENT_SUBTYPES.map((subtype) => (
+                  {SORTED_INVESTMENT_SUBTYPES.map((subtype) => (
                     <option key={subtype} value={subtype}>
                       {getInvestmentSubtypeLabel(subtype)}
                     </option>

@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import type { AccountBrand } from "@/lib/account-brand";
 
@@ -11,10 +11,112 @@ type FinancialAccountCardProps = {
   onOpen?: () => void;
   amountLabel?: string;
   onAmountClick?: () => void;
+  editableName?: string;
+  editableAccountNumber?: string;
+  editableAmount?: string;
+  onNameCommit?: (value: string) => Promise<void> | void;
+  onAccountNumberCommit?: (value: string) => Promise<void> | void;
+  onAmountCommit?: (value: string) => Promise<void> | void;
   className?: string;
   state?: "deleting" | "loading" | undefined;
   showChevron?: boolean;
 };
+
+function InlineCardField({
+  value,
+  displayValue,
+  label,
+  className,
+  inputMode,
+  onCommit,
+}: {
+  value: string;
+  displayValue: string;
+  label: string;
+  className: string;
+  inputMode?: "decimal";
+  onCommit: (value: string) => Promise<void> | void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const savingRef = useRef(false);
+
+  useEffect(() => {
+    if (!editing) setDraft(value);
+  }, [editing, value]);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const commit = async () => {
+    if (savingRef.current) return;
+    const nextValue = draft.trim();
+    if (nextValue === value.trim()) {
+      setEditing(false);
+      return;
+    }
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      await onCommit(nextValue);
+      setEditing(false);
+    } catch {
+      inputRef.current?.focus();
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    event.stopPropagation();
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void commit();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      setDraft(value);
+      setEditing(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        className={`${className} financial-account-card__inline-input`}
+        value={draft}
+        inputMode={inputMode}
+        aria-label={label}
+        disabled={saving}
+        onClick={(event) => event.stopPropagation()}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={() => void commit()}
+      />
+    );
+  }
+
+  return (
+    <button
+      className={`${className} financial-account-card__inline-trigger`}
+      type="button"
+      aria-label={label}
+      onClick={(event) => {
+        event.stopPropagation();
+        setEditing(true);
+      }}
+    >
+      {displayValue}
+    </button>
+  );
+}
 
 export function FinancialAccountCard({
   accountBrand,
@@ -25,6 +127,12 @@ export function FinancialAccountCard({
   onOpen,
   amountLabel,
   onAmountClick,
+  editableName,
+  editableAccountNumber,
+  editableAmount,
+  onNameCommit,
+  onAccountNumberCommit,
+  onAmountCommit,
   className,
   state,
   showChevron = true,
@@ -65,7 +173,17 @@ export function FinancialAccountCard({
         <div className="financial-account-card__head">
           <div className="financial-account-card__identity">
             <AccountBrandMark accountBrand={accountBrand} label={name} />
-            <strong className="financial-account-card__name">{name}</strong>
+            {onNameCommit && editableName !== undefined ? (
+              <InlineCardField
+                value={editableName}
+                displayValue={name}
+                label={`Edit ${name} name`}
+                className="financial-account-card__name"
+                onCommit={onNameCommit}
+              />
+            ) : (
+              <strong className="financial-account-card__name">{name}</strong>
+            )}
           </div>
           {showChevron ? (
             <button
@@ -84,7 +202,15 @@ export function FinancialAccountCard({
         </div>
 
         <div className="financial-account-card__meta">
-          {accountNumber ? (
+          {onAccountNumberCommit && editableAccountNumber !== undefined ? (
+            <InlineCardField
+              value={editableAccountNumber}
+              displayValue={accountNumber || "Add account number"}
+              label={`Edit ${name} account number`}
+              className="financial-account-card__number"
+              onCommit={onAccountNumberCommit}
+            />
+          ) : accountNumber ? (
             <span className="financial-account-card__number" title={accountNumber}>
               {accountNumber}
             </span>
@@ -93,7 +219,16 @@ export function FinancialAccountCard({
           )}
         </div>
 
-        {amountInteractive ? (
+        {onAmountCommit && editableAmount !== undefined ? (
+          <InlineCardField
+            value={editableAmount}
+            displayValue={amount}
+            label={amountLabel ?? `Change ${name} balance`}
+            className="financial-account-card__amount"
+            inputMode="decimal"
+            onCommit={onAmountCommit}
+          />
+        ) : amountInteractive ? (
           <button
             className="financial-account-card__amount financial-account-card__amount-button"
             type="button"

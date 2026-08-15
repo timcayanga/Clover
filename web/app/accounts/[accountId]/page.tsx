@@ -86,6 +86,7 @@ import {
   canTrackInvestmentPurchaseHistory,
   getInvestmentPurchaseSummaryLabel,
   getInvestmentSubtypeLabel,
+  SORTED_INVESTMENT_SUBTYPES,
   type InvestmentSubtype,
   isFixedIncomeInvestmentSubtype,
   isMarketInvestmentSubtype,
@@ -2435,6 +2436,57 @@ function AccountDetailPageContent() {
     }
   };
 
+  const saveInlineCardBalance = async (value: string) => {
+    if (!account) return;
+    const parsedBalance = parseBalanceInput(value);
+    if (parsedBalance === null) {
+      setMessage("Enter a valid balance.");
+      throw new Error("Enter a valid balance.");
+    }
+    const nextBalance = normalizeAccountBalanceSign(account.type, parsedBalance).toFixed(2);
+    const response = await fetch(`/api/accounts/${account.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspaceId: account.workspaceId, balance: nextBalance }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.account) {
+      setMessage("Unable to update account balance.");
+      throw new Error("Unable to update account balance.");
+    }
+    const nextAccount = payload.account as Account;
+    setAccount(nextAccount);
+    stableBalanceRef.current = nextAccount.balance ?? nextBalance;
+    setBalanceDraft(Math.abs(parseAmount(nextAccount.balance ?? nextBalance)).toFixed(2));
+    setMessage("Account balance updated.");
+  };
+
+  const saveInlineCardIdentity = async (field: "name" | "accountNumber", value: string) => {
+    if (!account || account.type === "investment") return;
+    const trimmed = value.trim();
+    if (field === "name" && !trimmed) {
+      setMessage("Account name cannot be empty.");
+      throw new Error("Account name cannot be empty.");
+    }
+    const response = await fetch(`/api/accounts/${account.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspaceId: account.workspaceId,
+        [field]: field === "accountNumber" ? trimmed || null : trimmed,
+      }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.account) {
+      setMessage("Unable to update account details.");
+      throw new Error("Unable to update account details.");
+    }
+    const nextAccount = payload.account as Account;
+    setAccount(nextAccount);
+    setAccountEditDraft({ name: nextAccount.name, accountNumber: nextAccount.accountNumber ?? "" });
+    setMessage("Account details updated.");
+  };
+
   const saveCreditSettings = async () => {
     if (!account || !isCreditAccount) {
       return;
@@ -3911,27 +3963,16 @@ function AccountDetailPageContent() {
                   accountNumber={liveCardNumber}
                   amount={isPendingBalance ? "Loading..." : formatAccountAmount(accountCardBalance, account.currency)}
                   amountLabel={`Change ${accountCardName} balance`}
-                  onAmountClick={openBalanceEditor}
+                  editableName={account.type === "investment" ? undefined : account.name}
+                  editableAccountNumber={account.type === "investment" ? undefined : account.accountNumber ?? ""}
+                  editableAmount={Math.abs(parseAmount(displayBalance)).toFixed(2)}
+                  onNameCommit={account.type === "investment" ? undefined : (value) => saveInlineCardIdentity("name", value)}
+                  onAccountNumberCommit={account.type === "investment" ? undefined : (value) => saveInlineCardIdentity("accountNumber", value)}
+                  onAmountCommit={saveInlineCardBalance}
                   showChevron={false}
-                  onOpen={
-                    account.type === "investment"
-                      ? undefined
-                      : () => {
-                          setAccountIdentityEditorOpen((open) => !open);
-                        }
-                  }
                 />
 
                 <div className="accounts-detail__card-text-actions">
-                  {canAdjustBalanceSimply ? (
-                    <button
-                      className="accounts-detail__balance-adjust-button"
-                      type="button"
-                      onClick={openBalanceAdjustment}
-                    >
-                      {balanceAdjustmentLabel}
-                    </button>
-                  ) : null}
                   <button
                     className="accounts-detail__type-edit-button"
                     type="button"
@@ -4018,76 +4059,6 @@ function AccountDetailPageContent() {
               ) : null}
             </div>
 
-            {account.type !== "investment" && accountIdentityEditorOpen ? (
-              <div className="accounts-detail__account-identity-editor accounts-detail__account-identity-editor--inline">
-                <p className="accounts-detail__account-identity-editor-title">Edit account details</p>
-                <div className="accounts-detail__account-identity-editor-body">
-                  <div className="accounts-inline-edit__grid">
-                    <label>
-                      Name
-                      <input value={accountEditDraft.name} onChange={(event) => setAccountEditDraft((current) => ({ ...current, name: event.target.value }))} />
-                    </label>
-                    <label>
-                      Account number
-                      <input
-                        value={accountEditDraft.accountNumber}
-                        onChange={(event) => setAccountEditDraft((current) => ({ ...current, accountNumber: event.target.value }))}
-                      />
-                    </label>
-                  </div>
-                  <div className="accounts-inline-edit__actions">
-                    <span className="accounts-detail__autosave-state">
-                      {accountEditSaveState === "saving"
-                        ? "Saving..."
-                        : accountEditSaveState === "saved"
-                          ? "Saved"
-                          : accountEditSaveState === "error"
-                            ? "Needs attention"
-                            : ""}
-                    </span>
-                    <button className="accounts-detail__account-identity-close" type="button" onClick={() => setAccountIdentityEditorOpen(false)}>
-                      Close
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            {balanceEditorOpen ? (
-              <form className="accounts-detail__balance-editor" onSubmit={saveBalanceFromCard}>
-                <label>
-                  Balance
-                  <input
-                    ref={balanceInputRef}
-                    value={balanceDraft}
-                    onChange={(event) => {
-                      setBalanceDraft(event.target.value);
-                      setBalanceSaveState("idle");
-                    }}
-                    inputMode="decimal"
-                    aria-label="Account balance"
-                  />
-                </label>
-                <div className="accounts-detail__balance-editor-actions">
-                  <span className="accounts-detail__autosave-state">
-                    {balanceSaveState === "saving"
-                      ? "Saving..."
-                      : balanceSaveState === "saved"
-                        ? "Saved"
-                        : balanceSaveState === "error"
-                          ? "Needs attention"
-                          : ""}
-                  </span>
-                  <button className="button button-secondary button-small" type="button" onClick={() => setBalanceEditorOpen(false)}>
-                    Cancel
-                  </button>
-                  <button className="button button-primary button-small" type="submit" disabled={balanceSaveState === "saving"}>
-                    Save
-                  </button>
-                </div>
-              </form>
-            ) : null}
-
           </div>
         ) : null}
 
@@ -4169,7 +4140,7 @@ function AccountDetailPageContent() {
                         );
                       }}
                     >
-                      {["stock", "etf", "mutual_fund", "money_market_fund", "uitf", "reit", "crypto", "bond", "time_deposit", "other"].map((subtype) => (
+                      {SORTED_INVESTMENT_SUBTYPES.map((subtype) => (
                         <option key={subtype} value={subtype}>
                           {getInvestmentSubtypeLabel(subtype)}
                         </option>

@@ -23,6 +23,7 @@ import {
   readDraggedAccountId,
 } from "@/lib/account-card-drag";
 import { prefersLiveInvestmentBalance } from "@/lib/investment-balance";
+import { useLiveInvestmentValues } from "@/lib/use-live-investment-values";
 import { getUploadSummaryCurrencies } from "@/lib/import-upload-summary";
 import { getAccountCardName, getAccountDisplayName, formatUploadAccountDisplayName } from "@/lib/account-display";
 import { getAccountPath, getInvestmentInstitutionPath } from "@/lib/account-path";
@@ -671,6 +672,25 @@ type InvestmentInstitutionCard = {
   balance: string;
   updatedAt: string;
   accounts: Account[];
+  assetCount?: number;
+};
+
+type AccountInvestmentSnapshot = {
+  id: string;
+  portfolioName: string | null;
+  currency: string;
+  updatedAt: string;
+  account: { id: string; institution: string | null } | null;
+  documentImport: { institution: string | null; currency: string } | null;
+  holdings: Array<{
+    id: string;
+    assetName: string;
+    assetSymbol: string | null;
+    assetType: string | null;
+    currentValue: string | null;
+    marketValue: string | null;
+    updatedAt: string;
+  }>;
 };
 
 const isInvestmentInstitutionCard = (row: Account | InvestmentInstitutionCard): row is InvestmentInstitutionCard =>
@@ -818,6 +838,84 @@ const getInvestmentInstitutionPreview = (accounts: Account[]) => {
   return `${assetCount} asset${assetCount === 1 ? "" : "s"}`;
 };
 
+const normalizeInvestmentAssetKey = (symbol: string | null | undefined, name: string) =>
+  (symbol?.trim() || name)
+    .toLowerCase()
+    .replace(/\bbitcoin segwit\b/g, "btc")
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+
+const isAggregateInvestmentHolding = (name: string, institution: string) => {
+  const normalized = name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const normalizedInstitution = institution.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return (
+    !normalized ||
+    normalized === normalizedInstitution ||
+    /^(?:portfolio|investments?|holdings?|assets?|dividends?|activity|transaction history)$/.test(normalized) ||
+    normalized === `${normalizedInstitution} wallet`
+  );
+};
+
+const getInvestmentInstitutionSnapshotSummary = (
+  institution: string,
+  currency: string,
+  accounts: Account[],
+  snapshots: AccountInvestmentSnapshot[]
+) => {
+  if (institution.toLowerCase() === "gsave") return null;
+  const accountIds = new Set(accounts.map((account) => account.id));
+  const normalizedInstitution = institution.toLowerCase().trim();
+  const latestSnapshots = new Map<string, AccountInvestmentSnapshot>();
+
+  for (const snapshot of snapshots) {
+    const snapshotCurrency = formatCurrencyCode(snapshot.currency || snapshot.documentImport?.currency || currency);
+    const snapshotInstitution = (
+      snapshot.account?.institution || snapshot.documentImport?.institution || snapshot.portfolioName || ""
+    ).toLowerCase();
+    if (
+      snapshotCurrency !== currency ||
+      ((!snapshot.account?.id || !accountIds.has(snapshot.account.id)) &&
+        !snapshotInstitution.includes(normalizedInstitution))
+    ) {
+      continue;
+    }
+    const identity = snapshot.account?.id || snapshotInstitution;
+    const current = latestSnapshots.get(identity);
+    if (!current || new Date(snapshot.updatedAt).getTime() > new Date(current.updatedAt).getTime()) {
+      latestSnapshots.set(identity, snapshot);
+    }
+  }
+
+  const values = new Map<string, { value: number; updatedAt: number }>();
+  for (const snapshot of latestSnapshots.values()) {
+    for (const holding of snapshot.holdings) {
+      if (isAggregateInvestmentHolding(holding.assetName, institution)) continue;
+      const key = normalizeInvestmentAssetKey(holding.assetSymbol, holding.assetName);
+      const value = Math.abs(parseAmount(holding.currentValue ?? holding.marketValue));
+      if (!key || !Number.isFinite(value)) continue;
+      const updatedAt = new Date(holding.updatedAt || snapshot.updatedAt).getTime();
+      const current = values.get(key);
+      if (!current || updatedAt >= current.updatedAt) values.set(key, { value, updatedAt });
+    }
+  }
+
+  for (const account of accounts) {
+    const key = normalizeInvestmentAssetKey(account.investmentSymbol, account.name);
+    if (!key || isAggregateInvestmentHolding(account.name, institution)) continue;
+    const value = Math.abs(parseAmount(account.balance));
+    // Account balances are the current projection. Snapshots remain immutable
+    // import evidence, but must not make the Accounts card disagree with the
+    // account-backed holding shown in Institution Details.
+    values.set(key, { value, updatedAt: new Date(account.updatedAt).getTime() });
+  }
+
+  if (values.size === 0) return null;
+  return {
+    balance: Array.from(values.values()).reduce((sum, row) => sum + row.value, 0).toFixed(2),
+    assetCount: values.size,
+  };
+};
+
 const formatAggregateAmount = (value: number, accounts: Array<{ currency: string }>) => {
   const currencies = getCurrencyCodes(accounts);
   if (currencies.length === 0) {
@@ -863,7 +961,8 @@ const getInvestmentInstitutionName = (account: Account) =>
 
 const buildInvestmentInstitutionCards = (
   accounts: Account[],
-  readBalance: (account: Account) => string | null | undefined = (account) => account.balance
+  readBalance: (account: Account) => string | null | undefined = (account) => account.balance,
+  snapshots: AccountInvestmentSnapshot[] = []
 ): Array<Account | InvestmentInstitutionCard> => {
   const groups = new Map<string, InvestmentInstitutionCard>();
 
@@ -889,7 +988,15 @@ const buildInvestmentInstitutionCards = (
     });
   }
 
-  return Array.from(groups.values()).sort(
+  return Array.from(groups.values()).map((group) => {
+    const snapshotSummary = getInvestmentInstitutionSnapshotSummary(
+      group.institution,
+      group.currency,
+      group.accounts.map((account) => ({ ...account, balance: readBalance(account) ?? account.balance })),
+      snapshots
+    );
+    return snapshotSummary ? { ...group, balance: snapshotSummary.balance, assetCount: snapshotSummary.assetCount } : group;
+  }).sort(
     (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
   );
 };
@@ -1448,6 +1555,7 @@ function AccountsPageContent() {
   const [accountRules, setAccountRules] = useState<AccountRule[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>(initialCachedTransactions);
   const [statementCheckpoints, setStatementCheckpoints] = useState<StatementCheckpoint[]>(initialCachedStatementCheckpoints);
+  const [investmentSnapshots, setInvestmentSnapshots] = useState<AccountInvestmentSnapshot[]>([]);
   const [drawerTransactions, setDrawerTransactions] = useState<Transaction[]>([]);
   const [drawerStatementCheckpoints, setDrawerStatementCheckpoints] = useState<StatementCheckpoint[]>([]);
   const [message, setMessage] = useState("Select a workspace to review accounts.");
@@ -1680,6 +1788,7 @@ function AccountsPageContent() {
       }),
     [accounts, drawerAccountId, drawerStatementCheckpoints, drawerTransactions, statementCheckpoints, transactions]
   );
+  const liveInvestmentValues = useLiveInvestmentValues(reconciledAccounts);
 
   const collidingMaskedAccountNumberKeys = useMemo(() => {
     const counts = new Map<string, number>();
@@ -1801,6 +1910,7 @@ function AccountsPageContent() {
 
     if (!workspaceId) {
       setAccounts([]);
+      setInvestmentSnapshots([]);
       setAccountRules([]);
       setTransactions([]);
       setAccountsLoading(false);
@@ -1818,7 +1928,12 @@ function AccountsPageContent() {
     }
 
     try {
-      const accountsResponse = await fetchJsonOnce<{ accounts?: Account[]; accountRules?: AccountRule[]; statementCheckpoints?: StatementCheckpoint[] }>({
+      const accountsResponse = await fetchJsonOnce<{
+        accounts?: Account[];
+        accountRules?: AccountRule[];
+        statementCheckpoints?: StatementCheckpoint[];
+        investmentSnapshots?: AccountInvestmentSnapshot[];
+      }>({
         // An import may finish while the initial workspace request is still in
         // flight. Give the completion handoff its own request so it cannot
         // reuse that pre-import response and leave new snapshot accounts
@@ -1840,6 +1955,9 @@ function AccountsPageContent() {
         fetchedAccounts = Array.isArray(payload?.accounts)
           ? (payload.accounts as Account[]).filter((account) => isWorkspaceAccount(account, workspaceId))
           : [];
+        setInvestmentSnapshots(
+          Array.isArray(payload?.investmentSnapshots) ? payload.investmentSnapshots : []
+        );
         const republishedInventoryAccountIds =
           hasRecentWorkspaceImportEvidence(workspaceId, importActivitySnapshot)
             ? fetchedAccounts
@@ -2488,6 +2606,7 @@ function AccountsPageContent() {
       }
 
       setAccounts([]);
+      setInvestmentSnapshots([]);
       setAccountRules([]);
       setTransactions([]);
       setStatementCheckpoints([]);
@@ -2510,6 +2629,7 @@ function AccountsPageContent() {
     const hydratedFromCache = hydrateWorkspaceFromCache(selectedWorkspaceId);
     if (!hydratedFromCache && accounts.length === 0) {
       setAccounts([]);
+      setInvestmentSnapshots([]);
       setAccountRules([]);
       setTransactions([]);
       setStatementCheckpoints([]);
@@ -2792,15 +2912,24 @@ function AccountsPageContent() {
     persistSelectedCurrency(selectedWorkspaceId, fallbackCurrency);
   }, [availableCurrencies, hasInitialWorkspaceDataLoaded, selectedCurrency, selectedWorkspaceId]);
 
+  const valuedAccounts = useMemo(
+    () =>
+      reconciledAccounts.map((account) => {
+        const liveValue = liveInvestmentValues[account.id];
+        return liveValue === undefined ? account : { ...account, balance: liveValue.toFixed(2) };
+      }),
+    [liveInvestmentValues, reconciledAccounts]
+  );
+
   const currencyFilteredAccounts = useMemo(
     () => {
       if (!selectedCurrency || selectedCurrency.toLowerCase() === "all") {
-        return reconciledAccounts;
+        return valuedAccounts;
       }
 
-      return reconciledAccounts.filter((account) => formatCurrencyCode(account.currency) === selectedCurrency);
+      return valuedAccounts.filter((account) => formatCurrencyCode(account.currency) === selectedCurrency);
     },
-    [reconciledAccounts, selectedCurrency]
+    [selectedCurrency, valuedAccounts]
   );
 
   const hasResolvedBalance = (value: string | null | undefined) => {
@@ -2879,6 +3008,11 @@ function AccountsPageContent() {
     // checkpoint is historical evidence and must never override that current
     // value on Accounts; doing so makes the institution card disagree with its
     // own Holdings page until another refresh arrives.
+    const liveInvestmentValue = liveInvestmentValues[account.id];
+    if (Number.isFinite(liveInvestmentValue)) {
+      return liveInvestmentValue.toFixed(2);
+    }
+
     if (
       (prefersLiveInvestmentBalance(getEffectiveAccountType(account)) || isGSaveInstitutionAccount(account)) &&
       hasResolvedBalance(account.balance)
@@ -3159,7 +3293,8 @@ function AccountsPageContent() {
           visibleAccounts.filter(
             (account) => getEffectiveAccountType(account) === "investment" || isGSaveInstitutionAccount(account)
           ),
-          getDisplayedAccountBalance
+          getDisplayedAccountBalance,
+          investmentSnapshots
         ),
       },
       {
@@ -3225,7 +3360,7 @@ function AccountsPageContent() {
         return { ...group, rows, total, usesFxEstimate, estimateUnavailable };
       })
       .filter((group) => group.rows.length > 0 || draggedAccountId !== null);
-  }, [accountExchangeRates.rates, defaultCurrencyCode, draggedAccountId, isAllCurrenciesView, visibleAccounts]);
+  }, [accountExchangeRates.rates, defaultCurrencyCode, draggedAccountId, investmentSnapshots, isAllCurrenciesView, liveInvestmentValues, visibleAccounts]);
 
   const mobileAccountRows = useMemo(
     () => accountGroups.flatMap((group) => group.rows),
@@ -3631,6 +3766,62 @@ function AccountsPageContent() {
     }
   };
 
+  const saveInlineAccountField = async (
+    account: Account,
+    field: "name" | "accountNumber" | "balance",
+    value: string
+  ) => {
+    if (!selectedWorkspaceId || account.id.startsWith("optimistic-")) return;
+
+    const trimmed = value.trim();
+    if (field === "name" && !trimmed) {
+      setMessage("Account name cannot be empty.");
+      throw new Error("Account name cannot be empty.");
+    }
+    const parsedBalance = field === "balance" ? Number(trimmed.replace(/,/g, "")) : null;
+    if (field === "balance" && !Number.isFinite(parsedBalance)) {
+      setMessage("Enter a valid balance.");
+      throw new Error("Enter a valid balance.");
+    }
+
+    const optimisticValue =
+      field === "balance"
+        ? normalizeAccountBalanceSign(getEffectiveAccountType(account), parsedBalance ?? 0).toFixed(2)
+        : trimmed;
+    const previous = account;
+    setAccounts((current) =>
+      current.map((entry) =>
+        entry.id === account.id
+          ? {
+              ...entry,
+              [field]: field === "accountNumber" ? optimisticValue || null : optimisticValue,
+            }
+          : entry
+      )
+    );
+
+    try {
+      const response = await fetch(`/api/accounts/${account.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: selectedWorkspaceId,
+          [field]: field === "accountNumber" ? optimisticValue || null : optimisticValue,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.account) throw new Error("Unable to save this account detail.");
+      setAccounts((current) =>
+        current.map((entry) => (entry.id === account.id ? (payload.account as Account) : entry))
+      );
+      setMessage("Account updated.");
+    } catch (error) {
+      setAccounts((current) => current.map((entry) => (entry.id === account.id ? previous : entry)));
+      setMessage(error instanceof Error ? error.message : "Unable to save this account detail.");
+      throw error;
+    }
+  };
+
   const handleAccountDragStart = (event: DragEvent<HTMLDivElement>, account: Account) => {
     if (
       window.innerWidth <= 1100 ||
@@ -3668,8 +3859,8 @@ function AccountsPageContent() {
           key={key}
           accountBrand={accountBrand}
           name={row.institution}
-          accountNumber={getInvestmentInstitutionPreview(row.accounts)}
-          amount={formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}
+          accountNumber={row.assetCount ? `${row.assetCount} asset${row.assetCount === 1 ? "" : "s"}` : getInvestmentInstitutionPreview(row.accounts)}
+          amount={`Est. ${formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}`}
           onOpen={() => openInvestmentInstitution(row)}
           openLabel={`Open ${row.institution} investment institution`}
           className="financial-account-card--investment-institution"
@@ -3704,10 +3895,12 @@ function AccountsPageContent() {
       typeof latestCheckpointMetadata?.accountName === "string"
         ? latestCheckpointMetadata.accountName
         : null;
+    const accountNameIsNewerThanCheckpoint =
+      !latestCheckpoint || new Date(row.updatedAt).getTime() > new Date(latestCheckpoint.updatedAt).getTime();
     const rawAccountCardName =
       resolvedBankLabel
         ? formatUploadAccountDisplayName(
-            checkpointAccountName ?? row.name,
+            accountNameIsNewerThanCheckpoint ? row.name : checkpointAccountName ?? row.name,
             resolvedBankLabel,
             fallbackAccountNumber,
             row.type
@@ -3759,6 +3952,12 @@ function AccountsPageContent() {
                 : formatAccountAmount(balanceValue, row.currency)
           }
           onOpen={() => openAccountDrawer(row)}
+          editableName={row.name}
+          editableAccountNumber={fallbackAccountNumber ?? ""}
+          editableAmount={Math.abs(parseAmount(loadingContext.displayedBalance ?? row.balance)).toFixed(2)}
+          onNameCommit={(value) => saveInlineAccountField(row, "name", value)}
+          onAccountNumberCommit={(value) => saveInlineAccountField(row, "accountNumber", value)}
+          onAmountCommit={(value) => saveInlineAccountField(row, "balance", value)}
           openLabel={`Open ${accountCardName} account`}
           state={isDeleting ? "deleting" : loadingContext.isLoading ? "loading" : undefined}
         />
@@ -3792,11 +3991,11 @@ function AccountsPageContent() {
               <AccountBrandMark accountBrand={accountBrand} label={row.institution} />
               <span>
                 <strong>{row.institution}</strong>
-                <small>{getInvestmentInstitutionPreview(row.accounts)}</small>
+                <small>{row.assetCount ? `${row.assetCount} asset${row.assetCount === 1 ? "" : "s"}` : getInvestmentInstitutionPreview(row.accounts)}</small>
               </span>
             </span>
             <span className="accounts-mobile-list-row__end">
-              <strong>{formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}</strong>
+              <strong>Est. {formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}</strong>
               <span className="accounts-mobile-list-row__chevron" aria-hidden="true">
                 ⌄
               </span>
@@ -4518,9 +4717,16 @@ function AccountsPageContent() {
                             ? group.estimateUnavailable
                               ? "Est. —"
                               : `Est. ${formatDisplayAccountAmount(group.total, defaultCurrency)}`
-                            : formatAggregateAmount(group.total, group.rows)}
+                            : group.title === "Investments"
+                              ? `Est. ${formatAggregateAmount(group.total, group.rows)}`
+                              : formatAggregateAmount(group.total, group.rows)}
                         </strong>
                       </div>
+                      {group.title === "Investments" ? (
+                        <p className="accounts-group__estimate-note">
+                          Estimated values. Check your investment apps for the latest amounts.
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="accounts-card-grid accounts-card-grid--desktop" aria-label={`${group.title} accounts`}>

@@ -26195,6 +26195,76 @@ html[data-theme="dark"] .portfolio-growth__ranges button.is-active {
   transform: translateY(-1px);
 }
 
+.financial-account-card__inline-trigger {
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: text;
+  transition: opacity 140ms ease, transform 140ms ease, background-color 140ms ease;
+}
+
+.financial-account-card__inline-trigger:hover,
+.financial-account-card__inline-trigger:focus-visible {
+  background: color-mix(in srgb, currentColor 11%, transparent);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.financial-account-card__inline-input {
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 3px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 65%, transparent);
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  box-shadow: none;
+}
+
+.financial-account-card__inline-input.financial-account-card__name {
+  width: min(155px, 45vw);
+  font-weight: 700;
+}
+
+.financial-account-card__inline-input.financial-account-card__number {
+  width: min(170px, 48vw);
+}
+
+.financial-account-card__inline-input.financial-account-card__amount {
+  width: min(170px, 48vw);
+  font-weight: 700;
+}
+
+.institution-detail-hero__estimate-note,
+.investments-estimate-note,
+.accounts-group__estimate-note {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 500;
+}
+
+.institution-detail-hero__estimate-note {
+  padding: 0 4px;
+}
+
+.investments-estimate-note {
+  margin: -2px 4px 14px;
+}
+
+.accounts-group__estimate-note {
+  margin-top: 3px;
+}
+
 .accounts-account-card {
   position: relative;
   display: grid;

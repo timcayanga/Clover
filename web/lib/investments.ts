@@ -215,6 +215,12 @@ export const getInvestmentSubtypeLabel = (value: string | null | undefined) => {
   }
 };
 
+export const SORTED_INVESTMENT_SUBTYPES = [...INVESTMENT_SUBTYPES].sort((left, right) => {
+  if (left === "other") return 1;
+  if (right === "other") return -1;
+  return getInvestmentSubtypeLabel(left).localeCompare(getInvestmentSubtypeLabel(right));
+});
+
 export const getInvestmentSubtypeDescription = (value: string | null | undefined) => {
   switch (value) {
     case "stock":
@@ -293,12 +299,24 @@ export const getInvestmentFieldConfigs = (subtype: string | null | undefined): I
     ];
   }
 
-  if (subtype === "other" || subtype === "real_world_asset") {
+  if (subtype === "real_world_asset") {
     return [
       {
         key: "investmentSymbol",
         label: "Reference",
-        placeholder: subtype === "real_world_asset" ? "Example: GOLD" : "Example: Bond fund A",
+        placeholder: "Example: GOLD",
+      },
+      { key: "investmentQuantity", label: "Units", placeholder: "0.0000", inputMode: "decimal" },
+      { key: "investmentCostBasis", label: "Purchase value", placeholder: "0.00", inputMode: "decimal" },
+    ];
+  }
+
+  if (subtype === "other") {
+    return [
+      {
+        key: "investmentSymbol",
+        label: "Reference",
+        placeholder: "Example: Bond fund A",
       },
       { key: "investmentCostBasis", label: "Purchase value", placeholder: "0.00", inputMode: "decimal" },
     ];
