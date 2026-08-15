@@ -225,50 +225,52 @@ enum ContactInquiryStatus {
 }
 
 model User {
-  id                           String                       @id @default(cuid())
-  clerkUserId                  String                       @unique
-  email                        String                       @unique
-  firstName                    String?
-  lastName                     String?
-  verified                     Boolean                      @default(false)
-  environment                  String                       @default("production")
-  planTier                     PlanTier                     @default(free)
-  planTierLocked               Boolean                      @default(false)
-  accountLimit                 Int?
-  monthlyUploadLimit           Int?
-  transactionLimit             Int?
-  financialExperience          FinancialExperienceLevel?    @default(beginner)
-  primaryGoal                  String?
-  goalTargetAmount             Decimal?                     @db.Decimal(18, 2)
-  goalTargetSource             String?
-  goalPlan                     Json?
-  adviserPreferences           Json?
-  onboardingCompletedAt        DateTime?
-  dataWipedAt                  DateTime?
-  createdAt                    DateTime                     @default(now())
-  updatedAt                    DateTime                     @updatedAt
-  workspaces                   Workspace[]
-  goalSettings                 GoalSetting[]
-  splitBillGroups              SplitBillGroup[]
-  splitBillGroupCollaborations SplitBillGroupCollaborator[]
-  splitBillPeople              SplitBillPerson[]
-  splitBills                   SplitBill[]
-  splitBillPaymentProfiles     SplitBillPaymentProfile[]
-  ownedCircles                 Circle[]                     @relation("CircleOwner")
-  circleMemberships            CircleMembership[]
-  circleInvitationsSent        CircleInvitation[]           @relation("CircleInvitationSender")
-  circleActivities             CircleActivity[]             @relation("CircleActivityActor")
-  circleContributions          CircleContribution[]
-  circleSharedTransactions     CircleSharedTransaction[]
-  circleInvestmentShares       CircleInvestmentShare[]
-  billingSubscription          BillingSubscription?
-  billingEvents                BillingEvent[]
-  adminSupportActions          AdminSupportAction[]         @relation("SupportActionTarget")
-  adminSupportNotes            AdminSupportNote[]           @relation("SupportNoteTarget")
-  adminDataSnapshots           AdminDataSnapshot[]          @relation("DataSnapshotTarget")
-  brankasStatementSessions     BrankasStatementSession[]
-  finverseConnections          FinverseConnection[]
-  appErrorLogs                 AppErrorLog[]
+  id                               String                       @id @default(cuid())
+  clerkUserId                      String                       @unique
+  email                            String                       @unique
+  firstName                        String?
+  lastName                         String?
+  verified                         Boolean                      @default(false)
+  environment                      String                       @default("production")
+  planTier                         PlanTier                     @default(free)
+  planTierLocked                   Boolean                      @default(false)
+  accountLimit                     Int?
+  monthlyUploadLimit               Int?
+  transactionLimit                 Int?
+  financialExperience              FinancialExperienceLevel?    @default(beginner)
+  primaryGoal                      String?
+  goalTargetAmount                 Decimal?                     @db.Decimal(18, 2)
+  goalTargetSource                 String?
+  goalPlan                         Json?
+  adviserPreferences               Json?
+  regionalPreferences              Json?
+  regionalPreferencesInitializedAt DateTime?
+  onboardingCompletedAt            DateTime?
+  dataWipedAt                      DateTime?
+  createdAt                        DateTime                     @default(now())
+  updatedAt                        DateTime                     @updatedAt
+  workspaces                       Workspace[]
+  goalSettings                     GoalSetting[]
+  splitBillGroups                  SplitBillGroup[]
+  splitBillGroupCollaborations     SplitBillGroupCollaborator[]
+  splitBillPeople                  SplitBillPerson[]
+  splitBills                       SplitBill[]
+  splitBillPaymentProfiles         SplitBillPaymentProfile[]
+  ownedCircles                     Circle[]                     @relation("CircleOwner")
+  circleMemberships                CircleMembership[]
+  circleInvitationsSent            CircleInvitation[]           @relation("CircleInvitationSender")
+  circleActivities                 CircleActivity[]             @relation("CircleActivityActor")
+  circleContributions              CircleContribution[]
+  circleSharedTransactions         CircleSharedTransaction[]
+  circleInvestmentShares           CircleInvestmentShare[]
+  billingSubscription              BillingSubscription?
+  billingEvents                    BillingEvent[]
+  adminSupportActions              AdminSupportAction[]         @relation("SupportActionTarget")
+  adminSupportNotes                AdminSupportNote[]           @relation("SupportNoteTarget")
+  adminDataSnapshots               AdminDataSnapshot[]          @relation("DataSnapshotTarget")
+  brankasStatementSessions         BrankasStatementSession[]
+  finverseConnections              FinverseConnection[]
+  appErrorLogs                     AppErrorLog[]
 }
 
 model Budget {

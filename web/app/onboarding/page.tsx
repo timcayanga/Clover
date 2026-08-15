@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { OnboardingForm } from "@/components/onboarding-form";
 import { getSessionContext } from "@/lib/auth";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
@@ -9,6 +10,7 @@ import {
   getCircleInvitationPath,
   isCircleInvitationToken,
 } from "@/lib/circle-invitations";
+import { resolveNewUserRegionalDefaults } from "@/lib/new-user-regional-defaults";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -54,6 +56,11 @@ export default async function OnboardingPage({ searchParams }: { searchParams?: 
   const upgradeForPro = params.upgrade === "pro";
   const upgradeInterval = params.interval === "monthly" ? "monthly" : "annual";
   const env = getEnv();
+  const requestHeaders = await headers();
+  const regionalDefaults = resolveNewUserRegionalDefaults({
+    countryCode: requestHeaders.get("x-vercel-ip-country"),
+    acceptLanguage: requestHeaders.get("accept-language"),
+  });
 
   return (
     <main className="onboarding-page">
@@ -70,6 +77,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams?: 
           paypalAnnualPlanId={env.PAYPAL_ANNUAL_PLAN_ID ?? null}
           paypalBuyerCountry={env.PAYPAL_BUYER_COUNTRY ?? null}
           completionUrl={completionUrl}
+          regionalDefaults={regionalDefaults}
         />
       </section>
     </main>

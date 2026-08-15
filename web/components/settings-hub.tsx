@@ -25,7 +25,13 @@ import type { BillingInterval } from "@/lib/billing-plans";
 import { signOutToLanding } from "@/lib/sign-out";
 import { readAccountIdentityCache, writeAccountIdentityCache } from "@/lib/account-identity-cache";
 import { MOBILE_LAYOUT_MEDIA_QUERY } from "@/lib/responsive-layout";
-import { notifyDefaultCurrencyChanged, regionalPreferencesStorageKey } from "@/lib/regional-preferences";
+import {
+  fallbackRegionalPreferences,
+  normalizeRegionalPreferences,
+  persistRegionalPreferences,
+  regionalPreferencesStorageKey,
+  type RegionalPreferences,
+} from "@/lib/regional-preferences";
 import { getNavigationIconSrc, type NavigationIconName } from "@/lib/navigation-icons";
 
 const SettingsCategoriesPanel = dynamic(
@@ -100,13 +106,6 @@ type ImportPreferences = {
   askBeforeDifferentProfile: boolean;
 };
 
-type RegionalPreferences = {
-  baseCurrency: string;
-  dateFormat: "MM/DD/YYYY" | "DD/MM/YYYY" | "YYYY-MM-DD";
-  numberFormat: "1,234.56" | "1.234,56";
-  timeZone: string;
-};
-
 type DataUsePreferences = {
   improveSuggestions: boolean;
   adviserUsesContext: boolean;
@@ -166,6 +165,7 @@ type SettingsHubProps = {
     monthlyUploadCount: number;
     transactionCount: number;
   } | null;
+  initialRegionalPreferences?: RegionalPreferences | null;
   paypalClientId?: string | null;
   paypalMonthlyPlanId?: string | null;
   paypalAnnualPlanId?: string | null;
@@ -532,6 +532,7 @@ export function SettingsHub({
   profileLimit,
   initialPlanLimits = null,
   initialPlanUsage = null,
+  initialRegionalPreferences = null,
   paypalClientId: initialPaypalClientId,
   paypalMonthlyPlanId: initialPaypalMonthlyPlanId,
   paypalAnnualPlanId: initialPaypalAnnualPlanId,
@@ -618,12 +619,10 @@ export function SettingsHub({
     openReviewAfterImport: true,
     askBeforeDifferentProfile: true,
   });
-  const [regionalPreferences, setRegionalPreferences] = useState<RegionalPreferences>({
-    baseCurrency: "PHP",
-    dateFormat: "MM/DD/YYYY",
-    numberFormat: "1,234.56",
-    timeZone: "Asia/Manila",
-  });
+  const [regionalPreferences, setRegionalPreferences] = useState<RegionalPreferences>(() =>
+    normalizeRegionalPreferences(initialRegionalPreferences)
+  );
+  const regionalPreferencesDirtyRef = useRef(false);
   const [dataUsePreferences, setDataUsePreferences] = useState<DataUsePreferences>({
     improveSuggestions: true,
     adviserUsesContext: true,
@@ -1055,13 +1054,14 @@ export function SettingsHub({
         askBeforeDifferentProfile: true,
       })
     );
-    setRegionalPreferences(
-      readStoredJsonValue<RegionalPreferences>(SETTINGS_REGIONAL_KEY, {
-        baseCurrency: "PHP",
-        dateFormat: "MM/DD/YYYY",
-        numberFormat: "1,234.56",
+    const regionalFallback = normalizeRegionalPreferences(
+      initialRegionalPreferences ?? {
+        ...fallbackRegionalPreferences,
         timeZone: guessedTimeZone,
-      })
+      }
+    );
+    setRegionalPreferences(
+      normalizeRegionalPreferences(readStoredJsonValue<unknown>(SETTINGS_REGIONAL_KEY, regionalFallback), regionalFallback)
     );
     setDataUsePreferences(
       readStoredJsonValue<DataUsePreferences>(SETTINGS_DATA_USE_KEY, {
@@ -1076,7 +1076,7 @@ export function SettingsHub({
         defaultImportProfileId: initialSelectedProfileId,
       })
     );
-  }, [initialSelectedProfileId]);
+  }, [initialRegionalPreferences, initialSelectedProfileId]);
 
   useEffect(() => {
     if (!themePreferenceLoaded) {
@@ -1112,8 +1112,28 @@ export function SettingsHub({
   }, [importPreferences]);
 
   useEffect(() => {
-    writeStoredJsonValue(SETTINGS_REGIONAL_KEY, regionalPreferences);
-    notifyDefaultCurrencyChanged(regionalPreferences.baseCurrency);
+    persistRegionalPreferences(regionalPreferences);
+  }, [regionalPreferences]);
+
+  useEffect(() => {
+    if (!regionalPreferencesDirtyRef.current) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      void fetch("/api/settings/regional", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(regionalPreferences),
+        signal: controller.signal,
+      }).catch(() => null);
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, [regionalPreferences]);
 
   useEffect(() => {
@@ -2164,9 +2184,11 @@ export function SettingsHub({
                     value={regionalPreferences.baseCurrency}
                     onChange={(event) => {
                       clearSelectedCurrencyPreferences();
+                      regionalPreferencesDirtyRef.current = true;
                       setRegionalPreferences((current) => ({
                         ...current,
                         baseCurrency: event.target.value as RegionalPreferences["baseCurrency"],
+                        detectionSource: "manual",
                       }));
                     }}
                   >
@@ -2182,12 +2204,14 @@ export function SettingsHub({
                   <span>Number format</span>
                   <select
                     value={regionalPreferences.numberFormat}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      regionalPreferencesDirtyRef.current = true;
                       setRegionalPreferences((current) => ({
                         ...current,
                         numberFormat: event.target.value as RegionalPreferences["numberFormat"],
-                      }))
-                    }
+                        detectionSource: "manual",
+                      }));
+                    }}
                   >
                     <option value="1,234.56">1,234.56</option>
                     <option value="1.234,56">1.234,56</option>
@@ -2200,12 +2224,14 @@ export function SettingsHub({
                   <span>Date format</span>
                   <select
                     value={regionalPreferences.dateFormat}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      regionalPreferencesDirtyRef.current = true;
                       setRegionalPreferences((current) => ({
                         ...current,
                         dateFormat: event.target.value as RegionalPreferences["dateFormat"],
-                      }))
-                    }
+                        detectionSource: "manual",
+                      }));
+                    }}
                   >
                     <option value="MM/DD/YYYY">MM/DD/YYYY</option>
                     <option value="DD/MM/YYYY">DD/MM/YYYY</option>
@@ -2216,12 +2242,14 @@ export function SettingsHub({
                   <span>Time zone</span>
                   <select
                     value={regionalPreferences.timeZone}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      regionalPreferencesDirtyRef.current = true;
                       setRegionalPreferences((current) => ({
                         ...current,
                         timeZone: event.target.value,
-                      }))
-                    }
+                        detectionSource: "manual",
+                      }));
+                    }}
                   >
                     {timeZoneOptions.map((timeZone) => (
                       <option key={timeZone} value={timeZone}>

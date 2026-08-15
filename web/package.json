@@ -110,6 +110,7 @@
     "qa:bug-report": "tsx scripts/bug-report-regression.ts",
     "qa:auth-access": "tsx scripts/auth-access-regression.ts",
     "qa:onboarding": "tsx scripts/onboarding-regression.ts",
+    "qa:new-user-regional-defaults": "tsx scripts/new-user-regional-defaults-regression.ts",
     "qa:onboarding-missions": "tsx scripts/onboarding-missions-regression.ts",
     "qa:institution-holding": "tsx scripts/institution-holding-regression.ts",
     "qa:institution-deletion": "tsx scripts/institution-deletion-regression.ts",

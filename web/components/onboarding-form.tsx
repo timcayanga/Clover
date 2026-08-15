@@ -2,13 +2,18 @@
 
 import dynamic from "next/dynamic";
 import type { ChangeEvent } from "react";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { analyticsOnceKey, PostHogEvent } from "@/components/posthog-analytics";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { getFinancialExperienceDefinition, type FinancialExperienceLevel } from "@/lib/goals";
 import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
+import {
+  normalizeRegionalPreferences,
+  persistRegionalPreferences,
+  type RegionalPreferences,
+} from "@/lib/regional-preferences";
 
 const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
@@ -62,6 +67,7 @@ type OnboardingFormProps = {
   paypalAnnualPlanId?: string | null;
   paypalBuyerCountry?: string | null;
   completionUrl?: string;
+  regionalDefaults: RegionalPreferences;
 };
 
 const acceptedImportFiles = ".csv,.tsv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif";
@@ -80,6 +86,7 @@ export function OnboardingForm({
   paypalAnnualPlanId = null,
   paypalBuyerCountry = null,
   completionUrl = "/dashboard",
+  regionalDefaults,
 }: OnboardingFormProps) {
   const router = useRouter();
   const photoInputRef = useRef<HTMLInputElement | null>(null);
@@ -95,16 +102,32 @@ export function OnboardingForm({
   const [importOpen, setImportOpen] = useState(false);
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
   const [selectedUpgradeInterval, setSelectedUpgradeInterval] = useState<"monthly" | "annual">(upgradeInterval);
+  const getBrowserRegionalDefaults = () =>
+    normalizeRegionalPreferences({
+      ...regionalDefaults,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || regionalDefaults.timeZone,
+      locale: navigator.languages?.[0] || navigator.language || regionalDefaults.locale,
+    });
+
+  useEffect(() => {
+    const resolved = getBrowserRegionalDefaults();
+    persistRegionalPreferences(resolved);
+    // The server-provided defaults change only when this onboarding page is recreated.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regionalDefaults]);
 
   const selectedExperienceDefinition = getFinancialExperienceDefinition(experience);
 
   const upgradePlanId = selectedUpgradeInterval === "annual" ? paypalAnnualPlanId : paypalMonthlyPlanId;
 
   const persistOnboarding = async (startAction: "import" | "skip") => {
+    const preferences = getBrowserRegionalDefaults();
+    persistRegionalPreferences(preferences);
     const payload = JSON.stringify({
       experience,
       startAction,
       skipped: startAction === "skip",
+      regionalPreferences: preferences,
     });
 
     const response = await fetch("/api/onboarding", {

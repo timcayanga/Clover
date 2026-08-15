@@ -12,6 +12,15 @@ const onboardingSchema = z.object({
   experience: z.enum(["beginner", "comfortable", "advanced"]).optional().nullable(),
   startAction: z.string().trim().min(1).max(80).optional().nullable(),
   skipped: z.boolean().optional().default(false),
+  regionalPreferences: z.object({
+    baseCurrency: z.string().trim().length(3),
+    dateFormat: z.enum(["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"]),
+    numberFormat: z.enum(["1,234.56", "1.234,56"]),
+    timeZone: z.string().trim().min(1).max(100),
+    locale: z.string().trim().min(2).max(40),
+    countryCode: z.string().trim().length(2).nullable(),
+    detectionSource: z.enum(["geo", "locale", "fallback", "manual"]).optional(),
+  }).optional(),
 });
 
 export async function POST(request: Request) {
@@ -26,6 +35,12 @@ export async function POST(request: Request) {
         data: {
           financialExperience: payload.experience ?? user.financialExperience,
           onboardingCompletedAt: new Date(),
+          ...(payload.regionalPreferences && !user.regionalPreferencesInitializedAt
+            ? {
+                regionalPreferences: payload.regionalPreferences,
+                regionalPreferencesInitializedAt: new Date(),
+              }
+            : {}),
         },
       });
 
@@ -36,6 +51,9 @@ export async function POST(request: Request) {
       experience: payload.experience ?? user.financialExperience ?? null,
       start_action: payload.startAction ?? null,
       skipped: payload.skipped,
+      regional_country: payload.regionalPreferences?.countryCode ?? null,
+      regional_currency: payload.regionalPreferences?.baseCurrency ?? null,
+      regional_detection_source: payload.regionalPreferences?.detectionSource ?? null,
     });
 
     return NextResponse.json({ user: updated });

@@ -10,6 +10,7 @@ import { getEffectiveProfileLimit, getEffectiveUserLimits } from "@/lib/user-lim
 import { getUserPlanUsage } from "@/lib/plan-access";
 import { getEnv } from "@/lib/env";
 import { isPaddleCheckoutReady } from "@/lib/paddle-billing";
+import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
 
 export const metadata = {
   title: "Settings",
@@ -183,6 +184,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
         profileLimit={user ? getEffectiveProfileLimit(user) : null}
         initialPlanLimits={initialPlanLimits}
         initialPlanUsage={initialPlanUsage}
+        initialRegionalPreferences={user?.regionalPreferences ? normalizeRegionalPreferences(user.regionalPreferences) : null}
         paypalClientId={env.PAYPAL_CLIENT_ID ?? null}
         paypalMonthlyPlanId={env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
         paypalAnnualPlanId={env.PAYPAL_ANNUAL_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
