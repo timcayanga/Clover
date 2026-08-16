@@ -160,9 +160,23 @@ type Account = {
   currency: string;
   source?: string;
   balance?: string | null;
+  investmentSubtype?: string | null;
 };
 
-const isTransactionAccount = (account: Pick<Account, "type">) => account.type !== "investment";
+const transactionInvestmentIdentityPattern = /\b(?:gsave|gcrypto|gfunds?|gstocks?|gotrade)\b/i;
+
+const isTransactionAccount = (
+  account: Pick<Account, "type" | "name" | "institution" | "investmentSubtype">
+) => {
+  if (account.type === "investment" || Boolean(account.investmentSubtype)) {
+    return false;
+  }
+
+  // Older imports can retain a bank-shaped shadow row for an investment
+  // institution. Keep those rows out of transaction entry without deleting
+  // their audit history or confirmed records.
+  return !transactionInvestmentIdentityPattern.test(`${account.name} ${account.institution ?? ""}`);
+};
 
 const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account | null => {
   const optimisticAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
@@ -226,6 +240,44 @@ const getTransactionAccountFilterKey = (account: Account) => {
   }
 
   return normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency);
+};
+
+const getTransactionAccountFamilyKey = (account: Account) => {
+  if (account.type === "cash") {
+    return "cash";
+  }
+
+  const family = (account.institution || account.name)
+    .toLowerCase()
+    .replace(/\b(?:account|wallet|savings?)\b/g, " ")
+    .replace(/\d+/g, " ")
+    .replace(/[^a-z]+/g, " ")
+    .trim();
+  return family || account.name.toLowerCase().trim();
+};
+
+const buildTransactionAccountLabels = (accounts: Account[]) => {
+  const currenciesByFamily = new Map<string, Set<string>>();
+  for (const account of accounts) {
+    const family = getTransactionAccountFamilyKey(account);
+    const currencies = currenciesByFamily.get(family) ?? new Set<string>();
+    currencies.add(formatCurrencyCode(account.currency || "PHP"));
+    currenciesByFamily.set(family, currencies);
+  }
+
+  return new Map(
+    accounts.map((account) => {
+      const baseLabel = formatTransactionAccountName(account);
+      const currency = formatCurrencyCode(account.currency || "PHP");
+      const familyCurrencies = currenciesByFamily.get(getTransactionAccountFamilyKey(account));
+      const alreadyNamesCurrency = new RegExp(`(?:^|\\s|\\()${currency}(?:\\)|$)`, "i").test(baseLabel);
+      const label =
+        familyCurrencies && familyCurrencies.size > 1 && !alreadyNamesCurrency
+          ? `${baseLabel} (${currency})`
+          : baseLabel;
+      return [account.id, label] as const;
+    })
+  );
 };
 
 const buildTransactionAccountFilterOptions = (accounts: Account[]) => {
@@ -2355,6 +2407,30 @@ function TransactionsPageContent() {
   );
   const accountById = useMemo(() => new Map(accounts.map((account) => [account.id, account] as const)), [accounts]);
   const accountNameById = useMemo(() => new Map(accounts.map((account) => [account.id, formatTransactionAccountName(account)] as const)), [accounts]);
+  const selectableTransactionAccounts = useMemo(() => {
+    const hiddenAccountIds = new Set([
+      ...getDeletedWorkspaceAccountIds(selectedWorkspaceId),
+      ...getDeletingWorkspaceAccountIds(selectedWorkspaceId),
+    ]);
+    const seenKeys = new Set<string>();
+
+    return accounts.filter((account) => {
+      if (hiddenAccountIds.has(account.id) || !isTransactionAccount(account)) {
+        return false;
+      }
+
+      const key = getTransactionAccountFilterKey(account);
+      if (seenKeys.has(key)) {
+        return false;
+      }
+      seenKeys.add(key);
+      return true;
+    });
+  }, [accounts, selectedWorkspaceId]);
+  const selectableTransactionAccountLabels = useMemo(
+    () => buildTransactionAccountLabels(selectableTransactionAccounts),
+    [selectableTransactionAccounts]
+  );
   const getDisplayAccountNameForTransaction = useCallback(
     (transaction: Transaction) =>
       accountNameById.get(transaction.accountId) ??
@@ -2404,16 +2480,15 @@ function TransactionsPageContent() {
   );
   const transactionAccountPickerOptions = useMemo<TransactionPickerAccount[]>(
     () =>
-      accounts
-        .filter(isTransactionAccount)
+      selectableTransactionAccounts
         .map((account) => ({
           id: account.id,
-          label: formatTransactionAccountName(account),
+          label: selectableTransactionAccountLabels.get(account.id) ?? formatTransactionAccountName(account),
           subtitle: account.institution ?? account.type.replaceAll("_", " "),
           brand: accountBrandById.get(account.id) ?? getAccountBrand(account),
         }))
         .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base", numeric: true })),
-    [accountBrandById, accounts]
+    [accountBrandById, selectableTransactionAccountLabels, selectableTransactionAccounts]
   );
 
   useEffect(() => {
@@ -2443,30 +2518,14 @@ function TransactionsPageContent() {
     [accounts]
   );
   const accountFilterOptions = useMemo(() => buildTransactionAccountFilterOptions(accounts), [accounts]);
-  const manualAccountOptions = useMemo(() => {
-    const cashCurrencyCount = new Set(
-      accounts.filter((account) => account.type === "cash").map((account) => formatCurrencyCode(account.currency || "PHP"))
-    ).size;
-    const seenKeys = new Set<string>();
-
-    return accounts.filter(isTransactionAccount).flatMap((account) => {
-      const key = getTransactionAccountFilterKey(account);
-      if (seenKeys.has(key)) {
-        return [];
-      }
-
-      seenKeys.add(key);
-      return [
-        {
-          account,
-          label:
-            account.type === "cash" && cashCurrencyCount > 1
-              ? `Cash ${formatCurrencyCode(account.currency || "PHP")}`
-              : getAccountDisplayName(account),
-        },
-      ];
-    });
-  }, [accounts]);
+  const manualAccountOptions = useMemo(
+    () =>
+      selectableTransactionAccounts.map((account) => ({
+        account,
+        label: selectableTransactionAccountLabels.get(account.id) ?? formatTransactionAccountName(account),
+      })),
+    [selectableTransactionAccountLabels, selectableTransactionAccounts]
+  );
   const manualSelectedAccount = useMemo(
     () => accounts.find((account) => account.id === manualForm.accountId) ?? null,
     [accounts, manualForm.accountId]
@@ -3979,6 +4038,13 @@ function TransactionsPageContent() {
     transactionSummaryCurrencies,
     defaultCurrency,
     isAllCurrenciesView && transactionSummaryCurrencies.length > 1
+  );
+  const contributingTransactionCurrencies = useMemo(
+    () =>
+      Object.entries(displayedTransactionsSummary.currencyTotals ?? {})
+        .filter(([, values]) => values.income !== 0 || values.spending !== 0 || values.transfers !== 0)
+        .map(([currency]) => formatCurrencyCode(currency)),
+    [displayedTransactionsSummary.currencyTotals]
   );
   const estimatedTransactionTotals = useMemo(() => {
     if (!isAllCurrenciesView || transactionSummaryCurrencies.length <= 1) {
@@ -6522,9 +6588,19 @@ function TransactionsPageContent() {
   };
 
   const netCashFlow = estimatedTransactionTotals.income - estimatedTransactionTotals.spending;
-  const transactionEstimateUnavailable = isAllCurrenciesView && transactionExchangeRates.unavailable.length > 0;
+  const missingContributingTransactionCurrencies = contributingTransactionCurrencies.filter(
+    (currency) =>
+      currency !== formatCurrencyCode(defaultCurrency) &&
+      !Number.isFinite(transactionExchangeRates.rates[formatCurrencyCode(currency)])
+  );
+  const transactionEstimateLoading =
+    isAllCurrenciesView && transactionExchangeRates.loading && missingContributingTransactionCurrencies.length > 0;
+  const transactionEstimateUnavailable =
+    isAllCurrenciesView &&
+    !transactionExchangeRates.loading &&
+    missingContributingTransactionCurrencies.length > 0;
   const formatTransactionSummary = (value: number) => {
-    if (transactionExchangeRates.loading || transactionEstimateUnavailable) {
+    if (transactionEstimateLoading || transactionEstimateUnavailable) {
       return "—";
     }
     if (isAllCurrenciesView && transactionSummaryCurrencies.length > 1) {
@@ -6895,6 +6971,26 @@ function TransactionsPageContent() {
         onChange={handleMobileFileChange}
         aria-hidden="true"
         tabIndex={-1}
+      />
+
+      <CurrencySelector
+        value={workspaceCurrencyCodes.length > 1 ? currencyFilter : workspaceCurrencyCodes[0] ?? "PHP"}
+        onChange={(next) => {
+          const nextCurrency = next && next.toLowerCase() !== "all" ? formatCurrencyCode(next) : "";
+          setCurrencyFilter(nextCurrency);
+          persistSelectedCurrency(selectedWorkspaceId, nextCurrency);
+        }}
+        options={workspaceCurrencyCodes}
+        includeAllOption={workspaceCurrencyCodes.length > 1}
+        allLabel="All currencies"
+        ariaLabel="Filter transactions by currency"
+        className="transactions-currency-filter transactions-currency-filter--compact"
+        buttonClassName="transactions-currency-filter__button transactions-action-button transactions-toolbar-chip"
+        menuClassName="transactions-currency-filter__menu"
+        optionClassName="transactions-currency-filter__option"
+        menuAlignment="end"
+        showChevron={false}
+        portalMenu
       />
 
       <button

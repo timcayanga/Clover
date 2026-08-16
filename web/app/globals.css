@@ -56026,3 +56026,77 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     padding-left: 42px;
   }
 }
+
+/* Final mobile shell alignment: center the page name against the viewport,
+   independently of asymmetric navigation and action controls. */
+@media (max-width: 1100px) {
+  .content--plain-title > :is(.topbar, .shell-compact-bar) {
+    position: sticky !important;
+  }
+
+  .content--plain-title > .topbar .topbar__title-wrap,
+  .content--plain-title > .shell-compact-bar .shell-compact-bar__copy,
+  .content--plain-title > :is(.topbar, .shell-compact-bar):has(.shell-back-button)
+    :is(.topbar__title-wrap, .shell-compact-bar__copy) {
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: min(42%, 220px) !important;
+    max-width: min(42%, 220px) !important;
+    transform: translate(-50%, -50%) !important;
+    justify-self: auto !important;
+    justify-items: center !important;
+    overflow: hidden;
+    text-align: center !important;
+    pointer-events: none;
+  }
+
+  .content--plain-title > :is(.topbar, .shell-compact-bar) .topbar__title-row {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  .content--plain-title > :is(.topbar, .shell-compact-bar) .topbar__title-row h1 {
+    width: 100%;
+    text-align: center !important;
+  }
+
+  .content--has-title-addon > :is(.topbar, .shell-compact-bar) .topbar__title-row > h1 {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 2;
+    max-width: 36%;
+    transform: translate(-50%, -50%);
+    overflow: hidden;
+    text-align: center !important;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .transactions-shell-actions--compact {
+    gap: 5px;
+  }
+
+  .transactions-mobile-simple-row {
+    border-top: 0.5px solid rgba(148, 163, 184, 0.24);
+  }
+
+  .transactions-mobile-simple-row:last-child {
+    border-bottom: 0.5px solid rgba(148, 163, 184, 0.24);
+  }
+
+  .transactions-mobile-date-divider::before,
+  .transactions-mobile-date-divider::after {
+    border-top-width: 0.5px;
+    opacity: 0.42;
+  }
+
+  html[data-theme="dark"] .transactions-mobile-simple-row,
+  html[data-theme="dark"] .transactions-mobile-simple-row:last-child {
+    border-color: rgba(203, 213, 225, 0.16) !important;
+  }
+}

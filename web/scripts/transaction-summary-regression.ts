@@ -77,6 +77,8 @@ assert.match(footerSnapshot, /"Est\. Spending" : "Spending"/);
 assert.match(footerSnapshot, /"Est\. Net Cash Flow" : "Net Cash Flow"/);
 assert.doesNotMatch(footerSnapshot, />Transfers<\/span>/);
 assert.match(pageSource, /const netCashFlow = estimatedTransactionTotals\.income - estimatedTransactionTotals\.spending;/);
+assert.match(pageSource, /contributingTransactionCurrencies/, "Zero-value currencies must not suppress otherwise valid mixed-currency estimates.");
+assert.match(pageSource, /missingContributingTransactionCurrencies/, "FX readiness must be scoped to currencies that contribute to the totals.");
 
 const routeSource = readFileSync(path.join(process.cwd(), "app/api/transactions/route.ts"), "utf8");
 assert.match(routeSource, /currencyTotals/, "The API must preserve per-currency totals before conversion.");

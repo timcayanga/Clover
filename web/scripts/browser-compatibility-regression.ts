@@ -417,6 +417,16 @@ async function main() {
     /\.transactions-mobile-date-divider,[\s\S]{0,80}\.transactions-mobile-date-divider span \{[\s\S]{0,80}min-height: 18px;/,
     "Mobile transaction date dividers must keep their compact vertical rhythm."
   );
+  assert.match(
+    globalStyles,
+    /Final mobile shell alignment[\s\S]{0,900}left: 50% !important;[\s\S]{0,180}transform: translate\(-50%, -50%\) !important;/,
+    "Mobile page names must remain centered against the viewport despite asymmetric controls."
+  );
+  assert.match(
+    globalStyles,
+    /Final mobile shell alignment[\s\S]{0,1800}\.transactions-mobile-simple-row \{[\s\S]{0,100}border-top: 0\.5px solid rgba\(148, 163, 184, 0\.24\);/,
+    "Mobile transaction separators must use a light hairline treatment."
+  );
   assert.ok(
     [transactionsSource, accountDetailsSource].every(
       (source) =>

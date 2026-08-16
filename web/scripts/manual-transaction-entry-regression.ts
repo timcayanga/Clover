@@ -42,7 +42,11 @@ assert.match(accountPicker, /AccountBrandMark/, "Account choices must show the s
 assert.doesNotMatch(accountPicker, /account\.subtitle \? <span>/, "Account choices must remain a compact single-line list.");
 assert.match(accountPicker, /buttonRef\?: React\.Ref<HTMLButtonElement>/, "Account picker triggers must support accessible icon shortcuts.");
 assert.match(categoryPicker, /buttonRef\?: React\.Ref<HTMLButtonElement>/, "Category picker triggers must support accessible icon shortcuts.");
-assert.match(transactions, /filter\(isTransactionAccount\)/, "Manual and edited transactions must not offer investment holdings as payment accounts.");
+assert.match(transactions, /account\.type === "investment" \|\| Boolean\(account\.investmentSubtype\)/, "Manual and edited transactions must not offer typed investment holdings as payment accounts.");
+assert.match(transactions, /transactionInvestmentIdentityPattern\.test/, "Legacy investment-shaped shadow accounts must stay out of transaction pickers.");
+assert.match(transactions, /getDeletedWorkspaceAccountIds\(selectedWorkspaceId\)/, "Deleted accounts must stay out of transaction pickers immediately.");
+assert.match(transactions, /buildTransactionAccountLabels\(selectableTransactionAccounts\)/, "Cross-currency account families must receive distinct picker labels.");
+assert.match(transactions, /className="transactions-currency-filter transactions-currency-filter--compact"/, "Mobile Transactions must expose the shared compact currency selector.");
 assert.match(transactions, /TransactionAccountPicker/, "Transaction account edits must use the icon-rich account picker.");
 assert.match(transactions, /inlineAccountPickerButtonRefs\.current\.get\(transaction\.id\)\?\.click\(\)/, "Clicking a row account mark must open its account editor.");
 assert.match(transactions, /inlineCategoryPickerButtonRefs\.current\.get\(transaction\.id\)\?\.click\(\)/, "Clicking a row category mark must open its category editor.");
