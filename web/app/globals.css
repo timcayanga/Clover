@@ -50738,6 +50738,118 @@ body:has(.landing-page) {
   }
 }
 
+/* Keep the public landing story in natural document flow on compact screens. */
+@media (max-width: 1100px) {
+  .landing-page .landing-hero {
+    grid-template-rows: auto auto;
+    gap: clamp(18px, 3vw, 28px);
+    min-height: auto;
+    padding: clamp(28px, 5vw, 52px) 0 clamp(48px, 7vw, 76px);
+    align-content: start;
+  }
+
+  .landing-page .landing-hero__copy {
+    width: min(100%, 620px);
+    margin-inline: auto;
+    gap: 12px;
+  }
+
+  .clarity-engine {
+    width: min(760px, 100%);
+    max-height: none;
+    margin: 0 auto;
+  }
+
+  .clarity-engine__canvas {
+    width: 100%;
+    aspect-ratio: 2.1 / 1;
+  }
+
+  .clarity-engine__status {
+    margin-top: 8px;
+  }
+
+  .landing-feature,
+  .landing-feature--reverse {
+    grid-template-rows: auto auto;
+    gap: clamp(22px, 4vw, 36px);
+    min-height: auto;
+    padding: clamp(52px, 8vw, 86px) clamp(8px, 2vw, 20px);
+    align-content: start;
+  }
+
+  .landing-feature__visual {
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .landing-feature__visual .landing-asset,
+  .landing-feature__visual .landing-asset__image {
+    width: 100%;
+    max-width: 100%;
+    max-height: min(42svh, 360px);
+  }
+
+  .landing-feature__visual .landing-asset__image {
+    object-fit: contain;
+  }
+
+  .landing-feature__copy {
+    width: min(100%, 680px);
+    margin-inline: auto;
+    gap: 12px;
+  }
+
+  .landing-feature__body {
+    width: min(100%, 600px);
+  }
+
+  .landing-feature__body ul {
+    width: fit-content;
+    max-width: calc(100% - 32px);
+    margin: 0.55rem auto 0;
+    padding-left: 1.2rem;
+    justify-items: start;
+    text-align: left;
+  }
+
+  .landing-feature__body li {
+    width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .landing-page {
+    width: min(100%, calc(100% - 24px));
+  }
+
+  .landing-page .landing-hero {
+    gap: 18px;
+    padding: 24px 0 56px;
+  }
+
+  .clarity-engine__status {
+    width: min(360px, calc(100% - 20px));
+    margin-top: 6px;
+  }
+
+  .landing-feature,
+  .landing-feature--reverse {
+    gap: 22px;
+    padding: 52px 4px;
+  }
+
+  .landing-feature__visual .landing-asset,
+  .landing-feature__visual .landing-asset__image {
+    max-height: min(38svh, 300px);
+  }
+
+  .landing-feature--pro {
+    padding-inline: 18px;
+  }
+}
+
 /* Keep Investments chart overrides last so legacy report-donut rules cannot restore donut styling. */
 .content--investments .investments-overview-metrics {
   grid-template-columns: repeat(4, minmax(0, 1fr));
