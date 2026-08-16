@@ -7310,7 +7310,13 @@ export function ImportFilesModal({
   }, [backgroundOnly, launchInBackground, open, showImportProgressDock]);
 
   useEffect(() => {
-    if (typeof document === "undefined" || !open || backgroundOnly || launchInBackground) {
+    if (
+      typeof document === "undefined" ||
+      !open ||
+      backgroundOnly ||
+      launchInBackground ||
+      showImportProgressDock
+    ) {
       return;
     }
 
@@ -7331,7 +7337,7 @@ export function ImportFilesModal({
       delete body.dataset.cloverImportModalVisibleCount;
       delete body.dataset.cloverImportModalVisible;
     };
-  }, [backgroundOnly, launchInBackground, open]);
+  }, [backgroundOnly, launchInBackground, open, showImportProgressDock]);
 
   useEffect(() => {
     if (!open || !workspaceId) {

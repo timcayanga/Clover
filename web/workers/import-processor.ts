@@ -44,6 +44,7 @@ import {
 } from "@/lib/import-file-text.server";
 import { downloadImportObject } from "@/lib/import-storage.server";
 import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
+import { resolveReceiptCategoryWithPaymentEvidence } from "@/lib/receipt-transaction-classification";
 import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
 import {
   assessReceiptPreviewQuality,
@@ -2071,7 +2072,7 @@ const normalizeReceiptLineItems = (
     .filter((item): item is NormalizedReceiptLineItem => item !== null);
 
 const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptText>) => ({
-  receipt_type: "receipt",
+  receipt_type: preview.receiptType,
   merchant_raw: isSuspiciousReceiptMerchantName(preview.merchantName) ? null : preview.merchantName ?? null,
   merchant_clean: isSuspiciousReceiptMerchantName(preview.merchantName) ? null : preview.merchantName ?? null,
   document_number: null,
@@ -11049,8 +11050,10 @@ export const processImportFileText = async (
       ? await resolveWorkspaceCashAccountId(String(importFile.workspaceId), resolvedMetadata.currency ?? "PHP")
       : null;
   const documentImportAccountId =
-    effectiveImportMode === "receipt" || effectiveImportMode === "notes"
-      ? documentCashAccountId
+    effectiveImportMode === "receipt"
+      ? resolvedReceiptAccountId ?? documentCashAccountId
+      : effectiveImportMode === "notes"
+        ? documentCashAccountId
       : receiptPreviewLooksLikeReceipt
         ? linkedImportAccountId ?? resolvedReceiptAccountId
         : linkedImportAccountId;
@@ -11101,9 +11104,18 @@ export const processImportFileText = async (
                 : effectiveImportMode === "notes"
                   ? "notes"
                   : "statement",
-        institution: effectiveImportMode === "receipt" ? null : resolvedMetadata.institution ?? null,
-        accountName: effectiveImportMode === "receipt" ? "Cash" : resolvedMetadata.accountName ?? null,
-        accountNumber: effectiveImportMode === "receipt" ? null : resolvedMetadata.accountNumber ?? null,
+        institution:
+          effectiveImportMode === "receipt"
+            ? receiptAccountResolution?.institution ?? null
+            : resolvedMetadata.institution ?? null,
+        accountName:
+          effectiveImportMode === "receipt"
+            ? receiptAccountResolution?.accountName ?? "Cash"
+            : resolvedMetadata.accountName ?? null,
+        accountNumber:
+          effectiveImportMode === "receipt"
+            ? receiptAccountResolution?.accountLast4 ?? null
+            : resolvedMetadata.accountNumber ?? null,
         currency: resolvedMetadata.currency ?? null,
         pageCount: pageImages?.length ?? 0,
         confidence: resolvedMetadata.confidence ?? 0,
@@ -12509,10 +12521,6 @@ export const confirmImportFile = async (
             : typeof receiptDetailsRecord?.categoryName === "string" && receiptDetailsRecord.categoryName.trim()
               ? receiptDetailsRecord.categoryName.trim()
               : null;
-        if (trainedCategoryName) {
-          return trainedCategoryName;
-        }
-
         const receiptTypeText =
           typeof receiptDetailsRecord?.receipt_type === "string"
             ? receiptDetailsRecord.receipt_type.trim().toLowerCase()
@@ -12528,7 +12536,27 @@ export const confirmImportFile = async (
                     .toLowerCase()
                 : "";
         const lineItemText = receiptLineItems.map((item) => item.description).join(" ").toLowerCase();
-        const receiptContextText = `${receiptMerchantClean || ""} ${receiptMerchantRaw || ""} ${receiptTypeText} ${lineItemText}`.trim();
+        const parserEvidence =
+          receiptDetailsRecord?.parser_evidence &&
+          typeof receiptDetailsRecord.parser_evidence === "object" &&
+          !Array.isArray(receiptDetailsRecord.parser_evidence)
+            ? (receiptDetailsRecord.parser_evidence as Record<string, unknown>)
+            : null;
+        const sourceText = typeof parserEvidence?.source_text === "string" ? parserEvidence.source_text : "";
+        const paymentMethod =
+          typeof receiptDetailsRecord?.payment_method === "string"
+            ? receiptDetailsRecord.payment_method
+            : typeof receiptDocument?.paymentMethod === "string"
+              ? receiptDocument.paymentMethod
+              : "";
+        const receiptContextText = `${receiptMerchantClean || ""} ${receiptMerchantRaw || ""} ${receiptTypeText} ${paymentMethod} ${sourceText} ${lineItemText}`.trim();
+        const paymentAwareCategory = resolveReceiptCategoryWithPaymentEvidence({
+          proposedCategory: trainedCategoryName,
+          receiptContext: receiptContextText,
+        });
+        if (paymentAwareCategory) {
+          return paymentAwareCategory;
+        }
 
         if (
           /\btemporary bill\b/.test(receiptTypeText) ||
@@ -12554,7 +12582,12 @@ export const confirmImportFile = async (
         }
 
         const contextualGuess = guessCategoryName(receiptContextText, "expense");
-        return contextualGuess !== "Other" ? contextualGuess : "Food & Dining";
+        return (
+          resolveReceiptCategoryWithPaymentEvidence({
+            proposedCategory: contextualGuess,
+            receiptContext: receiptContextText,
+          }) ?? (contextualGuess !== "Other" ? contextualGuess : "Food & Dining")
+        );
       })();
       const receiptCategoryId = await resolveOrCreateWorkspaceCategoryId({
         workspaceId: String(importFile.workspaceId),

@@ -69,6 +69,7 @@ const extractLastFourDigits = (value?: string | null) => {
 };
 
 const accountNameSignals = [
+  { pattern: /^(?:card|credit card|debit card)$/i, type: "credit_card" },
   { pattern: /\bvisa\b/i, type: "credit_card" },
   { pattern: /\bmastercard\b/i, type: "credit_card" },
   { pattern: /\bamex\b|\bamerican express\b/i, type: "credit_card" },

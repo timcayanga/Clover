@@ -1737,6 +1737,7 @@ const detectReceiptAccountMatchFromText = (text: string): ReceiptPreviewAccountM
     { pattern: /\bamex\b|\bamerican express\b/i, accountName: "American Express", confidence: 80 },
     { pattern: /\bdebit card\b/i, accountName: "Debit Card", confidence: 72 },
     { pattern: /\bcredit card\b/i, accountName: "Credit Card", confidence: 72 },
+    { pattern: /\bcard\s*(?:number|no\.?|#)\s*[:#-]?\s*(?:[*xX•]+\s*)?\d{4}\b/i, accountName: "Card", confidence: 82 },
     { pattern: /\b(?:credit\s+card|debit\s+card|card\s+payment|payment\s+card|paid\s+by|paid\s+with|form\s+of\s+payment|payment\s+details|payment\s+method|approved\s+for\s+payment|received\s+payment)\b/i, accountName: "Card", confidence: 58 },
     { pattern: /\bgcash\b/i, accountName: "GCash", confidence: 78 },
     { pattern: /\bmaya\b|\bpaymaya\b/i, accountName: "Maya", confidence: 78 },
