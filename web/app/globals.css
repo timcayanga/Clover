@@ -54617,8 +54617,16 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   }
 
   .accounts-detail__transactions .accounts-detail__mobile-transaction-name {
-    grid-template-columns: 20px minmax(0, 1fr);
-    gap: 6px;
+    grid-template-columns: 20px minmax(0, 1fr) !important;
+    gap: 6px !important;
+  }
+
+  .accounts-detail__transactions .accounts-detail__mobile-transaction-name .transactions-mobile-simple-row__name-main {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.25;
   }
 
   .transactions-mobile-simple-row__amount.positive {

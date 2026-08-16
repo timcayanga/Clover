@@ -399,8 +399,13 @@ async function main() {
   );
   assert.match(
     globalStyles,
-    /\.accounts-detail__transactions \.accounts-detail__mobile-transaction-name \{[\s\S]{0,120}grid-template-columns: 20px minmax\(0, 1fr\);/,
+    /\.accounts-detail__transactions \.accounts-detail__mobile-transaction-name \{[\s\S]{0,120}grid-template-columns: 20px minmax\(0, 1fr\) !important;/,
     "Account Details must retain its compact single-badge mobile transaction layout."
+  );
+  assert.match(
+    globalStyles,
+    /\.accounts-detail__transactions \.accounts-detail__mobile-transaction-name \.transactions-mobile-simple-row__name-main \{[\s\S]{0,180}white-space: normal;[\s\S]{0,80}overflow-wrap: anywhere;/,
+    "Account Details must show complete mobile transaction names instead of truncating them."
   );
   assert.match(
     globalStyles,
