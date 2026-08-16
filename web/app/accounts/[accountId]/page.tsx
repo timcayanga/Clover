@@ -3069,6 +3069,11 @@ function AccountDetailPageContent() {
   };
 
   const openTransactionDetail = (transaction: Transaction) => {
+    if (isMobileViewport) {
+      router.push(`/transactions/${encodeURIComponent(transaction.id)}`, { scroll: true });
+      return;
+    }
+
     setSelectedTransaction(transaction);
     setDetailDraft(
       createDetailDraft(transaction, {

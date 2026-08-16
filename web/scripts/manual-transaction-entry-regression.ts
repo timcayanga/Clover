@@ -11,6 +11,7 @@ const suggestionsRoute = read("app/api/transaction-name-suggestions/route.ts");
 const categoryRoute = read("app/api/categories/route.ts");
 const categoryPicker = read("components/transaction-category-picker.tsx");
 const accountPicker = read("components/transaction-account-picker.tsx");
+const accountDetail = read("app/accounts/[accountId]/page.tsx");
 const transactionDetail = read("app/transactions/[transactionId]/page.tsx");
 const crossFeatureActions = read("components/transaction-cross-feature-actions.tsx");
 const categorySettings = read("components/settings-categories-panel.tsx");
@@ -47,6 +48,7 @@ assert.match(styles, /@media \(max-width: 1100px\)[\s\S]*?\.dashboard-home__repo
 assert.match(styles, /\.transaction-category-picker__menu[\s\S]*?position: fixed/, "The mobile category picker must use a navigable bottom sheet.");
 assert.match(styles, /\.transaction-account-picker__menu[\s\S]*?position: fixed/, "The mobile account picker must use a navigable bottom sheet.");
 assert.match(transactions, /if \(syncRoute && isCompactViewport\)[\s\S]*?router\.push\(`\/transactions\/\$\{encodeURIComponent\(transaction\.id\)\}`/, "Only compact layouts should route transaction details to a standalone page.");
+assert.match(accountDetail, /if \(isMobileViewport\) \{[\s\S]{0,120}router\.push\(`\/transactions\/\$\{encodeURIComponent\(transaction\.id\)\}`/, "Mobile Account Details must route transactions to the shared standalone detail page.");
 assert.match(transactions, /transaction-drawer--sidepanel/, "Desktop transaction details must retain the right-side drawer.");
 assert.match(transactionDetail, /<summary>More<\/summary>/, "Mobile transaction details must retain the More section.");
 assert.match(transactionDetail, /Line Items/, "Mobile transaction details must show editable line items.");
