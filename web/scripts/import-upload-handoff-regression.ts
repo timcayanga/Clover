@@ -38,6 +38,22 @@ const main = async () => {
     readFile(join(webRoot, "vercel.json"), "utf8"),
   ]);
   const optimisticSummarySource = await readFile(join(webRoot, "lib/import-optimistic-summary.ts"), "utf8");
+  const imageCompressionSource = await readFile(join(webRoot, "lib/import-image-compression.ts"), "utf8");
+  assert.match(
+    modalSource,
+    /optimizeImportImages\(nextFiles, MAX_IMPORT_FILE_SIZE\)/,
+    "Oversized mobile photos should be optimized before upload."
+  );
+  assert.match(
+    imageCompressionSource,
+    /MAX_IMPORT_IMAGE_SOURCE_SIZE = 16 \* 1024 \* 1024/,
+    "Mobile photos up to 16 MB should be accepted for optimization."
+  );
+  assert.match(
+    imageCompressionSource,
+    /for \(const file of files\)/,
+    "Multiple mobile photos should be optimized sequentially to protect device memory."
+  );
   assert.match(
     modalSource,
     /const COMPLETED_IMPORT_AUTO_CLOSE_MS = 10_000;/,

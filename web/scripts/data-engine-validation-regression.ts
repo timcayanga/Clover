@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { applyImportValidationToRows, calibrateConfidenceScore, validateParsedImportRows } from "@/lib/data-engine-validation";
 import { MAX_IMPORT_FILE_SIZE, validateImportFile, validateImportFileBytes } from "@/lib/import-file-validation";
+import { IMPORT_IMAGE_TARGET_SIZE, MAX_IMPORT_IMAGE_SOURCE_SIZE } from "@/lib/import-image-compression";
 
 const goodRows = [
   { date: "2026-01-02", amount: "-100.00", merchantRaw: "SHOP", merchantClean: "Shop", type: "expense" as const, rawPayload: { parserEvidence: { page: 1, source_text: "SHOP -100.00" } } },
@@ -46,10 +47,12 @@ assert.ok(unsafeStatement.findings.some((finding) => finding.code === "row.balan
 
 assert.equal(validateImportFileBytes({ fileName: "statement.pdf", contentType: "application/pdf", bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]) }), null);
 assert.match(String(validateImportFileBytes({ fileName: "statement.pdf", contentType: "application/pdf", bytes: new Uint8Array([1, 2, 3]) })), /valid PDF/i);
-assert.equal(MAX_IMPORT_FILE_SIZE, 2 * 1024 * 1024);
+assert.equal(MAX_IMPORT_FILE_SIZE, 4 * 1024 * 1024);
+assert.equal(MAX_IMPORT_IMAGE_SOURCE_SIZE, 16 * 1024 * 1024);
+assert.ok(IMPORT_IMAGE_TARGET_SIZE < MAX_IMPORT_FILE_SIZE);
 assert.equal(validateImportFile({ fileName: "statement.pdf", contentType: "application/pdf", fileSize: MAX_IMPORT_FILE_SIZE }), null);
 assert.match(
-  String(validateImportFile({ fileName: "statement.pdf", contentType: "application/pdf", fileSize: 3 * 1024 * 1024 })),
-  /2 MB or smaller/i
+  String(validateImportFile({ fileName: "statement.pdf", contentType: "application/pdf", fileSize: 5 * 1024 * 1024 })),
+  /4 MB or smaller/i
 );
 console.log("Data Engine validation regression passed.");

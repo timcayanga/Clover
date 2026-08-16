@@ -8,9 +8,10 @@ import {
 } from "@/lib/import-format-policies";
 import type { ImportImageMode } from "@/lib/import-image-mode";
 
-// Keep uploads small enough for a responsive, serverless import path. Larger
-// statements should be split rather than silently tying up the visible import.
-export const MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024;
+// Multipart imports must remain below the hosting request ceiling. Mobile
+// photos may start larger, but the client optimizes them before this check.
+export const MAX_IMPORT_FILE_SIZE = 4 * 1024 * 1024;
+export const MAX_IMPORT_FILE_SIZE_LABEL = "4 MB";
 export const MAX_IMPORT_PDF_PAGES = 250;
 
 const getFileExtension = (fileName: string) => {
@@ -55,7 +56,7 @@ export const validateImportFile = (params: {
   }
 
   if (params.fileSize > MAX_IMPORT_FILE_SIZE) {
-    return "Uploaded files must be 2 MB or smaller.";
+    return `Uploaded files must be ${MAX_IMPORT_FILE_SIZE_LABEL} or smaller.`;
   }
 
   if (!isSupportedImportFile(params.fileName, params.contentType, { importMode: params.importMode ?? null })) {

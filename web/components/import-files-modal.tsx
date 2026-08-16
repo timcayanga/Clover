@@ -21,7 +21,12 @@ import {
 } from "@/lib/import-file-helpers";
 import { extractTextFromFile, probeFilePasswordProtection, validatePdfPassword } from "@/lib/import-file-text";
 import { postFileWithProgress } from "@/lib/import-file-post";
-import { validateImportFile } from "@/lib/import-file-validation";
+import { optimizeImportImages } from "@/lib/import-image-compression";
+import {
+  MAX_IMPORT_FILE_SIZE,
+  MAX_IMPORT_FILE_SIZE_LABEL,
+  validateImportFile,
+} from "@/lib/import-file-validation";
 import { type ImportImageMode } from "@/lib/import-image-mode";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { normalizeBankName } from "@/lib/data-qa-banks";
@@ -1431,7 +1436,10 @@ export function ImportFilesModal({
     }, delayMs);
   };
 
-  const addFiles = (incoming: FileList | File[], options?: { launchInBackground?: boolean }) => {
+  const addFiles = (
+    incoming: FileList | File[],
+    options?: { launchInBackground?: boolean; imagesPrepared?: boolean }
+  ) => {
     const nextFiles = Array.from(incoming);
     if (nextFiles.length === 0) return;
 
@@ -1439,6 +1447,25 @@ export function ImportFilesModal({
       setValidationNotice("Clover is still loading your workspace. Please wait a moment, then upload again.");
       setMessage("Upload unavailable while Clover finishes loading your workspace.");
       autoStartRef.current = false;
+      return;
+    }
+
+    if (!options?.imagesPrepared && nextFiles.some((file) => isImageImportFile(file) && file.size > MAX_IMPORT_FILE_SIZE)) {
+      setValidationNotice(null);
+      setMessage("Optimizing photo for a faster upload...");
+      void optimizeImportImages(nextFiles, MAX_IMPORT_FILE_SIZE)
+        .then((preparedFiles) => {
+          addFiles(preparedFiles, { ...options, imagesPrepared: true });
+        })
+        .catch((error) => {
+          const detail = error instanceof Error ? error.message : "Clover could not prepare this photo.";
+          setValidationNotice(detail);
+          setMessage("No files were added.");
+          reportImportClientStage("photo_optimization_failed", {
+            fileCount: nextFiles.length,
+            reason: detail,
+          });
+        });
       return;
     }
 
@@ -1479,8 +1506,8 @@ export function ImportFilesModal({
         });
 
         if (validationError) {
-          if (validationError === "Uploaded files must be 2 MB or smaller.") {
-            validationIssues.push(`${file.name} is larger than 2 MB.`);
+          if (validationError === `Uploaded files must be ${MAX_IMPORT_FILE_SIZE_LABEL} or smaller.`) {
+            validationIssues.push(`${file.name} is larger than ${MAX_IMPORT_FILE_SIZE_LABEL}.`);
           } else if (/Only PDF, CSV, TSV, XLSX/.test(validationError)) {
             validationIssues.push(`${file.name} has an invalid file extension.`);
           } else {
