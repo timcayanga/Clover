@@ -3874,15 +3874,16 @@ function AccountsPageContent() {
     const loadingContext = getUploadAccountLoadingContext(row);
     const latestCheckpoint = loadingContext.latestCheckpoint;
     const latestCheckpointMetadata = latestCheckpoint?.sourceMetadata as Record<string, unknown> | null | undefined;
+    const relatedAccountTransaction = transactions.find((transaction) => transactionMatchesAccount(transaction, row));
+    const relatedTransactionWithAccountNumber = transactions.find(
+      (transaction) => transactionMatchesAccount(transaction, row) && Boolean(transaction.accountNumber?.trim())
+    );
     const fallbackAccountNumber =
-      row.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null;
-    const relatedTransactionInstitution = transactions.find((transaction) => {
-      if (!transactionMatchesAccount(transaction, row)) {
-        return false;
-      }
-
-      return typeof transaction.institution === "string" && transaction.institution.trim().length > 0;
-    })?.institution?.trim() ?? null;
+      row.accountNumber ??
+      latestCheckpoint?.sourceMetadata?.accountNumber ??
+      relatedTransactionWithAccountNumber?.accountNumber?.trim() ??
+      null;
+    const relatedTransactionInstitution = relatedAccountTransaction?.institution?.trim() ?? null;
     const checkpointInstitution =
       typeof latestCheckpointMetadata?.institution === "string"
         ? latestCheckpointMetadata.institution

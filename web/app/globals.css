@@ -26217,10 +26217,15 @@ html[data-theme="dark"] .portfolio-growth__ranges button.is-active {
   border-radius: 6px;
   background: transparent;
   color: inherit;
-  font: inherit;
+  font-family: inherit;
   text-align: left;
   cursor: text;
   transition: opacity 140ms ease, transform 140ms ease, background-color 140ms ease;
+}
+
+.financial-account-card__inline-trigger[data-empty="true"] {
+  width: 100%;
+  min-height: 1.2rem;
 }
 
 .financial-account-card__inline-trigger:hover,
@@ -26240,7 +26245,7 @@ html[data-theme="dark"] .portfolio-growth__ranges button.is-active {
   outline: none;
   background: transparent;
   color: inherit;
-  font: inherit;
+  font-family: inherit;
   box-shadow: none;
 }
 

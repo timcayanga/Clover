@@ -108,6 +108,7 @@ function InlineCardField({
       className={`${className} financial-account-card__inline-trigger`}
       type="button"
       aria-label={label}
+      data-empty={displayValue ? undefined : "true"}
       onClick={(event) => {
         event.stopPropagation();
         setEditing(true);
@@ -205,7 +206,7 @@ export function FinancialAccountCard({
           {onAccountNumberCommit && editableAccountNumber !== undefined ? (
             <InlineCardField
               value={editableAccountNumber}
-              displayValue={accountNumber || "Add account number"}
+              displayValue={accountNumber ?? ""}
               label={`Edit ${name} account number`}
               className="financial-account-card__number"
               onCommit={onAccountNumberCommit}
