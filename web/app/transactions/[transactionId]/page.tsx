@@ -7,12 +7,20 @@ import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { TransactionAccountPicker, type TransactionPickerAccount } from "@/components/transaction-account-picker";
 import { TransactionCategoryPicker } from "@/components/transaction-category-picker";
 import { CurrencySelector } from "@/components/currency-selector";
+import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
+import { TransactionCrossFeatureActions } from "@/components/transaction-cross-feature-actions";
 import { getAccountBrand } from "@/lib/account-brand";
 import type { AccountType } from "@/lib/domain-types";
 import { buildTransactionDetailDraft, type TransactionDetailDraftValue } from "@/lib/transaction-detail-draft";
 import { buildTransactionUpdatePayload } from "@/lib/transaction-update-payload";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { formatCurrencyAmount } from "@/lib/currency-format";
+import {
+  createEmptyReceiptLineItem,
+  getManualReceiptLineItemTotal,
+  getReceiptLineItemComputedAmount,
+} from "@/lib/receipt-line-items";
+import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
 
 type Transaction = {
   id: string;
@@ -36,6 +44,13 @@ type Transaction = {
   importFileId?: string | null;
   rawPayload?: unknown;
   normalizedPayload?: unknown;
+  reviewStatus?: string | null;
+  parserConfidence?: number | null;
+  categoryConfidence?: number | null;
+  accountMatchConfidence?: number | null;
+  duplicateConfidence?: number | null;
+  transferConfidence?: number | null;
+  splitBill?: { id: string; title: string } | null;
 };
 
 type AccountOption = {
@@ -69,6 +84,21 @@ const displayAccountName = (account: AccountOption) => {
 const typeSymbol = (type: TransactionDetailDraftValue["type"]) =>
   type === "credit" ? "+" : type === "transfer" ? "↔" : "-";
 
+const getConfidenceScore = (transaction: Transaction) => {
+  const values = [
+    transaction.parserConfidence,
+    transaction.categoryConfidence,
+    transaction.accountMatchConfidence,
+    transaction.duplicateConfidence,
+    transaction.transferConfidence,
+  ].filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (values.length === 0) return transaction.source === "manual" ? 100 : 80;
+  return Math.round(values.reduce((sum, value) => {
+    const score = value <= 1 ? value * 100 : value;
+    return sum + Math.max(0, Math.min(100, score));
+  }, 0) / values.length);
+};
+
 export default function TransactionDetailPage() {
   const params = useParams<{ transactionId: string }>();
   const router = useRouter();
@@ -81,6 +111,9 @@ export default function TransactionDetailPage() {
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [splitBillOpen, setSplitBillOpen] = useState(false);
+  const [splitBillSaving, setSplitBillSaving] = useState(false);
+  const [splitBillDraft, setSplitBillDraft] = useState<SplitBillTransactionLinkDraft>({ groupId: "", participantNames: [] });
 
   const goBack = () => {
     if (window.history.length > 1) {
@@ -168,6 +201,41 @@ export default function TransactionDetailPage() {
         })),
     [accounts]
   );
+  const confidenceScore = transaction ? getConfidenceScore(transaction) : 0;
+  const confidenceLabel = confidenceScore >= 85 ? "High confidence" : confidenceScore >= 65 ? "Medium confidence" : "Low confidence";
+  const receiptLineTotal = useMemo(() => getManualReceiptLineItemTotal(draft?.receiptLineItems ?? []), [draft?.receiptLineItems]);
+
+  const updateLineItem = (index: number, field: "description" | "quantity" | "currency" | "amount", value: string) => {
+    setDraft((current) => current ? {
+      ...current,
+      receiptLineItems: current.receiptLineItems.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item),
+    } : current);
+  };
+
+  const createSplitBill = async () => {
+    if (!transaction || !draft || splitBillSaving) return;
+    setSplitBillSaving(true);
+    setMessage("");
+    try {
+      const bill = await createSplitBillFromTransaction({
+        workspaceId: transaction.workspaceId,
+        transactionId: transaction.id,
+        transactionTitle: draft.merchantClean || transaction.merchantRaw,
+        billDate: draft.date,
+        currency: draft.currency,
+        amount: draft.amount,
+        draft: splitBillDraft,
+        receiptLineItems: draft.receiptLineItems.map((item) => ({ description: item.description, amount: String(getReceiptLineItemComputedAmount(item) ?? 0) })),
+      }) as { id?: string; title?: string };
+      setTransaction({ ...transaction, splitBill: bill.id ? { id: bill.id, title: bill.title || draft.merchantClean } : transaction.splitBill });
+      setSplitBillOpen(false);
+      setMessage("Added to Split Bills.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to add this transaction to Split Bills.");
+    } finally {
+      setSplitBillSaving(false);
+    }
+  };
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -336,20 +404,68 @@ export default function TransactionDetailPage() {
                   />
                 </span>
               </label>
-              <label className="transaction-detail-page__notes">
-                Notes
-                <textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder="Optional note" />
-              </label>
             </section>
 
-            <details className="transaction-detail-page__source">
-              <summary>Source Details</summary>
-              <dl>
-                <div><dt>Original Name</dt><dd>{transaction.merchantRaw}</dd></div>
-                <div><dt>Source</dt><dd>{transaction.source === "upload" ? "Imported file" : transaction.source || "Manual"}</dd></div>
-                <div><dt>Account</dt><dd>{transaction.accountName}</dd></div>
-              </dl>
+            <details className="transaction-detail-page__more">
+              <summary>More</summary>
+              <div className="transaction-detail-page__more-body">
+                <label className="transaction-detail-page__notes">
+                  Notes
+                  <textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder="Optional note" />
+                </label>
+                <div className="transaction-detail-page__line-items">
+                  <div className="transaction-detail-page__line-items-head">
+                    <strong>Line Items</strong>
+                    <span>{formatCurrencyAmount(receiptLineTotal, draft.currency)}</span>
+                  </div>
+                  {draft.receiptLineItems.map((item, index) => (
+                    <div className="transaction-detail-page__line-item" key={`line-item-${index}`}>
+                      <input aria-label={`Line item ${index + 1} name`} placeholder="Item name" value={item.description} onChange={(event) => updateLineItem(index, "description", event.target.value)} />
+                      <input aria-label={`Line item ${index + 1} quantity`} placeholder="Qty" inputMode="decimal" value={item.quantity} onChange={(event) => updateLineItem(index, "quantity", event.target.value)} />
+                      <input aria-label={`Line item ${index + 1} currency`} placeholder={draft.currency} value={item.currency} onChange={(event) => updateLineItem(index, "currency", event.target.value.toUpperCase())} />
+                      <input aria-label={`Line item ${index + 1} amount`} placeholder="Amount" inputMode="decimal" value={item.amount} onChange={(event) => updateLineItem(index, "amount", event.target.value)} />
+                      <button type="button" aria-label={`Remove line item ${index + 1}`} onClick={() => setDraft({ ...draft, receiptLineItems: draft.receiptLineItems.filter((_, itemIndex) => itemIndex !== index) })}>×</button>
+                    </div>
+                  ))}
+                  <button className="button button-secondary button-small transaction-detail-page__add-line" type="button" onClick={() => setDraft({ ...draft, receiptLineItems: [...draft.receiptLineItems, { ...createEmptyReceiptLineItem(), currency: draft.currency }] })}>Add line item</button>
+                </div>
+                <div className="transaction-detail-page__confidence">
+                  <span className={`transaction-detail-page__confidence-chip is-${confidenceScore >= 85 ? "high" : confidenceScore >= 65 ? "medium" : "low"}`}>{confidenceLabel}</span>
+                  <strong>{confidenceScore}%</strong>
+                </div>
+                <p>Clover checks the merchant, account, category, duplicate risk, and parser result.</p>
+              </div>
             </details>
+
+            <TransactionCrossFeatureActions
+              workspaceId={transaction.workspaceId}
+              transactionId={transaction.id}
+              transactionType={draft.type === "credit" ? "income" : draft.type === "transfer" ? "transfer" : "expense"}
+              title={draft.merchantClean || transaction.merchantRaw}
+              amount={draft.amount}
+              currency={draft.currency}
+              date={draft.date}
+              accountId={draft.accountId}
+              splitBillHref={transaction.splitBill ? `/split-bill?bill=${transaction.splitBill.id}` : null}
+              splitBillOpen={splitBillOpen}
+              onToggleSplitBill={transaction.splitBill ? undefined : () => setSplitBillOpen((current) => !current)}
+            />
+            {splitBillOpen && !transaction.splitBill ? (
+              <div className="transaction-detail-page__split-bill">
+                <SplitBillTransactionLinkFields
+                  workspaceId={transaction.workspaceId}
+                  draft={splitBillDraft}
+                  onChange={setSplitBillDraft}
+                  open={splitBillOpen}
+                  title="Add transaction to Split Bills"
+                  helperText="Choose a group or add the people sharing this transaction."
+                  actionLabel="Create split bill"
+                  onAction={createSplitBill}
+                  actionBusy={splitBillSaving}
+                  actionDisabled={!splitBillDraft.groupId && splitBillDraft.participantNames.length === 0}
+                />
+              </div>
+            ) : null}
 
             {message ? <p className="transaction-detail-page__message" role="status">{message}</p> : null}
             <footer className="transaction-detail-page__actions">

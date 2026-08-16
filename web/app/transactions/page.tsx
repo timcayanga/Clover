@@ -25,6 +25,7 @@ import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
+import { TransactionCrossFeatureActions } from "@/components/transaction-cross-feature-actions";
 import { TransactionCategoryPicker, type TransactionPickerCategory } from "@/components/transaction-category-picker";
 import { TransactionAccountPicker, type TransactionPickerAccount } from "@/components/transaction-account-picker";
 import { TransactionNameAutocomplete, type TransactionNameSuggestion } from "@/components/transaction-name-autocomplete";
@@ -4572,10 +4573,6 @@ function TransactionsPageContent() {
     () => parseReceiptLineItemsFromPayload(selectedTransaction?.rawPayload),
     [selectedTransaction?.rawPayload]
   );
-  const selectedTransactionRawSourceLine = useMemo(
-    () => getRawPayloadTextCandidate(selectedTransaction?.rawPayload, ["line", "rawLine", "sourceLine", "rawText", "text"]),
-    [selectedTransaction?.rawPayload]
-  );
   const selectedTransactionRawNote = useMemo(() => getTransactionParsedNote(selectedTransaction), [selectedTransaction]);
   const detailReceiptLineItems = detailDraft?.receiptLineItems ?? selectedTransactionReceiptLineItems.map(receiptLineItemToDraft);
   const detailReceiptLineItemTotal = useMemo(
@@ -4660,7 +4657,7 @@ function TransactionsPageContent() {
   };
 
   const openTransactionDetail = (transaction: Transaction, { syncRoute = true }: { syncRoute?: boolean } = {}) => {
-    if (syncRoute) {
+    if (syncRoute && isCompactViewport) {
       router.push(`/transactions/${encodeURIComponent(transaction.id)}`, { scroll: true });
       return;
     }
@@ -8625,18 +8622,6 @@ function TransactionsPageContent() {
                     placeholder="Optional note or review context"
                   />
                 </label>
-                {selectedTransactionRawNote ? (
-                  <div className="transaction-drawer-more__row transaction-drawer-more__row--stacked">
-                    <span>Parsed note</span>
-                    <p>{selectedTransactionRawNote}</p>
-                  </div>
-                ) : null}
-                {selectedTransactionRawSourceLine ? (
-                  <div className="transaction-drawer-more__row transaction-drawer-more__row--stacked">
-                    <span>Raw source line</span>
-                    <strong>{selectedTransactionRawSourceLine}</strong>
-                  </div>
-                ) : null}
                 <div className="transaction-drawer-receipt-lines">
                   <div className="transaction-drawer-receipt-lines__head">
                     <span className="transaction-drawer-field-label">
@@ -8743,24 +8728,22 @@ function TransactionsPageContent() {
                 </div>
               ) : (
                 <>
-                  <div className="detail-actions__left">
-                    {selectedTransaction.splitBill ? (
-                      <Link className="button button-secondary" href={`/split-bill?bill=${selectedTransaction.splitBill.id}`} prefetch={false}>
-                        Open In Split Bills
-                      </Link>
-                    ) : (
-                      <button
-                        className="button button-secondary"
-                        type="button"
-                        onClick={() => {
-                          setTransactionSplitBillError(null);
-                          setTransactionSplitBillOpen((current) => !current);
-                        }}
-                      >
-                        {transactionSplitBillOpen ? "Hide Split Bills" : "Add To Split Bills"}
-                      </button>
-                    )}
-                  </div>
+                  <TransactionCrossFeatureActions
+                    workspaceId={selectedTransaction.workspaceId}
+                    transactionId={selectedTransaction.id}
+                    transactionType={selectedTransaction.type}
+                    title={detailDraft?.merchantClean || selectedTransaction.merchantClean || selectedTransaction.merchantRaw}
+                    amount={detailDraft?.amount ?? selectedTransaction.amount}
+                    currency={detailDraft?.currency ?? selectedTransaction.currency}
+                    date={detailDraft?.date ?? selectedTransaction.date}
+                    accountId={detailDraft?.accountId ?? selectedTransaction.accountId}
+                    splitBillHref={selectedTransaction.splitBill ? `/split-bill?bill=${selectedTransaction.splitBill.id}` : null}
+                    splitBillOpen={transactionSplitBillOpen}
+                    onToggleSplitBill={selectedTransaction.splitBill ? undefined : () => {
+                      setTransactionSplitBillError(null);
+                      setTransactionSplitBillOpen((current) => !current);
+                    }}
+                  />
                   {!selectedTransactionWarningReason ? (
                     <button
                       className="button button-danger"
