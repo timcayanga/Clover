@@ -127,6 +127,7 @@
     "qa:admin-core-funnel": "tsx scripts/admin-core-funnel-regression.ts",
     "qa:admin-analysis": "tsx scripts/admin-analysis-regression.ts",
     "qa:interaction-delight": "tsx scripts/interaction-delight-regression.ts",
+    "qa:account-card-gallery": "tsx scripts/account-card-gallery-regression.ts",
     "qa:mobile-swipe-delete": "tsx scripts/mobile-swipe-delete-regression.ts",
     "qa:mobile-navigation": "tsx scripts/mobile-navigation-regression.ts",
     "qa:pwa-ios": "tsx scripts/pwa-ios-regression.ts",
