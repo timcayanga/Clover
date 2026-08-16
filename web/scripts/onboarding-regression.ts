@@ -7,6 +7,7 @@ const onboardingRoute = readFileSync(resolve(process.cwd(), "app/api/onboarding/
 const onboardingPage = readFileSync(resolve(process.cwd(), "app/onboarding/page.tsx"), "utf8");
 const continuePage = readFileSync(resolve(process.cwd(), "app/continue/page.tsx"), "utf8");
 const packageSource = readFileSync(resolve(process.cwd(), "package.json"), "utf8");
+const prismaConfig = readFileSync(resolve(process.cwd(), "prisma.config.ts"), "utf8");
 const categoryMetadataMigration = readFileSync(
   resolve(
     process.cwd(),
@@ -58,6 +59,11 @@ assert.match(
   packageSource,
   /check-environment-isolation\.ts && tsx scripts\/apply-migrations\.ts/u,
   "Vercel builds must apply migrations only after the environment isolation guard passes",
+);
+assert.match(
+  prismaConfig,
+  /process\.env\.DIRECT_URL \?\? process\.env\.DATABASE_URL/u,
+  "Prisma migrations must prefer the direct database connection over the transaction pooler",
 );
 
 console.log("Onboarding regression checks passed.");
