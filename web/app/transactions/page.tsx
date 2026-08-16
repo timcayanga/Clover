@@ -61,7 +61,7 @@ import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import type { AccountType } from "@/lib/domain-types";
 import { getAccountCardName, getAccountDisplayName, formatUploadAccountDisplayName } from "@/lib/account-display";
 import { getAccountBrand } from "@/lib/account-brand";
-import { guessCategoryName, inferAccountTypeFromStatement } from "@/lib/import-parser";
+import { guessCategoryName, inferAccountTypeFromStatement } from "@/lib/financial-classification";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { getTransactionReviewReason, getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";

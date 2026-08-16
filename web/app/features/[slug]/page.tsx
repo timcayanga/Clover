@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: FeatureDetailPageProps): Prom
 
   if (!isFeatureSlug(resolvedSlug)) {
     return {
-      title: "Features | Clover",
+      title: "Features",
     };
   }
 
@@ -27,12 +27,12 @@ export async function generateMetadata({ params }: FeatureDetailPageProps): Prom
 
   if (!page) {
     return {
-      title: "Features | Clover",
+      title: "Features",
     };
   }
 
   return {
-    title: `${page.navLabel} | Clover`,
+    title: page.navLabel,
     description: page.overview,
   };
 }

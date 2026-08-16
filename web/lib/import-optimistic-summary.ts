@@ -1,7 +1,7 @@
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import type { AccountType } from "@/lib/domain-types";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
-import { inferAccountTypeFromStatement } from "@/lib/import-parser";
+import { inferAccountTypeFromStatement } from "@/lib/financial-classification";
 import { findKnownImportedBalance, getKnownPreviewTransactions } from "@/lib/import-preview-cache";
 import { pickStableBalance } from "@/lib/import-upload-summary";
 import {

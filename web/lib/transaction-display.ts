@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { guessCategoryName } from "@/lib/import-parser";
+import { guessCategoryName } from "@/lib/financial-classification";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 
 type TransactionType = "income" | "expense" | "transfer";

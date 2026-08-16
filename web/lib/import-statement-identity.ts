@@ -3,7 +3,7 @@ import type { AccountType } from "@/lib/domain-types";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { normalizeBankName } from "@/lib/data-qa-banks";
 import { type ImportImageMode } from "@/lib/import-image-mode";
-import { inferAccountTypeFromStatement } from "@/lib/import-parser";
+import { inferAccountTypeFromStatement } from "@/lib/financial-classification";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
 
 export type UploadAccountType = AccountType | null;

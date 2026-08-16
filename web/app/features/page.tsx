@@ -6,7 +6,7 @@ import { resolvePublicAccountState } from "@/lib/public-account-state";
 import { FEATURE_PAGES } from "@/lib/public-site";
 
 export const metadata: Metadata = {
-  title: "Features | Clover",
+  title: "Features",
   description:
     "Explore how Clover helps you manage money, gain insights, plan ahead, handle shared finances, protect your data, and grow with Pro.",
 };

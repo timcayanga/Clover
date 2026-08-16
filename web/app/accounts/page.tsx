@@ -56,7 +56,7 @@ import {
   type WorkspaceCacheUpdatedEventDetail,
 } from "@/lib/workspace-cache";
 import { getAccountBrand } from "@/lib/account-brand";
-import { inferAccountTypeFromStatement } from "@/lib/import-parser";
+import { inferAccountTypeFromStatement } from "@/lib/financial-classification";
 import { getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
 import {
   chooseWorkspaceId,

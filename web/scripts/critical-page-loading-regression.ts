@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import {
+  guessCategoryName,
+  inferAccountTypeFromStatement,
+} from "../lib/financial-classification";
 
 const readSource = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
@@ -25,6 +29,39 @@ assert.match(lazyActionsSource, /dynamic\(\s*\(\) => import\("@\/components\/imp
 
 const accountsSource = readSource("app/accounts/page.tsx");
 assert.match(accountsSource, /awaitHydration: !hydratedFromCache/);
+assert.doesNotMatch(accountsSource, /from "@\/lib\/import-parser"/);
+
+const accountDetailsSource = readSource("app/accounts/[accountId]/page.tsx");
+const transactionsSource = readSource("app/transactions/page.tsx");
+const transactionDisplaySource = readSource("lib/transaction-display.ts");
+const importOptimisticSummarySource = readSource("lib/import-optimistic-summary.ts");
+const importStatementIdentitySource = readSource("lib/import-statement-identity.ts");
+for (const source of [
+  accountDetailsSource,
+  transactionsSource,
+  transactionDisplaySource,
+  importOptimisticSummarySource,
+  importStatementIdentitySource,
+]) {
+  assert.doesNotMatch(source, /from "@\/lib\/import-parser"/);
+}
+
+assert.equal(inferAccountTypeFromStatement("PayPal", "PayPal"), "wallet");
+assert.equal(inferAccountTypeFromStatement("RCBC", "RCBC Visa Platinum"), "credit_card");
+assert.equal(inferAccountTypeFromStatement("Maya", "Maya Savings"), "bank");
+assert.equal(inferAccountTypeFromStatement("PDAX", "PDAX Portfolio"), "investment");
+assert.equal(guessCategoryName("Service Navigo Paris", "expense"), "Transport");
+assert.equal(guessCategoryName("OpenAI ChatGPT", "expense"), "Bills & Utilities");
+
+const featuresSource = readSource("app/features/page.tsx");
+const featureDetailSource = readSource("app/features/[slug]/page.tsx");
+const helpSource = readSource("app/help/page.tsx");
+assert.match(featuresSource, /title: "Features"/);
+assert.doesNotMatch(featuresSource, /title: "Features \| Clover"/);
+assert.match(featureDetailSource, /title: page\.navLabel/);
+assert.doesNotMatch(featureDetailSource, /page\.navLabel\} \| Clover/);
+assert.match(helpSource, /title: "Help Center"/);
+assert.doesNotMatch(helpSource, /title: "Help Center \| Clover"/);
 
 const adviserSource = readSource("app/adviser/page.tsx");
 const adviserLoadingSource = readSource("app/adviser/loading.tsx");

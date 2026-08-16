@@ -12,7 +12,7 @@ type HelpPageProps = {
 };
 
 export const metadata: Metadata = {
-  title: "Help Center | Clover",
+  title: "Help Center",
   description:
     "Find Clover help for Profiles, imports, spreadsheets, transactions, recurring activity, Adviser, reports, Circles, Split Bills, budgets, goals, investments, billing, privacy, and security.",
   keywords: Array.from(

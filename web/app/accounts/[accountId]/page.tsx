@@ -18,7 +18,7 @@ import { deriveReconciledBalance, normalizeAccountBalanceSign, type BalanceLikeT
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { extractAccountIdFromPathSegment, getAccountPath } from "@/lib/account-path";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
-import { guessCategoryName } from "@/lib/import-parser";
+import { guessCategoryName } from "@/lib/financial-classification";
 import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { getTransactionDisplayType } from "@/lib/transaction-display-type";
