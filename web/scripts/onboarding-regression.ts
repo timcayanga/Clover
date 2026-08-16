@@ -6,6 +6,14 @@ const onboardingForm = readFileSync(resolve(process.cwd(), "components/onboardin
 const onboardingRoute = readFileSync(resolve(process.cwd(), "app/api/onboarding/route.ts"), "utf8");
 const onboardingPage = readFileSync(resolve(process.cwd(), "app/onboarding/page.tsx"), "utf8");
 const continuePage = readFileSync(resolve(process.cwd(), "app/continue/page.tsx"), "utf8");
+const packageSource = readFileSync(resolve(process.cwd(), "package.json"), "utf8");
+const categoryMetadataMigration = readFileSync(
+  resolve(
+    process.cwd(),
+    "prisma/migrations/20260816050000_category_system_metadata/migration.sql",
+  ),
+  "utf8",
+);
 
 const uploadOpenHandler = onboardingForm.slice(
   onboardingForm.indexOf("const openImportFiles"),
@@ -36,5 +44,20 @@ assert.match(onboardingRoute, /requireAuth/u, "Onboarding completion must requir
 assert.match(onboardingPage, /hasCompletedOnboarding/u, "Completed users must skip onboarding");
 assert.match(continuePage, /hasCompletedOnboarding/u, "Post-auth routing must resolve onboarding status directly");
 assert.match(continuePage, /redirect\(hasCompletedOnboarding\(user\) \? "\/home" : "\/onboarding"\)/u);
+assert.match(
+  categoryMetadataMigration,
+  /ADD COLUMN IF NOT EXISTS "isSystem" BOOLEAN NOT NULL DEFAULT true/u,
+  "Workspace bootstrap category metadata must be represented in migration history",
+);
+assert.match(
+  categoryMetadataMigration,
+  /ADD COLUMN IF NOT EXISTS "isArchived" BOOLEAN NOT NULL DEFAULT false/u,
+  "Category archive metadata must be represented in migration history",
+);
+assert.match(
+  packageSource,
+  /check-environment-isolation\.ts && tsx scripts\/apply-migrations\.ts/u,
+  "Vercel builds must apply migrations only after the environment isolation guard passes",
+);
 
 console.log("Onboarding regression checks passed.");
