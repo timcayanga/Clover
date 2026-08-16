@@ -2,12 +2,16 @@
 
 import { useLayoutEffect, useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { applyThemeMode, readStoredThemeMode, THEME_STORAGE_KEY } from "@/lib/theme-preference";
+import {
+  applyThemeMode,
+  isLightOnlyThemeRoute,
+  readStoredThemeMode,
+  THEME_STORAGE_KEY,
+} from "@/lib/theme-preference";
 
 export function ThemeSync() {
   const pathname = usePathname() ?? "";
-  const isLightOnlyRoute =
-    pathname === "/" || pathname.startsWith("/sign-in") || pathname.startsWith("/sign-up") || pathname === "/onboarding";
+  const isLightOnlyRoute = isLightOnlyThemeRoute(pathname);
 
   useLayoutEffect(() => {
     if (isLightOnlyRoute) {

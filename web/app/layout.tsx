@@ -7,7 +7,13 @@ import { ClerkAppProvider } from "@/components/clerk-app-provider";
 import { PostHogAnalytics, PostHogClerkIdentity } from "@/components/posthog-analytics";
 import { getAppBuildInfo } from "@/lib/build-info";
 import { ThemeSync } from "@/components/theme-sync";
-import { THEME_RESOLVED_COOKIE_KEY, THEME_STORAGE_KEY } from "@/lib/theme-preference";
+import {
+  LIGHT_ONLY_THEME_PREFIXES,
+  LIGHT_ONLY_THEME_ROUTES,
+  THEME_COLORS,
+  THEME_RESOLVED_COOKIE_KEY,
+  THEME_STORAGE_KEY,
+} from "@/lib/theme-preference";
 import { HelperTextSync } from "@/components/helper-text-sync";
 import { StagingBrowserStateReset } from "@/components/staging-browser-state-reset";
 import { AdminOnlyRedirect } from "@/components/admin-only-redirect";
@@ -88,7 +94,10 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#ffffff",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: THEME_COLORS.light },
+    { media: "(prefers-color-scheme: dark)", color: THEME_COLORS.dark },
+  ],
 };
 
 export const dynamic = "force-dynamic";
@@ -155,12 +164,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               const key = ${JSON.stringify(THEME_STORAGE_KEY)};
               const saved = window.localStorage.getItem(key);
               const pathname = window.location.pathname;
+              const lightOnlyRoutes = ${JSON.stringify(LIGHT_ONLY_THEME_ROUTES)};
+              const lightOnlyPrefixes = ${JSON.stringify(LIGHT_ONLY_THEME_PREFIXES)};
               const isLightOnlyRoute =
-                pathname === "/" ||
-                pathname === "/install" ||
-                pathname.startsWith("/sign-in") ||
-                pathname.startsWith("/sign-up") ||
-                pathname === "/onboarding";
+                lightOnlyRoutes.includes(pathname) ||
+                lightOnlyPrefixes.some((prefix) => pathname.startsWith(prefix));
               const mode = isLightOnlyRoute
                 ? "light"
                 : saved === "light" || saved === "dark"
@@ -169,6 +177,14 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               const resolved = mode;
               document.documentElement.dataset.theme = resolved;
               document.documentElement.style.colorScheme = resolved;
+              let themeColor = document.querySelector('meta[data-clover-theme-color="true"]');
+              if (!themeColor) {
+                themeColor = document.createElement("meta");
+                themeColor.name = "theme-color";
+                themeColor.dataset.cloverThemeColor = "true";
+                document.head.appendChild(themeColor);
+              }
+              themeColor.content = resolved === "dark" ? ${JSON.stringify(THEME_COLORS.dark)} : ${JSON.stringify(THEME_COLORS.light)};
             } catch (error) {}
           })();
         `}

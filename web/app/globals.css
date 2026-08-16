@@ -849,6 +849,8 @@ body.dashboard-modal-open .app-shell {
 
 .clover-auth-card__brand {
   display: flex;
+  min-height: 44px;
+  align-items: center;
   justify-content: center;
   margin-bottom: -6px;
 }
@@ -913,16 +915,16 @@ body.dashboard-modal-open .app-shell {
 }
 
 .clover-auth-password input {
-  padding-right: 48px;
+  padding-right: 54px;
 }
 
 .clover-auth-password-toggle {
   position: absolute;
-  inset: 0 8px 0 auto;
+  inset: 0 2px 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
+  width: 44px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -1147,6 +1149,9 @@ body.dashboard-modal-open .app-shell {
 
 .clover-auth-forgot-password {
   margin-left: auto;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
   color: var(--accent);
   font-size: 13px;
   line-height: 1.2;
