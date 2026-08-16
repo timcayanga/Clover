@@ -13,6 +13,14 @@ const main = async () => {
   assert.match(styles, /\.transaction-inline-edit--amount/);
   assert.match(styles, /\.transaction-amount-type-select/);
   assert.match(styles, /\.content--accounts[\s\S]*?\.financial-account-card\.is-interactive/);
+  assert.match(
+    styles,
+    /\.financial-account-card__inline-trigger:hover,[\s\S]*?background: transparent;[\s\S]*?box-shadow: none;[\s\S]*?text-decoration: underline;/,
+  );
+  assert.match(
+    styles,
+    /\.financial-account-card__amount-button:hover,[\s\S]*?background: transparent;[\s\S]*?box-shadow: none;[\s\S]*?text-decoration: underline;/,
+  );
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?transition: none !important/);
 
   console.log("Interaction delight regression passed.");

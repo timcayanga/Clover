@@ -26458,9 +26458,13 @@ html[data-theme="dark"] .portfolio-growth__ranges button.is-active {
 
 .financial-account-card__amount-button:hover,
 .financial-account-card__amount-button:focus-visible {
-  background: rgba(255, 255, 255, 0.14);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
+  background: transparent;
+  box-shadow: none;
   outline: none;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 72%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
   transform: translateY(-1px);
 }
 
@@ -26485,8 +26489,13 @@ html[data-theme="dark"] .portfolio-growth__ranges button.is-active {
 
 .financial-account-card__inline-trigger:hover,
 .financial-account-card__inline-trigger:focus-visible {
-  background: color-mix(in srgb, currentColor 11%, transparent);
+  background: transparent;
+  box-shadow: none;
   outline: none;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 72%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
   transform: translateY(-1px);
 }
 
