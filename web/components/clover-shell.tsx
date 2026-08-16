@@ -2107,7 +2107,7 @@ export function CloverShell({
 
       <button
         ref={quickAddButtonRef}
-        className="shell-quick-add-button"
+        className={`shell-quick-add-button${isQuickAddOpen ? " is-open" : ""}`}
         type="button"
         aria-label={
           pathname?.startsWith("/accounts/institutions/")
@@ -2160,6 +2160,18 @@ export function CloverShell({
       {isQuickAddOpen ? (
         <div className="shell-quick-add-popover" ref={quickAddPopoverRef} role="menu" aria-label="Quick add">
           <button
+            className="shell-quick-add-popover__item shell-quick-add-popover__item--mobile-only shell-quick-add-popover__item--camera"
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setIsQuickAddOpen(false);
+              openQuickAddCamera();
+            }}
+          >
+            <span className="shell-quick-add-popover__emoji" aria-hidden="true">📷</span>
+            <strong>Camera</strong>
+          </button>
+          <button
             className="shell-quick-add-popover__item shell-quick-add-popover__item--mobile-only"
             type="button"
             role="menuitem"
@@ -2168,18 +2180,8 @@ export function CloverShell({
               openQuickAddPhotoLibrary();
             }}
           >
-            <strong>🖼️ Photos</strong>
-          </button>
-          <button
-            className="shell-quick-add-popover__item shell-quick-add-popover__item--mobile-only"
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setIsQuickAddOpen(false);
-              openQuickAddCamera();
-            }}
-          >
-            <strong>📷 Camera</strong>
+            <span className="shell-quick-add-popover__emoji" aria-hidden="true">🖼️</span>
+            <strong>Photos</strong>
           </button>
           <button
             className="shell-quick-add-popover__item shell-quick-add-popover__item--primary"
@@ -2263,7 +2265,7 @@ export function CloverShell({
         </Link>
         <button
           ref={quickAddButtonRef}
-          className="shell-bottom-nav__add"
+          className={`shell-bottom-nav__add${isQuickAddOpen ? " is-open" : ""}`}
           type="button"
           aria-label={isQuickAddOpen ? "Close quick add" : "Open quick add"}
           title={isQuickAddOpen ? "Close quick add" : "Open quick add"}

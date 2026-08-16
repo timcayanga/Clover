@@ -51450,6 +51450,137 @@ html[data-theme="dark"] .content--adviser .adviser-summary .adviser-summary-card
   }
 }
 
+/* The mobile quick-add palette grows from the center action instead of
+   presenting a second full-width sheet. Camera is the mobile OCR shortcut;
+   desktop keeps Upload Files as its primary action. */
+@media (max-width: 1100px) {
+  .shell-quick-add-popover {
+    left: 50% !important;
+    right: auto !important;
+    bottom: calc(88px + env(safe-area-inset-bottom)) !important;
+    width: min(248px, calc(100vw - 32px));
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    border-radius: 18px;
+    background: #ffffff;
+    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+    transform: translateX(-50%);
+    transform-origin: 50% calc(100% + 18px);
+    animation: clover-mobile-quick-add-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  .shell-quick-add-popover__item,
+  .shell-quick-add-popover__item--mobile-only,
+  .shell-quick-add-popover__item--primary,
+  .shell-quick-add-popover__item--manual {
+    width: auto;
+    min-height: 36px;
+    display: inline-flex;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 9px;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 11px;
+    background: #f7fafc;
+    box-shadow: none;
+    color: var(--text);
+  }
+
+  .shell-quick-add-popover__item:hover,
+  .shell-quick-add-popover__item:focus-visible,
+  .shell-quick-add-popover__item--primary:hover,
+  .shell-quick-add-popover__item--primary:focus-visible {
+    border-color: rgba(3, 168, 192, 0.3);
+    background: #eefafb;
+    color: var(--text);
+    transform: translateY(-1px);
+  }
+
+  .shell-quick-add-popover__item--camera,
+  .shell-quick-add-popover__item--camera:hover,
+  .shell-quick-add-popover__item--camera:focus-visible {
+    border-color: transparent;
+    background: var(--brand-gradient);
+    color: #ffffff;
+    box-shadow: 0 8px 18px rgba(3, 168, 192, 0.18);
+  }
+
+  .shell-quick-add-popover__item strong {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+  }
+
+  .shell-quick-add-popover__item svg,
+  .shell-quick-add-popover__emoji {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 15px;
+  }
+
+  .shell-quick-add-popover__emoji {
+    display: inline-grid;
+    place-items: center;
+    color: inherit !important;
+    font-size: 0.78rem !important;
+    line-height: 1 !important;
+  }
+
+  .shell-bottom-nav__add svg {
+    transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .shell-bottom-nav__add.is-open svg {
+    transform: rotate(45deg);
+  }
+}
+
+html[data-theme="dark"] .shell-quick-add-popover {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: #152133;
+}
+
+html[data-theme="dark"] .shell-quick-add-popover__item,
+html[data-theme="dark"] .shell-quick-add-popover__item--primary,
+html[data-theme="dark"] .shell-quick-add-popover__item--manual {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: #1c2a3d;
+  color: #e7eef7;
+}
+
+html[data-theme="dark"] .shell-quick-add-popover__item--camera,
+html[data-theme="dark"] .shell-quick-add-popover__item--camera:hover,
+html[data-theme="dark"] .shell-quick-add-popover__item--camera:focus-visible {
+  border-color: transparent;
+  background: var(--brand-gradient);
+  color: #ffffff;
+}
+
+@keyframes clover-mobile-quick-add-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(12px) scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-quick-add-popover {
+    animation: none !important;
+  }
+
+  .shell-bottom-nav__add svg {
+    transition: none !important;
+  }
+}
+
 /* Mobile shell final pass: one square full-width header, one vertical product
    drawer, and one right-side settings drawer across every product page. */
 .sidebar-nav--mobile,

@@ -87,6 +87,14 @@ async function main() {
     /CRITICAL_NAVIGATION_ICON_NAMES[\s\S]{0,500}"profile"/,
     "The Profile artwork must be preloaded with the rest of the primary navigation.",
   );
+  assert.match(shell, /shell-quick-add-popover__item--camera[\s\S]{0,500}<strong>Camera<\/strong>/);
+  assert.match(shell, /shell-bottom-nav__add\$\{isQuickAddOpen \? " is-open" : ""\}/);
+  assert.match(
+    styles,
+    /\.shell-quick-add-popover \{[\s\S]{0,220}left: 50% !important;[\s\S]{0,500}grid-template-columns: repeat\(2/,
+    "The mobile quick-add choices must animate from a compact palette centered on the plus button.",
+  );
+  assert.match(styles, /\.shell-quick-add-popover__item--camera[\s\S]{0,220}background: var\(--brand-gradient\)/);
 
   console.log("Mobile navigation regression passed.");
 }
