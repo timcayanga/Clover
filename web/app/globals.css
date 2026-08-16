@@ -52332,48 +52332,99 @@ html[data-theme="dark"] .shell-quick-add-popover__item--camera:focus-visible {
     0 8px 16px rgba(7, 12, 22, 0.12);
 }
 
-.luxury-account-card::before {
-  background:
-    linear-gradient(118deg, rgba(255, 255, 255, 0.34) 0%, transparent 19%, transparent 62%, rgba(255, 255, 255, 0.12) 78%, transparent 100%),
-    radial-gradient(circle at 64% 76%, rgba(255, 255, 255, 0.18), transparent 38%);
-  opacity: 0.82;
-}
-
+.luxury-account-card::before,
 .luxury-account-card::after {
-  background: repeating-linear-gradient(105deg, rgba(255, 255, 255, 0.09) 0 1px, transparent 1px 7px);
+  pointer-events: none;
   mix-blend-mode: soft-light;
-  opacity: 0.34;
 }
 
-.luxury-account-card--obsidian::after,
-.luxury-account-card--copper-carbon::after {
+.luxury-account-card::before {
+  background: linear-gradient(112deg, rgba(255, 255, 255, 0.32), transparent 22%, transparent 66%, rgba(255, 255, 255, 0.14));
+  opacity: 0.72;
+}
+
+.luxury-account-card--guilloche::after {
+  width: 230px;
+  height: 230px;
+  left: auto;
+  right: -72px;
+  top: -62px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 50%;
+  background: repeating-radial-gradient(circle, transparent 0 8px, rgba(255, 255, 255, 0.14) 9px 10px);
+  box-shadow: 0 0 0 28px rgba(255, 255, 255, 0.035), 0 0 0 57px rgba(255, 255, 255, 0.025);
+}
+
+.luxury-account-card--architectural::after {
+  inset: -35% -25%;
   background:
-    repeating-linear-gradient(128deg, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 10px),
-    repeating-linear-gradient(42deg, rgba(0, 0, 0, 0.18) 0 2px, transparent 2px 13px);
-  opacity: 0.5;
+    repeating-linear-gradient(90deg, transparent 0 31px, rgba(255, 255, 255, 0.17) 32px 33px),
+    repeating-linear-gradient(0deg, transparent 0 31px, rgba(0, 0, 0, 0.1) 32px 33px);
+  transform: rotate(-17deg);
+  opacity: 0.58;
 }
 
-.luxury-account-card--champagne::after,
-.luxury-account-card--arctic-silver::after {
-  background: repeating-linear-gradient(96deg, rgba(255, 255, 255, 0.24) 0 1px, rgba(20, 27, 34, 0.06) 1px 2px, transparent 2px 8px);
-  opacity: 0.5;
-}
-
-.luxury-account-card--emerald::after,
-.luxury-account-card--garnet::after,
-.luxury-account-card--amethyst::after {
+.luxury-account-card--faceted::after {
+  inset: 0;
   background:
-    radial-gradient(circle at 18% 28%, rgba(255, 255, 255, 0.18) 0 1px, transparent 2px),
-    radial-gradient(circle at 76% 64%, rgba(255, 255, 255, 0.13) 0 1px, transparent 2px);
-  background-size: 22px 22px, 31px 31px;
-  opacity: 0.46;
+    linear-gradient(32deg, transparent 0 47%, rgba(255, 255, 255, 0.18) 48% 61%, transparent 62%),
+    linear-gradient(145deg, transparent 0 42%, rgba(0, 0, 0, 0.15) 43% 58%, transparent 59%),
+    linear-gradient(78deg, transparent 0 62%, rgba(255, 255, 255, 0.13) 63% 78%, transparent 79%);
 }
 
-.luxury-account-card--aurora::after,
-.luxury-account-card--rose-titanium::after,
-.luxury-account-card--sapphire::after {
-  background: linear-gradient(108deg, transparent 22%, rgba(255, 255, 255, 0.34) 43%, transparent 61%);
-  opacity: 0.54;
+.luxury-account-card--orbit::after {
+  width: 270px;
+  height: 145px;
+  left: 42%;
+  top: 5%;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 50%;
+  box-shadow: 0 0 0 18px rgba(255, 255, 255, 0.05), 0 0 0 38px rgba(255, 255, 255, 0.04);
+  transform: rotate(-18deg);
+}
+
+.luxury-account-card--pinstripe::after {
+  inset: -30%;
+  background: repeating-linear-gradient(112deg, transparent 0 13px, rgba(255, 255, 255, 0.18) 14px 15px, transparent 16px 28px);
+  opacity: 0.62;
+}
+
+.luxury-account-card--topographic::after {
+  inset: -20%;
+  background: repeating-radial-gradient(ellipse at 78% 22%, transparent 0 13px, rgba(0, 0, 0, 0.16) 14px 15px, transparent 16px 27px);
+  transform: rotate(8deg);
+  opacity: 0.72;
+}
+
+.luxury-account-card--ribbon::after {
+  inset: -45% -20%;
+  background:
+    repeating-linear-gradient(42deg, transparent 0 31px, rgba(255, 255, 255, 0.17) 32px 49px, transparent 50px 81px),
+    repeating-linear-gradient(-42deg, transparent 0 31px, rgba(0, 0, 0, 0.13) 32px 49px, transparent 50px 81px);
+  opacity: 0.58;
+}
+
+.luxury-account-card--monogram::after {
+  inset: -15%;
+  background:
+    radial-gradient(circle at 50% 50%, transparent 0 7px, rgba(255, 255, 255, 0.16) 8px 9px, transparent 10px),
+    radial-gradient(circle at 0 0, transparent 0 7px, rgba(255, 255, 255, 0.12) 8px 9px, transparent 10px);
+  background-size: 34px 34px;
+  transform: rotate(12deg);
+  opacity: 0.65;
+}
+
+.luxury-account-card--brushed::after {
+  inset: 0;
+  background: repeating-linear-gradient(96deg, rgba(255, 255, 255, 0.18) 0 1px, transparent 1px 5px, rgba(0, 0, 0, 0.09) 6px 7px, transparent 7px 12px);
+  opacity: 0.58;
+}
+
+.luxury-account-card--prism::after {
+  inset: 0;
+  background:
+    conic-gradient(from 215deg at 76% 28%, transparent 0 13%, rgba(255, 255, 255, 0.26) 14% 22%, transparent 23% 38%, rgba(0, 0, 0, 0.12) 39% 47%, transparent 48%),
+    linear-gradient(145deg, transparent 0 55%, rgba(255, 255, 255, 0.18) 56% 72%, transparent 73%);
 }
 
 .card-atelier__note {
