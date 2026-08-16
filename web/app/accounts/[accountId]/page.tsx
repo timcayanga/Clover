@@ -13,6 +13,7 @@ import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
 import { formatUploadAccountDisplayName, getAccountCardName, getAccountDisplayName } from "@/lib/account-display";
 import { getAccountBrand } from "@/lib/account-brand";
+import { getLuxuryAccountCardClass } from "@/lib/account-card-luxury";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
 import { deriveReconciledBalance, normalizeAccountBalanceSign, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { formatCurrencyAmount } from "@/lib/currency-format";
@@ -1083,7 +1084,28 @@ function AccountDetailPageContent() {
   const [dividendDeleteBusy, setDividendDeleteBusy] = useState<string | null>(null);
   const [hasInitialDataLoaded, setHasInitialDataLoaded] = useState(false);
   const [cacheRefreshTick, setCacheRefreshTick] = useState(0);
+  const [luxuryAccountCardsEnabled, setLuxuryAccountCardsEnabled] = useState(false);
   const [importActivitySnapshot, setImportActivitySnapshot] = useState(() => readImportActivity());
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void fetchJsonOnce<{ user?: { features?: { luxuryAccountCards?: boolean } } }>({
+      key: "account-card-luxury-rollout",
+      route: "/api/me",
+      input: "/api/me",
+    }).then((result) => {
+      if (!cancelled) {
+        setLuxuryAccountCardsEnabled(result.ok && result.json?.user?.features?.luxuryAccountCards === true);
+      }
+    }).catch(() => {
+      if (!cancelled) setLuxuryAccountCardsEnabled(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const handledImportedSummaryKeysRef = useRef(new Set<string>());
   const loadedAccountIdRef = useRef<string | null>(null);
   const selectAllTransactionsRef = useRef<HTMLInputElement | null>(null);
@@ -3997,7 +4019,10 @@ function AccountDetailPageContent() {
             <div className={`accounts-detail__hero-layout${isCreditAccount ? " is-credit-account" : ""}`}>
               <div className="accounts-detail__hero-card-row">
                 <FinancialAccountCard
-                  className="accounts-detail__hero-card"
+                  className={[
+                    "accounts-detail__hero-card",
+                    luxuryAccountCardsEnabled ? getLuxuryAccountCardClass(account.id) : null,
+                  ].filter(Boolean).join(" ")}
                   accountBrand={accountBrand}
                   name={accountCardName}
                   accountNumber={liveCardNumber}

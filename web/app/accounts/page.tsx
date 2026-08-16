@@ -56,6 +56,7 @@ import {
   type WorkspaceCacheUpdatedEventDetail,
 } from "@/lib/workspace-cache";
 import { getAccountBrand } from "@/lib/account-brand";
+import { getLuxuryAccountCardClass } from "@/lib/account-card-luxury";
 import { inferAccountTypeFromStatement } from "@/lib/financial-classification";
 import { getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
 import {
@@ -1569,6 +1570,7 @@ function AccountsPageContent() {
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
   const [planUsage, setPlanUsage] = useState<PlanUsage | null>(null);
+  const [luxuryAccountCardsEnabled, setLuxuryAccountCardsEnabled] = useState(false);
   const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -1730,6 +1732,7 @@ function AccountsPageContent() {
       setPlanTier(nextPlanTier);
       setPlanLimits(nextLimits);
       setPlanUsage(nextUsage);
+      setLuxuryAccountCardsEnabled(payload?.user?.features?.luxuryAccountCards === true);
     };
 
     void loadPlan();
@@ -3865,7 +3868,10 @@ function AccountsPageContent() {
           amount={formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}
           onOpen={() => openInvestmentInstitution(row)}
           openLabel={`Open ${row.institution} investment institution`}
-          className="financial-account-card--investment-institution"
+          className={[
+            "financial-account-card--investment-institution",
+            luxuryAccountCardsEnabled ? getLuxuryAccountCardClass(row.id) : null,
+          ].filter(Boolean).join(" ")}
         />
       );
     }
@@ -3962,6 +3968,7 @@ function AccountsPageContent() {
           onAccountNumberCommit={(value) => saveInlineAccountField(row, "accountNumber", value)}
           onAmountCommit={(value) => saveInlineAccountField(row, "balance", value)}
           openLabel={`Open ${accountCardName} account`}
+          className={luxuryAccountCardsEnabled ? getLuxuryAccountCardClass(row.id) : undefined}
           state={isDeleting ? "deleting" : loadingContext.isLoading ? "loading" : undefined}
         />
       </div>

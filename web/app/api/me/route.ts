@@ -5,6 +5,7 @@ import { getUserBillingSubscription } from "@/lib/paypal-billing";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { getUserPlanUsage } from "@/lib/plan-access";
 import { createTransientDataUnavailableResponse, isTransientDataError, isUnauthorizedDataError } from "@/lib/transient-data";
+import { isLuxuryAccountCardPreviewEmail } from "@/lib/account-card-luxury";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,9 @@ export async function GET() {
         goalPlan: user.goalPlan,
         onboardingCompletedAt: user.onboardingCompletedAt,
         dataWipedAt: user.dataWipedAt,
+        features: {
+          luxuryAccountCards: isLuxuryAccountCardPreviewEmail(user.email),
+        },
         billingSubscription: billingSubscription
           ? {
               provider: billingSubscription.provider,
