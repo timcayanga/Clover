@@ -18124,6 +18124,35 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   justify-content: center;
 }
 
+.transaction-relation-icon-trigger {
+  appearance: none;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+.transaction-relation-icon-trigger:hover {
+  transform: translateY(-1px) scale(1.04);
+}
+
+.transaction-relation-icon-trigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(3, 168, 192, 0.18);
+}
+
+.transaction-relation-icon-trigger--account {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .category-brand-mark {
   position: relative;
   display: inline-flex;
@@ -55527,7 +55556,7 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   min-width: 0;
   min-height: 44px;
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) auto;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
   align-items: center;
   gap: 9px;
   padding: 6px 9px;
@@ -55548,9 +55577,9 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
 }
 
 .transaction-account-picker__option .accounts-brand-mark {
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
 }
 
 .transaction-account-picker__option-text {
@@ -55559,15 +55588,13 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   gap: 2px;
 }
 
-.transaction-account-picker__option-text strong,
-.transaction-account-picker__option-text span {
+.transaction-account-picker__option-text strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .transaction-account-picker__option-text strong { font-size: 0.82rem; }
-.transaction-account-picker__option-text span { color: var(--muted); font-size: 0.72rem; text-transform: capitalize; }
 .transaction-account-picker__check { color: var(--accent); font-weight: 800; }
 .transaction-account-picker__empty { margin: 0; padding: 18px 10px; color: var(--muted); text-align: center; font-size: 0.8rem; }
 
@@ -55678,7 +55705,7 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   min-width: 0;
   min-height: 44px;
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) auto;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
   align-items: center;
   gap: 9px;
   padding: 6px 9px;
@@ -55691,9 +55718,9 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   font-size: 0.82rem;
   cursor: pointer;
 }
-.transaction-category-picker__option.is-child { grid-template-columns: 26px minmax(0, 1fr) auto; min-height: 40px; color: var(--muted); font-size: 0.76rem; }
-.transaction-category-picker__option > .transaction-category-icon { width: 30px; height: 30px; }
-.transaction-category-picker__option.is-child > .transaction-category-icon { width: 25px; height: 25px; }
+.transaction-category-picker__option.is-child { grid-template-columns: 22px minmax(0, 1fr) auto; min-height: 40px; color: var(--muted); font-size: 0.76rem; }
+.transaction-category-picker__option > .transaction-category-icon { width: 24px; height: 24px; }
+.transaction-category-picker__option.is-child > .transaction-category-icon { width: 22px; height: 22px; }
 .transaction-category-picker__option:hover,
 .transaction-category-picker__option:focus-visible,
 .transaction-category-picker__option.is-selected { background: rgba(3, 168, 192, 0.08); outline: none; }

@@ -15,6 +15,7 @@ type TransactionAccountPickerProps = {
   accounts: TransactionPickerAccount[];
   selectedId: string;
   onSelect: (account: TransactionPickerAccount) => void;
+  buttonRef?: React.Ref<HTMLButtonElement>;
   className?: string;
   buttonClassName?: string;
   menuClassName?: string;
@@ -28,6 +29,7 @@ export function TransactionAccountPicker({
   accounts,
   selectedId,
   onSelect,
+  buttonRef,
   className,
   buttonClassName,
   menuClassName,
@@ -64,6 +66,7 @@ export function TransactionAccountPicker({
   return (
     <div className={`transaction-account-picker ${className ?? ""}`.trim()} ref={rootRef}>
       <button
+        ref={buttonRef}
         type="button"
         className={`transactions-manual-picker__button transactions-manual-picker__button--plain ${buttonClassName ?? ""}`.trim()}
         aria-label={ariaLabel}
@@ -105,7 +108,6 @@ export function TransactionAccountPicker({
                 </span>
                 <span className="transaction-account-picker__option-text">
                   <strong>{account.label}</strong>
-                  {account.subtitle ? <span>{account.subtitle}</span> : null}
                 </span>
                 {account.id === selectedId ? <span className="transaction-account-picker__check" aria-hidden="true">✓</span> : null}
               </button>

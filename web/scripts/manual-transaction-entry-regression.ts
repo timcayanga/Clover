@@ -39,14 +39,21 @@ assert.match(categoryPicker, /sortOtherLast/, "Other must remain the final categ
 assert.match(categoryPicker, /label: type === "expense" \? "Expenses"/, "Categories must be grouped into readable transaction types.");
 assert.match(categoryPicker, /CategoryBrandMark/, "Category choices must show the same category marks as transaction rows.");
 assert.match(accountPicker, /AccountBrandMark/, "Account choices must show the same institution marks as transaction rows.");
+assert.doesNotMatch(accountPicker, /account\.subtitle \? <span>/, "Account choices must remain a compact single-line list.");
+assert.match(accountPicker, /buttonRef\?: React\.Ref<HTMLButtonElement>/, "Account picker triggers must support accessible icon shortcuts.");
+assert.match(categoryPicker, /buttonRef\?: React\.Ref<HTMLButtonElement>/, "Category picker triggers must support accessible icon shortcuts.");
 assert.match(transactions, /filter\(isTransactionAccount\)/, "Manual and edited transactions must not offer investment holdings as payment accounts.");
 assert.match(transactions, /TransactionAccountPicker/, "Transaction account edits must use the icon-rich account picker.");
+assert.match(transactions, /inlineAccountPickerButtonRefs\.current\.get\(transaction\.id\)\?\.click\(\)/, "Clicking a row account mark must open its account editor.");
+assert.match(transactions, /inlineCategoryPickerButtonRefs\.current\.get\(transaction\.id\)\?\.click\(\)/, "Clicking a row category mark must open its category editor.");
 assert.match(categorySettings, /parentCategoryId/, "Custom categories must support user-selected groups.");
 assert.match(categoryRoute, /assertValidParentCategory/, "Category groups must be validated server-side.");
 
 assert.match(styles, /@media \(max-width: 1100px\)[\s\S]*?\.dashboard-home__report-card \.eyebrow \{ font-size: 13px/, "Mobile report labels must meet the new readability floor.");
 assert.match(styles, /\.transaction-category-picker__menu[\s\S]*?position: fixed/, "The mobile category picker must use a navigable bottom sheet.");
 assert.match(styles, /\.transaction-account-picker__menu[\s\S]*?position: fixed/, "The mobile account picker must use a navigable bottom sheet.");
+assert.match(styles, /\.transaction-account-picker__option \.accounts-brand-mark \{[\s\S]*?width: 24px;[\s\S]*?height: 24px;/, "Account picker marks must remain visually compact.");
+assert.match(styles, /\.transaction-category-picker__option > \.transaction-category-icon \{ width: 24px; height: 24px; \}/, "Category picker marks must remain visually compact.");
 assert.match(transactions, /if \(syncRoute && isCompactViewport\)[\s\S]*?router\.push\(`\/transactions\/\$\{encodeURIComponent\(transaction\.id\)\}`/, "Only compact layouts should route transaction details to a standalone page.");
 assert.match(accountDetail, /if \(isMobileViewport\) \{[\s\S]{0,120}router\.push\(`\/transactions\/\$\{encodeURIComponent\(transaction\.id\)\}`/, "Mobile Account Details must route transactions to the shared standalone detail page.");
 assert.match(transactions, /transaction-drawer--sidepanel/, "Desktop transaction details must retain the right-side drawer.");

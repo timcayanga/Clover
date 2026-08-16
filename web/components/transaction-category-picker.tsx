@@ -14,7 +14,7 @@ type TransactionCategoryPickerProps = {
   categories: TransactionPickerCategory[];
   selectedId: string;
   onSelect: (category: TransactionPickerCategory) => void;
-  buttonRef?: React.RefObject<HTMLButtonElement | null>;
+  buttonRef?: React.Ref<HTMLButtonElement>;
   className?: string;
   buttonClassName?: string;
   menuClassName?: string;

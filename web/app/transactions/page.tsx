@@ -2176,6 +2176,8 @@ function TransactionsPageContent() {
   const [transactionsPageSize, setTransactionsPageSize] = useState(25);
   const [transactionsPage, setTransactionsPage] = useState(1);
   const transactionPrefetchRef = useRef<Map<string, TransactionPrefetchEntry>>(new Map());
+  const inlineAccountPickerButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const inlineCategoryPickerButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const [query, setQuery] = useState("");
   const [currencyFilter, setCurrencyFilter] = useState("");
   const [sortField, setSortField] = useState<TransactionSortField>("date");
@@ -7395,9 +7397,17 @@ function TransactionsPageContent() {
                         aria-label={`Select ${transaction.merchantRaw}`}
                       />
                     </label>
-                    <div className="transaction-category-icon-cell" aria-hidden="true">
+                    <button
+                      type="button"
+                      className="transaction-category-icon-cell transaction-relation-icon-trigger"
+                      aria-label={`Edit category for ${transaction.merchantRaw}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        inlineCategoryPickerButtonRefs.current.get(transaction.id)?.click();
+                      }}
+                    >
                       <CategoryBrandMark categoryName={categoryLabel} size={24} radius={8} />
-                    </div>
+                    </button>
                     <div className="transaction-name-cell">
                       <InlineEditableCell
                         value={transaction.merchantClean ?? transaction.merchantRaw}
@@ -7419,10 +7429,27 @@ function TransactionsPageContent() {
                       />
                     </div>
                     <div className="transaction-account-cell">
-                      <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
+                      <button
+                        type="button"
+                        className="transaction-relation-icon-trigger transaction-relation-icon-trigger--account"
+                        aria-label={`Edit account for ${transaction.merchantRaw}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          inlineAccountPickerButtonRefs.current.get(transaction.id)?.click();
+                        }}
+                      >
+                        <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
+                      </button>
                       <TransactionAccountPicker
                         accounts={transactionAccountPickerOptions}
                         selectedId={transaction.accountId}
+                        buttonRef={(node) => {
+                          if (node) {
+                            inlineAccountPickerButtonRefs.current.set(transaction.id, node);
+                            return;
+                          }
+                          inlineAccountPickerButtonRefs.current.delete(transaction.id);
+                        }}
                         ariaLabel={`Edit account for ${transaction.merchantRaw}`}
                         className="transaction-inline-relation-picker transaction-inline-relation-picker--account"
                         buttonClassName="transaction-inline-edit transaction-inline-edit--select"
@@ -7433,6 +7460,13 @@ function TransactionsPageContent() {
                       <TransactionCategoryPicker
                         categories={categories}
                         selectedId={effectiveCategoryValue}
+                        buttonRef={(node) => {
+                          if (node) {
+                            inlineCategoryPickerButtonRefs.current.set(transaction.id, node);
+                            return;
+                          }
+                          inlineCategoryPickerButtonRefs.current.delete(transaction.id);
+                        }}
                         ariaLabel={`Edit category for ${transaction.merchantRaw}`}
                         className="transaction-inline-relation-picker transaction-inline-relation-picker--category"
                         buttonClassName="transaction-inline-edit transaction-inline-edit--select"
