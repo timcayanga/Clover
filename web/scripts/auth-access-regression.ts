@@ -8,6 +8,7 @@ const middleware = readFileSync(resolve(process.cwd(), "middleware.ts"), "utf8")
 const signInPage = readFileSync(resolve(process.cwd(), "app/sign-in/[[...sign-in]]/page.tsx"), "utf8");
 const morePage = readFileSync(resolve(process.cwd(), "app/more/page.tsx"), "utf8");
 const signOutButton = readFileSync(resolve(process.cwd(), "components/more-sign-out-button.tsx"), "utf8");
+const publicAccountActions = readFileSync(resolve(process.cwd(), "components/public-account-actions.tsx"), "utf8");
 const globalStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
 const protectedRouteMatcher = middleware.match(
   /const isProtectedAppRoute = createRouteMatcher\(\[([\s\S]*?)\]\);/u,
@@ -74,5 +75,10 @@ assert.match(authScreen, /message\.includes\("response: 0"\)/u, "Clerk response-
 assert.match(morePage, /MoreSignOutButton/u, "The mobile More page must expose logout");
 assert.match(signOutButton, /signOutToLanding/u, "Mobile logout must use the safe Clover sign-out flow");
 assert.match(signOutButton, /clearAllWorkspaceCaches/u, "Mobile logout must clear private workspace caches");
+assert.match(publicAccountActions, /Go to Home/u, "Signed-in landing navigation must link to Home");
+assert.match(publicAccountActions, /Log Out/u, "Signed-in landing navigation must expose logout");
+assert.match(publicAccountActions, /signOutToLanding/u, "Landing logout must use the safe Clover sign-out flow");
+assert.match(publicAccountActions, /clearAllWorkspaceCaches/u, "Landing logout must clear private workspace caches");
+assert.match(publicAccountActions, /aria-haspopup="menu"/u, "The landing account control must expose an accessible menu");
 
 console.log("Auth access regression checks passed.");

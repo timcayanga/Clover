@@ -36054,14 +36054,34 @@ button.accounts-detail__transaction-head-cell {
   gap: 12px;
 }
 
+.landing-account-menu {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+
+.landing-account-menu--desktop {
+  justify-self: end;
+}
+
+.landing-account-menu--mobile {
+  justify-self: end;
+  z-index: 3;
+}
+
 .landing-account-link {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--text);
+  font: inherit;
   font-weight: 600;
   letter-spacing: -0.02em;
   white-space: nowrap;
+  cursor: pointer;
 }
 
 .landing-account-link--desktop {
@@ -36071,6 +36091,17 @@ button.accounts-detail__transaction-head-cell {
 .landing-account-link:hover,
 .landing-account-link:focus-visible {
   color: var(--text);
+}
+
+.landing-account-link__chevron {
+  color: var(--muted-2);
+  font-size: 0.72em;
+  line-height: 1;
+  transition: transform 160ms ease;
+}
+
+.landing-account-link[aria-expanded="true"] .landing-account-link__chevron {
+  transform: rotate(180deg);
 }
 
 .landing-account-link__avatar {
@@ -36098,6 +36129,74 @@ button.accounts-detail__transaction-head-cell {
   justify-self: end;
   position: relative;
   z-index: 2;
+}
+
+.landing-account-menu__panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 50;
+  display: grid;
+  gap: 3px;
+  width: max-content;
+  min-width: 156px;
+  padding: 8px;
+  border: 1px solid rgba(224, 232, 238, 0.96);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+  animation: landing-account-menu-in 150ms ease both;
+}
+
+.landing-account-menu__item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.landing-account-menu__item:hover,
+.landing-account-menu__item:focus-visible {
+  background: rgba(3, 168, 192, 0.09);
+}
+
+.landing-account-menu__item--danger {
+  color: #c8353e;
+}
+
+.landing-account-menu__item:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+@keyframes landing-account-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-account-menu__panel,
+  .landing-account-link__chevron {
+    animation: none;
+    transition: none;
+  }
 }
 
 .landing-nav__mobile,
@@ -54263,6 +54362,25 @@ html[data-theme="dark"] .landing-nav__mobile-menu-group {
   background: transparent !important;
   border-color: transparent !important;
   color: #e7eef7 !important;
+}
+
+html[data-theme="dark"] .landing-account-menu__panel {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: #08111e;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
+}
+
+html[data-theme="dark"] .landing-account-menu__item {
+  color: #e7eef7;
+}
+
+html[data-theme="dark"] .landing-account-menu__item:hover,
+html[data-theme="dark"] .landing-account-menu__item:focus-visible {
+  background: rgba(68, 205, 202, 0.12);
+}
+
+html[data-theme="dark"] .landing-account-menu__item--danger {
+  color: #ff8f96;
 }
 
 @media (max-width: 1100px) {
