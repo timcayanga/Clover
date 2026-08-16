@@ -11,8 +11,8 @@ const main = async () => {
   const styles = await readFile(path.join(process.cwd(), "app/globals.css"), "utf8");
 
   const sampleIds = Array.from(component.matchAll(/id: "([^"]+)"/g), (match) => match[1]);
-  assert.equal(sampleIds.length, 10, "The staging gallery should contain exactly ten card concepts.");
-  assert.equal(new Set(sampleIds).size, 10, "Every card concept should have a unique finish.");
+  assert.equal(sampleIds.length, 20, "The staging gallery should contain exactly twenty card concepts.");
+  assert.equal(new Set(sampleIds).size, 20, "Every card concept should have a unique finish.");
   assert.match(component, /<FinancialAccountCard/);
   assert.doesNotMatch(component, /editableName|editableAccountNumber|editableAmount/);
   assert.match(page, /process\.env\.VERCEL_ENV === "production"/);

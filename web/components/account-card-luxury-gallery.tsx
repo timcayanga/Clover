@@ -104,6 +104,96 @@ const samples: LuxuryCardSample[] = [
     accountNumber: "•••• 8872",
     amount: "₱42,706.18",
   },
+  {
+    id: "contour-arc",
+    title: "Contour Arc",
+    finish: "Maya black framed by offset precision curves",
+    institution: "Maya",
+    accountName: "Maya",
+    accountNumber: "•••• 9926",
+    amount: "₱94,620.18",
+  },
+  {
+    id: "offset-orbit",
+    title: "Offset Orbit",
+    finish: "UnionBank orange with monumental circular forms",
+    institution: "UnionBank",
+    accountName: "UnionBank",
+    accountNumber: "•••• 1938",
+    amount: "₱126,850.00",
+  },
+  {
+    id: "sculpted-petal",
+    title: "Sculpted Petal",
+    finish: "BPI red assembled from balanced quarter circles",
+    institution: "BPI",
+    accountName: "BPI",
+    accountNumber: "•••• 4821",
+    amount: "₱184,302.11",
+  },
+  {
+    id: "wave-relief",
+    title: "Wave Relief",
+    finish: "GCash blue with tactile flowing linework",
+    institution: "GCash",
+    accountName: "GCash",
+    accountNumber: "•••• 7740",
+    amount: "₱36,904.55",
+  },
+  {
+    id: "precision-frame",
+    title: "Precision Frame",
+    finish: "Metrobank blue with fine architectural piping",
+    institution: "Metrobank",
+    accountName: "Metrobank",
+    accountNumber: "•••• 2190",
+    amount: "₱88,104.06",
+  },
+  {
+    id: "layered-horizon",
+    title: "Layered Horizon",
+    finish: "Wise green divided into soft tonal landscapes",
+    institution: "Wise",
+    accountName: "Wise",
+    accountNumber: "•••• 4428",
+    amount: "£2,075.40",
+  },
+  {
+    id: "angular-lattice",
+    title: "Angular Lattice",
+    finish: "HSBC red with interlocking jewel-cut outlines",
+    institution: "HSBC",
+    accountName: "HSBC",
+    accountNumber: "•••• 6501",
+    amount: "£4,680.25",
+  },
+  {
+    id: "circuit-line",
+    title: "Circuit Line",
+    finish: "PayPal blue with minimal routed linework",
+    institution: "PayPal",
+    accountName: "PayPal",
+    accountNumber: "•••• 3084",
+    amount: "$5,120.96",
+  },
+  {
+    id: "embossed-curve",
+    title: "Embossed Curve",
+    finish: "RCBC blue shaped by a quiet raised arc",
+    institution: "RCBC",
+    accountName: "RCBC",
+    accountNumber: "•••• 7413",
+    amount: "₱72,488.29",
+  },
+  {
+    id: "split-facet",
+    title: "Split Facet",
+    finish: "GoTyme aqua with sharply layered tonal planes",
+    institution: "GoTyme",
+    accountName: "GoTyme",
+    accountNumber: "•••• 5602",
+    amount: "₱59,802.44",
+  },
 ];
 
 const parseHex = (hex: string) => {
@@ -147,8 +237,9 @@ export function AccountCardLuxuryGallery() {
           <p className="card-atelier__eyebrow">Clover Card Atelier</p>
           <h1>Brand color. Individual character.</h1>
           <p className="card-atelier__intro">
-            Ten abstract background directions using Clover&apos;s current account-card layout, fields, and institution
-            marks. Every finish preserves the bank&apos;s own color, with contrast selected automatically for legibility.
+            Twenty abstract background directions across two collections, using Clover&apos;s current account-card layout,
+            fields, and institution marks. Every finish preserves the bank&apos;s own color, with contrast selected
+            automatically for legibility.
           </p>
         </div>
         <a className="card-atelier__back" href="/accounts">
