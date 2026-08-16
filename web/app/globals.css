@@ -19335,6 +19335,29 @@ input.transaction-inline-edit--amount::placeholder {
   grid-template-columns: minmax(0, 1fr) minmax(150px, 1fr) auto;
 }
 
+.transaction-cross-feature-actions__panel--circles {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.transaction-cross-feature-actions__circle-picker {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.transaction-cross-feature-actions__create-row,
+.transactions-split-bill-link-panel__create-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.transaction-cross-feature-actions__new-circle,
+.transactions-split-bill-link-panel__new-group {
+  justify-self: start;
+}
+
 .transaction-cross-feature-actions__panel label {
   display: grid;
   gap: 5px;
@@ -19365,8 +19388,31 @@ input.transaction-inline-edit--amount::placeholder {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 18px 24px 22px;
+}
+
+.transaction-detail-page__actions .button,
+.transaction-detail-page__delete-button,
+.transaction-drawer-delete-footer .button {
+  width: auto;
+  max-width: max-content;
+  height: auto;
+  aspect-ratio: auto;
+  min-width: 0;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.transaction-drawer-delete-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--stroke);
 }
 
 .transaction-detail-page__delete-confirm {
@@ -19447,8 +19493,19 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .transaction-cross-feature-actions__panel,
-  .transaction-cross-feature-actions__panel--recurring {
+  .transaction-cross-feature-actions__panel--recurring,
+  .transaction-cross-feature-actions__panel--circles {
     grid-template-columns: 1fr;
+  }
+
+  .transaction-cross-feature-actions__create-row,
+  .transactions-split-bill-link-panel__create-group {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .transaction-cross-feature-actions__create-row .button-secondary,
+  .transactions-split-bill-link-panel__create-group .button-secondary {
+    grid-column: 2;
   }
 
   .transaction-detail-page__actions {
@@ -21871,6 +21928,50 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 .transactions-split-bill-link-panel__actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.transactions-split-bill-link-panel__suggestions {
+  display: grid;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.transactions-split-bill-link-panel__suggestions > button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-strong);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.transactions-split-bill-link-panel__suggestions > button:hover,
+.transactions-split-bill-link-panel__suggestions > button:focus-visible {
+  background: rgba(3, 168, 192, 0.08);
+}
+
+.transactions-split-bill-link-panel__suggestion-initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border-radius: 50%;
+  background: rgba(3, 168, 192, 0.12);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 .transaction-drawer-split-bill {

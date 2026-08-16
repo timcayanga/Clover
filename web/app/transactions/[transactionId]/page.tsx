@@ -469,6 +469,7 @@ export default function TransactionDetailPage() {
 
             {message ? <p className="transaction-detail-page__message" role="status">{message}</p> : null}
             <footer className="transaction-detail-page__actions">
+              <button className="button button-primary button-small" type="submit" disabled={saving}>{saving ? "Saving..." : "Save Changes"}</button>
               {confirmingDelete ? (
                 <div className="transaction-detail-page__delete-confirm" role="alert">
                   <span>Delete this transaction?</span>
@@ -476,9 +477,8 @@ export default function TransactionDetailPage() {
                   <button className="button button-danger button-small" type="button" onClick={() => void deleteTransaction()} disabled={saving}>Delete</button>
                 </div>
               ) : (
-                <button className="button button-danger button-small" type="button" onClick={() => setConfirmingDelete(true)}>Delete</button>
+                <button className="button button-danger button-small transaction-detail-page__delete-button" type="button" onClick={() => setConfirmingDelete(true)}>Delete Transaction</button>
               )}
-              <button className="button button-primary button-small" type="submit" disabled={saving}>{saving ? "Saving..." : "Save Changes"}</button>
             </footer>
           </form>
         ) : null}

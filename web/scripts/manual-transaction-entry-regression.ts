@@ -57,5 +57,14 @@ assert.doesNotMatch(transactionDetail, /Source Details/, "Transaction details sh
 assert.match(crossFeatureActions, /Add to Circles/, "Transaction details must support Circles linking.");
 assert.match(crossFeatureActions, /Add to Recurring/, "Transaction details must support Recurring linking.");
 assert.match(crossFeatureActions, /Add to Split Bills/, "Transaction details must support Split Bills linking.");
+assert.match(crossFeatureActions, /if \(splitBillOpen\)[\s\S]*?setPanel\(null\)/, "Opening Split Bills must close other transaction action panels.");
+assert.match(crossFeatureActions, /Create new Circle/, "Transaction details must allow creating a Circle without leaving the transaction.");
+assert.match(crossFeatureActions, /Add to Circle/, "Transaction details must allow choosing and sharing to an existing Circle.");
+const splitBillLinkFields = read("components/split-bill-transaction-link-fields.tsx");
+assert.match(splitBillLinkFields, /fetch\("\/api\/split-bill-people"\)/, "Split Bills transaction linking must load saved people suggestions.");
+assert.match(splitBillLinkFields, /Create new group/, "Split Bills transaction linking must allow creating a group in place.");
+assert.match(splitBillLinkFields, /Saved people suggestions/, "Split Bills transaction linking must expose type-ahead people suggestions.");
+assert.match(styles, /\.transaction-detail-page__delete-button[\s\S]*?width: auto/, "The transaction delete action must remain compact.");
+assert.match(transactions, /transaction-drawer-delete-footer/, "Desktop transaction deletion must remain at the bottom of the details drawer.");
 
 console.log("Manual transaction entry regression passed.");

@@ -8705,30 +8705,8 @@ function TransactionsPageContent() {
               </div>
             </details>
 
-            <div className={`form-actions detail-actions${transactionDeleteConfirmOpen ? " is-confirming-delete" : ""}`}>
-              {transactionDeleteConfirmOpen ? (
-                <div className="detail-warning-box transaction-delete-confirm" role="alert">
-                  <p>
-                    <strong>Delete transaction?</strong>
-                    <span>This cannot be undone.</span>
-                  </p>
-                  <div className="detail-warning-actions detail-warning-actions--compact">
-                    <button
-                      className="button button-secondary button-small"
-                      type="button"
-                      onClick={() => setTransactionDeleteConfirmOpen(false)}
-                      disabled={isSaving}
-                    >
-                      Cancel
-                    </button>
-                    <button className="button button-danger button-small" type="button" onClick={() => void confirmDeleteTransaction()} disabled={isSaving}>
-                      {isSaving ? "Deleting..." : "Delete"}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <TransactionCrossFeatureActions
+            <div className="form-actions detail-actions">
+              <TransactionCrossFeatureActions
                     workspaceId={selectedTransaction.workspaceId}
                     transactionId={selectedTransaction.id}
                     transactionType={selectedTransaction.type}
@@ -8743,18 +8721,7 @@ function TransactionsPageContent() {
                       setTransactionSplitBillError(null);
                       setTransactionSplitBillOpen((current) => !current);
                     }}
-                  />
-                  {!selectedTransactionWarningReason ? (
-                    <button
-                      className="button button-danger"
-                      type="button"
-                      onClick={() => setTransactionDeleteConfirmOpen(true)}
-                    >
-                      Delete Transaction
-                    </button>
-                  ) : null}
-                </>
-              )}
+              />
             </div>
 
             {(transactionSplitBillError || (transactionSplitBillOpen && !selectedTransaction.splitBill)) ? (
@@ -8774,6 +8741,25 @@ function TransactionsPageContent() {
                     actionDisabled={!transactionSplitBillDraft.groupId.trim() && transactionSplitBillDraft.participantNames.length === 0}
                   />
                 ) : null}
+              </div>
+            ) : null}
+
+            {!selectedTransactionWarningReason ? (
+              <div className="transaction-drawer-delete-footer">
+                {transactionDeleteConfirmOpen ? (
+                  <div className="detail-warning-box transaction-delete-confirm" role="alert">
+                    <p>
+                      <strong>Delete transaction?</strong>
+                      <span>This cannot be undone.</span>
+                    </p>
+                    <div className="detail-warning-actions detail-warning-actions--compact">
+                      <button className="button button-secondary button-small" type="button" onClick={() => setTransactionDeleteConfirmOpen(false)} disabled={isSaving}>Cancel</button>
+                      <button className="button button-danger button-small" type="button" onClick={() => void confirmDeleteTransaction()} disabled={isSaving}>{isSaving ? "Deleting..." : "Delete"}</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button className="button button-danger button-small" type="button" onClick={() => setTransactionDeleteConfirmOpen(true)}>Delete Transaction</button>
+                )}
               </div>
             ) : null}
           </section>
