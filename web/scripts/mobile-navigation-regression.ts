@@ -117,6 +117,16 @@ async function main() {
   );
   assert.match(
     styles,
+    /\.content--has-title-addon > :is\(\.topbar, \.shell-compact-bar\) \.topbar__title-row \{[\s\S]{0,420}flex-wrap: wrap !important;[\s\S]{0,120}overflow: visible !important;/,
+    "Tabbed mobile headers must wrap rather than clip subtabs that do not fit on one row.",
+  );
+  assert.match(
+    styles,
+    /\.content--has-title-addon \.topbar__title-addon :is\([\s\S]{0,500}-webkit-mask-image: none !important;[\s\S]{0,100}mask-image: none !important;/,
+    "Tabbed mobile headers must not fade the final visible subtab.",
+  );
+  assert.match(
+    styles,
     /\.content--investments \.investments-mobile-header \{[\s\S]{0,80}display: none !important;/,
     "Investments must use the shared shell header instead of rendering a duplicate mobile header.",
   );

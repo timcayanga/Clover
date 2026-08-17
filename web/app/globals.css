@@ -56841,7 +56841,7 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     max-width: 100% !important;
     transform: none !important;
     justify-self: stretch !important;
-    overflow: hidden !important;
+    overflow: visible !important;
     text-align: left !important;
     pointer-events: auto !important;
   }
@@ -56850,11 +56850,12 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     display: flex !important;
     width: 100% !important;
     min-width: 0 !important;
-    align-items: center !important;
+    align-items: flex-start !important;
     justify-content: flex-start !important;
-    gap: 14px !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
+    column-gap: 14px !important;
+    row-gap: 3px !important;
+    flex-wrap: wrap !important;
+    overflow: visible !important;
     scrollbar-width: none;
   }
 
@@ -56866,6 +56867,9 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     position: static !important;
     inset: auto !important;
     flex: 0 0 auto !important;
+    display: inline-flex !important;
+    min-height: 34px !important;
+    align-items: center !important;
     width: auto !important;
     max-width: none !important;
     margin: 0 !important;
@@ -56882,8 +56886,9 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   }
 
   .content--has-title-addon .topbar__title-addon {
-    flex: 0 0 auto !important;
+    flex: 1 1 auto !important;
     min-width: 0 !important;
+    overflow: visible !important;
   }
 
   .content--has-title-addon .topbar__title-addon :is(
@@ -56893,12 +56898,15 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
       .circles-title-tabs
     ) {
     display: flex !important;
-    width: max-content !important;
+    width: auto !important;
     min-width: 0 !important;
     align-items: center !important;
     gap: 14px !important;
     padding: 0 !important;
     overflow: visible !important;
+    flex-wrap: wrap !important;
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
   }
 
   .content--has-title-addon .topbar__title-addon :is(
@@ -56908,7 +56916,7 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
       .circles-title-tabs
     ) :is(a, button, .reports-tab, .investments-tab) {
     min-height: 34px !important;
-    padding: 0 0 3px !important;
+    padding: 0 !important;
     font-size: 14px !important;
     font-weight: 600 !important;
     line-height: 1.2 !important;
