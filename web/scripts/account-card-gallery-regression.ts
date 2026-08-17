@@ -3,7 +3,6 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
   getLuxuryAccountCardClass,
-  isLuxuryAccountCardPreviewEmail,
   LUXURY_ACCOUNT_CARD_STYLES,
 } from "@/lib/account-card-luxury";
 
@@ -28,13 +27,11 @@ const main = async () => {
   assert.match(page, /notFound\(\)/);
   assert.match(styles, /\.card-atelier__grid/);
   assert.match(styles, /\.luxury-account-card::before/);
-  assert.match(rollout, /timcayanga@gmail\.com/);
+  assert.doesNotMatch(rollout, /@gmail\.com|PREVIEW_EMAILS/);
   assert.match(rollout, /stableHash/);
-  assert.match(meRoute, /luxuryAccountCards: isLuxuryAccountCardPreviewEmail\(user\.email\)/);
+  assert.match(meRoute, /luxuryAccountCards: true/);
   assert.match(accountsPage, /luxuryAccountCardsEnabled \? getLuxuryAccountCardClass\(row\.id\)/);
   assert.match(accountDetailPage, /luxuryAccountCardsEnabled \? getLuxuryAccountCardClass\(account\.id\)/);
-  assert.equal(isLuxuryAccountCardPreviewEmail("TIMCAYANGA@gmail.com"), true);
-  assert.equal(isLuxuryAccountCardPreviewEmail("another-user@example.com"), false);
   assert.equal(getLuxuryAccountCardClass("account-123"), getLuxuryAccountCardClass("account-123"));
   assert.ok(
     LUXURY_ACCOUNT_CARD_STYLES.some((style) => getLuxuryAccountCardClass("account-123").endsWith(style)),

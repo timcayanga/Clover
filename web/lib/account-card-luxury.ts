@@ -21,11 +21,6 @@ export const LUXURY_ACCOUNT_CARD_STYLES = [
   "split-facet",
 ] as const;
 
-const LUXURY_ACCOUNT_CARD_PREVIEW_EMAILS = new Set(["timcayanga@gmail.com"]);
-
-export const isLuxuryAccountCardPreviewEmail = (email: string | null | undefined) =>
-  Boolean(email && LUXURY_ACCOUNT_CARD_PREVIEW_EMAILS.has(email.trim().toLowerCase()));
-
 const stableHash = (value: string) => {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
