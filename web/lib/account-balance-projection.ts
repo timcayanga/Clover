@@ -1,11 +1,64 @@
 import { prefersLiveInvestmentBalance } from "@/lib/investment-balance";
 
 type BalanceValue = { toString(): string } | string | number | null | undefined;
+type DateValue = Date | string | null | undefined;
+
+export type AccountBalanceCheckpoint = {
+  createdAt: DateValue;
+  statementEndDate?: DateValue;
+  sourceMetadata?: unknown;
+};
 
 const toBalanceString = (value: BalanceValue) => {
   if (value === null || value === undefined) return null;
   const normalized = String(value).trim();
   return normalized === "" ? null : normalized;
+};
+
+const toTimestamp = (value: DateValue) => {
+  if (!value) return 0;
+  const timestamp = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
+/**
+ * Statements are effective on their statement end date, not the day the file
+ * happened to be uploaded. Point-in-time screenshots and other imports without
+ * a statement period use their capture/import time instead.
+ */
+export const getAccountCheckpointEffectiveTime = (checkpoint: AccountBalanceCheckpoint) => {
+  const sourceMetadata =
+    checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
+      ? (checkpoint.sourceMetadata as Record<string, unknown>)
+      : null;
+  const importMode = typeof sourceMetadata?.importMode === "string" ? sourceMetadata.importMode.trim() : null;
+
+  if (importMode && importMode !== "statement") {
+    return toTimestamp(checkpoint.createdAt);
+  }
+
+  return toTimestamp(checkpoint.statementEndDate) || toTimestamp(checkpoint.createdAt);
+};
+
+export const selectLatestAccountCheckpoint = <T extends AccountBalanceCheckpoint>(checkpoints: T[]) => {
+  let latest: T | null = null;
+  let latestEffectiveTime = -1;
+  let latestCreatedTime = -1;
+
+  for (const checkpoint of checkpoints) {
+    const effectiveTime = getAccountCheckpointEffectiveTime(checkpoint);
+    const createdTime = toTimestamp(checkpoint.createdAt);
+    if (
+      effectiveTime > latestEffectiveTime ||
+      (effectiveTime === latestEffectiveTime && createdTime >= latestCreatedTime)
+    ) {
+      latest = checkpoint;
+      latestEffectiveTime = effectiveTime;
+      latestCreatedTime = createdTime;
+    }
+  }
+
+  return latest;
 };
 
 /**

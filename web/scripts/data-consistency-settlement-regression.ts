@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveEffectiveAccountBalance } from "../lib/account-balance-projection";
+import {
+  getAccountCheckpointEffectiveTime,
+  resolveEffectiveAccountBalance,
+  selectLatestAccountCheckpoint,
+} from "../lib/account-balance-projection";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const webRoot = join(scriptDir, "..");
@@ -48,6 +52,43 @@ const main = async () => {
     null,
     "Investment balances must remain tied to their live holding projection."
   );
+  assert.equal(
+    resolveEffectiveAccountBalance({
+      accountType: "bank",
+      liveBalance: "250.00",
+      checkpointStatus: "reconciled",
+      checkpointBalance: "0.00",
+    }),
+    "0.00",
+    "A confirmed zero checkpoint must not fall back to a stale non-zero balance."
+  );
+
+  const olderStatementUploadedLater = {
+    id: "older-upload",
+    statementEndDate: "2026-06-30T00:00:00.000Z",
+    createdAt: "2026-08-15T00:00:00.000Z",
+    sourceMetadata: { importMode: "statement" },
+  };
+  const newerStatementUploadedEarlier = {
+    id: "newer-balance",
+    statementEndDate: "2026-07-31T00:00:00.000Z",
+    createdAt: "2026-08-01T00:00:00.000Z",
+    sourceMetadata: { importMode: "statement" },
+  };
+  assert.equal(
+    selectLatestAccountCheckpoint([olderStatementUploadedLater, newerStatementUploadedEarlier])?.id,
+    "newer-balance",
+    "Uploading an older statement later must not replace the newer statement balance."
+  );
+  assert.equal(
+    getAccountCheckpointEffectiveTime({
+      createdAt: "2026-08-16T00:00:00.000Z",
+      statementEndDate: "2026-06-30T00:00:00.000Z",
+      sourceMetadata: { importMode: "receipt" },
+    }),
+    new Date("2026-08-16T00:00:00.000Z").getTime(),
+    "Point-in-time imports must use their capture time."
+  );
 
   const [listRoute, detailRoute, statusSnapshot, statusRoute, eventRoute, visibility] = await Promise.all([
     readFile(join(webRoot, "app/api/accounts/route.ts"), "utf8"),
@@ -60,6 +101,7 @@ const main = async () => {
 
   for (const source of [listRoute, detailRoute]) {
     assert.match(source, /resolveEffectiveAccountBalance\(/);
+    assert.match(source, /getAccountCheckpointEffectiveTime\(/);
   }
   assert.match(statusSnapshot, /const settledImportComplete = visibleImportComplete && settlementIssues\.length === 0/);
   assert.match(statusSnapshot, /transaction_count_not_settled/);

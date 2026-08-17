@@ -33,6 +33,7 @@ import { ReportsRangeMenu } from "@/components/reports-range-menu";
 import { resolveReportWindow } from "@/lib/report-window";
 import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
 import { defaultCurrencyCookieKey, normalizeDefaultCurrency } from "@/lib/regional-preferences";
+import { resolveEffectiveAccountBalance, selectLatestAccountCheckpoint } from "@/lib/account-balance-projection";
 
 export const dynamic = "force-dynamic";
 
@@ -95,6 +96,7 @@ type AdviserWorkspaceAccountSource = {
     status: string;
     statementEndDate: Date | null;
     createdAt: Date;
+    sourceMetadata: unknown;
   }>;
 };
 
@@ -1154,9 +1156,10 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
             status: true,
             statementEndDate: true,
             createdAt: true,
+            sourceMetadata: true,
           },
-          orderBy: [{ statementEndDate: "desc" }, { createdAt: "desc" }],
-          take: 1,
+          orderBy: { createdAt: "desc" },
+          take: 50,
         },
       },
     },
@@ -1329,11 +1332,8 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     manualTransactionsByAccount.set(transaction.accountId, existing);
   }
   const reconcileWorkspaceAccountBalance = (account: AdviserWorkspaceAccountSource) => {
-    const latestCheckpoint = account.statementCheckpoints[0] ?? null;
-    const checkpointBalance = latestCheckpoint?.status !== "mismatch" ? latestCheckpoint?.endingBalance : null;
-    const reconciledBalance =
-      checkpointBalance ??
-      (account.source === "manual"
+    const latestCheckpoint = selectLatestAccountCheckpoint(account.statementCheckpoints);
+    const fallbackBalance = account.source === "manual"
         ? deriveReconciledBalance({
             balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
             transactions: manualTransactionsByAccount.get(account.id) ?? [],
@@ -1342,7 +1342,14 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
               : [],
             treatStoredBalanceAsOpening: true,
           })
-        : account.balance);
+        : account.balance;
+    const reconciledBalance = resolveEffectiveAccountBalance({
+      accountType: account.type,
+      liveBalance: fallbackBalance as Parameters<typeof resolveEffectiveAccountBalance>[0]["liveBalance"],
+      checkpointStatus: latestCheckpoint?.status ?? null,
+      checkpointBalance:
+        (latestCheckpoint?.endingBalance ?? null) as Parameters<typeof resolveEffectiveAccountBalance>[0]["checkpointBalance"],
+    });
     const parsed = Number(reconciledBalance ?? 0);
     return Number.isFinite(parsed) ? parsed : null;
   };

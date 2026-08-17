@@ -41,6 +41,7 @@ import { hasCompatibleTable } from "@/lib/data-engine";
 import { defaultCurrencyCookieKey, normalizeDefaultCurrency } from "@/lib/regional-preferences";
 import { OnboardingMissions } from "@/components/onboarding-missions";
 import { BalanceVisibilityToggle } from "@/components/balance-visibility-toggle";
+import { resolveEffectiveAccountBalance, selectLatestAccountCheckpoint } from "@/lib/account-balance-projection";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -700,12 +701,10 @@ async function DashboardStream({
                 status: true,
                 statementEndDate: true,
                 createdAt: true,
+                sourceMetadata: true,
               },
-              orderBy: [
-                { statementEndDate: "desc" },
-                { createdAt: "desc" },
-              ],
-              take: 1,
+              orderBy: { createdAt: "desc" },
+              take: 50,
             },
           },
           orderBy: { updatedAt: "desc" },
@@ -759,17 +758,21 @@ async function DashboardStream({
     `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency)}`;
 
   const reconcileAccountBalance = (account: (typeof dashboardAccounts)[number]) => {
-    const latestCheckpoint = account.statementCheckpoints[0] ?? null;
-    const checkpointBalance =
-      latestCheckpoint?.status !== "mismatch" && latestCheckpoint?.endingBalance ? latestCheckpoint.endingBalance : null;
-    const reconciledBalance = checkpointBalance ?? (account.source === "manual"
+    const latestCheckpoint = selectLatestAccountCheckpoint(account.statementCheckpoints);
+    const fallbackBalance = account.source === "manual"
       ? deriveReconciledBalance({
           balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
           transactions: account.transactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
           checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
           treatStoredBalanceAsOpening: true,
         })
-      : account.balance);
+      : account.balance;
+    const reconciledBalance = resolveEffectiveAccountBalance({
+      accountType: account.type,
+      liveBalance: fallbackBalance,
+      checkpointStatus: latestCheckpoint?.status ?? null,
+      checkpointBalance: latestCheckpoint?.endingBalance ?? null,
+    });
 
     return Number(reconciledBalance ?? account.balance ?? 0);
   };

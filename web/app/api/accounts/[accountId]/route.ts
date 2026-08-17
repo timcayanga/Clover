@@ -14,7 +14,7 @@ import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { BANK_PRIORITY, normalizeBankName } from "@/lib/data-qa-banks";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { isWiseWalletWithoutVisibleAccountNumber, normalizeImportedCurrencyCode } from "@/lib/imported-account-identity";
-import { resolveEffectiveAccountBalance } from "@/lib/account-balance-projection";
+import { getAccountCheckpointEffectiveTime, resolveEffectiveAccountBalance } from "@/lib/account-balance-projection";
 
 export const dynamic = "force-dynamic";
 
@@ -265,19 +265,7 @@ const readCheckpointFreshnessTime = (checkpoint: {
   statementEndDate?: Date | string | null;
   sourceMetadata?: unknown;
 }) => {
-  const sourceMetadata =
-    checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
-      ? (checkpoint.sourceMetadata as Record<string, unknown>)
-      : null;
-  const importMode = typeof sourceMetadata?.importMode === "string" ? sourceMetadata.importMode.trim() : null;
-  if (importMode && importMode !== "statement") {
-    return new Date(checkpoint.createdAt).getTime();
-  }
-
-  return Math.max(
-    checkpoint.statementEndDate ? new Date(checkpoint.statementEndDate).getTime() : 0,
-    new Date(checkpoint.createdAt).getTime()
-  );
+  return getAccountCheckpointEffectiveTime(checkpoint);
 };
 
 const findPublishedSummaryForAccount = (

@@ -32,7 +32,7 @@ import {
 } from "@/lib/transient-data";
 import { summarizeErrorForLog } from "@/lib/security-logging";
 import { getLiveCryptoPhpPrices } from "@/lib/crypto-market-prices";
-import { resolveEffectiveAccountBalance } from "@/lib/account-balance-projection";
+import { getAccountCheckpointEffectiveTime, resolveEffectiveAccountBalance } from "@/lib/account-balance-projection";
 import { isCryptoAssetCurrencyCode } from "@/lib/financial-identity-detection";
 import {
   getCanonicalPdaxHoldingIdentity,
@@ -493,37 +493,12 @@ const readImportedSourceRowIndex = (payload: unknown) => {
   return readImportedJsonNumber((payload as Record<string, unknown>).sourceRowIndex);
 };
 
-const readCheckpointDateTime = (value: Date | string | null | undefined) => {
-  if (!value) {
-    return 0;
-  }
-
-  if (value instanceof Date) {
-    return value.getTime();
-  }
-
-  const parsed = new Date(value).getTime();
-  return Number.isNaN(parsed) ? 0 : parsed;
-};
-
 const readCheckpointFreshnessTime = (checkpoint: {
   createdAt: Date | string;
   statementEndDate?: Date | string | null;
   sourceMetadata?: Prisma.JsonValue | null;
 }) => {
-  const sourceMetadata =
-    checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
-      ? (checkpoint.sourceMetadata as Record<string, unknown>)
-      : null;
-  const importMode = typeof sourceMetadata?.importMode === "string" ? sourceMetadata.importMode.trim() : null;
-  if (importMode && importMode !== "statement") {
-    return readCheckpointDateTime(checkpoint.createdAt);
-  }
-
-  return Math.max(
-    readCheckpointDateTime(checkpoint.statementEndDate),
-    readCheckpointDateTime(checkpoint.createdAt)
-  );
+  return getAccountCheckpointEffectiveTime(checkpoint);
 };
 
 const isCimbParsedAccountRepairRow = (row: {

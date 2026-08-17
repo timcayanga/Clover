@@ -71,7 +71,8 @@ assert.ok(
 
 const dashboardSource = source("app/dashboard/page.tsx");
 assert.match(dashboardSource, /account\.source === "manual"/);
-assert.match(dashboardSource, /: account\.balance\);/);
+assert.match(dashboardSource, /selectLatestAccountCheckpoint\(account\.statementCheckpoints\)/);
+assert.match(dashboardSource, /resolveEffectiveAccountBalance\(\{/);
 assert.match(
   dashboardSource,
   /const spendableAccounts = dashboardAccounts\.filter[\s\S]{0,1400}balanceRateEntries = await Promise\.all/,
@@ -84,6 +85,8 @@ assert.doesNotMatch(dashboardSource, /Across currencies in/);
 const adviserSource = source("app/adviser/page.tsx");
 assert.match(adviserSource, /defaultCurrencyCookieKey/);
 assert.match(adviserSource, /loadAdviserExchangeRate/);
+assert.match(adviserSource, /selectLatestAccountCheckpoint\(account\.statementCheckpoints\)/);
+assert.match(adviserSource, /resolveEffectiveAccountBalance\(\{/);
 assert.match(
   adviserSource,
   /const spendableAccounts = workspaceAccounts\.filter[\s\S]{0,1200}normalizeAccountBalanceSign/,

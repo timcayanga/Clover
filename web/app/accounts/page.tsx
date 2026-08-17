@@ -17,6 +17,7 @@ import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
 import { deriveReconciledBalance, normalizeAccountBalanceSign } from "@/lib/account-balance";
+import { getAccountCheckpointEffectiveTime } from "@/lib/account-balance-projection";
 import {
   ACCOUNT_CARD_DRAG_MIME,
   hasActiveAccountCardDrag,
@@ -1249,19 +1250,7 @@ const accountNumbersMayMatch = (
 };
 
 const getCheckpointFreshnessTime = (checkpoint: StatementCheckpoint) => {
-  const sourceMetadata =
-    checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
-      ? (checkpoint.sourceMetadata as Record<string, unknown>)
-      : null;
-  const importMode = typeof sourceMetadata?.importMode === "string" ? sourceMetadata.importMode.trim() : null;
-  if (importMode && importMode !== "statement") {
-    return new Date(checkpoint.createdAt).getTime();
-  }
-
-  return Math.max(
-    checkpoint.statementEndDate ? new Date(checkpoint.statementEndDate).getTime() : 0,
-    new Date(checkpoint.createdAt).getTime()
-  );
+  return getAccountCheckpointEffectiveTime(checkpoint);
 };
 
 const mergeStatementCheckpoints = (current: StatementCheckpoint[], next: StatementCheckpoint[]) => {
