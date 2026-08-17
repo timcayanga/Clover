@@ -7195,7 +7195,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
 .transactions-table.commitments-table td {
   font-size: 0.86rem;
   line-height: 1.25;
-  padding: 4px 12px;
+  padding: 6px 12px;
   vertical-align: middle;
 }
 
@@ -7204,10 +7204,15 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
 }
 
 .transactions-table.commitments-table th {
-  height: 36px;
+  height: 32px;
   font-weight: 400;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
   text-transform: none;
+}
+
+.commitments-table__completion {
+  width: 40px;
+  text-align: center !important;
 }
 
 @media (min-width: 1101px) {
@@ -7249,12 +7254,11 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   white-space: nowrap;
 }
 
-.commitments-table__inferred {
-  display: block;
-  margin-top: 2px;
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 600;
+.commitments-table__editable--primary {
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
 }
 
 .recurring-occurrence-check {
@@ -7600,35 +7604,34 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 32px;
-    border-bottom: 1px solid var(--stroke);
+    gap: 6px;
+    min-height: 18px;
     color: var(--muted);
-    font-size: 11px;
+    font-size: 0.64rem;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: capitalize;
   }
 
-  .recurring-mobile-group__date span::before,
-  .recurring-mobile-group__date span::after {
-    content: "------";
-    margin-inline: 3px;
-    color: color-mix(in srgb, var(--muted) 72%, transparent);
-    letter-spacing: 0;
+  .recurring-mobile-group__date::before,
+  .recurring-mobile-group__date::after {
+    content: "";
+    flex: 1 1 auto;
+    border-top: 0.5px dashed color-mix(in srgb, var(--muted) 48%, transparent);
   }
 
   .recurring-mobile-row {
     appearance: none;
     display: grid;
-    grid-template-columns: 28px minmax(0, 1fr) auto 28px 14px;
+    grid-template-columns: 18px 20px 20px minmax(0, 1fr) auto 24px;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     width: 100%;
-    min-height: 52px;
+    min-height: 40px;
     margin: 0;
-    padding: 6px 10px;
+    padding: 6px 4px 6px 6px;
     border: 0;
-    border-bottom: 1px solid var(--stroke);
+    border-top: 0.5px solid rgba(148, 163, 184, 0.24);
     background: transparent;
     color: var(--text);
     cursor: default;
@@ -7636,8 +7639,7 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   }
 
   .recurring-mobile-row__open {
-    display: grid;
-    gap: 2px;
+    display: block;
     min-width: 0;
     padding: 0;
     border: 0;
@@ -7647,26 +7649,14 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
     text-align: left;
   }
 
-  .recurring-mobile-row__open small {
-    overflow: hidden;
-    color: var(--muted);
-    font-size: 10px;
-    font-weight: 400;
-    line-height: 1.2;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   .recurring-occurrence-check--mobile {
-    display: grid;
-    justify-items: center;
-    gap: 1px;
-    font-size: 9px;
+    display: inline-flex;
+    justify-content: center;
   }
 
   .recurring-occurrence-check--mobile input {
-    width: 17px;
-    height: 17px;
+    width: 16px;
+    height: 16px;
   }
 
   .recurring-mobile-row:active {
@@ -7675,22 +7665,26 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
 
   .recurring-mobile-row__account,
   .recurring-mobile-row__account .accounts-brand-mark {
-    width: 28px;
-    height: 28px;
-    border-radius: 9px;
+    width: 20px;
+    height: 20px;
+    border-radius: 7px;
+  }
+
+  .recurring-mobile-row__category {
+    align-self: center;
   }
 
   .recurring-mobile-row__name {
     min-width: 0;
     overflow: hidden;
-    font-size: 14px;
+    font-size: 0.82rem;
     line-height: 1.2;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .recurring-mobile-row__amount {
-    font-size: 14px;
+    font-size: 0.82rem;
     font-weight: 700;
     white-space: nowrap;
   }
@@ -7725,8 +7719,9 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   }
 
   .recurring-mobile-row__chevron {
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
+    justify-self: center;
     color: var(--muted);
   }
 

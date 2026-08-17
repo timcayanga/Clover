@@ -1070,9 +1070,9 @@ export function CommitmentsPanel({
                   type: displayedAccount?.type ?? null,
                 });
                 const occurrenceCompleted = Boolean(commitment.occurrenceCompletedAt);
-                const completionLabel = commitment.kind === "receivable"
-                  ? occurrenceCompleted ? "Received" : "Pending"
-                  : occurrenceCompleted ? "Paid" : "Pending";
+                const completionAction = occurrenceCompleted
+                  ? `Mark ${commitment.title} as pending`
+                  : `Mark ${commitment.title} as ${commitment.kind === "receivable" ? "received" : "paid"}`;
                 return (
                   <MobileSwipeDelete
                     key={commitment.id}
@@ -1080,12 +1080,30 @@ export function CommitmentsPanel({
                     disabled={isSaving}
                     onDelete={() => handleDelete(commitment.id)}
                   >
-                  <div
-                    className="recurring-mobile-row"
-                  >
+                    <div
+                      className="recurring-mobile-row"
+                    >
+                    <label
+                      className={`recurring-occurrence-check recurring-occurrence-check--mobile${occurrenceCompleted ? " is-complete" : ""}`}
+                      title={completionAction}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={occurrenceCompleted}
+                        disabled={commitment.status !== "active" || !commitment.occurrenceDueDate || completingCommitmentId === commitment.id}
+                        onChange={(event) => void handleOccurrenceCompletion(commitment, event.target.checked)}
+                        aria-label={completionAction}
+                      />
+                    </label>
                     <span className="recurring-mobile-row__account" aria-hidden="true">
                       <AccountBrandMark accountBrand={brand} label={displayedAccount?.name ?? commitment.title} />
                     </span>
+                    <CategoryBrandMark
+                      categoryName={commitment.categoryName ?? "Other"}
+                      size={20}
+                      radius={7}
+                      className="recurring-mobile-row__category"
+                    />
                     <button
                       type="button"
                       className="recurring-mobile-row__open"
@@ -1093,22 +1111,12 @@ export function CommitmentsPanel({
                       aria-label={`Open ${commitment.title}`}
                     >
                       <strong className="recurring-mobile-row__name">{commitment.title}</strong>
-                      <small>{commitment.categoryName ?? "Other"} · {displayedAccount?.name ?? "Account to confirm"}</small>
                     </button>
                     <span className="recurring-mobile-row__amount">{formatCurrency(commitment.amount, commitment.currency)}</span>
-                    <label className={`recurring-occurrence-check recurring-occurrence-check--mobile${occurrenceCompleted ? " is-complete" : ""}`}>
-                      <input
-                        type="checkbox"
-                        checked={occurrenceCompleted}
-                        disabled={commitment.status !== "active" || !commitment.occurrenceDueDate || completingCommitmentId === commitment.id}
-                        onChange={(event) => void handleOccurrenceCompletion(commitment, event.target.checked)}
-                      />
-                      <span>{completionLabel}</span>
-                    </label>
                     <svg className="recurring-mobile-row__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="m9 6 6 6-6 6" />
                     </svg>
-                  </div>
+                    </div>
                   </MobileSwipeDelete>
                 );
               })}
@@ -1157,6 +1165,7 @@ export function CommitmentsPanel({
           <table className="transactions-table commitments-table">
             <thead>
               <tr>
+                <th aria-label="Completed" />
                 <th>Description</th>
                 {showsPerson ? <th>{personHeading}</th> : null}
                 <th>Due Date</th>
@@ -1164,7 +1173,6 @@ export function CommitmentsPanel({
                 <th>Category</th>
                 <th>Amount</th>
                 {showsAccount ? <th>Account</th> : null}
-                <th>Status</th>
                 <th aria-label="Actions" />
               </tr>
             </thead>
@@ -1182,6 +1190,24 @@ export function CommitmentsPanel({
               ) : null}
               {tabCommitments.map((commitment) => (
                 <tr key={commitment.id} className="commitments-table__row">
+                  <td className="commitments-table__completion">
+                    <label
+                      className={`recurring-occurrence-check${commitment.occurrenceCompletedAt ? " is-complete" : ""}`}
+                      title={commitment.occurrenceCompletedAt
+                        ? `Mark ${commitment.title} as pending`
+                        : `Mark ${commitment.title} as ${commitment.kind === "receivable" ? "received" : "paid"}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={Boolean(commitment.occurrenceCompletedAt)}
+                        disabled={commitment.status !== "active" || !commitment.occurrenceDueDate || completingCommitmentId === commitment.id}
+                        onChange={(event) => void handleOccurrenceCompletion(commitment, event.target.checked)}
+                        aria-label={commitment.occurrenceCompletedAt
+                          ? `Mark ${commitment.title} as pending`
+                          : `Mark ${commitment.title} as ${commitment.kind === "receivable" ? "received" : "paid"}`}
+                      />
+                    </label>
+                  </td>
                   <td>
                     {isEditing(commitment.id, "title") ? (
                       <input
@@ -1202,9 +1228,6 @@ export function CommitmentsPanel({
                         {commitment.title}
                       </button>
                     )}
-                    {!showsPerson && commitment.counterparty ? (
-                      <span className="commitments-table__secondary">{commitment.counterparty}</span>
-                    ) : null}
                   </td>
                   {showsPerson ? (
                     <td>
@@ -1336,25 +1359,9 @@ export function CommitmentsPanel({
                         title={commitment.inferredAccountId ? "Use Clover's suggested account" : "Edit linked account"}
                       >
                         {commitment.account?.name ?? commitment.inferredAccount?.name ?? "Not linked"}
-                        {!commitment.account && commitment.inferredAccount ? <span className="commitments-table__inferred">Suggested</span> : null}
                       </button>
                     )}
                   </td> : null}
-                  <td>
-                    <label className={`recurring-occurrence-check${commitment.occurrenceCompletedAt ? " is-complete" : ""}`}>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(commitment.occurrenceCompletedAt)}
-                        disabled={commitment.status !== "active" || !commitment.occurrenceDueDate || completingCommitmentId === commitment.id}
-                        onChange={(event) => void handleOccurrenceCompletion(commitment, event.target.checked)}
-                      />
-                      <span>
-                        {commitment.kind === "receivable"
-                          ? commitment.occurrenceCompletedAt ? "Received" : "Pending"
-                          : commitment.occurrenceCompletedAt ? "Paid" : "Pending"}
-                      </span>
-                    </label>
-                  </td>
                   <td className="commitments-table__actions">
                     <button
                       className="commitments-table__delete"
