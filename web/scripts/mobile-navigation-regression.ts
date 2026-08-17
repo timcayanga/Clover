@@ -132,13 +132,18 @@ async function main() {
   );
   assert.match(
     styles,
-    /\.sidebar-nav--mobile \.nav-link \{[\s\S]{0,160}min-height: 32px !important;[\s\S]{0,160}height: 32px !important;/,
-    "The mobile drawer rows must stay compact enough to fit in one viewport.",
+    /\.sidebar-nav--mobile \.nav-link \{[\s\S]{0,180}min-height: 44px !important;[\s\S]{0,180}height: 44px !important;[\s\S]{0,220}font-size: 15px !important;/,
+    "The mobile drawer rows must provide accessible product tap targets and readable labels.",
   );
   assert.match(
     styles,
-    /\.sidebar-nav--mobile \.nav-link__icon \.menu-icon-3d,[\s\S]{0,180}\.menu-icon-3d--home,[\s\S]{0,180}\.menu-icon-3d--adviser[\s\S]{0,180}width: 29px !important;[\s\S]{0,100}height: 29px !important;/,
+    /\.sidebar-nav--mobile \.nav-link__icon \.menu-icon-3d,[\s\S]{0,180}\.menu-icon-3d--home,[\s\S]{0,180}\.menu-icon-3d--adviser[\s\S]{0,180}width: 34px !important;[\s\S]{0,100}height: 34px !important;/,
     "Every mobile drawer icon must use the same footprint as Home.",
+  );
+  assert.match(
+    styles,
+    /\.sidebar-nav--mobile \{[\s\S]{0,260}overflow-y: auto !important;/,
+    "The larger mobile drawer menu must remain usable on short screens.",
   );
 
   console.log("Mobile navigation regression passed.");

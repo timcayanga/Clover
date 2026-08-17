@@ -56944,8 +56944,8 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     display: none !important;
   }
 
-  /* Keep the mobile drawer within one viewport and normalize every menu icon
-     to the Home icon footprint. */
+  /* Give every product a comfortable touch target while keeping the drawer
+     usable on shorter phones by scrolling only the navigation list. */
   .sidebar {
     padding: 8px 10px !important;
     gap: 3px !important;
@@ -56968,10 +56968,18 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   }
 
   .sidebar-nav--mobile {
-    flex: 0 1 auto !important;
+    flex: 1 1 auto !important;
     gap: 0 !important;
     margin-top: 0 !important;
-    overflow: visible !important;
+    padding: 2px 0 6px !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+  }
+
+  .sidebar-nav--mobile::-webkit-scrollbar {
+    display: none;
   }
 
   .sidebar-nav--mobile .sidebar-nav__section {
@@ -56979,35 +56987,38 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   }
 
   .sidebar-nav--mobile .sidebar-nav__section + .sidebar-nav__section {
-    margin-top: 1px !important;
+    margin-top: 3px !important;
   }
 
   .sidebar-nav--mobile .sidebar-nav__section-label {
-    padding: 1px 8px 0 !important;
-    font-size: 9px !important;
-    line-height: 1.05 !important;
-  }
-
-  .sidebar-nav--mobile .nav-link {
-    min-height: 32px !important;
-    height: 32px !important;
-    padding: 1px 8px !important;
-    gap: 8px !important;
-    border-radius: 11px !important;
-    font-size: 13px !important;
+    padding: 2px 10px 1px !important;
+    font-size: 10px !important;
     line-height: 1.1 !important;
   }
 
+  .sidebar-nav--mobile .nav-link {
+    min-height: 44px !important;
+    height: 44px !important;
+    padding: 3px 10px !important;
+    gap: 11px !important;
+    border-radius: 13px !important;
+    font-size: 15px !important;
+    font-weight: 500 !important;
+    line-height: 1.15 !important;
+    touch-action: manipulation;
+  }
+
   .sidebar-nav--mobile .nav-link__icon {
-    width: 29px !important;
-    height: 29px !important;
+    width: 34px !important;
+    height: 34px !important;
+    flex: 0 0 34px !important;
   }
 
   .sidebar-nav--mobile .nav-link__icon .menu-icon-3d,
   .sidebar-nav--mobile .nav-link__icon .menu-icon-3d--home,
   .sidebar-nav--mobile .nav-link__icon .menu-icon-3d--adviser {
-    width: 29px !important;
-    height: 29px !important;
+    width: 34px !important;
+    height: 34px !important;
     transform: none !important;
   }
 
