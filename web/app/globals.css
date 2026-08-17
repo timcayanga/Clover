@@ -45638,8 +45638,9 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 .split-bill-qr-editor {
   position: relative;
   width: min(620px, 100%);
-  max-height: min(90dvh, 820px);
+  max-height: min(calc(100dvh - 48px), 820px);
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .split-bill-qr-editor__head {
@@ -45652,6 +45653,12 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 .split-bill-qr-editor__head p {
   margin-top: 4px;
   font-size: 0.84rem;
+}
+
+.split-bill-qr-editor__head .eyebrow {
+  margin: 0 0 4px;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
 }
 
 .split-bill-qr-editor__close {
@@ -45670,6 +45677,14 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   font-size: 1.5rem;
   line-height: 1;
   cursor: pointer;
+}
+
+.split-bill-qr-editor__close-mobile {
+  display: none;
+}
+
+.split-bill-qr-editor__close-desktop {
+  display: inline;
 }
 
 .split-bill-qr-editor__upload-row {
@@ -45994,7 +46009,7 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
     min-height: 174px;
   }
 
-  .split-bill-qr-modal.split-bill-modal {
+  .split-bill-qr-modal.split-bill-modal:not(.split-bill-qr-editor-surface) {
     align-items: end;
     place-items: end center;
     padding: 12px 0 0;
@@ -46002,7 +46017,6 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
     backdrop-filter: blur(7px);
   }
 
-  .split-bill-qr-editor,
   .split-bill-qr-viewer {
     width: 100%;
     max-height: 92dvh;
@@ -47709,6 +47723,95 @@ body[data-split-bill-modal-open="true"] .app-shell {
 @media (max-width: 1100px) {
   .split-bill-home > .split-bill-qr-library {
     order: 100;
+  }
+
+  .split-bill-qr-editor-surface.split-bill-modal {
+    display: block;
+    padding: 0;
+    overflow: hidden;
+    background: var(--surface);
+    backdrop-filter: none;
+  }
+
+  .split-bill-qr-editor-surface .split-bill-qr-editor {
+    width: 100%;
+    min-height: 100dvh;
+    max-height: 100dvh;
+    padding: max(14px, env(safe-area-inset-top)) 18px calc(24px + env(safe-area-inset-bottom));
+    gap: 16px;
+    overflow-y: auto;
+    border: 0;
+    border-radius: 0;
+    background: var(--surface);
+    box-shadow: none;
+  }
+
+  .split-bill-qr-editor-surface .split-bill-qr-editor__head {
+    position: sticky;
+    top: calc(-1 * max(14px, env(safe-area-inset-top)));
+    z-index: 4;
+    min-height: 58px;
+    margin: calc(-1 * max(14px, env(safe-area-inset-top))) -18px 4px;
+    padding: max(14px, env(safe-area-inset-top)) 54px 12px;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.07);
+  }
+
+  .split-bill-qr-editor-surface .split-bill-qr-editor__head > div {
+    display: contents;
+  }
+
+  .split-bill-qr-editor-surface .split-bill-qr-editor__head h3 {
+    margin: 0;
+    text-align: center;
+    font-size: 1rem;
+    line-height: 1.2;
+  }
+
+  .split-bill-qr-editor-surface .split-bill-qr-editor__head .eyebrow,
+  .split-bill-qr-editor-surface .split-bill-qr-editor__head h3 + p {
+    display: none;
+  }
+
+  .split-bill-qr-editor-surface .split-bill-qr-editor__close {
+    position: absolute;
+    left: 16px;
+    width: 36px;
+    height: 36px;
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--surface) 94%, var(--accent) 6%);
+    font-size: 1rem;
+  }
+
+  .split-bill-qr-editor__close-mobile {
+    display: grid;
+    place-items: center;
+  }
+
+  .split-bill-qr-editor__close-desktop {
+    display: none;
+  }
+
+  .split-bill-qr-editor-surface .split-bill-qr-editor__fields {
+    grid-template-columns: 1fr;
+  }
+
+  .split-bill-qr-editor-surface .split-bill-qr-editor__actions {
+    position: sticky;
+    bottom: calc(-1 * (24px + env(safe-area-inset-bottom)));
+    z-index: 3;
+    margin: 4px -18px calc(-1 * (24px + env(safe-area-inset-bottom)));
+    padding: 14px 18px calc(18px + env(safe-area-inset-bottom));
+    background: var(--surface);
+    border-top: 1px solid rgba(15, 23, 42, 0.07);
+  }
+
+  .split-bill-qr-editor-surface .split-bill-qr-editor__actions .button {
+    width: 100%;
+    min-height: 42px;
   }
 
   .split-bill-simple-entry-modal {

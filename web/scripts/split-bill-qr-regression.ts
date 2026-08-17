@@ -35,6 +35,9 @@ assert.doesNotMatch(
 );
 assert.match(paymentOptionsSource, /<span>Bank<\/span>/, "Payment options must capture the bank or payment provider.");
 assert.match(paymentOptionsSource, /QR Code <small>Optional<\/small>/, "QR images must remain optional.");
+assert.match(paymentOptionsSource, /createPortal/, "Payment option editors must escape the clipped Split Bills section.");
+assert.match(paymentOptionsSource, /split-bill-qr-editor-surface/, "Payment options must use the responsive editor surface.");
+assert.match(paymentOptionsSource, /split-bill-qr-editor__close-mobile/, "The mobile payment-option page must provide a back action.");
 assert.match(paymentToolsSource, /typeof navigator\.share === "function"/, "Payment requests must prefer native device sharing.");
 assert.match(paymentToolsSource, /mailto:/, "Desktop payment requests must retain an email fallback.");
 assert.match(paymentToolsSource, /navigator\.clipboard\.writeText/, "Payment requests must retain a copy-link fallback.");

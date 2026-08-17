@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import {
   PAYMENT_QR_PROVIDERS,
@@ -152,6 +153,7 @@ export function SplitBillQrLibrary() {
   const [error, setError] = useState<string | null>(null);
   const chooseInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const editorNameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -181,6 +183,28 @@ export function SplitBillQrLibrary() {
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [isEditorOpen, viewingProfile]);
+
+  useLayoutEffect(() => {
+    if (!isEditorOpen && !viewingProfile) return;
+
+    const body = document.body;
+    const previousOverflow = body.style.overflow;
+    body.dataset.splitBillModalOpen = "true";
+    body.style.overflow = "hidden";
+
+    return () => {
+      if (body.dataset.splitBillModalOpen === "true") {
+        body.dataset.splitBillModalOpen = "false";
+      }
+      body.style.overflow = previousOverflow;
+    };
+  }, [isEditorOpen, viewingProfile]);
+
+  useEffect(() => {
+    if (!isEditorOpen) return;
+    const frame = window.requestAnimationFrame(() => editorNameInputRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [isEditorOpen]);
 
   const openCreate = () => {
     setDraft({ ...emptyDraft, isDefault: profiles.length === 0 });
@@ -371,21 +395,29 @@ export function SplitBillQrLibrary() {
         </button>
       )}
 
-      {isEditorOpen ? (
-        <div className="split-bill-modal split-bill-qr-modal" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setIsEditorOpen(false)}>
-          <form className="split-bill-modal__card split-bill-qr-editor panel glass" onSubmit={saveProfile} role="dialog" aria-modal="true" aria-labelledby="split-bill-qr-editor-title">
+      {isEditorOpen && typeof document !== "undefined" ? createPortal(
+        <div className="split-bill-modal split-bill-qr-modal split-bill-qr-editor-surface" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setIsEditorOpen(false)}>
+          <form className="split-bill-modal__card split-bill-qr-editor panel glass" onSubmit={saveProfile} role="dialog" aria-modal="true" aria-labelledby="split-bill-qr-editor-title" onMouseDown={(event) => event.stopPropagation()}>
             <div className="split-bill-qr-editor__head">
               <div>
+                <p className="eyebrow">Payment Options</p>
                 <h3 id="split-bill-qr-editor-title">{editingId ? "Edit Payment Option" : "Add Payment Option"}</h3>
                 <p>Add bank details, a QR code, or both.</p>
               </div>
-              <button className="split-bill-qr-editor__close" type="button" aria-label="Close" onClick={() => setIsEditorOpen(false)}>×</button>
+              <button className="split-bill-qr-editor__close" type="button" aria-label="Back to Split Bills" onClick={() => setIsEditorOpen(false)}>
+                <span className="split-bill-qr-editor__close-mobile" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path d="m15 18-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
+                <span className="split-bill-qr-editor__close-desktop" aria-hidden="true">×</span>
+              </button>
             </div>
 
             <div className="split-bill-qr-editor__fields">
               <label>
                 <span>Name</span>
-                <input value={draft.label} maxLength={80} required placeholder="My GCash" onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))} />
+                <input ref={editorNameInputRef} value={draft.label} maxLength={80} required placeholder="My GCash" onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))} />
               </label>
               <label>
                 <span>Bank</span>
@@ -438,10 +470,11 @@ export function SplitBillQrLibrary() {
               </button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body,
       ) : null}
 
-      {viewingProfile ? (
+      {viewingProfile && typeof document !== "undefined" ? createPortal(
         <div className="split-bill-modal split-bill-qr-modal" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setViewingProfile(null)}>
           <div className="split-bill-modal__card split-bill-qr-viewer panel glass" role="dialog" aria-modal="true" aria-label={viewingProfile.label}>
             <button className="split-bill-qr-editor__close" type="button" aria-label="Close" onClick={() => setViewingProfile(null)}>×</button>
@@ -451,7 +484,8 @@ export function SplitBillQrLibrary() {
               <span>{viewingProfile.provider}{viewingProfile.accountNumber ? ` · ${viewingProfile.accountNumber}` : ""}</span>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </section>
   );
