@@ -13,13 +13,13 @@ const installPage = read("components/install-clover.tsx");
 
 assert.match(manifest, /start_url:\s*["']\/continue\?source=pwa["']/, "PWA must resume through Clover's authenticated continue route");
 assert.match(manifest, /display:\s*["']standalone["']/, "PWA must open without browser chrome");
-assert.match(manifest, /icon-192\.png/);
-assert.match(manifest, /icon-512\.png/);
-assert.match(manifest, /icon-maskable-512\.png/);
+assert.match(manifest, /icon-192-gradient\.png/);
+assert.match(manifest, /icon-512-gradient\.png/);
+assert.match(manifest, /icon-maskable-512-gradient\.png/);
 
 assert.match(layout, /appleWebApp:\s*{/);
 assert.match(layout, /viewportFit:\s*["']cover["']/);
-assert.match(layout, /apple-touch-icon\.png/);
+assert.match(layout, /apple-touch-icon-gradient\.png/);
 assert.match(layout, /<PwaServiceWorker\s*\/>/);
 
 assert.match(registration, /navigator\.serviceWorker\.register\(["']\/sw\.js["']/);
@@ -35,10 +35,10 @@ assert.match(installPage, /display-mode:\s*standalone/);
 assert.match(installPage, /same synced account you use on desktop/);
 
 for (const asset of [
-  "public/pwa/apple-touch-icon.png",
-  "public/pwa/icon-192.png",
-  "public/pwa/icon-512.png",
-  "public/pwa/icon-maskable-512.png",
+  "public/pwa/apple-touch-icon-gradient.png",
+  "public/pwa/icon-192-gradient.png",
+  "public/pwa/icon-512-gradient.png",
+  "public/pwa/icon-maskable-512-gradient.png",
 ]) {
   assert.ok(existsSync(path.join(root, asset)), `Missing PWA asset: ${asset}`);
 }
