@@ -424,13 +424,13 @@ async function main() {
   );
   assert.match(
     globalStyles,
-    /Mobile pages with subtabs[\s\S]{0,2400}\.content--has-title-addon > :is\(\.topbar, \.shell-compact-bar\) \.topbar__title-row \{[\s\S]{0,320}align-items: flex-start !important;[\s\S]{0,180}flex-wrap: wrap !important;/,
-    "Tabbed mobile headers must keep the page title and every subtab visible in one aligned, wrapping row."
+    /Mobile pages with subtabs[\s\S]{0,2400}\.content--has-title-addon > :is\(\.topbar, \.shell-compact-bar\) \.topbar__title-row \{[\s\S]{0,320}align-items: center !important;[\s\S]{0,180}flex-wrap: nowrap !important;/,
+    "Tabbed mobile headers must keep the page title and subtabs aligned in one row."
   );
   assert.match(
     globalStyles,
-    /Mobile pages with subtabs[\s\S]{0,4200}\.content--has-title-addon \.topbar__title-addon :is\([\s\S]{0,220}\.circles-title-tabs[\s\S]{0,500}flex-wrap: wrap !important;[\s\S]{0,160}-webkit-mask-image: none !important;/,
-    "Tabbed mobile headers must not fade, clip, or hide available subtabs."
+    /Mobile pages with subtabs[\s\S]{0,4200}\.content--has-title-addon \.topbar__title-addon :is\([\s\S]{0,220}\.circles-title-tabs[\s\S]{0,500}overflow-x: auto !important;[\s\S]{0,180}flex-wrap: nowrap !important;[\s\S]{0,180}-webkit-mask-image: none !important;/,
+    "Tabbed mobile headers must expose every available subtab in an unfaded horizontal scroller."
   );
   assert.match(
     globalStyles,

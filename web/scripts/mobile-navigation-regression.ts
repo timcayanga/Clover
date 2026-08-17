@@ -117,18 +117,28 @@ async function main() {
   );
   assert.match(
     styles,
-    /\.content--has-title-addon > :is\(\.topbar, \.shell-compact-bar\) \.topbar__title-row \{[\s\S]{0,420}flex-wrap: wrap !important;[\s\S]{0,120}overflow: visible !important;/,
-    "Tabbed mobile headers must wrap rather than clip subtabs that do not fit on one row.",
+    /\.content--has-title-addon > :is\(\.topbar, \.shell-compact-bar\) \.topbar__title-row \{[\s\S]{0,420}align-items: center !important;[\s\S]{0,180}flex-wrap: nowrap !important;[\s\S]{0,120}overflow: hidden !important;/,
+    "Tabbed mobile headers must keep the page title and subtabs aligned on one row.",
   );
   assert.match(
     styles,
-    /\.content--has-title-addon \.topbar__title-addon :is\([\s\S]{0,500}-webkit-mask-image: none !important;[\s\S]{0,100}mask-image: none !important;/,
-    "Tabbed mobile headers must not fade the final visible subtab.",
+    /\.content--has-title-addon \.topbar__title-addon :is\([\s\S]{0,500}overflow-x: auto !important;[\s\S]{0,160}flex-wrap: nowrap !important;[\s\S]{0,220}-webkit-mask-image: none !important;/,
+    "Tabbed mobile headers must expose every subtab through an unfaded horizontal row.",
   );
   assert.match(
     styles,
     /\.content--investments \.investments-mobile-header \{[\s\S]{0,80}display: none !important;/,
     "Investments must use the shared shell header instead of rendering a duplicate mobile header.",
+  );
+  assert.match(
+    styles,
+    /Match the compact mobile add action[\s\S]{0,500}\.investments-page__add-button \{[\s\S]{0,180}width: 40px !important;[\s\S]{0,220}border-radius: 50% !important;/,
+    "Investments must expose a compact circular plus action on mobile.",
+  );
+  assert.match(
+    styles,
+    /\.content--circles \.circles-topbar-action \{[\s\S]{0,260}border-radius: 50% !important;/,
+    "Circles must expose a circular mobile plus action.",
   );
   assert.match(
     styles,

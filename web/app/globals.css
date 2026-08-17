@@ -53610,7 +53610,7 @@ body[data-clover-home-balances-hidden] :is(
     height: 40px;
     min-height: 40px !important;
     padding: 0 !important;
-    border-radius: 14px !important;
+    border-radius: 50% !important;
     justify-content: center !important;
   }
 
@@ -56850,12 +56850,12 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     display: flex !important;
     width: 100% !important;
     min-width: 0 !important;
-    align-items: flex-start !important;
+    align-items: center !important;
     justify-content: flex-start !important;
     column-gap: 14px !important;
-    row-gap: 3px !important;
-    flex-wrap: wrap !important;
-    overflow: visible !important;
+    row-gap: 0 !important;
+    flex-wrap: nowrap !important;
+    overflow: hidden !important;
     scrollbar-width: none;
   }
 
@@ -56888,7 +56888,7 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   .content--has-title-addon .topbar__title-addon {
     flex: 1 1 auto !important;
     min-width: 0 !important;
-    overflow: visible !important;
+    overflow: hidden !important;
   }
 
   .content--has-title-addon .topbar__title-addon :is(
@@ -56903,10 +56903,22 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     align-items: center !important;
     gap: 14px !important;
     padding: 0 !important;
-    overflow: visible !important;
-    flex-wrap: wrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    flex-wrap: nowrap !important;
+    scrollbar-width: none;
+    overscroll-behavior-inline: contain;
     -webkit-mask-image: none !important;
     mask-image: none !important;
+  }
+
+  .content--has-title-addon .topbar__title-addon :is(
+      .reports-top-tabs,
+      .investments-tabs,
+      .recurring-tabs--top,
+      .circles-title-tabs
+    )::-webkit-scrollbar {
+    display: none;
   }
 
   .content--has-title-addon .topbar__title-addon :is(
@@ -56942,6 +56954,45 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
 
   .content--investments .investments-mobile-header {
     display: none !important;
+  }
+
+  /* Match the compact mobile add action used by Transactions. */
+  .content--investments > :is(.topbar, .shell-compact-bar) .investments-page__add-button {
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    justify-content: center !important;
+    gap: 0 !important;
+  }
+
+  .content--investments > :is(.topbar, .shell-compact-bar) .investments-page__add-button-label {
+    display: none !important;
+  }
+
+  .content--investments > :is(.topbar, .shell-compact-bar) .investments-page__add-button .button-icon {
+    width: 20px !important;
+    height: 20px !important;
+    margin: 0 !important;
+  }
+
+  .content--investments > :is(.topbar, .shell-compact-bar) .investments-page__add-button .button-icon svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+
+  /* Recurring uses the same visible inactive and active tab treatment as the
+     other tabbed products, regardless of its compact mobile labels. */
+  .content--recurring .recurring-tabs--top .investments-tab {
+    color: var(--muted) !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+  }
+
+  .content--recurring .recurring-tabs--top .investments-tab.is-active {
+    color: var(--accent) !important;
   }
 
   /* Give every product a comfortable touch target while keeping the drawer
