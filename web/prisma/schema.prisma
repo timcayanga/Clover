@@ -1490,6 +1490,7 @@ model SplitBillPaymentProfile {
   personName    String?
   accountName   String?
   accountNumber String?
+  routingCode   String?
   qrPayload     String?                   @db.Text
   qrImageData   String?                   @db.Text
   isDefault     Boolean                   @default(false)

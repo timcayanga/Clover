@@ -50,7 +50,7 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
   const [selectedPayer, setSelectedPayer] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const descriptionRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -93,7 +93,9 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
   }, [selectedPeople, selectedPayer, splitMode]);
 
   useEffect(() => {
-    inputRef.current?.focus();
+    if (open && window.matchMedia("(min-width: 1101px)").matches) {
+      descriptionRef.current?.focus();
+    }
   }, [open]);
 
   const splitOptions = useMemo(() => splitModeOptions(currentUserName), [currentUserName]);
@@ -267,24 +269,57 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
         </div>
 
         <label className="settings-field">
+          <span>Description</span>
+          <input
+            ref={descriptionRef}
+            className="settings-input"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder="Dinner, drinks, ride, groceries"
+          />
+        </label>
+
+        <div className="split-bill-manual-modal__amount-row">
+          <label className="settings-field">
+            <span>Amount</span>
+            <div className="split-bill-manual-modal__amount-input">
+              <CurrencySelector
+                value={currency}
+                onChange={setCurrency}
+                options={currencyOptions}
+                ariaLabel="Select bill currency"
+                className="transactions-currency-filter split-bill-manual-modal__currency-selector"
+                buttonClassName="transactions-currency-filter__button split-bill-manual-modal__currency-button"
+                menuClassName="transactions-currency-filter__menu split-bill-manual-modal__currency-menu"
+                optionClassName="transactions-currency-filter__option"
+                menuAlignment="start"
+                showGroupedSections
+              />
+              <input
+                className="settings-input"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                inputMode="decimal"
+                placeholder="0.00"
+              />
+            </div>
+          </label>
+        </div>
+
+        <label className="settings-field">
           <span>Add people or group</span>
           <input
-            ref={inputRef}
             className="settings-input"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search saved people or groups"
             onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                const firstPerson = suggestions.people[0];
-                const firstGroup = suggestions.groups[0];
-                if (firstPerson) {
-                  addPerson(firstPerson.name);
-                } else if (firstGroup) {
-                  addPeopleFromGroup(firstGroup);
-                }
-              }
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              const firstPerson = suggestions.people[0];
+              const firstGroup = suggestions.groups[0];
+              if (firstPerson) addPerson(firstPerson.name);
+              else if (firstGroup) addPeopleFromGroup(firstGroup);
             }}
           />
         </label>
@@ -333,43 +368,6 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
               </button>
             </span>
           ))}
-        </div>
-
-        <label className="settings-field">
-          <span>Description</span>
-          <input
-            className="settings-input"
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder="Dinner, drinks, ride, groceries"
-          />
-        </label>
-
-        <div className="split-bill-manual-modal__amount-row">
-          <label className="settings-field">
-            <span>Amount</span>
-            <div className="split-bill-manual-modal__amount-input">
-              <CurrencySelector
-                value={currency}
-                onChange={setCurrency}
-                options={currencyOptions}
-                ariaLabel="Select bill currency"
-                className="transactions-currency-filter split-bill-manual-modal__currency-selector"
-                buttonClassName="transactions-currency-filter__button split-bill-manual-modal__currency-button"
-                menuClassName="transactions-currency-filter__menu split-bill-manual-modal__currency-menu"
-                optionClassName="transactions-currency-filter__option"
-                menuAlignment="start"
-                showGroupedSections
-              />
-              <input
-                className="settings-input"
-                value={amount}
-                onChange={(event) => setAmount(event.target.value)}
-                inputMode="decimal"
-                placeholder="0.00"
-              />
-            </div>
-          </label>
         </div>
 
         <label className="settings-field">

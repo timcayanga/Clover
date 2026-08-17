@@ -123,11 +123,6 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
     photoLibraryInputRef.current.click();
   };
 
-  const chooseFile = (nextFile: File | null) => {
-    setFile(nextFile);
-    setError(validateFile(nextFile));
-  };
-
   const saveReceiptBill = async (preview: ReceiptPreviewResult, fileToSave: File, receiptStorageKey: string) => {
     const draft = splitBillDraftFromReceiptPreview(preview);
     const participantIdMap = new Map<string, string>();
@@ -242,14 +237,14 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
     router.push("/split-bill/new");
   };
 
-  const handleUpload = async () => {
-    const validationError = validateFile(file);
+  const handleUpload = async (selectedFile: File) => {
+    const validationError = validateFile(selectedFile);
     if (validationError) {
       setError(validationError);
       return;
     }
 
-    const selectedFile = file as File;
+    setFile(selectedFile);
     setIsUploading(true);
     setError(null);
     setMessage("Reading your receipt...");
@@ -276,11 +271,26 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
       onSaved?.(savedBill);
       onClose();
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : "Unable to read that receipt.");
+      const detail = uploadError instanceof Error ? uploadError.message : "";
+      setError(
+        /string did not match|expected pattern|invalid url/i.test(detail)
+          ? "We couldn't open that receipt. Try the photo or file again."
+          : detail || "We couldn't read that receipt. Try another photo or file.",
+      );
       setMessage("Drop a receipt file here or browse from your computer.");
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const chooseFile = (nextFile: File | null) => {
+    const validationError = validateFile(nextFile);
+    setError(validationError);
+    if (!nextFile || validationError) {
+      setFile(nextFile);
+      return;
+    }
+    void handleUpload(nextFile);
   };
 
   if (!open) {
@@ -396,37 +406,8 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
           <p>
             Accepted files: PDF, JPG, JPEG, PNG, and WEBP.
             <br />
-            This stays inside Split Bills and saves a bill after Clover previews it.
+            Clover reads the receipt automatically and keeps it inside Split Bills.
           </p>
-        </div>
-
-        <div className="accounts-import-files">
-          {file ? (
-            <article className="accounts-import-file accounts-import-file--pending">
-              <div className="accounts-import-file__head">
-                <div className="accounts-import-file__meta">
-                  <strong>{file.name}</strong>
-                  <span>
-                    {file.type.startsWith("image/") ? "Image" : "PDF"} · {Math.max(1, Math.round(file.size / 1024))} KB
-                  </span>
-                </div>
-                <div className="accounts-import-file__badges">
-                  <span className="accounts-import-badge is-pending">queued</span>
-                </div>
-              </div>
-              <div className="accounts-import-file__foot">
-                <span>{isUploading ? "Reading receipt..." : "Ready to preview"}</span>
-                <div className="accounts-import-file__actions">
-                  <button className="button button-secondary button-small" type="button" onClick={() => setFile(null)} disabled={isUploading}>
-                    Remove
-                  </button>
-                  <button className="button button-primary button-small" type="button" onClick={() => void handleUpload()} disabled={isUploading || !file}>
-                    {isUploading ? "Uploading..." : "Preview receipt"}
-                  </button>
-                </div>
-              </div>
-            </article>
-          ) : null}
         </div>
       </section>
     </div>,

@@ -27,7 +27,15 @@ const providerRules: Array<{
   patterns: RegExp[];
 }> = [
   { provider: "GCash", patterns: [/GCASH/i, /G-?XCHANGE/i, /GXCHPHM2/i, /MYNT/i] },
-  { provider: "Maya", patterns: [/PAYMAYA/i, /\bMAYA\b/i, /PYMYPHM2/i, /MAYA\.PH/i] },
+  {
+    provider: "Maya",
+    patterns: [
+      /PAYMAYA/i,
+      /\bMAYA(?:\s+(?:BANK|WALLET|PHILIPPINES))?\b/i,
+      /P(?:YMY|MYA)PHM2/i,
+      /MAYA\.PH/i,
+    ],
+  },
   { provider: "BPI", patterns: [/BANK OF THE PHILIPPINE ISLANDS/i, /BOPIPHMM/i, /\bBPI\b/i] },
   { provider: "BDO", patterns: [/BDO UNIBANK/i, /BNORPHMM/i, /\bBDO\b/i] },
   { provider: "UnionBank", patterns: [/UNIONBANK/i, /UNION BANK/i, /UBPHPHMM/i] },

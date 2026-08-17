@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
 import { createPortal } from "react-dom";
+import { AccountBrandMark } from "@/components/account-brand-mark";
 import { useCloverChrome } from "@/components/clover-shell";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import {
@@ -9,6 +10,7 @@ import {
   getPaymentQrTheme,
 } from "@/lib/payment-qr";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
+import { getAccountBrand } from "@/lib/account-brand";
 
 type PaymentProfile = {
   id: string;
@@ -18,6 +20,7 @@ type PaymentProfile = {
   personName: string | null;
   accountName: string | null;
   accountNumber: string | null;
+  routingCode: string | null;
   qrPayload: string | null;
   qrImageData: string | null;
   isDefault: boolean;
@@ -30,6 +33,7 @@ type QrDraft = {
   personName: string;
   accountName: string;
   accountNumber: string;
+  routingCode: string;
   qrPayload: string;
   qrImageData: string;
   isDefault: boolean;
@@ -45,7 +49,54 @@ type PaymentAccount = {
 };
 
 type BarcodeDetectorConstructor = new (options: { formats: string[] }) => {
-  detect: (source: CanvasImageSource) => Promise<Array<{ rawValue?: string }>>;
+  detect: (source: CanvasImageSource) => Promise<Array<{
+    rawValue?: string;
+    boundingBox?: { x: number; y: number; width: number; height: number };
+  }>>;
+};
+
+type QrBounds = { x: number; y: number; width: number; height: number };
+type QrDecodeResult = { payload: string | null; bounds: QrBounds | null };
+
+const getPaymentFieldLabels = (currency: string) => {
+  switch (currency.trim().toUpperCase()) {
+    case "GBP":
+      return { accountNumber: "Account number", routingCode: "Sort code" };
+    case "USD":
+      return { accountNumber: "Account number", routingCode: "Routing number" };
+    case "AUD":
+      return { accountNumber: "Account number", routingCode: "BSB" };
+    case "INR":
+      return { accountNumber: "Account number", routingCode: "IFSC" };
+    case "EUR":
+    case "CHF":
+    case "SEK":
+    case "NOK":
+    case "DKK":
+    case "PLN":
+    case "CZK":
+    case "HUF":
+    case "RON":
+    case "AED":
+    case "SAR":
+      return { accountNumber: "IBAN", routingCode: "BIC / SWIFT" };
+    case "CAD":
+      return { accountNumber: "Account number", routingCode: "Transit / institution number" };
+    case "SGD":
+    case "HKD":
+    case "NZD":
+      return { accountNumber: "Account number", routingCode: "Bank / branch code" };
+    case "JPY":
+      return { accountNumber: "Account number", routingCode: "Branch code" };
+    case "MXN":
+      return { accountNumber: "CLABE", routingCode: "Bank code" };
+    case "BRL":
+      return { accountNumber: "Account or Pix key", routingCode: "Branch code" };
+    case "ZAR":
+      return { accountNumber: "Account number", routingCode: "Branch code" };
+    default:
+      return { accountNumber: "Account number", routingCode: null };
+  }
 };
 
 const emptyDraft: QrDraft = {
@@ -55,6 +106,7 @@ const emptyDraft: QrDraft = {
   personName: "",
   accountName: "",
   accountNumber: "",
+  routingCode: "",
   qrPayload: "",
   qrImageData: "",
   isDefault: false,
@@ -96,8 +148,15 @@ async function decodeQr(canvas: HTMLCanvasElement, context: CanvasRenderingConte
   if (BarcodeDetector) {
     try {
       const results = await new BarcodeDetector({ formats: ["qr_code"] }).detect(canvas);
-      const payload = results.find((result) => result.rawValue)?.rawValue;
-      if (payload) return payload;
+      const result = results.find((item) => item.rawValue);
+      if (result?.rawValue) {
+        return {
+          payload: result.rawValue,
+          bounds: result.boundingBox
+            ? { x: result.boundingBox.x, y: result.boundingBox.y, width: result.boundingBox.width, height: result.boundingBox.height }
+            : null,
+        } satisfies QrDecodeResult;
+      }
     } catch {
       // The pure JavaScript decoder below covers browsers without a working detector.
     }
@@ -106,7 +165,23 @@ async function decodeQr(canvas: HTMLCanvasElement, context: CanvasRenderingConte
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
   const { default: jsQR } = await import("jsqr");
   const direct = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" });
-  if (direct?.data) return direct.data;
+  const jsQrResult = direct;
+  if (jsQrResult?.data) {
+    const points = [
+      jsQrResult.location.topLeftCorner,
+      jsQrResult.location.topRightCorner,
+      jsQrResult.location.bottomLeftCorner,
+      jsQrResult.location.bottomRightCorner,
+    ];
+    const xValues = points.map((point) => point.x);
+    const yValues = points.map((point) => point.y);
+    const left = Math.min(...xValues);
+    const top = Math.min(...yValues);
+    return {
+      payload: jsQrResult.data,
+      bounds: { x: left, y: top, width: Math.max(...xValues) - left, height: Math.max(...yValues) - top },
+    } satisfies QrDecodeResult;
+  }
 
   const contrasted = new Uint8ClampedArray(imageData.data);
   for (let index = 0; index < contrasted.length; index += 4) {
@@ -116,16 +191,47 @@ async function decodeQr(canvas: HTMLCanvasElement, context: CanvasRenderingConte
     contrasted[index + 1] = value;
     contrasted[index + 2] = value;
   }
-  return jsQR(contrasted, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" })?.data ?? null;
+  const fallback = jsQR(contrasted, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" });
+  if (!fallback?.data) return { payload: null, bounds: null } satisfies QrDecodeResult;
+  const points = [fallback.location.topLeftCorner, fallback.location.topRightCorner, fallback.location.bottomLeftCorner, fallback.location.bottomRightCorner];
+  const xValues = points.map((point) => point.x);
+  const yValues = points.map((point) => point.y);
+  const left = Math.min(...xValues);
+  const top = Math.min(...yValues);
+  return {
+    payload: fallback.data,
+    bounds: { x: left, y: top, width: Math.max(...xValues) - left, height: Math.max(...yValues) - top },
+  } satisfies QrDecodeResult;
 }
 
-const compressQrImage = (image: HTMLImageElement) => {
+const compressQrImage = (image: HTMLImageElement, sourceCanvas: HTMLCanvasElement, bounds: QrBounds | null) => {
   let maxDimension = 1_200;
   let quality = 0.9;
   let encoded = "";
 
   for (let attempt = 0; attempt < 6; attempt += 1) {
-    const { canvas } = drawImageToCanvas(image, maxDimension);
+    const canvas = document.createElement("canvas");
+    if (bounds) {
+      const padding = Math.max(bounds.width, bounds.height) * 0.14;
+      const requestedSize = Math.max(bounds.width, bounds.height) + padding * 2;
+      const size = Math.min(requestedSize, sourceCanvas.width, sourceCanvas.height);
+      const centerX = bounds.x + bounds.width / 2;
+      const centerY = bounds.y + bounds.height / 2;
+      const left = Math.min(Math.max(0, centerX - size / 2), sourceCanvas.width - size);
+      const top = Math.min(Math.max(0, centerY - size / 2), sourceCanvas.height - size);
+      canvas.width = Math.min(maxDimension, 900);
+      canvas.height = canvas.width;
+      const cropContext = canvas.getContext("2d");
+      if (!cropContext) throw new Error("This browser could not crop the QR image.");
+      cropContext.fillStyle = "#ffffff";
+      cropContext.fillRect(0, 0, canvas.width, canvas.height);
+      cropContext.drawImage(sourceCanvas, left, top, size, size, 0, 0, canvas.width, canvas.height);
+    } else {
+      const rendered = drawImageToCanvas(image, maxDimension).canvas;
+      canvas.width = rendered.width;
+      canvas.height = rendered.height;
+      canvas.getContext("2d")?.drawImage(rendered, 0, 0);
+    }
     encoded = canvas.toDataURL("image/jpeg", quality);
     if (encoded.length <= MAX_SAVED_DATA_LENGTH) break;
     maxDimension = Math.round(maxDimension * 0.82);
@@ -145,6 +251,7 @@ const profileToDraft = (profile: PaymentProfile): QrDraft => ({
   personName: profile.personName ?? "",
   accountName: profile.accountName ?? "",
   accountNumber: profile.accountNumber ?? "",
+  routingCode: profile.routingCode ?? "",
   qrPayload: profile.qrPayload ?? "",
   qrImageData: profile.qrImageData ?? "",
   isDefault: profile.isDefault,
@@ -156,7 +263,6 @@ export function SplitBillQrLibrary() {
   const [draft, setDraft] = useState<QrDraft>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
-  const [viewingProfile, setViewingProfile] = useState<PaymentProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isReading, setIsReading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -166,7 +272,6 @@ export function SplitBillQrLibrary() {
   const [selectedPaymentAccountId, setSelectedPaymentAccountId] = useState("");
   const [isLoadingPaymentAccounts, setIsLoadingPaymentAccounts] = useState(false);
   const chooseInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const editorNameInputRef = useRef<HTMLInputElement>(null);
 
   const closeEditor = useCallback(() => {
@@ -226,17 +331,16 @@ export function SplitBillQrLibrary() {
   }, []);
 
   useEffect(() => {
-    if (!isEditorOpen && !viewingProfile) return;
+    if (!isEditorOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
         setIsEditorOpen(false);
-        setViewingProfile(null);
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isEditorOpen, viewingProfile]);
+  }, [isEditorOpen]);
 
   useEffect(() => {
     if (!isEditorOpen) {
@@ -262,7 +366,7 @@ export function SplitBillQrLibrary() {
   }, [closeEditor, editingId, isEditorOpen, setMobileOverlayChrome]);
 
   useLayoutEffect(() => {
-    if (!isEditorOpen && !viewingProfile) return;
+    if (!isEditorOpen) return;
 
     const body = document.body;
     const previousOverflow = body.style.overflow;
@@ -275,7 +379,7 @@ export function SplitBillQrLibrary() {
       }
       body.style.overflow = previousOverflow;
     };
-  }, [isEditorOpen, viewingProfile]);
+  }, [isEditorOpen]);
 
   useEffect(() => {
     if (!isEditorOpen) return;
@@ -330,7 +434,7 @@ export function SplitBillQrLibrary() {
     setSelectedPaymentAccountId(accountId);
     const account = paymentAccounts.find((item) => item.id === accountId);
     if (!account) {
-      setDraft((current) => ({ ...current, provider: "", accountNumber: "" }));
+      setDraft((current) => ({ ...current, provider: "", accountNumber: "", routingCode: "" }));
       return;
     }
 
@@ -350,9 +454,19 @@ export function SplitBillQrLibrary() {
     return `${account.name}${suffix} · ${account.currency}`;
   };
 
+  const getVisibleAccountName = (profile: PaymentProfile) => {
+    const accountName = profile.accountName?.trim();
+    if (!accountName) return null;
+    const normalizedName = accountName.toLowerCase();
+    if (normalizedName === profile.label.trim().toLowerCase() || normalizedName === profile.provider.trim().toLowerCase()) {
+      return null;
+    }
+    return accountName;
+  };
+
   const readImage = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    const source = cameraInputRef.current === event.currentTarget ? "camera" : "file";
+    const source = "chooser";
     event.target.value = "";
     if (!file) return;
     setError(null);
@@ -370,27 +484,28 @@ export function SplitBillQrLibrary() {
     try {
       const image = await loadImage(file);
       const { canvas, context } = drawImageToCanvas(image, 1_600);
-      const payload = await decodeQr(canvas, context);
-      const detection = detectPaymentQrProvider(payload, file.name);
-      const imageData = compressQrImage(image);
+      const decoded = await decodeQr(canvas, context);
+      const detection = detectPaymentQrProvider(decoded.payload, file.name);
+      const imageData = compressQrImage(image, canvas, decoded.bounds);
       setDraft((current) => ({
         ...current,
         label: current.label || (detection.provider === "Other" ? "Payment QR" : `${detection.provider} QR`),
-        qrPayload: payload ?? "",
+        provider: detection.provider === "Other" ? current.provider : detection.provider,
+        qrPayload: decoded.payload ?? "",
         qrImageData: imageData,
       }));
       const matchingAccount = paymentAccounts.find((account) =>
         `${account.institution ?? ""} ${account.name}`.toLowerCase().includes(detection.provider.toLowerCase())
       );
       if (matchingAccount) selectPaymentAccount(matchingAccount.id);
-      setNotice(payload ? detection.reason : "Image added. Confirm the bank so it is easy to recognize.");
+      setNotice(decoded.payload ? detection.reason : "Image added. Confirm the bank so it is easy to recognize.");
       capturePostHogClientEvent("split_bill_qr_uploaded", {
         provider: detection.provider,
         detection_confidence: detection.confidence,
-        qr_decoded: Boolean(payload),
+        qr_decoded: Boolean(decoded.payload),
         source,
       });
-      if (!payload) capturePostHogClientEvent("split_bill_qr_detection_failed", { file_type: file.type });
+      if (!decoded.payload) capturePostHogClientEvent("split_bill_qr_detection_failed", { file_type: file.type });
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "This QR image could not be read.");
       capturePostHogClientEvent("split_bill_qr_detection_failed", { file_type: file.type });
@@ -403,6 +518,30 @@ export function SplitBillQrLibrary() {
     event.preventDefault();
     setError(null);
     setIsSaving(true);
+    const previousProfiles = profiles;
+    const optimisticId = editingId ?? `pending-${Date.now()}`;
+    const optimisticProfile: PaymentProfile = {
+      id: optimisticId,
+      label: draft.label.trim(),
+      provider: draft.provider,
+      currency: draft.currency,
+      personName: draft.personName || null,
+      accountName: draft.accountName || null,
+      accountNumber: draft.accountNumber || null,
+      routingCode: draft.routingCode || null,
+      qrPayload: draft.qrPayload || null,
+      qrImageData: draft.qrImageData || null,
+      isDefault: draft.isDefault,
+    };
+    setProfiles((current) => {
+      const next = editingId
+        ? current.map((profile) => (profile.id === editingId ? optimisticProfile : profile))
+        : [optimisticProfile, ...current];
+      return optimisticProfile.isDefault
+        ? next.map((profile) => ({ ...profile, isDefault: profile.id === optimisticId }))
+        : next;
+    });
+    setIsEditorOpen(false);
     try {
       const response = await fetch(
         editingId ? `/api/split-bill-payment-profiles/${editingId}` : "/api/split-bill-payment-profiles",
@@ -417,7 +556,7 @@ export function SplitBillQrLibrary() {
       setProfiles((current) => {
         const next = editingId
           ? current.map((profile) => (profile.id === editingId ? payload.profile : profile))
-          : [payload.profile, ...current];
+          : current.map((profile) => (profile.id === optimisticId ? payload.profile : profile));
         return payload.profile.isDefault
           ? next.map((profile) => ({ ...profile, isDefault: profile.id === payload.profile.id }))
           : next;
@@ -427,9 +566,10 @@ export function SplitBillQrLibrary() {
         qr_decoded: Boolean(payload.profile.qrPayload),
       });
       window.dispatchEvent(new Event("clover:payment-options-changed"));
-      setIsEditorOpen(false);
     } catch (caughtError) {
+      setProfiles(previousProfiles);
       setError(caughtError instanceof Error ? caughtError.message : "Unable to save this payment option.");
+      setIsEditorOpen(true);
     } finally {
       setIsSaving(false);
     }
@@ -449,10 +589,13 @@ export function SplitBillQrLibrary() {
       });
       capturePostHogClientEvent("split_bill_qr_deleted", { provider: profile.provider });
       window.dispatchEvent(new Event("clover:payment-options-changed"));
+      if (editingId === profile.id) setIsEditorOpen(false);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Unable to delete this payment option.");
     }
   };
+
+  const paymentFieldLabels = getPaymentFieldLabels(draft.currency);
 
   return (
     <section className="split-bill-qr-library panel glass" aria-labelledby="split-bill-qr-title">
@@ -462,7 +605,9 @@ export function SplitBillQrLibrary() {
           <p>Save bank details or a QR code once, then share the right option with a payment request.</p>
         </div>
         <button className="button button-primary button-small transactions-action-button" type="button" onClick={openCreate}>
-          <span aria-hidden="true">+</span> Add option
+          <span aria-hidden="true">+</span>
+          <span className="split-bill-action-label--desktop">Add Option</span>
+          <span className="split-bill-action-label--mobile">Add</span>
         </button>
       </div>
 
@@ -475,34 +620,34 @@ export function SplitBillQrLibrary() {
         <div className="split-bill-qr-library__grid">
           {profiles.map((profile) => {
             const theme = getPaymentQrTheme(profile.provider);
+            const accountBrand = getAccountBrand({ institution: profile.provider, name: profile.label, type: "bank" });
+            const visibleAccountName = getVisibleAccountName(profile);
             return (
-              <article
-                className="split-bill-qr-card"
+              <button
+                type="button"
+                className={`split-bill-qr-card${profile.qrImageData ? " has-qr" : ""}`}
                 key={profile.id}
                 style={{ "--qr-start": theme.start, "--qr-end": theme.end, "--qr-accent": theme.accent } as CSSProperties}
+                onClick={() => openEdit(profile)}
+                aria-label={`Open ${profile.label} payment details`}
               >
                 <div className="split-bill-qr-card__copy">
                   <div className="split-bill-qr-card__provider">
-                    <span aria-hidden="true">▦</span>
-                    <strong>{profile.provider}</strong>
+                    <AccountBrandMark accountBrand={accountBrand} label={profile.provider} />
+                    <strong>{profile.label}</strong>
                     {profile.isDefault ? <small>Default</small> : null}
+                    <span className="split-bill-qr-card__chevron" aria-hidden="true">›</span>
                   </div>
-                  <h3>{profile.label}</h3>
-                  <p>{profile.accountName || "Ready to share"}</p>
+                  {visibleAccountName ? <p>{visibleAccountName}</p> : null}
                   {profile.accountNumber ? <span>{profile.accountNumber}</span> : null}
+                  {profile.routingCode ? <span>{profile.routingCode}</span> : null}
                 </div>
                 {profile.qrImageData ? (
-                  <button className="split-bill-qr-card__image" type="button" onClick={() => setViewingProfile(profile)} aria-label={`View ${profile.label} QR code`}>
+                  <span className="split-bill-qr-card__image" aria-hidden="true">
                     <img src={profile.qrImageData} alt={`${profile.provider} payment QR code`} />
-                  </button>
-                ) : (
-                  <div className="split-bill-qr-card__image split-bill-qr-card__image--details" aria-hidden="true">BANK</div>
-                )}
-                <div className="split-bill-qr-card__actions">
-                  <button type="button" onClick={() => openEdit(profile)}>Edit</button>
-                  <button type="button" onClick={() => void deleteProfile(profile)}>Delete</button>
-                </div>
-              </article>
+                  </span>
+                ) : null}
+              </button>
             );
           })}
         </div>
@@ -563,9 +708,15 @@ export function SplitBillQrLibrary() {
                 <input value={draft.accountName} maxLength={120} onChange={(event) => setDraft((current) => ({ ...current, accountName: event.target.value }))} />
               </label>
               <label>
-                <span>Account number <small>Optional</small></span>
+                <span>{paymentFieldLabels.accountNumber} <small>Optional</small></span>
                 <input value={draft.accountNumber} maxLength={120} onChange={(event) => setDraft((current) => ({ ...current, accountNumber: event.target.value }))} />
               </label>
+              {paymentFieldLabels.routingCode ? (
+                <label>
+                  <span>{paymentFieldLabels.routingCode} <small>Optional</small></span>
+                  <input value={draft.routingCode} maxLength={120} onChange={(event) => setDraft((current) => ({ ...current, routingCode: event.target.value }))} />
+                </label>
+              ) : null}
             </div>
 
             <div className="split-bill-qr-editor__upload-block">
@@ -575,12 +726,8 @@ export function SplitBillQrLibrary() {
               </div>
               <div className="split-bill-qr-editor__upload-row">
                 <input ref={chooseInputRef} className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={readImage} />
-                <input ref={cameraInputRef} className="sr-only" type="file" accept="image/*" capture="environment" onChange={readImage} />
                 <button className="button button-secondary button-small" type="button" disabled={isReading} onClick={() => chooseInputRef.current?.click()}>
                   {draft.qrImageData ? "Replace QR" : "Upload QR"}
-                </button>
-                <button className="button button-secondary button-small split-bill-qr-editor__camera" type="button" disabled={isReading} onClick={() => cameraInputRef.current?.click()}>
-                  Take photo
                 </button>
                 {isReading ? <span className="split-bill-qr-editor__reading">Reading QR…</span> : null}
               </div>
@@ -597,6 +744,18 @@ export function SplitBillQrLibrary() {
             ) : null}
             {error ? <p className="split-bill-qr-library__error" role="alert">{error}</p> : null}
             <div className="split-bill-qr-editor__actions">
+              {editingId ? (
+                <button
+                  className="button button-danger button-small"
+                  type="button"
+                  onClick={() => {
+                    const profile = profiles.find((item) => item.id === editingId);
+                    if (profile) void deleteProfile(profile);
+                  }}
+                >
+                  Delete
+                </button>
+              ) : null}
               <button className="button button-primary button-small" type="submit" disabled={isSaving || isReading || !draft.label.trim() || !selectedPaymentAccountId}>
                 {isSaving ? "Saving…" : "Save"}
               </button>
@@ -606,19 +765,6 @@ export function SplitBillQrLibrary() {
         document.body,
       ) : null}
 
-      {viewingProfile && typeof document !== "undefined" ? createPortal(
-        <div className="split-bill-modal split-bill-qr-modal" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setViewingProfile(null)}>
-          <div className="split-bill-modal__card split-bill-qr-viewer panel glass" role="dialog" aria-modal="true" aria-label={viewingProfile.label}>
-            <button className="split-bill-qr-editor__close" type="button" aria-label="Close" onClick={() => setViewingProfile(null)}>×</button>
-            <img src={viewingProfile.qrImageData ?? ""} alt={`${viewingProfile.provider} payment QR code`} />
-            <div>
-              <strong>{viewingProfile.label}</strong>
-              <span>{viewingProfile.provider}{viewingProfile.accountNumber ? ` · ${viewingProfile.accountNumber}` : ""}</span>
-            </div>
-          </div>
-        </div>,
-        document.body,
-      ) : null}
     </section>
   );
 }

@@ -174,11 +174,12 @@ export function SplitBillPaymentTools({ bill, onBillUpdated }: SplitBillPaymentT
           <p className="split-bill-table__hint">Choose how you want to be paid, then share the request.</p>
         </div>
         <button
-          className="button button-secondary button-small"
+          className="button button-primary button-small transactions-action-button"
           type="button"
           onClick={() => window.dispatchEvent(new Event("clover:open-payment-option"))}
         >
-          Add option
+          <span aria-hidden="true">+</span>
+          Add Option
         </button>
       </div>
 

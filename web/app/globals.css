@@ -44500,19 +44500,19 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 }
 
 .split-bill-action-button--add {
-  background: rgba(255, 255, 255, 0.92);
-  border-color: rgba(3, 168, 192, 0.22);
-  color: var(--accent);
-  box-shadow: none;
-  font-weight: 600;
+  background: linear-gradient(135deg, var(--accent), #52cec7);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(3, 168, 192, 0.18);
+  font-weight: 700;
 }
 
 .split-bill-action-button--add:hover,
 .split-bill-action-button--add:focus-visible {
-  background: rgba(245, 252, 253, 0.98);
-  border-color: rgba(3, 168, 192, 0.38);
-  color: var(--accent);
-  box-shadow: none;
+  background: linear-gradient(135deg, #009db5, #42c6c0);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 12px 28px rgba(3, 168, 192, 0.24);
 }
 
 .split-bill-currency-selector .currency-selector__trigger-all {
@@ -45455,7 +45455,14 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
     linear-gradient(135deg, var(--qr-start), var(--qr-end));
   box-shadow: 0 16px 34px color-mix(in srgb, var(--qr-start) 24%, transparent);
   color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
   transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.split-bill-qr-card:not(.has-qr) {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .split-bill-qr-card::after {
@@ -45475,6 +45482,11 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   box-shadow: 0 20px 38px color-mix(in srgb, var(--qr-start) 30%, transparent);
 }
 
+.split-bill-qr-card:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--qr-accent) 74%, #fff);
+  outline-offset: 3px;
+}
+
 .split-bill-qr-card__copy {
   display: grid;
   align-content: start;
@@ -45484,20 +45496,15 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 .split-bill-qr-card__provider {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 10px;
   min-width: 0;
 }
 
-.split-bill-qr-card__provider > span {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.16);
-  color: var(--qr-accent);
-  font-size: 1.05rem;
+.split-bill-qr-card__provider .accounts-brand-mark {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: 14px;
 }
 
 .split-bill-qr-card__provider strong {
@@ -45505,7 +45512,24 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.82rem;
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.split-bill-qr-card__chevron {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  flex: 0 0 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 1.2rem;
+  line-height: 1;
 }
 
 .split-bill-qr-card__provider small {
@@ -45516,22 +45540,25 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   font-weight: 700;
 }
 
-.split-bill-qr-card__copy h3 {
-  margin: 18px 0 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 1.12rem;
-}
-
 .split-bill-qr-card__copy p,
 .split-bill-qr-card__copy > span {
-  margin: 0;
+  margin: 16px 0 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: rgba(255, 255, 255, 0.84);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.split-bill-qr-card__copy > span {
+  letter-spacing: 0.08em;
+}
+
+.split-bill-qr-card__copy > span + span,
+.split-bill-qr-card__copy p + span {
+  margin-top: 3px;
 }
 
 .split-bill-qr-card__image {
@@ -45547,17 +45574,7 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   border-radius: 18px;
   background: #fff;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
-  cursor: zoom-in;
-}
-
-.split-bill-qr-card__image--details {
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.15);
-  box-shadow: none;
-  color: #fff;
-  font-size: 0.64rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  cursor: pointer;
 }
 
 .split-bill-qr-card__image img {
@@ -45565,33 +45582,6 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   height: 100%;
   border-radius: 11px;
   object-fit: contain;
-}
-
-.split-bill-qr-card__actions {
-  position: absolute;
-  z-index: 2;
-  left: 18px;
-  bottom: 14px;
-  display: flex;
-  gap: 12px;
-}
-
-.split-bill-qr-card__actions button {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.88);
-  font: inherit;
-  font-size: 0.72rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.split-bill-qr-card__actions button:hover,
-.split-bill-qr-card__actions button:focus-visible {
-  color: #fff;
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 
 .split-bill-qr-library__empty {
@@ -47835,7 +47825,9 @@ body[data-split-bill-modal-open="true"] .split-bill-page-actions {
     min-width: 62px !important;
     min-height: 36px;
     padding-inline: 14px !important;
-    color: var(--accent);
+    border-color: transparent;
+    background: linear-gradient(135deg, var(--accent), #52cec7);
+    color: #fff;
     font-size: 0.82rem;
     font-weight: 700;
   }

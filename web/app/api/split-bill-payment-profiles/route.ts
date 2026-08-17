@@ -37,6 +37,7 @@ export async function POST(request: Request) {
           personName: body.personName?.trim() || null,
           accountName: body.accountName?.trim() || null,
           accountNumber: body.accountNumber?.trim() || null,
+          routingCode: body.routingCode?.trim() || null,
           qrPayload: body.qrPayload?.trim() || null,
           qrImageData: body.qrImageData?.trim() || null,
           isDefault: body.isDefault || hasExisting === 0,

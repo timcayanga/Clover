@@ -16,6 +16,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ pr
         label: body.label, provider: body.provider, currency: body.currency.toUpperCase(),
         personName: body.personName?.trim() || null, accountName: body.accountName?.trim() || null,
         accountNumber: body.accountNumber?.trim() || null, qrPayload: body.qrPayload?.trim() || null,
+        routingCode: body.routingCode?.trim() || null,
         qrImageData: body.qrImageData?.trim() || null, isDefault: body.isDefault ?? existing.isDefault,
       } });
     });

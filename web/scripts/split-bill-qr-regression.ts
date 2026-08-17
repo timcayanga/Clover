@@ -10,6 +10,12 @@ assert.equal(gcash.confidence, "high");
 const maya = detectPaymentQrProvider("000201010212PAYMAYA PYMYPHM2 6304A1B2");
 assert.equal(maya.provider, "Maya");
 
+const mayaBank = detectPaymentQrProvider("000201010212MAYA BANK PHILIPPINES PMYAPHM2 6304A1B2");
+assert.equal(mayaBank.provider, "Maya");
+
+const mayaFilename = detectPaymentQrProvider(null, "Maya_QR_payment.jpeg");
+assert.equal(mayaFilename.provider, "Maya");
+
 const interoperable = detectPaymentQrProvider("00020101021226580011ph.ppmi.p2m6304A1B2");
 assert.equal(interoperable.provider, "QR Ph");
 
@@ -24,6 +30,7 @@ assert.ok(PAYMENT_QR_PROVIDERS.includes(unknown.provider));
 assert.notEqual(getPaymentQrTheme("GCash").start, getPaymentQrTheme("Maya").start);
 
 const paymentOptionsSource = readFileSync(resolve(process.cwd(), "components/split-bill-qr-library.tsx"), "utf8");
+const receiptImportSource = readFileSync(resolve(process.cwd(), "components/split-bill-import-modal.tsx"), "utf8");
 const splitBillHomeSource = readFileSync(resolve(process.cwd(), "components/split-bill-home.tsx"), "utf8");
 const splitBillActionsSource = readFileSync(resolve(process.cwd(), "components/split-bill-page-actions.tsx"), "utf8");
 const cloverShellSource = readFileSync(resolve(process.cwd(), "components/clover-shell.tsx"), "utf8");
@@ -40,6 +47,9 @@ assert.doesNotMatch(
 );
 assert.match(paymentOptionsSource, /<span>Bank<\/span>/, "Payment options must capture the bank or payment provider.");
 assert.match(paymentOptionsSource, /QR Code <small>Optional<\/small>/, "QR images must remain optional.");
+assert.match(paymentOptionsSource, /compressQrImage\(image, canvas, decoded\.bounds\)/, "Payment QR images must be cropped around the detected code.");
+assert.match(paymentOptionsSource, /split-bill-qr-card__chevron/, "Payment option cards must expose the same chevron affordance as account cards.");
+assert.doesNotMatch(paymentOptionsSource, />Edit<|>Delete<\/button>[\s\S]*split-bill-qr-card/, "Payment option cards must open details instead of carrying inline actions.");
 assert.match(paymentOptionsSource, /createPortal/, "Payment option editors must escape the clipped Split Bills section.");
 assert.match(paymentOptionsSource, /split-bill-qr-editor-surface/, "Payment options must use the responsive editor surface.");
 assert.match(paymentOptionsSource, /split-bill-qr-editor__close-mobile/, "The mobile payment-option page must provide a back action.");
@@ -55,6 +65,9 @@ assert.doesNotMatch(paymentOptionsSource, /Name shown to payers|Mobile or accoun
 assert.match(paymentOptionsSource, /readSelectedWorkspaceId/, "Payment options must follow the user's active Profile.");
 assert.match(paymentAccountsRoute, /type: \{ in: \["bank", "wallet"\] \}/, "Payment options must exclude cards, cash, and investments.");
 assert.match(paymentAccountsRoute, /where: \{ id: workspaceId, userId: user\.id \}/, "Payment accounts must be scoped to the signed-in user.");
+assert.match(receiptImportSource, /void handleUpload\(nextFile\)/, "Receipt selection must start parsing automatically.");
+assert.doesNotMatch(receiptImportSource, /Preview receipt|>Remove</, "Receipt import must not wait for a second preview action.");
+assert.match(receiptImportSource, /string did not match\|expected pattern\|invalid url/, "Raw mobile URL-pattern errors must be converted into a friendly import error.");
 assert.match(paymentToolsSource, /typeof navigator\.share === "function"/, "Payment requests must prefer native device sharing.");
 assert.match(paymentToolsSource, /mailto:/, "Desktop payment requests must retain an email fallback.");
 assert.match(paymentToolsSource, /navigator\.clipboard\.writeText/, "Payment requests must retain a copy-link fallback.");

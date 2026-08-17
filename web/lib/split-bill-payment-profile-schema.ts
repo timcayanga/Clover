@@ -18,6 +18,7 @@ export const splitBillPaymentProfileSchema = z.object({
   personName: z.string().trim().max(120).nullable().optional(),
   accountName: z.string().trim().max(120).nullable().optional(),
   accountNumber: z.string().trim().max(120).nullable().optional(),
+  routingCode: z.string().trim().max(120).nullable().optional(),
   qrPayload: z.string().trim().max(10_000).nullable().optional(),
   qrImageData: qrImageDataSchema,
   isDefault: z.boolean().optional(),
