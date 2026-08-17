@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent } from "react";
 import { createPortal } from "react-dom";
+import { useCloverChrome } from "@/components/clover-shell";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import {
   detectPaymentQrProvider,
@@ -150,6 +151,7 @@ const profileToDraft = (profile: PaymentProfile): QrDraft => ({
 });
 
 export function SplitBillQrLibrary() {
+  const { setMobileOverlayChrome } = useCloverChrome();
   const [profiles, setProfiles] = useState<PaymentProfile[]>([]);
   const [draft, setDraft] = useState<QrDraft>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -166,6 +168,10 @@ export function SplitBillQrLibrary() {
   const chooseInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const editorNameInputRef = useRef<HTMLInputElement>(null);
+
+  const closeEditor = useCallback(() => {
+    setIsEditorOpen(false);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -231,6 +237,29 @@ export function SplitBillQrLibrary() {
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [isEditorOpen, viewingProfile]);
+
+  useEffect(() => {
+    if (!isEditorOpen) {
+      setMobileOverlayChrome(null);
+      return;
+    }
+
+    const mobileQuery = window.matchMedia("(max-width: 1100px)");
+    const syncMobileChrome = () => {
+      setMobileOverlayChrome(
+        mobileQuery.matches
+          ? { title: editingId ? "Edit Payment Option" : "Add Payment Option", onBack: closeEditor }
+          : null,
+      );
+    };
+
+    syncMobileChrome();
+    mobileQuery.addEventListener("change", syncMobileChrome);
+    return () => {
+      mobileQuery.removeEventListener("change", syncMobileChrome);
+      setMobileOverlayChrome(null);
+    };
+  }, [closeEditor, editingId, isEditorOpen, setMobileOverlayChrome]);
 
   useLayoutEffect(() => {
     if (!isEditorOpen && !viewingProfile) return;
@@ -486,7 +515,7 @@ export function SplitBillQrLibrary() {
       )}
 
       {isEditorOpen && typeof document !== "undefined" ? createPortal(
-        <div className="split-bill-modal split-bill-qr-modal split-bill-qr-editor-surface" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setIsEditorOpen(false)}>
+        <div className="split-bill-modal split-bill-qr-modal split-bill-qr-editor-surface" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && closeEditor()}>
           <form className="split-bill-modal__card split-bill-qr-editor panel glass" onSubmit={saveProfile} role="dialog" aria-modal="true" aria-labelledby="split-bill-qr-editor-title" onMouseDown={(event) => event.stopPropagation()}>
             <div className="split-bill-qr-editor__head">
               <div>
@@ -494,7 +523,7 @@ export function SplitBillQrLibrary() {
                 <h3 id="split-bill-qr-editor-title">{editingId ? "Edit Payment Option" : "Add Payment Option"}</h3>
                 <p>Add bank details, a QR code, or both.</p>
               </div>
-              <button className="split-bill-qr-editor__close" type="button" aria-label="Back to Split Bills" onClick={() => setIsEditorOpen(false)}>
+              <button className="split-bill-qr-editor__close" type="button" aria-label="Back to Split Bills" onClick={closeEditor}>
                 <span className="split-bill-qr-editor__close-mobile" aria-hidden="true">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                     <path d="m15 18-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />

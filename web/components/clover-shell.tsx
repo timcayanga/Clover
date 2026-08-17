@@ -71,6 +71,7 @@ const ImportFilesModal = dynamic(
 
 type CloverChromeActions = {
   closeChrome: () => void;
+  setMobileOverlayChrome: (chrome: { title: string; onBack: () => void } | null) => void;
 };
 
 const CloverChromeContext = createContext<CloverChromeActions | null>(null);
@@ -81,6 +82,7 @@ export const useCloverChrome = () => {
   if (!context) {
     return {
       closeChrome: () => {},
+      setMobileOverlayChrome: () => {},
     };
   }
 
@@ -819,6 +821,7 @@ export function CloverShell({
   const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(() => readDismissedNotifications());
   const [cachedProfileImage] = useState<string | null>(() => readAccountIdentityCache()?.imageUrl ?? null);
   const [isBottomNavCompact, setIsBottomNavCompact] = useState(false);
+  const [mobileOverlayChrome, setMobileOverlayChrome] = useState<{ title: string; onBack: () => void } | null>(null);
   const [previousPathname, setPreviousPathname] = useState<string | null>(null);
   const quickAddAccounts = useMemo(
     () =>
@@ -957,10 +960,14 @@ export function CloverShell({
     "/settings",
   ]).has(pathname ?? "");
   const resolvedMobileBackHref = mobileBackHref ?? (active === "dashboard" ? undefined : "/home");
-  const shouldShowBackButton = active !== "dashboard" && (!isMobileRootRoute || mobileBackHref === "/settings");
-  const mobileFallbackBackOnly = !hasHistoryBackTarget && Boolean(resolvedMobileBackHref);
+  const shouldShowBackButton = Boolean(mobileOverlayChrome) || (active !== "dashboard" && (!isMobileRootRoute || mobileBackHref === "/settings"));
+  const mobileFallbackBackOnly = !mobileOverlayChrome && !hasHistoryBackTarget && Boolean(resolvedMobileBackHref);
   const handleBack = () => {
     closeChrome();
+    if (mobileOverlayChrome) {
+      mobileOverlayChrome.onBack();
+      return;
+    }
     if (mobileFallbackBackOnly && resolvedMobileBackHref) {
       router.push(resolvedMobileBackHref);
       return;
@@ -1785,7 +1792,7 @@ export function CloverShell({
   };
 
   return (
-    <CloverChromeContext.Provider value={{ closeChrome }}>
+    <CloverChromeContext.Provider value={{ closeChrome, setMobileOverlayChrome }}>
       <OnboardingMissionTracker />
       <RegionalPreferencesSync />
       <div className={`app-shell ${isSidebarOpen ? "is-sidebar-open" : ""}`} ref={shellRef}>
@@ -2356,7 +2363,7 @@ export function CloverShell({
             >
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
               <div className="topbar__title-row">
-                <h1>{title}</h1>
+                <h1>{mobileOverlayChrome?.title ?? title}</h1>
                 {titleAddon ? <div className="topbar__title-addon">{titleAddon}</div> : null}
               </div>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
@@ -2397,7 +2404,7 @@ export function CloverShell({
             <div className="topbar__title-wrap">
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
               <div className="topbar__title-row">
-                <h1>{title}</h1>
+                <h1>{mobileOverlayChrome?.title ?? title}</h1>
                 {titleAddon ? <div className="topbar__title-addon">{titleAddon}</div> : null}
               </div>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}

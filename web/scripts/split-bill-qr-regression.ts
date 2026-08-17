@@ -24,6 +24,9 @@ assert.ok(PAYMENT_QR_PROVIDERS.includes(unknown.provider));
 assert.notEqual(getPaymentQrTheme("GCash").start, getPaymentQrTheme("Maya").start);
 
 const paymentOptionsSource = readFileSync(resolve(process.cwd(), "components/split-bill-qr-library.tsx"), "utf8");
+const splitBillHomeSource = readFileSync(resolve(process.cwd(), "components/split-bill-home.tsx"), "utf8");
+const cloverShellSource = readFileSync(resolve(process.cwd(), "components/clover-shell.tsx"), "utf8");
+const globalStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
 const paymentToolsSource = readFileSync(resolve(process.cwd(), "components/split-bill-payment-tools.tsx"), "utf8");
 const paymentRequestRoute = readFileSync(resolve(process.cwd(), "app/api/split-bills/[billId]/payment-requests/route.ts"), "utf8");
 const paymentAccountsRoute = readFileSync(resolve(process.cwd(), "app/api/split-bill-payment-accounts/route.ts"), "utf8");
@@ -39,6 +42,11 @@ assert.match(paymentOptionsSource, /QR Code <small>Optional<\/small>/, "QR image
 assert.match(paymentOptionsSource, /createPortal/, "Payment option editors must escape the clipped Split Bills section.");
 assert.match(paymentOptionsSource, /split-bill-qr-editor-surface/, "Payment options must use the responsive editor surface.");
 assert.match(paymentOptionsSource, /split-bill-qr-editor__close-mobile/, "The mobile payment-option page must provide a back action.");
+assert.match(paymentOptionsSource, /setMobileOverlayChrome/, "The mobile payment-option editor must retain Clover's shared page chrome.");
+assert.match(cloverShellSource, /mobileOverlayChrome\?\.title \?\? title/, "The shared mobile header must support contextual editor titles.");
+assert.match(splitBillHomeSource, /split-bill-mobile-add-button[\s\S]*?>\s*Add\s*<\/button>/, "People and Groups must retain a visible mobile Add action.");
+assert.match(globalStyles, /split-bill-mobile-home__footer \.split-bill-mobile-add-button[\s\S]*?width: auto !important/, "Mobile People and Groups Add actions must not collapse into icon-only buttons.");
+assert.doesNotMatch(globalStyles, /data-split-bill-modal-open="true"\] \.shell-bottom-nav\s*\{\s*display:\s*none/, "Payment-option editing must preserve the mobile bottom navigation.");
 assert.match(paymentOptionsSource, /<select[\s\S]*Select a bank or wallet/, "The bank field must use the user's saved payment accounts.");
 assert.match(paymentOptionsSource, /readSelectedWorkspaceId/, "Payment options must follow the user's active Profile.");
 assert.match(paymentAccountsRoute, /type: \{ in: \["bank", "wallet"\] \}/, "Payment options must exclude cards, cash, and investments.");

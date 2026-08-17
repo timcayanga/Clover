@@ -47533,25 +47533,23 @@ body[data-split-bill-modal-open="true"] .split-bill-page-actions {
   display: none !important;
 }
 
-body[data-split-bill-modal-open="true"] .sidebar,
-body[data-split-bill-modal-open="true"] .sidebar-backdrop {
-  display: none !important;
-}
-
-body[data-split-bill-modal-open="true"] .topbar,
-body[data-split-bill-modal-open="true"] .shell-compact-bar {
-  visibility: hidden !important;
-}
-
-body[data-split-bill-modal-open="true"] .app-shell {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-@media (max-width: 1100px) {
-  body[data-split-bill-modal-open="true"] .shell-bottom-nav {
+@media (min-width: 1101px) {
+  body[data-split-bill-modal-open="true"] .sidebar,
+  body[data-split-bill-modal-open="true"] .sidebar-backdrop {
     display: none !important;
   }
 
+  body[data-split-bill-modal-open="true"] .topbar,
+  body[data-split-bill-modal-open="true"] .shell-compact-bar {
+    visibility: hidden !important;
+  }
+
+  body[data-split-bill-modal-open="true"] .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1100px) {
   .split-bill-mobile-home {
     display: grid;
   }
@@ -47736,6 +47734,8 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
   .split-bill-qr-editor-surface.split-bill-modal {
     display: block;
+    inset: 72px 0 calc(86px + env(safe-area-inset-bottom));
+    z-index: 45;
     padding: 0;
     overflow: hidden;
     background: var(--surface);
@@ -47744,9 +47744,9 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
   .split-bill-qr-editor-surface .split-bill-qr-editor {
     width: 100%;
-    min-height: 100dvh;
-    max-height: 100dvh;
-    padding: max(14px, env(safe-area-inset-top)) 18px calc(40px + env(safe-area-inset-bottom));
+    min-height: 100%;
+    max-height: 100%;
+    padding: 18px 18px 28px;
     gap: 16px;
     overflow-y: auto;
     border: 0;
@@ -47756,16 +47756,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
   }
 
   .split-bill-qr-editor-surface .split-bill-qr-editor__head {
-    position: sticky;
-    top: calc(-1 * max(14px, env(safe-area-inset-top)));
-    z-index: 4;
-    min-height: 58px;
-    margin: calc(-1 * max(14px, env(safe-area-inset-top))) -18px 4px;
-    padding: max(14px, env(safe-area-inset-top)) 54px 12px;
-    align-items: center;
-    justify-content: center;
-    background: var(--surface);
-    border-bottom: 1px solid rgba(15, 23, 42, 0.07);
+    display: none;
   }
 
   .split-bill-qr-editor-surface .split-bill-qr-editor__head > div {
@@ -47812,8 +47803,8 @@ body[data-split-bill-modal-open="true"] .app-shell {
     position: relative;
     bottom: auto;
     z-index: 3;
-    margin: 4px -18px calc(-1 * (40px + env(safe-area-inset-bottom)));
-    padding: 14px 18px calc(24px + env(safe-area-inset-bottom));
+    margin: 4px -18px -28px;
+    padding: 14px 18px 22px;
     background: var(--surface);
     border-top: 1px solid rgba(15, 23, 42, 0.07);
   }
@@ -47821,6 +47812,17 @@ body[data-split-bill-modal-open="true"] .app-shell {
   .split-bill-qr-editor-surface .split-bill-qr-editor__actions .button {
     width: 100%;
     min-height: 42px;
+  }
+
+  .split-bill-mobile-home__footer .split-bill-mobile-add-button {
+    display: inline-flex !important;
+    width: auto !important;
+    min-width: 62px !important;
+    min-height: 36px;
+    padding-inline: 14px !important;
+    color: var(--accent);
+    font-size: 0.82rem;
+    font-weight: 700;
   }
 
   .split-bill-simple-entry-modal {
