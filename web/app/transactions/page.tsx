@@ -164,11 +164,12 @@ type Account = {
 };
 
 const transactionInvestmentIdentityPattern = /\b(?:gsave|gcrypto|gfunds?|gstocks?|gotrade)\b/i;
+const transactionAccountTypes = new Set<AccountType>(["bank", "wallet", "credit_card", "cash"]);
 
 const isTransactionAccount = (
   account: Pick<Account, "type" | "name" | "institution" | "investmentSubtype">
 ) => {
-  if (account.type === "investment" || Boolean(account.investmentSubtype)) {
+  if (!transactionAccountTypes.has(account.type) || Boolean(account.investmentSubtype)) {
     return false;
   }
 
@@ -2517,7 +2518,10 @@ function TransactionsPageContent() {
       ),
     [accounts]
   );
-  const accountFilterOptions = useMemo(() => buildTransactionAccountFilterOptions(accounts), [accounts]);
+  const accountFilterOptions = useMemo(
+    () => buildTransactionAccountFilterOptions(selectableTransactionAccounts),
+    [selectableTransactionAccounts]
+  );
   const manualAccountOptions = useMemo(
     () =>
       selectableTransactionAccounts.map((account) => ({
@@ -8079,7 +8083,7 @@ function TransactionsPageContent() {
                   Account
                   <select value={bulkEditForm.accountId} onChange={(event) => setBulkEditForm((current) => ({ ...current, accountId: event.target.value }))}>
                     <option value="">Leave unchanged</option>
-                    {accounts.map((account) => (
+                    {selectableTransactionAccounts.map((account) => (
                       <option key={account.id} value={account.id}>
                         {formatTransactionAccountName(account)}
                       </option>

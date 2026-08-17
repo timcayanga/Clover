@@ -113,6 +113,8 @@ export function ImportUploadDock({
 
     delete document.body.dataset.cloverImportModalLocks;
     delete document.body.dataset.cloverImportModalOpen;
+    delete document.body.dataset.cloverImportModalVisible;
+    delete document.body.dataset.cloverImportModalVisibleCount;
   }, [open]);
 
   if (!open) {
@@ -185,7 +187,7 @@ export function ImportUploadDock({
           aria-valuenow={Math.round(value)}
         >
           <div className="import-upload-dock__mobile-progress-copy">
-            <span>{isComplete ? "Import complete" : "Importing"}</span>
+            <span>{isComplete ? "Import complete" : progressLabel}</span>
             <strong>{Math.round(value)}%</strong>
           </div>
           <div className="import-upload-dock__mobile-progress-track">

@@ -364,6 +364,21 @@ const main = async () => {
     "A long-running import must not flicker backward through earlier progress phases."
   );
   assert.match(
+    uploadDockSource,
+    /delete document\.body\.dataset\.cloverImportModalVisible;[\s\S]{0,100}delete document\.body\.dataset\.cloverImportModalVisibleCount;/,
+    "A compact import dock must release the modal flag that disables mobile navigation."
+  );
+  assert.match(
+    uploadDockSource,
+    /<span>\{isComplete \? "Import complete" : progressLabel\}<\/span>/,
+    "Mobile import progress must show the same descriptive stage used on desktop."
+  );
+  assert.match(
+    globalStylesSource,
+    /\.import-upload-dock:not\(\.import-upload-dock--error\) \.import-upload-dock__inner \{[\s\S]{0,100}pointer-events: none;/,
+    "Active mobile import progress must not intercept navigation or page interactions."
+  );
+  assert.match(
     globalStylesSource,
     /\.transactions-mobile-simple-row__category-icon \.category-brand-mark__glyph-icon\s*\{\s*width: 62%;\s*height: 62%;/,
     "Mobile category badges must retain the same inset artwork scale used on desktop."

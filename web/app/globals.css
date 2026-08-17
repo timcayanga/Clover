@@ -34905,6 +34905,7 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .import-upload-dock:not(.import-upload-dock--error) .import-upload-dock__inner {
+    pointer-events: none;
     min-height: 54px;
     padding: 10px 12px;
     border-radius: 16px;
@@ -34927,7 +34928,11 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .import-upload-dock__mobile-progress-copy span {
+    min-width: 0;
     font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .import-upload-dock__mobile-progress-copy strong {
