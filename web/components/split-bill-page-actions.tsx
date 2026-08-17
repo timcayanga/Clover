@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCloverChrome } from "@/components/clover-shell";
 import { SplitBillActionButtons } from "@/components/split-bill-action-buttons";
 import { SplitBillImportModal } from "@/components/split-bill-import-modal";
 import { SplitBillManualModal } from "@/components/split-bill-manual-modal";
@@ -87,6 +88,7 @@ function SplitBillPeoplePicker({
 }
 
 export function SplitBillPageActions({ currentUserName, people, groups, onBillSaved, onGroupSaved, onPersonSaved }: SplitBillPageActionsProps) {
+  const { setMobileOverlayChrome } = useCloverChrome();
   const [openAddMode, setOpenAddMode] = useState<"manual" | "import" | null>(null);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
@@ -150,6 +152,39 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
       window.removeEventListener("clover:open-split-bill-people", handleOpenPeople);
     };
   }, [groups]);
+
+  useEffect(() => {
+    if (!isGroupModalOpen && !isPersonModalOpen) {
+      setMobileOverlayChrome(null);
+      return;
+    }
+
+    const mobileQuery = window.matchMedia("(max-width: 1100px)");
+    const closeMobilePage = () => {
+      if (isPersonModalOpen) {
+        closePersonModal();
+        return;
+      }
+      closeGroupModal();
+    };
+    const syncMobileChrome = () => {
+      setMobileOverlayChrome(
+        mobileQuery.matches
+          ? {
+              title: isPersonModalOpen ? "Add Person" : editingGroupId ? "Edit Group" : "Add Group",
+              onBack: closeMobilePage,
+            }
+          : null,
+      );
+    };
+
+    syncMobileChrome();
+    mobileQuery.addEventListener("change", syncMobileChrome);
+    return () => {
+      mobileQuery.removeEventListener("change", syncMobileChrome);
+      setMobileOverlayChrome(null);
+    };
+  }, [editingGroupId, isGroupModalOpen, isPersonModalOpen, setMobileOverlayChrome]);
 
   const saveGroup = async () => {
     setIsSavingGroup(true);

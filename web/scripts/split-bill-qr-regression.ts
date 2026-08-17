@@ -25,6 +25,7 @@ assert.notEqual(getPaymentQrTheme("GCash").start, getPaymentQrTheme("Maya").star
 
 const paymentOptionsSource = readFileSync(resolve(process.cwd(), "components/split-bill-qr-library.tsx"), "utf8");
 const splitBillHomeSource = readFileSync(resolve(process.cwd(), "components/split-bill-home.tsx"), "utf8");
+const splitBillActionsSource = readFileSync(resolve(process.cwd(), "components/split-bill-page-actions.tsx"), "utf8");
 const cloverShellSource = readFileSync(resolve(process.cwd(), "components/clover-shell.tsx"), "utf8");
 const globalStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
 const paymentToolsSource = readFileSync(resolve(process.cwd(), "components/split-bill-payment-tools.tsx"), "utf8");
@@ -45,7 +46,9 @@ assert.match(paymentOptionsSource, /split-bill-qr-editor__close-mobile/, "The mo
 assert.match(paymentOptionsSource, /setMobileOverlayChrome/, "The mobile payment-option editor must retain Clover's shared page chrome.");
 assert.match(cloverShellSource, /mobileOverlayChrome\?\.title \?\? title/, "The shared mobile header must support contextual editor titles.");
 assert.match(splitBillHomeSource, /split-bill-mobile-add-button[\s\S]*?>\s*Add\s*<\/button>/, "People and Groups must retain a visible mobile Add action.");
+assert.match(splitBillActionsSource, /title: isPersonModalOpen \? "Add Person" : editingGroupId \? "Edit Group" : "Add Group"/, "Mobile People and Group editors must use Clover's shared page header.");
 assert.match(globalStyles, /split-bill-mobile-home__footer \.split-bill-mobile-add-button[\s\S]*?width: auto !important/, "Mobile People and Groups Add actions must not collapse into icon-only buttons.");
+assert.match(globalStyles, /\.split-bill-simple-entry-modal\s*\{[\s\S]*?inset: 72px 0 calc\(86px \+ env\(safe-area-inset-bottom\)\)/, "Mobile People and Group editors must render as full pages between Clover's shared navigation bars.");
 assert.doesNotMatch(globalStyles, /data-split-bill-modal-open="true"\] \.shell-bottom-nav\s*\{\s*display:\s*none/, "Payment-option editing must preserve the mobile bottom navigation.");
 assert.match(paymentOptionsSource, /<select[\s\S]*Select a bank or wallet/, "The bank field must use the user's saved payment accounts.");
 assert.doesNotMatch(paymentOptionsSource, /Name shown to payers|Mobile or account number/, "Account details must not imply a bank- or wallet-specific format through generic inline placeholders.");

@@ -47826,36 +47826,30 @@ body[data-split-bill-modal-open="true"] .split-bill-page-actions {
   }
 
   .split-bill-simple-entry-modal {
-    place-items: end center;
-    padding: 14px 0 0;
-    background: rgba(15, 23, 42, 0.38);
-    backdrop-filter: blur(8px);
+    display: block;
+    inset: 72px 0 calc(86px + env(safe-area-inset-bottom));
+    z-index: 45;
+    padding: 0;
+    overflow: hidden;
+    background: var(--surface);
+    backdrop-filter: none;
   }
 
   .split-bill-simple-entry-modal .split-bill-person-modal,
   .split-bill-simple-entry-modal .split-bill-group-modal {
     width: 100%;
-    min-height: 0;
-    max-height: 92dvh;
-    padding: 20px 18px calc(20px + env(safe-area-inset-bottom));
+    min-height: 100%;
+    max-height: 100%;
+    padding: 22px 18px 28px;
+    overflow-y: auto;
     border: 0;
-    border-radius: 26px 26px 0 0;
+    border-radius: 0;
     background: var(--surface);
-    box-shadow: var(--shadow);
+    box-shadow: none;
   }
 
   .split-bill-simple-entry-modal .split-bill-manual-modal__head {
-    min-height: auto;
-    padding-left: 0;
-  }
-
-  .split-bill-simple-entry-modal .split-bill-manual-modal__head > div {
-    display: block;
-  }
-
-  .split-bill-simple-entry-modal .split-bill-manual-modal__head .eyebrow {
-    display: block;
-    font-size: 0.72rem;
+    display: none;
   }
 
   .split-bill-simple-entry-modal .settings-field {
