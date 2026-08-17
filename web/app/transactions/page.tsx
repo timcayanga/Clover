@@ -6977,26 +6977,6 @@ function TransactionsPageContent() {
         tabIndex={-1}
       />
 
-      <CurrencySelector
-        value={workspaceCurrencyCodes.length > 1 ? currencyFilter : workspaceCurrencyCodes[0] ?? "PHP"}
-        onChange={(next) => {
-          const nextCurrency = next && next.toLowerCase() !== "all" ? formatCurrencyCode(next) : "";
-          setCurrencyFilter(nextCurrency);
-          persistSelectedCurrency(selectedWorkspaceId, nextCurrency);
-        }}
-        options={workspaceCurrencyCodes}
-        includeAllOption={workspaceCurrencyCodes.length > 1}
-        allLabel="All currencies"
-        ariaLabel="Filter transactions by currency"
-        className="transactions-currency-filter transactions-currency-filter--compact"
-        buttonClassName="transactions-currency-filter__button transactions-action-button transactions-toolbar-chip"
-        menuClassName="transactions-currency-filter__menu"
-        optionClassName="transactions-currency-filter__option"
-        menuAlignment="end"
-        showChevron={false}
-        portalMenu
-      />
-
       <button
         className={`button button-secondary button-small transactions-toolbar-filter transactions-toolbar-filter--compact${filterOpen ? " is-active" : ""}`}
         type="button"
@@ -7195,6 +7175,31 @@ function TransactionsPageContent() {
                 </button>
               </div>
               <div className="form-grid">
+                {isCompactViewport ? (
+                  <div className="transactions-filter-group transactions-filter-group--currency" role="group" aria-label="Currency">
+                    <div className="transactions-filter-group__head">
+                      <span className="transactions-filter-group__label">Currency</span>
+                    </div>
+                    <CurrencySelector
+                      value={workspaceCurrencyCodes.length > 1 ? currencyFilter : workspaceCurrencyCodes[0] ?? "PHP"}
+                      onChange={(next) => {
+                        const nextCurrency = next && next.toLowerCase() !== "all" ? formatCurrencyCode(next) : "";
+                        setCurrencyFilter(nextCurrency);
+                        persistSelectedCurrency(selectedWorkspaceId, nextCurrency);
+                      }}
+                      options={workspaceCurrencyCodes}
+                      includeAllOption={workspaceCurrencyCodes.length > 1}
+                      allLabel="All currencies"
+                      ariaLabel="Filter transactions by currency"
+                      className="transactions-filter-currency"
+                      buttonClassName="transactions-filter-currency__button"
+                      menuClassName="transactions-filter-currency__menu"
+                      optionClassName="transactions-filter-currency__option"
+                      menuAlignment="start"
+                      portalMenu
+                    />
+                  </div>
+                ) : null}
                 <div className="transactions-filter-group" role="group" aria-label="Dates">
                   <div className="transactions-filter-group__head">
                     <span className="transactions-filter-group__label">Dates</span>

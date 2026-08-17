@@ -95,6 +95,11 @@ async function main() {
     "The mobile quick-add choices must animate from a compact palette centered on the plus button.",
   );
   assert.match(styles, /\.shell-quick-add-popover__item--camera[\s\S]{0,220}background: var\(--brand-gradient\)/);
+  assert.match(
+    styles,
+    /\.content--plain-title > \.topbar \.topbar__title-wrap,[\s\S]{0,900}left: 50% !important;[\s\S]{0,300}transform: translate\(-50%, -50%\) !important;/,
+    "Plain mobile page titles must remain centered independently of uneven header controls.",
+  );
 
   console.log("Mobile navigation regression passed.");
 }

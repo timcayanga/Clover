@@ -56703,6 +56703,7 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     overflow: hidden;
     text-align: center !important;
     pointer-events: none;
+    z-index: 2;
   }
 
   .content--plain-title > :is(.topbar, .shell-compact-bar) .topbar__title-row {
@@ -56731,6 +56732,37 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
 
   .transactions-shell-actions--compact {
     gap: 5px;
+  }
+
+  .content--plain-title > :is(.topbar, .shell-compact-bar) :is(.topbar-actions, .shell-compact-bar__actions),
+  .content--plain-title > :is(.topbar, .shell-compact-bar) .shell-topbar-leading {
+    position: relative;
+    z-index: 3;
+  }
+
+  .transactions-filter-group--currency {
+    display: grid;
+    gap: 7px;
+  }
+
+  .transactions-filter-currency,
+  .transactions-filter-currency__button {
+    width: 100%;
+  }
+
+  .transactions-filter-currency__button {
+    min-height: 42px;
+    justify-content: space-between;
+    border: 1px solid var(--stroke);
+    border-radius: 14px;
+    padding: 8px 12px;
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: none;
+  }
+
+  .transactions-filter-currency__menu {
+    z-index: 3200;
   }
 
   .transactions-mobile-simple-row {

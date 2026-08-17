@@ -62,13 +62,23 @@ localStorage.setItem(selectedCurrencyByWorkspaceKey, "{invalid");
 assert.equal(readSelectedCurrency("workspace-a"), null, "Corrupt browser storage must safely fall back to page defaults.");
 
 const accountsPageSource = readFileSync(resolve(process.cwd(), "app/accounts/page.tsx"), "utf8");
+const transactionsPageSource = readFileSync(resolve(process.cwd(), "app/transactions/page.tsx"), "utf8");
 const currencySelectorSource = readFileSync(resolve(process.cwd(), "components/currency-selector.tsx"), "utf8");
 const globalStylesSource = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
+const compactTransactionsActions = transactionsPageSource.slice(
+  transactionsPageSource.indexOf('className="transactions-shell-actions transactions-shell-actions--compact"'),
+  transactionsPageSource.indexOf('className="transactions-shell-actions"', transactionsPageSource.indexOf('className="transactions-shell-actions transactions-shell-actions--compact"') + 1),
+);
 assert.ok(
   currencySelectorSource.includes("currency-selector__all-icon") &&
-    globalStylesSource.includes(".content--accounts .accounts-currency-filter .currency-selector__all-label") &&
-    globalStylesSource.includes(".content--transactions .transactions-currency-filter .currency-selector__all-icon"),
-  "All Currencies must use an unclipped icon in compact Accounts and Transactions headers."
+    globalStylesSource.includes(".content--accounts .accounts-currency-filter .currency-selector__all-label"),
+  "All Currencies must use an unclipped icon in the compact Accounts header."
+);
+assert.ok(
+  !compactTransactionsActions.includes("<CurrencySelector") &&
+    transactionsPageSource.includes("transactions-filter-group--currency") &&
+    transactionsPageSource.includes('ariaLabel="Filter transactions by currency"'),
+  "Mobile Transactions must keep Currency inside Filters instead of crowding the centered page title."
 );
 assert.ok(
   accountsPageSource.includes("visibleAccountCurrencies.some((currency) => currency !== defaultCurrencyCode)"),
