@@ -32,10 +32,16 @@ assert.deepEqual(
 );
 
 const transactionsPage = readFileSync(new URL("../app/transactions/page.tsx", import.meta.url), "utf8");
+const accountDetailPage = readFileSync(new URL("../app/accounts/[accountId]/page.tsx", import.meta.url), "utf8");
 const detailPage = readFileSync(new URL("../app/transactions/[transactionId]/page.tsx", import.meta.url), "utf8");
 const detailRoute = readFileSync(new URL("../app/api/transactions/[transactionId]/route.ts", import.meta.url), "utf8");
+const globalStyles = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
 
 assert.match(transactionsPage, /router\.push\(`\/transactions\/\$\{encodeURIComponent\(transaction\.id\)\}`/);
+assert.match(transactionsPage, /className="transaction-drawer-form__amount-type-row"/);
+assert.match(accountDetailPage, /className="transaction-drawer-form__amount-type-row"/);
+assert.match(globalStyles, /\.transaction-drawer-select__icon\s*\{[^}]*z-index:\s*2;/s);
+assert.match(globalStyles, /@media \(max-width: 1100px\)[\s\S]*?\.transaction-drawer-form__amount-type-row\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\);/);
 assert.match(detailPage, /<option value="transfer">Transfer<\/option>/);
 assert.match(detailPage, /method: "PATCH"/);
 assert.match(detailPage, /method: "DELETE"/);

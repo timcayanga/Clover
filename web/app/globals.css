@@ -19691,6 +19691,7 @@ input.transaction-inline-edit--amount::placeholder {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  z-index: 2;
 }
 
 .transaction-drawer-select__icon .accounts-brand-mark {
@@ -19745,6 +19746,19 @@ input.transaction-inline-edit--amount::placeholder {
   width: 100%;
 }
 
+.transaction-drawer-form__amount-type-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(150px, 0.75fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.transaction-drawer-form__type-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
 .transaction-drawer-form__amount-field {
   display: grid;
   gap: 6px;
@@ -19781,6 +19795,12 @@ input.transaction-inline-edit--amount::placeholder {
   min-width: 58px;
   justify-content: center;
   padding-inline: 10px;
+}
+
+@media (max-width: 1100px) {
+  .transaction-drawer-form__amount-type-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .transaction-drawer-receipt-lines {

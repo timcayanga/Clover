@@ -4629,13 +4629,14 @@ function TransactionsPageContent() {
   const detailSelectedAccountBrand = useMemo(
     () =>
       detailSelectedAccount
-        ? getAccountBrand({
+        ? transactionAccountPickerOptions.find((account) => account.id === detailSelectedAccount.id)?.brand ??
+          getAccountBrand({
             name: detailSelectedAccount.name,
             institution: detailSelectedAccount.institution,
             type: detailSelectedAccount.type,
           })
         : null,
-    [detailSelectedAccount]
+    [detailSelectedAccount, transactionAccountPickerOptions]
   );
   const detailSelectedCategory = useMemo(
     () => categories.find((category) => category.id === (detailDraft?.categoryId ?? otherCategoryId)) ?? null,
@@ -8599,67 +8600,69 @@ function TransactionsPageContent() {
                 />
               </label>
 
-              <div className="transaction-drawer-form__amount-field">
-                <span className="transaction-drawer-field-label">
-                  <span>Amount</span>
-                </span>
-                <div className="transaction-drawer-form__money-row">
-                  <CurrencySelector
-                    value={detailDraft?.currency ?? selectedTransaction.currency}
-                    onChange={(value) => setDetailDraft((current) => (current ? { ...current, currency: value } : current))}
-                    options={currencyCatalogCodes}
-                    ariaLabel="Select transaction currency"
-                    className="transaction-drawer-form__currency-selector"
-                    buttonClassName="transaction-drawer-form__currency-button"
-                    menuClassName="transaction-drawer-form__currency-menu"
-                    optionClassName="transaction-drawer-form__currency-option"
-                  />
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={detailDraft?.amount ?? selectedTransaction.amount}
-                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, amount: event.target.value } : current))}
-                  />
-                </div>
-              </div>
-
-              <label>
-                <span className="transactions-manual-type-label">
-                  <span>Type</span>
-                </span>
-                <div className="transactions-manual-type-control transaction-drawer-type-control">
-                  <span className="transactions-manual-type-symbol" aria-hidden="true">
-                    {(detailDraft?.type ??
-                      (selectedTransaction.type === "income" ? "credit" : selectedTransaction.type === "transfer" ? "transfer" : "debit")) ===
-                    "credit"
-                      ? "+"
-                      : (detailDraft?.type ?? selectedTransaction.type) === "transfer"
-                        ? "↔"
-                        : "-"}
+              <div className="transaction-drawer-form__amount-type-row">
+                <div className="transaction-drawer-form__amount-field">
+                  <span className="transaction-drawer-field-label">
+                    <span>Amount</span>
                   </span>
-                  <select
-                    value={
-                      detailDraft?.type ??
-                      (selectedTransaction.type === "income" ? "credit" : selectedTransaction.type === "transfer" ? "transfer" : "debit")
-                    }
-                    onChange={(event) =>
-                      setDetailDraft((current) =>
-                        current
-                          ? {
-                              ...current,
-                              type: event.target.value as TransactionDetailDraft["type"],
-                              isTransfer: event.target.value === "transfer",
-                            }
-                          : current
-                      )
-                    }
-                  >
-                    <option value="debit">Expense</option>
-                    <option value="credit">Income</option>
-                    <option value="transfer">Transfer</option>
-                  </select>
+                  <div className="transaction-drawer-form__money-row">
+                    <CurrencySelector
+                      value={detailDraft?.currency ?? selectedTransaction.currency}
+                      onChange={(value) => setDetailDraft((current) => (current ? { ...current, currency: value } : current))}
+                      options={currencyCatalogCodes}
+                      ariaLabel="Select transaction currency"
+                      className="transaction-drawer-form__currency-selector"
+                      buttonClassName="transaction-drawer-form__currency-button"
+                      menuClassName="transaction-drawer-form__currency-menu"
+                      optionClassName="transaction-drawer-form__currency-option"
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={detailDraft?.amount ?? selectedTransaction.amount}
+                      onChange={(event) => setDetailDraft((current) => (current ? { ...current, amount: event.target.value } : current))}
+                    />
+                  </div>
                 </div>
-              </label>
+
+                <label className="transaction-drawer-form__type-field">
+                  <span className="transactions-manual-type-label">
+                    <span>Type</span>
+                  </span>
+                  <div className="transactions-manual-type-control transaction-drawer-type-control">
+                    <span className="transactions-manual-type-symbol" aria-hidden="true">
+                      {(detailDraft?.type ??
+                        (selectedTransaction.type === "income" ? "credit" : selectedTransaction.type === "transfer" ? "transfer" : "debit")) ===
+                      "credit"
+                        ? "+"
+                        : (detailDraft?.type ?? selectedTransaction.type) === "transfer"
+                          ? "↔"
+                          : "-"}
+                    </span>
+                    <select
+                      value={
+                        detailDraft?.type ??
+                        (selectedTransaction.type === "income" ? "credit" : selectedTransaction.type === "transfer" ? "transfer" : "debit")
+                      }
+                      onChange={(event) =>
+                        setDetailDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                type: event.target.value as TransactionDetailDraft["type"],
+                                isTransfer: event.target.value === "transfer",
+                              }
+                            : current
+                        )
+                      }
+                    >
+                      <option value="debit">Expense</option>
+                      <option value="credit">Income</option>
+                      <option value="transfer">Transfer</option>
+                    </select>
+                  </div>
+                </label>
+              </div>
 
               <label>
                 <span className="transaction-drawer-field-label">
