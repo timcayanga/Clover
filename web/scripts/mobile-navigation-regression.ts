@@ -97,8 +97,13 @@ async function main() {
   assert.match(styles, /\.shell-quick-add-popover__item--camera[\s\S]{0,220}background: var\(--brand-gradient\)/);
   assert.match(
     styles,
-    /\.content--plain-title > \.topbar \.topbar__title-wrap,[\s\S]{0,900}left: 50% !important;[\s\S]{0,300}transform: translate\(-50%, -50%\) !important;/,
-    "Plain mobile page titles must remain centered independently of uneven header controls.",
+    /\.content--plain-title > :is\(\.topbar, \.shell-compact-bar\) \{[\s\S]{0,180}grid-template-columns: minmax\(0, 1fr\) auto minmax\(0, 1fr\) !important;/,
+    "Plain mobile page titles must occupy the center of equal-width header tracks.",
+  );
+  assert.match(
+    styles,
+    /\.content > :is\(\.topbar, \.shell-compact-bar\) \{[\s\S]{0,500}width: 100vw !important;[\s\S]{0,220}margin-inline: calc\(50% - 50vw\) !important;/,
+    "Mobile headers must cover the viewport edge to edge without inheriting page padding.",
   );
 
   console.log("Mobile navigation regression passed.");
