@@ -56816,3 +56816,197 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     border-color: rgba(203, 213, 225, 0.16) !important;
   }
 }
+
+/* Mobile pages with subtabs use one compact, horizontally scrollable header.
+   Plain page titles remain viewport-centered by the rules above. */
+@media (max-width: 1100px) {
+  .content--has-title-addon > :is(.topbar, .shell-compact-bar) {
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    gap: 8px !important;
+  }
+
+  .content--has-title-addon > :is(.topbar, .shell-compact-bar) .shell-topbar-leading {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    justify-self: start !important;
+  }
+
+  .content--has-title-addon > .topbar .topbar__title-wrap,
+  .content--has-title-addon > .shell-compact-bar .shell-compact-bar__copy {
+    position: static !important;
+    inset: auto !important;
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    transform: none !important;
+    justify-self: stretch !important;
+    overflow: hidden !important;
+    text-align: left !important;
+    pointer-events: auto !important;
+  }
+
+  .content--has-title-addon > :is(.topbar, .shell-compact-bar) .topbar__title-row {
+    display: flex !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 14px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    scrollbar-width: none;
+  }
+
+  .content--has-title-addon > :is(.topbar, .shell-compact-bar) .topbar__title-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .content--has-title-addon > :is(.topbar, .shell-compact-bar) .topbar__title-row > h1 {
+    position: static !important;
+    inset: auto !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    max-width: none !important;
+    margin: 0 !important;
+    transform: none !important;
+    overflow: visible !important;
+    color: var(--ink) !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+    text-align: left !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+    pointer-events: none;
+  }
+
+  .content--has-title-addon .topbar__title-addon {
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+  }
+
+  .content--has-title-addon .topbar__title-addon :is(
+      .reports-top-tabs,
+      .investments-tabs,
+      .recurring-tabs--top,
+      .circles-title-tabs
+    ) {
+    display: flex !important;
+    width: max-content !important;
+    min-width: 0 !important;
+    align-items: center !important;
+    gap: 14px !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .content--has-title-addon .topbar__title-addon :is(
+      .reports-top-tabs,
+      .investments-tabs,
+      .recurring-tabs--top,
+      .circles-title-tabs
+    ) :is(a, button, .reports-tab, .investments-tab) {
+    min-height: 34px !important;
+    padding: 0 0 3px !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+  }
+
+  .content--has-title-addon > :is(.topbar, .shell-compact-bar) :is(.topbar-actions, .shell-compact-bar__actions) {
+    grid-column: 3 !important;
+    grid-row: 1 !important;
+    justify-self: end !important;
+  }
+
+  /* Investments previously rendered a second mobile-only header. The shell
+     header is now the single source of truth for all tabbed pages. */
+  .content--investments > :is(.topbar, .shell-compact-bar) {
+    display: grid !important;
+  }
+
+  .content--investments > :is(.topbar, .shell-compact-bar) .topbar__title-row > h1,
+  .content--investments > :is(.topbar, .shell-compact-bar) :is(.topbar-actions, .shell-compact-bar__actions) {
+    display: flex !important;
+  }
+
+  .content--investments .investments-mobile-header {
+    display: none !important;
+  }
+
+  /* Keep the mobile drawer within one viewport and normalize every menu icon
+     to the Home icon footprint. */
+  .sidebar {
+    padding: 8px 10px !important;
+    gap: 3px !important;
+    overflow: hidden !important;
+  }
+
+  .sidebar-header {
+    min-height: 40px !important;
+    padding: 0 3px 2px !important;
+    gap: 6px !important;
+  }
+
+  .sidebar-brand-link__mark {
+    width: 27px !important;
+    height: 27px !important;
+  }
+
+  .sidebar-brand-link__wordmark {
+    width: 69px !important;
+  }
+
+  .sidebar-nav--mobile {
+    flex: 0 1 auto !important;
+    gap: 0 !important;
+    margin-top: 0 !important;
+    overflow: visible !important;
+  }
+
+  .sidebar-nav--mobile .sidebar-nav__section {
+    gap: 0 !important;
+  }
+
+  .sidebar-nav--mobile .sidebar-nav__section + .sidebar-nav__section {
+    margin-top: 1px !important;
+  }
+
+  .sidebar-nav--mobile .sidebar-nav__section-label {
+    padding: 1px 8px 0 !important;
+    font-size: 9px !important;
+    line-height: 1.05 !important;
+  }
+
+  .sidebar-nav--mobile .nav-link {
+    min-height: 32px !important;
+    height: 32px !important;
+    padding: 1px 8px !important;
+    gap: 8px !important;
+    border-radius: 11px !important;
+    font-size: 13px !important;
+    line-height: 1.1 !important;
+  }
+
+  .sidebar-nav--mobile .nav-link__icon {
+    width: 29px !important;
+    height: 29px !important;
+  }
+
+  .sidebar-nav--mobile .nav-link__icon .menu-icon-3d,
+  .sidebar-nav--mobile .nav-link__icon .menu-icon-3d--home,
+  .sidebar-nav--mobile .nav-link__icon .menu-icon-3d--adviser {
+    width: 29px !important;
+    height: 29px !important;
+    transform: none !important;
+  }
+
+  .sidebar-footer {
+    min-height: 40px !important;
+    margin-top: auto !important;
+    padding: 3px 2px 0 !important;
+    gap: 6px !important;
+  }
+}

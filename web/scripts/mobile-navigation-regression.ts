@@ -105,6 +105,31 @@ async function main() {
     /\.content > :is\(\.topbar, \.shell-compact-bar\) \{[\s\S]{0,500}width: 100vw !important;[\s\S]{0,220}margin-inline: calc\(50% - 50vw\) !important;/,
     "Mobile headers must cover the viewport edge to edge without inheriting page padding.",
   );
+  assert.match(
+    styles,
+    /\.content--has-title-addon > :is\(\.topbar, \.shell-compact-bar\) \.topbar__title-row > h1 \{[\s\S]{0,220}position: static !important;[\s\S]{0,500}font-size: 14px !important;/,
+    "Tabbed mobile page titles must remain inline with their subtabs instead of overlaying them.",
+  );
+  assert.match(
+    styles,
+    /\.content--has-title-addon \.topbar__title-addon :is\([\s\S]{0,180}\.reports-top-tabs,[\s\S]{0,180}\.investments-tabs,[\s\S]{0,180}\.recurring-tabs--top,[\s\S]{0,180}\.circles-title-tabs[\s\S]{0,260}font-size: 14px !important;/,
+    "Tabbed mobile page titles and subtab labels must share one compact type scale.",
+  );
+  assert.match(
+    styles,
+    /\.content--investments \.investments-mobile-header \{[\s\S]{0,80}display: none !important;/,
+    "Investments must use the shared shell header instead of rendering a duplicate mobile header.",
+  );
+  assert.match(
+    styles,
+    /\.sidebar-nav--mobile \.nav-link \{[\s\S]{0,160}min-height: 32px !important;[\s\S]{0,160}height: 32px !important;/,
+    "The mobile drawer rows must stay compact enough to fit in one viewport.",
+  );
+  assert.match(
+    styles,
+    /\.sidebar-nav--mobile \.nav-link__icon \.menu-icon-3d,[\s\S]{0,180}\.menu-icon-3d--home,[\s\S]{0,180}\.menu-icon-3d--adviser[\s\S]{0,180}width: 29px !important;[\s\S]{0,100}height: 29px !important;/,
+    "Every mobile drawer icon must use the same footprint as Home.",
+  );
 
   console.log("Mobile navigation regression passed.");
 }
