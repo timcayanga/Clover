@@ -281,8 +281,6 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
         </section>
       ) : null}
 
-      <SplitBillQrLibrary />
-
       <section className="split-bill-panel panel glass">
         <div className="split-bill-panel__head">
           <div>
@@ -558,6 +556,8 @@ export function SplitBillHome({ bills, groups, people, currentUserName, onOpenBi
           </div>
         </section>
       </div>
+
+      <SplitBillQrLibrary />
     </div>
   );
 }
