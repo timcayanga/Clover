@@ -560,11 +560,11 @@ export function SplitBillQrLibrary() {
               </label>
               <label>
                 <span>Account name <small>Optional</small></span>
-                <input value={draft.accountName} maxLength={120} placeholder="Name shown to payers" onChange={(event) => setDraft((current) => ({ ...current, accountName: event.target.value }))} />
+                <input value={draft.accountName} maxLength={120} onChange={(event) => setDraft((current) => ({ ...current, accountName: event.target.value }))} />
               </label>
               <label>
                 <span>Account number <small>Optional</small></span>
-                <input value={draft.accountNumber} maxLength={120} placeholder="Mobile or account number" onChange={(event) => setDraft((current) => ({ ...current, accountNumber: event.target.value }))} />
+                <input value={draft.accountNumber} maxLength={120} onChange={(event) => setDraft((current) => ({ ...current, accountNumber: event.target.value }))} />
               </label>
             </div>
 

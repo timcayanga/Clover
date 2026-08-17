@@ -48,6 +48,7 @@ assert.match(splitBillHomeSource, /split-bill-mobile-add-button[\s\S]*?>\s*Add\s
 assert.match(globalStyles, /split-bill-mobile-home__footer \.split-bill-mobile-add-button[\s\S]*?width: auto !important/, "Mobile People and Groups Add actions must not collapse into icon-only buttons.");
 assert.doesNotMatch(globalStyles, /data-split-bill-modal-open="true"\] \.shell-bottom-nav\s*\{\s*display:\s*none/, "Payment-option editing must preserve the mobile bottom navigation.");
 assert.match(paymentOptionsSource, /<select[\s\S]*Select a bank or wallet/, "The bank field must use the user's saved payment accounts.");
+assert.doesNotMatch(paymentOptionsSource, /Name shown to payers|Mobile or account number/, "Account details must not imply a bank- or wallet-specific format through generic inline placeholders.");
 assert.match(paymentOptionsSource, /readSelectedWorkspaceId/, "Payment options must follow the user's active Profile.");
 assert.match(paymentAccountsRoute, /type: \{ in: \["bank", "wallet"\] \}/, "Payment options must exclude cards, cash, and investments.");
 assert.match(paymentAccountsRoute, /where: \{ id: workspaceId, userId: user\.id \}/, "Payment accounts must be scoped to the signed-in user.");
