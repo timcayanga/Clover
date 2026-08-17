@@ -117,6 +117,21 @@ async function main() {
   );
   assert.match(
     styles,
+    /Canonical product subtabs and tabbed header alignment[\s\S]{0,1600}font-size: 14px !important;[\s\S]{0,180}font-style: normal !important;[\s\S]{0,180}font-weight: 500 !important;/,
+    "Every product subtab must inherit the desktop Investments type contract.",
+  );
+  assert.match(
+    styles,
+    /Keep the accessible target while removing the decorative burger circle[\s\S]{0,520}border: 0 !important;[\s\S]{0,180}border-radius: 0 !important;[\s\S]{0,180}background: transparent !important;[\s\S]{0,180}box-shadow: none !important;/,
+    "The mobile burger must keep its tap target without rendering a circular container.",
+  );
+  assert.match(
+    styles,
+    /Canonical product subtabs and tabbed header alignment[\s\S]{0,7000}grid-template-columns: 44px minmax\(0, 1fr\) auto !important;[\s\S]{0,2200}min-height: 44px !important;[\s\S]{0,1200}align-items: center !important;/,
+    "Tabbed mobile headers must reserve stable aligned tracks for navigation, tabs, and actions.",
+  );
+  assert.match(
+    styles,
     /\.content--has-title-addon > :is\(\.topbar, \.shell-compact-bar\) \.topbar__title-row \{[\s\S]{0,420}align-items: center !important;[\s\S]{0,180}flex-wrap: nowrap !important;[\s\S]{0,120}overflow: hidden !important;/,
     "Tabbed mobile headers must keep the page title and subtabs aligned on one row.",
   );

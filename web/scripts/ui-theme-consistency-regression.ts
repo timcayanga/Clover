@@ -66,6 +66,16 @@ async function main() {
   assert.match(globalStyles, /\.clover-auth-card__brand \{[\s\S]{0,120}min-height: 44px/);
   assert.match(globalStyles, /\.clover-auth-password-toggle \{[\s\S]{0,220}width: 44px/);
   assert.match(globalStyles, /\.clover-auth-forgot-password \{[\s\S]{0,140}min-height: 40px/);
+  assert.match(
+    globalStyles,
+    /Canonical product subtabs and tabbed header alignment[\s\S]{0,1600}color: rgba\(71, 85, 105, 0\.78\) !important;[\s\S]{0,260}font-weight: 500 !important;/,
+    "Product subtabs must share the Investments typography and inactive color in light mode.",
+  );
+  assert.match(
+    globalStyles,
+    /html\[data-theme="dark"\] :is\([\s\S]{0,300}\.animated-tabs__tab,[\s\S]{0,360}color: rgba\(203, 213, 225, 0\.78\) !important;/,
+    "Product subtabs must preserve the same hierarchy in dark mode.",
+  );
 
   console.log("UI theme and layout consistency regression passed.");
 }
