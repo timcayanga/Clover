@@ -4,10 +4,10 @@ import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type CS
 import { createPortal } from "react-dom";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import {
-  PAYMENT_QR_PROVIDERS,
   detectPaymentQrProvider,
   getPaymentQrTheme,
 } from "@/lib/payment-qr";
+import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 
 type PaymentProfile = {
   id: string;
@@ -34,13 +34,22 @@ type QrDraft = {
   isDefault: boolean;
 };
 
+type PaymentAccount = {
+  id: string;
+  name: string;
+  institution: string | null;
+  accountNumber: string | null;
+  type: "bank" | "wallet";
+  currency: string;
+};
+
 type BarcodeDetectorConstructor = new (options: { formats: string[] }) => {
   detect: (source: CanvasImageSource) => Promise<Array<{ rawValue?: string }>>;
 };
 
 const emptyDraft: QrDraft = {
   label: "",
-  provider: "Other",
+  provider: "",
   currency: "PHP",
   personName: "",
   accountName: "",
@@ -151,6 +160,9 @@ export function SplitBillQrLibrary() {
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [paymentAccounts, setPaymentAccounts] = useState<PaymentAccount[]>([]);
+  const [selectedPaymentAccountId, setSelectedPaymentAccountId] = useState("");
+  const [isLoadingPaymentAccounts, setIsLoadingPaymentAccounts] = useState(false);
   const chooseInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const editorNameInputRef = useRef<HTMLInputElement>(null);
@@ -166,6 +178,42 @@ export function SplitBillQrLibrary() {
       .catch(() => active && setError("Saved payment options could not load. Please try again."))
       .finally(() => active && setIsLoading(false));
     capturePostHogClientEvent("split_bill_qr_viewed");
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadPaymentAccounts = async () => {
+      setIsLoadingPaymentAccounts(true);
+      try {
+        let workspaceId = readSelectedWorkspaceId();
+        if (!workspaceId) {
+          const workspaceResponse = await fetch("/api/workspaces", { cache: "no-store" });
+          const workspacePayload = await workspaceResponse.json();
+          workspaceId = workspaceResponse.ok && Array.isArray(workspacePayload.workspaces)
+            ? String(workspacePayload.workspaces[0]?.id ?? "")
+            : "";
+        }
+        if (!workspaceId) throw new Error("No active profile");
+
+        const response = await fetch(
+          `/api/split-bill-payment-accounts?workspaceId=${encodeURIComponent(workspaceId)}`,
+          { cache: "no-store" },
+        );
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error ?? "Unable to load accounts");
+        if (active) setPaymentAccounts(Array.isArray(payload.accounts) ? payload.accounts : []);
+      } catch {
+        if (active) setPaymentAccounts([]);
+      } finally {
+        if (active) setIsLoadingPaymentAccounts(false);
+      }
+    };
+
+    void loadPaymentAccounts();
     return () => {
       active = false;
     };
@@ -202,12 +250,25 @@ export function SplitBillQrLibrary() {
 
   useEffect(() => {
     if (!isEditorOpen) return;
+    if (!window.matchMedia("(min-width: 1101px)").matches) return;
     const frame = window.requestAnimationFrame(() => editorNameInputRef.current?.focus());
     return () => window.cancelAnimationFrame(frame);
   }, [isEditorOpen]);
 
+  useEffect(() => {
+    if (!isEditorOpen || selectedPaymentAccountId || paymentAccounts.length === 0 || !draft.provider) return;
+    const normalizedNumber = draft.accountNumber.replace(/\D/g, "");
+    const match = paymentAccounts.find((account) => {
+      const provider = (account.institution || account.name).trim().toLowerCase();
+      const accountNumber = (account.accountNumber ?? "").replace(/\D/g, "");
+      return provider === draft.provider.trim().toLowerCase() && (!normalizedNumber || accountNumber === normalizedNumber);
+    });
+    if (match) setSelectedPaymentAccountId(match.id);
+  }, [draft.accountNumber, draft.provider, isEditorOpen, paymentAccounts, selectedPaymentAccountId]);
+
   const openCreate = () => {
     setDraft({ ...emptyDraft, isDefault: profiles.length === 0 });
+    setSelectedPaymentAccountId("");
     setEditingId(null);
     setNotice(null);
     setError(null);
@@ -217,6 +278,7 @@ export function SplitBillQrLibrary() {
   useEffect(() => {
     const handleOpenPaymentOption = () => {
       setDraft({ ...emptyDraft, isDefault: profiles.length === 0 });
+      setSelectedPaymentAccountId("");
       setEditingId(null);
       setNotice(null);
       setError(null);
@@ -228,10 +290,35 @@ export function SplitBillQrLibrary() {
 
   const openEdit = (profile: PaymentProfile) => {
     setDraft(profileToDraft(profile));
+    setSelectedPaymentAccountId("");
     setEditingId(profile.id);
     setNotice(null);
     setError(null);
     setIsEditorOpen(true);
+  };
+
+  const selectPaymentAccount = (accountId: string) => {
+    setSelectedPaymentAccountId(accountId);
+    const account = paymentAccounts.find((item) => item.id === accountId);
+    if (!account) {
+      setDraft((current) => ({ ...current, provider: "", accountNumber: "" }));
+      return;
+    }
+
+    const provider = account.institution?.trim() || account.name.trim();
+    setDraft((current) => ({
+      ...current,
+      label: current.label.trim() ? current.label : `My ${account.name}`,
+      provider,
+      currency: account.currency,
+      accountNumber: account.accountNumber ?? "",
+    }));
+  };
+
+  const formatPaymentAccountLabel = (account: PaymentAccount) => {
+    const digits = account.accountNumber?.replace(/\D/g, "") ?? "";
+    const suffix = digits ? ` •••• ${digits.slice(-4)}` : "";
+    return `${account.name}${suffix} · ${account.currency}`;
   };
 
   const readImage = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -260,10 +347,13 @@ export function SplitBillQrLibrary() {
       setDraft((current) => ({
         ...current,
         label: current.label || (detection.provider === "Other" ? "Payment QR" : `${detection.provider} QR`),
-        provider: detection.provider,
         qrPayload: payload ?? "",
         qrImageData: imageData,
       }));
+      const matchingAccount = paymentAccounts.find((account) =>
+        `${account.institution ?? ""} ${account.name}`.toLowerCase().includes(detection.provider.toLowerCase())
+      );
+      if (matchingAccount) selectPaymentAccount(matchingAccount.id);
       setNotice(payload ? detection.reason : "Image added. Confirm the bank so it is easy to recognize.");
       capturePostHogClientEvent("split_bill_qr_uploaded", {
         provider: detection.provider,
@@ -421,10 +511,23 @@ export function SplitBillQrLibrary() {
               </label>
               <label>
                 <span>Bank</span>
-                <input list="split-bill-payment-banks" value={draft.provider} maxLength={80} required placeholder="GCash, BPI, Maya" onChange={(event) => setDraft((current) => ({ ...current, provider: event.target.value }))} />
-                <datalist id="split-bill-payment-banks">
-                  {PAYMENT_QR_PROVIDERS.map((provider) => <option key={provider} value={provider} />)}
-                </datalist>
+                <select
+                  value={selectedPaymentAccountId}
+                  required
+                  disabled={isLoadingPaymentAccounts || paymentAccounts.length === 0}
+                  onChange={(event) => selectPaymentAccount(event.target.value)}
+                >
+                  <option value="">
+                    {isLoadingPaymentAccounts
+                      ? "Loading banks and wallets…"
+                      : paymentAccounts.length === 0
+                        ? "No bank or wallet accounts available"
+                        : "Select a bank or wallet"}
+                  </option>
+                  {paymentAccounts.map((account) => (
+                    <option key={account.id} value={account.id}>{formatPaymentAccountLabel(account)}</option>
+                  ))}
+                </select>
               </label>
               <label>
                 <span>Account name <small>Optional</small></span>
@@ -465,7 +568,7 @@ export function SplitBillQrLibrary() {
             ) : null}
             {error ? <p className="split-bill-qr-library__error" role="alert">{error}</p> : null}
             <div className="split-bill-qr-editor__actions">
-              <button className="button button-primary button-small" type="submit" disabled={isSaving || isReading || !draft.label.trim() || !draft.provider.trim()}>
+              <button className="button button-primary button-small" type="submit" disabled={isSaving || isReading || !draft.label.trim() || !selectedPaymentAccountId}>
                 {isSaving ? "Saving…" : "Save"}
               </button>
             </div>
