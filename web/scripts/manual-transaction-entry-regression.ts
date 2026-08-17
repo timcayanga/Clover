@@ -49,7 +49,11 @@ assert.match(transactions, /getDeletedWorkspaceAccountIds\(selectedWorkspaceId\)
 assert.match(transactions, /buildTransactionAccountLabels\(selectableTransactionAccounts\)/, "Cross-currency account families must receive distinct picker labels.");
 assert.match(transactions, /buildTransactionAccountFilterOptions\(selectableTransactionAccounts\)/, "Transaction filters must use the same eligible account list as transaction editors.");
 assert.match(transactions, /\{selectableTransactionAccounts\.map\(\(account\) => \(/, "Bulk transaction edits must not reintroduce investment accounts.");
-assert.match(transactions, /className="transactions-currency-filter transactions-currency-filter--compact"/, "Mobile Transactions must expose the shared compact currency selector.");
+assert.match(
+  transactions,
+  /className="transactions-filter-group transactions-filter-group--currency"[\s\S]{0,1400}className="transactions-filter-currency"/,
+  "Mobile Transactions must expose the shared currency selector inside the Filter panel."
+);
 assert.match(transactions, /TransactionAccountPicker/, "Transaction account edits must use the icon-rich account picker.");
 assert.match(transactions, /inlineAccountPickerButtonRefs\.current\.get\(transaction\.id\)\?\.click\(\)/, "Clicking a row account mark must open its account editor.");
 assert.match(transactions, /inlineCategoryPickerButtonRefs\.current\.get\(transaction\.id\)\?\.click\(\)/, "Clicking a row category mark must open its category editor.");

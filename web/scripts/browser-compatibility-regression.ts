@@ -419,12 +419,22 @@ async function main() {
   );
   assert.match(
     globalStyles,
-    /Final mobile shell alignment[\s\S]{0,900}left: 50% !important;[\s\S]{0,180}transform: translate\(-50%, -50%\) !important;/,
-    "Mobile page names must remain centered against the viewport despite asymmetric controls."
+    /Final mobile shell alignment[\s\S]{0,1800}\.content--plain-title > \.topbar \.topbar__title-wrap,[\s\S]{0,700}grid-column: 2 !important;[\s\S]{0,260}justify-self: center !important;/,
+    "Plain mobile page names must remain centered in the header's middle grid column despite asymmetric controls."
   );
   assert.match(
     globalStyles,
-    /Final mobile shell alignment[\s\S]{0,1800}\.transactions-mobile-simple-row \{[\s\S]{0,100}border-top: 0\.5px solid rgba\(148, 163, 184, 0\.24\);/,
+    /Mobile pages with subtabs[\s\S]{0,2400}\.content--has-title-addon > :is\(\.topbar, \.shell-compact-bar\) \.topbar__title-row \{[\s\S]{0,320}align-items: flex-start !important;[\s\S]{0,180}flex-wrap: wrap !important;/,
+    "Tabbed mobile headers must keep the page title and every subtab visible in one aligned, wrapping row."
+  );
+  assert.match(
+    globalStyles,
+    /Mobile pages with subtabs[\s\S]{0,4200}\.content--has-title-addon \.topbar__title-addon :is\([\s\S]{0,220}\.circles-title-tabs[\s\S]{0,500}flex-wrap: wrap !important;[\s\S]{0,160}-webkit-mask-image: none !important;/,
+    "Tabbed mobile headers must not fade, clip, or hide available subtabs."
+  );
+  assert.match(
+    globalStyles,
+    /\.transactions-mobile-simple-row \{[\s\S]{0,100}border-top: 0\.5px solid rgba\(148, 163, 184, 0\.24\);/,
     "Mobile transaction separators must use a light hairline treatment."
   );
   assert.ok(
