@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "clover-static-";
-const CACHE_NAME = `${CACHE_PREFIX}v1`;
+const CACHE_NAME = `${CACHE_PREFIX}v2`;
 const PRECACHE_URLS = [
   "/pwa/apple-touch-icon.png",
   "/pwa/icon-192.png",
@@ -19,7 +19,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) => Promise.all(
       keys
-        .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+        .filter((key) => key !== CACHE_NAME)
         .map((key) => caches.delete(key)),
     )).then(() => self.clients.claim()),
   );
@@ -35,7 +35,6 @@ function isSafeStaticAsset(url, request) {
   }
 
   return (
-    url.pathname.startsWith("/_next/static/") ||
     url.pathname.startsWith("/pwa/") ||
     url.pathname === "/clover-mark.svg" ||
     url.pathname === "/icon.svg" ||

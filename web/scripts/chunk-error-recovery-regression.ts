@@ -6,6 +6,7 @@ const layout = fs.readFileSync(path.join(root, "app/layout.tsx"), "utf8");
 const nextConfig = fs.readFileSync(path.join(root, "next.config.mjs"), "utf8");
 const bootstrap = fs.readFileSync(path.join(root, "lib/chunk-error-bootstrap.ts"), "utf8");
 const clientRecovery = fs.readFileSync(path.join(root, "lib/chunk-error-recovery.ts"), "utf8");
+const serviceWorker = fs.readFileSync(path.join(root, "public/sw.js"), "utf8");
 
 const assert = (condition: boolean, message: string) => {
   if (!condition) throw new Error(message);
@@ -20,5 +21,8 @@ assert(bootstrap.includes('window.addEventListener("unhandledrejection"'), "Chun
 assert(bootstrap.includes("chunkUrlPattern") && bootstrap.includes("sourceUrl"), "Failed chunk script URLs must trigger recovery.");
 assert(bootstrap.includes("window.location.replace"), "Recovery must request a fresh document.");
 assert(clientRecovery.includes("CHUNK_RECOVERY_QUERY_KEY"), "Client fallback must share the recovery query key.");
+assert(bootstrap.includes('key.startsWith("clover-static-")'), "Bootstrap recovery must clear stale PWA caches.");
+assert(clientRecovery.includes('key.startsWith("clover-static-")'), "Client recovery must clear stale PWA caches.");
+assert(!serviceWorker.includes('url.pathname.startsWith("/_next/static/")'), "PWA must not cache deployment-specific Next.js chunks.");
 
 console.log("Chunk error recovery regression checks passed.");

@@ -16,11 +16,26 @@ export function getChunkRecoveryBootstrapScript(buildId: string) {
         return "";
       };
 
-      const recover = () => {
+      const recover = async () => {
         try {
           const recoveryKey = recoveryFlag + ":" + buildId + ":" + window.location.pathname;
           if (window.sessionStorage.getItem(recoveryKey) === "1") return;
           window.sessionStorage.setItem(recoveryKey, "1");
+
+          if ("caches" in window) {
+            const cacheKeys = await window.caches.keys();
+            await Promise.all(
+              cacheKeys
+                .filter((key) => key.startsWith("clover-static-"))
+                .map((key) => window.caches.delete(key)),
+            );
+          }
+
+          if ("serviceWorker" in navigator) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registrations.map((registration) => registration.update()));
+          }
+
           const recoveryUrl = new URL(window.location.href);
           recoveryUrl.searchParams.set(queryKey, buildId);
           window.location.replace(recoveryUrl.toString());

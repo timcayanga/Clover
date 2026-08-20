@@ -25,7 +25,9 @@ assert.match(layout, /<PwaServiceWorker\s*\/>/);
 assert.match(registration, /navigator\.serviceWorker\.register\(["']\/sw\.js["']/);
 assert.match(serviceWorker, /request\.mode\s*===\s*["']navigate["']/);
 assert.match(serviceWorker, /request\.destination\s*===\s*["']document["']/);
-assert.match(serviceWorker, /\/_next\/static\//);
+assert.doesNotMatch(serviceWorker, /pathname\.startsWith\(["']\/_next\/static\//, "Service worker must never cache deployment-specific Next.js chunks");
+assert.match(serviceWorker, /clover-static-/);
+assert.match(serviceWorker, /key !== CACHE_NAME/, "Service worker activation must purge obsolete caches");
 assert.doesNotMatch(serviceWorker, /pathname\.startsWith\(["']\/api\//, "Service worker must not opt API responses into caching");
 assert.doesNotMatch(serviceWorker, /caches\.open\([^)]*financial|account|transaction/i, "Service worker must not create financial-data caches");
 

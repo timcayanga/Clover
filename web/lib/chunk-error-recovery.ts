@@ -27,7 +27,7 @@ export function getErrorMessage(error: unknown) {
   return "";
 }
 
-export function recoverFromChunkLoadError() {
+export async function recoverFromChunkLoadError() {
   if (typeof window === "undefined") {
     return false;
   }
@@ -40,6 +40,25 @@ export function recoverFromChunkLoadError() {
   }
 
   window.sessionStorage.setItem(recoveryKey, "1");
+
+  try {
+    if ("caches" in window) {
+      const cacheKeys = await window.caches.keys();
+      await Promise.all(
+        cacheKeys
+          .filter((key) => key.startsWith("clover-static-"))
+          .map((key) => window.caches.delete(key)),
+      );
+    }
+
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.update()));
+    }
+  } catch {
+    // Cache cleanup is best effort. The cache-busted navigation still recovers.
+  }
+
   const recoveryUrl = new URL(window.location.href);
   recoveryUrl.searchParams.set(CHUNK_RECOVERY_QUERY_KEY, currentBuildId);
   window.location.replace(recoveryUrl.toString());
