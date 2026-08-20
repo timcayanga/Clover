@@ -50,7 +50,9 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
       throw error;
     });
 
-  const [budgets, transactions, categories, accounts, commitments] = await Promise.all([
+  // Keep each batch within Clover's Vercel database pool limit. Running all
+  // five reads at once can make later queries exceed the acquisition timeout.
+  const [budgets, transactions] = await Promise.all([
     budgetsPromise,
     prisma.transaction.findMany({
       where: buildActiveWorkspaceTransactionWhere(workspaceId, {
@@ -69,6 +71,8 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
         isExcluded: true,
       },
     }),
+  ]);
+  const [categories, accounts] = await Promise.all([
     prisma.category.findMany({
       where: {
         workspaceId,
@@ -101,7 +105,8 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
       },
       orderBy: [{ name: "asc" }],
     }),
-    prisma.financialCommitment.findMany({
+  ]);
+  const commitments = await prisma.financialCommitment.findMany({
       where: {
         workspaceId,
         status: "active",
@@ -116,8 +121,7 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
         kind: true,
         status: true,
       },
-    }),
-  ]);
+    });
 
   // Parsed rows can be visible in Transactions before the normalization worker finishes.
   // Use them as a read-only fallback so budgets do not look empty during that window.

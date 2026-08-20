@@ -1159,7 +1159,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
             sourceMetadata: true,
           },
           orderBy: { createdAt: "desc" },
-          take: 50,
+          take: 1,
         },
       },
     },
@@ -1212,15 +1212,9 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     .filter((account) => account.source === "manual")
     .map((account) => account.id);
 
-  const [
-    allTransactionsQuery,
-    recurringPatterns,
-    financialCommitments,
-    goalHistoryRows,
-    investmentSnapshots,
-    splitBillWorkspaceData,
-    manualAccountTransactions,
-  ] = await Promise.all([
+  // Vercel functions intentionally use a small database pool. Keep Adviser
+  // reads in pairs so one page cannot exhaust the pool and time out itself.
+  const [allTransactionsQuery, recurringPatterns] = await Promise.all([
     prisma.transaction.findMany({
       where: buildActiveWorkspaceTransactionWhere(resolvedWorkspace.id),
       select: {
@@ -1256,6 +1250,8 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
       orderBy: [{ nextExpectedDate: "asc" }, { lastSeenDate: "desc" }],
       take: 12,
     }),
+  ]);
+  const [financialCommitments, goalHistoryRows] = await Promise.all([
     prisma.financialCommitment.findMany({
       where: {
         workspaceId: resolvedWorkspace.id,
@@ -1280,6 +1276,8 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
         createdAt: true,
       },
     }),
+  ]);
+  const [investmentSnapshots, splitBillWorkspaceData] = await Promise.all([
     prisma.investmentSnapshot.findMany({
       where: {
         workspaceId: resolvedWorkspace.id,
@@ -1303,26 +1301,26 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
       },
     }),
     loadSplitBillWorkspaceData(user.id),
-    manualAccountIds.length > 0
-      ? prisma.transaction.findMany({
-          where: buildActiveWorkspaceTransactionWhere(resolvedWorkspace.id, {
-            accountId: { in: manualAccountIds },
-          }),
-          select: {
-            accountId: true,
-            amount: true,
-            type: true,
-            isExcluded: true,
-            merchantRaw: true,
-            merchantClean: true,
-            description: true,
-            date: true,
-            createdAt: true,
-            rawPayload: true,
-          },
-        })
-      : Promise.resolve([]),
   ]);
+  const manualAccountTransactions = manualAccountIds.length > 0
+    ? await prisma.transaction.findMany({
+        where: buildActiveWorkspaceTransactionWhere(resolvedWorkspace.id, {
+          accountId: { in: manualAccountIds },
+        }),
+        select: {
+          accountId: true,
+          amount: true,
+          type: true,
+          isExcluded: true,
+          merchantRaw: true,
+          merchantClean: true,
+          description: true,
+          date: true,
+          createdAt: true,
+          rawPayload: true,
+        },
+      })
+    : [];
 
   const allTransactions = allTransactionsQuery as AdviserTransaction[];
   const manualTransactionsByAccount = new Map<string, BalanceLikeTransaction[]>();
@@ -1368,7 +1366,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     investmentInterestRate: account.investmentInterestRate === null ? null : Number(account.investmentInterestRate),
     investmentMaturityValue: account.investmentMaturityValue === null ? null : Number(account.investmentMaturityValue),
   })) satisfies WorkspaceAccount[];
-  const [plannedPaymentSuggestions, adviserInteractions, adviserCompletionLogs, budgetData] = await Promise.all([
+  const [plannedPaymentSuggestions, adviserInteractions] = await Promise.all([
     getPlannedPaymentSuggestions(resolvedWorkspace.id).catch(() => []),
     prisma.auditLog.findMany({
       where: {
@@ -1386,24 +1384,26 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
         createdAt: true,
       },
     }),
-    prisma.auditLog.findMany({
-      where: {
-        workspaceId: resolvedWorkspace.id,
-        action: {
-          in: ["adviser.action_completed"],
-        },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-      select: {
-        action: true,
-        entityId: true,
-        metadata: true,
-        createdAt: true,
-      },
-    }),
-    loadBudgetWorkspaceData(resolvedWorkspace.id, now),
   ]);
+  const adviserCompletionLogs = await prisma.auditLog.findMany({
+    where: {
+      workspaceId: resolvedWorkspace.id,
+      action: {
+        in: ["adviser.action_completed"],
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    select: {
+      action: true,
+      entityId: true,
+      metadata: true,
+      createdAt: true,
+    },
+  });
+  // Budget loading performs its own bounded database reads, so do not run it
+  // beside another Adviser query burst.
+  const budgetData = await loadBudgetWorkspaceData(resolvedWorkspace.id, now);
 
   const adviserMemoryByGroup = new Map<string, AdviserMemoryStats>();
   const adviserMemoryByItem = new Map<string, AdviserMemoryStats>();

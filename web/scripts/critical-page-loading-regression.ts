@@ -65,10 +65,24 @@ assert.doesNotMatch(helpSource, /title: "Help Center \| Clover"/);
 
 const adviserSource = readSource("app/adviser/page.tsx");
 const adviserLoadingSource = readSource("app/adviser/loading.tsx");
+const budgetingDataSource = readSource("lib/budgeting-data.ts");
+const serverPageErrorSource = readSource("lib/server-page-error.ts");
 assert.doesNotMatch(adviserSource, /accounts:\s*\{[\s\S]{0,900}transactions:\s*\{/);
 assert.match(adviserSource, /<Suspense fallback=\{null\}>\s*<ReportsStream/);
 assert.match(adviserLoadingSource, /CloverRouteLoadingScreen label="adviser" prompt/);
 assert.doesNotMatch(shellSource, /const coreRoutes = \[[^\]]*"\/adviser"/);
+assert.match(adviserSource, /statementCheckpoints:[\s\S]{0,500}take: 1/);
+assert.match(adviserSource, /Keep Adviser[\s\S]{0,250}reads in pairs/);
+assert.doesNotMatch(
+  adviserSource,
+  /const \[\s*allTransactionsQuery,[\s\S]{0,250}manualAccountTransactions[\s\S]{0,80}= await Promise\.all/,
+);
+assert.match(budgetingDataSource, /Keep each batch within Clover's Vercel database pool limit/);
+assert.doesNotMatch(
+  budgetingDataSource,
+  /const \[budgets, transactions, categories, accounts, commitments\] = await Promise\.all/,
+);
+assert.match(serverPageErrorSource, /\[clover:server-page-error\]/);
 
 const errorBoundarySource = readSource("app/error.tsx");
 const errorScreenSource = readSource("components/error-recovery-screen.tsx");

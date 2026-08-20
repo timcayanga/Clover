@@ -35,6 +35,16 @@ export async function recordServerPageError({
 }: ServerPageErrorInput) {
   const details = normalizeCapturedError(error);
 
+  // Page components render a friendly recovery state, so retain a sanitized
+  // diagnostic in runtime logs without exposing financial payloads to users.
+  console.error("[clover:server-page-error]", {
+    source,
+    route,
+    name: details.name,
+    message: details.message,
+    digest: getNavigationDigest(error) || null,
+  });
+
   await recordAppError({
     ...details,
     source,
