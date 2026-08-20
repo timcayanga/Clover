@@ -11,6 +11,7 @@ import { getAdminDataEnvironment } from "@/lib/admin";
 import { getAnalyticsBetaStartedAt } from "@/lib/analytics";
 import { getAdminTransactionVolumeSnapshot } from "@/lib/admin-transaction-volume";
 import { formatCurrencyAmount } from "@/lib/currency-format";
+import { getAdminImportActivityCutoff } from "@/lib/admin-import-activity";
 
 const formatCount = (value: number) => value.toLocaleString();
 const formatTrackedVolume = (
@@ -37,6 +38,7 @@ export async function getAdminCommandCenterSnapshot(
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const eightWeeksAgo = new Date(now.getTime() - 8 * 7 * 24 * 60 * 60 * 1000);
+  const activeImportCutoff = getAdminImportActivityCutoff(now);
   const realUser = getAdminRealUserWhere();
   const realWorkspace = getAdminRealWorkspaceWhere();
   const activeTransaction = { deletedAt: null } as const;
@@ -114,7 +116,11 @@ export async function getAdminCommandCenterSnapshot(
         where: { ...realUser, onboardingCompletedAt: { not: null } },
       }),
       prisma.importFile.count({
-        where: { status: "processing", workspace: realWorkspace },
+        where: {
+          status: "processing",
+          updatedAt: { gte: activeImportCutoff },
+          workspace: realWorkspace,
+        },
       }),
       prisma.importFile.count({
         where: {

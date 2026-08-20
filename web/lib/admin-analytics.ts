@@ -15,6 +15,7 @@ import {
   type AnalyticsEventName,
 } from "@/lib/analytics";
 import { getPostHogLiveAnalytics, type PostHogLiveAnalytics } from "@/lib/posthog-query";
+import { getAdminImportActivityCutoff } from "@/lib/admin-import-activity";
 
 export type AdminAnalyticsEvent = {
   name: AnalyticsEventName;
@@ -101,7 +102,7 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
   const sevenDaysAgo = sinceBeta(new Date(now - 7 * 24 * 60 * 60 * 1000));
   const thirtyDaysAgo = sinceBeta(new Date(now - 30 * 24 * 60 * 60 * 1000));
   const oneDayAgo = sinceBeta(new Date(now - 24 * 60 * 60 * 1000));
-  const staleImportCutoff = new Date(now - 30 * 60 * 1000);
+  const staleImportCutoff = getAdminImportActivityCutoff(new Date(now));
   const productionUser = getAdminRealUserWhere();
   const productionWorkspace = getAdminRealWorkspaceWhere();
   const betaParticipantUser: Prisma.UserWhereInput = {
@@ -222,7 +223,14 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
         workspace: productionWorkspace,
       },
     }),
-    prisma.importFile.count({ where: { ...betaImport, status: "processing", workspace: productionWorkspace } }),
+    prisma.importFile.count({
+      where: {
+        ...betaImport,
+        status: "processing",
+        updatedAt: { gte: staleImportCutoff },
+        workspace: productionWorkspace,
+      },
+    }),
     prisma.importFile.count({ where: { ...betaImport, status: "processing", updatedAt: { lt: staleImportCutoff }, workspace: productionWorkspace } }),
     prisma.transaction.count({
       where: {

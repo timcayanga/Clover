@@ -124,6 +124,8 @@
     "qa:admin-user-controls": "tsx scripts/admin-user-controls-regression.ts",
     "qa:admin-account-count": "tsx scripts/admin-account-count-regression.ts",
     "qa:admin-home-tracked-amount": "tsx scripts/admin-home-tracked-amount-regression.ts",
+    "qa:admin-import-activity": "tsx scripts/admin-import-activity-regression.ts",
+    "qa:chunk-recovery": "tsx scripts/chunk-error-recovery-regression.ts",
     "qa:admin-core-funnel": "tsx scripts/admin-core-funnel-regression.ts",
     "qa:admin-analysis": "tsx scripts/admin-analysis-regression.ts",
     "qa:interaction-delight": "tsx scripts/interaction-delight-regression.ts",

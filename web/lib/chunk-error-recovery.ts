@@ -1,5 +1,7 @@
 "use client";
 
+import { CHUNK_RECOVERY_QUERY_KEY } from "@/lib/chunk-error-bootstrap";
+
 const CHUNK_ERROR_PATTERN =
   /Loading chunk|ChunkLoadError|Failed to fetch dynamically imported module|Importing a module script failed/i;
 
@@ -38,6 +40,8 @@ export function recoverFromChunkLoadError() {
   }
 
   window.sessionStorage.setItem(recoveryKey, "1");
-  window.location.reload();
+  const recoveryUrl = new URL(window.location.href);
+  recoveryUrl.searchParams.set(CHUNK_RECOVERY_QUERY_KEY, currentBuildId);
+  window.location.replace(recoveryUrl.toString());
   return true;
 }

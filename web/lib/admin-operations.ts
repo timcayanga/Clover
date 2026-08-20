@@ -5,6 +5,7 @@ import {
   getAdminRealWorkspaceWhere,
 } from "@/lib/admin-data-scope";
 import { prisma } from "@/lib/prisma";
+import { getAdminImportActivityCutoff } from "@/lib/admin-import-activity";
 
 export type AdminOperationsSnapshot = {
   generatedAt: string;
@@ -48,14 +49,20 @@ export async function getAdminOperationsSnapshot(): Promise<AdminOperationsSnaps
   const now = Date.now();
   const dayAgo = new Date(now - 24 * 60 * 60 * 1000);
   const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
-  const staleCutoff = new Date(now - 30 * 60 * 1000);
+  const staleCutoff = getAdminImportActivityCutoff(new Date(now));
   const [active, pending, cancelled, suspended, recentEvents, processing, stale, failed24h, queuedJobs, failedJobs, recentImports, actions24h, notes7d, snapshotsAvailable, recentActions] = await Promise.all([
     prisma.billingSubscription.count({ where: { status: "active", user: realUser } }),
     prisma.billingSubscription.count({ where: { status: "approval_pending", user: realUser } }),
     prisma.billingSubscription.count({ where: { status: "cancelled", user: realUser } }),
     prisma.billingSubscription.count({ where: { status: "suspended", user: realUser } }),
     prisma.billingEvent.findMany({ where: { createdAt: { gte: weekAgo }, user: realUser }, orderBy: { createdAt: "desc" }, take: 12, include: { user: { select: { email: true } } } }),
-    prisma.importFile.count({ where: { status: "processing", workspace: scopedWorkspace } }),
+    prisma.importFile.count({
+      where: {
+        status: "processing",
+        updatedAt: { gte: staleCutoff },
+        workspace: scopedWorkspace,
+      },
+    }),
     prisma.importFile.count({ where: { status: "processing", updatedAt: { lt: staleCutoff }, workspace: scopedWorkspace } }),
     prisma.importFile.count({ where: { status: "failed", updatedAt: { gte: dayAgo }, workspace: scopedWorkspace } }),
     prisma.importEnrichmentJob.count({ where: { status: "queued", workspace: scopedWorkspace } }),
@@ -81,7 +88,14 @@ export async function getAdminOperationsSnapshot(): Promise<AdminOperationsSnaps
     },
     imports: {
       processing, stale, failed24h, queuedJobs, failedJobs,
-      recent: recentImports.map((item) => ({ id: item.id, fileName: item.fileName, status: item.status, phase: item.enrichmentJob?.phase ?? item.processingPhase, updatedAt: item.updatedAt.toISOString(), userEmail: item.workspace.user.email })),
+      recent: recentImports.map((item) => ({
+        id: item.id,
+        fileName: item.fileName,
+        status: item.status === "processing" && item.updatedAt < staleCutoff ? "stale" : item.status,
+        phase: item.enrichmentJob?.phase ?? item.processingPhase,
+        updatedAt: item.updatedAt.toISOString(),
+        userEmail: item.workspace.user.email,
+      })),
     },
     alerts,
     access: {

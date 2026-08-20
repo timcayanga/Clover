@@ -20,6 +20,7 @@ import { AdminOnlyRedirect } from "@/components/admin-only-redirect";
 import { ModalKeyboardController } from "@/components/modal-keyboard-controller";
 import { CRITICAL_NAVIGATION_ICON_NAMES, getNavigationIconSrc } from "@/lib/navigation-icons";
 import { PwaServiceWorker } from "@/components/pwa-service-worker";
+import { getChunkRecoveryBootstrapScript } from "@/lib/chunk-error-bootstrap";
 
 const clerkLocalization = {
   userProfile: {
@@ -117,6 +118,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       style={serverTheme ? { colorScheme: serverTheme } : undefined}
     >
       <head>
+        <script
+          id="clover-chunk-recovery"
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: getChunkRecoveryBootstrapScript(buildInfo.buildId) }}
+        />
         {CRITICAL_NAVIGATION_ICON_NAMES.map((icon) => (
           <link
             key={icon}
