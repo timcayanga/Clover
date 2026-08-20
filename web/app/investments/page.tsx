@@ -2757,7 +2757,7 @@ export default function InvestmentsPage() {
       mobileBackHref="/more"
       titleAddon={
         <AnimatedTabs
-          className="investments-tabs"
+          className="investments-tabs mobile-icon-tabs"
           activeKey={selectedTab}
           onChange={(key) => selectInvestmentTab(key as InvestmentTab)}
           tabs={visibleInvestmentTabs.map((tab) => ({

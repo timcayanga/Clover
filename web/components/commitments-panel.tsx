@@ -67,7 +67,7 @@ const dateFormatter = new Intl.DateTimeFormat("en-PH", {
 
 type CommitmentKind = "planned_payment" | "debt" | "receivable" | "reminder";
 type CommitmentFormKind = CommitmentKind;
-type EditableCommitmentField = "title" | "counterparty" | "dueDate" | "recurrence" | "amount" | "accountId" | "status";
+type EditableCommitmentField = "title" | "counterparty" | "dueDate" | "recurrence" | "amount" | "accountId" | "status" | "notes";
 
 type CommitmentFormCopy = {
   eyebrow: string;
@@ -628,6 +628,9 @@ export function CommitmentsPanel({
       }
 
       setVisibleCommitments((current) => current.filter((commitment) => commitment.id !== commitmentId));
+      if (mobileDetailId === commitmentId) {
+        closeMobileDetail();
+      }
       router.refresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to delete commitment";
@@ -691,6 +694,8 @@ export function CommitmentsPanel({
         return commitment.accountId ?? "";
       case "status":
         return commitment.status;
+      case "notes":
+        return commitment.notes ?? "";
     }
   };
 
@@ -757,7 +762,7 @@ export function CommitmentsPanel({
   };
 
   const handleEditorKeyDown = (
-    event: React.KeyboardEvent<HTMLInputElement>,
+    event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
     commitment: FinancialCommitmentSummary,
     field: EditableCommitmentField
   ) => {
@@ -1080,9 +1085,7 @@ export function CommitmentsPanel({
                     disabled={isSaving}
                     onDelete={() => handleDelete(commitment.id)}
                   >
-                    <div
-                      className="recurring-mobile-row"
-                    >
+                    <div className="recurring-mobile-row" onClick={() => openMobileDetail(commitment.id)}>
                     <label
                       className={`recurring-occurrence-check recurring-occurrence-check--mobile${occurrenceCompleted ? " is-complete" : ""}`}
                       title={completionAction}
@@ -1091,6 +1094,7 @@ export function CommitmentsPanel({
                         type="checkbox"
                         checked={occurrenceCompleted}
                         disabled={commitment.status !== "active" || !commitment.occurrenceDueDate || completingCommitmentId === commitment.id}
+                        onClick={(event) => event.stopPropagation()}
                         onChange={(event) => void handleOccurrenceCompletion(commitment, event.target.checked)}
                         aria-label={completionAction}
                       />
@@ -1107,7 +1111,6 @@ export function CommitmentsPanel({
                     <button
                       type="button"
                       className="recurring-mobile-row__open"
-                      onClick={() => openMobileDetail(commitment.id)}
                       aria-label={`Open ${commitment.title}`}
                     >
                       <strong className="recurring-mobile-row__name">{commitment.title}</strong>
@@ -1437,16 +1440,99 @@ export function CommitmentsPanel({
                 <h2>{mobileDetailCommitment.title}</h2>
               </div>
             </header>
-            <dl className="recurring-mobile-detail__fields">
-              <div><dt>Status</dt><dd>{mobileDetailCommitment.kind === "receivable" ? mobileDetailCommitment.occurrenceCompletedAt ? "Received" : "Pending" : mobileDetailCommitment.occurrenceCompletedAt ? "Paid" : "Pending"}</dd></div>
-              <div><dt>Amount</dt><dd>{formatCurrency(mobileDetailCommitment.amount)}</dd></div>
-              <div><dt>Due date</dt><dd>{formatDate(getCommitmentDateValue(mobileDetailCommitment))}</dd></div>
-              <div><dt>Repeats</dt><dd>{mobileDetailCommitment.recurrence === "once" ? "One-time" : commitmentRecurrenceLabels[mobileDetailCommitment.recurrence]}</dd></div>
-              <div><dt>Category</dt><dd>{mobileDetailCommitment.categoryName ?? "Other"}</dd></div>
-              {mobileDetailCommitment.account || mobileDetailCommitment.inferredAccount ? <div><dt>Account</dt><dd>{mobileDetailCommitment.account?.name ?? mobileDetailCommitment.inferredAccount?.name}</dd></div> : null}
-              {mobileDetailCommitment.counterparty ? <div><dt>{activeTab === "owed" ? "Owed from" : "Payee"}</dt><dd>{mobileDetailCommitment.counterparty}</dd></div> : null}
-              {mobileDetailCommitment.notes ? <div className="recurring-mobile-detail__field--wide"><dt>Notes</dt><dd>{mobileDetailCommitment.notes}</dd></div> : null}
-            </dl>
+            <div className="recurring-mobile-detail__fields">
+              <label className="recurring-mobile-detail__field recurring-mobile-detail__field--wide">
+                <span>Name</span>
+                <input
+                  key={`title-${mobileDetailCommitment.title}`}
+                  defaultValue={mobileDetailCommitment.title}
+                  onBlur={(event) => void saveCommitmentField(mobileDetailCommitment, "title", event.currentTarget.value)}
+                  onKeyDown={(event) => handleEditorKeyDown(event, mobileDetailCommitment, "title")}
+                />
+              </label>
+              <label className="recurring-mobile-detail__field">
+                <span>Amount</span>
+                <input
+                  key={`amount-${mobileDetailCommitment.amount}`}
+                  inputMode="decimal"
+                  defaultValue={mobileDetailCommitment.amount ?? ""}
+                  onBlur={(event) => void saveCommitmentField(mobileDetailCommitment, "amount", event.currentTarget.value)}
+                  onKeyDown={(event) => handleEditorKeyDown(event, mobileDetailCommitment, "amount")}
+                />
+              </label>
+              <label className="recurring-mobile-detail__field">
+                <span>Due date</span>
+                <input
+                  key={`date-${getCommitmentDateValue(mobileDetailCommitment)}`}
+                  type="date"
+                  defaultValue={toDateInputValue(getCommitmentDateValue(mobileDetailCommitment))}
+                  onBlur={(event) => void saveCommitmentField(mobileDetailCommitment, "dueDate", event.currentTarget.value)}
+                />
+              </label>
+              <label className="recurring-mobile-detail__field">
+                <span>Repeats</span>
+                <select
+                  value={mobileDetailCommitment.recurrence}
+                  onChange={(event) => void saveCommitmentField(mobileDetailCommitment, "recurrence", event.currentTarget.value)}
+                >
+                  {commitmentRecurrenceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </label>
+              <label className="recurring-mobile-detail__field">
+                <span>Account</span>
+                <select
+                  value={mobileDetailCommitment.accountId ?? mobileDetailCommitment.inferredAccountId ?? ""}
+                  onChange={(event) => void saveCommitmentField(mobileDetailCommitment, "accountId", event.currentTarget.value)}
+                >
+                  <option value="">Not linked</option>
+                  {[...accounts].sort((left, right) => left.name.localeCompare(right.name)).map((account) => (
+                    <option key={account.id} value={account.id}>{account.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="recurring-mobile-detail__field recurring-mobile-detail__field--wide">
+                <span>{activeTab === "owed" ? "Owed from" : "Payee"}</span>
+                <input
+                  key={`counterparty-${mobileDetailCommitment.counterparty}`}
+                  defaultValue={mobileDetailCommitment.counterparty ?? ""}
+                  onBlur={(event) => void saveCommitmentField(mobileDetailCommitment, "counterparty", event.currentTarget.value)}
+                  onKeyDown={(event) => handleEditorKeyDown(event, mobileDetailCommitment, "counterparty")}
+                />
+              </label>
+              <div className="recurring-mobile-detail__field recurring-mobile-detail__field--wide recurring-mobile-detail__category">
+                <span>Category</span>
+                <strong>{mobileDetailCommitment.categoryName ?? "Other"}</strong>
+              </div>
+              <label className="recurring-mobile-detail__field recurring-mobile-detail__field--wide">
+                <span>Notes</span>
+                <textarea
+                  key={`notes-${mobileDetailCommitment.notes}`}
+                  defaultValue={mobileDetailCommitment.notes ?? ""}
+                  rows={4}
+                  onBlur={(event) => void saveCommitmentField(mobileDetailCommitment, "notes", event.currentTarget.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") event.currentTarget.blur();
+                  }}
+                />
+              </label>
+              <label className="recurring-mobile-detail__completion recurring-mobile-detail__field--wide">
+                <input
+                  type="checkbox"
+                  checked={Boolean(mobileDetailCommitment.occurrenceCompletedAt)}
+                  disabled={!mobileDetailCommitment.occurrenceDueDate || completingCommitmentId === mobileDetailCommitment.id}
+                  onChange={(event) => void handleOccurrenceCompletion(mobileDetailCommitment, event.currentTarget.checked)}
+                />
+                <span>{mobileDetailCommitment.kind === "receivable" ? mobileDetailCommitment.occurrenceCompletedAt ? "Received" : "Pending" : mobileDetailCommitment.occurrenceCompletedAt ? "Paid" : "Pending"}</span>
+              </label>
+              <button
+                className="button button-danger button-small recurring-mobile-detail__delete recurring-mobile-detail__field--wide"
+                type="button"
+                disabled={isSaving || savingCommitmentId === mobileDetailCommitment.id}
+                onClick={() => void handleDelete(mobileDetailCommitment.id)}
+              >
+                Delete recurring item
+              </button>
+            </div>
           </section>
         ) : null}
       </article>

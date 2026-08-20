@@ -31,6 +31,23 @@ const tabs = [
 ] as const;
 type CircleTab = (typeof tabs)[number];
 
+function CircleTabIcon({ tab }: { tab: CircleTab }) {
+  const common = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+
+  if (tab === "expenses") return <svg viewBox="0 0 24 24" {...common}><path d="M4 7h16v10H4z" /><path d="M8 12h8M12 9v6" /></svg>;
+  if (tab === "budget") return <svg viewBox="0 0 24 24" {...common}><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M8 7h8M8 11h2m2 0h2m2 0h1M8 15h2m2 0h2m2 0h1" /></svg>;
+  if (tab === "goals") return <svg viewBox="0 0 24 24" {...common}><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3" /><path d="m15 9 5-5" /></svg>;
+  if (tab === "activity") return <svg viewBox="0 0 24 24" {...common}><path d="M4 18V9m5 9V5m5 13v-6m5 6V8" /></svg>;
+  if (tab === "members") return <svg viewBox="0 0 24 24" {...common}><circle cx="9" cy="9" r="3" /><circle cx="17" cy="10" r="2" /><path d="M4 19c.6-3 2.3-5 5-5s4.4 2 5 5m1-4c2.5 0 4 1.3 4.5 3.5" /></svg>;
+  return <svg viewBox="0 0 24 24" {...common}><rect x="4" y="4" width="6" height="6" rx="1.5" /><rect x="14" y="4" width="6" height="6" rx="1.5" /><rect x="4" y="14" width="6" height="6" rx="1.5" /><rect x="14" y="14" width="6" height="6" rx="1.5" /></svg>;
+}
+
 type CirclesWorkspaceProps = {
   initialData: CirclesWorkspaceData;
   selectedCircleId: string | null;
@@ -562,7 +579,7 @@ export function CirclesWorkspace({
           {selectedCircle ? (
             <main ref={workspaceRef} className="circles-workspace">
               <AnimatedTabs
-                className="investments-tabs circles-section-tabs"
+                className="investments-tabs circles-section-tabs mobile-icon-tabs"
                 activeKey={activeTab}
                 onChange={(key) => selectTab(key as CircleTab)}
                 tabs={tabs.map((tab) => ({
@@ -571,6 +588,7 @@ export function CirclesWorkspace({
                     tab === "budget"
                       ? "Budgeting"
                       : tab[0].toUpperCase() + tab.slice(1),
+                  icon: <CircleTabIcon tab={tab} />,
                   ariaLabel:
                     tab === "budget"
                       ? "Budgeting"

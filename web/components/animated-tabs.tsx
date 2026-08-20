@@ -81,7 +81,7 @@ export function AnimatedTabs({ className, activeKey, onChange, tabs }: AnimatedT
           aria-label={tab.ariaLabel ?? tab.label}
         >
           {tab.icon ? <span className="animated-tabs__icon" aria-hidden="true">{tab.icon}</span> : null}
-          {tab.label ? <span>{tab.label}</span> : null}
+          {tab.label ? <span className="animated-tabs__label">{tab.label}</span> : null}
           {tab.badge ? <span className="animated-tabs__badge">{tab.badge}</span> : null}
         </button>
       );

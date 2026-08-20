@@ -29,6 +29,14 @@ const recurringTabs: Array<{ id: RecurringTab; label: string; mobileLabel: strin
   { id: "installments", label: "Installments", mobileLabel: "Installments" },
 ];
 
+function RecurringTabIcon({ tab }: { tab: RecurringTab }) {
+  if (tab === "planned") return <svg viewBox="0 0 24 24" fill="none"><path d="M6 4v3m12-3v3M5 9h14M6 6h12a2 2 0 0 1 2 2v11H4V8a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+  if (tab === "debt") return <svg viewBox="0 0 24 24" fill="none"><path d="M4 8h16v11H4zM7 8V5h10v3m-9 5h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+  if (tab === "owed") return <svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16m-4-4 4 4-4 4M8 8l-4 4 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+  if (tab === "installments") return <svg viewBox="0 0 24 24" fill="none"><path d="M6 6h12M6 12h12M6 18h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><circle cx="4" cy="6" r="1" fill="currentColor" /><circle cx="4" cy="12" r="1" fill="currentColor" /><circle cx="4" cy="18" r="1" fill="currentColor" /></svg>;
+  return <svg viewBox="0 0 24 24" fill="none"><path d="M4 5h7v6H4zm9 0h7v6h-7zM4 13h7v6H4zm9 0h7v6h-7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>;
+}
+
 const addKindForTab = (tab: RecurringTab): RecurringAddKind => {
   switch (tab) {
     case "debt":
@@ -131,7 +139,7 @@ export function RecurringPageClient({
       title="Recurring"
       mobileLeadingAction={<ContextualAskClover context="recurring" planTier={planTier} />}
       titleAddon={
-        <nav className="investments-tabs recurring-tabs--top" aria-label="Recurring sections">
+        <nav className="investments-tabs recurring-tabs--top mobile-icon-tabs" aria-label="Recurring sections">
           {recurringTabs.map((tab) => (
             <button
               key={tab.id}
@@ -140,6 +148,7 @@ export function RecurringPageClient({
               aria-current={activeTab === tab.id ? "page" : undefined}
               onClick={() => selectTab(tab.id)}
             >
+              <span className="recurring-tab-icon" aria-hidden="true"><RecurringTabIcon tab={tab.id} /></span>
               <span className="recurring-tab-label recurring-tab-label--desktop">{tab.label}</span>
               <span className="recurring-tab-label recurring-tab-label--mobile">{tab.mobileLabel}</span>
             </button>
