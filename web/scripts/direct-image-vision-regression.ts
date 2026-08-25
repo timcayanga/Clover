@@ -78,6 +78,26 @@ assert.match(
   "OpenAI import requests must log latency and token usage for cost monitoring."
 );
 assert.match(
+  parserSource,
+  /const openAIReceiptJsonSchema = \{[\s\S]*?receipt_account_match:[\s\S]*?receipt_details:[\s\S]*?transactions:/,
+  "Receipt vision must use a compact response contract without statement and holdings fields."
+);
+assert.match(
+  parserSource,
+  /schema: isReceiptMode \? openAIReceiptJsonSchema : openAIJsonSchema/,
+  "Only receipt imports should use the compact response contract."
+);
+assert.match(
+  parserSource,
+  /const maxOutputTokens = isReceiptMode\s*\? 2_200/,
+  "Receipt structured extraction must use a bounded response budget."
+);
+assert.match(
+  parserSource,
+  /expandReceiptResponseForInternalValidation\(parsedJson, params\.detectedMetadata\)/,
+  "Compact receipt responses must be expanded before the shared downstream validator runs."
+);
+assert.match(
   workerSource,
   /const transcriptParsed = transcriptPreviewDetails\s*\? null\s*:\s*await parseImportTextWithOpenAIFallback/,
   "A usable deterministic receipt transcript must skip the extra paid text parse."

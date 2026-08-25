@@ -1133,6 +1133,51 @@ const openAIJsonSchema = {
   ],
 } as const;
 
+// Receipts previously used the full statement contract, which made every
+// request describe and return unused account, holdings, reconciliation, and
+// learning fields. Keep the receipt response focused, then expand it into the
+// existing internal shape before validation so downstream behavior is stable.
+const openAIReceiptJsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    document_type: { type: "string", enum: ["receipt"] },
+    receipt_account_match: openAIJsonSchema.properties.receipt_account_match,
+    receipt_details: openAIJsonSchema.properties.receipt_details,
+    transactions: openAIJsonSchema.properties.transactions,
+  },
+  required: ["document_type", "receipt_account_match", "receipt_details", "transactions"],
+} as const;
+
+const expandReceiptResponseForInternalValidation = (
+  parsed: unknown,
+  detectedMetadata: DetectedStatementMetadata | null
+) => {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return parsed;
+  }
+
+  return {
+    ...(parsed as Record<string, unknown>),
+    document_type: "receipt",
+    account: {
+      display_name: detectedMetadata?.accountName ?? null,
+      institution_name: detectedMetadata?.institution ?? null,
+      account_number: detectedMetadata?.accountNumber ?? null,
+      account_last4: detectedMetadata?.accountNumber?.replace(/\D/g, "").slice(-4) || null,
+      account_type: detectedMetadata?.accountType ?? null,
+      currency: detectedMetadata?.currency ?? null,
+      statement_period: {
+        start: detectedMetadata?.startDate ?? null,
+        end: detectedMetadata?.endDate ?? null,
+      },
+      statement_balance: detectedMetadata?.endingBalance ?? null,
+      computed_balance: detectedMetadata?.endingBalance ?? null,
+      source: "openai_fallback",
+    },
+  };
+};
+
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 
 const wiseEvidenceAmountPattern =
@@ -2581,10 +2626,10 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   // capture) needs a compact structured result, not a statement-sized output
   // budget. Keeping this below the general 3k cap reduces cold vision latency
   // while leaving multi-page and known-statement quality paths unchanged.
-  const maxOutputTokens = isSinglePageGenericImage
-    ? 2_400
-    : isReceiptMode
-      ? 2_500
+  const maxOutputTokens = isReceiptMode
+    ? 2_200
+    : isSinglePageGenericImage
+      ? 2_400
       : inferredDocumentFamily === "generic_document"
         ? 3_000
         : pdfFileDataBase64
@@ -2679,9 +2724,9 @@ export const parseImportTextWithOpenAIFallback = async (params: {
           text: {
             format: {
               type: "json_schema",
-              name: "bank_statement_import",
+              name: isReceiptMode ? "receipt_import" : "bank_statement_import",
               strict: true,
-              schema: openAIJsonSchema,
+              schema: isReceiptMode ? openAIReceiptJsonSchema : openAIJsonSchema,
             },
           },
         }),
@@ -2892,7 +2937,11 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         },
       };
     }
-    let validation = importedStatementSchema.safeParse(parsedJson);
+    let validation = importedStatementSchema.safeParse(
+      isReceiptMode
+        ? expandReceiptResponseForInternalValidation(parsedJson, params.detectedMetadata)
+        : parsedJson
+    );
     if (
       useColdVisualFastPath &&
       validation.success &&
@@ -2925,7 +2974,13 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         });
         const strongOutputText = extractOutputText(strongPayload);
         const strongParsedJson = strongOutputText ? parseStructuredJsonText(strongOutputText) : null;
-        const strongValidation = strongParsedJson ? importedStatementSchema.safeParse(strongParsedJson) : null;
+        const strongValidation = strongParsedJson
+          ? importedStatementSchema.safeParse(
+              isReceiptMode
+                ? expandReceiptResponseForInternalValidation(strongParsedJson, params.detectedMetadata)
+                : strongParsedJson
+            )
+          : null;
         if (
           strongOutputText &&
           strongParsedJson &&
