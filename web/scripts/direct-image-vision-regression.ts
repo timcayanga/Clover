@@ -89,8 +89,8 @@ assert.match(
 );
 assert.match(
   parserSource,
-  /const maxOutputTokens = isReceiptMode\s*\? 2_200/,
-  "Receipt structured extraction must use a bounded response budget."
+  /const maxOutputTokens = isReceiptMode\s*\?\s*inferredDifficulty === "hard"\s*\? 2_600\s*:\s*1_600/,
+  "Receipt structured extraction must use a difficulty-aware bounded response budget."
 );
 assert.match(
   parserSource,

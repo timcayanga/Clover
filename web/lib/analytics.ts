@@ -51,6 +51,7 @@ export type AnalyticsEventName =
   | "import_processing_completed"
   | "import_processing_stalled"
   | "import_parser_arbitrated"
+  | "import_receipt_cache_reused"
   | "review_queue_opened"
   | "review_queue_completed"
   | "review_queue_abandoned"
@@ -168,7 +169,7 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "first_import_started", "first_import_completed", "transaction_confirmation_completed", "second_import_completed", "first_report_viewed",
   "file_upload_started", "file_uploaded", "file_upload_failed", "import_started", "import_parsing_started",
   "import_parsed_successfully", "import_parsed_with_warnings", "import_failed", "import_processing_started",
-  "import_processing_completed", "import_processing_stalled", "import_parser_arbitrated", "review_queue_opened", "review_queue_completed", "review_queue_abandoned",
+  "import_processing_completed", "import_processing_stalled", "import_parser_arbitrated", "import_receipt_cache_reused", "review_queue_opened", "review_queue_completed", "review_queue_abandoned",
   "confidence_details_viewed", "source_document_viewed", "transaction_confirmed_without_edit", "transaction_edited_before_confirmation",
   "import_confirmed", "import_retry_started", "import_retry_succeeded", "import_retry_failed", "qa_run_completed", "qa_run_failed",
   "password_provided", "password_failed", "import_password_canceled", "statement_identity_resolved", "statement_identity_confirmed", "import_duplicate_detected",

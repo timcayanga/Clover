@@ -2627,7 +2627,9 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   // budget. Keeping this below the general 3k cap reduces cold vision latency
   // while leaving multi-page and known-statement quality paths unchanged.
   const maxOutputTokens = isReceiptMode
-    ? 2_200
+    ? inferredDifficulty === "hard"
+      ? 2_600
+      : 1_600
     : isSinglePageGenericImage
       ? 2_400
       : inferredDocumentFamily === "generic_document"
@@ -2659,6 +2661,14 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     }
     return userContent;
   };
+  // Receipt parsing is a bounded transcription/extraction task. Keeping the
+  // reasoning budget minimal removes hidden reasoning-token latency and cost;
+  // difficult receipts retain low reasoning plus a larger output allowance.
+  const receiptReasoningEffort = isReceiptMode
+    ? inferredDifficulty === "hard"
+      ? "low"
+      : "minimal"
+    : null;
 
   const responseDurations = new WeakMap<Response, number>();
   const responseRequestNumbers = new WeakMap<Response, number>();
@@ -2687,6 +2697,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       outputTokens: Number(usage?.output_tokens ?? 0) || null,
       totalTokens: Number(usage?.total_tokens ?? 0) || null,
       imageCount: pageImagesToSend.length,
+      maxOutputTokens,
+      reasoningEffort: receiptReasoningEffort,
     });
   };
 
@@ -2711,6 +2723,9 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         body: JSON.stringify({
           model: selectedModel,
           max_output_tokens: maxOutputTokens,
+          ...(receiptReasoningEffort
+            ? { reasoning: { effort: receiptReasoningEffort } }
+            : {}),
           input: [
             {
               role: "system",

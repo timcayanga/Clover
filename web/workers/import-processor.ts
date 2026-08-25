@@ -150,26 +150,88 @@ import {
 
 type OpenAIImportParseResult = NonNullable<Awaited<ReturnType<typeof parseImportTextWithOpenAIFallback>>>;
 type ImportedReceiptDetails = NonNullable<OpenAIImportParseResult["receiptDetails"]>;
+type ImportedReceiptAccountMatch = NonNullable<OpenAIImportParseResult["receiptAccountMatch"]>;
 
-const readPersistedSplitBillReceiptDetails = (rawPayload: unknown): ImportedReceiptDetails | null => {
+type PersistedReceiptExtraction = {
+  receiptDetails: ImportedReceiptDetails;
+  receiptAccountMatch: ImportedReceiptAccountMatch | null;
+  validationScore: number | null;
+};
+
+const readPersistedReceiptExtraction = (rawPayload: unknown): PersistedReceiptExtraction | null => {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
     return null;
   }
 
   const payload = rawPayload as Record<string, unknown>;
+  const extraction =
+    payload.receiptExtraction && typeof payload.receiptExtraction === "object" && !Array.isArray(payload.receiptExtraction)
+      ? (payload.receiptExtraction as Record<string, unknown>)
+      : payload;
   const candidate =
-    payload.receiptDetails && typeof payload.receiptDetails === "object" && !Array.isArray(payload.receiptDetails)
-      ? (payload.receiptDetails as Record<string, unknown>)
-      : payload.receipt_details && typeof payload.receipt_details === "object" && !Array.isArray(payload.receipt_details)
-        ? (payload.receipt_details as Record<string, unknown>)
+    extraction.receiptDetails &&
+    typeof extraction.receiptDetails === "object" &&
+    !Array.isArray(extraction.receiptDetails)
+      ? (extraction.receiptDetails as Record<string, unknown>)
+      : extraction.receipt_details &&
+          typeof extraction.receipt_details === "object" &&
+          !Array.isArray(extraction.receipt_details)
+        ? (extraction.receipt_details as Record<string, unknown>)
         : null;
   if (!candidate) {
     return null;
   }
 
-  const lineItems = Array.isArray(candidate.line_items) ? candidate.line_items : [];
-  const allocations = Array.isArray(candidate.split_allocations)
-    ? (candidate.split_allocations as Array<{
+  const receiptDetails = {
+    ...candidate,
+    line_items: Array.isArray(candidate.line_items) ? candidate.line_items : [],
+    split_allocations: Array.isArray(candidate.split_allocations) ? candidate.split_allocations : [],
+  } as ImportedReceiptDetails;
+  const hasUsefulEvidence = Boolean(
+    receiptDetails.merchant_raw ||
+      receiptDetails.merchant_clean ||
+      typeof receiptDetails.total === "number" ||
+      typeof receiptDetails.total === "string" ||
+      receiptDetails.transaction_date ||
+      receiptDetails.payment_method ||
+      receiptDetails.line_items.length > 0 ||
+      receiptDetails.split_allocations.length > 0
+  );
+  if (!hasUsefulEvidence) {
+    return null;
+  }
+
+  const validation =
+    extraction.validation && typeof extraction.validation === "object" && !Array.isArray(extraction.validation)
+      ? (extraction.validation as Record<string, unknown>)
+      : null;
+  if (validation?.critical === true) {
+    return null;
+  }
+
+  const accountMatch =
+    extraction.receiptAccountMatch &&
+    typeof extraction.receiptAccountMatch === "object" &&
+    !Array.isArray(extraction.receiptAccountMatch)
+      ? (extraction.receiptAccountMatch as ImportedReceiptAccountMatch)
+      : null;
+
+  return {
+    receiptDetails,
+    receiptAccountMatch: accountMatch,
+    validationScore: typeof validation?.score === "number" ? validation.score : null,
+  };
+};
+
+const readPersistedSplitBillReceiptDetails = (rawPayload: unknown): ImportedReceiptDetails | null => {
+  const extraction = readPersistedReceiptExtraction(rawPayload);
+  if (!extraction) {
+    return null;
+  }
+
+  const lineItems = extraction.receiptDetails.line_items;
+  const allocations = Array.isArray(extraction.receiptDetails.split_allocations)
+    ? (extraction.receiptDetails.split_allocations as Array<{
         participant_name?: string | null;
         charged?: number | string | null;
         paid?: number | string | null;
@@ -178,7 +240,7 @@ const readPersistedSplitBillReceiptDetails = (rawPayload: unknown): ImportedRece
     : [];
   if (
     !isImportedSplitBillStructure({
-      total: typeof candidate.total === "number" || typeof candidate.total === "string" ? candidate.total : null,
+      total: extraction.receiptDetails.total,
       lineItems,
       allocations,
     })
@@ -186,7 +248,7 @@ const readPersistedSplitBillReceiptDetails = (rawPayload: unknown): ImportedRece
     return null;
   }
 
-  return candidate as ImportedReceiptDetails;
+  return extraction.receiptDetails;
 };
 
 const findPriorSplitBillReceiptDetails = async (params: {
@@ -7756,7 +7818,12 @@ export const processImportFileText = async (
     crypto.randomUUID();
   const traceUpdatePromise = updateImportProgress({ traceId }).catch(() => null);
   const emitImportProcessingEvent = (
-    event: "import_processing_started" | "import_processing_completed" | "import_processing_stalled" | "import_parser_arbitrated",
+    event:
+      | "import_processing_started"
+      | "import_processing_completed"
+      | "import_processing_stalled"
+      | "import_parser_arbitrated"
+      | "import_receipt_cache_reused",
     properties: Record<string, unknown> = {}
   ) => {
     if (!options.actorUserId) {
@@ -7933,6 +8000,18 @@ export const processImportFileText = async (
           fileFingerprint: importFile.sourceFingerprint,
           fileType,
           importMode: "notes",
+          cacheVersion: resolveImportFileExtractionCacheVersion(fileName),
+        }).catch(() => null)
+      : Promise.resolve(null);
+  const priorExactReceiptCachePromise =
+    (importMode === "receipt" || imageImport) &&
+    typeof importFile.sourceFingerprint === "string" &&
+    importFile.sourceFingerprint.trim()
+      ? loadImportFileExtractionCache({
+          workspaceId: String(importFile.workspaceId),
+          fileFingerprint: importFile.sourceFingerprint,
+          fileType,
+          importMode: "receipt",
           cacheVersion: resolveImportFileExtractionCacheVersion(fileName),
         }).catch(() => null)
       : Promise.resolve(null);
@@ -8322,13 +8401,33 @@ export const processImportFileText = async (
     persistedSplitBillReceiptDetails,
     priorSplitBillReceiptDetails,
     priorExactNotesCache,
+    priorExactReceiptCache,
     priorExactNotesImports,
   ] = await Promise.all([
     persistedSplitBillReceiptDetailsPromise,
     priorSplitBillReceiptDetailsPromise,
     priorExactNotesCachePromise,
+    priorExactReceiptCachePromise,
     priorExactNotesImportsPromise,
   ]);
+  const cachedReceiptExtractionCandidate = readPersistedReceiptExtraction(priorExactReceiptCache?.metadata ?? null);
+  const cachedReceiptExtraction =
+    cachedReceiptExtractionCandidate &&
+    cachedReceiptExtractionCandidate.validationScore !== null &&
+    cachedReceiptExtractionCandidate.validationScore >= 65
+      ? cachedReceiptExtractionCandidate
+      : null;
+  if (cachedReceiptExtraction) {
+    console.info("Reusing validated exact receipt extraction", {
+      importFileId,
+      validationScore: cachedReceiptExtraction.validationScore,
+    });
+    emitImportProcessingEvent("import_receipt_cache_reused", {
+      processing_phase: "reading_account_details",
+      validation_score: cachedReceiptExtraction.validationScore,
+      openai_call_avoided: true,
+    });
+  }
   const refreshInferredNoteDates = (rows: Array<Record<string, unknown>>) =>
     rows.map((row): Record<string, unknown> => {
         const rawPayload =
@@ -8387,8 +8486,12 @@ export const processImportFileText = async (
   if (trainedReceiptFixture && imageImport && importMode === "statement") {
     importMode = "receipt";
   }
+  if (cachedReceiptExtraction && importMode === "statement") {
+    importMode = "receipt";
+  }
   let isDocumentImport = isDocumentImportMode || (imageImport && importMode !== "statement");
   let trainedReceiptDetails =
+    cachedReceiptExtraction?.receiptDetails ??
     trainedSplitBillReceiptDetails ??
     (trainedReceiptFixture
       ? buildReceiptDetailsFromTrainingFixture(trainedReceiptFixture)
@@ -9998,6 +10101,7 @@ export const processImportFileText = async (
     backupParserRaceTimedOut,
     backupParserDecisionDurationMs,
     directMultilingualReceiptVision: shouldPreferDirectReceiptVision,
+    exactReceiptCacheHit: Boolean(cachedReceiptExtraction),
     layoutDriftDetected: layoutDriftAssessment.drifted,
     layoutSignatureOverlap: layoutDriftAssessment.overlap,
     localCandidateSource,
@@ -10040,7 +10144,8 @@ export const processImportFileText = async (
   }
   let receiptAccountMatch =
     effectiveImportMode === "receipt"
-      ? trainedReceiptFixture?.accountMatch ??
+      ? cachedReceiptExtraction?.receiptAccountMatch ??
+        trainedReceiptFixture?.accountMatch ??
         openAiParsed?.receiptAccountMatch ??
         (receiptPreview?.receiptAccountMatch
           ? {
@@ -11000,6 +11105,17 @@ export const processImportFileText = async (
         console.warn("Unable to persist extracted-text fingerprint", { importFileId, error });
       });
     }
+    const extractionCacheMetadata =
+      effectiveImportMode === "receipt" && receiptDetails && openAiReceiptValidation
+        ? {
+            ...resolvedMetadata,
+            receiptExtraction: {
+              receiptDetails,
+              receiptAccountMatch,
+              validation: openAiReceiptValidation,
+            },
+          }
+        : resolvedMetadata;
     void storeImportedFileTextCacheRecord({
       workspaceId: String(importFile.workspaceId),
       fileFingerprint: extractedTextFileFingerprint,
@@ -11008,11 +11124,14 @@ export const processImportFileText = async (
       extractedText: textForParse,
       statementFingerprint,
       statementFamilySignature,
-      metadata: resolvedMetadata,
+      metadata: extractionCacheMetadata,
       parsedRows: rows as unknown as Prisma.InputJsonValue,
       pageCount: pageImages?.length ?? 0,
       confidence: resolvedMetadata.confidence ?? 0,
-      hitCount: (textCacheInfo?.cacheRecord?.hitCount ?? 0) + 1,
+      hitCount:
+        effectiveImportMode === "receipt"
+          ? (priorExactReceiptCache?.hitCount ?? 0) + 1
+          : (textCacheInfo?.cacheRecord?.hitCount ?? 0) + 1,
       cacheVersion:
         textCacheInfo?.cacheRecord?.cacheVersion ?? resolveImportFileExtractionCacheVersion(fileName),
     }).catch((error) => {

@@ -16,7 +16,7 @@ assert.match(
 );
 assert.match(
   source,
-  /text:\s*\{[\s\S]*?schema: openAIJsonSchema/,
+  /text:\s*\{[\s\S]*?schema: isReceiptMode \? openAIReceiptJsonSchema : openAIJsonSchema/,
   "The compact path must retain the strict full response schema."
 );
 

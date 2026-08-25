@@ -11,7 +11,7 @@ assert.match(
 );
 assert.match(
   source,
-  /const maxOutputTokens = isReceiptMode\s*\? 2_200\s*:\s*isSinglePageGenericImage\s*\? 2_400\s*:/,
+  /const maxOutputTokens = isReceiptMode[\s\S]*?\? 2_600\s*:\s*1_600\s*:\s*isSinglePageGenericImage\s*\? 2_400\s*:/,
   "The fast generic-image budget must remain bounded at 2,400 output tokens."
 );
 assert.match(source, /max_output_tokens: maxOutputTokens/, "The model request must use the calibrated output budget.");
