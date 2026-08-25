@@ -68,6 +68,16 @@ assert.match(
   "One-page receipt transcription must use a bounded output budget."
 );
 assert.match(
+  parserSource,
+  /OPENAI_RECEIPT_VISION_MAX_LONGEST_EDGE = 1440/,
+  "Receipt photos must use the lower vision resolution budget."
+);
+assert.match(
+  parserSource,
+  /OpenAI parser request completed/,
+  "OpenAI import requests must log latency and token usage for cost monitoring."
+);
+assert.match(
   workerSource,
   /const transcriptParsed = transcriptPreviewDetails\s*\? null\s*:\s*await parseImportTextWithOpenAIFallback/,
   "A usable deterministic receipt transcript must skip the extra paid text parse."

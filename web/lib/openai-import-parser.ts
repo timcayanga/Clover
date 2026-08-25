@@ -1235,6 +1235,8 @@ const buildModelInputText = (text: string) => {
 
 const OPENAI_VISION_MAX_LONGEST_EDGE = 1600;
 const OPENAI_VISION_JPEG_QUALITY = 72;
+const OPENAI_RECEIPT_VISION_MAX_LONGEST_EDGE = 1440;
+const OPENAI_RECEIPT_VISION_JPEG_QUALITY = 70;
 
 const selectRepresentativeVisionPages = <T>(pages: T[], limit: number) => {
   if (pages.length <= limit) {
@@ -1257,7 +1259,10 @@ const selectRepresentativeVisionPages = <T>(pages: T[], limit: number) => {
     .map((index) => pages[index]);
 };
 
-const compactVisionImageDataUrl = async (dataUrl: string) => {
+const compactVisionImageDataUrl = async (
+  dataUrl: string,
+  options?: { maxLongestEdge?: number; jpegQuality?: number }
+) => {
   if (!dataUrl.startsWith("data:image/")) {
     return dataUrl;
   }
@@ -1271,15 +1276,17 @@ const compactVisionImageDataUrl = async (dataUrl: string) => {
     const sharpModule = await import("sharp");
     const sharp = sharpModule.default;
     const input = Buffer.from(dataUrl.slice(commaIndex + 1), "base64");
+    const maxLongestEdge = options?.maxLongestEdge ?? OPENAI_VISION_MAX_LONGEST_EDGE;
+    const jpegQuality = options?.jpegQuality ?? OPENAI_VISION_JPEG_QUALITY;
     const output = await sharp(input)
       .rotate()
       .resize({
-        width: OPENAI_VISION_MAX_LONGEST_EDGE,
-        height: OPENAI_VISION_MAX_LONGEST_EDGE,
+        width: maxLongestEdge,
+        height: maxLongestEdge,
         fit: "inside",
         withoutEnlargement: true,
       })
-      .jpeg({ quality: OPENAI_VISION_JPEG_QUALITY, chromaSubsampling: "4:2:0" })
+      .jpeg({ quality: jpegQuality, chromaSubsampling: "4:2:0" })
       .toBuffer();
 
     return `data:image/jpeg;base64,${output.toString("base64")}`;
@@ -1289,11 +1296,14 @@ const compactVisionImageDataUrl = async (dataUrl: string) => {
   }
 };
 
-const compactVisionPageImages = async (pages: Array<{ page: number; dataUrl: string }>) =>
+const compactVisionPageImages = async (
+  pages: Array<{ page: number; dataUrl: string }>,
+  options?: { maxLongestEdge?: number; jpegQuality?: number }
+) =>
   Promise.all(
     pages.map(async (page) => ({
       page: page.page,
-      dataUrl: await compactVisionImageDataUrl(page.dataUrl),
+      dataUrl: await compactVisionImageDataUrl(page.dataUrl, options),
     }))
   );
 
@@ -2451,7 +2461,19 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     pageImagesInput,
     Math.min(pageImageLimit, pageImagesInput.length)
   );
-  const pageImagesToSend = await compactVisionPageImages(selectedVisionPages);
+  // Phone photos are usually far larger than the text resolution needed for
+  // receipt extraction. A 1440px edge stays legible while avoiding the extra
+  // 512px vision-tile row/column that a 1600px image commonly incurs. Bank
+  // statements retain the larger budget because their tables are denser.
+  const pageImagesToSend = await compactVisionPageImages(
+    selectedVisionPages,
+    isReceiptMode
+      ? {
+          maxLongestEdge: OPENAI_RECEIPT_VISION_MAX_LONGEST_EDGE,
+          jpegQuality: OPENAI_RECEIPT_VISION_JPEG_QUALITY,
+        }
+      : undefined
+  );
   const pdfFileDataBase64 =
     params.fileDataBase64 &&
     String(params.fileType ?? "").toLowerCase().includes("pdf") &&
@@ -2593,6 +2615,36 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     return userContent;
   };
 
+  const responseDurations = new WeakMap<Response, number>();
+  const responseRequestNumbers = new WeakMap<Response, number>();
+  let requestCount = 0;
+
+  const logOpenAIResponseUsage = (usageParams: {
+    payload: Record<string, unknown>;
+    response: Response;
+    model: string;
+    stage: string;
+  }) => {
+    const usage =
+      usageParams.payload.usage &&
+      typeof usageParams.payload.usage === "object" &&
+      !Array.isArray(usageParams.payload.usage)
+        ? (usageParams.payload.usage as Record<string, unknown>)
+        : null;
+    console.info("[import-performance] OpenAI parser request completed", {
+      model: usageParams.model,
+      stage: usageParams.stage,
+      importMode: params.importMode ?? null,
+      documentFamily: inferredDocumentFamily,
+      durationMs: responseDurations.get(usageParams.response) ?? null,
+      requestNumber: responseRequestNumbers.get(usageParams.response) ?? null,
+      inputTokens: Number(usage?.input_tokens ?? 0) || null,
+      outputTokens: Number(usage?.output_tokens ?? 0) || null,
+      totalTokens: Number(usage?.total_tokens ?? 0) || null,
+      imageCount: pageImagesToSend.length,
+    });
+  };
+
   const callOpenAI = async (
     selectedModel: string,
     pageImages: Array<{ page: number; dataUrl: string }>,
@@ -2601,8 +2653,11 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   ) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const requestStartedAt = Date.now();
+    requestCount += 1;
+    const requestNumber = requestCount;
     try {
-      return await fetch("https://api.openai.com/v1/responses", {
+      const response = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -2632,6 +2687,9 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         }),
         signal: controller.signal,
       });
+      responseDurations.set(response, Math.max(0, Date.now() - requestStartedAt));
+      responseRequestNumbers.set(response, requestNumber);
+      return response;
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         return null;
@@ -2800,6 +2858,12 @@ export const parseImportTextWithOpenAIFallback = async (params: {
 
     let selectedModel = attemptedResult.model;
     let payload = (await attemptedResult.response.json()) as Record<string, unknown>;
+    logOpenAIResponseUsage({
+      payload,
+      response: attemptedResult.response,
+      model: selectedModel,
+      stage: "structured_primary",
+    });
     let outputText = extractOutputText(payload);
     if (!outputText) {
       return null;
@@ -2853,6 +2917,12 @@ export const parseImportTextWithOpenAIFallback = async (params: {
             );
       if (strongRetry) {
         const strongPayload = (await strongRetry.response.json()) as Record<string, unknown>;
+        logOpenAIResponseUsage({
+          payload: strongPayload,
+          response: strongRetry.response,
+          model: strongRetry.model,
+          stage: "structured_quality_retry",
+        });
         const strongOutputText = extractOutputText(strongPayload);
         const strongParsedJson = strongOutputText ? parseStructuredJsonText(strongOutputText) : null;
         const strongValidation = strongParsedJson ? importedStatementSchema.safeParse(strongParsedJson) : null;
