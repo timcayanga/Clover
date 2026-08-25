@@ -10148,19 +10148,24 @@ export const processImportFileText = async (
       const transcriptPreviewDetails = isReceiptPreviewUsable(transcriptPreview)
         ? buildReceiptDetailsFromPreview(transcriptPreview)
         : null;
-      const transcriptParsed = await parseImportTextWithOpenAIFallback({
-        text: transcriptNormalized,
-        fileName,
-        fileType,
-        detectedMetadata: openAiMetadata ?? metadataForParse,
-        parsedRows: [],
-        pageImages: null,
-        fileDataBase64: pdfFileDataBase64,
-        preferPrimary: openAiPrimaryMode,
-        importMode,
-        timeoutMs: 20_000,
-        retryTimeoutMs: 15_000,
-      });
+      // A faithful transcript is usually enough for Clover's deterministic
+      // receipt parser. Only pay for another model pass when that parser still
+      // cannot recover a usable merchant/date/total payload.
+      const transcriptParsed = transcriptPreviewDetails
+        ? null
+        : await parseImportTextWithOpenAIFallback({
+            text: transcriptNormalized,
+            fileName,
+            fileType,
+            detectedMetadata: openAiMetadata ?? metadataForParse,
+            parsedRows: [],
+            pageImages: null,
+            fileDataBase64: pdfFileDataBase64,
+            preferPrimary: openAiPrimaryMode,
+            importMode,
+            timeoutMs: 20_000,
+            retryTimeoutMs: 15_000,
+          });
 
       const transcriptReceiptDetails =
         transcriptParsed?.receiptDetails && countReceiptDetailSignals(transcriptParsed.receiptDetails) > 0

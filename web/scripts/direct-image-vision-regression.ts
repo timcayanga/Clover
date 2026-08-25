@@ -57,5 +57,20 @@ assert.match(
   /Preserve the original script exactly; do not translate, romanize, or omit unfamiliar words\./,
   "Receipt transcription must preserve non-English text in its original script."
 );
+assert.match(
+  parserSource,
+  /transcriptionStrategy === "fast_only"\s*\? \[imageModel\]/,
+  "Fast-only receipt recovery must make at most one transcription model attempt."
+);
+assert.match(
+  parserSource,
+  /params\.importMode === "receipt"\s*\? 1_800/,
+  "One-page receipt transcription must use a bounded output budget."
+);
+assert.match(
+  workerSource,
+  /const transcriptParsed = transcriptPreviewDetails\s*\? null\s*:\s*await parseImportTextWithOpenAIFallback/,
+  "A usable deterministic receipt transcript must skip the extra paid text parse."
+);
 
 console.log("Direct image vision path avoids redundant OCR.");

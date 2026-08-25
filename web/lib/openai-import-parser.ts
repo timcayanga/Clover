@@ -3301,11 +3301,11 @@ export const transcribeImportImagesWithOpenAI = async (params: {
     ...(transcriptionStrategy === "strong_only"
       ? [strongModel]
       : transcriptionStrategy === "fast_only"
-        ? [imageModel, ocrModel]
+        ? [imageModel]
         : shouldPrioritizeStrongTranscriptModel
           ? [strongModel, imageModel, ocrModel]
           : [imageModel, ocrModel, strongModel]),
-    OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK,
+    ...(transcriptionStrategy === "fast_only" ? [] : [OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK]),
   ]);
   const controller = new AbortController();
   const timeout = setTimeout(
@@ -3334,7 +3334,12 @@ export const transcribeImportImagesWithOpenAI = async (params: {
         },
         body: JSON.stringify({
           model: selectedModel,
-          max_output_tokens: 6_000,
+          max_output_tokens:
+            params.importMode === "receipt"
+              ? 1_800
+              : params.importMode === "notes"
+                ? 3_000
+                : 6_000,
           input: [
             {
               role: "system",
