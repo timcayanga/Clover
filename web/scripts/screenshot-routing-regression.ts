@@ -5,7 +5,12 @@ import {
   shouldPreferDirectImageStatementVisionPath,
   shouldAttemptGenericScreenshotTranscriptRepair,
 } from "@/workers/import-processor";
-import { inferOpenAIImportDifficulty, shouldPrioritizeStrongImageTranscriptModel } from "@/lib/openai-import-parser";
+import {
+  inferOpenAIImportDifficulty,
+  receiptExtractionCandidateNeedsHighDetailRetry,
+  scoreReceiptExtractionCandidate,
+  shouldPrioritizeStrongImageTranscriptModel,
+} from "@/lib/openai-import-parser";
 
 assert.equal(
   inferOpenAIImportDifficulty({
@@ -20,6 +25,55 @@ assert.equal(
   }),
   "medium",
   "A new one-screen statement should try fast transcription before escalating."
+);
+
+assert.equal(
+  inferOpenAIImportDifficulty({
+    fileName: "IMG_4198.jpeg",
+    fileType: "image/jpeg",
+    text: "",
+    detectedMetadata: null,
+    parsedRows: [],
+    importMode: "receipt",
+    pageImagesCount: 1,
+    documentFamily: "generic_document",
+  }),
+  "medium",
+  "A single receipt photo should begin on the compact route even when browser OCR is empty."
+);
+
+const completeReceiptCandidate = {
+  document_type: "receipt",
+  receipt_details: {
+    merchant_clean: "Sample Store",
+    transaction_date: "2026-08-25",
+    currency: "PHP",
+    total: 1250,
+    line_items: [],
+    parser_evidence: { source_text: "TOTAL PHP 1,250.00" },
+  },
+  transactions: [],
+};
+
+assert.ok(
+  scoreReceiptExtractionCandidate(completeReceiptCandidate) >= 60,
+  "A receipt with merchant, date, currency, total, and evidence should pass the compact quality gate."
+);
+assert.equal(
+  receiptExtractionCandidateNeedsHighDetailRetry(completeReceiptCandidate),
+  false,
+  "A complete compact receipt read should not spend a second high-detail request."
+);
+assert.equal(
+  receiptExtractionCandidateNeedsHighDetailRetry({
+    ...completeReceiptCandidate,
+    receipt_details: {
+      ...completeReceiptCandidate.receipt_details,
+      total: null,
+    },
+  }),
+  true,
+  "A receipt without a usable total must retry at high image detail."
 );
 
 assert.equal(

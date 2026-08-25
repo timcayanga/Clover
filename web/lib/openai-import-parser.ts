@@ -450,6 +450,8 @@ type OpenAIDocumentFamily =
 
 type OpenAIImportDifficulty = "easy" | "medium" | "hard";
 
+type OpenAIImageDetail = "auto" | "low" | "high";
+
 type ReceiptAccountMatch = {
   account_name: string | null;
   account_last4: string | null;
@@ -570,6 +572,99 @@ export const coldLayoutCandidateNeedsStrongRetry = (params: {
     datedRows / Math.max(1, transactions.length) < 0.6 ||
     (params.pageImageCount > 2 && transactions.length < 2)
   );
+};
+
+type ReceiptExtractionCandidate = {
+  document_type?: string | null;
+  receipt_account_match?: {
+    account_name?: string | null;
+    account_last4?: string | null;
+  } | null;
+  receipt_details?: {
+    merchant_raw?: string | null;
+    merchant_clean?: string | null;
+    transaction_date?: string | null;
+    currency?: string | null;
+    total?: number | null;
+    line_items?: Array<unknown> | null;
+    parser_evidence?: { source_text?: string | null } | null;
+  } | null;
+  transactions?: Array<{
+    date?: string | null;
+    transaction_date?: string | null;
+    raw_name?: string | null;
+    normalized_name?: string | null;
+    amount?: number | null;
+    currency?: string | null;
+    parser_evidence?: { source_text?: string | null } | null;
+  }> | null;
+};
+
+export const scoreReceiptExtractionCandidate = (
+  candidate: ReceiptExtractionCandidate | null | undefined
+) => {
+  if (!candidate || candidate.document_type !== "receipt") {
+    return 0;
+  }
+
+  const details = candidate.receipt_details;
+  const transactions = Array.isArray(candidate.transactions) ? candidate.transactions : [];
+  const hasAmount =
+    (typeof details?.total === "number" && Number.isFinite(details.total) && Math.abs(details.total) > 0) ||
+    transactions.some(
+      (row) => typeof row.amount === "number" && Number.isFinite(row.amount) && Math.abs(row.amount) > 0
+    );
+  const hasMerchant = Boolean(
+    details?.merchant_clean?.trim() ||
+    details?.merchant_raw?.trim() ||
+    transactions.some((row) => row.normalized_name?.trim() || row.raw_name?.trim())
+  );
+  const hasDate = Boolean(
+    details?.transaction_date?.trim() ||
+    transactions.some((row) => row.transaction_date?.trim() || row.date?.trim())
+  );
+  const hasEvidence = Boolean(
+    details?.parser_evidence?.source_text?.trim() ||
+    transactions.some((row) => row.parser_evidence?.source_text?.trim())
+  );
+  const hasCurrency = Boolean(
+    details?.currency?.trim() || transactions.some((row) => row.currency?.trim())
+  );
+  const hasLineItems = Boolean(details?.line_items?.length);
+  const hasAccountMatch = Boolean(
+    candidate.receipt_account_match?.account_last4?.trim() ||
+    candidate.receipt_account_match?.account_name?.trim()
+  );
+
+  return (
+    (hasAmount ? 35 : 0) +
+    (hasMerchant ? 25 : 0) +
+    (hasDate ? 12 : 0) +
+    (hasEvidence ? 10 : 0) +
+    (hasCurrency ? 6 : 0) +
+    (hasLineItems ? 7 : 0) +
+    (hasAccountMatch ? 5 : 0)
+  );
+};
+
+export const receiptExtractionCandidateNeedsHighDetailRetry = (
+  candidate: ReceiptExtractionCandidate | null | undefined
+) => {
+  const score = scoreReceiptExtractionCandidate(candidate);
+  const details = candidate?.receipt_details;
+  const transactions = Array.isArray(candidate?.transactions) ? candidate.transactions : [];
+  const hasAmount =
+    (typeof details?.total === "number" && Number.isFinite(details.total) && Math.abs(details.total) > 0) ||
+    transactions.some(
+      (row) => typeof row.amount === "number" && Number.isFinite(row.amount) && Math.abs(row.amount) > 0
+    );
+  const hasMerchant = Boolean(
+    details?.merchant_clean?.trim() ||
+    details?.merchant_raw?.trim() ||
+    transactions.some((row) => row.normalized_name?.trim() || row.raw_name?.trim())
+  );
+
+  return score < 60 || !hasAmount || !hasMerchant;
 };
 
 const importedStatementSchema = z.object({
@@ -2003,12 +2098,18 @@ export const inferOpenAIImportDifficulty = (params: {
     veryWeakText &&
     metadataConfidence < 55 &&
     documentFamily === "generic_document";
+  // Missing browser OCR is normal for a single receipt photo. Start it on
+  // the compact path and let result completeness decide whether to escalate.
+  const isSingleGenericReceiptPhoto =
+    params.importMode === "receipt" &&
+    isImageLike &&
+    pageImagesCount === 1 &&
+    documentFamily === "generic_document";
 
   if (
-    (!isSingleUnknownStatementScreenshot && veryWeakText) ||
-    (isImageLike && weakText && sparseRows && !isSingleUnknownStatementScreenshot) ||
-    (isImageLike && metadataConfidence < 55 && !isSingleUnknownStatementScreenshot) ||
-    (params.importMode === "receipt" && weakText) ||
+    (!isSingleUnknownStatementScreenshot && !isSingleGenericReceiptPhoto && veryWeakText) ||
+    (isImageLike && weakText && sparseRows && !isSingleUnknownStatementScreenshot && !isSingleGenericReceiptPhoto) ||
+    (isImageLike && metadataConfidence < 55 && !isSingleUnknownStatementScreenshot && !isSingleGenericReceiptPhoto) ||
     (documentFamily === "wallet_screenshot" && weakText) ||
     (documentFamily === "investment_history" && weakText) ||
     pageImagesCount >= 4
@@ -2536,6 +2637,9 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     inferredDocumentFamily === "generic_document" &&
     isVisualImageImport &&
     pageImagesToSend.length === 1;
+  const useLowDetailReceiptFastPath =
+    isReceiptMode &&
+    isSinglePageGenericImage;
   const useColdVisualFastPath = shouldUseColdVisualImportFastPath({
     importMode: params.importMode ?? null,
     documentFamily: inferredDocumentFamily,
@@ -2643,7 +2747,10 @@ export const parseImportTextWithOpenAIFallback = async (params: {
                 ? 6_000
                 : 2_500
               : 4_000;
-  const buildUserContent = (pageImages: Array<{ page: number; dataUrl: string }>) => {
+  const buildUserContent = (
+    pageImages: Array<{ page: number; dataUrl: string }>,
+    imageDetail: OpenAIImageDetail = "auto"
+  ) => {
     const userContent: Array<Record<string, unknown>> = [{ type: "input_text", text: userPrompt }];
     if (pdfFileDataBase64) {
       userContent.unshift({
@@ -2657,6 +2764,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       userContent.push({
         type: "input_image",
         image_url: pageImage.dataUrl,
+        ...(imageDetail === "auto" ? {} : { detail: imageDetail }),
       });
     }
     return userContent;
@@ -2672,6 +2780,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
 
   const responseDurations = new WeakMap<Response, number>();
   const responseRequestNumbers = new WeakMap<Response, number>();
+  const responseImageDetails = new WeakMap<Response, OpenAIImageDetail>();
   let requestCount = 0;
 
   const logOpenAIResponseUsage = (usageParams: {
@@ -2699,6 +2808,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       imageCount: pageImagesToSend.length,
       maxOutputTokens,
       reasoningEffort: receiptReasoningEffort,
+      imageDetail: responseImageDetails.get(usageParams.response) ?? "auto",
     });
   };
 
@@ -2706,7 +2816,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     selectedModel: string,
     pageImages: Array<{ page: number; dataUrl: string }>,
     timeoutMs: number,
-    systemInstructions = systemPrompt
+    systemInstructions = systemPrompt,
+    imageDetail: OpenAIImageDetail = "auto"
   ) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -2733,7 +2844,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
             },
             {
               role: "user",
-              content: buildUserContent(pageImages),
+              content: buildUserContent(pageImages, imageDetail),
             },
           ],
           text: {
@@ -2749,6 +2860,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       });
       responseDurations.set(response, Math.max(0, Date.now() - requestStartedAt));
       responseRequestNumbers.set(response, requestNumber);
+      responseImageDetails.set(response, imageDetail);
       return response;
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
@@ -2774,7 +2886,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     models: string[],
     pageImages: Array<{ page: number; dataUrl: string }>,
     timeoutMs: number,
-    deadlineMs: number
+    deadlineMs: number,
+    imageDetail: OpenAIImageDetail = "auto"
   ): Promise<{ response: Response; model: string } | null> => {
     for (const candidateModel of models) {
       const attemptTimeoutMs = getRemainingOpenAIImportAttemptTimeout({
@@ -2785,7 +2898,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         return null;
       }
 
-      let response = await callOpenAI(candidateModel, pageImages, attemptTimeoutMs);
+      let response = await callOpenAI(candidateModel, pageImages, attemptTimeoutMs, systemPrompt, imageDetail);
       let errorText = shouldReadOpenAIImportErrorBody(response)
         ? await response!.text().catch(() => "")
         : response
@@ -2806,7 +2919,13 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         if (reducedImageTimeoutMs === null) {
           return null;
         }
-        response = await callOpenAI(candidateModel, pageImages.slice(0, 1), reducedImageTimeoutMs);
+        response = await callOpenAI(
+          candidateModel,
+          pageImages.slice(0, 1),
+          reducedImageTimeoutMs,
+          systemPrompt,
+          imageDetail
+        );
         errorText = shouldReadOpenAIImportErrorBody(response)
           ? await response!.text().catch(() => "")
           : response
@@ -2893,7 +3012,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       fallbackChain,
       initialPageImages,
       primaryTimeoutMs,
-      fallbackDeadlineMs
+      fallbackDeadlineMs,
+      useLowDetailReceiptFastPath ? "low" : "auto"
     );
     const attemptedResult =
       attempted ??
@@ -2902,14 +3022,16 @@ export const parseImportTextWithOpenAIFallback = async (params: {
             dedupeOpenAIImportModels([strongModel, imageModel, OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK]),
             pageImagesToSend,
             retryTimeoutMs,
-            fallbackDeadlineMs
+            fallbackDeadlineMs,
+            useLowDetailReceiptFastPath ? "low" : "auto"
           )
         : pageImagesToSend.length > 0 && model !== textModel
         ? await callOpenAIWithFallbackModels(
             dedupeOpenAIImportModels([textModel, OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK]),
             pageImagesToSend.slice(0, 1),
             retryTimeoutMs,
-            fallbackDeadlineMs
+            fallbackDeadlineMs,
+            useLowDetailReceiptFastPath ? "low" : "auto"
           )
         : null);
     if (!attemptedResult) {
@@ -2958,6 +3080,62 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         : parsedJson
     );
     if (
+      useLowDetailReceiptFastPath &&
+      (!validation.success || receiptExtractionCandidateNeedsHighDetailRetry(validation.data))
+    ) {
+      const initialCandidateScore = validation.success
+        ? scoreReceiptExtractionCandidate(validation.data)
+        : 0;
+      const detailRetryTimeoutMs = getRemainingOpenAIImportAttemptTimeout({
+        deadlineMs: fallbackDeadlineMs,
+        requestedTimeoutMs: retryTimeoutMs,
+      });
+      const detailRetry =
+        detailRetryTimeoutMs === null
+          ? null
+          : await callOpenAIWithFallbackModels(
+              dedupeOpenAIImportModels([
+                fastModel,
+                imageModel,
+                strongModel,
+                OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK,
+              ]),
+              pageImagesToSend,
+              detailRetryTimeoutMs,
+              fallbackDeadlineMs,
+              "high"
+            );
+      if (detailRetry) {
+        const detailPayload = (await detailRetry.response.json()) as Record<string, unknown>;
+        logOpenAIResponseUsage({
+          payload: detailPayload,
+          response: detailRetry.response,
+          model: detailRetry.model,
+          stage: "structured_receipt_detail_retry",
+        });
+        const detailOutputText = extractOutputText(detailPayload);
+        const detailParsedJson = detailOutputText ? parseStructuredJsonText(detailOutputText) : null;
+        const detailValidation = detailParsedJson
+          ? importedStatementSchema.safeParse(
+              expandReceiptResponseForInternalValidation(detailParsedJson, params.detectedMetadata)
+            )
+          : null;
+        if (
+          detailOutputText &&
+          detailParsedJson &&
+          detailValidation?.success &&
+          (!validation.success ||
+            scoreReceiptExtractionCandidate(detailValidation.data) > initialCandidateScore)
+        ) {
+          payload = detailPayload;
+          outputText = detailOutputText;
+          parsedJson = detailParsedJson;
+          validation = detailValidation;
+          selectedModel = detailRetry.model;
+        }
+      }
+    }
+    if (
       useColdVisualFastPath &&
       validation.success &&
       coldLayoutCandidateNeedsStrongRetry({
@@ -2977,7 +3155,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
               dedupeOpenAIImportModels([strongModel, imageModel, OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK]),
               pageImagesToSend,
               strongRetryTimeoutMs,
-              fallbackDeadlineMs
+              fallbackDeadlineMs,
+              "high"
             );
       if (strongRetry) {
         const strongPayload = (await strongRetry.response.json()) as Record<string, unknown>;

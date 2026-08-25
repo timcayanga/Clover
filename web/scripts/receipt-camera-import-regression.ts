@@ -65,6 +65,17 @@ assert.match(
 );
 
 const workerSource = readFileSync(join(root, "workers/import-processor.ts"), "utf8");
+const openAIParserSource = readFileSync(join(root, "lib/openai-import-parser.ts"), "utf8");
+assert.match(
+  openAIParserSource,
+  /useLowDetailReceiptFastPath[\s\S]{0,12000}?\? "low" : "auto"/,
+  "single generic receipt photos should use low image detail for the first structured request"
+);
+assert.match(
+  openAIParserSource,
+  /structured_receipt_detail_retry[\s\S]{0,1800}?scoreReceiptExtractionCandidate/,
+  "incomplete low-detail receipt reads should be compared against a high-detail retry"
+);
 assert.match(
   workerSource,
   /effectiveImportMode === "receipt"\s*\? resolvedReceiptAccountId \?\? documentCashAccountId/,
