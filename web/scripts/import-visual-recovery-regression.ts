@@ -11,6 +11,7 @@ import {
   shouldKeepFailedVisualImportRecoverable,
   shouldLoadReceiptVisionAssets,
   shouldProcessReceiptInline,
+  shouldRetryReceiptVisionExtraction,
   shouldUseReceiptPreviewFastPath,
   shouldStopStaleVisualImportRetry,
 } from "@/lib/import-visual-recovery";
@@ -170,6 +171,33 @@ const main = () => {
     }),
     false,
     "Trained receipt fixtures should not pay the vision fallback cost."
+  );
+  assert.equal(
+    shouldRetryReceiptVisionExtraction({
+      hasReceiptDetails: true,
+      qualityScore: 1,
+      detailSignalCount: 3,
+    }),
+    false,
+    "A structured receipt with several useful fields should not pay for a second OCR and parse cycle."
+  );
+  assert.equal(
+    shouldRetryReceiptVisionExtraction({
+      hasReceiptDetails: true,
+      qualityScore: 1,
+      detailSignalCount: 1,
+    }),
+    true,
+    "A genuinely sparse low-quality receipt should retain the transcription recovery pass."
+  );
+  assert.equal(
+    shouldRetryReceiptVisionExtraction({
+      hasReceiptDetails: false,
+      qualityScore: 3,
+      detailSignalCount: 0,
+    }),
+    true,
+    "A missing receipt payload must still trigger recovery."
   );
 
   const restaurantReceipt = parseReceiptText(

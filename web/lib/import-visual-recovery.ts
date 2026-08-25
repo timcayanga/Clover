@@ -68,6 +68,14 @@ export const shouldLoadReceiptVisionAssets = (params: {
   !params.receiptPreviewIsUsable &&
   !params.skipVisualBackupParser;
 
+export const shouldRetryReceiptVisionExtraction = (params: {
+  hasReceiptDetails: boolean;
+  qualityScore?: number | null;
+  detailSignalCount: number;
+}) =>
+  !params.hasReceiptDetails ||
+  (params.detailSignalCount < 2 && Number(params.qualityScore ?? 0) < 2);
+
 export const shouldKeepFailedVisualImportRecoverable = (params: {
   importMode?: VisualImportRecoveryMode | null;
   isVisualImport?: boolean;

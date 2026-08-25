@@ -114,7 +114,11 @@ import { inferInvestmentClassification } from "@/lib/investments";
 import { getLiveCryptoPhpPrices } from "@/lib/crypto-market-prices";
 import { canonicalizePdaxInvestmentHoldings } from "@/lib/pdax-portfolio-accounts";
 import { buildImportedReceivableCommitmentCandidate } from "@/lib/imported-receivables";
-import { shouldLoadReceiptVisionAssets, shouldUseReceiptPreviewFastPath } from "@/lib/import-visual-recovery";
+import {
+  shouldLoadReceiptVisionAssets,
+  shouldRetryReceiptVisionExtraction,
+  shouldUseReceiptPreviewFastPath,
+} from "@/lib/import-visual-recovery";
 import { isProtectedTransactionReviewStatus } from "@/lib/data-engine-safety";
 import { reconcileStatementTransactionYears } from "@/lib/import-date-reconciliation";
 import { applyImportValidationToRows, validateParsedImportRows } from "@/lib/data-engine-validation";
@@ -1654,6 +1658,16 @@ export const shouldPreferDirectImageStatementVisionPath = (params: {
     !hasKnownStatementImageFallback
   );
 };
+
+export const shouldPreferDirectReceiptVisionPath = (params: {
+  fileName: string;
+  fileType: string;
+  importMode: ImportImageMode;
+  trainedReceiptDetails?: unknown;
+}) =>
+  isImageImportFile(params.fileType, params.fileName) &&
+  params.importMode === "receipt" &&
+  !params.trainedReceiptDetails;
 
 const isGcryptoActivityHistoryMetadata = (params: {
   metadata?: ReturnType<typeof detectStatementMetadataFromText> | null;
@@ -8389,6 +8403,12 @@ export const processImportFileText = async (
     textCacheInfo: options.textCacheInfo ?? null,
     trainedReceiptDetails,
   });
+  const shouldPreferDirectReceiptVision = shouldPreferDirectReceiptVisionPath({
+    fileName,
+    fileType,
+    importMode,
+    trainedReceiptDetails,
+  });
   let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
   let pdfFileDataBase64: string | null = null;
   let usedFastOnlyImageTranscript = false;
@@ -8461,7 +8481,13 @@ export const processImportFileText = async (
     fileType === "application/pdf" &&
     /landbank|land bank|eastwest|chinabank|china bank/i.test(fileName);
 
-  if (!shouldPreferDirectImageStatementVision && !trainedReceiptDetails && !noisyPdfBankByFileName && !text) {
+  if (
+    !shouldPreferDirectImageStatementVision &&
+    !shouldPreferDirectReceiptVision &&
+    !trainedReceiptDetails &&
+    !noisyPdfBankByFileName &&
+    !text
+  ) {
     if (!storageKey) {
       throw new Error("Missing imported file.");
     }
@@ -9971,6 +9997,7 @@ export const processImportFileText = async (
     backupParserRaceResolved,
     backupParserRaceTimedOut,
     backupParserDecisionDurationMs,
+    directMultilingualReceiptVision: shouldPreferDirectReceiptVision,
     layoutDriftDetected: layoutDriftAssessment.drifted,
     layoutSignatureOverlap: layoutDriftAssessment.overlap,
     localCandidateSource,
@@ -10095,10 +10122,11 @@ export const processImportFileText = async (
       !openAiParseIsUsableWiseScreenshot &&
       (openAiParsed.rows.length === 0 || !openAiStatementIdentityPresent)) ||
     (effectiveImportMode === "receipt" &&
-      (!openAiParsed.receiptDetails ||
-        (openAiReceiptValidation !== null && openAiReceiptValidation.score < 2) ||
-        (countReceiptDetailSignals(openAiParsed.receiptDetails) < 2 &&
-          !openAiParsed.receiptAccountMatch))) ||
+      shouldRetryReceiptVisionExtraction({
+        hasReceiptDetails: Boolean(openAiParsed?.receiptDetails),
+        qualityScore: openAiReceiptValidation?.score ?? null,
+        detailSignalCount: countReceiptDetailSignals(openAiParsed?.receiptDetails ?? null),
+      })) ||
     (effectiveImportMode === "notes" && openAiParsed.rows.length === 0) ||
     ((effectiveImportMode === "portfolio" || effectiveImportMode === "account_detail") &&
       (!openAiParsed.holdings.length || !openAiMetadata?.accountName));
@@ -10110,6 +10138,8 @@ export const processImportFileText = async (
       detectedMetadata: openAiMetadata ?? metadataForParse,
       pageImages: pageImages ?? [],
       importMode,
+      timeoutMs: 15_000,
+      strategy: "fast_only",
     });
 
     if (transcript?.transcript.trim()) {

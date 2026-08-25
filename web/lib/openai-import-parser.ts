@@ -2110,6 +2110,8 @@ const buildOpenAIInputPayload = (params: {
     ...(params.importMode === "receipt"
       ? [
           "This input is a receipt, invoice, e-receipt, order confirmation, ticket receipt, manual receipt photo, or receipt-like PDF/email screenshot.",
+          "Read receipts in any visible language or script. Preserve merchant names and line-item descriptions in their original language and script; do not discard or translate away the raw evidence.",
+          "Normalize dates, currency codes, and numeric amounts into their structured fields while keeping the original visible wording in raw names and parser evidence.",
           "Extract the merchant, date, total amount, currency, subtotal, tax, service charge, discounts, tips, and any visible account or card association.",
           "If the receipt is itemized, extract each line item with description, quantity, unit price, and amount.",
           "If the receipt is a split bill or group-summary receipt, extract each participant's charged/paid/due amounts when shown.",
@@ -2193,6 +2195,7 @@ const buildCompactGenericImageInputPayload = (params: {
     `File name: ${params.fileName ?? "unknown"}`,
     `File type: ${params.fileType ?? "unknown"}`,
     "Classify it as statement, receipt, notes, portfolio, or account_detail from visible evidence.",
+    "Read every visible language and script. Preserve original merchant and item wording in raw fields and evidence instead of translating or omitting it.",
     "Extract only clearly visible, trackable financial records. Do not invent data or use phone UI text as a record.",
     "For a handwritten or digital financial note, create one conservative transaction for each clearly labeled paid, payable, due, final, net-total, or allocated amount. Do not create subtotal, fee, discount, or intermediate arithmetic rows.",
     "Preserve raw names and supporting evidence. Use null for unavailable account, receipt, or holdings details. Set review_required when any material field is uncertain.",
@@ -3223,7 +3226,8 @@ export const transcribeImportImagesWithOpenAI = async (params: {
 
   const systemPrompt = [
     "You are Clover’s OCR transcription engine.",
-    "Transcribe the visible text faithfully.",
+    "Transcribe visible text faithfully in every language and script shown.",
+    "Preserve the original script exactly; do not translate, romanize, or omit unfamiliar words.",
     "Return JSON only.",
     "Do not summarize.",
     "Do not invent text.",
