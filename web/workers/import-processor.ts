@@ -7247,6 +7247,77 @@ const applyMerchantRescueToEnrichedRow = (
   };
 };
 
+type ImportEnrichmentTransactionUpdate = {
+  id: string;
+  categoryId: string;
+  type: TransactionType;
+  merchantClean: string | null;
+  categoryConfidence: number;
+  parserConfidence: number;
+  reviewStatus: Extract<ReviewStatus, "confirmed" | "pending_review">;
+  isTransfer: boolean;
+  normalizedPayload: Prisma.InputJsonValue;
+  learnedRuleIdsApplied: Prisma.InputJsonValue;
+};
+
+const applyImportEnrichmentTransactionUpdates = async (
+  updates: ImportEnrichmentTransactionUpdate[]
+): Promise<number> => {
+  if (updates.length === 0) return 0;
+
+  const updatedTransactions = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    UPDATE "Transaction" AS target_transaction
+    SET
+      "categoryId" = patch."categoryId",
+      "type" = patch."type",
+      "merchantClean" = COALESCE(patch."merchantClean", target_transaction."merchantClean"),
+      "categoryConfidence" = patch."categoryConfidence",
+      "parserConfidence" = patch."parserConfidence",
+      "reviewStatus" = patch."reviewStatus",
+      "isTransfer" = patch."isTransfer",
+      "normalizedPayload" = patch."normalizedPayload",
+      "learnedRuleIdsApplied" = patch."learnedRuleIdsApplied",
+      "updatedAt" = CURRENT_TIMESTAMP
+    FROM (
+      VALUES ${Prisma.join(
+        updates.map(
+          (update) => Prisma.sql`(
+            ${update.id},
+            ${update.categoryId},
+            ${update.type}::"TransactionType",
+            ${update.merchantClean},
+            ${update.categoryConfidence},
+            ${update.parserConfidence},
+            ${update.reviewStatus}::"ReviewStatus",
+            ${update.isTransfer},
+            ${JSON.stringify(update.normalizedPayload)}::jsonb,
+            ${JSON.stringify(update.learnedRuleIdsApplied)}::jsonb
+          )`
+        )
+      )}
+    ) AS patch(
+      "id",
+      "categoryId",
+      "type",
+      "merchantClean",
+      "categoryConfidence",
+      "parserConfidence",
+      "reviewStatus",
+      "isTransfer",
+      "normalizedPayload",
+      "learnedRuleIdsApplied"
+    )
+    WHERE target_transaction."id" = patch."id"
+      AND target_transaction."reviewStatus" IN (
+        'suggested'::"ReviewStatus",
+        'pending_review'::"ReviewStatus"
+      )
+    RETURNING target_transaction."id"
+  `);
+
+  return updatedTransactions.length;
+};
+
 export const processImportEnrichmentJobs = async (options: {
   importFileId?: string | null;
   limit?: number;
@@ -7437,10 +7508,7 @@ export const processImportEnrichmentJobs = async (options: {
           return applyMerchantRescueToEnrichedRow(strengthened, parsedRow);
         });
         evaluatedRows += enrichedRows.length;
-        const transactionUpdates: Array<{
-          id: string;
-          data: Parameters<typeof prisma.transaction.update>[0]["data"];
-        }> = [];
+        const transactionUpdates: ImportEnrichmentTransactionUpdate[] = [];
 
         for (const [index, row] of enrichedRows.entries()) {
           const candidateRow = candidateRows[index];
@@ -7526,35 +7594,27 @@ export const processImportEnrichmentJobs = async (options: {
             : "confirmed";
           transactionUpdates.push({
             id: transaction.id,
-            data: {
-              categoryId,
-              type: canonicalType,
-              merchantClean:
-                typeof row.merchantClean === "string" && row.merchantClean.trim()
-                  ? row.merchantClean.trim()
-                  : typeof row.merchantRaw === "string"
-                    ? row.merchantRaw
-                    : undefined,
-              categoryConfidence,
-              parserConfidence,
-              reviewStatus: nextReviewStatus,
-              isTransfer: canonicalType === "transfer",
-              normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
-              learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
-            },
+            categoryId,
+            type: canonicalType,
+            merchantClean:
+              typeof row.merchantClean === "string" && row.merchantClean.trim()
+                ? row.merchantClean.trim()
+                : typeof row.merchantRaw === "string"
+                  ? row.merchantRaw
+                  : null,
+            categoryConfidence,
+            parserConfidence,
+            reviewStatus: nextReviewStatus,
+            isTransfer: canonicalType === "transfer",
+            normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
+            learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
           });
-          updatedRows += 1;
         }
 
         if (transactionUpdates.length > 0) {
-          await prisma.$transaction(
-            transactionUpdates.map(({ id, data }) =>
-              prisma.transaction.update({
-                where: { id },
-                data,
-              })
-            )
-          );
+          const appliedUpdates = await applyImportEnrichmentTransactionUpdates(transactionUpdates);
+          updatedRows += appliedUpdates;
+          skippedRows += transactionUpdates.length - appliedUpdates;
           databaseBatches += 1;
         }
 

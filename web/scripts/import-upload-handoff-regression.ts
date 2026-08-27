@@ -1003,6 +1003,21 @@ const main = async () => {
   assert.match(importProcessorSource, /SELECT 1::int AS acquired FROM confirmation_lock/);
   assert.match(
     importProcessorSource,
+    /UPDATE "Transaction" AS target_transaction[\s\S]{0,1800}FROM \([\s\S]{0,200}VALUES \$\{Prisma\.join\([\s\S]{0,1600}target_transaction\."reviewStatus" IN \([\s\S]{0,200}'suggested'::"ReviewStatus"[\s\S]{0,200}'pending_review'::"ReviewStatus"/,
+    "Enrichment should update each batch in one guarded statement and preserve transactions confirmed during processing."
+  );
+  assert.match(
+    importProcessorSource,
+    /const appliedUpdates = await applyImportEnrichmentTransactionUpdates\(transactionUpdates\);[\s\S]{0,180}skippedRows \+= transactionUpdates\.length - appliedUpdates/,
+    "Enrichment metrics should count rows protected by the write-time review-status guard."
+  );
+  assert.doesNotMatch(
+    importProcessorSource,
+    /transactionUpdates\.map\(\(\{ id, data \}\) =>[\s\S]{0,200}prisma\.transaction\.update/,
+    "Enrichment should not issue one database update per transaction."
+  );
+  assert.match(
+    importProcessorSource,
     /const lockedImportFile = await tx\.importFile\.findUnique\([\s\S]{0,900}savedTransactionsCount >= lockedConfirmedTransactions/,
     "A competing confirmation request must return the first committed result after it acquires the statement lock."
   );

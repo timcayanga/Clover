@@ -137,8 +137,8 @@ assert.match(
 );
 assert.match(
   workerSource,
-  /await prisma\.\$transaction\([\s\S]{0,400}?transactionUpdates\.map/,
-  "enrichment transaction writes must be batched"
+  /const appliedUpdates = await applyImportEnrichmentTransactionUpdates\(transactionUpdates\)/,
+  "enrichment transaction writes must use one guarded bulk update per batch"
 );
 assert.match(
   workerSource,
