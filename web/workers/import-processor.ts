@@ -11904,6 +11904,81 @@ export const processImportFileText = async (
     }
   }
 
+  if (isDocumentImport && effectiveImportMode === "receipt") {
+    try {
+      const receiptConfirmationStartedAt = Date.now();
+      await updateImportProgress({
+        status: "processing",
+        processingPhase: "reconciling",
+        processingMessage: "Clover is saving the receipt transaction.",
+      });
+      confirmedImportResult = await confirmImportFileWithRetry("fast_receipt", linkedImportAccountId);
+      if (confirmedImportResult.imported <= 0 && !confirmedImportResult.duplicate) {
+        throw new Error("Receipt confirmation produced no visible transaction.");
+      }
+
+      await updateImportProgress({
+        status: "done",
+        processingPhase: "complete",
+        processingMessage: "Receipt is ready. Clover is refining names and categories in the background.",
+        confirmedTransactionsCount:
+          confirmedImportResult.confirmedTransactionsCount ?? confirmedImportResult.imported,
+      });
+      console.info("[import-performance] receipt usable handoff complete", {
+        importFileId,
+        totalMs: Date.now() - startedAt,
+        confirmationMs: Date.now() - receiptConfirmationStartedAt,
+        importedRows: confirmedImportResult.imported,
+        usedVisionFallback: Boolean(pageImages?.length),
+        usedOpenAiFallback: Boolean(useOpenAiParse),
+      });
+      emitImportProcessingEvent("import_processing_completed", {
+        processing_status: "done",
+        processing_phase: "receipt_core_visible",
+        imported_rows: confirmedImportResult.imported,
+        time_to_usable_ms: Date.now() - startedAt,
+        background_enrichment: true,
+      });
+      recordImportDataQaInBackground({
+        workspaceId: String(importFile.workspaceId),
+        importFileId,
+        fileName: String(importFile.fileName ?? "imported-file"),
+        fileType: String(importFile.fileType ?? "unknown"),
+        importMode: effectiveImportMode,
+        rows,
+        metadata: resolvedMetadata,
+        startedAt,
+        usedVisionFallback: Boolean(pageImages?.length),
+        usedOpenAiFallback: Boolean(useOpenAiParse),
+        actorUserId: options.actorUserId ?? null,
+      });
+
+      return {
+        imported: confirmedImportResult.imported,
+        duplicate: Boolean(confirmedImportResult.duplicate),
+        metadata: resolvedMetadata,
+        accountId: confirmedImportResult.accountId ?? null,
+        accountSummaries: confirmedImportResult.accountSummaries,
+        confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? confirmedImportResult.imported,
+        insightSummary: confirmedImportResult.insightSummary ?? undefined,
+        accountBalance: confirmedImportResult.accountBalance ?? null,
+        status: "done",
+      };
+    } catch (error) {
+      await updateImportFileCompat(importFileId, {
+        status: "failed",
+        processingPhase: "repair_needed",
+        processingMessage: "Clover couldn't finish saving the receipt transaction.",
+      });
+      emitImportProcessingEvent("import_processing_stalled", {
+        processing_status: "failed",
+        processing_phase: "repair_needed",
+        reason: "receipt_core_confirmation_failed",
+      });
+      throw error;
+    }
+  }
+
   try {
     const qaRunResult = await recordDataQaRun({
       workspaceId: String(importFile.workspaceId),
@@ -12888,26 +12963,41 @@ export const confirmImportFile = async (
         });
       }
 
+      if (createdTransactionId) {
+        const receiptVisibleAt = Date.now();
+        await updateImportFileCompat(importFileId, {
+          accountId: cashAccountId ?? documentImport?.accountId ?? accountId ?? null,
+          status: "done",
+          processingPhase: "complete",
+          processingMessage: "Receipt is ready. Clover is refining names and categories in the background.",
+          confirmedTransactionsCount: 1,
+        });
+        console.info("[import-performance] receipt core visible", {
+          importFileId,
+          transactionId: createdTransactionId,
+          totalMs: receiptVisibleAt - startedAt,
+          backgroundEnrichmentPending: true,
+        });
+      }
+
       const cleanupRowsAfterConfirmation = await countImportTransactionsNeedingCleanup(importFileId).catch(() => 0);
       if (cleanupRowsAfterConfirmation > 0) {
-        await upsertImportEnrichmentJob({
+        const enrichmentJob = await upsertImportEnrichmentJob({
           workspaceId: String(importFile.workspaceId),
           importFileId,
           totalRows: Math.max(1, cleanupRowsAfterConfirmation),
           phase: "queued",
           forceRequeue: false,
-        });
-        await processImportEnrichmentJobs({
-          importFileId,
-          limit: MAX_IMPORT_ENRICHMENT_ATTEMPTS,
-          batchSize: 500,
-          workerId: `receipt-import-enrichment-${importFileId}`,
         }).catch((error) => {
-          console.warn("Unable to finalize receipt enrichment immediately after import", {
+          console.warn("Unable to queue receipt enrichment after the transaction became visible", {
             importFileId,
             error,
           });
+          return null;
         });
+        if (enrichmentJob) {
+          processImportEnrichmentJobsInBackground(importFileId, cleanupRowsAfterConfirmation);
+        }
       }
 
       if (createdTransactionId && documentImport?.id) {
@@ -12983,6 +13073,12 @@ export const confirmImportFile = async (
             })),
             transactionId: createdTransactionId,
           } as Prisma.InputJsonValue,
+        }).catch((error) => {
+          console.warn("Unable to link receipt details after the transaction became visible", {
+            importFileId,
+            transactionId: createdTransactionId,
+            error,
+          });
         });
       }
 
@@ -13018,6 +13114,12 @@ export const confirmImportFile = async (
                 : null,
           confidence:
             Number(receiptDetailsRecord?.confidence_score ?? receiptDetailsRecord?.confidenceScore ?? 95) || 95,
+        }).catch((error) => {
+          console.warn("Unable to create the optional Split Bills record after the receipt became visible", {
+            importFileId,
+            transactionId: createdTransactionId,
+            error,
+          });
         });
       }
 

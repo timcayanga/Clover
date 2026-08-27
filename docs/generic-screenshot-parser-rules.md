@@ -27,6 +27,14 @@ These rules apply when an uploaded screenshot does not match a trained instituti
 - Record backup model, decision duration, schema validation, quality score, and routing outcome in import metadata for QA and Admin diagnostics.
 - When source OCR text is blank, derive the reusable statement-family signature from validated rows and resolved account metadata so the successful import can contribute to future routing history.
 
+## Receipt time to usable
+
+- Publish a receipt transaction as soon as merchant, total, date, currency, and the best supported account are safely persisted. The user must not wait for data QA, merchant cleanup, category refinement, duplicate analysis, recurring analysis, or learning before the transaction becomes visible.
+- Queue post-visible cleanup through the durable import enrichment job. Enrichment must update the existing transaction in place and must never create a second transaction for the same receipt.
+- Background work may refine only suggested or review-pending data. Never overwrite a transaction that the user edited, confirmed, or rejected.
+- A failure in optional receipt-detail linking, Split Bills creation, QA, or enrichment must not retroactively mark an already-visible core transaction as failed.
+- Record time-to-usable separately from background completion time so Clover can monitor both the immediate experience and eventual enrichment health.
+
 ## Unfamiliar institution and currency identity
 
 - Run trained institution parsers first. Generic identity detection must never override a dedicated parser result.

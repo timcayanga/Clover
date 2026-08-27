@@ -86,5 +86,38 @@ assert.match(
   /resolveReceiptCategoryWithPaymentEvidence\(\{[\s\S]{0,180}?proposedCategory: trainedCategoryName/,
   "trained receipt categories must still pass through POS-versus-transfer safety"
 );
+const receiptConfirmationSection = workerSource.slice(
+  workerSource.indexOf('if (createdTransactionId) {', workerSource.indexOf('if (importMode === "receipt")')),
+  workerSource.indexOf('if (createdTransactionId && documentImport?.id)', workerSource.indexOf('if (importMode === "receipt")'))
+);
+assert.match(
+  receiptConfirmationSection,
+  /processingMessage: "Receipt is ready\. Clover is refining names and categories in the background\."[\s\S]{0,180}?confirmedTransactionsCount: 1/,
+  "receipt confirmation must publish the core transaction before post-visible detail work"
+);
+assert.match(
+  receiptConfirmationSection,
+  /upsertImportEnrichmentJob[\s\S]{0,500}?processImportEnrichmentJobsInBackground/,
+  "receipt cleanup must use the durable enrichment job and post-visible scheduler"
+);
+assert.doesNotMatch(
+  receiptConfirmationSection,
+  /await processImportEnrichmentJobs\(/,
+  "receipt confirmation must not wait for enrichment before becoming visible"
+);
+const receiptFastHandoffSection = workerSource.slice(
+  workerSource.indexOf('if (isDocumentImport && effectiveImportMode === "receipt")'),
+  workerSource.indexOf("try {\n    const qaRunResult", workerSource.indexOf('if (isDocumentImport && effectiveImportMode === "receipt")'))
+);
+assert.match(
+  receiptFastHandoffSection,
+  /confirmImportFileWithRetry\("fast_receipt"[\s\S]{0,1800}?recordImportDataQaInBackground/,
+  "receipt QA must start only after the usable transaction handoff"
+);
+assert.match(
+  receiptFastHandoffSection,
+  /time_to_usable_ms/,
+  "receipt handoff must emit time-to-usable telemetry"
+);
 
 console.log("Receipt camera import regression checks passed.");
