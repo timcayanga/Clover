@@ -39,6 +39,32 @@ const main = async () => {
   ]);
   const optimisticSummarySource = await readFile(join(webRoot, "lib/import-optimistic-summary.ts"), "utf8");
   const imageCompressionSource = await readFile(join(webRoot, "lib/import-image-compression.ts"), "utf8");
+  const meRouteSource = await readFile(join(webRoot, "app/api/me/route.ts"), "utf8");
+  assert.match(
+    meRouteSource,
+    /prisma\.importFile\.findFirst\([\s\S]{0,300}workspace: \{ userId: user\.id \}[\s\S]{0,300}orderBy: \{ createdAt: "desc" \}/,
+    "The weekly upload reminder should use the user's durable latest upload across workspaces."
+  );
+  assert.match(
+    meRouteSource,
+    /latestUploadAt: latestUpload\?\.createdAt\.toISOString\(\) \?\? null/,
+    "The profile response should expose the latest upload timestamp."
+  );
+  assert.match(
+    modalSource,
+    /const daysSinceMonday = \(weekStartedAt\.getDay\(\) \+ 6\) % 7;[\s\S]{0,500}date >= weekStartedAt && date < nextWeekStartedAt/,
+    "The reminder should follow the user's local Monday-to-Sunday week."
+  );
+  assert.match(
+    modalSource,
+    /showWeeklyUploadPrivacyReminder[\s\S]{0,1000}Your upload is used to create your Clover records\.[\s\S]{0,200}marked for deletion after 72 hours[\s\S]{0,150}Clover never sells your data/,
+    "The first upload of each week should show concise, accurate privacy reassurance."
+  );
+  assert.doesNotMatch(
+    modalSource,
+    /Private by default/,
+    "The weekly upload reminder should not include the removed privacy heading."
+  );
   assert.match(
     modalSource,
     /optimizeImportImages\(nextFiles, MAX_IMPORT_FILE_SIZE\)/,

@@ -29509,6 +29509,21 @@ button.accounts-detail__transaction-head-cell {
   color: var(--muted);
 }
 
+.accounts-import-footer-copy .accounts-import-footer-copy__privacy {
+  max-width: 68ch;
+  margin-inline: auto;
+  color: var(--text);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.accounts-import-footer-copy__privacy a {
+  color: var(--accent-strong);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+
 .accounts-import-help {
   display: grid;
   gap: 10px;

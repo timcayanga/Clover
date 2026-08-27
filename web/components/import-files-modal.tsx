@@ -323,6 +323,26 @@ const triggerImportEnrichment = (importFileId: string) => {
     });
 };
 
+const isDateInCurrentLocalWeek = (value: unknown, now = new Date()) => {
+  if (typeof value !== "string" || !value.trim()) {
+    return false;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return false;
+  }
+
+  const weekStartedAt = new Date(now);
+  const daysSinceMonday = (weekStartedAt.getDay() + 6) % 7;
+  weekStartedAt.setDate(weekStartedAt.getDate() - daysSinceMonday);
+  weekStartedAt.setHours(0, 0, 0, 0);
+  const nextWeekStartedAt = new Date(weekStartedAt);
+  nextWeekStartedAt.setDate(nextWeekStartedAt.getDate() + 7);
+
+  return date >= weekStartedAt && date < nextWeekStartedAt;
+};
+
 const reportImportClientStage = (stage: string, details: Record<string, string | number | boolean | null> = {}) => {
   void fetch("/api/imports/client-events", {
     method: "POST",
@@ -403,6 +423,7 @@ export function ImportFilesModal({
   const [validatingPasswordItemId, setValidatingPasswordItemId] = useState<string | null>(null);
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [monthlyUploadLimit, setMonthlyUploadLimit] = useState<number | null>(10);
+  const [showWeeklyUploadPrivacyReminder, setShowWeeklyUploadPrivacyReminder] = useState(false);
   const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
   const [qaRunsByItemId, setQaRunsByItemId] = useState<Record<string, QaRunSummary | null>>({});
   const [qaLoadingByItemId, setQaLoadingByItemId] = useState<Record<string, boolean>>({});
@@ -1216,6 +1237,9 @@ export function ImportFilesModal({
       try {
         const response = await fetch("/api/me");
         if (!response.ok) {
+          if (!cancelled) {
+            setShowWeeklyUploadPrivacyReminder(true);
+          }
           return;
         }
 
@@ -1227,6 +1251,7 @@ export function ImportFilesModal({
             : Number(payload.user.monthlyUploadLimit);
         if (!cancelled) {
           setPlanTier(nextPlanTier);
+          setShowWeeklyUploadPrivacyReminder(!isDateInCurrentLocalWeek(payload?.user?.latestUploadAt));
           setMonthlyUploadLimit(
             nextMonthlyUploadLimit === null
               ? null
@@ -1238,6 +1263,7 @@ export function ImportFilesModal({
       } catch {
         if (!cancelled) {
           setPlanTier("unknown");
+          setShowWeeklyUploadPrivacyReminder(true);
         }
       }
     };
@@ -8165,6 +8191,12 @@ export function ImportFilesModal({
         <div className="accounts-import-footer-copy">
           {validationNotice ? <p className="accounts-import-footer-copy__warning">{validationNotice}</p> : null}
           {message ? <p className="accounts-import-footer-copy__status">{message}</p> : null}
+          {showWeeklyUploadPrivacyReminder ? (
+            <p className="accounts-import-footer-copy__privacy">
+              Your upload is used to create your Clover records. Source files are marked for deletion after 72 hours,
+              and Clover never sells your data. <Link href="/privacy-policy#automation">Learn more</Link>
+            </p>
+          ) : null}
           <p>
             Accepted files: PDF, CSV, TSV, XLSX, XLS, XLSM, XLSB, ODS, JPG, JPEG, PNG, WEBP, HEIC, and HEIF.
             <br />

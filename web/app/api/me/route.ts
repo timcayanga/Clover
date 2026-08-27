@@ -4,6 +4,7 @@ import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getUserBillingSubscription } from "@/lib/paypal-billing";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { getUserPlanUsage } from "@/lib/plan-access";
+import { prisma } from "@/lib/prisma";
 import { createTransientDataUnavailableResponse, isTransientDataError, isUnauthorizedDataError } from "@/lib/transient-data";
 
 export const dynamic = "force-dynamic";
@@ -12,9 +13,14 @@ export async function GET() {
   try {
     const { userId } = await requireAuth();
     const user = await getOrCreateCurrentUser(userId);
-    const [billingSubscription, planUsage] = await Promise.all([
+    const [billingSubscription, planUsage, latestUpload] = await Promise.all([
       getUserBillingSubscription(user.id),
       getUserPlanUsage(user.id),
+      prisma.importFile.findFirst({
+        where: { workspace: { userId: user.id } },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true },
+      }),
     ]);
     const effectiveLimits = getEffectiveUserLimits(user);
 
@@ -32,6 +38,7 @@ export async function GET() {
         goalPlan: user.goalPlan,
         onboardingCompletedAt: user.onboardingCompletedAt,
         dataWipedAt: user.dataWipedAt,
+        latestUploadAt: latestUpload?.createdAt.toISOString() ?? null,
         features: {
           luxuryAccountCards: true,
         },
