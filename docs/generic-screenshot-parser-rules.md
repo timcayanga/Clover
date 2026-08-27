@@ -39,6 +39,14 @@ These rules apply when an uploaded screenshot does not match a trained instituti
 - A failure in optional receipt-detail linking, Split Bills creation, QA, or enrichment must not retroactively mark an already-visible core transaction as failed.
 - Record time-to-usable separately from background completion time so Clover can monitor both the immediate experience and eventual enrichment health.
 
+## Persistent import visibility
+
+- Persist the import record, raw source reference, parser phase, parsed-row count, and confirmed-row count before reporting progress to the browser.
+- Keep routine progress polling read-only and limited to the import record. Load full settlement and account projections only at visibility, failure, or a stale recovery checkpoint.
+- A navigation or browser remount must restore active progress from durable server state. Long-running parsing remains visible and can resume from its last checkpoint without re-uploading the source file.
+- Do not run parsing inside a status `GET`. Recovery uses a separate resumable request with the same regional placement and execution window as normal import processing.
+- Report success only after persisted transactions and account projections settle. Then invalidate Home, Accounts, Transactions, Adviser, and other dependent views so the imported result appears without a manual refresh.
+
 ## Unfamiliar institution and currency identity
 
 - Run trained institution parsers first. Generic identity detection must never override a dedicated parser result.

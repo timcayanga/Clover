@@ -238,6 +238,46 @@ const main = async () => {
     "Completed import success should remain visible for ten seconds."
   );
   assert.match(
+    globalImportActivitySource,
+    /fetch\(`\/api\/imports\/\$\{encodeURIComponent\(importFileId\)\}\/progress`[\s\S]{0,9000}schedulePoll\(importStatusPollMs\)/,
+    "The global import dock must keep reading durable progress after navigation."
+  );
+  assert.match(
+    globalImportActivitySource,
+    /const needsFullStatus =[\s\S]{0,700}processingPhase === "queued_retry"[\s\S]{0,500}\/status`/,
+    "High-frequency background polling must reserve the full status read for completion, failure, or recovery."
+  );
+  assert.match(
+    globalImportActivitySource,
+    /statementSelfHeal\?\.reason === "stale_statement_image_queue"[\s\S]{0,500}\/resume`[\s\S]{0,100}method: "POST"/,
+    "A stalled first import must resume once from its persisted server checkpoint."
+  );
+  assert.match(
+    globalImportActivitySource,
+    /publishImportedSummary\(snapshot\.workspaceId, snapshot\.summary\)[\s\S]{0,900}source: "transactions"[\s\S]{0,500}"home"/,
+    "A background import completion must publish its result and invalidate Home."
+  );
+  assert.match(
+    globalImportActivitySource,
+    /Import complete\. Your results are visible on Home, Accounts, and Transactions\./,
+    "Background completion copy must tell the user exactly where the imported result is visible."
+  );
+  assert.match(
+    globalImportActivitySource,
+    /const durablySettled =[\s\S]{0,200}settledImportComplete === true[\s\S]{0,100}receiptTransaction/,
+    "Background success must wait for settled projections or a persisted receipt transaction."
+  );
+  assert.match(
+    globalImportActivitySource,
+    /decision\.kind === "visible"[\s\S]{0,250}Clover is updating Home and account totals/,
+    "The dock must explain the final projection-settlement stage without reporting premature success."
+  );
+  assert.match(
+    globalImportActivitySource,
+    /importFile\?\.status === "processing"[\s\S]{0,500}still processing this import in the background[\s\S]{0,500}Clover is reconnecting while your import continues/,
+    "The safety timer must preserve long-running imports and transient reconnects instead of reporting a false timeout."
+  );
+  assert.match(
     modalSource,
     /if \(primaryVisibilityCompletedRef\.current\) \{[\s\S]{0,700}snapshot\?\.status === "done"[\s\S]{0,400}surface: "background"/,
     "A page remount must hand a completed foreground import to the global success dock."
@@ -669,11 +709,32 @@ const main = async () => {
     "Production statement screenshots must stay on the durable inline request path."
   );
   const statusRouteSource = await readFile(join(webRoot, "app/api/imports/[importId]/status/route.ts"), "utf8");
+  const resumeRouteSource = await readFile(join(webRoot, "app/api/imports/[importId]/resume/route.ts"), "utf8");
   const staleStatementImageQueueSource = section(statusRouteSource, "if (staleStatementImageQueue)", "const staleStatementImageEmptyDone");
   assert.doesNotMatch(
     staleStatementImageQueueSource,
     /after\(async \(\) =>/,
-    "A stranded screenshot must be recovered by the status request, not another best-effort callback."
+    "A stranded screenshot status read must not schedule best-effort parser work."
+  );
+  assert.doesNotMatch(
+    staleStatementImageQueueSource,
+    /processImportFileText|confirmImportFile/,
+    "A status read must remain lightweight instead of running parsing or confirmation inline."
+  );
+  assert.match(
+    staleStatementImageQueueSource,
+    /processingPhase: "queued_retry"[\s\S]{0,1400}statementSelfHeal/,
+    "A stranded screenshot must persist a resumable queue checkpoint for the global activity controller."
+  );
+  assert.match(
+    resumeRouteSource,
+    /export const maxDuration = 300;[\s\S]{0,80}export const preferredRegion = "sin1";/,
+    "Resumable imports must retain the normal five-minute regional execution window."
+  );
+  assert.match(
+    resumeRouteSource,
+    /const visibleRows = await countTransactionsByImportFileCompat[\s\S]{0,900}visibleRows > 0 \? "done" : "processing"[\s\S]{0,900}status: 503/,
+    "A failed resume must preserve visible rows or a retryable durable checkpoint."
   );
   assert.match(
     statusRouteSource,

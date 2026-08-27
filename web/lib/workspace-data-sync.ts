@@ -83,7 +83,7 @@ export const classifyWorkspaceMutation = (pathname: string, method: string): Wor
 
 export const getAffectedWorkspaceDataDomains = (source: WorkspaceDataDomain) => [...domainDependencies[source]];
 
-const publishWorkspaceDataChange = (change: WorkspaceDataChange) => {
+export const publishWorkspaceDataChange = (change: WorkspaceDataChange) => {
   if (change.workspaceId) clearWorkspaceCache(change.workspaceId);
   else clearAllWorkspaceCaches();
 

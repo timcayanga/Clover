@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { ImportErrorToast } from "@/components/import-error-toast";
 import { ImportUploadDock } from "@/components/import-upload-dock";
+import { publishImportedSummary } from "@/lib/imported-summary-events";
+import { resolveImportModalStatusDecision } from "@/lib/import-modal-status";
+import { publishWorkspaceDataChange } from "@/lib/workspace-data-sync";
 import {
   clearImportActivity,
   readImportActivity,
@@ -46,6 +49,8 @@ const staleActiveImportBaseTimeoutMs = 60 * 1000;
 const staleActiveImportPerFileTimeoutMs = 15 * 1000;
 const staleActiveImportMaxTimeoutMs = 5 * 60 * 1000;
 const completedImportDismissDelayMs = 10 * 1000;
+const importStatusPollMs = 2_500;
+const importStatusRetryPollMs = 5_000;
 
 const getStaleActiveImportTimeoutMs = (activity: ImportActivitySnapshot) => {
   const fileTotal = Number.isFinite(Number(activity.fileTotal)) ? Math.max(1, Number(activity.fileTotal)) : 1;
@@ -97,6 +102,8 @@ const writeDismissedKeys = (keys: Set<string>) => {
 export function GlobalImportActivity() {
   const pathname = usePathname();
   const dismissedKeysRef = useRef<Set<string>>(readDismissedKeys());
+  const resumedImportIdsRef = useRef(new Set<string>());
+  const publishedImportIdsRef = useRef(new Set<string>());
   const [activity, setActivity] = useState<ImportActivitySnapshot | null>(() => {
     const snapshot = readImportActivity();
     const dismissKey = getDismissKey(snapshot);
@@ -112,6 +119,203 @@ export function GlobalImportActivity() {
     typeof document === "undefined" ? false : document.body.hasAttribute("data-clover-accounts-loading")
   );
   const shouldShowOnCurrentPath = canShowImportActivityOnPath(pathname);
+
+  useEffect(() => {
+    if (!activity || activity.status !== "active" || !activity.importFileId || importModalVisible) {
+      return;
+    }
+
+    let cancelled = false;
+    let pollTimer: number | null = null;
+    const importFileId = activity.importFileId;
+
+    const schedulePoll = (delayMs: number) => {
+      if (cancelled) return;
+      pollTimer = window.setTimeout(() => void pollStatus(), delayMs);
+    };
+
+    const publishVisibleImport = (snapshot: ImportActivitySnapshot) => {
+      if (publishedImportIdsRef.current.has(importFileId)) return;
+      publishedImportIdsRef.current.add(importFileId);
+      if (snapshot.summary) {
+        publishImportedSummary(snapshot.workspaceId, snapshot.summary);
+      }
+      publishWorkspaceDataChange({
+        workspaceId: snapshot.workspaceId,
+        source: "transactions",
+        affected: [
+          "accounts",
+          "transactions",
+          "recurring",
+          "circles",
+          "split-bills",
+          "budgeting",
+          "goals",
+          "investments",
+          "adviser",
+          "home",
+          "reports",
+        ],
+        path: `/api/imports/${importFileId}/status`,
+        revision: Date.now(),
+      });
+    };
+
+    const pollStatus = async () => {
+      try {
+        const progressResponse = await fetch(`/api/imports/${encodeURIComponent(importFileId)}/progress`, {
+          cache: "no-store",
+        });
+        if (!progressResponse.ok) {
+          schedulePoll(importStatusRetryPollMs);
+          return;
+        }
+
+        type ImportStatusPayload = {
+          importFile?: {
+            status?: string | null;
+            processingPhase?: string | null;
+            processingMessage?: string | null;
+            processingAttempt?: number | null;
+            updatedAt?: string | null;
+          } | null;
+          parsedRowsCount?: number | null;
+          confirmedTransactionsCount?: number | null;
+          visibleImportComplete?: boolean | null;
+          settledImportComplete?: boolean | null;
+          confirmationStatus?: string | null;
+          telemetryPhase?: string | null;
+          telemetryLabel?: string | null;
+          telemetryMessage?: string | null;
+          canResume?: boolean | null;
+          statementSelfHeal?: { reason?: string | null } | null;
+          receiptTransaction?: unknown;
+          receiptDocument?: unknown;
+        };
+        let payload = (await progressResponse.json()) as ImportStatusPayload;
+        const progressUpdatedAtMs = Date.parse(String(payload.importFile?.updatedAt ?? ""));
+        const progressAgeMs = Number.isFinite(progressUpdatedAtMs) ? Date.now() - progressUpdatedAtMs : 0;
+        const needsFullStatus =
+          payload.importFile?.status === "done" ||
+          payload.importFile?.status === "failed" ||
+          Number(payload.confirmedTransactionsCount ?? 0) > 0 ||
+          (payload.importFile?.processingPhase === "queued_retry" && progressAgeMs >= 15_000);
+        if (needsFullStatus) {
+          const statusResponse = await fetch(`/api/imports/${encodeURIComponent(importFileId)}/status`, {
+            cache: "no-store",
+          });
+          if (statusResponse.ok) {
+            payload = (await statusResponse.json()) as ImportStatusPayload;
+          }
+        }
+        if (cancelled) return;
+
+        const current = readImportActivity();
+        if (!current || current.status !== "active" || current.importFileId !== importFileId) {
+          return;
+        }
+
+        const importFile = payload.importFile;
+        const decision = resolveImportModalStatusDecision({
+          importMode: "statement",
+          status: importFile?.status,
+          processingPhase: importFile?.processingPhase,
+          processingMessage: importFile?.processingMessage,
+          telemetryPhase: payload.telemetryPhase,
+          telemetryLabel: payload.telemetryLabel,
+          telemetryMessage: payload.telemetryMessage,
+          parsedRowsCount: payload.parsedRowsCount,
+          confirmedTransactionsCount: payload.confirmedTransactionsCount,
+          visibleImportComplete: payload.visibleImportComplete,
+          hasStructuredReceiptVisibility: Boolean(payload.receiptTransaction || payload.receiptDocument),
+          processingAttempt: importFile?.processingAttempt,
+          progressFloor: current.progress,
+        });
+
+        if (decision.kind === "repair_needed") {
+          const failedSnapshot: ImportActivitySnapshot = {
+            ...current,
+            status: "error",
+            progress: decision.progress,
+            detail: decision.progressLabel,
+            errorCode: decision.errorCode,
+            errorTitle: "File needs another read",
+            errorMessage: decision.message,
+            errorNextSteps: getImportErrorNextSteps(decision.errorCode),
+            updatedAt: Date.now(),
+          };
+          setImportActivity(failedSnapshot);
+          setActivity(failedSnapshot);
+          return;
+        }
+
+        const durablySettled =
+          payload.settledImportComplete === true || Boolean(payload.receiptTransaction);
+        if (durablySettled) {
+          const completedAt = Date.now();
+          const startedAt = current.timing?.startedAt ?? completedAt;
+          const firstVisibleAt = current.timing?.firstVisibleAt ?? completedAt;
+          const doneSnapshot: ImportActivitySnapshot = {
+            ...current,
+            status: "done",
+            completedFiles: Math.max(current.completedFiles, current.fileTotal || 1),
+            progress: 100,
+            detail: "Import complete. Your results are visible on Home, Accounts, and Transactions.",
+            timing: {
+              startedAt,
+              firstVisibleAt,
+              completedAt,
+              visibilityLatencyMs: Math.max(0, firstVisibleAt - startedAt),
+              totalLatencyMs: Math.max(0, completedAt - startedAt),
+            },
+            updatedAt: completedAt,
+          };
+          setImportActivity(doneSnapshot);
+          setActivity(doneSnapshot);
+          publishVisibleImport(doneSnapshot);
+          return;
+        }
+
+        const nextSnapshot: ImportActivitySnapshot = {
+          ...current,
+          progress: Math.max(current.progress, decision.kind === "visible" ? 95 : decision.progress),
+          detail:
+            decision.kind === "visible"
+              ? "Transactions are saved. Clover is updating Home and account totals."
+              : decision.detail,
+          updatedAt: Date.now(),
+        };
+        setImportActivity(nextSnapshot);
+        setActivity(nextSnapshot);
+
+        const shouldResume =
+          !resumedImportIdsRef.current.has(importFileId) &&
+          (payload.statementSelfHeal?.reason === "stale_statement_image_queue" ||
+            (payload.canResume === true && importFile?.processingPhase === "queued_retry"));
+        if (shouldResume) {
+          resumedImportIdsRef.current.add(importFileId);
+          void fetch(`/api/imports/${encodeURIComponent(importFileId)}/resume`, {
+            method: "POST",
+          })
+            .then((response) => {
+              if (!response.ok) resumedImportIdsRef.current.delete(importFileId);
+            })
+            .catch(() => {
+              resumedImportIdsRef.current.delete(importFileId);
+            });
+        }
+        schedulePoll(importStatusPollMs);
+      } catch {
+        schedulePoll(importStatusRetryPollMs);
+      }
+    };
+
+    void pollStatus();
+    return () => {
+      cancelled = true;
+      if (pollTimer) window.clearTimeout(pollTimer);
+    };
+  }, [activity?.importFileId, activity?.status, importModalVisible]);
 
   useEffect(
     () =>
@@ -250,10 +454,28 @@ export function GlobalImportActivity() {
               setActivity(doneSnapshot);
               return;
             }
+            if (importFile?.status === "processing") {
+              const activeSnapshot: ImportActivitySnapshot = {
+                ...current,
+                detail:
+                  importFile.processingMessage?.trim() ||
+                  "Clover is still processing this import in the background.",
+                updatedAt: Date.now(),
+              };
+              setImportActivity(activeSnapshot);
+              setActivity(activeSnapshot);
+              return;
+            }
           }
         } catch {
-          // A status refresh is best-effort. Fall through to the timeout state
-          // only when Clover cannot establish a durable terminal result.
+          const reconnectingSnapshot: ImportActivitySnapshot = {
+            ...current,
+            detail: "Clover is reconnecting while your import continues in the background.",
+            updatedAt: Date.now(),
+          };
+          setImportActivity(reconnectingSnapshot);
+          setActivity(reconnectingSnapshot);
+          return;
         }
       }
 

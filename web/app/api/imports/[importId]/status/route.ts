@@ -27,6 +27,7 @@ import {
 import { summarizeErrorForLog } from "@/lib/security-logging";
 
 export const dynamic = "force-dynamic";
+export const preferredRegion = "sin1";
 
 const STALE_RECEIPT_PROCESSING_MS = 3 * 60 * 1000;
 const STALE_STATEMENT_IMAGE_QUEUE_MS = 15 * 1000;
@@ -150,48 +151,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     if (staleStatementImageQueue) {
       await updateImportFileCompat(importId, {
         status: "processing",
-        processingPhase: "reading_account_details",
-        processingMessage: "Starting screenshot import...",
+        processingPhase: "queued_retry",
+        processingMessage: "Clover saved this file and is restarting the background reader.",
       });
-      // This is a recovery path for a stranded import. Run it in the status
-      // request itself: another post-response callback could strand the same
-      // file forever at 70% when Vercel does not schedule it.
-      try {
-        const { getConfiguredPdfJsBaseUrl } = await import("@/lib/import-file-text.server");
-        const { processImportFileText } = await import("@/workers/import-processor");
-        await processImportFileText(importId, {
-          actorUserId: userId,
-          qaSource: "import_processing",
-          importMode: isRecoverableImageImportMode(importMode) ? importMode : "statement",
-          pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
-        });
-      } catch {
-          const refreshedRows = await prisma.transaction
-            .count({
-              where: {
-                deletedAt: null,
-                OR: [
-                  { importFileId: importId },
-                  {
-                    rawPayload: {
-                      path: ["sourceImportFileId"],
-                      equals: importId,
-                    },
-                  },
-                ],
-              },
-            })
-            .catch(() => 0);
-          if (refreshedRows === 0) {
-            await updateImportFileCompat(importId, {
-              status: "failed",
-              processingPhase: "repair_needed",
-              processingMessage: `Clover couldn't finish reading this ${imageImportLabel}. Please retry the upload.`,
-              parsedRowsCount: 0,
-              confirmedTransactionsCount: 0,
-            }).catch(() => null);
-          }
-      }
+      // Status reads must remain fast. The global import activity starts the
+      // separate resume request, which can safely continue from this durable
+      // checkpoint without making every progress poll run the parser.
       const refreshedSnapshot = await loadImportStatusSnapshot(importId, {
         importFile: (await fetchImportFileCompat(importId)) ?? importFile,
         promoteFailedVisibleImport: true,

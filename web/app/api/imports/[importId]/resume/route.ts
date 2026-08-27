@@ -12,6 +12,8 @@ import { importProcessingLooksActive } from "@/lib/import-resume-policy";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+export const preferredRegion = "sin1";
 
 export async function POST(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
   try {
@@ -307,6 +309,22 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       resumeReason: nextTelemetry.resumeReason,
     });
   } catch {
-    return NextResponse.json({ error: "Unable to resume import" }, { status: 400 });
+    const importId = await params.then((value) => value.importId).catch(() => null);
+    if (importId) {
+      const visibleRows = await countTransactionsByImportFileCompat(importId).catch(() => 0);
+      await updateImportFileCompat(importId, {
+        status: visibleRows > 0 ? "done" : "processing",
+        processingPhase: visibleRows > 0 ? "complete" : "queued_retry",
+        processingMessage:
+          visibleRows > 0
+            ? "Transactions are visible. Clover is cleaning up names and categories in the background."
+            : "Clover saved this import and will retry from its last checkpoint.",
+        ...(visibleRows > 0 ? { confirmedTransactionsCount: visibleRows } : {}),
+      }).catch(() => null);
+    }
+    return NextResponse.json(
+      { error: "Unable to resume import yet", retryable: true, importFileId: importId },
+      { status: 503 }
+    );
   }
 }
