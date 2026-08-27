@@ -9,6 +9,7 @@ const envSchema = z.object({
   R2_BUCKET_NAME: z.string().min(1).optional(),
   DATABASE_URL: z.string().min(1).optional(),
   REDIS_URL: z.string().min(1).optional(),
+  CRON_SECRET: z.string().min(32).optional(),
   OPENAI_API_KEY: z.string().min(1).optional(),
   OPENAI_ADVISER_MODEL: z.string().min(1).optional(),
   OPENAI_IMPORT_PARSER_MODEL: z.string().min(1).optional(),

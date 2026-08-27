@@ -310,7 +310,7 @@ const triggerImportEnrichment = (importFileId: string) => {
   void fetch("/api/import-enrichment/run", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ importFileId, limit: 10, batchSize: 100 }),
+    body: JSON.stringify({ importFileId, limit: 10, batchSize: 250 }),
     keepalive: true,
   })
     .then((response) => {

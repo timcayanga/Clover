@@ -710,6 +710,9 @@ const main = async () => {
   );
   const statusRouteSource = await readFile(join(webRoot, "app/api/imports/[importId]/status/route.ts"), "utf8");
   const resumeRouteSource = await readFile(join(webRoot, "app/api/imports/[importId]/resume/route.ts"), "utf8");
+  const recoverySweepSource = await readFile(join(webRoot, "lib/import-recovery-sweep.ts"), "utf8");
+  const recoveryCronSource = await readFile(join(webRoot, "app/api/cron/import-recovery/route.ts"), "utf8");
+  const enrichmentRouteSource = await readFile(join(webRoot, "app/api/import-enrichment/run/route.ts"), "utf8");
   const staleStatementImageQueueSource = section(statusRouteSource, "if (staleStatementImageQueue)", "const staleStatementImageEmptyDone");
   assert.doesNotMatch(
     staleStatementImageQueueSource,
@@ -735,6 +738,34 @@ const main = async () => {
     resumeRouteSource,
     /const visibleRows = await countTransactionsByImportFileCompat[\s\S]{0,900}visibleRows > 0 \? "done" : "processing"[\s\S]{0,900}status: 503/,
     "A failed resume must preserve visible rows or a retryable durable checkpoint."
+  );
+  assert.match(
+    recoverySweepSource,
+    /FOR UPDATE SKIP LOCKED[\s\S]{0,900}RETURNING import_file\."id"/,
+    "Scheduled recovery must atomically claim stale imports so competing workers cannot process the same file."
+  );
+  assert.match(
+    recoverySweepSource,
+    /if \(parsedRows > 0\) \{[\s\S]{0,300}confirmImportFile\(claimed\.id, null\)/,
+    "Recovery must confirm persisted parsed rows before paying to repeat OCR or AI extraction."
+  );
+  assert.match(
+    recoverySweepSource,
+    /processImportEnrichmentJobs\(\{[\s\S]{0,300}batchSize: 250/,
+    "The server-owned recovery sweep must continue bounded enrichment without an open browser."
+  );
+  assert.match(recoveryCronSource, /timingSafeEqual\(providedBuffer, expectedBuffer\)/);
+  assert.match(recoveryCronSource, /CRON_SECRET[\s\S]{0,500}Bearer \$\{cronSecret\}/);
+  assert.match(recoveryCronSource, /runImportRecoverySweep\(\{/);
+  assert.match(
+    enrichmentRouteSource,
+    /export const maxDuration = 300;[\s\S]{0,80}export const preferredRegion = "sin1";/,
+    "Enrichment must retain a five-minute Singapore-local execution window."
+  );
+  assert.match(
+    enrichmentRouteSource,
+    /upsertImportEnrichmentJob\(\{[\s\S]{0,300}forceRequeue: false/,
+    "A browser remount must not reset a running enrichment lease or repeat completed work."
   );
   assert.match(
     statusRouteSource,
@@ -816,6 +847,11 @@ const main = async () => {
     JSON.parse(vercelConfigSource).regions,
     ["sin1"],
     "Vercel project configuration must place generated functions in Singapore, not only rely on route metadata."
+  );
+  assert.deepEqual(
+    JSON.parse(vercelConfigSource).crons,
+    [{ path: "/api/cron/import-recovery", schedule: "* * * * *" }],
+    "Production must sweep stranded imports and enrichment every minute without waiting for a browser."
   );
   assert.doesNotMatch(
     processRouteSource,

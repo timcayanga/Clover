@@ -46,6 +46,8 @@ These rules apply when an uploaded screenshot does not match a trained instituti
 - A navigation or browser remount must restore active progress from durable server state. Long-running parsing remains visible and can resume from its last checkpoint without re-uploading the source file.
 - Do not run parsing inside a status `GET`. Recovery uses a separate resumable request with the same regional placement and execution window as normal import processing.
 - Report success only after persisted transactions and account projections settle. Then invalidate Home, Accounts, Transactions, Adviser, and other dependent views so the imported result appears without a manual refresh.
+- A server-owned recovery sweep must claim stale imports atomically and resume from persisted parsed rows before repeating OCR or AI extraction.
+- Scheduled recovery must also drain bounded enrichment batches so cleanup continues when every browser is closed.
 
 ## Unfamiliar institution and currency identity
 

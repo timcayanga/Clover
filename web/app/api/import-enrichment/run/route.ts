@@ -8,6 +8,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+export const preferredRegion = "sin1";
 
 const runSchema = z.object({
   importFileId: z.string().min(1).optional(),
@@ -39,7 +41,7 @@ export async function POST(request: Request) {
           importFileId: payload.importFileId,
           totalRows: parsedRowCount,
           phase: "queued",
-          forceRequeue: true,
+          forceRequeue: false,
         });
       }
     } else if (!localDev) {
