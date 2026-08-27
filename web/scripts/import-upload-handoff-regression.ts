@@ -1011,6 +1011,33 @@ const main = async () => {
     /const appliedUpdates = await applyImportEnrichmentTransactionUpdates\(transactionUpdates\);[\s\S]{0,180}skippedRows \+= transactionUpdates\.length - appliedUpdates/,
     "Enrichment metrics should count rows protected by the write-time review-status guard."
   );
+  assert.match(
+    importProcessorSource,
+    /const \[parsedRows, statementFingerprints\] = await Promise\.all\(\[[\s\S]{0,300}fetchParsedTransactionRows\(job\.importFileId\)[\s\S]{0,200}listImportStatementFingerprints\(job\.importFileId\)/,
+    "Enrichment should load parsed rows and the reusable import scope concurrently."
+  );
+  assert.match(
+    importProcessorSource,
+    /const \[statementCheckpoint, transactions, existingCategories, trainingContext\] = await Promise\.all\(\[[\s\S]{0,1800}loadImportEnrichmentTrainingContext/,
+    "Independent enrichment context reads should not be serialized."
+  );
+  assert.match(
+    importProcessorSource,
+    /collapseDuplicateTransactionsForImport\(job\.importFileId, importTransactionScope\)[\s\S]{0,500}countImportTransactionsNeedingCleanup\([\s\S]{0,120}importTransactionScope/,
+    "Final enrichment cleanup should reuse the import scope instead of reloading fingerprints."
+  );
+  for (const timingField of [
+    "setupDurationMs",
+    "rowEnrichmentDurationMs",
+    "transferReconciliationDurationMs",
+    "dedupeAndCleanupDurationMs",
+  ]) {
+    assert.match(
+      importProcessorSource,
+      new RegExp(`${timingField}:`),
+      `Enrichment telemetry should expose ${timingField}.`
+    );
+  }
   assert.doesNotMatch(
     importProcessorSource,
     /transactionUpdates\.map\(\(\{ id, data \}\) =>[\s\S]{0,200}prisma\.transaction\.update/,

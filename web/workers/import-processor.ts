@@ -6904,15 +6904,25 @@ const listImportStatementFingerprints = async (importFileId: string) => {
   );
 };
 
+type ImportTransactionScope = {
+  workspaceId: string;
+  statementFingerprints: string[];
+};
+
 const buildImportTransactionWhere = async (
   importFileId: string,
-  options: { workspaceId?: string | null; includeDeleted?: boolean } = {}
+  options: {
+    workspaceId?: string | null;
+    includeDeleted?: boolean;
+    statementFingerprints?: string[];
+  } = {}
 ): Promise<Prisma.TransactionWhereInput> => {
   const workspaceId =
     typeof options.workspaceId === "string" && options.workspaceId.trim()
       ? options.workspaceId.trim()
       : String((await fetchImportFileCompat(importFileId).catch(() => null))?.workspaceId ?? "").trim();
-  const statementFingerprints = await listImportStatementFingerprints(importFileId);
+  const statementFingerprints =
+    options.statementFingerprints ?? (await listImportStatementFingerprints(importFileId));
   const identityPredicates: Prisma.TransactionWhereInput[] = [
     { importFileId },
     {
@@ -6985,11 +6995,16 @@ const buildImportTransactionCollapseKey = (transaction: {
   ].join("|");
 };
 
-const collapseDuplicateTransactionsForImport = async (importFileId: string) => {
-  const importFile = await fetchImportFileCompat(importFileId).catch(() => null);
-  const statementFingerprints = await listImportStatementFingerprints(importFileId);
+const collapseDuplicateTransactionsForImport = async (
+  importFileId: string,
+  scope?: ImportTransactionScope
+) => {
+  const importFile = scope ? null : await fetchImportFileCompat(importFileId).catch(() => null);
+  const statementFingerprints =
+    scope?.statementFingerprints ?? (await listImportStatementFingerprints(importFileId));
   const transactionWhere = await buildImportTransactionWhere(importFileId, {
-    workspaceId: importFile?.workspaceId ? String(importFile.workspaceId) : null,
+    workspaceId: scope?.workspaceId ?? (importFile?.workspaceId ? String(importFile.workspaceId) : null),
+    statementFingerprints,
   });
   const transactions = await prisma.transaction.findMany({
     where: transactionWhere,
@@ -7085,10 +7100,13 @@ const collapseDuplicateTransactionsForImport = async (importFileId: string) => {
   return { removed: duplicateIds.length };
 };
 
-export const countImportTransactionsNeedingCleanup = async (importFileId: string) =>
+export const countImportTransactionsNeedingCleanup = async (
+  importFileId: string,
+  scope?: ImportTransactionScope
+) =>
   prisma.transaction.count({
     where: {
-      ...(await buildImportTransactionWhere(importFileId)),
+      ...(await buildImportTransactionWhere(importFileId, scope ?? {})),
       reviewStatus: { in: ["suggested", "pending_review"] },
       AND: [
         {
@@ -7116,10 +7134,13 @@ export const shouldRetryImportEnrichmentCleanup = (params: {
   return params.attempt === 1 || params.remainingCleanupRows < params.cleanupRowsBeforeAttempt;
 };
 
-const markRemainingImportCleanupRowsForReview = async (importFileId: string) =>
+const markRemainingImportCleanupRowsForReview = async (
+  importFileId: string,
+  scope?: ImportTransactionScope
+) =>
   prisma.transaction.updateMany({
     where: {
-      ...(await buildImportTransactionWhere(importFileId)),
+      ...(await buildImportTransactionWhere(importFileId, scope ?? {})),
       reviewStatus: { in: ["suggested", "pending_review"] },
       AND: [
         {
@@ -7370,16 +7391,24 @@ export const processImportEnrichmentJobs = async (options: {
         continue;
       }
 
-      const parsedRows = await fetchParsedTransactionRows(job.importFileId);
+      const [parsedRows, statementFingerprints] = await Promise.all([
+        fetchParsedTransactionRows(job.importFileId),
+        listImportStatementFingerprints(job.importFileId),
+      ]);
       const totalRows = parsedRows.length;
       if (totalRows === 0) {
         await completeImportEnrichmentJob({ id: job.id, totalRows: 0, workerId, leaseToken });
         results.push({ importFileId: job.importFileId, status: "done", processedRows: 0, totalRows: 0 });
         continue;
       }
-      const cleanupRowsBeforeAttempt = await countImportTransactionsNeedingCleanup(job.importFileId).catch(
-        () => totalRows
-      );
+      const importTransactionScope: ImportTransactionScope = {
+        workspaceId: String(importFile.workspaceId),
+        statementFingerprints,
+      };
+      const cleanupRowsBeforeAttempt = await countImportTransactionsNeedingCleanup(
+        job.importFileId,
+        importTransactionScope
+      ).catch(() => totalRows);
       if (cleanupRowsBeforeAttempt <= 0) {
         await completeImportEnrichmentJob({ id: job.id, totalRows, workerId, leaseToken });
         console.info("[import-enrichment] skipped clean import", {
@@ -7391,31 +7420,39 @@ export const processImportEnrichmentJobs = async (options: {
         continue;
       }
 
-      const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
-        ? await prisma.accountStatementCheckpoint.findUnique({
-            where: { importFileId: job.importFileId },
-            select: { sourceMetadata: true },
-          })
-        : null;
+      const statementCheckpointPromise = (async () =>
+        (await hasCompatibleTable("AccountStatementCheckpoint"))
+          ? prisma.accountStatementCheckpoint.findUnique({
+              where: { importFileId: job.importFileId },
+              select: { sourceMetadata: true },
+            })
+          : null)();
+      const [statementCheckpoint, transactions, existingCategories, trainingContext] = await Promise.all([
+        statementCheckpointPromise,
+        prisma.transaction.findMany({
+          where: await buildImportTransactionWhere(job.importFileId, importTransactionScope),
+          select: {
+            id: true,
+            rawPayload: true,
+            reviewStatus: true,
+            date: true,
+            amount: true,
+            merchantRaw: true,
+            merchantClean: true,
+            description: true,
+          },
+        }),
+        prisma.category.findMany({
+          where: { workspaceId: String(importFile.workspaceId) },
+          select: { id: true, name: true },
+        }),
+        loadImportEnrichmentTrainingContext(String(importFile.workspaceId)),
+      ]);
+      const enrichmentSetupCompletedAt = Date.now();
       const statementConfidence =
         typeof statementCheckpoint?.sourceMetadata === "object" && statementCheckpoint.sourceMetadata !== null
           ? normalizeImportConfidenceScore((statementCheckpoint.sourceMetadata as Record<string, unknown>).confidence)
           : 100;
-      const transactions = await prisma.transaction.findMany({
-        where: await buildImportTransactionWhere(job.importFileId, {
-          workspaceId: String(importFile.workspaceId),
-        }),
-        select: {
-          id: true,
-          rawPayload: true,
-          reviewStatus: true,
-          date: true,
-          amount: true,
-          merchantRaw: true,
-          merchantClean: true,
-          description: true,
-        },
-      });
       const transactionBySourceIndex = new Map<number, { id: string; reviewStatus: string }>();
       const transactionsByFallbackKey = new Map<string, Array<{ id: string; reviewStatus: string }>>();
       const eligibleSourceIndices = new Set<number>();
@@ -7454,13 +7491,6 @@ export const processImportEnrichmentJobs = async (options: {
         }
       }
 
-      const [existingCategories, trainingContext] = await Promise.all([
-        prisma.category.findMany({
-          where: { workspaceId: String(importFile.workspaceId) },
-          select: { id: true, name: true },
-        }),
-        loadImportEnrichmentTrainingContext(String(importFile.workspaceId)),
-      ]);
       const categoryByName = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
       const usedTransactionIds = new Set<string>();
       let updatedRows = 0;
@@ -7630,6 +7660,7 @@ export const processImportEnrichmentJobs = async (options: {
         });
       }
 
+      const rowEnrichmentCompletedAt = Date.now();
       console.info("[import-enrichment] processed batch", {
         importFileId: job.importFileId,
         totalRows,
@@ -7640,10 +7671,12 @@ export const processImportEnrichmentJobs = async (options: {
         updatedRows,
         skippedRows,
         databaseBatches,
-        durationMs: Date.now() - enrichmentStartedAt,
+        durationMs: rowEnrichmentCompletedAt - enrichmentStartedAt,
+        setupDurationMs: enrichmentSetupCompletedAt - enrichmentStartedAt,
+        rowEnrichmentDurationMs: rowEnrichmentCompletedAt - enrichmentSetupCompletedAt,
         rowsPerSecond:
           evaluatedRows > 0
-            ? Math.round((evaluatedRows * 1_000) / Math.max(1, Date.now() - enrichmentStartedAt))
+            ? Math.round((evaluatedRows * 1_000) / Math.max(1, rowEnrichmentCompletedAt - enrichmentSetupCompletedAt))
             : 0,
       });
 
@@ -7660,6 +7693,7 @@ export const processImportEnrichmentJobs = async (options: {
         ? new Date(Math.max(...importedDates.map((date) => date.getTime())))
         : null;
       const reconciliationPaddingMs = 14 * 24 * 60 * 60 * 1000;
+      const transferReconciliationStartedAt = Date.now();
       await reconcileWorkspaceInternalTransfers(prisma, String(importFile.workspaceId), {
         dateFrom: earliestImportedDate
           ? new Date(earliestImportedDate.getTime() - reconciliationPaddingMs)
@@ -7668,15 +7702,28 @@ export const processImportEnrichmentJobs = async (options: {
           ? new Date(latestImportedDate.getTime() + reconciliationPaddingMs)
           : null,
       });
+      const transferReconciliationCompletedAt = Date.now();
 
       if (processedRows >= totalRows) {
-        await collapseDuplicateTransactionsForImport(job.importFileId).catch((error) => {
+        const finalCleanupStartedAt = Date.now();
+        await collapseDuplicateTransactionsForImport(job.importFileId, importTransactionScope).catch((error) => {
           console.warn("Unable to collapse duplicate transactions after enrichment", {
             importFileId: job.importFileId,
             error,
           });
         });
-        const remainingCleanupCount = await countImportTransactionsNeedingCleanup(job.importFileId).catch(() => 0);
+        const remainingCleanupCount = await countImportTransactionsNeedingCleanup(
+          job.importFileId,
+          importTransactionScope
+        ).catch(() => 0);
+        console.info("[import-enrichment] finalized cleanup", {
+          importFileId: job.importFileId,
+          transferReconciliationDurationMs:
+            transferReconciliationCompletedAt - transferReconciliationStartedAt,
+          dedupeAndCleanupDurationMs: Date.now() - finalCleanupStartedAt,
+          totalDurationMs: Date.now() - enrichmentStartedAt,
+          remainingCleanupCount,
+        });
         if (
           shouldRetryImportEnrichmentCleanup({
             attempt,
@@ -7702,7 +7749,7 @@ export const processImportEnrichmentJobs = async (options: {
         }
 
         if (remainingCleanupCount > 0) {
-          await markRemainingImportCleanupRowsForReview(job.importFileId).catch(() => null);
+          await markRemainingImportCleanupRowsForReview(job.importFileId, importTransactionScope).catch(() => null);
           await completeImportEnrichmentJob({ id: job.id, totalRows, workerId, leaseToken });
           await updateImportFileCompat(job.importFileId, {
             processingPhase: "complete",
@@ -7728,7 +7775,7 @@ export const processImportEnrichmentJobs = async (options: {
           retryable,
         });
         if (!retryable) {
-          await markRemainingImportCleanupRowsForReview(job.importFileId).catch(() => null);
+          await markRemainingImportCleanupRowsForReview(job.importFileId, importTransactionScope).catch(() => null);
         }
         results.push({ importFileId: job.importFileId, status: retryable ? "running" : "failed", processedRows, totalRows });
       }
