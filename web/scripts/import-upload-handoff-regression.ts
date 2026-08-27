@@ -850,8 +850,8 @@ const main = async () => {
   );
   assert.deepEqual(
     JSON.parse(vercelConfigSource).crons,
-    [{ path: "/api/cron/import-recovery", schedule: "* * * * *" }],
-    "Production must sweep stranded imports and enrichment every minute without waiting for a browser."
+    [{ path: "/api/cron/import-recovery", schedule: "0 18 * * *" }],
+    "The Hobby-compatible nightly safety net must recover old imports without waiting for a browser."
   );
   assert.doesNotMatch(
     processRouteSource,
