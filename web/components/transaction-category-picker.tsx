@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
 
 export type TransactionPickerCategory = {
@@ -145,6 +146,9 @@ export function TransactionCategoryPicker({
               </section>
             ))}
           </div>
+          <Link className="transaction-category-picker__manage" href="/transactions/categories" onClick={() => setOpen(false)}>
+            Manage categories
+          </Link>
         </div>
       ) : null}
     </div>

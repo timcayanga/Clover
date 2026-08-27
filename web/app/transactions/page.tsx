@@ -6988,6 +6988,13 @@ function TransactionsPageContent() {
         <ActionIcon name="filters" />
         <span>Filters</span>
       </button>
+      <details className="transactions-manage-menu">
+        <summary className="button button-secondary button-small" aria-label="Manage transaction organization">Manage</summary>
+        <div className="transactions-manage-menu__popover">
+          <Link href="/transactions/categories">Categories</Link>
+          <Link href="/transactions/tags">Tags</Link>
+        </div>
+      </details>
       <button
         className="button button-secondary button-small accounts-toolbar-add transactions-toolbar-add transactions-toolbar-add--compact"
         type="button"
@@ -7013,6 +7020,14 @@ function TransactionsPageContent() {
   ) : (
     <div className="transactions-shell-actions" style={transactionsShellActionsStyle}>
       <ContextualAskClover context="transactions" planTier={planTier} />
+
+      <details className="transactions-manage-menu">
+        <summary className="button button-secondary button-small">Manage</summary>
+        <div className="transactions-manage-menu__popover">
+          <Link href="/transactions/categories">Manage categories</Link>
+          <Link href="/transactions/tags">Manage tags</Link>
+        </div>
+      </details>
 
       <CurrencySelector
         value={workspaceCurrencyCodes.length > 1 ? currencyFilter : workspaceCurrencyCodes[0] ?? "PHP"}

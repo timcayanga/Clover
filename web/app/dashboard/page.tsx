@@ -1219,7 +1219,7 @@ async function DashboardStream({
             </div>
             <DailyFlowChart days={weeklyFlow} label="Weekly report" currency={displayCurrency} />
             <Link className="dashboard-home__report-link" href="/reports?section=trends">
-              Open Adviser
+              View report
             </Link>
           </article>
 
@@ -1249,7 +1249,7 @@ async function DashboardStream({
             </div>
             <DailyFlowChart days={monthlyFlow} label="Monthly report" currency={displayCurrency} />
             <Link className="dashboard-home__report-link" href="/reports?section=trends">
-              Open Adviser
+              View report
             </Link>
           </article>
         </div>

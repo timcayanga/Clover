@@ -38,7 +38,7 @@ const main = async () => {
   const [globalStyles, adminStyles, reportsSource] = await Promise.all([
     readFile(path.join(root, "app/globals.css"), "utf8"),
     readFile(path.join(root, "public/admin.css"), "utf8"),
-    readFile(path.join(root, "app/reports/page.tsx"), "utf8"),
+    readFile(path.join(root, "app/reports/reports-page-content.tsx"), "utf8"),
   ]);
 
   assert.match(globalStyles, /\.eyebrow\s*\{[\s\S]*?text-transform:\s*capitalize;/);

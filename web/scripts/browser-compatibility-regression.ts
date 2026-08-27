@@ -58,7 +58,7 @@ async function main() {
       "app/goals/page.tsx",
       "app/profile/page.tsx",
       "app/recurring/page.tsx",
-      "app/reports/page.tsx",
+      "app/reports/reports-page-content.tsx",
       "app/review/page.tsx",
       "app/settings/page.tsx",
       "app/split-bill/page.tsx",

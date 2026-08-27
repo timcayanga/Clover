@@ -51,7 +51,7 @@ const source = (relativePath: string) => readFileSync(path.join(process.cwd(), r
 for (const file of [
   "app/dashboard/page.tsx",
   "app/adviser/page.tsx",
-  "app/reports/page.tsx",
+  "app/reports/reports-page-content.tsx",
   "lib/budgeting-data.ts",
   "lib/recurring-page.ts",
 ]) {

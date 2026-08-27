@@ -3,6 +3,7 @@ export const SETTINGS_GUIDANCE_MENU_EVENT = "clover-guidance-menu-change";
 
 export const guidanceMenuItems = [
   { key: "dashboard", label: "Home", description: "Your overview and next useful actions." },
+  { key: "reports", label: "Reports", description: "Charts, cash flow, spending, and financial trends." },
   { key: "adviser", label: "Adviser", description: "Personal guidance, trends, and recommendations." },
   { key: "accounts", label: "Accounts", description: "Banks, cash, and connected account balances." },
   { key: "transactions", label: "Transactions", description: "Search, review, and categorize activity." },
@@ -20,6 +21,7 @@ export type GuidanceMenuVisibility = Record<GuidanceMenuKey, boolean>;
 export const guidanceMenuPresets: Record<"learning" | "comfortable" | "very-comfortable", GuidanceMenuVisibility> = {
   learning: {
     dashboard: true,
+    reports: true,
     adviser: true,
     accounts: true,
     transactions: true,
@@ -32,6 +34,7 @@ export const guidanceMenuPresets: Record<"learning" | "comfortable" | "very-comf
   },
   comfortable: {
     dashboard: true,
+    reports: true,
     adviser: true,
     accounts: true,
     transactions: true,
@@ -44,6 +47,7 @@ export const guidanceMenuPresets: Record<"learning" | "comfortable" | "very-comf
   },
   "very-comfortable": {
     dashboard: true,
+    reports: true,
     adviser: true,
     accounts: true,
     transactions: true,

@@ -2010,6 +2010,132 @@ body.transactions-manual-open .shell-bug-report-button {
   line-height: 1.15;
 }
 
+.more-page__link-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.more-page__link-description {
+  color: var(--clover-muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.transactions-organization-page {
+  width: min(100%, 1080px);
+  margin: 0 auto;
+}
+
+.transactions-manage-menu {
+  position: relative;
+}
+
+.transactions-manage-menu > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.transactions-manage-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.transactions-manage-menu__popover {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 190px;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--stroke);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.transactions-manage-menu__popover a {
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+.transactions-manage-menu__popover a:hover,
+.transactions-manage-menu__popover a:focus-visible {
+  background: var(--surface-2);
+}
+
+.transaction-category-picker__manage {
+  display: block;
+  margin: 0 10px 10px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--stroke);
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.reports-page__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transaction-tags-manager__list {
+  display: grid;
+  gap: 10px;
+}
+
+.transaction-tags-manager__row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--stroke);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.transaction-tags-manager__row input {
+  width: 100%;
+}
+
+.transaction-tags-manager__usage {
+  color: var(--clover-muted);
+  font-size: 0.82rem;
+}
+
+.transaction-tags-manager__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.transaction-detail-page__tags-field {
+  display: grid;
+  gap: 8px;
+}
+
+.transaction-detail-page__tags-field > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .transaction-tags-manager__row {
+    grid-template-columns: 1fr;
+  }
+
+  .transaction-tags-manager__actions > * {
+    flex: 1;
+  }
+}
+
 .recurring-modal-close {
   width: 32px;
   min-width: 32px;

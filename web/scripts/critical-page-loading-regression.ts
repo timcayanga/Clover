@@ -68,7 +68,7 @@ const adviserLoadingSource = readSource("app/adviser/loading.tsx");
 const budgetingDataSource = readSource("lib/budgeting-data.ts");
 const serverPageErrorSource = readSource("lib/server-page-error.ts");
 assert.doesNotMatch(adviserSource, /accounts:\s*\{[\s\S]{0,900}transactions:\s*\{/);
-assert.match(adviserSource, /<Suspense fallback=\{null\}>\s*<ReportsStream/);
+assert.doesNotMatch(adviserSource, /<ReportsStream/, "Adviser must remain chat-first instead of embedding Reports.");
 assert.match(adviserLoadingSource, /CloverRouteLoadingScreen label="adviser" prompt/);
 assert.doesNotMatch(shellSource, /const coreRoutes = \[[^\]]*"\/adviser"/);
 assert.match(adviserSource, /statementCheckpoints:[\s\S]{0,500}take: 1/);

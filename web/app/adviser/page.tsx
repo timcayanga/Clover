@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
+import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
@@ -24,12 +24,8 @@ import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
 import { isTransientDataError } from "@/lib/transient-data";
 import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
 import { TransientDataRecovery } from "@/components/transient-data-recovery";
-import { ReportsSection as ReportsSectionPanel, ReportsTabsProvider, ReportsTopTabs } from "@/components/reports-tabs";
-import { ReportsStream } from "@/app/reports/page";
-import { PlanUpgradeCallout } from "@/components/plan-upgrade-callout";
 import { hasFullFeatureAccess } from "@/lib/beta-access";
 import { InfoTooltip } from "@/components/info-tooltip";
-import { ReportsRangeMenu } from "@/components/reports-range-menu";
 import { resolveReportWindow } from "@/lib/report-window";
 import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
 import { defaultCurrencyCookieKey, normalizeDefaultCurrency } from "@/lib/regional-preferences";
@@ -3355,30 +3351,15 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     6
   );
 
-  const reportSections = ["overview", "spending", "trends", "advanced"] as const;
   const hasCompleteAccess = hasFullFeatureAccess(user.planTier);
 
   return (
-    <ReportsTabsProvider
-      initialSection="overview"
-      availableSections={[...reportSections]}
-      lockedSections={hasCompleteAccess ? [] : ["advanced"]}
-      restoreSelection={false}
-    >
       <CloverShell
         active="adviser"
         title="Adviser"
-        titleAddon={<ReportsTopTabs />}
-        actions={
-          <ReportsRangeMenu
-            currentRange={reportWindow.range}
-            currentRangeLabel={reportWindow.label}
-            currentFrom={reportWindow.from}
-            currentTo={reportWindow.to}
-          />
-        }
+        subtitle="Ask questions, understand changes, and decide what to do next."
+        actions={<Link className="button button-secondary button-small" href="/reports">View reports</Link>}
       >
-      <ReportsSectionPanel section="overview">
       <section className="adviser-page">
         {isAdviserGettingStarted ? (
           <EmptyDataCta
@@ -3398,6 +3379,10 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
             transactionHref="/transactions?manual=1"
           />
         ) : null}
+        <section className="adviser-section adviser-section--questions glass">
+          <AdviserChat prompts={promptSuggestions} isPro={hasCompleteAccess} />
+        </section>
+
         <header className="adviser-summary">
           <div className="adviser-summary__grid" aria-label="Adviser summary">
             {summaryCardsToRender.map((card) => (
@@ -3427,31 +3412,8 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
           cards={passiveCardsDisplay}
         />
 
-        <section className="adviser-section adviser-section--questions glass">
-          <AdviserChat prompts={promptSuggestions} isPro={hasCompleteAccess} />
-        </section>
-
       </section>
-      </ReportsSectionPanel>
-      <Suspense fallback={null}>
-        <ReportsStream active="adviser" searchParams={resolvedSearchParams} />
-      </Suspense>
-      {!hasCompleteAccess ? (
-        <ReportsSectionPanel section="advanced">
-          <PlanUpgradeCallout
-            planTier="free"
-            title="Unlock deeper Adviser insights"
-            copy="Upgrade to Pro to open the full Insights view, with more context around your cash flow, patterns, and next actions."
-            ctaHref="/settings?upgrade=pro&interval=annual"
-            ctaLabel="Upgrade to Pro"
-            secondaryHref="/pricing"
-            secondaryLabel="Compare plans"
-            className="adviser-pro-upgrade-callout"
-          />
-        </ReportsSectionPanel>
-      ) : null}
       </CloverShell>
-    </ReportsTabsProvider>
   );
   } catch (error) {
     if (isNextNavigationSignal(error)) {

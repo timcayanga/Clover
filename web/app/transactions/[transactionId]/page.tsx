@@ -6,6 +6,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { TransactionAccountPicker, type TransactionPickerAccount } from "@/components/transaction-account-picker";
 import { TransactionCategoryPicker } from "@/components/transaction-category-picker";
+import { TransactionTagsEditor } from "@/components/transaction-tags-editor";
 import { CurrencySelector } from "@/components/currency-selector";
 import { SplitBillTransactionLinkFields } from "@/components/split-bill-transaction-link-fields";
 import { TransactionCrossFeatureActions } from "@/components/transaction-cross-feature-actions";
@@ -51,6 +52,7 @@ type Transaction = {
   duplicateConfidence?: number | null;
   transferConfidence?: number | null;
   splitBill?: { id: string; title: string } | null;
+  tags?: Array<{ id: string; name: string }>;
 };
 
 type AccountOption = {
@@ -104,6 +106,7 @@ export default function TransactionDetailPage() {
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [draft, setDraft] = useState<TransactionDetailDraftValue | null>(null);
+  const [tagDraft, setTagDraft] = useState<string[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "missing" | "error">("loading");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
@@ -152,6 +155,7 @@ export default function TransactionDetailPage() {
         setTransaction(nextTransaction);
         setAccounts(payload.accounts ?? []);
         setCategories(payload.categories ?? []);
+        setTagDraft((nextTransaction.tags ?? []).map((tag) => tag.name));
         setDraft(
           buildTransactionDetailDraft(nextTransaction, {
             merchantClean: nextTransaction.merchantClean ?? nextTransaction.merchantRaw,
@@ -248,7 +252,7 @@ export default function TransactionDetailPage() {
       const response = await fetch(`/api/transactions/${encodeURIComponent(transaction.id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildTransactionUpdatePayload(draft, transaction)),
+        body: JSON.stringify({ ...buildTransactionUpdatePayload(draft, transaction), tags: tagDraft }),
       });
       const payload = (await response.json().catch(() => ({}))) as DetailPayload;
       if (!response.ok || !payload.transaction) {
@@ -257,6 +261,7 @@ export default function TransactionDetailPage() {
 
       const updated = payload.transaction;
       setTransaction(updated);
+      setTagDraft((updated.tags ?? []).map((tag) => tag.name));
       setDraft(
         buildTransactionDetailDraft(updated, {
           merchantClean: updated.merchantClean ?? updated.merchantRaw,
@@ -284,6 +289,7 @@ export default function TransactionDetailPage() {
         isTransfer: transaction.type === "transfer" || transaction.isTransfer,
       })
     );
+    setTagDraft((transaction.tags ?? []).map((tag) => tag.name));
     setEditing(false);
     setMessage("");
   };
@@ -424,6 +430,15 @@ export default function TransactionDetailPage() {
                   className="transaction-detail-page__relation-picker"
                 />
               </label>
+              <div className="transaction-detail-page__tags-field">
+                <span>Tags</span>
+                <TransactionTagsEditor
+                  tags={tagDraft}
+                  onChange={setTagDraft}
+                  placeholder="Examples: Work, Family, Reimbursable"
+                  inputAriaLabel="Add tags to transaction"
+                />
+              </div>
               <label>
                 Amount
                 <span className="transaction-detail-page__money-control">
@@ -448,6 +463,7 @@ export default function TransactionDetailPage() {
                 <div><span>Type</span><strong>{draft.type === "credit" ? "Income" : draft.type === "transfer" ? "Transfer" : "Expense"}</strong></div>
                 <div><span>Account</span><strong>{displayAccountName(accounts.find((account) => account.id === draft.accountId) ?? { id: "", name: transaction.accountName, institution: transaction.institution ?? null, accountNumber: transaction.accountNumber ?? null, type: "bank", currency: draft.currency })}</strong></div>
                 <div><span>Category</span><strong>{selectedCategory?.name ?? transaction.categoryName ?? "Other"}</strong></div>
+                <div><span>Tags</span><strong>{tagDraft.length > 0 ? tagDraft.join(", ") : "No tags"}</strong></div>
                 <div><span>Date</span><strong>{new Date(`${draft.date}T00:00:00`).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })}</strong></div>
                 <div className="transaction-detail-page__facts-notes"><span>Notes</span><strong>{draft.description.trim() || "No notes"}</strong></div>
               </section>

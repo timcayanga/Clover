@@ -7,7 +7,7 @@ const main = async () => {
   const root = process.cwd();
   const [adviserSource, reportsSource, rangeMenuSource] = await Promise.all([
     readFile(join(root, "app/adviser/page.tsx"), "utf8"),
-    readFile(join(root, "app/reports/page.tsx"), "utf8"),
+    readFile(join(root, "app/reports/reports-page-content.tsx"), "utf8"),
     readFile(join(root, "components/reports-range-menu.tsx"), "utf8"),
   ]);
 
@@ -32,8 +32,11 @@ const invalid = resolveReportWindow(new Date(2026, 7, 1, 12), {
 assert.equal(invalid.isCustom, false);
 assert.equal(invalid.range, "90d");
 
-assert.match(adviserSource, /actions=\{/);
-assert.match(adviserSource, /currentFrom=\{reportWindow\.from\}/);
+assert.match(adviserSource, /href="\/reports">View reports<\/Link>/);
+assert.doesNotMatch(adviserSource, /<ReportsStream/);
+assert.match(reportsSource, /<ReportsPageStream searchParams=\{searchParams\}/);
+assert.match(reportsSource, /href="\/adviser">Ask Adviser<\/Link>/);
+assert.match(reportsSource, /currentFrom=\{reportWindow\.from\}/);
 assert.match(reportsSource, /reportWindow\.isCustom\s*\? reportCurrentWindowTransactions/);
 assert.match(reportsSource, /const isReportSpendingTransaction[\s\S]*return true;/);
 assert.doesNotMatch(reportsSource, /for \(const account of workspaceAccountSummaries\)[\s\S]{0,500}reportSankeyAccountIncome\.set/);

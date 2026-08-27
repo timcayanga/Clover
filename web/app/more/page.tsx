@@ -10,6 +10,7 @@ type MoreLink = {
   href: string;
   title: string;
   icon: PageIconName;
+  description: string;
 };
 
 type MoreSection = {
@@ -17,10 +18,11 @@ type MoreSection = {
   items: MoreLink[];
 };
 
-type PageIconName = "dashboard" | "adviser" | "accounts" | "transactions" | "recurring" | "circles" | "split-bill" | "investments" | "goals" | "budgeting" | "notifications" | "settings" | "help";
+type PageIconName = "dashboard" | "reports" | "adviser" | "accounts" | "transactions" | "recurring" | "circles" | "split-bill" | "investments" | "goals" | "budgeting" | "profile" | "notifications" | "settings" | "help";
 
 const MORE_ICON_NAMES: Record<PageIconName, NavigationIconName> = {
   dashboard: "home",
+  reports: "reports",
   adviser: "adviser",
   accounts: "accounts",
   transactions: "transactions",
@@ -30,6 +32,7 @@ const MORE_ICON_NAMES: Record<PageIconName, NavigationIconName> = {
   investments: "investments",
   goals: "goals",
   budgeting: "budgeting",
+  profile: "profile",
   notifications: "notifications",
   settings: "settings",
   help: "help",
@@ -41,17 +44,19 @@ function PageIcon({ name }: { name: PageIconName }) {
 
 const moreSections: MoreSection[] = [
   {
-    title: "Overview",
+    title: "Understand",
     items: [
       {
-        href: "/home",
-        title: "Home",
-        icon: "dashboard",
+        href: "/reports",
+        title: "Reports",
+        icon: "reports",
+        description: "Explore charts, cash flow, spending, and trends.",
       },
       {
         href: "/adviser",
         title: "Adviser",
         icon: "adviser",
+        description: "Ask Clover questions about your money.",
       },
     ],
   },
@@ -62,16 +67,19 @@ const moreSections: MoreSection[] = [
         href: "/accounts",
         title: "Accounts",
         icon: "accounts",
+        description: "See banks, wallets, cash, and balances.",
       },
       {
         href: "/transactions",
         title: "Transactions",
         icon: "transactions",
+        description: "Search, review, categorize, and tag activity.",
       },
       {
         href: "/recurring",
         title: "Recurring",
         icon: "recurring",
+        description: "Review repeating payments and upcoming costs.",
       },
     ],
   },
@@ -79,14 +87,16 @@ const moreSections: MoreSection[] = [
     title: "Together",
     items: [
       {
-        href: "/circles",
-        title: "Circles",
-        icon: "circles",
-      },
-      {
         href: "/split-bill",
         title: "Split Bills",
         icon: "split-bill",
+        description: "Split one expense without inviting anyone.",
+      },
+      {
+        href: "/circles",
+        title: "Circles",
+        icon: "circles",
+        description: "Coordinate ongoing shared money responsibilities.",
       },
     ],
   },
@@ -97,16 +107,19 @@ const moreSections: MoreSection[] = [
         href: "/budgeting",
         title: "Budgeting",
         icon: "budgeting",
+        description: "Set spending guardrails and track pacing.",
       },
       {
         href: "/goals",
         title: "Goals",
         icon: "goals",
+        description: "Track progress toward money goals.",
       },
       {
         href: "/investments",
         title: "Investments",
         icon: "investments",
+        description: "Review holdings and portfolio performance.",
       },
     ],
   },
@@ -114,19 +127,28 @@ const moreSections: MoreSection[] = [
     title: "App",
     items: [
       {
+        href: "/profile",
+        title: "Profile",
+        icon: "profile",
+        description: "Review your Clover identity and account details.",
+      },
+      {
         href: "/notifications",
         title: "Notifications",
         icon: "notifications",
+        description: "See imports, reviews, and important updates.",
       },
       {
         href: "/settings",
         title: "Settings",
         icon: "settings",
+        description: "Manage your profile, preferences, and plan.",
       },
       {
         href: "/help",
         title: "Help",
         icon: "help",
+        description: "Find guidance about Clover and your data.",
       },
     ],
   },
@@ -149,7 +171,10 @@ async function MorePageContent() {
                     <span className="more-page__link-icon" aria-hidden="true">
                       <PageIcon name={item.icon} />
                     </span>
-                    <span className="more-page__link-label">{item.title}</span>
+                    <span className="more-page__link-copy">
+                      <span className="more-page__link-label">{item.title}</span>
+                      <span className="more-page__link-description">{item.description}</span>
+                    </span>
                   </Link>
                 ))}
               </div>

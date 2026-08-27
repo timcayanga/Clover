@@ -208,6 +208,14 @@ const sidebarSearchPages: Array<{
     terms: ["split bill", "split bill", "splitwise", "receipt split", "shared bill", "bill split"],
   },
   {
+    key: "reports",
+    title: "Reports",
+    href: "/reports",
+    icon: "reports",
+    detail: "Charts, cash flow, spending, and trends.",
+    terms: ["reports", "charts", "cash flow", "spending", "trends", "analysis"],
+  },
+  {
     key: "adviser",
     title: "Adviser",
     href: "/adviser",
@@ -318,6 +326,12 @@ const desktopNavSections = [
     label: "Overview",
     items: [
       { href: "/home", label: "Home", key: "dashboard" as const },
+    ],
+  },
+  {
+    label: "Understand",
+    items: [
+      { href: "/reports", label: "Reports", key: "reports" as const },
       { href: "/adviser", label: "Adviser", key: "adviser" as const },
     ],
   },
@@ -332,8 +346,8 @@ const desktopNavSections = [
   {
     label: "Together",
     items: [
-      { href: "/circles", label: "Circles", key: "circles" as const },
       { href: "/split-bill", label: "Split Bills", key: "split-bill" as const },
+      { href: "/circles", label: "Circles", key: "circles" as const },
     ],
   },
   {
@@ -2297,25 +2311,20 @@ export function CloverShell({
           </span>
           <span className="shell-bottom-nav__label">Adviser</span>
         </Link>
-        <button
-          type="button"
-          className={`shell-bottom-nav__item${isProfileActive ? " is-active" : ""}`}
-          aria-expanded={isProfileDrawerOpen}
-          aria-controls="mobile-settings-drawer"
-          onClick={() => {
-            setIsSidebarOpen(false);
-            setIsProfileDrawerOpen((current) => !current);
-          }}
+        <Link
+          href="/more"
+          prefetch={false}
+          className={`shell-bottom-nav__item${isMoreActive ? " is-active" : ""}`}
+          aria-current={isMoreActive ? "page" : undefined}
+          onClick={(event) => handleNavigationLinkClick(event, "/more")}
+          onMouseEnter={() => prefetchNavTarget("/more")}
+          onTouchStart={() => prefetchNavTarget("/more")}
         >
           <span className="shell-bottom-nav__icon" aria-hidden="true">
-            {profileImage ? (
-              <img className="shell-bottom-nav__profile-photo" src={profileImage} alt="" width={96} height={96} loading="eager" decoding="sync" fetchPriority="high" />
-            ) : (
-              <MenuIcon name="profile" />
-            )}
+            <MenuIcon name="more" />
           </span>
-          <span className="shell-bottom-nav__label">Profile</span>
-        </button>
+          <span className="shell-bottom-nav__label">More</span>
+        </Link>
       </nav>
 
       <main

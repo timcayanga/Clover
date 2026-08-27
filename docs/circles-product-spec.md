@@ -20,9 +20,10 @@ Manage money together, without sharing everything.
 
 ## Navigation
 
-- Desktop: `Manage > Circles` replaces the top-level Split Bills entry.
-- Mobile: Circles appears under `More` until usage supports promotion into the bottom navigation.
-- Split Bills remains available as the expense ledger inside a Circle and through legacy deep links.
+- Desktop: Circles and Split Bills appear together under `Together` because they serve different levels of coordination.
+- Mobile: both appear under `More > Together` until usage supports promoting either into the bottom navigation.
+- Split Bills remains a lightweight standalone flow for one-off expenses and name-only participants; it never requires Circle membership.
+- A Split Bill group may optionally be linked or promoted to a Circle without rewriting bills, participants, or settlements.
 - Circle administration belongs in the Circle's Members area. Global account preferences remain in Settings.
 
 ## Circle Types
@@ -85,7 +86,7 @@ Setup must not request bank credentials, account access, salary, or full transac
 
 ### Expenses
 
-- Existing Split Bills groups are upgraded to Circles without changing bills or settlements.
+- Existing Split Bills groups remain standalone unless their owner explicitly links or promotes them to a Circle.
 - Circle members can create Circle-owned Split Bills.
 - Members can share a selected personal transaction as amount-only or item-detail visibility.
 - Sharing does not change the transaction's category, merchant, review state, or Profile.
