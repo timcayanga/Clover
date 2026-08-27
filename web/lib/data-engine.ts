@@ -5501,15 +5501,25 @@ export const applyDataQaReviewLearning = async (params: {
   };
 };
 
+export const loadImportEnrichmentTrainingContext = async (workspaceId: string) => {
+  const [merchantRules, accountRules, trainingSignals, negativeSignals] = await Promise.all([
+    loadMerchantRules(workspaceId),
+    loadAccountRules(workspaceId),
+    loadTrainingSignals(workspaceId),
+    loadNegativeMerchantSignals(workspaceId),
+  ]);
+
+  return { merchantRules, accountRules, trainingSignals, negativeSignals };
+};
+
 export const enrichParsedRowsWithTraining = async (params: {
   workspaceId: string;
   rows: ParsedImportRow[];
   statementConfidence?: number;
+  trainingContext?: Awaited<ReturnType<typeof loadImportEnrichmentTrainingContext>>;
 }) => {
-  const merchantRules = await loadMerchantRules(params.workspaceId);
-  const accountRules = await loadAccountRules(params.workspaceId);
-  const trainingSignals = await loadTrainingSignals(params.workspaceId);
-  const negativeSignals = await loadNegativeMerchantSignals(params.workspaceId);
+  const { merchantRules, accountRules, trainingSignals, negativeSignals } =
+    params.trainingContext ?? (await loadImportEnrichmentTrainingContext(params.workspaceId));
   const rawStatementConfidence =
     typeof params.statementConfidence === "number" && Number.isFinite(params.statementConfidence)
       ? Math.max(0, Math.min(100, params.statementConfidence))

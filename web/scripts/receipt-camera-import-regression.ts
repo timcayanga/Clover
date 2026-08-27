@@ -106,18 +106,56 @@ assert.doesNotMatch(
   "receipt confirmation must not wait for enrichment before becoming visible"
 );
 const receiptFastHandoffSection = workerSource.slice(
-  workerSource.indexOf('if (isDocumentImport && effectiveImportMode === "receipt")'),
-  workerSource.indexOf("try {\n    const qaRunResult", workerSource.indexOf('if (isDocumentImport && effectiveImportMode === "receipt")'))
+  workerSource.indexOf("const isFastTransactionDocument ="),
+  workerSource.indexOf("try {\n    const qaRunResult", workerSource.indexOf("const isFastTransactionDocument ="))
 );
 assert.match(
   receiptFastHandoffSection,
-  /confirmImportFileWithRetry\("fast_receipt"[\s\S]{0,1800}?recordImportDataQaInBackground/,
+  /effectiveImportMode === "receipt" \? "fast_receipt" : "fast_notes"[\s\S]{0,2400}?recordImportDataQaInBackground/,
   "receipt QA must start only after the usable transaction handoff"
+);
+assert.match(
+  receiptFastHandoffSection,
+  /effectiveImportMode === "notes" && rows\.length > 0/,
+  "digital-note transactions must use the same visible-first handoff as receipts"
 );
 assert.match(
   receiptFastHandoffSection,
   /time_to_usable_ms/,
   "receipt handoff must emit time-to-usable telemetry"
+);
+
+assert.match(
+  workerSource,
+  /const initialStartIndex = Math\.max\(0, Math\.min\(totalRows, Number\(job\.lastRowIndex \?\? 0\)\)\)/,
+  "enrichment retries must resume from the durable row cursor"
+);
+assert.match(
+  workerSource,
+  /candidateRows = batchRows[\s\S]{0,500}?eligibleSourceIndices\.has\(sourceRowIndex\)/,
+  "enrichment must filter out ineligible rows before loading the rule engine"
+);
+assert.match(
+  workerSource,
+  /await prisma\.\$transaction\([\s\S]{0,400}?transactionUpdates\.map/,
+  "enrichment transaction writes must be batched"
+);
+assert.match(
+  workerSource,
+  /normalizedTotalRows <= 25 \? 0 : 1_000/,
+  "small-import enrichment should begin immediately and large imports should not wait five seconds"
+);
+
+const dataEngineSource = readFileSync(join(root, "lib/data-engine.ts"), "utf8");
+assert.match(
+  dataEngineSource,
+  /loadImportEnrichmentTrainingContext[\s\S]{0,500}?Promise\.all\(\[/,
+  "enrichment training inputs must load in parallel"
+);
+assert.match(
+  dataEngineSource,
+  /params\.trainingContext \?\? \(await loadImportEnrichmentTrainingContext/,
+  "one training snapshot must be reusable across every batch in a job"
 );
 
 console.log("Receipt camera import regression checks passed.");

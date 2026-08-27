@@ -30,7 +30,11 @@ These rules apply when an uploaded screenshot does not match a trained instituti
 ## Receipt time to usable
 
 - Publish a receipt transaction as soon as merchant, total, date, currency, and the best supported account are safely persisted. The user must not wait for data QA, merchant cleanup, category refinement, duplicate analysis, recurring analysis, or learning before the transaction becomes visible.
+- Use the same visible-first handoff for transaction-bearing digital notes. Structured statements, spreadsheets, PDFs, screenshots, and delimited files also publish core rows before post-visible QA and enrichment.
 - Queue post-visible cleanup through the durable import enrichment job. Enrichment must update the existing transaction in place and must never create a second transaction for the same receipt.
+- Start enrichment immediately for imports of 25 rows or fewer and within one second for larger imports. Resume from the durable row cursor after a timeout instead of rescanning completed batches.
+- Load merchant rules, account rules, training signals, and negative feedback in parallel once per job. Reuse that snapshot across batches, evaluate only suggested or review-pending rows, and batch transaction updates.
+- Scope post-enrichment transfer reconciliation to the imported date window rather than scanning unrelated workspace history.
 - Background work may refine only suggested or review-pending data. Never overwrite a transaction that the user edited, confirmed, or rejected.
 - A failure in optional receipt-detail linking, Split Bills creation, QA, or enrichment must not retroactively mark an already-visible core transaction as failed.
 - Record time-to-usable separately from background completion time so Clover can monitor both the immediate experience and eventual enrichment health.

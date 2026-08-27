@@ -113,4 +113,5 @@ Rules:
 - Batch high-volume transaction inserts while keeping raw row provenance intact.
 - Reuse identical transaction-context inference within one runtime instead of rescanning the context corpus for every row.
 - Make accounts, transactions, and receivables durable before template promotion, analytics, QA, or representative training signals run.
+- Evaluate enrichment only for suggested or review-pending rows, reuse one parallel-loaded training snapshot across batches, batch database writes, and resume from the saved cursor after a timeout.
 - Large imports may sample redundant learning and analytics events; confirmed user edits remain authoritative and are never sampled away.

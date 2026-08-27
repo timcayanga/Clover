@@ -68,6 +68,7 @@ import {
   fetchImportFileCompat,
   fetchParsedTransactionRows,
   enrichParsedRowsWithTraining,
+  loadImportEnrichmentTrainingContext,
   defaultCategoryForType,
   insertTransactionCompat,
   replaceDocumentImportPagesCompat,
@@ -1382,8 +1383,16 @@ const resolveTransferTypeAgainstWorkspaceAccounts = (params: {
 
 const reconcileWorkspaceInternalTransfers = async (
   tx: Prisma.TransactionClient | typeof prisma,
-  workspaceId: string
+  workspaceId: string,
+  options: { dateFrom?: Date | null; dateTo?: Date | null } = {}
 ) => {
+  const transactionDateFilter =
+    options.dateFrom || options.dateTo
+      ? {
+          ...(options.dateFrom ? { gte: options.dateFrom } : {}),
+          ...(options.dateTo ? { lte: options.dateTo } : {}),
+        }
+      : undefined;
   const [accounts, transactions] = await Promise.all([
     tx.account.findMany({
       where: { workspaceId },
@@ -1394,6 +1403,7 @@ const reconcileWorkspaceInternalTransfers = async (
         workspaceId,
         deletedAt: null,
         importFileId: { not: null },
+        ...(transactionDateFilter ? { date: transactionDateFilter } : {}),
         category: { is: { name: "Transfers" } },
         reviewStatus: { notIn: ["edited", "rejected", "duplicate_skipped"] },
       },
@@ -1507,6 +1517,8 @@ const reconcileWorkspaceInternalTransfers = async (
   ]);
   console.info("[internal-transfer-reconciliation] completed", {
     workspaceId,
+    dateFrom: options.dateFrom?.toISOString() ?? null,
+    dateTo: options.dateTo?.toISOString() ?? null,
     candidateCount: transactions.length,
     internalCount: internalIds.size,
     externalIncomeCount: externalIncomeIds.length,
@@ -7264,6 +7276,7 @@ export const processImportEnrichmentJobs = async (options: {
 
     const leaseToken = job.leaseToken;
     try {
+      const enrichmentStartedAt = Date.now();
       const attempt = Math.max(1, Number(job.attempts ?? 1));
       const deadlineAt = Date.now() + 60_000;
       const importFile = await fetchImportFileCompat(job.importFileId);
@@ -7296,6 +7309,16 @@ export const processImportEnrichmentJobs = async (options: {
       const cleanupRowsBeforeAttempt = await countImportTransactionsNeedingCleanup(job.importFileId).catch(
         () => totalRows
       );
+      if (cleanupRowsBeforeAttempt <= 0) {
+        await completeImportEnrichmentJob({ id: job.id, totalRows, workerId, leaseToken });
+        console.info("[import-enrichment] skipped clean import", {
+          importFileId: job.importFileId,
+          totalRows,
+          durationMs: Date.now() - enrichmentStartedAt,
+        });
+        results.push({ importFileId: job.importFileId, status: "done", processedRows: totalRows, totalRows });
+        continue;
+      }
 
       const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
         ? await prisma.accountStatementCheckpoint.findUnique({
@@ -7324,6 +7347,8 @@ export const processImportEnrichmentJobs = async (options: {
       });
       const transactionBySourceIndex = new Map<number, { id: string; reviewStatus: string }>();
       const transactionsByFallbackKey = new Map<string, Array<{ id: string; reviewStatus: string }>>();
+      const eligibleSourceIndices = new Set<number>();
+      let hasEligibleTransactionWithoutSourceIndex = false;
       for (const transaction of transactions) {
         const rawPayload = transaction.rawPayload;
         const sourceRowIndex =
@@ -7335,6 +7360,11 @@ export const processImportEnrichmentJobs = async (options: {
             id: transaction.id,
             reviewStatus: transaction.reviewStatus,
           });
+          if (transaction.reviewStatus === "suggested" || transaction.reviewStatus === "pending_review") {
+            eligibleSourceIndices.add(sourceRowIndex);
+          }
+        } else if (transaction.reviewStatus === "suggested" || transaction.reviewStatus === "pending_review") {
+          hasEligibleTransactionWithoutSourceIndex = true;
         }
         const fallbackKey = buildImportEnrichmentMatchKey({
           date: transaction.date,
@@ -7353,36 +7383,70 @@ export const processImportEnrichmentJobs = async (options: {
         }
       }
 
-      const existingCategories = await prisma.category.findMany({
-        where: { workspaceId: String(importFile.workspaceId) },
-        select: { id: true, name: true },
-      });
+      const [existingCategories, trainingContext] = await Promise.all([
+        prisma.category.findMany({
+          where: { workspaceId: String(importFile.workspaceId) },
+          select: { id: true, name: true },
+        }),
+        loadImportEnrichmentTrainingContext(String(importFile.workspaceId)),
+      ]);
       const categoryByName = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
       const usedTransactionIds = new Set<string>();
       let updatedRows = 0;
       let skippedRows = 0;
-      let processedRows = 0;
+      let evaluatedRows = 0;
+      let databaseBatches = 0;
+      const initialStartIndex = Math.max(0, Math.min(totalRows, Number(job.lastRowIndex ?? 0)));
+      let processedRows = initialStartIndex;
 
-      for (let startIndex = 0; startIndex < totalRows; startIndex += batchSize) {
+      for (let startIndex = initialStartIndex; startIndex < totalRows; startIndex += batchSize) {
         if (Date.now() >= deadlineAt) {
           break;
         }
 
         const batchRows = parsedRows.slice(startIndex, startIndex + batchSize);
+        const candidateRows = batchRows
+          .map((row, index) => ({ row, sourceRowIndex: startIndex + index + 1 }))
+          .filter(
+            ({ sourceRowIndex }) =>
+              hasEligibleTransactionWithoutSourceIndex || eligibleSourceIndices.has(sourceRowIndex)
+          );
+        if (candidateRows.length === 0) {
+          skippedRows += batchRows.length;
+          processedRows = Math.min(totalRows, startIndex + batchRows.length);
+          await updateRunningImportEnrichmentJobProgress({
+            id: job.id,
+            leaseToken,
+            phase: "enriching",
+            lastRowIndex: processedRows,
+            processedRows,
+            totalRows,
+            workerId,
+          });
+          continue;
+        }
+
         const enrichedRows = (await enrichParsedRowsWithTraining({
           workspaceId: String(importFile.workspaceId),
-          rows: coerceParsedTransactionRowsForEnrichment(batchRows),
+          rows: coerceParsedTransactionRowsForEnrichment(candidateRows.map(({ row }) => row)),
           statementConfidence: attempt >= 2 ? Math.max(statementConfidence, 90) : statementConfidence,
+          trainingContext,
         })).map((row, index) => {
-          const parsedRow = batchRows[index] as EnrichedParsedImportRow | undefined;
+          const parsedRow = candidateRows[index]?.row as EnrichedParsedImportRow | undefined;
           const strengthened = strengthenEnrichmentRowForAttempt(row, parsedRow, attempt);
           return applyMerchantRescueToEnrichedRow(strengthened, parsedRow);
         });
+        evaluatedRows += enrichedRows.length;
+        const transactionUpdates: Array<{
+          id: string;
+          data: Parameters<typeof prisma.transaction.update>[0]["data"];
+        }> = [];
 
         for (const [index, row] of enrichedRows.entries()) {
-          const sourceRowIndex = startIndex + index + 1;
+          const candidateRow = candidateRows[index];
+          const sourceRowIndex = candidateRow?.sourceRowIndex ?? startIndex + index + 1;
           const sourceIndexedTransaction = transactionBySourceIndex.get(sourceRowIndex);
-          const parsedRow = batchRows[index] as EnrichedParsedImportRow | undefined;
+          const parsedRow = candidateRow?.row as EnrichedParsedImportRow | undefined;
           const fallbackKey = buildImportEnrichmentMatchKey({
             date: parsedRow?.date ?? row.date,
             amount: parsedRow?.amount ?? row.amount,
@@ -7460,8 +7524,8 @@ export const processImportEnrichmentJobs = async (options: {
           })
             ? "pending_review"
             : "confirmed";
-          await prisma.transaction.update({
-            where: { id: transaction.id },
+          transactionUpdates.push({
+            id: transaction.id,
             data: {
               categoryId,
               type: canonicalType,
@@ -7482,6 +7546,18 @@ export const processImportEnrichmentJobs = async (options: {
           updatedRows += 1;
         }
 
+        if (transactionUpdates.length > 0) {
+          await prisma.$transaction(
+            transactionUpdates.map(({ id, data }) =>
+              prisma.transaction.update({
+                where: { id },
+                data,
+              })
+            )
+          );
+          databaseBatches += 1;
+        }
+
         processedRows = Math.min(totalRows, startIndex + batchRows.length);
         await updateRunningImportEnrichmentJobProgress({
           id: job.id,
@@ -7498,15 +7574,40 @@ export const processImportEnrichmentJobs = async (options: {
         importFileId: job.importFileId,
         totalRows,
         attempt,
+        resumedFromRow: initialStartIndex,
         processedRows,
+        evaluatedRows,
         updatedRows,
         skippedRows,
+        databaseBatches,
+        durationMs: Date.now() - enrichmentStartedAt,
+        rowsPerSecond:
+          evaluatedRows > 0
+            ? Math.round((evaluatedRows * 1_000) / Math.max(1, Date.now() - enrichmentStartedAt))
+            : 0,
       });
 
       // Enrichment may retain the Transfers category, but ownership determines
       // whether the ledger movement is an internal transfer or an expense/income.
       // Run this last so enrichment cannot restore an external payment to transfer.
-      await reconcileWorkspaceInternalTransfers(prisma, String(importFile.workspaceId));
+      const importedDates = transactions
+        .map((transaction) => transaction.date)
+        .filter((date): date is Date => date instanceof Date && Number.isFinite(date.getTime()));
+      const earliestImportedDate = importedDates.length > 0
+        ? new Date(Math.min(...importedDates.map((date) => date.getTime())))
+        : null;
+      const latestImportedDate = importedDates.length > 0
+        ? new Date(Math.max(...importedDates.map((date) => date.getTime())))
+        : null;
+      const reconciliationPaddingMs = 14 * 24 * 60 * 60 * 1000;
+      await reconcileWorkspaceInternalTransfers(prisma, String(importFile.workspaceId), {
+        dateFrom: earliestImportedDate
+          ? new Date(earliestImportedDate.getTime() - reconciliationPaddingMs)
+          : null,
+        dateTo: latestImportedDate
+          ? new Date(latestImportedDate.getTime() + reconciliationPaddingMs)
+          : null,
+      });
 
       if (processedRows >= totalRows) {
         await collapseDuplicateTransactionsForImport(job.importFileId).catch((error) => {
@@ -7612,7 +7713,7 @@ const processImportEnrichmentJobsInBackground = (importFileId: string, totalRows
   );
   schedulePostVisibleImportWork(`enrichment:${importFileId}`, async () => {
     await processImportEnrichmentJobs({ importFileId, limit, batchSize: 500 });
-  });
+  }, normalizedTotalRows <= 25 ? 0 : 1_000);
 };
 
 const isWiseReviewOnlyTransaction = (params: {
@@ -11904,37 +12005,46 @@ export const processImportFileText = async (
     }
   }
 
-  if (isDocumentImport && effectiveImportMode === "receipt") {
+  const isFastTransactionDocument =
+    isDocumentImport &&
+    (effectiveImportMode === "receipt" || (effectiveImportMode === "notes" && rows.length > 0));
+  if (isFastTransactionDocument) {
     try {
-      const receiptConfirmationStartedAt = Date.now();
+      const documentConfirmationStartedAt = Date.now();
+      const transactionDocumentLabel = effectiveImportMode === "receipt" ? "Receipt" : "Split bill";
       await updateImportProgress({
         status: "processing",
         processingPhase: "reconciling",
-        processingMessage: "Clover is saving the receipt transaction.",
+        processingMessage: `Clover is saving the ${transactionDocumentLabel.toLowerCase()} transactions.`,
       });
-      confirmedImportResult = await confirmImportFileWithRetry("fast_receipt", linkedImportAccountId);
+      confirmedImportResult = await confirmImportFileWithRetry(
+        effectiveImportMode === "receipt" ? "fast_receipt" : "fast_notes",
+        linkedImportAccountId
+      );
       if (confirmedImportResult.imported <= 0 && !confirmedImportResult.duplicate) {
-        throw new Error("Receipt confirmation produced no visible transaction.");
+        throw new Error(`${transactionDocumentLabel} confirmation produced no visible transaction.`);
       }
 
       await updateImportProgress({
         status: "done",
         processingPhase: "complete",
-        processingMessage: "Receipt is ready. Clover is refining names and categories in the background.",
+        processingMessage: `${transactionDocumentLabel} is ready. Clover is refining names and categories in the background.`,
         confirmedTransactionsCount:
           confirmedImportResult.confirmedTransactionsCount ?? confirmedImportResult.imported,
       });
-      console.info("[import-performance] receipt usable handoff complete", {
+      console.info("[import-performance] transaction document usable handoff complete", {
         importFileId,
+        importMode: effectiveImportMode,
         totalMs: Date.now() - startedAt,
-        confirmationMs: Date.now() - receiptConfirmationStartedAt,
+        confirmationMs: Date.now() - documentConfirmationStartedAt,
         importedRows: confirmedImportResult.imported,
         usedVisionFallback: Boolean(pageImages?.length),
         usedOpenAiFallback: Boolean(useOpenAiParse),
       });
       emitImportProcessingEvent("import_processing_completed", {
         processing_status: "done",
-        processing_phase: "receipt_core_visible",
+        processing_phase:
+          effectiveImportMode === "receipt" ? "receipt_core_visible" : "notes_transactions_visible",
         imported_rows: confirmedImportResult.imported,
         time_to_usable_ms: Date.now() - startedAt,
         background_enrichment: true,
@@ -11968,12 +12078,18 @@ export const processImportFileText = async (
       await updateImportFileCompat(importFileId, {
         status: "failed",
         processingPhase: "repair_needed",
-        processingMessage: "Clover couldn't finish saving the receipt transaction.",
+        processingMessage:
+          effectiveImportMode === "receipt"
+            ? "Clover couldn't finish saving the receipt transaction."
+            : "Clover couldn't finish saving the split bill transactions.",
       });
       emitImportProcessingEvent("import_processing_stalled", {
         processing_status: "failed",
         processing_phase: "repair_needed",
-        reason: "receipt_core_confirmation_failed",
+        reason:
+          effectiveImportMode === "receipt"
+            ? "receipt_core_confirmation_failed"
+            : "notes_core_confirmation_failed",
       });
       throw error;
     }

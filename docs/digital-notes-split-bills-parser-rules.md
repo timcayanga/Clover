@@ -8,3 +8,5 @@
 - A participant share is an amount charged/owed, not evidence that the participant paid. Do not create payment or settlement records without an explicit payer/payment signal.
 - If merchant, currency, payer, or date is absent, retain the raw worksheet, use a review state, and label the inferred field clearly.
 - Source re-imports must be idempotent and must reject the legacy pattern of multiple `Shared bill: <name> share` transactions.
+- Once transaction rows and raw source payloads are durably persisted, publish the usable transactions before Data QA and enrichment finish.
+- Keep low-confidence fields review-required. Post-visible cleanup must never overwrite confirmed, edited, rejected, or otherwise user-controlled values.
