@@ -2262,6 +2262,8 @@ function TransactionsPageContent() {
   const selectedTransactionCount = selectedTransactionIds.length;
   const hasSelectedTransactions = selectedTransactionCount > 0;
   const [detailDraft, setDetailDraft] = useState<TransactionDetailDraft | null>(null);
+  const [detailEditing, setDetailEditing] = useState(false);
+  const [detailActionMenuOpen, setDetailActionMenuOpen] = useState(false);
   const [transactionDeleteConfirmOpen, setTransactionDeleteConfirmOpen] = useState(false);
   const [transactionSplitBillOpen, setTransactionSplitBillOpen] = useState(false);
   const [transactionSplitBillDraft, setTransactionSplitBillDraft] = useState<SplitBillTransactionLinkDraft>({
@@ -2343,11 +2345,10 @@ function TransactionsPageContent() {
   const [headerMenuOpen, setHeaderMenuOpen] = useState<TransactionSortField | null>(null);
   const [headerMenuPosition, setHeaderMenuPosition] = useState<{ top: number; left: number; width: number } | null>(null);
   const headerMenuRef = useRef<HTMLDivElement | null>(null);
-  const detailAutosaveTimerRef = useRef<number | null>(null);
   const manualModalStyle = useMemo<React.CSSProperties>(
     () => ({
-      width: isCompactViewport ? "calc(100vw - 16px)" : "420px",
-      maxHeight: isCompactViewport ? "calc(100dvh - 16px)" : "calc(100dvh - 24px)",
+      width: isCompactViewport ? "100vw" : "620px",
+      maxHeight: isCompactViewport ? "100dvh" : "calc(100dvh - 24px)",
       overflow: "auto",
     }),
     [isCompactViewport]
@@ -4587,29 +4588,6 @@ function TransactionsPageContent() {
   }, [detailDraft, getDisplayCategoryIdForTransaction, otherCategoryId, selectedTransaction]);
 
   useEffect(() => {
-    if (detailAutosaveTimerRef.current) {
-      window.clearTimeout(detailAutosaveTimerRef.current);
-      detailAutosaveTimerRef.current = null;
-    }
-
-    if (!selectedTransaction || !detailDraft || !hasDetailDraftChanges || isSaving || isApplyingHistory) {
-      return;
-    }
-
-    detailAutosaveTimerRef.current = window.setTimeout(() => {
-      detailAutosaveTimerRef.current = null;
-      void persistDetailDraft({ closeAfterSave: false });
-    }, 500);
-
-    return () => {
-      if (detailAutosaveTimerRef.current) {
-        window.clearTimeout(detailAutosaveTimerRef.current);
-        detailAutosaveTimerRef.current = null;
-      }
-    };
-  }, [detailDraft, hasDetailDraftChanges, isApplyingHistory, isSaving, selectedTransaction]);
-
-  useEffect(() => {
     if (!activeWarningTransactionId || !isWorkspaceDataReady) {
       return;
     }
@@ -4740,6 +4718,8 @@ function TransactionsPageContent() {
     }
     setActiveWarningTransactionId(null);
     setSelectedTransaction(transaction);
+    setDetailEditing(false);
+    setDetailActionMenuOpen(false);
     setTransactionDeleteConfirmOpen(false);
     setTransactionSplitBillOpen(false);
     setTransactionSplitBillDraft({
@@ -4865,18 +4845,15 @@ function TransactionsPageContent() {
     options?: { syncRoute?: boolean } | ReactMouseEvent<HTMLElement>
   ) => {
     const syncRoute = options && "syncRoute" in options ? options.syncRoute ?? true : true;
-    if (detailAutosaveTimerRef.current) {
-      window.clearTimeout(detailAutosaveTimerRef.current);
-      detailAutosaveTimerRef.current = null;
-    }
-
-    if (selectedTransaction && detailDraft && hasDetailDraftChanges && !isSaving && !isApplyingHistory) {
-      void persistDetailDraft({ closeAfterSave: true });
+    if (detailEditing && hasDetailDraftChanges && !isSaving) {
+      setMessage("Save or cancel your transaction changes before closing.");
       return;
     }
 
     setSelectedTransaction(null);
     setDetailDraft(null);
+    setDetailEditing(false);
+    setDetailActionMenuOpen(false);
     setTransactionDeleteConfirmOpen(false);
     setTransactionSplitBillOpen(false);
     setTransactionSplitBillDraft({
@@ -4899,6 +4876,25 @@ function TransactionsPageContent() {
       transactionDetailScrollYRef.current = null;
       window.requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: "auto" }));
     }
+  };
+
+  const cancelTransactionDetailEdit = () => {
+    if (!selectedTransaction) {
+      return;
+    }
+
+    setDetailDraft({
+      ...createDetailDraft(selectedTransaction, {
+        categoryId: getDisplayCategoryIdForTransaction(selectedTransaction),
+        type: getTransactionDisplayType(
+          selectedTransaction,
+          accountNumberById.get(selectedTransaction.accountId) ?? null,
+          workspaceAccountNumbers
+        ),
+      }),
+    });
+    setDetailEditing(false);
+    setDetailActionMenuOpen(false);
   };
 
   useEffect(() => {
@@ -6188,12 +6184,15 @@ function TransactionsPageContent() {
             : "Transaction details updated."
         );
         closeTransactionDetail();
-      } else if (categoryChange.categoryChanged) {
+      } else {
+        setDetailEditing(false);
         setMessage(
-          buildTransactionCategoryUpdatedMessage({
-            previousCategoryName: categoryChange.previousCategoryName,
-            nextCategoryName: categoryChange.nextCategoryName,
-          })
+          categoryChange.categoryChanged
+            ? buildTransactionCategoryUpdatedMessage({
+                previousCategoryName: categoryChange.previousCategoryName,
+                nextCategoryName: categoryChange.nextCategoryName,
+              })
+            : "Transaction saved."
         );
       }
     } catch (error) {
@@ -8141,8 +8140,10 @@ function TransactionsPageContent() {
             </div>
 
             <form onSubmit={saveManualTransaction}>
-              <div className="manual-form-layout manual-form-layout--compact">
-                <div className="transactions-manual-type-toggle" role="group" aria-label="Transaction type">
+              <div className="manual-form-layout manual-form-layout--compact" data-transaction-type={manualForm.type}>
+                <div className="transactions-manual-type-section">
+                  <span className="transactions-manual-type-section__label">Transaction type</span>
+                  <div className="transactions-manual-type-toggle" role="group" aria-label="Transaction type">
                   <button
                     type="button"
                     className={`transactions-manual-type-toggle__button ${manualForm.type === "debit" ? "is-active" : ""}`}
@@ -8152,7 +8153,7 @@ function TransactionsPageContent() {
                     <span className="transactions-manual-type-symbol" aria-hidden="true">
                       −
                     </span>
-                    <span>Expenses</span>
+                    <span>Expense</span>
                   </button>
                   <button
                     type="button"
@@ -8174,6 +8175,7 @@ function TransactionsPageContent() {
                     <span className="transactions-manual-type-symbol" aria-hidden="true">↔</span>
                     <span>Transfer</span>
                   </button>
+                  </div>
                 </div>
 
                 <div className="transactions-manual-row transactions-manual-row--name">
@@ -8304,7 +8306,9 @@ function TransactionsPageContent() {
                     />
                     {manualTransferDestinationOptions.length === 0 ? (
                       <small className="field-help">Add another account in {manualForm.currency} to record an internal transfer.</small>
-                    ) : null}
+                    ) : (
+                      <small className="field-help">Transfers between your accounts are excluded from income and spending.</small>
+                    )}
                   </label>
                 ) : null}
 
@@ -8561,9 +8565,48 @@ function TransactionsPageContent() {
                   {hasDistinctDetailRawName ? <p className="transaction-drawer__merchant-raw">{detailTransactionRawName}</p> : null}
                 </div>
               </div>
-              <button className="icon-button transaction-drawer__close-button" type="button" onClick={closeTransactionDetail} aria-label="Close transaction details">
-                ×
-              </button>
+              <div className="transaction-drawer__head-actions">
+                {detailEditing ? (
+                  <button className="button button-ghost button-small" type="button" onClick={cancelTransactionDetailEdit} disabled={isSaving}>
+                    Cancel
+                  </button>
+                ) : (
+                  <button className="button button-secondary button-small transaction-drawer__edit-button" type="button" onClick={() => setDetailEditing(true)}>
+                    Edit
+                  </button>
+                )}
+                {!detailEditing ? (
+                  <div className="transaction-drawer__action-menu">
+                    <button
+                      className="icon-button"
+                      type="button"
+                      aria-label="More transaction actions"
+                      aria-expanded={detailActionMenuOpen}
+                      onClick={() => setDetailActionMenuOpen((current) => !current)}
+                    >
+                      <ActionIcon name="more" />
+                    </button>
+                    {detailActionMenuOpen ? (
+                      <div className="transaction-drawer__action-menu-popover" role="menu">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="transaction-drawer__action-menu-danger"
+                          onClick={() => {
+                            setDetailActionMenuOpen(false);
+                            setTransactionDeleteConfirmOpen(true);
+                          }}
+                        >
+                          Delete transaction
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                <button className="icon-button transaction-drawer__close-button" type="button" onClick={closeTransactionDetail} aria-label="Close transaction details">
+                  ×
+                </button>
+              </div>
             </div>
 
             {selectedTransactionPrimaryReviewChips.length > 0 ? (
@@ -8579,7 +8622,29 @@ function TransactionsPageContent() {
               </div>
             ) : null}
 
+            {detailEditing ? (
             <div className="transaction-drawer-form transaction-drawer-form--single">
+              <div className="transaction-drawer-edit-type">
+                <span className="transactions-manual-type-section__label">Transaction type</span>
+                <div className="transactions-manual-type-toggle" role="group" aria-label="Transaction type">
+                  {amountTypeOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`transactions-manual-type-toggle__button ${detailDraft?.type === option.value ? "is-active" : ""}`}
+                      aria-pressed={detailDraft?.type === option.value}
+                      onClick={() =>
+                        setDetailDraft((current) =>
+                          current ? { ...current, type: option.value, isTransfer: option.value === "transfer" } : current
+                        )
+                      }
+                    >
+                      <span className="transactions-manual-type-symbol" aria-hidden="true">{option.icon}</span>
+                      <span>{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
               <label>
                 Name
                 <input
@@ -8600,7 +8665,7 @@ function TransactionsPageContent() {
                 />
               </label>
 
-              <div className="transaction-drawer-form__amount-type-row">
+              <div className="transaction-drawer-form__amount-type-row transaction-drawer-form__amount-type-row--amount-only">
                 <div className="transaction-drawer-form__amount-field">
                   <span className="transaction-drawer-field-label">
                     <span>Amount</span>
@@ -8625,43 +8690,6 @@ function TransactionsPageContent() {
                   </div>
                 </div>
 
-                <label className="transaction-drawer-form__type-field">
-                  <span className="transactions-manual-type-label">
-                    <span>Type</span>
-                  </span>
-                  <div className="transactions-manual-type-control transaction-drawer-type-control">
-                    <span className="transactions-manual-type-symbol" aria-hidden="true">
-                      {(detailDraft?.type ??
-                        (selectedTransaction.type === "income" ? "credit" : selectedTransaction.type === "transfer" ? "transfer" : "debit")) ===
-                      "credit"
-                        ? "+"
-                        : (detailDraft?.type ?? selectedTransaction.type) === "transfer"
-                          ? "↔"
-                          : "-"}
-                    </span>
-                    <select
-                      value={
-                        detailDraft?.type ??
-                        (selectedTransaction.type === "income" ? "credit" : selectedTransaction.type === "transfer" ? "transfer" : "debit")
-                      }
-                      onChange={(event) =>
-                        setDetailDraft((current) =>
-                          current
-                            ? {
-                                ...current,
-                                type: event.target.value as TransactionDetailDraft["type"],
-                                isTransfer: event.target.value === "transfer",
-                              }
-                            : current
-                        )
-                      }
-                    >
-                      <option value="debit">Expense</option>
-                      <option value="credit">Income</option>
-                      <option value="transfer">Transfer</option>
-                    </select>
-                  </div>
-                </label>
               </div>
 
               <label>
@@ -8706,6 +8734,21 @@ function TransactionsPageContent() {
               </label>
 
             </div>
+            ) : (
+              <div className="transaction-drawer-view">
+                <div className={`transaction-drawer-view__amount is-${detailDraft?.type ?? "debit"}`}>
+                  <span>{detailDraft?.type === "credit" ? "+" : detailDraft?.type === "transfer" ? "↔" : "−"}</span>
+                  <strong>{formatTransactionAmount(Number(detailDraft?.amount ?? selectedTransaction.amount), detailDraft?.currency ?? selectedTransaction.currency)}</strong>
+                  <em>{detailDraft?.type === "credit" ? "Income" : detailDraft?.type === "transfer" ? "Transfer" : "Expense"}</em>
+                </div>
+                <dl className="transaction-drawer-view__facts">
+                  <div><dt>Date</dt><dd>{formatDate(detailDraft?.date ?? selectedTransaction.date)}</dd></div>
+                  <div><dt>Account</dt><dd>{detailSelectedAccount ? formatTransactionAccountName(detailSelectedAccount) : selectedTransaction.accountName}</dd></div>
+                  <div><dt>Category</dt><dd>{detailSelectedCategory?.name ?? selectedTransaction.categoryName ?? "Other"}</dd></div>
+                  <div><dt>Notes</dt><dd>{detailDraft?.description.trim() || "No notes"}</dd></div>
+                </dl>
+              </div>
+            )}
 
             {selectedTransactionWarningReasonSummary ? (
               <div className="detail-warning-box detail-warning-box--compact transaction-drawer-warning">
@@ -8748,6 +8791,7 @@ function TransactionsPageContent() {
               </div>
             ) : null}
 
+            {detailEditing ? (
             <details className="transaction-drawer-more">
               <summary>More</summary>
               <div className="transaction-drawer-more__body">
@@ -8846,7 +8890,45 @@ function TransactionsPageContent() {
                 <p>Based on Clover's merchant, account, category, duplicate, and parser checks.</p>
               </div>
             </details>
+            ) : (
+              <details className="transaction-drawer-more">
+                <summary>Source and review details</summary>
+                <div className="transaction-drawer-more__body">
+                  <div className="transaction-drawer-more__row">
+                    <span>Source</span>
+                    <strong>{selectedTransaction.importFileId ? "Imported" : "Manual"}</strong>
+                  </div>
+                  <div className="transaction-drawer-more__row">
+                    <span>Confidence score</span>
+                    <span className="transaction-drawer-more__confidence">
+                      {selectedTransactionConfidenceChips.map((chip) => (
+                        <span key={chip.label} className={`transaction-drawer-review-status__chip transaction-drawer-review-status__chip--${chip.tone}`}>
+                          {chip.label}
+                        </span>
+                      ))}
+                      <strong>{selectedTransactionConfidenceScore ?? 0}%</strong>
+                    </span>
+                  </div>
+                  <p>Clover keeps the original source separate from the details you confirm.</p>
+                </div>
+              </details>
+            )}
 
+            {detailEditing ? (
+              <div className="transaction-drawer-edit-footer">
+                <button className="button button-secondary" type="button" onClick={cancelTransactionDetailEdit} disabled={isSaving}>
+                  Cancel
+                </button>
+                <button
+                  className="button button-primary"
+                  type="button"
+                  onClick={() => void persistDetailDraft({ closeAfterSave: false })}
+                  disabled={isSaving || !hasDetailDraftChanges}
+                >
+                  {isSaving ? "Saving..." : "Save changes"}
+                </button>
+              </div>
+            ) : (
             <div className="form-actions detail-actions">
               <TransactionCrossFeatureActions
                     workspaceId={selectedTransaction.workspaceId}
@@ -8865,6 +8947,7 @@ function TransactionsPageContent() {
                     }}
               />
             </div>
+            )}
 
             {(transactionSplitBillError || (transactionSplitBillOpen && !selectedTransaction.splitBill)) ? (
               <div className="transaction-drawer-split-bill">
@@ -8886,9 +8969,8 @@ function TransactionsPageContent() {
               </div>
             ) : null}
 
-            {!selectedTransactionWarningReason ? (
+            {!detailEditing && !selectedTransactionWarningReason && transactionDeleteConfirmOpen ? (
               <div className="transaction-drawer-delete-footer">
-                {transactionDeleteConfirmOpen ? (
                   <div className="detail-warning-box transaction-delete-confirm" role="alert">
                     <p>
                       <strong>Delete transaction?</strong>
@@ -8899,9 +8981,6 @@ function TransactionsPageContent() {
                       <button className="button button-danger button-small" type="button" onClick={() => void confirmDeleteTransaction()} disabled={isSaving}>{isSaving ? "Deleting..." : "Delete"}</button>
                     </div>
                   </div>
-                ) : (
-                  <button className="button button-danger button-small" type="button" onClick={() => setTransactionDeleteConfirmOpen(true)}>Delete Transaction</button>
-                )}
               </div>
             ) : null}
           </section>

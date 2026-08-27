@@ -68,6 +68,11 @@ assert.match(styles, /\.transaction-category-picker__option > \.transaction-cate
 assert.match(transactions, /if \(syncRoute && isCompactViewport\)[\s\S]*?router\.push\(`\/transactions\/\$\{encodeURIComponent\(transaction\.id\)\}`/, "Only compact layouts should route transaction details to a standalone page.");
 assert.match(accountDetail, /if \(isMobileViewport\) \{[\s\S]{0,120}router\.push\(`\/transactions\/\$\{encodeURIComponent\(transaction\.id\)\}`/, "Mobile Account Details must route transactions to the shared standalone detail page.");
 assert.match(transactions, /transaction-drawer--sidepanel/, "Desktop transaction details must retain the right-side drawer.");
+assert.match(transactions, /transactions-manual-type-section__label">Transaction type/, "Manual entry must introduce transaction type as the first required decision.");
+assert.match(transactions, /data-transaction-type=\{manualForm\.type\}/, "Manual entry must adapt its field layout for transfers.");
+assert.match(styles, /\.transactions-manual-type-toggle__button\s*\{[\s\S]*?min-height:\s*44px;/, "Desktop transaction types must use full-size segmented controls.");
+assert.match(styles, /@media \(max-width: 767px\)[\s\S]*?\.transactions-manual-type-toggle__button\s*\{[\s\S]*?min-height:\s*48px;/, "Mobile transaction types must provide 48px touch targets.");
+assert.match(styles, /\.manual-form-layout--compact\s*\{[\s\S]*?grid-template-columns:\s*repeat\(6,/, "Desktop manual entry must use the responsive six-column field grid.");
 assert.match(transactionDetail, /<summary>More<\/summary>/, "Mobile transaction details must retain the More section.");
 assert.match(transactionDetail, /Line Items/, "Mobile transaction details must show editable line items.");
 assert.match(transactionDetail, /confidenceScore/, "Mobile transaction details must show confidence context.");
@@ -82,7 +87,12 @@ const splitBillLinkFields = read("components/split-bill-transaction-link-fields.
 assert.match(splitBillLinkFields, /fetch\("\/api\/split-bill-people"\)/, "Split Bills transaction linking must load saved people suggestions.");
 assert.match(splitBillLinkFields, /Create new group/, "Split Bills transaction linking must allow creating a group in place.");
 assert.match(splitBillLinkFields, /Saved people suggestions/, "Split Bills transaction linking must expose type-ahead people suggestions.");
-assert.match(styles, /\.transaction-detail-page__delete-button[\s\S]*?width: auto/, "The transaction delete action must remain compact.");
-assert.match(transactions, /transaction-drawer-delete-footer/, "Desktop transaction deletion must remain at the bottom of the details drawer.");
+assert.match(transactions, /setDetailEditing\(true\)/, "Desktop Transaction Details must have an explicit Edit action.");
+assert.match(transactions, /Save changes/, "Desktop transaction edits must have an explicit Save action.");
+assert.doesNotMatch(transactions, /detailAutosaveTimerRef/, "Transaction Details must not silently autosave financial edits.");
+assert.match(transactions, /transaction-drawer__action-menu-popover/, "Desktop destructive actions must live in the overflow menu.");
+assert.match(transactionDetail, /setEditing\(true\)/, "Mobile Transaction Details must have an explicit Edit action.");
+assert.match(transactionDetail, /transaction-detail-page__action-menu-popover/, "Mobile destructive actions must live in the overflow menu.");
+assert.match(styles, /\.transaction-detail-page__actions\.is-editing[\s\S]*?position:\s*sticky/, "Mobile Save and Cancel actions must remain reachable above navigation.");
 
 console.log("Manual transaction entry regression passed.");

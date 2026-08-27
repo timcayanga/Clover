@@ -81,9 +81,6 @@ const displayAccountName = (account: AccountOption) => {
   return digits.length >= 4 ? `${base} ${digits.slice(-4)}` : base;
 };
 
-const typeSymbol = (type: TransactionDetailDraftValue["type"]) =>
-  type === "credit" ? "+" : type === "transfer" ? "↔" : "-";
-
 const getConfidenceScore = (transaction: Transaction) => {
   const values = [
     transaction.parserConfidence,
@@ -110,6 +107,8 @@ export default function TransactionDetailPage() {
   const [status, setStatus] = useState<"loading" | "ready" | "missing" | "error">("loading");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [splitBillOpen, setSplitBillOpen] = useState(false);
   const [splitBillSaving, setSplitBillSaving] = useState(false);
@@ -267,11 +266,26 @@ export default function TransactionDetailPage() {
         })
       );
       setMessage("Transaction saved.");
+      setEditing(false);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to save transaction.");
     } finally {
       setSaving(false);
     }
+  };
+
+  const cancelEdit = () => {
+    if (!transaction) return;
+    setDraft(
+      buildTransactionDetailDraft(transaction, {
+        merchantClean: transaction.merchantClean ?? transaction.merchantRaw,
+        effectiveType: transaction.type,
+        categoryId: transaction.categoryId,
+        isTransfer: transaction.type === "transfer" || transaction.isTransfer,
+      })
+    );
+    setEditing(false);
+    setMessage("");
   };
 
   const deleteTransaction = async () => {
@@ -298,12 +312,31 @@ export default function TransactionDetailPage() {
         <header className="transaction-detail-page__header">
           <button className="transaction-detail-page__back" type="button" onClick={goBack} aria-label="Back to transactions">
             <span aria-hidden="true">‹</span>
-            <span>Transactions</span>
+            <span className="transaction-detail-page__back-label">Transactions</span>
           </button>
-          <div>
+          <div className="transaction-detail-page__header-title">
             <p className="eyebrow">Transaction Details</p>
-            <h1>{transaction?.merchantClean ?? transaction?.merchantRaw ?? "Transaction"}</h1>
+            <h1>{editing ? "Edit transaction" : "Transaction details"}</h1>
           </div>
+          {transaction ? (
+            <div className="transaction-detail-page__header-actions">
+              {editing ? (
+                <button className="button button-ghost button-small" type="button" onClick={cancelEdit} disabled={saving}>Cancel</button>
+              ) : (
+                <>
+                  <button className="button button-secondary button-small" type="button" onClick={() => setEditing(true)}>Edit</button>
+                  <div className="transaction-detail-page__action-menu">
+                    <button className="icon-button" type="button" aria-label="More transaction actions" aria-expanded={actionMenuOpen} onClick={() => setActionMenuOpen((current) => !current)}>•••</button>
+                    {actionMenuOpen ? (
+                      <div className="transaction-detail-page__action-menu-popover" role="menu">
+                        <button type="button" role="menuitem" onClick={() => { setActionMenuOpen(false); setConfirmingDelete(true); }}>Delete transaction</button>
+                      </div>
+                    ) : null}
+                  </div>
+                </>
+              )}
+            </div>
+          ) : null}
         </header>
 
         {status === "loading" ? (
@@ -340,7 +373,29 @@ export default function TransactionDetailPage() {
               </strong>
             </section>
 
+            {editing ? (
             <section className="transaction-detail-page__fields">
+              <div className="transaction-detail-page__type-section">
+                <span>Transaction type</span>
+                <div className="transactions-manual-type-toggle" role="group" aria-label="Transaction type">
+                  {([
+                    { value: "debit", label: "Expense", icon: "−" },
+                    { value: "credit", label: "Income", icon: "+" },
+                    { value: "transfer", label: "Transfer", icon: "↔" },
+                  ] as const).map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`transactions-manual-type-toggle__button ${draft.type === option.value ? "is-active" : ""}`}
+                      aria-pressed={draft.type === option.value}
+                      onClick={() => setDraft({ ...draft, type: option.value, isTransfer: option.value === "transfer" })}
+                    >
+                      <span aria-hidden="true">{option.icon}</span>
+                      <span>{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
               <label>
                 Name
                 <input value={draft.merchantClean} onChange={(event) => setDraft({ ...draft, merchantClean: event.target.value })} />
@@ -348,23 +403,6 @@ export default function TransactionDetailPage() {
               <label>
                 Date
                 <input type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} />
-              </label>
-              <label>
-                Type
-                <span className="transaction-detail-page__type-control">
-                  <span aria-hidden="true">{typeSymbol(draft.type)}</span>
-                  <select
-                    value={draft.type}
-                    onChange={(event) => {
-                      const type = event.target.value as TransactionDetailDraftValue["type"];
-                      setDraft({ ...draft, type, isTransfer: type === "transfer" });
-                    }}
-                  >
-                    <option value="debit">Expense</option>
-                    <option value="credit">Income</option>
-                    <option value="transfer">Transfer</option>
-                  </select>
-                </span>
               </label>
               <label>
                 Account
@@ -405,7 +443,17 @@ export default function TransactionDetailPage() {
                 </span>
               </label>
             </section>
+            ) : (
+              <section className="transaction-detail-page__facts">
+                <div><span>Type</span><strong>{draft.type === "credit" ? "Income" : draft.type === "transfer" ? "Transfer" : "Expense"}</strong></div>
+                <div><span>Account</span><strong>{displayAccountName(accounts.find((account) => account.id === draft.accountId) ?? { id: "", name: transaction.accountName, institution: transaction.institution ?? null, accountNumber: transaction.accountNumber ?? null, type: "bank", currency: draft.currency })}</strong></div>
+                <div><span>Category</span><strong>{selectedCategory?.name ?? transaction.categoryName ?? "Other"}</strong></div>
+                <div><span>Date</span><strong>{new Date(`${draft.date}T00:00:00`).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })}</strong></div>
+                <div className="transaction-detail-page__facts-notes"><span>Notes</span><strong>{draft.description.trim() || "No notes"}</strong></div>
+              </section>
+            )}
 
+            {editing ? (
             <details className="transaction-detail-page__more">
               <summary>More</summary>
               <div className="transaction-detail-page__more-body">
@@ -436,8 +484,24 @@ export default function TransactionDetailPage() {
                 <p>Clover checks the merchant, account, category, duplicate risk, and parser result.</p>
               </div>
             </details>
+            ) : (
+              <details className="transaction-detail-page__more">
+                <summary>Source and review details</summary>
+                <div className="transaction-detail-page__more-body">
+                  <div className="transaction-detail-page__confidence">
+                    <span>Source</span>
+                    <strong>{transaction.importFileId ? "Imported" : "Manual"}</strong>
+                  </div>
+                  <div className="transaction-detail-page__confidence">
+                    <span className={`transaction-detail-page__confidence-chip is-${confidenceScore >= 85 ? "high" : confidenceScore >= 65 ? "medium" : "low"}`}>{confidenceLabel}</span>
+                    <strong>{confidenceScore}%</strong>
+                  </div>
+                  <p>Clover keeps the original source separate from the details you confirm.</p>
+                </div>
+              </details>
+            )}
 
-            <TransactionCrossFeatureActions
+            {!editing ? <TransactionCrossFeatureActions
               workspaceId={transaction.workspaceId}
               transactionId={transaction.id}
               transactionType={draft.type === "credit" ? "income" : draft.type === "transfer" ? "transfer" : "expense"}
@@ -449,8 +513,8 @@ export default function TransactionDetailPage() {
               splitBillHref={transaction.splitBill ? `/split-bill?bill=${transaction.splitBill.id}` : null}
               splitBillOpen={splitBillOpen}
               onToggleSplitBill={transaction.splitBill ? undefined : () => setSplitBillOpen((current) => !current)}
-            />
-            {splitBillOpen && !transaction.splitBill ? (
+            /> : null}
+            {!editing && splitBillOpen && !transaction.splitBill ? (
               <div className="transaction-detail-page__split-bill">
                 <SplitBillTransactionLinkFields
                   workspaceId={transaction.workspaceId}
@@ -468,17 +532,19 @@ export default function TransactionDetailPage() {
             ) : null}
 
             {message ? <p className="transaction-detail-page__message" role="status">{message}</p> : null}
-            <footer className="transaction-detail-page__actions">
-              <button className="button button-primary button-small" type="submit" disabled={saving}>{saving ? "Saving..." : "Save Changes"}</button>
-              {confirmingDelete ? (
+            <footer className={`transaction-detail-page__actions ${editing ? "is-editing" : confirmingDelete ? "is-confirming-delete" : ""}`}>
+              {editing ? (
+                <>
+                  <button className="button button-secondary" type="button" onClick={cancelEdit} disabled={saving}>Cancel</button>
+                  <button className="button button-primary" type="submit" disabled={saving}>{saving ? "Saving..." : "Save changes"}</button>
+                </>
+              ) : confirmingDelete ? (
                 <div className="transaction-detail-page__delete-confirm" role="alert">
                   <span>Delete this transaction?</span>
                   <button className="button button-secondary button-small" type="button" onClick={() => setConfirmingDelete(false)}>Cancel</button>
                   <button className="button button-danger button-small" type="button" onClick={() => void deleteTransaction()} disabled={saving}>Delete</button>
                 </div>
-              ) : (
-                <button className="button button-danger button-small transaction-detail-page__delete-button" type="button" onClick={() => setConfirmingDelete(true)}>Delete Transaction</button>
-              )}
+              ) : null}
             </footer>
           </form>
         ) : null}
