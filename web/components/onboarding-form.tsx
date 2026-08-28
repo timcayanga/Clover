@@ -9,6 +9,7 @@ import { analyticsOnceKey, PostHogEvent } from "@/components/posthog-analytics";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { getFinancialExperienceDefinition, type FinancialExperienceLevel } from "@/lib/goals";
 import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
+import { CloverRouteLoadingScreen } from "@/components/clover-route-loading-screen";
 import {
   normalizeRegionalPreferences,
   persistRegionalPreferences,
@@ -99,6 +100,7 @@ export function OnboardingForm({
     upgradeForPro ? "Choose Pro now or continue with Clover Free. You can upgrade later." : null,
   );
   const [isPending, startTransition] = useTransition();
+  const [isCompleting, setIsCompleting] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
   const [selectedUpgradeInterval, setSelectedUpgradeInterval] = useState<"monthly" | "annual">(upgradeInterval);
@@ -161,14 +163,14 @@ export function OnboardingForm({
   };
 
   const handleSkip = () => {
-    startTransition(() => {
-      setMessage(completionUrl === "/dashboard" ? "Opening your dashboard..." : "Opening your Circle invitation...");
-      void persistOnboarding("skip")
-        .then(() => router.replace(completionUrl))
-        .catch((error) => {
-          setMessage(error instanceof Error ? error.message : "Unable to finish Clover setup.");
-        });
-    });
+    setIsCompleting(true);
+    setMessage(completionUrl === "/dashboard" ? "Opening your dashboard..." : "Opening your Circle invitation...");
+    void persistOnboarding("skip")
+      .then(() => router.replace(completionUrl))
+      .catch((error) => {
+        setIsCompleting(false);
+        setMessage(error instanceof Error ? error.message : "Unable to finish Clover setup.");
+      });
   };
 
   const experienceStep = (
@@ -356,6 +358,10 @@ export function OnboardingForm({
     </>
   );
 
+  if (isCompleting) {
+    return <CloverRouteLoadingScreen label="Clover" viewport />;
+  }
+
   return (
     <>
       <PostHogEvent
@@ -398,10 +404,12 @@ export function OnboardingForm({
             }
 
             try {
+              setIsCompleting(true);
               await persistOnboarding("import");
               setMessage(completionUrl === "/dashboard" ? "Import complete. Taking you to the dashboard." : "Import complete. Opening your Circle invitation.");
               router.replace(completionUrl);
             } catch (error) {
+              setIsCompleting(false);
               setMessage(error instanceof Error ? error.message : "Unable to finish Clover setup.");
             }
           }}

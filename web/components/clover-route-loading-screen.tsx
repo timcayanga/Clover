@@ -4,12 +4,17 @@ import { CloverLoadingMark } from "@/components/clover-loading-mark";
 type CloverRouteLoadingScreenProps = {
   label?: string;
   prompt?: boolean;
+  viewport?: boolean;
 };
 
-export function CloverRouteLoadingScreen({ label = "page", prompt = false }: CloverRouteLoadingScreenProps) {
+export function CloverRouteLoadingScreen({
+  label = "page",
+  prompt = false,
+  viewport = false,
+}: CloverRouteLoadingScreenProps) {
   return (
     <div
-      className={`clover-loading-screen${prompt ? " clover-loading-screen--prompt" : ""}`}
+      className={`clover-loading-screen${prompt ? " clover-loading-screen--prompt" : ""}${viewport ? " clover-loading-screen--viewport" : ""}`}
       role="status"
       aria-live="polite"
       aria-label={`Loading ${label}`}

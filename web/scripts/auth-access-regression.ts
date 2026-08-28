@@ -6,6 +6,7 @@ const authScreen = readFileSync(resolve(process.cwd(), "components/clerk-auth-sc
 const clerkProvider = readFileSync(resolve(process.cwd(), "components/clerk-app-provider.tsx"), "utf8");
 const middleware = readFileSync(resolve(process.cwd(), "middleware.ts"), "utf8");
 const signInPage = readFileSync(resolve(process.cwd(), "app/sign-in/[[...sign-in]]/page.tsx"), "utf8");
+const ssoCallback = readFileSync(resolve(process.cwd(), "app/sso-callback/page.tsx"), "utf8");
 const morePage = readFileSync(resolve(process.cwd(), "app/more/page.tsx"), "utf8");
 const signOutButton = readFileSync(resolve(process.cwd(), "components/more-sign-out-button.tsx"), "utf8");
 const publicAccountActions = readFileSync(resolve(process.cwd(), "components/public-account-actions.tsx"), "utf8");
@@ -44,6 +45,16 @@ assert.match(
   "The landing sign-up form must not create a clipped nested scroll region",
 );
 assert.match(
+  ssoCallback,
+  /<CloverRouteLoadingScreen label="secure sign-in" viewport \/>/u,
+  "Social sign-in callbacks must use the same full-viewport Clover splash",
+);
+assert.doesNotMatch(
+  ssoCallback,
+  /clover-auth-card glass/u,
+  "Social sign-in loading must not appear inside an authentication card",
+);
+assert.match(
   globalStyles,
   /\.landing-signup-modal__panel\s*\{[\s\S]*?-webkit-overflow-scrolling:\s*touch;/u,
   "The landing sign-up panel must remain smoothly scrollable on mobile Safari",
@@ -72,6 +83,16 @@ assert.doesNotMatch(
   "Social sign-in must start a fresh Clerk attempt instead of continuing stale authentication state",
 );
 assert.match(authScreen, /message\.includes\("response: 0"\)/u, "Clerk response-state errors must be handled safely");
+assert.match(
+  authScreen,
+  /if \(isRedirecting\) \{[\s\S]*?<CloverRouteLoadingScreen label="Clover" viewport/u,
+  "Completed sign-in and sign-up must use the shared full-viewport Clover splash",
+);
+assert.match(
+  globalStyles,
+  /\.clover-loading-screen--viewport\s*\{[\s\S]*?position:\s*fixed;[\s\S]*?inset:\s*0;/u,
+  "Post-auth loading must escape the authentication card container",
+);
 assert.match(morePage, /MoreSignOutButton/u, "The mobile More page must expose logout");
 assert.match(signOutButton, /signOutToLanding/u, "Mobile logout must use the safe Clover sign-out flow");
 assert.match(signOutButton, /clearAllWorkspaceCaches/u, "Mobile logout must clear private workspace caches");

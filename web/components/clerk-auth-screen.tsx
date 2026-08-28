@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useSignIn, useSignUp } from "@clerk/nextjs";
 import { PasswordIcon } from "@/components/password-icon";
+import { CloverRouteLoadingScreen } from "@/components/clover-route-loading-screen";
 import {
   persistRememberedSessionId,
   persistStaySignedInPreference,
@@ -217,6 +218,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [socialBusy, setSocialBusy] = useState<SocialStrategy | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
@@ -258,6 +260,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
 
   useEffect(() => {
     if (auth.isLoaded && auth.isSignedIn) {
+      setIsRedirecting(true);
       router.replace(completeRedirectUrl);
     }
   }, [auth.isLoaded, auth.isSignedIn, completeRedirectUrl, router]);
@@ -304,14 +307,11 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
   }, [mode]);
 
   if (!isReady) {
-    return (
-      <section className="clover-auth-card glass">
-        <Link className="clover-auth-card__brand" href="/" aria-label="Back to Clover home" prefetch={false}>
-          <img className="clover-auth-card__logo" src="/clover-mark.svg" alt="Clover" loading="eager" fetchPriority="high" />
-        </Link>
-          <p className="clover-auth-card__loading">Loading secure sign-in...</p>
-      </section>
-    );
+    return <CloverRouteLoadingScreen label="secure sign-in" viewport />;
+  }
+
+  if (isRedirecting) {
+    return <CloverRouteLoadingScreen label="Clover" viewport />;
   }
 
   const submitSignIn = async () => {
@@ -329,6 +329,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
 
       if (response.status === "complete" && response.createdSessionId) {
         persistRememberedSessionId(staySignedIn ? response.createdSessionId : null);
+        setIsRedirecting(true);
         await signInState.setActive({
           session: response.createdSessionId,
           redirectUrl: completeRedirectUrl,
@@ -378,6 +379,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
       setError("Your sign-in needs another step. Please try again or reset your password below.");
 
     } catch (err) {
+      setIsRedirecting(false);
       setError(getSignInErrorMessage(err));
     } finally {
       setBusy(false);
@@ -484,6 +486,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
 
       if (response.status === "complete" && response.createdSessionId) {
         persistRememberedSessionId(staySignedIn ? response.createdSessionId : null);
+        setIsRedirecting(true);
         await signInState.setActive({
           session: response.createdSessionId,
           redirectUrl: completeRedirectUrl,
@@ -498,6 +501,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
 
       setError("We couldn’t finish the password reset just yet. Please try again.");
     } catch (err) {
+      setIsRedirecting(false);
       setError(getSignInErrorMessage(err, "reset"));
     } finally {
       setBusy(false);
@@ -521,6 +525,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
 
       if (response.status === "complete" && response.createdSessionId) {
         persistRememberedSessionId(staySignedIn ? response.createdSessionId : null);
+        setIsRedirecting(true);
         await signInState.setActive({
           session: response.createdSessionId,
           redirectUrl: completeRedirectUrl,
@@ -530,6 +535,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
 
       setError("That verification did not complete sign-in. Please try another code.");
     } catch (err) {
+      setIsRedirecting(false);
       setError(getSignInErrorMessage(err, "verification"));
     } finally {
       setBusy(false);
@@ -570,6 +576,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
 
       if (response.status === "complete" && response.createdSessionId) {
         persistRememberedSessionId(response.createdSessionId);
+        setIsRedirecting(true);
         await signUpState.setActive({
           session: response.createdSessionId,
           redirectUrl: completeRedirectUrl,
@@ -591,6 +598,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
 
       setError("We couldn't finish your sign-up. Please try again.");
     } catch (err) {
+      setIsRedirecting(false);
       const firstError = getFirstClerkError(err);
 
       if (firstError.code.includes("form_identifier_exists") || firstError.code.includes("identifier_exists")) {
@@ -619,6 +627,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
 
       if (response.status === "complete" && response.createdSessionId) {
         persistRememberedSessionId(response.createdSessionId);
+        setIsRedirecting(true);
         await signUpState.setActive({
           session: response.createdSessionId,
           redirectUrl: completeRedirectUrl,
@@ -628,6 +637,7 @@ function ClerkAuthScreenInner({ mode, completeRedirectUrl }: { mode: "sign-in" |
 
       setError("That code didn’t work. Please try again.");
     } catch (err) {
+      setIsRedirecting(false);
       setError(getSignInErrorMessage(err, "verification"));
     } finally {
       setBusy(false);

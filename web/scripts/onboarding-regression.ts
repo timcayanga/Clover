@@ -46,6 +46,11 @@ assert.match(onboardingPage, /hasCompletedOnboarding/u, "Completed users must sk
 assert.match(continuePage, /hasCompletedOnboarding/u, "Post-auth routing must resolve onboarding status directly");
 assert.match(continuePage, /redirect\(hasCompletedOnboarding\(user\) \? "\/home" : "\/onboarding"\)/u);
 assert.match(
+  onboardingForm,
+  /if \(isCompleting\) \{[\s\S]*?<CloverRouteLoadingScreen label="Clover" viewport/u,
+  "Completed onboarding must use the shared full-viewport Clover splash",
+);
+assert.match(
   categoryMetadataMigration,
   /ADD COLUMN IF NOT EXISTS "isSystem" BOOLEAN NOT NULL DEFAULT true/u,
   "Workspace bootstrap category metadata must be represented in migration history",

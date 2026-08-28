@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { AuthenticateWithRedirectCallback, useAuth } from "@clerk/nextjs";
+import { CloverRouteLoadingScreen } from "@/components/clover-route-loading-screen";
 import {
   persistRememberedSessionId,
   readStaySignedInPreference,
@@ -27,18 +28,13 @@ export default function SsoCallbackPage() {
 
   return (
     <main className="auth-page">
-      <section className="clover-auth-card glass">
-        <div className="clover-auth-card__brand">
-          <img className="clover-auth-card__logo" src="/clover-logo-full.svg" alt="Clover" loading="eager" fetchPriority="high" />
-        </div>
-        <p className="clover-auth-card__loading">Completing your sign-in...</p>
-        <AuthenticateWithRedirectCallback
-          signInUrl="/sign-in"
-          signUpUrl="/sign-up"
-          signInFallbackRedirectUrl="/home"
-          signUpFallbackRedirectUrl="/home"
-        />
-      </section>
+      <CloverRouteLoadingScreen label="secure sign-in" viewport />
+      <AuthenticateWithRedirectCallback
+        signInUrl="/sign-in"
+        signUpUrl="/sign-up"
+        signInFallbackRedirectUrl="/home"
+        signUpFallbackRedirectUrl="/home"
+      />
     </main>
   );
 }
