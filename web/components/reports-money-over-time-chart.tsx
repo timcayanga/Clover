@@ -10,7 +10,7 @@ export type ReportsMoneyPoint = {
 
 const chartWidth = 760;
 const chartHeight = 250;
-const chartPadding = { top: 18, right: 118, bottom: 18, left: 12 };
+const chartPadding = { top: 18, right: 0, bottom: 18, left: 0 };
 
 const dateFormatter = new Intl.DateTimeFormat("en-PH", {
   month: "short",
@@ -37,9 +37,16 @@ export function ReportsMoneyOverTimeChart({
 
   const chart = useMemo(() => {
     const values = points.map((point) => point.balance);
-    const minimum = Math.min(0, ...values);
-    const maximum = Math.max(0, ...values);
-    const valueRange = Math.max(maximum - minimum, 1);
+    const observedMinimum = Math.min(...values);
+    const observedMaximum = Math.max(...values);
+    const observedRange = observedMaximum - observedMinimum;
+    const domainPadding =
+      observedRange > 0
+        ? observedRange * 0.14
+        : Math.max(Math.abs(observedMaximum) * 0.005, 1);
+    const minimum = observedMinimum - domainPadding;
+    const maximum = observedMaximum + domainPadding;
+    const valueRange = maximum - minimum;
     const xSpan = chartWidth - chartPadding.left - chartPadding.right;
     const ySpan = chartHeight - chartPadding.top - chartPadding.bottom;
     const plotted = points.map((point, index) => ({
@@ -96,6 +103,17 @@ export function ReportsMoneyOverTimeChart({
 
   const latest = chart.plotted[chart.plotted.length - 1];
   const activePoint = hovered ?? latest;
+  const hoveredChange =
+    hoverIndex === null || hoverIndex === 0
+      ? null
+      : activePoint.balance - chart.plotted[hoverIndex - 1].balance;
+  const hoverLeft = hovered ? (hovered.x / chartWidth) * 100 : 0;
+  const hoverTop = hovered ? (hovered.y / chartHeight) * 100 : 0;
+  const tooltipClassName = [
+    "reports-money-chart__tooltip",
+    hoverLeft > 72 ? "reports-money-chart__tooltip--left" : "",
+    hoverTop < 30 ? "reports-money-chart__tooltip--below" : "",
+  ].filter(Boolean).join(" ");
 
   return (
     <div className="reports-money-chart">
@@ -137,23 +155,38 @@ export function ReportsMoneyOverTimeChart({
           />
           <path className="reports-money-chart__line" d={chart.path} />
           {hovered ? (
-            <>
-              <line
-                className="reports-money-chart__hover-line"
-                x1={hovered.x}
-                x2={hovered.x}
-                y1={chartPadding.top}
-                y2={chartHeight - chartPadding.bottom}
-              />
-              <circle
-                className="reports-money-chart__hover-dot"
-                cx={hovered.x}
-                cy={hovered.y}
-                r="6"
-              />
-            </>
+            <line
+              className="reports-money-chart__hover-line"
+              x1={hovered.x}
+              x2={hovered.x}
+              y1={chartPadding.top}
+              y2={chartHeight - chartPadding.bottom}
+            />
           ) : null}
         </svg>
+        {hovered ? (
+          <>
+            <span
+              className="reports-money-chart__hover-dot"
+              style={{ left: `${hoverLeft}%`, top: `${hoverTop}%` }}
+              aria-hidden="true"
+            />
+            <div
+              className={tooltipClassName}
+              style={{ left: `${hoverLeft}%`, top: `${hoverTop}%` }}
+              role="status"
+            >
+              <span>{dateFormatter.format(parseReportDate(hovered.date))}</span>
+              <strong>{formatCurrencyAmount(hovered.balance, currency)}</strong>
+              {hoveredChange === null ? null : (
+                <small className={hoveredChange >= 0 ? "positive" : "negative"}>
+                  {hoveredChange >= 0 ? "+" : ""}
+                  {formatCurrencyAmount(hoveredChange, currency)} that day
+                </small>
+              )}
+            </div>
+          </>
+        ) : null}
         <div className="reports-money-chart__y-axis" aria-hidden="true">
           {chart.ticks.map((tick) => (
             <span key={tick.y} style={{ top: `${(tick.y / chartHeight) * 100}%` }}>

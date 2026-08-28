@@ -1709,12 +1709,12 @@ export async function ReportsStream({
               <article className="metric compact metric--highlight glass">
                 <InfoTooltip className="reports-container-info" align="left" label="All money coming in during the selected range." />
                 <div className="metric__label"><span>Income</span></div>
-                <strong>{formatCurrency(currentSummary.income)}</strong>
+                <strong className="positive">{formatCurrency(currentSummary.income)}</strong>
               </article>
               <article className="metric compact metric--highlight glass">
                 <ReportInfoTip className="reports-container-info" label="All spending recorded in the selected range." />
                 <div className="metric__label"><span>Expenses</span></div>
-                <strong>{formatCurrency(currentSummary.expense)}</strong>
+                <strong className="negative">{formatCurrency(currentSummary.expense)}</strong>
               </article>
               <article className="metric compact metric--highlight glass">
                 <ReportInfoTip className="reports-container-info" label="Income minus spending for the selected range." />

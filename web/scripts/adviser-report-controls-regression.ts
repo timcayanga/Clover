@@ -71,6 +71,11 @@ assert.doesNotMatch(rangeMenuSource, /window\.location\.assign/);
 assert.match(moneyChartSource, /onPointerMove=\{\(event\) => handlePointerMove\(event\.clientX\)\}/);
 assert.match(moneyChartSource, /reports-money-chart__y-axis/);
 assert.match(moneyChartSource, /formatCurrencyAmount\(tick\.value, currency\)/);
+assert.match(moneyChartSource, /observedRange \* 0\.14/);
+assert.doesNotMatch(moneyChartSource, /Math\.min\(0, \.\.\.values\)/);
+assert.match(moneyChartSource, /reports-money-chart__tooltip/);
+assert.match(reportsSource, /<strong className="positive">\{formatCurrency\(currentSummary\.income\)\}<\/strong>/);
+assert.match(reportsSource, /<strong className="negative">\{formatCurrency\(currentSummary\.expense\)\}<\/strong>/);
 assert.match(globalStyles, /\.content--reports \.report-flow-map__bar \{[\s\S]{0,160}height: 36px/);
 assert.match(globalStyles, /\.content--reports \.report-sankey__chart-wrap \{[\s\S]{0,180}min-height: 520px/);
 
