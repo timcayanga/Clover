@@ -118,7 +118,10 @@ export function StagingBrowserStateReset(props: StagingBrowserStateResetProps) {
         if (window.sessionStorage.getItem(sessionResetMarkerKey) !== "done") {
           window.sessionStorage.setItem(sessionResetMarkerKey, "done");
           clearBrowserState({ clearAuth: !keepSignedIn });
-          window.location.reload();
+          // Do not force a second navigation here. Some desktop browsers
+          // briefly expose the narrow opening width while a tab is attaching;
+          // reloading during that window leaves responsive media queries in
+          // their mobile composition until the user manually resizes.
           return;
         }
       }
@@ -148,7 +151,6 @@ export function StagingBrowserStateReset(props: StagingBrowserStateResetProps) {
     }
 
     clearBrowserState({ clearAuth: true });
-    window.location.reload();
   }, [pathname, props.buildId, props.deploymentId, props.gitSha]);
 
   return null;
