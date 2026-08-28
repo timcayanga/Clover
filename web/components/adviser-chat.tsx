@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, KeyboardEvent } from "react";
 import Link from "next/link";
 import { trackAdviserInteraction } from "@/lib/adviser-interactions";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
@@ -70,6 +70,7 @@ type AdviserChatProps = {
   isPro: boolean;
   storageKey?: string;
   initialPrompt?: string;
+  layout?: "embedded" | "workspace";
 };
 
 const adviserChatStorageKey = "clover-adviser-chat-session-v1";
@@ -91,7 +92,7 @@ const inferFeedbackGroup = (question: string) => {
   return "cashflow";
 };
 
-export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey, initialPrompt = "" }: AdviserChatProps) {
+export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey, initialPrompt = "", layout = "embedded" }: AdviserChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -104,7 +105,7 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
   const [isHydrated, setIsHydrated] = useState(false);
   const [feedbackByMessage, setFeedbackByMessage] = useState<Record<number, "helpful" | "not_helpful">>({});
   const threadRef = useRef<HTMLDivElement | null>(null);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const visiblePrompts = useMemo(() => (suggestedPrompts.length > 0 ? suggestedPrompts : prompts).slice(0, 6), [prompts, suggestedPrompts]);
   const hasReachedLimit = usage !== null && !usage.unlimited && usage.remaining <= 0;
@@ -139,6 +140,16 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
 
     setInput((current) => current.trim() ? current : initialPrompt.trim());
   }, [initialPrompt, isHydrated]);
+
+  useEffect(() => {
+    const inputElement = inputRef.current;
+    if (!inputElement) {
+      return;
+    }
+
+    inputElement.style.height = "auto";
+    inputElement.style.height = `${Math.min(inputElement.scrollHeight, 160)}px`;
+  }, [input]);
 
   useEffect(() => {
     if (!isHydrated) {
@@ -327,6 +338,15 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
     await sendMessage(input);
   };
 
+  const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+      return;
+    }
+
+    event.preventDefault();
+    void sendMessage(input);
+  };
+
   const sendSuggestedPrompt = (prompt: AdviserPrompt) => {
     trackAdviserInteraction({
       kind: "prompt",
@@ -372,7 +392,7 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
 
   if (!isPro) {
     return (
-      <div className="adviser-chat adviser-chat--locked" aria-label="Ask Clover is available with Pro">
+      <div className={`adviser-chat adviser-chat--locked${layout === "workspace" ? " adviser-chat--workspace" : ""}`} aria-label="Ask Clover is available with Pro">
         <div className="adviser-chat__locked-preview" aria-hidden="true">
           <div className="adviser-chat__composer-bar">
             <input type="text" value="Ask Clover a question about your money..." readOnly tabIndex={-1} />
@@ -402,15 +422,17 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
   }
 
   return (
-    <div className="adviser-chat">
-      <div className="adviser-chat__heading-row">
-        <p className="eyebrow adviser-chat__ask-label">Ask Clover</p>
-        {messages.length > 0 ? (
-          <button type="button" className="adviser-chat__reset" onClick={startNewConversation}>
-            Start fresh
-          </button>
-        ) : null}
-      </div>
+    <div className={`adviser-chat${layout === "workspace" ? " adviser-chat--workspace" : ""}`}>
+      {layout === "embedded" || messages.length > 0 ? (
+        <div className="adviser-chat__heading-row">
+          {layout === "embedded" ? <p className="eyebrow adviser-chat__ask-label">Ask Clover</p> : <span />}
+          {messages.length > 0 ? (
+            <button type="button" className="adviser-chat__reset" onClick={startNewConversation}>
+              Start fresh
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {usage && !usage.unlimited ? (
         <p className="adviser-chat__status">
           {hasReachedLimit
@@ -419,10 +441,14 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
         </p>
       ) : null}
       {messages.length === 0 ? (
-        <>
-          <p className="adviser-chat__question-lead">Try one of these, or ask in your own words.</p>
+        <div className="adviser-chat__welcome">
+          <div className="adviser-chat__welcome-mark" aria-hidden="true">C</div>
+          <div className="adviser-chat__welcome-copy">
+            <h2>How can Clover help?</h2>
+            <p className="adviser-chat__question-lead">Ask about your spending, accounts, goals, or what to do next.</p>
+          </div>
           <div className="adviser-chat__prompt-row" aria-label="Suggested questions">
-            {visiblePrompts.map((prompt) => (
+            {visiblePrompts.slice(0, 4).map((prompt) => (
               <button
                 key={prompt.id}
                 type="button"
@@ -435,7 +461,7 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
               </button>
             ))}
           </div>
-        </>
+        </div>
       ) : null}
       {messages.length > 0 ? (
         <div ref={threadRef} className="adviser-chat__thread" role="log" aria-live="polite" aria-relevant="additions text">
@@ -470,7 +496,6 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
               ) : null}
             </article>
           ))}
-          <div ref={bottomRef} />
         </div>
       ) : null}
 
@@ -510,16 +535,25 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
           </div>
         ) : null}
         <div className="adviser-chat__composer-bar">
-          <input
+          <textarea
+            ref={inputRef}
             id="adviser-chat-input"
-            type="text"
+            rows={1}
             value={input}
             onChange={(event) => setInput(event.target.value)}
+            onKeyDown={handleComposerKeyDown}
             placeholder="Ask about your money..."
             disabled={hasReachedLimit}
           />
-          <button type="submit" className="button button-primary button-small" disabled={hasReachedLimit || isSending || input.trim().length === 0}>
-            {isSending ? "Sending" : "Send"}
+          <button
+            type="submit"
+            className="button button-primary button-small adviser-chat__send"
+            aria-label={isSending ? "Sending message" : "Send message"}
+            disabled={hasReachedLimit || isSending || input.trim().length === 0}
+          >
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M10 15V5m0 0L6 9m4-4 4 4" />
+            </svg>
           </button>
           {isSending || error ? (
             <span className={`adviser-chat__status${isSending ? " adviser-chat__status--thinking" : ""}`}>

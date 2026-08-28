@@ -23,7 +23,9 @@ async function main() {
   assert.match(reports, /<ReportsPageStream searchParams=\{searchParams\}/);
   assert.match(reports, /href="\/adviser">Ask Adviser<\/Link>/);
   assert.doesNotMatch(adviser, /<ReportsStream/);
-  assert.match(adviser, /<AdviserChat[\s\S]{0,200}<\/section>[\s\S]{0,200}<header className="adviser-summary">/);
+  assert.match(adviser, /title="Ask Clover"[\s\S]{0,500}<AdviserChat[\s\S]{0,220}layout="workspace"/);
+  assert.doesNotMatch(adviser, /<header className="adviser-summary">/);
+  assert.doesNotMatch(adviser, /title="What Clover noticed"/);
   assert.match(transactions, /href="\/transactions\/categories">Manage categories<\/Link>/);
   assert.match(transactions, /href="\/transactions\/tags">Manage tags<\/Link>/);
   assert.match(transactionDetail, /<TransactionTagsEditor[\s\S]{0,180}onChange=\{setTagDraft\}/);

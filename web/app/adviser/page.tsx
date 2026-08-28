@@ -15,8 +15,6 @@ import { loadSplitBillWorkspaceData } from "@/lib/split-bill-loaders";
 import { loadBudgetWorkspaceData } from "@/lib/budgeting-data";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
 import { AdviserChat } from "@/components/adviser-chat";
-import { AdviserSectionCarousel, type AdviserSectionCard } from "@/components/adviser-section-carousel";
-import { EmptyDataCta } from "@/components/empty-data-cta";
 import { isLiabilityAccountType, isSpendableAccountType, isTrackedAssetAccountType } from "@/lib/account-types";
 import { deriveReconciledBalance, normalizeAccountBalanceSign, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
@@ -25,7 +23,6 @@ import { isTransientDataError } from "@/lib/transient-data";
 import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
 import { TransientDataRecovery } from "@/components/transient-data-recovery";
 import { hasFullFeatureAccess } from "@/lib/beta-access";
-import { InfoTooltip } from "@/components/info-tooltip";
 import { resolveReportWindow } from "@/lib/report-window";
 import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
 import { defaultCurrencyCookieKey, normalizeDefaultCurrency } from "@/lib/regional-preferences";
@@ -324,77 +321,6 @@ type AdviserThresholdProfile = {
   goalDriftPercent: number;
 };
 
-const getAdviserCardEmoji = (card: { title: string; group: string; tone: AdviserCard["tone"] }) => {
-  const title = card.title.toLowerCase();
-
-  if (title.includes("spending is higher") || title.includes("spending has eased") || title.includes("spend spike") || title.includes("income timing")) {
-    return "💸";
-  }
-
-  if (title.includes("spending is coming from") || title.includes("category concentration") || title.includes("category mix") || title.includes("simple cap")) {
-    return "📊";
-  }
-
-  if (title.includes("weekend")) {
-    return "🌤️";
-  }
-
-  if (title.includes("recurring") || title.includes("subscriptions") || title.includes("charges") || title.includes("bills")) {
-    return "🧾";
-  }
-
-  if (title.includes("split bill") || title.includes("shared bill")) {
-    return "🧮";
-  }
-
-  if (title.includes("investment")) {
-    return "📈";
-  }
-
-  if (title.includes("goal")) {
-    return "🎯";
-  }
-
-  if (title.includes("uncategorized") || title.includes("cleanup") || title.includes("clean data")) {
-    return "🧹";
-  }
-
-  if (title.includes("set aside") || title.includes("cash flow")) {
-    return "🛟";
-  }
-
-  if (title.includes("review") || title.includes("check")) {
-    return "🔎";
-  }
-
-  if (card.group === "cashflow") {
-    return "💼";
-  }
-
-  if (card.group === "cleanup") {
-    return "🧹";
-  }
-
-  if (card.group === "goals") {
-    return "🎯";
-  }
-
-  if (card.group === "investments") {
-    return "📈";
-  }
-
-  if (card.tone === "warning") {
-    return "⚠️";
-  }
-
-  return "✨";
-};
-
-const withAdviserEmoji = (card: AdviserCard): AdviserSectionCard => ({
-  ...card,
-  emoji: getAdviserCardEmoji(card),
-});
-
 function AdviserUnavailableContent() {
   return (
     <section className="adviser-page">
@@ -410,114 +336,6 @@ function AdviserUnavailableState() {
     </CloverShell>
   );
 }
-
-const adviserGettingStartedCards: Record<"noticed" | "do" | "improve", AdviserSectionCard[]> = {
-  noticed: [
-    {
-      id: "adviser-get-started-accounts",
-      title: "Connect your money",
-      summary: "Adviser gets sharper once Clover can see your balances, accounts, and recent history together.",
-      evidence: "Start with accounts and statements so Clover has real context to work with.",
-      ctaLabel: "Open accounts",
-      href: "/accounts",
-      tone: "neutral",
-      group: "onboarding",
-      emoji: "🏦",
-    },
-    {
-      id: "adviser-get-started-transactions",
-      title: "Feed recent activity",
-      summary: "Transactions help Clover spot spending shifts, cash-flow patterns, and categories worth watching.",
-      evidence: "A few imports are enough to make Adviser and Budgets much more useful.",
-      ctaLabel: "Open transactions",
-      href: "/transactions?import=1",
-      tone: "positive",
-      group: "onboarding",
-      emoji: "📥",
-    },
-    {
-      id: "adviser-get-started-recurring",
-      title: "Flag repeat payments",
-      summary: "Recurring bills and subscriptions help Adviser warn you before money leaves your account.",
-      evidence: "That is where due dates, pressure, and planning start to feel more intelligent.",
-      ctaLabel: "Open recurring",
-      href: "/recurring",
-      tone: "warning",
-      group: "onboarding",
-      emoji: "🔁",
-    },
-  ],
-  do: [
-    {
-      id: "adviser-next-upload",
-      title: "Upload your latest files",
-      summary: "The fastest way to make Adviser feel personal is to import your latest bank, card, or wallet activity.",
-      evidence: "Clover can only coach from the balances and transactions it can actually see.",
-      ctaLabel: "Upload transactions",
-      href: "/transactions?import=1",
-      tone: "positive",
-      group: "onboarding",
-      emoji: "📄",
-    },
-    {
-      id: "adviser-next-add-account",
-      title: "Add the accounts you use most",
-      summary: "Savings, cards, wallets, and cash give Adviser a better picture of where your money really sits.",
-      evidence: "Even a small account map makes cash-flow and account guidance more grounded.",
-      ctaLabel: "Add account",
-      href: "/accounts",
-      tone: "neutral",
-      group: "onboarding",
-      emoji: "➕",
-    },
-    {
-      id: "adviser-next-set-routine",
-      title: "Build a weekly habit",
-      summary: "A quick weekly upload is enough to keep Adviser current without making money admin feel heavy.",
-      evidence: "Fresh imports make alerts, trends, and coaching feel timely instead of stale.",
-      ctaLabel: "Start with imports",
-      href: "/transactions?import=1",
-      tone: "warning",
-      group: "onboarding",
-      emoji: "🗓️",
-    },
-  ],
-  improve: [
-    {
-      id: "adviser-improve-spending",
-      title: "Watch spending earlier",
-      summary: "Once your transactions are in, Adviser can point out category spikes before the month gets away from you.",
-      evidence: "That is when alerts like weekend spikes and category drifts start becoming useful.",
-      ctaLabel: "See transactions",
-      href: "/transactions",
-      tone: "neutral",
-      group: "onboarding",
-      emoji: "👀",
-    },
-    {
-      id: "adviser-improve-goals",
-      title: "Give advice a direction",
-      summary: "Goals and budgets help Clover turn data into suggestions that feel more specific to you.",
-      evidence: "Without a target, Adviser can only describe what happened, not what to optimize for.",
-      ctaLabel: "Open goals",
-      href: "/goals",
-      tone: "positive",
-      group: "onboarding",
-      emoji: "🎯",
-    },
-    {
-      id: "adviser-improve-review",
-      title: "Clean up a few rows",
-      summary: "Merchant names and categories do not need to be perfect, but a little cleanup makes every page smarter.",
-      evidence: "That helps Adviser and Budgets tell a cleaner story from the same data.",
-      ctaLabel: "Review transactions",
-      href: "/transactions",
-      tone: "warning",
-      group: "onboarding",
-      emoji: "✨",
-    },
-  ],
-};
 
 const updateMemoryStats = (map: Map<string, AdviserMemoryStats>, key: string, createdAt: Date) => {
   const current = map.get(key);
@@ -3044,43 +2862,6 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     3
   );
 
-  const passiveCardsToRender = passiveCards;
-  const recommendationCardsToRender = recommendationCards;
-  const coachingCardsToRender = coachingCards;
-  const isAdviserGettingStarted =
-    workspaceAccounts.length === 0 &&
-    allTransactions.length === 0 &&
-    financialCommitments.length === 0 &&
-    recurringPatterns.length === 0;
-  const summaryCardsToRender = isAdviserGettingStarted
-    ? [
-        {
-          id: "accounts_ready",
-          title: "Accounts",
-          value: "0",
-          tone: "neutral" as const,
-          detail: "Connect accounts so Adviser can understand your balance picture.",
-        },
-        {
-          id: "transactions_ready",
-          title: "Transactions",
-          value: "0",
-          tone: "neutral" as const,
-          detail: "Import statements or receipts so Clover can spot patterns and changes.",
-        },
-        {
-          id: "guidance_ready",
-          title: "Guidance",
-          value: "Waiting",
-          tone: "positive" as const,
-          detail: "Once data is in, Adviser turns it into weekly guidance and useful prompts.",
-        },
-      ]
-    : summaryCards;
-  const passiveCardsDisplay = isAdviserGettingStarted ? adviserGettingStartedCards.noticed : passiveCardsToRender.map(withAdviserEmoji);
-  const recommendationCardsDisplay = isAdviserGettingStarted ? adviserGettingStartedCards.do : recommendationCardsToRender.map(withAdviserEmoji);
-  const coachingCardsDisplay = isAdviserGettingStarted ? adviserGettingStartedCards.improve : coachingCardsToRender.map(withAdviserEmoji);
-
   const promptSuggestions: RankedAdviserPrompt[] = selectTopRanked(
     [
       topCategoryName
@@ -3356,62 +3137,16 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
   return (
       <CloverShell
         active="adviser"
-        title="Adviser"
-        subtitle="Ask questions, understand changes, and decide what to do next."
+        title="Ask Clover"
         actions={<Link className="button button-secondary button-small" href="/reports">View reports</Link>}
       >
-      <section className="adviser-page">
-        {isAdviserGettingStarted ? (
-          <EmptyDataCta
-            className="dashboard-empty-state"
-            eyebrow="Adviser"
-            title="Turn your money data into guidance you can act on"
-            copy="Adviser works best once Clover can see your accounts, transactions, and recurring obligations. Give it a little context and it starts surfacing what matters next."
-            highlights={[
-              "Spot spending shifts, account pressure, and category patterns earlier.",
-              "Get clearer prompts, trends, and coaching from the same data you already upload.",
-              "Use budgets, goals, and recurring items to make the advice feel more personal.",
-            ]}
-            illustration="/illustrations/clover-empty-dashboard-3d.png"
-            illustrationAlt="A 3D Clover dashboard illustration"
-            importHref="/transactions?import=1"
-            accountHref="/accounts"
-            transactionHref="/transactions?manual=1"
-          />
-        ) : null}
-        <section className="adviser-section adviser-section--questions glass">
-          <AdviserChat prompts={promptSuggestions} isPro={hasCompleteAccess} initialPrompt={resolvedSearchParams?.prompt?.slice(0, 1600)} />
-        </section>
-
-        <header className="adviser-summary">
-          <div className="adviser-summary__grid" aria-label="Adviser summary">
-            {summaryCardsToRender.map((card) => (
-              <article key={card.id} className="accounts-overview-card glass adviser-summary-card">
-                <p className="eyebrow">
-                  <span className="adviser-summary-card__title-full">{card.title}</span>
-                  <span className="adviser-summary-card__title-mobile">
-                    {card.id === "money_left"
-                      ? "Balance"
-                      : card.id === "savings_rate"
-                        ? "Savings rate"
-                        : card.id === "upcoming_pressure"
-                          ? "Bills"
-                          : card.title}
-                  </span>
-                </p>
-                <InfoTooltip className="summary-card-info adviser-summary-card__info" label={card.detail} />
-                <strong className={`accounts-overview-card__amount ${card.tone === "warning" ? "is-danger" : "is-good"}`}>{card.value}</strong>
-              </article>
-            ))}
-          </div>
-        </header>
-
-        <AdviserSectionCarousel
-          title="What Clover noticed"
-          ariaLabel="What Clover noticed cards"
-          cards={passiveCardsDisplay}
+      <section className="adviser-page adviser-page--chat">
+        <AdviserChat
+          prompts={promptSuggestions}
+          isPro={hasCompleteAccess}
+          initialPrompt={resolvedSearchParams?.prompt?.slice(0, 1600)}
+          layout="workspace"
         />
-
       </section>
       </CloverShell>
   );
