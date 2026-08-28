@@ -400,13 +400,6 @@ export async function ReportsStream({
     },
     select: {
       id: true,
-      _count: {
-        select: {
-          accounts: true,
-          importFiles: true,
-          transactions: true,
-        },
-      },
     },
     orderBy: { createdAt: "asc" },
   });
