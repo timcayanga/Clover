@@ -994,7 +994,7 @@ const findReceiptTableBounds = (lines: string[]) => {
       return false;
     }
 
-    return /^(?:\s*sub\s*-?\s*total\b|\s*service\s+charge\b|\s*amount\s+due\b|\s*total\s+no\s+of\s+items\b|\s*vat\s+sales\b|\s*12%\s+vat\s+sales\b|\s*non-vat\s+sales\b|\s*zero-rated\s+sales\b|\s*temporary\s+bill\b)/i.test(
+    return /^[^A-Za-z0-9]*(?:sub\s*-?\s*total\b|service\s+charge\b|amount\s+due\b|total\s+no\s+of\s+items\b|vat\s+sales\b|12%\s+vat\s+sales\b|non-vat\s+sales\b|zero-rated\s+sales\b|temporary\s+bill\b)/i.test(
       normalizeWhitespace(line)
     );
   });
@@ -1332,8 +1332,15 @@ const inferReceiptSubtotalFromFooter = (lines: string[], itemTotal: number | nul
 
   if (itemTotal !== null && Number.isFinite(itemTotal) && itemTotal > 0) {
     const inflatedFooterSubtotal = subtotal > itemTotal * 1.6;
+    const sortedFooterAmounts = [...footerAmounts].sort((left, right) => right - left);
+    const secondaryToPrimaryRatio =
+      sortedFooterAmounts.length === 2 && sortedFooterAmounts[0] > 0
+        ? sortedFooterAmounts[1] / sortedFooterAmounts[0]
+        : null;
+    const looksLikeTaxBreakdown =
+      secondaryToPrimaryRatio !== null && secondaryToPrimaryRatio >= 0.08 && secondaryToPrimaryRatio <= 0.2;
     const footerLooksReasonable = Math.abs(subtotal - itemTotal) <= Math.max(5, itemTotal * 0.35);
-    if (inflatedFooterSubtotal) {
+    if (inflatedFooterSubtotal && !looksLikeTaxBreakdown) {
       return itemTotal;
     }
     if (footerLooksReasonable) {
@@ -2590,9 +2597,9 @@ export const parseReceiptText = (receiptText: string): ReceiptPreviewResult => {
   ]);
   const documentNumber = extractReceiptField(normalized, [
     /\b(?:official receipt|receipt|or no\.?|cash slip)\s*(?:no\.?|#)?\s*[:#-]?\s*([A-Z0-9-]{3,})/i,
-    /\b(?:ref(?:erence)?\s*no\.?)\s*[:#-]?\s*(\d{3,}(?:\s+\d{2,}){1,3})\b/i,
-    /\b(?:ref(?:erence)?\s*no\.?)\s*[:#-]?\s*([A-Z0-9]+(?:[\s-]+[A-Z0-9]+){1,})/i,
     /\b(?:ref\.?\s*no\.?|reference)\s*[:#-]?\s*([A-Z0-9-]{6,})/i,
+    /\b(?:ref(?:erence)?\s*no\.?)\s*[:#-]?\s*(\d{3,}(?:[ \t]+\d{2,}){1,3})\b/i,
+    /\b(?:ref(?:erence)?\s*no\.?)\s*[:#-]?\s*([A-Z0-9]+(?:[ \t-]+[A-Z0-9]+){1,})/i,
     /\b(?:ticket number)\s*[:#-]?\s*([A-Z0-9-]{6,})/i,
   ]);
 

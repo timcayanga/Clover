@@ -327,6 +327,18 @@ export const getEffectiveTransactionCategoryName = (params: {
   }
   const heuristic = guessCategoryName(effectiveMerchantName || descriptionText || params.merchantRaw, params.type);
 
+  if (
+    isImportedRow &&
+    hasImportedRawPayload &&
+    isMeaningfulCategoryName(institutionOverride) &&
+    directCategory &&
+    rawPayloadCategory &&
+    directCategory === rawPayloadCategory &&
+    institutionOverride !== directCategory
+  ) {
+    return institutionOverride;
+  }
+
   if (isMeaningfulCategoryName(directCategory)) {
     if ((isImportedRow || hasImportedRawPayload) && isBroadCategoryName(directCategory)) {
       if (institutionOverride === directCategory) {

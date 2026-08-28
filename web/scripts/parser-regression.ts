@@ -668,9 +668,9 @@ const main = async () => {
   const parser = await import("../lib/import-parser");
   const receiptAccountResolutionModule = await import("../lib/receipt-account-resolution");
   const splitBillModule = await import("../lib/split-bill");
-  if (dataEngine.IMPORT_FILE_EXTRACTION_CACHE_VERSION !== "v12") {
+  if (dataEngine.IMPORT_FILE_EXTRACTION_CACHE_VERSION !== "v13") {
     throw new Error(
-      `expected import extraction cache version v12 after extraction recovery changes, got ${dataEngine.IMPORT_FILE_EXTRACTION_CACHE_VERSION}`
+      `expected import extraction cache version v13 after column-aware MariBank extraction, got ${dataEngine.IMPORT_FILE_EXTRACTION_CACHE_VERSION}`
     );
   }
 
@@ -1472,20 +1472,20 @@ const main = async () => {
     accountName: maribankMetadata.accountName,
     accountNumber: maribankMetadata.accountNumber,
   });
-  if (maribankRows.length !== 63) {
-    throw new Error(`expected MariBank sample to keep all 63 transaction rows, got ${maribankRows.length}`);
+  if (maribankRows.length !== 62) {
+    throw new Error(`expected MariBank sample to keep all 62 visible transaction rows, got ${maribankRows.length}`);
   }
   const maribankTransferRow = maribankRows.find(
-    (row) => /judy sibayan|jaycelle c\./i.test(row.description ?? "") && /transfer/i.test(row.description ?? "")
+    (row) => /jaycelle c\./i.test(row.description ?? "") && /transfer/i.test(row.description ?? "")
   );
   if (
     !maribankTransferRow ||
     maribankTransferRow.categoryName !== "Transfers" ||
-    maribankTransferRow.type !== "transfer" ||
+    maribankTransferRow.type !== "expense" ||
     ((maribankTransferRow.rawPayload as Record<string, unknown> | undefined)?.notes as string | undefined)?.trim() === ""
   ) {
     throw new Error(
-      `expected MariBank transfers to preserve the full counterparty name and classify as Transfers/transfer, got ${JSON.stringify(
+      `expected MariBank outgoing transfers to preserve the full counterparty name and classify as Transfers/expense, got ${JSON.stringify(
         maribankTransferRow ?? null
       )}`
     );
@@ -1497,6 +1497,17 @@ const main = async () => {
   const maribankLoadRow = maribankRows.find((row) => /top up - data/i.test(row.description ?? ""));
   if (!maribankLoadRow || !/go\+99/i.test(((maribankLoadRow.rawPayload as Record<string, unknown> | undefined)?.notes as string | undefined) ?? "")) {
     throw new Error(`expected MariBank load rows to preserve the merchant name in notes, got ${JSON.stringify(maribankLoadRow ?? null)}`);
+  }
+  const maribankIncomeTotal = maribankRows
+    .filter((row) => row.type === "income")
+    .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
+  const maribankExpenseTotal = maribankRows
+    .filter((row) => row.type === "expense")
+    .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
+  if (!approxEqual(maribankIncomeTotal, 24218.91) || !approxEqual(maribankExpenseTotal, 14218.1)) {
+    throw new Error(
+      `expected MariBank row directions to reconcile to statement totals, got incoming ${formatMoney(maribankIncomeTotal)} and outgoing ${formatMoney(maribankExpenseTotal)}`
+    );
   }
   console.log(`[PASS] MariBank row preservation | ${basename(maribankSamplePath)} | ${maribankRows.length} rows`);
 
@@ -2158,7 +2169,7 @@ const main = async () => {
   }
   console.log("[PASS] BPI classification | statement payment credit rows normalize as Financial expense");
 
-  const unionBankMarchPath = join(root, "Actual SOAs/UnionBank/UnionBank SOA March 2026_unlocked.pdf");
+  const unionBankMarchPath = join(root, "Actual SOAs/UnionBank/Unlocked/UnionBank SOA March 2026_unlocked.pdf");
   const unionBankMarchBytes = await readFile(unionBankMarchPath);
   const unionBankMarchText = await readUploadedFileText({
     name: basename(unionBankMarchPath),
@@ -2228,7 +2239,9 @@ const main = async () => {
       )}`
     );
   }
-  const gcashBancnetRows = gcashActualRows.filter((row) => /payment to bancnet p 2 m send/i.test(String(row.description ?? row.merchantRaw ?? "")));
+  const gcashBancnetRows = gcashActualRows.filter((row) =>
+    /payment to bancnet p\s*2\s*m send/i.test(String(row.description ?? row.merchantRaw ?? ""))
+  );
   if (
     gcashBancnetRows.length === 0 ||
     gcashBancnetRows.some((row) => row.merchantClean !== "BancNet P2M Send" || row.categoryName !== "Transfers")
@@ -4148,7 +4161,7 @@ const main = async () => {
     "EMPORARY BILL",
   ].join("\n"));
   if (
-    jarandjamReceiptPreview.merchantName !== "JARANDJAM INC." ||
+    jarandjamReceiptPreview.merchantName !== "JARANDJAM INC" ||
     jarandjamReceiptPreview.billDate !== "2025-12-22T00:00:00.000Z" ||
     jarandjamReceiptPreview.currency !== "PHP" ||
     jarandjamReceiptPreview.subtotal !== "7145.00" ||
@@ -4428,7 +4441,7 @@ const main = async () => {
     );
   }
 
-  const ramenOfficialReceiptAddressPreview = parseReceiptText([
+  const ramenOfficialReceiptPreview = parseReceiptText([
     "7 é                IKKORYU FUKUOKA RAMEN               FR",
     "y          Level 3 L316-L317 Century Mall          jose",
     "113        Kalayaan Ave., Cor, Salamanca        Hts",
@@ -4467,7 +4480,7 @@ const main = async () => {
     );
   }
 
-  const ramenOfficialReceiptPreview = parseReceiptText([
+  const ramenOfficialReceiptAddressPreview = parseReceiptText([
     "7 é                IKKORYU FUKUOKA RAMEN               FR",
     "y          Level 3 L316-L317 Century Mall          jose",
     "113        Kalayaan Ave., Cor, Salamanca        Hts",
@@ -4658,9 +4671,9 @@ const main = async () => {
   }
 
   const chinaBankProbe = detectStatementMetadataFromText("China Bank Statement of Account\nStatement Period Aug. 01, 2024 To Aug. 31, 2024");
-  if (chinaBankProbe.institution !== "China Bank") {
+  if (chinaBankProbe.institution !== "Chinabank") {
     throw new Error(
-      `Parser regression checks failed:\n- [China Bank detection] expected China Bank but got ${chinaBankProbe.institution ?? "null"}`
+      `Parser regression checks failed:\n- [China Bank detection] expected Chinabank but got ${chinaBankProbe.institution ?? "null"}`
     );
   }
 
@@ -4744,6 +4757,7 @@ const main = async () => {
     );
   }
 
+  await importFileTextModule.shutdownImportOcrWorkers();
   console.log(`Parser regression checks passed for ${fixtures.length} fixtures.`);
 };
 

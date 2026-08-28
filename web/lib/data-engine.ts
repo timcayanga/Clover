@@ -29,7 +29,7 @@ import { deriveTravelEpisodes, resolveTransactionContext } from "@/lib/context-c
 import { coerceTransactionTypeFromCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
 
 export const DATA_ENGINE_VERSION = "v2";
-export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v12";
+export const IMPORT_FILE_EXTRACTION_CACHE_VERSION = "v13";
 export const resolveImportFileExtractionCacheVersion = (fileName?: string | null) => {
   const normalizedFileName = String(fileName ?? "");
   if (/^BE\d{8}\.pdf$/i.test(normalizedFileName.trim())) {
@@ -1535,6 +1535,12 @@ export const buildTrainingSignalDedupeKey = (params: {
 export const guessCategoryFallback = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
   const compact = normalizeWhitespace(description).replace(/\s+/g, "").toLowerCase();
+  if (isStatementPaymentSettlementDescription(description)) return "Transfers";
+  if (/tax withheld|withheld tax|taxwithheld|withheldtax/.test(lower)) return "Financial";
+  if (/interest\s+earned|interestearned/.test(lower)) return "Income";
+  if (/atm\s*withdrawal.*(?:fee|charge)|(?:fee|charge).*atm\s*withdrawal/.test(lower)) return "Financial";
+  if (/expressnet|megalink|withdrawal|atm\b|cash withdrawal|cash out|atmwdl|atm withdrawal|et\s+wdl/.test(lower)) return "Cash & ATM";
+  if (type === "income" && /cash\s*\/\s*check\s+deposit|cash\s+deposit|check\s+deposit/.test(lower)) return "Income";
   const hasTravelContext =
     /(?:sydney|melbourne|nsw|harbour|opera\s+house|great\s+ocean\s+road|skybus|airport|tourism|leura|surry\s+hills|george\s+st|circular|bath|victoria|apollo\s+bay)/.test(lower) ||
     /(?:sydney|melbourne|nsw|harbour|operahouse|greatoceanroad|skybus|airport|tourism|leura|surryhills|georgest|circular|bath|victoria|apollobay)/.test(compact);
@@ -1550,7 +1556,6 @@ export const guessCategoryFallback = (description: string, type: TransactionType
   if (/deposit to gsave|withdraw from gsave|seamoney credit|maribank credit/.test(lower)) return "Financial";
   if (/google\s+play|googleplay/.test(lower) || /googleplay/.test(compact)) return "Entertainment";
   if (/transfer|instapay|pesonet|wise to|to savings|to checking|wa\s+(?:cr|db)|et\s+(?:cr|db)\s+ibft|st\s+(?:cm|dm)\s+gen|mo\s+dm/.test(lower)) return "Transfers";
-  if (/expressnet|megalink|withdrawal|atm\b|cash withdrawal|cash out|atmwdl|atm withdrawal|et\s+wdl/.test(lower)) return "Cash & ATM";
   if (/service\s*charge|servicecharge|service\s*fee|bank\s*charge|bankcharge|svchg|finance\s+charges?|late\s+payment\s+fee|annual\s+fee/.test(lower)) return "Financial";
   if (/tax withheld|withheld tax|taxwithheld|withheldtax/.test(lower)) return "Financial";
   if (/gcash\s+cash\s+in|gcashcashin/.test(lower)) return "Transfers";
@@ -4367,7 +4372,7 @@ export const classifyMerchant = (params: {
     }
   }
 
-  const bestRuleIsExact = Boolean(bestRule && normalizedMerchantCandidates.has(bestRule.merchantKey));
+  const bestRuleIsExact = Boolean(bestRule && normalizedMerchant === bestRule.merchantKey);
   const bestRuleIsFamilyMatch = Boolean(
     bestRule &&
       !bestRuleIsExact &&
@@ -4417,7 +4422,7 @@ export const classifyMerchant = (params: {
 
   if (bestRule && bestRuleScore >= 20) {
     const learnedCategory = bestRule.categoryName ?? finalHeuristicCategory;
-    const exact = normalizedMerchantCandidates.has(bestRule.merchantKey);
+    const exact = normalizedMerchant === bestRule.merchantKey;
     const familyMatch = !exact && hasFamilyMatch(
       normalizedMerchantCandidates,
       bestRule.merchantPattern,
@@ -4450,7 +4455,7 @@ export const classifyMerchant = (params: {
 
   if (bestSignal && bestScore >= 18) {
     const learnedCategory = bestSignal.categoryName ?? finalHeuristicCategory;
-    const exact = normalizedMerchantCandidates.has(bestSignal.merchantKey);
+    const exact = normalizedMerchant === bestSignal.merchantKey;
     const familyMatch = !exact && hasFamilyMatch(normalizedMerchantCandidates, bestSignal.merchantKey, bestSignal.categoryName);
     const rawConfidence = Math.max(68, bestScore) - Math.min(bestScore * 0.6, negativePenalty * 0.45);
     const confidenceCap = familyMatch ? (negativePenalty > 0 ? 76 : 82) : negativePenalty > 0 ? 80 : 99;

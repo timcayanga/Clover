@@ -186,6 +186,13 @@ const isLikelyPersonToPersonMerchant = (value?: string | null) => {
 export const guessCategoryName = (text: string, type: TransactionType) => {
   const lower = text.toLowerCase();
   const compact = compactWhitespace(text).toLowerCase();
+  if (isStatementPaymentSettlementDescription(text)) return "Transfers";
+  if (isStandaloneCashPaymentDescription(text)) return "Shopping";
+  if (/atm\s*withdrawal.*(?:fee|charge)|(?:fee|charge).*atm\s*withdrawal/.test(lower)) return "Financial";
+  if (/expressnet|megalinkw?|\/drw\b|cash\s*(?:withdrawal|out)|atm\b|automated\s+teller|cash\s+advance/.test(lower)) return "Cash & ATM";
+  if (/taxwithheld|withheldtax|tax withheld|withheld tax/.test(lower) || /taxwithheld|withheldtax/.test(compact)) return "Financial";
+  if (/interest\s+earned|interestearned/.test(lower) || /interestearned/.test(compact)) return "Income";
+  if (type === "income" && /cash\s*\/\s*check\s+deposit|cash\s+deposit|check\s+deposit/.test(lower)) return "Income";
   const strongHint = getStrongMerchantCategoryHint(text);
   if (strongHint) return strongHint;
   const sharedHint = getSharedMerchantCategoryHint(text);
@@ -5611,6 +5618,70 @@ const parseMariBankImportText = (text: string, context: ImportParseContext = {})
   const rows: ParsedImportRow[] = [];
   let pendingDescriptionParts: string[] = [];
 
+  const structuredTransactionLines = transactionLines.filter((line) => /^MARIBANK_TXN\s*\|/i.test(line));
+  for (const [sourceRowIndex, line] of structuredTransactionLines.entries()) {
+    const parts = line.split(/\s*\|\s*/);
+    if (parts.length < 6) {
+      continue;
+    }
+
+    const [, dateText, directionText, amountText, merchantText, detailText] = parts;
+    const direction = directionText.toLowerCase() === "incoming" ? "incoming" : "outgoing";
+    const date = /^\d{1,2}\s+[A-Z]{3}$/i.test(dateText)
+      ? parseDateValue(`${dateText}${endDate ? ` ${new Date(endDate).getUTCFullYear()}` : ""}`)
+      : /^[A-Z]{3}$/i.test(dateText) && endDate
+        ? new Date(endDate)
+        : null;
+    const amount = parseMoney(amountText);
+    const merchant = humanizeMerchantText(merchantText || detailText || "MariBank");
+    const detailLabel = detailText || null;
+    if (!date || amount === null) {
+      continue;
+    }
+
+    const classificationText = `${merchant} ${detailLabel ?? ""}`;
+    const isInterest = /interest/i.test(classificationText);
+    const isReward = /reward/i.test(classificationText);
+    const categoryName = isInterest
+      ? "Income"
+      : guessMariBankCategoryName(merchant, detailLabel, direction === "incoming" ? "income" : "expense");
+    const type: TransactionType = isInterest || isReward || direction === "incoming" ? "income" : "expense";
+    const notesLabel = [merchant, detailLabel]
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      .filter((value, index, values) => values.indexOf(value) === index)
+      .join(" • ");
+
+    rows.push({
+      date: date.toISOString().slice(0, 10),
+      amount: amount.toFixed(2),
+      merchantRaw: merchant,
+      merchantClean: summarizeMerchantText(merchant, "MariBank"),
+      description: detailLabel && detailLabel !== merchant ? `${merchant} • ${detailLabel}` : merchant,
+      categoryName,
+      accountName,
+      institution: "MariBank",
+      type,
+      rawPayload: {
+        bank: "MariBank",
+        kind: "savings_transaction",
+        accountName,
+        accountNumber,
+        sourceRowIndex,
+        line,
+        direction,
+        descriptionLine: merchant,
+        detailLine: detailLabel,
+        note: notesLabel,
+        notes: notesLabel,
+        fullDetails: notesLabel || null,
+        parsedDetails: notesLabel || null,
+        transactionDetails: detailLabel,
+        counterpartyName: merchant,
+        amountText,
+      },
+    } satisfies ParsedImportRow);
+  }
+
   const isTransactionHeaderLine = (line: string) =>
     /^DATE\s+TRANSACTION/i.test(line) ||
     /^page\s+\d+\s+of\s+\d+/i.test(line) ||
@@ -5645,7 +5716,7 @@ const parseMariBankImportText = (text: string, context: ImportParseContext = {})
     return "expense" as TransactionType;
   };
 
-  for (let index = 0; index < transactionLines.length; index += 1) {
+  for (let index = 0; structuredTransactionLines.length === 0 && index < transactionLines.length; index += 1) {
     const line = transactionLines[index];
 
     if (!line || isTransactionHeaderLine(line)) {
@@ -6942,14 +7013,21 @@ const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     null;
   const cardAccountMatch = normalized.match(/\bBE\d{8}\b/i)?.[0] ?? null;
   const statementAccountNumberDisplay =
-    statementAccountLine?.match(/\bNO\s*[:：]\s*([A-Z0-9][A-Z0-9\s-]{5,})/i)?.[1]
-      ?.replace(/[OoQ]/g, "0")
-      .replace(/\s*-\s*/g, "-")
-      .replace(/[^0-9-]/g, "")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "")
-      .slice(0, 18) ??
-    null;
+    periodAccountLines
+      .map((line) => line.match(/\bNO\s*[:：]\s*([A-Z0-9][A-Z0-9\s~–—-]{5,})/i)?.[1] ?? null)
+      .filter((value): value is string => Boolean(value))
+      .map((value) =>
+        value
+          .replace(/[OoQ]/g, "0")
+          .replace(/[~–—]/g, "-")
+          .replace(/\s*-\s*/g, "-")
+          .replace(/[^0-9-]/g, "")
+          .replace(/-+/g, "-")
+          .replace(/^-|-$/g, "")
+          .slice(0, 18)
+      )
+      .filter((value) => value.replace(/\D/g, "").length >= 8)
+      .sort((left, right) => right.replace(/\D/g, "").length - left.replace(/\D/g, "").length)[0] ?? null;
   const statementAccountNumber = statementAccountNumberDisplay?.replace(/\D/g, "").slice(0, 16) ?? null;
   const accountSection =
     statementAccountNumber ??
@@ -15753,12 +15831,18 @@ const normalizeGcashMerchant = (description: string) => {
 
   const receivedMatch = trimmed.match(/^Received GCash from\s+(.+?)(?:\s+with account ending in|\s+and invno:|$)/i);
   if (receivedMatch?.[1]) {
-    return `Received GCash from ${normalizeWhitespace(receivedMatch[1].replace(/\s*\/\s*GCash Family Savings Bank.*$/i, ""))}`;
+    const normalizedSender = normalizeWhitespace(receivedMatch[1].replace(/\s*\/\s*GCash Family Savings Bank.*$/i, ""));
+    return /\bpdax\b|philippine\s+digital\s+asset\s+exchang/i.test(normalizedSender)
+      ? "PDAX"
+      : `Received GCash from ${normalizedSender}`;
   }
 
   const sentMatch = trimmed.match(/^Sent GCash to\s+(.+?)(?:\s+with account ending in|\s+and invno:|$)/i);
   if (sentMatch?.[1]) {
-    return `Sent GCash to ${normalizeWhitespace(sentMatch[1])}`;
+    const normalizedRecipient = normalizeWhitespace(sentMatch[1]);
+    return /\bpdax\b|philippine\s+digital\s+asset\s+exchang/i.test(normalizedRecipient)
+      ? "PDAX"
+      : `Sent GCash to ${normalizedRecipient}`;
   }
 
   const transferMatch = trimmed.match(/^Transfer from\s+\d+\s+to\s+\d+/i);
@@ -15942,6 +16026,10 @@ const looksLikeGcashRecordTail = (value: string) =>
 const guessGcashCategoryName = (description: string, type: TransactionType) => {
   const merchant = normalizeGcashMerchant(description);
   if (/^(?:deposit to gsave|withdraw from gsave|transfer (?:to|from) gsave)\b/i.test(description) || /seamoney credit/i.test(description)) {
+    return "Financial";
+  }
+
+  if (merchant === "PDAX" || /\bpdax\b|philippine\s+digital\s+asset\s+exchang/i.test(description)) {
     return "Financial";
   }
 
@@ -16253,7 +16341,7 @@ const parseGcashImportText = (text: string) => {
       row.merchantRaw = humanizeMerchantText(repairedDescription);
       row.merchantClean = summarizeMerchantText(repairedDescription, metadata.institution);
       row.type = isCredit ? "income" : "expense";
-      row.categoryName = "Transfers";
+      row.categoryName = source === "PDAX" ? "Financial" : "Transfers";
       row.rawPayload = {
         ...(row.rawPayload ?? {}),
         extractedDescription: description,
@@ -22327,6 +22415,17 @@ const classifyGenericWalletHistoryTransaction = (description: string, previousBa
 
   if (/^buy load transaction for\b/.test(lower) || /^bills payment to\b/.test(lower)) {
     return { type: "expense" as TransactionType, categoryName: "Bills & Utilities" };
+  }
+
+  if (/\bpdax\b|philippine\s+digital\s+asset\s+exchang/.test(lower)) {
+    const type = /^received gcash from\b/.test(lower)
+      ? ("income" as TransactionType)
+      : /^sent gcash to\b|^payment to\b/.test(lower)
+        ? ("expense" as TransactionType)
+        : balanceDelta !== null && balanceDelta > 0
+          ? ("income" as TransactionType)
+          : ("expense" as TransactionType);
+    return { type, categoryName: "Financial" };
   }
 
   if (/^received gcash from\b|^received money\b/.test(lower)) {

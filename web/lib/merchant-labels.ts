@@ -554,7 +554,11 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Pickup Coffee",
     },
     {
-      patterns: [/sent\s+gcash\s+to\s+pdax/i, /payment\s+to\s+philippine\s+digital\s+asset\s+exchang/i],
+      patterns: [
+        /sent\s+gcash\s+to\s+pdax/i,
+        /received\s+gcash\s+from\s+pdax/i,
+        /payment\s+to\s+philippine\s+digital\s+asset\s+exchang/i,
+      ],
       replacement: "PDAX",
     },
     {

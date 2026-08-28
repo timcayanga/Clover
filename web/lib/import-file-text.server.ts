@@ -329,6 +329,7 @@ type ImportedFileTextWithCacheInfo = {
 type OcrWorker = {
   setParameters: (params: Record<string, unknown>) => Promise<unknown>;
   recognize: (source: unknown) => Promise<{ data: { text?: string } }>;
+  terminate: () => Promise<unknown>;
 };
 
 const readImportedFileTextCacheRecord = async (params: {
@@ -464,6 +465,12 @@ const loadCanvasModule = async (): Promise<CanvasModule | null> => {
 };
 
 const ocrWorkerPromises = new Map<string, Promise<OcrWorker | null>>();
+
+export const shutdownImportOcrWorkers = async () => {
+  const workers = await Promise.all(ocrWorkerPromises.values());
+  ocrWorkerPromises.clear();
+  await Promise.all(workers.filter((worker): worker is OcrWorker => Boolean(worker)).map((worker) => worker.terminate()));
+};
 
 const getOcrWorker = async (pageSegMode = "6") => {
   const workerKey = String(pageSegMode);
@@ -2037,6 +2044,7 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
     const loadingTask = pdfjs.getDocument(options as any);
     const pdf = await loadingTask.promise;
     const pages = new Array<string>(pdf.numPages);
+    const mariBankTransactionRows = new Array<string[]>(pdf.numPages);
     let nextPageIndex = 0;
     // PDF.js can read independent text layers concurrently. Bound the work so
     // a long statement does not monopolize a serverless invocation, while
@@ -2052,12 +2060,19 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
           const simpleText = buildSimplePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
           const layoutAwareText = buildLayoutAwarePdfTextFromContentItems(content.items as PdfTextContentItemLike[]);
           pages[pageIndex] = pickBetterPdfTextLayerCandidate(simpleText, layoutAwareText);
+          mariBankTransactionRows[pageIndex] = buildMariBankTransactionRowsFromContentItems(
+            content.items as PdfTextContentItemLike[]
+          );
         }
       })
     );
 
     try {
-      return pages.join("\n");
+      const extractedText = pages.join("\n");
+      const structuredMariBankRows = mariBankTransactionRows.flat().filter(Boolean);
+      return /\bMARI\s*BANK\b/i.test(extractedText) && structuredMariBankRows.length > 0
+        ? `${extractedText}\n${structuredMariBankRows.join("\n")}`
+        : extractedText;
     } finally {
       await loadingTask.destroy().catch(() => null);
     }
@@ -2170,6 +2185,81 @@ export const buildLayoutAwarePdfTextFromContentItems = (items: PdfTextContentIte
     .map((row) => buildRowText(row))
     .filter((line) => line.length > 0)
     .join("\n");
+};
+
+const buildMariBankTransactionRowsFromContentItems = (items: PdfTextContentItemLike[]) => {
+  const normalizedItems = items
+    .map((item) => ({
+      text: normalizePdfTextContentItem(item.str),
+      x: Number(item.transform?.[4] ?? 0),
+      y: Number(item.transform?.[5] ?? 0),
+    }))
+    .filter((item) => item.text.length > 0 && Number.isFinite(item.x) && Number.isFinite(item.y));
+
+  const transactionHeading = normalizedItems.find((item) => /SAVINGS\s*-\s*TRANSACTION\s+DETAILS/i.test(item.text));
+  const transactionColumnHeading = normalizedItems.find(
+    (item) => /^TRANSACTION$/i.test(item.text) && normalizedItems.some((candidate) => /^OUTGOING$/i.test(candidate.text))
+  );
+  if (!transactionHeading && !transactionColumnHeading) {
+    return [];
+  }
+
+  const interestTableHeading = normalizedItems.find((item) => /SAVINGS\s*-\s*INTEREST\s*&\s*TAX\s+DETAILS/i.test(item.text));
+  const dateItems = normalizedItems
+    .filter((item) => {
+      if (item.x > 110 || !/^(?:\d{1,2}\s+)?[A-Z]{3}$/i.test(item.text)) {
+        return false;
+      }
+      if (transactionColumnHeading && item.y >= transactionColumnHeading.y - 3) {
+        return false;
+      }
+      if (interestTableHeading && item.y <= interestTableHeading.y) {
+        return false;
+      }
+      return true;
+    })
+    .sort((left, right) => right.y - left.y);
+
+  return dateItems.flatMap((dateItem) => {
+    const amountItem = normalizedItems.find(
+      (item) => item.x >= 350 && Math.abs(item.y - dateItem.y) <= 2.25 && /^-?[0-9][0-9,]*\.\d{2}$/.test(item.text)
+    );
+    if (!amountItem) {
+      return [];
+    }
+
+    const descriptionItems = normalizedItems
+      .filter(
+        (item) =>
+          item.x >= 130 &&
+          item.x < 350 &&
+          item.y >= dateItem.y - 18 &&
+          item.y <= dateItem.y + 18 &&
+          !/^(?:DATE|TRANSACTION|OUTGOING|INCOMING|PHP)$/i.test(item.text)
+      )
+      .sort((left, right) => right.y - left.y || left.x - right.x);
+    const merchant = descriptionItems
+      .filter((item) => item.y >= dateItem.y - 2.25)
+      .map((item) => item.text)
+      .join(" ")
+      .trim();
+    const detail = descriptionItems
+      .filter((item) => item.y < dateItem.y - 2.25)
+      .map((item) => item.text)
+      .join(" ")
+      .trim();
+    if (!merchant && !detail) {
+      return [];
+    }
+
+    const safeField = (value: string) => value.replace(/\s*\|\s*/g, " / ").replace(/\s+/g, " ").trim();
+    const direction = amountItem.x >= 470 ? "incoming" : "outgoing";
+    return [
+      ["MARIBANK_TXN", safeField(dateItem.text), direction, safeField(amountItem.text), safeField(merchant), safeField(detail)].join(
+        " | "
+      ),
+    ];
+  });
 };
 
 const buildSimplePdfTextFromContentItems = (items: PdfTextContentItemLike[]) => {
