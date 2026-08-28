@@ -155,14 +155,16 @@ const canonicalHoldings = canonicalizePdaxInvestmentHoldings([
   { assetName: "Ripple", assetSymbol: null, quantity: 125.492, currentValue: 10644.04 },
   { assetName: "XRP", assetSymbol: "XRP", quantity: 125.492, currentValue: 10644.04 },
   { assetName: "Bitcoin SegWit", assetSymbol: "BTC", quantity: 0.018005, currentValue: 86511.42 },
+  { assetName: "PDAX Gold RWA", assetSymbol: null, assetType: "other", currentValue: 22542.46 },
 ]);
 assert.deepEqual(
   canonicalHoldings.map((holding) => [holding.assetName, holding.assetSymbol, holding.currentValue]),
   [
     ["XRP", "XRP", 10644.04],
     ["BTC", "BTC", 86511.42],
+    ["Gold", null, 22542.46],
   ],
-  "PDAX wallet evidence must stay out of holdings, while Ripple and XRP collapse to one canonical asset."
+  "PDAX wallet evidence must stay out of holdings, Ripple/XRP must collapse, and visible Gold must remain an asset."
 );
 
 console.log("[PASS] PDAX portfolio screenshots retain canonical identity and safe snapshot holdings.");

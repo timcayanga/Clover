@@ -101,6 +101,9 @@ export const getCanonicalPdaxHoldingIdentity = (holding: PdaxInvestmentHoldingIn
   if (symbol === "BTC" || name === "btc" || /^bitcoin(?: segwit)?$/.test(name)) {
     return { key: "BTC", assetName: "BTC", assetSymbol: "BTC", assetType: "crypto" };
   }
+  if (symbol === "GOLD" || name === "gold" || name === "pdax gold" || name === "pdax gold rwa") {
+    return { key: "GOLD", assetName: "Gold", assetSymbol: null, assetType: "real_world_asset" };
+  }
 
   const fallbackKey = symbol || name;
   return {

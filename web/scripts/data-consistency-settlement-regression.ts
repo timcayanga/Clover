@@ -120,6 +120,11 @@ const main = async () => {
     assert.match(source, /resolveEffectiveAccountBalance\(/);
     assert.match(source, /compareAccountCheckpointFreshness\(/);
   }
+  assert.match(
+    listRoute,
+    /exactCheckpointEndingBalance \?\? publishedSummaryBalance/,
+    "The exact statement ending balance must outrank a stale cached publication summary on Accounts."
+  );
   assert.match(statusSnapshot, /const settledImportComplete = visibleImportComplete && settlementIssues\.length === 0/);
   assert.match(statusSnapshot, /transaction_count_not_settled/);
   assert.match(statusSnapshot, /account_not_visible:/);

@@ -985,8 +985,12 @@ const cleanupPdaxPortfolioBucketHoldings = async (workspaceId: string) => {
 
   // Older backup-parser runs could convert PDAX overview buckets into
   // holdings. These are derived import artifacts, not user-confirmed assets.
-  const bucketNames = new Set(["php", "php wallet", "crypto", "crypto balance", "bonds", "gold"]);
-  const bucketNameCandidates = ["PHP", "PHP wallet", "Crypto", "Crypto balance", "Bonds", "Gold", ...Array.from(bucketNames)];
+  // Gold is a concrete PDAX real-world asset when the source exposes a Gold
+  // balance. It used to be grouped with overview-only buckets here, which
+  // removed the holding from institution details while its account continued
+  // to contribute to the Accounts card total.
+  const bucketNames = new Set(["php", "php wallet", "crypto", "crypto balance", "bonds"]);
+  const bucketNameCandidates = ["PHP", "PHP wallet", "Crypto", "Crypto balance", "Bonds", ...Array.from(bucketNames)];
   const candidates = await prisma.investmentHolding.findMany({
     where: {
       workspaceId,
@@ -3657,16 +3661,24 @@ export async function GET(request: Request) {
         typeof (latestCheckpoint.sourceMetadata as Record<string, unknown>).accountNumber === "string"
           ? String((latestCheckpoint.sourceMetadata as Record<string, unknown>).accountNumber).trim()
           : null;
+      const exactCheckpointEndingBalance =
+        latestCheckpoint?.accountId === account.id &&
+        latestCheckpoint.endingBalance !== null &&
+        latestCheckpoint.endingBalance !== undefined
+          ? latestCheckpoint.endingBalance.toString()
+          : null;
+      const publishedSummaryBalance =
+        checkpointPublishedSummary?.balance !== null && checkpointPublishedSummary?.balance !== undefined
+          ? String(checkpointPublishedSummary.balance).trim() || null
+          : null;
       const checkpointBalance =
         latestCheckpoint?.status === "mismatch"
           ? null
-          : checkpointPublishedSummary && typeof checkpointPublishedSummary.balance === "string"
-          ? checkpointPublishedSummary.balance
-          : latestCheckpoint?.accountId === account.id &&
-              latestCheckpoint?.endingBalance !== null &&
-              latestCheckpoint?.endingBalance !== undefined
-          ? latestCheckpoint.endingBalance.toString()
-          : null;
+          // The checkpoint row is the reconciled statement result. A cached
+          // publication summary can contain an earlier parser projection (for
+          // example Maya 2608's stale 60,184.87 beside a 27,228.09 ending
+          // balance), so it must never outrank exact checkpoint evidence.
+          : exactCheckpointEndingBalance ?? publishedSummaryBalance;
       const effectiveAccountNumber = account.accountNumber ?? checkpointAccountNumber ?? null;
       const hasCorrectedGotradeIdentity =
         account.institution?.trim().toLowerCase() === "gotrade" && /^gotrade(?: activity)?$/i.test(account.name.trim());
