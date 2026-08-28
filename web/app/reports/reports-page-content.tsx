@@ -20,10 +20,11 @@ import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format"
 import { recordAppError } from "@/lib/error-logs";
 import { InfoTooltip as ReportInfoTip } from "@/components/info-tooltip";
 import { InfoTooltip } from "@/components/info-tooltip";
+import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { getCategoryIconTone } from "@/lib/category-icons";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
-import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
-import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
+import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
+import { getTransactionSummaryTypeOverrides } from "@/lib/transaction-summary";
 import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
 import { hasFullFeatureAccess } from "@/lib/beta-access";
 import { resolveReportWindow } from "@/lib/report-window";
@@ -54,12 +55,6 @@ export const reportsMetadata = {
   title: "Reports",
 };
 
-const currencyFormatter = new Intl.NumberFormat("en-PH", {
-  style: "currency",
-  currency: "PHP",
-  minimumFractionDigits: 2,
-});
-
 const monthFormatter = new Intl.DateTimeFormat("en-PH", {
   month: "short",
   year: "numeric",
@@ -70,15 +65,22 @@ const shortDateFormatter = new Intl.DateTimeFormat("en-PH", {
   day: "2-digit",
 });
 
-const getReadableTextColor = (backgroundColor: string) => {
-  const channels = backgroundColor.match(/[\d.]+/g)?.slice(0, 3).map(Number);
-  if (!channels || channels.length < 3) {
-    return "#07111d";
+const buildReportPieSlicePath = (startShare: number, endShare: number) => {
+  const center = 120;
+  const radius = 88;
+  const toPoint = (share: number) => {
+    const angle = share * Math.PI * 2 - Math.PI / 2;
+    return {
+      x: center + Math.cos(angle) * radius,
+      y: center + Math.sin(angle) * radius,
+    };
+  };
+  const start = toPoint(startShare);
+  const end = toPoint(endShare);
+  if (endShare - startShare >= 0.9999) {
+    return `M ${center} ${center} L ${center} ${center - radius} A ${radius} ${radius} 0 1 1 ${center} ${center + radius} A ${radius} ${radius} 0 1 1 ${center} ${center - radius} Z`;
   }
-
-  const [red = 0, green = 0, blue = 0] = channels;
-  const luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
-  return luminance > 0.58 ? "#07111d" : "#f8fafc";
+  return `M ${center} ${center} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${endShare - startShare > 0.5 ? 1 : 0} 1 ${end.x} ${end.y} Z`;
 };
 
 type WindowSummary = {
@@ -103,6 +105,7 @@ type ReportTransaction = {
     institution: string | null;
     accountNumber: string | null;
     currency: string;
+    type: string;
   };
   category: {
     name: string;
@@ -124,12 +127,16 @@ const getReportTransactionCategoryName = (transaction: ReportTransaction) =>
   }) ?? "Uncategorized";
 
 const getReportTransactionType = (transaction: ReportTransaction) =>
-  coerceTransactionTypeFromCategoryName(
-    getReportTransactionCategoryName(transaction),
-    transaction.type,
-    transaction.amount,
-    transaction.isTransfer
-  );
+  resolveFinancialTransactionType({
+    type: transaction.type,
+    amount: transaction.amount,
+    isTransfer: transaction.isTransfer,
+    categoryName: getReportTransactionCategoryName(transaction),
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean,
+    description: transaction.description,
+    institution: transaction.account.institution,
+  });
 
 const reportSankeyExcludedMerchantMatchers = [
   "check clearing",
@@ -156,20 +163,17 @@ const isReportMerchantEligible = (transaction: ReportTransaction) => {
   return !reportSankeyExcludedMerchantMatchers.some((matcher) => merchantLabel.includes(matcher));
 };
 
-const isReportSpendingTransaction = (transaction: ReportTransaction) => {
-  if (getReportTransactionType(transaction) !== "expense") {
-    return false;
-  }
-
-  return true;
-};
-
 type MonthBucket = {
   key: string;
   label: string;
   income: number;
   expense: number;
   net: number;
+};
+
+type ReportTimelineBucket = MonthBucket & {
+  start: Date;
+  end: Date;
 };
 
 type WorkspaceAccountSnapshot = {
@@ -235,11 +239,6 @@ const toReportAmount = (value: unknown) => {
 
 const toReportMagnitude = (value: unknown) => Math.abs(toReportAmount(value));
 
-const getWorkspaceReportRowCount = (
-  workspace: { id: string; _count: { transactions: number } },
-  parsedRowsByWorkspaceId: Map<string, number>
-) => workspace._count.transactions + (parsedRowsByWorkspaceId.get(workspace.id) ?? 0);
-
 const mapParsedRowsToReportTransactions = (
   rows: Array<{
     id: string;
@@ -261,6 +260,7 @@ const mapParsedRowsToReportTransactions = (
         institution: string | null;
         accountNumber: string | null;
         currency: string;
+        type: string;
       } | null;
     } | null;
   }>
@@ -288,6 +288,7 @@ const mapParsedRowsToReportTransactions = (
           institution: row.importFile?.account?.institution ?? row.institution,
           accountNumber: row.importFile?.account?.accountNumber ?? null,
           currency: row.importFile?.account?.currency ?? row.currency ?? "MIXED",
+          type: row.importFile?.account?.type ?? "other",
         },
         category: row.categoryName ? { name: row.categoryName } : null,
         importFileId: row.importFileId,
@@ -326,6 +327,26 @@ const getMonthBuckets = (anchor: Date) => {
     });
   }
   return buckets;
+};
+
+const getReportTimelineBuckets = (start: Date, end: Date, count = 6): ReportTimelineBucket[] => {
+  const startTime = start.getTime();
+  const endTime = end.getTime();
+  const duration = Math.max(endTime - startTime + 1, 1);
+
+  return Array.from({ length: count }, (_, index) => {
+    const bucketStart = new Date(startTime + Math.floor((duration * index) / count));
+    const bucketEnd = new Date(startTime + Math.floor((duration * (index + 1)) / count) - 1);
+    return {
+      key: `${bucketStart.toISOString()}-${index}`,
+      label: shortDateFormatter.format(bucketStart),
+      start: bucketStart,
+      end: index === count - 1 ? new Date(end) : bucketEnd,
+      income: 0,
+      expense: 0,
+      net: 0,
+    };
+  });
 };
 
 function ReportsStreamFallback() {
@@ -389,46 +410,12 @@ export async function ReportsStream({
     },
     orderBy: { createdAt: "asc" },
   });
-  const parsedRowCounts = await prisma.parsedTransaction
-    .groupBy({
-      by: ["workspaceId"],
-      where: {
-        workspaceId: { in: userWorkspaces.map((workspace) => workspace.id) },
-        date: { not: null },
-        amount: { not: null },
-      },
-      _count: { _all: true },
-    })
-    .catch(() => []);
-  const parsedRowsByWorkspaceId = new Map(
-    parsedRowCounts.map((row) => [row.workspaceId, Number(row._count._all ?? 0)])
-  );
   const cookieWorkspace = selectedWorkspaceCookieId
     ? userWorkspaces.find((workspace) => workspace.id === selectedWorkspaceCookieId) ?? null
     : null;
-  const workspaceWithMostData =
-    [...userWorkspaces].sort((left, right) => {
-      const transactionGap =
-        getWorkspaceReportRowCount(right, parsedRowsByWorkspaceId) -
-        getWorkspaceReportRowCount(left, parsedRowsByWorkspaceId);
-      if (transactionGap !== 0) {
-        return transactionGap;
-      }
-
-      const importGap = right._count.importFiles - left._count.importFiles;
-      if (importGap !== 0) {
-        return importGap;
-      }
-
-      return right._count.accounts - left._count.accounts;
-    })[0] ?? null;
-  const activeWorkspace =
-    cookieWorkspace &&
-    (getWorkspaceReportRowCount(cookieWorkspace, parsedRowsByWorkspaceId) > 0 ||
-      ((workspaceWithMostData ? getWorkspaceReportRowCount(workspaceWithMostData, parsedRowsByWorkspaceId) : 0) === 0 &&
-        (cookieWorkspace._count.importFiles > 0 || cookieWorkspace._count.accounts > 1)))
-      ? cookieWorkspace
-      : workspaceWithMostData ?? cookieWorkspace;
+  // Match Home and the rest of the app: the selected workspace is authoritative.
+  // Reports must never jump to another workspace merely because it has more rows.
+  const activeWorkspace = cookieWorkspace ?? userWorkspaces[0] ?? null;
 
   let selectedWorkspaceId = activeWorkspace?.id ?? "";
 
@@ -470,13 +457,6 @@ export async function ReportsStream({
     selectedWorkspaceId = starterWorkspaceData.id;
   }
 
-  await repairWorkspaceDataVisibility(selectedWorkspaceId).catch((error) => {
-    console.warn("[reports] unable to repair workspace data visibility", {
-      workspaceId: selectedWorkspaceId,
-      error,
-    });
-  });
-
   try {
     const now = new Date();
     const {
@@ -486,21 +466,18 @@ export async function ReportsStream({
       previousEnd: previousWindowEnd,
     } = reportWindow;
     const sixMonthsAgo = new Date(currentWindowEnd.getFullYear(), currentWindowEnd.getMonth() - 5, 1);
+    const reportQueryStart = new Date(Math.min(previousWindowStart.getTime(), sixMonthsAgo.getTime()));
 
     const [
       reportTransactions,
-      importedTransactionStats,
-      manualTransactionStats,
-      accountStats,
       workspaceAccountSnapshots,
       latestImport,
-      processingImportCount,
-      doneImportCount,
-      failedImportCount,
-      deletedImportCount,
+      importStatusRows,
     ] = await Promise.all([
       prisma.transaction.findMany({
-        where: buildActiveWorkspaceTransactionWhere(selectedWorkspaceId),
+        where: buildActiveWorkspaceTransactionWhere(selectedWorkspaceId, {
+          date: { gte: reportQueryStart, lte: currentWindowEnd },
+        }),
         select: {
           id: true,
           date: true,
@@ -519,6 +496,7 @@ export async function ReportsStream({
               institution: true,
               accountNumber: true,
               currency: true,
+              type: true,
             },
           },
           category: {
@@ -529,33 +507,6 @@ export async function ReportsStream({
         },
         orderBy: { date: "desc" },
       }),
-      needsAdvancedData
-        ? prisma.transaction.aggregate({
-            where: buildActiveWorkspaceTransactionWhere(selectedWorkspaceId, {
-              importFileId: { not: null },
-            }),
-            _count: { id: true },
-            _sum: { amount: true },
-          })
-        : Promise.resolve({ _count: { id: 0 }, _sum: { amount: 0 } }),
-      needsAdvancedData
-        ? prisma.transaction.aggregate({
-            where: buildActiveWorkspaceTransactionWhere(selectedWorkspaceId, {
-              importFileId: null,
-            }),
-            _count: { id: true },
-            _sum: { amount: true },
-          })
-        : Promise.resolve({ _count: { id: 0 }, _sum: { amount: 0 } }),
-      needsAdvancedData
-        ? prisma.account.aggregate({
-            where: {
-              workspaceId: selectedWorkspaceId,
-            },
-            _sum: { balance: true },
-            _count: { id: true, balance: true },
-          })
-        : Promise.resolve({ _sum: { balance: 0 }, _count: { id: 0, balance: 0 } }),
       needsAdvancedData
         ? (prisma.account.findMany({
             where: {
@@ -583,17 +534,23 @@ export async function ReportsStream({
             },
           })
         : Promise.resolve(null),
-      needsAdvancedData ? prisma.importFile.count({ where: { workspaceId: selectedWorkspaceId, status: "processing" } }) : Promise.resolve(0),
-      needsAdvancedData ? prisma.importFile.count({ where: { workspaceId: selectedWorkspaceId, status: "done" } }) : Promise.resolve(0),
-      needsAdvancedData ? prisma.importFile.count({ where: { workspaceId: selectedWorkspaceId, status: "failed" } }) : Promise.resolve(0),
-      needsAdvancedData ? prisma.importFile.count({ where: { workspaceId: selectedWorkspaceId, status: "deleted" } }) : Promise.resolve(0),
+      needsAdvancedData
+        ? prisma.importFile.groupBy({
+            by: ["status"],
+            where: { workspaceId: selectedWorkspaceId },
+            _count: { _all: true },
+          })
+        : Promise.resolve([]),
     ]);
 
+    const importCountByStatus = new Map(
+      importStatusRows.map((row) => [row.status, Number(row._count._all ?? 0)])
+    );
     const importStatusCounts = {
-      processing: Number(processingImportCount ?? 0),
-      done: Number(doneImportCount ?? 0),
-      failed: Number(failedImportCount ?? 0),
-      deleted: Number(deletedImportCount ?? 0),
+      processing: importCountByStatus.get("processing") ?? 0,
+      done: importCountByStatus.get("done") ?? 0,
+      failed: importCountByStatus.get("failed") ?? 0,
+      deleted: importCountByStatus.get("deleted") ?? 0,
     };
     const normalizedReportTransactions = Array.isArray(reportTransactions) ? reportTransactions.filter(isDefined) : [];
     const normalizedImportFileIds = new Set(
@@ -603,7 +560,7 @@ export async function ReportsStream({
       .findMany({
         where: {
           workspaceId: selectedWorkspaceId,
-          date: { not: null },
+          date: { not: null, gte: reportQueryStart, lte: currentWindowEnd },
           amount: { not: null },
           importFileId: normalizedImportFileIds.size > 0 ? { notIn: Array.from(normalizedImportFileIds) } : undefined,
           importFile: {
@@ -632,6 +589,7 @@ export async function ReportsStream({
                   institution: true,
                   accountNumber: true,
                   currency: true,
+                  type: true,
                 },
               },
             },
@@ -644,6 +602,27 @@ export async function ReportsStream({
       ...normalizedReportTransactions,
       ...mapParsedRowsToReportTransactions(parsedReportRows),
     ].sort((left, right) => right.date.getTime() - left.date.getTime());
+    const reportTypeOverrides = getTransactionSummaryTypeOverrides(
+      reportAllTransactions.map((transaction) => ({
+        id: transaction.id,
+        accountId: transaction.account.id,
+        accountType: transaction.account.type,
+        date: transaction.date,
+        amount: transaction.amount,
+        currency: transaction.account.currency,
+        type: transaction.type,
+        isTransfer: transaction.isTransfer,
+        categoryName: getReportTransactionCategoryName(transaction),
+        merchantRaw: transaction.merchantRaw,
+        merchantClean: transaction.merchantClean,
+        description: transaction.description,
+        rawPayload: transaction.rawPayload,
+      }))
+    );
+    const getResolvedReportTransactionType = (transaction: ReportTransaction) =>
+      reportTypeOverrides.get(transaction.id) ?? getReportTransactionType(transaction);
+    const isResolvedReportSpendingTransaction = (transaction: ReportTransaction) =>
+      getResolvedReportTransactionType(transaction) === "expense";
     const requestedFilter = searchParams?.filter?.trim().toLowerCase() ?? "";
     const reportScopedTransactions = requestedFilter
       ? reportAllTransactions.filter((transaction) => {
@@ -653,14 +632,14 @@ export async function ReportsStream({
           return category.includes(requestedFilter) || merchant.includes(requestedFilter) || account.includes(requestedFilter);
         })
       : reportAllTransactions;
-    const spendingPaceTransactions = reportScopedTransactions.filter(isReportSpendingTransaction);
+    const spendingPaceTransactions = reportScopedTransactions.filter(isResolvedReportSpendingTransaction);
     const spendingPace = buildSpendingPaceSnapshot(
       spendingPaceTransactions.map((transaction) => ({
         date: transaction.date,
         amount: toReportMagnitude(transaction.amount),
         category: getReportTransactionCategoryName(transaction),
       })),
-      now
+      currentWindowEnd
     );
     const spendingPaceCurrencies = Array.from(
       new Set(
@@ -679,20 +658,9 @@ export async function ReportsStream({
     const reportSixMonthTransactions = reportScopedTransactions.filter(
       (transaction) => transaction.date >= sixMonthsAgo && transaction.date <= currentWindowEnd
     );
-    const reportDisplayTransactions =
-      reportWindow.isCustom
-        ? reportCurrentWindowTransactions
-        : reportCurrentWindowTransactions.length > 0
-          ? reportCurrentWindowTransactions
-          : reportSixMonthTransactions.length > 0
-            ? reportSixMonthTransactions
-            : reportAllTransactions;
-    const reportTrendTransactions = reportWindow.isCustom
-      ? reportCurrentWindowTransactions
-      : reportSixMonthTransactions.length > 0
-        ? reportSixMonthTransactions
-        : reportDisplayTransactions;
-    const accountStatsCountId = Number((accountStats as { _count?: { id?: number } } | null | undefined)?._count?.id ?? 0);
+    const reportDisplayTransactions = reportCurrentWindowTransactions;
+    const reportTrendTransactions = reportSixMonthTransactions;
+    const accountStatsCountId = workspaceAccountSnapshots.length;
     const isFreshResetWorkspace =
       user.dataWipedAt !== null && accountStatsCountId <= 1 && Object.values(importStatusCounts).every((count) => count === 0);
     const latestImportSummary = latestImport as unknown as
@@ -703,16 +671,12 @@ export async function ReportsStream({
         }
       | null;
     const isEmptyWorkspace = accountStatsCountId <= 1 && reportDisplayTransactions.length === 0 && Object.values(importStatusCounts).every((count) => count === 0);
-    const reportFallbackNotice =
-      !reportWindow.isCustom && reportCurrentWindowTransactions.length === 0 && reportDisplayTransactions.length > 0
-        ? "No activity in the selected range yet. Showing the latest available transactions instead."
-        : null;
     const reportHistoricalTransactions = reportScopedTransactions.filter((transaction) => transaction.date < currentWindowStart);
 
     const currentSummary: WindowSummary = reportDisplayTransactions.reduce(
       (accumulator, transaction) => {
         const magnitude = toReportMagnitude(transaction.amount);
-        const transactionType = getReportTransactionType(transaction);
+        const transactionType = getResolvedReportTransactionType(transaction);
         if (transactionType === "income") {
           accumulator.income += magnitude;
         } else if (transactionType === "expense") {
@@ -742,7 +706,7 @@ export async function ReportsStream({
     const previousSummary: WindowSummary = reportPreviousWindowTransactions.reduce(
       (accumulator, row) => {
         const magnitude = toReportMagnitude(row.amount);
-        const transactionType = getReportTransactionType(row);
+        const transactionType = getResolvedReportTransactionType(row);
         if (transactionType === "income") {
           accumulator.income += magnitude;
         } else if (transactionType === "expense") {
@@ -768,7 +732,7 @@ export async function ReportsStream({
       } as WindowSummary
     );
 
-    const monthBuckets = getMonthBuckets(reportTrendTransactions[0]?.date ?? reportAllTransactions[0]?.date ?? now);
+    const monthBuckets = getMonthBuckets(currentWindowEnd);
     reportTrendTransactions.forEach((transaction) => {
       const bucket = bucketMonth(transaction.date, monthBuckets);
       if (!bucket) {
@@ -776,7 +740,7 @@ export async function ReportsStream({
       }
 
       const amount = toReportMagnitude(transaction.amount);
-      const transactionType = getReportTransactionType(transaction);
+      const transactionType = getResolvedReportTransactionType(transaction);
       if (transactionType === "income") {
         bucket.income += amount;
       } else if (transactionType === "expense") {
@@ -785,10 +749,6 @@ export async function ReportsStream({
       bucket.net = bucket.income - bucket.expense;
     });
 
-    const accountStatsSummary = accountStats as unknown as {
-      _sum?: { balance?: number | null };
-      _count?: { id?: number; balance?: number };
-    };
     const workspaceAccountSummaries = Array.isArray(workspaceAccountSnapshots)
       ? (workspaceAccountSnapshots as Array<WorkspaceAccountSnapshot | null | undefined>).flatMap((account) => {
           if (!account || typeof account.id !== "string") {
@@ -814,9 +774,12 @@ export async function ReportsStream({
     const formatCurrency = (value: number, currency: string | null = displayCurrency) => formatCurrencyAmount(value, currency);
     const formatSignedCurrency = (value: number, currency: string | null = displayCurrency) =>
       `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency)}`;
-    const totalAccountBalance = Number(accountStatsSummary._sum?.balance ?? 0);
-    const activeAccountCount = Number(accountStatsSummary._count?.balance ?? 0);
-    const accountCount = Number(accountStatsSummary._count?.id ?? 0);
+    const totalAccountBalance = workspaceAccountSummaries.reduce((sum, account) => {
+      const balance = Number(account.balance);
+      return Number.isFinite(balance) ? sum + balance : sum;
+    }, 0);
+    const activeAccountCount = workspaceAccountSummaries.filter((account) => account.balance !== null).length;
+    const accountCount = workspaceAccountSummaries.length;
     const uncategorizedTransactions = reportDisplayTransactions.filter((transaction) => !transaction.category?.name || !transaction.merchantClean);
 
     const duplicateGroups = new Map<string, (typeof reportDisplayTransactions)[number][]>();
@@ -887,11 +850,15 @@ export async function ReportsStream({
     const previousNet = previousSummary.income - previousSummary.expense;
     const currentSpend = currentSummary.expense;
     const previousSpend = previousSummary.expense;
-    const savingsRate = currentSummary.income > 0 ? currentNet / currentSummary.income : null;
+    // Net income already communicates a deficit. Savings rate is the retained
+    // share of income, so keep the product-facing percentage within 0–100%.
+    const savingsRate = currentSummary.income > 0
+      ? Math.min(1, Math.max(0, currentNet / currentSummary.income))
+      : null;
     const spendDelta = previousSpend > 0 ? ((currentSpend - previousSpend) / previousSpend) * 100 : null;
     const incomeDelta = previousSummary.income > 0 ? ((currentSummary.income - previousSummary.income) / previousSummary.income) * 100 : null;
 
-    const reportExpenseTransactions = reportDisplayTransactions.filter(isReportSpendingTransaction);
+    const reportExpenseTransactions = reportDisplayTransactions.filter(isResolvedReportSpendingTransaction);
     const reportExpenseCategories = reportExpenseTransactions.reduce(
       (totals, transaction) => {
         const categoryName = getReportTransactionCategoryName(transaction);
@@ -905,7 +872,7 @@ export async function ReportsStream({
     const reportExpenseDisplayCategories = reportExpenseCategoryEntries;
     const reportSpentTotal = reportExpenseTotal > 0 ? reportExpenseTotal : currentSpend;
 
-    const reportSankeyIncomeTransactions = reportDisplayTransactions.filter((transaction) => getReportTransactionType(transaction) === "income");
+    const reportSankeyIncomeTransactions = reportDisplayTransactions.filter((transaction) => getResolvedReportTransactionType(transaction) === "income");
     const reportSankeyExpenseTransactions = reportExpenseTransactions;
     const reportSankeyAccountIncome = new Map<
       string,
@@ -1068,16 +1035,16 @@ export async function ReportsStream({
     });
 
     const sankeyTotalFlow = sankeyAccountFlows.reduce((sum, account) => sum + account.amount, 0);
-    const sankeyChartWidth = 1120;
-    const sankeyChartHeight = Math.max(420, 300 + Math.max(sankeyAccountFlows.length, sankeyCategoryNodes.length) * 22);
-    const sankeyNodeWidth = 12;
-    const sankeyColumnPadding = 30;
+    const sankeyChartWidth = 1360;
+    const sankeyChartHeight = Math.max(520, 340 + Math.max(sankeyAccountFlows.length, sankeyCategoryNodes.length) * 30);
+    const sankeyNodeWidth = 16;
+    const sankeyColumnPadding = 42;
     const sankeySourceGap = 18;
     const sankeyAccountGap = 14;
     const sankeyCategoryGap = 10;
-    const sankeySourceX = 48;
-    const sankeyAccountX = 472;
-    const sankeyCategoryX = 858;
+    const sankeySourceX = 56;
+    const sankeyAccountX = 578;
+    const sankeyCategoryX = 1070;
     const sankeyAvailableHeight = sankeyChartHeight - sankeyColumnPadding * 2;
     const sankeyAccountScale =
       (sankeyAvailableHeight - Math.max(sankeyAccountFlows.length - 1, 0) * sankeyAccountGap) / Math.max(sankeyTotalFlow, 1);
@@ -1238,18 +1205,12 @@ export async function ReportsStream({
     const maxCategorySpend = topCategories[0]?.[1] ?? 0;
 
     const topCategoryShare = currentSpend > 0 ? maxCategorySpend / currentSpend : null;
-    const importedTransactionStatsSummary = importedTransactionStats as unknown as {
-      _count?: { id?: number };
-      _sum?: { amount?: number | null };
-    };
-    const manualTransactionStatsSummary = manualTransactionStats as unknown as {
-      _count?: { id?: number };
-      _sum?: { amount?: number | null };
-    };
-    const importedTransactions = Number(importedTransactionStatsSummary._count?.id ?? 0);
-    const manualTransactions = Number(manualTransactionStatsSummary._count?.id ?? 0);
-    const importedAmount = Number(importedTransactionStatsSummary._sum?.amount ?? 0);
-    const manualAmount = Number(manualTransactionStatsSummary._sum?.amount ?? 0);
+    const importedReportTransactions = reportAllTransactions.filter((transaction) => transaction.importFileId !== null);
+    const manualReportTransactions = reportAllTransactions.filter((transaction) => transaction.importFileId === null);
+    const importedTransactions = importedReportTransactions.length;
+    const manualTransactions = manualReportTransactions.length;
+    const importedAmount = importedReportTransactions.reduce((sum, transaction) => sum + toReportAmount(transaction.amount), 0);
+    const manualAmount = manualReportTransactions.reduce((sum, transaction) => sum + toReportAmount(transaction.amount), 0);
     const goalKey = user.primaryGoal?.trim() ?? null;
     const goalLabel = goalKey ? goalLabels[goalKey] ?? goalKey : null;
     const goalTargetAmount = user.goalTargetAmount ? Number(user.goalTargetAmount) : null;
@@ -1262,10 +1223,10 @@ export async function ReportsStream({
 
     const reportRecentTransactions = reportCurrentWindowTransactions.length > 0 ? reportCurrentWindowTransactions : reportDisplayTransactions;
     const reportRecentExpenseTransactions = reportRecentTransactions.filter(
-      (transaction) => getReportTransactionType(transaction) === "expense" && isReportMerchantEligible(transaction)
+      (transaction) => getResolvedReportTransactionType(transaction) === "expense" && isReportMerchantEligible(transaction)
     );
     const reportHistoricalExpenseTransactions = reportHistoricalTransactions.filter(
-      (transaction) => getReportTransactionType(transaction) === "expense" && isReportMerchantEligible(transaction)
+      (transaction) => getResolvedReportTransactionType(transaction) === "expense" && isReportMerchantEligible(transaction)
     );
 
     const recentMerchantSpend = new Map<
@@ -1342,7 +1303,7 @@ export async function ReportsStream({
     const currentMonthBucket = monthBuckets[monthBuckets.length - 1];
     const previousMonthBucket = monthBuckets[monthBuckets.length - 2] ?? monthBuckets[monthBuckets.length - 1];
     const monthlyNetChange = currentMonthBucket.net - previousMonthBucket.net;
-    const weeklySummaryEnd = reportTrendTransactions[0]?.date ?? reportAllTransactions[0]?.date ?? now;
+    const weeklySummaryEnd = currentWindowEnd;
     const weeklySummaryStart = new Date(weeklySummaryEnd);
     weeklySummaryStart.setDate(weeklySummaryStart.getDate() - 6);
     const previousWeeklySummaryEnd = new Date(weeklySummaryStart);
@@ -1353,7 +1314,7 @@ export async function ReportsStream({
       transactions.reduce(
         (summary, transaction) => {
           const magnitude = toReportMagnitude(transaction.amount);
-          const transactionType = getReportTransactionType(transaction);
+          const transactionType = getResolvedReportTransactionType(transaction);
           if (transactionType === "income") {
             summary.income += magnitude;
           } else if (transactionType === "expense") {
@@ -1377,24 +1338,46 @@ export async function ReportsStream({
     const previousWeeklyNet = previousWeeklySummary.income - previousWeeklySummary.expense;
     const weeklyNetChange = weeklyNet - previousWeeklyNet;
     const weeklySummaryLabel = `${formatShortDate(weeklySummaryStart)} - ${formatShortDate(weeklySummaryEnd)}`;
-    const reportChartWidth = 560;
+    const reportTimelineBuckets = getReportTimelineBuckets(currentWindowStart, currentWindowEnd);
+    reportDisplayTransactions.forEach((transaction) => {
+      const bucket = reportTimelineBuckets.find(
+        (candidate) => transaction.date >= candidate.start && transaction.date <= candidate.end
+      );
+      if (!bucket) return;
+      const amount = toReportMagnitude(transaction.amount);
+      const type = getResolvedReportTransactionType(transaction);
+      if (type === "income") bucket.income += amount;
+      if (type === "expense") bucket.expense += amount;
+      bucket.net = bucket.income - bucket.expense;
+    });
+
+    let cumulativeNet = 0;
+    const reportCumulativeTimelineBuckets = reportTimelineBuckets.map((bucket) => {
+      cumulativeNet += bucket.net;
+      return { ...bucket, net: cumulativeNet };
+    });
+    const reportChartWidth = 640;
     const reportChartHeight = 220;
     const reportChartPadding = 24;
     const reportChartXSpan = reportChartWidth - reportChartPadding * 2;
     const reportChartYSpan = reportChartHeight - reportChartPadding * 2;
-    const reportCashFlowValues = monthBuckets.map((bucket) => bucket.net);
-    const reportCashFlowMax = Math.max(...reportCashFlowValues);
-    const reportCashFlowMin = Math.min(...reportCashFlowValues);
+    const reportCashFlowValues = reportCumulativeTimelineBuckets.map((bucket) => bucket.net);
+    const reportCashFlowMax = Math.max(0, ...reportCashFlowValues);
+    const reportCashFlowMin = Math.min(0, ...reportCashFlowValues);
     const reportCashFlowRange = Math.max(reportCashFlowMax - reportCashFlowMin, 1);
-    const reportCashFlowPoints = monthBuckets.map((bucket, index) => {
-      const x = reportChartPadding + (index / Math.max(monthBuckets.length - 1, 1)) * reportChartXSpan;
+    const reportCashFlowPoints = reportCumulativeTimelineBuckets.map((bucket, index) => {
+      const x = reportChartPadding + (index / Math.max(reportCumulativeTimelineBuckets.length - 1, 1)) * reportChartXSpan;
       const normalized = (bucket.net - reportCashFlowMin) / reportCashFlowRange;
       const y = reportChartPadding + (1 - normalized) * reportChartYSpan;
       return { ...bucket, x, y };
     });
-    const reportCashFlowPath = reportCashFlowPoints
-      .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
-      .join(" ");
+    const reportCashFlowPath = reportCashFlowPoints.reduce((path, point, index, points) => {
+      if (index === 0) return `M ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+      const previous = points[index - 1];
+      const midpoint = (previous.x + point.x) / 2;
+      return `${path} C ${midpoint.toFixed(1)} ${previous.y.toFixed(1)}, ${midpoint.toFixed(1)} ${point.y.toFixed(1)}, ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+    }, "");
+    const reportCashFlowZeroY = reportChartPadding + (1 - (0 - reportCashFlowMin) / reportCashFlowRange) * reportChartYSpan;
     const reportCategorySegments = reportExpenseDisplayCategories.map(([categoryName, amount]) => ({
       categoryName,
       amount,
@@ -1431,7 +1414,7 @@ export async function ReportsStream({
     const topCategoryAmount = topCategories[0]?.[1] ?? 0;
     const historicalTopCategoryAmount = topCategoryName
       ? reportHistoricalTransactions.reduce((sum, transaction) => {
-          if (getReportTransactionType(transaction) !== "expense") {
+          if (getResolvedReportTransactionType(transaction) !== "expense") {
             return sum;
           }
 
@@ -1449,7 +1432,9 @@ export async function ReportsStream({
       currentSpend,
       monthlyIncome: currentSummary.income > 0 ? currentSummary.income : null,
       currentSavingsRate: savingsRate,
-      previousSavingsRate: previousSummary.income > 0 ? (previousSummary.income - previousSummary.expense) / previousSummary.income : null,
+      previousSavingsRate: previousSummary.income > 0
+        ? Math.min(1, Math.max(0, (previousSummary.income - previousSummary.expense) / previousSummary.income))
+        : null,
       spendDelta,
       recurringShare: recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0) / Math.max(currentSpend, 1),
     }, displayCurrency);
@@ -1464,9 +1449,9 @@ export async function ReportsStream({
         99,
         60 +
           reportDisplayTransactions.length * 0.12 +
-          doneImportCount * 1.5 +
+          importStatusCounts.done * 1.5 +
           activeAccountCount * 1.5 -
-          failedImportCount * 8 -
+          importStatusCounts.failed * 8 -
           actionableCount * 2.5 -
           (1 - accountBalanceCoverage) * 8
       )
@@ -1684,11 +1669,7 @@ export async function ReportsStream({
             report_type: selectedRange,
             workspace_id: selectedWorkspaceId,
             transaction_count: reportDisplayTransactions.length,
-            import_count:
-              Number(doneImportCount ?? 0) +
-              Number(processingImportCount ?? 0) +
-              Number(failedImportCount ?? 0) +
-              Number(deletedImportCount ?? 0),
+            import_count: Object.values(importStatusCounts).reduce((sum, count) => sum + count, 0),
           }}
         />
         <PostHogEvent
@@ -1786,20 +1767,20 @@ export async function ReportsStream({
               <article className="metric compact metric--highlight glass">
                 <ReportInfoTip className="reports-container-info" label="The share of income left after spending." />
                 <div className="metric__label"><span>Savings rate</span></div>
-                <strong>{savingsRate === null ? "N/A" : formatPercent(savingsRate * 100)}</strong>
+                <strong>{savingsRate === null ? "N/A" : `${Math.round(savingsRate * 100)}%`}</strong>
               </article>
             </section>
 
             <section className="reports-grid reports-grid--primary reports-overview-visual">
               <article className="report-card glass report-card--wide">
-                <ReportInfoTip className="reports-container-info" label={`A ${reportCurrentWindowTransactions.length > 0 ? rangeWindowText : "latest available activity"} view of how the balance moved.`} />
+                <ReportInfoTip className="reports-container-info" label={`A ${rangeWindowText} view of how income and spending changed the net position.`} />
                 <div className="report-card__head">
                   <div className="report-card__head-title">
                     <h4>Money over time</h4>
                   </div>
                   <div className="report-card__stat">
                     <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
-                    <span>{reportCurrentWindowTransactions.length > 0 ? selectedRangeLabel : "Latest available"}</span>
+                    <span>{selectedRangeLabel}</span>
                   </div>
                 </div>
 
@@ -1816,8 +1797,15 @@ export async function ReportsStream({
                         const y = reportChartPadding + reportChartYSpan * fraction;
                         return <line key={fraction} x1={reportChartPadding} y1={y} x2={reportChartWidth - reportChartPadding} y2={y} className="report-chart__gridline" />;
                       })}
+                      <line
+                        x1={reportChartPadding}
+                        y1={reportCashFlowZeroY}
+                        x2={reportChartWidth - reportChartPadding}
+                        y2={reportCashFlowZeroY}
+                        className="report-chart__zero-line"
+                      />
                       <path
-                        d={`${reportCashFlowPath} L ${reportChartWidth - reportChartPadding} ${reportChartHeight - reportChartPadding} L ${reportChartPadding} ${reportChartHeight - reportChartPadding} Z`}
+                        d={`${reportCashFlowPath} L ${reportChartWidth - reportChartPadding} ${reportCashFlowZeroY} L ${reportChartPadding} ${reportCashFlowZeroY} Z`}
                         className="report-chart__area"
                       />
                       <path d={reportCashFlowPath} className={`report-chart__line ${currentNet >= 0 ? "report-chart__line--positive" : "report-chart__line--negative"}`} />
@@ -1841,11 +1829,6 @@ export async function ReportsStream({
                       </div>
                     ))}
                   </div>
-                  {reportFallbackNotice ? (
-                    <div className="reports-data-note reports-data-note--inline">
-                      <strong>{reportFallbackNotice}</strong>
-                    </div>
-                  ) : null}
                 </div>
               </article>
             </section>
@@ -1992,9 +1975,6 @@ export async function ReportsStream({
 
                       </svg>
                     </div>
-                    <p className="reports-data-note reports-data-note--inline">
-                      Beginning balance is estimated from the current account balance and recorded activity in this period.
-                    </p>
                   </>
                 ) : (
                   <ReportsEmptyNote
@@ -2046,7 +2026,9 @@ export async function ReportsStream({
             </section>
 
             <article className="reports-next reports-subtab-card glass">
-              <p className="eyebrow reports-subtab-title">🎯 Goal Check</p>
+              <div className="report-card__head report-card__head--compact">
+                <h4 className="reports-subtab-title">🎯 Goal Check</h4>
+              </div>
               <h4>{goalNextStep.title}</h4>
               <p>{goalSummary}</p>
               <Link className="button button-primary button-pill" href={goalNextStep.href}>
@@ -2079,35 +2061,34 @@ export async function ReportsStream({
                     {reportCategorySegments.map((segment) => (
                       <Link
                         key={segment.categoryName}
-                        href={buildTransactionsHref({ category: segment.categoryName })}
+                        href={segment.categoryName === "Other spend" ? "/transactions" : buildTransactionsHref({ category: segment.categoryName })}
                         className="report-flow-map__row report-list__item--link"
                       >
                         <div className="report-flow-map__meta">
+                          <CategoryBrandMark categoryName={segment.categoryName} size={30} radius={9} />
                           <strong>{segment.categoryName}</strong>
                         </div>
                         <div className="report-flow-map__bar" aria-label={`${formatCurrency(segment.amount)}, ${formatPercent(segment.share * 100)}`}>
                           <span
-                            className={getReadableTextColor(segment.color.backgroundColor) === "#07111d" ? "is-light-tone" : "is-dark-tone"}
                             style={{
                               width: `${Math.max((segment.amount / reportCategoryMaxAmount) * 100, 8)}%`,
                               background: segment.color.backgroundColor,
                               borderColor: segment.color.borderColor,
                             }}
-                          >
-                            <small>{formatCurrency(segment.amount)} · {formatPercent(segment.share * 100)}</small>
-                          </span>
+                          />
+                          <small className="report-flow-map__value">{formatCurrency(segment.amount)} · {formatPercent(segment.share * 100)}</small>
                         </div>
                       </Link>
                     ))}
                     {currentOtherSpend > 0 ? (
                       <div className="report-flow-map__row report-flow-map__row--other">
                         <div className="report-flow-map__meta">
+                          <CategoryBrandMark categoryName="Other" size={30} radius={9} />
                           <strong>Other spend</strong>
                         </div>
                         <div className="report-flow-map__bar">
-                          <span style={{ width: `${Math.max((currentOtherSpend / reportCategoryMaxAmount) * 100, 8)}%`, background: "var(--border-subtle)" }}>
-                            <small>{formatCurrency(currentOtherSpend)} · {formatPercent((currentOtherSpend / Math.max(currentSpend, 1)) * 100)}</small>
-                          </span>
+                          <span style={{ width: `${Math.max((currentOtherSpend / reportCategoryMaxAmount) * 100, 8)}%`, background: "var(--border-subtle)" }} />
+                          <small className="report-flow-map__value">{formatCurrency(currentOtherSpend)} · {formatPercent((currentOtherSpend / Math.max(currentSpend, 1)) * 100)}</small>
                         </div>
                       </div>
                     ) : null}
@@ -2131,31 +2112,25 @@ export async function ReportsStream({
             </div>
 
             <div className="report-donut report-donut--pie">
-              <div className="report-donut__chart" role="img" aria-label="Spending breakdown donut chart">
+              <div className="report-donut__chart" role="img" aria-label="Spending breakdown pie chart">
                 <svg viewBox="0 0 240 240">
-                  <circle cx="120" cy="120" r="58" className="report-donut__track" />
                   {reportSpendingMixSegments.length > 0
                     ? (() => {
-                        const circumference = 2 * Math.PI * 58;
                         let offset = 0;
                         return reportSpendingMixSegments.map((segment) => {
-                          const dashLength = segment.share * circumference;
-                          const circle = (
-                            <circle
+                          const nextOffset = offset + segment.share;
+                          const wedge = (
+                            <path
                               key={segment.categoryName}
-                              cx="120"
-                              cy="120"
-                              r="58"
                               className="report-donut__segment"
+                              d={buildReportPieSlicePath(offset, nextOffset)}
                               style={{
-                                stroke: segment.color.borderColor,
-                                strokeDasharray: `${dashLength} ${circumference}`,
-                                strokeDashoffset: -offset,
+                                fill: segment.color.borderColor,
                               }}
                             />
                           );
-                          offset += dashLength;
-                          return circle;
+                          offset = nextOffset;
+                          return wedge;
                         });
                       })()
                     : null}
@@ -2164,17 +2139,14 @@ export async function ReportsStream({
 
               <div className="report-donut__legend">
                 {reportCategorySegments.length > 0 ? (
-                  reportCategorySegments.map((segment) => {
+                  reportSpendingMixSegments.map((segment) => {
                     return (
                       <Link
                         key={segment.categoryName}
-                        href={buildTransactionsHref({ category: segment.categoryName })}
+                        href={segment.categoryName === "Other spend" ? "/transactions" : buildTransactionsHref({ category: segment.categoryName })}
                         className="report-donut__legend-item report-list__item--link"
                       >
-                        <span
-                          className="report-donut__swatch"
-                          style={{ background: segment.color.backgroundColor, borderColor: segment.color.borderColor }}
-                        />
+                        <CategoryBrandMark categoryName={segment.categoryName} size={32} radius={10} />
                         <div className="report-donut__meta">
                           <strong>{segment.categoryName}</strong>
                           <span>
@@ -2190,15 +2162,6 @@ export async function ReportsStream({
                     copy="Once you categorize a few expenses, the donut chart will fill in."
                   />
                 )}
-                {currentOtherSpend > 0 ? (
-                  <div className="report-donut__legend-item">
-                    <span className="report-donut__swatch" style={{ background: "var(--border-subtle)" }} />
-                    <div className="report-donut__meta">
-                      <strong>Other spend</strong>
-                      <span>{formatCurrency(currentOtherSpend)}</span>
-                    </div>
-                  </div>
-                ) : null}
               </div>
             </div>
 

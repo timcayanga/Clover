@@ -56733,6 +56733,252 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
 
 /* Lightweight interaction delight
    Keep editable surfaces discoverable without adding layout work or continuous motion. */
+
+/* Reports: readable, range-aware visualizations and consistent type. */
+.content--reports :is(.report-card, .report-ai-card, .reports-next) {
+  font-family: var(--font-body);
+}
+
+.content--reports .report-chart--overview {
+  padding: 20px 18px 14px;
+  border: 1px solid color-mix(in srgb, var(--stroke) 75%, transparent);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 15% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 42%),
+    color-mix(in srgb, var(--surface) 96%, var(--accent) 4%);
+}
+
+.content--reports .report-chart__line {
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.content--reports .report-chart__area {
+  opacity: 0.75;
+}
+
+.content--reports .report-chart__zero-line {
+  stroke: color-mix(in srgb, var(--muted) 46%, transparent);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 6;
+}
+
+.content--reports .report-chart__point {
+  r: 5px;
+  stroke-width: 3;
+}
+
+.content--reports .report-flow-map__row {
+  grid-template-columns: minmax(170px, 0.8fr) minmax(280px, 2.2fr);
+  gap: 16px;
+}
+
+.content--reports .report-flow-map__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.content--reports .report-flow-map__meta strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.content--reports .report-flow-map__bar {
+  position: relative;
+  height: 36px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--stroke) 65%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 88%, var(--stroke));
+}
+
+.content--reports .report-flow-map__bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  min-width: 8%;
+  border-right: 1px solid;
+  border-radius: 11px;
+}
+
+.content--reports .report-flow-map__bar .report-flow-map__value {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  width: auto;
+  padding-inline: 12px;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.content--reports .report-donut--pie .report-donut__chart::after,
+.content--reports .report-donut--pie .report-donut__track {
+  content: none;
+  display: none;
+}
+
+.content--reports .report-donut--pie .report-donut__chart svg {
+  width: min(100%, 300px);
+  height: auto;
+  transform: none;
+}
+
+.content--reports .report-donut--pie .report-donut__segment {
+  stroke: var(--surface);
+  stroke-width: 2px;
+  stroke-linejoin: round;
+  transition: opacity 160ms ease;
+}
+
+.content--reports .report-donut--pie .report-donut__segment:hover {
+  opacity: 0.82;
+}
+
+.content--reports .report-donut__legend-item {
+  gap: 10px;
+}
+
+.content--reports .report-sankey-card {
+  overflow: hidden;
+}
+
+.content--reports .report-sankey__chart-wrap {
+  width: 100%;
+  min-height: 520px;
+  padding: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--surface) 95%, var(--accent) 5%);
+}
+
+.content--reports .report-sankey__svg {
+  display: block;
+  width: 100%;
+  min-width: 1120px;
+  height: auto;
+  min-height: 490px;
+  overflow: visible;
+}
+
+.content--reports .report-sankey__svg text {
+  font-family: var(--font-body);
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  text-transform: none;
+}
+
+.content--reports .report-sankey__column-label {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.content--reports :is(.report-sankey__source-label, .report-sankey__target-title) {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.content--reports :is(.report-sankey__source-value, .report-sankey__target-value) {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.content--reports .report-ai-signal strong {
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.4;
+}
+
+.content--reports .report-ai-signal span {
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.content--reports .report-ai-card--compact .report-list__meta span {
+  font-size: 0.96rem;
+  line-height: 1.55;
+}
+
+.content--reports .reports-next {
+  gap: 10px;
+}
+
+.content--reports .reports-next > h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.content--reports .reports-next > p {
+  margin: 0;
+  font-size: 0.94rem;
+  line-height: 1.55;
+}
+
+.reports-range-menu.is-pending .reports-range-menu__summary {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+@media (max-width: 720px) {
+  .content--reports .report-chart--overview {
+    padding-inline: 10px;
+    border-radius: 18px;
+  }
+
+  .content--reports .report-chart__labels--six .report-chart__label:nth-child(even) {
+    display: none;
+  }
+
+  .content--reports .report-flow-map__row {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .content--reports .report-flow-map__bar {
+    height: 40px;
+  }
+
+  .content--reports .report-donut--pie .report-donut__chart svg {
+    width: min(78vw, 280px);
+  }
+
+  .content--reports .report-sankey__chart-wrap {
+    min-height: 440px;
+    margin-inline: -8px;
+    width: calc(100% + 16px);
+    padding: 10px;
+  }
+
+  .content--reports .report-sankey__svg {
+    min-width: 980px;
+    min-height: 420px;
+  }
+
+  .content--reports .report-ai-signal-grid--compact {
+    grid-template-columns: 1fr;
+  }
+
+  .content--reports .report-ai-card--compact .report-list__meta span,
+  .content--reports .reports-next > p {
+    font-size: 0.92rem;
+  }
+}
+
 :where(input, select, textarea) {
   transition:
     border-color 150ms ease,

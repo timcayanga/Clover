@@ -5,10 +5,11 @@ import { resolveReportWindow } from "../lib/report-window";
 
 const main = async () => {
   const root = process.cwd();
-  const [adviserSource, reportsSource, rangeMenuSource] = await Promise.all([
+  const [adviserSource, reportsSource, rangeMenuSource, globalStyles] = await Promise.all([
     readFile(join(root, "app/adviser/page.tsx"), "utf8"),
     readFile(join(root, "app/reports/reports-page-content.tsx"), "utf8"),
     readFile(join(root, "components/reports-range-menu.tsx"), "utf8"),
+    readFile(join(root, "app/globals.css"), "utf8"),
   ]);
 
 const custom = resolveReportWindow(new Date(2026, 7, 1, 12), {
@@ -37,11 +38,23 @@ assert.doesNotMatch(adviserSource, /<ReportsStream/);
 assert.match(reportsSource, /<ReportsPageStream searchParams=\{searchParams\}/);
 assert.match(reportsSource, /href="\/adviser">Ask Adviser<\/Link>/);
 assert.match(reportsSource, /currentFrom=\{reportWindow\.from\}/);
-assert.match(reportsSource, /reportWindow\.isCustom\s*\? reportCurrentWindowTransactions/);
-assert.match(reportsSource, /const isReportSpendingTransaction[\s\S]*return true;/);
+assert.match(reportsSource, /const reportDisplayTransactions = reportCurrentWindowTransactions;/);
+assert.doesNotMatch(reportsSource, /latest available activity/i);
+assert.match(reportsSource, /resolveFinancialTransactionType\(\{/);
+assert.match(reportsSource, /getTransactionSummaryTypeOverrides\(/);
+assert.match(reportsSource, /const activeWorkspace = cookieWorkspace \?\? userWorkspaces\[0\] \?\? null;/);
+assert.match(reportsSource, /Math\.min\(1, Math\.max\(0, currentNet \/ currentSummary\.income\)\)/);
+assert.match(reportsSource, /getReportTimelineBuckets\(currentWindowStart, currentWindowEnd\)/);
+assert.match(reportsSource, /buildReportPieSlicePath\(offset, nextOffset\)/);
+assert.match(reportsSource, /<CategoryBrandMark categoryName=\{segment\.categoryName\}/);
+assert.doesNotMatch(reportsSource, /Beginning balance is estimated from the current account balance/);
 assert.doesNotMatch(reportsSource, /for \(const account of workspaceAccountSummaries\)[\s\S]{0,500}reportSankeyAccountIncome\.set/);
 assert.match(rangeMenuSource, /type="date"/);
 assert.match(rangeMenuSource, /Apply dates/);
+assert.match(rangeMenuSource, /router\.replace\(/);
+assert.doesNotMatch(rangeMenuSource, /window\.location\.assign/);
+assert.match(globalStyles, /\.content--reports \.report-flow-map__bar \{[\s\S]{0,160}height: 36px/);
+assert.match(globalStyles, /\.content--reports \.report-sankey__chart-wrap \{[\s\S]{0,180}min-height: 520px/);
 
   console.log("Adviser report controls regression checks passed.");
 };

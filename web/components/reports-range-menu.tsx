@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 type ReportsRange = "30d" | "90d" | "ytd";
 
@@ -27,18 +27,24 @@ export function ReportsRangeMenu({
   const [open, setOpen] = useState(false);
   const [from, setFrom] = useState(currentFrom ?? "");
   const [to, setTo] = useState(currentTo ?? "");
+  const [optimisticRange, setOptimisticRange] = useState<ReportsRange | null>(null);
+  const [isPending, startTransition] = useTransition();
   const menuRef = useRef<HTMLDivElement | null>(null);
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   const navigateWithParams = (update: (params: URLSearchParams) => void) => {
     const params = new URLSearchParams(searchParams?.toString() ?? "");
     update(params);
-    window.location.assign(`${pathname}?${params.toString()}`);
+    startTransition(() => {
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    });
   };
 
   const setRange = (range: ReportsRange) => {
     setOpen(false);
+    setOptimisticRange(range);
     navigateWithParams((params) => {
       params.set("range", range);
       params.delete("from");
@@ -54,6 +60,12 @@ export function ReportsRangeMenu({
       params.set("to", to);
     });
   };
+
+  useEffect(() => {
+    setOptimisticRange(null);
+    setFrom(currentFrom ?? "");
+    setTo(currentTo ?? "");
+  }, [currentFrom, currentRange, currentTo]);
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -80,7 +92,7 @@ export function ReportsRangeMenu({
   }, []);
 
   return (
-    <div className="reports-range-menu" ref={menuRef}>
+    <div className={`reports-range-menu${isPending ? " is-pending" : ""}`} ref={menuRef} aria-busy={isPending}>
       <button
         className="reports-range-menu__summary"
         type="button"
@@ -113,7 +125,7 @@ export function ReportsRangeMenu({
             {(["30d", "90d", "ytd"] as const).map((range) => (
               <button
                 key={range}
-                className={`pill pill-interactive ${currentRange === range ? "pill-is-selected" : ""}`}
+                className={`pill pill-interactive ${(optimisticRange ?? currentRange) === range ? "pill-is-selected" : ""}`}
                 type="button"
                 onClick={() => setRange(range)}
               >
