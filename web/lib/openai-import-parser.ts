@@ -474,6 +474,12 @@ export const shouldUseColdVisualImportFastPath = (params: {
   params.parsedRowsCount === 0 &&
   (
     params.documentFamily === "generic_document" ||
+    // A cold, single-page image has no deterministic text evidence yet. Do
+    // not let filename-derived account guesses promote it straight to the
+    // slowest bank-statement model: the bounded fast classifier can identify
+    // receipts and notes immediately, while the quality gate below still
+    // escalates weak statement candidates to the strong model.
+    (params.pageImageCount === 1 && params.textLength === 0) ||
     (
       params.textLength < 180 &&
       params.metadataConfidence < 75 &&

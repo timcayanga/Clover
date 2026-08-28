@@ -40,6 +40,20 @@ assert.equal(
   shouldUseColdVisualImportFastPath({
     importMode: "statement",
     documentFamily: "bank_statement",
+    pageImageCount: 1,
+    textLength: 0,
+    parsedRowsCount: 0,
+    metadataConfidence: 92,
+    hasInstitution: true,
+    hasAccountIdentity: true,
+  }),
+  true,
+  "A one-page cold image must start with the fast classifier even when its filename produced a confident account guess."
+);
+assert.equal(
+  shouldUseColdVisualImportFastPath({
+    importMode: "statement",
+    documentFamily: "bank_statement",
     pageImageCount: 2,
     textLength: 2_000,
     parsedRowsCount: 18,

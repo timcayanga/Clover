@@ -9563,6 +9563,12 @@ export const processImportFileText = async (
   const shouldPrioritizeBackupEarly =
     !skipVisualBackupParser &&
     !hasStructuredWorkbookRows &&
+    // Generic screenshot OCR can manufacture dozens of statement-looking
+    // rows from receipt labels, totals, and timestamps. Wait until those rows
+    // have been rejected and document classification has run; otherwise the
+    // early promise locks a receipt into the slow bank-statement model before
+    // the later receipt preview can correct the mode.
+    !(preliminaryImageStatementAssessment?.shouldDiscardBeforeBackup ?? false) &&
     (preliminaryParserRoutingDecision.decision === "backup_required" ||
       preliminaryParserRoutingDecision.decision === "backup_preferred");
   const preliminaryNeedsVisualBackupAssets =
@@ -10402,6 +10408,10 @@ export const processImportFileText = async (
   const shouldRunOpenAiFallback =
     !skipVisualBackupParser &&
     !hasStructuredWorkbookRows &&
+    // Exact-fingerprint note training is confirmed deterministic evidence.
+    // Do not spend a model call on it or allow a variable model extraction to
+    // replace the known rows with a lower-quality candidate.
+    !trainedNotesRows &&
     !hasLocalDeterministicPdaxPortfolioSnapshot &&
     (!canUseFastImageParse || shouldForceBackupForSuspiciousParse || shouldUseVisionFallback);
   const shouldRaceBackupAgainstLocal =
@@ -10448,7 +10458,11 @@ export const processImportFileText = async (
               pageImages,
               fileDataBase64: pdfFileDataBase64,
               preferPrimary: openAiPrimaryMode || Boolean(pageImages?.length),
-              importMode,
+              // Receipt/notes classification may have improved since the
+              // initial upload mode was recorded. Give the backup parser the
+              // current document mode so it can use the compact visual schema
+              // and model budget instead of a statement-sized request.
+              importMode: effectiveImportMode,
               pageImageLimit: isWiseImageStatement ? 1 : null,
               timeoutMs: isWiseImageStatement ? 60_000 : null,
               retryTimeoutMs: isWiseImageStatement ? 20_000 : null,
