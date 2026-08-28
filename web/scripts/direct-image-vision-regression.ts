@@ -111,6 +111,16 @@ assert.match(
 );
 assert.match(
   parserSource,
+  /const receiptReasoningEffort = isReceiptMode[\s\S]*?\? "low"[\s\S]*?: "none"/,
+  "Easy receipt extraction must use a reasoning effort supported by every configured model."
+);
+assert.doesNotMatch(
+  parserSource,
+  /receiptReasoningEffort[\s\S]{0,180}"minimal"/,
+  "Receipt extraction must not send the unsupported minimal reasoning effort."
+);
+assert.match(
+  parserSource,
   /expandReceiptResponseForInternalValidation\(parsedJson, params\.detectedMetadata\)/,
   "Compact receipt responses must be expanded before the shared downstream validator runs."
 );

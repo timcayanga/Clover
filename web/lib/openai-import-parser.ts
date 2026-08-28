@@ -2769,13 +2769,15 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     }
     return userContent;
   };
-  // Receipt parsing is a bounded transcription/extraction task. Keeping the
-  // reasoning budget minimal removes hidden reasoning-token latency and cost;
-  // difficult receipts retain low reasoning plus a larger output allowance.
+  // Receipt parsing is a bounded transcription/extraction task. The current
+  // Responses API models accept `none` but reject `minimal`; sending the latter
+  // made Clover burn through the entire fallback chain before doing a second
+  // OCR + text parse. Easy receipts should use no reasoning tokens, while hard
+  // receipts retain low reasoning plus a larger output allowance.
   const receiptReasoningEffort = isReceiptMode
     ? inferredDifficulty === "hard"
       ? "low"
-      : "minimal"
+      : "none"
     : null;
 
   const responseDurations = new WeakMap<Response, number>();
