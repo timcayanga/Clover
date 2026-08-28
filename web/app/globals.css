@@ -59225,7 +59225,7 @@ html[data-theme="dark"] .content--investments .adviser-header-link {
     overflow: visible !important;
   }
 
-  .content--circles > :is(.topbar, .shell-compact-bar) .topbar__title-row > h1,
+  .content--circles > :is(.topbar, .shell-compact-bar) .topbar__title-row:has(.circles-title-tabs) > h1,
   .content--circles .circles-title-tab__name,
   .content--circles .circles-title-tab__editor {
     display: none !important;
@@ -59275,6 +59275,14 @@ html[data-theme="dark"] .content--investments .adviser-header-link {
       .shell-compact-bar__actions
     ) {
     grid-column: 3 !important;
+  }
+
+  .content--recurring > :is(.topbar, .shell-compact-bar)
+    :is(.topbar-actions, .shell-compact-bar__actions)
+    .recurring-shell-actions > .contextual-ask-clover {
+    display: inline-flex !important;
+    width: 40px;
+    height: 40px;
   }
 
   .split-bill-mobile-home__footer .split-bill-mobile-add-button {
