@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { resolveBudgetingWorkspace } from "@/lib/budgeting-context";
 import { isMissingBudgetTableError, loadBudgetWorkspaceData } from "@/lib/budgeting-data";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
+import { isAdminOnlyDataError, isUnauthorizedDataError } from "@/lib/transient-data";
 
 const budgetPayloadSchema = z
   .object({
@@ -43,7 +44,18 @@ const budgetPayloadSchema = z
   });
 
 export async function GET() {
-  const context = await resolveBudgetingWorkspace();
+  let context: Awaited<ReturnType<typeof resolveBudgetingWorkspace>>;
+  try {
+    context = await resolveBudgetingWorkspace();
+  } catch (error) {
+    if (isUnauthorizedDataError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (isAdminOnlyDataError(error)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    throw error;
+  }
   if (!context.workspaceId) {
     return NextResponse.json({ error: "Workspace unavailable" }, { status: 400 });
   }
@@ -59,8 +71,19 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  let context: Awaited<ReturnType<typeof resolveBudgetingWorkspace>>;
+  try {
+    context = await resolveBudgetingWorkspace();
+  } catch (error) {
+    if (isUnauthorizedDataError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (isAdminOnlyDataError(error)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    throw error;
+  }
   assertTrustedRequestOrigin(request);
-  const context = await resolveBudgetingWorkspace();
   if (!context.workspaceId) {
     return NextResponse.json({ error: "Workspace unavailable" }, { status: 400 });
   }

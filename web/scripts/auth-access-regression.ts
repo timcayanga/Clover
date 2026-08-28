@@ -11,6 +11,9 @@ const morePage = readFileSync(resolve(process.cwd(), "app/more/page.tsx"), "utf8
 const signOutButton = readFileSync(resolve(process.cwd(), "components/more-sign-out-button.tsx"), "utf8");
 const publicAccountActions = readFileSync(resolve(process.cwd(), "components/public-account-actions.tsx"), "utf8");
 const globalStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
+const circlesRoute = readFileSync(resolve(process.cwd(), "app/api/circles/route.ts"), "utf8");
+const circleAccess = readFileSync(resolve(process.cwd(), "lib/circle-access.ts"), "utf8");
+const budgetsRoute = readFileSync(resolve(process.cwd(), "app/api/budgets/route.ts"), "utf8");
 const protectedRouteMatcher = middleware.match(
   /const isProtectedAppRoute = createRouteMatcher\(\[([\s\S]*?)\]\);/u,
 )?.[1] ?? "";
@@ -101,5 +104,8 @@ assert.match(publicAccountActions, /Log Out/u, "Signed-in landing navigation mus
 assert.match(publicAccountActions, /signOutToLanding/u, "Landing logout must use the safe Clover sign-out flow");
 assert.match(publicAccountActions, /clearAllWorkspaceCaches/u, "Landing logout must clear private workspace caches");
 assert.match(publicAccountActions, /aria-haspopup="menu"/u, "The landing account control must expose an accessible menu");
+assert.match(circleAccess, /isUnauthorizedDataError\(error\)[\s\S]*?status: 401/u, "Circle APIs must map missing authentication to 401");
+assert.match(circlesRoute, /getCircleErrorResponse\(error\)/u, "The Circles collection route must use the guarded error mapping");
+assert.match(budgetsRoute, /isUnauthorizedDataError\(error\)[\s\S]*?status: 401/u, "Budget APIs must fail closed with 401 before workspace access");
 
 console.log("Auth access regression checks passed.");

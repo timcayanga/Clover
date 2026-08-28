@@ -72,7 +72,7 @@ const checks = [
   [institutionPage.includes("fetchedSnapshots.length > 0 || current.length === 0"), "Transient empty snapshot reads preserve visible holdings"],
   [institutionPage.includes('className="institution-assets-table__asset-name"'), "Asset names render with compact icons"],
   [styles.includes(".institution-assets-table__asset-name .accounts-brand-mark"), "Institution asset marks match transaction row sizing"],
-  [accountsPage.includes('className="financial-account-card--investment-institution"'), "Institution cards have concise preview styling"],
+  [accountsPage.includes('"financial-account-card--investment-institution"'), "Institution cards have concise preview styling"],
   [styles.includes(".financial-account-card--investment-institution .financial-account-card__number"), "Institution preview stays on one line"],
   [institutionPage.includes("sortInvestmentTransactionsNewestFirst"), "Institution trading history uses chronological transaction ordering"],
   [institutionPage.includes('institution-assets-table institution-assets-table--holdings'), "Holdings uses the compact transaction-style table"],

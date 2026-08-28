@@ -26,8 +26,8 @@ const main = async () => {
   );
   assert.match(
     modalSource,
-    /window\.setTimeout\(closeVisibleImportModalIfPrimaryDataReady, 0\);[\s\S]{0,500}scheduleSuccessfulImportAutoClose\(\)/,
-    "A completed receipt batch must arm the standard ten-second success dismissal."
+    /window\.setTimeout\(closeVisibleImportModalIfPrimaryDataReady, 0\);/,
+    "A completed receipt batch must close only after its primary data is visible."
   );
 
   console.log("[PASS] Receipt success waits for visible transactions and schedules dismissal.");

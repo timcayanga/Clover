@@ -50,7 +50,7 @@ const main = async () => {
   console.log(`[PASS] HSBC screenshots | overview=${overviewRows.length} rows | detail=${detailRows.length} rows | history=${historyRows.length} rows`);
 };
 
-main().catch((error) => {
+main().then(() => process.exit(0)).catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });

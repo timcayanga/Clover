@@ -3,7 +3,7 @@ import { after, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { circleRoles, circleTypes } from "@/lib/circles";
-import { getCircleCurrentUser } from "@/lib/circle-access";
+import { getCircleCurrentUser, getCircleErrorResponse } from "@/lib/circle-access";
 import { loadCirclesWorkspaceData } from "@/lib/circle-loaders";
 import { getUserDisplayName } from "@/lib/user-display-name";
 import {
@@ -48,12 +48,10 @@ export async function GET() {
     const user = await getCircleCurrentUser();
     return NextResponse.json(await loadCirclesWorkspaceData(user));
   } catch (error) {
+    const failure = getCircleErrorResponse(error);
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Unable to load Circles.",
-      },
-      { status: 400 },
+      { error: failure.message },
+      { status: failure.status },
     );
   }
 }
@@ -209,14 +207,10 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (error) {
+    const failure = getCircleErrorResponse(error);
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unable to create this Circle.",
-      },
-      { status: 400 },
+      { error: failure.message },
+      { status: failure.status },
     );
   }
 }

@@ -3500,7 +3500,7 @@ const normalizeBpiText = (text: string) =>
       const tokens = normalized.split(" ");
       const singleCharacterTokens = tokens.filter((token) => /^[A-Za-z0-9]$/.test(token)).length;
       const looksCharacterSpaced = tokens.length >= 6 && singleCharacterTokens / tokens.length >= 0.65;
-      const repaired = (looksCharacterSpaced ? tokens.join("") : normalized)
+      const repaired = (looksCharacterSpaced ? normalizeCharacterSpacedGenericLine(normalized) : normalized)
         // BPI's scanned month and ledger labels commonly lose one glyph in OCR.
         .replace(/^way(?=\s*\d{1,2}\b)/i, "May")
         .replace(/^sun(?=\s*\d{1,2}\b)/i, "Jun")
@@ -24422,20 +24422,26 @@ const parseMayaSavingsStatementMetadata = (
     extractFormattedAccountNumberFromLines(lines) ??
     detectAccountNumberFromText(normalized);
 
-  const mayaSavingsHolderCandidate = normalizeWhitespace(
+  const rawMayaSavingsHolderCandidate = normalizeWhitespace(
     normalized.match(/(?:Consumer Savings|Maya Savings)[\s\S]{0,220}?\b([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,4})\s+0\.00\s+PHP\s+0\.00\s+PHP\s+3\.5%/i)?.[1] ?? ""
   )
     .replace(/^PHP\s+/i, "")
     .trim();
+  const mayaSavingsHolderCandidate = /^(?:consumer|maya)\s+savings$/i.test(rawMayaSavingsHolderCandidate)
+    ? ""
+    : rawMayaSavingsHolderCandidate;
   const mayaSavingsAccountNameFallback =
     mayaSavingsHolderCandidate ||
     accountLine.match(/^(.*?)\s+\d[\d\s-]{6,}\d\s+Maya Savings/i)?.[1]?.trim() ||
     accountLine.match(/^(.*?)\s+Maya Savings/i)?.[1]?.trim() ||
     extractAccountHolderNameFromLines(lines, lines.findIndex((line) => /account\s+number/i.test(line))) ||
     "Maya Savings";
-  const accountName =
+  const detectedAccountName =
     lines.find((line) => /account\s+name\s*:/i.test(line))?.match(/account\s+name\s*:\s*(.+)$/i)?.[1]?.trim() ??
     mayaSavingsAccountNameFallback;
+  const accountName = /^(?:consumer|maya)\s+savings$/i.test(detectedAccountName)
+    ? "Maya Savings"
+    : detectedAccountName;
 
   const summaryLine = lines.find((line) => /account\s+summary/i.test(line)) ?? null;
   const summaryIndex = lines.findIndex((line) => /account\s+summary/i.test(line));

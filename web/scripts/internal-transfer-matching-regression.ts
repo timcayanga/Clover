@@ -302,7 +302,7 @@ assert.match(
 );
 const enrichmentLogIndex = workerSource.indexOf('console.info("[import-enrichment] processed batch"');
 const enrichmentReconciliationIndex = workerSource.indexOf(
-  "await reconcileWorkspaceInternalTransfers(prisma, String(importFile.workspaceId));",
+  "await reconcileWorkspaceInternalTransfers(prisma, String(importFile.workspaceId)",
   enrichmentLogIndex
 );
 const enrichmentCompletionIndex = workerSource.indexOf(

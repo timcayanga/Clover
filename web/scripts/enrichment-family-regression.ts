@@ -149,7 +149,14 @@ const runPlannedPaymentCombinationChecks = () => {
   assert(combined.length === 3, "Expected same-family PHP recurring candidates to combine without merging other currencies or reminders");
   const merged = combined.find((item) => item.id.startsWith("combined_recurring_transaction::PHP::openai"));
   assert(merged?.combinedSuggestionCount === 2, "Expected the combined candidate to retain its source count");
-  assert(merged?.accountId === null && merged.accountName === "Multiple accounts", "Expected a cross-account candidate to stay unlinked until review");
+  assert(
+    merged?.accountId === "a" && merged.accountName === "Wise",
+    "Expected a cross-account candidate to prefill the highest-confidence source account for review"
+  );
+  assert(
+    merged?.relatedAccountNames?.includes("Wise") && merged.relatedAccountNames.includes("RCBC 1014"),
+    "Expected a cross-account candidate to retain every contributing account for review"
+  );
   assert(merged?.dueDate === "2026-08-10T00:00:00.000Z", "Expected the earliest upcoming candidate date to remain visible");
   assert(merged?.notes?.includes("Wise") && merged.notes.includes("RCBC 1014"), "Expected review notes to preserve contributing accounts");
 };

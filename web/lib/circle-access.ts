@@ -1,6 +1,7 @@
 import type { CircleRole, User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
+import { isAdminOnlyDataError, isUnauthorizedDataError } from "@/lib/transient-data";
 
 const roleRank: Record<CircleRole, number> = {
   participant: 1,
@@ -71,6 +72,14 @@ export const getCircleAccess = async (
 };
 
 export const getCircleErrorResponse = (error: unknown) => {
+  if (isUnauthorizedDataError(error)) {
+    return { message: "Unauthorized", status: 401 };
+  }
+
+  if (isAdminOnlyDataError(error)) {
+    return { message: "Forbidden", status: 403 };
+  }
+
   if (error instanceof CircleAccessError) {
     return { message: error.message, status: error.status };
   }

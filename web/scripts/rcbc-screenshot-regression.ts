@@ -77,6 +77,7 @@ const main = async () => {
   }
 
   console.log(`[PASS] RCBC screenshot regression | ${checks.length} files`);
+  process.exit(0);
 };
 
 main().catch((error) => {

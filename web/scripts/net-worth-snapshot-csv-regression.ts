@@ -410,7 +410,7 @@ const main = async () => {
   const statusSnapshotSource = await readFile(join(process.cwd(), "lib/import-status-snapshot.ts"), "utf8");
   assert.match(
     statusSnapshotSource,
-    /mergePublishedAccountSummaries\(\s*readPublishedAccountSummaries\(statementCheckpoint\?\.sourceMetadata\),\s*computedAccountSummaries\s*\)/,
+    /const publishedAccountSummaries = readPublishedAccountSummaries\(statementCheckpoint\?\.sourceMetadata\);[\s\S]{0,240}const accountSummaries = mergePublishedAccountSummaries\(publishedAccountSummaries, computedAccountSummaries\);/,
     "Status polling must retain every account summary already published by confirmation."
   );
 

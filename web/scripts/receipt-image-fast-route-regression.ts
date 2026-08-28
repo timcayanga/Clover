@@ -27,8 +27,8 @@ assert.match(
 );
 assert.match(
   parserSource,
-  /const receiptReasoningEffort = isReceiptMode[\s\S]*?"minimal"/,
-  "Ordinary receipt extraction must use minimal reasoning."
+  /const receiptReasoningEffort = isReceiptMode[\s\S]*?"none"/,
+  "Ordinary receipt extraction must avoid unsupported reasoning effort and use the fastest valid setting."
 );
 assert.match(
   parserSource,
