@@ -21,7 +21,7 @@ async function main() {
   assert.match(shell, /label: "Understand"[\s\S]{0,300}href: "\/reports"[\s\S]{0,220}href: "\/adviser"/);
   assert.match(shell, /shell-bottom-nav__label">More<\/span>/);
   assert.match(reports, /<ReportsPageStream searchParams=\{searchParams\}/);
-  assert.match(reports, /href="\/adviser">Ask Adviser<\/Link>/);
+  assert.match(reports, /<AdviserHeaderLink \/>/);
   assert.doesNotMatch(adviser, /<ReportsStream/);
   assert.match(adviser, /title="Ask Clover"[\s\S]{0,500}<AdviserChat[\s\S]{0,220}layout="workspace"/);
   assert.doesNotMatch(adviser, /<header className="adviser-summary">/);

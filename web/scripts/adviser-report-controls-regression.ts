@@ -37,7 +37,7 @@ assert.equal(invalid.range, "90d");
 assert.match(adviserSource, /href="\/reports">View reports<\/Link>/);
 assert.doesNotMatch(adviserSource, /<ReportsStream/);
 assert.match(reportsSource, /<ReportsPageStream searchParams=\{searchParams\}/);
-assert.match(reportsSource, /href="\/adviser">Ask Adviser<\/Link>/);
+assert.match(reportsSource, /<AdviserHeaderLink \/>/);
 assert.match(reportsSource, /currentFrom=\{reportWindow\.from\}/);
 assert.match(reportsSource, /const reportDisplayTransactions = reportCurrentWindowTransactions;/);
 assert.doesNotMatch(reportsSource, /latest available activity/i);

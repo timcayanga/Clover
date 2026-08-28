@@ -30,6 +30,13 @@ const investmentHoldingRouteSource = readFileSync(
   resolve(process.cwd(), "app/api/investment-holdings/[holdingId]/route.ts"),
   "utf8"
 );
+const adviserHeaderLinkSource = readFileSync(
+  resolve(process.cwd(), "components/adviser-header-link.tsx"),
+  "utf8",
+);
+
+assert.match(adviserHeaderLinkSource, /getNavigationIconSrc\("adviser"\)/);
+assert.match(adviserHeaderLinkSource, /aria-label="Open Adviser"/);
 
 assert.match(investmentHoldingRouteSource, /export async function DELETE/, "Imported holdings need a delete endpoint.");
 assert.match(
@@ -237,6 +244,11 @@ const marketChartSource = readFileSync(resolve(process.cwd(), "components/invest
 const portfolioGrowthSource = readFileSync(resolve(process.cwd(), "components/investment-portfolio-growth-chart.tsx"), "utf8");
 const marketHistoryRouteSource = readFileSync(resolve(process.cwd(), "app/api/market-history/route.ts"), "utf8");
 
+assert.match(
+  investmentsPageSource,
+  /actions=\{[\s\S]*?<AdviserHeaderLink \/>[\s\S]*?<CurrencySelector/,
+  "Investments must expose Adviser in its page header",
+);
 assert.match(investmentsPageSource, /deleteSelectedInvestmentAsset/, "Asset details should expose the delete workflow.");
 assert.match(investmentsPageSource, /"Delete asset"/, "Asset details should render a clear delete action.");
 assert.match(

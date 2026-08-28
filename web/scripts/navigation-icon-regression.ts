@@ -38,6 +38,7 @@ async function main() {
       "components/clover-shell.tsx",
       "components/settings-hub.tsx",
       "components/circles-workspace.tsx",
+      "components/adviser-header-link.tsx",
     ].map(async (relativePath) => ({
       relativePath,
       source: await readFile(path.join(root, relativePath), "utf8"),

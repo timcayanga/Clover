@@ -2478,6 +2478,43 @@ body.transactions-manual-open .shell-bug-report-button {
   gap: 8px;
 }
 
+.adviser-header-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  flex: 0 0 40px;
+  padding: 4px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--shadow-soft);
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.adviser-header-link img {
+  display: block;
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
+.adviser-header-link:hover,
+.adviser-header-link:focus-visible {
+  border-color: rgba(3, 168, 192, 0.32);
+  background: color-mix(in srgb, var(--surface) 92%, var(--accent) 8%);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+html[data-theme="dark"] .adviser-header-link {
+  border-color: rgba(229, 231, 235, 0.14);
+  background: rgba(229, 231, 235, 0.9);
+}
+
 .transaction-tags-manager__list {
   display: grid;
   gap: 10px;

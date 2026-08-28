@@ -15,6 +15,7 @@ import { InfoTooltip } from "@/components/info-tooltip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { InvestmentMarketChart } from "@/components/investment-market-chart";
 import { InvestmentPortfolioGrowthChart } from "@/components/investment-portfolio-growth-chart";
+import { AdviserHeaderLink } from "@/components/adviser-header-link";
 import { GrowthPlanner } from "@/components/growth-planner";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
@@ -2780,6 +2781,7 @@ export default function InvestmentsPage() {
       }
       actions={
         <>
+          <AdviserHeaderLink />
           <CurrencySelector
             value={portfolioCurrencyFilter}
             onChange={(next) => {

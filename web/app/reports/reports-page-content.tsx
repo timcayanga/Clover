@@ -31,6 +31,7 @@ import { resolveReportWindow } from "@/lib/report-window";
 import { buildSpendingPaceSnapshot } from "@/lib/spending-pace";
 import { SpendingPaceCard } from "@/components/spending-pace-card";
 import type { User } from "@prisma/client";
+import { AdviserHeaderLink } from "@/components/adviser-header-link";
 import {
   ReportsMoneyOverTimeChart,
   type ReportsMoneyPoint,
@@ -2355,7 +2356,7 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
         titleAddon={<ReportsTopTabs />}
         actions={
           <div className="reports-page__actions">
-            <Link className="button button-secondary button-small" href="/adviser">Ask Adviser</Link>
+            <AdviserHeaderLink />
             <ReportsRangeMenu
               currentRange={selectedRange}
               currentRangeLabel={selectedRangeLabel}
