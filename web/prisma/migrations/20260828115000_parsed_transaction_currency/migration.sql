@@ -1,0 +1,2 @@
+ALTER TABLE "ParsedTransaction"
+ADD COLUMN IF NOT EXISTS "currency" TEXT NOT NULL DEFAULT 'PHP';

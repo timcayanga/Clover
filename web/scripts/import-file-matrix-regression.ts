@@ -12,6 +12,7 @@ const webRoot = basename(process.cwd()) === "web" ? process.cwd() : join(process
 loadEnvConfig(webRoot);
 
 const baseUrl = process.env.CLOVER_IMPORT_REGRESSION_BASE_URL ?? "http://localhost:3001";
+const requestOrigin = new URL(baseUrl).origin;
 const statementRoot = process.env.CLOVER_STATEMENT_ROOT ?? "/Users/TimCayanga1/Documents/Bank Statements";
 const screenshotRoot = process.env.CLOVER_SCREENSHOT_ROOT ?? "/Users/TimCayanga1/Documents/Bank Screenshots";
 const receiptRoot = process.env.CLOVER_RECEIPT_ROOT ?? "/Users/TimCayanga1/Documents/Receipt Samples";
@@ -38,6 +39,8 @@ const maxStatusMs = Number(process.env.CLOVER_IMPORT_MAX_STATUS_MS ?? 3_000);
 const caseFilter = process.env.CLOVER_IMPORT_MATRIX_CASE?.trim().toLowerCase() ?? "";
 const keepWorkspaces = process.env.CLOVER_IMPORT_MATRIX_KEEP_WORKSPACES === "true";
 const forceInlineProcessing = process.env.CLOVER_IMPORT_MATRIX_FORCE_INLINE !== "false";
+const regressionUserId = process.env.CLOVER_IMPORT_REGRESSION_USER_ID?.trim() || "local-admin";
+const regressionUserEnvironment = process.env.CLOVER_IMPORT_REGRESSION_USER_ENVIRONMENT?.trim() || "local";
 
 type ImportMode = "statement" | "receipt" | "notes";
 
@@ -232,7 +235,11 @@ const postFile = async (workspaceId: string, matrixCase: MatrixCase, importId = 
   form.set("file", new Blob([bytes], { type: matrixCase.fileType }), fileName);
 
   const startedAt = Date.now();
-  const response = await fetch(`${baseUrl}/api/imports/${importId}/process`, { method: "POST", body: form });
+  const response = await fetch(`${baseUrl}/api/imports/${importId}/process`, {
+    method: "POST",
+    headers: { Origin: requestOrigin },
+    body: form,
+  });
   const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   return { importId, response, payload, startedAt };
 };
@@ -477,13 +484,13 @@ const main = async () => {
   assert.equal(health?.ok, true, `Start Clover locally at ${baseUrl} before running this regression.`);
 
   const user = await prisma.user.upsert({
-    where: { clerkUserId: "local-admin" },
+    where: { clerkUserId: regressionUserId },
     update: { planTier: "pro", planTierLocked: true },
     create: {
-      clerkUserId: "local-admin",
-      email: "local-admin+file-matrix@clover.local",
+      clerkUserId: regressionUserId,
+      email: `${regressionUserId}+file-matrix@clover.local`,
       verified: true,
-      environment: "local",
+      environment: regressionUserEnvironment,
       planTier: "pro",
       planTierLocked: true,
     },
