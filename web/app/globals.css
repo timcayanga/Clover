@@ -56863,6 +56863,106 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     color-mix(in srgb, var(--surface) 96%, var(--accent) 4%);
 }
 
+.content--reports .reports-money-over-time__title {
+  font-weight: 400;
+}
+
+.reports-money-chart {
+  display: grid;
+  gap: 10px;
+  padding: 16px 16px 12px;
+  border: 1px solid color-mix(in srgb, var(--stroke) 75%, transparent);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 15% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 42%),
+    color-mix(in srgb, var(--surface) 96%, var(--accent) 4%);
+}
+
+.reports-money-chart__summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 28px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.reports-money-chart__summary strong {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.reports-money-chart__plot {
+  position: relative;
+  min-width: 0;
+}
+
+.reports-money-chart__svg {
+  display: block;
+  width: 100%;
+  height: 250px;
+  cursor: crosshair;
+  touch-action: pan-y;
+}
+
+.reports-money-chart__gridline {
+  stroke: color-mix(in srgb, var(--muted) 22%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 4 7;
+}
+
+.reports-money-chart__area { fill: url(#reportsMoneyBalanceFill); }
+.reports-money-chart__line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.reports-money-chart__hover-line {
+  stroke: color-mix(in srgb, var(--accent) 52%, transparent);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 5;
+}
+.reports-money-chart__hover-dot {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 4;
+}
+.reports-money-chart__y-axis {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 112px;
+  pointer-events: none;
+}
+.reports-money-chart__y-axis span {
+  position: absolute;
+  right: 0;
+  width: 108px;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: right;
+  white-space: nowrap;
+}
+.reports-money-chart__x-axis {
+  display: flex;
+  justify-content: space-between;
+  padding-right: 116px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.reports-money-chart__empty {
+  display: grid;
+  min-height: 240px;
+  place-items: center;
+  color: var(--muted);
+}
+
 .content--reports .report-chart__line {
   stroke-width: 4;
   stroke-linecap: round;
@@ -57054,6 +57154,15 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
     padding-inline: 10px;
     border-radius: 18px;
   }
+
+  .reports-money-chart { padding-inline: 10px; border-radius: 18px; }
+  .reports-money-chart__svg { height: 220px; }
+  .reports-money-chart__summary { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .reports-money-chart__summary strong { font-size: 16px; }
+  .reports-money-chart__y-axis { width: 96px; }
+  .reports-money-chart__y-axis span { width: 92px; font-size: 10px; }
+  .reports-money-chart__x-axis { padding-right: 100px; }
+  .reports-money-chart__x-axis span:nth-child(even) { display: none; }
 
   .content--reports .report-chart__labels--six .report-chart__label:nth-child(even) {
     display: none;

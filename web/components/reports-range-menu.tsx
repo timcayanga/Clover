@@ -34,6 +34,22 @@ export function ReportsRangeMenu({
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const rangeHref = (range: ReportsRange) => {
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
+    params.set("range", range);
+    params.delete("from");
+    params.delete("to");
+    return `${pathname}?${params.toString()}`;
+  };
+
+  const prefetchStandardRanges = () => {
+    (["30d", "90d", "ytd"] as const).forEach((range) => {
+      if (range !== currentRange || currentFrom || currentTo) {
+        router.prefetch(rangeHref(range));
+      }
+    });
+  };
+
   const navigateWithParams = (update: (params: URLSearchParams) => void) => {
     const params = new URLSearchParams(searchParams?.toString() ?? "");
     update(params);
@@ -99,8 +115,13 @@ export function ReportsRangeMenu({
         aria-label={`Change report range. Current range: ${currentRangeLabel}`}
         aria-haspopup="menu"
         aria-expanded={open}
-        title="Change report range"
-        onClick={() => setOpen((current) => !current)}
+      title="Change report range"
+        onPointerEnter={prefetchStandardRanges}
+        onFocus={prefetchStandardRanges}
+        onClick={() => {
+          prefetchStandardRanges();
+          setOpen((current) => !current);
+        }}
       >
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1.5A2.5 2.5 0 0 1 22 6.5v12A2.5 2.5 0 0 1 19.5 21h-15A2.5 2.5 0 0 1 2 18.5v-12A2.5 2.5 0 0 1 4.5 4H6V3a1 1 0 0 1 1-1Zm12.5 8h-15v8.5c0 .276.224.5.5.5h14a.5.5 0 0 0 .5-.5V10Zm-14-4A.5.5 0 0 0 5 8.5V8h14v.5a.5.5 0 0 0-.5-.5h-14Z" />

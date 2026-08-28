@@ -30,6 +30,11 @@ import { hasFullFeatureAccess } from "@/lib/beta-access";
 import { resolveReportWindow } from "@/lib/report-window";
 import { buildSpendingPaceSnapshot } from "@/lib/spending-pace";
 import { SpendingPaceCard } from "@/components/spending-pace-card";
+import type { User } from "@prisma/client";
+import {
+  ReportsMoneyOverTimeChart,
+  type ReportsMoneyPoint,
+} from "@/components/reports-money-over-time-chart";
 
 const ReportsReviewQueue = nextDynamic(() => import("@/components/reports-review-queue").then((module) => module.ReportsReviewQueue), {
   loading: () => (
@@ -169,11 +174,6 @@ type MonthBucket = {
   income: number;
   expense: number;
   net: number;
-};
-
-type ReportTimelineBucket = MonthBucket & {
-  start: Date;
-  end: Date;
 };
 
 type WorkspaceAccountSnapshot = {
@@ -329,26 +329,6 @@ const getMonthBuckets = (anchor: Date) => {
   return buckets;
 };
 
-const getReportTimelineBuckets = (start: Date, end: Date, count = 6): ReportTimelineBucket[] => {
-  const startTime = start.getTime();
-  const endTime = end.getTime();
-  const duration = Math.max(endTime - startTime + 1, 1);
-
-  return Array.from({ length: count }, (_, index) => {
-    const bucketStart = new Date(startTime + Math.floor((duration * index) / count));
-    const bucketEnd = new Date(startTime + Math.floor((duration * (index + 1)) / count) - 1);
-    return {
-      key: `${bucketStart.toISOString()}-${index}`,
-      label: shortDateFormatter.format(bucketStart),
-      start: bucketStart,
-      end: index === count - 1 ? new Date(end) : bucketEnd,
-      income: 0,
-      expense: 0,
-      net: 0,
-    };
-  });
-};
-
 function ReportsStreamFallback() {
   return <CloverLoadingScreen label="reports" />;
 }
@@ -365,9 +345,13 @@ function ReportsEmptyNote({ title, copy }: { title: string; copy: string }) {
 export async function ReportsStream({
   active = "reports",
   searchParams,
+  user,
+  sessionIsGuest,
 }: {
   active?: "reports" | "adviser";
   searchParams?: { range?: string; section?: string; filter?: string; from?: string; to?: string };
+  user: User;
+  sessionIsGuest: boolean;
 }) {
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
@@ -377,18 +361,13 @@ export async function ReportsStream({
   const rangeWindowText = selectedRange === "ytd" ? "year-to-date" : selectedRangeLabel.toLowerCase();
   const requestedSection = normalizeReportsSection(searchParams?.section);
 
-  const session = await getPageSessionContext();
-  const existingUser = await prisma.user.findUnique({
-    where: { clerkUserId: session.userId },
-  });
-  const user = existingUser ?? (await getOrCreateCurrentUser(session.userId));
   const isPro = hasFullFeatureAccess(user.planTier);
   const initialSection = isPro || requestedSection !== "advanced" ? requestedSection : "overview";
   const sectionTabs: ReportsSection[] = isPro ? ["overview", "spending", "trends", "advanced"] : ["overview", "spending", "trends"];
   const needsSpendingData = true;
   const needsTrendData = true;
   const needsAdvancedData = isPro;
-  if (!session.isGuest && !hasCompletedOnboarding(user)) {
+  if (!sessionIsGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
 
@@ -500,8 +479,7 @@ export async function ReportsStream({
         },
         orderBy: { date: "desc" },
       }),
-      needsAdvancedData
-        ? (prisma.account.findMany({
+      (prisma.account.findMany({
             where: {
               workspaceId: selectedWorkspaceId,
             },
@@ -514,8 +492,7 @@ export async function ReportsStream({
               type: true,
             },
             orderBy: [{ balance: "desc" }, { updatedAt: "desc" }],
-          }) as Promise<WorkspaceAccountSnapshot[]>)
-        : Promise.resolve([] as WorkspaceAccountSnapshot[]),
+          }) as Promise<WorkspaceAccountSnapshot[]>),
       needsAdvancedData
         ? prisma.importFile.findFirst({
             where: { workspaceId: selectedWorkspaceId },
@@ -1331,46 +1308,28 @@ export async function ReportsStream({
     const previousWeeklyNet = previousWeeklySummary.income - previousWeeklySummary.expense;
     const weeklyNetChange = weeklyNet - previousWeeklyNet;
     const weeklySummaryLabel = `${formatShortDate(weeklySummaryStart)} - ${formatShortDate(weeklySummaryEnd)}`;
-    const reportTimelineBuckets = getReportTimelineBuckets(currentWindowStart, currentWindowEnd);
+    const reportDateKey = (date: Date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    const dailyNetByDate = new Map<string, number>();
     reportDisplayTransactions.forEach((transaction) => {
-      const bucket = reportTimelineBuckets.find(
-        (candidate) => transaction.date >= candidate.start && transaction.date <= candidate.end
-      );
-      if (!bucket) return;
-      const amount = toReportMagnitude(transaction.amount);
       const type = getResolvedReportTransactionType(transaction);
-      if (type === "income") bucket.income += amount;
-      if (type === "expense") bucket.expense += amount;
-      bucket.net = bucket.income - bucket.expense;
+      if (type !== "income" && type !== "expense") return;
+      const signedAmount = toReportMagnitude(transaction.amount) * (type === "income" ? 1 : -1);
+      const dateKey = reportDateKey(transaction.date);
+      dailyNetByDate.set(dateKey, (dailyNetByDate.get(dateKey) ?? 0) + signedAmount);
     });
-
-    let cumulativeNet = 0;
-    const reportCumulativeTimelineBuckets = reportTimelineBuckets.map((bucket) => {
-      cumulativeNet += bucket.net;
-      return { ...bucket, net: cumulativeNet };
-    });
-    const reportChartWidth = 640;
-    const reportChartHeight = 220;
-    const reportChartPadding = 24;
-    const reportChartXSpan = reportChartWidth - reportChartPadding * 2;
-    const reportChartYSpan = reportChartHeight - reportChartPadding * 2;
-    const reportCashFlowValues = reportCumulativeTimelineBuckets.map((bucket) => bucket.net);
-    const reportCashFlowMax = Math.max(0, ...reportCashFlowValues);
-    const reportCashFlowMin = Math.min(0, ...reportCashFlowValues);
-    const reportCashFlowRange = Math.max(reportCashFlowMax - reportCashFlowMin, 1);
-    const reportCashFlowPoints = reportCumulativeTimelineBuckets.map((bucket, index) => {
-      const x = reportChartPadding + (index / Math.max(reportCumulativeTimelineBuckets.length - 1, 1)) * reportChartXSpan;
-      const normalized = (bucket.net - reportCashFlowMin) / reportCashFlowRange;
-      const y = reportChartPadding + (1 - normalized) * reportChartYSpan;
-      return { ...bucket, x, y };
-    });
-    const reportCashFlowPath = reportCashFlowPoints.reduce((path, point, index, points) => {
-      if (index === 0) return `M ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
-      const previous = points[index - 1];
-      const midpoint = (previous.x + point.x) / 2;
-      return `${path} C ${midpoint.toFixed(1)} ${previous.y.toFixed(1)}, ${midpoint.toFixed(1)} ${point.y.toFixed(1)}, ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
-    }, "");
-    const reportCashFlowZeroY = reportChartPadding + (1 - (0 - reportCashFlowMin) / reportCashFlowRange) * reportChartYSpan;
+    const reportMoneyPoints: ReportsMoneyPoint[] = [];
+    let runningBalance = totalAccountBalance - currentNet;
+    const timelineDate = new Date(currentWindowStart);
+    timelineDate.setHours(0, 0, 0, 0);
+    const timelineEnd = new Date(currentWindowEnd);
+    timelineEnd.setHours(23, 59, 59, 999);
+    while (timelineDate <= timelineEnd) {
+      const dateKey = reportDateKey(timelineDate);
+      runningBalance += dailyNetByDate.get(dateKey) ?? 0;
+      reportMoneyPoints.push({ date: dateKey, balance: runningBalance });
+      timelineDate.setDate(timelineDate.getDate() + 1);
+    }
     const reportCategorySegments = reportExpenseDisplayCategories.map(([categoryName, amount]) => ({
       categoryName,
       amount,
@@ -1769,60 +1728,18 @@ export async function ReportsStream({
                 <ReportInfoTip className="reports-container-info" label={`A ${rangeWindowText} view of how income and spending changed the net position.`} />
                 <div className="report-card__head">
                   <div className="report-card__head-title">
-                    <h4>Money over time</h4>
+                    <h4 className="reports-money-over-time__title">Money over time</h4>
                   </div>
                   <div className="report-card__stat">
-                    <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
-                    <span>{selectedRangeLabel}</span>
+                    <strong>{formatCurrency(totalAccountBalance)}</strong>
+                    <span>Current balance</span>
                   </div>
                 </div>
 
-                <div className="report-chart report-chart--overview">
-                  <svg className="report-chart__svg" viewBox={`0 0 ${reportChartWidth} ${reportChartHeight}`} role="img" aria-label="Cash flow trend chart">
-                    <defs>
-                      <linearGradient id="reportCashFlowFill" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="rgba(3, 168, 192, 0.22)" />
-                        <stop offset="100%" stopColor="rgba(3, 168, 192, 0.03)" />
-                      </linearGradient>
-                    </defs>
-                    <g aria-hidden="true">
-                      {[0.25, 0.5, 0.75].map((fraction) => {
-                        const y = reportChartPadding + reportChartYSpan * fraction;
-                        return <line key={fraction} x1={reportChartPadding} y1={y} x2={reportChartWidth - reportChartPadding} y2={y} className="report-chart__gridline" />;
-                      })}
-                      <line
-                        x1={reportChartPadding}
-                        y1={reportCashFlowZeroY}
-                        x2={reportChartWidth - reportChartPadding}
-                        y2={reportCashFlowZeroY}
-                        className="report-chart__zero-line"
-                      />
-                      <path
-                        d={`${reportCashFlowPath} L ${reportChartWidth - reportChartPadding} ${reportCashFlowZeroY} L ${reportChartPadding} ${reportCashFlowZeroY} Z`}
-                        className="report-chart__area"
-                      />
-                      <path d={reportCashFlowPath} className={`report-chart__line ${currentNet >= 0 ? "report-chart__line--positive" : "report-chart__line--negative"}`} />
-                      {reportCashFlowPoints.map((point) => (
-                        <circle
-                          key={point.key}
-                          cx={point.x}
-                          cy={point.y}
-                          r="4"
-                          className="report-chart__point"
-                          style={{ stroke: currentNet >= 0 ? "var(--good)" : "#f97316" }}
-                        />
-                      ))}
-                    </g>
-                  </svg>
-                  <div className="report-chart__labels report-chart__labels--six">
-                    {reportCashFlowPoints.map((bucket) => (
-                      <div key={bucket.key} className="report-chart__label">
-                        <span>{bucket.label}</span>
-                        <strong className={bucket.net >= 0 ? "positive" : "negative"}>{formatSignedCurrency(bucket.net)}</strong>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <ReportsMoneyOverTimeChart
+                  points={reportMoneyPoints}
+                  currency={displayCurrency}
+                />
               </article>
             </section>
           </>
@@ -2448,7 +2365,12 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
           </div>
         }
       >
-        <ReportsStream active="reports" searchParams={resolvedSearchParams} />
+        <ReportsStream
+          active="reports"
+          searchParams={resolvedSearchParams}
+          user={user}
+          sessionIsGuest={session.isGuest}
+        />
       </CloverShell>
     </ReportsTabsProvider>
   );
