@@ -83,6 +83,16 @@ assert.match(
 );
 assert.match(
   workerSource,
+  /const receiptFileNameDate = parseDateValue\([\s\S]{0,500}?const receiptDateInferredFromFileName = !explicitReceiptDate && Boolean\(receiptFileNameDate\)/,
+  "receipts with a missing extracted date should recover an explicit date from the source filename"
+);
+assert.match(
+  workerSource,
+  /reviewStatus: receiptNeedsReview \|\| receiptDateInferredFromFileName \? "pending_review" : "confirmed"/,
+  "filename-inferred receipt dates must remain review-required"
+);
+assert.match(
+  workerSource,
   /resolveReceiptCategoryWithPaymentEvidence\(\{[\s\S]{0,180}?proposedCategory: trainedCategoryName/,
   "trained receipt categories must still pass through POS-versus-transfer safety"
 );

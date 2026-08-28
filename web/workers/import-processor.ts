@@ -13152,7 +13152,7 @@ export const confirmImportFile = async (
         lineItems: receiptLineItems,
         allocations: receiptSplitAllocations,
       });
-      const receiptDate =
+      const explicitReceiptDate =
         receiptDocument?.transactionDate ??
         parseDateValue(
           typeof receiptDetailsRecord?.transaction_date === "string"
@@ -13160,12 +13160,18 @@ export const confirmImportFile = async (
             : typeof receiptDetailsRecord?.transactionDate === "string"
               ? receiptDetailsRecord.transactionDate
               : null
-        ) ??
+        );
+      const receiptFileNameDate = parseDateValue(
+        String(importFile.fileName ?? "").match(/\b(20\d{2}[-_.]\d{2}[-_.]\d{2})\b/)?.[1]?.replace(/[_.]/g, "-") ?? null
+      );
+      const receiptDate =
+        explicitReceiptDate ??
+        receiptFileNameDate ??
         (receiptIsSplitBill
-          ? parseDateValue(String(importFile.fileName ?? "").match(/\b(20\d{2}[-_.]\d{2}[-_.]\d{2})\b/)?.[1]?.replace(/[_.]/g, "-") ?? null) ??
-            importFile.uploadedAt
+          ? importFile.uploadedAt
           : null) ??
         null;
+      const receiptDateInferredFromFileName = !explicitReceiptDate && Boolean(receiptFileNameDate);
       const receiptMerchantRaw =
         typeof receiptDocument?.merchantRaw === "string" && receiptDocument.merchantRaw.trim()
           ? receiptDocument.merchantRaw.trim()
@@ -13302,14 +13308,14 @@ export const confirmImportFile = async (
             importFileId,
             categoryId: receiptCategoryId,
             categoryName: receiptCategoryName,
-            reviewStatus: receiptNeedsReview ? "pending_review" : "confirmed",
+            reviewStatus: receiptNeedsReview || receiptDateInferredFromFileName ? "pending_review" : "confirmed",
             parserConfidence:
               Math.max(
                 1,
                 Math.min(
-                  receiptNeedsReview ? 69 : 100,
+                  receiptNeedsReview || receiptDateInferredFromFileName ? 69 : 100,
                   Number(receiptDetailsRecord?.confidence_score ?? receiptPayloadSource?.confidence ?? receiptPayloadSource?.confidence_score ?? 0) ||
-                    (receiptNeedsReview ? 50 : 95)
+                    (receiptNeedsReview || receiptDateInferredFromFileName ? 50 : 95)
                 )
               ),
             categoryConfidence: 95,
@@ -13326,6 +13332,7 @@ export const confirmImportFile = async (
             rawPayload: {
               source: "receipt",
               documentType: "receipt",
+              dateInferredFromFileName: receiptDateInferredFromFileName,
               notes: receiptLineItemNotes || null,
               receiptDocumentId: receiptDocument?.id ?? documentImport?.id ?? null,
               receiptDetails: {
