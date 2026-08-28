@@ -19,6 +19,7 @@ import {
   type ParsedImportRow,
 } from "@/lib/import-parser";
 import { isTrustedMetadataOnlyWiseStatement } from "@/lib/metadata-only-statement";
+import { applyStatementFilenameCoverage } from "@/lib/statement-filename-coverage";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { applyDeterministicMerchantRescue } from "@/lib/merchant-enrichment";
 import {
@@ -1806,7 +1807,7 @@ const sanitizeCachedStatementMetadata = (params: {
   if (explicitGcashWalletHistory) {
     // Repair legacy cache metadata created while generic IMG filenames could
     // synthesize a GCrypto label. Visible GCash evidence is authoritative.
-    return {
+    return applyStatementFilenameCoverage({
       ...params.metadata,
       institution: "GCash",
       accountName: "GCash",
@@ -1817,20 +1818,20 @@ const sanitizeCachedStatementMetadata = (params: {
       totalAmountDue: null,
       paymentDueDate: null,
       confidence: Math.max(Number(params.metadata.confidence ?? 0), 90),
-    };
+    }, params.fileName);
   }
 
   if (isGcryptoActivityHistoryMetadata(params)) {
-    return {
+    return applyStatementFilenameCoverage({
       ...params.metadata,
       openingBalance: null,
       endingBalance: null,
       totalAmountDue: null,
       paymentDueDate: null,
-    };
+    }, params.fileName);
   }
 
-  return params.metadata;
+  return applyStatementFilenameCoverage(params.metadata, params.fileName);
 };
 
 let accountColumnCache: Set<string> | null = null;

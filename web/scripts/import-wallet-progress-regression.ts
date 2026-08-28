@@ -7,6 +7,7 @@ import {
 } from "../lib/import-parser";
 import { hasPdfEncryptionMarker } from "../lib/import-file-text";
 import { normalizeBatchImportProgress, preserveMonotonicImportProgress } from "../lib/import-progress";
+import { applyStatementFilenameCoverage, getStatementFilenameCoverage } from "../lib/statement-filename-coverage";
 
 const unknownWalletStatement = `
   Northstar Pay
@@ -125,6 +126,23 @@ assert.equal(
   unlabeledMayaSavingsMetadata.accountNumber?.replace(/\D/g, ""),
   "805280702608",
   "A standalone Maya Savings account number must stop before the following balance."
+);
+
+const mayaWalletCoverage = getStatementFilenameCoverage(
+  "MayaWallet_SoA_95f-baf23d860e15_01-Jul-2026_31-Jul-2026.pdf"
+);
+assert.equal(mayaWalletCoverage?.startDate, "2026-07-01T12:00:00.000Z");
+assert.equal(mayaWalletCoverage?.endDate, "2026-07-31T12:00:00.000Z");
+assert.deepEqual(
+  applyStatementFilenameCoverage(
+    { startDate: "2026-07-07T12:00:00.000Z", endDate: "2026-07-29T12:00:00.000Z" },
+    "MayaWallet_SoA_95f-baf23d860e15_01-Jul-2026_31-Jul-2026.pdf"
+  ),
+  {
+    startDate: "2026-07-01T12:00:00.000Z",
+    endDate: "2026-07-31T12:00:00.000Z",
+  },
+  "Maya statement filename coverage must outrank transaction-date gaps."
 );
 
 console.log("[PASS] password prompting, wallet identity, and multi-file progress regressions");
