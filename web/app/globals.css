@@ -51012,6 +51012,55 @@ html[data-theme="dark"] .investments-portfolio-table__total {
 .circles-topbar-action__icon { display: none; }
 .circles-topbar-action__short { display: none; }
 .circles-title-tabs { max-width: min(720px, 56vw); }
+.circles-title-tabs-wrap { position: relative; min-width: 0; }
+.circles-title-tabs--editable { align-items: stretch; }
+.circles-title-tabs--editable .circles-title-tab { gap: 5px; }
+.circles-title-tab__select,
+.circles-title-tab__name,
+.circles-title-tab__edit-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.circles-title-tab__select { flex: 0 0 auto; }
+.circles-title-tab__name { min-width: 0; white-space: nowrap; }
+.circles-title-tab__editor { display: inline-flex; align-items: center; gap: 3px; }
+.circles-title-tab__editor input {
+  width: clamp(110px, 15vw, 180px);
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid rgba(3, 168, 192, .42);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+.circles-title-tab__editor input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(3, 168, 192, .1); }
+.circles-title-tab__edit-action { width: 24px; height: 24px; border-radius: 7px; color: var(--accent-strong); font-size: 15px; }
+.circles-title-tab__edit-action:hover,
+.circles-title-tab__edit-action:focus-visible { background: var(--accent-soft); outline: none; }
+.circles-title-tabs__error {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  z-index: 4;
+  max-width: 320px;
+  padding: 6px 9px;
+  border: 1px solid rgba(239, 68, 68, .24);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--danger, #dc2626);
+  font-size: 12px;
+  box-shadow: var(--shadow-sm);
+}
 .circles-title-tab__avatar { width: 22px; height: 22px; padding: 3px; border-radius: 7px; background: var(--accent-soft); object-fit: contain; }
 .circles-section-tabs { width: 100%; padding: 0 2px 2px; }
 

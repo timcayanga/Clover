@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import {
   buildCircleInsights,
   calculateGoalForecast,
@@ -127,11 +129,36 @@ const runInvitationUat = () => {
   );
 };
 
+const runInlineRenameUat = () => {
+  const pageSource = readFileSync(
+    path.join(process.cwd(), "components/circles-page-client.tsx"),
+    "utf8",
+  );
+  const workspaceSource = readFileSync(
+    path.join(process.cwd(), "components/circles-workspace.tsx"),
+    "utf8",
+  );
+
+  assert.match(pageSource, /onClick=\{\(\) => beginEditing\(circle\)\}/);
+  assert.match(pageSource, /body: JSON\.stringify\(\{ name \}\)/);
+  assert.match(pageSource, /event\.key === "Escape"/);
+  assert.match(pageSource, /maxLength=\{100\}/);
+  assert.match(
+    workspaceSource,
+    /circle\.id === circleRename\.circleId[\s\S]*name: circleRename\.name/,
+  );
+  logPass(
+    "Circle organizer",
+    "can rename a Circle from its title tab with save, cancel, and synchronized workspace state",
+  );
+};
+
 runBeginnerUat();
 runExperiencedUat();
 runBarkadaUat();
 runCoupleUat();
 runRequestSecurityUat();
 runInvitationUat();
+runInlineRenameUat();
 
 process.stdout.write("Circles regression suite passed.\n");

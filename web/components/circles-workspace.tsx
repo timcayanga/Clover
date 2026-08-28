@@ -54,6 +54,11 @@ type CirclesWorkspaceProps = {
   onSelectedCircleChange: (circleId: string | null) => void;
   onCirclesChange: (circles: CircleSummary[]) => void;
   createRequest: number;
+  circleRename: {
+    circleId: string;
+    name: string;
+    revision: number;
+  } | null;
 };
 
 const emptyStateCircleTypes = [
@@ -129,6 +134,7 @@ export function CirclesWorkspace({
   onSelectedCircleChange,
   onCirclesChange,
   createRequest,
+  circleRename,
 }: CirclesWorkspaceProps) {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLElement>(null);
@@ -161,6 +167,18 @@ export function CirclesWorkspace({
   useEffect(() => {
     onCirclesChange(data.circles);
   }, [data.circles, onCirclesChange]);
+
+  useEffect(() => {
+    if (!circleRename) return;
+    setData((current) => ({
+      ...current,
+      circles: current.circles.map((circle) =>
+        circle.id === circleRename.circleId
+          ? { ...circle, name: circleRename.name }
+          : circle,
+      ),
+    }));
+  }, [circleRename]);
 
   useEffect(() => {
     setActiveTab("overview");
