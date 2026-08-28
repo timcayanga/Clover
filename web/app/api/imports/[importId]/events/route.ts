@@ -61,6 +61,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
         let lastSerializedSnapshot = "";
         let visibleEventSent = false;
         let fullSnapshotLoaded = false;
+        let lastFullSnapshotStatus: string | null = null;
         let nextFinalizationCheckAt = 0;
         let consecutiveErrors = 0;
         const close = () => {
@@ -122,7 +123,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
             const shouldFinalize =
               progress.status === "failed" ||
               (!fullSnapshotLoaded && Number(progress.confirmedTransactionsCount ?? 0) > 0) ||
-              (progress.status === "done" && Date.now() >= nextFinalizationCheckAt);
+              (progress.status === "done" &&
+                (lastFullSnapshotStatus !== "done" || Date.now() >= nextFinalizationCheckAt));
             if (!shouldFinalize) {
               return;
             }
@@ -133,6 +135,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
               promoteFailedVisibleImport: true,
             });
             fullSnapshotLoaded = true;
+            lastFullSnapshotStatus = progress.status;
             nextFinalizationCheckAt = Date.now() + 5_000;
             if (!snapshot) {
               send("error", { error: "Import not found" });

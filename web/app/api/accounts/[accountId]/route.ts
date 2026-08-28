@@ -14,7 +14,7 @@ import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { BANK_PRIORITY, normalizeBankName } from "@/lib/data-qa-banks";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { isWiseWalletWithoutVisibleAccountNumber, normalizeImportedCurrencyCode } from "@/lib/imported-account-identity";
-import { getAccountCheckpointEffectiveTime, resolveEffectiveAccountBalance } from "@/lib/account-balance-projection";
+import { compareAccountCheckpointFreshness, resolveEffectiveAccountBalance } from "@/lib/account-balance-projection";
 
 export const dynamic = "force-dynamic";
 
@@ -260,14 +260,6 @@ const accountNumbersMayMatch = (left?: string | null, right?: string | null, req
   return leftIsSuffixOnly && rightIsSuffixOnly && leftDigits === rightDigits;
 };
 
-const readCheckpointFreshnessTime = (checkpoint: {
-  createdAt: Date | string;
-  statementEndDate?: Date | string | null;
-  sourceMetadata?: unknown;
-}) => {
-  return getAccountCheckpointEffectiveTime(checkpoint);
-};
-
 const findPublishedSummaryForAccount = (
   account: {
     id: string;
@@ -350,8 +342,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
         type: account.type,
         currency: account.currency ?? null,
       });
-      let latestTime = -1;
-
       for (const checkpoint of checkpoints) {
         const sourceMetadata =
           checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
@@ -379,9 +369,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
           continue;
         }
 
-        const checkpointTime = readCheckpointFreshnessTime(checkpoint);
-        if (checkpointTime >= latestTime) {
-          latestTime = checkpointTime;
+        if (!latestCheckpoint || compareAccountCheckpointFreshness(checkpoint, latestCheckpoint) >= 0) {
           latestCheckpoint = checkpoint;
         }
       }

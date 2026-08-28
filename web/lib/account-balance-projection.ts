@@ -37,24 +37,38 @@ export const getAccountCheckpointEffectiveTime = (checkpoint: AccountBalanceChec
     return toTimestamp(checkpoint.createdAt);
   }
 
-  return toTimestamp(checkpoint.statementEndDate) || toTimestamp(checkpoint.createdAt);
+  const statementEndTime = toTimestamp(checkpoint.statementEndDate);
+  if (statementEndTime) {
+    return statementEndTime;
+  }
+
+  // A legacy statement with no period is undated financial evidence. Its
+  // upload time must not outrank a statement that has an explicit statement
+  // date; doing so can make an older balance replace a freshly imported one.
+  // `selectLatestAccountCheckpoint` still uses createdAt to order multiple
+  // undated statements when no stronger date exists.
+  return importMode === "statement" ? 0 : toTimestamp(checkpoint.createdAt);
+};
+
+export const compareAccountCheckpointFreshness = (
+  left: AccountBalanceCheckpoint,
+  right: AccountBalanceCheckpoint
+) => {
+  const effectiveDifference =
+    getAccountCheckpointEffectiveTime(left) - getAccountCheckpointEffectiveTime(right);
+  if (effectiveDifference !== 0) {
+    return effectiveDifference;
+  }
+
+  return toTimestamp(left.createdAt) - toTimestamp(right.createdAt);
 };
 
 export const selectLatestAccountCheckpoint = <T extends AccountBalanceCheckpoint>(checkpoints: T[]) => {
   let latest: T | null = null;
-  let latestEffectiveTime = -1;
-  let latestCreatedTime = -1;
 
   for (const checkpoint of checkpoints) {
-    const effectiveTime = getAccountCheckpointEffectiveTime(checkpoint);
-    const createdTime = toTimestamp(checkpoint.createdAt);
-    if (
-      effectiveTime > latestEffectiveTime ||
-      (effectiveTime === latestEffectiveTime && createdTime >= latestCreatedTime)
-    ) {
+    if (!latest || compareAccountCheckpointFreshness(checkpoint, latest) >= 0) {
       latest = checkpoint;
-      latestEffectiveTime = effectiveTime;
-      latestCreatedTime = createdTime;
     }
   }
 

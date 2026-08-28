@@ -23,6 +23,11 @@ const main = async () => {
     "The status stream must reload the import record instead of polling a stale upload snapshot."
   );
   assert.match(routeSource, /progress\.status\s*===\s*"failed"/);
+  assert.match(
+    routeSource,
+    /lastFullSnapshotStatus\s*!==\s*"done"\s*\|\|\s*Date\.now\(\)\s*>=\s*nextFinalizationCheckAt/,
+    "The stream must recheck settlement immediately when processing first reaches done instead of waiting for the retry throttle."
+  );
   assert.match(routeSource, /snapshot\.settledImportComplete/);
   assert.match(routeSource, /const compactImportSnapshot/);
   assert.match(routeSource, /send\("snapshot", progressSnapshot\)/);

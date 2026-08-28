@@ -80,6 +80,23 @@ const main = async () => {
     "newer-balance",
     "Uploading an older statement later must not replace the newer statement balance."
   );
+  const undatedLegacyStatement = {
+    id: "undated-legacy",
+    statementEndDate: null,
+    createdAt: "2026-08-01T00:00:00.000Z",
+    sourceMetadata: { importMode: "statement" },
+  };
+  const datedStatementUploadedLater = {
+    id: "dated-import",
+    statementEndDate: "2026-07-29T00:00:00.000Z",
+    createdAt: "2026-08-28T00:00:00.000Z",
+    sourceMetadata: { importMode: "statement" },
+  };
+  assert.equal(
+    selectLatestAccountCheckpoint([undatedLegacyStatement, datedStatementUploadedLater])?.id,
+    "dated-import",
+    "An undated legacy statement must not outrank a statement with an explicit financial date."
+  );
   assert.equal(
     getAccountCheckpointEffectiveTime({
       createdAt: "2026-08-16T00:00:00.000Z",
@@ -101,7 +118,7 @@ const main = async () => {
 
   for (const source of [listRoute, detailRoute]) {
     assert.match(source, /resolveEffectiveAccountBalance\(/);
-    assert.match(source, /getAccountCheckpointEffectiveTime\(/);
+    assert.match(source, /compareAccountCheckpointFreshness\(/);
   }
   assert.match(statusSnapshot, /const settledImportComplete = visibleImportComplete && settlementIssues\.length === 0/);
   assert.match(statusSnapshot, /transaction_count_not_settled/);

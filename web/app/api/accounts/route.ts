@@ -32,7 +32,7 @@ import {
 } from "@/lib/transient-data";
 import { summarizeErrorForLog } from "@/lib/security-logging";
 import { getLiveCryptoPhpPrices } from "@/lib/crypto-market-prices";
-import { getAccountCheckpointEffectiveTime, resolveEffectiveAccountBalance } from "@/lib/account-balance-projection";
+import { compareAccountCheckpointFreshness, resolveEffectiveAccountBalance } from "@/lib/account-balance-projection";
 import { isCryptoAssetCurrencyCode } from "@/lib/financial-identity-detection";
 import {
   getCanonicalPdaxHoldingIdentity,
@@ -491,14 +491,6 @@ const readImportedSourceRowIndex = (payload: unknown) => {
   }
 
   return readImportedJsonNumber((payload as Record<string, unknown>).sourceRowIndex);
-};
-
-const readCheckpointFreshnessTime = (checkpoint: {
-  createdAt: Date | string;
-  statementEndDate?: Date | string | null;
-  sourceMetadata?: Prisma.JsonValue | null;
-}) => {
-  return getAccountCheckpointEffectiveTime(checkpoint);
 };
 
 const isCimbParsedAccountRepairRow = (row: {
@@ -3379,25 +3371,16 @@ export async function GET(request: Request) {
                 ? sourceMetadata.accountCurrency
                 : null,
         });
-        const checkpointTime = readCheckpointFreshnessTime(checkpoint);
         if (checkpointKey) {
           const currentByKey = latestByAccountKey.get(checkpointKey);
-          const currentTimeByKey = currentByKey
-            ? readCheckpointFreshnessTime(currentByKey)
-            : -1;
-
-          if (!currentByKey || checkpointTime >= currentTimeByKey) {
+          if (!currentByKey || compareAccountCheckpointFreshness(checkpoint, currentByKey) >= 0) {
             latestByAccountKey.set(checkpointKey, checkpoint);
           }
         }
 
         if (checkpoint.accountId) {
           const current = latestByAccountId.get(checkpoint.accountId);
-          const currentTime = current
-            ? readCheckpointFreshnessTime(current)
-            : -1;
-
-          if (!current || checkpointTime >= currentTime) {
+          if (!current || compareAccountCheckpointFreshness(checkpoint, current) >= 0) {
             latestByAccountId.set(checkpoint.accountId, checkpoint);
           }
         }
@@ -3559,7 +3542,6 @@ export async function GET(request: Request) {
       currency?: string | null;
     }) => {
       let latestCheckpoint: (typeof statementCheckpoints)[number] | null = null;
-      let latestTime = -1;
       const accountKey = buildCurrencyScopedAccountIdentityKey({
         name: account.name,
         institution: account.institution,
@@ -3615,11 +3597,8 @@ export async function GET(request: Request) {
           continue;
         }
 
-        const checkpointTime = readCheckpointFreshnessTime(checkpoint);
-
-        if (checkpointTime >= latestTime) {
+        if (!latestCheckpoint || compareAccountCheckpointFreshness(checkpoint, latestCheckpoint) >= 0) {
           latestCheckpoint = checkpoint;
-          latestTime = checkpointTime;
         }
       }
 

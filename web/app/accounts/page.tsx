@@ -17,7 +17,7 @@ import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
 import { deriveReconciledBalance, normalizeAccountBalanceSign } from "@/lib/account-balance";
-import { getAccountCheckpointEffectiveTime } from "@/lib/account-balance-projection";
+import { compareAccountCheckpointFreshness } from "@/lib/account-balance-projection";
 import {
   ACCOUNT_CARD_DRAG_MIME,
   hasActiveAccountCardDrag,
@@ -1249,10 +1249,6 @@ const accountNumbersMayMatch = (
   return leftIsSuffixOnly && rightIsSuffixOnly && leftDigits === rightDigits;
 };
 
-const getCheckpointFreshnessTime = (checkpoint: StatementCheckpoint) => {
-  return getAccountCheckpointEffectiveTime(checkpoint);
-};
-
 const mergeStatementCheckpoints = (current: StatementCheckpoint[], next: StatementCheckpoint[]) => {
   if (next.length === 0) {
     return current;
@@ -1292,7 +1288,6 @@ const getLatestCheckpointForAccount = (
   }
 
   let latestCheckpoint: StatementCheckpoint | null = null;
-  let latestTime = -1;
   const identityKey = normalizeImportedAccountKey(
     account.name,
     account.institution,
@@ -1330,11 +1325,8 @@ const getLatestCheckpointForAccount = (
       continue;
     }
 
-    const checkpointTime = getCheckpointFreshnessTime(checkpoint);
-
-    if (checkpointTime >= latestTime) {
+    if (!latestCheckpoint || compareAccountCheckpointFreshness(checkpoint, latestCheckpoint) >= 0) {
       latestCheckpoint = checkpoint;
-      latestTime = checkpointTime;
     }
   }
 
