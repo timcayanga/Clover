@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { basename, extname, join } from "node:path";
+import { basename, dirname, extname, join } from "node:path";
 import { loadEnvConfig } from "@next/env";
 import { prisma } from "@/lib/prisma";
 import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
@@ -13,7 +15,24 @@ const baseUrl = process.env.CLOVER_IMPORT_REGRESSION_BASE_URL ?? "http://localho
 const statementRoot = process.env.CLOVER_STATEMENT_ROOT ?? "/Users/TimCayanga1/Documents/Bank Statements";
 const screenshotRoot = process.env.CLOVER_SCREENSHOT_ROOT ?? "/Users/TimCayanga1/Documents/Bank Screenshots";
 const receiptRoot = process.env.CLOVER_RECEIPT_ROOT ?? "/Users/TimCayanga1/Documents/Receipt Samples";
-const passwordFixture = join(webRoot, "tmp/pdfs/rcbc-password-qa.pdf");
+const gitRepositoryRoot = (() => {
+  try {
+    return dirname(
+      execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
+        cwd: webRoot,
+        encoding: "utf8",
+      }).trim()
+    );
+  } catch {
+    return dirname(webRoot);
+  }
+})();
+const passwordFixtureCandidates = [
+  process.env.CLOVER_IMPORT_PASSWORD_FIXTURE,
+  join(webRoot, "tmp/pdfs/rcbc-password-qa.pdf"),
+  join(gitRepositoryRoot, "web/tmp/pdfs/rcbc-password-qa.pdf"),
+].filter((candidate): candidate is string => Boolean(candidate));
+const passwordFixture = passwordFixtureCandidates.find((candidate) => existsSync(candidate)) ?? passwordFixtureCandidates[0]!;
 const maxVisibleMs = Number(process.env.CLOVER_IMPORT_MAX_VISIBLE_MS ?? 20_000);
 const maxStatusMs = Number(process.env.CLOVER_IMPORT_MAX_STATUS_MS ?? 3_000);
 const caseFilter = process.env.CLOVER_IMPORT_MATRIX_CASE?.trim().toLowerCase() ?? "";
@@ -37,6 +56,7 @@ type MatrixCase = {
   expectedAllMerchants?: RegExp;
   expectedCategory?: string;
   expectedAllTransfers?: boolean;
+  minimumTransfers?: number;
   expectedAmount?: number;
   expectedAmounts?: number[];
   exactTransactions?: number;
@@ -55,6 +75,7 @@ const cases: MatrixCase[] = [
     minimumTransactions: 50,
     expectedInstitution: /RCBC/i,
     expectedAccountType: "credit_card",
+    minimumTransfers: 1,
   },
   {
     label: "RCBC password prompt",
@@ -313,6 +334,13 @@ const verifyTransactions = async (workspaceId: string, importId: string, matrixC
   );
   const { spending, income, transfers } = totals;
   assert.ok(spending > 0 || income > 0 || transfers > 0, `${matrixCase.label}: visible summary values cannot all be zero.`);
+  if (matrixCase.minimumTransfers != null) {
+    const transferRows = transactions.filter((row) => row.isTransfer || row.type === "transfer").length;
+    assert.ok(
+      transferRows >= matrixCase.minimumTransfers,
+      `${matrixCase.label}: expected at least ${matrixCase.minimumTransfers} transfer rows, got ${transferRows}.`
+    );
+  }
 
   const accountIds = new Set(transactions.map((row) => row.accountId));
   assert.equal(accountIds.size, 1, `${matrixCase.label}: one file unexpectedly created transactions across multiple accounts.`);
@@ -422,6 +450,12 @@ const verifyDuplicateReplay = async (workspaceId: string, matrixCase: MatrixCase
 };
 
 const waitForPostVisibleJobs = async (workspaceIds: string[], timeoutMs = 20_000) => {
+  // Deferred QA, training, and finalization work starts 5-10 seconds after the
+  // import becomes visible. Let those callbacks begin before checking the
+  // durable enrichment queue; otherwise cleanup can delete their workspace
+  // during the delay and manufacture foreign-key failures in the server log.
+  const deferredWorkGraceMs = Number(process.env.CLOVER_IMPORT_POST_VISIBLE_GRACE_MS ?? 12_000);
+  await new Promise((resolve) => setTimeout(resolve, deferredWorkGraceMs));
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     const activeJobs = await prisma.importEnrichmentJob.count({
@@ -431,6 +465,7 @@ const waitForPostVisibleJobs = async (workspaceIds: string[], timeoutMs = 20_000
       },
     });
     if (activeJobs === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
       return;
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
@@ -462,6 +497,10 @@ const main = async () => {
     assert.ok(selectedCases.length > 0, `No import matrix case matched ${caseFilter}.`);
     for (const matrixCase of selectedCases) {
       assert.ok(extname(matrixCase.path), `${matrixCase.label}: fixture path must have an extension.`);
+      assert.ok(
+        existsSync(matrixCase.path),
+        `${matrixCase.label}: fixture not found at ${matrixCase.path}. Checked password fixture candidates: ${passwordFixtureCandidates.join(", ")}`
+      );
       const workspace = await createWorkspace(user.id, matrixCase.label);
       workspaces.push(workspace.id);
       const posted = await postFile(workspace.id, matrixCase);

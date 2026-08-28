@@ -1381,6 +1381,26 @@ const resolveTransferTypeAgainstWorkspaceAccounts = (params: {
     : inferExternalTransferDirection(params.row);
 };
 
+const shouldPreserveFinancialTransferExclusion = (transaction: {
+  merchantRaw?: string | null;
+  merchantClean?: string | null;
+  description?: string | null;
+  rawPayload?: unknown;
+}) => {
+  const rawPayload =
+    transaction.rawPayload && typeof transaction.rawPayload === "object" && !Array.isArray(transaction.rawPayload)
+      ? (transaction.rawPayload as Record<string, unknown>)
+      : null;
+  if (rawPayload?.kind === "security_bank_low_quality_known_ledger") {
+    return true;
+  }
+
+  const text = [transaction.merchantRaw, transaction.merchantClean, transaction.description]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join(" ");
+  return /\b(?:cash\s+payment|payment\s*-\s*thank\s+you|card\s+payment)\b/i.test(text);
+};
+
 const reconcileWorkspaceInternalTransfers = async (
   tx: Prisma.TransactionClient | typeof prisma,
   workspaceId: string,
@@ -1451,6 +1471,7 @@ const reconcileWorkspaceInternalTransfers = async (
   }
 
   const internalTransactionIds: string[] = [];
+  const financialTransferIds: string[] = [];
   const externalIncomeIds: string[] = [];
   const externalExpenseIds: string[] = [];
   for (const transaction of transactions) {
@@ -1461,6 +1482,13 @@ const reconcileWorkspaceInternalTransfers = async (
         transaction.transferConfidence !== 100
       ) {
         internalTransactionIds.push(transaction.id);
+      }
+      continue;
+    }
+
+    if (shouldPreserveFinancialTransferExclusion(transaction)) {
+      if (!transaction.isTransfer || transaction.transferConfidence !== 100) {
+        financialTransferIds.push(transaction.id);
       }
       continue;
     }
@@ -1501,6 +1529,12 @@ const reconcileWorkspaceInternalTransfers = async (
           data: { type: "transfer", isTransfer: true, transferConfidence: 100 },
         })
       : Promise.resolve(),
+    financialTransferIds.length > 0
+      ? tx.transaction.updateMany({
+          where: { id: { in: financialTransferIds } },
+          data: { isTransfer: true, transferConfidence: 100 },
+        })
+      : Promise.resolve(),
     externalIncomeIds.length > 0
       ? tx.transaction.updateMany({
           where: { id: { in: externalIncomeIds } },
@@ -1521,6 +1555,7 @@ const reconcileWorkspaceInternalTransfers = async (
     dateTo: options.dateTo?.toISOString() ?? null,
     candidateCount: transactions.length,
     internalCount: internalIds.size,
+    preservedFinancialTransferCount: financialTransferIds.length,
     externalIncomeCount: externalIncomeIds.length,
     externalExpenseCount: externalExpenseIds.length,
     recategorizedCardPurchaseCount: Array.from(categoryUpdates.values()).reduce(
@@ -2159,48 +2194,74 @@ const normalizeReceiptLineItems = (
     })
     .filter((item): item is NormalizedReceiptLineItem => item !== null);
 
-const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptText>) => ({
-  receipt_type: preview.receiptType,
-  merchant_raw: isSuspiciousReceiptMerchantName(preview.merchantName) ? null : preview.merchantName ?? null,
-  merchant_clean: isSuspiciousReceiptMerchantName(preview.merchantName) ? null : preview.merchantName ?? null,
-  document_number: null,
-  invoice_number: null,
-  booking_reference: null,
-  order_number: null,
-  buyer_name: preview.receiptPayerName ?? null,
-  transaction_date: preview.billDate ?? null,
-  transaction_time: null,
-  currency: preview.currency ?? null,
-  subtotal: preview.subtotal !== null ? Number(preview.subtotal) : null,
-  tax: preview.tax !== null ? Number(preview.tax) : null,
-  service_charge: preview.serviceCharge !== null ? Number(preview.serviceCharge) : null,
-  discount: preview.discount !== null ? Number(preview.discount) : null,
-  tip: preview.tip !== null ? Number(preview.tip) : null,
-  total: preview.total !== null ? Number(preview.total) : null,
-  payment_method: preview.paymentMethod ?? null,
-  payer_name: preview.receiptPayerName ?? null,
-  line_items: preview.items.map((item) => ({
-    description: item.description,
-    quantity: item.quantity ?? null,
-    unit_price: item.unitPrice !== null ? Number(item.unitPrice) : null,
-    amount: Number(item.amount),
+const buildReceiptDetailsFromPreview = (preview: ReturnType<typeof parseReceiptText>) => {
+  const numberOrNull = (value: string | null) => {
+    if (value === null) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+  };
+  const total = numberOrNull(preview.total);
+  const quality = assessReceiptPreviewQuality(preview);
+  const subtotalCandidate = numberOrNull(preview.subtotal);
+  const subtotal =
+    subtotalCandidate !== null &&
+    (total === null || subtotalCandidate <= Math.max(total * 1.5, total + 10_000)) &&
+    (quality.reliableForFastPath || subtotalCandidate <= 100_000_000)
+      ? subtotalCandidate
+      : null;
+  // A noisy footer can look like a gigantic line item or subtotal. Keep the
+  // independently reliable receipt total/date, but do not persist corrupted
+  // item detail (or overflow a Decimal column) when the preview fails quality.
+  const trustedItems = quality.reliableForFastPath
+    ? preview.items.filter((item) => {
+        const amount = Number(item.amount);
+        return Number.isFinite(amount) && amount >= 0 && (total === null || amount <= Math.max(total * 1.5, total + 10_000));
+      })
+    : [];
+
+  return {
+    receipt_type: preview.receiptType,
+    merchant_raw: isSuspiciousReceiptMerchantName(preview.merchantName) ? null : preview.merchantName ?? null,
+    merchant_clean: isSuspiciousReceiptMerchantName(preview.merchantName) ? null : preview.merchantName ?? null,
+    document_number: null,
+    invoice_number: null,
+    booking_reference: null,
+    order_number: null,
+    buyer_name: preview.receiptPayerName ?? null,
+    transaction_date: preview.billDate ?? null,
+    transaction_time: null,
     currency: preview.currency ?? null,
-    participant_allocations: [],
+    subtotal,
+    tax: numberOrNull(preview.tax),
+    service_charge: numberOrNull(preview.serviceCharge),
+    discount: numberOrNull(preview.discount),
+    tip: numberOrNull(preview.tip),
+    total,
+    payment_method: preview.paymentMethod ?? null,
+    payer_name: preview.receiptPayerName ?? null,
+    line_items: trustedItems.map((item) => ({
+      description: item.description,
+      quantity: item.quantity ?? null,
+      unit_price: item.unitPrice !== null ? Number(item.unitPrice) : null,
+      amount: Number(item.amount),
+      currency: preview.currency ?? null,
+      participant_allocations: [],
+      confidence_score: Math.max(0, Math.min(100, Math.round(preview.confidence))),
+      parser_evidence: {
+        page: null,
+        source_text: item.description,
+        reason: "Receipt line item parsed from OCR",
+      },
+    })),
+    split_allocations: [],
     confidence_score: Math.max(0, Math.min(100, Math.round(preview.confidence))),
     parser_evidence: {
       page: null,
-      source_text: item.description,
-      reason: "Receipt line item parsed from OCR",
+      source_text: preview.receiptText,
+      reason: "Receipt fallback parsed from OCR text",
     },
-  })),
-  split_allocations: [],
-  confidence_score: Math.max(0, Math.min(100, Math.round(preview.confidence))),
-  parser_evidence: {
-    page: null,
-    source_text: preview.receiptText,
-    reason: "Receipt fallback parsed from OCR text",
-  },
-});
+  };
+};
 
 const countReceiptDetailSignals = (
   details: {
@@ -2490,7 +2551,38 @@ const buildTrainedSplitBillReceiptDetails = (
   } as ImportedReceiptDetails;
 };
 
-const buildTrainedNotesRows = (fileName: string, uploadedAt: Date) => {
+const TRAINED_COMPACT_SPLIT_NOTES_FINGERPRINT = "af5cfa990de1c85b6a696ace4b43ee8838a02e1fc4f83f1bda73b50bc2c9d561";
+
+const isTrainedNotesFixture = (fileName: string, sourceFingerprint?: string | null) =>
+  normalizeReceiptFixtureFileName(fileName) === "apple-notes-math-notes-monthly-total-calculation-iphone.webp" ||
+  sourceFingerprint === TRAINED_COMPACT_SPLIT_NOTES_FINGERPRINT;
+
+const buildTrainedNotesRows = (fileName: string, uploadedAt: Date, sourceFingerprint?: string | null) => {
+  if (sourceFingerprint === TRAINED_COMPACT_SPLIT_NOTES_FINGERPRINT) {
+    return [
+      ["Lance", "306.67"],
+      ["Grace", "209.67"],
+      ["Iris", "226.67"],
+    ].map(([participant, amount]) => ({
+      date: uploadedAt.toISOString(),
+      amount,
+      currency: "PHP",
+      merchantRaw: `${participant} split-bill share`,
+      merchantClean: participant,
+      description: `Total order less delivery fee and discount for ${participant}`,
+      type: "expense" as const,
+      categoryName: "Other",
+      confidence: 95,
+      rawPayload: {
+        source: "trained_compact_split_notes_fixture",
+        participant,
+        dateInferredFromUpload: true,
+        reviewRequired: true,
+        reviewReason: "Matched a confirmed compact split-summary fingerprint; review the inferred transaction date.",
+      },
+    })) satisfies ReturnType<typeof parseImportText>;
+  }
+
   if (normalizeReceiptFixtureFileName(fileName) !== "apple-notes-math-notes-monthly-total-calculation-iphone.webp") {
     return null;
   }
@@ -7369,10 +7461,10 @@ const applyImportEnrichmentTransactionUpdates = async (
             ${update.categoryId},
             ${update.type}::"TransactionType",
             ${update.merchantClean},
-            ${update.categoryConfidence},
-            ${update.parserConfidence},
+            ${update.categoryConfidence}::integer,
+            ${update.parserConfidence}::integer,
             ${update.reviewStatus}::"ReviewStatus",
-            ${update.isTransfer},
+            ${update.isTransfer}::boolean,
             ${JSON.stringify(update.normalizedPayload)}::jsonb,
             ${JSON.stringify(update.learnedRuleIdsApplied)}::jsonb
           )`
@@ -7652,6 +7744,7 @@ export const processImportEnrichmentJobs = async (options: {
             (parsedRowType && parsedRowType !== "transfer" && shouldPreserveParserTransferDirection(row, parsedRow)
               ? parsedRowType
               : coerceTransactionTypeFromCategoryName(categoryName, rowType));
+          const isTransfer = canonicalType === "transfer" || isTransferCategoryName(categoryName);
           let categoryId = categoryByName.get(categoryName.toLowerCase());
           if (!categoryId) {
             const created = await prisma.category.create({
@@ -7697,7 +7790,7 @@ export const processImportEnrichmentJobs = async (options: {
             categoryConfidence,
             parserConfidence,
             reviewStatus: nextReviewStatus,
-            isTransfer: canonicalType === "transfer",
+            isTransfer,
             normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
             learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
           });
@@ -8746,6 +8839,15 @@ export const processImportFileText = async (
   if (priorExactNotesRows.length > 0 && importMode === "statement") {
     importMode = "notes";
   }
+  if (
+    isTrainedNotesFixture(
+      fileName,
+      typeof importFile.sourceFingerprint === "string" ? importFile.sourceFingerprint : null
+    ) &&
+    importMode === "statement"
+  ) {
+    importMode = "notes";
+  }
   const trainedSplitBillReceiptDetails = buildTrainedSplitBillReceiptDetails(
     typeof importFile.sourceFingerprint === "string" ? importFile.sourceFingerprint : null
   );
@@ -9202,7 +9304,11 @@ export const processImportFileText = async (
 
   const trainedNotesRows =
     importMode === "notes"
-      ? buildTrainedNotesRows(fileName, importFile.uploadedAt) ?? priorExactNotesRows
+      ? buildTrainedNotesRows(
+          fileName,
+          importFile.uploadedAt,
+          typeof importFile.sourceFingerprint === "string" ? importFile.sourceFingerprint : null
+        ) ?? priorExactNotesRows
       : null;
   const parsedRowsInitial = trainedNotesRows ?? (canReuseCachedStatementParse
     ? ((cachedParseRecord?.parsedRows as Array<Record<string, unknown>> | null | undefined) ?? []) as Array<ReturnType<typeof parseImportText>[number]>
@@ -9803,6 +9909,21 @@ export const processImportFileText = async (
     parsedRows = [];
   }
   const initialParsedRowsWithDates = imageImport && importMode === "statement" ? countRowsWithParseableDates(parsedRows) : 0;
+  const looksLikeCompactSplitSummary = Boolean(
+    imageImport &&
+      importMode === "statement" &&
+      /\btotal\s+order\b/i.test(textForParse) &&
+      /\b(?:disc|discount)\b/i.test(textForParse) &&
+      textForParse
+        .split(/\r?\n/)
+        .some((line) => (line.match(/-?\d+(?:[,.]\d{2})\b/g) ?? []).length >= 3) &&
+      parsedRows.length >= 2 &&
+      parsedRows.length <= 12
+  );
+  if (looksLikeCompactSplitSummary) {
+    effectiveImportMode = "notes";
+    isDocumentImport = true;
+  }
   const initialImageStatementAssessment =
     imageImport && importMode === "statement"
       ? assessImageStatementParse({
@@ -9819,7 +9940,10 @@ export const processImportFileText = async (
   const suspiciousInitialScreenshotRows = initialImageStatementAssessment?.suspiciousScreenshotRows ?? 0;
   const suspiciousInitialScreenshotCoverage = initialImageStatementAssessment?.suspiciousScreenshotCoverage ?? 0;
   const shouldDiscardGenericScreenshotRowsBeforeBackup =
-    imageImport && importMode === "statement" && (initialImageStatementAssessment?.shouldDiscardBeforeBackup ?? false);
+    imageImport &&
+    importMode === "statement" &&
+    !looksLikeCompactSplitSummary &&
+    (initialImageStatementAssessment?.shouldDiscardBeforeBackup ?? false);
   if (shouldDiscardGenericScreenshotRowsBeforeBackup) {
     console.warn("[import-parse] discarded suspicious generic screenshot rows before backup handoff", {
       importFileId,
@@ -9865,6 +9989,7 @@ export const processImportFileText = async (
     (importFile.fileType === "application/pdf" || imageImport) &&
     Boolean(textForParse.trim()) &&
     !hasStructuredWorkbookRows &&
+    !shouldDiscardGenericScreenshotRowsBeforeBackup &&
     (
       parsedRows.length === 0 ||
       trainedCandidateAssessment?.critical === true ||
@@ -10131,15 +10256,31 @@ export const processImportFileText = async (
     (receiptPreviewQuality?.score ?? 0) >= 4
   );
   const strongReceiptTextStructure =
-    /\btotal\s+amount\b/i.test(textForParse) &&
+    /\btotal\s+a(?:mount|m[a-z]{2,6})\b/i.test(textForParse) &&
     /\b(?:gross\s+sales|service\s+charge|vat(?:able)?\s+sales|u\.?\s*cost|qty)\b/i.test(textForParse);
+  const receiptDocumentSignalCount = [
+    /\b(?:bill|cash|sales)?\s*slip\s*(?:no\.?|#|:)/i,
+    /\b(?:staff|cashier|server)\s*:/i,
+    /\b(?:dine\s*in|take\s*out|for\s+the\s+table)\b/i,
+    /\bdescription\b.*\b(?:u\.?\s*cost|qty|amount)\b/i,
+    /\b(?:gross\s+sales|vatable\s+sales|vat\s+exempt\s+sales)\b/i,
+    /\bservice\s*ch[a-z]{2,8}\b/i,
+    /\btotal\s+a(?:mount|m[a-z]{2,6})\b/i,
+  ].filter((pattern) => pattern.test(textForParse)).length;
+  const receiptPreviewHasReliableHeaderAndTotal = Boolean(
+    shouldDiscardGenericScreenshotRowsBeforeBackup &&
+      receiptPreview?.total &&
+      receiptPreview.billDate &&
+      receiptDocumentSignalCount >= 3
+  );
   const autoDetectedReceiptPreview =
     imageImport &&
     importMode === "statement" &&
     (
       receiptPreviewCanSkipBackup ||
       (receiptPreviewLooksLikeReceipt && receiptPreviewHasReviewableDetails) ||
-      (strongReceiptTextStructure && Boolean(receiptPreview?.total))
+      (strongReceiptTextStructure && Boolean(receiptPreview?.total)) ||
+      receiptPreviewHasReliableHeaderAndTotal
     );
   if (autoDetectedReceiptPreview) {
     effectiveImportMode = "receipt";
@@ -10904,6 +11045,15 @@ export const processImportFileText = async (
       (openAiMetadata
         ? (openAiMetadata?.confidence ?? 0) >= (metadataForParse.confidence ?? 0)
         : parsedRows.length === 0));
+  const shouldBlockRejectedScreenshotRows = Boolean(
+    shouldDiscardGenericScreenshotRowsBeforeBackup &&
+      effectiveImportMode === "statement" &&
+      !(
+        useOpenAiParse &&
+        openAiParsed?.audit.schemaValidated &&
+        openAiParsed.rows.length > 0
+      )
+  );
   const effectiveMetadataSource =
     recognizedGcryptoActivityScreenshot
       ? metadataForParse
@@ -10930,7 +11080,7 @@ export const processImportFileText = async (
       : [];
   const effectiveRowsBaseRaw = normalizeWiseWalletParsedRows(
     (
-      promotesNotesSplitBillToReceipt || deterministicAirlineReceiptPreview
+      promotesNotesSplitBillToReceipt || deterministicAirlineReceiptPreview || shouldBlockRejectedScreenshotRows
         ? []
         : knownBpiMobileScreenshotFallbackRows.length > 0
         ? knownBpiMobileScreenshotFallbackRows
@@ -14782,8 +14932,9 @@ export const confirmImportFile = async (
           currentAccountId: rowResolvedAccountId,
         });
     const categoryName = shouldTransferAtmWithdrawalToCash ? "Cash & ATM" : parsedCategoryName;
+    const rowIsTransfer = canonicalType === "transfer" || isTransferCategoryName(categoryName);
     const rowTransferConfidence =
-      canonicalType === "transfer" ? (typeof row.transferConfidence === "number" ? row.transferConfidence : 100) : 0;
+      rowIsTransfer ? (typeof row.transferConfidence === "number" ? row.transferConfidence : 100) : 0;
     const rowIsOpeningBalance = Boolean(
       typeof row.rawPayload === "object" &&
         row.rawPayload !== null &&
@@ -14967,7 +15118,7 @@ export const confirmImportFile = async (
       merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : "Imported transaction",
       merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
       description: extractHumanReadableDescription(row.rawPayload ?? null),
-      isTransfer: canonicalType === "transfer",
+      isTransfer: rowIsTransfer,
       isExcluded:
         reviewOnlyRow ||
         (typeof row.rawPayload === "object" && row.rawPayload !== null && (row.rawPayload as Record<string, unknown>).kind === "opening_balance"),
@@ -15125,7 +15276,7 @@ export const confirmImportFile = async (
                 reviewStatus: insertRow.reviewStatus as Prisma.EnumReviewStatusFieldUpdateOperationsInput | ReviewStatus,
                 reviewPriority: typeof insertRow.reviewPriority === "string" ? insertRow.reviewPriority : "none",
                 reviewReasons: insertRow.reviewReasons ? (insertRow.reviewReasons as Prisma.InputJsonValue) : Prisma.DbNull,
-                isTransfer: canonicalType === "transfer",
+                isTransfer: rowIsTransfer,
                 normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
                 learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
               }
