@@ -606,8 +606,7 @@ export function SplitBillQrLibrary() {
         </div>
         <button className="button button-primary button-small transactions-action-button" type="button" onClick={openCreate}>
           <span aria-hidden="true">+</span>
-          <span className="split-bill-action-label--desktop">Add Option</span>
-          <span className="split-bill-action-label--mobile">Add</span>
+          <span>Add option</span>
         </button>
       </div>
 

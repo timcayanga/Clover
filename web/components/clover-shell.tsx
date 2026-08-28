@@ -117,6 +117,7 @@ type CloverShellProps = {
   kicker?: string;
   subtitle?: string;
   titleAddon?: ReactNode;
+  desktopTitleAction?: ReactNode;
   actions?: ReactNode;
   mobileLeadingAction?: ReactNode;
   showTopbar?: boolean;
@@ -792,6 +793,7 @@ export function CloverShell({
   kicker,
   subtitle,
   titleAddon,
+  desktopTitleAction,
   actions,
   mobileLeadingAction,
   showTopbar = true,
@@ -2396,6 +2398,7 @@ export function CloverShell({
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
               <div className="topbar__title-row">
                 <h1>{mobileOverlayChrome?.title ?? title}</h1>
+                {desktopTitleAction ? <div className="topbar__desktop-title-action">{desktopTitleAction}</div> : null}
                 {titleAddon ? <div className="topbar__title-addon">{titleAddon}</div> : null}
               </div>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
@@ -2437,6 +2440,7 @@ export function CloverShell({
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
               <div className="topbar__title-row">
                 <h1>{mobileOverlayChrome?.title ?? title}</h1>
+                {desktopTitleAction ? <div className="topbar__desktop-title-action">{desktopTitleAction}</div> : null}
                 {titleAddon ? <div className="topbar__title-addon">{titleAddon}</div> : null}
               </div>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}

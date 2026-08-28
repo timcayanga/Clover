@@ -299,7 +299,6 @@ export function CirclesPageClient({
     <CloverShell
       active="circles"
       title="Circles"
-      mobileBackHref="/more"
       titleAddon={
         circles.length ? (
           <CircleTitleTabs

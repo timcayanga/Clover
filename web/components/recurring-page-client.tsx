@@ -137,7 +137,6 @@ export function RecurringPageClient({
     <CloverShell
       active="recurring"
       title="Recurring"
-      mobileLeadingAction={<ContextualAskClover context="recurring" planTier={planTier} />}
       titleAddon={
         <nav className="investments-tabs recurring-tabs--top mobile-icon-tabs" aria-label="Recurring sections">
           {recurringTabs.map((tab) => (

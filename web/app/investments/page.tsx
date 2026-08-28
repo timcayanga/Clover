@@ -705,33 +705,49 @@ type InvestmentHoldingEditDraft = {
 
 type InvestmentTab = "overview" | "portfolio" | "planner" | "market" | "analysis";
 
+function InvestmentTabIcon({ tab }: { tab: InvestmentTab }) {
+  if (tab === "portfolio") {
+    return <svg viewBox="0 0 24 24" fill="none"><path d="M5 8h14v11H5zM8 8V5h8v3m-5 4h2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+  }
+  if (tab === "planner") {
+    return <svg viewBox="0 0 24 24" fill="none"><path d="M6 4v3m12-3v3M5 9h14M6 6h12a2 2 0 0 1 2 2v11H4V8a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><path d="m8 15 2 2 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+  }
+  if (tab === "market") {
+    return <svg viewBox="0 0 24 24" fill="none"><path d="M4 19h16M6 16l4-5 3 3 5-7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+  }
+  if (tab === "analysis") {
+    return <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.8" /><path d="m16 16 4 4M8 12l2-2 2 2 3-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+  }
+  return <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.8" /><rect x="14" y="4" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.8" /><rect x="4" y="14" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.8" /><rect x="14" y="14" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.8" /></svg>;
+}
+
 const INVESTMENT_TABS: Array<{ key: InvestmentTab; label: string; icon: ReactNode; proOnly?: boolean }> = [
   {
     key: "overview",
     label: "Overview",
-    icon: null,
+    icon: <InvestmentTabIcon tab="overview" />,
   },
   {
     key: "portfolio",
     label: "Portfolio",
-    icon: null,
+    icon: <InvestmentTabIcon tab="portfolio" />,
   },
   {
     key: "planner",
     label: "Planner",
-    icon: null,
+    icon: <InvestmentTabIcon tab="planner" />,
     proOnly: true,
   },
   {
     key: "market",
     label: "Markets",
-    icon: null,
+    icon: <InvestmentTabIcon tab="market" />,
     proOnly: true,
   },
   {
     key: "analysis",
     label: "Analysis",
-    icon: null,
+    icon: <InvestmentTabIcon tab="analysis" />,
     proOnly: true,
   },
 ];

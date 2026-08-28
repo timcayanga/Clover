@@ -6993,13 +6993,6 @@ function TransactionsPageContent() {
         <ActionIcon name="filters" />
         <span>Filters</span>
       </button>
-      <details className="transactions-manage-menu">
-        <summary className="button button-secondary button-small" aria-label="Manage transaction organization">Manage</summary>
-        <div className="transactions-manage-menu__popover">
-          <Link href="/transactions/categories">Categories</Link>
-          <Link href="/transactions/tags">Tags</Link>
-        </div>
-      </details>
       <button
         className="button button-secondary button-small accounts-toolbar-add transactions-toolbar-add transactions-toolbar-add--compact"
         type="button"
@@ -7026,8 +7019,6 @@ function TransactionsPageContent() {
     </div>
   ) : (
     <div className="transactions-shell-actions" style={transactionsShellActionsStyle}>
-      <ContextualAskClover context="transactions" planTier={planTier} />
-
       <details className="transactions-manage-menu">
         <summary className="button button-secondary button-small">Manage</summary>
         <div className="transactions-manage-menu__popover">
@@ -7159,7 +7150,25 @@ function TransactionsPageContent() {
     <CloverShell
       active="transactions"
       title="Transactions"
-      mobileLeadingAction={<ContextualAskClover context="transactions" planTier={planTier} />}
+      desktopTitleAction={<ContextualAskClover context="transactions" planTier={planTier} />}
+      mobileLeadingAction={
+        <div className="transactions-mobile-leading-actions">
+          <ContextualAskClover context="transactions" planTier={planTier} />
+          <details className="transactions-manage-menu transactions-manage-menu--mobile-leading">
+            <summary
+              className="button button-secondary button-small transactions-manage-icon-button"
+              aria-label="Manage transaction organization"
+              title="Manage"
+            >
+              <ActionIcon name="summary" />
+            </summary>
+            <div className="transactions-manage-menu__popover">
+              <Link href="/transactions/categories">Categories</Link>
+              <Link href="/transactions/tags">Tags</Link>
+            </div>
+          </details>
+        </div>
+      }
       actions={transactionsShellActions}
     >
       <PageFileDropZone
