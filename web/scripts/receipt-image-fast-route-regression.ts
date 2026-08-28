@@ -22,6 +22,11 @@ assert.match(
 );
 assert.match(
   parserSource,
+  /const coldVisualModel = OPENAI_IMPORT_FAST_MODEL_FALLBACK;[\s\S]*?const model = useColdVisualFastPath\s*\? coldVisualModel/,
+  "Cold generic images must not inherit a slower environment-level statement parser override."
+);
+assert.match(
+  parserSource,
   /const maxOutputTokens = isReceiptMode[\s\S]*?\? 2_600[\s\S]*?: 1_600/,
   "Ordinary receipts must use the compact response budget while hard receipts retain headroom."
 );

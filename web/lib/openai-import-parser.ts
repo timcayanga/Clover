@@ -2690,6 +2690,11 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     "image model",
   );
   const textModel = fastModel;
+  // Cold one-page images are classification-first requests. Keep that path on
+  // Clover's bounded fast model even when an environment still carries an
+  // older general parser override; otherwise a receipt dropped into Statement
+  // mode can spend the whole visible-import budget in the model call alone.
+  const coldVisualModel = OPENAI_IMPORT_FAST_MODEL_FALLBACK;
   const strongModel = resolveOpenAIImportModel(
     (env as { OPENAI_IMPORT_PARSER_STRONG_MODEL?: string }).OPENAI_IMPORT_PARSER_STRONG_MODEL,
     OPENAI_IMPORT_STRONG_MODEL_FALLBACK,
@@ -2702,7 +2707,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     "pdf model",
   );
   const model = useColdVisualFastPath
-    ? fastModel
+    ? coldVisualModel
     : pdfFileDataBase64
     ? pdfModel
     : pageImagesToSend.length > 0
@@ -2716,7 +2721,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       : textModel;
   const modelFallbackChain = dedupeOpenAIImportModels(
     useColdVisualFastPath
-      ? [fastModel]
+      ? [coldVisualModel]
       : pdfFileDataBase64
       ? inferredDifficulty === "hard"
         ? [strongModel, pdfModel, OPENAI_IMPORT_LEGACY_PDF_MODEL_FALLBACK]
