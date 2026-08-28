@@ -15,6 +15,7 @@ import { InfoTooltip } from "@/components/info-tooltip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { InvestmentMarketChart } from "@/components/investment-market-chart";
 import { InvestmentPortfolioGrowthChart } from "@/components/investment-portfolio-growth-chart";
+import { GrowthPlanner } from "@/components/growth-planner";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { useDefaultCurrency } from "@/lib/use-default-currency";
@@ -701,7 +702,7 @@ type InvestmentHoldingEditDraft = {
   currency: string;
 };
 
-type InvestmentTab = "overview" | "portfolio" | "market" | "analysis";
+type InvestmentTab = "overview" | "portfolio" | "planner" | "market" | "analysis";
 
 const INVESTMENT_TABS: Array<{ key: InvestmentTab; label: string; icon: ReactNode; proOnly?: boolean }> = [
   {
@@ -713,6 +714,12 @@ const INVESTMENT_TABS: Array<{ key: InvestmentTab; label: string; icon: ReactNod
     key: "portfolio",
     label: "Portfolio",
     icon: null,
+  },
+  {
+    key: "planner",
+    label: "Planner",
+    icon: null,
+    proOnly: true,
   },
   {
     key: "market",
@@ -735,7 +742,7 @@ const normalizeInvestmentTab = (value: string | null | undefined): InvestmentTab
     return "portfolio";
   }
 
-  if (value === "portfolio" || value === "market" || value === "analysis") {
+  if (value === "portfolio" || value === "planner" || value === "market" || value === "analysis") {
     return value;
   }
 
@@ -2096,7 +2103,7 @@ export default function InvestmentsPage() {
       portfolioView !== "all"
   );
   const canUseProTabs = hasFullFeatureAccess(planTier);
-  const canAccessSelectedTab = !((selectedTab === "market" || selectedTab === "analysis") && !canUseProTabs);
+  const canAccessSelectedTab = !((selectedTab === "planner" || selectedTab === "market" || selectedTab === "analysis") && !canUseProTabs);
   const visibleInvestmentTabs = INVESTMENT_TABS;
   const classifiedInvestmentAccounts = useMemo(
     () =>
@@ -2223,7 +2230,7 @@ export default function InvestmentsPage() {
   }, []);
 
   useEffect(() => {
-    if (!canUseProTabs && (selectedTab === "market" || selectedTab === "analysis")) {
+    if (!canUseProTabs && (selectedTab === "planner" || selectedTab === "market" || selectedTab === "analysis")) {
       setSelectedTab("overview");
     }
   }, [canUseProTabs, selectedTab]);
@@ -2873,8 +2880,8 @@ export default function InvestmentsPage() {
         {!canAccessSelectedTab ? (
           <PlanUpgradeCallout
             planTier="free"
-            title={`Unlock ${selectedTab === "market" ? "Markets" : "Analysis"}`}
-            copy="Upgrade to Pro to unlock the full investment workspace, including market context and portfolio analysis."
+            title={`Unlock ${selectedTab === "market" ? "Markets" : selectedTab === "planner" ? "Growth Planner" : "Analysis"}`}
+            copy="Upgrade to Pro to unlock the full investment workspace, including growth scenarios, market context, and portfolio analysis."
             ctaHref="/settings?upgrade=pro&interval=annual"
             ctaLabel="Upgrade to Pro"
             secondaryHref="/pricing"
@@ -3195,6 +3202,11 @@ export default function InvestmentsPage() {
               )}
             </section>
           </>
+        ) : selectedTab === "planner" ? (
+          <GrowthPlanner
+            currency={selectedCurrencyCodes[0] ?? portfolioCurrencyFilter ?? defaultCurrency ?? "PHP"}
+            initialPrincipal={canAggregateSelectedCurrency && estimatedPortfolioTotals.currentValue > 0 ? estimatedPortfolioTotals.currentValue : 100_000}
+          />
         ) : selectedTab === "market" ? (
           <InvestmentMarketChart
             investmentAccounts={marketPortfolioAccounts.length > 0 ? marketPortfolioAccounts : classifiedInvestmentAccounts}

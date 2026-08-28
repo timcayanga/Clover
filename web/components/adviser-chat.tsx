@@ -69,6 +69,7 @@ type AdviserChatProps = {
   prompts: AdviserPrompt[];
   isPro: boolean;
   storageKey?: string;
+  initialPrompt?: string;
 };
 
 const adviserChatStorageKey = "clover-adviser-chat-session-v1";
@@ -90,7 +91,7 @@ const inferFeedbackGroup = (question: string) => {
   return "cashflow";
 };
 
-export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey }: AdviserChatProps) {
+export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey, initialPrompt = "" }: AdviserChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -130,6 +131,14 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
       setIsHydrated(true);
     }
   }, [storageKey]);
+
+  useEffect(() => {
+    if (!isHydrated || !initialPrompt.trim()) {
+      return;
+    }
+
+    setInput((current) => current.trim() ? current : initialPrompt.trim());
+  }, [initialPrompt, isHydrated]);
 
   useEffect(() => {
     if (!isHydrated) {

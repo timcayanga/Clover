@@ -1110,7 +1110,7 @@ const getWeightedHistoricalBaseline = (series: Array<{ income: number; expense: 
   };
 };
 
-type AdviserSearchParams = { range?: string; section?: string; filter?: string; from?: string; to?: string };
+type AdviserSearchParams = { range?: string; section?: string; filter?: string; from?: string; to?: string; prompt?: string };
 
 async function AdviserPageContent({ searchParams }: { searchParams?: Promise<AdviserSearchParams> }) {
   try {
@@ -3380,7 +3380,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
           />
         ) : null}
         <section className="adviser-section adviser-section--questions glass">
-          <AdviserChat prompts={promptSuggestions} isPro={hasCompleteAccess} />
+          <AdviserChat prompts={promptSuggestions} isPro={hasCompleteAccess} initialPrompt={resolvedSearchParams?.prompt?.slice(0, 1600)} />
         </section>
 
         <header className="adviser-summary">

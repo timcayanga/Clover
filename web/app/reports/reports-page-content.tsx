@@ -27,6 +27,8 @@ import { repairWorkspaceDataVisibility } from "@/lib/reconciliation";
 import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
 import { hasFullFeatureAccess } from "@/lib/beta-access";
 import { resolveReportWindow } from "@/lib/report-window";
+import { buildSpendingPaceSnapshot } from "@/lib/spending-pace";
+import { SpendingPaceCard } from "@/components/spending-pace-card";
 
 const ReportsReviewQueue = nextDynamic(() => import("@/components/reports-review-queue").then((module) => module.ReportsReviewQueue), {
   loading: () => (
@@ -100,6 +102,7 @@ type ReportTransaction = {
     name: string;
     institution: string | null;
     accountNumber: string | null;
+    currency: string;
   };
   category: {
     name: string;
@@ -250,12 +253,14 @@ const mapParsedRowsToReportTransactions = (
     rawPayload: unknown;
     institution: string | null;
     accountName: string | null;
+    currency: string;
     importFile: {
       account: {
         id: string;
         name: string;
         institution: string | null;
         accountNumber: string | null;
+        currency: string;
       } | null;
     } | null;
   }>
@@ -282,6 +287,7 @@ const mapParsedRowsToReportTransactions = (
           name: row.importFile?.account?.name ?? row.accountName ?? "Imported account",
           institution: row.importFile?.account?.institution ?? row.institution,
           accountNumber: row.importFile?.account?.accountNumber ?? null,
+          currency: row.importFile?.account?.currency ?? row.currency ?? "MIXED",
         },
         category: row.categoryName ? { name: row.categoryName } : null,
         importFileId: row.importFileId,
@@ -512,6 +518,7 @@ export async function ReportsStream({
               name: true,
               institution: true,
               accountNumber: true,
+              currency: true,
             },
           },
           category: {
@@ -615,6 +622,7 @@ export async function ReportsStream({
           rawPayload: true,
           institution: true,
           accountName: true,
+          currency: true,
           importFile: {
             select: {
               account: {
@@ -623,6 +631,7 @@ export async function ReportsStream({
                   name: true,
                   institution: true,
                   accountNumber: true,
+                  currency: true,
                 },
               },
             },
@@ -644,6 +653,23 @@ export async function ReportsStream({
           return category.includes(requestedFilter) || merchant.includes(requestedFilter) || account.includes(requestedFilter);
         })
       : reportAllTransactions;
+    const spendingPaceTransactions = reportScopedTransactions.filter(isReportSpendingTransaction);
+    const spendingPace = buildSpendingPaceSnapshot(
+      spendingPaceTransactions.map((transaction) => ({
+        date: transaction.date,
+        amount: toReportMagnitude(transaction.amount),
+        category: getReportTransactionCategoryName(transaction),
+      })),
+      now
+    );
+    const spendingPaceCurrencies = Array.from(
+      new Set(
+        spendingPaceTransactions
+          .filter((transaction) => spendingPace ? transaction.date >= spendingPace.currentMonthStart && transaction.date <= spendingPace.currentComparableEnd : false)
+          .map((transaction) => formatCurrencyCode(transaction.account.currency))
+      )
+    );
+    const spendingPaceCurrency = spendingPaceCurrencies.length === 1 ? spendingPaceCurrencies[0] : "MIXED";
     const reportCurrentWindowTransactions = reportScopedTransactions.filter(
       (transaction) => transaction.date >= currentWindowStart && transaction.date <= currentWindowEnd
     );
@@ -2182,6 +2208,40 @@ export async function ReportsStream({
 
         <ReportsSectionPanel section="trends">
         <section className="reports-grid reports-grid--trends">
+          {spendingPace ? (
+            <SpendingPaceCard
+              currency={spendingPaceCurrency}
+              currentLabel={spendingPace.currentLabel}
+              previousLabel={spendingPace.previousLabel}
+              comparableDay={spendingPace.comparableDay}
+              latestDateLabel={formatShortDate(spendingPace.anchorDate)}
+              currentTotal={spendingPace.currentTotal}
+              previousTotal={spendingPace.previousTotal}
+              currentDailyAverage={spendingPace.currentDailyAverage}
+              previousDailyAverage={spendingPace.previousDailyAverage}
+              deltaPercent={spendingPace.deltaPercent}
+              points={spendingPace.points}
+              drivers={spendingPace.drivers.map((driver) => ({
+                ...driver,
+                href: buildTransactionsHref({
+                  category: driver.category,
+                  customStart: spendingPace.currentMonthStart.toISOString().slice(0, 10),
+                  customEnd: spendingPace.currentComparableEnd.toISOString().slice(0, 10),
+                }),
+              }))}
+              transactionsHref={buildTransactionsHref({
+                customStart: spendingPace.currentMonthStart.toISOString().slice(0, 10),
+                customEnd: spendingPace.currentComparableEnd.toISOString().slice(0, 10),
+              })}
+              adviserHref={`/adviser?prompt=${encodeURIComponent(
+                `My cumulative spending is ${formatCurrency(spendingPace.currentTotal, spendingPaceCurrency)} through day ${spendingPace.comparableDay} of ${spendingPace.currentLabel}, compared with ${formatCurrency(spendingPace.previousTotal, spendingPaceCurrency)} through the same point in ${spendingPace.previousLabel}. Explain what changed, consider my budgets and recurring obligations, and suggest what I should review first.`
+              )}`}
+            />
+          ) : (
+            <article className="report-card reports-subtab-card glass">
+              <ReportsEmptyNote title="No spending pace yet." copy="Add or import expenses to compare cumulative spending with the same days last month." />
+            </article>
+          )}
           <article className="report-card reports-subtab-card glass">
             <div className="report-card__head">
               <div className="report-card__head-title">
