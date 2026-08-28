@@ -2407,7 +2407,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               workspaceId: String(importFile.workspaceId),
               importMode,
               sourceBytes:
-                canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes
+                canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes
                   ? bytes
                   : null,
             },
@@ -2640,7 +2640,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               workspaceId: String(importFile.workspaceId),
               importMode,
               sourceBytes:
-                canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes
+                canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes || canProcessSpreadsheetFromRequestBytes
                   ? bytes
                   : null,
             },

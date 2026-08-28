@@ -917,6 +917,15 @@ const main = async () => {
     /rawFileReady:\s*canProcessImageFromRequestBytes \|\| canExtractPdfFromRequestBytes\s*\? uploadPromise\s*:\s*null/,
     "Request-byte PDFs should overlap storage and parsing, with the worker preserving the raw-file write boundary."
   );
+  assert.equal(
+    (
+      processRouteSource.match(
+        /sourceBytes:\s*canProcessImageFromRequestBytes \|\|\s*canExtractPdfFromRequestBytes \|\| canProcessSpreadsheetFromRequestBytes\s*\? bytes\s*:\s*null/g
+      ) ?? []
+    ).length >= 2,
+    true,
+    "Image preflight must read the request bytes instead of attempting object storage before the concurrent raw upload completes."
+  );
   assert.match(
     processRouteSource,
     /const shouldProcessInlineSpreadsheet = canProcessSpreadsheetFromRequestBytes/,
