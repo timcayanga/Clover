@@ -6,6 +6,58 @@
   initial-value: 0%;
 }
 
+/* Investments market charts share one responsive Clover canvas in every market. */
+.content--investments .investments-market {
+  --market-chart-height: clamp(250px, 28vw, 320px);
+}
+
+.content--investments .investments-market .insight-chart,
+.content--investments .market-chart__canvas,
+.content--investments .market-chart__plot {
+  width: 100%;
+  max-width: none;
+}
+
+.content--investments .investments-market .insight-chart svg,
+.content--investments .market-chart__y-axis {
+  height: var(--market-chart-height);
+}
+
+.content--investments .market-chart__plot svg {
+  width: 100%;
+}
+
+.content--investments .investments-market__portfolio-ticker-list {
+  align-items: center;
+}
+
+.content--investments .investments-market__portfolio-empty {
+  color: var(--muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .content--investments .investments-market {
+    --market-axis-width: 62px;
+    --market-chart-height: 240px;
+  }
+
+  .content--investments .market-chart__canvas {
+    grid-template-columns: var(--market-axis-width) minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .content--investments .market-chart__x-axis {
+    margin-left: calc(var(--market-axis-width) + 8px);
+  }
+
+  .content--investments .market-chart__y-axis,
+  .content--investments .market-chart__x-axis span {
+    font-size: 0.68rem;
+  }
+}
+
 :root {
   color-scheme: light;
   --font-body: "Poppins", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;

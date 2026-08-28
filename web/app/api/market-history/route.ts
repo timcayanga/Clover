@@ -245,7 +245,7 @@ const fetchYahooHistory = async (symbol: string, market: MarketRegion, range: Ma
     symbol: normalizeMarketSymbol(symbol),
     market,
     provider: "yahoo-finance" as const,
-    currency: "USD" as const,
+    currency: market === "ph" ? ("PHP" as const) : ("USD" as const),
     range,
     points,
     latest,
@@ -340,6 +340,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "symbol is required" }, { status: 400 });
   }
 
+  const isShortPhilippineRange = market === "ph" && (range === "1D" || range === "5D");
+  const intradayPhilippineResult = isShortPhilippineRange
+    ? await fetchYahooHistory(symbol, market, range)
+    : null;
+  if (intradayPhilippineResult && !("error" in intradayPhilippineResult)) {
+    return NextResponse.json(intradayPhilippineResult);
+  }
+
   if (market === "ph") {
     const stockAnalysisSymbol = normalizeMarketSymbol(symbol).replace(/\.PS$/, "");
     const stockAnalysisResponse = await fetch(`https://stockanalysis.com/quote/pse/${encodeURIComponent(stockAnalysisSymbol)}/history/`, {
@@ -359,7 +367,7 @@ export async function GET(request: Request) {
     }
   }
 
-  const yahooResult = await fetchYahooHistory(symbol, market, range);
+  const yahooResult = intradayPhilippineResult ?? await fetchYahooHistory(symbol, market, range);
   if (!("error" in yahooResult)) {
     return NextResponse.json(yahooResult);
   }

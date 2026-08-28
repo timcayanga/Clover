@@ -277,6 +277,18 @@ assert.match(investmentsPageSource, /endAngle - startAngle >= Math\.PI \* 2/, "A
 assert.match(investmentsPageSource, /investments-portfolio-outlook__unrated/, "Holdings without purchase values must remain visible without restoring a Neutral outlook column.");
 assert.match(investmentsStyles, /\.investments-portfolio-outlook__unrated\s*\{/, "Unrated portfolio holdings must have a compact visible treatment.");
 assert.match(marketChartSource, /seenSymbols\.has\(key\)/, "Portfolio market tickers must be deduplicated.");
+assert.match(
+  marketChartSource,
+  /portfolioAssetsForSelectedMarket = useMemo\([\s\S]{0,240}getMarketForInvestment\(account\) === selectedMarket/,
+  "The market selector must scope Your Portfolio to holdings from that market."
+);
+assert.match(marketChartSource, /selectMarket\(nextMarket\)/, "Changing markets must immediately synchronize the selected portfolio asset.");
+assert.match(marketChartSource, /preserveAspectRatio="none"/, "Every market chart must fill the available chart width.");
+assert.doesNotMatch(marketChartSource, /<iframe/, "PH, US, and Crypto must use the same Clover chart canvas.");
+assert.doesNotMatch(marketChartSource, /buildPhTradingViewUrl/, "PH charts must not branch into a separate embedded presentation.");
+assert.match(investmentsStyles, /--market-chart-height:\s*clamp\(250px, 28vw, 320px\)/, "Market charts must share one responsive height.");
+assert.match(marketHistoryRouteSource, /isShortPhilippineRange[\s\S]{0,220}fetchYahooHistory/, "Short PH ranges must prefer Clover's intraday data source.");
+assert.match(marketHistoryRouteSource, /currency: market === "ph" \? \("PHP" as const\)/, "Yahoo PH history must retain PHP as its source currency.");
 
 assert.equal(getPortfolioGrowthMarket("crypto", "PHP"), "crypto");
 assert.equal(getPortfolioGrowthMarket("stock", "PHP"), "ph");

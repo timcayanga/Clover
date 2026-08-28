@@ -75,7 +75,7 @@ const getMarketForInvestment = (account: InvestmentAccount): MarketKey => {
   return account.currency.trim().toUpperCase() === "PHP" ? "ph" : "us";
 };
 
-const chartWidth = 760;
+const chartWidth = 1000;
 const chartHeight = 220;
 const chartPadding = 24;
 
@@ -180,8 +180,6 @@ const buildTicks = (minValue: number, maxValue: number, count = 4) => {
   return Array.from({ length: count }, (_, index) => minValue + (span * index) / (count - 1));
 };
 
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-
 const getDisplayConversionRate = (
   originCurrency: "USD" | "PHP",
   targetCurrency: CurrencyCode,
@@ -208,38 +206,6 @@ const BENCHMARK_OPTIONS: BenchmarkOption[] = [
   { key: "nasdaq", label: "Nasdaq 100", symbol: "QQQ", market: "us", note: "US tech-heavy benchmark" },
   { key: "bitcoin", label: "Bitcoin", symbol: "BTC", market: "crypto", note: "Crypto market reference" },
 ];
-
-const PH_LIVE_RANGE_INTERVALS: Record<Extract<MarketRange, "1D" | "5D">, string> = {
-  "1D": "15",
-  "5D": "15",
-};
-
-const buildPhTradingViewUrl = (symbol: string, range: Extract<MarketRange, "1D" | "5D">) => {
-  const tradingViewSymbol = `PSE:${normalizeMarketSymbol(symbol)}`;
-  const url = new URL("https://s.tradingview.com/pse/widgetembed/");
-  url.searchParams.set("frameElementId", `investments-ph-${tradingViewSymbol.replace(/[^a-z0-9]/gi, "").toLowerCase()}`);
-  url.searchParams.set("symbol", tradingViewSymbol);
-  url.searchParams.set("interval", PH_LIVE_RANGE_INTERVALS[range]);
-  url.searchParams.set("hidelegend", "1");
-  url.searchParams.set("symboledit", "0");
-  url.searchParams.set("saveimage", "0");
-  url.searchParams.set("toolbarbg", "f1f3f6");
-  url.searchParams.set("studies", "[]");
-  url.searchParams.set("widgetbarwidth", "250");
-  url.searchParams.set("theme", "light");
-  url.searchParams.set("style", "3");
-  url.searchParams.set("timezone", "Asia/Taipei");
-  url.searchParams.set("studies_overrides", "{}");
-  url.searchParams.set("overrides", "{}");
-  url.searchParams.set("enabled_features", JSON.stringify(["esdonwidget"]));
-  url.searchParams.set("disabled_features", "[]");
-  url.searchParams.set("locale", "en");
-  url.searchParams.set("utm_source", "clover");
-  url.searchParams.set("utm_medium", "widget");
-  url.searchParams.set("utm_campaign", "chart");
-  url.searchParams.set("utm_term", tradingViewSymbol);
-  return url.toString();
-};
 
 const formatRelativeTime = (timestamp: number) => {
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
@@ -319,6 +285,10 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
   const [benchmarkKey, setBenchmarkKey] = useState<BenchmarkKey>("none");
   const [benchmarkHistory, setBenchmarkHistory] = useState<MarketHistoryResponse | null>(null);
   const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
+  const portfolioAssetsForSelectedMarket = useMemo(
+    () => trackablePortfolioAssets.filter((account) => getMarketForInvestment(account) === selectedMarket),
+    [selectedMarket, trackablePortfolioAssets]
+  );
 
   useEffect(() => {
     if (!submittedSymbol && defaultSymbol) {
@@ -382,6 +352,26 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
     setDisplayCurrency(marketValue === "ph" ? "PHP" : "USD");
     setQueryRevision((value) => value + 1);
     setTickerFocused(false);
+  };
+
+  const selectMarket = (nextMarket: MarketKey) => {
+    setSelectedMarket(nextMarket);
+    setDisplayCurrency(nextMarket === "ph" ? "PHP" : "USD");
+    setBenchmarkKey("none");
+
+    const firstMarketAsset = trackablePortfolioAssets.find(
+      (account) => getMarketForInvestment(account) === nextMarket && Boolean(account.investmentSymbol?.trim())
+    );
+    if (firstMarketAsset?.investmentSymbol) {
+      submitTicker(firstMarketAsset.investmentSymbol, nextMarket);
+      return;
+    }
+
+    setTickerInput("");
+    setSubmittedSymbol("");
+    setSubmittedMarket(nextMarket);
+    setHistory(null);
+    setError(null);
   };
 
   useEffect(() => {
@@ -565,7 +555,6 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
   const hoveredPoint = hoverIndex === null ? null : displayPoints[hoverIndex] ?? null;
   const benchmarkOption = BENCHMARK_OPTIONS.find((option) => option.key === benchmarkKey) ?? BENCHMARK_OPTIONS[0];
   const benchmarkSourceCurrency = benchmarkHistory?.currency ?? "USD";
-  const usePhLiveChart = submittedMarket === "ph" && (range === "1D" || range === "5D");
   const benchmarkVisiblePoints = useMemo(() => {
     if (!benchmarkHistory) {
       return [];
@@ -592,7 +581,7 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
       })),
     [benchmarkScale, benchmarkVisiblePoints, benchmarkSourceCurrency, displayCurrency, exchangeRate]
   );
-  const benchmarkIsActive = !usePhLiveChart && benchmarkKey !== "none" && benchmarkDisplayPoints.length > 1 && !benchmarkError;
+  const benchmarkIsActive = benchmarkKey !== "none" && benchmarkDisplayPoints.length > 1 && !benchmarkError;
   const chartPoints = benchmarkIsActive ? [...displayPoints, ...benchmarkDisplayPoints] : displayPoints;
   const chartBounds = useMemo(() => {
     if (chartPoints.length === 0) {
@@ -629,7 +618,7 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
     sourceCurrency === displayCurrency
       ? `Prices are shown in ${displayCurrency}.`
       : `Converted from ${sourceCurrency} using the latest FX rate.`;
-  const chartError = usePhLiveChart ? rateError : rateError ?? error;
+  const chartError = rateError ?? error;
   const sourceLabel =
     history?.provider === "stockanalysis"
       ? "StockAnalysis.com"
@@ -642,21 +631,17 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
   const trendColor = trendIsPositive ? "var(--good)" : "var(--bad)";
   const trendFillTop = trendIsPositive ? "rgba(34, 197, 94, 0.24)" : "rgba(239, 68, 68, 0.24)";
   const trendFillBottom = trendIsPositive ? "rgba(34, 197, 94, 0.03)" : "rgba(239, 68, 68, 0.03)";
-  const benchmarkComparisonLabel = usePhLiveChart
-    ? "Philippine charts use a live TradingView embed for intraday movement."
-    : benchmarkIsActive
+  const benchmarkComparisonLabel = benchmarkIsActive
     ? `${benchmarkOption.label} is normalized to the selected start value for relative movement comparison.`
     : chartSubtitle;
-  const benchmarkFooterLabel = usePhLiveChart ? "Hover the embedded chart for exact time, price, and volume." : benchmarkIsActive ? benchmarkOption.note : chartSubtitle;
-  const phTradingViewUrl = useMemo(
-    () => (usePhLiveChart ? buildPhTradingViewUrl(submittedSymbol, range as Extract<MarketRange, "1D" | "5D">) : null),
-    [range, submittedSymbol, usePhLiveChart]
-  );
-  const chartIsLoading = loading && !usePhLiveChart;
+  const benchmarkFooterLabel = benchmarkIsActive ? benchmarkOption.note : "Hover the chart to inspect time, price, and volume.";
+  const chartIsLoading = loading;
   const selectedPortfolioAsset = trackablePortfolioAssets.find(
-    (account) => normalizeMarketSymbol(account.investmentSymbol ?? "") === submittedSymbol
+    (account) =>
+      getMarketForInvestment(account) === submittedMarket &&
+      normalizeMarketSymbol(account.investmentSymbol ?? "") === submittedSymbol
   ) ?? null;
-  const missingTickerCount = trackablePortfolioAssets.filter((account) => !account.investmentSymbol?.trim()).length;
+  const missingTickerCount = portfolioAssetsForSelectedMarket.filter((account) => !account.investmentSymbol?.trim()).length;
   const rangeHigh = displayPoints.length > 0 ? Math.max(...displayPoints.map((point) => point.value)) : null;
   const rangeLow = displayPoints.length > 0 ? Math.min(...displayPoints.map((point) => point.value)) : null;
   const latestVolume = displayPoints[displayPoints.length - 1]?.volume ?? null;
@@ -732,7 +717,7 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
               className="investments-market__select investments-market__select--compact"
               onChange={(event) => {
                 const nextMarket = event.target.value as MarketKey;
-                setSelectedMarket(nextMarket);
+                selectMarket(nextMarket);
               }}
             >
               {MARKET_OPTIONS.map((option) => (
@@ -748,7 +733,6 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
             <select
               className="investments-market__select investments-market__select--compact"
               value={displayCurrency}
-              disabled={usePhLiveChart}
               onChange={(event) => setDisplayCurrency(event.target.value as CurrencyCode)}
             >
               <option value="USD">USD</option>
@@ -761,7 +745,6 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
               <select
                 className="investments-market__select investments-market__select--compact"
                 value={benchmarkKey}
-                disabled={usePhLiveChart}
                 onChange={(event) => setBenchmarkKey(event.target.value as BenchmarkKey)}
               >
                 {BENCHMARK_OPTIONS.map((option) => (
@@ -777,7 +760,12 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
       <div className="investments-market__portfolio-tickers">
         <span>Your portfolio</span>
         <div className="investments-market__portfolio-ticker-list">
-          {trackablePortfolioAssets
+          {portfolioAssetsForSelectedMarket.every((account) => !account.investmentSymbol?.trim()) ? (
+            <span className="investments-market__portfolio-empty">
+              No {MARKET_OPTIONS.find((option) => option.key === selectedMarket)?.label ?? "market"} assets with tickers
+            </span>
+          ) : null}
+          {portfolioAssetsForSelectedMarket
             .filter((account) => Boolean(account.investmentSymbol?.trim()))
             .slice(0, 8)
             .map((account) => {
@@ -795,7 +783,7 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
                 </button>
               );
             })}
-          {trackablePortfolioAssets.some((account) => !account.investmentSymbol?.trim()) && onOpenPortfolio ? (
+          {portfolioAssetsForSelectedMarket.some((account) => !account.investmentSymbol?.trim()) && onOpenPortfolio ? (
             <button className="investments-market__add-tickers" type="button" onClick={onOpenPortfolio}>
               + Add missing tickers
             </button>
@@ -826,7 +814,7 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
         </select>
       </label>
 
-      {!usePhLiveChart && benchmarkError ? <p className="panel-muted">Benchmark unavailable: {benchmarkError}</p> : null}
+      {benchmarkError ? <p className="panel-muted">Benchmark unavailable: {benchmarkError}</p> : null}
 
       <div className="insight-chart">
         {chartIsLoading ? (
@@ -836,43 +824,6 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
             <strong>Unable to load market data.</strong>
             <p>{chartError}</p>
           </div>
-        ) : usePhLiveChart && phTradingViewUrl ? (
-          <>
-            <div className="market-chart__canvas market-chart__canvas--embed">
-              <iframe
-                key={phTradingViewUrl}
-                className="market-chart__embed"
-                src={phTradingViewUrl}
-                title={`${submittedSymbol} live PH chart`}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-              />
-            </div>
-
-            <div className="investments-market__comparison">
-              <span>PSEConnect provides a delayed intraday chart for Philippine-listed equities.</span>
-              <span>Hover the chart to inspect time, price, and volume.</span>
-            </div>
-
-            <div className="insight-chart__labels">
-              <div className="insight-chart__label">
-                <span>Latest</span>
-                <strong>{formatAmount(currentDisplayPoint?.value ?? 0)}</strong>
-              </div>
-              <div className="insight-chart__label">
-                <span>Change</span>
-                <strong className={priceChange !== null && priceChange >= 0 ? "is-positive" : "is-negative"}>
-                  {priceChange === null ? "Not enough data" : `${priceChange >= 0 ? "+" : "-"}${formatAmount(Math.abs(priceChange))}`}
-                </strong>
-              </div>
-              <div className="insight-chart__label">
-                <span>Range change</span>
-                <strong className={priceChangePercent !== null && priceChangePercent >= 0 ? "is-positive" : "is-negative"}>
-                  {priceChangePercent === null ? "Not enough data" : `${priceChangePercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(priceChangePercent))}`}
-                </strong>
-              </div>
-            </div>
-          </>
         ) : displayPoints.length > 1 ? (
           <>
             <div className="market-chart__canvas">
@@ -888,6 +839,7 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
               <div className="market-chart__plot">
                 <svg
                   viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                  preserveAspectRatio="none"
                   role="img"
                   aria-label={`${submittedSymbol} price history`}
                 >
@@ -967,8 +919,8 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
                   <div
                     className="market-chart__tooltip"
                     style={{
-                      left: `${clamp(hoverPosition.x - 80, 6, chartWidth - 166)}px`,
-                      top: `${clamp(hoverPosition.y - 116, 6, chartHeight - 100)}px`,
+                      left: `clamp(6px, ${(hoverPosition.x / chartWidth) * 100}%, calc(100% - 166px))`,
+                      top: `clamp(6px, ${(hoverPosition.y / chartHeight) * 100}%, calc(100% - 100px))`,
                     }}
                   >
                     <strong>
@@ -1007,7 +959,7 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
                 }
 
                 return (
-                  <span key={point.date} style={{ left: `${lineChart.points[index]?.x ?? 0}px` }}>
+                  <span key={point.date} style={{ left: `${((lineChart.points[index]?.x ?? 0) / chartWidth) * 100}%` }}>
                     {formatAxisDate(point.date, range, isDailySource)}
                   </span>
                 );
@@ -1089,12 +1041,12 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
           <div className="investments-market-insights__grid">
             <article>
               <span>Largest trackable holding</span>
-              <strong>{trackablePortfolioAssets[0]?.name ?? "No tracked market assets"}</strong>
-              <small>{trackablePortfolioAssets[0]?.investmentSymbol?.trim() || "Add a ticker to follow its movement"}</small>
+              <strong>{portfolioAssetsForSelectedMarket[0]?.name ?? "No tracked market assets"}</strong>
+              <small>{portfolioAssetsForSelectedMarket[0]?.investmentSymbol?.trim() || "Add a ticker to follow its movement"}</small>
             </article>
             <article>
               <span>Tickers ready</span>
-              <strong>{trackablePortfolioAssets.length - missingTickerCount}</strong>
+              <strong>{portfolioAssetsForSelectedMarket.length - missingTickerCount}</strong>
               <small>Portfolio assets Clover can compare with market data</small>
             </article>
             <article>
@@ -1126,7 +1078,11 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
           </span>
           <span>{chartSubtitle}</span>
           {isMarketInvestmentSubtype(
-            investmentAccounts.find((account) => normalizeMarketSymbol(account.investmentSymbol ?? "") === submittedSymbol)?.investmentSubtype
+            investmentAccounts.find(
+              (account) =>
+                getMarketForInvestment(account) === submittedMarket &&
+                normalizeMarketSymbol(account.investmentSymbol ?? "") === submittedSymbol
+            )?.investmentSubtype
           ) ? (
             <Link href="/accounts" className="pill-link pill-link--inline">
               Open the account
