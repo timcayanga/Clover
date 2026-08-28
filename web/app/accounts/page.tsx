@@ -2466,6 +2466,16 @@ function AccountsPageContent() {
   };
 
   useEffect(() => {
+    // Restore the last usable Accounts snapshot immediately after hydration.
+    // Waiting for `/api/workspaces` first made repeat visits show a blank
+    // full-page splash for several seconds even though the same workspace was
+    // already cached locally. The authoritative refresh still runs below and
+    // reconciles any server changes in the background.
+    const cachedWorkspaceId = readSelectedWorkspaceId();
+    if (cachedWorkspaceId) {
+      setSelectedWorkspaceId((current) => current || cachedWorkspaceId);
+      hydrateWorkspaceFromCache(cachedWorkspaceId);
+    }
     void loadWorkspaces();
   }, []);
 

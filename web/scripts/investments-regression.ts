@@ -19,7 +19,8 @@ import {
 } from "@/lib/investment-activity";
 import { buildPortfolioGrowthSeries, getPortfolioGrowthMarket } from "@/lib/investment-portfolio-growth";
 import { canonicalizePdaxInvestmentHoldings } from "@/lib/pdax-portfolio-accounts";
-import { findClosestMarketPointIndex } from "@/lib/market-data";
+import { filterMarketHistoryByRange, findClosestMarketPointIndex } from "@/lib/market-data";
+import { parseStockAnalysisSeries } from "@/lib/stockanalysis-market-history";
 import {
   getFirstManualInvestmentDate,
   getManualInvestmentPositionActivities,
@@ -34,6 +35,16 @@ const adviserHeaderLinkSource = readFileSync(
   resolve(process.cwd(), "components/adviser-header-link.tsx"),
   "utf8",
 );
+
+const currentStockAnalysisShape = `symbol:"PSE-AREIT",data:[{c:36.65,h:37.05,l:36.6,o:37.05,t:"2026-08-28",v:405300,ch:-1.21},{a:37.1,c:37.1,h:37.5,l:36.85,o:37.45,t:"2026-08-27",v:1444100,ch:-.54}],created_at:"2025-03-07"`;
+const parsedPhilippineHistory = parseStockAnalysisSeries(currentStockAnalysisShape, "AREIT", "1Y");
+assert.ok(!("error" in parsedPhilippineHistory), "Current StockAnalysis history payloads must remain readable.");
+if (!("error" in parsedPhilippineHistory)) {
+  assert.equal(parsedPhilippineHistory.points.length, 2);
+  assert.equal(parsedPhilippineHistory.latest.value, 36.65, "The current row can omit adjusted close and must fall back to close.");
+  assert.equal(parsedPhilippineHistory.range, "1Y");
+  assert.equal(filterMarketHistoryByRange(parsedPhilippineHistory.points, "1Y").length, 2);
+}
 
 assert.match(adviserHeaderLinkSource, /getNavigationIconSrc\("adviser"\)/);
 assert.match(adviserHeaderLinkSource, /aria-label="Open Adviser"/);

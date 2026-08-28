@@ -6,6 +6,12 @@ const root = process.cwd();
 const routeSource = fs.readFileSync(path.join(root, "app/api/goals/route.ts"), "utf8");
 const pageSource = fs.readFileSync(path.join(root, "app/goals/page.tsx"), "utf8");
 const modalSource = fs.readFileSync(path.join(root, "components/goals-editor-modal.tsx"), "utf8");
+
+assert.match(
+  pageSource,
+  /currentSavingsRate\s*=\s*currentSummary\.income > 0[\s\S]{0,120}Math\.min\(1, Math\.max\(0, currentNet \/ currentSummary\.income\)\)/,
+  "Goals must use the same bounded 0–100% savings-rate definition as Reports.",
+);
 const globalStyles = fs.readFileSync(path.join(root, "app/globals.css"), "utf8");
 
 assert.match(

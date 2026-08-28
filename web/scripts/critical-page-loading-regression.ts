@@ -9,7 +9,9 @@ import {
 const readSource = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
 const shellSource = readSource("components/clover-shell.tsx");
-assert.match(shellSource, /dynamic\(\s*\(\) => import\("@\/components\/import-files-modal"\)/);
+assert.match(shellSource, /const loadImportFilesModal = \(\) =>[\s\S]{0,100}import\("@\/components\/import-files-modal"\)/);
+assert.match(shellSource, /const ImportFilesModal = dynamic\(\s*loadImportFilesModal/);
+assert.match(shellSource, /onPointerEnter=\{\(\) => \{[\s\S]{0,350}loadDashboardManualTransactionModal\(\)[\s\S]{0,120}loadImportFilesModal\(\)/);
 assert.doesNotMatch(shellSource, /^import \{ ImportFilesModal \} from "@\/components\/import-files-modal";/m);
 assert.doesNotMatch(shellSource, /^import \{ DashboardManualTransactionModal \} from "@\/components\/dashboard-top-actions";/m);
 
@@ -29,6 +31,11 @@ assert.match(lazyActionsSource, /dynamic\(\s*\(\) => import\("@\/components\/imp
 
 const accountsSource = readSource("app/accounts/page.tsx");
 assert.match(accountsSource, /awaitHydration: !hydratedFromCache/);
+assert.match(
+  accountsSource,
+  /const cachedWorkspaceId = readSelectedWorkspaceId\(\);[\s\S]{0,240}hydrateWorkspaceFromCache\(cachedWorkspaceId\);[\s\S]{0,120}void loadWorkspaces\(\);/,
+  "Accounts must paint its cached workspace before waiting for the workspace request.",
+);
 assert.doesNotMatch(accountsSource, /from "@\/lib\/import-parser"/);
 
 const accountDetailsSource = readSource("app/accounts/[accountId]/page.tsx");

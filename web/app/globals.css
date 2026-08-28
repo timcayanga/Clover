@@ -10848,6 +10848,7 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 }
 
 .reports-subtab-title {
+  align-items: center;
   margin: 0;
   color: var(--muted-2);
   font-family: var(--font-body);
@@ -10856,6 +10857,15 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   letter-spacing: 0.14em;
   line-height: 1.25;
   text-transform: capitalize;
+  display: inline-flex;
+  gap: 0.45em;
+}
+
+.reports-subtab-title__icon {
+  flex: 0 0 auto;
+  font-size: 1.05em;
+  letter-spacing: 0;
+  line-height: 1;
 }
 
 .reports-subtab-card .reports-subtab-title {

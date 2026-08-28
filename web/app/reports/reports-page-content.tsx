@@ -27,7 +27,8 @@ import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
 import { getTransactionSummaryTypeOverrides } from "@/lib/transaction-summary";
 import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
 import { hasFullFeatureAccess } from "@/lib/beta-access";
-import { resolveReportWindow } from "@/lib/report-window";
+import { getCalendarDayEndInTimeZone, resolveReportWindow } from "@/lib/report-window";
+import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
 import { buildSpendingPaceSnapshot } from "@/lib/spending-pace";
 import { SpendingPaceCard } from "@/components/spending-pace-card";
 import type { User } from "@prisma/client";
@@ -356,7 +357,10 @@ export async function ReportsStream({
 }) {
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
-  const reportWindow = resolveReportWindow(new Date(), searchParams);
+  const reportWindow = resolveReportWindow(
+    getCalendarDayEndInTimeZone(new Date(), normalizeRegionalPreferences(user.regionalPreferences).timeZone),
+    searchParams,
+  );
   const selectedRange = reportWindow.range;
   const selectedRangeLabel = reportWindow.label;
   const rangeWindowText = selectedRange === "ytd" ? "year-to-date" : selectedRangeLabel.toLowerCase();
@@ -1757,7 +1761,10 @@ export async function ReportsStream({
                 />
                 <div className="report-card__head report-card__head--compact">
                   <div>
-                    <h4 className="reports-subtab-title">🗺️ Cash Flow Map</h4>
+                    <h4 className="reports-subtab-title">
+                      <span className="reports-subtab-title__icon" aria-hidden="true">🗺️</span>
+                      <span>Cash Flow Map</span>
+                    </h4>
                   </div>
                 </div>
 
@@ -1900,7 +1907,10 @@ export async function ReportsStream({
                   <ReportInfoTip className="reports-container-info" label="The biggest reasons behind the shift." />
                   <div className="report-card__head report-card__head--compact">
                     <div>
-                      <h4 className="reports-subtab-title">🧭 Main Drivers</h4>
+                      <h4 className="reports-subtab-title">
+                        <span className="reports-subtab-title__icon" aria-hidden="true">🧭</span>
+                        <span>Main Drivers</span>
+                      </h4>
                     </div>
                   </div>
                   <div className="report-ai-signal-grid report-ai-signal-grid--compact">
@@ -1917,7 +1927,10 @@ export async function ReportsStream({
                   <ReportInfoTip className="reports-container-info" label="One easy action to take right now." />
                   <div className="report-card__head report-card__head--compact">
                     <div>
-                      <h4 className="reports-subtab-title">✨ Next Steps</h4>
+                      <h4 className="reports-subtab-title">
+                        <span className="reports-subtab-title__icon" aria-hidden="true">✨</span>
+                        <span>Next Steps</span>
+                      </h4>
                     </div>
                   </div>
                   <div className="report-list">
@@ -1938,7 +1951,10 @@ export async function ReportsStream({
 
             <article className="reports-next reports-subtab-card glass">
               <div className="report-card__head report-card__head--compact">
-                <h4 className="reports-subtab-title">🎯 Goal Check</h4>
+                <h4 className="reports-subtab-title">
+                  <span className="reports-subtab-title__icon" aria-hidden="true">🎯</span>
+                  <span>Goal Check</span>
+                </h4>
               </div>
               <h4>{goalNextStep.title}</h4>
               <p>{goalSummary}</p>
@@ -2340,7 +2356,10 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
     redirect("/onboarding");
   }
 
-  const reportWindow = resolveReportWindow(new Date(), resolvedSearchParams);
+  const reportWindow = resolveReportWindow(
+    getCalendarDayEndInTimeZone(new Date(), normalizeRegionalPreferences(user.regionalPreferences).timeZone),
+    resolvedSearchParams,
+  );
   const selectedRange = reportWindow.range;
   const selectedRangeLabel = reportWindow.label;
   const requestedSection = normalizeReportsSection(resolvedSearchParams?.section);

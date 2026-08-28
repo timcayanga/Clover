@@ -6,6 +6,7 @@ import {
   type MarketRange,
   type MarketRegion,
 } from "@/lib/market-data";
+import { parseStockAnalysisSeries } from "@/lib/stockanalysis-market-history";
 import { requireAuth } from "@/lib/auth";
 import { assertRateLimit } from "@/lib/rate-limit";
 
@@ -118,66 +119,6 @@ const parseSeries = (series: Record<string, Record<string, string>>, priceField:
   return points;
 };
 
-const parseStockAnalysisSeries = (html: string, symbol: string) => {
-  const normalized = normalizeMarketSymbol(symbol).replace(/\.PS$/, "");
-  const startIndex = html.indexOf(`symbol:"PSE-${normalized}"`);
-  if (startIndex < 0) {
-    return { error: "No market history found for that ticker." as const };
-  }
-
-  const dataStart = html.indexOf("data:[", startIndex);
-  const dataEnd = html.indexOf("],other:{", dataStart);
-  if (dataStart < 0 || dataEnd < 0) {
-    return { error: "No market history found for that ticker." as const };
-  }
-
-  const dataBlock = html.slice(dataStart + "data:[".length, dataEnd);
-  const rows: MarketHistoryPoint[] = [];
-
-  for (const match of dataBlock.matchAll(
-    /\{a:([^,]+),c:([^,]+),h:([^,]+),l:([^,]+),o:([^,]+),t:"([^"]+)",v:([^,]+),ch:([^}]+)\}/g
-  )) {
-    const adjusted = Number(match[1]);
-    const close = Number(match[2]);
-    const volume = Number(match[7]);
-    const date = match[6];
-    const value = Number.isFinite(adjusted) ? adjusted : close;
-
-    if (!Number.isFinite(value) || !date) {
-      continue;
-    }
-
-    rows.push({
-      date: new Date(`${date}T12:00:00+08:00`).toISOString(),
-      value,
-      volume: Number.isFinite(volume) ? volume : null,
-    });
-  }
-
-  rows.sort((left, right) => left.date.localeCompare(right.date));
-  if (rows.length === 0) {
-    return { error: "No market history found for that ticker." as const };
-  }
-
-  const latest = rows[rows.length - 1];
-  const previous = rows[rows.length - 2] ?? latest;
-  const change = latest.value - previous.value;
-  const changePercent = previous.value === 0 ? 0 : (change / previous.value) * 100;
-
-  return {
-    symbol: normalizeMarketSymbol(symbol),
-    market: "ph" as const,
-    provider: "stockanalysis" as const,
-    currency: "PHP" as const,
-    range: "MAX" as const,
-    points: rows,
-    latest,
-    previous,
-    change,
-    changePercent,
-  };
-};
-
 const parseYahooSeries = (payload: YahooFinanceResponse) => {
   const result = payload.chart?.result?.[0];
   const timestamps = result?.timestamp ?? [];
@@ -215,7 +156,7 @@ const fetchYahooHistory = async (symbol: string, market: MarketRegion, range: Ma
   url.searchParams.set("events", "div,splits");
 
   const response = await fetch(url.toString(), {
-    cache: "no-store",
+    next: { revalidate: range === "1D" || range === "5D" ? 60 : 900 },
     signal: AbortSignal.timeout(MARKET_PROVIDER_TIMEOUT_MS),
     headers: {
       "user-agent": "Mozilla/5.0",
@@ -275,7 +216,7 @@ const fetchAlphaFallback = async (symbol: string, market: MarketRegion) => {
   url.searchParams.set("apikey", apiKey);
 
   const response = await fetch(url.toString(), {
-    cache: "no-store",
+    next: { revalidate: 3600 },
     signal: AbortSignal.timeout(MARKET_PROVIDER_TIMEOUT_MS),
   });
   if (!response.ok) {
@@ -351,7 +292,7 @@ export async function GET(request: Request) {
   if (market === "ph") {
     const stockAnalysisSymbol = normalizeMarketSymbol(symbol).replace(/\.PS$/, "");
     const stockAnalysisResponse = await fetch(`https://stockanalysis.com/quote/pse/${encodeURIComponent(stockAnalysisSymbol)}/history/`, {
-      cache: "no-store",
+      next: { revalidate: 900 },
       signal: AbortSignal.timeout(MARKET_PROVIDER_TIMEOUT_MS),
       headers: {
         "user-agent": "Mozilla/5.0",
@@ -360,7 +301,7 @@ export async function GET(request: Request) {
     });
     if (stockAnalysisResponse.ok) {
       const html = await stockAnalysisResponse.text();
-      const stockAnalysisResult = parseStockAnalysisSeries(html, symbol);
+      const stockAnalysisResult = parseStockAnalysisSeries(html, symbol, range);
       if (!("error" in stockAnalysisResult)) {
         return NextResponse.json(stockAnalysisResult);
       }

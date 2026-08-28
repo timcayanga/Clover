@@ -513,8 +513,15 @@ async function GoalsPageStream() {
   const currentNet = currentSummary.income - currentSummary.expense;
   const previousNet = previousSummary.income - previousSummary.expense;
   const currentSpend = currentSummary.expense;
-  const currentSavingsRate = currentSummary.income > 0 ? currentNet / currentSummary.income : null;
-  const previousSavingsRate = previousSummary.income > 0 ? (previousSummary.income - previousSummary.expense) / previousSummary.income : null;
+  // Clover presents savings rate as the share of income retained, so keep the
+  // product metric within 0–100%. A cash-flow deficit is 0% saved rather than a
+  // negative savings percentage (matching Reports and Home).
+  const currentSavingsRate = currentSummary.income > 0
+    ? Math.min(1, Math.max(0, currentNet / currentSummary.income))
+    : null;
+  const previousSavingsRate = previousSummary.income > 0
+    ? Math.min(1, Math.max(0, (previousSummary.income - previousSummary.expense) / previousSummary.income))
+    : null;
   const spendDelta = previousSummary.expense > 0 ? ((currentSummary.expense - previousSummary.expense) / previousSummary.expense) * 100 : null;
   const savingsRateDelta =
     currentSavingsRate !== null && previousSavingsRate !== null ? (currentSavingsRate - previousSavingsRate) * 100 : null;

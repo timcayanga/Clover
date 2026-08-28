@@ -23,9 +23,9 @@ import { isTransientDataError } from "@/lib/transient-data";
 import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
 import { TransientDataRecovery } from "@/components/transient-data-recovery";
 import { hasFullFeatureAccess } from "@/lib/beta-access";
-import { resolveReportWindow } from "@/lib/report-window";
+import { getCalendarDayEndInTimeZone, resolveReportWindow } from "@/lib/report-window";
 import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
-import { defaultCurrencyCookieKey, normalizeDefaultCurrency } from "@/lib/regional-preferences";
+import { defaultCurrencyCookieKey, normalizeDefaultCurrency, normalizeRegionalPreferences } from "@/lib/regional-preferences";
 import { resolveEffectiveAccountBalance, selectLatestAccountCheckpoint } from "@/lib/account-balance-projection";
 
 export const dynamic = "force-dynamic";
@@ -932,14 +932,17 @@ type AdviserSearchParams = { range?: string; section?: string; filter?: string; 
 
 async function AdviserPageContent({ searchParams }: { searchParams?: Promise<AdviserSearchParams> }) {
   try {
-  const now = new Date();
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const reportWindow = resolveReportWindow(now, resolvedSearchParams);
   const session = await getPageSessionContext();
   const existingUser = await prisma.user.findUnique({
     where: { clerkUserId: session.userId },
   });
   const user = existingUser ?? (await getOrCreateCurrentUser(session.userId));
+  const now = new Date();
+  const reportWindow = resolveReportWindow(
+    getCalendarDayEndInTimeZone(now, normalizeRegionalPreferences(user.regionalPreferences).timeZone),
+    resolvedSearchParams,
+  );
 
   if (!hasCompletedOnboarding(user)) {
     redirect("/onboarding");
@@ -1435,6 +1438,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     latestInvestmentSnapshot && previousInvestmentSnapshot && latestInvestmentSnapshot.currency === previousInvestmentSnapshot.currency
       ? Number(latestInvestmentSnapshot.totalValue ?? 0) - Number(previousInvestmentSnapshot.totalValue ?? 0)
       : null;
+  const boundedCurrentSavingsRate = currentSavingsRate === null ? null : clamp(currentSavingsRate, 0, 1);
 
   const accountAnalysisAccounts = workspaceAccounts.filter((account) => formatCurrencyCode(account.currency) === displayCurrency);
   const currentInvestmentAccounts = accountAnalysisAccounts.filter(
@@ -2004,7 +2008,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     {
       id: "savings_rate",
       title: `Savings rate · ${reportWindow.label}`,
-      value: currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100),
+      value: boundedCurrentSavingsRate === null ? "N/A" : formatPercent(boundedCurrentSavingsRate * 100),
       tone: currentSavingsRate === null || currentSavingsRate >= 0 ? "positive" : "warning",
       detail:
         currentSavingsRate === null

@@ -20,6 +20,31 @@ export const normalizeReportRange = (value: string | undefined): ReportRange => 
   return "30d";
 };
 
+export const getCalendarDayEndInTimeZone = (instant: Date, timeZone: string) => {
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(instant);
+  } catch {
+    parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "UTC",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(instant);
+  }
+
+  const value = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value);
+  const year = value("year");
+  const month = value("month");
+  const day = value("day");
+  return new Date(year, month - 1, day, 23, 59, 59, 999);
+};
+
 const parseDateInput = (value: string | undefined, endOfDay = false) => {
   const match = value?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) {

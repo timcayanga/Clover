@@ -59,13 +59,19 @@ import {
   subscribeWorkspaceDataChanges,
 } from "@/lib/workspace-data-sync";
 
+const loadDashboardManualTransactionModal = () =>
+  import("@/components/dashboard-top-actions").then((module) => module.DashboardManualTransactionModal);
+
 const DashboardManualTransactionModal = dynamic(
-  () => import("@/components/dashboard-top-actions").then((module) => module.DashboardManualTransactionModal),
+  loadDashboardManualTransactionModal,
   { ssr: false }
 );
 
+const loadImportFilesModal = () =>
+  import("@/components/import-files-modal").then((module) => module.ImportFilesModal);
+
 const ImportFilesModal = dynamic(
-  () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
+  loadImportFilesModal,
   { ssr: false }
 );
 
@@ -1737,6 +1743,11 @@ export function CloverShell({
       return;
     }
 
+    // Warm the lazy modal as soon as the quick-add menu is requested. On a
+    // cold session this overlaps its chunk download with the user's menu
+    // choice instead of starting the download after "Add Manually" is clicked.
+    void loadDashboardManualTransactionModal();
+    void loadImportFilesModal();
     setIsQuickAddOpen((current) => !current);
   };
 
@@ -2144,6 +2155,18 @@ export function CloverShell({
               ? "Close quick add"
               : "Open quick add"
         }
+        onPointerEnter={() => {
+          if (!pathname?.startsWith("/accounts/institutions/") && !pathname?.startsWith("/split-bill") && !pathname?.startsWith("/investments") && !pathname?.startsWith("/recurring")) {
+            void loadDashboardManualTransactionModal();
+            void loadImportFilesModal();
+          }
+        }}
+        onFocus={() => {
+          if (!pathname?.startsWith("/accounts/institutions/") && !pathname?.startsWith("/split-bill") && !pathname?.startsWith("/investments") && !pathname?.startsWith("/recurring")) {
+            void loadDashboardManualTransactionModal();
+            void loadImportFilesModal();
+          }
+        }}
         onClick={openQuickAddTransaction}
       >
         <MenuIcon name="plus" />

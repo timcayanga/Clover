@@ -1539,6 +1539,8 @@ export async function POST(request: Request) {
       latestInvestmentSnapshot.currency === previousInvestmentSnapshot.currency
         ? Number(latestInvestmentSnapshot.totalValue ?? 0) - Number(previousInvestmentSnapshot.totalValue ?? 0)
         : null;
+    const boundedCurrentSavingsRate = currentSavingsRate === null ? null : clamp(currentSavingsRate, 0, 1);
+    const boundedBaselineSavingsRate = baselineSavingsRate === null ? null : clamp(baselineSavingsRate, 0, 1);
     const currentInvestmentAccounts = chatAccounts.filter(
       (account) => account.type === "investment" || Boolean(account.investmentSubtype)
     );
@@ -2139,7 +2141,7 @@ export async function POST(request: Request) {
         label: "Goal pressure",
         score: goalPressureScore,
         reason: goalLabel
-          ? `${goalLabel} status ${goalProgress.bandLabel}; current savings rate ${currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100)}.`
+          ? `${goalLabel} status ${goalProgress.bandLabel}; current savings rate ${boundedCurrentSavingsRate === null ? "N/A" : formatPercent(boundedCurrentSavingsRate * 100)}.`
           : "No active goal or goal signal is weak.",
       },
       {
@@ -2199,7 +2201,7 @@ export async function POST(request: Request) {
       `${longTermWindowLabel}: avg income ${formatCurrency(longTermAverageIncome)}, avg spend ${formatCurrency(longTermAverageSpend)}, avg net ${formatSignedCurrency(longTermAverageNet)}`,
       `Baseline model: spend ${formatCurrency(weightedHistoricalBaseline.spend)}, income ${formatCurrency(weightedHistoricalBaseline.income)}, net ${formatSignedCurrency(weightedHistoricalBaseline.net)}`,
       `Income timing signal: ${incomeTimingConfidence}; cadence ${incomeCadence}; median amount ${medianIncomeAmount > 0 ? formatCurrency(medianIncomeAmount, displayCurrency) : "N/A"}; estimated next date ${estimatedNextIncomeDate ? toShortDateLabel(estimatedNextIncomeDate) : "unconfirmed"}`,
-      `Savings rate: ${currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100)}${baselineSavingsRate === null ? "" : `; baseline ${formatPercent(baselineSavingsRate * 100)}`}`,
+      `Savings rate: ${boundedCurrentSavingsRate === null ? "N/A" : formatPercent(boundedCurrentSavingsRate * 100)}${boundedBaselineSavingsRate === null ? "" : `; baseline ${formatPercent(boundedBaselineSavingsRate * 100)}`}`,
       `Trend signals: spend ${monthlyExpenseTrend.direction > 0 ? "rising" : monthlyExpenseTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyExpenseTrend.score)}), income ${monthlyIncomeTrend.direction > 0 ? "rising" : monthlyIncomeTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyIncomeTrend.score)}), net ${monthlyNetTrend.direction > 0 ? "rising" : monthlyNetTrend.direction < 0 ? "easing" : "flat"} (${Math.round(monthlyNetTrend.score)})`,
       `Adviser themes: ${topThemeLine || "none"}`,
       `Adviser memory: ${adviserInteractions.length} interactions, ${adviserCompletionLogs.length} completion actions, follow-through rate ${formatPercent(adviserFollowThroughRate)}, cleanup affinity ${Math.round(userPreferenceAffinity.cleanup)}, cashflow affinity ${Math.round(userPreferenceAffinity.cashflow)}`,
@@ -3356,7 +3358,7 @@ export async function POST(request: Request) {
             historicalMonthlySurplus: longTermAverageNet,
             estimatedMonthlySavingsCapacity: monthlyCapacity,
             starterTarget: monthlyCapacity === null ? null : monthlyCapacity * 0.5,
-            currentSavingsRate,
+            currentSavingsRate: boundedCurrentSavingsRate,
             categoryLevers,
             guidance: monthlyCapacity === null
               ? "Give a repeatable percentage-based starting habit and explain which data would make a fixed amount reliable."
@@ -3549,7 +3551,7 @@ export async function POST(request: Request) {
             changes: {
               spending: previousSpend > 0 ? ((currentSpend - previousSpend) / previousSpend) * 100 : null,
               income: previousSummary.income > 0 ? ((currentSummary.income - previousSummary.income) / previousSummary.income) * 100 : null,
-              savingsRate: currentSavingsRate,
+              savingsRate: boundedCurrentSavingsRate,
             },
             strongestSignal: explainabilityBundle[0] ?? null,
           };

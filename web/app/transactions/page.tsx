@@ -135,8 +135,11 @@ type PlanUsage = {
   transactionCount: number;
 };
 
+const loadImportFilesModal = () =>
+  import("@/components/import-files-modal").then((module) => module.ImportFilesModal);
+
 const ImportFilesModal = dynamic(
-  () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
+  loadImportFilesModal,
   { ssr: false }
 );
 
@@ -6926,6 +6929,8 @@ function TransactionsPageContent() {
               : "button button-primary button-small transactions-action-button transactions-toolbar-upload"
           }
           type="button"
+          onPointerEnter={() => void loadImportFilesModal()}
+          onFocus={() => void loadImportFilesModal()}
           onClick={() => {
             if (isCompactViewport) {
               openMobileFilePicker();
@@ -7009,6 +7014,8 @@ function TransactionsPageContent() {
       <button
         className="button button-primary button-small accounts-toolbar-button accounts-toolbar-button--upload transactions-toolbar-upload transactions-toolbar-upload--compact"
         type="button"
+        onPointerEnter={() => void loadImportFilesModal()}
+        onFocus={() => void loadImportFilesModal()}
         onClick={() => openImportFiles()}
         aria-label="Upload files"
         title="Upload files"
@@ -7100,6 +7107,8 @@ function TransactionsPageContent() {
       <button
         className="button button-primary button-small transactions-action-button transactions-toolbar-upload"
         type="button"
+        onPointerEnter={() => void loadImportFilesModal()}
+        onFocus={() => void loadImportFilesModal()}
         onClick={() => openImportFiles()}
       >
         <span className="button-icon" aria-hidden="true">
