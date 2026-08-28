@@ -17,7 +17,7 @@ import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
 import { deriveReconciledBalance, normalizeAccountBalanceSign } from "@/lib/account-balance";
-import { compareAccountCheckpointFreshness } from "@/lib/account-balance-projection";
+import { compareAccountCheckpointFreshness, isAccountBalanceCheckpointEvidence } from "@/lib/account-balance-projection";
 import {
   ACCOUNT_CARD_DRAG_MIME,
   hasActiveAccountCardDrag,
@@ -1297,6 +1297,9 @@ const getLatestCheckpointForAccount = (
   );
 
   for (const checkpoint of statementCheckpoints) {
+    if (!isAccountBalanceCheckpointEvidence(checkpoint)) {
+      continue;
+    }
     const sourceMetadata = checkpoint.sourceMetadata as Record<string, unknown> | null | undefined;
     const checkpointInstitution =
       typeof sourceMetadata?.institution === "string"

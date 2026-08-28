@@ -88,6 +88,21 @@ assert.match(
 );
 assert.match(
   workerSource,
+  /const receiptAccountCurrency =[\s\S]{0,180}?receiptDetails\?\.currency \?\? resolvedMetadata\.currency[\s\S]{0,500}?resolveWorkspaceCashAccountId/,
+  "foreign-currency receipts must resolve their Cash account from the receipt currency, not fallback metadata"
+);
+assert.match(
+  workerSource,
+  /explicitlyResolvedReceiptAccountId \?\?[\s\S]{0,180}?resolveWorkspaceCashAccountId\(String\(importFile\.workspaceId\), receiptCurrency\)/,
+  "receipt confirmation must fall back to a same-currency Cash account when there is no explicit payment-account match"
+);
+assert.match(
+  workerSource,
+  /importModeCarriesAccountBalance\(effectiveImportMode\)[\s\S]{0,160}?resolvedMetadata\.endingBalance/,
+  "receipt totals must remain transaction evidence and must not be persisted as Cash ending balances"
+);
+assert.match(
+  workerSource,
   /const receiptFileNameDate = parseDateValue\([\s\S]{0,500}?const receiptDateInferredFromFileName = !explicitReceiptDate && Boolean\(receiptFileNameDate\)/,
   "receipts with a missing extracted date should recover an explicit date from the source filename"
 );

@@ -9,6 +9,23 @@ export type AccountBalanceCheckpoint = {
   sourceMetadata?: unknown;
 };
 
+const NON_BALANCE_IMPORT_MODES = new Set(["receipt", "transfer_receipt", "notes", "split_bill"]);
+
+export const isAccountBalanceCheckpointEvidence = (checkpoint: Pick<AccountBalanceCheckpoint, "sourceMetadata">) => {
+  const sourceMetadata =
+    checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
+      ? (checkpoint.sourceMetadata as Record<string, unknown>)
+      : null;
+  const documentType = String(sourceMetadata?.importMode ?? sourceMetadata?.documentType ?? "")
+    .trim()
+    .toLowerCase();
+
+  // Receipts and notes create transactions, not point-in-time account
+  // balances. Legacy imports retained checkpoint rows for progress/audit
+  // metadata; those rows must never override the ledger projection.
+  return !NON_BALANCE_IMPORT_MODES.has(documentType);
+};
+
 const toBalanceString = (value: BalanceValue) => {
   if (value === null || value === undefined) return null;
   const normalized = String(value).trim();
@@ -67,6 +84,9 @@ export const selectLatestAccountCheckpoint = <T extends AccountBalanceCheckpoint
   let latest: T | null = null;
 
   for (const checkpoint of checkpoints) {
+    if (!isAccountBalanceCheckpointEvidence(checkpoint)) {
+      continue;
+    }
     if (!latest || compareAccountCheckpointFreshness(checkpoint, latest) >= 0) {
       latest = checkpoint;
     }

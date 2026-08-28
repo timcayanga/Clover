@@ -9,6 +9,7 @@ import {
 import {
   canonicalImportedInstitutionKey,
   getImportedAccountLastFour,
+  normalizeImportedCurrencyCode,
   type ImportedAccountIdentityLike,
 } from "@/lib/imported-account-identity";
 
@@ -178,7 +179,8 @@ export const transactionMatchesImportedAccount = <
   account: TAccount
 ) => {
   if (transaction.accountId === account.id) {
-    return true;
+    return account.type !== "cash" ||
+      normalizeImportedCurrencyCode(transaction.currency) === normalizeImportedCurrencyCode(account.currency);
   }
 
   return (

@@ -684,6 +684,7 @@ async function DashboardStream({
               },
               select: {
                 amount: true,
+                currency: true,
                 type: true,
                 isExcluded: true,
                 merchantRaw: true,
@@ -759,10 +760,15 @@ async function DashboardStream({
 
   const reconcileAccountBalance = (account: (typeof dashboardAccounts)[number]) => {
     const latestCheckpoint = selectLatestAccountCheckpoint(account.statementCheckpoints);
+    const accountTransactions = account.type === "cash"
+      ? account.transactions.filter(
+          (transaction) => formatCurrencyCode(transaction.currency) === formatCurrencyCode(account.currency)
+        )
+      : account.transactions;
     const fallbackBalance = account.source === "manual"
       ? deriveReconciledBalance({
           balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
-          transactions: account.transactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
+          transactions: accountTransactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
           checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
           treatStoredBalanceAsOpening: true,
         })

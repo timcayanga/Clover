@@ -32,7 +32,11 @@ import {
 } from "@/lib/transient-data";
 import { summarizeErrorForLog } from "@/lib/security-logging";
 import { getLiveCryptoPhpPrices } from "@/lib/crypto-market-prices";
-import { compareAccountCheckpointFreshness, resolveEffectiveAccountBalance } from "@/lib/account-balance-projection";
+import {
+  compareAccountCheckpointFreshness,
+  isAccountBalanceCheckpointEvidence,
+  resolveEffectiveAccountBalance,
+} from "@/lib/account-balance-projection";
 import { isCryptoAssetCurrencyCode } from "@/lib/financial-identity-detection";
 import {
   getCanonicalPdaxHoldingIdentity,
@@ -3355,6 +3359,9 @@ export async function GET(request: Request) {
       const latestByAccountId = new Map<string, (typeof checkpoints)[number]>();
       const latestByAccountKey = new Map<string, (typeof checkpoints)[number]>();
       for (const checkpoint of checkpoints) {
+        if (!isAccountBalanceCheckpointEvidence(checkpoint)) {
+          continue;
+        }
         const sourceMetadata =
           checkpoint.sourceMetadata && typeof checkpoint.sourceMetadata === "object" && !Array.isArray(checkpoint.sourceMetadata)
             ? (checkpoint.sourceMetadata as Record<string, unknown>)
@@ -3413,7 +3420,7 @@ export async function GET(request: Request) {
     const accountIds = accounts.map((account) => account.id);
     const transactionCounts = accountIds.length
       ? await prisma.transaction.groupBy({
-          by: ["accountId"],
+          by: ["accountId", "currency"],
           where: {
             workspaceId,
             accountId: { in: accountIds },
@@ -3423,9 +3430,15 @@ export async function GET(request: Request) {
         })
       : [];
     const transactionCountByAccountId = new Map(
-      transactionCounts
-        .filter((row) => row.accountId)
-        .map((row) => [row.accountId as string, row._count._all])
+      accounts.map((account) => [
+        account.id,
+        transactionCounts
+          .filter((row) => row.accountId === account.id)
+          .filter(
+            (row) => account.type !== "cash" || normalizeImportedCurrencyCode(row.currency) === normalizeImportedCurrencyCode(account.currency)
+          )
+          .reduce((sum, row) => sum + row._count._all, 0),
+      ])
     );
     const checkpointAccountIds = new Set(
       statementCheckpoints

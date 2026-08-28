@@ -1127,6 +1127,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
         select: {
           accountId: true,
           amount: true,
+          currency: true,
           type: true,
           isExcluded: true,
           merchantRaw: true,
@@ -1141,7 +1142,17 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
 
   const allTransactions = allTransactionsQuery as AdviserTransaction[];
   const manualTransactionsByAccount = new Map<string, BalanceLikeTransaction[]>();
+  const manualAccountById = new Map(
+    (resolvedWorkspace.accounts as AdviserWorkspaceAccountSource[]).map((account) => [account.id, account])
+  );
   for (const transaction of manualAccountTransactions) {
+    const transactionAccount = manualAccountById.get(transaction.accountId);
+    if (
+      transactionAccount?.type === "cash" &&
+      formatCurrencyCode(transaction.currency) !== formatCurrencyCode(transactionAccount.currency)
+    ) {
+      continue;
+    }
     const existing = manualTransactionsByAccount.get(transaction.accountId) ?? [];
     existing.push(transaction as unknown as BalanceLikeTransaction);
     manualTransactionsByAccount.set(transaction.accountId, existing);

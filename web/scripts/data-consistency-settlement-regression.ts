@@ -98,6 +98,19 @@ const main = async () => {
     "An undated legacy statement must not outrank a statement with an explicit financial date."
   );
   assert.equal(
+    selectLatestAccountCheckpoint([
+      datedStatementUploadedLater,
+      {
+        id: "receipt-total-is-not-a-balance",
+        statementEndDate: null,
+        createdAt: "2026-08-20T00:00:00.000Z",
+        sourceMetadata: { importMode: "receipt" },
+      },
+    ])?.id,
+    "dated-import",
+    "A receipt total checkpoint must never replace an account balance."
+  );
+  assert.equal(
     getAccountCheckpointEffectiveTime({
       createdAt: "2026-08-16T00:00:00.000Z",
       statementEndDate: "2026-06-30T00:00:00.000Z",

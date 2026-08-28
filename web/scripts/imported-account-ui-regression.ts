@@ -10,6 +10,7 @@ import {
   isGenericUploadedAccountShadowed,
   uploadSummaryCanDismissImportUi,
   uploadSummaryMatchesImportedAccount,
+  transactionMatchesImportedAccount,
   type ImportedAccountLike,
 } from "@/lib/imported-account-ui";
 import { combineUploadInsightsSummaries, getUploadSummaryCurrencies } from "@/lib/import-upload-summary";
@@ -62,6 +63,35 @@ const main = () => {
     updatedAt: "2026-06-24T10:00:00.000Z",
     createdAt: "2026-06-01T10:00:00.000Z",
   };
+
+  const phpCashAccount: TestAccount = {
+    id: "cash-php",
+    name: "Cash",
+    institution: "Cash",
+    accountNumber: null,
+    type: "cash",
+    currency: "PHP",
+    source: "manual",
+    balance: "0",
+  };
+  const cashTransaction = {
+    id: "cash-row",
+    accountId: phpCashAccount.id,
+    accountName: "Cash",
+    institution: "Cash",
+    accountNumber: null,
+    currency: "CNY",
+  };
+  assert.equal(
+    transactionMatchesImportedAccount(cashTransaction, phpCashAccount),
+    false,
+    "A foreign-currency receipt linked to the PHP Cash ID must not appear in the PHP Cash ledger."
+  );
+  assert.equal(
+    transactionMatchesImportedAccount({ ...cashTransaction, currency: "PHP" }, phpCashAccount),
+    true,
+    "Same-currency Cash transactions must continue matching their account."
+  );
 
   const summary: UploadInsightsSummary = {
     fileName: "unionbank-summary.pdf",

@@ -567,7 +567,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
     const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
     const pageSize = Math.max(1, Number(searchParams.get("pageSize") ?? "25") || 25);
     const accountIds = await expandImportedAccountFilters(account.workspaceId, account);
-    const where = buildTransactionQueryWhere(account.workspaceId, { accountIds });
+    const where = buildTransactionQueryWhere(account.workspaceId, {
+      accountIds,
+      // Cash is a currency-scoped account. Legacy receipt imports may retain
+      // the correct transaction currency while pointing at the wrong Cash ID;
+      // never mix those rows into this account's ledger or balance.
+      currencyFilter: account.type === "cash" ? account.currency ?? undefined : undefined,
+    });
     const skip = (page - 1) * pageSize;
 
     const [totalCount, rows] = await Promise.all([

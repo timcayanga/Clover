@@ -16,7 +16,9 @@ import { getAccountBrand } from "@/lib/account-brand";
 import { getLuxuryAccountCardClass } from "@/lib/account-card-luxury";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
 import { deriveReconciledBalance, normalizeAccountBalanceSign, type BalanceLikeTransaction } from "@/lib/account-balance";
+import { isAccountBalanceCheckpointEvidence } from "@/lib/account-balance-projection";
 import { formatCurrencyAmount } from "@/lib/currency-format";
+import { normalizeImportedCurrencyCode } from "@/lib/imported-account-identity";
 import { extractAccountIdFromPathSegment, getAccountPath } from "@/lib/account-path";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { guessCategoryName } from "@/lib/financial-classification";
@@ -1463,7 +1465,13 @@ function AccountDetailPageContent() {
             cachedTransactions = mergeImportedWorkspaceTransactions(
               [],
               (cachedTransactionsWorkspace.transactions as ImportedWorkspaceTransaction[]).filter(
-                (transaction) => transaction.accountId === activeCachedAccount.id
+                (transaction) =>
+                  transaction.accountId === activeCachedAccount.id &&
+                  (activeCachedAccount.type !== "cash" ||
+                    normalizeImportedCurrencyCode(
+                      typeof transaction.currency === "string" ? transaction.currency : null
+                    ) ===
+                      normalizeImportedCurrencyCode(activeCachedAccount.currency))
               )
             );
           }
@@ -1810,6 +1818,9 @@ function AccountDetailPageContent() {
     }
 
     const matchingCheckpoints = checkpoints.filter((checkpoint) => {
+      if (!isAccountBalanceCheckpointEvidence(checkpoint)) {
+        return false;
+      }
       if (checkpoint.accountId === accountId) {
         return true;
       }
@@ -2017,7 +2028,10 @@ function AccountDetailPageContent() {
     ? Number(account.transactionCount ?? 0) > 0 ||
       transactions.some((transaction) => {
         if (transaction.accountId === account.id) {
-          return true;
+          return (
+            account.type !== "cash" ||
+            normalizeImportedCurrencyCode(transaction.currency) === normalizeImportedCurrencyCode(account.currency)
+          );
         }
 
         return (

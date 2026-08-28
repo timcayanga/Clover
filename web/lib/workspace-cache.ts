@@ -1873,7 +1873,10 @@ export const findCachedTransactionsForAccount = (
     const transactions = snapshotLike.transactions.filter((entry) => {
       const entryAccountId = typeof entry.accountId === "string" ? entry.accountId : "";
       if (accountIds.has(entryAccountId)) {
-        return true;
+        const accountType = String(accountIdentity?.type ?? "").trim().toLowerCase();
+        const accountCurrency = String(accountIdentity?.currency ?? "").trim().toUpperCase();
+        const transactionCurrency = String(entry.currency ?? "").trim().toUpperCase();
+        return accountType !== "cash" || !accountCurrency || transactionCurrency === accountCurrency;
       }
 
       if (!identityKey) {

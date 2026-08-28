@@ -2660,6 +2660,11 @@ const resolveWorkspaceCashAccountId = async (workspaceId: string, currency = "PH
   return cashAccount?.id ?? null;
 };
 
+const nonBalanceImportModes = new Set(["receipt", "transfer_receipt", "notes", "split_bill"]);
+
+const importModeCarriesAccountBalance = (importMode: string) =>
+  !nonBalanceImportModes.has(importMode.trim().toLowerCase());
+
 const countRowsWithParseableDates = (rows: Array<{ date?: string | null }>) =>
   rows.reduce((count, row) => (parseDateValue(row.date ?? null) ? count + 1 : count), 0);
 
@@ -9653,8 +9658,12 @@ export const processImportFileText = async (
         workspaceId: importFile.workspaceId,
         statementStartDate: metadataForParse.startDate ? new Date(metadataForParse.startDate) : null,
         statementEndDate: metadataForParse.endDate ? new Date(metadataForParse.endDate) : null,
-        openingBalance: metadataForParse.openingBalance === null ? null : metadataForParse.openingBalance.toString(),
-        endingBalance: metadataForParse.endingBalance === null ? null : metadataForParse.endingBalance.toString(),
+        openingBalance: !importModeCarriesAccountBalance(effectiveImportMode) || metadataForParse.openingBalance === null
+          ? null
+          : metadataForParse.openingBalance.toString(),
+        endingBalance: !importModeCarriesAccountBalance(effectiveImportMode) || metadataForParse.endingBalance === null
+          ? null
+          : metadataForParse.endingBalance.toString(),
         status: "pending",
         mismatchReason: null,
         sourceMetadata: preliminaryCheckpointSourceMetadata,
@@ -9664,8 +9673,12 @@ export const processImportFileText = async (
         importFileId,
         statementStartDate: metadataForParse.startDate ? new Date(metadataForParse.startDate) : null,
         statementEndDate: metadataForParse.endDate ? new Date(metadataForParse.endDate) : null,
-        openingBalance: metadataForParse.openingBalance === null ? null : metadataForParse.openingBalance.toString(),
-        endingBalance: metadataForParse.endingBalance === null ? null : metadataForParse.endingBalance.toString(),
+        openingBalance: !importModeCarriesAccountBalance(effectiveImportMode) || metadataForParse.openingBalance === null
+          ? null
+          : metadataForParse.openingBalance.toString(),
+        endingBalance: !importModeCarriesAccountBalance(effectiveImportMode) || metadataForParse.endingBalance === null
+          ? null
+          : metadataForParse.endingBalance.toString(),
         status: "pending",
         sourceMetadata: preliminaryCheckpointSourceMetadata,
         rowCount: parsedRows.length,
@@ -11646,9 +11659,14 @@ export const processImportFileText = async (
     candidateComparisonReason: statementCandidateComparison?.reason ?? null,
   } as Prisma.InputJsonValue;
   const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
+  const receiptAccountCurrency =
+    String(receiptDetails?.currency ?? resolvedMetadata.currency ?? "PHP").trim().toUpperCase() || "PHP";
   const documentCashAccountId =
     effectiveImportMode === "receipt" || effectiveImportMode === "notes"
-      ? await resolveWorkspaceCashAccountId(String(importFile.workspaceId), resolvedMetadata.currency ?? "PHP")
+      ? await resolveWorkspaceCashAccountId(
+          String(importFile.workspaceId),
+          effectiveImportMode === "receipt" ? receiptAccountCurrency : resolvedMetadata.currency ?? "PHP"
+        )
       : null;
   const documentImportAccountId =
     effectiveImportMode === "receipt"
@@ -11717,7 +11735,7 @@ export const processImportFileText = async (
           effectiveImportMode === "receipt"
             ? receiptAccountResolution?.accountLast4 ?? null
             : resolvedMetadata.accountNumber ?? null,
-        currency: resolvedMetadata.currency ?? null,
+        currency: effectiveImportMode === "receipt" ? receiptAccountCurrency : resolvedMetadata.currency ?? null,
         pageCount: pageImages?.length ?? 0,
         confidence: resolvedMetadata.confidence ?? 0,
         sourceMetadata: documentImportSourceMetadata,
@@ -11779,7 +11797,7 @@ export const processImportFileText = async (
       merchantClean: receiptDetailsPayload?.merchant_clean ?? null,
       transactionDate: parseDateValue(receiptDetailsPayload?.transaction_date ?? resolvedMetadata.endDate ?? null),
       transactionTime: receiptDetailsPayload?.transaction_time ?? null,
-      currency: receiptDetailsPayload?.currency ?? resolvedMetadata.currency ?? null,
+      currency: receiptDetailsPayload?.currency ?? receiptAccountCurrency,
       subtotal: receiptDetailsPayload?.subtotal ?? null,
       tax: receiptDetailsPayload?.tax ?? null,
       total: receiptDetailsPayload?.total ?? resolvedMetadata.endingBalance ?? resolvedMetadata.totalAmountDue ?? null,
@@ -12085,8 +12103,12 @@ export const processImportFileText = async (
           workspaceId: importFile.workspaceId,
           statementStartDate: metadataStartDate,
           statementEndDate: metadataEndDate,
-          openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
-          endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
+          openingBalance: !importModeCarriesAccountBalance(effectiveImportMode) || resolvedMetadata.openingBalance === null
+            ? null
+            : resolvedMetadata.openingBalance.toString(),
+          endingBalance: !importModeCarriesAccountBalance(effectiveImportMode) || resolvedMetadata.endingBalance === null
+            ? null
+            : resolvedMetadata.endingBalance.toString(),
           status: "pending",
           mismatchReason: null,
           sourceMetadata: checkpointSourceMetadata,
@@ -12097,8 +12119,12 @@ export const processImportFileText = async (
           importFileId,
           statementStartDate: metadataStartDate,
           statementEndDate: metadataEndDate,
-          openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
-          endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
+          openingBalance: !importModeCarriesAccountBalance(effectiveImportMode) || resolvedMetadata.openingBalance === null
+            ? null
+            : resolvedMetadata.openingBalance.toString(),
+          endingBalance: !importModeCarriesAccountBalance(effectiveImportMode) || resolvedMetadata.endingBalance === null
+            ? null
+            : resolvedMetadata.endingBalance.toString(),
           status: "pending",
           sourceMetadata: checkpointSourceMetadata,
           rowCount: rows.length,
@@ -13211,9 +13237,20 @@ export const confirmImportFile = async (
           : receiptPayloadSource?.receiptAccountMatch && typeof receiptPayloadSource.receiptAccountMatch === "object" && !Array.isArray(receiptPayloadSource.receiptAccountMatch)
             ? (receiptPayloadSource.receiptAccountMatch as Record<string, unknown>)
             : null;
+      const receiptAccountResolutionPayload =
+        receiptPayloadSource?.receiptAccountResolution &&
+        typeof receiptPayloadSource.receiptAccountResolution === "object" &&
+        !Array.isArray(receiptPayloadSource.receiptAccountResolution)
+          ? (receiptPayloadSource.receiptAccountResolution as Record<string, unknown>)
+          : null;
+      const explicitlyResolvedReceiptAccountId =
+        typeof receiptAccountResolutionPayload?.accountId === "string" &&
+        receiptAccountResolutionPayload.accountId.trim() &&
+        !receiptAccountResolutionPayload.accountId.startsWith("optimistic-")
+          ? receiptAccountResolutionPayload.accountId
+          : null;
       const cashAccountId =
-        receiptDocument?.accountId ??
-        (documentImport?.accountId && !String(documentImport.accountId).startsWith("optimistic-") ? documentImport.accountId : null) ??
+        explicitlyResolvedReceiptAccountId ??
         (await resolveWorkspaceCashAccountId(String(importFile.workspaceId), receiptCurrency));
       const receiptCategoryName = (() => {
         const trainedCategoryName =
