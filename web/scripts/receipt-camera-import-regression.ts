@@ -78,6 +78,11 @@ assert.match(
 );
 assert.match(
   workerSource,
+  /const chooseBetterReceiptDetails =[\s\S]{0,1200}?candidateQuality\.score > currentQuality\.score \? candidate : current/,
+  "model receipt details must not replace a more complete deterministic receipt preview"
+);
+assert.match(
+  workerSource,
   /effectiveImportMode === "receipt"\s*\? resolvedReceiptAccountId \?\? documentCashAccountId/,
   "receipt documents must prefer the uniquely resolved payment account over Cash"
 );

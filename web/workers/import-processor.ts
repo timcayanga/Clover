@@ -10536,11 +10536,25 @@ export const processImportFileText = async (
       critical: assessment.critical,
     })) ?? null,
   } as const;
-  let receiptDetails =
+  const chooseBetterReceiptDetails = (
+    current: ImportedReceiptDetails | null | undefined,
+    candidate: ImportedReceiptDetails | null | undefined
+  ) => {
+    if (!candidate) return current ?? null;
+    if (!current) return candidate;
+
+    const currentQuality = assessReceiptExtractionQuality({
+      receiptDetails: current,
+      expectedCurrency: openAiMetadata?.currency ?? metadataForParse.currency ?? null,
+    });
+    const candidateQuality = assessReceiptExtractionQuality({
+      receiptDetails: candidate,
+      expectedCurrency: openAiMetadata?.currency ?? metadataForParse.currency ?? null,
+    });
+    return candidateQuality.score > currentQuality.score ? candidate : current;
+  };
+  const openAiReceiptDetailsCandidate =
     (effectiveImportMode === "receipt" || effectiveImportMode === "notes") &&
-    trainedReceiptDetails
-      ? trainedReceiptDetails
-      : (effectiveImportMode === "receipt" || effectiveImportMode === "notes") &&
     openAiParsed?.receiptDetails &&
     (openAiParsed.receiptDetails.merchant_raw ||
       openAiParsed.receiptDetails.merchant_clean ||
@@ -10550,9 +10564,16 @@ export const processImportFileText = async (
       openAiParsed.receiptDetails.line_items.length > 0 ||
       openAiParsed.receiptDetails.split_allocations.length > 0)
       ? openAiParsed.receiptDetails
-      : receiptPreviewIsUsable || receiptPreviewHasReviewableDetails || autoDetectedReceiptPreview
-        ? receiptPreviewDetails
-        : null;
+      : null;
+  const receiptPreviewDetailsCandidate =
+    receiptPreviewIsUsable || receiptPreviewHasReviewableDetails || autoDetectedReceiptPreview
+      ? receiptPreviewDetails
+      : null;
+  let receiptDetails =
+    (effectiveImportMode === "receipt" || effectiveImportMode === "notes") &&
+    trainedReceiptDetails
+      ? trainedReceiptDetails
+      : chooseBetterReceiptDetails(openAiReceiptDetailsCandidate, receiptPreviewDetailsCandidate);
   const promotesNotesSplitBillToReceipt =
     effectiveImportMode === "notes" &&
     Boolean(
@@ -10780,19 +10801,10 @@ export const processImportFileText = async (
           importMode === "receipt" &&
           trainedReceiptDetails
             ? trainedReceiptDetails
-            : importMode === "receipt" &&
-              openAiParsed?.receiptDetails &&
-              (openAiParsed.receiptDetails.merchant_raw ||
-                openAiParsed.receiptDetails.merchant_clean ||
-                openAiParsed.receiptDetails.total !== null ||
-                openAiParsed.receiptDetails.transaction_date ||
-                openAiParsed.receiptDetails.payment_method ||
-                openAiParsed.receiptDetails.line_items.length > 0 ||
-                openAiParsed.receiptDetails.split_allocations.length > 0)
-              ? openAiParsed.receiptDetails
-              : receiptPreviewIsUsable || receiptPreviewHasReviewableDetails
-                ? receiptPreviewDetails
-                : null;
+            : chooseBetterReceiptDetails(
+                importMode === "receipt" ? openAiParsed?.receiptDetails : null,
+                receiptPreviewIsUsable || receiptPreviewHasReviewableDetails ? receiptPreviewDetails : null
+              );
 
         receiptAccountMatch =
           importMode === "receipt"
@@ -10944,7 +10956,7 @@ export const processImportFileText = async (
   // details from the adopted result before persisting the document and
   // confirming its transaction.
   if (effectiveImportMode === "receipt" && openAiParsed?.receiptDetails) {
-    receiptDetails = openAiParsed.receiptDetails;
+    receiptDetails = chooseBetterReceiptDetails(receiptDetails, openAiParsed.receiptDetails);
     receiptAccountMatch = openAiParsed.receiptAccountMatch ?? receiptAccountMatch;
     openAiReceiptValidation = assessReceiptExtractionQuality({
       receiptDetails,
