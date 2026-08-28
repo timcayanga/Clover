@@ -39028,7 +39028,7 @@ body:has(.pricing-page) {
   display: grid;
   gap: 20px;
   flex: 1 0 auto;
-  padding: 0 0 56px;
+  padding: 32px 0 56px;
 }
 
 .help-page .landing-nav {
@@ -39279,8 +39279,8 @@ body:has(.pricing-page) {
 .help-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
-  padding: 10px 0 72px;
+  gap: 16px;
+  padding: 4px 0 48px;
 }
 
 .help-card {
@@ -39289,10 +39289,10 @@ body:has(.pricing-page) {
   justify-items: center;
   align-content: center;
   grid-template-rows: minmax(0, 1fr) auto;
-  gap: 18px;
-  min-height: 340px;
-  padding: 28px 32px 32px;
-  border-radius: 30px;
+  gap: 10px;
+  min-height: 190px;
+  padding: 18px 24px 20px;
+  border-radius: 24px;
   border: 0;
   text-decoration: none;
   color: #ffffff;
@@ -39341,8 +39341,8 @@ body:has(.pricing-page) {
 }
 
 .help-card__image {
-  width: min(100%, 220px);
-  height: 220px;
+  width: min(100%, 112px);
+  height: 112px;
   flex: 0 0 auto;
   object-fit: contain;
   filter: drop-shadow(0 18px 26px rgba(15, 23, 42, 0.2));
@@ -39357,7 +39357,7 @@ body:has(.pricing-page) {
 .help-card h3 {
   margin: 0;
   max-width: 15ch;
-  font-size: clamp(1.75rem, 2.4vw, 2.5rem);
+  font-size: clamp(1.3rem, 1.8vw, 1.75rem);
   line-height: 1.08;
   letter-spacing: -0.04em;
   color: #ffffff;
@@ -43533,7 +43533,7 @@ html[data-helper-text="hidden"] .settings-helper {
 
   .help-page__content {
     gap: 16px;
-    padding: 0 0 40px;
+    padding: 26px 0 40px;
   }
 
   .help-grid {
@@ -43549,14 +43549,14 @@ html[data-helper-text="hidden"] .settings-helper {
   }
 
   .help-card {
-    min-height: 300px;
-    padding: 24px;
-    gap: 14px;
+    min-height: 176px;
+    padding: 16px 20px 18px;
+    gap: 8px;
   }
 
   .help-card__image {
-    width: min(100%, 185px);
-    height: 185px;
+    width: min(100%, 98px);
+    height: 98px;
   }
 
   .help-search--hero input {
@@ -43637,23 +43637,24 @@ html[data-helper-text="hidden"] .settings-helper {
 
 @media (max-width: 720px) {
   .help-grid {
-    grid-template-columns: 1fr;
-    gap: 14px;
-    padding-bottom: 40px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding-bottom: 32px;
   }
 
   .help-card {
-    min-height: 280px;
-    padding: 22px 20px 24px;
+    min-height: 142px;
+    padding: 12px 10px 14px;
+    border-radius: 20px;
   }
 
   .help-card__image {
-    width: min(100%, 170px);
-    height: 170px;
+    width: min(100%, 68px);
+    height: 68px;
   }
 
   .help-card h3 {
-    font-size: clamp(1.65rem, 8vw, 2.1rem);
+    font-size: clamp(1rem, 4.8vw, 1.2rem);
   }
 }
 
