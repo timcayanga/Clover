@@ -5,6 +5,23 @@ import {
   shouldPreferDirectImageStatementVisionPath,
   shouldPreferDirectReceiptVisionPath,
 } from "@/workers/import-processor";
+import { inferImportModeForFile } from "@/lib/import-statement-identity";
+
+assert.equal(
+  inferImportModeForFile({ name: "clover-qa-receipt-2.jpg", type: "image/jpeg" }, "statement"),
+  "receipt",
+  "An explicit receipt filename must use the compact receipt parser instead of the statement fallback."
+);
+assert.equal(
+  inferImportModeForFile({ name: "official_invoice_2026.png", type: "image/png" }, "statement"),
+  "receipt",
+  "An explicit invoice filename must use the compact receipt parser."
+);
+assert.equal(
+  inferImportModeForFile({ name: "bank-transaction-history.png", type: "image/png" }, "statement"),
+  "statement",
+  "Statement and transaction-history filenames must remain on the statement path."
+);
 
 assert.equal(
   shouldPreferDirectImageStatementVisionPath({

@@ -268,6 +268,18 @@ export const inferImportModeForFile = (file: ImportFileLike, defaultMode: Import
     return "receipt";
   }
 
+  // The upload modal intentionally defaults to statement mode so ambiguous
+  // bank screenshots remain conservative. Explicit receipt filenames are not
+  // ambiguous, though: routing them as statements sends a one-page purchase
+  // proof through the larger bank-statement vision schema and strongest model
+  // before the worker can rediscover that it is a receipt. Prefer the compact
+  // receipt path immediately while leaving generic camera filenames to the
+  // server's evidence-based document classifier.
+  const receiptSignalName = lowerName.replace(/[_-]+/g, " ");
+  if (/\b(?:receipt|invoice|sales\s*slip|cash\s*slip|purchase\s*proof)\b/i.test(receiptSignalName)) {
+    return "receipt";
+  }
+
   const guessedIdentity = guessStatementIdentity(file.name);
   if (guessedIdentity) {
     return "statement";
