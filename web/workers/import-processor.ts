@@ -6525,6 +6525,52 @@ const buildTransactionInsertRecord = (params: {
   return record;
 };
 
+const loadPersistedDataQaRowsForImport = async (importFileId: string): Promise<DataQaParsedRow[]> => {
+  const persistedRows = await prisma.transaction.findMany({
+    where: {
+      importFileId,
+      deletedAt: null,
+    },
+    orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+    select: {
+      date: true,
+      amount: true,
+      merchantRaw: true,
+      merchantClean: true,
+      description: true,
+      type: true,
+      parserConfidence: true,
+      categoryConfidence: true,
+      accountMatchConfidence: true,
+      duplicateConfidence: true,
+      transferConfidence: true,
+      rawPayload: true,
+      category: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  });
+
+  return persistedRows.map((row) => ({
+    date: row.date,
+    amount: row.amount.toString(),
+    merchantRaw: row.merchantRaw,
+    merchantClean: row.merchantClean,
+    description: row.description,
+    categoryName: row.category?.name ?? null,
+    type: row.type,
+    confidence: row.parserConfidence,
+    parserConfidence: row.parserConfidence,
+    categoryConfidence: row.categoryConfidence,
+    accountMatchConfidence: row.accountMatchConfidence,
+    duplicateConfidence: row.duplicateConfidence,
+    transferConfidence: row.transferConfidence,
+    rawPayload: row.rawPayload,
+  }));
+};
+
 const recordImportDataQaInBackground = (params: {
   workspaceId: string;
   importFileId: string;
@@ -6534,11 +6580,25 @@ const recordImportDataQaInBackground = (params: {
   rows: EnrichedParsedImportRow[];
   metadata: Parameters<typeof recordDataQaRun>[0]["metadata"];
   startedAt: number;
+  parsingDurationMs?: number;
   usedVisionFallback: boolean;
   usedOpenAiFallback: boolean;
+  pageCount?: number;
   actorUserId?: string | null;
 }) => {
+  // Capture the usable handoff duration before the delayed QA task starts.
+  // Measuring inside the scheduled callback incorrectly adds its 10-second
+  // post-visible delay to every import's parser duration.
+  const usableDurationMs = Math.max(0, Date.now() - params.startedAt);
+  const parsedRowsAtHandoff = params.rows as unknown as DataQaParsedRow[];
+
   schedulePostVisibleImportWork(`data-qa:${params.importFileId}`, async () => {
+    const shouldUsePersistedTransactions = params.importMode === "receipt" || params.importMode === "notes";
+    const persistedRows = shouldUsePersistedTransactions
+      ? await loadPersistedDataQaRowsForImport(params.importFileId).catch(() => [])
+      : [];
+    const qaRows = persistedRows.length > 0 ? persistedRows : parsedRowsAtHandoff;
+
     await recordDataQaRun({
       workspaceId: params.workspaceId,
       importFileId: params.importFileId,
@@ -6547,11 +6607,13 @@ const recordImportDataQaInBackground = (params: {
       fileType: params.fileType,
       parserVersion: DATA_ENGINE_VERSION,
       documentType: params.importMode,
-      parsedRows: params.rows as unknown as DataQaParsedRow[],
+      parsedRows: qaRows,
       metadata: params.metadata,
       timings: {
-        totalMs: Date.now() - params.startedAt,
-        parsingMs: Date.now() - params.startedAt,
+        totalMs: usableDurationMs,
+        timeToUsableMs: usableDurationMs,
+        parsingMs: params.parsingDurationMs ?? usableDurationMs,
+        pageCount: params.pageCount ?? 0,
         usedVisionFallback: params.usedVisionFallback,
         usedOpenAiFallback: params.usedOpenAiFallback,
         usedDeterministicParser: !params.usedOpenAiFallback,
@@ -12055,8 +12117,10 @@ export const processImportFileText = async (
         rows,
         metadata: resolvedMetadata,
         startedAt,
+        parsingDurationMs: parsedRowsPersistedAt - startedAt,
         usedVisionFallback: Boolean(pageImages?.length),
         usedOpenAiFallback: Boolean(useOpenAiParse),
+        pageCount: pageImages?.length ?? 0,
         actorUserId: options.actorUserId ?? null,
       });
       void (async () => {
@@ -12165,8 +12229,10 @@ export const processImportFileText = async (
         rows,
         metadata: resolvedMetadata,
         startedAt,
+        parsingDurationMs: parsedRowsPersistedAt - startedAt,
         usedVisionFallback: Boolean(pageImages?.length),
         usedOpenAiFallback: Boolean(useOpenAiParse),
+        pageCount: pageImages?.length ?? 0,
         actorUserId: options.actorUserId ?? null,
       });
 

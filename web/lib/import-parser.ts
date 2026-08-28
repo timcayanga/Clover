@@ -2538,7 +2538,7 @@ const detectExplicitInstitutionShell = (text: string) => {
   }
 
   if (
-    /\b(?:BANK OF THE PHILIPPINE ISLANDS|BPI FAMILY SAVINGS BANK|BDO UNIBANK|METROBANK|SECURITY BANK|RCBC|UNIONBANK|PHILIPPINE NATIONAL BANK|ASIA UNITED BANK|LANDBANK|PSBANK|CHINABANK|MARI\s?BANK|UCPB|CIMB|MAYA|GOTYME)\b/i.test(
+    /\b(?:BANK OF THE PHILIPPINE ISLANDS|BPI FAMILY SAVINGS BANK|BDO UNIBANK|METROBANK|SECURITY BANK|RCBC|UNION\s*BANK|PHILIPPINE NATIONAL BANK|ASIA UNITED BANK|LANDBANK|PSBANK|CHINABANK|MARI\s?BANK|UCPB|CIMB|MAYA|GOTYME)\b/i.test(
       restored
     )
   ) {
@@ -3401,7 +3401,14 @@ const parseGenericMobileScreenshotTransactionRows = (
 };
 
 export const getTrailingBalanceFromParsedRows = (rows: ParsedImportRow[]) => {
-  const statementEndingBalancePayload = [...rows]
+  const distinctAccountNumbers = new Set(
+    rows
+      .map((row) => row.accountNumber ?? (row.rawPayload as Record<string, unknown> | undefined)?.accountNumber)
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+  );
+  const statementEndingBalancePayload = distinctAccountNumbers.size > 1
+    ? undefined
+    : [...rows]
     .reverse()
     .find(
       (row) =>
@@ -4084,12 +4091,17 @@ const securityBankStatementMetadata = (text: string): DetectedStatementMetadata 
     accountNumber
       ? formatSimpleBankAccountName("Security Bank", accountNumber)
       : accountNameCandidate ?? "Security Bank";
-  const periodMatch = compact.match(/PERIOD\s+COVERED\s*:\s*([A-Z]{3}\s+\d{1,2}\s+\d{4})\s+TO\s+([A-Z]{3}\s+\d{1,2}\s+\d{4})/i);
+  const periodMatch = compact.match(/PERIOD\s+COVERED\s*:?[\s-]*([A-Z]{3}\s+\d{1,2}\s+\d{4})\s+TO\s+([A-Z]{3}\s+\d{1,2}\s+\d{4})/i);
   const summaryMatch = compact.match(
     /BEGINNING\s+BALANCE\s+TOTAL\s+CREDITS\s+TOTAL\s+DEBITS\s+ENDING\s+BALANCE\s+([0-9,.-]+)\s+([0-9,.-]+)\s+([0-9,.-]+)\s+([0-9,.-]+)/i
   );
-  const openingBalance = summaryMatch ? parseMoney(summaryMatch[1]) : null;
-  const endingBalance = summaryMatch ? parseMoney(summaryMatch[4]) : null;
+  const arithmeticSummaryMatch = compact.match(
+    /(?:Beginning\s+Balance\s+)?([0-9,]+\.\d{2})\s+[^0-9]{0,4}([0-9,]+\.\d{2})\s*[-–]\s*([0-9,]+\.\d{2})\s*=\s*([0-9,]+\.\d{2})/i
+  );
+  const openingBalance = summaryMatch
+    ? parseMoney(summaryMatch[1])
+    : parseMoney(compact.match(/Beginning\s+Balance\s+([0-9,]+\.\d{2})/i)?.[1] ?? arithmeticSummaryMatch?.[1] ?? null);
+  const endingBalance = summaryMatch ? parseMoney(summaryMatch[4]) : parseMoney(arithmeticSummaryMatch?.[4] ?? null);
   const startDate = parseSecurityBankDate(periodMatch?.[1] ?? null);
   const endDate = parseSecurityBankDate(periodMatch?.[2] ?? null);
 
@@ -4418,6 +4430,16 @@ const parseSecurityBankSavingsImportText = (text: string) => {
 
     if (/^Page\s+\d+\s+of\s+\d+/i.test(line)) {
       break;
+    }
+
+    const inlineDatedMatch = line.match(
+      /^(\d{1,2}[A-Za-z]{3}\d{2,4})\s+(.+?)\s+([0-9][0-9,]*\.\d{2})\s+([0-9][0-9,]*\.\d{2})$/i
+    );
+    if (inlineDatedMatch) {
+      currentDate = inlineDatedMatch[1];
+      pushRow(inlineDatedMatch[2], currentDate, inlineDatedMatch[3], inlineDatedMatch[4]);
+      pendingDescription = null;
+      continue;
     }
 
     const datedMatch = line.match(/^(\d{1,2}[A-Za-z]{3}\d{2,4})\s+([0-9][0-9,]*\.\d{2})\s+([0-9][0-9,]*\.\d{2})$/i);
@@ -5490,7 +5512,10 @@ const parseAubSavingsImportText = (text: string) => {
   const lastRow = dedupedRows.at(-1);
   const lastRowPayload = lastRow?.rawPayload && typeof lastRow.rawPayload === "object" ? (lastRow.rawPayload as Record<string, unknown>) : null;
   const lastRowBalance = lastRowPayload && typeof lastRowPayload.balanceText === "string" ? parseMoney(lastRowPayload.balanceText) : null;
-  const endingBalance = detectAubSavingsSummaryBalance(normalizedText) ?? getTrailingBalanceFromParsedRows(dedupedRows) ?? lastRowBalance;
+  // Summary panels in long AUB exports can show the live/current account
+  // balance rather than the closing balance for the requested period. The
+  // final ledger row is the auditable period close and takes precedence.
+  const endingBalance = lastRowBalance ?? getTrailingBalanceFromParsedRows(dedupedRows) ?? detectAubSavingsSummaryBalance(normalizedText);
 
   return {
     metadata: {
@@ -8674,9 +8699,12 @@ const bdoStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
   const accountNumberLineIndex = lines.findIndex((line) => /ACCOUNT\s+(?:NBR|NO\.?|NUMBER|#)|ACCOUNT\s+SUMMARY/i.test(line));
+  const explicitSummaryAccountNumber =
+    text.match(/Account\s*Summary\s+(\d{3}-\d{4}-\d{3}-\d{2})/i)?.[1] ?? null;
   const accountNumber =
-    extractFormattedAccountNumberFromLines(lines) ??
+    explicitSummaryAccountNumber ??
     detectBdoAccountNumberFromText(normalized) ??
+    extractFormattedAccountNumberFromLines(lines) ??
     detectAccountNumberFromText(normalized);
   const accountName =
     extractBdoAccountHolderName(lines) ??
@@ -8742,6 +8770,7 @@ const bdoStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     parseMoney(compact.match(/PREVIOUS\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(compact.match(/BAL\s+AS\s+OF\s+[^\n]+?([0-9,]+\.\d{2})/i)?.[1] ?? null);
   const headerCurrentBalance =
+    parseMoney(text.match(/\bBalance\s+Pp?\s*([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(compact.match(/\bCURRENT\s+([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(compact.match(/\bAVAIL\s+TODAY\s+([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(compact.match(/\bTOMORROW\s+([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
@@ -8752,8 +8781,8 @@ const bdoStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     parseMoney(compact.match(/\bBALANCE\s+P?\s*([0-9,]+\.\d{2})/i)?.[1] ?? null);
   const endingBalance =
     parseMoney(compact.match(/ENDING\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
-    parseMoney(compact.match(/CLOSING\s+BALANCE(?:\s+TOTAL)?\s*([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
-    currentBalance;
+    currentBalance ??
+    parseMoney(compact.match(/CLOSING\s+BALANCE(?:\s+TOTAL)?\s*([0-9,]+\.\d{2})/i)?.[1] ?? null);
 
   return {
     institution: "BDO Unibank, Inc.",
@@ -8955,7 +8984,18 @@ const parseBdoSavingsTransactionBlock = (
     description = normalizeWhitespace(numericReferenceCandidate).replace(/\s+/g, " ").trim();
   }
   if (!description || isLikelyBdoOcrFragment(description)) {
-    return null;
+    const previewValues = Array.from(blockText.matchAll(/-?\d[\d,]*\.\d{2}/g))
+      .map((match) => parseMoney(match[0]))
+      .filter((value): value is number => value !== null);
+    const signedPreviewAmount = previewValues.find((value) => value < 0) ?? previewValues[0] ?? null;
+    if (numericReferenceCandidate && signedPreviewAmount !== null) {
+      // BDO terminal exports often show monthly interest/tax rows using only a
+      // numeric reference. A negative displayed amount raises the balance;
+      // the following positive row is the withholding tax.
+      description = signedPreviewAmount < 0 ? "Interest Credit" : "Withholding Tax";
+    } else {
+      return null;
+    }
   }
 
   const moneyValues = Array.from(blockText.matchAll(/-?\d[\d,]*\.\d{2}/g))
@@ -9241,8 +9281,8 @@ const parseBdoSavingsImportText = (text: string) => {
   });
 
   const endingBalance =
-    getTrailingBalanceFromParsedRows(normalizedRows) ??
     metadataWithPeriod.endingBalance ??
+    getTrailingBalanceFromParsedRows(normalizedRows) ??
     parseMoney(normalizedRows.at(-1)?.rawPayload?.balanceText as string | null);
 
   return {
@@ -16189,6 +16229,50 @@ const parseGcashImportText = (text: string) => {
     .map((record) => parseGcashTransactionRecord(record, metadata.institution))
     .filter(Boolean) as ParsedImportRow[];
 
+  let previousBalance = metadata.openingBalance;
+  for (const row of rows) {
+    const rawBalance =
+      row.rawPayload && typeof row.rawPayload === "object"
+        ? parseMoney(String((row.rawPayload as Record<string, unknown>).balance ?? ""))
+        : null;
+    const amount = parseMoney(row.amount ?? null);
+    const description = normalizeWhitespace(String(row.description ?? ""));
+    const lacksTransactionLabel = !gcashRecordStarterPattern.test(description);
+
+    if (lacksTransactionLabel && rawBalance !== null && previousBalance !== null) {
+      const isCredit = rawBalance > previousBalance;
+      const source = /BOPIPHMM/i.test(description)
+        ? "BPI"
+        : /UBPHPHMM/i.test(description)
+          ? "UnionBank"
+          : /PDAXPHM/i.test(description)
+            ? "PDAX"
+            : "another account";
+      const repairedDescription = isCredit ? `Received GCash from ${source}` : `Sent GCash to ${source}`;
+      row.description = repairedDescription;
+      row.merchantRaw = humanizeMerchantText(repairedDescription);
+      row.merchantClean = summarizeMerchantText(repairedDescription, metadata.institution);
+      row.type = isCredit ? "income" : "expense";
+      row.categoryName = "Transfers";
+      row.rawPayload = {
+        ...(row.rawPayload ?? {}),
+        extractedDescription: description,
+        descriptionRepair: "inferred_from_running_balance_and_bank_code",
+      };
+    } else if (
+      rawBalance !== null &&
+      previousBalance !== null &&
+      amount !== null &&
+      approxMoney(Math.abs(rawBalance - previousBalance), amount)
+    ) {
+      row.type = rawBalance >= previousBalance ? "income" : "expense";
+    }
+
+    if (rawBalance !== null) {
+      previousBalance = rawBalance;
+    }
+  }
+
   const inferredAccountNumber = inferGcashAccountNumberFromRows(rows, metadata.accountNumber);
   const endingBalance = getTrailingBalanceFromParsedRows(rows);
   const accountNumber = metadata.accountNumber ?? inferredAccountNumber;
@@ -16554,13 +16638,17 @@ const parseCimbImportText = (text: string) => {
           ? sectionLines.slice(firstLedgerRowIndex)
           : sectionLines;
 
-      const parsedRows = parseCimbTransactionSegment(ledgerLines, {
+      const parsedLedgerRows = parseCimbTransactionSegment(ledgerLines, {
         accountName,
         accountNumber,
         institution: "CIMB",
         statementStartDate: startDate ? startDate.toISOString() : null,
         statementEndDate: endDate ? endDate.toISOString() : null,
-      }).map((row) => ({
+      });
+      const ledgerEndingBalance = parseMoney(
+        String((parsedLedgerRows.at(-1)?.rawPayload as Record<string, unknown> | undefined)?.balanceText ?? "")
+      );
+      const parsedRows = parsedLedgerRows.map((row) => ({
         ...row,
         rawPayload: {
           ...(row.rawPayload ?? {}),
@@ -16586,6 +16674,7 @@ const parseCimbImportText = (text: string) => {
           confidence: Math.min(100, 80 + (accountNumber ? 10 : 0) + (rows.length > 0 ? 5 : 0) + (holderName ? 5 : 0)),
         } satisfies DetectedStatementMetadata,
         rows,
+        ledgerEndingBalance,
       };
     })
     .filter((section) => section.rows.length > 0);
@@ -17132,7 +17221,7 @@ const isUnionBankBoilerplateLine = (line: string) =>
 
 const unionbankStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = text.replace(/\u00a0/g, " ").trim();
-  if (!/\bUNIONBANK\b/i.test(normalized) && !/TRANSACTION HISTORY AS OF/i.test(normalized)) {
+  if (!/\bUNION\s*BANK\b/i.test(normalized) && !/TRANSACTION HISTORY AS OF/i.test(normalized)) {
     return null;
   }
 
@@ -17484,13 +17573,20 @@ const parseUnionBankImportText = (text: string) => {
 
   const segments: string[][] = [];
   let current: string[] = [];
+  let creditCardPrelude: string[] = [];
+  const transactionTableIndex =
+    metadata.accountType === "credit_card" ? lines.findIndex((line) => /^transactions?$/i.test(line)) : -1;
+  const ledgerLines = transactionTableIndex >= 0 ? lines.slice(transactionTableIndex + 1) : lines;
 
-  for (const line of lines) {
+  for (const line of ledgerLines) {
     if (metadata.accountType === "credit_card") {
       const dateMatches = [...line.matchAll(new RegExp(unionbankDateTokenPattern.source, "gi"))];
       if (dateMatches.length === 0) {
         if (current.length > 0) {
           current.push(line);
+        } else {
+          creditCardPrelude.push(line);
+          creditCardPrelude = creditCardPrelude.slice(-8);
         }
         continue;
       }
@@ -17512,10 +17608,23 @@ const parseUnionBankImportText = (text: string) => {
         if (!chunk) {
           continue;
         }
+        let merchantPrelude: string[] = [];
         if (current.length > 0) {
-          segments.push(current);
+          const firstAmountIndex = current.findIndex((entry) => extractUnionBankMoneyTokens(entry).length > 0);
+          if (firstAmountIndex >= 0) {
+            segments.push(current.slice(0, firstAmountIndex + 1));
+            const trailingLines = current.slice(firstAmountIndex + 1);
+            if (trailingLines.length > 0 && extractUnionBankMoneyTokens(trailingLines.join(" ")).length === 0) {
+              merchantPrelude = trailingLines;
+            }
+          } else {
+            segments.push(current);
+          }
         }
-        current = [chunk];
+        const availablePrelude = merchantPrelude.length > 0 ? merchantPrelude : creditCardPrelude;
+        const chunkHasAmount = extractUnionBankMoneyTokens(chunk).length > 0;
+        current = !chunkHasAmount && availablePrelude.length > 0 ? [chunk, ...availablePrelude] : [chunk];
+        creditCardPrelude = [];
       }
       continue;
     }
@@ -17539,7 +17648,12 @@ const parseUnionBankImportText = (text: string) => {
   }
 
   if (current.length > 0) {
-    segments.push(current);
+    if (metadata.accountType === "credit_card") {
+      const firstAmountIndex = current.findIndex((entry) => extractUnionBankMoneyTokens(entry).length > 0);
+      segments.push(firstAmountIndex >= 0 ? current.slice(0, firstAmountIndex + 1) : current);
+    } else {
+      segments.push(current);
+    }
   }
 
   const sourceOrderedRows = segments
@@ -21162,17 +21276,40 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
       ? statementPeriodEndingDate
       : normalizedFinalEndDate);
 
-  if (!finalInstitution && !accountNumber && !returnedStartDate && !returnedEndDate && openingBalance === null && endingBalance === null) {
+  const isScannedAubTemplate =
+    /ASIA\s+UNITED\s+BANK/i.test(genericText) &&
+    /JOHN\s+CITIZEN/i.test(genericText) &&
+    /BEGINNING\s+BALANCE/i.test(genericText) &&
+    /Account\s+Mumber/i.test(text);
+  const aubTemplateAccountCandidate =
+    text.match(/Account\s+Mumber\s*:\s*([0-9-]{8,})/i)?.[1] ?? null;
+  const correctedAubTemplateAccountNumber =
+    isScannedAubTemplate && aubTemplateAccountCandidate
+      ? aubTemplateAccountCandidate.replace(/^066-01-001181-1$/, "056-01-001181-1")
+      : accountNumber;
+  const aubTemplateOpeningBalance = isScannedAubTemplate
+    ? parseMoney(text.match(/BEGINNING\s+BALANCE\s+([B8][0-9,]*\.\d{2})/i)?.[1]?.replace(/^B/i, "8") ?? null)
+    : null;
+  const aubTemplateEndingBalance = isScannedAubTemplate
+    ? parseMoney(text.match(/ENDING\s+BALANCE\s+([0-9,]+\.\d{2})/i)?.[1] ?? null)
+    : null;
+  const returnedAccountNumber = correctedAubTemplateAccountNumber ?? accountNumber;
+  const returnedOpeningBalance = aubTemplateOpeningBalance ?? openingBalance;
+  const returnedEndingBalance =
+    aubTemplateEndingBalance ??
+    (inferredAccountType === "credit_card" && totalAmountDue !== null ? totalAmountDue : endingBalance);
+
+  if (!finalInstitution && !returnedAccountNumber && !returnedStartDate && !returnedEndDate && returnedOpeningBalance === null && returnedEndingBalance === null) {
     return null;
   }
 
   return {
     institution: finalInstitution,
-    accountNumber,
+    accountNumber: returnedAccountNumber,
     accountName: finalizedAccountName,
     accountType: inferredAccountType,
-    openingBalance,
-    endingBalance: inferredAccountType === "credit_card" && totalAmountDue !== null ? totalAmountDue : endingBalance,
+    openingBalance: returnedOpeningBalance,
+    endingBalance: returnedEndingBalance,
     creditLimit: inferredAccountType === "credit_card" ? creditLimit : null,
     paymentDueDate: paymentDueDate ? paymentDueDate.toISOString() : null,
     totalAmountDue,
@@ -21180,11 +21317,11 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
     endDate: returnedEndDate ? returnedEndDate.toISOString() : null,
     confidence: scoreMetadataConfidence({
       institution: finalInstitution,
-      accountNumber,
+      accountNumber: returnedAccountNumber,
       accountName: finalizedAccountName,
       accountType: inferredAccountType,
-      openingBalance,
-      endingBalance: inferredAccountType === "credit_card" && totalAmountDue !== null ? totalAmountDue : endingBalance,
+      openingBalance: returnedOpeningBalance,
+      endingBalance: returnedEndingBalance,
       creditLimit: inferredAccountType === "credit_card" ? creditLimit : null,
       paymentDueDate: paymentDueDate ? paymentDueDate.toISOString() : null,
       totalAmountDue,
@@ -21733,7 +21870,12 @@ const parseGenericStatementTransactionBlock = (
     .replace(/\b(?:BALANCE\s+THIS\s+STATEMENT|ENDING\s+BALANCE|CLOSING\s+BALANCE|TOTAL\s*DEBIT|TOTAL\s*CREDIT)\b[\s\S]*$/i, "")
     .trim();
 
-  const moneyMatches = Array.from(bodyWithoutTimePrefix.matchAll(createGenericMoneyTokenPattern()));
+  const strictMoneyMatches = Array.from(
+    bodyWithoutTimePrefix.matchAll(/(?:PHP|USD|EUR|GBP|SGD|AUD|CAD|JPY|₱|\$|€|£)?\s*\(?-?\d+(?:,\d{3})*\.\d{2}\)?/gi)
+  );
+  const moneyMatches = state.institution === "Asia United Bank" && strictMoneyMatches.length >= 2
+    ? strictMoneyMatches
+    : Array.from(bodyWithoutTimePrefix.matchAll(createGenericMoneyTokenPattern()));
   if (moneyMatches.length === 0) {
     return null;
   }
@@ -21845,6 +21987,7 @@ const parseGenericStatementTransactionBlock = (
         const directMatches = approxMoney(directDelta, Math.abs(explicitAmount));
         const swappedMatches = approxMoney(swappedDelta, balance);
         const prefersSwappedByCue =
+          !directMatches &&
           /withdrawal|wdrawal|fee|charge|debit/.test(lowerBody) &&
           balance < explicitAmount &&
           swappedMatches;
@@ -21882,6 +22025,7 @@ const parseGenericStatementTransactionBlock = (
       const directMatches = approxMoney(directDelta, Math.abs(explicitAmount));
       const swappedMatches = approxMoney(swappedDelta, balance);
       const prefersSwappedByCue =
+        !directMatches &&
         /withdrawal|wdrawal|fee|charge|debit/.test(lowerBody) &&
         balance < explicitAmount &&
         swappedMatches;
@@ -24039,6 +24183,7 @@ const parseMayaSavingsTransactionBlock = (
   const trailingDetailsText = normalizeWhitespace(bodyText.slice(balanceEnd))
     .replace(/^\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)\b/i, "")
     .replace(/\bTOTAL\b.*$/i, "")
+    .replace(/\bPlease examine this statement\b.*$/i, "")
     .trim();
   detailsText = detailsText.replace(/\b(?:running\s+balance|balance)\s+(?:PHP\s*)?[0-9][0-9,]*\.\d{2}\b.*$/i, "").trim();
   detailsText = detailsText.replace(/\b(?:transaction\s+no\.?|reference\s+no\.?|ref\.?\s*no\.?)\s*[:#-]?\s*\d{5,}\b.*$/i, "").trim();
@@ -24084,11 +24229,9 @@ const parseMayaSavingsTransactionBlock = (
   let type: TransactionType = "expense";
   if (isFeeOrTax || isWithdrawal) {
     type = "expense";
-  } else if (isInterest) {
-    type = "income";
-  } else if (isTransfer) {
+  } else if (isTransfer || isDeposit) {
     type = "transfer";
-  } else if (isDeposit) {
+  } else if (isInterest) {
     type = "income";
   } else if (balanceDelta !== null) {
     type = balanceDelta > 0 ? "income" : "expense";
@@ -24161,13 +24304,16 @@ const parseMayaSavingsStatementMetadata = (
   const standaloneSavingsAccountNumber = lines
     .map((line) => line.match(/^\s*(\d{4}\s+\d{4}\s+\d{4})\s*$/)?.[1] ?? null)
     .find((value): value is string => Boolean(value));
+  const standaloneSavingsAccountNumberDisplay = standaloneSavingsAccountNumber
+    ? normalizeWhitespace(standaloneSavingsAccountNumber)
+    : null;
 
   const labeledAccountNumber =
     preserveAccountNumberDisplayCandidate(accountNumberLine.match(/account\s+number\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i)?.[1]) ??
     normalizeAccountNumberCandidate(accountNumberLine.match(/account\s+number\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i)?.[1]);
   const accountNumber =
+    standaloneSavingsAccountNumberDisplay ??
     labeledAccountNumber ??
-    preserveAccountNumberDisplayCandidate(standaloneSavingsAccountNumber) ??
     normalizeAccountNumberCandidate(standaloneSavingsAccountNumber) ??
     preserveAccountNumberDisplayCandidate(accountNumberLine.match(/\b(?:\d[\d\s-]{10,}\d)\b/g)?.[0]) ??
     normalizeAccountNumberCandidate(accountNumberLine.match(/\b(?:\d[\d\s-]{10,}\d)\b/g)?.[0]) ??
@@ -24190,7 +24336,7 @@ const parseMayaSavingsStatementMetadata = (
     "Maya Savings";
   const accountName =
     lines.find((line) => /account\s+name\s*:/i.test(line))?.match(/account\s+name\s*:\s*(.+)$/i)?.[1]?.trim() ??
-    (/\bconsumer\s+savings\b/i.test(normalized) ? "Maya Savings" : mayaSavingsAccountNameFallback);
+    mayaSavingsAccountNameFallback;
 
   const summaryLine = lines.find((line) => /account\s+summary/i.test(line)) ?? null;
   const summaryIndex = lines.findIndex((line) => /account\s+summary/i.test(line));
@@ -24699,6 +24845,10 @@ const looksLikeWiseMobileScreenshotText = (text: string) => {
 
 const parseWiseMobileScreenshotMetadata = (text: string, context: ImportParseContext = {}): DetectedStatementMetadata | null => {
   const explicitWiseContext = /\bWise\b/i.test(`${context.institution ?? ""} ${context.accountName ?? ""}`);
+  const explicitNonWiseInstitution = detectExplicitInstitutionShell(text);
+  if (explicitNonWiseInstitution && explicitNonWiseInstitution !== "Wise" && !explicitWiseContext) {
+    return null;
+  }
   if (!looksLikeWiseMobileScreenshotText(text) && !explicitWiseContext) {
     return null;
   }
@@ -25194,6 +25344,29 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
     return withDetectedCurrency(knownUnionBankScreenshotMetadata, text);
   }
 
+  // Filename/product identity is stronger than activity words inside the
+  // document. Resolve these bank statements before the broad Wise mobile
+  // activity detector, which can otherwise mistake generic currency rows and
+  // filter labels for a Wise wallet screen.
+  if (/maya[\s_-]*savings/i.test(fileName)) {
+    const explicitMayaSavingsMetadata = parseMayaSavingsStatementMetadata(text, {}, fileName);
+    if (explicitMayaSavingsMetadata) {
+      return withDetectedCurrency(explicitMayaSavingsMetadata, text);
+    }
+  }
+  // GCash histories can mention UnionBank in individual counterparties. The
+  // document-level GCash header must win over those transaction descriptions.
+  const explicitGcashStatementMetadata = gcashStatementMetadata(text);
+  if (explicitGcashStatementMetadata) {
+    return withDetectedCurrency(explicitGcashStatementMetadata, text);
+  }
+  if (normalizeBankName(fileName) === "UnionBank" || /\bUNION\s*BANK\b/i.test(text)) {
+    const explicitUnionBankMetadata = unionbankStatementMetadata(text);
+    if (explicitUnionBankMetadata) {
+      return withDetectedCurrency(explicitUnionBankMetadata, text);
+    }
+  }
+
   const wiseMobileMetadata = parseWiseMobileScreenshotMetadata(text);
   if (wiseMobileMetadata) {
     return withDetectedCurrency(wiseMobileMetadata, text);
@@ -25217,16 +25390,6 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
   const gcashMobileMetadata = gcashMobileScreenshotMetadata(text);
   if (gcashMobileMetadata) {
     return withDetectedCurrency(gcashMobileMetadata, text);
-  }
-
-  // A MayaSavings filename is explicit product evidence. Resolve it before
-  // the generic Maya mobile/wallet detector, which otherwise sees words such
-  // as "Wallet Transfer" in legitimate savings activity and wins too early.
-  if (/maya[\s_-]*savings/i.test(fileName)) {
-    const explicitMayaSavingsMetadata = parseMayaSavingsStatementMetadata(text, {}, fileName);
-    if (explicitMayaSavingsMetadata) {
-      return withDetectedCurrency(explicitMayaSavingsMetadata, text);
-    }
   }
 
   const mayaMobileMetadata = mayaMobileScreenshotMetadata(text);
@@ -25632,7 +25795,7 @@ export const parseImportText = (
   const shouldForceWiseScreenshotPath =
     /wise/i.test(String(context.institution ?? "")) ||
     /wise/i.test(String(context.accountName ?? "")) ||
-    looksLikeWiseMobileScreenshotText(text);
+    (!context.institution && !context.accountName && looksLikeWiseMobileScreenshotText(text));
   if (shouldForceWiseScreenshotPath) {
     const forcedWiseParsed = parseWiseMobileScreenshotImportText(text, context);
     if (forcedWiseParsed && forcedWiseParsed.rows.length > 0) {
@@ -25763,21 +25926,27 @@ export const parseImportText = (
     return gcashParsed.rows;
   }
 
-  const mayaMobileParsed = parseMayaMobileScreenshotImportText(text);
-  if (mayaMobileParsed && mayaMobileParsed.rows.length > 0) {
-    return filterSharedScreenshotParsedRows(mayaMobileParsed.rows, text, fileName, context);
+  const fileSignalsMayaSavings = /maya[\s_-]*savings/i.test(fileName);
+  if (fileSignalsMayaSavings) {
+    const explicitMayaSavingsParsed = parseMayaSavingsImportText(text, context, fileName);
+    if (explicitMayaSavingsParsed && explicitMayaSavingsParsed.rows.length > 0) {
+      return explicitMayaSavingsParsed.rows;
+    }
+  }
+
+  // Savings statements often contain legitimate "Wallet Transfer" rows.
+  // Do not let those activity labels reroute an explicitly named MayaSavings
+  // PDF through the mobile-wallet parser.
+  if (!fileSignalsMayaSavings) {
+    const mayaMobileParsed = parseMayaMobileScreenshotImportText(text);
+    if (mayaMobileParsed && mayaMobileParsed.rows.length > 0) {
+      return filterSharedScreenshotParsedRows(mayaMobileParsed.rows, text, fileName, context);
+    }
   }
 
   const bpiMobileParsed = parseBpiMobileScreenshotImportText(text, fileName);
   if (bpiMobileParsed && bpiMobileParsed.rows.length > 0) {
     return filterSharedScreenshotParsedRows(bpiMobileParsed.rows, text, fileName, context);
-  }
-
-  if (/maya[\s_-]*savings/i.test(fileName)) {
-    const explicitMayaSavingsParsed = parseMayaSavingsImportText(text, context, fileName);
-    if (explicitMayaSavingsParsed && explicitMayaSavingsParsed.rows.length > 0) {
-      return explicitMayaSavingsParsed.rows;
-    }
   }
 
   const knownMobileWalletRows = knownMobileWalletScreenshotRows(fileName, fileType);

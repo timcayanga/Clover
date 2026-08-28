@@ -441,6 +441,10 @@ const main = async () => {
   const receiptSample = evaluateDataQaRun(buildReceiptSample());
   assert.ok(receiptSample.score >= 55, "the receipt sample should still be usable");
   assert.ok(
+    !receiptSample.findings.some((finding) => finding.code === "transactions.empty"),
+    "a persisted receipt transaction must never be reported as empty"
+  );
+  assert.ok(
     receiptSample.findings.some((finding) => finding.code === "performance.vision_fallback_used"),
     "the receipt sample should record the vision fallback"
   );

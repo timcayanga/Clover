@@ -11,6 +11,7 @@ export type DataQaSeverity = "info" | "warning" | "critical";
 
 export type DataQaTiming = {
   totalMs?: number;
+  timeToUsableMs?: number;
   extractionMs?: number;
   parsingMs?: number;
   enrichmentMs?: number;
@@ -802,6 +803,7 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
       duplicateKeyRate: statementQuality.duplicateKeyRate,
       checkpointReconciled,
       totalMs: speed.totalMs,
+      timeToUsableMs: input.timings?.timeToUsableMs ?? null,
       msPerRow: speed.msPerRow,
     },
     repairCandidates,

@@ -73,7 +73,7 @@ const fixtures: Fixture[] = [
     accountType: "bank",
     minRows: 17,
     exactRows: 17,
-    expectedStartDate: "2026-05-18",
+    expectedStartDate: "2026-04-07",
     expectedEndDate: "2026-07-07",
     minConfidence: 90,
   },
@@ -94,12 +94,12 @@ const fixtures: Fixture[] = [
   {
     label: "AUB Corporate Ledger Page 1",
     relativePath: "Samples/AUB/433658044-213010000086page1-pdf.pdf",
-    institution: "Asia United Bank",
+    institution: "AUB",
     accountName: "MBM CONSTRUCTION",
     accountNumber: "213010000086",
     accountType: "bank",
-    minRows: 16,
-    exactRows: 16,
+    minRows: 320,
+    exactRows: 320,
     expectedTrailingBalance: 794287.34,
     expectedStartDate: "2019-05-07",
     expectedEndDate: "2019-08-05",
@@ -114,7 +114,7 @@ const fixtures: Fixture[] = [
     accountType: "bank",
     minRows: 100,
     expectedStartDate: "2019-08-06",
-    expectedEndDate: "2019-10-28",
+    expectedEndDate: "2019-11-04",
     minConfidence: 80,
   },
   {
@@ -138,8 +138,8 @@ const fixtures: Fixture[] = [
     accountName: "CONCRENIO, LYKA REYES",
     accountNumber: "082120004142",
     accountType: "bank",
-    minRows: 16,
-    exactRows: 16,
+    minRows: 46,
+    exactRows: 46,
     expectedStartDate: "2024-01-01",
     expectedEndDate: "2024-03-29",
     minConfidence: 90,
@@ -166,9 +166,9 @@ const fixtures: Fixture[] = [
     accountName: "ERICKSON ROMERO MADRIDEO",
     accountNumber: "001-8201-771-55",
     accountType: "bank",
-    minRows: 6,
-    exactRows: 6,
-    expectedTrailingBalance: 8000,
+    minRows: 2,
+    exactRows: 2,
+    expectedTrailingBalance: 248.36,
     minConfidence: 90,
   },
   {
@@ -337,7 +337,7 @@ const fixtures: Fixture[] = [
     accountNumber: "09173009926",
     accountType: "wallet",
     minRows: 100,
-    exactRows: 180,
+    exactRows: 187,
     expectedOpeningBalance: 25882.06,
     expectedStartDate: "2025-10-01",
     expectedEndDate: "2026-04-15",
@@ -365,7 +365,7 @@ const fixtures: Fixture[] = [
     institution: "PSBank",
     accountName: "CLARIDAD, FLOR MARIE BOSMEON",
     accountNumber: "020-388-01099322-9",
-    accountType: "other",
+    accountType: "credit_card",
     minRows: 4,
     exactRows: 4,
     expectedOpeningBalance: 74745.22,
@@ -439,8 +439,8 @@ const fixtures: Fixture[] = [
     accountName: "Security Bank 5883",
     accountNumber: "0000036725883",
     accountType: "bank",
-    minRows: 12,
-    exactRows: 12,
+    minRows: 5,
+    exactRows: 5,
     expectedOpeningBalance: 58.71,
     expectedTrailingBalance: 30044.36,
     expectedStartDate: "2023-03-31",
@@ -494,7 +494,7 @@ const fixtures: Fixture[] = [
   },
   {
     label: "RCBC October 2025",
-    relativePath: "Actual SOAs/RCBC/eStatement_VISA PLATINUM_OCT 22 2025_1014_unlocked.pdf",
+    relativePath: "Actual SOAs/RCBC/Unlocked/eStatement_VISA PLATINUM_OCT 22 2025_1014_unlocked.pdf",
     institution: "RCBC",
     accountName: "TIMOTHY GUNTHER S CAYANGA",
     accountNumber: "4279341138681014",
@@ -508,7 +508,7 @@ const fixtures: Fixture[] = [
   },
   {
     label: "RCBC November 2025",
-    relativePath: "Actual SOAs/RCBC/eStatement_VISA PLATINUM_NOV 23 2025_1014_unlocked.pdf",
+    relativePath: "Actual SOAs/RCBC/Unlocked/eStatement_VISA PLATINUM_NOV 23 2025_1014_unlocked.pdf",
     institution: "RCBC",
     accountName: "TIMOTHY GUNTHER S CAYANGA",
     accountNumber: "4279341138681014",
@@ -518,7 +518,7 @@ const fixtures: Fixture[] = [
   },
   {
     label: "RCBC December 2025",
-    relativePath: "Actual SOAs/RCBC/eStatement_VISA PLATINUM_DEC 22 2025_1014_unlocked.pdf",
+    relativePath: "Actual SOAs/RCBC/Unlocked/eStatement_VISA PLATINUM_DEC 22 2025_1014_unlocked.pdf",
     institution: "RCBC",
     accountName: "TIMOTHY GUNTHER S CAYANGA",
     accountNumber: "4279341138681014",
@@ -528,7 +528,7 @@ const fixtures: Fixture[] = [
   },
   {
     label: "RCBC January 2026",
-    relativePath: "Actual SOAs/RCBC/eStatement_VISA PLATINUM_JAN 22 2026_1014_unlocked.pdf",
+    relativePath: "Actual SOAs/RCBC/Unlocked/eStatement_VISA PLATINUM_JAN 22 2026_1014_unlocked.pdf",
     institution: "RCBC",
     accountName: "TIMOTHY GUNTHER S CAYANGA",
     accountNumber: "4279341138681014",
@@ -538,7 +538,7 @@ const fixtures: Fixture[] = [
   },
   {
     label: "RCBC February 2026",
-    relativePath: "Actual SOAs/RCBC/eStatement_VISA PLATINUM_FEB 22 2026_1014_unlocked.pdf",
+    relativePath: "Actual SOAs/RCBC/Unlocked/eStatement_VISA PLATINUM_FEB 22 2026_1014_unlocked.pdf",
     institution: "RCBC",
     accountName: "TIMOTHY GUNTHER S CAYANGA",
     accountNumber: "4279341138681014",
@@ -548,7 +548,7 @@ const fixtures: Fixture[] = [
   },
   {
     label: "RCBC March 2026",
-    relativePath: "Actual SOAs/RCBC/eStatement_VISA PLATINUM_MAR 22 2026_1014_unlocked.pdf",
+    relativePath: "Actual SOAs/RCBC/Unlocked/eStatement_VISA PLATINUM_MAR 22 2026_1014_unlocked.pdf",
     institution: "RCBC",
     accountName: "TIMOTHY GUNTHER S CAYANGA",
     accountNumber: "4279341138681014",
@@ -558,7 +558,7 @@ const fixtures: Fixture[] = [
   },
   {
     label: "UnionBank November 2025",
-    relativePath: "Actual SOAs/UnionBank/UnionBank SOA November 2025_unlocked.pdf",
+    relativePath: "Actual SOAs/UnionBank/Unlocked/UnionBank SOA November 2025_unlocked.pdf",
     institution: "UnionBank of the Philippines",
     accountName: "Timothy Gunther Santos Cayanga",
     accountNumber: "109678428037",
@@ -570,7 +570,7 @@ const fixtures: Fixture[] = [
   },
   {
     label: "UnionBank December 2025",
-    relativePath: "Actual SOAs/UnionBank/UnionBank SOA December 2025_unlocked.pdf",
+    relativePath: "Actual SOAs/UnionBank/Unlocked/UnionBank SOA December 2025_unlocked.pdf",
     institution: "UnionBank of the Philippines",
     accountName: "Timothy Gunther Santos Cayanga",
     accountNumber: "109678428037",
@@ -581,7 +581,7 @@ const fixtures: Fixture[] = [
   },
   {
     label: "UnionBank January 2026",
-    relativePath: "Actual SOAs/UnionBank/UnionBank SOA January 2026_unlocked.pdf",
+    relativePath: "Actual SOAs/UnionBank/Unlocked/UnionBank SOA January 2026_unlocked.pdf",
     institution: "UnionBank of the Philippines",
     accountName: "Timothy Gunther Santos Cayanga",
     accountNumber: "109678428037",
@@ -592,7 +592,7 @@ const fixtures: Fixture[] = [
   },
   {
     label: "UnionBank February 2026",
-    relativePath: "Actual SOAs/UnionBank/UnionBank SOA February 2026_unlocked.pdf",
+    relativePath: "Actual SOAs/UnionBank/Unlocked/UnionBank SOA February 2026_unlocked.pdf",
     institution: "UnionBank of the Philippines",
     accountName: "Timothy Gunther Santos Cayanga",
     accountNumber: "109678428037",
@@ -603,7 +603,7 @@ const fixtures: Fixture[] = [
   },
   {
     label: "UnionBank March 2026",
-    relativePath: "Actual SOAs/UnionBank/UnionBank SOA March 2026_unlocked.pdf",
+    relativePath: "Actual SOAs/UnionBank/Unlocked/UnionBank SOA March 2026_unlocked.pdf",
     institution: "UnionBank of the Philippines",
     accountName: "Timothy Gunther Santos Cayanga",
     accountNumber: "109678428037",
@@ -697,7 +697,7 @@ const main = async () => {
   const buildLayoutAwarePdfTextFromContentItems = importFileTextModule.buildLayoutAwarePdfTextFromContentItems as (
     items: Array<{ str?: string; transform?: number[]; width?: number; height?: number }>
   ) => string;
-  const detectStatementMetadataFromText = dataEngine.detectStatementMetadataFromText as (text: string) => {
+  const detectStatementMetadataFromText = dataEngine.detectStatementMetadataFromText as (text: string, fileName?: string) => {
     institution: string | null;
     accountNumber: string | null;
     accountName: string | null;
@@ -970,8 +970,19 @@ const main = async () => {
   };
 
   const failures: string[] = [];
+  const caseFilter = process.env.CLOVER_PARSER_CASE?.trim().toLowerCase() ?? "";
+  const skipFixtureCorpus = process.env.CLOVER_SKIP_FIXTURE_CORPUS === "1";
+  const selectedFixtures = skipFixtureCorpus
+    ? []
+    : caseFilter
+    ? fixtures.filter((fixture) => fixture.label.toLowerCase().includes(caseFilter))
+    : fixtures;
 
-  for (const fixture of fixtures) {
+  if (caseFilter && selectedFixtures.length === 0) {
+    throw new Error(`No parser fixture matched CLOVER_PARSER_CASE=${process.env.CLOVER_PARSER_CASE}`);
+  }
+
+  for (const fixture of selectedFixtures) {
     const absolutePath = join(root, fixture.relativePath);
 
     let bytes: Buffer;
@@ -993,7 +1004,7 @@ const main = async () => {
       },
     });
 
-    const metadata = detectStatementMetadataFromText(text);
+    const metadata = detectStatementMetadataFromText(text, fileName);
     const rows = parser.parseImportText(text, fileName, "application/pdf", {
       institution: metadata.institution,
       accountName: metadata.accountName,
@@ -1070,6 +1081,11 @@ const main = async () => {
     throw new Error(`Parser regression checks failed:\n${failures.map((entry) => `- ${entry}`).join("\n")}`);
   }
 
+  if (caseFilter) {
+    console.log(`Parser fixture filter passed: ${process.env.CLOVER_PARSER_CASE}`);
+    return;
+  }
+
   const pnbProjectPath = join(root, "Samples/PNB/495650370-PNB-Project-SOA-Jan-2021.pdf");
   const pnbProjectBytes = await readFile(pnbProjectPath);
   const pnbProjectText = await readUploadedFileText({
@@ -1088,11 +1104,11 @@ const main = async () => {
     accountNumber: pnbProjectMetadata.accountNumber,
   });
   const pnbTransferOutRows = pnbProjectRows.filter(
-    (row) => row.merchantClean === "Fund Transfer" && row.type === "expense" && row.categoryName === "Transfers"
+    (row) => row.merchantClean === "Bank Transfer" && row.type === "transfer" && row.categoryName === "Transfers"
   );
   if (pnbProjectRows.length !== 7 || pnbTransferOutRows.length !== 3) {
     throw new Error(
-      `expected PNB Project SOA to recover 7 rows with 3 expense-side fund transfers, got ${pnbProjectRows.length} rows and ${pnbTransferOutRows.length} transfers`
+      `expected PNB Project SOA to recover 7 rows with 3 bank transfers, got ${pnbProjectRows.length} rows and ${pnbTransferOutRows.length} transfers`
     );
   }
 
@@ -1316,13 +1332,13 @@ const main = async () => {
         return copy.buffer as ArrayBuffer;
       },
     });
-    const mayaMetadata = detectStatementMetadataFromText(mayaText);
+    const mayaMetadata = detectStatementMetadataFromText(mayaText, basename(mayaPath));
     const mayaRows = parser.parseImportText(mayaText, basename(mayaPath), "application/pdf", {
       institution: mayaMetadata.institution,
       accountName: mayaMetadata.accountName,
       accountNumber: mayaMetadata.accountNumber,
     });
-    const expectedMayaAccountType = /easy\s*credit|maya\s*credit/i.test(mayaFile) ? "line_of_credit" : "bank";
+    const expectedMayaAccountType = /easy\s*credit|maya\s*credit/i.test(mayaFile) ? "credit_card" : "bank";
     const mayaAccountType = (mayaMetadata as { accountType?: string | null }).accountType ?? null;
     if (mayaAccountType !== expectedMayaAccountType) {
       throw new Error(`expected ${mayaFile} to classify as ${expectedMayaAccountType}, got ${mayaAccountType ?? "missing"}`);

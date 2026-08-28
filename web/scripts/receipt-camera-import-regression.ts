@@ -124,6 +124,24 @@ assert.match(
   /time_to_usable_ms/,
   "receipt handoff must emit time-to-usable telemetry"
 );
+assert.match(
+  workerSource,
+  /loadPersistedDataQaRowsForImport[\s\S]{0,2200}?params\.importMode === "receipt"[\s\S]{0,900}?persistedRows\.length > 0 \? persistedRows : parsedRowsAtHandoff/,
+  "receipt QA must score the persisted visible transaction instead of an empty parser-row array"
+);
+assert.match(
+  workerSource,
+  /const usableDurationMs = Math\.max\(0, Date\.now\(\) - params\.startedAt\)[\s\S]{0,1800}?timeToUsableMs: usableDurationMs[\s\S]{0,300}?parsingMs: params\.parsingDurationMs \?\? usableDurationMs/,
+  "receipt QA timing must be captured before the delayed background callback"
+);
+assert.doesNotMatch(
+  workerSource.slice(
+    workerSource.indexOf("const recordImportDataQaInBackground ="),
+    workerSource.indexOf("const deleteTransactionsForImportWithTx", workerSource.indexOf("const recordImportDataQaInBackground ="))
+  ),
+  /totalMs: Date\.now\(\) - params\.startedAt|parsingMs: Date\.now\(\) - params\.startedAt/,
+  "the QA scheduler delay must not inflate receipt processing duration"
+);
 
 assert.match(
   workerSource,
