@@ -136,6 +136,16 @@ assert.match(
 );
 assert.match(
   transactionsPageSource,
+  /const isDurableReceiptSummary = previewTransactions\.some[\s\S]{0,260}?transaction\.id\.endsWith\("-receipt"\)/,
+  "A committed receipt snapshot must remain authoritative instead of being replaced by an immediate stale list read."
+);
+assert.match(
+  transactionsPageSource,
+  /if \(!isDurableReceiptSummary && !importRefreshInFlightRef\.current\)/,
+  "Durable receipt summaries must skip the immediate settlement refresh."
+);
+assert.match(
+  transactionsPageSource,
   /Math\.floor\(transactions\.length \/ MOBILE_TRANSACTIONS_BATCH_SIZE\) \+ 1/,
   "Mobile pagination must continue from the 25-row first page without skipping a 12-row batch."
 );

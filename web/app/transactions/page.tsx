@@ -3213,6 +3213,12 @@ function TransactionsPageContent() {
     async (summary: UploadInsightsSummary) => {
       const optimisticAccount = buildOptimisticImportedAccount(summary);
       const previewTransactions = summary.previewTransactions ?? [];
+      const isDurableReceiptSummary = previewTransactions.some(
+        (transaction) =>
+          Boolean(transaction.importFileId) &&
+          transaction.id.startsWith("optimistic-") &&
+          transaction.id.endsWith("-receipt")
+      );
       const importedAccountKey = normalizeImportedAccountKey(
         summary.accountName,
         summary.institution,
@@ -3354,7 +3360,7 @@ function TransactionsPageContent() {
         return;
       }
 
-      if (!importRefreshInFlightRef.current) {
+      if (!isDurableReceiptSummary && !importRefreshInFlightRef.current) {
         importRefreshInFlightRef.current = true;
         try {
           await refreshTransactionsAfterImport(selectedWorkspaceId);
