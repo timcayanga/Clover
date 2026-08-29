@@ -58,6 +58,33 @@ assert.equal(
 
 const root = process.cwd();
 const importModalSource = readFileSync(join(root, "components/import-files-modal.tsx"), "utf8");
+const transactionsPageSource = readFileSync(join(root, "app/transactions/page.tsx"), "utf8");
+const uploadDockSource = readFileSync(join(root, "components/import-upload-dock.tsx"), "utf8");
+assert.match(
+  transactionsPageSource,
+  /const handlePhotoCaptureChange =[\s\S]{0,420}?openImportFiles\(files, false, "receipt"\);/,
+  "PWA camera and photo-library uploads must route directly to the receipt parser."
+);
+assert.match(
+  transactionsPageSource,
+  /defaultImportMode=\{importSeedMode\}/,
+  "The selected camera import mode must be handed to the import modal."
+);
+assert.match(
+  importModalSource,
+  /defaultImportMode = "statement"[\s\S]{0,1200}?selectedImportMode: ImportImageMode = defaultImportMode/,
+  "The import modal must honor an explicit receipt mode while keeping statement uploads as the default."
+);
+assert.match(
+  transactionsPageSource,
+  /Boolean\(options\?\.background\)[\s\S]{0,180}?fetchedTransactions\.length < stableBaseTransactions\.length[\s\S]{0,180}?exactServerTotalCount <= stableBaseTransactions\.length/,
+  "A settling background response must not temporarily erase already-visible transactions."
+);
+assert.match(
+  uploadDockSource,
+  /primaryActionLabel = isComplete \|\| tone === "error" \? "Close import progress" : "Cancel upload"/,
+  "The progress X must cancel an active upload and close only after completion."
+);
 assert.match(
   importModalSource,
   /launchInBackground\s*\|\|\s*showImportProgressDock[\s\S]{0,220}?return;/,

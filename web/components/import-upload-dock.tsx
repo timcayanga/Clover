@@ -174,6 +174,9 @@ export function ImportUploadDock({
       : isComplete && tone === "success"
         ? resultHeadline || "Your import is now visible in Clover."
         : resultHeadline || (activeMilestone ? `✓ ${activeMilestone}` : detail);
+  const canUsePrimaryAction = isComplete || tone === "error" ? Boolean(onClose) : canControl && Boolean(onCancel);
+  const primaryActionLabel = isComplete || tone === "error" ? "Close import progress" : "Cancel upload";
+  const handlePrimaryAction = isComplete || tone === "error" ? onClose : onCancel;
 
   return (
     <div className={`import-upload-dock import-upload-dock--${tone}`} role={tone === "error" ? "alert" : "status"} aria-live={tone === "error" ? "assertive" : "polite"}>
@@ -210,12 +213,12 @@ export function ImportUploadDock({
             {tone === "error" && errorCode ? <p className="import-upload-dock__phase">Import code {errorCode}</p> : null}
           </div>
           <div className="import-upload-dock__header-actions">
-            {onClose ? (
+            {canUsePrimaryAction ? (
               <button
                 className="import-upload-dock__close import-upload-dock__close--dismiss"
                 type="button"
-                onClick={onClose}
-                aria-label="Close import progress"
+                onClick={handlePrimaryAction}
+                aria-label={primaryActionLabel}
               >
                 &times;
               </button>
@@ -228,11 +231,6 @@ export function ImportUploadDock({
                 aria-label={paused ? "Resume upload" : "Pause upload"}
               >
                 {paused ? "▶" : "⏸"}
-              </button>
-            ) : null}
-            {canControl && onCancel ? (
-              <button className="import-upload-dock__close" type="button" onClick={onCancel} aria-label="Cancel upload">
-                ⏹
               </button>
             ) : null}
           </div>

@@ -82,12 +82,12 @@ const main = async () => {
   );
   assert.match(
     modalSource,
-    /const COMPLETED_IMPORT_AUTO_CLOSE_MS = 10_000;/,
-    "A successful foreground import should remain visible for ten seconds before closing."
+    /const COMPLETED_IMPORT_DESKTOP_AUTO_CLOSE_MS = 10_000;[\s\S]{0,120}const COMPLETED_IMPORT_MOBILE_AUTO_CLOSE_MS = 5_000;/,
+    "A successful foreground import should close after five seconds on mobile while preserving the desktop confirmation window."
   );
   assert.match(
     modalSource,
-    /COMPLETED_IMPORT_AUTO_CLOSE_MS - \(Date\.now\(\) - completedAt\)[\s\S]{0,500}clearImportActivity\(\)[\s\S]{0,300}onClose\(\)/,
+    /getCompletedImportAutoCloseMs\(\) - \(Date\.now\(\) - completedAt\)[\s\S]{0,500}clearImportActivity\(\)[\s\S]{0,300}onClose\(\)/,
     "Completed foreground imports should clear their activity and close automatically."
   );
   const accountDetailsSource = await readFile(join(webRoot, "app/accounts/[accountId]/page.tsx"), "utf8");

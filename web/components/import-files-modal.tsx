@@ -28,6 +28,7 @@ import {
   validateImportFile,
 } from "@/lib/import-file-validation";
 import { type ImportImageMode } from "@/lib/import-image-mode";
+import { MOBILE_LAYOUT_MEDIA_QUERY } from "@/lib/responsive-layout";
 import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { normalizeBankName } from "@/lib/data-qa-banks";
 import {
@@ -152,6 +153,7 @@ type ImportFilesModalProps = {
   accounts: AccountOption[];
   accountRules?: AccountRule[];
   defaultAccountId?: string | null;
+  defaultImportMode?: ImportImageMode;
   showQaTools?: boolean;
   showManualTransactionLink?: boolean;
   initialFiles?: File[] | null;
@@ -219,7 +221,12 @@ type QaRunSummary = {
 };
 
 const MIN_FULLSCREEN_IMPORT_MODAL_MS = 1200;
-const COMPLETED_IMPORT_AUTO_CLOSE_MS = 10_000;
+const COMPLETED_IMPORT_DESKTOP_AUTO_CLOSE_MS = 10_000;
+const COMPLETED_IMPORT_MOBILE_AUTO_CLOSE_MS = 5_000;
+const getCompletedImportAutoCloseMs = () =>
+  typeof window !== "undefined" && window.matchMedia(MOBILE_LAYOUT_MEDIA_QUERY).matches
+    ? COMPLETED_IMPORT_MOBILE_AUTO_CLOSE_MS
+    : COMPLETED_IMPORT_DESKTOP_AUTO_CLOSE_MS;
 const IN_FLIGHT_IMPORT_PROGRESS_INITIAL_DELAY_MS = 400;
 // The status stream already updates every 1.5 seconds. Polling twice per
 // second multiplied Supabase reads without making the progress UI perceptibly
@@ -399,6 +406,7 @@ export function ImportFilesModal({
   accounts,
   accountRules = [],
   defaultAccountId,
+  defaultImportMode = "statement",
   showQaTools = false,
   showManualTransactionLink = true,
   initialFiles = null,
@@ -414,7 +422,7 @@ export function ImportFilesModal({
   const [items, setItems] = useState<QueuedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState("");
-  const selectedImportMode: ImportImageMode = "statement";
+  const selectedImportMode: ImportImageMode = defaultImportMode;
   const [launchInBackground, setLaunchInBackground] = useState(backgroundOnly);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -7024,7 +7032,7 @@ export function ImportFilesModal({
 
     const completedAt = completedBatchStartedAtRef.current ?? Date.now();
     completedBatchStartedAtRef.current = completedAt;
-    const remainingMs = Math.max(0, COMPLETED_IMPORT_AUTO_CLOSE_MS - (Date.now() - completedAt));
+    const remainingMs = Math.max(0, getCompletedImportAutoCloseMs() - (Date.now() - completedAt));
     const timer = window.setTimeout(() => {
       // Ignore late monitor results from this completed batch so the global
       // progress dock cannot reappear after foreground success auto-closes.
@@ -7037,8 +7045,9 @@ export function ImportFilesModal({
 
     return () => window.clearTimeout(timer);
   }, [backgroundOnly, currentErrorItem, hasCompletedBatch, launchInBackground, onClose, open]);
-  // Standard uploads show their explicit outcome for ten seconds. The compact
-  // dock remains reserved for imports intentionally sent to the background.
+  // Standard uploads show their explicit outcome for five seconds on mobile
+  // and ten seconds on desktop. The compact dock remains reserved for imports
+  // intentionally sent to the background.
   const showCompactProgress = launchInBackground && compactProgressUnlocked && progressSessionActive;
   // Once a file has entered the queue, the file picker is no longer useful and
   // obscures the only progress the user needs to see. Keep the password prompt
@@ -7120,6 +7129,22 @@ export function ImportFilesModal({
       visibilityHardStopTimerRef.current = null;
     }
     visibilityDeadlineRef.current = null;
+    const importsToCancel = itemsRef.current.filter(
+      (item) =>
+        item.importFileId &&
+        item.status !== "done" &&
+        item.confirmationState !== "confirmed"
+    );
+    for (const item of importsToCancel) {
+      retiredImportActivityFileNamesRef.current.add(item.file.name);
+      startedImportMonitorKeys.delete(
+        `${importModalInstanceIdRef.current}:${workspaceId}:${item.importFileId ?? ""}`
+      );
+      void fetch(`/api/imports/${encodeURIComponent(item.importFileId!)}`, {
+        method: "DELETE",
+        keepalive: true,
+      }).catch(() => null);
+    }
     const activeId = activeProgressItem?.id ?? null;
     markQueuedUploadsCanceled(activeId);
     setBusy(false);

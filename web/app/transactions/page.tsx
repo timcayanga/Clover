@@ -32,6 +32,7 @@ import { TransactionNameAutocomplete, type TransactionNameSuggestion } from "@/c
 import { TransactionTagsEditor } from "@/components/transaction-tags-editor";
 import { getCategoryIconTone } from "@/lib/category-icons";
 import { MOBILE_LAYOUT_MEDIA_QUERY } from "@/lib/responsive-layout";
+import type { ImportImageMode } from "@/lib/import-image-mode";
 import {
   analyticsOnceKey,
   capturePostHogClientEvent,
@@ -2256,6 +2257,7 @@ function TransactionsPageContent() {
   const [importOpen, setImportOpen] = useState(false);
   const [importSessionId, setImportSessionId] = useState(0);
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
+  const [importSeedMode, setImportSeedMode] = useState<ImportImageMode>("statement");
   const [importBackgroundOnly, setImportBackgroundOnly] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
@@ -2908,7 +2910,10 @@ function TransactionsPageContent() {
                 mergeImportedWorkspaceTransactions(stableBaseTransactions, fetchedTransactions).length < stableBaseTransactions.length &&
                 exactServerTotalCount <= stableBaseTransactions.length)
             )) ||
-          (options?.background && hasRecentCachedTotalCount)
+          (options?.background && hasRecentCachedTotalCount) ||
+          (Boolean(options?.background) &&
+            fetchedTransactions.length < stableBaseTransactions.length &&
+            exactServerTotalCount <= stableBaseTransactions.length)
         );
       const shouldPatchExistingTransactions = Boolean(options?.append || !hasFreshTransactions);
       const baseTransactions = shouldPatchExistingTransactions ? stableBaseTransactions : [];
@@ -3734,7 +3739,11 @@ function TransactionsPageContent() {
     setHeaderMenuPosition(null);
   };
 
-  const openImportFiles = (files: File[] | null = null, backgroundOnly = false) => {
+  const openImportFiles = (
+    files: File[] | null = null,
+    backgroundOnly = false,
+    importMode: ImportImageMode = "statement"
+  ) => {
     const shouldLaunchInBackground = backgroundOnly && !(files?.some(isImageImportFile) ?? false);
     flushSync(() => {
       closeChrome();
@@ -3743,6 +3752,7 @@ function TransactionsPageContent() {
       setImportBackgroundOnly(shouldLaunchInBackground);
       setImportSessionId((current) => current + 1);
       setImportSeedFiles(files && files.length > 0 ? files : null);
+      setImportSeedMode(importMode);
       setImportOpen(true);
     });
   };
@@ -3797,7 +3807,7 @@ function TransactionsPageContent() {
       return;
     }
 
-    openImportFiles(files);
+    openImportFiles(files, false, "receipt");
   };
 
   useEffect(() => {
@@ -9134,12 +9144,14 @@ function TransactionsPageContent() {
         workspaceId={selectedWorkspaceId}
         accounts={accounts}
         defaultAccountId={null}
+        defaultImportMode={importSeedMode}
         initialFiles={importSeedFiles}
         onInitialFilesConsumed={() => setImportSeedFiles(null)}
         backgroundOnly={importBackgroundOnly}
         onClose={() => {
           setImportOpen(false);
           setImportSeedFiles(null);
+          setImportSeedMode("statement");
           setImportBackgroundOnly(false);
         }}
         onImported={async (summary) => {
