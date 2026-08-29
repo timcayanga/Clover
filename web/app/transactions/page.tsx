@@ -2940,7 +2940,7 @@ function TransactionsPageContent() {
             })
           : importedTransactionsToPreserve;
       const shouldPreserveImportedTransactions =
-        !hasServerSideFilters &&
+        (!hasServerSideFilters || (Boolean(options?.background) && hasRecentImportEvidence)) &&
         (requestPage === 1 || Boolean(options?.append)) &&
         importedTransactionsToPreserveAfterServerResponse.length > 0 &&
         (exactServerTotalCount > 0 || hasRecentImportEvidence) &&

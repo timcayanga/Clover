@@ -825,8 +825,8 @@ const main = async () => {
   );
   assert.match(
     transactionsPageSource,
-    /const shouldPreserveImportedTransactions =[\s\S]{0,180}!hasServerSideFilters &&\s*\(requestPage === 1 \|\| Boolean\(options\?\.append\)\)/,
-    "Optimistic import rows must not be merged into later server-paginated transaction pages."
+    /const shouldPreserveImportedTransactions =[\s\S]{0,240}?\(requestPage === 1 \|\| Boolean\(options\?\.append\)\)/,
+    "Optimistic import rows may survive a filtered background settlement read but must not be merged into later server-paginated transaction pages."
   );
   const confirmationSource = section(importProcessorSource, "export const confirmImportFile", "if (isDocumentImport)");
   assert.match(

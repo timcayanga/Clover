@@ -121,6 +121,11 @@ assert.match(
 );
 assert.match(
   transactionsPageSource,
+  /const shouldPreserveImportedTransactions =[\s\S]{0,160}?\(!hasServerSideFilters \|\| \(Boolean\(options\?\.background\) && hasRecentImportEvidence\)\)/,
+  "A filtered Transactions view must preserve the newly published receipt while its background read catches up."
+);
+assert.match(
+  transactionsPageSource,
   /Math\.floor\(transactions\.length \/ MOBILE_TRANSACTIONS_BATCH_SIZE\) \+ 1/,
   "Mobile pagination must continue from the 25-row first page without skipping a 12-row batch."
 );
