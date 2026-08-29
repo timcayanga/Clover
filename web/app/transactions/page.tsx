@@ -195,6 +195,11 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     summary.accountNumber ?? null,
     summary.accountType ?? null
   );
+  const importedCurrency = String(
+    summary.currency ?? summary.previewTransactions?.[0]?.currency ?? "PHP"
+  )
+    .trim()
+    .toUpperCase() || "PHP";
 
   return {
     id: optimisticAccountId,
@@ -202,7 +207,7 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     institution: summary.institution,
     accountNumber: summary.accountNumber ?? null,
     type: summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
-    currency: "PHP",
+    currency: importedCurrency,
     source: "upload",
     balance: summary.balance,
   };

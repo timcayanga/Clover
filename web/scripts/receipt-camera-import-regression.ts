@@ -80,6 +80,11 @@ assert.match(
   "PWA camera and photo-library uploads must route directly to the receipt parser."
 );
 assert.match(
+  transactionsPageSource,
+  /const importedCurrency = String\([\s\S]{0,220}?summary\.previewTransactions\?\.\[0\]\?\.currency[\s\S]{0,700}?currency: importedCurrency/,
+  "a newly created foreign-currency cash account must not appear as PHP during optimistic receipt visibility"
+);
+assert.match(
   cloverShellSource,
   /handleQuickAddPhotoChange[\s\S]{0,420}?setQuickAddImportMode\("receipt"\)[\s\S]{0,120}?setQuickAddModal\("import"\)/,
   "The shared Camera and Receipt Photo entry points must route directly to the receipt parser on every device."
