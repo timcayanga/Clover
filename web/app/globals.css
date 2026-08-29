@@ -59212,10 +59212,20 @@ html[data-theme="dark"] .transaction-drawer-edit-footer {
 .content--investments .adviser-header-link:hover,
 .content--investments .adviser-header-link:focus-visible,
 html[data-theme="dark"] .content--investments .adviser-header-link {
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  min-height: 48px;
+  flex-basis: 48px;
   padding: 0;
   border: 0;
   background: transparent;
   box-shadow: none;
+}
+
+.content--investments .adviser-header-link img {
+  width: 48px;
+  height: 48px;
 }
 
 .split-bill-action-button--add,
@@ -59241,6 +59251,18 @@ html[data-theme="dark"] .split-bill-action-button--add:focus-visible {
 }
 
 @media (max-width: 1100px) {
+  .content--investments .adviser-header-link,
+  .content--investments .adviser-header-link:hover,
+  .content--investments .adviser-header-link:focus-visible,
+  html[data-theme="dark"] .content--investments .adviser-header-link,
+  .content--investments .adviser-header-link img {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    flex-basis: 40px;
+  }
+
   .topbar__desktop-title-action {
     display: none !important;
   }

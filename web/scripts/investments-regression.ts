@@ -35,6 +35,7 @@ const adviserHeaderLinkSource = readFileSync(
   resolve(process.cwd(), "components/adviser-header-link.tsx"),
   "utf8",
 );
+const globalStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
 
 const currentStockAnalysisShape = `symbol:"PSE-AREIT",data:[{c:36.65,h:37.05,l:36.6,o:37.05,t:"2026-08-28",v:405300,ch:-1.21},{a:37.1,c:37.1,h:37.5,l:36.85,o:37.45,t:"2026-08-27",v:1444100,ch:-.54}],created_at:"2025-03-07"`;
 const parsedPhilippineHistory = parseStockAnalysisSeries(currentStockAnalysisShape, "AREIT", "1Y");
@@ -48,6 +49,16 @@ if (!("error" in parsedPhilippineHistory)) {
 
 assert.match(adviserHeaderLinkSource, /getNavigationIconSrc\("adviser"\)/);
 assert.match(adviserHeaderLinkSource, /aria-label="Open Adviser"/);
+assert.match(
+  globalStyles,
+  /\.content--investments \.adviser-header-link img \{\s*width: 48px;\s*height: 48px;/,
+  "The desktop Investments Adviser icon must match the large account header action."
+);
+assert.match(
+  globalStyles,
+  /@media \(max-width: 1100px\)[\s\S]*?\.content--investments \.adviser-header-link img \{[\s\S]{0,180}width: 40px;/,
+  "The mobile Investments Adviser icon must match the standard compact header action."
+);
 
 assert.match(investmentHoldingRouteSource, /export async function DELETE/, "Imported holdings need a delete endpoint.");
 assert.match(
