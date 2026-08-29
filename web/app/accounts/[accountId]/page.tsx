@@ -109,6 +109,7 @@ type Account = {
   workspaceId: string;
   name: string;
   institution: string | null;
+  logoUrl?: string | null;
   accountNumber: string | null;
   investmentSubtype: InvestmentSubtype | null;
   investmentSymbol: string | null;
@@ -1960,6 +1961,7 @@ function AccountDetailPageContent() {
           subtype: account.investmentSubtype,
           currency: account.currency,
           institution: account.institution,
+          logoUrl: account.logoUrl,
         });
       }
 
@@ -1967,9 +1969,10 @@ function AccountDetailPageContent() {
         institution: account?.institution ?? null,
         name: displayAccountName,
         type: account?.type ?? null,
+        logoUrl: account?.logoUrl ?? null,
       });
     },
-    [account?.currency, account?.institution, account?.investmentSubtype, account?.investmentSymbol, account?.name, account?.type]
+    [account?.currency, account?.institution, account?.investmentSubtype, account?.investmentSymbol, account?.logoUrl, account?.name, account?.type]
   );
 
   const accountBrandStyles = useMemo(
@@ -2524,6 +2527,22 @@ function AccountDetailPageContent() {
     setAccount(nextAccount);
     setAccountEditDraft({ name: nextAccount.name, accountNumber: nextAccount.accountNumber ?? "" });
     setMessage("Account details updated.");
+  };
+
+  const saveAccountLogo = async (logoUrl: string | null) => {
+    if (!account) return;
+    const response = await fetch(`/api/accounts/${account.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspaceId: account.workspaceId, logoUrl }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.account) {
+      setMessage("Unable to update the account logo.");
+      throw new Error("Unable to update the account logo.");
+    }
+    setAccount(payload.account as Account);
+    setMessage("Account logo updated.");
   };
 
   const saveCreditSettings = async () => {
@@ -4047,6 +4066,8 @@ function AccountDetailPageContent() {
                   onNameCommit={account.type === "investment" ? undefined : (value) => saveInlineCardIdentity("name", value)}
                   onAccountNumberCommit={account.type === "investment" ? undefined : (value) => saveInlineCardIdentity("accountNumber", value)}
                   onAmountCommit={saveInlineCardBalance}
+                  logoUrl={account.logoUrl}
+                  onLogoCommit={saveAccountLogo}
                   showChevron={false}
                 />
 

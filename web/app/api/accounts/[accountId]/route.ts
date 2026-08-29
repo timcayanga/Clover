@@ -15,6 +15,7 @@ import { BANK_PRIORITY, normalizeBankName } from "@/lib/data-qa-banks";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { isWiseWalletWithoutVisibleAccountNumber, normalizeImportedCurrencyCode } from "@/lib/imported-account-identity";
 import { compareAccountCheckpointFreshness, resolveEffectiveAccountBalance } from "@/lib/account-balance-projection";
+import { isValidAccountLogoUrl } from "@/lib/account-logo";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,7 @@ const getCompatibleAccountSelect = (columns: Set<string>) => ({
   workspaceId: true,
   name: true,
   institution: true,
+  ...(columns.has("logoUrl") ? { logoUrl: true } : {}),
   ...(columns.has("accountNumber") ? { accountNumber: true } : {}),
   ...(columns.has("favorite") ? { favorite: true } : {}),
   investmentSubtype: true,
@@ -117,6 +119,9 @@ const accountPatchSchema = z.object({
   workspaceId: z.string().min(1),
   name: z.string().min(1).optional(),
   institution: z.string().nullable().optional(),
+  logoUrl: z.string().nullable().optional().refine((value) => value === undefined || isValidAccountLogoUrl(value), {
+    message: "Choose a supported account logo.",
+  }),
   accountNumber: z.string().nullable().optional(),
   favorite: z.boolean().optional(),
   creditLimit: z.union([z.string(), z.number(), z.null()]).optional(),
@@ -508,6 +513,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
           payload.institution === undefined
             ? inferredInstitutionFromName ?? undefined
             : payload.institution?.trim() || null,
+        ...(compatibleColumns.has("logoUrl")
+          ? { logoUrl: payload.logoUrl === undefined ? undefined : payload.logoUrl }
+          : {}),
         ...(compatibleColumns.has("accountNumber")
           ? { accountNumber: payload.accountNumber === undefined ? undefined : payload.accountNumber?.trim() || null }
           : {}),

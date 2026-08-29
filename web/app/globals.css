@@ -27614,7 +27614,7 @@ html[data-theme="dark"] .portfolio-growth__ranges button.is-active {
   right: 1.5rem;
   width: min(300px, 75vw);
   padding: 0.55rem 0.7rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--stroke);
   border-radius: 10px;
   background: var(--surface, #fff);
   color: var(--text-secondary, #52606d);
@@ -27966,6 +27966,265 @@ html[data-theme="dark"] .portfolio-growth__ranges button.is-active {
   box-shadow:
     0 10px 18px rgba(8, 15, 26, 0.18),
     0 1px 0 rgba(255, 255, 255, 0.12) inset;
+}
+
+.financial-account-card__logo-trigger {
+  appearance: none;
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.financial-account-card__logo-trigger:hover,
+.financial-account-card__logo-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, currentColor 76%, transparent);
+  outline-offset: 3px;
+}
+
+.financial-account-card__logo-edit {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 19px;
+  height: 19px;
+  border: 2px solid color-mix(in srgb, var(--card-accent, #0ea5b7) 45%, white);
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: #ffffff;
+  color: #162033;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.2);
+}
+
+.account-logo-picker__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.48);
+  backdrop-filter: blur(8px);
+}
+
+.account-logo-picker {
+  width: min(720px, 100%);
+  max-height: min(760px, calc(100dvh - 40px));
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  border: 1px solid var(--border);
+  border-radius: 26px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.3);
+}
+
+.account-logo-picker__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 14px;
+}
+
+.account-logo-picker__header h2,
+.account-logo-picker__eyebrow,
+.account-logo-picker__section-label,
+.account-logo-picker__error {
+  margin: 0;
+}
+
+.account-logo-picker__header h2 {
+  margin-top: 3px;
+  font-size: 1.35rem;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+
+.account-logo-picker__eyebrow,
+.account-logo-picker__section-label {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.account-logo-picker__close {
+  appearance: none;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border: 1px solid var(--stroke);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.account-logo-picker__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 24px 16px;
+}
+
+.account-logo-picker__upload,
+.account-logo-picker__reset {
+  min-height: 40px;
+  padding: 0 15px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.account-logo-picker__upload {
+  border: 1px solid transparent;
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.account-logo-picker__reset {
+  border: 1px solid var(--stroke);
+  background: transparent;
+  color: var(--text);
+}
+
+.account-logo-picker__upload:disabled,
+.account-logo-picker__reset:disabled,
+.account-logo-picker__close:disabled,
+.account-logo-picker__option:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.account-logo-picker__error {
+  margin: 0 24px 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  font-size: 0.82rem;
+}
+
+.account-logo-picker__scroll {
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 2px 24px 24px;
+}
+
+.account-logo-picker__section-label {
+  margin: 12px 0 9px;
+}
+
+.account-logo-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.account-logo-picker__option {
+  appearance: none;
+  position: relative;
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--stroke);
+  border-radius: 18px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.account-logo-picker__option:hover,
+.account-logo-picker__option:focus-visible,
+.account-logo-picker__option[data-selected="true"] {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+  transform: translateY(-1px);
+}
+
+.account-logo-picker__option[data-selected="true"]::after {
+  content: "✓";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.account-logo-picker__option img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+@media (max-width: 700px) {
+  .account-logo-picker__backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .account-logo-picker {
+    width: 100%;
+    max-height: min(82dvh, 760px);
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 24px 24px 0 0;
+  }
+
+  .account-logo-picker__header {
+    padding: 18px 18px 12px;
+  }
+
+  .account-logo-picker__actions {
+    padding: 0 18px 12px;
+  }
+
+  .account-logo-picker__upload,
+  .account-logo-picker__reset {
+    flex: 1;
+    padding-inline: 10px;
+  }
+
+  .account-logo-picker__scroll {
+    padding: 0 18px calc(24px + env(safe-area-inset-bottom));
+  }
+
+  .account-logo-picker__grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .account-logo-picker__option {
+    padding: 7px;
+    border-radius: 15px;
+  }
 }
 
 .financial-account-card__chevron {

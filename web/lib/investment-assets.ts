@@ -7,6 +7,7 @@ type InvestmentAssetBrandInput = {
   subtype?: InvestmentSubtype | null;
   currency?: string | null;
   institution?: string | null;
+  logoUrl?: string | null;
 };
 
 const assetIconPath = "/assets/banks/investment.png";
@@ -70,7 +71,7 @@ export const getInvestmentAssetBrand = (params: InvestmentAssetBrandInput): Acco
     ? uniqueValues([...institutionLogoCandidates, ...assetLogoCandidates])
     : uniqueValues([...assetLogoCandidates, ...institutionLogoCandidates]);
 
-  return {
+  const brand: AccountBrand = {
     label,
     logoSrc: null,
     logoSrcs,
@@ -87,5 +88,16 @@ export const getInvestmentAssetBrand = (params: InvestmentAssetBrandInput): Acco
         ? "linear-gradient(135deg, rgba(37, 99, 235, 0.16), rgba(37, 99, 235, 0.06))"
         : "linear-gradient(135deg, rgba(20, 184, 166, 0.16), rgba(20, 184, 166, 0.06))",
     foreground: "#0f172a",
+  };
+
+  if (!params.logoUrl) return brand;
+  const isCustomImage = params.logoUrl.startsWith("data:image/");
+  return {
+    ...brand,
+    logoSrc: params.logoUrl,
+    logoSrcs: [params.logoUrl],
+    logoBackground: "#ffffff",
+    logoFit: isCustomImage ? "cover" : "contain",
+    logoPadding: isCustomImage ? undefined : "4px",
   };
 };

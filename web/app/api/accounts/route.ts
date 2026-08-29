@@ -84,6 +84,7 @@ const getCompatibleAccountSelect = (columns: Set<string>) => ({
   workspaceId: true,
   name: true,
   institution: true,
+  ...(columns.has("logoUrl") ? { logoUrl: true } : {}),
   ...(columns.has("accountNumber") ? { accountNumber: true } : {}),
   ...(columns.has("favorite") ? { favorite: true } : {}),
   investmentSubtype: true,

@@ -5,6 +5,7 @@ type AccountBrandInput = {
   institution?: string | null;
   name?: string | null;
   type?: string | null;
+  logoUrl?: string | null;
 };
 
 export type AccountBrand = {
@@ -966,7 +967,7 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
   },
 ];
 
-export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
+const getBaseAccountBrand = (params: AccountBrandInput): AccountBrand => {
   const rawBrandText = [params.institution, params.name].filter(Boolean).join(" ");
   const isGSaveBackedUnoAccount =
     /\b(?:unoready|unoboost)\b/i.test(rawBrandText) ||
@@ -1186,4 +1187,19 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
     background: "linear-gradient(135deg, rgba(212, 217, 223, 0.94), rgba(166, 173, 184, 0.88))",
     foreground: "#111827",
   });
+};
+
+export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
+  const brand = getBaseAccountBrand(params);
+  if (!params.logoUrl) return brand;
+  const isCustomImage = params.logoUrl.startsWith("data:image/");
+
+  return {
+    ...brand,
+    logoSrc: params.logoUrl,
+    logoSrcs: [params.logoUrl],
+    logoBackground: "#ffffff",
+    logoFit: isCustomImage ? "cover" : "contain",
+    logoPadding: isCustomImage ? undefined : "4px",
   };
+};

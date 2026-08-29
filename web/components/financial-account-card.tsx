@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { AccountLogoPicker } from "@/components/account-logo-picker";
 import type { AccountBrand } from "@/lib/account-brand";
 
 type FinancialAccountCardProps = {
@@ -17,6 +18,8 @@ type FinancialAccountCardProps = {
   onNameCommit?: (value: string) => Promise<void> | void;
   onAccountNumberCommit?: (value: string) => Promise<void> | void;
   onAmountCommit?: (value: string) => Promise<void> | void;
+  logoUrl?: string | null;
+  onLogoCommit?: (logoUrl: string | null) => Promise<void> | void;
   className?: string;
   state?: "deleting" | "loading" | undefined;
   showChevron?: boolean;
@@ -134,6 +137,8 @@ export function FinancialAccountCard({
   onNameCommit,
   onAccountNumberCommit,
   onAmountCommit,
+  logoUrl,
+  onLogoCommit,
   className,
   state,
   showChevron = true,
@@ -173,7 +178,16 @@ export function FinancialAccountCard({
       <div className="financial-account-card__content">
         <div className="financial-account-card__head">
           <div className="financial-account-card__identity">
-            <AccountBrandMark accountBrand={accountBrand} label={name} />
+            {onLogoCommit ? (
+              <AccountLogoPicker
+                accountBrand={accountBrand}
+                accountName={name}
+                currentLogoUrl={logoUrl}
+                onCommit={onLogoCommit}
+              />
+            ) : (
+              <AccountBrandMark accountBrand={accountBrand} label={name} />
+            )}
             {onNameCommit && editableName !== undefined ? (
               <InlineCardField
                 value={editableName}

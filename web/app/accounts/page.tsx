@@ -183,6 +183,7 @@ type Account = {
   workspaceId?: string;
   name: string;
   institution: string | null;
+  logoUrl?: string | null;
   accountNumber: string | null;
   investmentSubtype: InvestmentSubtype | null;
   investmentSymbol: string | null;
@@ -210,6 +211,7 @@ const buildCashFallbackAccount = (currency: string): Account => {
     id: `fallback-cash-${formatCurrencyCode(currency).toLowerCase()}`,
     name: "Cash",
     institution: "Cash",
+    logoUrl: null,
     accountNumber: null,
     investmentSubtype: null,
     investmentSymbol: null,
@@ -3821,6 +3823,28 @@ function AccountsPageContent() {
     }
   };
 
+  const saveAccountLogo = async (account: Account, logoUrl: string | null) => {
+    if (!selectedWorkspaceId || account.id.startsWith("optimistic-") || isCashFallbackAccount(account)) return;
+    const previous = account;
+    setAccounts((current) => current.map((entry) => (entry.id === account.id ? { ...entry, logoUrl } : entry)));
+
+    try {
+      const response = await fetch(`/api/accounts/${account.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId: selectedWorkspaceId, logoUrl }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.account) throw new Error("Unable to save this account logo.");
+      setAccounts((current) => current.map((entry) => (entry.id === account.id ? (payload.account as Account) : entry)));
+      setMessage("Account logo updated.");
+    } catch (error) {
+      setAccounts((current) => current.map((entry) => (entry.id === account.id ? previous : entry)));
+      setMessage(error instanceof Error ? error.message : "Unable to save this account logo.");
+      throw error;
+    }
+  };
+
   const handleAccountDragStart = (event: DragEvent<HTMLDivElement>, account: Account) => {
     if (
       window.innerWidth <= 1100 ||
@@ -3921,6 +3945,7 @@ function AccountsPageContent() {
       institution: row.institution ?? resolvedBankLabel,
       name: rawAccountCardName,
       type: getEffectiveAccountType(row),
+      logoUrl: row.logoUrl,
     });
     const balanceValue = Math.abs(parseAmount(loadingContext.displayedBalance));
     const formattedAccountCardNumber = formatDisambiguatedCardAccountNumber(fallbackAccountNumber, {
@@ -3961,6 +3986,8 @@ function AccountsPageContent() {
           onNameCommit={(value) => saveInlineAccountField(row, "name", value)}
           onAccountNumberCommit={(value) => saveInlineAccountField(row, "accountNumber", value)}
           onAmountCommit={(value) => saveInlineAccountField(row, "balance", value)}
+          logoUrl={row.logoUrl}
+          onLogoCommit={isCashFallbackAccount(row) ? undefined : (logoUrl) => saveAccountLogo(row, logoUrl)}
           openLabel={`Open ${accountCardName} account`}
           className={luxuryAccountCardsEnabled ? getLuxuryAccountCardClass(row.id) : undefined}
           state={isDeleting ? "deleting" : loadingContext.isLoading ? "loading" : undefined}
@@ -4028,6 +4055,7 @@ function AccountsPageContent() {
       institution: row.institution,
       name: row.name,
       type: getEffectiveAccountType(row),
+      logoUrl: row.logoUrl,
     });
     const accountDisplayName = getAccountDisplayName(row);
     const accountEyebrow = getAccountCardEyebrow(row);

@@ -538,6 +538,7 @@ model Account {
   workspaceId             String
   name                    String
   institution             String?
+  logoUrl                 String?
   accountNumber           String?
   investmentSubtype       String?
   investmentSymbol        String?
