@@ -53,6 +53,22 @@ const editorSource = fs.readFileSync(path.join(process.cwd(), "components/split-
 const workspaceSource = fs.readFileSync(path.join(process.cwd(), "components/split-bill-workspace.tsx"), "utf8");
 const pageActionsSource = fs.readFileSync(path.join(process.cwd(), "components/split-bill-page-actions.tsx"), "utf8");
 const groupRouteSource = fs.readFileSync(path.join(process.cwd(), "app/api/split-bill-groups/route.ts"), "utf8");
+const globalStyles = fs.readFileSync(path.join(process.cwd(), "app/globals.css"), "utf8");
+assert.match(
+  globalStyles,
+  /\.split-bill-action-button--add,[\s\S]{0,220}background: #fff !important/,
+  "Add Split Bill actions must use a white background."
+);
+assert.match(
+  globalStyles,
+  /\.split-bill-action-button--add :is\(span, svg\)[\s\S]{0,80}color: var\(--accent\) !important/,
+  "White Add Split Bill actions must keep their icon and label legible."
+);
+assert.doesNotMatch(
+  globalStyles,
+  /\.split-bill-action-button--upload[\s\S]{0,160}background: #fff !important/,
+  "Upload Receipt actions must retain their primary blue treatment."
+);
 assert.match(
   editorSource,
   /draft\.items = draft\.items\.map\(\(item, index\) => \(\{[\s\S]{0,120}id: item\.id \?\? `draft-item-\$\{index \+ 1\}`/,

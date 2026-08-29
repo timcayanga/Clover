@@ -59219,8 +59219,25 @@ html[data-theme="dark"] .content--investments .adviser-header-link {
 }
 
 .split-bill-action-button--add,
+html[data-theme="dark"] .split-bill-action-button--add {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--stroke)) !important;
+  background: #fff !important;
+  color: var(--accent) !important;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1) !important;
+}
+
 .split-bill-action-button--add :is(span, svg) {
-  color: #fff !important;
+  color: var(--accent) !important;
+}
+
+.split-bill-action-button--add:hover,
+.split-bill-action-button--add:focus-visible,
+html[data-theme="dark"] .split-bill-action-button--add:hover,
+html[data-theme="dark"] .split-bill-action-button--add:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--stroke)) !important;
+  background: color-mix(in srgb, #fff 94%, var(--accent) 6%) !important;
+  color: var(--accent) !important;
+  box-shadow: 0 10px 24px rgba(3, 168, 192, 0.16) !important;
 }
 
 @media (max-width: 1100px) {
