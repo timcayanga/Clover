@@ -5,11 +5,12 @@ import { getCalendarDayEndInTimeZone, resolveReportWindow } from "../lib/report-
 
 const main = async () => {
   const root = process.cwd();
-  const [adviserSource, adviserChatSource, reportsSource, rangeMenuSource, moneyChartSource, globalStyles] = await Promise.all([
+  const [adviserSource, adviserChatSource, reportsSource, rangeMenuSource, currencyFilterSource, moneyChartSource, globalStyles] = await Promise.all([
     readFile(join(root, "app/adviser/page.tsx"), "utf8"),
     readFile(join(root, "app/api/adviser/chat/route.ts"), "utf8"),
     readFile(join(root, "app/reports/reports-page-content.tsx"), "utf8"),
     readFile(join(root, "components/reports-range-menu.tsx"), "utf8"),
+    readFile(join(root, "components/reports-currency-filter.tsx"), "utf8"),
     readFile(join(root, "components/reports-money-over-time-chart.tsx"), "utf8"),
     readFile(join(root, "app/globals.css"), "utf8"),
   ]);
@@ -58,7 +59,10 @@ assert.match(reportsSource, /Math\.min\(1, Math\.max\(0, currentNet \/ currentSu
 assert.match(reportsSource, /let runningBalance = totalAccountBalance - currentNet;/);
 assert.match(reportsSource, /dailyNetByDate/);
 assert.match(reportsSource, /<ReportsMoneyOverTimeChart/);
-assert.match(reportsSource, /<span>Current balance<\/span>/);
+assert.doesNotMatch(reportsSource, /<span>Current balance<\/span>/);
+assert.match(reportsSource, /const currencyScopedTransactions = requestedCurrency/);
+assert.match(reportsSource, /formatCurrencyCode\(transaction\.account\.currency\) === requestedCurrency/);
+assert.match(reportsSource, /formatCurrencyCode\(account\.currency\) === requestedCurrency/);
 assert.match(reportsSource, /buildReportPieSlicePath\(offset, nextOffset\)/);
 assert.match(reportsSource, /<CategoryBrandMark categoryName=\{segment\.categoryName\}/);
 assert.doesNotMatch(reportsSource, /Beginning balance is estimated from the current account balance/);
@@ -68,7 +72,13 @@ assert.match(rangeMenuSource, /Apply dates/);
 assert.match(rangeMenuSource, /router\.replace\(/);
 assert.match(rangeMenuSource, /router\.prefetch\(rangeHref\(range\)\)/);
 assert.doesNotMatch(rangeMenuSource, /window\.location\.assign/);
+assert.match(currencyFilterSource, /Filter reports by currency/);
+assert.match(currencyFilterSource, /params\.set\("currency", formatCurrencyCode\(next\)\)/);
+assert.match(currencyFilterSource, /params\.delete\("currency"\)/);
 assert.match(moneyChartSource, /onPointerMove=\{\(event\) => handlePointerMove\(event\.clientX\)\}/);
+assert.match(moneyChartSource, /onPointerDown=\{\(event\) => handlePointerSelection\(event\.clientX\)\}/);
+assert.match(moneyChartSource, /\{interactionPoint \? "Balance on" : "Current balance"\}/);
+assert.doesNotMatch(moneyChartSource, /reports-money-chart__summary/);
 assert.match(moneyChartSource, /reports-money-chart__y-axis/);
 assert.match(moneyChartSource, /formatCurrencyAmount\(tick\.value, currency\)/);
 assert.match(moneyChartSource, /observedRange \* 0\.14/);

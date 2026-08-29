@@ -57610,6 +57610,20 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   font-weight: 400;
 }
 
+.content--reports .reports-money-over-time__head {
+  align-items: flex-start;
+}
+
+.content--reports .reports-money-over-time__stat {
+  max-width: min(48%, 360px);
+  padding-right: 34px;
+  text-align: right;
+}
+
+.content--reports .reports-money-over-time__stat span {
+  white-space: normal;
+}
+
 .reports-money-chart {
   display: grid;
   gap: 10px;
@@ -57619,23 +57633,6 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   background:
     radial-gradient(circle at 15% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 42%),
     color-mix(in srgb, var(--surface) 96%, var(--accent) 4%);
-}
-
-.reports-money-chart__summary {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 28px;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.reports-money-chart__summary strong {
-  color: var(--text);
-  font-size: 18px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
 }
 
 .reports-money-chart__plot {
@@ -57941,6 +57938,50 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
   cursor: progress;
 }
 
+/* Reports header actions use the artwork itself as the hit target. */
+.content--reports .adviser-header-link,
+.content--reports .adviser-header-link:hover,
+.content--reports .adviser-header-link:focus-visible,
+html[data-theme="dark"] .content--reports .adviser-header-link {
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  min-height: 48px;
+  flex-basis: 48px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.content--reports .adviser-header-link img {
+  width: 48px;
+  height: 48px;
+}
+
+.content--reports .reports-range-menu__summary,
+.content--reports .reports-range-menu__summary:hover,
+.content--reports .reports-range-menu__summary:focus-visible,
+html[data-theme="dark"] .content--reports .reports-range-menu__summary,
+html[data-theme="dark"] .content--reports .reports-range-menu__summary:hover,
+html[data-theme="dark"] .content--reports .reports-range-menu__summary:focus-visible {
+  width: 48px;
+  height: 48px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.content--reports .reports-range-menu__summary svg {
+  width: 30px;
+  height: 30px;
+}
+
+.content--reports .reports-currency-filter__button {
+  min-width: 44px;
+  min-height: 40px;
+}
+
 @media (max-width: 720px) {
   .content--reports .report-chart--overview {
     padding-inline: 10px;
@@ -57949,8 +57990,10 @@ html[data-theme="dark"] .split-bill-manual-modal__back-desktop {
 
   .reports-money-chart { padding-inline: 10px; border-radius: 18px; }
   .reports-money-chart__svg { height: 220px; }
-  .reports-money-chart__summary { align-items: flex-start; flex-direction: column; gap: 2px; }
-  .reports-money-chart__summary strong { font-size: 16px; }
+  .content--reports .reports-money-over-time__stat {
+    max-width: 58%;
+    padding-right: 30px;
+  }
   .reports-money-chart__y-axis { width: 96px; }
   .reports-money-chart__y-axis span { width: 92px; font-size: 10px; }
   .reports-money-chart__tooltip { min-width: 140px; }

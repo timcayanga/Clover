@@ -34,6 +34,7 @@ export function ReportsMoneyOverTimeChart({
 }) {
   const chartRef = useRef<SVGSVGElement>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   const chart = useMemo(() => {
     const values = points.map((point) => point.balance);
@@ -82,11 +83,9 @@ export function ReportsMoneyOverTimeChart({
     return { plotted, path, ticks, axisIndexes };
   }, [points]);
 
-  const hovered = hoverIndex === null ? null : chart.plotted[hoverIndex] ?? null;
-
-  const handlePointerMove = (clientX: number) => {
+  const getIndexAtClientX = (clientX: number) => {
     const element = chartRef.current;
-    if (!element || chart.plotted.length === 0) return;
+    if (!element || chart.plotted.length === 0) return null;
     const bounds = element.getBoundingClientRect();
     const chartX = ((clientX - bounds.left) / Math.max(bounds.width, 1)) * chartWidth;
     const index = Math.round(
@@ -94,7 +93,15 @@ export function ReportsMoneyOverTimeChart({
         Math.max(chartWidth - chartPadding.left - chartPadding.right, 1)) *
         (chart.plotted.length - 1),
     );
-    setHoverIndex(Math.max(0, Math.min(chart.plotted.length - 1, index)));
+    return Math.max(0, Math.min(chart.plotted.length - 1, index));
+  };
+
+  const handlePointerMove = (clientX: number) => {
+    setHoverIndex(getIndexAtClientX(clientX));
+  };
+
+  const handlePointerSelection = (clientX: number) => {
+    setSelectedIndex(getIndexAtClientX(clientX));
   };
 
   if (chart.plotted.length === 0) {
@@ -102,13 +109,15 @@ export function ReportsMoneyOverTimeChart({
   }
 
   const latest = chart.plotted[chart.plotted.length - 1];
-  const activePoint = hovered ?? latest;
+  const interactionIndex = hoverIndex ?? selectedIndex;
+  const interactionPoint = interactionIndex === null ? null : chart.plotted[interactionIndex] ?? null;
+  const activePoint = interactionPoint ?? latest;
   const hoveredChange =
-    hoverIndex === null || hoverIndex === 0
+    interactionIndex === null || interactionIndex === 0
       ? null
-      : activePoint.balance - chart.plotted[hoverIndex - 1].balance;
-  const hoverLeft = hovered ? (hovered.x / chartWidth) * 100 : 0;
-  const hoverTop = hovered ? (hovered.y / chartHeight) * 100 : 0;
+      : activePoint.balance - chart.plotted[interactionIndex - 1].balance;
+  const hoverLeft = interactionPoint ? (interactionPoint.x / chartWidth) * 100 : 0;
+  const hoverTop = interactionPoint ? (interactionPoint.y / chartHeight) * 100 : 0;
   const tooltipClassName = [
     "reports-money-chart__tooltip",
     hoverLeft > 72 ? "reports-money-chart__tooltip--left" : "",
@@ -116,11 +125,19 @@ export function ReportsMoneyOverTimeChart({
   ].filter(Boolean).join(" ");
 
   return (
-    <div className="reports-money-chart">
-      <div className="reports-money-chart__summary" aria-live="polite">
-        <span>{dateFormatter.format(parseReportDate(activePoint.date))}</span>
-        <strong>{formatCurrencyAmount(activePoint.balance, currency)}</strong>
+    <>
+      <div className="report-card__head reports-money-over-time__head">
+        <div className="report-card__head-title">
+          <h4 className="reports-money-over-time__title">Money over time</h4>
+        </div>
+        <div className="report-card__stat reports-money-over-time__stat" aria-live="polite">
+          <strong>{formatCurrencyAmount(activePoint.balance, currency)}</strong>
+          <span>
+            {interactionPoint ? "Balance on" : "Current balance"} · {dateFormatter.format(parseReportDate(activePoint.date))}
+          </span>
+        </div>
       </div>
+      <div className="reports-money-chart">
       <div className="reports-money-chart__plot">
         <svg
           ref={chartRef}
@@ -130,6 +147,7 @@ export function ReportsMoneyOverTimeChart({
           role="img"
           aria-label="Account balance over time"
           onPointerMove={(event) => handlePointerMove(event.clientX)}
+          onPointerDown={(event) => handlePointerSelection(event.clientX)}
           onPointerLeave={() => setHoverIndex(null)}
           onTouchMove={(event) => handlePointerMove(event.touches[0]?.clientX ?? 0)}
         >
@@ -154,17 +172,17 @@ export function ReportsMoneyOverTimeChart({
             d={`${chart.path} L ${latest.x} ${chartHeight - chartPadding.bottom} L ${chart.plotted[0].x} ${chartHeight - chartPadding.bottom} Z`}
           />
           <path className="reports-money-chart__line" d={chart.path} />
-          {hovered ? (
+          {interactionPoint ? (
             <line
               className="reports-money-chart__hover-line"
-              x1={hovered.x}
-              x2={hovered.x}
+              x1={interactionPoint.x}
+              x2={interactionPoint.x}
               y1={chartPadding.top}
               y2={chartHeight - chartPadding.bottom}
             />
           ) : null}
         </svg>
-        {hovered ? (
+        {interactionPoint ? (
           <>
             <span
               className="reports-money-chart__hover-dot"
@@ -176,8 +194,8 @@ export function ReportsMoneyOverTimeChart({
               style={{ left: `${hoverLeft}%`, top: `${hoverTop}%` }}
               role="status"
             >
-              <span>{dateFormatter.format(parseReportDate(hovered.date))}</span>
-              <strong>{formatCurrencyAmount(hovered.balance, currency)}</strong>
+              <span>{dateFormatter.format(parseReportDate(interactionPoint.date))}</span>
+              <strong>{formatCurrencyAmount(interactionPoint.balance, currency)}</strong>
               {hoveredChange === null ? null : (
                 <small className={hoveredChange >= 0 ? "positive" : "negative"}>
                   {hoveredChange >= 0 ? "+" : ""}
@@ -202,6 +220,7 @@ export function ReportsMoneyOverTimeChart({
           </span>
         ))}
       </div>
-    </div>
+      </div>
+    </>
   );
 }

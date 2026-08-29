@@ -33,6 +33,7 @@ import { buildSpendingPaceSnapshot } from "@/lib/spending-pace";
 import { SpendingPaceCard } from "@/components/spending-pace-card";
 import type { User } from "@prisma/client";
 import { AdviserHeaderLink } from "@/components/adviser-header-link";
+import { ReportsCurrencyFilter } from "@/components/reports-currency-filter";
 import {
   ReportsMoneyOverTimeChart,
   type ReportsMoneyPoint,
@@ -351,7 +352,7 @@ export async function ReportsStream({
   sessionIsGuest,
 }: {
   active?: "reports" | "adviser";
-  searchParams?: { range?: string; section?: string; filter?: string; from?: string; to?: string };
+  searchParams?: { range?: string; section?: string; filter?: string; from?: string; to?: string; currency?: string };
   user: User;
   sessionIsGuest: boolean;
 }) {
@@ -599,14 +600,21 @@ export async function ReportsStream({
     const isResolvedReportSpendingTransaction = (transaction: ReportTransaction) =>
       getResolvedReportTransactionType(transaction) === "expense";
     const requestedFilter = searchParams?.filter?.trim().toLowerCase() ?? "";
+    const requestedCurrencyValue = searchParams?.currency?.trim().toUpperCase() ?? "";
+    const requestedCurrency = requestedCurrencyValue && requestedCurrencyValue !== "ALL" ? requestedCurrencyValue : null;
+    const currencyScopedTransactions = requestedCurrency
+      ? reportAllTransactions.filter(
+          (transaction) => formatCurrencyCode(transaction.account.currency) === requestedCurrency
+        )
+      : reportAllTransactions;
     const reportScopedTransactions = requestedFilter
-      ? reportAllTransactions.filter((transaction) => {
+      ? currencyScopedTransactions.filter((transaction) => {
           const category = getReportTransactionCategoryName(transaction).toLowerCase();
           const merchant = normalizeMerchant(transaction.merchantClean ?? transaction.merchantRaw).toLowerCase();
           const account = transaction.account.name.toLowerCase();
           return category.includes(requestedFilter) || merchant.includes(requestedFilter) || account.includes(requestedFilter);
         })
-      : reportAllTransactions;
+      : currencyScopedTransactions;
     const spendingPaceTransactions = reportScopedTransactions.filter(isResolvedReportSpendingTransaction);
     const spendingPace = buildSpendingPaceSnapshot(
       spendingPaceTransactions.map((transaction) => ({
@@ -724,7 +732,7 @@ export async function ReportsStream({
       bucket.net = bucket.income - bucket.expense;
     });
 
-    const workspaceAccountSummaries = Array.isArray(workspaceAccountSnapshots)
+    const allWorkspaceAccountSummaries = Array.isArray(workspaceAccountSnapshots)
       ? (workspaceAccountSnapshots as Array<WorkspaceAccountSnapshot | null | undefined>).flatMap((account) => {
           if (!account || typeof account.id !== "string") {
             return [];
@@ -742,10 +750,15 @@ export async function ReportsStream({
           ];
         })
       : [];
+    const workspaceAccountSummaries = requestedCurrency
+      ? allWorkspaceAccountSummaries.filter(
+          (account) => formatCurrencyCode(account.currency) === requestedCurrency
+        )
+      : allWorkspaceAccountSummaries;
     const currencyCandidates = new Set(
       workspaceAccountSummaries.map((account) => formatCurrencyCode(account.currency)).filter((currency) => currency.length > 0)
     );
-    const displayCurrency = currencyCandidates.size === 1 ? Array.from(currencyCandidates)[0] : "MIXED";
+    const displayCurrency = requestedCurrency ?? (currencyCandidates.size === 1 ? Array.from(currencyCandidates)[0] : "MIXED");
     const formatCurrency = (value: number, currency: string | null = displayCurrency) => formatCurrencyAmount(value, currency);
     const formatSignedCurrency = (value: number, currency: string | null = displayCurrency) =>
       `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency)}`;
@@ -1731,16 +1744,6 @@ export async function ReportsStream({
             <section className="reports-grid reports-grid--primary reports-overview-visual">
               <article className="report-card glass report-card--wide">
                 <ReportInfoTip className="reports-container-info" label={`A ${rangeWindowText} view of how income and spending changed the net position.`} />
-                <div className="report-card__head">
-                  <div className="report-card__head-title">
-                    <h4 className="reports-money-over-time__title">Money over time</h4>
-                  </div>
-                  <div className="report-card__stat">
-                    <strong>{formatCurrency(totalAccountBalance)}</strong>
-                    <span>Current balance</span>
-                  </div>
-                </div>
-
                 <ReportsMoneyOverTimeChart
                   points={reportMoneyPoints}
                   currency={displayCurrency}
@@ -2348,7 +2351,7 @@ export async function ReportsStream({
   }
 }
 
-async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string; from?: string; to?: string }> }) {
+async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string; from?: string; to?: string; currency?: string }> }) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const session = await getPageSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
@@ -2376,6 +2379,7 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
         actions={
           <div className="reports-page__actions">
             <AdviserHeaderLink />
+            <ReportsCurrencyFilter currentCurrency={resolvedSearchParams?.currency?.trim().toUpperCase()} />
             <ReportsRangeMenu
               currentRange={selectedRange}
               currentRangeLabel={selectedRangeLabel}
@@ -2396,6 +2400,6 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
   );
 }
 
-export default function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string; from?: string; to?: string }> }) {
+export default function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string; from?: string; to?: string; currency?: string }> }) {
   return <RouteSplash label="reports"><ReportsPageStream searchParams={searchParams} /></RouteSplash>;
 }
