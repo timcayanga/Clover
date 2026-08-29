@@ -1722,6 +1722,7 @@ type ProcessImportResult = {
   imported: number;
   duplicate: boolean;
   metadata: ReturnType<typeof detectStatementMetadataFromText>;
+  resolvedImportMode?: ImportImageMode;
   accountId?: string | null;
   accountSummaries?: Array<{
     accountId: string;
@@ -12527,6 +12528,7 @@ export const processImportFileText = async (
         imported: confirmedImportResult.imported,
         duplicate: Boolean(confirmedImportResult.duplicate),
         metadata: resolvedMetadata,
+        resolvedImportMode: effectiveImportMode,
         accountId: confirmedImportResult.accountId ?? null,
         accountSummaries: confirmedImportResult.accountSummaries,
         confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
@@ -13067,6 +13069,7 @@ export const processImportFileText = async (
             imported: confirmedImportResult.imported,
             duplicate: false,
             metadata: resolvedMetadata,
+            resolvedImportMode: effectiveImportMode,
             accountId: confirmedImportResult.accountId ?? null,
             accountSummaries: confirmedImportResult.accountSummaries,
             confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,

@@ -163,6 +163,7 @@ assert.match(
 );
 
 const workerSource = readFileSync(join(root, "workers/import-processor.ts"), "utf8");
+const processRouteSource = readFileSync(join(root, "app/api/imports/[importId]/process/route.ts"), "utf8");
 const openAIParserSource = readFileSync(join(root, "lib/openai-import-parser.ts"), "utf8");
 assert.match(
   openAIParserSource,
@@ -193,6 +194,17 @@ assert.match(
   importModalSource,
   /processPayload\?\.receiptTransaction[\s\S]{0,260}?\? "receipt"[\s\S]{0,800}?resolvedResponseImportMode !== itemImportMode/,
   "server-detected receipts should switch out of the statement confirmation path"
+);
+assert.match(
+  workerSource,
+  /resolvedImportMode\?: ImportImageMode/,
+  "the worker should return its final receipt versus statement decision"
+);
+assert.match(workerSource, /resolvedImportMode: effectiveImportMode/);
+assert.match(
+  processRouteSource,
+  /importMode: result\.resolvedImportMode \?\? importMode \?\? "statement"/,
+  "the process response should expose a server-detected receipt mode"
 );
 assert.match(
   importModalSource,

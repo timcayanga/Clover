@@ -2821,7 +2821,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           ok: true,
           queued: false,
           processed: true,
-          importMode: importMode ?? "statement",
+          // The worker can reclassify a generic camera/gallery upload after
+          // reading the image. Return that durable decision so the client does
+          // not keep monitoring a receipt through the statement save path.
+          importMode: result.resolvedImportMode ?? importMode ?? "statement",
           importedRows: result.imported,
           duplicate: Boolean(result.duplicate),
           status: result.status ?? "done",
