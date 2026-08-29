@@ -1536,11 +1536,29 @@ export async function POST(request: Request) {
         : prisma.category.findFirst({
             where: { id: payload.categoryId, workspaceId: payload.workspaceId },
           });
-    const [transactionCount, otherCategory, selectedCategory] = await Promise.all([
+    const selectedAccountPromise = prisma.account.findFirst({
+      where: { id: payload.accountId, workspaceId: payload.workspaceId },
+      select: { id: true, currency: true },
+    });
+    const [transactionCount, otherCategory, selectedCategory, selectedAccount] = await Promise.all([
       transactionCountPromise,
       otherCategoryPromise,
       selectedCategoryPromise,
+      selectedAccountPromise,
     ]);
+
+    if (!selectedAccount) {
+      return NextResponse.json({ error: "Choose an account from this Clover profile." }, { status: 400 });
+    }
+
+    const accountCurrency = String(selectedAccount.currency ?? "PHP").trim().toUpperCase() || "PHP";
+    const transactionCurrency = payload.currency.trim().toUpperCase();
+    if (accountCurrency !== transactionCurrency) {
+      return NextResponse.json(
+        { error: `Use ${accountCurrency} for this account, or choose a ${transactionCurrency} account.` },
+        { status: 400 }
+      );
+    }
 
     if (effectiveLimits.transactionLimit !== null && transactionCount !== null && transactionCount >= effectiveLimits.transactionLimit) {
       const isFreePlan = user.planTier === "free";
@@ -1571,7 +1589,7 @@ export async function POST(request: Request) {
         categoryId: resolvedCategoryId,
         date: new Date(payload.date),
         amount: payload.amount.toString(),
-        currency: payload.currency.toUpperCase(),
+        currency: transactionCurrency,
         type: resolvedType,
         merchantRaw: payload.merchantRaw,
         merchantClean: payload.merchantClean ?? null,

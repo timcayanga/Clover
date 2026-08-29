@@ -60,6 +60,11 @@ assert.match(splitBillActionsSource, /title: isPersonModalOpen \? "Add Person" :
 assert.match(globalStyles, /split-bill-mobile-home__footer \.split-bill-mobile-add-button[\s\S]*?width: auto !important/, "Mobile People and Groups Add actions must not collapse into icon-only buttons.");
 assert.match(globalStyles, /\.split-bill-simple-entry-modal\s*\{[\s\S]*?inset: 72px 0 calc\(86px \+ env\(safe-area-inset-bottom\)\)/, "Mobile People and Group editors must render as full pages between Clover's shared navigation bars.");
 assert.doesNotMatch(globalStyles, /data-split-bill-modal-open="true"\] \.shell-bottom-nav\s*\{\s*display:\s*none/, "Payment-option editing must preserve the mobile bottom navigation.");
+assert.doesNotMatch(
+  globalStyles,
+  /data-split-bill-modal-open="true"\] \.topbar[\s\S]{0,100}visibility:\s*hidden/,
+  "Desktop Split Bills modals must not inherit hidden visibility from the topbar that contains them."
+);
 assert.match(paymentOptionsSource, /<select[\s\S]*Select a bank or wallet/, "The bank field must use the user's saved payment accounts.");
 assert.doesNotMatch(paymentOptionsSource, /Name shown to payers|Mobile or account number/, "Account details must not imply a bank- or wallet-specific format through generic inline placeholders.");
 assert.match(paymentOptionsSource, /readSelectedWorkspaceId/, "Payment options must follow the user's active Profile.");

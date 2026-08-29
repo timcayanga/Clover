@@ -7,6 +7,7 @@ const read = (relativePath: string) => readFileSync(path.join(process.cwd(), rel
 const transactions = read("app/transactions/page.tsx");
 const dashboardActions = read("components/dashboard-top-actions.tsx");
 const transferRoute = read("app/api/transactions/manual-transfer/route.ts");
+const transactionsRoute = read("app/api/transactions/route.ts");
 const suggestionsRoute = read("app/api/transaction-name-suggestions/route.ts");
 const categoryRoute = read("app/api/categories/route.ts");
 const categoryPicker = read("components/transaction-category-picker.tsx");
@@ -30,6 +31,11 @@ assert.match(transferRoute, /transferDirection: "out", amountDelta: -amount/, "T
 assert.match(transferRoute, /transferDirection: "in", amountDelta: amount/, "The destination account must increase.");
 assert.match(transferRoute, /manual_transfer_fee/, "Transfer fees must remain a separate expense.");
 assert.match(transferRoute, /source\.currency[\s\S]*destination\.currency/, "Manual transfers must reject unsafe cross-currency pairing.");
+assert.match(
+  transactionsRoute,
+  /where: \{ id: payload\.accountId, workspaceId: payload\.workspaceId \}[\s\S]{0,1200}accountCurrency !== transactionCurrency/,
+  "Manual transaction writes must reject accounts outside the workspace and cross-currency account mismatches."
+);
 
 assert.match(suggestionsRoute, /where:\s*\{\s*workspaceId,/, "Name suggestions must stay workspace-scoped.");
 assert.match(suggestionsRoute, /take: 80/, "Suggestions must use bounded history reads.");
@@ -47,6 +53,16 @@ assert.match(transactions, /!transactionAccountTypes\.has\(account\.type\) \|\| 
 assert.match(transactions, /transactionInvestmentIdentityPattern\.test/, "Legacy investment-shaped shadow accounts must stay out of transaction pickers.");
 assert.match(transactions, /getDeletedWorkspaceAccountIds\(selectedWorkspaceId\)/, "Deleted accounts must stay out of transaction pickers immediately.");
 assert.match(transactions, /buildTransactionAccountLabels\(selectableTransactionAccounts\)/, "Cross-currency account families must receive distinct picker labels.");
+assert.match(
+  transactions,
+  /ensureDefaultAccount = async \(workspaceId: string, preferredCurrency = "PHP"\)[\s\S]{0,900}formatCurrencyCode\(account\.currency \|\| "PHP"\) === normalizedPreferredCurrency/,
+  "Manual entry must resolve its default Cash account in the selected transaction currency."
+);
+assert.match(
+  transactions,
+  /accountId,\s*currency: accountCurrency,/,
+  "Opening manual entry must keep the displayed currency aligned with the resolved account."
+);
 assert.match(transactions, /buildTransactionAccountFilterOptions\(selectableTransactionAccounts\)/, "Transaction filters must use the same eligible account list as transaction editors.");
 assert.match(transactions, /\{selectableTransactionAccounts\.map\(\(account\) => \(/, "Bulk transaction edits must not reintroduce investment accounts.");
 assert.match(

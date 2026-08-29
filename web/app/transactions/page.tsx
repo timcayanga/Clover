@@ -3986,8 +3986,13 @@ function TransactionsPageContent() {
     setHeaderMenuPosition(null);
   }, [accounts, categories, defaultCurrency, isWorkspaceDataReady, searchParams, selectedWorkspaceId]);
 
-  const ensureDefaultAccount = async (workspaceId: string) => {
-    const cashAccount = accounts.find((account) => account.type === "cash" || account.name.trim().toLowerCase() === "cash");
+  const ensureDefaultAccount = async (workspaceId: string, preferredCurrency = "PHP") => {
+    const normalizedPreferredCurrency = formatCurrencyCode(preferredCurrency || "PHP");
+    const cashAccount = accounts.find(
+      (account) =>
+        (account.type === "cash" || account.name.trim().toLowerCase() === "cash") &&
+        formatCurrencyCode(account.currency || "PHP") === normalizedPreferredCurrency
+    );
     if (cashAccount) {
       return cashAccount.id;
     }
@@ -4000,7 +4005,7 @@ function TransactionsPageContent() {
         name: "Cash",
         institution: "Cash",
         type: "cash",
-        currency: "PHP",
+        currency: normalizedPreferredCurrency,
         source: "manual",
       }),
     });
@@ -5263,7 +5268,7 @@ function TransactionsPageContent() {
     }
 
     flushSync(() => {
-      setManualForm(createEmptyManualForm("", getOtherCategoryId(categories)));
+      setManualForm(createEmptyManualForm("", getOtherCategoryId(categories), defaultCurrency));
       setManualMoreOpen(false);
       setManualAccountMenuOpen(false);
       setManualCategoryMenuOpen(false);
@@ -5271,7 +5276,10 @@ function TransactionsPageContent() {
     });
 
     try {
-      const accountId = await ensureDefaultAccount(activeWorkspaceId);
+      const accountId = await ensureDefaultAccount(activeWorkspaceId, defaultCurrency);
+      const accountCurrency = formatCurrencyCode(
+        accounts.find((account) => account.id === accountId)?.currency || defaultCurrency
+      );
       setManualForm((current) => {
         if (current.accountId) {
           return current;
@@ -5280,6 +5288,7 @@ function TransactionsPageContent() {
         return {
           ...current,
           accountId,
+          currency: accountCurrency,
         };
       });
     } catch (error) {
@@ -5444,7 +5453,7 @@ function TransactionsPageContent() {
     let optimisticTransactionType: Transaction["type"] = "expense";
     let resolvedAccountId = "";
     try {
-      const accountId = manualForm.accountId || (await ensureDefaultAccount(activeWorkspaceId));
+      const accountId = manualForm.accountId || (await ensureDefaultAccount(activeWorkspaceId, manualForm.currency));
       resolvedAccountId = accountId;
       const account = accounts.find((entry) => entry.id === accountId) ?? null;
       const accountCurrency = formatCurrencyCode(account?.currency ?? "PHP");
@@ -5612,7 +5621,8 @@ function TransactionsPageContent() {
       setMessage(`Transaction "${created.merchantRaw}" added.`);
 
       if (keepOpenAfterSave) {
-        const nextAccountId = resolvedAccountId || created.accountId || (await ensureDefaultAccount(activeWorkspaceId));
+        const nextAccountId =
+          resolvedAccountId || created.accountId || (await ensureDefaultAccount(activeWorkspaceId, created.currency));
         const nextAccount = accounts.find((entry) => entry.id === nextAccountId) ?? null;
         const nextCurrency = formatCurrencyCode(nextAccount?.currency ?? created.currency ?? "PHP");
         flushSync(() => {
