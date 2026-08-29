@@ -121,8 +121,13 @@ assert.match(
 );
 assert.match(
   transactionsPageSource,
-  /const shouldPreserveImportedTransactions =[\s\S]{0,160}?\(!hasServerSideFilters \|\| \(Boolean\(options\?\.background\) && hasRecentImportEvidence\)\)/,
+  /const hasOptimisticImportedTransactions =[\s\S]{0,180}?transaction\.id\.startsWith\("optimistic-"\)/,
   "A filtered Transactions view must preserve the newly published receipt while its background read catches up."
+);
+assert.match(
+  transactionsPageSource,
+  /const shouldPreserveImportedTransactions =[\s\S]{0,260}?hasRecentImportEvidence \|\| hasOptimisticImportedTransactions/,
+  "Filtered settlement reads must use the optimistic receipt marker even before import activity state rerenders."
 );
 assert.match(
   transactionsPageSource,

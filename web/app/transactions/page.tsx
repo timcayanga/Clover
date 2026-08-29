@@ -2876,6 +2876,9 @@ function TransactionsPageContent() {
         transactionsRef.current.length > 0
           ? getImportedTransactionsToPreserve(transactionsRef.current.filter((transaction) => !deletedAccountIds.has(transaction.accountId)))
           : getImportedTransactionsToPreserve(visibleCachedWorkspaceTransactions);
+      const hasOptimisticImportedTransactions = importedTransactionsToPreserve.some((transaction) =>
+        transaction.id.startsWith("optimistic-")
+      );
       const hasFreshTransactions = fetchedTransactions.length > 0;
       const hasServerSideFilters = Boolean(
         query.trim() ||
@@ -2940,10 +2943,11 @@ function TransactionsPageContent() {
             })
           : importedTransactionsToPreserve;
       const shouldPreserveImportedTransactions =
-        (!hasServerSideFilters || (Boolean(options?.background) && hasRecentImportEvidence)) &&
+        (!hasServerSideFilters ||
+          (Boolean(options?.background) && (hasRecentImportEvidence || hasOptimisticImportedTransactions))) &&
         (requestPage === 1 || Boolean(options?.append)) &&
         importedTransactionsToPreserveAfterServerResponse.length > 0 &&
-        (exactServerTotalCount > 0 || hasRecentImportEvidence) &&
+        (exactServerTotalCount > 0 || hasRecentImportEvidence || hasOptimisticImportedTransactions) &&
         (
           Boolean(options?.background) ||
           importedTransactionsToPreserveAfterServerResponse.length > fetchedTransactions.length ||
