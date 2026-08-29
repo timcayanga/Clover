@@ -16,6 +16,7 @@ import { deriveReconciledBalance } from "@/lib/account-balance";
 import { assertRateLimit } from "@/lib/rate-limit";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
 import { normalizeAdviserPreferences } from "@/lib/adviser-preferences";
+import { selectAdviserToolNames } from "@/lib/adviser-tool-routing";
 import {
   buildInvestmentReview,
   calculateDailySpendingPlan,
@@ -2912,7 +2913,7 @@ export async function POST(request: Request) {
 
     const model = env.OPENAI_ADVISER_MODEL?.trim() || "gpt-4.1";
     const actions: AdviserAction[] = [];
-    const tools = [
+    const allTools = [
       {
         type: "function",
         name: "open_report",
@@ -3183,16 +3184,27 @@ export async function POST(request: Request) {
           additionalProperties: false,
         },
       },
-    ];
+    ] as const;
+
+    const relevantToolNames = new Set(selectAdviserToolNames({
+      question: latestQuestion,
+      everydayIntent,
+      asksForOverallMoneyOverview,
+      asksForSuggestedGoal,
+      asksAboutSpecificPurchase,
+      includesPurchaseAmount,
+    }));
+    const relevantTools = allTools.filter((tool) => relevantToolNames.has(tool.name));
+    const focusedToolRule = relevantTools.length > 0
+      ? "Use the focused tool result supplied for this question, then answer directly. Do not ask to call another tool. Use prepare_write_action only for an explicit user-requested write, and never claim a write happened before confirmation."
+      : "No tool call is needed for this question. Answer directly from the grounded workspace context and recent conversation.";
 
     const baseInput: unknown[] = [
-      { role: "system", content: [{ type: "input_text", text: `${systemPrompt}\n\nRequest routing hint: ${requestRoutingHint}\n\nTool rules: Use read tools when a Clover page or calculation is needed. Use prepare_write_action only when the user explicitly asks Clover to create or record something. Never claim a write happened until the user confirms it.` }] },
+      { role: "system", content: [{ type: "input_text", text: `${systemPrompt}\n\nRequest routing hint: ${requestRoutingHint}\n\nTool rules: ${focusedToolRule}` }] },
       ...incomingMessages.map((message) => ({ role: message.role, content: [{ type: "input_text", text: message.content }] })),
     ];
     let modelInput = baseInput;
-    let payload: Record<string, unknown> = {};
-
-    for (let step = 0; step < 3; step += 1) {
+    if (relevantTools.length > 0) {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
       let response: Response;
@@ -3200,7 +3212,15 @@ export async function POST(request: Request) {
         response = await fetch("https://api.openai.com/v1/responses", {
           method: "POST",
           headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ model, temperature: 0.2, max_output_tokens: 900, tools, input: modelInput }),
+          body: JSON.stringify({
+            model,
+            temperature: 0.2,
+            max_output_tokens: 450,
+            tools: relevantTools,
+            tool_choice: "required",
+            parallel_tool_calls: true,
+            input: modelInput,
+          }),
           signal: controller.signal,
         });
       } catch (error) {
@@ -3215,13 +3235,9 @@ export async function POST(request: Request) {
         return NextResponse.json({ reply: fallbackReply, actions: selectPrimaryAdviserAction(actions.length > 0 ? actions : fallbackActions), suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
       }
 
-      payload = (await response.json()) as Record<string, unknown>;
-      const output = Array.isArray(payload.output) ? payload.output : [];
+      const toolSelectionPayload = (await response.json()) as Record<string, unknown>;
+      const output = Array.isArray(toolSelectionPayload.output) ? toolSelectionPayload.output : [];
       const calls = output.filter((item): item is { type: "function_call"; name: string; call_id: string; arguments: string } => Boolean(item && typeof item === "object" && (item as { type?: unknown }).type === "function_call"));
-
-      if (calls.length === 0) {
-        break;
-      }
 
       const toolOutputs = await Promise.all(calls.map(async (call) => {
         let args: Record<string, unknown> = {};
@@ -3782,11 +3798,10 @@ export async function POST(request: Request) {
       modelInput = [...modelInput, ...output, ...toolOutputs];
     }
 
-    const generatedReply = extractOutputText(payload) || "I could not generate a response right now.";
-    const reply =
+    const deterministicReply =
       asksForSuggestedGoal && suggestedGoal
         ? `A practical place to start is ${suggestedGoal.title.toLowerCase()}.\n\n${suggestedGoal.explanation}\n\nUse the button below to create it now. You can adjust it later as Clover learns from more transactions.`
-        : generatedReply;
+        : null;
     if (actions.length === 0 && fallbackActions.length > 0) {
       actions.push(...fallbackActions);
     }
@@ -3794,17 +3809,19 @@ export async function POST(request: Request) {
     if (streamRequested) {
       const encoder = new TextEncoder();
       let upstreamResponse: Response | null = null;
-      try {
-        upstreamResponse = await fetch("https://api.openai.com/v1/responses", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ model, stream: true, temperature: 0.2, max_output_tokens: 900, tools: [], input: modelInput }),
-        });
-      } catch (error) {
-        console.error("Adviser upstream stream failed", error instanceof Error ? error.message : error);
+      if (!deterministicReply) {
+        try {
+          upstreamResponse = await fetch("https://api.openai.com/v1/responses", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ model, stream: true, temperature: 0.2, max_output_tokens: 900, tools: [], input: modelInput }),
+          });
+        } catch (error) {
+          console.error("Adviser upstream stream failed", error instanceof Error ? error.message : error);
+        }
       }
 
-      const responseStream = !asksForSuggestedGoal && upstreamResponse?.ok && upstreamResponse.body
+      const responseStream = upstreamResponse?.ok && upstreamResponse.body
         ? new ReadableStream<Uint8Array>({
             async start(controller) {
               const reader = upstreamResponse.body!.getReader();
@@ -3840,6 +3857,7 @@ export async function POST(request: Request) {
           })
         : new ReadableStream<Uint8Array>({
             start(controller) {
+              const reply = deterministicReply ?? fallbackReply;
               const chunks = reply.match(/.{1,28}(?:\s+|$)/g) ?? [reply];
               let index = 0;
               const emit = () => {
@@ -3863,6 +3881,35 @@ export async function POST(request: Request) {
         },
       });
     }
+
+    if (deterministicReply) {
+      return NextResponse.json({ reply: deterministicReply, actions: responseActions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding });
+    }
+
+    const finalController = new AbortController();
+    const finalTimeout = setTimeout(() => finalController.abort(), 15000);
+    let finalResponse: Response;
+    try {
+      finalResponse = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, temperature: 0.2, max_output_tokens: 900, tools: [], input: modelInput }),
+        signal: finalController.signal,
+      });
+    } catch (error) {
+      console.error("Adviser final response failed", error instanceof Error ? error.message : error);
+      return NextResponse.json({ reply: fallbackReply, actions: responseActions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
+    } finally {
+      clearTimeout(finalTimeout);
+    }
+
+    if (!finalResponse.ok) {
+      console.error("Adviser final response returned an error", finalResponse.status);
+      return NextResponse.json({ reply: fallbackReply, actions: responseActions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
+    }
+
+    const finalPayload = (await finalResponse.json()) as Record<string, unknown>;
+    const reply = extractOutputText(finalPayload) || fallbackReply;
     return NextResponse.json({ reply, actions: responseActions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to generate an Adviser response.";

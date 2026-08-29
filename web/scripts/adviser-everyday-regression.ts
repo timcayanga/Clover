@@ -8,6 +8,7 @@ import {
   extractEverydayMoneyAmount,
   getEverydayRoutingHint,
 } from "@/lib/adviser-everyday";
+import { selectAdviserToolNames } from "@/lib/adviser-tool-routing";
 
 const intentCases = [
   ["How much should I budget today?", "daily_spending"],
@@ -131,5 +132,44 @@ for (const toolName of [
 assert.match(chatRouteSource, /ask at most one focused follow-up/i);
 assert.match(chatRouteSource, /never promise approval/i);
 assert.match(chatRouteSource, /A loss by itself is not a reason to sell/i);
+
+const routedToolCases = [
+  ["How much can I safely spend until payday?", "calculate_safe_to_spend"],
+  ["Show me my spending report", "open_report"],
+  ["Which transactions were transfers?", "find_transactions"],
+  ["Am I over my budget?", "get_budget_status"],
+  ["What is my portfolio balance?", "get_investment_summary"],
+  ["Create a monthly food budget of PHP 8,000", "prepare_write_action"],
+] as const;
+
+for (const [question, expectedTool] of routedToolCases) {
+  const routedTools = selectAdviserToolNames({ question });
+  assert.deepEqual(routedTools, [expectedTool], `${question} should expose only ${expectedTool}`);
+}
+
+assert.deepEqual(
+  selectAdviserToolNames({ question: "What should I focus on this month?" }),
+  [],
+  "A general grounded question should not pay for a tool catalog",
+);
+assert.deepEqual(
+  selectAdviserToolNames({ question: "What about tomorrow?", everydayIntent: "daily_spending" }),
+  ["plan_daily_spending"],
+  "A short follow-up should retain its resolved everyday tool",
+);
+assert.deepEqual(
+  selectAdviserToolNames({ question: "Create a monthly food budget of PHP 8,000", everydayIntent: "food_choice" }),
+  ["prepare_write_action"],
+  "An explicit write must take priority over a read-oriented everyday intent",
+);
+assert.deepEqual(
+  selectAdviserToolNames({ question: "Suggest a realistic goal", asksForSuggestedGoal: true }),
+  [],
+  "The deterministic suggested-goal answer should not make a model tool-selection request",
+);
+assert.doesNotMatch(chatRouteSource, /for \(let step = 0; step < 3/);
+assert.match(chatRouteSource, /tools: relevantTools,[\s\S]{0,120}tool_choice: "required"/);
+assert.match(chatRouteSource, /stream: true[\s\S]{0,120}tools: \[\]/);
+assert.match(chatRouteSource, /const finalPayload = \(await finalResponse\.json\(\)\)/);
 
 console.log("Adviser everyday regression passed.");
