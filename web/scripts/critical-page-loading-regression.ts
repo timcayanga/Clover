@@ -8,6 +8,11 @@ import {
 
 const readSource = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
+const rootLayoutSource = readSource("app/layout.tsx");
+const globalStylesSource = readSource("app/globals.css");
+assert.match(rootLayoutSource, /import \{ Poppins, Raleway \} from "next\/font\/google"/);
+assert.doesNotMatch(globalStylesSource, /fonts\.googleapis\.com/);
+
 const shellSource = readSource("components/clover-shell.tsx");
 assert.match(shellSource, /const loadImportFilesModal = \(\) =>[\s\S]{0,100}import\("@\/components\/import-files-modal"\)/);
 assert.match(shellSource, /const ImportFilesModal = dynamic\(\s*loadImportFilesModal/);
@@ -16,6 +21,8 @@ assert.doesNotMatch(shellSource, /^import \{ ImportFilesModal \} from "@\/compon
 assert.doesNotMatch(shellSource, /^import \{ DashboardManualTransactionModal \} from "@\/components\/dashboard-top-actions";/m);
 assert.doesNotMatch(shellSource, /window\.location\.assign\(href\)/, "Sidebar navigation must stay inside the App Router.");
 assert.doesNotMatch(shellSource, /prefetchCoreRoutes/, "The shell must not issue a burst of dynamic route requests on every mount.");
+assert.match(shellSource, /const clientRouteWarmups = \["\/accounts", "\/transactions", "\/investments"\]/);
+assert.doesNotMatch(shellSource, /clientRouteWarmups = \[[^\]]*"\/recurring"/);
 
 const clerkSource = readSource("lib/clerk.ts");
 const userContextSource = readSource("lib/user-context.ts");

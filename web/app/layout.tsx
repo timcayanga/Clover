@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 import Script from "next/script";
+import { Poppins, Raleway } from "next/font/google";
 import "./globals.css";
 import { GlobalImportActivity } from "@/components/global-import-activity";
 import { ClerkAppProvider } from "@/components/clerk-app-provider";
@@ -21,6 +22,20 @@ import { ModalKeyboardController } from "@/components/modal-keyboard-controller"
 import { CRITICAL_NAVIGATION_ICON_NAMES, getNavigationIconSrc } from "@/lib/navigation-icons";
 import { PwaServiceWorker } from "@/components/pwa-service-worker";
 import { getChunkRecoveryBootstrapScript } from "@/lib/chunk-error-bootstrap";
+
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-poppins",
+  display: "swap",
+});
+
+const raleway = Raleway({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-raleway",
+  display: "swap",
+});
 
 const clerkLocalization = {
   userProfile: {
@@ -113,6 +128,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html
       lang="en"
+      className={`${poppins.variable} ${raleway.variable}`}
       suppressHydrationWarning
       data-theme={serverTheme ?? undefined}
       style={serverTheme ? { colorScheme: serverTheme } : undefined}

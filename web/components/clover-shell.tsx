@@ -1718,6 +1718,23 @@ export function CloverShell({
     void router.prefetch(href);
   };
 
+  useEffect(() => {
+    const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+    if (connection?.saveData) return;
+
+    // Warm only client-owned, bundle-heavy destinations. Server-rendered pages
+    // remain intent-prefetched so idle time never launches report or recurring
+    // database work. Staggering avoids the request burst the old core prefetch
+    // produced on every shell mount.
+    const clientRouteWarmups = ["/accounts", "/transactions", "/investments"]
+      .filter((href) => !pathname?.startsWith(href));
+    const timers = clientRouteWarmups.map((href, index) => window.setTimeout(() => {
+      void router.prefetch(href);
+    }, 900 + index * 650));
+
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [pathname, router]);
+
   const openQuickAddTransaction = () => {
     if (pathname?.startsWith("/accounts/institutions/")) {
       setIsQuickAddOpen(false);

@@ -2196,7 +2196,9 @@ export default function InvestmentsPage() {
     setSelectedInvestmentAssetId(null);
     cancelEditingAccount();
     setHoldingEditDraft(null);
-    window.history.replaceState(null, "", "/investments");
+    if (window.location.search || window.location.hash) {
+      window.history.replaceState(null, "", "/investments");
+    }
   };
 
   const openOutlookMarketData = (row: PortfolioDisplayRow) => {

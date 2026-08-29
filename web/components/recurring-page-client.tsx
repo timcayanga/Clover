@@ -132,7 +132,9 @@ export function RecurringPageClient({
 
   const selectTab = (tab: RecurringTab) => {
     setActiveTab(tab);
-    window.history.replaceState({}, "", "/recurring");
+    if (window.location.search || window.location.hash) {
+      window.history.replaceState({}, "", "/recurring");
+    }
   };
 
   return (
