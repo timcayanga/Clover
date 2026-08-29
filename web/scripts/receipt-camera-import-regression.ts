@@ -56,6 +56,14 @@ assert.equal(
   }),
   "Transfers"
 );
+assert.equal(
+  resolveReceiptCategoryWithPaymentEvidence({
+    proposedCategory: "Transfers",
+    receiptContext: "QA City Market sales receipt. Total USD 29.70.",
+  }),
+  null,
+  "A generic Transfers guess must not override purchase-receipt merchant context."
+);
 
 const root = process.cwd();
 const importModalSource = readFileSync(join(root, "components/import-files-modal.tsx"), "utf8");
@@ -118,9 +126,16 @@ assert.match(
 );
 assert.match(
   transactionsPageSource,
-  /setWorkspaceCurrencyCodes\(\(current\) => Array\.from\(new Set\(\[\.\.\.current, \.\.\.importedCurrencyCodes\]\)\)\.sort\(\)\)/,
+  /setWorkspaceCurrencyCodes\(\(current\) => Array\.from\(new Set\(\[\.\.\.current, \.\.\.importedPreviewCurrencyCodes\]\)\)\.sort\(\)\)/,
   "A newly imported foreign currency must become filterable before a route remount."
 );
+assert.match(
+  transactionsPageSource,
+  /const shouldRevealAllCurrencies =[\s\S]{0,400}?importedCurrencyCodes\.some/,
+  "A foreign-currency receipt must become visible immediately even when the table started on another currency."
+);
+assert.match(transactionsPageSource, /if \(shouldRevealAllCurrencies\) \{[\s\S]{0,280}?setCurrencyFilter\(""\)/);
+assert.match(transactionsPageSource, /if \(shouldRevealAllCurrencies\) \{\s*persistSelectedCurrency\(selectedWorkspaceId, ""\)/);
 assert.match(
   importModalSource,
   /file\.size > Math\.min\(imageOptimizationTarget, MAX_IMPORT_FILE_SIZE\)/,
@@ -246,9 +261,39 @@ assert.match(
   "receipt visibility should be detected promptly without increasing polling throughout the entire upload"
 );
 assert.match(
+  importModalSource,
+  /const queuedImportMode =[\s\S]{0,220}?queuedImportMode !== "receipt" && !isGenericMobileScreenshotFileName/,
+  "Receipt uploads must never create a transient filename-derived account."
+);
+const confirmBackgroundGuard = importModalSource.slice(
+  importModalSource.indexOf("const confirmItemImport ="),
+  importModalSource.indexOf("const getProgressDetail =")
+);
+assert.match(
+  confirmBackgroundGuard,
+  /const emitImportError =[\s\S]{0,520}?if \(!backgroundOnly\)[\s\S]{0,160}?closeImportAfterError/,
+  "Optional background confirmation failures must not surface as visible import failures."
+);
+assert.match(
+  confirmBackgroundGuard,
+  /const settledVisible = backgroundOnly\s*\? true\s*:\s*await waitForSettledVisibility/,
+  "A background confirmation must not re-run the blocking visible-settlement UI gate."
+);
+assert.match(
   workerSource,
   /const chooseBetterReceiptDetails =[\s\S]{0,1200}?candidateQuality\.score > currentQuality\.score \? candidate : current/,
   "model receipt details must not replace a more complete deterministic receipt preview"
+);
+assert.match(
+  workerSource,
+  /const isGenericReceiptMerchantLabel[\s\S]{0,1400}?merchant_raw: previewMerchant[\s\S]{0,180}?merchant_clean: previewMerchant/,
+  "Generic document headings must yield to a supported merchant parsed from the receipt."
+);
+assert.match(workerSource, /receiptDetails = preferSpecificReceiptMerchant\(receiptDetails, receiptPreview\)/);
+assert.match(
+  openAIParserSource,
+  /merchant must be the actual business name[\s\S]{0,280}?Test Receipt[\s\S]{0,280}?Official Receipt/,
+  "The fast vision prompt must not return a document heading as the merchant."
 );
 assert.match(
   workerSource,

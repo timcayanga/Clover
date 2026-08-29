@@ -38,6 +38,16 @@ const detailRoute = readFileSync(new URL("../app/api/transactions/[transactionId
 const globalStyles = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
 
 assert.match(transactionsPage, /router\.push\(`\/transactions\/\$\{encodeURIComponent\(transaction\.id\)\}`/);
+assert.match(
+  transactionsPage,
+  /refreshOpenTransactionDetail[\s\S]{0,700}?fetch\(`\/api\/transactions\/\$\{encodeURIComponent\(transactionId\)\}`[\s\S]{0,120}?cache: "no-store"/,
+  "Desktop details must open from the visible row immediately, then refresh post-visible receipt fields without a page navigation."
+);
+assert.match(
+  transactionsPage,
+  /void refreshOpenTransactionDetail\(transaction\.id\)/,
+  "Opening Transaction Details must request the latest enriched line items."
+);
 assert.match(transactionsPage, /className="transaction-drawer-form__amount-type-row transaction-drawer-form__amount-type-row--amount-only"/);
 assert.match(accountDetailPage, /className="transaction-drawer-form__amount-type-row"/);
 assert.match(globalStyles, /\.transaction-drawer-select__icon\s*\{[^}]*z-index:\s*2;/s);

@@ -2789,7 +2789,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       });
   const systemPrompt = `${buildOpenAIBackupSystemPrompt(promptImportMode, pageImagesToSend.length > 0, Boolean(pdfFileDataBase64))}${
     useReceiptCoreOnly
-      ? " CORE-FIRST RECEIPT: Return only the merchant, transaction date/time, currency, total, payment method, account evidence, confidence, and visible source evidence. Do not extract line items, tax, discounts, tips, or split allocations in this pass. Return transactions as an empty array."
+      ? " CORE-FIRST RECEIPT: Return only the merchant, transaction date/time, currency, total, payment method, account evidence, confidence, and visible source evidence. The merchant must be the actual business name, never a generic document heading such as Receipt, Test Receipt, Sales Receipt, Official Receipt, Invoice, or Proof of Purchase. Prefer a distinct business name near the top of the image. Do not extract line items, tax, discounts, tips, or split allocations in this pass. Return transactions as an empty array."
       : ""
   }`;
   const fastModel = resolveOpenAIImportModel(

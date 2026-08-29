@@ -2315,6 +2315,34 @@ const countReceiptDetailSignals = (
   );
 };
 
+const isGenericReceiptMerchantLabel = (value?: string | null) =>
+  /^(?:(?:test|official|sales|cash|store|customer|merchant)\s+)?receipt(?:\s*(?:copy|#?\d+))?$|^(?:invoice|sales slip|proof of purchase)$/i.test(
+    String(value ?? "").trim()
+  );
+
+const preferSpecificReceiptMerchant = (
+  details: ImportedReceiptDetails | null | undefined,
+  preview: ReturnType<typeof parseReceiptText> | null | undefined
+) => {
+  if (!details) return details ?? null;
+  const currentMerchant = details.merchant_clean ?? details.merchant_raw;
+  const previewMerchant = preview?.merchantName?.trim() ?? "";
+  if (
+    !isGenericReceiptMerchantLabel(currentMerchant) ||
+    !previewMerchant ||
+    isSuspiciousReceiptMerchantName(previewMerchant) ||
+    isGenericReceiptMerchantLabel(previewMerchant)
+  ) {
+    return details;
+  }
+
+  return {
+    ...details,
+    merchant_raw: previewMerchant,
+    merchant_clean: previewMerchant,
+  };
+};
+
 const isReceiptPreviewUsable = (preview: ReturnType<typeof parseReceiptText> | null | undefined) => {
   if (!preview) {
     return false;
@@ -10728,6 +10756,7 @@ export const processImportFileText = async (
     trainedReceiptDetails
       ? trainedReceiptDetails
       : chooseBetterReceiptDetails(openAiReceiptDetailsCandidate, receiptPreviewDetailsCandidate);
+  receiptDetails = preferSpecificReceiptMerchant(receiptDetails, receiptPreview);
   const promotesNotesSplitBillToReceipt =
     effectiveImportMode === "notes" &&
     Boolean(
@@ -13583,7 +13612,8 @@ export const confirmImportFile = async (
           /\bdine\s*in\b/.test(receiptTypeText) ||
           /\brestaurant\b/.test(receiptTypeText) ||
           /\bcafe\b/.test(receiptTypeText) ||
-          /\bbar\b/.test(receiptTypeText)
+          /\bbar\b/.test(receiptTypeText) ||
+          /茶馆|茶館|餐厅|餐廳|咖啡/.test(receiptContextText)
         ) {
           return "Food & Dining";
         }

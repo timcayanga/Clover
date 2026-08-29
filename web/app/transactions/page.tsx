@@ -2264,6 +2264,7 @@ function TransactionsPageContent() {
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const transactionDetailRefreshRequestRef = useRef(0);
   const selectedTransactionCount = selectedTransactionIds.length;
   const hasSelectedTransactions = selectedTransactionCount > 0;
   const [detailDraft, setDetailDraft] = useState<TransactionDetailDraft | null>(null);
@@ -3213,9 +3214,28 @@ function TransactionsPageContent() {
       const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
       let nextAccountsSnapshot: Account[] | null = null;
       let nextTransactionsSnapshot: Transaction[] | null = null;
+      const importedCurrencyCodes = Array.from(
+        new Set(
+          [summary.currency, ...previewTransactions.map((transaction) => transaction.currency)]
+            .map((currency) => formatCurrencyCode(currency ?? ""))
+            .filter(Boolean)
+        )
+      );
+      const shouldRevealAllCurrencies = Boolean(
+        currencyFilter &&
+          importedCurrencyCodes.length > 0 &&
+          importedCurrencyCodes.some((currency) => currency !== formatCurrencyCode(currencyFilter))
+      );
 
       flushSync(() => {
         setIsWorkspaceDataReady(true);
+
+        if (shouldRevealAllCurrencies) {
+          // The import succeeded even when the current table is scoped to a
+          // different currency. Move to the inclusive view so the new row is
+          // visible immediately instead of making users leave and re-enter.
+          setCurrencyFilter("");
+        }
 
         if (optimisticAccount) {
           setAccounts((current) =>
@@ -3273,10 +3293,10 @@ function TransactionsPageContent() {
         }
 
         if (nextTransactionsSnapshot && previewTransactions.length > 0) {
-          const importedCurrencyCodes = previewTransactions
+          const importedPreviewCurrencyCodes = previewTransactions
             .map((transaction) => formatCurrencyCode(transaction.currency))
             .filter(Boolean);
-          setWorkspaceCurrencyCodes((current) => Array.from(new Set([...current, ...importedCurrencyCodes])).sort());
+          setWorkspaceCurrencyCodes((current) => Array.from(new Set([...current, ...importedPreviewCurrencyCodes])).sort());
           setTransactionsSummary((current) =>
             buildVisibleTransactionSummary(
               nextTransactionsSnapshot ?? [],
@@ -3297,6 +3317,10 @@ function TransactionsPageContent() {
           );
         }
       });
+
+      if (shouldRevealAllCurrencies) {
+        persistSelectedCurrency(selectedWorkspaceId, "");
+      }
 
       const settledAccountId =
         (nextAccountsSnapshot ? resolvePersistedImportedAccountId(summary, nextAccountsSnapshot) : null) ??
@@ -3327,7 +3351,7 @@ function TransactionsPageContent() {
 
       setMessage("Import complete. Accounts and Transactions are updated.");
     },
-    [accountNumberById, refreshTransactionsAfterImport, selectedWorkspaceId]
+    [accountNumberById, currencyFilter, refreshTransactionsAfterImport, selectedWorkspaceId]
   );
 
   useEffect(() => {
@@ -4743,6 +4767,36 @@ function TransactionsPageContent() {
     }
   };
 
+  const refreshOpenTransactionDetail = async (transactionId: string) => {
+    const requestId = transactionDetailRefreshRequestRef.current + 1;
+    transactionDetailRefreshRequestRef.current = requestId;
+    try {
+      const response = await fetch(`/api/transactions/${encodeURIComponent(transactionId)}`, {
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const refreshed = payload?.transaction as Transaction | undefined;
+      if (!refreshed?.id || requestId !== transactionDetailRefreshRequestRef.current) return;
+      setTransactions((current) => current.map((entry) => (entry.id === refreshed.id ? refreshed : entry)));
+      setSelectedTransaction((current) => (current?.id === refreshed.id ? refreshed : current));
+      setDetailDraft((current) => {
+        if (!current) return current;
+        return createDetailDraft(refreshed, {
+          categoryId: getDisplayCategoryIdForTransaction(refreshed),
+          type: getTransactionDisplayType(
+            refreshed,
+            accountNumberById.get(refreshed.accountId) ?? null,
+            workspaceAccountNumbers
+          ),
+        });
+      });
+    } catch {
+      // The existing row is already usable. Keep the drawer instant if the
+      // detail refresh or post-visible receipt enrichment is still settling.
+    }
+  };
+
   const openTransactionDetail = (transaction: Transaction, { syncRoute = true }: { syncRoute?: boolean } = {}) => {
     if (syncRoute && isCompactViewport) {
       router.push(`/transactions/${encodeURIComponent(transaction.id)}`, { scroll: true });
@@ -4773,6 +4827,7 @@ function TransactionsPageContent() {
         ),
       }),
     });
+    void refreshOpenTransactionDetail(transaction.id);
 
     if (syncRoute && isCompactViewport) {
       detailTransactionParamRef.current = transaction.id;

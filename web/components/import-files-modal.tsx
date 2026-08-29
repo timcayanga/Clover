@@ -1901,7 +1901,12 @@ export function ImportFilesModal({
       }
     };
     const emitImportError = (stage: ImportErrorStage, fileName: string, message: string | null | undefined) => {
-      closeImportAfterError(itemId, stage, fileName, message);
+      // Confirmation can continue after the durable row has already been
+      // published. A failure in that optional background pass must not turn a
+      // visible, persisted transaction into an I-105 upload failure.
+      if (!backgroundOnly) {
+        closeImportAfterError(itemId, stage, fileName, message);
+      }
     };
     const resolvedAccountId =
       serverResolveAccount
@@ -2131,14 +2136,16 @@ export function ImportFilesModal({
         await Promise.resolve(onImported(summary));
 
         triggerImportEnrichment(importFileId);
-        const settledVisible = await waitForSettledVisibility(
-          itemId,
-          importFileId,
-          durableAccountId,
-          importedRows,
-          summary.balance ?? null,
-          "Import confirmation succeeded before settled data became visible"
-        );
+        const settledVisible = backgroundOnly
+          ? true
+          : await waitForSettledVisibility(
+              itemId,
+              importFileId,
+              durableAccountId,
+              importedRows,
+              summary.balance ?? null,
+              "Import confirmation succeeded before settled data became visible"
+            );
         if (!settledVisible) {
           return { status: "staged", importedRows, summary };
         }
@@ -2415,7 +2422,9 @@ export function ImportFilesModal({
       }
     };
     const emitImportError = (stage: ImportErrorStage, fileName: string, message: string | null | undefined) => {
-      closeImportAfterError(itemId, stage, fileName, message);
+      if (!backgroundOnly) {
+        closeImportAfterError(itemId, stage, fileName, message);
+      }
     };
     const emitImportRecoverable = (fileName: string, detail: string, progressLabel = "Review needed") => {
       if (!backgroundOnly) {
@@ -2428,7 +2437,9 @@ export function ImportFilesModal({
     const queuedImportPollDelayMs = () => Math.min(1_000, 500 + Math.floor((Date.now() - startedAt) / 15_000) * 250);
     const requiresVisibleRows =
       shouldRequireVisibleRowsForImport(summaryContext.fileName) || importContextLooksWise(summaryContext);
-    const allowFilenameFallbackIdentity = !isGenericMobileScreenshotFileName(summaryContext.fileName);
+    const queuedImportMode = itemsRef.current.find((entry) => entry.id === itemId)?.importMode ?? null;
+    const allowFilenameFallbackIdentity =
+      queuedImportMode !== "receipt" && !isGenericMobileScreenshotFileName(summaryContext.fileName);
     const MAX_WAIT_MS = backgroundOnly ? IMPORT_BACKGROUND_HARD_STOP_MS : requiresVisibleRows ? 75_000 : 180_000;
     let latestResolvedAccountId: string | null = accountId && !accountId.startsWith("optimistic-") ? accountId : null;
     for (let attempt = 0; attempt < 120; attempt += 1) {

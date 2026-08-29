@@ -38,5 +38,12 @@ export const resolveReceiptCategoryWithPaymentEvidence = ({
     return "Shopping";
   }
 
+  if (category === "Transfers" && !explicitTransfer) {
+    // A purchase receipt is not transfer evidence by itself. Returning null
+    // lets the caller use merchant and item context (market, cafe, pharmacy,
+    // and so on) instead of cementing a generic model guess.
+    return null;
+  }
+
   return category;
 };
