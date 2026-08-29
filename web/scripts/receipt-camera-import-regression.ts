@@ -123,13 +123,18 @@ assert.match(
 );
 assert.match(
   importModalSource,
-  /file\.size > Math\.min\(IMPORT_IMAGE_TARGET_SIZE, MAX_IMPORT_FILE_SIZE\)/,
+  /file\.size > Math\.min\(imageOptimizationTarget, MAX_IMPORT_FILE_SIZE\)/,
   "Large camera photos must be optimized proactively rather than only after exceeding the upload limit."
 );
 assert.match(
   imageCompressionSource,
-  /const targetUploadBytes = Math\.min\(IMPORT_IMAGE_TARGET_SIZE, maxUploadBytes\)/,
-  "Camera optimization must use the OCR-safe upload target as its threshold."
+  /RECEIPT_IMPORT_IMAGE_TARGET_SIZE = 1_800_000[\s\S]{0,1800}?isReceiptProfile \? 2_000 : 2_600/,
+  "Receipt photos should use a smaller upload and pixel budget without reducing statement resolution."
+);
+assert.match(
+  importModalSource,
+  /defaultImportMode === "receipt" \? "receipt" : "default"[\s\S]{0,1800}?photo_optimization_complete/,
+  "Explicit receipt capture should use and measure the receipt-specific image profile."
 );
 assert.match(
   uploadDockSource,
@@ -144,6 +149,16 @@ assert.match(
 
 const workerSource = readFileSync(join(root, "workers/import-processor.ts"), "utf8");
 const openAIParserSource = readFileSync(join(root, "lib/openai-import-parser.ts"), "utf8");
+assert.match(
+  openAIParserSource,
+  /OPENAI_RECEIPT_CORE_VISION_MAX_LONGEST_EDGE = 1120/,
+  "The core-first server request should compact easy receipt images more aggressively than its detail pass."
+);
+assert.match(
+  openAIParserSource,
+  /useReceiptCoreImageBudget[\s\S]{0,1800}?OPENAI_RECEIPT_CORE_VISION_MAX_LONGEST_EDGE/,
+  "The core-first image budget must be applied to the first model request."
+);
 assert.match(
   openAIParserSource,
   /useLowDetailReceiptFastPath[\s\S]{0,12000}?\? "low" : "auto"/,
@@ -166,7 +181,7 @@ assert.match(
 );
 assert.match(
   openAIParserSource,
-  /const RECEIPT_VISION_HEDGE_DELAY_MS = 6_000/,
+  /const RECEIPT_VISION_HEDGE_DELAY_MS = 2_500/,
   "slow receipt vision should have a bounded hedge delay"
 );
 assert.match(
@@ -182,7 +197,7 @@ assert.match(
 );
 assert.match(
   importModalSource,
-  /const NEAR_VISIBLE_IMPORT_PROGRESS_POLL_INTERVAL_MS = 600/,
+  /const NEAR_VISIBLE_IMPORT_PROGRESS_POLL_INTERVAL_MS = 350/,
   "the near-visible import phase should use a short polling interval"
 );
 assert.match(
@@ -192,8 +207,13 @@ assert.match(
 );
 assert.match(
   importEventsRouteSource,
-  /IMPORT_STATUS_STREAM_NEAR_VISIBLE_POLL_MS = 500[\s\S]{0,5000}?processingPhase === "reconciling"/,
+  /IMPORT_STATUS_STREAM_NEAR_VISIBLE_POLL_MS = 250[\s\S]{0,5000}?processingPhase === "reconciling"/,
   "the server event stream should tighten its cadence only near visible completion"
+);
+assert.match(
+  importEventsRouteSource,
+  /export const preferredRegion = "sin1"/,
+  "receipt visibility streaming should stay colocated with the import worker and database"
 );
 assert.match(
   workerSource,

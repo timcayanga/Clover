@@ -5,11 +5,12 @@ import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+export const preferredRegion = "sin1";
 
 const encoder = new TextEncoder();
 const IMPORT_STATUS_STREAM_POLL_MS = 2_500;
-const IMPORT_STATUS_STREAM_ACTIVE_RECEIPT_POLL_MS = 1_000;
-const IMPORT_STATUS_STREAM_NEAR_VISIBLE_POLL_MS = 500;
+const IMPORT_STATUS_STREAM_ACTIVE_RECEIPT_POLL_MS = 750;
+const IMPORT_STATUS_STREAM_NEAR_VISIBLE_POLL_MS = 250;
 const IMPORT_STATUS_STREAM_MAX_ERRORS = 3;
 
 const formatSseEvent = (event: string, data: unknown) => encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);

@@ -67,7 +67,7 @@ const main = async () => {
   );
   assert.match(
     modalSource,
-    /optimizeImportImages\(nextFiles, MAX_IMPORT_FILE_SIZE\)/,
+    /optimizeImportImages\(nextFiles, MAX_IMPORT_FILE_SIZE, imageOptimizationProfile\)/,
     "Oversized mobile photos should be optimized before upload."
   );
   assert.match(

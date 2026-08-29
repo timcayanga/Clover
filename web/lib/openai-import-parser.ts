@@ -21,7 +21,7 @@ const OPENAI_IMPORT_PDF_MODEL_FALLBACK = "gpt-5.5";
 const OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK = "gpt-5.5";
 const OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK = "gpt-5.4-mini";
 const OPENAI_IMPORT_LEGACY_PDF_MODEL_FALLBACK = "gpt-5.5";
-const RECEIPT_VISION_HEDGE_DELAY_MS = 6_000;
+const RECEIPT_VISION_HEDGE_DELAY_MS = 2_500;
 
 export const getRemainingOpenAIImportAttemptTimeout = (params: {
   deadlineMs: number;
@@ -1465,6 +1465,8 @@ const OPENAI_VISION_MAX_LONGEST_EDGE = 1600;
 const OPENAI_VISION_JPEG_QUALITY = 72;
 const OPENAI_RECEIPT_VISION_MAX_LONGEST_EDGE = 1440;
 const OPENAI_RECEIPT_VISION_JPEG_QUALITY = 70;
+const OPENAI_RECEIPT_CORE_VISION_MAX_LONGEST_EDGE = 1120;
+const OPENAI_RECEIPT_CORE_VISION_JPEG_QUALITY = 68;
 
 const selectRepresentativeVisionPages = <T>(pages: T[], limit: number) => {
   if (pages.length <= limit) {
@@ -2698,13 +2700,29 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     pageImagesInput,
     Math.min(pageImageLimit, pageImagesInput.length)
   );
+  const isSinglePageGenericImageInput =
+    inferredDocumentFamily === "generic_document" &&
+    selectedVisionPages.length === 1 &&
+    !params.fileDataBase64;
+  const useReceiptCoreImageBudget = Boolean(
+    params.receiptCoreOnly &&
+    isReceiptMode &&
+    isSinglePageGenericImageInput &&
+    !params.forceReceiptHighDetail &&
+    inferredDifficulty !== "hard"
+  );
   // Phone photos are usually far larger than the text resolution needed for
-  // receipt extraction. A 1440px edge stays legible while avoiding the extra
-  // 512px vision-tile row/column that a 1600px image commonly incurs. Bank
-  // statements retain the larger budget because their tables are denser.
+  // receipt extraction. The compact core pass uses 1120px; difficult and
+  // detail-recovery receipt reads retain 1440px. Bank statements keep the
+  // larger budget because their tables are denser.
   const pageImagesToSend = await compactVisionPageImages(
     selectedVisionPages,
-    isReceiptMode
+    useReceiptCoreImageBudget
+      ? {
+          maxLongestEdge: OPENAI_RECEIPT_CORE_VISION_MAX_LONGEST_EDGE,
+          jpegQuality: OPENAI_RECEIPT_CORE_VISION_JPEG_QUALITY,
+        }
+      : isReceiptMode
       ? {
           maxLongestEdge: OPENAI_RECEIPT_VISION_MAX_LONGEST_EDGE,
           jpegQuality: OPENAI_RECEIPT_VISION_JPEG_QUALITY,

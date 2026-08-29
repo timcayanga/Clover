@@ -4,6 +4,9 @@ import { isImageImportFile } from "@/lib/import-file-helpers";
 
 export const MAX_IMPORT_IMAGE_SOURCE_SIZE = 16 * 1024 * 1024;
 export const IMPORT_IMAGE_TARGET_SIZE = 3_500_000;
+export const RECEIPT_IMPORT_IMAGE_TARGET_SIZE = 1_800_000;
+
+export type ImportImageOptimizationProfile = "default" | "receipt";
 
 const loadImage = (file: File) =>
   new Promise<HTMLImageElement>((resolve, reject) => {
@@ -34,8 +37,16 @@ const jpegName = (fileName: string) => {
   return `${stem}.jpg`;
 };
 
-export const optimizeImportImage = async (file: File, maxUploadBytes: number) => {
-  const targetUploadBytes = Math.min(IMPORT_IMAGE_TARGET_SIZE, maxUploadBytes);
+export const optimizeImportImage = async (
+  file: File,
+  maxUploadBytes: number,
+  profile: ImportImageOptimizationProfile = "default"
+) => {
+  const isReceiptProfile = profile === "receipt";
+  const targetUploadBytes = Math.min(
+    isReceiptProfile ? RECEIPT_IMPORT_IMAGE_TARGET_SIZE : IMPORT_IMAGE_TARGET_SIZE,
+    maxUploadBytes
+  );
   if (!isImageImportFile(file) || file.size <= targetUploadBytes) {
     return file;
   }
@@ -45,8 +56,11 @@ export const optimizeImportImage = async (file: File, maxUploadBytes: number) =>
   }
 
   const image = await loadImage(file);
-  let maxDimension = 2_600;
-  let quality = 0.9;
+  // A phone receipt remains legible at 2000px while uploading materially less
+  // data. Statement screenshots keep the larger canvas because their tables
+  // contain much denser text.
+  let maxDimension = isReceiptProfile ? 2_000 : 2_600;
+  let quality = isReceiptProfile ? 0.86 : 0.9;
   let output: Blob | null = null;
 
   for (let attempt = 0; attempt < 7; attempt += 1) {
@@ -83,12 +97,16 @@ export const optimizeImportImage = async (file: File, maxUploadBytes: number) =>
   });
 };
 
-export const optimizeImportImages = async (files: File[], maxUploadBytes: number) => {
+export const optimizeImportImages = async (
+  files: File[],
+  maxUploadBytes: number,
+  profile: ImportImageOptimizationProfile = "default"
+) => {
   const optimized: File[] = [];
   // Decode one camera image at a time to avoid a memory spike when a user
   // selects several high-resolution photos on a phone.
   for (const file of files) {
-    optimized.push(await optimizeImportImage(file, maxUploadBytes));
+    optimized.push(await optimizeImportImage(file, maxUploadBytes, profile));
   }
   return optimized;
 };

@@ -21,7 +21,11 @@ import {
 } from "@/lib/import-file-helpers";
 import { extractTextFromFile, probeFilePasswordProtection, validatePdfPassword } from "@/lib/import-file-text";
 import { postFileWithProgress } from "@/lib/import-file-post";
-import { IMPORT_IMAGE_TARGET_SIZE, optimizeImportImages } from "@/lib/import-image-compression";
+import {
+  IMPORT_IMAGE_TARGET_SIZE,
+  RECEIPT_IMPORT_IMAGE_TARGET_SIZE,
+  optimizeImportImages,
+} from "@/lib/import-image-compression";
 import {
   MAX_IMPORT_FILE_SIZE,
   MAX_IMPORT_FILE_SIZE_LABEL,
@@ -229,7 +233,7 @@ const getCompletedImportAutoCloseMs = () =>
     : COMPLETED_IMPORT_DESKTOP_AUTO_CLOSE_MS;
 const IN_FLIGHT_IMPORT_PROGRESS_INITIAL_DELAY_MS = 400;
 const IN_FLIGHT_IMPORT_PROGRESS_POLL_INTERVAL_MS = 1_500;
-const NEAR_VISIBLE_IMPORT_PROGRESS_POLL_INTERVAL_MS = 600;
+const NEAR_VISIBLE_IMPORT_PROGRESS_POLL_INTERVAL_MS = 350;
 
 type ImportStatusPayload = {
   importFile?: {
@@ -1475,6 +1479,12 @@ export function ImportFilesModal({
     const nextFiles = Array.from(incoming);
     if (nextFiles.length === 0) return;
 
+    const imageOptimizationProfile = defaultImportMode === "receipt" ? "receipt" : "default";
+    const imageOptimizationTarget =
+      imageOptimizationProfile === "receipt"
+        ? RECEIPT_IMPORT_IMAGE_TARGET_SIZE
+        : IMPORT_IMAGE_TARGET_SIZE;
+
     if (!workspaceId) {
       setValidationNotice("Clover is still loading your workspace. Please wait a moment, then upload again.");
       setMessage("Upload unavailable while Clover finishes loading your workspace.");
@@ -1485,13 +1495,29 @@ export function ImportFilesModal({
     if (
       !options?.imagesPrepared &&
       nextFiles.some(
-        (file) => isImageImportFile(file) && file.size > Math.min(IMPORT_IMAGE_TARGET_SIZE, MAX_IMPORT_FILE_SIZE)
+        (file) => isImageImportFile(file) && file.size > Math.min(imageOptimizationTarget, MAX_IMPORT_FILE_SIZE)
       )
     ) {
       setValidationNotice(null);
       setMessage("Optimizing photo for a faster upload...");
-      void optimizeImportImages(nextFiles, MAX_IMPORT_FILE_SIZE)
+      const optimizationStartedAt = performance.now();
+      const originalImageBytes = nextFiles.reduce(
+        (total, file) => total + (isImageImportFile(file) ? file.size : 0),
+        0
+      );
+      void optimizeImportImages(nextFiles, MAX_IMPORT_FILE_SIZE, imageOptimizationProfile)
         .then((preparedFiles) => {
+          const preparedImageBytes = preparedFiles.reduce(
+            (total, file) => total + (isImageImportFile(file) ? file.size : 0),
+            0
+          );
+          reportImportClientStage("photo_optimization_complete", {
+            fileCount: nextFiles.length,
+            profile: imageOptimizationProfile,
+            durationMs: Math.round(performance.now() - optimizationStartedAt),
+            originalImageBytes,
+            preparedImageBytes,
+          });
           addFiles(preparedFiles, { ...options, imagesPrepared: true });
         })
         .catch((error) => {
