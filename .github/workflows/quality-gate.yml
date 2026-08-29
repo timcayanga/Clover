@@ -21,10 +21,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -36,14 +36,8 @@ jobs:
       - name: Generate Prisma Client
         run: npm --prefix web exec -- prisma generate --schema web/prisma/schema.prisma
 
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Run release regressions
-        run: npm run qa:release
-
-      - name: Build production application
-        run: npm run build
+      - name: Run the same pre-push quality gate used locally
+        run: npm run qa:prepush
 
       - name: Reject critical dependency advisories
         run: npm audit --prefix web --omit=dev --audit-level=high

@@ -28058,7 +28058,7 @@ html[data-theme="dark"] .portfolio-growth__ranges button.is-active {
   font-size: 0.76rem;
   font-weight: 600;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: capitalize;
 }
 
 .account-logo-picker__close {

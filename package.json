@@ -11,6 +11,7 @@
     "qa:data-engine": "npm --prefix web run qa:data-engine-safety && npm --prefix web run qa:data-engine-validation",
     "qa:browser": "npm --prefix web run qa:browser-compatibility",
     "qa:release": "npm --prefix web run qa:release",
+    "qa:prepush": "npm run typecheck && npm run qa:release && npm run build",
     "qa:release:live": "npm --prefix web run qa:release:live"
   }
 }

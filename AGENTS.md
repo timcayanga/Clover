@@ -93,3 +93,9 @@ If `docs/product-spec.md` is added later, it should become the primary product s
 - If a task could change confirmed financial records, pause and verify the intended behavior before making the change.
 - If a rule conflicts with the product spec, the spec wins.
 - If a rule conflicts with existing confirmed data, preserve the confirmed data and adapt the new logic around it.
+
+## Required Before Pushing
+
+- Run `npm run qa:prepush` from the repository root before every push to `staging` or `main`.
+- Do not push if the command fails. Fix the failing regression, rerun the complete command, and only push after it passes.
+- Keep `.github/workflows/quality-gate.yml` aligned with `qa:prepush` so local and GitHub validation cannot drift.
