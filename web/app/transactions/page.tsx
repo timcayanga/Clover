@@ -3415,7 +3415,15 @@ function TransactionsPageContent() {
     const filteredTransactions = (cachedSnapshot.transactions as Transaction[]).filter(
       (transaction) => !deletedAccountIds.has(transaction.accountId)
     );
-    const dedupedCachedTransactions = mergeImportedWorkspaceTransactions([], filteredTransactions);
+    const cachedAccountIds = new Set(filteredAccounts.map((account) => account.id));
+    const optimisticReceiptTransactionsToPreserve = getImportedTransactionsToPreserve(transactionsRef.current).filter(
+      (transaction) => transaction.id.startsWith("optimistic-") && cachedAccountIds.has(transaction.accountId)
+    );
+    const dedupedCachedTransactions = mergeImportedWorkspaceTransactions(
+      optimisticReceiptTransactionsToPreserve,
+      filteredTransactions
+    );
+    transactionsRef.current = dedupedCachedTransactions;
     setAccounts(filteredAccounts);
     setCategories(
       cachedSnapshot.categories.length > 0

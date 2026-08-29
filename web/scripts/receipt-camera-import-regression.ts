@@ -146,6 +146,11 @@ assert.match(
 );
 assert.match(
   transactionsPageSource,
+  /const optimisticReceiptTransactionsToPreserve = getImportedTransactionsToPreserve\(transactionsRef\.current\)[\s\S]{0,300}?mergeImportedWorkspaceTransactions\([\s\S]{0,120}?optimisticReceiptTransactionsToPreserve/,
+  "A stale cache update must not remove a receipt that is already visible in the current workspace."
+);
+assert.match(
+  transactionsPageSource,
   /Math\.floor\(transactions\.length \/ MOBILE_TRANSACTIONS_BATCH_SIZE\) \+ 1/,
   "Mobile pagination must continue from the 25-row first page without skipping a 12-row batch."
 );
