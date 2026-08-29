@@ -4981,9 +4981,7 @@ export function ImportFilesModal({
             void monitorQueuedDocumentImport(itemId, importFileId, importMode, fileName, {
               deliverSummary: false,
               keepWatchingAfterVisible: false,
-            }).finally(() => router.refresh());
-          } else {
-            router.refresh();
+            });
           }
           return { completed: true, summary: receiptSummary };
         }
@@ -5770,7 +5768,6 @@ export function ImportFilesModal({
             });
             window.setTimeout(closeVisibleImportModalIfPrimaryDataReady, 0);
             setMessage(`Imported ${item.file.name}.`);
-            router.refresh();
             return {
               status: "done",
               importedRows: Math.max(1, Number(receiptSummary.rowsImported ?? 0)),

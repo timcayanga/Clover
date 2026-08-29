@@ -195,6 +195,15 @@ assert.match(
 const workerSource = readFileSync(join(root, "workers/import-processor.ts"), "utf8");
 const processRouteSource = readFileSync(join(root, "app/api/imports/[importId]/process/route.ts"), "utf8");
 const openAIParserSource = readFileSync(join(root, "lib/openai-import-parser.ts"), "utf8");
+const directReceiptResponseSource = importModalSource.slice(
+  importModalSource.indexOf('if (resolvedResponseImportMode === "receipt" && processPayload?.receiptTransaction)'),
+  importModalSource.indexOf('const importedLabel =', importModalSource.indexOf('if (resolvedResponseImportMode === "receipt" && processPayload?.receiptTransaction)'))
+);
+assert.doesNotMatch(
+  directReceiptResponseSource,
+  /router\.refresh\(\)/,
+  "A durable receipt response must not be replaced by an immediate route refresh."
+);
 assert.match(
   processRouteSource,
   /resolvedResponseImportMode === "receipt" && visibleRows > 0[\s\S]{0,180}?loadCommittedReceiptTransactionForResponse\(importId\)/,
