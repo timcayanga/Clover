@@ -21,7 +21,7 @@ import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { getAccountBrand } from "@/lib/account-brand";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { RecurringCalendar } from "@/components/recurring-calendar";
-import { RecurringCalendarDetail } from "@/components/recurring-calendar-detail";
+import { RecurringCalendarDetail, type RecurringDetailEditableField } from "@/components/recurring-calendar-detail";
 
 type CommitmentAccountOption = {
   id: string;
@@ -48,6 +48,7 @@ type CommitmentsPanelProps = {
   recurringPatterns: RecurringPatternSummary[];
   plannedPaymentSuggestions: PlannedPaymentSuggestion[];
   accounts: CommitmentAccountOption[];
+  categoryOptions: string[];
   transactions: CommitmentTransactionOption[];
   activeTab?: "overview" | "planned" | "debt" | "owed" | "installments";
   initialKind?: CommitmentKind;
@@ -69,7 +70,7 @@ const dateFormatter = new Intl.DateTimeFormat("en-PH", {
 
 type CommitmentKind = "planned_payment" | "debt" | "receivable" | "reminder";
 type CommitmentFormKind = CommitmentKind;
-type EditableCommitmentField = "title" | "counterparty" | "dueDate" | "recurrence" | "amount" | "accountId" | "status" | "notes";
+type EditableCommitmentField = RecurringDetailEditableField | "counterparty" | "dueDate" | "notes";
 
 type CommitmentFormCopy = {
   eyebrow: string;
@@ -303,6 +304,7 @@ export function CommitmentsPanel({
   recurringPatterns,
   plannedPaymentSuggestions,
   accounts,
+  categoryOptions,
   transactions,
   activeTab = "overview",
   initialKind = "planned_payment",
@@ -691,8 +693,14 @@ export function CommitmentsPanel({
         return toDateInputValue(getCommitmentDateValue(commitment));
       case "recurrence":
         return commitment.recurrence;
+      case "kind":
+        return commitment.kind;
       case "amount":
         return commitment.amount ?? "";
+      case "currency":
+        return commitment.currency;
+      case "categoryName":
+        return commitment.categoryName ?? "";
       case "accountId":
         return commitment.accountId ?? "";
       case "status":
@@ -720,16 +728,16 @@ export function CommitmentsPanel({
     commitment: FinancialCommitmentSummary,
     field: EditableCommitmentField,
     nextValue: string
-  ) => {
+  ): Promise<boolean> => {
     const normalizedValue = nextValue.trim();
     if (field === "title" && !normalizedValue) {
       cancelCellEdit();
-      return;
+      return false;
     }
 
     if (normalizedValue === getEditableValue(commitment, field)) {
       cancelCellEdit();
-      return;
+      return true;
     }
 
     setSavingCommitmentId(commitment.id);
@@ -756,9 +764,11 @@ export function CommitmentsPanel({
       );
       cancelCellEdit();
       router.refresh();
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to update recurring item";
       window.alert(message);
+      return false;
     } finally {
       setSavingCommitmentId(null);
     }
@@ -1680,6 +1690,11 @@ export function CommitmentsPanel({
         <RecurringCalendarDetail
           commitment={calendarDetailCommitment}
           occurrenceDate={calendarDetail!.occurrenceDate}
+          accountOptions={accounts}
+          categoryOptions={categoryOptions}
+          currencyOptions={currencyCatalogCodes}
+          saving={savingCommitmentId === calendarDetailCommitment.id}
+          onSaveField={(field, value) => saveCommitmentField(calendarDetailCommitment, field, value)}
           onClose={() => setCalendarDetail(null)}
         />
       ) : null}

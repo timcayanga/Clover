@@ -18,10 +18,10 @@
 }
 
 .recurring-calendar__header {
-  align-items: center;
-  display: flex;
-  gap: 20px;
-  justify-content: space-between;
+  align-items: start;
+  display: grid;
+  gap: 7px;
+  justify-items: start;
 }
 
 .recurring-calendar__heading {
@@ -33,15 +33,7 @@
   display: block;
   font-size: 0.72rem;
   letter-spacing: 0.08em;
-  margin-bottom: 3px;
-}
-
-.recurring-calendar__heading h2 {
-  color: var(--text);
-  font-size: clamp(1.2rem, 2vw, 1.55rem);
   font-weight: 500;
-  letter-spacing: -0.035em;
-  line-height: 1.1;
   margin: 0;
 }
 
@@ -50,15 +42,16 @@
   display: grid;
   flex: 0 0 auto;
   gap: 7px;
-  grid-template-columns: 38px minmax(132px, auto) minmax(88px, auto) 38px;
+  grid-template-columns: auto 38px minmax(142px, auto) 38px;
+  justify-content: start;
 }
 
 .recurring-calendar__controls label {
   display: block;
 }
 
-.recurring-calendar__controls select,
-.recurring-calendar__nav {
+.recurring-calendar__nav,
+.recurring-calendar__today {
   appearance: none;
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   border: 1px solid var(--stroke);
@@ -68,11 +61,40 @@
   height: 38px;
 }
 
-.recurring-calendar__controls select {
+.recurring-calendar__today {
   cursor: pointer;
-  font-size: 0.78rem;
-  min-width: 100%;
-  padding: 0 28px 0 11px;
+  font-size: 0.76rem;
+  padding-inline: 14px;
+}
+
+.recurring-calendar__date-picker {
+  align-items: center;
+  display: flex;
+  min-width: 0;
+}
+
+.recurring-calendar__date-picker select {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: clamp(1rem, 1.7vw, 1.28rem);
+  font-weight: 500;
+  height: 38px;
+  letter-spacing: -0.025em;
+  outline: none;
+  padding: 0 3px;
+  width: auto;
+}
+
+.recurring-calendar__date-picker label:first-child select {
+  max-width: 118px;
+}
+
+.recurring-calendar__date-picker label:last-child select {
+  max-width: 66px;
 }
 
 .recurring-calendar__nav {
@@ -86,7 +108,9 @@
 }
 
 .recurring-calendar__nav:hover,
-.recurring-calendar__nav:focus-visible {
+.recurring-calendar__nav:focus-visible,
+.recurring-calendar__today:hover,
+.recurring-calendar__today:focus-visible {
   border-color: color-mix(in srgb, var(--accent) 58%, var(--stroke));
   color: var(--accent);
   outline: none;
@@ -156,7 +180,8 @@
   background: color-mix(in srgb, var(--surface) 94%, transparent);
   border-bottom: 1px solid var(--recurring-calendar-line);
   border-right: 1px solid var(--recurring-calendar-line);
-  min-height: 118px;
+  height: clamp(72px, calc((100dvh - 330px) / 6), 118px);
+  min-height: 72px;
   min-width: 0;
   padding: 7px;
 }
@@ -324,6 +349,63 @@
   margin: 4px 0 0;
 }
 
+.recurring-calendar-detail__editable {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: text;
+  display: block;
+  font: inherit;
+  line-height: inherit;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.recurring-calendar-detail__editable:hover,
+.recurring-calendar-detail__editable:focus-visible {
+  color: var(--accent);
+  outline: none;
+}
+
+.recurring-calendar-detail__title-input,
+.recurring-calendar-detail__amount-input,
+.recurring-calendar-detail__select {
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 54%, var(--stroke));
+  border-radius: 9px;
+  color: var(--text);
+  font: inherit;
+  outline: none;
+  width: 100%;
+}
+
+.recurring-calendar-detail__title-input {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  margin-top: 4px;
+  padding: 6px 8px;
+}
+
+.recurring-calendar-detail__amount-input {
+  font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  padding: 7px 9px;
+}
+
+.recurring-calendar-detail__select {
+  cursor: pointer;
+  font-size: 0.82rem;
+  margin-top: 5px;
+  min-height: 36px;
+  padding: 5px 28px 5px 8px;
+}
+
 .recurring-calendar-detail__close,
 .recurring-calendar-detail__back {
   align-items: center;
@@ -389,6 +471,10 @@
   padding: 12px;
 }
 
+.recurring-calendar-detail__facts > div.is-editing {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--stroke));
+}
+
 .recurring-calendar-detail__facts dd {
   color: var(--text);
   font-size: 0.82rem;
@@ -407,7 +493,7 @@ html[data-theme="dark"] .recurring-calendar {
   --recurring-calendar-line: rgba(148, 163, 184, 0.16);
 }
 
-html[data-theme="dark"] .recurring-calendar__controls select,
+html[data-theme="dark"] .recurring-calendar__today,
 html[data-theme="dark"] .recurring-calendar__nav,
 html[data-theme="dark"] .recurring-calendar__day,
 html[data-theme="dark"] .recurring-calendar-detail__card {
@@ -455,13 +541,24 @@ html[data-theme="dark"] .recurring-calendar__event[data-kind="reminder"] {
   }
 
   .recurring-calendar__controls {
-    grid-template-columns: 38px minmax(0, 1.35fr) minmax(0, 0.8fr) 38px;
+    grid-template-columns: auto 38px minmax(0, 1fr) 38px;
     width: 100%;
   }
 
-  .recurring-calendar__controls select {
-    font-size: 0.72rem;
-    padding-inline: 8px;
+  .recurring-calendar__today {
+    padding-inline: 11px;
+  }
+
+  .recurring-calendar__date-picker select {
+    font-size: 0.94rem;
+  }
+
+  .recurring-calendar__date-picker label:first-child select {
+    max-width: 92px;
+  }
+
+  .recurring-calendar__date-picker label:last-child select {
+    max-width: 58px;
   }
 
   .recurring-calendar__legend {
@@ -489,7 +586,8 @@ html[data-theme="dark"] .recurring-calendar__event[data-kind="reminder"] {
   }
 
   .recurring-calendar__day {
-    min-height: 84px;
+    height: clamp(64px, calc((100dvh - 412px) / 6), 84px);
+    min-height: 64px;
     padding: 3px;
   }
 
@@ -602,10 +700,6 @@ html[data-theme="dark"] .recurring-calendar__event[data-kind="reminder"] {
 }
 
 @media (max-width: 520px) {
-  .recurring-calendar__day {
-    min-height: 72px;
-  }
-
   .recurring-calendar__event span {
     font-size: 0.5rem;
   }

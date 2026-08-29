@@ -10,6 +10,10 @@ const panelSource = readFileSync(join(webRoot, "components", "commitments-panel.
 const clientSource = readFileSync(join(webRoot, "components", "recurring-page-client.tsx"), "utf8");
 const pageSource = readFileSync(join(webRoot, "lib", "recurring-page.ts"), "utf8");
 const stylesSource = readFileSync(join(webRoot, "app", "globals.css"), "utf8");
+const calendarSource = readFileSync(join(webRoot, "components", "recurring-calendar.tsx"), "utf8");
+const detailSource = readFileSync(join(webRoot, "components", "recurring-calendar-detail.tsx"), "utf8");
+const commitmentRouteSource = readFileSync(join(webRoot, "app", "api", "commitments", "[commitmentId]", "route.ts"), "utf8");
+const schemaSource = readFileSync(join(webRoot, "prisma", "schema.prisma"), "utf8");
 
 assert.match(panelSource, /<th>Category<\/th>/, "Recurring subtabs must expose category data.");
 assert.match(panelSource, /CategoryBrandMark/, "Recurring categories must use Clover's transaction-style category marks.");
@@ -29,7 +33,7 @@ assert.ok(
 );
 assert.doesNotMatch(panelSource, /recurring-mobile-row__open[\s\S]{0,400}<small>/, "Mobile recurring rows must stay single-line like Transactions.");
 assert.match(panelSource, /commitment\.account \?\? commitment\.inferredAccount/, "Recurring rows must show reliable inferred accounts.");
-assert.match(pageSource, /categorySource: evidenceTransaction\?\.category\?\.name \? "transaction"/, "Transaction categories must take precedence over fallback categories.");
+assert.match(pageSource, /categoryName: commitment\.categoryName \?\? evidenceTransaction\?\.category\?\.name \?\? inferCommitmentCategory/, "Manual and transaction categories must take precedence over fallback categories.");
 assert.match(pageSource, /bestMatch\.score >= runnerUp\.score \+ 2/, "Ambiguous account matches must stay unconfirmed.");
 assert.match(stylesSource, /transactions-table\.commitments-table thead th[\s\S]{0,180}position: sticky/, "Recurring table headers must remain sticky.");
 assert.match(stylesSource, /\.recurring-mobile-row \{[\s\S]{0,260}grid-template-columns: 18px 20px 20px minmax\(0, 1fr\) auto 24px/, "Mobile recurring rows must match the compact Transactions row rhythm.");
@@ -38,6 +42,17 @@ assert.match(panelSource, /activeTab !== "overview" \? renderRecurringTable\(\) 
 assert.match(stylesSource, /\.recurring-calendar__grid[\s\S]{0,260}grid-template-columns: repeat\(7, minmax\(0, 1fr\)\)/, "The recurring calendar must render a full-width seven-day grid.");
 assert.match(stylesSource, /touch-action: pan-y/, "The recurring calendar must preserve vertical scrolling while supporting horizontal month swipes.");
 assert.match(clientSource, /aria-label=\{tab\.label\}/, "Recurring icon tabs must retain accessible names on mobile.");
+assert.match(calendarSource, />\s*Today\s*</, "The calendar header must offer a compact Today control.");
+assert.match(calendarSource, /Previous month[\s\S]{0,1600}Next month/, "The selected month must sit between previous and next arrows.");
+assert.match(stylesSource, /height: clamp\(72px, calc\(\(100dvh - 330px\) \/ 6\), 118px\)/, "Desktop calendar rows must fit the available viewport when possible.");
+assert.match(stylesSource, /height: clamp\(64px, calc\(\(100dvh - 412px\) \/ 6\), 84px\)/, "Mobile calendar rows must fit the available viewport when possible.");
+assert.match(detailSource, /onBlur=\{\(\) => void finishEdit\("title"\)\}/, "Payment names must auto-save when inline editing loses focus.");
+assert.match(detailSource, /onBlur=\{\(\) => void finishEdit\("amount"\)\}/, "Payment amounts must auto-save when inline editing loses focus.");
+for (const field of ["kind", "recurrence", "status", "accountId", "categoryName", "currency"]) {
+  assert.match(detailSource, new RegExp(`renderSelect\\("${field}"`), `${field} must be editable from the calendar details view.`);
+}
+assert.match(commitmentRouteSource, /categoryName: Object\.hasOwn\(body, "categoryName"\)/, "Recurring category changes must persist through the protected mutation route.");
+assert.match(schemaSource, /categoryName\s+String\?/, "Recurring items must retain an explicit editable category override.");
 
 const commitment = (
   overrides: Partial<FinancialCommitmentSummary>,

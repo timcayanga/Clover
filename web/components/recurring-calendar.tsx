@@ -91,25 +91,37 @@ export function RecurringCalendar({
     <section className="recurring-calendar panel glass" aria-label={`${monthNames[selectedMonth]} ${selectedYear} payment calendar`}>
       <header className="recurring-calendar__header">
         <div className="recurring-calendar__heading">
-          <span className="recurring-calendar__eyebrow">Payment calendar</span>
-          <h2>{monthNames[selectedMonth]} {selectedYear}</h2>
+          <h2 className="recurring-calendar__eyebrow">Payment calendar</h2>
         </div>
         <div className="recurring-calendar__controls">
+          <button
+            type="button"
+            className="recurring-calendar__today"
+            onClick={() => {
+              const today = new Date();
+              setSelectedYear(today.getFullYear());
+              setSelectedMonth(today.getMonth());
+            }}
+          >
+            Today
+          </button>
           <button type="button" className="recurring-calendar__nav" onClick={() => navigateMonth(-1)} aria-label="Previous month">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
           </button>
-          <label>
-            <span className="sr-only">Month</span>
-            <select value={selectedMonth} onChange={(event) => setSelectedMonth(Number(event.target.value))} aria-label="Calendar month">
-              {monthNames.map((month, index) => <option key={month} value={index}>{month}</option>)}
-            </select>
-          </label>
-          <label>
-            <span className="sr-only">Year</span>
-            <select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} aria-label="Calendar year">
-              {yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
-            </select>
-          </label>
+          <div className="recurring-calendar__date-picker" aria-live="polite">
+            <label>
+              <span className="sr-only">Month</span>
+              <select value={selectedMonth} onChange={(event) => setSelectedMonth(Number(event.target.value))} aria-label="Calendar month">
+                {monthNames.map((month, index) => <option key={month} value={index}>{month}</option>)}
+              </select>
+            </label>
+            <label>
+              <span className="sr-only">Year</span>
+              <select value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} aria-label="Calendar year">
+                {yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
+              </select>
+            </label>
+          </div>
           <button type="button" className="recurring-calendar__nav" onClick={() => navigateMonth(1)} aria-label="Next month">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
           </button>

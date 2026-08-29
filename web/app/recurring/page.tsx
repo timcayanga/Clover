@@ -53,7 +53,7 @@ export default async function RecurringPage({
     const selectedWorkspaceId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
     const workspaceId = await getRecurringWorkspaceId(user.clerkUserId, user.email, user.verified, selectedWorkspaceId);
     const recurringData = await getRecurringPageData(workspaceId);
-    const { accounts: workspaceAccounts, transactions: recentTransactions, commitments, recurringPatterns, plannedPaymentSuggestions } = recurringData;
+    const { accounts: workspaceAccounts, categoryOptions, transactions: recentTransactions, commitments, recurringPatterns, plannedPaymentSuggestions } = recurringData;
 
     return (
       <RecurringPageClient
@@ -62,6 +62,7 @@ export default async function RecurringPage({
         recurringPatterns={recurringPatterns}
         plannedPaymentSuggestions={plannedPaymentSuggestions}
         accounts={workspaceAccounts}
+        categoryOptions={categoryOptions}
         transactions={recentTransactions}
         planTier={user.planTier}
         initialTab={initialTab}

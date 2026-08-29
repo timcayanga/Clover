@@ -33,6 +33,7 @@ export type FinancialCommitmentSummary = {
   recurrence: CommitmentRecurrence;
   nextDueDate: string | null;
   notes: string | null;
+  categoryName?: string | null;
   accountId: string | null;
   transactionId: string | null;
   statementCheckpointId: string | null;
@@ -43,8 +44,7 @@ export type FinancialCommitmentSummary = {
   updatedAt: string;
   account: FinancialCommitmentAccount | null;
   transaction: FinancialCommitmentTransaction | null;
-  categoryName?: string | null;
-  categorySource?: "transaction" | "inferred" | null;
+  categorySource?: "manual" | "transaction" | "inferred" | null;
   inferredAccountId?: string | null;
   inferredAccount?: FinancialCommitmentAccount | null;
   occurrenceDueDate?: string | null;
@@ -141,6 +141,7 @@ export const serializeFinancialCommitment = <T extends {
   recurrence: CommitmentRecurrence;
   nextDueDate: Date | null;
   notes: string | null;
+  categoryName?: string | null;
   accountId: string | null;
   transactionId: string | null;
   statementCheckpointId: string | null;
@@ -175,6 +176,7 @@ export const serializeFinancialCommitment = <T extends {
   recurrence: commitment.recurrence,
   nextDueDate: commitment.nextDueDate?.toISOString() ?? null,
   notes: commitment.notes,
+  categoryName: commitment.categoryName ?? null,
   accountId: commitment.accountId,
   transactionId: commitment.transactionId,
   statementCheckpointId: commitment.statementCheckpointId,
@@ -218,6 +220,7 @@ export const parseCommitmentPayload = (payload: Record<string, unknown>) => {
     recurrence: typeof recurrence === "string" && recurrence in commitmentRecurrenceLabels ? (recurrence as CommitmentRecurrence) : "once",
     nextDueDate: parseNullableDate(payload.nextDueDate),
     notes: parseNullableText(payload.notes),
+    categoryName: parseNullableText(payload.categoryName),
     accountId: parseNullableText(payload.accountId),
     transactionId: parseNullableText(payload.transactionId),
     statementCheckpointId: parseNullableText(payload.statementCheckpointId),

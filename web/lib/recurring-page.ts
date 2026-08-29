@@ -9,6 +9,7 @@ import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
 import { getPlannedPaymentSuggestions, getRecurringConfidenceTier, type PlannedPaymentSuggestion } from "@/lib/planned-payment-suggestions";
 import { syncReceivableAccountCommitments } from "@/lib/imported-receivables.server";
 import { resolveTrackedCommitmentDueDate, toCommitmentOccurrenceKey } from "@/lib/commitment-occurrences";
+import { DEFAULT_CATEGORY_ROWS } from "@/lib/default-categories";
 
 export type RecurringPageAccount = {
   id: string;
@@ -72,6 +73,7 @@ export type RecurringPageData = {
   recurringItems: ReturnType<typeof buildRecurringTransactionSummaries>;
   commitments: FinancialCommitmentSummary[];
   recurringPatterns: RecurringPatternSummary[];
+  categoryOptions: string[];
   liabilityAccountCount: number;
 };
 
@@ -145,8 +147,12 @@ export const enrichRecurringCommitments = (params: {
 
     return {
       ...commitment,
-      categoryName: evidenceTransaction?.category?.name ?? inferCommitmentCategory(commitment),
-      categorySource: evidenceTransaction?.category?.name ? "transaction" as const : "inferred" as const,
+      categoryName: commitment.categoryName ?? evidenceTransaction?.category?.name ?? inferCommitmentCategory(commitment),
+      categorySource: commitment.categoryName
+        ? "manual" as const
+        : evidenceTransaction?.category?.name
+          ? "transaction" as const
+          : "inferred" as const,
       inferredAccountId,
       inferredAccount: inferredAccountRecord
         ? {
@@ -241,7 +247,7 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
     "receivable accounts"
   );
 
-  const [reminders, accounts, transactions, commitments, recurringPatterns, plannedPaymentSuggestions] = await Promise.all([
+  const [reminders, accounts, transactions, commitments, recurringPatterns, plannedPaymentSuggestions, categoryRows] = await Promise.all([
     withRecurringEnrichmentTimeout(getUpcomingStatementReminders(workspaceId), [], "statement reminders"),
     prisma.account.findMany({
       where: { workspaceId },
@@ -365,6 +371,11 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
         })
       : Promise.resolve([]),
     withRecurringEnrichmentTimeout(getPlannedPaymentSuggestions(workspaceId), [], "payment suggestions"),
+    prisma.category.findMany({
+      where: { workspaceId, isArchived: false },
+      select: { name: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   const recurringItems = buildRecurringTransactionSummaries(transactions as RecurringTransactionLike[]);
@@ -446,6 +457,10 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
         }
       : null,
   }));
+  const categoryOptions = Array.from(new Set([
+    ...categoryRows.map((category) => category.name),
+    ...DEFAULT_CATEGORY_ROWS.map((category) => category.name),
+  ])).sort((left, right) => left.localeCompare(right));
 
   const enrichedCommitments = enrichRecurringCommitments({
     commitments: commitments.map((commitment) => serializeFinancialCommitment(commitment)),
@@ -471,6 +486,7 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
     recurringItems,
     commitments: enrichedCommitments,
     recurringPatterns: serializedRecurringPatterns,
+    categoryOptions,
     plannedPaymentSuggestions,
     liabilityAccountCount,
   };

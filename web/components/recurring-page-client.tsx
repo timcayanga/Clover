@@ -12,6 +12,7 @@ type RecurringPageClientProps = {
   recurringPatterns: Parameters<typeof CommitmentsPanel>[0]["recurringPatterns"];
   plannedPaymentSuggestions: Parameters<typeof CommitmentsPanel>[0]["plannedPaymentSuggestions"];
   accounts: Parameters<typeof CommitmentsPanel>[0]["accounts"];
+  categoryOptions: Parameters<typeof CommitmentsPanel>[0]["categoryOptions"];
   transactions: Parameters<typeof CommitmentsPanel>[0]["transactions"];
   planTier: "free" | "pro";
   initialTab?: RecurringTab;
@@ -68,6 +69,7 @@ export function RecurringPageClient({
   recurringPatterns,
   plannedPaymentSuggestions,
   accounts,
+  categoryOptions,
   transactions,
   planTier,
   initialTab = "overview",
@@ -186,6 +188,7 @@ export function RecurringPageClient({
           recurringPatterns={recurringPatterns}
           plannedPaymentSuggestions={plannedPaymentSuggestions}
           accounts={accounts}
+          categoryOptions={categoryOptions}
           transactions={transactions}
           activeTab={activeTab}
           initialKind={addKind}

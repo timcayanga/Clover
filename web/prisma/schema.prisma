@@ -1618,6 +1618,7 @@ model FinancialCommitment {
   recurrence            CommitmentRecurrence            @default(once)
   nextDueDate           DateTime?
   notes                 String?
+  categoryName          String?
   accountId             String?
   transactionId         String?
   statementCheckpointId String?
