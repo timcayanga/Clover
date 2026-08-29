@@ -58,6 +58,7 @@ import {
   installWorkspaceMutationObserver,
   subscribeWorkspaceDataChanges,
 } from "@/lib/workspace-data-sync";
+import { clearJsonRequestCache, fetchJsonOnce } from "@/lib/request-dedupe";
 
 const loadDashboardManualTransactionModal = () =>
   import("@/components/dashboard-top-actions").then((module) => module.DashboardManualTransactionModal);
@@ -871,6 +872,8 @@ export function CloverShell({
       if (!currentDomain || !change.affected.includes(currentDomain)) return;
       if (workspaceId && change.workspaceId && workspaceId !== change.workspaceId) return;
 
+      clearJsonRequestCache("shell:");
+
       if (refreshTimer) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(() => {
         startTransition(() => router.refresh());
@@ -1130,12 +1133,17 @@ export function CloverShell({
 
     const loadCurrentUser = async () => {
       try {
-        const response = await fetch("/api/me");
+        const response = await fetchJsonOnce<{ user?: { planTier?: string } }>({
+          key: `shell:me:${user?.id ?? "guest"}`,
+          route: "/api/me",
+          input: "/api/me",
+          cacheTtlMs: 5 * 60 * 1000,
+        });
         if (!response.ok || cancelled) {
           return;
         }
 
-        const payload = await response.json();
+        const payload = response.json;
         setSearchPlanTier(payload?.user?.planTier === "pro" ? "pro" : "free");
       } catch {
         if (!cancelled) {
@@ -1149,7 +1157,7 @@ export function CloverShell({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     setOpenMenu(null);
@@ -1297,9 +1305,14 @@ export function CloverShell({
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/circle-invitations", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((result: { invitations?: ShellCircleInvitation[] } | null) => {
+    fetchJsonOnce<{ invitations?: ShellCircleInvitation[] }>({
+      key: `shell:circle-invitations:${user?.id ?? "guest"}`,
+      route: "/api/circle-invitations",
+      input: "/api/circle-invitations",
+      cacheTtlMs: 30_000,
+    })
+      .then((response) => (response.ok ? response.json : null))
+      .then((result) => {
         if (!cancelled) setCircleInvitations(result?.invitations ?? []);
       })
       .catch(() => {
@@ -1308,7 +1321,7 @@ export function CloverShell({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1320,13 +1333,19 @@ export function CloverShell({
       }
 
       try {
-        const response = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(searchWorkspaceId)}`);
+        const response = await fetchJsonOnce<{ accounts?: SidebarSearchAccount[] }>({
+          key: `shell:accounts:${searchWorkspaceId}`,
+          route: "/api/accounts",
+          workspaceId: searchWorkspaceId,
+          input: `/api/accounts?workspaceId=${encodeURIComponent(searchWorkspaceId)}`,
+          cacheTtlMs: 30_000,
+        });
         if (!response.ok || cancelled) {
           return;
         }
 
-        const payload = await response.json();
-        const items = Array.isArray(payload.accounts) ? (payload.accounts as SidebarSearchAccount[]) : [];
+        const payload = response.json;
+        const items = Array.isArray(payload?.accounts) ? payload.accounts : [];
         if (!cancelled) {
           setSearchAccounts(items);
         }
@@ -1360,13 +1379,19 @@ export function CloverShell({
       }
 
       try {
-        const response = await fetch(`/api/review?workspaceId=${encodeURIComponent(searchWorkspaceId)}`);
+        const response = await fetchJsonOnce<{ transactions?: unknown[] }>({
+          key: `shell:review:${searchWorkspaceId}`,
+          route: "/api/review",
+          workspaceId: searchWorkspaceId,
+          input: `/api/review?workspaceId=${encodeURIComponent(searchWorkspaceId)}`,
+          cacheTtlMs: 15_000,
+        });
         if (!response.ok || cancelled) {
           return;
         }
 
-        const payload = await response.json();
-        const count = Array.isArray(payload.transactions) ? payload.transactions.length : 0;
+        const payload = response.json;
+        const count = Array.isArray(payload?.transactions) ? payload.transactions.length : 0;
         if (!cancelled) {
           setReviewQueueCount(count);
         }
@@ -1663,14 +1688,6 @@ export function CloverShell({
     ) : null;
   const navigateTo = (href: string) => {
     closeChrome();
-    if (typeof window !== "undefined" && pathname?.startsWith("/accounts")) {
-      const currentHref = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-      if (currentHref !== href) {
-        window.location.assign(href);
-      }
-      return;
-    }
-
     router.push(href);
   };
 
@@ -1700,25 +1717,6 @@ export function CloverShell({
 
     void router.prefetch(href);
   };
-
-  useEffect(() => {
-    // Adviser is dynamic and query-heavy. Prefetch it on direct intent below instead
-    // of paying its database and origin-transfer cost in every Clover session.
-    const coreRoutes = ["/home", "/accounts", "/transactions", "/recurring", "/more"];
-    const prefetchCoreRoutes = () => coreRoutes.forEach((href) => void router.prefetch(href));
-    const idleWindow = window as Window & {
-      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
-      cancelIdleCallback?: (handle: number) => void;
-    };
-
-    if (idleWindow.requestIdleCallback) {
-      const handle = idleWindow.requestIdleCallback(prefetchCoreRoutes, { timeout: 1500 });
-      return () => idleWindow.cancelIdleCallback?.(handle);
-    }
-
-    const handle = window.setTimeout(prefetchCoreRoutes, 350);
-    return () => window.clearTimeout(handle);
-  }, [router]);
 
   const openQuickAddTransaction = () => {
     if (pathname?.startsWith("/accounts/institutions/")) {

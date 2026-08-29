@@ -1,5 +1,5 @@
-import { clerkClient } from "@clerk/nextjs/server";
 import { getEnv } from "@/lib/env";
+import { syncClerkUser } from "@/lib/clerk";
 
 const normalizeList = (value: string | undefined) =>
   (value ?? "")
@@ -26,8 +26,8 @@ export const isConfiguredAdminEmail = async (userId: string) => {
   }
 
   try {
-    const user = await (await clerkClient()).users.getUser(userId);
-    return user.emailAddresses.some((entry) => adminEmails.has(entry.emailAddress.toLowerCase()));
+    const user = await syncClerkUser(userId);
+    return user.authoritative && user.emailAddresses.some((email) => adminEmails.has(email.toLowerCase()));
   } catch {
     return false;
   }

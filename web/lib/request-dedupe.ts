@@ -8,6 +8,7 @@ type FetchJsonOnceParams = {
   init?: RequestInit;
   detail?: string | null;
   timeoutMs?: number | null;
+  cacheTtlMs?: number | null;
 };
 
 type FetchJsonOnceResult<T> = {
@@ -33,6 +34,18 @@ declare global {
 }
 
 const inFlightJsonRequests = new Map<string, Promise<FetchJsonOnceResult<JsonValue>>>();
+const resolvedJsonRequests = new Map<string, { expiresAt: number; value: FetchJsonOnceResult<JsonValue> }>();
+
+export const clearJsonRequestCache = (keyPrefix?: string) => {
+  if (!keyPrefix) {
+    resolvedJsonRequests.clear();
+    return;
+  }
+
+  for (const key of resolvedJsonRequests.keys()) {
+    if (key.startsWith(keyPrefix)) resolvedJsonRequests.delete(key);
+  }
+};
 
 const pushBreadcrumb = (breadcrumb: RequestBreadcrumb) => {
   if (typeof window === "undefined") {
@@ -44,6 +57,12 @@ const pushBreadcrumb = (breadcrumb: RequestBreadcrumb) => {
 };
 
 export const fetchJsonOnce = async <T>(params: FetchJsonOnceParams): Promise<FetchJsonOnceResult<T>> => {
+  const cached = resolvedJsonRequests.get(params.key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value as FetchJsonOnceResult<T>;
+  }
+  if (cached) resolvedJsonRequests.delete(params.key);
+
   const existing = inFlightJsonRequests.get(params.key);
   if (existing) {
     pushBreadcrumb({
@@ -100,11 +119,18 @@ export const fetchJsonOnce = async <T>(params: FetchJsonOnceParams): Promise<Fet
         status: response.status,
         at: Date.now(),
       });
-      return {
+      const result = {
         ok: response.ok,
         status: response.status,
         json,
       };
+      if (response.ok && params.cacheTtlMs && params.cacheTtlMs > 0) {
+        resolvedJsonRequests.set(params.key, {
+          expiresAt: Date.now() + params.cacheTtlMs,
+          value: result,
+        });
+      }
+      return result;
     } catch {
       pushBreadcrumb({
         route: params.route,

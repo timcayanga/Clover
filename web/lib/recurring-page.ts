@@ -10,6 +10,7 @@ import { getPlannedPaymentSuggestions, getRecurringConfidenceTier, type PlannedP
 import { syncReceivableAccountCommitments } from "@/lib/imported-receivables.server";
 import { resolveTrackedCommitmentDueDate, toCommitmentOccurrenceKey } from "@/lib/commitment-occurrences";
 import { DEFAULT_CATEGORY_ROWS } from "@/lib/default-categories";
+import { after } from "next/server";
 
 export type RecurringPageAccount = {
   id: string;
@@ -238,14 +239,17 @@ export async function getRecurringWorkspaceId(
 export async function getRecurringPageData(workspaceId: string): Promise<RecurringPageData> {
   const hasRecurringPatternTable = await hasCompatibleTable("RecurringPattern");
 
-  if (hasRecurringPatternTable) {
-    await withRecurringEnrichmentTimeout(syncWorkspaceRecurringPatterns(workspaceId), [], "patterns");
-  }
-  await withRecurringEnrichmentTimeout(
-    syncReceivableAccountCommitments(workspaceId),
-    0,
-    "receivable accounts"
-  );
+  // Import processing already performs recurring detection. Keep the page render
+  // read-only and refresh legacy enrichment after the response has streamed so a
+  // maintenance timeout can never hold the calendar behind a loading screen.
+  after(async () => {
+    await Promise.all([
+      hasRecurringPatternTable
+        ? withRecurringEnrichmentTimeout(syncWorkspaceRecurringPatterns(workspaceId), [], "patterns")
+        : Promise.resolve([]),
+      withRecurringEnrichmentTimeout(syncReceivableAccountCommitments(workspaceId), 0, "receivable accounts"),
+    ]);
+  });
 
   const [reminders, accounts, transactions, commitments, recurringPatterns, plannedPaymentSuggestions, categoryRows] = await Promise.all([
     withRecurringEnrichmentTimeout(getUpcomingStatementReminders(workspaceId), [], "statement reminders"),

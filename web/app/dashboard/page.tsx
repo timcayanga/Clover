@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { Suspense } from "react";
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
@@ -591,22 +592,19 @@ async function resolveDashboardWorkspaceSummary(user: Awaited<ReturnType<typeof 
 
   const activeWorkspaceSummary = workspaceSummary;
 
-  await repairWorkspaceDataVisibility(activeWorkspaceSummary.id).catch((error) => {
-    console.warn("[home] unable to repair workspace data visibility", {
-      workspaceId: activeWorkspaceSummary.id,
-      error,
+  // Visibility repair is a legacy safety net, not page data. Run it after the
+  // response so Home does not perform two writes and a duplicate workspace read
+  // before it can show the user's current snapshot.
+  after(async () => {
+    await repairWorkspaceDataVisibility(activeWorkspaceSummary.id).catch((error) => {
+      console.warn("[home] unable to repair workspace data visibility", {
+        workspaceId: activeWorkspaceSummary.id,
+        error,
+      });
     });
   });
-  workspaceSummary = await prisma.workspace.findUnique({
-    where: { id: activeWorkspaceSummary.id },
-    select: workspaceSelect,
-  });
 
-  if (!workspaceSummary) {
-    redirect("/home");
-  }
-
-  return workspaceSummary;
+  return activeWorkspaceSummary;
 }
 
 async function DashboardStream({

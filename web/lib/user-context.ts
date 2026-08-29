@@ -12,8 +12,10 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
   const existing = await prisma.user.findUnique({
     where: { clerkUserId: clerkUser.clerkUserId },
   });
-  const syncedFirstName = clerkUser.firstName ?? existing?.firstName ?? null;
-  const syncedLastName = clerkUser.lastName ?? existing?.lastName ?? null;
+  const syncedEmail = clerkUser.authoritative ? clerkUser.email : existing?.email ?? clerkUser.email;
+  const syncedFirstName = clerkUser.authoritative ? clerkUser.firstName : existing?.firstName ?? clerkUser.firstName;
+  const syncedLastName = clerkUser.authoritative ? clerkUser.lastName : existing?.lastName ?? clerkUser.lastName;
+  const syncedVerified = clerkUser.authoritative ? clerkUser.verified : existing?.verified ?? clerkUser.verified;
 
   try {
     const resolvedEnvironment = resolvePersistedUserEnvironment(
@@ -21,19 +23,19 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
       existing?.environment
     );
     const user = existing
-      ? existing.email !== clerkUser.email ||
+      ? existing.email !== syncedEmail ||
           existing.firstName !== syncedFirstName ||
           existing.lastName !== syncedLastName ||
-          existing.verified !== clerkUser.verified ||
+          existing.verified !== syncedVerified ||
           existing.environment !== resolvedEnvironment ||
           (isLocalEnvironment && existing.planTier !== "pro")
         ? await prisma.user.update({
             where: { id: existing.id },
             data: {
-              email: clerkUser.email,
+              email: syncedEmail,
               firstName: syncedFirstName,
               lastName: syncedLastName,
-              verified: clerkUser.verified,
+              verified: syncedVerified,
               environment: resolvedEnvironment,
               ...(isLocalEnvironment ? { planTier: "pro" } : {}),
             },
@@ -42,10 +44,10 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
       : await prisma.user.create({
           data: {
             clerkUserId: clerkUser.clerkUserId,
-            email: clerkUser.email,
-            firstName: clerkUser.firstName,
-            lastName: clerkUser.lastName,
-            verified: clerkUser.verified,
+            email: syncedEmail,
+            firstName: syncedFirstName,
+            lastName: syncedLastName,
+            verified: syncedVerified,
             environment: currentEnvironment,
             planTier: isLocalEnvironment ? "pro" : "free",
           },
@@ -53,10 +55,10 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
 
     if (!existing) {
       void capturePostHogServerEvent("signup_completed", clerkUser.clerkUserId, {
-        email_verified: clerkUser.verified,
+        email_verified: syncedVerified,
       });
       void capturePostHogServerEvent("first_login", clerkUser.clerkUserId, {
-        email_verified: clerkUser.verified,
+        email_verified: syncedVerified,
       });
     }
 
@@ -82,7 +84,7 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
     }
 
     const existingByEmail = await prisma.user.findUnique({
-      where: { email: clerkUser.email },
+      where: { email: syncedEmail },
     });
 
     if (!existingByEmail) {

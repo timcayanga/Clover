@@ -14,6 +14,14 @@ assert.match(shellSource, /const ImportFilesModal = dynamic\(\s*loadImportFilesM
 assert.match(shellSource, /onPointerEnter=\{\(\) => \{[\s\S]{0,350}loadDashboardManualTransactionModal\(\)[\s\S]{0,120}loadImportFilesModal\(\)/);
 assert.doesNotMatch(shellSource, /^import \{ ImportFilesModal \} from "@\/components\/import-files-modal";/m);
 assert.doesNotMatch(shellSource, /^import \{ DashboardManualTransactionModal \} from "@\/components\/dashboard-top-actions";/m);
+assert.doesNotMatch(shellSource, /window\.location\.assign\(href\)/, "Sidebar navigation must stay inside the App Router.");
+assert.doesNotMatch(shellSource, /prefetchCoreRoutes/, "The shell must not issue a burst of dynamic route requests on every mount.");
+
+const clerkSource = readSource("lib/clerk.ts");
+const userContextSource = readSource("lib/user-context.ts");
+assert.match(clerkSource, /unstable_cache/);
+assert.match(clerkSource, /clover-clerk-user-v1/);
+assert.match(userContextSource, /clerkUser\.authoritative/);
 
 const dashboardSource = readSource("app/dashboard/page.tsx");
 assert.match(dashboardSource, /DashboardTopActionsLazy/);
@@ -24,6 +32,10 @@ assert.match(dashboardSource, /Weekly Report/);
 assert.match(dashboardSource, /Monthly Report/);
 assert.match(dashboardSource, /monthlyTimelineDays/);
 assert.match(dashboardSource, /dashboard-home__report-flow-tooltip/);
+assert.match(dashboardSource, /after\(async \(\) => \{[\s\S]{0,250}repairWorkspaceDataVisibility/);
+
+const recurringPageDataSource = readSource("lib/recurring-page.ts");
+assert.match(recurringPageDataSource, /after\(async \(\) => \{[\s\S]{0,450}syncWorkspaceRecurringPatterns/);
 
 const lazyActionsSource = readSource("components/dashboard-top-actions-lazy.tsx");
 assert.match(lazyActionsSource, /dynamic\(\s*\(\) => import\("@\/components\/dashboard-top-actions"\)/);
