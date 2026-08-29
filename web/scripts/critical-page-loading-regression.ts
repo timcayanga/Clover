@@ -37,6 +37,11 @@ assert.match(dashboardSource, /const todayStart = toDayStart\(now\)/);
 assert.doesNotMatch(dashboardSource, /activityAnchorDate/);
 assert.match(dashboardSource, /Weekly Report/);
 assert.match(dashboardSource, /Monthly Report/);
+assert.match(
+  globalStylesSource,
+  /\.dashboard-home__report-card h4\s*\{[^}]*font-family:\s*var\(--font-body\)/s,
+  "Weekly and monthly report totals should use Clover's standard numeric font",
+);
 assert.match(dashboardSource, /monthlyTimelineDays/);
 assert.match(dashboardSource, /dashboard-home__report-flow-tooltip/);
 assert.match(dashboardSource, /after\(async \(\) => \{[\s\S]{0,250}repairWorkspaceDataVisibility/);

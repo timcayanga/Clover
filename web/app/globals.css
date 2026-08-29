@@ -7162,9 +7162,11 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
 .dashboard-home__report-card h4 {
   margin: 4px 0 0;
   color: var(--text-strong);
+  font-family: var(--font-body);
   font-size: clamp(1.4rem, 2.6vw, 2rem);
   line-height: 1.05;
   letter-spacing: -0.055em;
+  font-variant-numeric: tabular-nums;
 }
 
 .dashboard-home__report-card p {
