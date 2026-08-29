@@ -91,6 +91,7 @@ import {
   recordUnsupervisedLearningAuditForTemplate,
   resolveImportFileExtractionCacheVersion,
   updateImportFileCompat,
+  normalizeAccountRuleKey,
   upsertAccountRule,
   upsertStatementTemplate,
 } from "@/lib/data-engine";
@@ -139,7 +140,12 @@ import {
 } from "@/lib/import-statement-identity";
 import { mergeCheckpointSourceMetadata, readCheckpointImportMode } from "@/lib/import-workflow";
 import { inferCanonicalImportedAccountProduct, matchesLegacyPayPalWalletDuplicate } from "@/lib/imported-account-identity";
-import { findBestImportedAccountMatch, matchesImportedAccountIdentity, normalizeImportedAccountKey } from "@/lib/workspace-cache";
+import {
+  findBestImportedAccountMatch,
+  matchesDurableImportedAccountIdentity,
+  matchesImportedAccountIdentity,
+  normalizeImportedAccountKey,
+} from "@/lib/workspace-cache";
 import {
   claimNextImportEnrichmentJob,
   completeImportEnrichmentJob,
@@ -1861,6 +1867,11 @@ const getCompatibleAccountSelect = (columns: Set<string>) => ({
   workspaceId: true,
   name: true,
   institution: true,
+  ...(columns.has("importIdentityName") ? { importIdentityName: true } : {}),
+  ...(columns.has("importIdentityInstitution") ? { importIdentityInstitution: true } : {}),
+  ...(columns.has("importIdentityAccountNumber") ? { importIdentityAccountNumber: true } : {}),
+  ...(columns.has("nameCustomized") ? { nameCustomized: true } : {}),
+  ...(columns.has("institutionCustomized") ? { institutionCustomized: true } : {}),
   ...(columns.has("accountNumber") ? { accountNumber: true } : {}),
   type: true,
   currency: true,
@@ -5702,6 +5713,11 @@ const resolveConfirmationAccount = async (params: {
       balance?: { toString: () => string } | null;
       creditLimit?: { toString: () => string } | null;
       creditLimitSource?: string | null;
+      importIdentityName?: string | null;
+      importIdentityInstitution?: string | null;
+      importIdentityAccountNumber?: string | null;
+      nameCustomized?: boolean;
+      institutionCustomized?: boolean;
     },
     next: {
       name?: string | null;
@@ -5736,11 +5752,35 @@ const resolveConfirmationAccount = async (params: {
         next.accountNumber ?? account.accountNumber,
         next.type ?? account.type
       );
-    if (displayName.trim() && displayName.trim() !== account.name) {
+    if (!account.nameCustomized && displayName.trim() && displayName.trim() !== account.name) {
       data.name = displayName.trim();
     }
-    if (next.institution !== undefined && (next.institution ?? null) !== account.institution) {
+    if (!account.institutionCustomized && next.institution !== undefined && (next.institution ?? null) !== account.institution) {
       data.institution = next.institution === null ? null : next.institution.trim() || null;
+    }
+    if (
+      compatibleAccountColumns.has("importIdentityName") &&
+      !account.importIdentityName &&
+      typeof next.name === "string" &&
+      next.name.trim()
+    ) {
+      data.importIdentityName = next.name.trim();
+    }
+    if (
+      compatibleAccountColumns.has("importIdentityInstitution") &&
+      !account.importIdentityInstitution &&
+      typeof next.institution === "string" &&
+      next.institution.trim()
+    ) {
+      data.importIdentityInstitution = next.institution.trim();
+    }
+    if (
+      compatibleAccountColumns.has("importIdentityAccountNumber") &&
+      !account.importIdentityAccountNumber &&
+      typeof next.accountNumber === "string" &&
+      next.accountNumber.trim()
+    ) {
+      data.importIdentityAccountNumber = next.accountNumber.trim();
     }
     if (compatibleAccountColumns.has("accountNumber")) {
       const normalizedAccountNumber = next.accountNumber?.trim() || null;
@@ -6030,14 +6070,15 @@ const resolveConfirmationAccount = async (params: {
 
     return 0;
   };
+  const incomingImportIdentity = {
+    name: inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
+    institution: inferredInstitution,
+    accountNumber: inferredAccountNumber,
+    type: accountIdentityType,
+    currency: inferredCurrency,
+  };
   const accountMatchesImportIdentity = (account: (typeof workspaceAccounts)[number]) =>
-    matchesImportedAccountIdentity(account, {
-      name: inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
-      institution: inferredInstitution,
-      accountNumber: inferredAccountNumber,
-      type: accountIdentityType,
-      currency: inferredCurrency,
-    });
+    matchesDurableImportedAccountIdentity(account, incomingImportIdentity);
   const accountHasNoAccountNumber = (account: (typeof workspaceAccounts)[number]) =>
     !String(account.accountNumber ?? "").replace(/\D/g, "");
   const isWiseWalletImport =
@@ -6266,12 +6307,24 @@ const resolveConfirmationAccount = async (params: {
     return collapseDuplicateUploadedAccountsForAccount(updatedAccount);
   }
 
-  const existingByKey =
+  let existingByKey =
     isWiseWalletImport
       ? null
       : workspaceAccounts
           .filter(accountMatchesImportIdentity)
           .sort(sortImportedAccountsByFreshness)[0] ?? null;
+  if (!existingByKey && !isWiseWalletImport && hasInferredAccountNumber) {
+    const aliasRuleKey = normalizeAccountRuleKey(incomingImportIdentity.name, incomingImportIdentity.institution);
+    const aliasRule = aliasRuleKey
+      ? await prisma.accountRule.findUnique({
+          where: { workspaceId_ruleKey: { workspaceId, ruleKey: aliasRuleKey } },
+          select: { accountId: true },
+        }).catch(() => null)
+      : null;
+    existingByKey = aliasRule?.accountId
+      ? workspaceAccounts.find((account) => account.id === aliasRule.accountId) ?? null
+      : null;
+  }
   if (!existingByKey && legacyPayPalWalletAccount) {
     const updatedAccount = await updateAccountIdentity(legacyPayPalWalletAccount, {
       name: inferredAccountName,
@@ -6431,13 +6484,23 @@ const resolveConfirmationAccount = async (params: {
     }
 
     const compatibleAccountColumns = await getCompatibleAccountColumns();
-      const accountData = {
+    const createdAccountName =
+      accountSnapshotInventory && inferredAccountName
+        ? inferredAccountName
+        : formatUploadAccountDisplayName(inferredAccountName, inferredInstitution, inferredAccountNumber, accountIdentityType);
+    const accountData = {
         workspaceId,
-        name:
-          accountSnapshotInventory && inferredAccountName
-            ? inferredAccountName
-            : formatUploadAccountDisplayName(inferredAccountName, inferredInstitution, inferredAccountNumber, accountIdentityType),
+        name: createdAccountName,
         institution: inferredInstitution,
+        ...(compatibleAccountColumns.has("importIdentityName")
+          ? { importIdentityName: inferredAccountName?.trim() || createdAccountName }
+          : {}),
+        ...(compatibleAccountColumns.has("importIdentityInstitution")
+          ? { importIdentityInstitution: inferredInstitution?.trim() || null }
+          : {}),
+        ...(compatibleAccountColumns.has("importIdentityAccountNumber")
+          ? { importIdentityAccountNumber: inferredAccountNumber?.trim() || null }
+          : {}),
         ...(compatibleAccountColumns.has("accountNumber") && inferredAccountNumber
           ? { accountNumber: inferredAccountNumber }
           : {}),
@@ -6476,11 +6539,11 @@ const resolveConfirmationAccount = async (params: {
               ...(compatibleAccountColumns.has("creditLimitUpdatedAt") ? { creditLimitUpdatedAt: new Date() } : {}),
             }
           : {}),
-      };
+    };
 
-      if (!accountData.name) {
-        return null;
-      }
+    if (!accountData.name) {
+      return null;
+    }
 
     try {
       // Parsing and confirmation can reach account creation from separate

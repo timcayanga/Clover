@@ -56,6 +56,12 @@ const getCompatibleAccountSelect = (columns: Set<string>) => ({
   name: true,
   institution: true,
   ...(columns.has("logoUrl") ? { logoUrl: true } : {}),
+  ...(columns.has("importIdentityName") ? { importIdentityName: true } : {}),
+  ...(columns.has("importIdentityInstitution") ? { importIdentityInstitution: true } : {}),
+  ...(columns.has("importIdentityAccountNumber") ? { importIdentityAccountNumber: true } : {}),
+  ...(columns.has("nameCustomized") ? { nameCustomized: true } : {}),
+  ...(columns.has("institutionCustomized") ? { institutionCustomized: true } : {}),
+  ...(columns.has("logoCustomized") ? { logoCustomized: true } : {}),
   ...(columns.has("accountNumber") ? { accountNumber: true } : {}),
   ...(columns.has("favorite") ? { favorite: true } : {}),
   investmentSubtype: true,
@@ -457,12 +463,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
           : account.source;
     const effectiveAccountName =
       effectiveSource === "upload"
-        ? formatUploadAccountDisplayName(
-            latestCheckpointAccountName ?? account.name,
-            effectiveInstitution,
-            effectiveAccountNumber,
-            account.type
-          )
+        ? account.nameCustomized
+          ? account.name
+          : formatUploadAccountDisplayName(
+              latestCheckpointAccountName ?? account.name,
+              effectiveInstitution,
+              effectiveAccountNumber,
+              account.type
+            )
         : account.name;
     const effectiveBalance = resolveEffectiveAccountBalance({
       accountType: account.type,
@@ -506,6 +514,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
         : null;
 
     await assertWorkspaceAccess(userId, payload.workspaceId);
+    const existingAccount = await prisma.account.findUnique({
+      where: { id: accountId },
+      select: getCompatibleAccountSelect(compatibleColumns),
+    });
+    if (!existingAccount || existingAccount.workspaceId !== payload.workspaceId) {
+      return NextResponse.json({ error: "Account not found" }, { status: 404 });
+    }
+    const nextInstitution =
+      payload.institution === undefined
+        ? inferredInstitutionFromName ?? existingAccount.institution
+        : payload.institution?.trim() || null;
+    const userChangedName = payload.name !== undefined && payload.name.trim() !== existingAccount.name.trim();
+    const userChangedInstitution =
+      (payload.institution !== undefined || inferredInstitutionFromName !== null) &&
+      (nextInstitution ?? null) !== (existingAccount.institution ?? null);
 
     const accountUpdateData = {
         name: payload.name?.trim() ?? undefined,
@@ -515,6 +538,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
             : payload.institution?.trim() || null,
         ...(compatibleColumns.has("logoUrl")
           ? { logoUrl: payload.logoUrl === undefined ? undefined : payload.logoUrl }
+          : {}),
+        ...(compatibleColumns.has("nameCustomized") && userChangedName ? { nameCustomized: true } : {}),
+        ...(compatibleColumns.has("institutionCustomized") && userChangedInstitution ? { institutionCustomized: true } : {}),
+        ...(compatibleColumns.has("logoCustomized") && payload.logoUrl !== undefined
+          ? { logoCustomized: payload.logoUrl !== null }
+          : {}),
+        ...(compatibleColumns.has("importIdentityName") && userChangedInstitution && payload.name?.trim()
+          ? { importIdentityName: payload.name.trim() }
+          : {}),
+        ...(compatibleColumns.has("importIdentityInstitution") && userChangedInstitution
+          ? { importIdentityInstitution: nextInstitution }
           : {}),
         ...(compatibleColumns.has("accountNumber")
           ? { accountNumber: payload.accountNumber === undefined ? undefined : payload.accountNumber?.trim() || null }

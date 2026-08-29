@@ -85,6 +85,12 @@ const getCompatibleAccountSelect = (columns: Set<string>) => ({
   name: true,
   institution: true,
   ...(columns.has("logoUrl") ? { logoUrl: true } : {}),
+  ...(columns.has("importIdentityName") ? { importIdentityName: true } : {}),
+  ...(columns.has("importIdentityInstitution") ? { importIdentityInstitution: true } : {}),
+  ...(columns.has("importIdentityAccountNumber") ? { importIdentityAccountNumber: true } : {}),
+  ...(columns.has("nameCustomized") ? { nameCustomized: true } : {}),
+  ...(columns.has("institutionCustomized") ? { institutionCustomized: true } : {}),
+  ...(columns.has("logoCustomized") ? { logoCustomized: true } : {}),
   ...(columns.has("accountNumber") ? { accountNumber: true } : {}),
   ...(columns.has("favorite") ? { favorite: true } : {}),
   investmentSubtype: true,
@@ -3711,16 +3717,18 @@ export async function GET(request: Request) {
         Boolean(effectiveInstitution || effectiveAccountNumber || checkpointAccountName);
       const effectiveAccountName =
         effectiveSource === "upload"
-          ? formatUploadAccountDisplayName(
-              shouldReplaceGenericImageFilename
-                ? checkpointAccountName ?? effectiveInstitution ?? account.name
-                : hasCorrectedGotradeIdentity
-                  ? account.name
-                  : checkpointAccountName ?? account.name,
-              effectiveInstitution,
-              effectiveAccountNumber,
-              account.type
-            )
+          ? account.nameCustomized
+            ? account.name
+            : formatUploadAccountDisplayName(
+                shouldReplaceGenericImageFilename
+                  ? checkpointAccountName ?? effectiveInstitution ?? account.name
+                  : hasCorrectedGotradeIdentity
+                    ? account.name
+                    : checkpointAccountName ?? account.name,
+                effectiveInstitution,
+                effectiveAccountNumber,
+                account.type
+              )
           : account.name;
 
       return {

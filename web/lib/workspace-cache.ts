@@ -533,6 +533,27 @@ export const scoreImportedAccountIdentityMatch = (left: ImportedAccountIdentityL
 export const matchesImportedAccountIdentity = (left: ImportedAccountIdentityLike, right: ImportedAccountIdentityLike) =>
   scoreImportedAccountIdentityMatch(left, right) > 0;
 
+export type DurableImportedAccountIdentityLike = ImportedAccountIdentityLike & {
+  importIdentityName?: string | null;
+  importIdentityInstitution?: string | null;
+  importIdentityAccountNumber?: string | null;
+};
+
+export const matchesDurableImportedAccountIdentity = (
+  account: DurableImportedAccountIdentityLike,
+  incoming: ImportedAccountIdentityLike
+) =>
+  matchesImportedAccountIdentity(account, incoming) ||
+  matchesImportedAccountIdentity(
+    {
+      ...account,
+      name: account.importIdentityName ?? account.name,
+      institution: account.importIdentityInstitution ?? account.institution,
+      accountNumber: account.importIdentityAccountNumber ?? account.accountNumber,
+    },
+    incoming
+  );
+
 export const findBestImportedAccountMatch = <T extends ImportedAccountIdentityLike>(accounts: T[], identity: ImportedAccountIdentityLike) => {
   let bestMatch: T | null = null;
   let bestScore = 0;

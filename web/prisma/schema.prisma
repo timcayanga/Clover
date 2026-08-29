@@ -539,6 +539,12 @@ model Account {
   name                    String
   institution             String?
   logoUrl                 String?
+  importIdentityName      String?
+  importIdentityInstitution String?
+  importIdentityAccountNumber String?
+  nameCustomized          Boolean                      @default(false)
+  institutionCustomized   Boolean                      @default(false)
+  logoCustomized          Boolean                      @default(false)
   accountNumber           String?
   investmentSubtype       String?
   investmentSymbol        String?
