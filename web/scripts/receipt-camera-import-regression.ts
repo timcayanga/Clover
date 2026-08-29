@@ -59,11 +59,32 @@ assert.equal(
 const root = process.cwd();
 const importModalSource = readFileSync(join(root, "components/import-files-modal.tsx"), "utf8");
 const transactionsPageSource = readFileSync(join(root, "app/transactions/page.tsx"), "utf8");
+const cloverShellSource = readFileSync(join(root, "components/clover-shell.tsx"), "utf8");
 const uploadDockSource = readFileSync(join(root, "components/import-upload-dock.tsx"), "utf8");
 assert.match(
   transactionsPageSource,
   /const handlePhotoCaptureChange =[\s\S]{0,420}?openImportFiles\(files, false, "receipt"\);/,
   "PWA camera and photo-library uploads must route directly to the receipt parser."
+);
+assert.match(
+  cloverShellSource,
+  /handleQuickAddPhotoChange[\s\S]{0,420}?setQuickAddImportMode\("receipt"\)[\s\S]{0,120}?setQuickAddModal\("import"\)/,
+  "The shared Camera and Receipt Photo entry points must route directly to the receipt parser on every device."
+);
+assert.match(
+  cloverShellSource,
+  /handleQuickAddFileChange[\s\S]{0,420}?setQuickAddImportMode\("statement"\)[\s\S]{0,120}?setQuickAddModal\("import"\)/,
+  "The mixed-file picker must remain conservative for statement screenshots."
+);
+assert.match(
+  cloverShellSource,
+  /defaultImportMode=\{quickAddImportMode\}/,
+  "The shared uploader must pass its explicit receipt or statement intent into the import modal."
+);
+assert.match(
+  cloverShellSource,
+  /shell-quick-add-popover__item--receipt[\s\S]{0,420}?Receipt Photo/,
+  "Desktop and tablet users must have an explicit receipt-photo upload entry point."
 );
 assert.match(
   transactionsPageSource,

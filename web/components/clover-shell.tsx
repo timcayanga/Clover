@@ -40,6 +40,7 @@ import {
   type ImportActivitySnapshot,
 } from "@/lib/import-activity";
 import { formatImportResultHeadline } from "@/lib/import-result-summary";
+import type { ImportImageMode } from "@/lib/import-image-mode";
 import { publishImportedSummary } from "@/lib/imported-summary-events";
 import {
   getGuidanceMenuPreset,
@@ -833,6 +834,7 @@ export function CloverShell({
   const [notificationsPopoverStyle, setNotificationsPopoverStyle] = useState<{ left: number; bottom: number } | null>(null);
   const [quickAddModal, setQuickAddModal] = useState<"transaction" | "import" | null>(null);
   const [quickAddSeedFiles, setQuickAddSeedFiles] = useState<File[] | null>(null);
+  const [quickAddImportMode, setQuickAddImportMode] = useState<ImportImageMode>("statement");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   // Keep the server render and the first client render identical. Persistent
@@ -1171,6 +1173,7 @@ export function CloverShell({
     setIsQuickAddOpen(false);
     setQuickAddModal(null);
     setQuickAddSeedFiles(null);
+    setQuickAddImportMode("statement");
     clearStaleInteractionLocks();
   }, [pathname]);
 
@@ -1781,6 +1784,7 @@ export function CloverShell({
   const closeQuickAddModal = () => {
     setQuickAddModal(null);
     setQuickAddSeedFiles(null);
+    setQuickAddImportMode("statement");
   };
 
   const openQuickAddCamera = () => {
@@ -1822,6 +1826,7 @@ export function CloverShell({
 
     setIsQuickAddOpen(false);
     setQuickAddSeedFiles(files);
+    setQuickAddImportMode("statement");
     setQuickAddModal("import");
   };
 
@@ -1834,6 +1839,7 @@ export function CloverShell({
 
     setIsQuickAddOpen(false);
     setQuickAddSeedFiles(files);
+    setQuickAddImportMode("receipt");
     setQuickAddModal("import");
   };
 
@@ -2243,7 +2249,7 @@ export function CloverShell({
             <strong>Camera</strong>
           </button>
           <button
-            className="shell-quick-add-popover__item shell-quick-add-popover__item--mobile-only"
+            className="shell-quick-add-popover__item shell-quick-add-popover__item--receipt"
             type="button"
             role="menuitem"
             onClick={() => {
@@ -2252,7 +2258,7 @@ export function CloverShell({
             }}
           >
             <span className="shell-quick-add-popover__emoji" aria-hidden="true">🖼️</span>
-            <strong>Photos</strong>
+            <strong>Receipt Photo</strong>
           </button>
           <button
             className="shell-quick-add-popover__item shell-quick-add-popover__item--primary"
@@ -2291,6 +2297,7 @@ export function CloverShell({
           workspaceId={searchWorkspaceId}
           accounts={quickAddAccounts}
           defaultAccountId={quickAddAccounts.find((account) => account.type !== "cash" && account.type !== "other" && account.type !== "investment")?.id ?? quickAddAccounts[0]?.id ?? null}
+          defaultImportMode={quickAddImportMode}
           initialFiles={quickAddSeedFiles}
           onInitialFilesConsumed={() => setQuickAddSeedFiles(null)}
           onClose={closeQuickAddModal}
