@@ -3279,16 +3279,21 @@ function TransactionsPageContent() {
           setTransactions((current) => {
             if (previewTransactions.length === 0) {
               nextTransactionsSnapshot = current;
+              transactionsRef.current = current;
               return current;
             }
             const next = mergeImportedPreviewTransactions(current, previewTransactions);
             nextTransactionsSnapshot = next;
+            // The settlement refresh starts in this same callback. Keep its
+            // synchronous source of truth aligned before React runs effects.
+            transactionsRef.current = next;
             return next;
           });
         } else if (previewTransactions.length > 0) {
           setTransactions((current) => {
             const next = mergeImportedPreviewTransactions(current, previewTransactions);
             nextTransactionsSnapshot = next;
+            transactionsRef.current = next;
             return next;
           });
         }

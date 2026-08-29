@@ -131,6 +131,11 @@ assert.match(
 );
 assert.match(
   transactionsPageSource,
+  /mergeImportedPreviewTransactions\(current, previewTransactions\);[\s\S]{0,180}?transactionsRef\.current = next/,
+  "The import callback must expose its new receipt row to the same-turn settlement refresh."
+);
+assert.match(
+  transactionsPageSource,
   /Math\.floor\(transactions\.length \/ MOBILE_TRANSACTIONS_BATCH_SIZE\) \+ 1/,
   "Mobile pagination must continue from the 25-row first page without skipping a 12-row batch."
 );
