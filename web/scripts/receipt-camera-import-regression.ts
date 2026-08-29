@@ -263,6 +263,11 @@ assert.match(
   "a fast camera receipt should not wait behind the general document polling cadence"
 );
 assert.match(
+  importEventsRouteSource,
+  /IMPORT_STATUS_STREAM_STARTUP_RETRIES = 5[\s\S]{0,5000}?for \(let attempt = 1; !importFile[\s\S]{0,700}?fetchImportFileStatusCompat\(importId\)/,
+  "the visibility stream should survive the upload-record creation race"
+);
+assert.match(
   importModalSource,
   /processResponseSettled = true;[\s\S]{0,500}?setTimeout[\s\S]{0,300}?importEventStream\?\.close\(\)[\s\S]{0,80}?5_000/,
   "the response handoff should leave enough time for the structured visibility event"

@@ -12,6 +12,8 @@ const IMPORT_STATUS_STREAM_POLL_MS = 2_500;
 const IMPORT_STATUS_STREAM_ACTIVE_RECEIPT_POLL_MS = 750;
 const IMPORT_STATUS_STREAM_NEAR_VISIBLE_POLL_MS = 250;
 const IMPORT_STATUS_STREAM_MAX_ERRORS = 3;
+const IMPORT_STATUS_STREAM_STARTUP_RETRIES = 5;
+const IMPORT_STATUS_STREAM_STARTUP_RETRY_MS = 150;
 
 const formatSseEvent = (event: string, data: unknown) => encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 
@@ -64,7 +66,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
     const localDev = await isLocalDevHost();
     const { userId } = localDev ? { userId: "local-admin" } : await requireAuth();
 
-    const importFile = await fetchImportFileStatusCompat(importId);
+    let importFile = await fetchImportFileStatusCompat(importId);
+    for (let attempt = 1; !importFile && attempt <= IMPORT_STATUS_STREAM_STARTUP_RETRIES; attempt += 1) {
+      // The upload request and EventSource start together. Give the upload a
+      // bounded moment to create its import record instead of returning a 404
+      // that permanently drops the fastest receipt visibility handoffs.
+      await new Promise((resolve) => setTimeout(resolve, IMPORT_STATUS_STREAM_STARTUP_RETRY_MS * attempt));
+      importFile = await fetchImportFileStatusCompat(importId);
+    }
     if (!importFile) {
       return NextResponse.json({ error: "Import not found" }, { status: 404 });
     }
