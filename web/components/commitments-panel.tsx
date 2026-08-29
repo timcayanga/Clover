@@ -20,6 +20,8 @@ import { AccountBrandMark } from "@/components/account-brand-mark";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { getAccountBrand } from "@/lib/account-brand";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
+import { RecurringCalendar } from "@/components/recurring-calendar";
+import { RecurringCalendarDetail } from "@/components/recurring-calendar-detail";
 
 type CommitmentAccountOption = {
   id: string;
@@ -359,6 +361,7 @@ export function CommitmentsPanel({
   const [savingCommitmentId, setSavingCommitmentId] = useState<string | null>(null);
   const [completingCommitmentId, setCompletingCommitmentId] = useState<string | null>(null);
   const [mobileDetailId, setMobileDetailId] = useState<string | null>(null);
+  const [calendarDetail, setCalendarDetail] = useState<{ commitmentId: string; occurrenceDate: string } | null>(null);
   const overviewStats = useMemo(() => {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
@@ -1025,6 +1028,10 @@ export function CommitmentsPanel({
         return [];
     }
   }, [activeTab, visibleCommitments]);
+  const calendarCommitments = activeTab === "overview" ? visibleCommitments : tabCommitments;
+  const calendarDetailCommitment = calendarDetail
+    ? visibleCommitments.find((commitment) => commitment.id === calendarDetail.commitmentId) ?? null
+    : null;
 
   // Suggestions belong to Overview. Subtabs contain only items the user has
   // already kept, which prevents candidates from looking like saved payments.
@@ -1541,6 +1548,12 @@ export function CommitmentsPanel({
 
   return (
     <section style={{ display: "grid", gap: 24 }}>
+      <RecurringCalendar
+        commitments={calendarCommitments}
+        comprehensive={activeTab === "overview"}
+        onSelectCommitment={(commitment, occurrenceDate) => setCalendarDetail({ commitmentId: commitment.id, occurrenceDate })}
+      />
+
       {activeTab !== "overview" ? renderRecurringTable() : null}
 
       {activeTab === "overview" ? <>
@@ -1662,6 +1675,14 @@ export function CommitmentsPanel({
       ) : null}
 
       </> : null}
+
+      {calendarDetailCommitment ? (
+        <RecurringCalendarDetail
+          commitment={calendarDetailCommitment}
+          occurrenceDate={calendarDetail!.occurrenceDate}
+          onClose={() => setCalendarDetail(null)}
+        />
+      ) : null}
 
       {reviewingSuggestion ? (
         <div
