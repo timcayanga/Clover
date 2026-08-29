@@ -3152,7 +3152,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
   return (
       <CloverShell
         active="adviser"
-        title="Ask Clover"
+        title="Adviser"
         actions={<Link className="button button-secondary button-small" href="/reports">View reports</Link>}
       >
       <section className="adviser-page adviser-page--chat">

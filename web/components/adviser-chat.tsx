@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { trackAdviserInteraction } from "@/lib/adviser-interactions";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 
@@ -421,8 +422,51 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
     );
   }
 
+  const composer = (
+    <form className="adviser-chat__composer" onSubmit={handleSubmit}>
+      <label className="sr-only" htmlFor="adviser-chat-input">
+        Ask Adviser anything
+      </label>
+      {messages.length > 0 && visiblePrompts.length > 0 ? (
+        <div className="adviser-chat__bottom-prompts" aria-label="Suggested follow-up questions">
+          {visiblePrompts.slice(0, 3).map((prompt) => (
+            <button
+              key={`bottom-${prompt.id}`}
+              type="button"
+              className="adviser-chat__prompt"
+              disabled={hasReachedLimit || isSending}
+              onClick={() => sendSuggestedPrompt(prompt)}
+            >
+              <span className="adviser-chat__prompt-emoji" aria-hidden="true">{getPromptEmoji(prompt.group)}</span>
+              <span>{prompt.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <div className="adviser-chat__composer-bar">
+        <textarea
+          ref={inputRef}
+          id="adviser-chat-input"
+          rows={1}
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          onKeyDown={handleComposerKeyDown}
+          placeholder="Ask Adviser about your money..."
+          disabled={hasReachedLimit}
+        />
+        {isSending || error ? (
+          <span className={`adviser-chat__status${isSending ? " adviser-chat__status--thinking" : ""}`}>
+            {isSending ? (
+              <><span>Thinking</span><span className="adviser-chat__thinking-dots" aria-hidden="true"><i /><i /><i /></span></>
+            ) : error}
+          </span>
+        ) : null}
+      </div>
+    </form>
+  );
+
   return (
-    <div className={`adviser-chat${layout === "workspace" ? " adviser-chat--workspace" : ""}`}>
+    <div className={`adviser-chat${layout === "workspace" ? " adviser-chat--workspace" : ""}${messages.length === 0 ? " adviser-chat--empty" : ""}`}>
       {layout === "embedded" || messages.length > 0 ? (
         <div className="adviser-chat__heading-row">
           {layout === "embedded" ? <p className="eyebrow adviser-chat__ask-label">Ask Clover</p> : <span />}
@@ -442,11 +486,12 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
       ) : null}
       {messages.length === 0 ? (
         <div className="adviser-chat__welcome">
-          <div className="adviser-chat__welcome-mark" aria-hidden="true">C</div>
+          <Image className="adviser-chat__welcome-mark" src="/clover-mark.svg" alt="" width={42} height={42} priority />
           <div className="adviser-chat__welcome-copy">
-            <h2>How can Clover help?</h2>
-            <p className="adviser-chat__question-lead">Ask about your spending, accounts, goals, or what to do next.</p>
+            <h2>Make your next money move.</h2>
+            <p className="adviser-chat__question-lead">Ask Adviser to compare your options, spot risks, and suggest what to do next.</p>
           </div>
+          {layout === "workspace" ? composer : null}
           <div className="adviser-chat__prompt-row" aria-label="Suggested questions">
             {visiblePrompts.slice(0, 4).map((prompt) => (
               <button
@@ -514,56 +559,7 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
           ))}
         </div>
       ) : null}
-      <form className="adviser-chat__composer" onSubmit={handleSubmit}>
-        <label className="sr-only" htmlFor="adviser-chat-input">
-          Ask Clover anything
-        </label>
-        {messages.length > 0 && visiblePrompts.length > 0 ? (
-          <div className="adviser-chat__bottom-prompts" aria-label="Suggested follow-up questions">
-            {visiblePrompts.slice(0, 3).map((prompt) => (
-              <button
-                key={`bottom-${prompt.id}`}
-                type="button"
-                className="adviser-chat__prompt"
-                disabled={hasReachedLimit || isSending}
-                onClick={() => sendSuggestedPrompt(prompt)}
-              >
-                <span className="adviser-chat__prompt-emoji" aria-hidden="true">{getPromptEmoji(prompt.group)}</span>
-                <span>{prompt.label}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-        <div className="adviser-chat__composer-bar">
-          <textarea
-            ref={inputRef}
-            id="adviser-chat-input"
-            rows={1}
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={handleComposerKeyDown}
-            placeholder="Ask about your money..."
-            disabled={hasReachedLimit}
-          />
-          <button
-            type="submit"
-            className="button button-primary button-small adviser-chat__send"
-            aria-label={isSending ? "Sending message" : "Send message"}
-            disabled={hasReachedLimit || isSending || input.trim().length === 0}
-          >
-            <svg viewBox="0 0 20 20" aria-hidden="true">
-              <path d="M10 15V5m0 0L6 9m4-4 4 4" />
-            </svg>
-          </button>
-          {isSending || error ? (
-            <span className={`adviser-chat__status${isSending ? " adviser-chat__status--thinking" : ""}`}>
-              {isSending ? (
-                <><span>Thinking</span><span className="adviser-chat__thinking-dots" aria-hidden="true"><i /><i /><i /></span></>
-              ) : error}
-            </span>
-          ) : null}
-        </div>
-      </form>
+      {messages.length > 0 || layout === "embedded" ? composer : null}
     </div>
   );
 }

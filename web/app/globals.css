@@ -20870,17 +20870,10 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .adviser-chat__welcome-mark {
-  display: grid;
-  place-items: center;
   width: 42px;
   height: 42px;
   margin-bottom: 18px;
-  border-radius: 14px;
-  background: var(--accent);
-  color: #fff;
-  box-shadow: 0 10px 24px rgba(3, 168, 192, 0.2);
-  font-size: 1rem;
-  font-weight: 800;
+  object-fit: contain;
 }
 
 .adviser-chat__welcome-copy h2 {
@@ -20900,31 +20893,31 @@ input.transaction-inline-edit--amount::placeholder {
 .adviser-chat--workspace .adviser-chat__prompt-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 28px;
+  gap: 5px 24px;
+  margin-top: 14px;
 }
 
 .adviser-chat--workspace .adviser-chat__prompt-row .adviser-chat__prompt {
   width: 100%;
   min-width: 0;
-  min-height: 58px;
+  min-height: 28px;
   justify-content: flex-start;
-  padding: 12px 14px;
+  padding: 3px 0;
   overflow: hidden;
-  border-color: var(--stroke);
-  border-radius: 16px;
+  border: 0;
+  border-radius: 0;
   background: transparent;
-  color: var(--text);
-  font-size: 0.84rem;
+  color: var(--muted);
+  font-size: 0.76rem;
   line-height: 1.35;
   text-align: left;
-  transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
+  transition: color 150ms ease, transform 150ms ease;
 }
 
 .adviser-chat--workspace .adviser-chat__prompt-row .adviser-chat__prompt:hover,
 .adviser-chat--workspace .adviser-chat__prompt-row .adviser-chat__prompt:focus-visible {
-  border-color: rgba(3, 168, 192, 0.28);
-  background: rgba(3, 168, 192, 0.055);
+  color: var(--accent);
+  background: transparent;
   transform: translateY(-1px);
 }
 
@@ -20937,7 +20930,11 @@ input.transaction-inline-edit--amount::placeholder {
   padding: 22px 4px 30px;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  scrollbar-gutter: stable;
+  scrollbar-width: none;
+}
+
+.adviser-chat--workspace .adviser-chat__thread::-webkit-scrollbar {
+  display: none;
 }
 
 .adviser-chat--workspace .adviser-chat__message {
@@ -20992,6 +20989,13 @@ input.transaction-inline-edit--amount::placeholder {
   background: linear-gradient(180deg, transparent, var(--surface) 28%);
 }
 
+.adviser-chat--workspace.adviser-chat--empty .adviser-chat__composer {
+  width: 100%;
+  margin-top: 25px;
+  padding: 0;
+  background: transparent;
+}
+
 .adviser-chat--workspace .adviser-chat__bottom-prompts,
 .adviser-chat--workspace .adviser-chat__composer-bar {
   width: min(100%, 800px);
@@ -21016,12 +21020,17 @@ input.transaction-inline-edit--amount::placeholder {
   border: 1px solid rgba(11, 27, 43, 0.12);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.78);
-  padding: 13px 52px 12px 16px;
+  padding: 13px 16px 12px;
   color: inherit;
   font: inherit;
   line-height: 1.45;
   overflow-y: auto;
+  scrollbar-width: none;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.07);
+}
+
+.adviser-chat__composer-bar textarea::-webkit-scrollbar {
+  display: none;
 }
 
 .adviser-chat__composer-bar textarea:focus {
@@ -21034,36 +21043,9 @@ html[data-theme="dark"] .adviser-chat__composer-bar textarea {
   background: rgba(12, 18, 29, 0.92);
 }
 
-.adviser-chat--workspace .adviser-chat__send {
-  position: absolute;
-  right: 7px;
-  bottom: 7px;
-  display: grid;
-  place-items: center;
-  width: 36px;
-  min-width: 36px;
-  min-height: 36px;
-  padding: 0;
-  border-radius: 12px;
-}
-
-.adviser-chat__send svg {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-
 .adviser-chat--workspace .adviser-chat__composer-bar > .adviser-chat__status {
   display: flex;
   margin: 7px 4px 0;
-}
-
-html[data-theme="dark"] .adviser-chat__welcome-mark {
-  color: #06151a;
 }
 
 @media (max-width: 1100px) {
@@ -21083,8 +21065,8 @@ html[data-theme="dark"] .adviser-chat__welcome-mark {
   }
 
   .adviser-chat__welcome {
-    justify-content: flex-start;
-    padding: clamp(34px, 10vh, 72px) 2px 18px;
+    justify-content: center;
+    padding: 20px 2px 34px;
   }
 
   .adviser-chat__welcome-mark {
@@ -21100,16 +21082,16 @@ html[data-theme="dark"] .adviser-chat__welcome-mark {
 
   .adviser-chat--workspace .adviser-chat__prompt-row {
     grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-    margin-top: 22px;
+    gap: 4px;
+    margin-top: 12px;
   }
 
   .content--adviser .adviser-chat--workspace .adviser-chat__prompt-row .adviser-chat__prompt {
     display: flex;
-    min-height: 50px;
-    padding: 10px 12px;
-    border-radius: 14px;
-    font-size: 0.78rem;
+    min-height: 26px;
+    padding: 3px 0;
+    border-radius: 0;
+    font-size: 0.72rem;
   }
 
   .adviser-chat--workspace .adviser-chat__thread {
@@ -21139,18 +21121,11 @@ html[data-theme="dark"] .adviser-chat__welcome-mark {
 
   .adviser-chat__composer-bar textarea {
     min-height: 46px;
-    padding: 12px 48px 11px 14px;
+    padding: 12px 14px 11px;
     border-radius: 17px;
     font-size: 0.9rem;
   }
 
-  .adviser-chat--workspace .adviser-chat__send {
-    right: 6px;
-    bottom: 6px;
-    width: 34px;
-    min-width: 34px;
-    min-height: 34px;
-  }
 }
 
 .modal-backdrop--transaction-detail {
