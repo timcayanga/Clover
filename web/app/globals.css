@@ -54966,7 +54966,7 @@ html[data-theme="dark"] .shell-quick-add-popover__item--camera:focus-visible {
   stroke-width: 1.8;
 }
 
-.home-sensitive-amount__mask {
+.home-sensitive-amount > .home-sensitive-amount__mask {
   display: none;
   letter-spacing: 0.025em;
 }

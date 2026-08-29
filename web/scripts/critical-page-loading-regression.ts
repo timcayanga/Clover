@@ -89,6 +89,11 @@ assert.match(
   globalStylesSource,
   /body\[data-clover-home-balances-hidden\] \.home-sensitive-amount__mask\s*\{[^}]*display:\s*inline/s,
 );
+assert.match(
+  globalStylesSource,
+  /\.home-sensitive-amount > \.home-sensitive-amount__mask\s*\{[^}]*display:\s*none/s,
+  "Report metric layout styles must not reveal the amount mask while values are visible.",
+);
 assert.match(dashboardSource, /after\(async \(\) => \{[\s\S]{0,250}repairWorkspaceDataVisibility/);
 
 const recurringPageDataSource = readSource("lib/recurring-page.ts");
