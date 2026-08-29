@@ -45,11 +45,14 @@ assert.match(globalStyles, /@media \(max-width: 1100px\)[\s\S]*?\.transaction-dr
 assert.match(detailPage, /\{ value: "transfer", label: "Transfer", icon: "↔" \}/, "Mobile editing must use the shared three-option type selector.");
 assert.match(detailPage, /editing \? "Edit transaction" : "Transaction details"/, "Mobile details must distinguish view and edit states.");
 assert.match(detailPage, /Save changes/, "Mobile edits must require an explicit save.");
-assert.match(detailPage, /Delete transaction/, "Mobile deletion must remain available from the actions menu.");
+assert.match(detailPage, /beginEditing\("name"\)/, "Clicking a visible detail must enter editing without a separate Edit action.");
+assert.match(detailPage, /transaction-detail-page__delete-button/, "Mobile deletion must remain available at the bottom of the page.");
 assert.match(detailPage, /method: "PATCH"/);
 assert.match(detailPage, /method: "DELETE"/);
 assert.match(detailPage, /TransactionAccountPicker/, "The full details page must show institution icons in account choices.");
 assert.match(detailPage, /TransactionCategoryPicker/, "The full details page must show category icons in category choices.");
+assert.match(detailPage, /AccountBrandMark/, "The full details page must show the account icon in read mode.");
+assert.match(detailPage, /mobileBackHref="\/transactions"/, "The shared mobile header must own the single back action.");
 assert.match(detailRoute, /export async function GET/);
 assert.match(detailRoute, /assertWorkspaceAccess\(userId, transaction\.workspaceId\)/);
 assert.match(detailRoute, /type: \{ not: "investment" \}/, "Investment holdings must not be returned as transaction accounts.");

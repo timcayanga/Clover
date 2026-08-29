@@ -35,7 +35,8 @@ const jpegName = (fileName: string) => {
 };
 
 export const optimizeImportImage = async (file: File, maxUploadBytes: number) => {
-  if (!isImageImportFile(file) || file.size <= maxUploadBytes) {
+  const targetUploadBytes = Math.min(IMPORT_IMAGE_TARGET_SIZE, maxUploadBytes);
+  if (!isImageImportFile(file) || file.size <= targetUploadBytes) {
     return file;
   }
 
@@ -64,7 +65,7 @@ export const optimizeImportImage = async (file: File, maxUploadBytes: number) =>
     context.imageSmoothingQuality = "high";
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
     output = await encodeJpeg(canvas, quality);
-    if (output.size <= Math.min(IMPORT_IMAGE_TARGET_SIZE, maxUploadBytes)) {
+    if (output.size <= targetUploadBytes) {
       break;
     }
 

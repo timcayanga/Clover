@@ -91,8 +91,10 @@ assert.match(transactions, /setDetailEditing\(true\)/, "Desktop Transaction Deta
 assert.match(transactions, /Save changes/, "Desktop transaction edits must have an explicit Save action.");
 assert.doesNotMatch(transactions, /detailAutosaveTimerRef/, "Transaction Details must not silently autosave financial edits.");
 assert.match(transactions, /transaction-drawer__action-menu-popover/, "Desktop destructive actions must live in the overflow menu.");
-assert.match(transactionDetail, /setEditing\(true\)/, "Mobile Transaction Details must have an explicit Edit action.");
-assert.match(transactionDetail, /transaction-detail-page__action-menu-popover/, "Mobile destructive actions must live in the overflow menu.");
+assert.match(transactionDetail, /beginEditing\("account"\)/, "Transaction detail fields must enter editing directly when tapped.");
+assert.match(transactionDetail, /transaction-detail-page__delete-button/, "Mobile destructive actions must remain at the bottom of the details page.");
+assert.match(transactionDetail, /AccountBrandMark/, "Transaction details must show the selected account icon.");
+assert.match(transactionDetail, /CategoryBrandMark/, "Transaction details must show the selected category icon.");
 assert.match(styles, /\.transaction-detail-page__actions\.is-editing[\s\S]*?position:\s*sticky/, "Mobile Save and Cancel actions must remain reachable above navigation.");
 
 console.log("Manual transaction entry regression passed.");

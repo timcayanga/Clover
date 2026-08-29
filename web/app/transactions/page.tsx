@@ -2331,6 +2331,7 @@ function TransactionsPageContent() {
   const [manualCategoryMenuOpen, setManualCategoryMenuOpen] = useState(false);
   const [mobileVisibleCount, setMobileVisibleCount] = useState(MOBILE_TRANSACTIONS_BATCH_SIZE);
   const [isMobileLoadingMore, setIsMobileLoadingMore] = useState(false);
+  const [mobilePaginationExhausted, setMobilePaginationExhausted] = useState(false);
   const transactionRowRefs = useRef(new Map<string, HTMLElement>());
   const warningPopoverRefs = useRef(new Map<string, HTMLDivElement | null>());
   const selectionActionsMenuRef = useRef<HTMLDivElement | null>(null);
@@ -2947,6 +2948,11 @@ function TransactionsPageContent() {
         shouldPreserveImportedTransactions && importedTransactionsToPreserveAfterServerResponse.length > 0
           ? mergeImportedWorkspaceTransactions(mergedTransactions, importedTransactionsToPreserveAfterServerResponse as unknown as ImportedWorkspaceTransaction[])
           : mergedTransactions;
+      const stableTransactionIds = new Set(stableBaseTransactions.map((transaction) => transaction.id));
+      const appendedUniqueTransactionCount = fetchedTransactions.reduce(
+        (count, transaction) => count + (stableTransactionIds.has(transaction.id) ? 0 : 1),
+        0
+      );
       const responseCurrencyCodes = Array.isArray(payload?.currencyCodes)
         ? payload.currencyCodes.map((value: unknown) => formatCurrencyCode(String(value ?? ""))).filter(Boolean)
         : [];
@@ -3019,8 +3025,13 @@ function TransactionsPageContent() {
       setTransactions(mergedTransactionsWithImports);
       if (options?.append) {
         setMobileVisibleCount((current) => current + fetchedTransactions.length);
+        // Stop the observer when the server page is empty or contains only rows
+        // already present locally. Without this guard, the mobile sentinel can
+        // request the same no-op page forever and remain on "Loading more".
+        setMobilePaginationExhausted(fetchedTransactions.length === 0 || appendedUniqueTransactionCount === 0);
       } else {
         setMobileVisibleCount(MOBILE_TRANSACTIONS_BATCH_SIZE);
+        setMobilePaginationExhausted(false);
       }
       if (options?.append) {
         setIsMobileLoadingMore(false);
@@ -3262,6 +3273,10 @@ function TransactionsPageContent() {
         }
 
         if (nextTransactionsSnapshot && previewTransactions.length > 0) {
+          const importedCurrencyCodes = previewTransactions
+            .map((transaction) => formatCurrencyCode(transaction.currency))
+            .filter(Boolean);
+          setWorkspaceCurrencyCodes((current) => Array.from(new Set([...current, ...importedCurrencyCodes])).sort());
           setTransactionsSummary((current) =>
             buildVisibleTransactionSummary(
               nextTransactionsSnapshot ?? [],
@@ -4324,6 +4339,7 @@ function TransactionsPageContent() {
   const someVisibleSelected = desktopPageTransactionIds.some((transactionId) => selectedTransactionIds.includes(transactionId));
   const hasMoreMobileTransactions =
     isCompactViewport &&
+    !mobilePaginationExhausted &&
     !searchText &&
     (mobileVisibleTransactions.length < visibleTransactions.length || transactions.length < transactionsSummary.totalCount);
 
@@ -4379,7 +4395,10 @@ function TransactionsPageContent() {
       return;
     }
 
-    const nextPage = Math.max(1, Math.ceil(transactions.length / MOBILE_TRANSACTIONS_BATCH_SIZE)) + 1;
+    // The first fetch currently contains 25 rows while mobile batches contain
+    // 12. floor + 1 resumes at offset 24, preserving the boundary row for
+    // de-duplication without skipping transactions 25-36.
+    const nextPage = Math.max(2, Math.floor(transactions.length / MOBILE_TRANSACTIONS_BATCH_SIZE) + 1);
     mobileLoadMoreInFlightRef.current = true;
     setIsMobileLoadingMore(true);
     try {
@@ -4480,6 +4499,10 @@ function TransactionsPageContent() {
 
   useEffect(() => {
     setTransactionsPage(1);
+    setMobileVisibleCount(MOBILE_TRANSACTIONS_BATCH_SIZE);
+    setMobilePaginationExhausted(false);
+    mobileLoadMoreInFlightRef.current = false;
+    setIsMobileLoadingMore(false);
   }, [
     selectedWorkspaceId,
     query,

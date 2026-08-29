@@ -60212,7 +60212,7 @@ html[data-theme="dark"] .recurring-mobile-detail__header {
 }
 
 .transaction-drawer-view__facts > div,
-.transaction-detail-page__facts > div {
+.transaction-detail-page__facts > :is(div, button) {
   display: grid;
   grid-template-columns: minmax(90px, 0.38fr) minmax(0, 1fr);
   gap: 14px;
@@ -60221,11 +60221,43 @@ html[data-theme="dark"] .recurring-mobile-detail__header {
 }
 
 .transaction-drawer-view__facts > div:first-child,
-.transaction-detail-page__facts > div:first-child { border-top: 0; }
+.transaction-detail-page__facts > :is(div, button):first-child { border-top: 0; }
 .transaction-drawer-view__facts dt,
 .transaction-detail-page__facts span { color: var(--muted); font-size: 0.78rem; }
 .transaction-drawer-view__facts dd { margin: 0; color: var(--text); font-size: 0.9rem; font-weight: 700; text-align: right; }
 .transaction-detail-page__facts strong { min-width: 0; color: var(--text); font-size: 0.9rem; text-align: right; overflow-wrap: anywhere; }
+
+.transaction-detail-page__facts > button {
+  width: 100%;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.transaction-detail-page__facts > button:hover,
+.transaction-detail-page__facts > button:focus-visible {
+  background: rgba(3, 168, 192, 0.06);
+  outline: none;
+}
+
+.transaction-detail-page__fact-value-with-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.transaction-detail-page__fact-icon,
+.transaction-detail-page__fact-icon .accounts-brand-mark {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border-radius: 8px;
+}
 
 .transaction-drawer-edit-type,
 .transaction-detail-page__type-section {
@@ -60316,17 +60348,7 @@ html[data-theme="dark"] .transaction-drawer-edit-footer {
   }
 
   .transaction-detail-page__header {
-    position: sticky;
-    top: 0;
-    z-index: 20;
-    display: grid;
-    grid-template-columns: 38px minmax(0, 1fr) auto;
-    gap: 8px;
-    min-height: 58px;
-    margin: 0;
-    padding: max(8px, env(safe-area-inset-top)) 12px 8px;
-    border-bottom: 1px solid var(--stroke);
-    background: var(--surface);
+    display: none;
   }
 
   .transaction-detail-page__back {
@@ -60340,7 +60362,18 @@ html[data-theme="dark"] .transaction-drawer-edit-footer {
   .transaction-detail-page__header-actions .button { min-height: 34px; padding: 6px 10px; }
   .transaction-detail-page__summary { padding-inline: 16px; }
   .transaction-detail-page__facts { margin: 8px 16px 16px; }
+  .transaction-detail-page__facts > button { min-height: 50px; }
   .transaction-detail-page__fields { padding-inline: 16px; }
+
+  .content--transactions .shell-compact-bar .shell-back-button {
+    width: auto;
+    min-width: 28px;
+    height: 38px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
 
   .transaction-detail-page__actions.is-editing {
     position: sticky;

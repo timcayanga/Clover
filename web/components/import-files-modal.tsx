@@ -21,7 +21,7 @@ import {
 } from "@/lib/import-file-helpers";
 import { extractTextFromFile, probeFilePasswordProtection, validatePdfPassword } from "@/lib/import-file-text";
 import { postFileWithProgress } from "@/lib/import-file-post";
-import { optimizeImportImages } from "@/lib/import-image-compression";
+import { IMPORT_IMAGE_TARGET_SIZE, optimizeImportImages } from "@/lib/import-image-compression";
 import {
   MAX_IMPORT_FILE_SIZE,
   MAX_IMPORT_FILE_SIZE_LABEL,
@@ -1484,7 +1484,12 @@ export function ImportFilesModal({
       return;
     }
 
-    if (!options?.imagesPrepared && nextFiles.some((file) => isImageImportFile(file) && file.size > MAX_IMPORT_FILE_SIZE)) {
+    if (
+      !options?.imagesPrepared &&
+      nextFiles.some(
+        (file) => isImageImportFile(file) && file.size > Math.min(IMPORT_IMAGE_TARGET_SIZE, MAX_IMPORT_FILE_SIZE)
+      )
+    ) {
       setValidationNotice(null);
       setMessage("Optimizing photo for a faster upload...");
       void optimizeImportImages(nextFiles, MAX_IMPORT_FILE_SIZE)

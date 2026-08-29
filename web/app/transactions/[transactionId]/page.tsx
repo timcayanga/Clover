@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
+import { AccountBrandMark } from "@/components/account-brand-mark";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { TransactionAccountPicker, type TransactionPickerAccount } from "@/components/transaction-account-picker";
 import { TransactionCategoryPicker } from "@/components/transaction-category-picker";
@@ -111,11 +112,11 @@ export default function TransactionDetailPage() {
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [splitBillOpen, setSplitBillOpen] = useState(false);
   const [splitBillSaving, setSplitBillSaving] = useState(false);
   const [splitBillDraft, setSplitBillDraft] = useState<SplitBillTransactionLinkDraft>({ groupId: "", participantNames: [] });
+  const pendingEditFieldRef = useRef<string | null>(null);
 
   const goBack = () => {
     if (window.history.length > 1) {
@@ -192,6 +193,23 @@ export default function TransactionDetailPage() {
     () => categories.find((category) => category.id === draft?.categoryId) ?? null,
     [categories, draft?.categoryId]
   );
+  const selectedAccount = useMemo(
+    () => accounts.find((account) => account.id === draft?.accountId) ?? null,
+    [accounts, draft?.accountId]
+  );
+  const accountForDisplay = useMemo<AccountOption>(
+    () => selectedAccount ?? {
+      id: "",
+      name: transaction?.accountName ?? "Account",
+      institution: transaction?.institution ?? null,
+      accountNumber: transaction?.accountNumber ?? null,
+      type: "bank",
+      currency: draft?.currency ?? "PHP",
+    },
+    [draft?.currency, selectedAccount, transaction?.accountName, transaction?.accountNumber, transaction?.institution]
+  );
+  const accountDisplayName = displayAccountName(accountForDisplay);
+  const accountBrand = getAccountBrand(accountForDisplay);
   const accountPickerOptions = useMemo<TransactionPickerAccount[]>(
     () =>
       accounts
@@ -207,6 +225,32 @@ export default function TransactionDetailPage() {
   const confidenceScore = transaction ? getConfidenceScore(transaction) : 0;
   const confidenceLabel = confidenceScore >= 85 ? "High confidence" : confidenceScore >= 65 ? "Medium confidence" : "Low confidence";
   const receiptLineTotal = useMemo(() => getManualReceiptLineItemTotal(draft?.receiptLineItems ?? []), [draft?.receiptLineItems]);
+
+  const beginEditing = (field: string) => {
+    pendingEditFieldRef.current = field;
+    setEditing(true);
+  };
+
+  useEffect(() => {
+    if (!editing || !pendingEditFieldRef.current) {
+      return;
+    }
+
+    const field = pendingEditFieldRef.current;
+    pendingEditFieldRef.current = null;
+    const frame = window.requestAnimationFrame(() => {
+      const container = document.querySelector<HTMLElement>(`[data-transaction-detail-field="${field}"]`);
+      const control = container?.matches("input, textarea, select, button")
+        ? container
+        : container?.querySelector<HTMLElement>("input, textarea, select, button");
+      control?.focus();
+      if ((field === "account" || field === "category") && control instanceof HTMLButtonElement) {
+        control.click();
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [editing]);
 
   const updateLineItem = (index: number, field: "description" | "quantity" | "currency" | "amount", value: string) => {
     setDraft((current) => current ? {
@@ -313,7 +357,7 @@ export default function TransactionDetailPage() {
   };
 
   return (
-    <CloverShell active="transactions" title="Transaction Details" showTopbar={false}>
+    <CloverShell active="transactions" title="Transaction Details" showTopbar={false} mobileBackHref="/transactions">
       <main className="transaction-detail-page">
         <header className="transaction-detail-page__header">
           <button className="transaction-detail-page__back" type="button" onClick={goBack} aria-label="Back to transactions">
@@ -329,17 +373,7 @@ export default function TransactionDetailPage() {
               {editing ? (
                 <button className="button button-ghost button-small" type="button" onClick={cancelEdit} disabled={saving}>Cancel</button>
               ) : (
-                <>
-                  <button className="button button-secondary button-small" type="button" onClick={() => setEditing(true)}>Edit</button>
-                  <div className="transaction-detail-page__action-menu">
-                    <button className="icon-button" type="button" aria-label="More transaction actions" aria-expanded={actionMenuOpen} onClick={() => setActionMenuOpen((current) => !current)}>•••</button>
-                    {actionMenuOpen ? (
-                      <div className="transaction-detail-page__action-menu-popover" role="menu">
-                        <button type="button" role="menuitem" onClick={() => { setActionMenuOpen(false); setConfirmingDelete(true); }}>Delete transaction</button>
-                      </div>
-                    ) : null}
-                  </div>
-                </>
+                <button className="button button-secondary button-small transaction-detail-page__edit-button" type="button" onClick={() => setEditing(true)}>Edit</button>
               )}
             </div>
           ) : null}
@@ -381,7 +415,7 @@ export default function TransactionDetailPage() {
 
             {editing ? (
             <section className="transaction-detail-page__fields">
-              <div className="transaction-detail-page__type-section">
+              <div className="transaction-detail-page__type-section" data-transaction-detail-field="type">
                 <span>Transaction type</span>
                 <div className="transactions-manual-type-toggle" role="group" aria-label="Transaction type">
                   {([
@@ -402,15 +436,15 @@ export default function TransactionDetailPage() {
                   ))}
                 </div>
               </div>
-              <label>
+              <label data-transaction-detail-field="name">
                 Name
                 <input value={draft.merchantClean} onChange={(event) => setDraft({ ...draft, merchantClean: event.target.value })} />
               </label>
-              <label>
+              <label data-transaction-detail-field="date">
                 Date
                 <input type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} />
               </label>
-              <label>
+              <label data-transaction-detail-field="account">
                 Account
                 <TransactionAccountPicker
                   accounts={accountPickerOptions}
@@ -420,7 +454,7 @@ export default function TransactionDetailPage() {
                   className="transaction-detail-page__relation-picker"
                 />
               </label>
-              <label>
+              <label data-transaction-detail-field="category">
                 Category
                 <TransactionCategoryPicker
                   categories={categories}
@@ -430,7 +464,7 @@ export default function TransactionDetailPage() {
                   className="transaction-detail-page__relation-picker"
                 />
               </label>
-              <div className="transaction-detail-page__tags-field">
+              <div className="transaction-detail-page__tags-field" data-transaction-detail-field="tags">
                 <span>Tags</span>
                 <TransactionTagsEditor
                   tags={tagDraft}
@@ -439,7 +473,7 @@ export default function TransactionDetailPage() {
                   inputAriaLabel="Add tags to transaction"
                 />
               </div>
-              <label>
+              <label data-transaction-detail-field="amount">
                 Amount
                 <span className="transaction-detail-page__money-control">
                   <CurrencySelector
@@ -460,20 +494,22 @@ export default function TransactionDetailPage() {
             </section>
             ) : (
               <section className="transaction-detail-page__facts">
-                <div><span>Type</span><strong>{draft.type === "credit" ? "Income" : draft.type === "transfer" ? "Transfer" : "Expense"}</strong></div>
-                <div><span>Account</span><strong>{displayAccountName(accounts.find((account) => account.id === draft.accountId) ?? { id: "", name: transaction.accountName, institution: transaction.institution ?? null, accountNumber: transaction.accountNumber ?? null, type: "bank", currency: draft.currency })}</strong></div>
-                <div><span>Category</span><strong>{selectedCategory?.name ?? transaction.categoryName ?? "Other"}</strong></div>
-                <div><span>Tags</span><strong>{tagDraft.length > 0 ? tagDraft.join(", ") : "No tags"}</strong></div>
-                <div><span>Date</span><strong>{new Date(`${draft.date}T00:00:00`).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })}</strong></div>
-                <div className="transaction-detail-page__facts-notes"><span>Notes</span><strong>{draft.description.trim() || "No notes"}</strong></div>
+                <button type="button" onClick={() => beginEditing("type")}><span>Type</span><strong>{draft.type === "credit" ? "Income" : draft.type === "transfer" ? "Transfer" : "Expense"}</strong></button>
+                <button type="button" onClick={() => beginEditing("name")}><span>Name</span><strong>{draft.merchantClean || transaction.merchantRaw}</strong></button>
+                <button type="button" onClick={() => beginEditing("account")}><span>Account</span><strong className="transaction-detail-page__fact-value-with-icon"><span className="transaction-detail-page__fact-icon" aria-hidden="true"><AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} /></span>{accountDisplayName}</strong></button>
+                <button type="button" onClick={() => beginEditing("category")}><span>Category</span><strong className="transaction-detail-page__fact-value-with-icon"><CategoryBrandMark categoryName={selectedCategory?.name ?? transaction.categoryName ?? "Other"} size={24} radius={8} />{selectedCategory?.name ?? transaction.categoryName ?? "Other"}</strong></button>
+                <button type="button" onClick={() => beginEditing("tags")}><span>Tags</span><strong>{tagDraft.length > 0 ? tagDraft.join(", ") : "No tags"}</strong></button>
+                <button type="button" onClick={() => beginEditing("date")}><span>Date</span><strong>{new Date(`${draft.date}T00:00:00`).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })}</strong></button>
+                <button type="button" onClick={() => beginEditing("amount")}><span>Amount</span><strong>{formatCurrencyAmount(Number(draft.amount || 0), draft.currency)}</strong></button>
+                <button type="button" className="transaction-detail-page__facts-notes" onClick={() => beginEditing("notes")}><span>Notes</span><strong>{draft.description.trim() || "No notes"}</strong></button>
               </section>
             )}
 
             {editing ? (
-            <details className="transaction-detail-page__more">
+            <details className="transaction-detail-page__more" open>
               <summary>More</summary>
               <div className="transaction-detail-page__more-body">
-                <label className="transaction-detail-page__notes">
+                <label className="transaction-detail-page__notes" data-transaction-detail-field="notes">
                   Notes
                   <textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder="Optional note" />
                 </label>
@@ -560,7 +596,9 @@ export default function TransactionDetailPage() {
                   <button className="button button-secondary button-small" type="button" onClick={() => setConfirmingDelete(false)}>Cancel</button>
                   <button className="button button-danger button-small" type="button" onClick={() => void deleteTransaction()} disabled={saving}>Delete</button>
                 </div>
-              ) : null}
+              ) : (
+                <button className="button button-danger button-small transaction-detail-page__delete-button" type="button" onClick={() => setConfirmingDelete(true)}>Delete transaction</button>
+              )}
             </footer>
           </form>
         ) : null}

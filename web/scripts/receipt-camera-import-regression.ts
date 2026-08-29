@@ -58,6 +58,7 @@ assert.equal(
 
 const root = process.cwd();
 const importModalSource = readFileSync(join(root, "components/import-files-modal.tsx"), "utf8");
+const imageCompressionSource = readFileSync(join(root, "lib/import-image-compression.ts"), "utf8");
 const transactionsPageSource = readFileSync(join(root, "app/transactions/page.tsx"), "utf8");
 const cloverShellSource = readFileSync(join(root, "components/clover-shell.tsx"), "utf8");
 const uploadDockSource = readFileSync(join(root, "components/import-upload-dock.tsx"), "utf8");
@@ -100,6 +101,31 @@ assert.match(
   transactionsPageSource,
   /Boolean\(options\?\.background\)[\s\S]{0,180}?fetchedTransactions\.length < stableBaseTransactions\.length[\s\S]{0,180}?exactServerTotalCount <= stableBaseTransactions\.length/,
   "A settling background response must not temporarily erase already-visible transactions."
+);
+assert.match(
+  transactionsPageSource,
+  /Math\.floor\(transactions\.length \/ MOBILE_TRANSACTIONS_BATCH_SIZE\) \+ 1/,
+  "Mobile pagination must continue from the 25-row first page without skipping a 12-row batch."
+);
+assert.match(
+  transactionsPageSource,
+  /setMobilePaginationExhausted\(fetchedTransactions\.length === 0 \|\| appendedUniqueTransactionCount === 0\)/,
+  "Mobile pagination must stop when a server page adds no transactions."
+);
+assert.match(
+  transactionsPageSource,
+  /setWorkspaceCurrencyCodes\(\(current\) => Array\.from\(new Set\(\[\.\.\.current, \.\.\.importedCurrencyCodes\]\)\)\.sort\(\)\)/,
+  "A newly imported foreign currency must become filterable before a route remount."
+);
+assert.match(
+  importModalSource,
+  /file\.size > Math\.min\(IMPORT_IMAGE_TARGET_SIZE, MAX_IMPORT_FILE_SIZE\)/,
+  "Large camera photos must be optimized proactively rather than only after exceeding the upload limit."
+);
+assert.match(
+  imageCompressionSource,
+  /const targetUploadBytes = Math\.min\(IMPORT_IMAGE_TARGET_SIZE, maxUploadBytes\)/,
+  "Camera optimization must use the OCR-safe upload target as its threshold."
 );
 assert.match(
   uploadDockSource,
