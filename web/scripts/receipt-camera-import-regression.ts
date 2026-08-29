@@ -239,12 +239,22 @@ assert.match(
 );
 assert.match(
   importModalSource,
-  /new EventSource\(`\/api\/imports\/\$\{importFileId\}\/events`\)[\s\S]{0,3000}?completionTransport: "server_sent_event"/,
+  /new EventSource\(`\/api\/imports\/\$\{importFileId\}\/events`\)[\s\S]{0,7000}?completionTransport: "server_sent_event"/,
   "the uploader should react to server-pushed receipt visibility while retaining polling fallback"
 );
 assert.match(
+  importModalSource,
+  /handleVisibleImportEvent[\s\S]{0,2600}?buildReceiptSummaryFromReceiptTransaction[\s\S]{0,1200}?onImported\(visibleReceiptSummary\)/,
+  "server-pushed receipt visibility should publish the new row into the open transaction table"
+);
+assert.match(
   importEventsRouteSource,
-  /IMPORT_STATUS_STREAM_NEAR_VISIBLE_POLL_MS = 250[\s\S]{0,5000}?processingPhase === "reconciling"/,
+  /receiptTransaction: snapshot\.receiptTransaction[\s\S]{0,900}?amount: snapshot\.receiptTransaction\.amount[\s\S]{0,500}?merchantClean: snapshot\.receiptTransaction\.merchantClean/,
+  "the one-time visible event should carry enough receipt fields for immediate UI insertion"
+);
+assert.match(
+  importEventsRouteSource,
+  /IMPORT_STATUS_STREAM_NEAR_VISIBLE_POLL_MS = 250[\s\S]{0,8000}?processingPhase === "reconciling"/,
   "the server event stream should tighten its cadence only near visible completion"
 );
 assert.match(

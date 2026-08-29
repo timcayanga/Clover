@@ -5314,6 +5314,7 @@ export function ImportFilesModal({
       let processResponseSettled = false;
       let inFlightStatusMonitorStopped = false;
       let importEventStream: EventSource | null = null;
+      let receiptVisibilityPublished = false;
       const importRequestStartedAt = performance.now();
       const processResponsePromise = postFileWithProgress(
         `/api/imports/${importFileId}/process`,
@@ -5384,7 +5385,7 @@ export function ImportFilesModal({
       });
       if (typeof EventSource !== "undefined") {
         importEventStream = new EventSource(`/api/imports/${importFileId}/events`);
-        const handleVisibleImportEvent = (event: MessageEvent<string>) => {
+        const handleVisibleImportEvent = async (event: MessageEvent<string>) => {
           try {
             const payload = JSON.parse(event.data) as ImportStatusPayload;
             const confirmedTransactionsCount = Number(payload.confirmedTransactionsCount ?? 0);
@@ -5394,6 +5395,41 @@ export function ImportFilesModal({
               typeof payload.importFile?.accountId === "string" && payload.importFile.accountId.trim()
                 ? payload.importFile.accountId.trim()
                 : null;
+            let visibleReceiptSummary: UploadInsightsSummary | null = null;
+            if (payload.receiptTransaction && !receiptVisibilityPublished) {
+              const receiptAccountId =
+                typeof payload.receiptTransaction.accountId === "string"
+                  ? payload.receiptTransaction.accountId.trim()
+                  : "";
+              const accountOption = findAccountOptionById(accounts, receiptAccountId);
+              visibleReceiptSummary = buildReceiptSummaryFromReceiptTransaction(
+                {
+                  fileName: item.file.name,
+                  importFileId: importFileId!,
+                  receiptTransaction: payload.receiptTransaction,
+                  accountType: (accountOption?.type as UploadAccountType) ?? null,
+                },
+                (params) =>
+                  buildOptimisticUploadSummary(
+                    params.fileName,
+                    params.importedRows,
+                    params.accountId,
+                    params.accountName,
+                    params.institution,
+                    params.accountType,
+                    params.optimisticAccountId ?? null,
+                    params.balance ?? null,
+                    params.previewTransactions,
+                    params.accountNumber ?? null,
+                    params.showBalanceEvenIfEmpty ?? false
+                  )
+              );
+              if (visibleReceiptSummary) {
+                receiptVisibilityPublished = true;
+                seedImportedWorkspaceCaches(workspaceId, visibleReceiptSummary);
+                await Promise.resolve(onImported(visibleReceiptSummary));
+              }
+            }
             updateItem(itemId, {
               status: "done",
               confirmationState: "confirmed",
@@ -5414,7 +5450,7 @@ export function ImportFilesModal({
               completedFiles: completedFileCount + 1,
               progress: 100,
               detail: `${visibleRows} transaction${visibleRows === 1 ? "" : "s"} imported successfully.`,
-              summary: null,
+              summary: visibleReceiptSummary,
               errorMessage: null,
             });
             setMessage(`Imported ${item.file.name}.`);
@@ -5427,13 +5463,15 @@ export function ImportFilesModal({
             inFlightStatusMonitorStopped = true;
             importEventStream?.close();
             importEventStream = null;
-            router.refresh();
+            if (!visibleReceiptSummary) {
+              router.refresh();
+            }
           } catch {
             // The read-only progress poll remains the compatibility fallback.
           }
         };
-        importEventStream.addEventListener("visible", handleVisibleImportEvent as EventListener);
-        importEventStream.addEventListener("complete", handleVisibleImportEvent as EventListener);
+        importEventStream.addEventListener("visible", handleVisibleImportEvent as unknown as EventListener);
+        importEventStream.addEventListener("complete", handleVisibleImportEvent as unknown as EventListener);
         importEventStream.onerror = () => {
           importEventStream?.close();
           importEventStream = null;
@@ -5695,8 +5733,11 @@ export function ImportFilesModal({
           );
 
           if (receiptSummary) {
-            seedImportedWorkspaceCaches(workspaceId, receiptSummary);
-            await Promise.resolve(onImported(receiptSummary));
+            if (!receiptVisibilityPublished) {
+              receiptVisibilityPublished = true;
+              seedImportedWorkspaceCaches(workspaceId, receiptSummary);
+              await Promise.resolve(onImported(receiptSummary));
+            }
             triggerImportEnrichment(importFileId);
             updateItem(itemId, {
               status: "done",
