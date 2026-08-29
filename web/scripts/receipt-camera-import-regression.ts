@@ -259,6 +259,16 @@ assert.match(
 );
 assert.match(
   importEventsRouteSource,
+  /let nextPollMs = IMPORT_STATUS_STREAM_ACTIVE_RECEIPT_POLL_MS/,
+  "a fast camera receipt should not wait behind the general document polling cadence"
+);
+assert.match(
+  importModalSource,
+  /processResponseSettled = true;[\s\S]{0,500}?setTimeout[\s\S]{0,300}?importEventStream\?\.close\(\)[\s\S]{0,80}?5_000/,
+  "the response handoff should leave enough time for the structured visibility event"
+);
+assert.match(
+  importEventsRouteSource,
   /export const preferredRegion = "sin1"/,
   "receipt visibility streaming should stay colocated with the import worker and database"
 );
@@ -266,6 +276,11 @@ assert.match(
   workerSource,
   /visible_total_and_date_matched: true[\s\S]{0,180}?openai_call_avoided: true/,
   "perceptual receipt cache reuse must require matching visible financial evidence"
+);
+assert.match(
+  workerSource,
+  /burger\|sandwich[\s\S]{0,220}?juice\|pastry\|bread[\s\S]{0,220}?receiptContextText/,
+  "common receipt food items should override an unsupported Transfers guess"
 );
 assert.match(
   workerSource,

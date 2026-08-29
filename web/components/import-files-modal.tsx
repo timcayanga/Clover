@@ -5357,9 +5357,15 @@ export function ImportFilesModal({
         { signal: options?.signal ?? null }
       ).finally(() => {
         processResponseSettled = true;
-        inFlightStatusMonitorStopped = true;
-        importEventStream?.close();
-        importEventStream = null;
+        // The process response and the visibility stream race on very fast
+        // receipts. Leave the stream a short handoff window so its structured
+        // transaction can still update the open table after the upload request
+        // itself has returned.
+        window.setTimeout(() => {
+          inFlightStatusMonitorStopped = true;
+          importEventStream?.close();
+          importEventStream = null;
+        }, 5_000);
       });
       // Tiny files can finish uploading without a computable progress event.
       // Once the request is in flight, leave preparation but keep the label at

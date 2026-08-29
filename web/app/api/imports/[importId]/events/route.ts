@@ -84,7 +84,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
         let lastFullSnapshotStatus: string | null = null;
         let nextFinalizationCheckAt = 0;
         let consecutiveErrors = 0;
-        let nextPollMs = IMPORT_STATUS_STREAM_POLL_MS;
+        // A newly opened camera upload may not have persisted its receipt phase
+        // before the first immediate read. Start with the receipt cadence so a
+        // fast parse cannot finish between two widely spaced stream polls.
+        let nextPollMs = IMPORT_STATUS_STREAM_ACTIVE_RECEIPT_POLL_MS;
         const close = () => {
           if (closed) {
             return;

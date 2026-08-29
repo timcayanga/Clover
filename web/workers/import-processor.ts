@@ -13622,8 +13622,8 @@ export const confirmImportFile = async (
         }
 
         if (
-          /\b(adobo|pares|kare|salmon|lemonade|fizz|tonic|pasta|burger|noodle|rice|meal|dish|grill|steak|sushi|ramen|coffee|latte|dessert|tapsilogan|tapsilog|sisig|longsilog|pancit|bangus|porkchop|pork\s*chop)\b/.test(
-            lineItemText
+          /\b(adobo|pares|kare|salmon|lemonade|fizz|tonic|pasta|burger|sandwich|noodle|rice|meal|dish|grill|steak|sushi|ramen|coffee|latte|juice|pastry|bread|dessert|tapsilogan|tapsilog|sisig|longsilog|pancit|bangus|porkchop|pork\s*chop|deli)\b/.test(
+            `${receiptContextText} ${lineItemText}`
           )
         ) {
           return "Food & Dining";
