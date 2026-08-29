@@ -29,8 +29,6 @@ export type RecurringPageTransaction = {
   merchantRaw: string;
   merchantClean: string | null;
   description: string | null;
-  rawPayload: unknown;
-  importFileId: string | null;
   category: {
     name: string;
   } | null;
@@ -281,8 +279,6 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
         merchantRaw: true,
         merchantClean: true,
         description: true,
-        rawPayload: true,
-        importFileId: true,
         category: {
           select: {
             name: true,
@@ -400,8 +396,6 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
     merchantRaw: transaction.merchantRaw,
     merchantClean: transaction.merchantClean,
     description: transaction.description,
-    rawPayload: transaction.rawPayload,
-    importFileId: transaction.importFileId,
     category: transaction.category,
     account: {
       id: transaction.account.id,
@@ -468,7 +462,9 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
 
   const enrichedCommitments = enrichRecurringCommitments({
     commitments: commitments.map((commitment) => serializeFinancialCommitment(commitment)),
-    transactions: serializedTransactions,
+    // Matching uses the larger server-side window above, while the client only
+    // needs recent choices for the optional "linked transaction" field.
+    transactions: serializedTransactions.slice(0, 24),
     accounts: serializedAccounts,
   }).map((commitment) => {
     const sourceCommitment = commitments.find((item) => item.id === commitment.id);

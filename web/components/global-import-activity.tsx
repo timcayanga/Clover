@@ -101,24 +101,26 @@ const writeDismissedKeys = (keys: Set<string>) => {
 
 export function GlobalImportActivity() {
   const pathname = usePathname();
-  const dismissedKeysRef = useRef<Set<string>>(readDismissedKeys());
+  // Browser storage must not influence the first client render. Reading it in
+  // a state/ref initializer makes the hydrated tree differ from the server
+  // whenever an import is in progress (or was dismissed), forcing React to
+  // discard the server HTML during every full navigation.
+  const dismissedKeysRef = useRef<Set<string>>(new Set());
   const resumedImportIdsRef = useRef(new Set<string>());
   const publishedImportIdsRef = useRef(new Set<string>());
-  const [activity, setActivity] = useState<ImportActivitySnapshot | null>(() => {
+  const [activity, setActivity] = useState<ImportActivitySnapshot | null>(null);
+  const [pageModalActive, setPageModalActive] = useState(false);
+  const [importModalVisible, setImportModalVisible] = useState(false);
+  const [accountsSplashActive, setAccountsSplashActive] = useState(false);
+  const shouldShowOnCurrentPath = canShowImportActivityOnPath(pathname);
+
+  useEffect(() => {
+    const dismissedKeys = readDismissedKeys();
+    dismissedKeysRef.current = dismissedKeys;
     const snapshot = readImportActivity();
     const dismissKey = getDismissKey(snapshot);
-    return dismissKey && dismissedKeysRef.current.has(dismissKey) ? null : snapshot;
-  });
-  const [pageModalActive, setPageModalActive] = useState(() =>
-    typeof document === "undefined" ? false : document.body.hasAttribute("data-clover-page-modal")
-  );
-  const [importModalVisible, setImportModalVisible] = useState(() =>
-    typeof document === "undefined" ? false : document.body.hasAttribute("data-clover-import-modal-visible")
-  );
-  const [accountsSplashActive, setAccountsSplashActive] = useState(() =>
-    typeof document === "undefined" ? false : document.body.hasAttribute("data-clover-accounts-loading")
-  );
-  const shouldShowOnCurrentPath = canShowImportActivityOnPath(pathname);
+    setActivity(dismissKey && dismissedKeys.has(dismissKey) ? null : snapshot);
+  }, []);
 
   useEffect(() => {
     if (!activity || activity.status !== "active" || !activity.importFileId || importModalVisible) {

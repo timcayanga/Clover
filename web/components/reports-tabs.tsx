@@ -57,13 +57,18 @@ export function ReportsTabsProvider({
   restoreSelection?: boolean;
   children: ReactNode;
 }) {
-  const [activeSection, setActiveSection] = useState<ReportsSection>(() => {
-    if (typeof window === "undefined" || !restoreSelection) {
-      return initialSection;
-    }
+  const [activeSection, setActiveSection] = useState<ReportsSection>(initialSection);
 
-    return normalizeReportsSection(window.sessionStorage.getItem(reportsSectionStorageKey), availableSections, initialSection);
-  });
+  useEffect(() => {
+    if (!restoreSelection) return;
+    setActiveSection(
+      normalizeReportsSection(
+        window.sessionStorage.getItem(reportsSectionStorageKey),
+        availableSections,
+        initialSection
+      )
+    );
+  }, [availableSections, initialSection, restoreSelection]);
 
   useEffect(() => {
     setActiveSection((current) => normalizeReportsSection(current, availableSections, initialSection));

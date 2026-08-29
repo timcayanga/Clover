@@ -43,6 +43,26 @@ assert.match(dashboardSource, /after\(async \(\) => \{[\s\S]{0,250}repairWorkspa
 
 const recurringPageDataSource = readSource("lib/recurring-page.ts");
 assert.match(recurringPageDataSource, /after\(async \(\) => \{[\s\S]{0,450}syncWorkspaceRecurringPatterns/);
+assert.match(recurringPageDataSource, /transactions: serializedTransactions\.slice\(0, 24\)/);
+
+const globalImportActivitySource = readSource("components/global-import-activity.tsx");
+assert.match(
+  globalImportActivitySource,
+  /const \[activity, setActivity\] = useState<ImportActivitySnapshot \| null>\(null\)/,
+  "Global import activity must hydrate from a deterministic empty state.",
+);
+assert.match(
+  shellSource,
+  /const \[importActivity, setImportActivity\] = useState<ImportActivitySnapshot \| null>\(null\)/,
+  "The shared shell must not read browser import state during hydration.",
+);
+
+const reportsTabsSource = readSource("components/reports-tabs.tsx");
+assert.match(
+  reportsTabsSource,
+  /const \[activeSection, setActiveSection\] = useState<ReportsSection>\(initialSection\)/,
+  "Reports must hydrate the server-selected tab before restoring session state.",
+);
 
 const lazyActionsSource = readSource("components/dashboard-top-actions-lazy.tsx");
 assert.match(lazyActionsSource, /dynamic\(\s*\(\) => import\("@\/components\/dashboard-top-actions"\)/);

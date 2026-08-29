@@ -833,16 +833,19 @@ export function CloverShell({
   const [quickAddSeedFiles, setQuickAddSeedFiles] = useState<File[] | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [searchWorkspaceId, setSearchWorkspaceId] = useState(() => readSelectedWorkspaceId() || workspaceId || "");
+  // Keep the server render and the first client render identical. Persistent
+  // browser state is restored by the mount effects below; using it in these
+  // initializers caused a full hydration rebuild on authenticated page loads.
+  const [searchWorkspaceId, setSearchWorkspaceId] = useState(workspaceId || "");
   const [searchAccounts, setSearchAccounts] = useState<SidebarSearchAccount[]>([]);
   const [searchPlanTier, setSearchPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [searchTicker, setSearchTicker] = useState<SidebarSearchMarket | null>(null);
   const [searchTickerLoading, setSearchTickerLoading] = useState(false);
-  const [importActivity, setImportActivity] = useState<ImportActivitySnapshot | null>(() => readImportActivity());
+  const [importActivity, setImportActivity] = useState<ImportActivitySnapshot | null>(null);
   const [reviewQueueCount, setReviewQueueCount] = useState(0);
   const [circleInvitations, setCircleInvitations] = useState<ShellCircleInvitation[]>([]);
-  const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(() => readDismissedNotifications());
-  const [cachedProfileImage] = useState<string | null>(() => readAccountIdentityCache()?.imageUrl ?? null);
+  const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(new Set());
+  const [cachedProfileImage, setCachedProfileImage] = useState<string | null>(null);
   const [isBottomNavCompact, setIsBottomNavCompact] = useState(false);
   const [mobileOverlayChrome, setMobileOverlayChrome] = useState<{ title: string; onBack: () => void } | null>(null);
   const [previousPathname, setPreviousPathname] = useState<string | null>(null);
@@ -1363,7 +1366,12 @@ export function CloverShell({
     };
   }, [searchWorkspaceId]);
 
-  useEffect(() => subscribeImportActivity(() => setImportActivity(readImportActivity())), []);
+  useEffect(() => {
+    setImportActivity(readImportActivity());
+    setDismissedNotifications(readDismissedNotifications());
+    setCachedProfileImage(readAccountIdentityCache()?.imageUrl ?? null);
+    return subscribeImportActivity(() => setImportActivity(readImportActivity()));
+  }, []);
 
   useEffect(() => {
     document.body.dataset.cloverShellReady = "true";
