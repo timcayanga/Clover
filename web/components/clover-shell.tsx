@@ -32,14 +32,7 @@ import {
   isChunkLoadErrorMessage,
   recoverFromChunkLoadError,
 } from "@/lib/chunk-error-recovery";
-import {
-  clearImportActivity,
-  getImportActivityTimingSummary,
-  readImportActivity,
-  subscribeImportActivity,
-  type ImportActivitySnapshot,
-} from "@/lib/import-activity";
-import { formatImportResultHeadline } from "@/lib/import-result-summary";
+import { subscribeImportActivity } from "@/lib/import-activity";
 import type { ImportImageMode } from "@/lib/import-image-mode";
 import { publishImportedSummary } from "@/lib/imported-summary-events";
 import {
@@ -60,6 +53,12 @@ import {
   subscribeWorkspaceDataChanges,
 } from "@/lib/workspace-data-sync";
 import { clearJsonRequestCache, fetchJsonOnce } from "@/lib/request-dedupe";
+import type { InAppNotification } from "@/lib/in-app-notifications";
+import {
+  dismissInAppNotifications,
+  inAppNotificationsChangedEvent,
+  loadInAppNotificationFeed,
+} from "@/lib/in-app-notifications.client";
 
 const loadDashboardManualTransactionModal = () =>
   import("@/components/dashboard-top-actions").then((module) => module.DashboardManualTransactionModal);
@@ -634,23 +633,6 @@ function MenuIcon({ name, open = false }: { name: IconName; open?: boolean }) {
   }
 }
 
-type ShellNotification = {
-  id: string;
-  title: string;
-  detail: string;
-  href: string;
-  tone: string;
-  dismissLabel: string;
-  onDismiss: () => void;
-};
-
-type ShellCircleInvitation = {
-  id: string;
-  circleName: string;
-  invitedBy: string;
-  href: string;
-};
-
 function NotificationCountBadge({ count }: { count: number }) {
   if (count <= 0) {
     return null;
@@ -662,91 +644,6 @@ function NotificationCountBadge({ count }: { count: number }) {
     </span>
   );
 }
-
-const dismissedNotificationStorageKey = "clover.dismissed-notifications.v1";
-
-const readDismissedNotifications = () => {
-  if (typeof window === "undefined") {
-    return new Set<string>();
-  }
-
-  try {
-    const raw = window.localStorage.getItem(dismissedNotificationStorageKey);
-    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
-    return new Set(Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : []);
-  } catch {
-    return new Set<string>();
-  }
-};
-
-const writeDismissedNotifications = (dismissed: Set<string>) => {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(dismissedNotificationStorageKey, JSON.stringify(Array.from(dismissed)));
-  } catch {
-    // Dismissal is convenience-only; ignore storage failures.
-  }
-};
-
-const formatRelativeNotificationTime = (updatedAt: number) => {
-  if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
-    return "Just now";
-  }
-
-  const secondsAgo = Math.max(0, Math.floor((Date.now() - updatedAt) / 1000));
-  if (secondsAgo < 10) return "Just now";
-  if (secondsAgo < 60) return `${secondsAgo}s ago`;
-
-  const minutesAgo = Math.floor(secondsAgo / 60);
-  if (minutesAgo < 60) return `${minutesAgo}m ago`;
-
-  const hoursAgo = Math.floor(minutesAgo / 60);
-  return `${hoursAgo}h ago`;
-};
-
-const getImportNotificationCopy = (activity: ImportActivitySnapshot) => {
-  const timingSummary = getImportActivityTimingSummary(activity);
-
-  if (activity.status === "error") {
-    return {
-      tone: "Needs attention",
-      title: activity.errorTitle ?? "Import needs attention",
-      detail: [activity.errorMessage ?? activity.detail ?? "Clover could not finish this import automatically.", timingSummary]
-        .filter(Boolean)
-        .join(" · "),
-    };
-  }
-
-  if (activity.status === "done") {
-    return {
-      tone: "Complete",
-      title: "Import complete",
-      detail: [
-        (activity.summary ? formatImportResultHeadline(activity.summary) : "") ||
-          activity.detail ||
-          "Your import is ready in Clover.",
-        timingSummary,
-      ]
-        .filter(Boolean)
-        .join(" · "),
-    };
-  }
-
-  const fileProgress =
-    activity.fileTotal > 0
-      ? `${Math.min(activity.completedFiles, activity.fileTotal)} of ${activity.fileTotal} files ready`
-      : "Import queued";
-  const percent = `${Math.round(Math.max(0, Math.min(100, activity.progress)))}%`;
-
-  return {
-    tone: "In progress",
-    title: "Import in progress",
-    detail: [activity.detail, timingSummary, `${fileProgress} · ${percent}`].filter(Boolean).join(" · "),
-  };
-};
 
 const isActuallyVisibleElement = (element: Element | null) => {
   if (!(element instanceof HTMLElement)) {
@@ -857,10 +754,7 @@ export function CloverShell({
   const [searchPlanTier, setSearchPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [searchTicker, setSearchTicker] = useState<SidebarSearchMarket | null>(null);
   const [searchTickerLoading, setSearchTickerLoading] = useState(false);
-  const [importActivity, setImportActivity] = useState<ImportActivitySnapshot | null>(null);
-  const [reviewQueueCount, setReviewQueueCount] = useState(0);
-  const [circleInvitations, setCircleInvitations] = useState<ShellCircleInvitation[]>([]);
-  const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(new Set());
+  const [notifications, setNotifications] = useState<InAppNotification[]>([]);
   const [cachedProfileImage, setCachedProfileImage] = useState<string | null>(null);
   const [isBottomNavCompact, setIsBottomNavCompact] = useState(false);
   const [mobileOverlayChrome, setMobileOverlayChrome] = useState<{ title: string; onBack: () => void } | null>(null);
@@ -1325,26 +1219,6 @@ export function CloverShell({
 
   useEffect(() => {
     let cancelled = false;
-    fetchJsonOnce<{ invitations?: ShellCircleInvitation[] }>({
-      key: `shell:circle-invitations:${user?.id ?? "guest"}`,
-      route: "/api/circle-invitations",
-      input: "/api/circle-invitations",
-      cacheTtlMs: 30_000,
-    })
-      .then((response) => (response.ok ? response.json : null))
-      .then((result) => {
-        if (!cancelled) setCircleInvitations(result?.invitations ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setCircleInvitations([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id]);
-
-  useEffect(() => {
-    let cancelled = false;
 
     const loadSearchAccounts = async () => {
       if (!searchWorkspaceId) {
@@ -1384,55 +1258,46 @@ export function CloverShell({
   }, [searchWorkspaceId]);
 
   useEffect(() => {
-    setImportActivity(readImportActivity());
-    setDismissedNotifications(readDismissedNotifications());
     setCachedProfileImage(readAccountIdentityCache()?.imageUrl ?? null);
-    return subscribeImportActivity(() => setImportActivity(readImportActivity()));
-  }, []);
-
-  useEffect(() => {
-    document.body.dataset.cloverShellReady = "true";
   }, []);
 
   useEffect(() => {
     let cancelled = false;
 
-    const loadReviewQueueCount = async () => {
+    const loadNotifications = async (fresh = false) => {
       if (!searchWorkspaceId) {
-        setReviewQueueCount(0);
+        setNotifications([]);
         return;
       }
-
       try {
-        const response = await fetchJsonOnce<{ transactions?: unknown[] }>({
-          key: `shell:review:${searchWorkspaceId}`,
-          route: "/api/review",
-          workspaceId: searchWorkspaceId,
-          input: `/api/review?workspaceId=${encodeURIComponent(searchWorkspaceId)}`,
-          cacheTtlMs: 15_000,
-        });
-        if (!response.ok || cancelled) {
-          return;
-        }
-
-        const payload = response.json;
-        const count = Array.isArray(payload?.transactions) ? payload.transactions.length : 0;
-        if (!cancelled) {
-          setReviewQueueCount(count);
-        }
+        const feed = await loadInAppNotificationFeed(searchWorkspaceId, fresh);
+        if (!cancelled) setNotifications(feed.notifications);
       } catch {
-        if (!cancelled) {
-          setReviewQueueCount(0);
-        }
+        if (!cancelled) setNotifications([]);
       }
     };
 
-    void loadReviewQueueCount();
-
+    void loadNotifications();
+    const refresh = () => void loadNotifications(true);
+    window.addEventListener(inAppNotificationsChangedEvent, refresh);
+    window.addEventListener("focus", refresh);
+    let importRefreshTimer: number | null = null;
+    const unsubscribeImportActivity = subscribeImportActivity(() => {
+      if (importRefreshTimer) window.clearTimeout(importRefreshTimer);
+      importRefreshTimer = window.setTimeout(refresh, 700);
+    });
     return () => {
       cancelled = true;
+      window.removeEventListener(inAppNotificationsChangedEvent, refresh);
+      window.removeEventListener("focus", refresh);
+      if (importRefreshTimer) window.clearTimeout(importRefreshTimer);
+      unsubscribeImportActivity();
     };
   }, [searchWorkspaceId]);
+
+  useEffect(() => {
+    document.body.dataset.cloverShellReady = "true";
+  }, []);
 
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
@@ -1631,67 +1496,16 @@ export function CloverShell({
     pageSearchResults[0]?.href ??
     "/home";
 
-  const dismissNotification = (notificationId: string) => {
-    setDismissedNotifications((current) => {
-      const next = new Set(current);
-      next.add(notificationId);
-      writeDismissedNotifications(next);
-      return next;
-    });
+  const dismissNotification = async (notificationId: string) => {
+    const previous = notifications;
+    setNotifications((current) => current.filter((item) => item.id !== notificationId));
+    try {
+      await dismissInAppNotifications({ ids: [notificationId] });
+    } catch {
+      setNotifications(previous);
+    }
   };
 
-  const notifications = useMemo<ShellNotification[]>(() => {
-    const items: ShellNotification[] = [];
-
-    if (importActivity) {
-      const copy = getImportNotificationCopy(importActivity);
-      const title = importActivity.fileName ? `${copy.title}: ${importActivity.fileName}` : copy.title;
-      items.push({
-        id: `import:${importActivity.workspaceId}:${importActivity.updatedAt}`,
-        title,
-        detail: `${copy.detail}${importActivity.updatedAt ? ` · ${formatRelativeNotificationTime(importActivity.updatedAt)}` : ""}`,
-        href: "/notifications",
-        tone: copy.tone,
-        dismissLabel: "Dismiss import notification",
-        onDismiss: () => {
-          clearImportActivity();
-          setImportActivity(null);
-        },
-      });
-    }
-
-    if (searchWorkspaceId && reviewQueueCount > 0) {
-      const notificationId = `review:${searchWorkspaceId}:${reviewQueueCount}`;
-      if (!dismissedNotifications.has(notificationId)) {
-        items.push({
-          id: notificationId,
-          title: `${reviewQueueCount} transaction${reviewQueueCount === 1 ? "" : "s"} need attention`,
-          detail: "Review low-confidence categories, duplicates, or rows Clover wants you to confirm.",
-          href: "/review",
-          tone: "Review",
-          dismissLabel: "Dismiss review notification",
-          onDismiss: () => dismissNotification(notificationId),
-        });
-      }
-    }
-
-    circleInvitations.forEach((invitation) => {
-      const notificationId = `circle-invitation:${invitation.id}`;
-      if (!dismissedNotifications.has(notificationId)) {
-        items.push({
-          id: notificationId,
-          title: `Join ${invitation.circleName}`,
-          detail: `${invitation.invitedBy} invited you to a Circle.`,
-          href: invitation.href,
-          tone: "Circle invitation",
-          dismissLabel: "Dismiss Circle invitation notification",
-          onDismiss: () => dismissNotification(notificationId),
-        });
-      }
-    });
-
-    return items;
-  }, [circleInvitations, dismissedNotifications, importActivity, reviewQueueCount, searchWorkspaceId]);
   const notificationCount = notifications.length;
   const homeNotificationsAction =
     active === "dashboard" ? (
@@ -2132,25 +1946,36 @@ export function CloverShell({
                     role="none"
                   >
                     <Link
-                      href={notification.href}
+                      href={notification.productHref}
+                      prefetch={false}
+                      className="sidebar-popover__notification-product"
+                      role="menuitem"
+                      aria-label={`Open ${notification.productLabel}`}
+                      title={`Open ${notification.productLabel}`}
+                      onClick={(event) => handleNavigationLinkClick(event, notification.productHref)}
+                    >
+                      <img src={getNavigationIconSrc(notification.product)} alt="" aria-hidden="true" />
+                    </Link>
+                    <Link
+                      href={notification.href ?? notification.productHref}
                       prefetch={false}
                       className="sidebar-popover__notification-main"
                       role="menuitem"
-                      onClick={(event) => handleNavigationLinkClick(event, notification.href)}
-                      onMouseEnter={() => prefetchNavTarget(notification.href)}
-                      onTouchStart={() => prefetchNavTarget(notification.href)}
+                      onClick={(event) => handleNavigationLinkClick(event, notification.href ?? notification.productHref)}
+                      onMouseEnter={() => prefetchNavTarget(notification.href ?? notification.productHref)}
+                      onTouchStart={() => prefetchNavTarget(notification.href ?? notification.productHref)}
                     >
-                      <span className="sidebar-popover__notification-tone">{notification.tone}</span>
+                      <span className="sidebar-popover__notification-tone">{notification.productLabel}</span>
                       <span className="sidebar-popover__notification-title">{notification.title}</span>
-                      <span className="sidebar-popover__notification-detail">{notification.detail}</span>
+                      <span className="sidebar-popover__notification-detail">{notification.message}</span>
                     </Link>
                     <button
                       type="button"
                       className="sidebar-popover__notification-dismiss"
-                      aria-label={notification.dismissLabel}
+                      aria-label={`Dismiss ${notification.title}`}
                       onClick={(event) => {
                         event.stopPropagation();
-                        notification.onDismiss();
+                        void dismissNotification(notification.id);
                       }}
                     >
                       x
@@ -2158,7 +1983,7 @@ export function CloverShell({
                   </div>
                 ))
               ) : (
-                <div className="sidebar-popover__empty">You’re all caught up. New import and review updates will show here.</div>
+                <div className="sidebar-popover__empty">You’re all caught up. New product updates will show here.</div>
               )}
             </div>
           </div>,

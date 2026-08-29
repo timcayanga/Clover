@@ -3758,7 +3758,7 @@ html[data-theme="dark"] .adviser-header-link {
 .sidebar-popover__notification {
   color: var(--text);
   align-items: start;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   column-gap: 8px;
   text-decoration: none;
   transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
@@ -3780,6 +3780,28 @@ html[data-theme="dark"] .adviser-header-link {
   color: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+.sidebar-popover__notification-product {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  text-decoration: none;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.sidebar-popover__notification-product:hover,
+.sidebar-popover__notification-product:focus-visible {
+  background: rgba(3, 168, 192, 0.1);
+  transform: scale(1.04);
+}
+
+.sidebar-popover__notification-product img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
 }
 
 .sidebar-popover__notification-dismiss {
@@ -4889,10 +4911,52 @@ html[data-theme="dark"] .adviser-header-link {
   gap: 12px;
 }
 
-.notification-item {
+.notifications-toolbar {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--stroke);
+}
+
+.notifications-toolbar p,
+.notifications-status,
+.notifications-empty p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.notifications-status {
+  padding: 18px 0;
+}
+
+.notifications-status--error {
+  color: var(--danger);
+}
+
+.notifications-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 52px 20px;
+  text-align: center;
+}
+
+.notifications-empty img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+}
+
+.notifications-empty h3 {
+  margin: 0;
+}
+
+.notification-item {
+  display: grid;
+  align-items: flex-start;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 18px;
   padding: 16px 0;
   border: 0;
@@ -4902,6 +4966,29 @@ html[data-theme="dark"] .adviser-header-link {
   box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+}
+
+.notification-item__product-link {
+  display: inline-grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(3, 168, 192, 0.06);
+  text-decoration: none;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.notification-item__product-link:hover,
+.notification-item__product-link:focus-visible {
+  background: var(--accent-soft);
+  transform: translateY(-1px);
+}
+
+.notification-item__product-link img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
 }
 
 .notification-item--budget {
@@ -4963,9 +5050,46 @@ html[data-theme="dark"] .adviser-header-link {
   font-weight: 900;
 }
 
-.notification-item__time {
+.notification-item__time,
+.notification-item__actions {
   flex: none;
   padding-top: 2px;
+}
+
+.notification-item__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.notification-item__actions time {
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.notification-item__dismiss {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 8px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.notification-item__dismiss:hover,
+.notification-item__dismiss:focus-visible {
+  color: var(--text);
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.notification-item__dismiss:disabled {
+  opacity: 0.55;
+  cursor: wait;
 }
 
 .home-notifications-button {
@@ -55655,9 +55779,19 @@ body[data-clover-home-balances-hidden] :is(
   }
 
   .content--notifications .notification-item {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: 40px minmax(0, 1fr);
     gap: 10px;
     padding: 14px 0;
+  }
+
+  .content--notifications .notification-item__product-link {
+    width: 40px;
+    height: 40px;
+  }
+
+  .content--notifications .notification-item__product-link img {
+    width: 36px;
+    height: 36px;
   }
 
   .content--notifications .notification-item__main {
@@ -55674,6 +55808,18 @@ body[data-clover-home-balances-hidden] :is(
     align-self: center;
     gap: 6px;
     padding: 0;
+  }
+
+  .content--notifications .notification-item__actions {
+    grid-column: 2;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    padding: 0;
+  }
+
+  .content--notifications .notifications-toolbar {
+    padding: 8px 0 12px;
   }
 
   .content--has-title-addon > :is(.topbar, .shell-compact-bar) {

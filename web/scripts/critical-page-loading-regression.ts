@@ -5,6 +5,7 @@ import {
   guessCategoryName,
   inferAccountTypeFromStatement,
 } from "../lib/financial-classification";
+import "./in-app-notifications-regression";
 
 const readSource = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
@@ -73,8 +74,8 @@ assert.match(
 );
 assert.match(
   shellSource,
-  /const \[importActivity, setImportActivity\] = useState<ImportActivitySnapshot \| null>\(null\)/,
-  "The shared shell must not read browser import state during hydration.",
+  /const \[notifications, setNotifications\] = useState<InAppNotification\[]>\(\[\]\)/,
+  "The shared shell must hydrate notifications from a deterministic empty state.",
 );
 
 const reportsTabsSource = readSource("components/reports-tabs.tsx");

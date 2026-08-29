@@ -271,6 +271,19 @@ model User {
   brankasStatementSessions         BrankasStatementSession[]
   finverseConnections              FinverseConnection[]
   appErrorLogs                     AppErrorLog[]
+  inAppNotificationDismissals      InAppNotificationDismissal[]
+}
+
+model InAppNotificationDismissal {
+  id              String   @id @default(cuid())
+  userId          String
+  notificationKey String
+  dismissedAt     DateTime @default(now())
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, notificationKey])
+  @@index([userId, dismissedAt])
 }
 
 model Budget {

@@ -106,6 +106,7 @@
     "qa:environment-readiness": "tsx scripts/check-environment-readiness.ts",
     "qa:environment-isolation": "tsx scripts/environment-isolation-regression.ts",
     "qa:critical-page-loading": "tsx scripts/critical-page-loading-regression.ts",
+    "qa:in-app-notifications": "tsx scripts/in-app-notifications-regression.ts",
     "qa:browser-compatibility": "tsx scripts/browser-compatibility-regression.ts",
     "qa:ui-consistency": "tsx scripts/ui-theme-consistency-regression.ts",
     "qa:title-case": "tsx scripts/title-case-regression.ts",
