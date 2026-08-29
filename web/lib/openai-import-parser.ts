@@ -1251,6 +1251,50 @@ const openAIReceiptJsonSchema = {
   required: ["document_type", "receipt_account_match", "receipt_details", "transactions"],
 } as const;
 
+const openAIReceiptCoreJsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    document_type: { type: "string", enum: ["receipt"] },
+    receipt_account_match: openAIJsonSchema.properties.receipt_account_match,
+    receipt_details: {
+      anyOf: [
+        {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            receipt_type: { type: ["string", "null"] },
+            merchant_raw: { type: ["string", "null"] },
+            merchant_clean: { type: ["string", "null"] },
+            transaction_date: { type: ["string", "null"] },
+            transaction_time: { type: ["string", "null"] },
+            currency: { type: ["string", "null"] },
+            total: { type: ["number", "null"] },
+            payment_method: { type: ["string", "null"] },
+            confidence_score: { type: "number" },
+            parser_evidence: openAIJsonSchema.properties.receipt_details.anyOf[0].properties.parser_evidence,
+          },
+          required: [
+            "receipt_type",
+            "merchant_raw",
+            "merchant_clean",
+            "transaction_date",
+            "transaction_time",
+            "currency",
+            "total",
+            "payment_method",
+            "confidence_score",
+            "parser_evidence",
+          ],
+        },
+        { type: "null" },
+      ],
+    },
+    transactions: { type: "array", maxItems: 0, items: {} },
+  },
+  required: ["document_type", "receipt_account_match", "receipt_details", "transactions"],
+} as const;
+
 const expandReceiptResponseForInternalValidation = (
   parsed: unknown,
   detectedMetadata: DetectedStatementMetadata | null
@@ -1259,9 +1303,46 @@ const expandReceiptResponseForInternalValidation = (
     return parsed;
   }
 
+  const parsedRecord = parsed as Record<string, unknown>;
+  const compactReceiptDetails =
+    parsedRecord.receipt_details &&
+    typeof parsedRecord.receipt_details === "object" &&
+    !Array.isArray(parsedRecord.receipt_details)
+      ? (parsedRecord.receipt_details as Record<string, unknown>)
+      : null;
+
   return {
-    ...(parsed as Record<string, unknown>),
+    ...parsedRecord,
     document_type: "receipt",
+    receipt_details: compactReceiptDetails
+      ? {
+          receipt_type: null,
+          merchant_raw: null,
+          merchant_clean: null,
+          document_number: null,
+          invoice_number: null,
+          booking_reference: null,
+          order_number: null,
+          buyer_name: null,
+          transaction_date: null,
+          transaction_time: null,
+          currency: null,
+          subtotal: null,
+          tax: null,
+          service_charge: null,
+          discount: null,
+          tip: null,
+          total: null,
+          payment_method: null,
+          payer_name: null,
+          line_items: [],
+          split_allocations: [],
+          confidence_score: 0,
+          parser_evidence: { page: null, source_text: null, reason: "Core receipt extraction" },
+          ...compactReceiptDetails,
+        }
+      : null,
+    transactions: Array.isArray(parsedRecord.transactions) ? parsedRecord.transactions : [],
     account: {
       display_name: detectedMetadata?.accountName ?? null,
       institution_name: detectedMetadata?.institution ?? null,
@@ -2478,6 +2559,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   pageImageLimit?: number | null;
   timeoutMs?: number | null;
   retryTimeoutMs?: number | null;
+  receiptCoreOnly?: boolean;
+  forceReceiptHighDetail?: boolean;
 }): Promise<
   | {
       documentType: "statement" | "receipt" | "notes" | "portfolio" | "account_detail";
@@ -2494,6 +2577,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         schemaValidated: boolean;
         schemaValidationResult: string;
         rawResponse: string;
+        receiptCoreOnly?: boolean;
         quality?: ReturnType<typeof assessStatementExtractionQuality>;
       };
     }
@@ -2646,7 +2730,13 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     pageImagesToSend.length === 1;
   const useLowDetailReceiptFastPath =
     isReceiptMode &&
-    isSinglePageGenericImage;
+    isSinglePageGenericImage &&
+    !params.forceReceiptHighDetail;
+  const useReceiptCoreOnly = Boolean(
+    params.receiptCoreOnly &&
+    useLowDetailReceiptFastPath &&
+    inferredDifficulty !== "hard"
+  );
   const useColdVisualFastPath = shouldUseColdVisualImportFastPath({
     importMode: params.importMode ?? null,
     documentFamily: inferredDocumentFamily,
@@ -2679,7 +2769,11 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         fileDataBase64: pdfFileDataBase64,
         importMode: promptImportMode,
       });
-  const systemPrompt = buildOpenAIBackupSystemPrompt(promptImportMode, pageImagesToSend.length > 0, Boolean(pdfFileDataBase64));
+  const systemPrompt = `${buildOpenAIBackupSystemPrompt(promptImportMode, pageImagesToSend.length > 0, Boolean(pdfFileDataBase64))}${
+    useReceiptCoreOnly
+      ? " CORE-FIRST RECEIPT: Return only the merchant, transaction date/time, currency, total, payment method, account evidence, confidence, and visible source evidence. Do not extract line items, tax, discounts, tips, or split allocations in this pass. Return transactions as an empty array."
+      : ""
+  }`;
   const fastModel = resolveOpenAIImportModel(
     (env as { OPENAI_IMPORT_PARSER_MODEL?: string }).OPENAI_IMPORT_PARSER_MODEL,
     OPENAI_IMPORT_FAST_MODEL_FALLBACK,
@@ -2743,7 +2837,9 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   // budget. Keeping this below the general 3k cap reduces cold vision latency
   // while leaving multi-page and known-statement quality paths unchanged.
   const maxOutputTokens = isReceiptMode
-    ? inferredDifficulty === "hard"
+    ? useReceiptCoreOnly
+      ? 900
+      : inferredDifficulty === "hard"
       ? 2_600
       : 1_600
     : isSinglePageGenericImage
@@ -2867,7 +2963,11 @@ export const parseImportTextWithOpenAIFallback = async (params: {
               type: "json_schema",
               name: isReceiptMode ? "receipt_import" : "bank_statement_import",
               strict: true,
-              schema: isReceiptMode ? openAIReceiptJsonSchema : openAIJsonSchema,
+              schema: isReceiptMode
+                ? useReceiptCoreOnly
+                  ? openAIReceiptCoreJsonSchema
+                  : openAIReceiptJsonSchema
+                : openAIJsonSchema,
             },
           },
         }),
@@ -3137,7 +3237,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       initialPageImages,
       primaryTimeoutMs,
       fallbackDeadlineMs,
-      useLowDetailReceiptFastPath ? "low" : "auto"
+      params.forceReceiptHighDetail ? "high" : useLowDetailReceiptFastPath ? "low" : "auto"
     );
     const attemptedResult =
       attempted ??
@@ -3147,7 +3247,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
             pageImagesToSend,
             retryTimeoutMs,
             fallbackDeadlineMs,
-            useLowDetailReceiptFastPath ? "low" : "auto"
+            params.forceReceiptHighDetail ? "high" : useLowDetailReceiptFastPath ? "low" : "auto"
           )
         : pageImagesToSend.length > 0 && model !== textModel
         ? await callOpenAIWithFallbackModels(
@@ -3155,7 +3255,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
             pageImagesToSend.slice(0, 1),
             retryTimeoutMs,
             fallbackDeadlineMs,
-            useLowDetailReceiptFastPath ? "low" : "auto"
+            params.forceReceiptHighDetail ? "high" : useLowDetailReceiptFastPath ? "low" : "auto"
           )
         : null);
     if (!attemptedResult) {
@@ -3195,6 +3295,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
           schemaValidated: false,
           schemaValidationResult: "unparseable_json",
           rawResponse: outputText,
+          receiptCoreOnly: useReceiptCoreOnly,
         },
       };
     }
@@ -3367,6 +3468,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
           schemaValidated: false,
           schemaValidationResult: `${validationSummary}; family=${inferredDocumentFamily}; difficulty=${inferredDifficulty}; model=${selectedModel}`,
           rawResponse: outputText,
+          receiptCoreOnly: useReceiptCoreOnly,
         },
       };
     }
@@ -3629,6 +3731,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         schemaValidationResult: `${validationSummary}; quality=${quality.score}; qualityReasons=${quality.reasons.join(",") || "none"}; family=${inferredDocumentFamily}; difficulty=${inferredDifficulty}; model=${selectedModel}`,
         quality,
         rawResponse: outputText,
+        receiptCoreOnly: useReceiptCoreOnly,
       },
     };
   } catch (error) {

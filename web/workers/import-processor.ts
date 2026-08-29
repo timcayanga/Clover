@@ -84,6 +84,7 @@ import {
   recordTrainingSignal,
   loadStatementTemplate,
   loadImportFileExtractionCache,
+  loadRecentReceiptExtractionCaches,
   loadScoredStatementTemplatesForInstitution,
   mergeStatementMetadataWithTemplate,
   recordStatementTemplateOutcome,
@@ -95,6 +96,7 @@ import {
   upsertAccountRule,
   upsertStatementTemplate,
 } from "@/lib/data-engine";
+import { computeImportImageDifferenceHash, getImportImageHashDistance } from "@/lib/import-image-perceptual-hash";
 import {
   getTrailingBalanceFromParsedRows,
   inferAccountTypeFromStatement,
@@ -305,6 +307,8 @@ const findPriorSplitBillReceiptDetails = async (params: {
 };
 
 const POST_VISIBLE_IMPORT_DELAY_MS = 5_000;
+const RECEIPT_VISIBLE_TARGET_MS = 8_000;
+const RECEIPT_VISIBLE_SLOW_BUDGET_MS = 12_000;
 
 const schedulePostVisibleImportWork = (
   label: string,
@@ -8451,6 +8455,19 @@ export const processImportFileText = async (
           cacheVersion: resolveImportFileExtractionCacheVersion(fileName),
         }).catch(() => null)
       : Promise.resolve(null);
+  const receiptPerceptualHashPromise =
+    imageImport && options.sourceBytes?.length
+      ? computeImportImageDifferenceHash(options.sourceBytes)
+      : Promise.resolve(null);
+  const recentReceiptCachesPromise = receiptPerceptualHashPromise.then((perceptualHash) =>
+    perceptualHash
+      ? loadRecentReceiptExtractionCaches({
+          workspaceId: String(importFile.workspaceId),
+          cacheVersion: resolveImportFileExtractionCacheVersion(fileName),
+          take: 40,
+        }).catch(() => [])
+      : []
+  );
   const priorExactNotesImportsPromise = priorExactNotesCachePromise.then((cacheRecord) =>
     (!Array.isArray(cacheRecord?.parsedRows) || cacheRecord.parsedRows.length === 0) &&
     imageImport &&
@@ -8839,20 +8856,41 @@ export const processImportFileText = async (
     priorExactNotesCache,
     priorExactReceiptCache,
     priorExactNotesImports,
+    receiptPerceptualHash,
+    recentReceiptCaches,
   ] = await Promise.all([
     persistedSplitBillReceiptDetailsPromise,
     priorSplitBillReceiptDetailsPromise,
     priorExactNotesCachePromise,
     priorExactReceiptCachePromise,
     priorExactNotesImportsPromise,
+    receiptPerceptualHashPromise,
+    recentReceiptCachesPromise,
   ]);
   const cachedReceiptExtractionCandidate = readPersistedReceiptExtraction(priorExactReceiptCache?.metadata ?? null);
-  const cachedReceiptExtraction =
+  let cachedReceiptExtraction =
     cachedReceiptExtractionCandidate &&
     cachedReceiptExtractionCandidate.validationScore !== null &&
     cachedReceiptExtractionCandidate.validationScore >= 65
       ? cachedReceiptExtractionCandidate
       : null;
+  const perceptualReceiptCacheCandidate = !cachedReceiptExtraction && receiptPerceptualHash
+    ? recentReceiptCaches
+        .map((cacheRecord) => {
+          const metadata =
+            cacheRecord.metadata && typeof cacheRecord.metadata === "object" && !Array.isArray(cacheRecord.metadata)
+              ? (cacheRecord.metadata as Record<string, unknown>)
+              : null;
+          const candidateHash = typeof metadata?.perceptualHash === "string" ? metadata.perceptualHash : null;
+          const extraction = readPersistedReceiptExtraction(metadata);
+          return candidateHash && extraction
+            ? { extraction, distance: getImportImageHashDistance(receiptPerceptualHash, candidateHash) }
+            : null;
+        })
+        .filter((candidate): candidate is { extraction: PersistedReceiptExtraction; distance: number } => Boolean(candidate))
+        .filter((candidate) => candidate.distance <= 3 && (candidate.extraction.validationScore ?? 0) >= 75)
+        .sort((left, right) => left.distance - right.distance)[0] ?? null
+    : null;
   if (cachedReceiptExtraction) {
     console.info("Reusing validated exact receipt extraction", {
       importFileId,
@@ -10303,6 +10341,33 @@ export const processImportFileText = async (
     });
   }
   const receiptPreview = imageImport ? parseReceiptText(textForParse) : null;
+  if (!cachedReceiptExtraction && perceptualReceiptCacheCandidate && receiptPreview) {
+    const cachedDetails = perceptualReceiptCacheCandidate.extraction.receiptDetails;
+    const previewTotal = Number(receiptPreview.total);
+    const cachedTotal = Number(cachedDetails.total);
+    const totalMatches =
+      receiptPreview.total !== null &&
+      cachedDetails.total !== null &&
+      Number.isFinite(previewTotal) &&
+      Number.isFinite(cachedTotal) &&
+      Math.abs(cachedTotal - previewTotal) <= 0.01;
+    const dateMatches = Boolean(
+      receiptPreview.billDate &&
+      cachedDetails.transaction_date &&
+      parseDateValue(receiptPreview.billDate)?.toISOString().slice(0, 10) ===
+        parseDateValue(cachedDetails.transaction_date)?.toISOString().slice(0, 10)
+    );
+    if (totalMatches && dateMatches) {
+      cachedReceiptExtraction = perceptualReceiptCacheCandidate.extraction;
+      emitImportProcessingEvent("import_receipt_cache_reused", {
+        processing_phase: "reading_account_details",
+        validation_score: cachedReceiptExtraction.validationScore,
+        perceptual_hash_distance: perceptualReceiptCacheCandidate.distance,
+        visible_total_and_date_matched: true,
+        openai_call_avoided: true,
+      });
+    }
+  }
   const receiptPreviewDetails = receiptPreview ? buildReceiptDetailsFromPreview(receiptPreview) : null;
   const receiptPreviewQuality = receiptPreview ? assessReceiptPreviewQuality(receiptPreview) : null;
   const suppressReceiptPreviewForInvestmentActivity =
@@ -10502,6 +10567,13 @@ export const processImportFileText = async (
     (imageStatementParseLooksUsable || parsedDateCoverage >= 0.5 || parsedRows.length >= 4);
   let backupParserRaceResolved = false;
   let backupParserRaceTimedOut = false;
+  const receiptNeedsCompleteFirstPass = Boolean(
+    effectiveImportMode !== "receipt" ||
+    trainedReceiptDetails ||
+    cachedReceiptExtraction ||
+    /\b(?:split\s*bill|shared\s*bill|participant|participants|payer|paid\s+by|amount\s+due\s+per\s+person)\b/i.test(textForParse) ||
+    /\b(?:handwritten|handwriting)\b/i.test(fileName)
+  );
   if (shouldRunOpenAiFallback) {
     backupParserStartedAt ??= Date.now();
     if (importMode === "receipt") {
@@ -10547,6 +10619,7 @@ export const processImportFileText = async (
               pageImageLimit: isWiseImageStatement ? 1 : null,
               timeoutMs: isWiseImageStatement ? 60_000 : null,
               retryTimeoutMs: isWiseImageStatement ? 20_000 : null,
+              receiptCoreOnly: effectiveImportMode === "receipt" && !receiptNeedsCompleteFirstPass,
             });
       backupParserRaceResolved = Boolean(importMode === "statement" && earlyOpenAiFallbackPromise);
     }
@@ -11636,6 +11709,7 @@ export const processImportFileText = async (
       effectiveImportMode === "receipt" && receiptDetails && openAiReceiptValidation
         ? {
             ...resolvedMetadata,
+            perceptualHash: receiptPerceptualHash,
             receiptExtraction: {
               receiptDetails,
               receiptAccountMatch,
@@ -12481,15 +12555,156 @@ export const processImportFileText = async (
         importedRows: confirmedImportResult.imported,
         usedVisionFallback: Boolean(pageImages?.length),
         usedOpenAiFallback: Boolean(useOpenAiParse),
+        parserDecisionMs: backupParserDecisionDurationMs,
+        persistenceMs: Math.max(0, parsedRowsPersistedAt - startedAt),
+        withinReceiptTarget: effectiveImportMode !== "receipt" || Date.now() - startedAt <= RECEIPT_VISIBLE_TARGET_MS,
+        exceededReceiptSlowBudget: effectiveImportMode === "receipt" && Date.now() - startedAt > RECEIPT_VISIBLE_SLOW_BUDGET_MS,
       });
+      if (effectiveImportMode === "receipt" && Date.now() - startedAt > RECEIPT_VISIBLE_SLOW_BUDGET_MS) {
+        console.warn("[import-performance] receipt exceeded visible latency budget", {
+          importFileId,
+          timeToUsableMs: Date.now() - startedAt,
+          targetMs: RECEIPT_VISIBLE_TARGET_MS,
+          slowBudgetMs: RECEIPT_VISIBLE_SLOW_BUDGET_MS,
+          parserDecisionMs: backupParserDecisionDurationMs,
+          confirmationMs: Date.now() - documentConfirmationStartedAt,
+        });
+      }
       emitImportProcessingEvent("import_processing_completed", {
         processing_status: "done",
         processing_phase:
           effectiveImportMode === "receipt" ? "receipt_core_visible" : "notes_transactions_visible",
         imported_rows: confirmedImportResult.imported,
         time_to_usable_ms: Date.now() - startedAt,
+        parser_decision_ms: backupParserDecisionDurationMs,
+        confirmation_ms: Date.now() - documentConfirmationStartedAt,
+        visible_target_ms: RECEIPT_VISIBLE_TARGET_MS,
+        visible_slow_budget_ms: RECEIPT_VISIBLE_SLOW_BUDGET_MS,
         background_enrichment: true,
       });
+      const shouldRefineReceiptDetails = Boolean(
+        effectiveImportMode === "receipt" &&
+        openAiParsed?.audit.receiptCoreOnly &&
+        documentImportRecord?.id &&
+        pageImages?.length
+      );
+      if (shouldRefineReceiptDetails) {
+        const coreReceiptDetails = receiptDetails;
+        const coreReceiptValidationScore = openAiReceiptValidation?.score ?? 0;
+        const receiptDocumentImportId = documentImportRecord!.id;
+        const receiptPages = pageImages!;
+        schedulePostVisibleImportWork(`receipt-details:${importFileId}`, async () => {
+          const detailStartedAt = Date.now();
+          const refined = await parseImportTextWithOpenAIFallback({
+            text: textForParse,
+            fileName,
+            fileType,
+            detectedMetadata: resolvedMetadata,
+            parsedRows: [],
+            pageImages: receiptPages,
+            fileDataBase64: null,
+            preferPrimary: true,
+            importMode: "receipt",
+            receiptCoreOnly: false,
+            forceReceiptHighDetail: true,
+            timeoutMs: 30_000,
+            retryTimeoutMs: 18_000,
+          });
+          const refinedDetails = refined?.receiptDetails ?? null;
+          if (!refinedDetails) return;
+          const refinedValidation = assessReceiptExtractionQuality({
+            receiptDetails: refinedDetails,
+            expectedCurrency: coreReceiptDetails?.currency ?? resolvedMetadata.currency ?? null,
+          });
+          const hasAdditionalDetails =
+            refinedDetails.line_items.length > 0 ||
+            refinedDetails.split_allocations.length > 0 ||
+            countReceiptDetailSignals(refinedDetails) > countReceiptDetailSignals(coreReceiptDetails);
+          if (!hasAdditionalDetails || refinedValidation.score < coreReceiptValidationScore) return;
+
+          const existingReceiptDocument = await prisma.receiptDocument.findUnique({
+            where: { documentImportId: receiptDocumentImportId },
+          }).catch(() => null);
+          if (!existingReceiptDocument) return;
+          const existingPayload =
+            existingReceiptDocument.rawPayload &&
+            typeof existingReceiptDocument.rawPayload === "object" &&
+            !Array.isArray(existingReceiptDocument.rawPayload)
+              ? (existingReceiptDocument.rawPayload as Record<string, unknown>)
+              : {};
+          await upsertReceiptDocumentCompat({
+            workspaceId: String(importFile.workspaceId),
+            documentImportId: receiptDocumentImportId,
+            accountId: existingReceiptDocument.accountId,
+            transactionId: existingReceiptDocument.transactionId,
+            merchantRaw: existingReceiptDocument.merchantRaw,
+            merchantClean: existingReceiptDocument.merchantClean,
+            transactionDate: existingReceiptDocument.transactionDate,
+            transactionTime: refinedDetails.transaction_time ?? existingReceiptDocument.transactionTime,
+            currency: existingReceiptDocument.currency,
+            subtotal: refinedDetails.subtotal ?? existingReceiptDocument.subtotal?.toString() ?? null,
+            tax: refinedDetails.tax ?? existingReceiptDocument.tax?.toString() ?? null,
+            total: existingReceiptDocument.total?.toString() ?? null,
+            paymentMethod: refinedDetails.payment_method ?? existingReceiptDocument.paymentMethod,
+            accountMatch: existingReceiptDocument.accountMatch as Prisma.InputJsonValue | null,
+            confidence: Math.max(existingReceiptDocument.confidence, refinedDetails.confidence_score ?? 0),
+            rawPayload: {
+              ...existingPayload,
+              receiptDetails: refinedDetails,
+              receiptValidation: refinedValidation,
+              detailEnrichment: {
+                completedAt: new Date().toISOString(),
+                durationMs: Date.now() - detailStartedAt,
+                preservedConfirmedCore: true,
+              },
+            } as Prisma.InputJsonValue,
+          });
+          if (existingReceiptDocument.transactionId) {
+            const transaction = await prisma.transaction.findUnique({
+              where: { id: existingReceiptDocument.transactionId },
+              select: { rawPayload: true },
+            }).catch(() => null);
+            const transactionPayload =
+              transaction?.rawPayload && typeof transaction.rawPayload === "object" && !Array.isArray(transaction.rawPayload)
+                ? (transaction.rawPayload as Record<string, unknown>)
+                : null;
+            const existingLineItems = Array.isArray(transactionPayload?.receiptLineItems)
+              ? transactionPayload.receiptLineItems
+              : [];
+            if (transactionPayload?.source === "receipt" && existingLineItems.length === 0) {
+              const existingTransactionDetails =
+                transactionPayload.receiptDetails &&
+                typeof transactionPayload.receiptDetails === "object" &&
+                !Array.isArray(transactionPayload.receiptDetails)
+                  ? (transactionPayload.receiptDetails as Record<string, unknown>)
+                  : {};
+              await prisma.transaction.update({
+                where: { id: existingReceiptDocument.transactionId },
+                data: {
+                  rawPayload: {
+                    ...transactionPayload,
+                    receiptDetails: {
+                      ...refinedDetails,
+                      merchant_raw: existingTransactionDetails.merchant_raw ?? coreReceiptDetails?.merchant_raw ?? null,
+                      merchant_clean: existingTransactionDetails.merchant_clean ?? coreReceiptDetails?.merchant_clean ?? null,
+                      transaction_date: existingTransactionDetails.transaction_date ?? coreReceiptDetails?.transaction_date ?? null,
+                      currency: existingTransactionDetails.currency ?? coreReceiptDetails?.currency ?? null,
+                      total: existingTransactionDetails.total ?? coreReceiptDetails?.total ?? null,
+                    },
+                    receiptLineItems: refinedDetails.line_items,
+                  } as Prisma.InputJsonValue,
+                },
+              });
+            }
+          }
+          emitImportProcessingEvent("import_processing_completed", {
+            processing_status: "done",
+            processing_phase: "receipt_details_enriched",
+            receipt_detail_duration_ms: Date.now() - detailStartedAt,
+            line_item_count: refinedDetails.line_items.length,
+          });
+        }, 0);
+      }
       recordImportDataQaInBackground({
         workspaceId: String(importFile.workspaceId),
         importFileId,
@@ -13316,9 +13531,9 @@ export const confirmImportFile = async (
         !receiptAccountResolutionPayload.accountId.startsWith("optimistic-")
           ? receiptAccountResolutionPayload.accountId
           : null;
-      const cashAccountId =
-        explicitlyResolvedReceiptAccountId ??
-        (await resolveWorkspaceCashAccountId(String(importFile.workspaceId), receiptCurrency));
+      const cashAccountIdPromise = explicitlyResolvedReceiptAccountId
+        ? Promise.resolve(explicitlyResolvedReceiptAccountId)
+        : resolveWorkspaceCashAccountId(String(importFile.workspaceId), receiptCurrency);
       const receiptCategoryName = (() => {
         const trainedCategoryName =
           typeof receiptDetailsRecord?.category_name === "string" && receiptDetailsRecord.category_name.trim()
@@ -13394,11 +13609,14 @@ export const confirmImportFile = async (
           }) ?? (contextualGuess !== "Other" ? contextualGuess : "Food & Dining")
         );
       })();
-      const receiptCategoryId = await resolveOrCreateWorkspaceCategoryId({
-        workspaceId: String(importFile.workspaceId),
-        categoryName: receiptCategoryName,
-        fallbackType: "expense",
-      });
+      const [cashAccountId, receiptCategoryId] = await Promise.all([
+        cashAccountIdPromise,
+        resolveOrCreateWorkspaceCategoryId({
+          workspaceId: String(importFile.workspaceId),
+          categoryName: receiptCategoryName,
+          fallbackType: "expense",
+        }),
+      ]);
       let createdTransactionId = receiptDocument?.transactionId ?? null;
       let existingReceiptTransaction:
         | {

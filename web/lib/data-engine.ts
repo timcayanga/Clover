@@ -2600,6 +2600,31 @@ export const loadImportFileExtractionCache = async (params: {
   }
 };
 
+export const loadRecentReceiptExtractionCaches = async (params: {
+  workspaceId: string;
+  cacheVersion?: string;
+  take?: number;
+}) => {
+  const columns = await getCompatibleImportFileExtractionCacheColumns();
+  if (columns.length === 0) return [] as ImportFileExtractionCacheRow[];
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      `SELECT ${columns.map((column) => `"${column}"`).join(", ")}
+       FROM "ImportFileExtractionCache"
+       WHERE "workspaceId" = $1 AND "importMode" = 'receipt' AND "cacheVersion" = $2
+       ORDER BY "lastUsedAt" DESC
+       LIMIT $3`,
+      params.workspaceId,
+      params.cacheVersion ?? IMPORT_FILE_EXTRACTION_CACHE_VERSION,
+      Math.max(1, Math.min(params.take ?? 40, 100))
+    );
+    return rows as ImportFileExtractionCacheRow[];
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "ImportFileExtractionCache") || isMissingDatabaseColumnError(error)) return [];
+    throw error;
+  }
+};
+
 export const upsertImportFileExtractionCache = async (params: {
   workspaceId: string;
   fileFingerprint: string;

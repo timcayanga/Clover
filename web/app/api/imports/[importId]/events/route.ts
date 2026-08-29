@@ -8,6 +8,8 @@ export const dynamic = "force-dynamic";
 
 const encoder = new TextEncoder();
 const IMPORT_STATUS_STREAM_POLL_MS = 2_500;
+const IMPORT_STATUS_STREAM_ACTIVE_RECEIPT_POLL_MS = 1_000;
+const IMPORT_STATUS_STREAM_NEAR_VISIBLE_POLL_MS = 500;
 const IMPORT_STATUS_STREAM_MAX_ERRORS = 3;
 
 const formatSseEvent = (event: string, data: unknown) => encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -64,6 +66,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
         let lastFullSnapshotStatus: string | null = null;
         let nextFinalizationCheckAt = 0;
         let consecutiveErrors = 0;
+        let nextPollMs = IMPORT_STATUS_STREAM_POLL_MS;
         const close = () => {
           if (closed) {
             return;
@@ -114,6 +117,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
               confirmedTransactionsCount: Number(progress.confirmedTransactionsCount ?? 0),
               visibleImportComplete: Number(progress.confirmedTransactionsCount ?? 0) > 0,
             };
+            nextPollMs =
+              progress.processingPhase === "reconciling" || Number(progress.confirmedTransactionsCount ?? 0) > 0
+                ? IMPORT_STATUS_STREAM_NEAR_VISIBLE_POLL_MS
+                : progress.processingPhase === "reading_receipt_vision"
+                  ? IMPORT_STATUS_STREAM_ACTIVE_RECEIPT_POLL_MS
+                  : IMPORT_STATUS_STREAM_POLL_MS;
             const serialized = JSON.stringify(progressSnapshot);
             if (serialized !== lastSerializedSnapshot) {
               lastSerializedSnapshot = serialized;
@@ -169,7 +178,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
             if (!closed) {
               timer = setTimeout(() => {
                 void poll();
-              }, IMPORT_STATUS_STREAM_POLL_MS);
+              }, nextPollMs);
             }
           }
         };

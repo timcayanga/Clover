@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { resolveReceiptAccountHintToAccount } from "../lib/receipt-account-resolution";
 import { resolveReceiptCategoryWithPaymentEvidence } from "../lib/receipt-transaction-classification";
 import { parseReceiptText } from "../lib/split-bill";
+import { getImportImageHashDistance } from "../lib/import-image-perceptual-hash";
 
 const receiptText = [
   "UNKNOWN MERCHANT",
@@ -62,6 +63,9 @@ const imageCompressionSource = readFileSync(join(root, "lib/import-image-compres
 const transactionsPageSource = readFileSync(join(root, "app/transactions/page.tsx"), "utf8");
 const cloverShellSource = readFileSync(join(root, "components/clover-shell.tsx"), "utf8");
 const uploadDockSource = readFileSync(join(root, "components/import-upload-dock.tsx"), "utf8");
+const importEventsRouteSource = readFileSync(join(root, "app/api/imports/[importId]/events/route.ts"), "utf8");
+assert.equal(getImportImageHashDistance("0000000000000000", "0000000000000000"), 0);
+assert.equal(getImportImageHashDistance("0000000000000000", "0000000000000001"), 1);
 assert.match(
   transactionsPageSource,
   /const handlePhotoCaptureChange =[\s\S]{0,420}?openImportFiles\(files, false, "receipt"\);/,
@@ -152,6 +156,16 @@ assert.match(
 );
 assert.match(
   openAIParserSource,
+  /const openAIReceiptCoreJsonSchema =[\s\S]{0,2600}?transactions: \{ type: "array", maxItems: 0/,
+  "ordinary receipts should use a compact core-only response contract"
+);
+assert.match(
+  openAIParserSource,
+  /useReceiptCoreOnly[\s\S]{0,300}?\? 900/,
+  "core receipt extraction should use a bounded output budget"
+);
+assert.match(
+  openAIParserSource,
   /const RECEIPT_VISION_HEDGE_DELAY_MS = 6_000/,
   "slow receipt vision should have a bounded hedge delay"
 );
@@ -170,6 +184,41 @@ assert.match(
   importModalSource,
   /const NEAR_VISIBLE_IMPORT_PROGRESS_POLL_INTERVAL_MS = 600/,
   "the near-visible import phase should use a short polling interval"
+);
+assert.match(
+  importModalSource,
+  /new EventSource\(`\/api\/imports\/\$\{importFileId\}\/events`\)[\s\S]{0,3000}?completionTransport: "server_sent_event"/,
+  "the uploader should react to server-pushed receipt visibility while retaining polling fallback"
+);
+assert.match(
+  importEventsRouteSource,
+  /IMPORT_STATUS_STREAM_NEAR_VISIBLE_POLL_MS = 500[\s\S]{0,5000}?processingPhase === "reconciling"/,
+  "the server event stream should tighten its cadence only near visible completion"
+);
+assert.match(
+  workerSource,
+  /visible_total_and_date_matched: true[\s\S]{0,180}?openai_call_avoided: true/,
+  "perceptual receipt cache reuse must require matching visible financial evidence"
+);
+assert.match(
+  workerSource,
+  /receiptCoreOnly: effectiveImportMode === "receipt" && !receiptNeedsCompleteFirstPass/,
+  "split, trained, cached, and explicitly complex receipts must stay on the complete first-pass path"
+);
+assert.match(
+  workerSource,
+  /schedulePostVisibleImportWork\(`receipt-details:\$\{importFileId\}`[\s\S]{0,5000}?preservedConfirmedCore: true/,
+  "full line-item extraction should run after visibility without replacing confirmed core fields"
+);
+assert.match(
+  workerSource,
+  /RECEIPT_VISIBLE_TARGET_MS = 8_000[\s\S]{0,100}?RECEIPT_VISIBLE_SLOW_BUDGET_MS = 12_000/,
+  "receipt telemetry should enforce explicit target and slow-tail budgets"
+);
+assert.match(
+  workerSource,
+  /const cashAccountIdPromise =[\s\S]{0,7000}?const \[cashAccountId, receiptCategoryId\] = await Promise\.all/,
+  "receipt account resolution and category persistence should overlap on the visible path"
 );
 assert.match(
   importModalSource,
@@ -193,7 +242,7 @@ assert.match(
 );
 assert.match(
   workerSource,
-  /explicitlyResolvedReceiptAccountId \?\?[\s\S]{0,180}?resolveWorkspaceCashAccountId\(String\(importFile\.workspaceId\), receiptCurrency\)/,
+  /const cashAccountIdPromise = explicitlyResolvedReceiptAccountId[\s\S]{0,180}?resolveWorkspaceCashAccountId\(String\(importFile\.workspaceId\), receiptCurrency\)/,
   "receipt confirmation must fall back to a same-currency Cash account when there is no explicit payment-account match"
 );
 assert.match(
@@ -241,7 +290,7 @@ const receiptFastHandoffSection = workerSource.slice(
 );
 assert.match(
   receiptFastHandoffSection,
-  /effectiveImportMode === "receipt" \? "fast_receipt" : "fast_notes"[\s\S]{0,2400}?recordImportDataQaInBackground/,
+  /effectiveImportMode === "receipt" \? "fast_receipt" : "fast_notes"[\s\S]{0,12000}?recordImportDataQaInBackground/,
   "receipt QA must start only after the usable transaction handoff"
 );
 assert.match(

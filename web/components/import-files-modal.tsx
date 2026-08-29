@@ -5275,6 +5275,8 @@ export function ImportFilesModal({
       // original file immediately and can run its deterministic and backup readers.
       let processResponseSettled = false;
       let inFlightStatusMonitorStopped = false;
+      let importEventStream: EventSource | null = null;
+      const importRequestStartedAt = performance.now();
       const processResponsePromise = postFileWithProgress(
         `/api/imports/${importFileId}/process`,
         item.file,
@@ -5317,6 +5319,8 @@ export function ImportFilesModal({
       ).finally(() => {
         processResponseSettled = true;
         inFlightStatusMonitorStopped = true;
+        importEventStream?.close();
+        importEventStream = null;
       });
       // Tiny files can finish uploading without a computable progress event.
       // Once the request is in flight, leave preparation but keep the label at
@@ -5340,6 +5344,63 @@ export function ImportFilesModal({
         summary: null,
         errorMessage: null,
       });
+      if (typeof EventSource !== "undefined") {
+        importEventStream = new EventSource(`/api/imports/${importFileId}/events`);
+        const handleVisibleImportEvent = (event: MessageEvent<string>) => {
+          try {
+            const payload = JSON.parse(event.data) as ImportStatusPayload;
+            const confirmedTransactionsCount = Number(payload.confirmedTransactionsCount ?? 0);
+            const parsedRowsCount = Number(payload.parsedRowsCount ?? 0);
+            const visibleRows = Math.max(confirmedTransactionsCount, parsedRowsCount, 1);
+            const visibleAccountId =
+              typeof payload.importFile?.accountId === "string" && payload.importFile.accountId.trim()
+                ? payload.importFile.accountId.trim()
+                : null;
+            updateItem(itemId, {
+              status: "done",
+              confirmationState: "confirmed",
+              error: null,
+              targetAccountId: visibleAccountId,
+              importedRows: visibleRows,
+              progress: 100,
+              progressLabel: "Imported successfully",
+            });
+            publishImportActivity({
+              workspaceId,
+              surface: importActivitySurfaceRef.current,
+              status: "done",
+              importFileId,
+              fileName: item.file.name,
+              fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+              fileTotal: items.length,
+              completedFiles: completedFileCount + 1,
+              progress: 100,
+              detail: `${visibleRows} transaction${visibleRows === 1 ? "" : "s"} imported successfully.`,
+              summary: null,
+              errorMessage: null,
+            });
+            setMessage(`Imported ${item.file.name}.`);
+            reportImportClientStage("receipt_visible_in_ui", {
+              importFileId,
+              importMode: itemImportMode,
+              clientTimeToVisibleMs: Math.round(performance.now() - importRequestStartedAt),
+              completionTransport: "server_sent_event",
+            });
+            inFlightStatusMonitorStopped = true;
+            importEventStream?.close();
+            importEventStream = null;
+            router.refresh();
+          } catch {
+            // The read-only progress poll remains the compatibility fallback.
+          }
+        };
+        importEventStream.addEventListener("visible", handleVisibleImportEvent as EventListener);
+        importEventStream.addEventListener("complete", handleVisibleImportEvent as EventListener);
+        importEventStream.onerror = () => {
+          importEventStream?.close();
+          importEventStream = null;
+        };
+      }
       // The multipart request stays open while the deterministic parser saves
       // rows. Poll the read-only lightweight progress endpoint so progress is
       // driven by real server phases instead of freezing at the upload boundary.
