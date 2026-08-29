@@ -145,6 +145,7 @@ import {
   matchesDurableImportedAccountIdentity,
   matchesImportedAccountIdentity,
   normalizeImportedAccountKey,
+  scoreDurableImportedAccountIdentityMatch,
 } from "@/lib/workspace-cache";
 import {
   claimNextImportEnrichmentJob,
@@ -6079,6 +6080,14 @@ const resolveConfirmationAccount = async (params: {
   };
   const accountMatchesImportIdentity = (account: (typeof workspaceAccounts)[number]) =>
     matchesDurableImportedAccountIdentity(account, incomingImportIdentity);
+  const bestDurableImportIdentityMatch = (accounts: typeof workspaceAccounts) =>
+    accounts
+      .map((account) => ({ account, score: scoreDurableImportedAccountIdentityMatch(account, incomingImportIdentity) }))
+      .filter((candidate) => candidate.score > 0)
+      .sort(
+        (left, right) =>
+          right.score - left.score || sortImportedAccountsByFreshness(left.account, right.account)
+      )[0]?.account ?? null;
   const accountHasNoAccountNumber = (account: (typeof workspaceAccounts)[number]) =>
     !String(account.accountNumber ?? "").replace(/\D/g, "");
   const isWiseWalletImport =
@@ -6207,10 +6216,7 @@ const resolveConfirmationAccount = async (params: {
             .filter((account) => account.id !== directAccount.id)
             .filter(wiseWalletAccountMatchesCurrency)
             .sort(sortImportedAccountsByFreshness)[0] ?? null
-        : workspaceAccounts
-            .filter((account) => account.id !== directAccount.id)
-            .filter(accountMatchesImportIdentity)
-            .sort(sortImportedAccountsByFreshness)[0] ??
+        : bestDurableImportIdentityMatch(workspaceAccounts.filter((account) => account.id !== directAccount.id)) ??
           (hasInferredAccountNumber
             ? null
             : findBestImportedAccountMatch(
@@ -6310,9 +6316,7 @@ const resolveConfirmationAccount = async (params: {
   let existingByKey =
     isWiseWalletImport
       ? null
-      : workspaceAccounts
-          .filter(accountMatchesImportIdentity)
-          .sort(sortImportedAccountsByFreshness)[0] ?? null;
+      : bestDurableImportIdentityMatch(workspaceAccounts);
   if (!existingByKey && !isWiseWalletImport && hasInferredAccountNumber) {
     const aliasRuleKey = normalizeAccountRuleKey(incomingImportIdentity.name, incomingImportIdentity.institution);
     const aliasRule = aliasRuleKey
@@ -14306,6 +14310,9 @@ export const confirmImportFile = async (
   const existingImportTransactionsPromise = confirmationInputsPromise.then(
     (inputs) => inputs.existingImportTransactions
   );
+  const preexistingImportAccountIdsPromise = existingImportTransactionsPromise.then((transactions) =>
+    Array.from(new Set(transactions.map((transaction) => transaction.accountId)))
+  );
   const previousStatementCheckpointPromise = confirmationInputsPromise.then(
     (inputs) => inputs.previousStatementCheckpoint
   );
@@ -15744,6 +15751,11 @@ export const confirmImportFile = async (
     const resolvedInstitutionsForCleanup = Array.from(
       new Set(resolvedAccounts.map((entry) => entry.institution).filter((institution): institution is string => Boolean(institution?.trim())))
     );
+    const resolvedAccountIdSetForCleanup = new Set(resolvedAccountIdsForCleanup);
+    const staleAccountIdsEmptiedByImportCleanup = new Set(
+      (await preexistingImportAccountIdsPromise)
+        .filter((accountId) => !resolvedAccountIdSetForCleanup.has(accountId))
+    );
     await Promise.allSettled(
       Array.from(resolvedAccountSummaryById.entries()).map(([accountId, summary]) => {
         const displayName = formatUploadAccountDisplayName(
@@ -15786,6 +15798,14 @@ export const confirmImportFile = async (
           })),
         ],
       } satisfies Prisma.TransactionWhereInput;
+      const staleStatementAccountRows = await prisma.transaction.findMany({
+        where: staleStatementTransactionWhere,
+        select: { accountId: true },
+        distinct: ["accountId"],
+      }).catch(() => []);
+      for (const row of staleStatementAccountRows) {
+        staleAccountIdsEmptiedByImportCleanup.add(row.accountId);
+      }
       await prisma.transaction.deleteMany({
         where: staleStatementTransactionWhere,
       }).catch((error) => {
@@ -15810,6 +15830,7 @@ export const confirmImportFile = async (
           },
           select: {
             id: true,
+            accountId: true,
             date: true,
             amount: true,
             currency: true,
@@ -15833,6 +15854,11 @@ export const confirmImportFile = async (
           )
           .map((row) => row.id);
         if (staleDuplicateIds.length > 0) {
+          for (const row of staleCandidateTransactions) {
+            if (staleDuplicateIds.includes(row.id)) {
+              staleAccountIdsEmptiedByImportCleanup.add(row.accountId);
+            }
+          }
           await prisma.transaction.deleteMany({
             where: {
               id: { in: staleDuplicateIds },
@@ -15856,7 +15882,12 @@ export const confirmImportFile = async (
           type: { not: "investment" },
           id: { notIn: resolvedAccountIdsForCleanup },
           transactions: { none: {} },
-          accountNumber: null,
+          OR: [
+            { accountNumber: null },
+            ...(staleAccountIdsEmptiedByImportCleanup.size > 0
+              ? [{ id: { in: Array.from(staleAccountIdsEmptiedByImportCleanup) } }]
+              : []),
+          ],
         },
       }).catch((error) => {
         console.warn("[import-account-match] unable to delete empty stale multi-account placeholders", {

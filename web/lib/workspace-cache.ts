@@ -539,12 +539,13 @@ export type DurableImportedAccountIdentityLike = ImportedAccountIdentityLike & {
   importIdentityAccountNumber?: string | null;
 };
 
-export const matchesDurableImportedAccountIdentity = (
+export const scoreDurableImportedAccountIdentityMatch = (
   account: DurableImportedAccountIdentityLike,
   incoming: ImportedAccountIdentityLike
 ) =>
-  matchesImportedAccountIdentity(account, incoming) ||
-  matchesImportedAccountIdentity(
+  Math.max(
+    scoreImportedAccountIdentityMatch(account, incoming),
+    scoreImportedAccountIdentityMatch(
     {
       ...account,
       name: account.importIdentityName ?? account.name,
@@ -552,7 +553,13 @@ export const matchesDurableImportedAccountIdentity = (
       accountNumber: account.importIdentityAccountNumber ?? account.accountNumber,
     },
     incoming
+    )
   );
+
+export const matchesDurableImportedAccountIdentity = (
+  account: DurableImportedAccountIdentityLike,
+  incoming: ImportedAccountIdentityLike
+) => scoreDurableImportedAccountIdentityMatch(account, incoming) > 0;
 
 export const findBestImportedAccountMatch = <T extends ImportedAccountIdentityLike>(accounts: T[], identity: ImportedAccountIdentityLike) => {
   let bestMatch: T | null = null;

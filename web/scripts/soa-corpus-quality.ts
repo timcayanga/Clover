@@ -18,6 +18,9 @@ type CorpusFileResult = {
   identity: boolean;
   protected: boolean;
   visualRequired: boolean;
+  textMs: number;
+  parseMs: number;
+  totalMs: number;
   recognizedEmptyStatement?: boolean;
   otherSamples?: Array<{ merchantRaw: string; merchantClean: string; description: string }>;
   duplicateSamples?: Array<{ key: string; count: number; merchants: string[]; sourceLines: string[] }>;
@@ -93,9 +96,16 @@ const readPdfText = async (filePath: string) => {
 const summarizeFile = async (filePath: string): Promise<CorpusFileResult> => {
   const relativeFile = relative(root, filePath);
   const relativeParts = relativeFile.split(/[\\/]/).filter(Boolean);
-  const bank = relativeParts.length > 1 ? relativeParts[0] ?? "Unknown" : basename(root) || "Unknown";
+  const corpusSection = relativeParts[0];
+  const bank =
+    (corpusSection === "Actual SOAs" || corpusSection === "Samples") && relativeParts.length > 1
+      ? relativeParts[1] ?? "Unknown"
+      : relativeParts[0] ?? basename(root) ?? "Unknown";
+  const totalStartedAt = performance.now();
   try {
+    const textStartedAt = performance.now();
     const extraction = await readPdfText(filePath);
+    const textMs = performance.now() - textStartedAt;
     if (extraction.text.trim().length < 40) {
       return {
         file: relativeFile,
@@ -110,8 +120,12 @@ const summarizeFile = async (filePath: string): Promise<CorpusFileResult> => {
         identity: false,
         protected: false,
         visualRequired: true,
+        textMs,
+        parseMs: 0,
+        totalMs: performance.now() - totalStartedAt,
       };
     }
+    const parseStartedAt = performance.now();
     const metadata = detectStatementMetadataFromText(extraction.text, basename(filePath));
     const parsedRows = parseImportText(extraction.text, basename(filePath), "application/pdf", {
       institution: metadata.institution,
@@ -121,6 +135,7 @@ const summarizeFile = async (filePath: string): Promise<CorpusFileResult> => {
     const rows = parsedRows.filter(
       (row) => row.rawPayload?.kind !== "opening_balance" && row.rawPayload?.kind !== "account_snapshot_marker"
     );
+    const parseMs = performance.now() - parseStartedAt;
     const hasDedicatedParserEvidence = parsedRows.some((row) =>
       ["hsbc_uk_pdf_statement_transaction", "wise_pdf_statement_transaction"].includes(String(row.rawPayload?.kind ?? ""))
     );
@@ -179,6 +194,9 @@ const summarizeFile = async (filePath: string): Promise<CorpusFileResult> => {
       // is image-backed; do not count it as complete parser coverage.
       visualRequired:
         extraction.pageCount > 1 && rows.length <= 1 && !hasDedicatedParserEvidence && !recognizedEmptyStatement,
+      textMs,
+      parseMs,
+      totalMs: performance.now() - totalStartedAt,
       ...(recognizedEmptyStatement ? { recognizedEmptyStatement: true } : {}),
       ...(otherSamples.length > 0 ? { otherSamples } : {}),
       ...(duplicateSamples.length > 0 ? { duplicateSamples } : {}),
@@ -199,6 +217,9 @@ const summarizeFile = async (filePath: string): Promise<CorpusFileResult> => {
       identity: false,
       protected: protectedFile,
       visualRequired: false,
+      textMs: 0,
+      parseMs: 0,
+      totalMs: performance.now() - totalStartedAt,
       ...(protectedFile ? {} : { error: message }),
     };
   }
@@ -240,6 +261,36 @@ const main = async () => {
       (!result.recognizedEmptyStatement && rate(result.normalizedRows, result.rows) < 0.75) ||
       result.duplicateKeyRate > 0.05
   );
+  const percentile = (values: number[], quantile: number) => {
+    if (values.length === 0) return 0;
+    const sorted = [...values].sort((left, right) => left - right);
+    return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * quantile) - 1))] ?? 0;
+  };
+  const bankSummaries = [...new Set(results.map((result) => result.bank))]
+    .sort((left, right) => left.localeCompare(right))
+    .map((bank) => {
+      const bankResults = results.filter((result) => result.bank === bank);
+      const bankEvaluated = bankResults.filter((result) => !result.error && !result.protected);
+      const bankParsed = bankEvaluated.filter((result) => !result.visualRequired);
+      const bankRows = bankParsed.reduce((sum, result) => sum + result.rows, 0);
+      return {
+        bank,
+        files: bankResults.length,
+        parsedFiles: bankParsed.length,
+        failedFiles: bankResults.filter((result) => result.error).length,
+        protectedFiles: bankResults.filter((result) => result.protected).length,
+        visualRequiredFiles: bankResults.filter((result) => result.visualRequired).length,
+        rows: bankRows,
+        identityCoverage: rate(bankParsed.filter((result) => result.identity).length, bankParsed.length),
+        dateCoverage: rate(bankParsed.reduce((sum, result) => sum + result.datedRows, 0), bankRows),
+        normalizedNameCoverage: rate(bankParsed.reduce((sum, result) => sum + result.normalizedRows, 0), bankRows),
+        otherRate: rate(bankParsed.reduce((sum, result) => sum + result.otherRows, 0), bankRows),
+        totalMs: bankResults.reduce((sum, result) => sum + result.totalMs, 0),
+        medianFileMs: percentile(bankResults.map((result) => result.totalMs), 0.5),
+        p95FileMs: percentile(bankResults.map((result) => result.totalMs), 0.95),
+        slowestFileMs: Math.max(0, ...bankResults.map((result) => result.totalMs)),
+      };
+    });
 
   const output = {
     root,
@@ -258,6 +309,7 @@ const main = async () => {
       identityCoverage: rate(parsed.filter((result) => result.identity).length, parsed.length),
     },
     highRiskFiles: highRiskFiles.map((result) => result.file),
+    bankSummaries,
     results,
   };
 

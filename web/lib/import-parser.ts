@@ -24980,6 +24980,12 @@ const looksLikeWiseMobileScreenshotText = (text: string) => {
 
 const parseWiseMobileScreenshotMetadata = (text: string, context: ImportParseContext = {}): DetectedStatementMetadata | null => {
   const explicitWiseContext = /\bWise\b/i.test(`${context.institution ?? ""} ${context.accountName ?? ""}`);
+  const hasCreditCardStatementShell =
+    /\bCREDIT\s+CARD\s+ACCOUNT\b/i.test(text) &&
+    /\b(?:Statement\s+Date|Payment\s+Due\s+Date|Minimum\s+Amount\s+Due|Credit\s+Card\s+Account\s+Number)\b/i.test(text);
+  if (hasCreditCardStatementShell && !explicitWiseContext && !/\bWise(?:\s+Pilipinas)?\b/i.test(text)) {
+    return null;
+  }
   const explicitNonWiseInstitution = detectExplicitInstitutionShell(text);
   if (explicitNonWiseInstitution && explicitNonWiseInstitution !== "Wise" && !explicitWiseContext) {
     return null;

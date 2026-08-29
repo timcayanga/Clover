@@ -155,6 +155,7 @@ const main = async () => {
     formData.set("fileType", "application/pdf");
     formData.set("importMode", "statement");
     formData.set("allowDuplicateStatement", "true");
+    formData.set("forceInlineProcessing", "true");
     formData.set("file", new Blob([bytes], { type: "application/pdf" }), fileName);
 
     const processResponse = await fetch(`${baseUrl}/api/imports/${importId}/process`, {

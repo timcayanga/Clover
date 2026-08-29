@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { matchesDurableImportedAccountIdentity } from "@/lib/workspace-cache";
+import { matchesDurableImportedAccountIdentity, scoreDurableImportedAccountIdentityMatch } from "@/lib/workspace-cache";
 
 const customizedGoTyme = {
   id: "account-gotyme",
@@ -48,6 +48,34 @@ const main = () => {
     false,
     "A different account number must not be routed to the customized account."
   );
+  const exactNumberScore = scoreDurableImportedAccountIdentityMatch(customizedGoTyme, {
+    name: "GoTyme 1008",
+    institution: "GoTyme",
+    accountNumber: "1008",
+    type: "bank",
+    currency: "PHP",
+  });
+  const genericPlaceholderScore = scoreDurableImportedAccountIdentityMatch(
+    {
+      name: "GoTyme",
+      institution: "GoTyme",
+      accountNumber: null,
+      type: "bank",
+      currency: "PHP",
+      source: "upload",
+    },
+    {
+      name: "GoTyme 1008",
+      institution: "GoTyme",
+      accountNumber: "1008",
+      type: "bank",
+      currency: "PHP",
+    }
+  );
+  assert.ok(
+    exactNumberScore > genericPlaceholderScore,
+    "An exact account number must outrank a newer generic institution placeholder."
+  );
 
   const accountRoute = fs.readFileSync(path.join(process.cwd(), "app/api/accounts/[accountId]/route.ts"), "utf8");
   const accountsRoute = fs.readFileSync(path.join(process.cwd(), "app/api/accounts/route.ts"), "utf8");
@@ -60,7 +88,7 @@ const main = () => {
   assert.match(accountRoute, /logoCustomized: payload\.logoUrl !== null/);
   assert.match(accountRoute, /account\.nameCustomized[\s\S]{0,80}\? account\.name/);
   assert.match(accountsRoute, /account\.nameCustomized[\s\S]{0,80}\? account\.name/);
-  assert.match(worker, /matchesDurableImportedAccountIdentity\(account, incomingImportIdentity\)/);
+  assert.match(worker, /scoreDurableImportedAccountIdentityMatch\(account, incomingImportIdentity\)/);
   assert.match(worker, /!account\.nameCustomized[\s\S]{0,100}data\.name/);
   assert.match(worker, /normalizeAccountRuleKey\(incomingImportIdentity\.name, incomingImportIdentity\.institution\)/);
   assert.match(migration, /"importIdentityName" TEXT/);
