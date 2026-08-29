@@ -60927,3 +60927,77 @@ html[data-theme="dark"] .split-bill-action-button--add:focus-visible {
     transition: none !important;
   }
 }
+
+/* Keep product titles and Adviser actions on one visual centerline. The 3D
+   Adviser artwork has transparent inset space, so its box is intentionally a
+   little larger than neighboring controls. */
+@media (min-width: 1101px) {
+  .content--transactions > .topbar .topbar__title-wrap,
+  .content--transactions > .topbar .topbar__title-row {
+    align-items: center;
+  }
+
+  .content--transactions > .topbar .topbar__title-row {
+    min-height: 52px;
+    gap: 10px;
+  }
+
+  .content--transactions .topbar__desktop-title-action :is(
+      .contextual-ask-clover,
+      .contextual-ask-clover__trigger,
+      .contextual-ask-clover__icon
+    ),
+  .content--accounts .contextual-ask-clover,
+  .content--accounts .contextual-ask-clover__trigger,
+  .content--accounts .contextual-ask-clover__icon,
+  .content--recurring .contextual-ask-clover,
+  .content--recurring .contextual-ask-clover__trigger,
+  .content--recurring .contextual-ask-clover__icon {
+    width: 52px;
+    min-width: 52px;
+    height: 52px;
+    min-height: 52px;
+  }
+
+  .content--reports .adviser-header-link,
+  .content--investments .adviser-header-link {
+    width: 52px;
+    min-width: 52px;
+    height: 52px;
+    min-height: 52px;
+    flex-basis: 52px;
+  }
+
+  .content--reports .adviser-header-link img,
+  .content--investments .adviser-header-link img {
+    width: 52px;
+    height: 52px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .content:is(.content--accounts, .content--transactions, .content--recurring)
+    .shell-topbar-leading__actions
+    :is(.contextual-ask-clover, .contextual-ask-clover__trigger, .contextual-ask-clover__icon) {
+    width: 44px !important;
+    min-width: 44px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    flex: 0 0 44px !important;
+  }
+
+  .content--has-mobile-subheader .shell-topbar-leading__actions .adviser-header-link,
+  .content--has-mobile-subheader .shell-topbar-leading__actions .adviser-header-link:hover,
+  .content--has-mobile-subheader .shell-topbar-leading__actions .adviser-header-link:focus-visible {
+    width: 44px !important;
+    min-width: 44px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    flex: 0 0 44px !important;
+  }
+
+  .content--has-mobile-subheader .shell-topbar-leading__actions .adviser-header-link img {
+    width: 36px !important;
+    height: 36px !important;
+  }
+}

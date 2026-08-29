@@ -34,6 +34,21 @@ assert.match(
   /\.currency-selector__trigger-all,[\s\S]*?\.currency-selector__trigger-token,[\s\S]*?font-size: inherit !important;[\s\S]*?font-weight: inherit !important;/,
   "Header currency labels must not override the shared CTA typography."
 );
+assert.match(
+  css,
+  /\.content--transactions > \.topbar \.topbar__title-wrap,[\s\S]{0,180}\.content--transactions > \.topbar \.topbar__title-row \{[\s\S]{0,80}align-items: center;/,
+  "The Transactions title and Adviser action must remain vertically aligned."
+);
+assert.match(
+  css,
+  /\.content--transactions \.topbar__desktop-title-action :is\([\s\S]{0,420}width: 52px;[\s\S]{0,100}height: 52px;/,
+  "Desktop Adviser artwork must retain the larger shared header size."
+);
+assert.match(
+  css,
+  /\.content:is\(\.content--accounts, \.content--transactions, \.content--recurring\)[\s\S]{0,300}width: 44px !important;[\s\S]{0,120}height: 44px !important;/,
+  "Mobile Adviser actions must retain the larger shared header size."
+);
 
 for (const selector of [".recurring-compact-action.button-small", ".admin-users__row-actions .button-small", ".settings-session-action.button-small"]) {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
