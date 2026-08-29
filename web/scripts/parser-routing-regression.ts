@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { detectInstitutionFromStatementSignals, detectStatementMetadata, parseImportText } from "@/lib/import-parser";
+import { detectStatementMetadataFromText } from "@/lib/data-engine";
 import {
   buildParserRoutingDecision,
   buildParserRoutingHistoryHint,
@@ -363,5 +365,37 @@ assert.ok(reviewReasons.includes("ambiguous_category"));
 assert.ok(reviewReasons.includes("validation:amount.coverage_low"));
 assert.ok(reviewReasons.includes("anomaly:amount_text_mismatch"));
 assert.equal(getImportReviewPriority(reviewReasons), "critical");
+
+const goTymeWithBpiCounterpartyText = [
+  "GoTyme Bank",
+  "Statement of Account",
+  "Account Number: 123456789012",
+  "Period: July 1, 2026 - July 31, 2026",
+  "Opening balance PHP 1,000.00",
+  "Date Details Credits Debits Running Balance",
+  "07-02-2026 Inbound Transfer from BPI 500.00 0.00 1,500.00",
+  "07-03-2026 Outbound Transfer to BPI 0.00 100.00 1,400.00",
+  "Closing balance PHP 1,400.00",
+].join("\n");
+const goTymeMetadata = detectStatementMetadata(goTymeWithBpiCounterpartyText, "statement.pdf");
+assert.equal(goTymeMetadata?.institution, "GoTyme");
+assert.equal(detectStatementMetadataFromText(goTymeWithBpiCounterpartyText, "statement.pdf").institution, "GoTyme");
+const goTymeRows = parseImportText(goTymeWithBpiCounterpartyText, "statement.pdf", "application/pdf");
+assert.equal(goTymeRows.length, 2);
+assert.ok(goTymeRows.every((row) => row.institution === "GoTyme" && row.rawPayload?.bank === "GoTyme"));
+
+const bpiWithGoTymeCounterpartyText = [
+  "Bank of the Philippine Islands",
+  "Statement of Account",
+  "Account Number 1234567890",
+  "Period Covered Jul 1, 2026 - Jul 31, 2026",
+  "Date Description Debit Credit Balance",
+  "07-03-2026 Transfer to GoTyme 100.00 0.00 900.00",
+].join("\n");
+assert.equal(
+  detectInstitutionFromStatementSignals(bpiWithGoTymeCounterpartyText),
+  "Bank of the Philippine Islands",
+  "A GoTyme counterparty must not override a BPI statement header."
+);
 
 console.log("parser routing regression passed");

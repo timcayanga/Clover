@@ -2544,24 +2544,36 @@ const detectExplicitInstitutionShell = (text: string) => {
     return "GCash";
   }
 
-  if (
-    /\b(?:BANK OF THE PHILIPPINE ISLANDS|BPI FAMILY SAVINGS BANK|BDO UNIBANK|METROBANK|SECURITY BANK|RCBC|UNION\s*BANK|PHILIPPINE NATIONAL BANK|ASIA UNITED BANK|LANDBANK|PSBANK|CHINABANK|MARI\s?BANK|UCPB|CIMB|MAYA|GOTYME)\b/i.test(
-      restored
-    )
-  ) {
-    for (const institution of institutionPatterns) {
-      if (institution.pattern.test(restored) || institution.pattern.test(compact)) {
-        return institution.name;
-      }
-    }
+  if (isGoTymeStatementText(text)) {
+    return "GoTyme";
   }
 
+  const headerText = splitStatementLines(text)
+    .slice(0, 24)
+    .filter(
+      (line) =>
+        !/\b(?:beneficiary|recipient|intermediary|correspondent|payee|merchant|transfer(?:red)?\s+to|payment\s+to)\b/i.test(line) &&
+        !/(?:\b\d{4}[-/]\d{1,2}[-/]\d{1,2}\b|\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b)/.test(line)
+    )
+    .join("\n");
+  const restoredHeader = restoreGenericCompactLabels(normalizeWhitespace(decompactOcrText(headerText)));
+  const compactHeader = compactWhitespace(restoredHeader).toUpperCase();
+  const headerMatches = institutionPatterns.filter(
+    (institution) => institution.pattern.test(restoredHeader) || institution.pattern.test(compactHeader)
+  );
+  if (headerMatches.length === 1) {
+    return headerMatches[0].name;
+  }
+
+  // Multiple institution names near the top can still be counterparties or
+  // linked-wallet labels. Let the weighted detector arbitrate instead of
+  // silently choosing whichever institution happens to appear first in code.
   return null;
 };
 
 const isAmbiguousInstitutionTextMatch = (institutionName: string) => ["Wise", "PayPal", "GCash", "GCrypto"].includes(institutionName);
 
-const detectInstitutionFromSignals = (
+export const detectInstitutionFromStatementSignals = (
   text: string,
   options: {
     fileName?: string | null;
@@ -2926,12 +2938,12 @@ const parseGenericScreenshotStatementMetadata = (text: string, fileName = ""): D
           )
       ) ?? null;
   const institutionFromLines = sanitizeBankNameLabel(
-    detectInstitutionFromSignals(normalizedText, {
+    detectInstitutionFromStatementSignals(normalizedText, {
       headerLines: normalizedLines.slice(0, 32),
       fileName,
     })
   );
-  const institutionFromText = sanitizeBankNameLabel(detectInstitutionFromSignals(normalizedText, { fileName }));
+  const institutionFromText = sanitizeBankNameLabel(detectInstitutionFromStatementSignals(normalizedText, { fileName }));
   const sanitizedInferredInstitutionLine = sanitizeBankNameLabel(inferredInstitutionLine);
   const sanitizedTitleLineFallback = sanitizeBankNameLabel(titleLineFallback);
   const safeInferredInstitutionLine = isGenericPortfolioUiLabel(sanitizedInferredInstitutionLine)
@@ -3613,11 +3625,11 @@ const institutionPatterns: Array<{ name: string; pattern: RegExp }> = [
 ];
 
 const detectInstitutionFromText = (text: string) => {
-  return detectInstitutionFromSignals(text);
+  return detectInstitutionFromStatementSignals(text);
 };
 
 const detectInstitutionFromLines = (lines: string[]) => {
-  return detectInstitutionFromSignals(lines.join("\n"), {
+  return detectInstitutionFromStatementSignals(lines.join("\n"), {
     headerLines: lines.slice(0, 24),
   });
 };
@@ -6957,7 +6969,7 @@ const parseUcpbImportText = (text: string, context: ImportParseContext = {}) => 
 
 const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = normalizeBpiText(text).trim();
-  if (isBpiCreditCardStatementText(normalized)) {
+  if (isBpiCreditCardStatementText(normalized) || isGoTymeStatementText(normalized)) {
     return null;
   }
   if (!/BANK OF THE PHILIPPINE ISLANDS|\bBPI\b|\bBE\d{8}\b|FORBES\s*PARK\s*SAVINGS\s*BET\-?PHP/i.test(normalized)) {
@@ -18112,8 +18124,26 @@ const parseMayaSavingsDateText = (value?: string | null, yearHint?: number | nul
 
 const isGoTymeStatementText = (text: string) => {
   const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  const ledgerBoundaryCandidates = [
+    normalized.search(/\bDate\s+Details\s+Crea?dits\s+Debits\s+Running\s+Balance\b/i),
+    normalized.search(/\b\d{2}-\d{2}-\d{4}\b/),
+  ].filter((index) => index >= 0);
+  const identityBoundary = ledgerBoundaryCandidates.length > 0 ? Math.min(...ledgerBoundaryCandidates) : 1_200;
+  const identityRegion = normalized.slice(0, identityBoundary);
+  const goTymeLedgerSignalCount = [
+    /\bOPENING\s+BALANCE\s+PHP\b/i,
+    /\bCLOSING\s+BALANCE\s+PHP\b/i,
+    /\bTOTAL\s+CREDIT\b/i,
+    /\bTOTAL\s+DEBIT\b/i,
+    /\bALL\s+FIGURES\s+ARE\s+IN\s+PHP\b/i,
+    /\bDOCUMENT\s+ID\s*:/i,
+    /\bCREA?DITS\s+DEBITS\b/i,
+  ].filter((pattern) => pattern.test(normalized)).length;
+  const hasGoTymeOwnerEvidence =
+    /\bGO\s*TYME(?:\s+BANK)?\b|\bGOTYME(?:BANK)?\b/i.test(identityRegion) ||
+    (goTymeLedgerSignalCount >= 4 && /\bGO\s*TYME\s+BANK\b|\bGOTYMEBANK\b/i.test(normalized));
   return (
-    /\bGO\s*TYME\b|\bGOTYME\b/i.test(normalized) &&
+    hasGoTymeOwnerEvidence &&
     /(STATEMENT\s+OF\s+ACCOUNT|GO\s*TYME\s+BANK\s+ACCOUNT|ACCOUNT\s+NUMBER\s*:|TOTAL\s+CREDIT|TOTAL\s+DEBIT|RUNNING\s+BALANCE)/i.test(
       normalized
     )
@@ -25465,6 +25495,14 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
   if (explicitGcashStatementMetadata) {
     return withDetectedCurrency(explicitGcashStatementMetadata, text);
   }
+
+  // GoTyme ledgers can name BPI, GCash, and other institutions as
+  // counterparties. The explicit GoTyme document shell and running-balance
+  // layout must win before any counterparty bank parser is attempted.
+  const explicitGoTymeMetadata = parseGoTymeImportText(text);
+  if (explicitGoTymeMetadata) {
+    return withDetectedCurrency(explicitGoTymeMetadata.metadata, text);
+  }
   if (normalizeBankName(fileName) === "UnionBank" || /\bUNION\s*BANK\b/i.test(text)) {
     const explicitUnionBankMetadata = unionbankStatementMetadata(text);
     if (explicitUnionBankMetadata) {
@@ -25605,11 +25643,6 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
     return withDetectedCurrency(cimbMetadata.metadata, text);
   }
 
-  const gotymeMetadata = parseGoTymeImportText(text);
-  if (gotymeMetadata) {
-    return withDetectedCurrency(gotymeMetadata.metadata, text);
-  }
-
   const bdoParsed = parseBdoSavingsImportText(text);
   if (bdoParsed) {
     return withDetectedCurrency(bdoParsed.metadata, text);
@@ -25650,7 +25683,7 @@ export const detectStatementMetadata = (text: string, fileName = ""): DetectedSt
   const institutionDetection = detectUnknownInstitutionEvidence(text, { fileName });
   const currencyDetection = detectCurrencyEvidence(text);
   const institution = sanitizeBankNameLabel(
-    detectInstitutionFromSignals(text, { fileName, headerLines: splitStatementLines(text).slice(0, 24) }) ?? institutionDetection.institution
+    detectInstitutionFromStatementSignals(text, { fileName, headerLines: splitStatementLines(text).slice(0, 24) }) ?? institutionDetection.institution
   );
   const accountNumber = detectAccountNumberFromText(normalized);
   const { startDate, endDate } = detectStatementDatesFromText(normalized);
@@ -26004,6 +26037,13 @@ export const parseImportText = (
     return [];
   }
 
+  // Resolve explicit GoTyme ledgers before BPI. GoTyme transaction details
+  // often name a counterparty bank, which is not the statement owner.
+  const gotymeParsed = parseGoTymeImportText(text, context);
+  if (gotymeParsed && gotymeParsed.rows.length > 0) {
+    return gotymeParsed.rows;
+  }
+
   // Run BPI savings parsing before broader bank heuristics. OCR can make a
   // BPI header resemble another institution, while the ledger shape remains
   // recoverable by the dedicated BPI parser.
@@ -26130,11 +26170,6 @@ export const parseImportText = (
   const cimbParsed = parseCimbImportText(text);
   if (cimbParsed && cimbParsed.rows.length > 0) {
     return cimbParsed.rows;
-  }
-
-  const gotymeParsed = parseGoTymeImportText(text, context);
-  if (gotymeParsed && gotymeParsed.rows.length > 0) {
-    return gotymeParsed.rows;
   }
 
   const bdoParsed = parseBdoSavingsImportText(text);

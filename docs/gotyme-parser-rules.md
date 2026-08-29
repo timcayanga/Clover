@@ -39,6 +39,7 @@ This document captures the GoTyme parsing rules learned from the synthetic train
 ## Parsing Guidance
 
 - Prefer deterministic parsing from the statement text before any AI fallback.
+- Let an explicit GoTyme document shell and GoTyme running-balance ledger win over bank names found inside transaction details. A BPI, GCash, or other counterparty mention is not evidence that the statement belongs to that institution.
 - Prefer the GoTyme parser before any BDO-style savings fallback, because both layouts can look similar at a glance but GoTyme uses its own credits/debits/running-balance semantics.
 - Keep raw statement data, parsed rows, and normalized transactions separate.
 - Preserve bank-specific transfer, fee, sweep, and adjustment wording instead of collapsing it into generic spend.

@@ -138,6 +138,35 @@ const main = () => {
     "Expected UnionBank-labeled statement rows to never be claimed by Wise fallback parsing."
   );
 
+  const goTymeWithBpiCounterpartyText = [
+    "GoTyme Bank",
+    "Statement of Account",
+    "Account Number: 123456789012",
+    "Period: July 1, 2026 - July 31, 2026",
+    "Opening balance PHP 1,000.00",
+    "Date Details Credits Debits Running Balance",
+    "07-02-2026 Inbound Transfer from BPI 500.00 0.00 1,500.00",
+    "07-03-2026 Outbound Transfer to BPI 0.00 100.00 1,400.00",
+    "Closing balance PHP 1,400.00",
+  ].join("\n");
+  const goTymeMetadata = detectStatementMetadata(goTymeWithBpiCounterpartyText, "statement.pdf");
+  assert.equal(
+    goTymeMetadata?.institution,
+    "GoTyme",
+    "Expected the GoTyme document shell to beat BPI counterparty text."
+  );
+  assert.equal(
+    detectStatementMetadataFromText(goTymeWithBpiCounterpartyText, "statement.pdf").institution,
+    "GoTyme",
+    "Expected Data Engine to use the same header-weighted institution detection."
+  );
+  const goTymeRows = parseImportText(goTymeWithBpiCounterpartyText, "statement.pdf", "application/pdf");
+  assert.equal(goTymeRows.length, 2);
+  assert.ok(
+    goTymeRows.every((row) => row.institution === "GoTyme" && row.rawPayload?.bank === "GoTyme"),
+    "Expected BPI counterparty rows to remain attached to the GoTyme account."
+  );
+
   const strongStructuredRoute = decideImportParserRoute({
     importMode: "statement",
     fileType: "application/pdf",

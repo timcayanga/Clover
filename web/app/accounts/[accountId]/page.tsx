@@ -3840,7 +3840,6 @@ function AccountDetailPageContent() {
         body: JSON.stringify({
           workspaceId: account.workspaceId,
           name: nextName || account.name,
-          institution: account.institution,
           accountNumber: nextAccountNumber || null,
           type: account.type,
           currency: account.currency,

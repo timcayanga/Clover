@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import {
   detectStatementMetadata,
+  detectInstitutionFromStatementSignals,
   detectExplicitAccountTypeFromStatementText,
   type DetectedStatementMetadata,
   type ImportedAccountType,
@@ -207,26 +208,6 @@ const CATEGORY_FALLBACKS: Record<TransactionType, string> = {
   expense: "Other",
   transfer: "Transfers",
 };
-
-const KNOWN_INSTITUTIONS: Array<{ name: string; match: RegExp }> = [
-  { name: "BPI", match: /\b(BANK OF THE PHILIPPINE ISLANDS|BPI)\b/i },
-  { name: "BDO", match: /\b(BDO|BANCO DE ORO)\b/i },
-  { name: "Metrobank", match: /\b(METROBANK|METROPOLITAN BANK)\b/i },
-  { name: "Security Bank", match: /\bSECURITY BANK\b/i },
-  { name: "EastWest", match: /\b(EASTWEST|EAST WEST)\b/i },
-  { name: "CIMB", match: /\b(CIMB|GSAVE)\b/i },
-  { name: "RCBC", match: /\bRCBC\b/i },
-  { name: "UnionBank", match: /\b(UNIONBANK|UNION\s+BANK|UNIONBANK\s+OF\s+THE\s+PHILIPPINES|UNION\s+BANK\s+OF\s+THE\s+PHILIPPINES)\b/i },
-  { name: "Landbank", match: /\bLANDBANK\b/i },
-  { name: "Chinabank", match: /\b(CHINABANK|CHINA\s*BANK)\b/i },
-  { name: "MariBank", match: /\b(MARIBANK|SEABANK)\b/i },
-  { name: "PSBank", match: /\bPSBANK\b/i },
-  { name: "UCPB", match: /\b(UCPB|UNITED\s+COCONUT\s+PLANTERS\s+BANK)\b/i },
-  { name: "Maya", match: /\bMAYA\b/i },
-  { name: "GCash", match: /\bGCASH\b/i },
-  { name: "Wise", match: /\bWISE\b/i },
-  { name: "PayPal", match: /\bPAYPAL\b/i },
-];
 
 const PARSED_TRANSACTION_COLUMNS = [
   "id",
@@ -1879,11 +1860,8 @@ export const mapImportedCategoryToCloverCategory = (
 
 export const detectInstitutionFromText = (text: string | null | undefined) => {
   const normalized = normalizeWhitespace(String(text ?? ""));
-  for (const institution of KNOWN_INSTITUTIONS) {
-    if (institution.match.test(normalized)) {
-      return institution.name;
-    }
-  }
+  const detectedInstitution = detectInstitutionFromStatementSignals(normalized);
+  if (detectedInstitution) return detectedInstitution;
 
   if (
     /PERIOD\s+COVERED/i.test(normalized) &&

@@ -495,12 +495,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
           payload.name ?? null
         ) ?? payload.currency.trim().toUpperCase()
       : undefined;
+    const inferredInstitutionFromName =
+      payload.name !== undefined && payload.institution === undefined
+        ? normalizeUploadBankName(payload.name)
+        : null;
 
     await assertWorkspaceAccess(userId, payload.workspaceId);
 
     const accountUpdateData = {
         name: payload.name?.trim() ?? undefined,
-        institution: payload.institution === undefined ? undefined : payload.institution?.trim() || null,
+        institution:
+          payload.institution === undefined
+            ? inferredInstitutionFromName ?? undefined
+            : payload.institution?.trim() || null,
         ...(compatibleColumns.has("accountNumber")
           ? { accountNumber: payload.accountNumber === undefined ? undefined : payload.accountNumber?.trim() || null }
           : {}),

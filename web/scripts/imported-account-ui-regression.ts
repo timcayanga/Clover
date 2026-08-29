@@ -45,10 +45,27 @@ type TestTransaction = {
 
 const main = () => {
   const accountsPageSource = fs.readFileSync(path.join(process.cwd(), "app/accounts/page.tsx"), "utf8");
+  const accountDetailSource = fs.readFileSync(path.join(process.cwd(), "app/accounts/[accountId]/page.tsx"), "utf8");
+  const accountRouteSource = fs.readFileSync(path.join(process.cwd(), "app/api/accounts/[accountId]/route.ts"), "utf8");
   assert.match(
     accountsPageSource,
     /setAccountsLoading\(!hydratedFromCache\)/,
     "Cached Accounts reloads must stay non-blocking so background-derived Wise wallets persist for the next reload."
+  );
+  assert.match(
+    accountDetailSource,
+    /saveInlineCardIdentity\("name", value\)/,
+    "The shared desktop/mobile account card must keep its inline name editor."
+  );
+  assert.doesNotMatch(
+    accountDetailSource,
+    /name: nextName \|\| account\.name,\s*institution: account\.institution,/,
+    "Account name autosave must allow the API to infer a deliberately entered institution name."
+  );
+  assert.match(
+    accountRouteSource,
+    /inferredInstitutionFromName[\s\S]{0,220}normalizeUploadBankName\(payload\.name\)/,
+    "A recognized bank entered in the account name field must update the stored institution on desktop and mobile."
   );
 
   const numberedUploadAccount: TestAccount = {
