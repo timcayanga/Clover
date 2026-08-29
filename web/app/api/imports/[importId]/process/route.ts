@@ -76,6 +76,77 @@ type ImportResponseAccountSummary = {
   rowsImported?: number;
 };
 
+const loadCommittedReceiptTransactionForResponse = async (importFileId: string) => {
+  const transaction = await prisma.transaction
+    .findFirst({
+      where: {
+        importFileId,
+        deletedAt: null,
+      },
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        accountId: true,
+        categoryId: true,
+        reviewStatus: true,
+        date: true,
+        amount: true,
+        currency: true,
+        type: true,
+        merchantRaw: true,
+        merchantClean: true,
+        description: true,
+        rawPayload: true,
+        normalizedPayload: true,
+        isTransfer: true,
+        isExcluded: true,
+        createdAt: true,
+        account: {
+          select: {
+            name: true,
+            institution: true,
+            accountNumber: true,
+          },
+        },
+      },
+    })
+    .catch(() => null);
+
+  if (!transaction) {
+    return null;
+  }
+
+  return {
+    id: transaction.id,
+    accountId: transaction.accountId,
+    accountName: transaction.account.name,
+    institution: transaction.account.institution ?? null,
+    accountNumber: transaction.account.accountNumber ?? null,
+    categoryId: transaction.categoryId,
+    reviewStatus: transaction.reviewStatus,
+    date: transaction.date.toISOString(),
+    amount: transaction.amount.toString(),
+    currency: transaction.currency,
+    type: transaction.type,
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean ?? null,
+    description: transaction.description ?? null,
+    rawPayload:
+      transaction.rawPayload && typeof transaction.rawPayload === "object" && !Array.isArray(transaction.rawPayload)
+        ? (transaction.rawPayload as Record<string, unknown>)
+        : null,
+    normalizedPayload:
+      transaction.normalizedPayload &&
+      typeof transaction.normalizedPayload === "object" &&
+      !Array.isArray(transaction.normalizedPayload)
+        ? (transaction.normalizedPayload as Record<string, unknown>)
+        : null,
+    isTransfer: transaction.isTransfer,
+    isExcluded: transaction.isExcluded,
+    createdAt: transaction.createdAt.toISOString(),
+  };
+};
+
 const mergeImportResponseAccountSummaries = <T extends ImportResponseAccountSummary>(
   confirmedSummaries: T[] | null | undefined,
   snapshotSummaries: T[] | null | undefined
@@ -2816,6 +2887,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         );
         const committedAccountInventoryComplete =
           result.status === "done" && visibleRows === 0 && accountSummaries.length > 0;
+        const resolvedResponseImportMode = result.resolvedImportMode ?? importMode ?? "statement";
+        // The worker has already committed the receipt when visibleRows is positive.
+        // If the broader status snapshot raced that commit, return the transaction
+        // directly so the client can publish it without waiting for SSE or a reload.
+        const responseReceiptTransaction =
+          statusSnapshot?.receiptTransaction ??
+          (resolvedResponseImportMode === "receipt" && visibleRows > 0
+            ? await loadCommittedReceiptTransactionForResponse(importId)
+            : null);
 
         return NextResponse.json({
           ok: true,
@@ -2824,7 +2904,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           // The worker can reclassify a generic camera/gallery upload after
           // reading the image. Return that durable decision so the client does
           // not keep monitoring a receipt through the statement save path.
-          importMode: result.resolvedImportMode ?? importMode ?? "statement",
+          importMode: resolvedResponseImportMode,
           importedRows: result.imported,
           duplicate: Boolean(result.duplicate),
           status: result.status ?? "done",
@@ -2843,7 +2923,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           finalizationInBackground:
             result.status === "done" && visibleRows > 0 && !committedAccountInventoryComplete,
           receiptDocument: statusSnapshot?.receiptDocument ?? null,
-          receiptTransaction: statusSnapshot?.receiptTransaction ?? null,
+          receiptTransaction: responseReceiptTransaction,
         });
       }
 

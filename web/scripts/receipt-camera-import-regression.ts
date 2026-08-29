@@ -171,6 +171,11 @@ const workerSource = readFileSync(join(root, "workers/import-processor.ts"), "ut
 const processRouteSource = readFileSync(join(root, "app/api/imports/[importId]/process/route.ts"), "utf8");
 const openAIParserSource = readFileSync(join(root, "lib/openai-import-parser.ts"), "utf8");
 assert.match(
+  processRouteSource,
+  /resolvedResponseImportMode === "receipt" && visibleRows > 0[\s\S]{0,180}?loadCommittedReceiptTransactionForResponse\(importId\)/,
+  "A completed receipt process response must directly recover its committed transaction when the status snapshot races the write."
+);
+assert.match(
   openAIParserSource,
   /OPENAI_RECEIPT_CORE_VISION_MAX_LONGEST_EDGE = 1120/,
   "The core-first server request should compact easy receipt images more aggressively than its detail pass."
@@ -208,7 +213,7 @@ assert.match(
 assert.match(workerSource, /resolvedImportMode: effectiveImportMode/);
 assert.match(
   processRouteSource,
-  /importMode: result\.resolvedImportMode \?\? importMode \?\? "statement"/,
+  /const resolvedResponseImportMode = result\.resolvedImportMode \?\? importMode \?\? "statement";[\s\S]{0,1600}?importMode: resolvedResponseImportMode/,
   "the process response should expose a server-detected receipt mode"
 );
 assert.match(
