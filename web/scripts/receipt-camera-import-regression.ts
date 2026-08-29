@@ -225,7 +225,7 @@ assert.match(
 );
 assert.match(
   imageCompressionSource,
-  /RECEIPT_IMPORT_IMAGE_TARGET_SIZE = 1_800_000[\s\S]{0,1800}?isReceiptProfile \? 2_000 : 2_600/,
+  /RECEIPT_IMPORT_IMAGE_TARGET_SIZE = 1_250_000[\s\S]{0,2000}?isReceiptProfile \? 1_800 : 2_600/,
   "Receipt photos should use a smaller upload and pixel budget without reducing statement resolution."
 );
 assert.match(

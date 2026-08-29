@@ -4,7 +4,7 @@ import { isImageImportFile } from "@/lib/import-file-helpers";
 
 export const MAX_IMPORT_IMAGE_SOURCE_SIZE = 16 * 1024 * 1024;
 export const IMPORT_IMAGE_TARGET_SIZE = 3_500_000;
-export const RECEIPT_IMPORT_IMAGE_TARGET_SIZE = 1_800_000;
+export const RECEIPT_IMPORT_IMAGE_TARGET_SIZE = 1_250_000;
 
 export type ImportImageOptimizationProfile = "default" | "receipt";
 
@@ -56,11 +56,12 @@ export const optimizeImportImage = async (
   }
 
   const image = await loadImage(file);
-  // A phone receipt remains legible at 2000px while uploading materially less
-  // data. Statement screenshots keep the larger canvas because their tables
-  // contain much denser text.
-  let maxDimension = isReceiptProfile ? 2_000 : 2_600;
-  let quality = isReceiptProfile ? 0.86 : 0.9;
+  // The server's core receipt reader uses a 1120px visual budget. Preparing
+  // receipt photos at 1800px keeps headroom for later line-item enrichment
+  // while avoiding an unnecessary second megabyte over mobile networks.
+  // Statement screenshots keep the larger canvas because their tables are denser.
+  let maxDimension = isReceiptProfile ? 1_800 : 2_600;
+  let quality = isReceiptProfile ? 0.84 : 0.9;
   let output: Blob | null = null;
 
   for (let attempt = 0; attempt < 7; attempt += 1) {
