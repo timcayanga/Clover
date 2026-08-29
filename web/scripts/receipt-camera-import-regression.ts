@@ -186,8 +186,18 @@ assert.match(
 );
 assert.match(
   openAIParserSource,
-  /const openAIReceiptCoreJsonSchema =[\s\S]{0,2600}?transactions: \{ type: "array", maxItems: 0/,
+  /const openAIReceiptCoreJsonSchema =[\s\S]{0,3600}?transactions: \{[\s\S]{0,120}?type: "array",[\s\S]{0,120}?maxItems: 0,[\s\S]{0,240}?items: \{[\s\S]{0,80}?type: "object"/,
   "ordinary receipts should use a compact core-only response contract"
+);
+assert.match(
+  importModalSource,
+  /processPayload\?\.receiptTransaction[\s\S]{0,260}?\? "receipt"[\s\S]{0,800}?resolvedResponseImportMode !== itemImportMode/,
+  "server-detected receipts should switch out of the statement confirmation path"
+);
+assert.match(
+  importModalSource,
+  /resolvedResponseImportMode === "receipt" && processPayload\?\.receiptTransaction[\s\S]{0,2600}?onImported\(receiptSummary\)/,
+  "inline receipt responses should publish their durable transaction immediately"
 );
 assert.match(
   openAIParserSource,

@@ -2821,6 +2821,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           ok: true,
           queued: false,
           processed: true,
+          importMode: importMode ?? "statement",
           importedRows: result.imported,
           duplicate: Boolean(result.duplicate),
           status: result.status ?? "done",

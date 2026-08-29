@@ -5247,7 +5247,8 @@ export function ImportFilesModal({
     const guessedIdentity = guessStatementIdentity(item.file.name);
     const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName && guessedIdentity.accountNumber);
     const itemImportMode = inferImportModeForFile(item.file, item.importMode ?? "statement");
-    const isDocumentImport = itemImportMode !== "statement";
+    let resolvedResponseImportMode: ImportImageMode = itemImportMode;
+    let isDocumentImport = itemImportMode !== "statement";
     let importFileId: string | null = null;
 
     if (!workspaceId) {
@@ -5625,6 +5626,26 @@ export function ImportFilesModal({
       }
 
       const processPayload = await processResponse.json().catch(() => ({}));
+      resolvedResponseImportMode =
+        processPayload?.receiptTransaction ||
+        processPayload?.receiptDocument ||
+        processPayload?.importMode === "receipt" ||
+        processPayload?.metadata?.documentType === "receipt" ||
+        processPayload?.metadata?.document_type === "receipt"
+          ? "receipt"
+          : processPayload?.importMode === "notes" ||
+              processPayload?.importMode === "portfolio" ||
+              processPayload?.importMode === "account_detail"
+            ? processPayload.importMode
+            : itemImportMode;
+      isDocumentImport = resolvedResponseImportMode !== "statement";
+      if (resolvedResponseImportMode !== itemImportMode) {
+        // A generic camera/gallery upload can be submitted before the client
+        // knows whether the image is a statement or receipt. Trust the server's
+        // structured result so the receipt uses the fast visibility path
+        // instead of waiting in the statement confirmation loop.
+        updateItem(itemId, { importMode: resolvedResponseImportMode });
+      }
       const canonicalImportFileId =
         typeof processPayload?.canonicalImportFileId === "string"
           ? processPayload.canonicalImportFileId
@@ -5644,14 +5665,80 @@ export function ImportFilesModal({
         throw new Error("Clover lost the import identifier while reconciling this upload.");
       }
       if (isDocumentImport) {
+        if (resolvedResponseImportMode === "receipt" && processPayload?.receiptTransaction) {
+          const receiptAccountId =
+            typeof processPayload.receiptTransaction.accountId === "string"
+              ? processPayload.receiptTransaction.accountId.trim()
+              : null;
+          const accountOption = findAccountOptionById(accounts, receiptAccountId);
+          const receiptSummary = buildReceiptSummaryFromReceiptTransaction(
+            {
+              fileName: item.file.name,
+              importFileId,
+              receiptTransaction: processPayload.receiptTransaction,
+              accountType: (accountOption?.type as UploadAccountType) ?? null,
+            },
+            (params) =>
+              buildOptimisticUploadSummary(
+                params.fileName,
+                params.importedRows,
+                params.accountId,
+                params.accountName,
+                params.institution,
+                params.accountType,
+                params.optimisticAccountId ?? null,
+                params.balance ?? null,
+                params.previewTransactions,
+                params.accountNumber ?? null,
+                params.showBalanceEvenIfEmpty ?? false
+              )
+          );
+
+          if (receiptSummary) {
+            seedImportedWorkspaceCaches(workspaceId, receiptSummary);
+            await Promise.resolve(onImported(receiptSummary));
+            triggerImportEnrichment(importFileId);
+            updateItem(itemId, {
+              status: "done",
+              confirmationState: "confirmed",
+              error: null,
+              importFileId,
+              targetAccountId: receiptSummary.accountId ?? receiptAccountId,
+              importedRows: Math.max(1, Number(receiptSummary.rowsImported ?? 0)),
+              progress: 100,
+              progressLabel: "Receipt imported",
+            });
+            publishImportActivity({
+              workspaceId,
+              surface: importActivitySurfaceRef.current,
+              status: "done",
+              fileName: item.file.name,
+              fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+              fileTotal: items.length,
+              completedFiles: completedFileCount + 1,
+              progress: 100,
+              detail: "Receipt imported",
+              summary: receiptSummary,
+              errorMessage: null,
+            });
+            window.setTimeout(closeVisibleImportModalIfPrimaryDataReady, 0);
+            setMessage(`Imported ${item.file.name}.`);
+            router.refresh();
+            return {
+              status: "done",
+              importedRows: Math.max(1, Number(receiptSummary.rowsImported ?? 0)),
+              summary: receiptSummary,
+            };
+          }
+        }
         const importedLabel =
-          itemImportMode === "receipt"
+          resolvedResponseImportMode === "receipt"
             ? "Receipt imported"
-            : itemImportMode === "portfolio"
+            : resolvedResponseImportMode === "portfolio"
               ? "Portfolio screenshot imported"
-              : itemImportMode === "account_detail"
+              : resolvedResponseImportMode === "account_detail"
                 ? "File details imported"
-              : itemImportMode === "notes"
+              : resolvedResponseImportMode === "notes"
               ? "Notes screenshot imported"
               : "Screenshot imported";
         if (processPayload?.queued) {
@@ -5664,13 +5751,13 @@ export function ImportFilesModal({
             importedRows: 0,
             progress: IMPORT_PROGRESS.loadingAccount,
             progressLabel:
-              itemImportMode === "receipt"
+              resolvedResponseImportMode === "receipt"
                 ? "Reading receipt in background"
-                : itemImportMode === "portfolio"
+                : resolvedResponseImportMode === "portfolio"
                   ? "Reading portfolio in background"
-                  : itemImportMode === "account_detail"
+                  : resolvedResponseImportMode === "account_detail"
                     ? "Reading file details in background"
-              : itemImportMode === "notes"
+              : resolvedResponseImportMode === "notes"
                       ? "Reading notes in background"
                       : "Reading document in background",
           });
@@ -5684,19 +5771,19 @@ export function ImportFilesModal({
             completedFiles: completedFileCount,
             progress: IMPORT_PROGRESS.loadingAccount,
             detail:
-              itemImportMode === "receipt"
+              resolvedResponseImportMode === "receipt"
                 ? "Clover is reading the receipt"
-                : itemImportMode === "portfolio"
+                : resolvedResponseImportMode === "portfolio"
                   ? "Clover is reading the portfolio"
-                  : itemImportMode === "account_detail"
+                  : resolvedResponseImportMode === "account_detail"
                     ? "Clover is reading the account details"
-                    : itemImportMode === "notes"
+                    : resolvedResponseImportMode === "notes"
                       ? "Clover is reading the notes"
                       : "Clover is reading the document",
             summary: null,
             errorMessage: null,
           });
-          const monitorResult = await monitorQueuedDocumentImport(itemId, importFileId, itemImportMode, item.file.name);
+          const monitorResult = await monitorQueuedDocumentImport(itemId, importFileId, resolvedResponseImportMode, item.file.name);
           if (!monitorResult.completed) {
             return { status: "error", importedRows: null, summary: null };
           }

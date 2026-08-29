@@ -1290,7 +1290,20 @@ const openAIReceiptCoreJsonSchema = {
         { type: "null" },
       ],
     },
-    transactions: { type: "array", maxItems: 0, items: {} },
+    // OpenAI strict JSON schemas require every array item schema to declare a
+    // type, even when maxItems is zero. An empty schema made every receipt
+    // vision request fail with HTTP 400 before Clover fell back to a slower
+    // OCR + text pass.
+    transactions: {
+      type: "array",
+      maxItems: 0,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {},
+        required: [],
+      },
+    },
   },
   required: ["document_type", "receipt_account_match", "receipt_details", "transactions"],
 } as const;
