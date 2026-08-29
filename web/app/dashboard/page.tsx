@@ -43,6 +43,9 @@ import { defaultCurrencyCookieKey, normalizeDefaultCurrency } from "@/lib/region
 import { OnboardingMissions } from "@/components/onboarding-missions";
 import { BalanceVisibilityToggle } from "@/components/balance-visibility-toggle";
 import { resolveEffectiveAccountBalance, selectLatestAccountCheckpoint } from "@/lib/account-balance-projection";
+import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
+import type { HomeReviewTransaction } from "@/components/home-transaction-review-card";
+import { HomeTransactionReviewLauncher } from "@/components/home-transaction-review-launcher";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -92,11 +95,15 @@ type DashboardTransaction = {
   isExcluded: boolean;
   reviewStatus: "pending_review" | "suggested" | "confirmed" | "edited" | "rejected" | "duplicate_skipped";
   categoryConfidence: number | null;
+  parserConfidence: number | null;
+  accountMatchConfidence: number | null;
+  duplicateConfidence: number | null;
   categoryId: string | null;
   type: "income" | "expense" | "transfer";
   isTransfer: boolean;
   merchantRaw: string | null;
   merchantClean: string | null;
+  rawPayload: unknown;
   account: {
     name: string;
     currency: string | null;
@@ -104,6 +111,26 @@ type DashboardTransaction = {
   category: {
     name: string;
   } | null;
+};
+
+const getDashboardTransactionReviewReasons = (transaction: DashboardTransaction) => {
+  if (transaction.reviewStatus !== "pending_review" && transaction.reviewStatus !== "suggested") {
+    return [];
+  }
+
+  return getTransactionReviewReasons({
+    reviewStatus: transaction.reviewStatus,
+    isExcluded: transaction.isExcluded,
+    categoryId: transaction.categoryId,
+    categoryName: transaction.category?.name ?? null,
+    parserConfidence: transaction.parserConfidence,
+    categoryConfidence: transaction.categoryConfidence,
+    accountMatchConfidence: transaction.accountMatchConfidence,
+    duplicateConfidence: transaction.duplicateConfidence,
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean,
+    rawPayload: transaction.rawPayload,
+  });
 };
 
 type AggregatedTransactionTotals = {
@@ -320,7 +347,7 @@ const summarizeTransactions = (transactions: DashboardTransaction[]): Aggregated
         accumulator.confirmed += 1;
       }
 
-      if (transaction.reviewStatus !== "confirmed" || transaction.categoryId === null || (transaction.categoryConfidence ?? 0) < 70) {
+      if (getDashboardTransactionReviewReasons(transaction).length > 0) {
         accumulator.reviewAttention += 1;
       }
 
@@ -732,12 +759,16 @@ async function DashboardStream({
           amount: true,
           isExcluded: true,
           reviewStatus: true,
+          parserConfidence: true,
           categoryConfidence: true,
+          accountMatchConfidence: true,
+          duplicateConfidence: true,
           categoryId: true,
           type: true,
           isTransfer: true,
           merchantRaw: true,
           merchantClean: true,
+          rawPayload: true,
           account: {
             select: {
               name: true,
@@ -844,9 +875,21 @@ async function DashboardStream({
   const currentSavingsRate = currentSummary.current.income > 0 ? currentSummary.net / currentSummary.current.income : null;
   const previousNet = currentSummary.previous.income - currentSummary.previous.expense;
   const previousSavingsRate = currentSummary.previous.income > 0 ? previousNet / currentSummary.previous.income : null;
-  const reviewAttentionTransactions = currentThirtyDayTransactions.filter(
-    (transaction) => transaction.reviewStatus !== "confirmed" || transaction.categoryId === null || (transaction.categoryConfidence ?? 0) < 70
-  );
+  const reviewAttentionTransactions: HomeReviewTransaction[] = currentThirtyDayTransactions.flatMap((transaction) => {
+    const reviewReasons = getDashboardTransactionReviewReasons(transaction);
+    if (reviewReasons.length === 0) return [];
+    return [{
+      id: transaction.id,
+      title: transaction.merchantClean?.trim() || transaction.merchantRaw?.trim() || "Imported transaction",
+      date: transaction.date.toISOString(),
+      amount: String(transaction.amount),
+      currency: transaction.account?.currency ?? displayCurrency,
+      type: transaction.type,
+      accountName: transaction.account?.name ?? "Account",
+      categoryName: transaction.category?.name ?? null,
+      reviewReasons,
+    }];
+  });
   const reviewAttentionCount = reviewAttentionTransactions.length;
   const daysSinceLastImport = latestImport
     ? Math.max(0, Math.floor((now.getTime() - latestImport.uploadedAt.getTime()) / 86400000))
@@ -1324,27 +1367,7 @@ async function DashboardStream({
                 </div>
               </div>
               {reviewAttentionCount > 0 ? (
-                <div className="dashboard-home__action-list">
-                  {reviewAttentionTransactions.slice(0, 3).map((transaction) => {
-                    const transactionTitle = transaction.merchantClean?.trim() || transaction.merchantRaw?.trim() || "Imported transaction";
-                    const transactionCurrency = transaction.account?.currency ?? displayCurrency;
-                    return (
-                      <div className="dashboard-home__action-row" key={transaction.id}>
-                        <span className="dashboard-home__review-dot" aria-hidden="true" />
-                        <div className="dashboard-home__action-row-copy">
-                          <strong>{transactionTitle}</strong>
-                          <small>
-                            {transaction.date.toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
-                            {" · "}{formatCurrencyAmount(Math.abs(Number(transaction.amount)), transactionCurrency)}
-                          </small>
-                        </div>
-                        <Link className="dashboard-home__mini-action" href={`/transactions?review=${encodeURIComponent(transaction.id)}`}>
-                          Review
-                        </Link>
-                      </div>
-                    );
-                  })}
-                </div>
+                <HomeTransactionReviewLauncher transactions={reviewAttentionTransactions.slice(0, 3)} />
               ) : null}
               <Link className="dashboard-home__report-link" href={reviewAttentionCount > 0 ? "/review" : "/transactions"}>
                 {reviewAttentionCount > 0 ? "Open review" : "Open transactions"}

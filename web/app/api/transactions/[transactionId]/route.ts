@@ -97,23 +97,25 @@ const buildTransactionTagWrites = (workspaceId: string, tags: readonly string[])
 export async function GET(_request: Request, { params }: { params: Promise<{ transactionId: string }> }) {
   try {
     const { transactionId } = await params;
-    const userId = await resolveTransactionRouteUserId();
-    const transaction = await prisma.transaction.findFirst({
-      where: { id: transactionId, deletedAt: null },
-      include: {
-        account: true,
-        category: true,
-        splitBill: { select: { id: true, title: true } },
-        transactionTags: { select: { tag: { select: { id: true, name: true } } } },
-      },
-    });
+    const [userId, transaction] = await Promise.all([
+      resolveTransactionRouteUserId(),
+      prisma.transaction.findFirst({
+        where: { id: transactionId, deletedAt: null },
+        include: {
+          account: true,
+          category: true,
+          splitBill: { select: { id: true, title: true } },
+          transactionTags: { select: { tag: { select: { id: true, name: true } } } },
+        },
+      }),
+    ]);
 
     if (!transaction) {
       return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
     }
 
-    await assertWorkspaceAccess(userId, transaction.workspaceId);
-    const [accounts, categories] = await Promise.all([
+    const [, accounts, categories] = await Promise.all([
+      assertWorkspaceAccess(userId, transaction.workspaceId),
       prisma.account.findMany({
         where: { workspaceId: transaction.workspaceId, type: { not: "investment" } },
         orderBy: [{ name: "asc" }],

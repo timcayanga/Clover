@@ -7888,11 +7888,18 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   padding: 4px 9px;
   border: 1px solid rgba(3, 168, 192, 0.28);
   border-radius: 999px;
+  background: transparent;
   color: var(--accent);
+  cursor: pointer;
+  font-family: inherit;
   font-size: 10px;
   font-weight: 800;
   line-height: 1;
   text-decoration: none;
+}
+
+.dashboard-home__review-reason {
+  color: #b45309 !important;
 }
 
 .dashboard-home__mini-action:hover {
@@ -21275,6 +21282,70 @@ html[data-theme="dark"] .adviser-chat__composer-bar textarea {
   border-right: 0;
   box-shadow: -18px 0 36px rgba(31, 41, 51, 0.16);
   overflow: auto;
+}
+
+.home-transaction-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.home-transaction-detail .modal-head {
+  margin-bottom: 0;
+}
+
+.home-transaction-detail__reason {
+  display: grid;
+  gap: 3px;
+  padding: 11px 13px;
+  border: 1px solid rgba(245, 158, 11, 0.24);
+  border-radius: 14px;
+  background: rgba(245, 158, 11, 0.08);
+  color: #92400e;
+  font-size: 0.78rem;
+}
+
+.home-transaction-detail__reason span {
+  color: var(--muted);
+}
+
+.home-transaction-detail__loading {
+  display: flex;
+  min-height: 150px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  text-align: center;
+}
+
+.home-transaction-detail__form {
+  display: grid;
+  gap: 16px;
+}
+
+.home-transaction-detail .transaction-detail-page__fields {
+  padding: 0;
+}
+
+.home-transaction-detail .transaction-detail-page__facts,
+.home-transaction-detail .transaction-drawer-view__facts {
+  margin: 0;
+}
+
+.home-transaction-detail .transaction-detail-page__message {
+  margin: 0;
+}
+
+.home-transaction-detail .transaction-drawer-edit-footer {
+  bottom: -20px;
+}
+
+html[data-theme="dark"] .home-transaction-detail__reason {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.1);
+  color: #fbbf24;
 }
 
 .transaction-drawer__head {
