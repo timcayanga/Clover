@@ -151,6 +151,32 @@ assert.match(
   "incomplete low-detail receipt reads should be compared against a high-detail retry"
 );
 assert.match(
+  openAIParserSource,
+  /const RECEIPT_VISION_HEDGE_DELAY_MS = 6_000/,
+  "slow receipt vision should have a bounded hedge delay"
+);
+assert.match(
+  openAIParserSource,
+  /const shouldHedgeSlowReceiptVision =\s*isReceiptMode &&/,
+  "a slow one-page receipt read should start a bounded fallback without waiting for the primary timeout"
+);
+assert.match(openAIParserSource, /const firstResult = await Promise\.race\(\[primaryPromise, delayedHedgePromise\]\)/);
+assert.match(
+  openAIParserSource,
+  /firstResult\.source === "primary"\) hedgeController\.abort\(\)[\s\S]{0,120}?primaryController\.abort\(\)/,
+  "the losing hedged receipt request should be cancelled after a usable response"
+);
+assert.match(
+  importModalSource,
+  /const NEAR_VISIBLE_IMPORT_PROGRESS_POLL_INTERVAL_MS = 600/,
+  "the near-visible import phase should use a short polling interval"
+);
+assert.match(
+  importModalSource,
+  /processingPhase === "reconciling" \|\| nextProgress >= 90[\s\S]{0,160}?NEAR_VISIBLE_IMPORT_PROGRESS_POLL_INTERVAL_MS/,
+  "receipt visibility should be detected promptly without increasing polling throughout the entire upload"
+);
+assert.match(
   workerSource,
   /const chooseBetterReceiptDetails =[\s\S]{0,1200}?candidateQuality\.score > currentQuality\.score \? candidate : current/,
   "model receipt details must not replace a more complete deterministic receipt preview"

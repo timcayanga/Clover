@@ -228,10 +228,8 @@ const getCompletedImportAutoCloseMs = () =>
     ? COMPLETED_IMPORT_MOBILE_AUTO_CLOSE_MS
     : COMPLETED_IMPORT_DESKTOP_AUTO_CLOSE_MS;
 const IN_FLIGHT_IMPORT_PROGRESS_INITIAL_DELAY_MS = 400;
-// The status stream already updates every 1.5 seconds. Polling twice per
-// second multiplied Supabase reads without making the progress UI perceptibly
-// faster, especially for multi-file imports.
 const IN_FLIGHT_IMPORT_PROGRESS_POLL_INTERVAL_MS = 1_500;
+const NEAR_VISIBLE_IMPORT_PROGRESS_POLL_INTERVAL_MS = 600;
 
 type ImportStatusPayload = {
   importFile?: {
@@ -5349,6 +5347,7 @@ export function ImportFilesModal({
       // without waiting for post-visible QA or response serialization.
       void (async () => {
         await new Promise((resolve) => window.setTimeout(resolve, IN_FLIGHT_IMPORT_PROGRESS_INITIAL_DELAY_MS));
+        let nextProgressPollDelayMs = IN_FLIGHT_IMPORT_PROGRESS_POLL_INTERVAL_MS;
         while (!inFlightStatusMonitorStopped && !processResponseSettled) {
           try {
             const response = await fetch(`/api/imports/${importFileId}/progress`, { cache: "no-store" });
@@ -5446,6 +5445,10 @@ export function ImportFilesModal({
                   summary: null,
                   errorMessage: null,
                 });
+                nextProgressPollDelayMs =
+                  processingPhase === "reconciling" || nextProgress >= 90
+                    ? NEAR_VISIBLE_IMPORT_PROGRESS_POLL_INTERVAL_MS
+                    : IN_FLIGHT_IMPORT_PROGRESS_POLL_INTERVAL_MS;
               }
             }
           } catch {
@@ -5453,7 +5456,7 @@ export function ImportFilesModal({
             // must never turn a healthy upload into an error.
           }
 
-          await new Promise((resolve) => window.setTimeout(resolve, IN_FLIGHT_IMPORT_PROGRESS_POLL_INTERVAL_MS));
+          await new Promise((resolve) => window.setTimeout(resolve, nextProgressPollDelayMs));
         }
       })();
       if (shouldSkipLocalStatementPreparse) {

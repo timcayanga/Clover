@@ -21,6 +21,7 @@ const OPENAI_IMPORT_PDF_MODEL_FALLBACK = "gpt-5.5";
 const OPENAI_IMPORT_LEGACY_IMAGE_MODEL_FALLBACK = "gpt-5.5";
 const OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK = "gpt-5.4-mini";
 const OPENAI_IMPORT_LEGACY_PDF_MODEL_FALLBACK = "gpt-5.5";
+const RECEIPT_VISION_HEDGE_DELAY_MS = 6_000;
 
 export const getRemainingOpenAIImportAttemptTimeout = (params: {
   deadlineMs: number;
@@ -2830,9 +2831,10 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     pageImages: Array<{ page: number; dataUrl: string }>,
     timeoutMs: number,
     systemInstructions = systemPrompt,
-    imageDetail: OpenAIImageDetail = "auto"
+    imageDetail: OpenAIImageDetail = "auto",
+    requestController?: AbortController
   ) => {
-    const controller = new AbortController();
+    const controller = requestController ?? new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     const requestStartedAt = Date.now();
     requestCount += 1;
@@ -2902,7 +2904,116 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     deadlineMs: number,
     imageDetail: OpenAIImageDetail = "auto"
   ): Promise<{ response: Response; model: string } | null> => {
-    for (const candidateModel of models) {
+    let firstSequentialModelIndex = 0;
+    const shouldHedgeSlowReceiptVision =
+      isReceiptMode &&
+      pageImages.length === 1 &&
+      imageDetail === "low" &&
+      models.length > 1;
+
+    if (shouldHedgeSlowReceiptVision) {
+      const primaryModel = models[0]!;
+      const hedgeModel = models[1]!;
+      const primaryTimeoutMs = getRemainingOpenAIImportAttemptTimeout({
+        deadlineMs,
+        requestedTimeoutMs: timeoutMs,
+      });
+      if (primaryTimeoutMs === null) {
+        return null;
+      }
+
+      const primaryController = new AbortController();
+      const hedgeController = new AbortController();
+      const primaryPromise = callOpenAI(
+        primaryModel,
+        pageImages,
+        primaryTimeoutMs,
+        systemPrompt,
+        imageDetail,
+        primaryController
+      ).then((response) => ({ response, model: primaryModel, source: "primary" as const }));
+      let hedgeTimer: ReturnType<typeof setTimeout> | null = null;
+      let hedgePromise: Promise<{
+        response: Response | null;
+        model: string;
+        source: "hedge";
+      }> | null = null;
+      const startHedge = () => {
+        if (hedgePromise) {
+          return hedgePromise;
+        }
+        const hedgeTimeoutMs = getRemainingOpenAIImportAttemptTimeout({
+          deadlineMs,
+          requestedTimeoutMs: timeoutMs,
+        });
+        hedgePromise = hedgeTimeoutMs === null
+          ? Promise.resolve({ response: null, model: hedgeModel, source: "hedge" as const })
+          : callOpenAI(
+              hedgeModel,
+              pageImages,
+              hedgeTimeoutMs,
+              systemPrompt,
+              imageDetail,
+              hedgeController
+            ).then((response) => ({ response, model: hedgeModel, source: "hedge" as const }));
+        return hedgePromise;
+      };
+      const delayedHedgePromise = new Promise<{
+        response: Response | null;
+        model: string;
+        source: "hedge";
+      }>((resolve) => {
+        hedgeTimer = setTimeout(() => {
+          console.info("[import-performance] launching slow receipt vision hedge", {
+            primaryModel,
+            hedgeModel,
+            delayMs: RECEIPT_VISION_HEDGE_DELAY_MS,
+          });
+          void startHedge().then(resolve);
+        }, RECEIPT_VISION_HEDGE_DELAY_MS);
+      });
+
+      const firstResult = await Promise.race([primaryPromise, delayedHedgePromise]);
+      if (firstResult.response?.ok) {
+        if (hedgeTimer) clearTimeout(hedgeTimer);
+        if (firstResult.source === "primary") hedgeController.abort();
+        else primaryController.abort();
+        return { response: firstResult.response, model: firstResult.model };
+      }
+
+      // A fast primary failure should launch the fallback immediately rather
+      // than waiting for the hedge delay. If the hedge failed first, retain the
+      // primary request because it can still produce the valid result.
+      const secondResult =
+        firstResult.source === "primary"
+          ? await startHedge()
+          : await primaryPromise;
+      if (hedgeTimer) clearTimeout(hedgeTimer);
+      if (secondResult.response?.ok) {
+        if (secondResult.source === "primary") hedgeController.abort();
+        else primaryController.abort();
+        return { response: secondResult.response, model: secondResult.model };
+      }
+
+      primaryController.abort();
+      hedgeController.abort();
+      firstSequentialModelIndex = 2;
+      for (const result of [firstResult, secondResult]) {
+        const errorText = shouldReadOpenAIImportErrorBody(result.response)
+          ? await result.response!.text().catch(() => "")
+          : result.response
+            ? ""
+            : "timeout";
+        console.warn("OpenAI hedged receipt model attempt failed", {
+          model: result.model,
+          status: result.response?.status ?? null,
+          statusText: result.response?.statusText ?? null,
+          errorText: errorText.slice(0, 2_000) || null,
+        });
+      }
+    }
+
+    for (const candidateModel of models.slice(firstSequentialModelIndex)) {
       const attemptTimeoutMs = getRemainingOpenAIImportAttemptTimeout({
         deadlineMs,
         requestedTimeoutMs: timeoutMs,
