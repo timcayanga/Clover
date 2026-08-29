@@ -3405,6 +3405,11 @@ html[data-theme="dark"] .adviser-header-link {
   transform: translateY(-1px);
 }
 
+.sidebar-notifications-button {
+  position: relative;
+  overflow: visible;
+}
+
 .sidebar-profile {
   appearance: none;
   border: 0;
@@ -4979,7 +4984,7 @@ html[data-theme="dark"] .adviser-header-link {
   object-fit: contain;
 }
 
-.home-notifications-button__badge {
+.notification-count-badge {
   position: absolute;
   top: -2px;
   right: -3px;

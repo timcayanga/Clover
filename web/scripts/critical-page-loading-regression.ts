@@ -23,6 +23,21 @@ assert.doesNotMatch(shellSource, /window\.location\.assign\(href\)/, "Sidebar na
 assert.doesNotMatch(shellSource, /prefetchCoreRoutes/, "The shell must not issue a burst of dynamic route requests on every mount.");
 assert.match(shellSource, /const clientRouteWarmups = \["\/accounts", "\/transactions", "\/investments"\]/);
 assert.doesNotMatch(shellSource, /clientRouteWarmups = \[[^\]]*"\/recurring"/);
+assert.match(
+  shellSource,
+  /function NotificationCountBadge[\s\S]{0,350}?count > 99 \? "99\+" : count/,
+  "Notification counts should use one capped badge across header and sidebar surfaces."
+);
+assert.match(
+  shellSource,
+  /sidebar-notifications-button[\s\S]{0,500}?<NotificationCountBadge count=\{notificationCount\} \/>/,
+  "The persistent notification button should show the live notification count."
+);
+assert.match(
+  globalStylesSource,
+  /\.notification-count-badge\s*\{[^}]*position:\s*absolute;[^}]*top:\s*-2px;[^}]*right:\s*-3px;/s,
+  "The notification count should sit at the top-right of its button."
+);
 
 const clerkSource = readSource("lib/clerk.ts");
 const userContextSource = readSource("lib/user-context.ts");

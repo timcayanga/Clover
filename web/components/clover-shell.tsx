@@ -651,6 +651,18 @@ type ShellCircleInvitation = {
   href: string;
 };
 
+function NotificationCountBadge({ count }: { count: number }) {
+  if (count <= 0) {
+    return null;
+  }
+
+  return (
+    <span className="notification-count-badge" aria-hidden="true">
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
 const dismissedNotificationStorageKey = "clover.dismissed-notifications.v1";
 
 const readDismissedNotifications = () => {
@@ -1692,11 +1704,7 @@ export function CloverShell({
         onTouchStart={() => prefetchNavTarget("/notifications")}
       >
         <MenuIcon name="notifications" />
-        {notificationCount > 0 ? (
-          <span className="home-notifications-button__badge" aria-hidden="true">
-            {notificationCount > 99 ? "99+" : notificationCount}
-          </span>
-        ) : null}
+        <NotificationCountBadge count={notificationCount} />
       </Link>
     ) : null;
   const navigateTo = (href: string) => {
@@ -2001,7 +2009,7 @@ export function CloverShell({
           </button>
           <button
             ref={notificationsButtonRef}
-            className={`sidebar-icon-button ${isNotificationsActive ? "is-active" : ""}`}
+            className={`sidebar-icon-button sidebar-notifications-button ${isNotificationsActive ? "is-active" : ""}`}
             type="button"
             aria-label={`Open notifications${notificationCount ? ` (${notificationCount})` : ""}`}
             aria-expanded={isNotificationsActive}
@@ -2009,6 +2017,7 @@ export function CloverShell({
             onClick={handleNotificationsToggle}
           >
             <MenuIcon name="notifications" />
+            <NotificationCountBadge count={notificationCount} />
           </button>
           <Link
             href="/help"
