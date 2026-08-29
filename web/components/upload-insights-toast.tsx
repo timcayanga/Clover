@@ -34,7 +34,7 @@ export type UploadInsightsSummary = {
     accountName: string;
     categoryId: string | null;
     categoryName: string | null;
-    reviewStatus: "pending_review";
+    reviewStatus: "pending_review" | "suggested" | "confirmed" | "edited" | "rejected" | "duplicate_skipped";
     date: string;
     amount: string;
     currency: string;

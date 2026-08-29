@@ -3213,11 +3213,8 @@ function TransactionsPageContent() {
     async (summary: UploadInsightsSummary) => {
       const optimisticAccount = buildOptimisticImportedAccount(summary);
       const previewTransactions = summary.previewTransactions ?? [];
-      const isDurableReceiptSummary = previewTransactions.some(
-        (transaction) =>
-          Boolean(transaction.importFileId) &&
-          transaction.id.startsWith("optimistic-") &&
-          transaction.id.endsWith("-receipt")
+      const isServerBackedImportSummary = previewTransactions.some(
+        (transaction) => Boolean(transaction.importFileId) && !transaction.id.startsWith("optimistic-")
       );
       const importedAccountKey = normalizeImportedAccountKey(
         summary.accountName,
@@ -3360,7 +3357,7 @@ function TransactionsPageContent() {
         return;
       }
 
-      if (!isDurableReceiptSummary && !importRefreshInFlightRef.current) {
+      if (!isServerBackedImportSummary && !importRefreshInFlightRef.current) {
         importRefreshInFlightRef.current = true;
         try {
           await refreshTransactionsAfterImport(selectedWorkspaceId);
@@ -3416,11 +3413,20 @@ function TransactionsPageContent() {
       (transaction) => !deletedAccountIds.has(transaction.accountId)
     );
     const cachedAccountIds = new Set(filteredAccounts.map((account) => account.id));
-    const optimisticReceiptTransactionsToPreserve = getImportedTransactionsToPreserve(transactionsRef.current).filter(
-      (transaction) => transaction.id.startsWith("optimistic-") && cachedAccountIds.has(transaction.accountId)
+    const recentImportFileIds = new Set(
+      importActivitySnapshot?.workspaceId === workspaceId &&
+      Date.now() - importActivitySnapshot.updatedAt <= RECENT_TRANSACTION_CACHE_MAX_AGE_MS
+        ? (importActivitySnapshot.summary?.previewTransactions ?? []).map((transaction) => transaction.importFileId)
+        : []
+    );
+    const receiptTransactionsToPreserve = getImportedTransactionsToPreserve(transactionsRef.current).filter(
+      (transaction) =>
+        cachedAccountIds.has(transaction.accountId) &&
+        (transaction.id.startsWith("optimistic-") ||
+          Boolean(transaction.importFileId && recentImportFileIds.has(transaction.importFileId)))
     );
     const dedupedCachedTransactions = mergeImportedWorkspaceTransactions(
-      optimisticReceiptTransactionsToPreserve,
+      receiptTransactionsToPreserve,
       filteredTransactions
     );
     transactionsRef.current = dedupedCachedTransactions;

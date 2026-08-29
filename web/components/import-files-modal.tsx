@@ -269,7 +269,8 @@ type ImportStatusPayload = {
     institution?: string | null;
     accountNumber?: string | null;
     categoryId?: string | null;
-    reviewStatus?: string | null;
+    categoryName?: string | null;
+    reviewStatus?: "pending_review" | "suggested" | "confirmed" | "edited" | "rejected" | "duplicate_skipped";
     date?: string;
     amount?: string;
     currency?: string;
@@ -5313,6 +5314,7 @@ export function ImportFilesModal({
       let inFlightStatusMonitorStopped = false;
       let importEventStream: EventSource | null = null;
       let receiptVisibilityPublished = false;
+      let receiptModeDetectedInFlight = itemImportMode === "receipt";
       const importRequestStartedAt = performance.now();
       const processResponsePromise = postFileWithProgress(
         `/api/imports/${importFileId}/process`,
@@ -5388,7 +5390,9 @@ export function ImportFilesModal({
         errorMessage: null,
       });
       if (typeof EventSource !== "undefined") {
-        importEventStream = new EventSource(`/api/imports/${importFileId}/events`);
+        importEventStream = new EventSource(
+          `/api/imports/${importFileId}/events?mode=${encodeURIComponent(itemImportMode)}`
+        );
         const handleVisibleImportEvent = async (event: MessageEvent<string>) => {
           try {
             const payload = JSON.parse(event.data) as ImportStatusPayload;
@@ -5501,6 +5505,10 @@ export function ImportFilesModal({
               const confirmedTransactionsCount = Number(payload.confirmedTransactionsCount ?? 0);
               const passwordRequired =
                 processingPhase === "password_required" || /password-protected|password required/i.test(processingMessage ?? "");
+              receiptModeDetectedInFlight =
+                receiptModeDetectedInFlight ||
+                processingPhase === "reading_receipt_vision" ||
+                /receipt/i.test(processingMessage ?? "");
               if (passwordRequired) {
                 inFlightStatusMonitorStopped = true;
                 requestPasswordForItem(
@@ -5530,6 +5538,34 @@ export function ImportFilesModal({
               });
 
               if (statusDecision.kind === "visible") {
+                if (receiptModeDetectedInFlight && !payload.receiptTransaction) {
+                  const visibleRows = Math.max(1, confirmedTransactionsCount, parsedRowsCount);
+                  updateItem(itemId, {
+                    status: "importing",
+                    confirmationState: "staged",
+                    error: null,
+                    importedRows: visibleRows,
+                    progress: 99,
+                    progressLabel: "Loading receipt",
+                  });
+                  publishImportActivity({
+                    workspaceId,
+                    surface: importActivitySurfaceRef.current,
+                    status: "active",
+                    importFileId,
+                    fileName: item.file.name,
+                    fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+                    fileTotal: items.length,
+                    completedFiles: completedFileCount,
+                    progress: 99,
+                    detail: "The receipt is saved. Clover is placing it in Transactions.",
+                    summary: null,
+                    errorMessage: null,
+                  });
+                  nextProgressPollDelayMs = NEAR_VISIBLE_IMPORT_PROGRESS_POLL_INTERVAL_MS;
+                  await new Promise((resolve) => window.setTimeout(resolve, nextProgressPollDelayMs));
+                  continue;
+                }
                 const visibleRows = Math.max(confirmedTransactionsCount, parsedRowsCount);
                 const visibleAccountId =
                   typeof importFile?.accountId === "string" && importFile.accountId.trim()

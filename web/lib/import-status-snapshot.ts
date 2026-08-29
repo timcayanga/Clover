@@ -92,6 +92,7 @@ export type ImportStatusSnapshot = {
     institution: string | null;
     accountNumber: string | null;
     categoryId: string | null;
+    categoryName: string | null;
     reviewStatus: string | null;
     date: string;
     amount: string;
@@ -554,6 +555,11 @@ export const loadImportStatusSnapshot = async (
               currency: true,
               type: true,
               categoryId: true,
+              category: {
+                select: {
+                  name: true,
+                },
+              },
               merchantRaw: true,
               merchantClean: true,
               description: true,
@@ -585,6 +591,11 @@ export const loadImportStatusSnapshot = async (
               currency: true,
               type: true,
               categoryId: true,
+              category: {
+                select: {
+                  name: true,
+                },
+              },
               merchantRaw: true,
               merchantClean: true,
               description: true,
@@ -864,6 +875,7 @@ export const loadImportStatusSnapshot = async (
           institution: receiptTransaction.account?.institution ?? null,
           accountNumber: receiptTransaction.account?.accountNumber ?? null,
           categoryId: receiptTransaction.categoryId,
+          categoryName: receiptTransaction.category?.name ?? null,
           reviewStatus: receiptTransaction.reviewStatus,
           date: receiptTransaction.date.toISOString(),
           amount: receiptTransaction.amount.toString(),

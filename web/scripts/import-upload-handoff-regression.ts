@@ -710,8 +710,8 @@ const main = async () => {
   assert.match(progressRouteSource, /visibleImportComplete: confirmedTransactionsCount > 0/);
   assert.match(
     uploadHandoffSource,
-    /statusDecision\.kind === "visible"[\s\S]{0,900}status: "done"[\s\S]{0,900}progress: 100[\s\S]{0,1200}router\.refresh\(\)/,
-    "Durably committed rows should show an explicit 100% success and refresh the current page before the process response finishes."
+    /statusDecision\.kind === "visible"[\s\S]{0,1400}?receiptModeDetectedInFlight[\s\S]{0,600}?progress: 99[\s\S]{0,1600}?status: "done"[\s\S]{0,500}?progress: 100[\s\S]{0,1200}?router\.refresh\(\)/,
+    "Statements may refresh after durable visibility, while receipts must stay at 99% until their committed row is available."
   );
   assert.match(processRouteSource, /sourceFingerprint: fileFingerprint/);
   assert.match(

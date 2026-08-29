@@ -34,11 +34,14 @@ type ReceiptDocumentLike = {
 };
 
 type ReceiptTransactionLike = {
+  id?: string;
   accountId?: string;
   accountName?: string;
   institution?: string | null;
   accountNumber?: string | null;
   categoryId?: string | null;
+  categoryName?: string | null;
+  reviewStatus?: "pending_review" | "suggested" | "confirmed" | "edited" | "rejected" | "duplicate_skipped";
   date?: string;
   amount?: string;
   currency?: string;
@@ -228,7 +231,10 @@ export const buildReceiptSummaryFromReceiptTransaction = (
 
   const previewTransactions: NonNullable<UploadInsightsSummary["previewTransactions"]> = [
     {
-      id: `optimistic-${params.importFileId}-receipt`,
+      id:
+        typeof params.receiptTransaction.id === "string" && params.receiptTransaction.id.trim()
+          ? params.receiptTransaction.id.trim()
+          : `optimistic-${params.importFileId}-receipt`,
       importFileId: params.importFileId,
       sourceRowIndex: 1,
       accountId,
@@ -238,10 +244,12 @@ export const buildReceiptSummaryFromReceiptTransaction = (
           ? params.receiptTransaction.categoryId.trim()
           : null,
       categoryName:
-        receiptDetails && typeof receiptDetails.category_name === "string"
-          ? String(receiptDetails.category_name)
-          : null,
-      reviewStatus: "pending_review",
+        typeof params.receiptTransaction.categoryName === "string" && params.receiptTransaction.categoryName.trim()
+          ? params.receiptTransaction.categoryName.trim()
+          : receiptDetails && typeof receiptDetails.category_name === "string"
+            ? String(receiptDetails.category_name)
+            : null,
+      reviewStatus: params.receiptTransaction.reviewStatus ?? "pending_review",
       date,
       amount,
       currency: params.receiptTransaction.currency?.trim().toUpperCase() || "PHP",

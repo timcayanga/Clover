@@ -38,6 +38,7 @@ const compactImportSnapshot = (snapshot: Awaited<ReturnType<typeof loadImportSta
           institution: snapshot.receiptTransaction.institution,
           accountNumber: snapshot.receiptTransaction.accountNumber,
           categoryId: snapshot.receiptTransaction.categoryId,
+          categoryName: snapshot.receiptTransaction.categoryName,
           reviewStatus: snapshot.receiptTransaction.reviewStatus,
           date: snapshot.receiptTransaction.date,
           amount: snapshot.receiptTransaction.amount,
@@ -89,7 +90,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
         let timer: ReturnType<typeof setTimeout> | null = null;
         let lastSerializedSnapshot = "";
         let visibleEventSent = false;
-        let fullSnapshotLoaded = false;
         let lastFullSnapshotStatus: string | null = null;
         let nextFinalizationCheckAt = 0;
         let consecutiveErrors = 0;
@@ -97,6 +97,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
         // before the first immediate read. Start with the receipt cadence so a
         // fast parse cannot finish between two widely spaced stream polls.
         let nextPollMs = IMPORT_STATUS_STREAM_ACTIVE_RECEIPT_POLL_MS;
+        let receiptCadenceDetected = new URL(request.url).searchParams.get("mode") === "receipt";
         const close = () => {
           if (closed) {
             return;
@@ -147,10 +148,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
               confirmedTransactionsCount: Number(progress.confirmedTransactionsCount ?? 0),
               visibleImportComplete: Number(progress.confirmedTransactionsCount ?? 0) > 0,
             };
+            receiptCadenceDetected =
+              receiptCadenceDetected ||
+              progress.processingPhase === "reading_receipt_vision" ||
+              /receipt/i.test(String(progress.processingMessage ?? ""));
             nextPollMs =
               progress.processingPhase === "reconciling" || Number(progress.confirmedTransactionsCount ?? 0) > 0
                 ? IMPORT_STATUS_STREAM_NEAR_VISIBLE_POLL_MS
-                : progress.processingPhase === "reading_receipt_vision"
+                : receiptCadenceDetected
                   ? IMPORT_STATUS_STREAM_ACTIVE_RECEIPT_POLL_MS
                   : IMPORT_STATUS_STREAM_POLL_MS;
             const serialized = JSON.stringify(progressSnapshot);
@@ -161,7 +166,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
 
             const shouldFinalize =
               progress.status === "failed" ||
-              (!fullSnapshotLoaded && Number(progress.confirmedTransactionsCount ?? 0) > 0) ||
+              (!visibleEventSent && Number(progress.confirmedTransactionsCount ?? 0) > 0) ||
               (progress.status === "done" &&
                 (lastFullSnapshotStatus !== "done" || Date.now() >= nextFinalizationCheckAt));
             if (!shouldFinalize) {
@@ -173,7 +178,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ impo
             const snapshot = await loadImportStatusSnapshot(importId, {
               promoteFailedVisibleImport: true,
             });
-            fullSnapshotLoaded = true;
             lastFullSnapshotStatus = progress.status;
             nextFinalizationCheckAt = Date.now() + 5_000;
             if (!snapshot) {

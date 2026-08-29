@@ -5,6 +5,7 @@ import { resolveReceiptAccountHintToAccount } from "../lib/receipt-account-resol
 import { resolveReceiptCategoryWithPaymentEvidence } from "../lib/receipt-transaction-classification";
 import { parseReceiptText } from "../lib/split-bill";
 import { getImportImageHashDistance } from "../lib/import-image-perceptual-hash";
+import { buildReceiptSummaryFromReceiptTransaction } from "../lib/import-receipt-summary";
 
 const receiptText = [
   "UNKNOWN MERCHANT",
@@ -41,6 +42,52 @@ const account = resolveReceiptAccountHintToAccount(
   ]
 );
 assert.equal(account?.accountId, "rcbc-1014");
+
+const committedReceiptSummary = buildReceiptSummaryFromReceiptTransaction(
+  {
+    fileName: "committed-receipt.png",
+    importFileId: "import-committed",
+    accountType: "cash",
+    receiptTransaction: {
+      id: "transaction-committed",
+      accountId: "cash-php",
+      accountName: "Cash (PHP)",
+      categoryId: "food-category",
+      categoryName: "Food & Dining",
+      reviewStatus: "confirmed",
+      date: "2026-08-30T00:00:00.000Z",
+      amount: "315.75",
+      currency: "PHP",
+      type: "expense",
+      merchantRaw: "QA SUMMIT CAFE",
+      merchantClean: "QA Summit Cafe",
+    },
+  },
+  (params) => ({
+    fileName: params.fileName,
+    rowsImported: params.importedRows,
+    accountId: params.accountId,
+    accountName: params.accountName,
+    institution: params.institution,
+    accountNumber: params.accountNumber,
+    accountType: params.accountType,
+    balance: params.balance ?? null,
+    optimisticAccountId: params.optimisticAccountId,
+    previewTransactions: params.previewTransactions,
+    optimistic: false,
+    incomeTotal: 0,
+    expenseTotal: 315.75,
+    netTotal: -315.75,
+    topCategoryName: "Food & Dining",
+    topCategoryAmount: 315.75,
+    topCategoryShare: 1,
+    topMerchantName: "QA Summit Cafe",
+    topMerchantCount: 1,
+  })
+);
+assert.equal(committedReceiptSummary?.previewTransactions?.[0]?.id, "transaction-committed");
+assert.equal(committedReceiptSummary?.previewTransactions?.[0]?.categoryName, "Food & Dining");
+assert.equal(committedReceiptSummary?.previewTransactions?.[0]?.reviewStatus, "confirmed");
 
 assert.equal(
   resolveReceiptCategoryWithPaymentEvidence({
@@ -136,18 +183,18 @@ assert.match(
 );
 assert.match(
   transactionsPageSource,
-  /const isDurableReceiptSummary = previewTransactions\.some[\s\S]{0,260}?transaction\.id\.endsWith\("-receipt"\)/,
-  "A committed receipt snapshot must remain authoritative instead of being replaced by an immediate stale list read."
+  /const isServerBackedImportSummary = previewTransactions\.some[\s\S]{0,220}?!transaction\.id\.startsWith\("optimistic-"\)/,
+  "A server-backed import snapshot must remain authoritative instead of being replaced by an immediate stale list read."
 );
 assert.match(
   transactionsPageSource,
-  /if \(!isDurableReceiptSummary && !importRefreshInFlightRef\.current\)/,
-  "Durable receipt summaries must skip the immediate settlement refresh."
+  /if \(!isServerBackedImportSummary && !importRefreshInFlightRef\.current\)/,
+  "Server-backed import summaries must skip the immediate settlement refresh."
 );
 assert.match(
   transactionsPageSource,
-  /const optimisticReceiptTransactionsToPreserve = getImportedTransactionsToPreserve\(transactionsRef\.current\)[\s\S]{0,300}?mergeImportedWorkspaceTransactions\([\s\S]{0,120}?optimisticReceiptTransactionsToPreserve/,
-  "A stale cache update must not remove a receipt that is already visible in the current workspace."
+  /const recentImportFileIds = new Set[\s\S]{0,700}?const receiptTransactionsToPreserve = getImportedTransactionsToPreserve\(transactionsRef\.current\)[\s\S]{0,500}?mergeImportedWorkspaceTransactions\([\s\S]{0,120}?receiptTransactionsToPreserve/,
+  "A stale cache update must not remove a recent committed or optimistic receipt from the current workspace."
 );
 assert.match(
   transactionsPageSource,
@@ -288,8 +335,13 @@ assert.match(
 );
 assert.match(
   importModalSource,
-  /new EventSource\(`\/api\/imports\/\$\{importFileId\}\/events`\)[\s\S]{0,7000}?completionTransport: "server_sent_event"/,
+  /new EventSource\([\s\S]{0,180}?\/api\/imports\/\$\{importFileId\}\/events\?mode=[\s\S]{0,7000}?completionTransport: "server_sent_event"/,
   "the uploader should react to server-pushed receipt visibility while retaining polling fallback"
+);
+assert.match(
+  importModalSource,
+  /receiptModeDetectedInFlight[\s\S]{0,18000}?statusDecision\.kind === "visible"[\s\S]{0,1200}?progress: 99[\s\S]{0,700}?placing it in Transactions/,
+  "A lightweight progress poll must not report 100% or refresh before the committed receipt row is available."
 );
 assert.match(
   importModalSource,
@@ -298,7 +350,7 @@ assert.match(
 );
 assert.match(
   importEventsRouteSource,
-  /receiptTransaction: snapshot\.receiptTransaction[\s\S]{0,900}?amount: snapshot\.receiptTransaction\.amount[\s\S]{0,500}?merchantClean: snapshot\.receiptTransaction\.merchantClean/,
+  /receiptTransaction: snapshot\.receiptTransaction[\s\S]{0,900}?categoryName: snapshot\.receiptTransaction\.categoryName[\s\S]{0,500}?amount: snapshot\.receiptTransaction\.amount[\s\S]{0,500}?merchantClean: snapshot\.receiptTransaction\.merchantClean/,
   "the one-time visible event should carry enough receipt fields for immediate UI insertion"
 );
 assert.match(
@@ -310,6 +362,21 @@ assert.match(
   importEventsRouteSource,
   /let nextPollMs = IMPORT_STATUS_STREAM_ACTIVE_RECEIPT_POLL_MS/,
   "a fast camera receipt should not wait behind the general document polling cadence"
+);
+assert.match(
+  importEventsRouteSource,
+  /receiptCadenceDetected = new URL\(request\.url\)\.searchParams\.get\("mode"\) === "receipt"/,
+  "An explicit receipt upload must request the fast visibility cadence."
+);
+assert.match(
+  importEventsRouteSource,
+  /receiptCadenceDetected =\s*receiptCadenceDetected \|\|[\s\S]{0,280}?nextPollMs =[\s\S]{0,420}?receiptCadenceDetected[\s\S]{0,120}?IMPORT_STATUS_STREAM_ACTIVE_RECEIPT_POLL_MS/,
+  "Once a receipt is explicit or detected, its visibility stream must keep the fast cadence through persistence."
+);
+assert.match(
+  importEventsRouteSource,
+  /!visibleEventSent && Number\(progress\.confirmedTransactionsCount \?\? 0\) > 0/,
+  "A committed receipt must trigger a fresh structured snapshot even if an earlier done snapshot raced the transaction write."
 );
 assert.match(
   importEventsRouteSource,
