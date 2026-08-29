@@ -34,7 +34,6 @@
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   margin-bottom: 3px;
-  text-transform: uppercase;
 }
 
 .recurring-calendar__heading h2 {
@@ -151,7 +150,6 @@
   letter-spacing: 0.055em;
   padding: 9px 8px;
   text-align: center;
-  text-transform: uppercase;
 }
 
 .recurring-calendar__day {
@@ -316,7 +314,6 @@
   color: var(--muted);
   font-size: 0.68rem;
   letter-spacing: 0.055em;
-  text-transform: uppercase;
 }
 
 .recurring-calendar-detail__header h2 {
