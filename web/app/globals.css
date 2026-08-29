@@ -54966,27 +54966,18 @@ html[data-theme="dark"] .shell-quick-add-popover__item--camera:focus-visible {
   stroke-width: 1.8;
 }
 
-.dashboard-home__balance-visibility-slash {
-  opacity: 0;
-  transform-origin: center;
-  transition: opacity 140ms ease, transform 160ms ease;
-  transform: scale(0.7);
+.home-sensitive-amount__mask {
+  display: none;
+  letter-spacing: 0.025em;
 }
 
-.dashboard-home__balance-visibility.is-hidden .dashboard-home__balance-visibility-slash {
-  opacity: 1;
-  transform: scale(1);
+body[data-clover-home-balances-hidden] .home-sensitive-amount__actual {
+  display: none;
 }
 
-body[data-clover-home-balances-hidden] :is(
-  .dashboard-home__hero-main > strong,
-  .dashboard-home__hero-mini-value,
-  .dashboard-home__report-metrics strong
-) {
-  color: transparent !important;
-  text-shadow: 0 0 9px rgba(15, 23, 42, 0.54);
+body[data-clover-home-balances-hidden] .home-sensitive-amount__mask {
+  display: inline;
   user-select: none;
-  transition: color 160ms ease, text-shadow 160ms ease;
 }
 
 @media (max-width: 1100px) {
@@ -54998,8 +54989,7 @@ body[data-clover-home-balances-hidden] :is(
 @media (prefers-reduced-motion: reduce) {
   .shell-profile-drawer,
   .shell-profile-drawer-backdrop,
-  .dashboard-home__balance-visibility,
-  .dashboard-home__balance-visibility-slash {
+  .dashboard-home__balance-visibility {
     transition: none !important;
   }
 }

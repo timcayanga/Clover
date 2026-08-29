@@ -47,6 +47,7 @@ assert.match(clerkSource, /clover-clerk-user-v1/);
 assert.match(userContextSource, /clerkUser\.authoritative/);
 
 const dashboardSource = readSource("app/dashboard/page.tsx");
+const balanceVisibilitySource = readSource("components/balance-visibility-toggle.tsx");
 assert.match(dashboardSource, /DashboardTopActionsLazy/);
 assert.doesNotMatch(dashboardSource, /from "@\/components\/dashboard-top-actions";/);
 assert.match(dashboardSource, /const todayStart = toDayStart\(now\)/);
@@ -60,6 +61,34 @@ assert.match(
 );
 assert.match(dashboardSource, /monthlyTimelineDays/);
 assert.match(dashboardSource, /dashboard-home__report-flow-tooltip/);
+assert.match(dashboardSource, /function HomeSensitiveAmount/);
+assert.match(dashboardSource, /home-sensitive-amount__mask/);
+assert.match(
+  dashboardSource,
+  /label: "Balance in view"[\s\S]{0,220}<HomeSensitiveAmount/,
+  "The Home Adviser must respect amount privacy for monetary insights.",
+);
+assert.match(
+  dashboardSource,
+  /Weekly Report[\s\S]{0,240}<h4><HomeSensitiveAmount/,
+  "The weekly report total must respect the Home amount toggle.",
+);
+assert.match(
+  dashboardSource,
+  /Monthly Report[\s\S]{0,240}<h4><HomeSensitiveAmount/,
+  "The monthly report total must respect the Home amount toggle.",
+);
+assert.match(balanceVisibilitySource, /applyHomeAmountVisibility/);
+assert.match(balanceVisibilitySource, /M4 14c2\.2-2\.5 4\.9-3\.8 8-3\.8s5\.8 1\.3 8 3\.8/);
+assert.doesNotMatch(balanceVisibilitySource, /balance-visibility-slash|m4 4 16 16/i);
+assert.match(
+  globalStylesSource,
+  /body\[data-clover-home-balances-hidden\] \.home-sensitive-amount__actual\s*\{[^}]*display:\s*none/s,
+);
+assert.match(
+  globalStylesSource,
+  /body\[data-clover-home-balances-hidden\] \.home-sensitive-amount__mask\s*\{[^}]*display:\s*inline/s,
+);
 assert.match(dashboardSource, /after\(async \(\) => \{[\s\S]{0,250}repairWorkspaceDataVisibility/);
 
 const recurringPageDataSource = readSource("lib/recurring-page.ts");

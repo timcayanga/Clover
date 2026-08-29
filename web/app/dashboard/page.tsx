@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
@@ -9,7 +9,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { getPageSessionContext } from "@/lib/page-auth";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
-import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
+import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
 import { deriveReconciledBalance, normalizeAccountBalanceSign } from "@/lib/account-balance";
 import { isLiabilityAccountType, isSpendableAccountType } from "@/lib/account-types";
 import { RouteSplash } from "@/components/route-splash";
@@ -137,7 +137,7 @@ type DailyFlow = {
 type HomeAdviserItem = {
   emoji: string;
   label: string;
-  copy: string;
+  copy: ReactNode;
   href?: string;
   actionLabel?: string;
   tone?: "neutral" | "positive" | "warning";
@@ -167,6 +167,17 @@ const formatCurrency = (value: number, currency?: string | null) => formatCurren
 
 const formatSignedCurrency = (value: number, currency?: string | null) =>
   `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency ?? "MIXED")}`;
+
+function HomeSensitiveAmount({ value, currency }: { value: string; currency?: string | null }) {
+  const symbol = formatCurrencySymbol(currency);
+  const spacing = symbol.length > 2 && !symbol.endsWith("$") ? " " : "";
+  return (
+    <span className="home-sensitive-amount" data-home-sensitive-amount>
+      <span className="home-sensitive-amount__actual" aria-hidden="false">{value}</span>
+      <span className="home-sensitive-amount__mask" aria-hidden="true">{symbol}{spacing}******</span>
+    </span>
+  );
+}
 
 const toIsoDay = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -243,7 +254,7 @@ function DailyFlowChart({ days, label, currency }: { days: DailyFlow[]; label: s
       <div className="dashboard-home__report-flow-bars">
         {days.map((day, index) => {
           const hasMovement = day.income > 0 || day.expense > 0;
-          const detailLabel = `${day.dayLabel}, ${day.dateLabel}: ${formatCurrency(day.income, currency)} income, ${formatCurrency(day.expense, currency)} expenses`;
+          const detailLabel = `${day.dayLabel}, ${day.dateLabel} daily income and expenses`;
           const segments = [
             { kind: "income", value: day.income },
             { kind: "expense", value: day.expense },
@@ -271,8 +282,8 @@ function DailyFlowChart({ days, label, currency }: { days: DailyFlow[]; label: s
               {!isMonthly ? <span className="dashboard-home__report-flow-label">{day.label}</span> : null}
               <span className="dashboard-home__report-flow-tooltip" aria-hidden="true">
                 <strong>{day.dayLabel}, {day.dateLabel}</strong>
-                <span>Income {formatCurrency(day.income, currency)}</span>
-                <span>Expenses {formatCurrency(day.expense, currency)}</span>
+                <span>Income <HomeSensitiveAmount value={formatCurrency(day.income, currency)} currency={currency} /></span>
+                <span>Expenses <HomeSensitiveAmount value={formatCurrency(day.expense, currency)} currency={currency} /></span>
               </span>
             </div>
           );
@@ -852,16 +863,6 @@ async function DashboardStream({
     ? `Last upload was ${daysSinceLastImport === 0 ? "today" : `${daysSinceLastImport ?? 0} day${daysSinceLastImport === 1 ? "" : "s"} ago`}. Add recent statements so advice stays current.`
     : "Upload a recent statement so Clover can start finding spending patterns.";
   const weeklySpendDelta = weeklySummary.current.expense - weeklySummary.previous.expense;
-  const weeklySpendMovement =
-    weeklySummary.previous.expense > 0
-      ? `${weeklySpendDelta >= 0 ? "up" : "down"} ${formatCurrency(Math.abs(weeklySpendDelta))} vs last week`
-      : weeklySummary.current.expense > 0
-        ? "there is not enough prior activity to compare yet"
-        : "there is no spending to compare yet";
-  const weeklyActivityCopy =
-    weeklySummary.current.expense > 0
-      ? `${formatCurrency(weeklySummary.current.expense)} in spending recorded this week${weeklySummary.current.transfer > 0 ? `; ${formatCurrency(weeklySummary.current.transfer)} moved between accounts` : ""}.`
-      : "No spending was recorded this week.";
   const nextSevenDays = new Date(now);
   nextSevenDays.setDate(nextSevenDays.getDate() + 7);
   const [plannedPaymentSuggestions, recurringCommitments] = await Promise.all([
@@ -975,7 +976,7 @@ async function DashboardStream({
       ? {
           emoji: "💚",
           label: "Balance in view",
-          copy: `${formatCurrency(savingsTotal, balanceCurrency)} is currently tracked across your spendable accounts.`,
+          copy: <><HomeSensitiveAmount value={formatCurrency(savingsTotal, balanceCurrency)} currency={balanceCurrency} /> is currently tracked across your spendable accounts.</>,
           href: "/accounts",
           actionLabel: "View accounts",
           tone: "positive",
@@ -985,7 +986,7 @@ async function DashboardStream({
       ? {
           emoji: "📈",
           label: "Spending spike",
-          copy: `${categorySpike.name} is up ${formatCurrency(categorySpike.delta)} vs the previous 30 days.`,
+          copy: <>{categorySpike.name} is up <HomeSensitiveAmount value={formatCurrency(categorySpike.delta)} currency={displayCurrency} /> vs the previous 30 days.</>,
           href: `/transactions?category=${encodedSpikeCategory}`,
           actionLabel: "Review category",
           tone: "warning",
@@ -1015,7 +1016,7 @@ async function DashboardStream({
       ? {
           emoji: "🌿",
           label: "Spending eased",
-          copy: `You spent ${formatCurrency(Math.abs(weeklySpendDelta))} less than last week.`,
+          copy: <>You spent <HomeSensitiveAmount value={formatCurrency(Math.abs(weeklySpendDelta))} currency={displayCurrency} /> less than last week.</>,
           href: "/adviser?section=trends",
           actionLabel: "See the trend",
           tone: "positive",
@@ -1025,7 +1026,7 @@ async function DashboardStream({
       ? {
           emoji: "✨",
           label: "Positive cash flow",
-          copy: `${formatCurrency(monthSummary.net)} more came in than went out this month.`,
+          copy: <><HomeSensitiveAmount value={formatCurrency(monthSummary.net)} currency={displayCurrency} /> more came in than went out this month.</>,
           href: "/adviser?section=trends",
           actionLabel: "Open Adviser",
           tone: "positive",
@@ -1045,7 +1046,26 @@ async function DashboardStream({
       ? {
           emoji: "🗓️",
           label: "Weekly summary",
-          copy: `${weeklyActivityCopy} Spending is ${weeklySpendMovement}.`,
+          copy: (
+            <>
+              {weeklySummary.current.expense > 0 ? (
+                <>
+                  <HomeSensitiveAmount value={formatCurrency(weeklySummary.current.expense)} currency={displayCurrency} /> in spending recorded this week
+                  {weeklySummary.current.transfer > 0 ? (
+                    <>; <HomeSensitiveAmount value={formatCurrency(weeklySummary.current.transfer)} currency={displayCurrency} /> moved between accounts</>
+                  ) : null}.
+                </>
+              ) : "No spending was recorded this week."}
+              {" Spending is "}
+              {weeklySummary.previous.expense > 0 ? (
+                <>
+                  {weeklySpendDelta >= 0 ? "up" : "down"} <HomeSensitiveAmount value={formatCurrency(Math.abs(weeklySpendDelta))} currency={displayCurrency} /> vs last week.
+                </>
+              ) : weeklySummary.current.expense > 0
+                ? "there is not enough prior activity to compare yet."
+                : "there is no spending to compare yet."}
+            </>
+          ),
           href: "/adviser",
           actionLabel: "Open Adviser",
           tone: weeklySummary.net >= 0 ? "positive" : "warning",
@@ -1110,14 +1130,20 @@ async function DashboardStream({
               <p className="eyebrow">My Balance</p>
               <BalanceVisibilityToggle />
             </div>
-            <strong>{totalBalanceLabel}</strong>
+            <strong>
+              {balanceEstimateUnavailable
+                ? totalBalanceLabel
+                : <HomeSensitiveAmount value={totalBalanceLabel} currency={balanceCurrency} />}
+            </strong>
           </div>
           <div className="dashboard-home__hero-aside" aria-label="Monthly balance summary">
             {balanceHighlights.map((pill) => (
               <div key={pill.key} className="dashboard-home__hero-mini-pill">
                 <span className="dashboard-home__hero-mini-label">{pill.label}</span>
                 <div className="dashboard-home__hero-mini-row">
-                  <strong className="dashboard-home__hero-mini-value">{pill.value}</strong>
+                  <strong className="dashboard-home__hero-mini-value">
+                    <HomeSensitiveAmount value={pill.value} currency={displayCurrency} />
+                  </strong>
                   <span
                     className={
                       pill.trend === null
@@ -1144,7 +1170,9 @@ async function DashboardStream({
             <article key={pill.key} className="dashboard-home__hero-mobile-card glass">
               <span className="dashboard-home__hero-mini-label">{pill.label}</span>
               <div className="dashboard-home__hero-mini-row">
-                <strong className="dashboard-home__hero-mini-value">{pill.value}</strong>
+                <strong className="dashboard-home__hero-mini-value">
+                  <HomeSensitiveAmount value={pill.value} currency={displayCurrency} />
+                </strong>
                 <span
                   className={
                     pill.trend === null
@@ -1201,23 +1229,23 @@ async function DashboardStream({
             <div className="dashboard-home__report-card-head">
               <div>
                 <p className="eyebrow">Weekly Report</p>
-                <h4>{formatCurrency(weeklySummary.current.expense, displayCurrency)}</h4>
+                <h4><HomeSensitiveAmount value={formatCurrency(weeklySummary.current.expense, displayCurrency)} currency={displayCurrency} /></h4>
                 <p className="dashboard-home__report-note">Recorded spending in the last 7 days</p>
               </div>
             </div>
             <div className="dashboard-home__report-metrics" aria-label="Weekly report metrics">
               <span>
                 <small>Income</small>
-                <strong className="dashboard-home__report-metric-value--income">{formatCurrency(weeklySummary.current.income, displayCurrency)}</strong>
+                <strong className="dashboard-home__report-metric-value--income"><HomeSensitiveAmount value={formatCurrency(weeklySummary.current.income, displayCurrency)} currency={displayCurrency} /></strong>
               </span>
               <span>
                 <small>Expenses</small>
-                <strong className="dashboard-home__report-metric-value--expense">{formatCurrency(weeklySummary.current.expense, displayCurrency)}</strong>
+                <strong className="dashboard-home__report-metric-value--expense"><HomeSensitiveAmount value={formatCurrency(weeklySummary.current.expense, displayCurrency)} currency={displayCurrency} /></strong>
               </span>
               <span>
                 <small>Net Cash Flow</small>
                 <strong className={weeklySummary.net >= 0 ? "dashboard-home__report-metric-value--income" : "dashboard-home__report-metric-value--expense"}>
-                  {formatSignedCurrency(weeklySummary.net, displayCurrency)}
+                  <HomeSensitiveAmount value={formatSignedCurrency(weeklySummary.net, displayCurrency)} currency={displayCurrency} />
                 </strong>
               </span>
             </div>
@@ -1231,23 +1259,23 @@ async function DashboardStream({
             <div className="dashboard-home__report-card-head">
               <div>
                 <p className="eyebrow">Monthly Report</p>
-                <h4>{formatCurrency(monthSummary.expense, displayCurrency)}</h4>
+                <h4><HomeSensitiveAmount value={formatCurrency(monthSummary.expense, displayCurrency)} currency={displayCurrency} /></h4>
                 <p className="dashboard-home__report-note">Recorded spending this month to date</p>
               </div>
             </div>
             <div className="dashboard-home__report-metrics" aria-label="Monthly report metrics">
               <span>
                 <small>Income</small>
-                <strong className="dashboard-home__report-metric-value--income">{formatCurrency(monthSummary.income, displayCurrency)}</strong>
+                <strong className="dashboard-home__report-metric-value--income"><HomeSensitiveAmount value={formatCurrency(monthSummary.income, displayCurrency)} currency={displayCurrency} /></strong>
               </span>
               <span>
                 <small>Expenses</small>
-                <strong className="dashboard-home__report-metric-value--expense">{formatCurrency(monthSummary.expense, displayCurrency)}</strong>
+                <strong className="dashboard-home__report-metric-value--expense"><HomeSensitiveAmount value={formatCurrency(monthSummary.expense, displayCurrency)} currency={displayCurrency} /></strong>
               </span>
               <span>
                 <small>Net Cash Flow</small>
                 <strong className={monthSummary.net >= 0 ? "dashboard-home__report-metric-value--income" : "dashboard-home__report-metric-value--expense"}>
-                  {formatSignedCurrency(monthSummary.net, displayCurrency)}
+                  <HomeSensitiveAmount value={formatSignedCurrency(monthSummary.net, displayCurrency)} currency={displayCurrency} />
                 </strong>
               </span>
             </div>
