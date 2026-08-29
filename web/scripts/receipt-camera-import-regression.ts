@@ -464,6 +464,11 @@ assert.match(
   "The fast vision prompt must not return a document heading as the merchant."
 );
 assert.match(
+  openAIParserSource,
+  /Return transaction_date as ISO YYYY-MM-DD[\s\S]{0,220}?locale, language, and currency/,
+  "Receipt vision must normalize complete dates while using visible locale evidence to resolve date order."
+);
+assert.match(
   workerSource,
   /effectiveImportMode === "receipt"\s*\? resolvedReceiptAccountId \?\? documentCashAccountId/,
   "receipt documents must prefer the uniquely resolved payment account over Cash"

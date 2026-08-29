@@ -2048,6 +2048,7 @@ export const buildOpenAIBackupSystemPrompt = (importMode: ImportMode | null | un
       ? [
           "Treat this as a receipt-like document first: receipt, invoice, e-receipt, restaurant bill, tax invoice, booking receipt, or wallet screenshot.",
           "Prioritize merchant, total, date, currency, payment/reference details, line items, invoice or booking numbers, and any visible wallet/account hint.",
+          "Return transaction_date as ISO YYYY-MM-DD whenever a complete date is visible. Use the visible locale, language, and currency to resolve day-first versus month-first dates; keep the original date text in source evidence.",
           "If the image is a wallet screenshot, preserve recipient/sender identity, reference number, timestamp, and transfer direction conservatively.",
         ]
       : importMode === "statement"
@@ -2802,7 +2803,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       });
   const systemPrompt = `${buildOpenAIBackupSystemPrompt(promptImportMode, pageImagesToSend.length > 0, Boolean(pdfFileDataBase64))}${
     useReceiptCoreOnly
-      ? " CORE-FIRST RECEIPT: Return only the merchant, transaction date/time, currency, total, payment method, account evidence, confidence, and visible source evidence. The merchant must be the actual business name, never a generic document heading such as Receipt, Test Receipt, Sales Receipt, Official Receipt, Invoice, or Proof of Purchase. Prefer a distinct business name near the top of the image. Do not extract line items, tax, discounts, tips, or split allocations in this pass. Return transactions as an empty array."
+      ? " CORE-FIRST RECEIPT: Return only the merchant, transaction date/time, currency, total, payment method, account evidence, confidence, and visible source evidence. Return transaction_date as ISO YYYY-MM-DD whenever a complete date is visible, using visible locale, language, and currency to resolve date order. The merchant must be the actual business name, never a generic document heading such as Receipt, Test Receipt, Sales Receipt, Official Receipt, Invoice, or Proof of Purchase. Prefer a distinct business name near the top of the image. Do not extract line items, tax, discounts, tips, or split allocations in this pass. Return transactions as an empty array."
       : ""
   }`;
   const fastModel = resolveOpenAIImportModel(
