@@ -133,7 +133,9 @@ export function ReportsMoneyOverTimeChart({
         <div className="report-card__stat reports-money-over-time__stat" aria-live="polite">
           <strong>{formatCurrencyAmount(activePoint.balance, currency)}</strong>
           <span>
-            {interactionPoint ? "Balance on" : "Current balance"} · {dateFormatter.format(parseReportDate(activePoint.date))}
+            {interactionPoint
+              ? `Balance on ${dateFormatter.format(parseReportDate(activePoint.date))}`
+              : `Current balance · ${dateFormatter.format(parseReportDate(activePoint.date))}`}
           </span>
         </div>
       </div>

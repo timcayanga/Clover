@@ -77,7 +77,8 @@ assert.match(currencyFilterSource, /params\.set\("currency", formatCurrencyCode\
 assert.match(currencyFilterSource, /params\.delete\("currency"\)/);
 assert.match(moneyChartSource, /onPointerMove=\{\(event\) => handlePointerMove\(event\.clientX\)\}/);
 assert.match(moneyChartSource, /onPointerDown=\{\(event\) => handlePointerSelection\(event\.clientX\)\}/);
-assert.match(moneyChartSource, /\{interactionPoint \? "Balance on" : "Current balance"\}/);
+assert.match(moneyChartSource, /`Balance on \$\{dateFormatter\.format/);
+assert.match(moneyChartSource, /`Current balance · \$\{dateFormatter\.format/);
 assert.doesNotMatch(moneyChartSource, /reports-money-chart__summary/);
 assert.match(moneyChartSource, /reports-money-chart__y-axis/);
 assert.match(moneyChartSource, /formatCurrencyAmount\(tick\.value, currency\)/);
