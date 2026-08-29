@@ -20681,6 +20681,73 @@ input.transaction-inline-edit--amount::placeholder {
   font-size: 0.78rem;
 }
 
+.transaction-detail-page__line-items-view {
+  display: grid;
+  gap: 10px;
+  margin: 14px 24px 0;
+  padding: 16px;
+  border: 1px solid var(--stroke);
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.transaction-detail-page__line-items-list {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--stroke);
+  border-radius: 14px;
+}
+
+.transaction-detail-page__line-items-list > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 50px;
+  padding: 10px 12px;
+  border: 0;
+  border-top: 1px solid var(--stroke);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.transaction-detail-page__line-items-list > button:first-child { border-top: 0; }
+
+.transaction-detail-page__line-items-list > button:hover,
+.transaction-detail-page__line-items-list > button:focus-visible,
+.transaction-detail-page__line-items-empty:hover,
+.transaction-detail-page__line-items-empty:focus-visible {
+  background: rgba(3, 168, 192, 0.06);
+  outline: none;
+}
+
+.transaction-detail-page__line-items-list > button > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.transaction-detail-page__line-items-list small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.transaction-detail-page__line-items-empty {
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px dashed var(--stroke);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+
 .transaction-detail-page__line-item {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) 60px 74px minmax(88px, 0.7fr) 28px;
@@ -20743,6 +20810,15 @@ input.transaction-inline-edit--amount::placeholder {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+@media (min-width: 768px) {
+  :is(.transaction-detail-page, .transaction-drawer) .transaction-cross-feature-actions__buttons .button {
+    min-height: 28px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+  }
 }
 
 .transaction-cross-feature-actions__panel {
@@ -20907,6 +20983,7 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .transaction-detail-page__more,
+  .transaction-detail-page__line-items-view,
   .transaction-detail-page__split-bill,
   .transaction-cross-feature-actions {
     margin-inline: 10px;

@@ -53,6 +53,9 @@ assert.match(detailPage, /TransactionAccountPicker/, "The full details page must
 assert.match(detailPage, /TransactionCategoryPicker/, "The full details page must show category icons in category choices.");
 assert.match(detailPage, /AccountBrandMark/, "The full details page must show the account icon in read mode.");
 assert.match(detailPage, /mobileBackHref="\/transactions"/, "The shared mobile header must own the single back action.");
+assert.match(detailPage, /transaction-detail-page__line-items-view/, "Read mode must retain a visible Line Items section.");
+assert.match(detailPage, /No line items yet\. Tap to add one\./, "An empty Line Items section must provide a direct editing affordance.");
+assert.match(globalStyles, /@media \(min-width: 768px\)[\s\S]*?transaction-cross-feature-actions__buttons \.button[\s\S]*?min-height:\s*28px;/, "Desktop Transaction Details cross-feature actions must remain compact.");
 assert.match(detailRoute, /export async function GET/);
 assert.match(detailRoute, /assertWorkspaceAccess\(userId, transaction\.workspaceId\)/);
 assert.match(detailRoute, /type: \{ not: "investment" \}/, "Investment holdings must not be returned as transaction accounts.");

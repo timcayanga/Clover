@@ -513,7 +513,7 @@ export default function TransactionDetailPage() {
                   Notes
                   <textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder="Optional note" />
                 </label>
-                <div className="transaction-detail-page__line-items">
+                <div className="transaction-detail-page__line-items" data-transaction-detail-field="line-items">
                   <div className="transaction-detail-page__line-items-head">
                     <strong>Line Items</strong>
                     <span>{formatCurrencyAmount(receiptLineTotal, draft.currency)}</span>
@@ -552,6 +552,32 @@ export default function TransactionDetailPage() {
                 </div>
               </details>
             )}
+
+            {!editing ? (
+              <section className="transaction-detail-page__line-items-view" aria-labelledby="transaction-line-items-heading">
+                <div className="transaction-detail-page__line-items-head">
+                  <strong id="transaction-line-items-heading">Line Items</strong>
+                  <span>{formatCurrencyAmount(receiptLineTotal, draft.currency)}</span>
+                </div>
+                {draft.receiptLineItems.length > 0 ? (
+                  <div className="transaction-detail-page__line-items-list">
+                    {draft.receiptLineItems.map((item, index) => (
+                      <button type="button" key={`visible-line-item-${index}`} onClick={() => beginEditing("line-items")}>
+                        <span>
+                          <strong>{item.description.trim() || `Line item ${index + 1}`}</strong>
+                          <small>{Number(item.quantity || 1) === 1 ? "1 item" : `${item.quantity} items`}</small>
+                        </span>
+                        <strong>{formatCurrencyAmount(getReceiptLineItemComputedAmount(item) ?? 0, item.currency || draft.currency)}</strong>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <button className="transaction-detail-page__line-items-empty" type="button" onClick={() => beginEditing("line-items")}>
+                    No line items yet. Tap to add one.
+                  </button>
+                )}
+              </section>
+            ) : null}
 
             {!editing ? <TransactionCrossFeatureActions
               workspaceId={transaction.workspaceId}
