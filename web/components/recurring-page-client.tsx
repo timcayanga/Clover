@@ -144,6 +144,7 @@ export function RecurringPageClient({
               key={tab.id}
               type="button"
               className={`investments-tab${activeTab === tab.id ? " is-active" : ""}`}
+              aria-label={tab.label}
               aria-current={activeTab === tab.id ? "page" : undefined}
               onClick={() => selectTab(tab.id)}
             >

@@ -7,6 +7,7 @@ import type { FinancialCommitmentSummary } from "../lib/commitments";
 
 const webRoot = process.cwd();
 const panelSource = readFileSync(join(webRoot, "components", "commitments-panel.tsx"), "utf8");
+const clientSource = readFileSync(join(webRoot, "components", "recurring-page-client.tsx"), "utf8");
 const pageSource = readFileSync(join(webRoot, "lib", "recurring-page.ts"), "utf8");
 const stylesSource = readFileSync(join(webRoot, "app", "globals.css"), "utf8");
 
@@ -36,6 +37,7 @@ assert.match(panelSource, /<RecurringCalendar[\s\S]{0,180}comprehensive=\{active
 assert.match(panelSource, /activeTab !== "overview" \? renderRecurringTable\(\) : null/, "Subtab line items must remain below the calendar.");
 assert.match(stylesSource, /\.recurring-calendar__grid[\s\S]{0,260}grid-template-columns: repeat\(7, minmax\(0, 1fr\)\)/, "The recurring calendar must render a full-width seven-day grid.");
 assert.match(stylesSource, /touch-action: pan-y/, "The recurring calendar must preserve vertical scrolling while supporting horizontal month swipes.");
+assert.match(clientSource, /aria-label=\{tab\.label\}/, "Recurring icon tabs must retain accessible names on mobile.");
 
 const commitment = (
   overrides: Partial<FinancialCommitmentSummary>,
