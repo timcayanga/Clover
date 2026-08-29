@@ -118,6 +118,7 @@ type CloverShellProps = {
   kicker?: string;
   subtitle?: string;
   titleAddon?: ReactNode;
+  mobileSubheader?: ReactNode;
   desktopTitleAction?: ReactNode;
   actions?: ReactNode;
   mobileLeadingAction?: ReactNode;
@@ -794,6 +795,7 @@ export function CloverShell({
   kicker,
   subtitle,
   titleAddon,
+  mobileSubheader,
   desktopTitleAction,
   actions,
   mobileLeadingAction,
@@ -2378,7 +2380,7 @@ export function CloverShell({
       <main
         className={`content content--${active} ${titleAddon ? "content--has-title-addon" : "content--plain-title"}${
           mobileLeadingAction ? " content--has-mobile-leading-action" : ""
-        }`}
+        }${mobileSubheader ? " content--has-mobile-subheader" : ""}`}
         onClickCapture={(event) => {
           if (event.target instanceof Element && event.target.closest(".shell-mobile-more-link")) {
             return;
@@ -2473,6 +2475,12 @@ export function CloverShell({
               {actions}
             </div>
           </header>
+        ) : null}
+
+        {mobileSubheader ? (
+          <div className="shell-mobile-subheader" aria-label={`${title} sections`}>
+            {mobileSubheader}
+          </div>
         ) : null}
 
         <div className="content-body">{children}</div>

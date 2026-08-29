@@ -6,10 +6,14 @@ const root = process.cwd();
 const readSource = (relativePath: string) => readFile(path.join(root, relativePath), "utf8");
 
 async function main() {
-  const [shell, styles, navigationIcons] = await Promise.all([
+  const [shell, styles, navigationIcons, animatedTabs, reportsPage, recurringPage, investmentsPage] = await Promise.all([
     readSource("components/clover-shell.tsx"),
     readSource("app/globals.css"),
     readSource("lib/navigation-icons.ts"),
+    readSource("components/animated-tabs.tsx"),
+    readSource("app/reports/reports-page-content.tsx"),
+    readSource("components/recurring-page-client.tsx"),
+    readSource("app/investments/page.tsx"),
   ]);
 
   assert.match(
@@ -165,6 +169,36 @@ async function main() {
     styles,
     /\.sidebar-nav--mobile \{[\s\S]{0,260}overflow-y: auto !important;/,
     "The larger mobile drawer menu must remain usable on short screens.",
+  );
+  assert.match(shell, /mobileSubheader\?: ReactNode/);
+  assert.match(shell, /className="shell-mobile-subheader"/);
+  assert.match(reportsPage, /mobileSubheader=\{<ReportsTopTabs \/>\}/);
+  assert.match(recurringPage, /mobileSubheader=\{renderRecurringTabs\(true\)\}/);
+  assert.match(investmentsPage, /mobileSubheader=\{renderInvestmentTabs\(true\)\}/);
+  assert.match(
+    animatedTabs,
+    /buttonRect\.left - containerRect\.left \+ container\.scrollLeft/,
+    "Animated tab underlines must stay beneath the active tab after horizontal scrolling.",
+  );
+  assert.match(
+    styles,
+    /Mobile product chrome:[\s\S]{0,9000}\.shell-mobile-subheader[\s\S]{0,900}flex-direction: column !important/,
+    "Mobile product subtabs must use a separate icon-and-label sub-header.",
+  );
+  assert.match(
+    styles,
+    /input:not\(\[type="checkbox"\]\)[\s\S]{0,300}textarea,[\s\S]{0,80}select[\s\S]{0,120}font-size: 16px !important/,
+    "Mobile editable controls must avoid iOS focus zoom.",
+  );
+  assert.match(
+    styles,
+    /\.sidebar \{[\s\S]{0,160}inset: 0 auto 0 0 !important;[\s\S]{0,500}background: #ffffff !important;[\s\S]{0,500}transition: transform 240ms/,
+    "The mobile drawer must be an opaque edge-to-edge panel with an animated exit.",
+  );
+  assert.match(
+    styles,
+    /\.content--circles \.circles-title-tab\.is-active \.circles-title-tab__name \{[\s\S]{0,120}display: block !important/,
+    "The active Circle title must remain visible beside the mobile menu.",
   );
 
   console.log("Mobile navigation regression passed.");

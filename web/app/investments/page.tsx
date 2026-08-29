@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
@@ -1038,7 +1038,6 @@ const serializeInvestmentEditDraft = (account: Account): InvestmentEditDraft => 
 });
 
 export default function InvestmentsPage() {
-  const router = useRouter();
   const defaultCurrency = useDefaultCurrency();
   const initialWorkspaceId = readSelectedWorkspaceId();
   const initialCachedWorkspace = initialWorkspaceId ? getCachedInvestmentWorkspace(initialWorkspaceId).cachedSnapshot : null;
@@ -2776,27 +2775,30 @@ export default function InvestmentsPage() {
     return <CloverLoadingScreen label="investments" />;
   }
 
+  const renderInvestmentTabs = (mobile = false) => (
+    <AnimatedTabs
+      className={`investments-tabs${mobile ? " investments-tabs--mobile" : " mobile-icon-tabs"}`}
+      activeKey={selectedTab}
+      onChange={(key) => selectInvestmentTab(key as InvestmentTab)}
+      tabs={visibleInvestmentTabs.map((tab) => ({
+        key: tab.key,
+        label: tab.label,
+        icon: tab.icon,
+        disabled: false,
+        badge: tab.proOnly && !BETA_FULL_ACCESS_ENABLED ? "PRO" : null,
+        locked: tab.proOnly && !canUseProTabs,
+        ariaLabel: tab.label,
+      }))}
+    />
+  );
+
   return (
     <CloverShell
       active="investments"
       title="Investments"
-      mobileBackHref="/more"
-      titleAddon={
-        <AnimatedTabs
-          className="investments-tabs mobile-icon-tabs"
-          activeKey={selectedTab}
-          onChange={(key) => selectInvestmentTab(key as InvestmentTab)}
-          tabs={visibleInvestmentTabs.map((tab) => ({
-            key: tab.key,
-            label: tab.label,
-            icon: tab.icon,
-            disabled: false,
-            badge: tab.proOnly && !BETA_FULL_ACCESS_ENABLED ? "PRO" : null,
-            locked: tab.proOnly && !canUseProTabs,
-            ariaLabel: tab.label,
-          }))}
-        />
-      }
+      titleAddon={renderInvestmentTabs()}
+      mobileSubheader={renderInvestmentTabs(true)}
+      mobileLeadingAction={<AdviserHeaderLink />}
       actions={
         <>
           <AdviserHeaderLink />
@@ -2822,78 +2824,6 @@ export default function InvestmentsPage() {
         </>
       }
     >
-      <section className="investments-mobile-header" aria-label="Investments mobile header">
-        <div className="investments-mobile-header__bar">
-          <div className="investments-mobile-header__title-group">
-            <button
-              className="shell-back-button investments-mobile-header__back"
-              type="button"
-              aria-label="Back"
-              onClick={() => {
-                if (typeof window !== "undefined" && window.history.length > 1) {
-                  router.back();
-                  return;
-                }
-
-                router.push("/more");
-              }}
-            >
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="m14.5 6-6 6 6 6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" />
-              </svg>
-            </button>
-            <h1>Investments</h1>
-          </div>
-          <AnimatedTabs
-            className="investments-tabs investments-tabs--mobile"
-            activeKey={selectedTab}
-            onChange={(key) => selectInvestmentTab(key as InvestmentTab)}
-            tabs={visibleInvestmentTabs.map((tab) => ({
-              key: tab.key,
-              label: tab.label,
-              icon: tab.icon,
-              disabled: false,
-              badge: tab.proOnly && !BETA_FULL_ACCESS_ENABLED ? "PRO" : null,
-              locked: tab.proOnly && !canUseProTabs,
-              ariaLabel: tab.label,
-            }))}
-          />
-          <div className="investments-mobile-header__actions">
-            <CurrencySelector
-              value={portfolioCurrencyFilter}
-              onChange={(next) => {
-                const currency = formatCurrencyCode(next);
-                setPortfolioCurrencyFilter(currency);
-                persistSelectedCurrency(selectedWorkspaceId, currency);
-              }}
-              options={portfolioCurrencyOptions}
-              includeAllOption={false}
-              ariaLabel="Select investment currency"
-              className="investments-mobile-currency-filter"
-              buttonClassName="button button-secondary button-small investments-mobile-icon-button investments-mobile-currency-filter__button"
-              menuClassName="transactions-currency-filter__menu"
-              optionClassName="transactions-currency-filter__option"
-              compact
-              menuAlignment="end"
-              showChevron={false}
-            />
-            <button
-              className="button button-primary button-small investments-page__add-button investments-mobile-icon-button investments-mobile-icon-button--primary investments-mobile-icon-button--compact"
-              type="button"
-              onClick={() => setAddOpen(true)}
-              aria-label="Add investment"
-            >
-              <span className="button-icon" aria-hidden="true">
-                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                  <path d="M10 4v12M4 10h12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
-                </svg>
-              </span>
-              <span className="investments-page__add-button-label">Add investment</span>
-            </button>
-          </div>
-        </div>
-      </section>
-
       <div className="accounts-page animate-tab-panel" key={selectedTab}>
         {!loading && message ? <p className="panel-muted">{message}</p> : null}
 

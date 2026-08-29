@@ -39,10 +39,26 @@ export function AnimatedTabs({ className, activeKey, onChange, tabs }: AnimatedT
     const containerRect = container.getBoundingClientRect();
     const buttonRect = activeButton.getBoundingClientRect();
     setIndicator({
-      left: buttonRect.left - containerRect.left,
+      left: buttonRect.left - containerRect.left + container.scrollLeft,
       width: buttonRect.width,
       opacity: 1,
     });
+
+    const updateIndicator = () => {
+      const nextContainerRect = container.getBoundingClientRect();
+      const nextButtonRect = activeButton.getBoundingClientRect();
+      setIndicator({
+        left: nextButtonRect.left - nextContainerRect.left + container.scrollLeft,
+        width: nextButtonRect.width,
+        opacity: 1,
+      });
+    };
+    const resizeObserver = typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateIndicator) : null;
+    resizeObserver?.observe(container);
+    resizeObserver?.observe(activeButton);
+    return () => {
+      resizeObserver?.disconnect();
+    };
   }, [activeTab, tabs]);
 
   return (

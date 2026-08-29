@@ -137,28 +137,35 @@ export function RecurringPageClient({
     }
   };
 
+  const renderRecurringTabs = (mobile = false) => (
+    <nav
+      className={`investments-tabs recurring-tabs--top${mobile ? " recurring-tabs--mobile" : " mobile-icon-tabs"}`}
+      aria-label="Recurring sections"
+    >
+      {recurringTabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          className={`investments-tab${activeTab === tab.id ? " is-active" : ""}`}
+          aria-label={tab.label}
+          aria-current={activeTab === tab.id ? "page" : undefined}
+          onClick={() => selectTab(tab.id)}
+        >
+          <span className="recurring-tab-icon" aria-hidden="true"><RecurringTabIcon tab={tab.id} /></span>
+          <span className="recurring-tab-label recurring-tab-label--desktop">{tab.label}</span>
+          <span className="recurring-tab-label recurring-tab-label--mobile">{tab.mobileLabel}</span>
+        </button>
+      ))}
+    </nav>
+  );
+
   return (
     <CloverShell
       active="recurring"
       title="Recurring"
-      titleAddon={
-        <nav className="investments-tabs recurring-tabs--top mobile-icon-tabs" aria-label="Recurring sections">
-          {recurringTabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={`investments-tab${activeTab === tab.id ? " is-active" : ""}`}
-              aria-label={tab.label}
-              aria-current={activeTab === tab.id ? "page" : undefined}
-              onClick={() => selectTab(tab.id)}
-            >
-              <span className="recurring-tab-icon" aria-hidden="true"><RecurringTabIcon tab={tab.id} /></span>
-              <span className="recurring-tab-label recurring-tab-label--desktop">{tab.label}</span>
-              <span className="recurring-tab-label recurring-tab-label--mobile">{tab.mobileLabel}</span>
-            </button>
-          ))}
-        </nav>
-      }
+      titleAddon={renderRecurringTabs()}
+      mobileSubheader={renderRecurringTabs(true)}
+      mobileLeadingAction={<ContextualAskClover context="recurring" planTier={planTier} />}
       actions={
         <div className="recurring-shell-actions">
           <ContextualAskClover context="recurring" planTier={planTier} />

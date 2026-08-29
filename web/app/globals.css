@@ -60358,3 +60358,358 @@ html[data-theme="dark"] .split-bill-action-button--add:focus-visible {
     line-height: 1;
   }
 }
+
+/* Mobile product chrome: page actions stay in the primary header while
+   product sections get a dedicated, consistently aligned sub-header. */
+.shell-mobile-subheader {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  :where(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]),
+    textarea,
+    select
+  ) {
+    font-size: 16px !important;
+  }
+
+  .content--has-mobile-subheader > :is(.topbar, .shell-compact-bar) {
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    min-height: 58px;
+    padding-bottom: 8px !important;
+  }
+
+  .content--has-mobile-subheader > :is(.topbar, .shell-compact-bar) .shell-topbar-leading {
+    width: auto !important;
+    min-width: 0 !important;
+    height: 44px !important;
+    gap: 4px;
+    position: relative;
+    z-index: 3;
+  }
+
+  .content--has-mobile-subheader > .topbar .topbar__title-wrap,
+  .content--has-mobile-subheader > .shell-compact-bar .shell-compact-bar__copy {
+    position: absolute !important;
+    inset-inline: 25% !important;
+    grid-column: auto !important;
+    width: 50% !important;
+    max-width: 50% !important;
+    height: 44px !important;
+    justify-items: center !important;
+    overflow: hidden !important;
+    text-align: center !important;
+    pointer-events: none;
+  }
+
+  .content--has-mobile-subheader > :is(.topbar, .shell-compact-bar) .topbar__title-row {
+    width: 100% !important;
+    height: 44px !important;
+    justify-content: center !important;
+    overflow: hidden !important;
+  }
+
+  .content--has-mobile-subheader > :is(.topbar, .shell-compact-bar) .topbar__title-row > h1 {
+    display: inline-flex !important;
+    width: 100%;
+    min-height: 44px !important;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px !important;
+    text-align: center !important;
+  }
+
+  .content--has-mobile-subheader > :is(.topbar, .shell-compact-bar) .topbar__title-addon {
+    display: none !important;
+  }
+
+  .content--has-mobile-subheader > :is(.topbar, .shell-compact-bar) :is(.topbar-actions, .shell-compact-bar__actions) {
+    grid-column: 3 !important;
+    min-height: 36px !important;
+    gap: 4px !important;
+    position: relative;
+    z-index: 3;
+  }
+
+  .shell-mobile-subheader {
+    position: sticky;
+    top: 58px;
+    z-index: 29;
+    display: block;
+    width: calc(100% + 24px);
+    margin: 0 -12px 10px;
+    padding: 4px 8px 2px;
+    overflow: hidden;
+    border-bottom: 1px solid var(--stroke);
+    background: var(--surface);
+  }
+
+  .shell-mobile-subheader :is(.animated-tabs, .investments-tabs, .recurring-tabs--top, .reports-top-tabs) {
+    width: 100% !important;
+    min-height: 54px !important;
+    margin: 0 !important;
+    padding: 0 0 2px !important;
+    gap: 2px !important;
+    align-items: stretch !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+  }
+
+  .shell-mobile-subheader :is(.animated-tabs__tab, .investments-tab) {
+    display: inline-flex !important;
+    flex: 1 0 62px !important;
+    min-width: 62px !important;
+    min-height: 52px !important;
+    height: 52px !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 2px !important;
+    padding: 4px 6px 7px !important;
+    border: 0 !important;
+    background: transparent !important;
+    line-height: 1 !important;
+  }
+
+  .shell-mobile-subheader :is(.animated-tabs__icon, .recurring-tab-icon) {
+    display: inline-flex !important;
+    width: 20px !important;
+    height: 20px !important;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .shell-mobile-subheader :is(.animated-tabs__icon, .recurring-tab-icon) svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+
+  .shell-mobile-subheader :is(.animated-tabs__label, .recurring-tab-label--mobile) {
+    display: block !important;
+    max-width: 78px;
+    overflow: hidden;
+    font-size: 10px !important;
+    font-weight: 500 !important;
+    line-height: 1.15 !important;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .shell-mobile-subheader .recurring-tab-label--desktop {
+    display: none !important;
+  }
+
+  .shell-mobile-subheader .animated-tabs__indicator {
+    bottom: 0 !important;
+    height: 2px !important;
+    border-radius: 999px 999px 0 0 !important;
+  }
+
+  .content--has-mobile-subheader .shell-topbar-leading__actions {
+    display: inline-flex !important;
+  }
+
+  .content--has-mobile-subheader .shell-topbar-leading__actions :is(
+      .adviser-header-link,
+      .contextual-ask-clover,
+      .contextual-ask-clover__trigger,
+      .contextual-ask-clover__icon
+    ) {
+    width: 36px !important;
+    min-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    flex: 0 0 36px !important;
+  }
+
+  .content--has-mobile-subheader .shell-topbar-leading__actions .adviser-header-link {
+    padding: 3px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .content--has-mobile-subheader .shell-topbar-leading__actions .adviser-header-link img {
+    width: 28px;
+    height: 28px;
+  }
+
+  .content--reports .reports-page__actions > .adviser-header-link,
+  .content--investments .topbar-actions > .adviser-header-link,
+  .content--recurring .recurring-shell-actions > .contextual-ask-clover {
+    display: none !important;
+  }
+
+  .content--reports :is(.reports-currency-filter, .reports-currency-filter__button),
+  .content--reports .reports-range-menu__summary {
+    width: 36px !important;
+    min-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+  }
+
+  .content--reports .reports-currency-filter :is(.currency-selector__trigger-all, .currency-selector__trigger-token) {
+    display: inline-flex !important;
+    max-width: 24px;
+    overflow: hidden;
+    font-size: 10px;
+  }
+
+  .content--reports .reports-currency-filter .currency-selector__all-label {
+    display: none !important;
+  }
+
+  .content--reports .reports-currency-filter .currency-selector__all-icon {
+    display: block !important;
+  }
+
+  .content--reports .reports-range-menu__summary svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .content--investments > .topbar {
+    display: grid !important;
+  }
+
+  .content--investments .topbar-actions {
+    display: flex !important;
+  }
+
+  .content--investments .topbar-actions > :is(.investments-currency-filter, .investments-page__add-button) {
+    display: inline-flex !important;
+    width: 36px !important;
+    min-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+  }
+
+  .content--investments .topbar-actions .investments-page__add-button-label,
+  .content--investments .topbar-actions .currency-selector__trigger-token,
+  .content--investments .topbar-actions .currency-selector__trigger-all {
+    display: none !important;
+  }
+
+  .content--investments .topbar-actions .investments-currency-filter .currency-selector__button {
+    width: 36px !important;
+    min-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding: 0 !important;
+  }
+
+  .content--recurring > :is(.topbar, .shell-compact-bar) .shell-topbar-leading__actions {
+    display: inline-flex !important;
+  }
+
+  .content--circles > :is(.topbar, .shell-compact-bar) {
+    grid-template-columns: auto minmax(0, 1fr) 40px !important;
+  }
+
+  .content--circles > :is(.topbar, .shell-compact-bar) .shell-topbar-leading {
+    position: relative;
+    z-index: 5;
+  }
+
+  .content--circles > :is(.topbar, .shell-compact-bar) :is(.topbar__title-wrap, .shell-compact-bar__copy) {
+    grid-column: 2 !important;
+    justify-items: start !important;
+    overflow: hidden !important;
+    text-align: left !important;
+    pointer-events: auto;
+  }
+
+  .content--circles > :is(.topbar, .shell-compact-bar) .topbar__title-row {
+    justify-content: flex-start !important;
+    overflow: hidden !important;
+  }
+
+  .content--circles > :is(.topbar, .shell-compact-bar) .topbar__title-row > h1 {
+    display: none !important;
+  }
+
+  .content--circles .circles-title-tab:not(.is-active) {
+    display: none !important;
+  }
+
+  .content--circles .circles-title-tab.is-active {
+    display: inline-flex !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: 42px !important;
+    padding: 0 !important;
+    gap: 6px !important;
+  }
+
+  .content--circles .circles-title-tab.is-active .circles-title-tab__select {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+  }
+
+  .content--circles .circles-title-tab.is-active .circles-title-tab__avatar {
+    width: 30px;
+    height: 30px;
+  }
+
+  .content--circles .circles-title-tab.is-active .circles-title-tab__name {
+    display: block !important;
+    min-width: 0;
+    max-width: min(42vw, 180px);
+    overflow: hidden;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sidebar {
+    inset: 0 auto 0 0 !important;
+    width: min(280px, 78vw) !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    padding: max(14px, env(safe-area-inset-top)) 12px max(14px, env(safe-area-inset-bottom)) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+    background-image: none !important;
+    box-shadow: 14px 0 36px rgba(15, 23, 42, 0.16) !important;
+    transform: translateX(-100%) !important;
+    visibility: visible !important;
+    pointer-events: none;
+    transition: transform 240ms cubic-bezier(0.22, 0.8, 0.28, 1) !important;
+  }
+
+  .app-shell.is-sidebar-open .sidebar {
+    transform: translateX(0) !important;
+    pointer-events: auto;
+  }
+
+  .sidebar-backdrop {
+    background: rgba(15, 23, 42, 0.28) !important;
+    transition: opacity 240ms ease !important;
+  }
+
+  .app-shell:not(.is-sidebar-open) .sidebar-backdrop {
+    display: block !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+}
+
+@media (max-width: 1100px) and (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .sidebar-backdrop {
+    transition: none !important;
+  }
+}

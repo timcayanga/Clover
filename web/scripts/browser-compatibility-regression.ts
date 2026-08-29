@@ -252,8 +252,8 @@ async function main() {
   );
   assert.match(
     investmentsSource,
-    /className="investments-mobile-currency-filter"/,
-    "The Investments mobile header must keep an accessible currency selector."
+    /mobileSubheader=\{renderInvestmentTabs\(true\)\}[\s\S]{0,1200}ariaLabel="Select investment currency"/,
+    "The shared Investments mobile header must keep an accessible currency selector and a separate sub-header."
   );
   assert.match(
     investmentMarketSource,
