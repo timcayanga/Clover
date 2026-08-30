@@ -153,6 +153,26 @@ const runInlineRenameUat = () => {
   );
 };
 
+const runCirclesVisualConsistencyUat = () => {
+  const styles = readFileSync(
+    path.join(process.cwd(), "app/globals.css"),
+    "utf8",
+  );
+
+  assert.match(
+    styles,
+    /\.circles-section-tabs\s*\{[\s\S]*?position:\s*sticky;[\s\S]*?top:\s*58px;[\s\S]*?background:\s*var\(--surface\);[\s\S]*?\}/,
+  );
+  assert.match(
+    styles,
+    /\.circles-metric-grid \.summary-aligned-card strong\s*\{[\s\S]*?font-size:\s*1\.46rem;[\s\S]*?\}/,
+  );
+  logPass(
+    "Circles visitor",
+    "keeps section navigation visible and sees summary amounts at the shared Accounts scale",
+  );
+};
+
 runBeginnerUat();
 runExperiencedUat();
 runBarkadaUat();
@@ -160,5 +180,6 @@ runCoupleUat();
 runRequestSecurityUat();
 runInvitationUat();
 runInlineRenameUat();
+runCirclesVisualConsistencyUat();
 
 process.stdout.write("Circles regression suite passed.\n");
