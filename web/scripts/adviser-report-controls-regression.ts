@@ -5,13 +5,14 @@ import { getCalendarDayEndInTimeZone, resolveReportWindow } from "../lib/report-
 
 const main = async () => {
   const root = process.cwd();
-  const [adviserSource, adviserChatSource, reportsSource, rangeMenuSource, currencyFilterSource, moneyChartSource, globalStyles] = await Promise.all([
+  const [adviserSource, adviserChatSource, reportsSource, rangeMenuSource, currencyFilterSource, moneyChartSource, cashFlowMapSource, globalStyles] = await Promise.all([
     readFile(join(root, "app/adviser/page.tsx"), "utf8"),
     readFile(join(root, "app/api/adviser/chat/route.ts"), "utf8"),
     readFile(join(root, "app/reports/reports-page-content.tsx"), "utf8"),
     readFile(join(root, "components/reports-range-menu.tsx"), "utf8"),
     readFile(join(root, "components/reports-currency-filter.tsx"), "utf8"),
     readFile(join(root, "components/reports-money-over-time-chart.tsx"), "utf8"),
+    readFile(join(root, "components/reports-cash-flow-map.tsx"), "utf8"),
     readFile(join(root, "app/globals.css"), "utf8"),
   ]);
 
@@ -65,6 +66,8 @@ assert.match(reportsSource, /formatCurrencyCode\(transaction\.account\.currency\
 assert.match(reportsSource, /formatCurrencyCode\(account\.currency\) === requestedCurrency/);
 assert.match(reportsSource, /buildReportPieSlicePath\(offset, nextOffset\)/);
 assert.match(reportsSource, /<CategoryBrandMark categoryName=\{segment\.categoryName\}/);
+assert.match(reportsSource, /reports-grid--primary reports-grid--spending/);
+assert.match(reportsSource, /<ReportsCashFlowMap/);
 assert.doesNotMatch(reportsSource, /Beginning balance is estimated from the current account balance/);
 assert.doesNotMatch(reportsSource, /for \(const account of workspaceAccountSummaries\)[\s\S]{0,500}reportSankeyAccountIncome\.set/);
 assert.match(rangeMenuSource, /type="date"/);
@@ -85,10 +88,18 @@ assert.match(moneyChartSource, /formatCurrencyAmount\(tick\.value, currency\)/);
 assert.match(moneyChartSource, /observedRange \* 0\.14/);
 assert.doesNotMatch(moneyChartSource, /Math\.min\(0, \.\.\.values\)/);
 assert.match(moneyChartSource, /reports-money-chart__tooltip/);
+assert.match(cashFlowMapSource, /All sources/);
+assert.match(cashFlowMapSource, /All accounts/);
+assert.match(cashFlowMapSource, /All destinations/);
+assert.match(cashFlowMapSource, /new ResizeObserver\(updateWidth\)/);
+assert.match(cashFlowMapSource, /Math\.max\(300, Math\.round\(element\.clientWidth\)\)/);
 assert.match(reportsSource, /<strong className="positive">\{formatCurrency\(currentSummary\.income\)\}<\/strong>/);
 assert.match(reportsSource, /<strong className="negative">\{formatCurrency\(currentSummary\.expense\)\}<\/strong>/);
 assert.match(globalStyles, /\.content--reports \.report-flow-map__bar \{[\s\S]{0,160}height: 36px/);
 assert.match(globalStyles, /\.content--reports \.report-sankey__chart-wrap \{[\s\S]{0,180}min-height: 520px/);
+assert.match(globalStyles, /\.content--reports \.reports-grid--spending \{\s*grid-template-columns: minmax\(0, 1fr\)/);
+assert.match(globalStyles, /\.content--reports \.report-sankey__chart-wrap \{[\s\S]{0,180}min-width: 0;[\s\S]{0,180}overflow: hidden;/);
+assert.match(globalStyles, /\.content--reports \.reports-grid--trends \.report-list__item,[\s\S]{0,240}border-bottom: 1px solid var\(--stroke\)/);
 assert.doesNotMatch(globalStyles, /\.content--reports \.reports-currency-filter__button \{[\s\S]{0,100}min-height: 40px/);
 
   console.log("Adviser report controls regression checks passed.");
