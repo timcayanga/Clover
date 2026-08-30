@@ -31439,7 +31439,10 @@ button.accounts-detail__transaction-head-cell {
 .accounts-detail__reinvest-option {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
   min-height: 42px;
 }
 
@@ -31464,13 +31467,28 @@ button.accounts-detail__transaction-head-cell {
 
 .accounts-detail__history-form {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   align-items: end;
 }
 
 .accounts-detail__history-form label {
+  display: grid;
+  gap: 6px;
+  width: 100%;
   min-width: 0;
+}
+
+.accounts-detail__history-form label > :is(input:not([type="checkbox"]), select) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.accounts-detail__history-form > .button {
+  justify-self: start;
+  max-width: 100%;
 }
 
 .accounts-detail__history-form-note {
@@ -37738,7 +37756,7 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .accounts-detail__history-form {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .accounts-detail__history-form-note {
@@ -57070,6 +57088,16 @@ html[data-theme="dark"] .content > :is(.topbar, .shell-compact-bar) {
     margin-inline: -12px;
     width: calc(100% + 24px);
     padding: 8px 12px 6px;
+  }
+}
+
+@media (max-width: 560px) {
+  .accounts-detail__history-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .accounts-detail__history-form-note {
+    grid-column: auto;
   }
 }
 

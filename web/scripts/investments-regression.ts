@@ -40,6 +40,10 @@ const marketChartSource = readFileSync(
   "utf8",
 );
 const globalStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
+const accountDetailSource = readFileSync(
+  resolve(process.cwd(), "app/accounts/[accountId]/page.tsx"),
+  "utf8",
+);
 
 const currentStockAnalysisShape = `symbol:"PSE-AREIT",data:[{c:36.65,h:37.05,l:36.6,o:37.05,t:"2026-08-28",v:405300,ch:-1.21},{a:37.1,c:37.1,h:37.5,l:36.85,o:37.45,t:"2026-08-27",v:1444100,ch:-.54}],created_at:"2025-03-07"`;
 const parsedPhilippineHistory = parseStockAnalysisSeries(currentStockAnalysisShape, "AREIT", "1Y");
@@ -72,6 +76,26 @@ assert.doesNotMatch(
   marketChartSource,
   /setTimeout\(async \(\) =>/,
   "A confirmed ticker or range change should start loading immediately rather than waiting on a debounce.",
+);
+assert.match(
+  accountDetailSource,
+  /className="accounts-detail__history-form"/,
+  "Investment purchase and dividend activity must use the shared responsive form layout.",
+);
+assert.match(
+  globalStyles,
+  /\.accounts-detail__history-form\s*\{[\s\S]{0,180}grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/,
+  "Investment activity forms must use columns that are allowed to shrink inside their cards.",
+);
+assert.match(
+  globalStyles,
+  /\.accounts-detail__history-form label > :is\(input:not\(\[type="checkbox"\]\), select\)\s*\{[\s\S]{0,180}min-width:\s*0;[\s\S]{0,100}max-width:\s*100%;/,
+  "Investment activity fields must remain contained within their grid columns.",
+);
+assert.match(
+  globalStyles,
+  /@media \(max-width: 560px\)\s*\{[\s\S]{0,180}\.accounts-detail__history-form\s*\{[\s\S]{0,100}grid-template-columns:\s*minmax\(0, 1fr\);/,
+  "Investment activity forms must collapse to one column on narrow mobile screens.",
 );
 
 assert.match(investmentHoldingRouteSource, /export async function DELETE/, "Imported holdings need a delete endpoint.");
@@ -461,4 +485,4 @@ assert.equal(
   "Hover coordinates must resolve to the visually nearest chart date."
 );
 
-console.log(`Investment regression passed: ${classificationCases.length + 60} checks.`);
+console.log(`Investment regression passed: ${classificationCases.length + 64} checks.`);
