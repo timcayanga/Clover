@@ -7,7 +7,6 @@ import { LandingCtaActions } from "../components/landing-cta-actions";
 import { LandingNav } from "../components/landing-nav";
 import { LandingStoryReveal } from "../components/landing-story-reveal";
 import { MarketingFooter } from "../components/marketing-footer";
-import { resolvePublicAccountState } from "@/lib/public-account-state";
 
 function LandingImage({
   src,
@@ -55,8 +54,7 @@ function FeatureSection({
   );
 }
 
-export default async function HomePage() {
-  const accountState = await resolvePublicAccountState();
+export default function HomePage() {
   const authEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? process.env.CLERK_PUBLISHABLE_KEY);
 
   return (
@@ -71,7 +69,7 @@ export default async function HomePage() {
           } catch (error) {}
         `}
       </Script>
-      <LandingNav accountState={accountState} />
+      <LandingNav />
 
       <LandingStoryReveal as="section" className="landing-hero" initialVisible>
         <div className="landing-hero__copy">
@@ -84,7 +82,7 @@ export default async function HomePage() {
           </div>
 
           <div className="landing-hero__actions">
-            <LandingCtaActions accountState={accountState} authEnabled={authEnabled} />
+            <LandingCtaActions authEnabled={authEnabled} />
           </div>
 
           <div className="landing-hero__outcomes" aria-label="What Clover organizes">
@@ -281,7 +279,7 @@ export default async function HomePage() {
             <h2>Ready to make clearer money decisions?</h2>
           </div>
           <div className="landing-cta__actions">
-            <LandingCtaActions accountState={accountState} authEnabled={authEnabled} />
+            <LandingCtaActions authEnabled={authEnabled} />
           </div>
         </div>
       </LandingStoryReveal>

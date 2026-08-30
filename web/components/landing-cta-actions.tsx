@@ -7,15 +7,15 @@ import { LandingSignupModal } from "@/components/landing-signup-modal";
 import type { PublicAccountState } from "@/lib/public-account-state";
 
 type LandingCtaActionsProps = {
-  accountState: PublicAccountState;
+  accountState?: PublicAccountState | null;
   authEnabled: boolean;
 };
 
 export function LandingCtaActions({ accountState, authEnabled }: LandingCtaActionsProps) {
   const { isLoaded, isSignedIn, user } = useUser();
-  const signedIn = isLoaded ? Boolean(isSignedIn) : accountState.signedIn;
+  const signedIn = isLoaded ? Boolean(isSignedIn) : Boolean(accountState?.signedIn);
 
-  if (!isLoaded && !accountState.signedIn) {
+  if (!isLoaded && !accountState?.signedIn) {
     return <span className="landing-cta-actions__loading" aria-hidden="true" />;
   }
 
@@ -30,11 +30,11 @@ export function LandingCtaActions({ accountState, authEnabled }: LandingCtaActio
     );
   }
 
-  const displayName = accountState.displayName ?? user?.firstName ?? user?.emailAddresses[0]?.emailAddress?.split("@")[0] ?? "Account";
-  const avatarUrl = accountState.avatarUrl ?? user?.imageUrl ?? null;
+  const displayName = accountState?.displayName ?? user?.firstName ?? user?.emailAddresses[0]?.emailAddress?.split("@")[0] ?? "Account";
+  const avatarUrl = accountState?.avatarUrl ?? user?.imageUrl ?? null;
 
   return (
-    <Link className="button button-primary button-pill landing-account-cta" href="/continue" prefetch={false}>
+    <Link className="button button-primary button-pill landing-account-cta" href="/home">
       <span
         className="landing-account-cta__avatar"
         aria-hidden="true"

@@ -64,6 +64,38 @@ type InvestmentMarketChartProps = {
   focusAssetId?: string | null;
 };
 
+const MARKET_HISTORY_CLIENT_CACHE_TTL_MS = 60_000;
+const MARKET_HISTORY_CLIENT_CACHE_MAX_ENTRIES = 64;
+const marketHistoryClientCache = new Map<string, { payload: MarketHistoryResponse; fetchedAt: number; expiresAt: number }>();
+
+const getMarketHistoryCacheKey = (symbol: string, market: MarketKey, range: MarketRange) =>
+  `${market}:${normalizeMarketSymbol(symbol)}:${range}`;
+
+const readCachedMarketHistory = (symbol: string, market: MarketKey, range: MarketRange) => {
+  const key = getMarketHistoryCacheKey(symbol, market, range);
+  const cached = marketHistoryClientCache.get(key);
+  if (!cached || cached.expiresAt <= Date.now()) {
+    marketHistoryClientCache.delete(key);
+    return null;
+  }
+
+  return cached;
+};
+
+const writeCachedMarketHistory = (payload: MarketHistoryResponse) => {
+  if (marketHistoryClientCache.size >= MARKET_HISTORY_CLIENT_CACHE_MAX_ENTRIES) {
+    const oldestKey = marketHistoryClientCache.keys().next().value;
+    if (oldestKey) marketHistoryClientCache.delete(oldestKey);
+  }
+
+  const fetchedAt = Date.now();
+  marketHistoryClientCache.set(getMarketHistoryCacheKey(payload.symbol, payload.market, payload.range), {
+    payload,
+    fetchedAt,
+    expiresAt: fetchedAt + MARKET_HISTORY_CLIENT_CACHE_TTL_MS,
+  });
+};
+
 const isMarketTrackableSubtype = (value: string | null) =>
   value === "stock" || value === "etf" || value === "reit" || value === "crypto";
 
@@ -381,12 +413,20 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
       return;
     }
 
+    const cachedHistory = readCachedMarketHistory(submittedSymbol, submittedMarket, range);
+    if (cachedHistory) {
+      setHistory(cachedHistory.payload);
+      setError(null);
+      setLoading(false);
+      setLastUpdatedAt(cachedHistory.fetchedAt);
+      return;
+    }
+
     let cancelled = false;
     const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
+    const loadHistory = async () => {
       setLoading(true);
       setError(null);
-      setHistory(null);
       try {
         const response = await fetch(
           `/api/market-history?symbol=${encodeURIComponent(submittedSymbol)}&market=${encodeURIComponent(submittedMarket)}&range=${encodeURIComponent(range)}`,
@@ -398,11 +438,11 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
         }
 
         if (!response.ok) {
-          setHistory(null);
           setError(payload.error ?? "Unable to load market data.");
           return;
         }
 
+        writeCachedMarketHistory(payload);
         setHistory(payload);
         setLastUpdatedAt(Date.now());
       } catch (fetchError) {
@@ -415,12 +455,13 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
           setLoading(false);
         }
       }
-    }, 250);
+    };
+
+    void loadHistory();
 
     return () => {
       cancelled = true;
       controller.abort();
-      window.clearTimeout(timer);
     };
   }, [queryRevision, range, submittedMarket, submittedSymbol]);
 
@@ -434,9 +475,15 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
       return;
     }
 
+    const cachedBenchmark = readCachedMarketHistory(benchmark.symbol, benchmark.market, range);
+    if (cachedBenchmark) {
+      setBenchmarkHistory(cachedBenchmark.payload);
+      setBenchmarkError(null);
+      return;
+    }
+
     const loadBenchmark = async () => {
       try {
-        setBenchmarkHistory(null);
         setBenchmarkError(null);
         const response = await fetch(
           `/api/market-history?symbol=${encodeURIComponent(benchmark.symbol)}&market=${encodeURIComponent(benchmark.market)}&range=${encodeURIComponent(range)}`
@@ -447,11 +494,11 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
         }
 
         if (!response.ok) {
-          setBenchmarkHistory(null);
           setBenchmarkError(payload.error ?? `Unable to load ${benchmark.label}.`);
           return;
         }
 
+        writeCachedMarketHistory(payload);
         setBenchmarkHistory(payload);
         setBenchmarkError(null);
       } catch (fetchError) {

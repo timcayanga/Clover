@@ -157,12 +157,34 @@ assert.equal(guessCategoryName("OpenAI ChatGPT", "expense"), "Bills & Utilities"
 const featuresSource = readSource("app/features/page.tsx");
 const featureDetailSource = readSource("app/features/[slug]/page.tsx");
 const helpSource = readSource("app/help/page.tsx");
+const landingSource = readSource("app/page.tsx");
+const landingCtaSource = readSource("components/landing-cta-actions.tsx");
 assert.match(featuresSource, /title: "Features"/);
 assert.doesNotMatch(featuresSource, /title: "Features \| Clover"/);
 assert.match(featureDetailSource, /title: page\.navLabel/);
 assert.doesNotMatch(featureDetailSource, /page\.navLabel\} \| Clover/);
 assert.match(helpSource, /title: "Help Center"/);
 assert.doesNotMatch(helpSource, /title: "Help Center \| Clover"/);
+assert.doesNotMatch(
+  landingSource,
+  /resolvePublicAccountState/,
+  "The landing hero must not wait for server-side account synchronization before it can paint.",
+);
+assert.doesNotMatch(
+  helpSource,
+  /resolvePublicAccountState/,
+  "Help content must not wait for server-side account synchronization before it can paint.",
+);
+assert.match(
+  landingCtaSource,
+  /landing-account-cta" href="\/home"/,
+  "Signed-in public CTAs should enter Clover directly without an intermediate redirect request.",
+);
+assert.doesNotMatch(
+  landingCtaSource,
+  /landing-account-cta" href="\/home" prefetch=\{false\}/,
+  "The visible Open Clover CTA should keep App Router prefetching enabled.",
+);
 
 const adviserSource = readSource("app/adviser/page.tsx");
 const adviserLoadingSource = readSource("app/adviser/loading.tsx");

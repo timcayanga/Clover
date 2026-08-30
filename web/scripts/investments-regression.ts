@@ -35,6 +35,10 @@ const adviserHeaderLinkSource = readFileSync(
   resolve(process.cwd(), "components/adviser-header-link.tsx"),
   "utf8",
 );
+const marketChartSource = readFileSync(
+  resolve(process.cwd(), "components/investment-market-chart.tsx"),
+  "utf8",
+);
 const globalStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
 
 const currentStockAnalysisShape = `symbol:"PSE-AREIT",data:[{c:36.65,h:37.05,l:36.6,o:37.05,t:"2026-08-28",v:405300,ch:-1.21},{a:37.1,c:37.1,h:37.5,l:36.85,o:37.45,t:"2026-08-27",v:1444100,ch:-.54}],created_at:"2025-03-07"`;
@@ -58,6 +62,16 @@ assert.match(
   globalStyles,
   /@media \(max-width: 1100px\)[\s\S]*?\.content--investments \.adviser-header-link img \{[\s\S]{0,180}width: 40px;/,
   "The mobile Investments Adviser icon must match the standard compact header action."
+);
+assert.match(
+  marketChartSource,
+  /MARKET_HISTORY_CLIENT_CACHE_TTL_MS/,
+  "Investment range switches should reuse recent market responses.",
+);
+assert.doesNotMatch(
+  marketChartSource,
+  /setTimeout\(async \(\) =>/,
+  "A confirmed ticker or range change should start loading immediately rather than waiting on a debounce.",
 );
 
 assert.match(investmentHoldingRouteSource, /export async function DELETE/, "Imported holdings need a delete endpoint.");
@@ -262,7 +276,6 @@ assert.equal(
 const investmentsPageSource = readFileSync(resolve(process.cwd(), "app/investments/page.tsx"), "utf8");
 const institutionPageSource = readFileSync(resolve(process.cwd(), "app/accounts/institutions/[institutionSlug]/page.tsx"), "utf8");
 const investmentsStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
-const marketChartSource = readFileSync(resolve(process.cwd(), "components/investment-market-chart.tsx"), "utf8");
 const portfolioGrowthSource = readFileSync(resolve(process.cwd(), "components/investment-portfolio-growth-chart.tsx"), "utf8");
 const marketHistoryRouteSource = readFileSync(resolve(process.cwd(), "app/api/market-history/route.ts"), "utf8");
 

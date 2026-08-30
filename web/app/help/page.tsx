@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
 import { HelpCenter } from "@/components/help-center";
 import { helpSections } from "@/lib/help-center";
-import { resolvePublicAccountState } from "@/lib/public-account-state";
-
-export const dynamic = "force-dynamic";
 
 type HelpPageProps = {
   searchParams?: Promise<{
@@ -31,7 +28,6 @@ export const metadata: Metadata = {
 
 export default async function HelpPage({ searchParams }: HelpPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : null;
-  const accountState = await resolvePublicAccountState();
 
-  return <HelpCenter returnTo={resolvedSearchParams?.returnTo ?? null} accountState={accountState} />;
+  return <HelpCenter returnTo={resolvedSearchParams?.returnTo ?? null} />;
 }
