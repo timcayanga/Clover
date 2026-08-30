@@ -957,12 +957,12 @@ export function CloverShell({
     if (notificationCount > 0) {
       setNotificationCount(0);
       void markInAppNotificationsRead(notifications.map((item) => item.id)).catch(async () => {
-        const feed = await loadInAppNotificationFeed(searchWorkspaceId, true).catch(() => null);
+        const feed = await loadInAppNotificationFeed(searchWorkspaceId || null, true).catch(() => null);
         if (feed) setNotificationCount(feed.count);
       });
     }
-    if (notifications.length === 0 && searchWorkspaceId) {
-      void loadInAppNotificationFeed(searchWorkspaceId, true).then((feed) => {
+    if (notifications.length === 0) {
+      void loadInAppNotificationFeed(searchWorkspaceId || null, true).then((feed) => {
         setNotifications(feed.notifications);
         setNotificationCount(feed.count);
       }).catch(() => null);
@@ -1281,12 +1281,8 @@ export function CloverShell({
     let cancelled = false;
 
     const loadNotifications = async (fresh = false) => {
-      if (!searchWorkspaceId) {
-        setNotifications([]);
-        return;
-      }
       try {
-        const feed = await loadInAppNotificationFeed(searchWorkspaceId, fresh);
+        const feed = await loadInAppNotificationFeed(searchWorkspaceId || null, fresh);
         if (!cancelled) {
           setNotifications(feed.notifications);
           setNotificationCount(feed.count);

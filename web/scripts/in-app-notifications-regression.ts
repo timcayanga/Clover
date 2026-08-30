@@ -40,13 +40,13 @@ assert.match(notificationPageSource, /formatInAppNotificationDateTime\(notificat
 assert.match(notificationPageSource, /dismissInAppNotifications\(\{ ids: \[notificationId\] \}\)/);
 assert.match(notificationPageSource, /dismissInAppNotifications\(\{ dismissAll: true \}\)/);
 
-assert.match(shellSource, /loadInAppNotificationFeed\(searchWorkspaceId, fresh\)/);
 assert.match(shellSource, /getNavigationIconSrc\(notification\.product\)/);
 assert.match(shellSource, /NotificationCountBadge count=\{notificationCount\}/);
 assert.match(shellSource, /setNotificationCount\(feed\.count\)/);
 assert.match(shellSource, /markInAppNotificationsRead/);
 assert.match(shellSource, /inAppNotificationsReadEvent/);
-assert.match(shellSource, /notifications\.length === 0 && searchWorkspaceId/);
+assert.match(shellSource, /notifications\.length === 0/);
+assert.match(shellSource, /loadInAppNotificationFeed\(searchWorkspaceId \|\| null, fresh\)/);
 assert.match(shellSource, /sidebar-popover__clear-notifications/);
 assert.doesNotMatch(shellSource, /sidebar-popover__notification-tone/);
 assert.match(shellSource, /formatInAppNotificationDateTime\(notification\.createdAt\)/);
