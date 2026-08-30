@@ -130,7 +130,7 @@ const eagerGotradeRecovery = accountsRouteSource.indexOf(
   "await repairLegacyGotradeActivityImports(workspaceId)"
 );
 const visibleAccountsQuery = accountsRouteSource.indexOf(
-  "const [accounts, accountRules, statementCheckpoints, investmentSnapshots]"
+  "const [accounts, accountRules, statementCheckpoints"
 );
 assert.ok(
   eagerMayaWiseRepair > 0 && visibleAccountsQuery > eagerMayaWiseRepair,

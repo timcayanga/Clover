@@ -44,6 +44,7 @@ const accountDetailSource = readFileSync(
   resolve(process.cwd(), "app/accounts/[accountId]/page.tsx"),
   "utf8",
 );
+const accountsRouteSource = readFileSync(resolve(process.cwd(), "app/api/accounts/route.ts"), "utf8");
 
 const currentStockAnalysisShape = `symbol:"PSE-AREIT",data:[{c:36.65,h:37.05,l:36.6,o:37.05,t:"2026-08-28",v:405300,ch:-1.21},{a:37.1,c:37.1,h:37.5,l:36.85,o:37.45,t:"2026-08-27",v:1444100,ch:-.54}],created_at:"2025-03-07"`;
 const parsedPhilippineHistory = parseStockAnalysisSeries(currentStockAnalysisShape, "AREIT", "1Y");
@@ -87,6 +88,16 @@ assert.doesNotMatch(accountDetailSource, /No purchases logged yet\./);
 assert.doesNotMatch(accountDetailSource, /No dividends logged yet\./);
 assert.doesNotMatch(accountDetailSource, /<span>Reinvested<\/span>/);
 assert.match(accountDetailSource, /Reinvested the dividend back to this asset/);
+assert.match(
+  accountsRouteSource,
+  /loadEarliestInvestmentPurchaseDatesForWorkspace/,
+  "Investment overview accounts must inherit dates from saved purchase-history records.",
+);
+assert.match(
+  accountsRouteSource,
+  /effectiveInvestmentStartDate/,
+  "The earliest saved purchase must reach Investment Growth without overwriting an earlier recorded start date.",
+);
 assert.match(
   globalStyles,
   /\.accounts-detail__history-form\s*\{[\s\S]{0,180}grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/,
@@ -333,6 +344,8 @@ assert.match(portfolioGrowthSource, /onPointerMove/, "Portfolio growth must expo
 assert.match(portfolioGrowthSource, /preserveAspectRatio="none"/, "Portfolio growth must not letterbox chart coordinates at short browser heights.");
 assert.match(portfolioGrowthSource, /findClosestMarketPointIndex/, "Portfolio hover must resolve the nearest rendered point.");
 assert.match(portfolioGrowthSource, /Input a purchase date for an asset to start tracking your investment growth\./, "Growth must explain the next action when no dated valuation is available.");
+assert.match(portfolioGrowthSource, /Clover found your purchase history but still needs a usable value or ticker\./);
+assert.match(portfolioGrowthSource, /add its current value or market ticker\./);
 assert.match(portfolioGrowthSource, /assetsWithHistory/, "One unavailable investment must not blank the rest of the portfolio chart.");
 assert.match(investmentsPageSource, /historyMode: isMarketPriced \? "market" : "recorded"/, "Growth must include recorded-value investments beyond exchange-traded assets.");
 assert.match(marketHistoryRouteSource, /MAX:\s*\{\s*range:\s*"max",\s*interval:\s*"1d"\s*\}/, "MAX portfolio history must request daily prices.");
@@ -455,6 +468,25 @@ assert.deepEqual(growthSeries, [
   { date: "2026-08-02", value: 1400 },
 ]);
 
+const staggeredGrowthSeries = buildPortfolioGrowthSeries({
+  assets: [
+    { id: "early", name: "Early holding", symbol: "EARLY", market: "us", units: 1, currency: "USD", startDate: "2026-01-01" },
+    { id: "later", name: "Later holding", symbol: "LATER", market: "us", units: 1, currency: "USD", startDate: "2026-03-01" },
+  ],
+  histories: [
+    { assetId: "early", currency: "USD", points: [{ date: "2026-01-01", value: 10 }, { date: "2026-01-02", value: 12 }] },
+    { assetId: "later", currency: "USD", points: [{ date: "2026-03-01", value: 20 }, { date: "2026-03-02", value: 22 }] },
+  ],
+  exchangeRates: { USD: 1 },
+});
+assert.deepEqual(staggeredGrowthSeries[0], { date: "2026-01-01", value: 10 });
+assert.deepEqual(staggeredGrowthSeries.find((point) => point.date === "2026-03-01"), { date: "2026-03-01", value: 32 });
+assert.deepEqual(
+  staggeredGrowthSeries.at(-1),
+  { date: "2026-03-02", value: 34 },
+  "Selected assets with staggered price histories must combine instead of blanking the full chart.",
+);
+
 const activityBoundGrowthSeries = buildPortfolioGrowthSeries({
   assets: [
     { id: "early", name: "Early", symbol: "EARLY", market: "us", units: 1, currency: "USD", startDate: "2026-02-10" },
@@ -560,4 +592,4 @@ assert.equal(
   "Hover coordinates must resolve to the visually nearest chart date."
 );
 
-console.log(`Investment regression passed: ${classificationCases.length + 77} checks.`);
+console.log(`Investment regression passed: ${classificationCases.length + 84} checks.`);

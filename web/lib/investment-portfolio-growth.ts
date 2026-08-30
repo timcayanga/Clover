@@ -166,30 +166,26 @@ export const buildPortfolioGrowthSeries = ({
 
   if (usable.length === 0) return [];
 
-  const recordedStartDates = usable.map((entry) => entry.startDate).filter((date): date is string => Boolean(date));
-  const firstRecordedActivity = recordedStartDates.sort()[0] ?? null;
-  // Prefer the user's recorded activity period. Market history still bounds the
-  // chart when no selected provider has prices as far back as the first trade.
-  const earliestMarketDate = usable.reduce(
-    (earliest, entry) => entry.dates[0] < earliest ? entry.dates[0] : earliest,
-    usable[0].dates[0]
-  );
-  const firstSharedDate = firstRecordedActivity
-    ? (earliestMarketDate > firstRecordedActivity ? earliestMarketDate : firstRecordedActivity)
-    : usable.reduce(
-        (latest, entry) => (entry.dates[0] > latest ? entry.dates[0] : latest),
-        usable[0].dates[0]
-      );
-  const lastSharedDate = usable.reduce(
-    (earliest, entry) => (entry.dates[entry.dates.length - 1] < earliest ? entry.dates[entry.dates.length - 1] : earliest),
-    usable[0].dates[usable[0].dates.length - 1]
-  );
-  if (firstSharedDate > lastSharedDate) return [];
+  // Build over the union of every usable holding's period. Requiring all
+  // providers to overlap makes one newer purchase or stale quote erase the
+  // whole portfolio chart. Each asset joins only after both its position and a
+  // usable valuation have started.
+  const firstChartDate = usable
+    .map((entry) => {
+      const firstPriceDate = entry.dates[0];
+      return entry.startDate && entry.startDate > firstPriceDate ? entry.startDate : firstPriceDate;
+    })
+    .sort()[0];
+  const lastChartDate = usable
+    .map((entry) => entry.dates[entry.dates.length - 1])
+    .sort()
+    .at(-1)!;
+  if (firstChartDate > lastChartDate) return [];
 
   const dates = granularity === "daily"
-    ? buildDailyDateRange(firstSharedDate, lastSharedDate)
+    ? buildDailyDateRange(firstChartDate, lastChartDate)
     : Array.from(
-        new Set(usable.flatMap((entry) => entry.dates.filter((date) => date >= firstSharedDate && date <= lastSharedDate)))
+        new Set(usable.flatMap((entry) => entry.dates.filter((date) => date >= firstChartDate && date <= lastChartDate)))
       ).sort();
   const latestPriceByAsset = new Map<string, number>();
   const unitsByAsset = new Map<string, number>();
@@ -198,7 +194,7 @@ export const buildPortfolioGrowthSeries = ({
     let units = entry.unitLedger.baselineUnits;
     const appliedDates = new Set<string>();
     for (const activityDate of entry.unitLedger.activityDates) {
-      if (activityDate >= firstSharedDate.slice(0, 10)) continue;
+      if (activityDate >= firstChartDate.slice(0, 10)) continue;
       units = Math.max(0, units + (entry.unitLedger.changesByDate.get(activityDate) ?? 0));
       appliedDates.add(activityDate);
     }
@@ -206,7 +202,7 @@ export const buildPortfolioGrowthSeries = ({
     appliedActivityDatesByAsset.set(entry.asset.id, appliedDates);
   }
   for (const entry of usable) {
-    const seedDates = entry.dates.filter((date) => date <= firstSharedDate);
+    const seedDates = entry.dates.filter((date) => date <= firstChartDate);
     const seedDate = seedDates[seedDates.length - 1];
     const seedPrice = seedDate ? entry.daily.get(seedDate) : undefined;
     if (seedPrice !== undefined) latestPriceByAsset.set(entry.asset.id, seedPrice);
@@ -231,8 +227,7 @@ export const buildPortfolioGrowthSeries = ({
       if (price !== undefined) latestPriceByAsset.set(entry.asset.id, price);
       const latestPrice = latestPriceByAsset.get(entry.asset.id);
       if (latestPrice === undefined) {
-        if (firstRecordedActivity) continue;
-        return [];
+        continue;
       }
       const units = unitsByAsset.get(entry.asset.id) ?? 0;
       if (units <= 0) continue;

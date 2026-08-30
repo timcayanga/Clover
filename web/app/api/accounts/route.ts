@@ -251,6 +251,25 @@ const loadInvestmentSnapshotsForWorkspace = async (workspaceId: string) => {
   }));
 };
 
+const loadEarliestInvestmentPurchaseDatesForWorkspace = async (workspaceId: string) => {
+  if (!(await hasCompatibleTable("InvestmentPurchase"))) {
+    return new Map<string, Date>();
+  }
+
+  const purchases = await prisma.investmentPurchase.findMany({
+    where: { account: { workspaceId } },
+    orderBy: { purchasedAt: "asc" },
+    select: { accountId: true, purchasedAt: true },
+  }).catch(() => []);
+  const earliestByAccountId = new Map<string, Date>();
+  for (const purchase of purchases) {
+    if (!earliestByAccountId.has(purchase.accountId)) {
+      earliestByAccountId.set(purchase.accountId, purchase.purchasedAt);
+    }
+  }
+  return earliestByAccountId;
+};
+
 const normalizeAccountIdentityKey = (accountName?: string | null, institution?: string | null, accountNumber?: string | null) => {
   const digits = String(accountNumber ?? "").replace(/\D/g, "");
   const accountNumberKey = digits.length >= 4 ? digits.slice(-4) : "";
@@ -3343,7 +3362,7 @@ export async function GET(request: Request) {
       });
     }
 
-    const [accounts, accountRules, statementCheckpoints, investmentSnapshots] = await Promise.all([
+    const [accounts, accountRules, statementCheckpoints, investmentSnapshots, earliestInvestmentPurchaseDates] = await Promise.all([
       prisma.account.findMany({
         where: { workspaceId },
         orderBy: { createdAt: "desc" },
@@ -3423,6 +3442,7 @@ export async function GET(request: Request) {
       }));
       })(),
       loadInvestmentSnapshotsForWorkspace(workspaceId),
+      loadEarliestInvestmentPurchaseDatesForWorkspace(workspaceId),
     ]);
     const accountIds = accounts.map((account) => account.id);
     const transactionCounts = accountIds.length
@@ -3755,17 +3775,25 @@ export async function GET(request: Request) {
         !looksLikeReceiptImageFilenameAccount(account) &&
         !looksLikeGenericImageFilenameAccount(account)
     );
-    const serializedResponseAccounts = responseAccounts.map((account) => ({
-      ...serializeAccount({
-        ...account,
-        transactionCount: transactionCountByAccountId.get(account.id) ?? 0,
-      }),
-      // Account-inventory imports intentionally have no transactions. Carry
-      // their publication evidence to the browser so cache cleanup never
-      // mistakes a legitimate zero-balance account for a transient parser
-      // placeholder.
-      publishedImportInventory: publishedInventoryAccountIds.has(account.id),
-    }));
+    const serializedResponseAccounts = responseAccounts.map((account) => {
+      const purchaseStartDate = earliestInvestmentPurchaseDates.get(account.id) ?? null;
+      const effectiveInvestmentStartDate =
+        purchaseStartDate && (!account.investmentStartDate || purchaseStartDate < account.investmentStartDate)
+          ? purchaseStartDate
+          : account.investmentStartDate;
+      return {
+        ...serializeAccount({
+          ...account,
+          investmentStartDate: effectiveInvestmentStartDate,
+          transactionCount: transactionCountByAccountId.get(account.id) ?? 0,
+        }),
+        // Account-inventory imports intentionally have no transactions. Carry
+        // their publication evidence to the browser so cache cleanup never
+        // mistakes a legitimate zero-balance account for a transient parser
+        // placeholder.
+        publishedImportInventory: publishedInventoryAccountIds.has(account.id),
+      };
+    });
 
     console.info("[accounts-api] response summary", {
       userId,

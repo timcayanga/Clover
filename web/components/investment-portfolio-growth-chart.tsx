@@ -80,6 +80,7 @@ export function InvestmentPortfolioGrowthChart({ assets, currency }: Props) {
     () => assets.filter((asset) => selectedIds.includes(asset.id)),
     [assets, selectedIds]
   );
+  const hasDatedSelection = selectedAssets.some((asset) => Boolean(asset.startDate));
 
   useEffect(() => {
     if (selectedAssets.length === 0) {
@@ -255,8 +256,16 @@ export function InvestmentPortfolioGrowthChart({ assets, currency }: Props) {
         <div className="portfolio-growth__state">Loading daily market prices...</div>
       ) : points.length < 2 ? (
         <div className="portfolio-growth__state">
-          <strong>Input a purchase date for an asset to start tracking your investment growth.</strong>
-          <span>Open an asset in Portfolio and add its purchase date and current value.</span>
+          <strong>
+            {hasDatedSelection
+              ? "Clover found your purchase history but still needs a usable value or ticker."
+              : "Input a purchase date for an asset to start tracking your investment growth."}
+          </strong>
+          <span>
+            {hasDatedSelection
+              ? "Open the asset in Portfolio and add its current value or market ticker."
+              : "Open an asset in Portfolio and add its purchase date and current value."}
+          </span>
         </div>
       ) : (
         <div className="portfolio-growth__plot">

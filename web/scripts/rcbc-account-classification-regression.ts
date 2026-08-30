@@ -27,7 +27,7 @@ assert.equal(
 
 const accountsRouteSource = readFileSync(resolve(process.cwd(), "app/api/accounts/route.ts"), "utf8");
 const repairCall = accountsRouteSource.indexOf("await repairMisclassifiedUploadedRcbcCreditCards(workspaceId)");
-const visibleAccountQuery = accountsRouteSource.indexOf("const [accounts, accountRules, statementCheckpoints, investmentSnapshots]");
+const visibleAccountQuery = accountsRouteSource.indexOf("const [accounts, accountRules, statementCheckpoints");
 assert.ok(
   repairCall > 0 && visibleAccountQuery > repairCall,
   "RCBC product repair must run before the Accounts API returns visible accounts."
