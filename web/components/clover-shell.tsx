@@ -961,6 +961,12 @@ export function CloverShell({
         if (feed) setNotificationCount(feed.count);
       });
     }
+    if (notifications.length === 0 && searchWorkspaceId) {
+      void loadInAppNotificationFeed(searchWorkspaceId, true).then((feed) => {
+        setNotifications(feed.notifications);
+        setNotificationCount(feed.count);
+      }).catch(() => null);
+    }
     setOpenMenu("notifications");
   };
 

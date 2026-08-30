@@ -46,6 +46,7 @@ assert.match(shellSource, /NotificationCountBadge count=\{notificationCount\}/);
 assert.match(shellSource, /setNotificationCount\(feed\.count\)/);
 assert.match(shellSource, /markInAppNotificationsRead/);
 assert.match(shellSource, /inAppNotificationsReadEvent/);
+assert.match(shellSource, /notifications\.length === 0 && searchWorkspaceId/);
 assert.match(shellSource, /sidebar-popover__clear-notifications/);
 assert.doesNotMatch(shellSource, /sidebar-popover__notification-tone/);
 assert.match(shellSource, /formatInAppNotificationDateTime\(notification\.createdAt\)/);
