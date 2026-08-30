@@ -451,6 +451,7 @@ export async function ReportsStream({
       workspaceAccountSnapshots,
       latestImport,
       importStatusRows,
+      parsedReportRowCandidates,
     ] = await Promise.all([
       prisma.transaction.findMany({
         where: buildActiveWorkspaceTransactionWhere(selectedWorkspaceId, {
@@ -517,6 +518,47 @@ export async function ReportsStream({
             _count: { _all: true },
           })
         : Promise.resolve([]),
+      prisma.parsedTransaction
+        .findMany({
+          where: {
+            workspaceId: selectedWorkspaceId,
+            date: { not: null, gte: reportQueryStart, lte: currentWindowEnd },
+            amount: { not: null },
+            importFile: {
+              OR: [{ status: "done" }, { confirmedAt: { not: null } }, { parsedRowsCount: { gt: 0 } }],
+            },
+          },
+          select: {
+            id: true,
+            importFileId: true,
+            date: true,
+            amount: true,
+            type: true,
+            merchantRaw: true,
+            merchantClean: true,
+            categoryName: true,
+            rawPayload: true,
+            institution: true,
+            accountName: true,
+            currency: true,
+            importFile: {
+              select: {
+                account: {
+                  select: {
+                    id: true,
+                    name: true,
+                    institution: true,
+                    accountNumber: true,
+                    currency: true,
+                    type: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+        })
+        .catch(() => []),
     ]);
 
     const importCountByStatus = new Map(
@@ -532,48 +574,9 @@ export async function ReportsStream({
     const normalizedImportFileIds = new Set(
       normalizedReportTransactions.flatMap((transaction) => (transaction.importFileId ? [transaction.importFileId] : []))
     );
-    const parsedReportRows = await prisma.parsedTransaction
-      .findMany({
-        where: {
-          workspaceId: selectedWorkspaceId,
-          date: { not: null, gte: reportQueryStart, lte: currentWindowEnd },
-          amount: { not: null },
-          importFileId: normalizedImportFileIds.size > 0 ? { notIn: Array.from(normalizedImportFileIds) } : undefined,
-          importFile: {
-            OR: [{ status: "done" }, { confirmedAt: { not: null } }, { parsedRowsCount: { gt: 0 } }],
-          },
-        },
-        select: {
-          id: true,
-          importFileId: true,
-          date: true,
-          amount: true,
-          type: true,
-          merchantRaw: true,
-          merchantClean: true,
-          categoryName: true,
-          rawPayload: true,
-          institution: true,
-          accountName: true,
-          currency: true,
-          importFile: {
-            select: {
-              account: {
-                select: {
-                  id: true,
-                  name: true,
-                  institution: true,
-                  accountNumber: true,
-                  currency: true,
-                  type: true,
-                },
-              },
-            },
-          },
-        },
-        orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-      })
-      .catch(() => []);
+    const parsedReportRows = parsedReportRowCandidates.filter(
+      (row) => !normalizedImportFileIds.has(row.importFileId),
+    );
     const reportAllTransactions = [
       ...normalizedReportTransactions,
       ...mapParsedRowsToReportTransactions(parsedReportRows),

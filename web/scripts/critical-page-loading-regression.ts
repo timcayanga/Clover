@@ -42,6 +42,7 @@ assert.match(
 
 const clerkSource = readSource("lib/clerk.ts");
 const userContextSource = readSource("lib/user-context.ts");
+const reportsSource = readSource("app/reports/reports-page-content.tsx");
 assert.match(clerkSource, /unstable_cache/);
 assert.match(clerkSource, /clover-clerk-user-v1/);
 assert.match(userContextSource, /clerkUser\.authoritative/);
@@ -49,6 +50,16 @@ assert.match(
   userContextSource,
   /const \[clerkUser, existing\][\s\S]{0,260}Promise\.all/,
   "Authenticated entry should load the Clerk identity and existing database user in parallel.",
+);
+assert.match(
+  reportsSource,
+  /const \[[\s\S]{0,220}parsedReportRowCandidates[\s\S]{0,120}Promise\.all/,
+  "Report transactions and parsed-row fallbacks should load in parallel for fast filter changes.",
+);
+assert.match(
+  reportsSource,
+  /parsedReportRowCandidates\.filter\([\s\S]{0,140}!normalizedImportFileIds\.has/,
+  "Parallel report reads must still exclude parsed-row fallbacks once an import has normalized transactions.",
 );
 assert.match(
   userContextSource,
