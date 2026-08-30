@@ -34,7 +34,7 @@ export function LandingCtaActions({ accountState, authEnabled }: LandingCtaActio
   const avatarUrl = accountState?.avatarUrl ?? user?.imageUrl ?? null;
 
   return (
-    <Link className="button button-primary button-pill landing-account-cta" href="/home">
+    <a className="button button-primary button-pill landing-account-cta" href="/home">
       <span
         className="landing-account-cta__avatar"
         aria-hidden="true"
@@ -43,6 +43,6 @@ export function LandingCtaActions({ accountState, authEnabled }: LandingCtaActio
         {avatarUrl ? <img src={avatarUrl} alt="" /> : <span>{getAvatarInitials(displayName)}</span>}
       </span>
       <span>Open Clover</span>
-    </Link>
+    </a>
   );
 }

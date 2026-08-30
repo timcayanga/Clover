@@ -87,9 +87,9 @@ export function PublicAccountActions({ variant = "desktop", accountState }: Publ
 
         {accountMenuOpen ? (
           <div id={accountMenuId} className="landing-account-menu__panel" role="menu" aria-label="My Account">
-            <Link className="landing-account-menu__item" href="/home" role="menuitem" onClick={() => setAccountMenuOpen(false)}>
+            <a className="landing-account-menu__item" href="/home" role="menuitem" onClick={() => setAccountMenuOpen(false)}>
               Go to Home
-            </Link>
+            </a>
             <button className="landing-account-menu__item landing-account-menu__item--danger" type="button" role="menuitem" onClick={handleSignOut} disabled={signOutBusy}>
               {signOutBusy ? "Logging out..." : "Log Out"}
             </button>

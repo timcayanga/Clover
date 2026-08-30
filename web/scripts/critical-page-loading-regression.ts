@@ -177,13 +177,13 @@ assert.doesNotMatch(
 );
 assert.match(
   landingCtaSource,
-  /landing-account-cta" href="\/home"/,
-  "Signed-in public CTAs should enter Clover directly without an intermediate redirect request.",
+  /<a className="button button-primary button-pill landing-account-cta" href="\/home">/,
+  "Signed-in public CTAs should cross into Clover with a direct document request instead of a slow RSC transition.",
 );
 assert.doesNotMatch(
   landingCtaSource,
-  /landing-account-cta" href="\/home" prefetch=\{false\}/,
-  "The visible Open Clover CTA should keep App Router prefetching enabled.",
+  /landing-account-cta" href="\/continue"/,
+  "The visible Open Clover CTA must not add an intermediate redirect request.",
 );
 
 const adviserSource = readSource("app/adviser/page.tsx");
