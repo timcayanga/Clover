@@ -93,12 +93,16 @@ assert.match(cashFlowMapSource, /All accounts/);
 assert.match(cashFlowMapSource, /All destinations/);
 assert.match(cashFlowMapSource, /new ResizeObserver\(updateWidth\)/);
 assert.match(cashFlowMapSource, /Math\.max\(300, Math\.round\(element\.clientWidth\)\)/);
+assert.match(cashFlowMapSource, /className="report-sankey__top-row"/);
+assert.match(cashFlowMapSource, /<InfoTooltip/);
+assert.match(reportsSource, /report-ai-signal__icon/);
+assert.match(reportsSource, /report-next-step__icon/);
 assert.match(reportsSource, /<strong className="positive">\{formatCurrency\(currentSummary\.income\)\}<\/strong>/);
 assert.match(reportsSource, /<strong className="negative">\{formatCurrency\(currentSummary\.expense\)\}<\/strong>/);
 assert.match(globalStyles, /\.content--reports \.report-flow-map__bar \{[\s\S]{0,160}height: 36px/);
-assert.match(globalStyles, /\.content--reports \.report-sankey__chart-wrap \{[\s\S]{0,180}min-height: 520px/);
 assert.match(globalStyles, /\.content--reports \.reports-grid--spending \{\s*grid-template-columns: minmax\(0, 1fr\)/);
-assert.match(globalStyles, /\.content--reports \.report-sankey__chart-wrap \{[\s\S]{0,180}min-width: 0;[\s\S]{0,180}overflow: hidden;/);
+assert.match(globalStyles, /\.content--reports \.report-sankey__top-row \{[\s\S]{0,180}grid-template-columns: auto minmax\(420px, 1fr\) auto/);
+assert.match(globalStyles, /\.content--reports \.report-sankey__chart-wrap \{[\s\S]{0,180}height: auto;[\s\S]{0,180}overflow: visible;/);
 assert.match(globalStyles, /\.content--reports \.reports-grid--trends \.report-list__item,[\s\S]{0,240}border-bottom: 1px solid var\(--stroke\)/);
 assert.doesNotMatch(globalStyles, /\.content--reports \.reports-currency-filter__button \{[\s\S]{0,100}min-height: 40px/);
 

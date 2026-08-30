@@ -1642,42 +1642,22 @@ export async function ReportsStream({
             <>
             <section className="reports-brief-grid reports-brief-grid--more">
               <article className="report-ai-card reports-subtab-card report-ai-card--featured report-sankey-card glass">
-                <ReportInfoTip
-                  className="reports-container-info"
-                  label="Shows estimated beginning balances and recorded income flowing through each account into spending categories. Transfers between your own accounts are excluded."
+                <ReportsCashFlowMap
+                  currency={displayCurrency}
+                  accounts={sankeyAccountFlows.map((account) => ({
+                    id: account.id,
+                    label: account.label,
+                    beginningBalance: account.beginningBalance,
+                    incomeAmount: account.incomeAmount,
+                    color: account.color,
+                    flows: account.flows,
+                  }))}
+                  destinations={sankeyCategoryNodes.map((destination) => ({
+                    key: destination.key,
+                    label: destination.label,
+                    color: destination.color,
+                  }))}
                 />
-                <div className="report-card__head report-card__head--compact">
-                  <div>
-                    <h4 className="reports-subtab-title">
-                      <span className="reports-subtab-title__icon" aria-hidden="true">🗺️</span>
-                      <span>Cash Flow Map</span>
-                    </h4>
-                  </div>
-                </div>
-
-                {sankeyAccountFlows.length > 0 ? (
-                  <ReportsCashFlowMap
-                    currency={displayCurrency}
-                    accounts={sankeyAccountFlows.map((account) => ({
-                      id: account.id,
-                      label: account.label,
-                      beginningBalance: account.beginningBalance,
-                      incomeAmount: account.incomeAmount,
-                      color: account.color,
-                      flows: account.flows,
-                    }))}
-                    destinations={sankeyCategoryNodes.map((destination) => ({
-                      key: destination.key,
-                      label: destination.label,
-                      color: destination.color,
-                    }))}
-                  />
-                ) : (
-                  <ReportsEmptyNote
-                    title="Add a little more activity to see the cash flow map."
-                    copy="Once a few categories are tracked, the Sankey diagram will show how income fans out across the month."
-                  />
-                )}
               </article>
 
               <div className="reports-brief-grid__split">
@@ -1692,10 +1672,19 @@ export async function ReportsStream({
                     </div>
                   </div>
                   <div className="report-ai-signal-grid report-ai-signal-grid--compact">
-                    {aiSignals.slice(0, 3).map((signal) => (
+                    {aiSignals.slice(0, 3).map((signal, index) => (
                       <div key={signal.label} className={`report-ai-signal report-ai-signal--${signal.tone}`}>
-                        <span>{signal.label}</span>
-                        <strong>{signal.value}</strong>
+                        <span className="report-ai-signal__icon" aria-hidden="true">
+                          {index === 0 && topCategoryName
+                            ? <CategoryBrandMark categoryName={topCategoryName} size={28} radius={8} />
+                            : index === 1
+                              ? "🧾"
+                              : "🔁"}
+                        </span>
+                        <span className="report-ai-signal__copy">
+                          <span>{signal.label}</span>
+                          <strong>{signal.value}</strong>
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -1712,10 +1701,19 @@ export async function ReportsStream({
                     </div>
                   </div>
                   <div className="report-list">
-                    {aiActions.map((action) => (
+                    {aiActions.map((action, index) => (
                       <div key={action.title} className="report-list__item report-list__item--compact">
-                        <div className="report-list__meta">
-                          <span>{action.body}</span>
+                        <div className="report-next-step__copy">
+                          <span className="report-next-step__icon" aria-hidden="true">
+                            {index === 0 && topCategoryName
+                              ? <CategoryBrandMark categoryName={topCategoryName} size={28} radius={8} />
+                              : index === 1
+                                ? "✅"
+                                : "⚙️"}
+                          </span>
+                          <div className="report-list__meta">
+                            <span>{action.body}</span>
+                          </div>
                         </div>
                         <Link className="button button-primary button-small report-next-step__button" href={action.href}>
                           {action.title}

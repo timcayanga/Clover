@@ -35,11 +35,13 @@ const main = async () => {
     `Forced uppercase typography remains in: ${uppercaseTransforms.join(", ")}`
   );
 
-  const [globalStyles, adminStyles, reportsSource] = await Promise.all([
+  const [globalStyles, adminStyles, reportsPageSource, cashFlowMapSource] = await Promise.all([
     readFile(path.join(root, "app/globals.css"), "utf8"),
     readFile(path.join(root, "public/admin.css"), "utf8"),
     readFile(path.join(root, "app/reports/reports-page-content.tsx"), "utf8"),
+    readFile(path.join(root, "components/reports-cash-flow-map.tsx"), "utf8"),
   ]);
+  const reportsSource = `${reportsPageSource}\n${cashFlowMapSource}`;
 
   assert.match(globalStyles, /\.eyebrow\s*\{[\s\S]*?text-transform:\s*capitalize;/);
   assert.match(adminStyles, /\.eyebrow\s*\{[\s\S]*?text-transform:\s*capitalize;/);

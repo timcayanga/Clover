@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatCurrencyAmount } from "@/lib/currency-format";
+import { InfoTooltip } from "@/components/info-tooltip";
 
 export type ReportsCashFlowAccount = {
   id: string;
@@ -221,29 +222,39 @@ export function ReportsCashFlowMap({ accounts, destinations, currency }: Reports
 
   return (
     <div className="report-sankey">
-      <div className="report-sankey__filters" aria-label="Cash Flow Map filters">
-        <label>
-          <span>Sources</span>
-          <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
-            <option value={ALL}>All sources</option>
-            <option value="beginning-balance">Beginning balance</option>
-            <option value="income">Income</option>
-          </select>
-        </label>
-        <label>
-          <span>Accounts</span>
-          <select value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)}>
-            <option value={ALL}>All accounts</option>
-            {accounts.map((account) => <option key={account.id} value={account.id}>{account.label}</option>)}
-          </select>
-        </label>
-        <label>
-          <span>Destinations</span>
-          <select value={destinationFilter} onChange={(event) => setDestinationFilter(event.target.value)}>
-            <option value={ALL}>All destinations</option>
-            {destinations.map((destination) => <option key={destination.key} value={destination.key}>{destination.label}</option>)}
-          </select>
-        </label>
+      <div className="report-sankey__top-row">
+        <h4 className="reports-subtab-title">
+          <span className="reports-subtab-title__icon" aria-hidden="true">🗺️</span>
+          <span>Cash Flow Map</span>
+        </h4>
+        <div className="report-sankey__filters" aria-label="Cash Flow Map filters">
+          <label>
+            <span>Sources</span>
+            <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
+              <option value={ALL}>All sources</option>
+              <option value="beginning-balance">Beginning balance</option>
+              <option value="income">Income</option>
+            </select>
+          </label>
+          <label>
+            <span>Accounts</span>
+            <select value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)}>
+              <option value={ALL}>All accounts</option>
+              {accounts.map((account) => <option key={account.id} value={account.id}>{account.label}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Destinations</span>
+            <select value={destinationFilter} onChange={(event) => setDestinationFilter(event.target.value)}>
+              <option value={ALL}>All destinations</option>
+              {destinations.map((destination) => <option key={destination.key} value={destination.key}>{destination.label}</option>)}
+            </select>
+          </label>
+        </div>
+        <InfoTooltip
+          className="reports-container-info"
+          label="Shows estimated beginning balances and recorded income flowing through each account into spending categories. Transfers between your own accounts are excluded."
+        />
       </div>
 
       <div ref={chartRef} className="report-sankey__chart-wrap">
@@ -325,8 +336,8 @@ export function ReportsCashFlowMap({ accounts, destinations, currency }: Reports
           </svg>
         ) : (
           <div className="report-sankey__empty">
-            <strong>No cash flow matches these filters.</strong>
-            <span>Choose another source, account, or destination.</span>
+            <strong>{accounts.length > 0 ? "No cash flow matches these filters." : "Add a little more activity to see the cash flow map."}</strong>
+            <span>{accounts.length > 0 ? "Choose another source, account, or destination." : "Once a few categories are tracked, the diagram will show how income fans out across the month."}</span>
           </div>
         )}
       </div>
