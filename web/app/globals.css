@@ -52388,7 +52388,7 @@ html[data-theme="dark"] .investments-portfolio-table__total {
 .circles-title-tab__avatar { width: 22px; height: 22px; padding: 3px; border-radius: 7px; background: var(--accent-soft); object-fit: contain; }
 .circles-section-tabs {
   position: sticky;
-  top: 58px;
+  top: 62px;
   z-index: 29;
   width: 100%;
   padding: 0 2px 2px;

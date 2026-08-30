@@ -161,7 +161,7 @@ const runCirclesVisualConsistencyUat = () => {
 
   assert.match(
     styles,
-    /\.circles-section-tabs\s*\{[\s\S]*?position:\s*sticky;[\s\S]*?top:\s*58px;[\s\S]*?background:\s*var\(--surface\);[\s\S]*?\}/,
+    /\.circles-section-tabs\s*\{[\s\S]*?position:\s*sticky;[\s\S]*?top:\s*62px;[\s\S]*?background:\s*var\(--surface\);[\s\S]*?\}/,
   );
   assert.match(
     styles,
