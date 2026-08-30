@@ -1,4 +1,4 @@
-import type { MarketHistoryPoint, MarketRegion } from "@/lib/market-data";
+import type { MarketHistoryPoint, MarketRange, MarketRegion } from "@/lib/market-data";
 
 export type PortfolioGrowthAsset = {
   id: string;
@@ -7,6 +7,9 @@ export type PortfolioGrowthAsset = {
   market: MarketRegion;
   units: number;
   currency: string;
+  historyMode?: "market" | "recorded";
+  currentValue?: number | null;
+  purchaseValue?: number | null;
   startDate?: string | null;
   unitActivities?: PortfolioGrowthUnitActivity[];
 };
@@ -20,6 +23,61 @@ export type PortfolioGrowthHistory = {
   assetId: string;
   currency: string;
   points: MarketHistoryPoint[];
+};
+
+const getRangeStart = (range: MarketRange, now: Date) => {
+  const start = new Date(now);
+  start.setUTCHours(0, 0, 0, 0);
+  if (range === "1D") return start;
+  if (range === "5D") start.setUTCDate(start.getUTCDate() - 4);
+  if (range === "1M") start.setUTCMonth(start.getUTCMonth() - 1);
+  if (range === "3M") start.setUTCMonth(start.getUTCMonth() - 3);
+  if (range === "6M") start.setUTCMonth(start.getUTCMonth() - 6);
+  if (range === "YTD") start.setUTCMonth(0, 1);
+  if (range === "1Y") start.setUTCFullYear(start.getUTCFullYear() - 1);
+  if (range === "5Y") start.setUTCFullYear(start.getUTCFullYear() - 5);
+  return start;
+};
+
+export const buildRecordedValueHistory = (
+  asset: PortfolioGrowthAsset,
+  range: MarketRange,
+  now = new Date(),
+): PortfolioGrowthHistory | null => {
+  const parsedStart = asset.startDate ? new Date(asset.startDate) : null;
+  if (
+    !parsedStart ||
+    !Number.isFinite(parsedStart.getTime()) ||
+    !Number.isFinite(asset.currentValue) ||
+    (asset.currentValue ?? -1) < 0
+  ) {
+    return null;
+  }
+
+  const end = new Date(now);
+  if (!Number.isFinite(end.getTime()) || parsedStart > end) return null;
+  const valueDivisor = asset.historyMode === "market" ? asset.units : 1;
+  if (!Number.isFinite(valueDivisor) || valueDivisor <= 0) return null;
+  const rangeStart = getRangeStart(range, end);
+  const effectiveStart = range === "MAX" || parsedStart > rangeStart ? parsedStart : rangeStart;
+  const usesRecordedPurchase = effectiveStart.getTime() === parsedStart.getTime()
+    && Number.isFinite(asset.purchaseValue)
+    && (asset.purchaseValue ?? -1) >= 0;
+  const startValue = (usesRecordedPurchase ? asset.purchaseValue! : asset.currentValue!) / valueDivisor;
+  const currentValue = asset.currentValue! / valueDivisor;
+  const timestampRange = range === "1D";
+  const startKey = timestampRange
+    ? effectiveStart.toISOString()
+    : effectiveStart.toISOString().slice(0, 10);
+  const endKey = timestampRange ? end.toISOString() : end.toISOString().slice(0, 10);
+  const points = startKey === endKey
+    ? [{ date: endKey, value: currentValue }]
+    : [
+        { date: startKey, value: startValue },
+        { date: endKey, value: currentValue },
+      ];
+
+  return { assetId: asset.id, currency: asset.currency, points };
 };
 
 export const getPortfolioGrowthMarket = (subtype: string | null, currency: string): MarketRegion => {

@@ -17,7 +17,7 @@ import {
   getInvestmentActivityType,
   getInvestmentActivityUnits,
 } from "@/lib/investment-activity";
-import { buildPortfolioGrowthSeries, getPortfolioGrowthMarket } from "@/lib/investment-portfolio-growth";
+import { buildPortfolioGrowthSeries, buildRecordedValueHistory, getPortfolioGrowthMarket } from "@/lib/investment-portfolio-growth";
 import { canonicalizePdaxInvestmentHoldings } from "@/lib/pdax-portfolio-accounts";
 import { filterMarketHistoryByRange, findClosestMarketPointIndex } from "@/lib/market-data";
 import { parseStockAnalysisSeries } from "@/lib/stockanalysis-market-history";
@@ -327,6 +327,9 @@ assert.doesNotMatch(portfolioGrowthSource, /<strong>\{asset\.symbol\}<\/strong>/
 assert.match(portfolioGrowthSource, /onPointerMove/, "Portfolio growth must expose hover and pointer values.");
 assert.match(portfolioGrowthSource, /preserveAspectRatio="none"/, "Portfolio growth must not letterbox chart coordinates at short browser heights.");
 assert.match(portfolioGrowthSource, /findClosestMarketPointIndex/, "Portfolio hover must resolve the nearest rendered point.");
+assert.match(portfolioGrowthSource, /Input a purchase date for an asset to start tracking your investment growth\./, "Growth must explain the next action when no dated valuation is available.");
+assert.match(portfolioGrowthSource, /assetsWithHistory/, "One unavailable investment must not blank the rest of the portfolio chart.");
+assert.match(investmentsPageSource, /historyMode: isMarketPriced \? "market" : "recorded"/, "Growth must include recorded-value investments beyond exchange-traded assets.");
 assert.match(marketHistoryRouteSource, /MAX:\s*\{\s*range:\s*"max",\s*interval:\s*"1d"\s*\}/, "MAX portfolio history must request daily prices.");
 assert.match(portfolioGrowthSource, /className="portfolio-growth__canvas"/, "Portfolio hover markers must use an unstretched overlay canvas.");
 assert.doesNotMatch(portfolioGrowthSource, /<circle className="portfolio-growth__hover-dot"/, "The hover marker must not be distorted by SVG scaling.");
@@ -364,6 +367,73 @@ assert.match(marketHistoryRouteSource, /currency: market === "ph" \? \("PHP" as 
 assert.equal(getPortfolioGrowthMarket("crypto", "PHP"), "crypto");
 assert.equal(getPortfolioGrowthMarket("stock", "PHP"), "ph");
 assert.equal(getPortfolioGrowthMarket("stock", "USD"), "us");
+const recordedInvestmentHistory = buildRecordedValueHistory({
+  id: "time-deposit",
+  name: "Time deposit",
+  symbol: "Time deposit",
+  market: "ph",
+  units: 1,
+  currency: "PHP",
+  historyMode: "recorded",
+  currentValue: 105_000,
+  purchaseValue: 100_000,
+  startDate: "2026-01-15",
+}, "MAX", new Date("2026-08-30T12:00:00Z"));
+assert.deepEqual(recordedInvestmentHistory?.points, [
+  { date: "2026-01-15", value: 100_000 },
+  { date: "2026-08-30", value: 105_000 },
+]);
+assert.equal(
+  buildRecordedValueHistory({
+    id: "undated",
+    name: "Undated asset",
+    symbol: "Undated asset",
+    market: "ph",
+    units: 1,
+    currency: "PHP",
+    currentValue: 50_000,
+  }, "MAX", new Date("2026-08-30T12:00:00Z")),
+  null,
+  "Undated recorded values must not invent a purchase date.",
+);
+const recordedStockFallback = buildRecordedValueHistory({
+  id: "stock-fallback",
+  name: "Recorded stock",
+  symbol: "REC",
+  market: "ph",
+  units: 10,
+  currency: "PHP",
+  historyMode: "market",
+  currentValue: 3_000,
+  purchaseValue: 2_000,
+  startDate: "2026-01-15",
+}, "MAX", new Date("2026-08-30T12:00:00Z"));
+assert.deepEqual(recordedStockFallback?.points, [
+  { date: "2026-01-15", value: 200 },
+  { date: "2026-08-30", value: 300 },
+], "A market asset fallback must expose per-unit values to the portfolio series builder.");
+const recordedInvestmentSeries = buildPortfolioGrowthSeries({
+  assets: [{
+    id: "time-deposit",
+    name: "Time deposit",
+    symbol: "Time deposit",
+    market: "ph",
+    units: 1,
+    currency: "PHP",
+    historyMode: "recorded",
+    currentValue: 105_000,
+    purchaseValue: 100_000,
+    startDate: "2026-01-15",
+  }],
+  histories: recordedInvestmentHistory ? [recordedInvestmentHistory] : [],
+  exchangeRates: { PHP: 1 },
+});
+assert.deepEqual(recordedInvestmentSeries[0], { date: "2026-01-15", value: 100_000 });
+assert.deepEqual(
+  recordedInvestmentSeries.at(-1),
+  { date: "2026-08-30", value: 105_000 },
+  "A dated non-market investment must produce a growth series from its saved values.",
+);
 const growthSeries = buildPortfolioGrowthSeries({
   assets: [
     { id: "a", name: "Alpha", symbol: "AAA", market: "us", units: 2, currency: "PHP" },
@@ -485,4 +555,4 @@ assert.equal(
   "Hover coordinates must resolve to the visually nearest chart date."
 );
 
-console.log(`Investment regression passed: ${classificationCases.length + 64} checks.`);
+console.log(`Investment regression passed: ${classificationCases.length + 72} checks.`);

@@ -1782,10 +1782,14 @@ export default function InvestmentsPage() {
       investmentAccounts.map((account) => [account.id, account.investmentStartDate] as const)
     );
     return portfolioSourceRows.flatMap((row) => {
-      if (formatCurrencyCode(row.currency) !== portfolioCurrencyFilter || !row.symbol?.trim()) return [];
-      if (row.subtype !== "stock" && row.subtype !== "etf" && row.subtype !== "reit" && row.subtype !== "crypto") return [];
+      if (formatCurrencyCode(row.currency) !== portfolioCurrencyFilter) return [];
+      const isMarketPriced = Boolean(
+        row.symbol?.trim()
+        && (row.subtype === "stock" || row.subtype === "etf" || row.subtype === "reit" || row.subtype === "crypto")
+      );
       const units = parseNullableAmount(row.detail);
-      if (units === null || units < 0) return [];
+      if (isMarketPriced && units !== null && units < 0) return [];
+      if (!isMarketPriced && row.currentValue === null) return [];
       const normalizedNames = new Set([
         normalizeInvestmentPositionName(row.name),
         normalizeInvestmentPositionName(row.symbol),
@@ -1796,18 +1800,22 @@ export default function InvestmentsPage() {
             activity.accountId === row.accountId && normalizedNames.has(activity.normalizedAssetName)
         )
         .map((activity) => ({ date: activity.tradeDate, unitsDelta: activity.unitsDelta }));
-      if (units === 0 && unitActivities.length === 0) return [];
+      if (isMarketPriced && units === 0 && unitActivities.length === 0 && row.currentValue === null) return [];
       const market = getPortfolioGrowthMarket(row.subtype, row.currency);
-      const identity = `${row.key}:${market}:${row.symbol.trim().toUpperCase()}`;
+      const symbol = row.symbol?.trim().toUpperCase() || row.name;
+      const identity = `${row.key}:${market}:${symbol}`;
       if (seen.has(identity)) return [];
       seen.add(identity);
       return [{
         id: row.key,
         name: row.name,
-        symbol: row.symbol.trim().toUpperCase(),
+        symbol,
         market,
-        units,
+        units: isMarketPriced ? units ?? 1 : 1,
         currency: formatCurrencyCode(row.currency),
+        historyMode: isMarketPriced ? "market" : "recorded",
+        currentValue: row.currentValue,
+        purchaseValue: row.purchaseValue,
         startDate: row.startDate ?? earliestActivityByAccount.get(row.accountId) ?? accountStartDateById.get(row.accountId) ?? null,
         unitActivities,
       }];
@@ -2882,7 +2890,7 @@ export default function InvestmentsPage() {
                 <div className="investments-allocation__head-title">
                   <div className="investments-allocation__title-row">
                     <h5>Investment Growth</h5>
-                    <InfoTooltip label="Uses daily closing prices and recorded units for the selected holdings. Historical values use the latest recorded units and current FX rates when conversion is needed." />
+                    <InfoTooltip label="Includes market-priced and manually valued investments. Market assets use available prices and recorded units; other assets use their saved purchase dates and values." />
                   </div>
                 </div>
               </div>

@@ -10,6 +10,7 @@ import {
   type MarketRegion,
 } from "@/lib/market-data";
 import {
+  buildRecordedValueHistory,
   buildPortfolioGrowthSeries,
   type PortfolioGrowthAsset,
   type PortfolioGrowthHistory,
@@ -86,24 +87,41 @@ export function InvestmentPortfolioGrowthChart({ assets, currency }: Props) {
       setError("");
       return;
     }
+    const recordedFallbacks = new Map(
+      selectedAssets
+        .map((asset) => buildRecordedValueHistory(asset, range))
+        .filter((history): history is PortfolioGrowthHistory => history !== null)
+        .map((history) => [history.assetId, history] as const),
+    );
+    const marketAssets = selectedAssets.filter((asset) => asset.historyMode === "market");
+    if (marketAssets.length === 0) {
+      setHistories([...recordedFallbacks.values()]);
+      setLoading(false);
+      setError("");
+      return;
+    }
     const controller = new AbortController();
     let cancelled = false;
     setLoading(true);
     setError("");
-    void Promise.allSettled(selectedAssets.map((asset) => loadAssetHistory(asset, range, controller.signal)))
+    void Promise.allSettled(marketAssets.map((asset) => loadAssetHistory(asset, range, controller.signal)))
       .then((results) => {
         if (cancelled) return;
-        const loaded: PortfolioGrowthHistory[] = [];
+        const loaded = new Map(recordedFallbacks);
         const unavailable: string[] = [];
         results.forEach((result, index) => {
-          const asset = selectedAssets[index];
+          const asset = marketAssets[index];
           if (result.status === "fulfilled") {
-            loaded.push({ assetId: asset.id, currency: result.value.currency, points: result.value.points });
+            if (result.value.points.length > 0) {
+              loaded.set(asset.id, { assetId: asset.id, currency: result.value.currency, points: result.value.points });
+            } else {
+              unavailable.push(asset.name);
+            }
           } else if (result.reason?.name !== "AbortError") {
             unavailable.push(asset.name);
           }
         });
-        setHistories(loaded);
+        setHistories([...loaded.values()]);
         setError(unavailable.length > 0 ? `No market history yet for ${unavailable.join(", ")}.` : "");
       })
       .finally(() => {
@@ -117,17 +135,21 @@ export function InvestmentPortfolioGrowthChart({ assets, currency }: Props) {
 
   const sourceCurrencies = useMemo(() => histories.map((history) => history.currency), [histories]);
   const exchangeRates = useExchangeRates(sourceCurrencies, currencyCode, histories.length > 0);
+  const assetsWithHistory = useMemo(() => {
+    const ids = new Set(histories.map((history) => history.assetId));
+    return selectedAssets.filter((asset) => ids.has(asset.id));
+  }, [histories, selectedAssets]);
   const points = useMemo(
-    () => histories.length === selectedAssets.length && exchangeRates.unavailable.length === 0
+    () => histories.length > 0 && exchangeRates.unavailable.length === 0
       ?
       buildPortfolioGrowthSeries({
-        assets: selectedAssets,
+        assets: assetsWithHistory,
         histories,
         exchangeRates: exchangeRates.rates,
         granularity: range === "1D" ? "timestamp" : "daily",
       })
       : [],
-    [exchangeRates.rates, exchangeRates.unavailable.length, histories, range, selectedAssets]
+    [assetsWithHistory, exchangeRates.rates, exchangeRates.unavailable.length, histories, range]
   );
   const firstPoint = points[0] ?? null;
   const latestPoint = points[points.length - 1] ?? null;
@@ -173,8 +195,8 @@ export function InvestmentPortfolioGrowthChart({ assets, currency }: Props) {
   if (assets.length === 0) {
     return (
       <div className="investments-growth-chart__empty">
-        <strong>Add ticker symbols and units to track investment growth.</strong>
-        <span>Clover only charts holdings that have enough recorded data for a reliable market valuation.</span>
+        <strong>Add an investment to start tracking your growth.</strong>
+        <span>Record a purchase date and current value so Clover knows when to begin the chart.</span>
       </div>
     );
   }
@@ -233,8 +255,8 @@ export function InvestmentPortfolioGrowthChart({ assets, currency }: Props) {
         <div className="portfolio-growth__state">Loading daily market prices...</div>
       ) : points.length < 2 ? (
         <div className="portfolio-growth__state">
-          <strong>More price history is needed for this selection.</strong>
-          <span>Try a longer period or select another holding.</span>
+          <strong>Input a purchase date for an asset to start tracking your investment growth.</strong>
+          <span>Open an asset in Portfolio and add its purchase date and current value.</span>
         </div>
       ) : (
         <div className="portfolio-growth__plot">
@@ -283,7 +305,7 @@ export function InvestmentPortfolioGrowthChart({ assets, currency }: Props) {
       {exchangeRates.unavailable.length > 0 ? (
         <p className="portfolio-growth__notice">Currency conversion is unavailable for part of this chart.</p>
       ) : null}
-      <p className="portfolio-growth__method">Daily closing prices × units held on each date. Buys and sells change the portfolio from their recorded trade date.</p>
+      <p className="portfolio-growth__method">Market assets use available prices and recorded units. Other investments use saved purchase dates, purchase values, and current values.</p>
     </div>
   );
 }
