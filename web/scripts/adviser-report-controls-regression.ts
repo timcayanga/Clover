@@ -69,12 +69,12 @@ assert.doesNotMatch(reportsSource, /Beginning balance is estimated from the curr
 assert.doesNotMatch(reportsSource, /for \(const account of workspaceAccountSummaries\)[\s\S]{0,500}reportSankeyAccountIncome\.set/);
 assert.match(rangeMenuSource, /type="date"/);
 assert.match(rangeMenuSource, /Apply dates/);
-assert.match(rangeMenuSource, /router\.replace\(/);
-assert.match(rangeMenuSource, /router\.prefetch\(rangeHref\(range\)\)/);
+assert.match(rangeMenuSource, /window\.location\.replace\(/);
 assert.doesNotMatch(rangeMenuSource, /window\.location\.assign/);
 assert.match(currencyFilterSource, /Filter reports by currency/);
 assert.match(currencyFilterSource, /params\.set\("currency", formatCurrencyCode\(next\)\)/);
 assert.match(currencyFilterSource, /params\.delete\("currency"\)/);
+assert.match(currencyFilterSource, /window\.location\.replace\(/);
 assert.match(moneyChartSource, /onPointerMove=\{\(event\) => handlePointerMove\(event\.clientX\)\}/);
 assert.match(moneyChartSource, /onPointerDown=\{\(event\) => handlePointerSelection\(event\.clientX\)\}/);
 assert.match(moneyChartSource, /`Balance on \$\{dateFormatter\.format/);
@@ -89,6 +89,7 @@ assert.match(reportsSource, /<strong className="positive">\{formatCurrency\(curr
 assert.match(reportsSource, /<strong className="negative">\{formatCurrency\(currentSummary\.expense\)\}<\/strong>/);
 assert.match(globalStyles, /\.content--reports \.report-flow-map__bar \{[\s\S]{0,160}height: 36px/);
 assert.match(globalStyles, /\.content--reports \.report-sankey__chart-wrap \{[\s\S]{0,180}min-height: 520px/);
+assert.doesNotMatch(globalStyles, /\.content--reports \.reports-currency-filter__button \{[\s\S]{0,100}min-height: 40px/);
 
   console.log("Adviser report controls regression checks passed.");
 };

@@ -40,6 +40,7 @@ const main = () => {
   assert.match(card, /<AccountLogoPicker/);
   assert.match(picker, /accept="image\/png,image\/jpeg,image\/webp"/);
   assert.match(picker, /createPortal/);
+  assert.doesNotMatch(picker, /financial-account-card__logo-edit/);
   assert.match(accountRoute, /isValidAccountLogoUrl/);
   assert.match(accountRoute, /columns\.has\("logoUrl"\)/);
   assert.match(accountsPage, /onLogoCommit=/);

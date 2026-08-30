@@ -134,7 +134,6 @@ export function AccountLogoPicker({
         }}
       >
         <AccountBrandMark accountBrand={accountBrand} label={accountName} />
-        <span className="financial-account-card__logo-edit" aria-hidden="true">✎</span>
       </button>
 
       {open && typeof document !== "undefined"

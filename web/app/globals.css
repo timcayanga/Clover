@@ -28315,24 +28315,6 @@ html[data-theme="dark"] .portfolio-growth__ranges button.is-active {
   outline-offset: 3px;
 }
 
-.financial-account-card__logo-edit {
-  position: absolute;
-  right: -3px;
-  bottom: -3px;
-  width: 19px;
-  height: 19px;
-  border: 2px solid color-mix(in srgb, var(--card-accent, #0ea5b7) 45%, white);
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  background: #ffffff;
-  color: #162033;
-  font-size: 0.68rem;
-  font-weight: 800;
-  line-height: 1;
-  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.2);
-}
-
 .account-logo-picker__backdrop {
   position: fixed;
   inset: 0;
@@ -58572,11 +58554,6 @@ html[data-theme="dark"] .content--reports .reports-range-menu__summary:focus-vis
 .content--reports .reports-range-menu__summary svg {
   width: 30px;
   height: 30px;
-}
-
-.content--reports .reports-currency-filter__button {
-  min-width: 44px;
-  min-height: 40px;
 }
 
 @media (max-width: 720px) {
