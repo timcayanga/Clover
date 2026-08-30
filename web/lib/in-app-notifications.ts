@@ -24,9 +24,29 @@ export type InAppNotificationFeed = {
 };
 
 export const IN_APP_NOTIFICATIONS_CHANGED_EVENT = "clover:in-app-notifications-changed";
+export const IN_APP_NOTIFICATIONS_READ_EVENT = "clover:in-app-notifications-read";
+
+export const formatInAppNotificationDateTime = (createdAt: string) => {
+  const timestamp = new Date(createdAt);
+  if (!Number.isFinite(timestamp.getTime())) return "Just now";
+  return new Intl.DateTimeFormat("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Asia/Manila",
+  }).format(timestamp);
+};
 
 export const notifyInAppNotificationsChanged = () => {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event(IN_APP_NOTIFICATIONS_CHANGED_EVENT));
+  }
+};
+
+export const notifyInAppNotificationsRead = () => {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(IN_APP_NOTIFICATIONS_READ_EVENT));
   }
 };

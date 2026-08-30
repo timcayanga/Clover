@@ -81,7 +81,7 @@ export const buildInAppNotificationCandidates = async (
 
   const [
     imports,
-    reviewCount,
+    reviewSummary,
     mismatches,
     commitments,
     budgetData,
@@ -105,9 +105,17 @@ export const buildInAppNotificationCandidates = async (
       orderBy: { updatedAt: "desc" },
       take: 6,
     }),
-    prisma.transaction.count({ where: buildReviewQueueWhere(workspaceId) }),
+    prisma.transaction.aggregate({
+      where: buildReviewQueueWhere(workspaceId),
+      _count: { _all: true },
+      _max: { updatedAt: true },
+    }),
     prisma.accountStatementCheckpoint.findMany({
-      where: { workspaceId, status: "mismatch" },
+      where: {
+        workspaceId,
+        status: "mismatch",
+        NOT: { mismatchReason: "A transaction from this statement was deleted by the user." },
+      },
       select: { id: true, mismatchReason: true, updatedAt: true, account: { select: { name: true } } },
       orderBy: { updatedAt: "desc" },
       take: 4,
@@ -148,6 +156,7 @@ export const buildInAppNotificationCandidates = async (
       select: {
         id: true,
         token: true,
+        createdAt: true,
         expiresAt: true,
         circle: { select: { name: true } },
         invitedBy: { select: { firstName: true, lastName: true, email: true } },
@@ -213,6 +222,7 @@ export const buildInAppNotificationCandidates = async (
   ]);
 
   const items: InAppNotification[] = [];
+  const reviewCount = reviewSummary._count._all;
   const recentImports = imports.filter((item) => item.updatedAt >= sevenDaysAgo || item.status !== "done");
   recentImports.forEach((item) => {
     const copy = getImportCopy(item);
@@ -244,7 +254,7 @@ export const buildInAppNotificationCandidates = async (
       message: "A quick statement or receipt upload keeps balances and reports current.",
       tone: "neutral",
       priority: "low",
-      createdAt: now.toISOString(),
+      createdAt: reminderKeyDate.toISOString(),
       href: "/transactions",
       ctaLabel: "Upload data",
     });
@@ -260,7 +270,7 @@ export const buildInAppNotificationCandidates = async (
       message: "Review uncertain categories, possible duplicates, or account matches Clover wants you to confirm.",
       tone: "warning",
       priority: "high",
-      createdAt: now.toISOString(),
+      createdAt: (reviewSummary._max.updatedAt ?? now).toISOString(),
       href: "/review",
       ctaLabel: "Review transactions",
     });
@@ -331,7 +341,7 @@ export const buildInAppNotificationCandidates = async (
       message: `${getUserDisplayName(invitation.invitedBy)} invited you to a Circle. The invitation expires ${toMonthDay(invitation.expiresAt)}.`,
       tone: "positive",
       priority: "high",
-      createdAt: now.toISOString(),
+      createdAt: invitation.createdAt.toISOString(),
       href: getCircleInvitationPath(invitation.token),
       ctaLabel: "View invitation",
     });
@@ -429,13 +439,28 @@ export const buildInAppNotificationCandidates = async (
     .slice(0, 40);
 };
 
-export const loadActiveInAppNotifications = async (user: NotificationUser, workspaceId: string, now = new Date()) => {
+export const loadActiveInAppNotificationFeed = async (user: NotificationUser, workspaceId: string, now = new Date()) => {
   const candidates = await buildInAppNotificationCandidates(user, workspaceId, now);
-  if (candidates.length === 0) return [];
-  const dismissed = await prisma.inAppNotificationDismissal.findMany({
-    where: { userId: user.id, notificationKey: { in: candidates.map((item) => item.id) } },
-    select: { notificationKey: true },
-  });
+  if (candidates.length === 0) return { notifications: [], unreadCount: 0 };
+  const notificationKeys = candidates.map((item) => item.id);
+  const [dismissed, read] = await Promise.all([
+    prisma.inAppNotificationDismissal.findMany({
+      where: { userId: user.id, notificationKey: { in: notificationKeys } },
+      select: { notificationKey: true },
+    }),
+    prisma.inAppNotificationRead.findMany({
+      where: { userId: user.id, notificationKey: { in: notificationKeys } },
+      select: { notificationKey: true },
+    }),
+  ]);
   const dismissedKeys = new Set(dismissed.map((item) => item.notificationKey));
-  return candidates.filter((item) => !dismissedKeys.has(item.id));
+  const readKeys = new Set(read.map((item) => item.notificationKey));
+  const notifications = candidates.filter((item) => !dismissedKeys.has(item.id));
+  return {
+    notifications,
+    unreadCount: notifications.filter((item) => !readKeys.has(item.id)).length,
+  };
 };
+
+export const loadActiveInAppNotifications = async (user: NotificationUser, workspaceId: string, now = new Date()) =>
+  (await loadActiveInAppNotificationFeed(user, workspaceId, now)).notifications;

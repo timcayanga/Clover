@@ -3508,10 +3508,18 @@ html[data-theme="dark"] .adviser-header-link {
   position: fixed;
   right: auto;
   left: auto;
-  width: 268px;
+  width: 320px;
   z-index: 2147483647;
-  max-height: min(340px, calc(100dvh - 144px));
+  max-height: min(480px, calc(100dvh - 96px));
   overflow: auto;
+}
+
+@media (min-width: 1101px) {
+  .sidebar-popover--notifications {
+    width: 400px;
+    max-height: min(620px, calc(100dvh - 64px));
+    padding: 14px;
+  }
 }
 
 @media (min-width: 1101px) {
@@ -3699,7 +3707,9 @@ html[data-theme="dark"] .adviser-header-link {
 }
 
 .sidebar-popover__head {
-  display: grid;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 0;
   padding: 4px 4px 2px;
 }
@@ -3712,6 +3722,30 @@ html[data-theme="dark"] .adviser-header-link {
 
 .sidebar-popover--notifications .sidebar-popover__title {
   font-weight: 400;
+}
+
+.sidebar-popover__clear-notifications {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  padding: 5px 7px;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sidebar-popover__clear-notifications:hover,
+.sidebar-popover__clear-notifications:focus-visible {
+  background: var(--accent-soft);
+}
+
+.sidebar-popover__clear-notifications:disabled {
+  color: var(--muted);
+  cursor: default;
+  opacity: 0.55;
 }
 
 .sidebar-popover__subtitle {
@@ -3874,7 +3908,7 @@ html[data-theme="dark"] .adviser-header-link {
   color: var(--text);
   font-size: 14px;
   line-height: 1.45;
-  font-weight: 400;
+  font-weight: 700;
 }
 
 .sidebar-popover__notification-tone,
@@ -3882,6 +3916,12 @@ html[data-theme="dark"] .adviser-header-link {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.4;
+}
+
+.sidebar-popover__notification-main time {
+  color: var(--muted-2);
+  font-size: 0.7rem;
+  line-height: 1.35;
 }
 
 .sidebar-popover__notification-tone {
@@ -5003,6 +5043,7 @@ html[data-theme="dark"] .adviser-header-link {
 
 .notification-item__main h4 {
   margin: 0;
+  font-weight: 700;
 }
 
 .notification-item__main p {
@@ -5090,6 +5131,13 @@ html[data-theme="dark"] .adviser-header-link {
 .notification-item__dismiss:disabled {
   opacity: 0.55;
   cursor: wait;
+}
+
+@media (min-width: 1101px) {
+  .content--notifications .notifications-layout {
+    width: min(100%, 1180px);
+    min-height: calc(100dvh - 132px);
+  }
 }
 
 .home-notifications-button {

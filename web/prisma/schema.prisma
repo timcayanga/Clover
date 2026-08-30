@@ -272,6 +272,7 @@ model User {
   finverseConnections              FinverseConnection[]
   appErrorLogs                     AppErrorLog[]
   inAppNotificationDismissals      InAppNotificationDismissal[]
+  inAppNotificationReads           InAppNotificationRead[]
 }
 
 model InAppNotificationDismissal {
@@ -284,6 +285,18 @@ model InAppNotificationDismissal {
 
   @@unique([userId, notificationKey])
   @@index([userId, dismissedAt])
+}
+
+model InAppNotificationRead {
+  id              String   @id @default(cuid())
+  userId          String
+  notificationKey String
+  readAt          DateTime @default(now())
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, notificationKey])
+  @@index([userId, readAt])
 }
 
 model Budget {

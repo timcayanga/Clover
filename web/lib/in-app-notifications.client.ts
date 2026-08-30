@@ -1,6 +1,8 @@
 import {
   IN_APP_NOTIFICATIONS_CHANGED_EVENT,
+  IN_APP_NOTIFICATIONS_READ_EVENT,
   notifyInAppNotificationsChanged,
+  notifyInAppNotificationsRead,
   type InAppNotificationFeed,
 } from "@/lib/in-app-notifications";
 import { clearJsonRequestCache, fetchJsonOnce } from "@/lib/request-dedupe";
@@ -34,4 +36,19 @@ export const dismissInAppNotifications = async (input: { ids?: string[]; dismiss
   return payload as InAppNotificationFeed;
 };
 
+export const markInAppNotificationsRead = async (ids: string[]) => {
+  if (ids.length === 0) return null;
+  const response = await fetch("/api/notifications", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ markRead: true, ids }),
+  });
+  const payload = (await response.json().catch(() => null)) as InAppNotificationFeed | { error?: unknown } | null;
+  if (!response.ok) throw new Error("Unable to mark notifications as read.");
+  clearJsonRequestCache(notificationCachePrefix);
+  notifyInAppNotificationsRead();
+  return payload as InAppNotificationFeed;
+};
+
 export const inAppNotificationsChangedEvent = IN_APP_NOTIFICATIONS_CHANGED_EVENT;
+export const inAppNotificationsReadEvent = IN_APP_NOTIFICATIONS_READ_EVENT;

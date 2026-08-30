@@ -8,20 +8,10 @@ import {
   dismissInAppNotifications,
   inAppNotificationsChangedEvent,
   loadInAppNotificationFeed,
+  markInAppNotificationsRead,
 } from "@/lib/in-app-notifications.client";
-import type { InAppNotification } from "@/lib/in-app-notifications";
+import { formatInAppNotificationDateTime, type InAppNotification } from "@/lib/in-app-notifications";
 import { getNavigationIconSrc } from "@/lib/navigation-icons";
-
-const formatNotificationTime = (createdAt: string) => {
-  const timestamp = new Date(createdAt).getTime();
-  if (!Number.isFinite(timestamp)) return "Just now";
-  const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60_000));
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric" }).format(new Date(timestamp));
-};
 
 export function NotificationsClient() {
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
@@ -35,6 +25,9 @@ export function NotificationsClient() {
       const feed = await loadInAppNotificationFeed(null, fresh);
       setNotifications(feed.notifications);
       setError(null);
+      if (feed.count > 0) {
+        void markInAppNotificationsRead(feed.notifications.map((item) => item.id)).catch(() => null);
+      }
     } catch {
       setError("Clover could not load notifications right now.");
     } finally {
@@ -93,7 +86,7 @@ export function NotificationsClient() {
             onClick={() => void dismissAll()}
             disabled={loading || dismissingAll || notifications.length === 0}
           >
-            {dismissingAll ? "Dismissing..." : "Dismiss all"}
+            {dismissingAll ? "Clearing..." : "Clear All"}
           </button>
         </div>
 
@@ -119,12 +112,11 @@ export function NotificationsClient() {
                 <img src={getNavigationIconSrc(notification.product)} alt="" aria-hidden="true" />
               </Link>
               <div className="notification-item__main">
-                <p className="notification-item__tone">{notification.productLabel}</p>
                 <h4>{notification.title}</h4>
                 <p>{notification.message}</p>
               </div>
               <div className="notification-item__actions">
-                <time dateTime={notification.createdAt}>{formatNotificationTime(notification.createdAt)}</time>
+                <time dateTime={notification.createdAt}>{formatInAppNotificationDateTime(notification.createdAt)}</time>
                 {notification.href && notification.ctaLabel ? (
                   <Link className="button button-primary button-small" href={notification.href}>
                     {notification.ctaLabel}

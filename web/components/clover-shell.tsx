@@ -53,11 +53,13 @@ import {
   subscribeWorkspaceDataChanges,
 } from "@/lib/workspace-data-sync";
 import { clearJsonRequestCache, fetchJsonOnce } from "@/lib/request-dedupe";
-import type { InAppNotification } from "@/lib/in-app-notifications";
+import { formatInAppNotificationDateTime, type InAppNotification } from "@/lib/in-app-notifications";
 import {
   dismissInAppNotifications,
   inAppNotificationsChangedEvent,
+  inAppNotificationsReadEvent,
   loadInAppNotificationFeed,
+  markInAppNotificationsRead,
 } from "@/lib/in-app-notifications.client";
 
 const loadDashboardManualTransactionModal = () =>
@@ -755,6 +757,7 @@ export function CloverShell({
   const [searchTicker, setSearchTicker] = useState<SidebarSearchMarket | null>(null);
   const [searchTickerLoading, setSearchTickerLoading] = useState(false);
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
+  const [notificationCount, setNotificationCount] = useState(0);
   const [cachedProfileImage, setCachedProfileImage] = useState<string | null>(null);
   const [isBottomNavCompact, setIsBottomNavCompact] = useState(false);
   const [mobileOverlayChrome, setMobileOverlayChrome] = useState<{ title: string; onBack: () => void } | null>(null);
@@ -939,7 +942,7 @@ export function CloverShell({
     const buttonRect = notificationsButtonRef.current?.getBoundingClientRect();
     const sidebarRect = shellRef.current?.querySelector(".sidebar")?.getBoundingClientRect();
     if (buttonRect) {
-      const popoverWidth = 268;
+      const popoverWidth = Math.min(400, window.innerWidth - 24);
       const sidebarRight = sidebarRect?.right ?? buttonRect.right;
       const left = sidebarRight + popoverWidth + 24 <= window.innerWidth
         ? sidebarRight + 12
@@ -951,6 +954,13 @@ export function CloverShell({
       });
     }
 
+    if (notificationCount > 0) {
+      setNotificationCount(0);
+      void markInAppNotificationsRead(notifications.map((item) => item.id)).catch(async () => {
+        const feed = await loadInAppNotificationFeed(searchWorkspaceId, true).catch(() => null);
+        if (feed) setNotificationCount(feed.count);
+      });
+    }
     setOpenMenu("notifications");
   };
 
@@ -1271,15 +1281,23 @@ export function CloverShell({
       }
       try {
         const feed = await loadInAppNotificationFeed(searchWorkspaceId, fresh);
-        if (!cancelled) setNotifications(feed.notifications);
+        if (!cancelled) {
+          setNotifications(feed.notifications);
+          setNotificationCount(feed.count);
+        }
       } catch {
-        if (!cancelled) setNotifications([]);
+        if (!cancelled) {
+          setNotifications([]);
+          setNotificationCount(0);
+        }
       }
     };
 
     void loadNotifications();
     const refresh = () => void loadNotifications(true);
+    const markRead = () => setNotificationCount(0);
     window.addEventListener(inAppNotificationsChangedEvent, refresh);
+    window.addEventListener(inAppNotificationsReadEvent, markRead);
     window.addEventListener("focus", refresh);
     let importRefreshTimer: number | null = null;
     const unsubscribeImportActivity = subscribeImportActivity(() => {
@@ -1289,6 +1307,7 @@ export function CloverShell({
     return () => {
       cancelled = true;
       window.removeEventListener(inAppNotificationsChangedEvent, refresh);
+      window.removeEventListener(inAppNotificationsReadEvent, markRead);
       window.removeEventListener("focus", refresh);
       if (importRefreshTimer) window.clearTimeout(importRefreshTimer);
       unsubscribeImportActivity();
@@ -1500,13 +1519,26 @@ export function CloverShell({
     const previous = notifications;
     setNotifications((current) => current.filter((item) => item.id !== notificationId));
     try {
-      await dismissInAppNotifications({ ids: [notificationId] });
+      const feed = await dismissInAppNotifications({ ids: [notificationId] });
+      setNotifications(feed.notifications);
+      setNotificationCount(feed.count);
     } catch {
       setNotifications(previous);
     }
   };
 
-  const notificationCount = notifications.length;
+  const clearAllNotifications = async () => {
+    const previous = notifications;
+    const previousCount = notificationCount;
+    setNotifications([]);
+    setNotificationCount(0);
+    try {
+      await dismissInAppNotifications({ dismissAll: true });
+    } catch {
+      setNotifications(previous);
+      setNotificationCount(previousCount);
+    }
+  };
   const homeNotificationsAction =
     active === "dashboard" ? (
       <Link
@@ -1936,6 +1968,14 @@ export function CloverShell({
           >
             <div className="sidebar-popover__head">
               <span className="sidebar-popover__title">Notifications</span>
+              <button
+                type="button"
+                className="sidebar-popover__clear-notifications"
+                disabled={notifications.length === 0}
+                onClick={() => void clearAllNotifications()}
+              >
+                Clear All
+              </button>
             </div>
             <div className="sidebar-popover__items">
               {notifications.length ? (
@@ -1965,9 +2005,9 @@ export function CloverShell({
                       onMouseEnter={() => prefetchNavTarget(notification.href ?? notification.productHref)}
                       onTouchStart={() => prefetchNavTarget(notification.href ?? notification.productHref)}
                     >
-                      <span className="sidebar-popover__notification-tone">{notification.productLabel}</span>
                       <span className="sidebar-popover__notification-title">{notification.title}</span>
                       <span className="sidebar-popover__notification-detail">{notification.message}</span>
+                      <time dateTime={notification.createdAt}>{formatInAppNotificationDateTime(notification.createdAt)}</time>
                     </Link>
                     <button
                       type="button"
