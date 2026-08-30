@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { CurrencySelector } from "@/components/currency-selector";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { formatCurrencyCode } from "@/lib/currency-format";
@@ -9,7 +9,6 @@ const reportCurrencyOptions = getCurrencyCatalogCodes();
 
 export function ReportsCurrencyFilter({ currentCurrency }: { currentCurrency?: string }) {
   const pathname = usePathname();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const value = currentCurrency || "all";
 
@@ -25,7 +24,9 @@ export function ReportsCurrencyFilter({ currentCurrency }: { currentCurrency?: s
           params.set("currency", formatCurrencyCode(next));
         }
         const query = params.toString();
-        router.replace(query ? `${targetPath}?${query}` : targetPath, { scroll: false });
+        // Reports are server-authored. A document handoff avoids the slower streamed
+        // RSC replacement while preserving the same URL and calculation semantics.
+        window.location.replace(query ? `${targetPath}?${query}` : targetPath);
       }}
       options={reportCurrencyOptions}
       includeAllOption

@@ -43,6 +43,8 @@ assert.match(
 const clerkSource = readSource("lib/clerk.ts");
 const userContextSource = readSource("lib/user-context.ts");
 const reportsSource = readSource("app/reports/reports-page-content.tsx");
+const reportsRangeSource = readSource("components/reports-range-menu.tsx");
+const reportsCurrencySource = readSource("components/reports-currency-filter.tsx");
 assert.match(clerkSource, /unstable_cache/);
 assert.match(clerkSource, /clover-clerk-user-v1/);
 assert.match(userContextSource, /clerkUser\.authoritative/);
@@ -56,6 +58,18 @@ assert.match(
   /const \[[\s\S]{0,220}parsedReportRowCandidates[\s\S]{0,120}Promise\.all/,
   "Report transactions and parsed-row fallbacks should load in parallel for fast filter changes.",
 );
+assert.match(
+  reportsRangeSource,
+  /window\.location\.replace\(`\$\{pathname\}\?\$\{params\.toString\(\)\}`\)/,
+  "Report range changes should use the fast document handoff instead of a slow RSC replacement.",
+);
+assert.doesNotMatch(reportsRangeSource, /router\.replace/);
+assert.match(
+  reportsCurrencySource,
+  /window\.location\.replace\(query \? `\$\{targetPath\}\?\$\{query\}` : targetPath\)/,
+  "Report currency changes should use the fast document handoff instead of a slow RSC replacement.",
+);
+assert.doesNotMatch(reportsCurrencySource, /router\.replace/);
 assert.match(
   reportsSource,
   /parsedReportRowCandidates\.filter\([\s\S]{0,140}!normalizedImportFileIds\.has/,

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 
 type ReportsRange = "30d" | "90d" | "ytd";
 
@@ -28,34 +28,17 @@ export function ReportsRangeMenu({
   const [from, setFrom] = useState(currentFrom ?? "");
   const [to, setTo] = useState(currentTo ?? "");
   const [optimisticRange, setOptimisticRange] = useState<ReportsRange | null>(null);
-  const [isPending, startTransition] = useTransition();
   const menuRef = useRef<HTMLDivElement | null>(null);
   const pathname = usePathname();
-  const router = useRouter();
   const searchParams = useSearchParams();
-
-  const rangeHref = (range: ReportsRange) => {
-    const params = new URLSearchParams(searchParams?.toString() ?? "");
-    params.set("range", range);
-    params.delete("from");
-    params.delete("to");
-    return `${pathname}?${params.toString()}`;
-  };
-
-  const prefetchStandardRanges = () => {
-    (["30d", "90d", "ytd"] as const).forEach((range) => {
-      if (range !== currentRange || currentFrom || currentTo) {
-        router.prefetch(rangeHref(range));
-      }
-    });
-  };
 
   const navigateWithParams = (update: (params: URLSearchParams) => void) => {
     const params = new URLSearchParams(searchParams?.toString() ?? "");
     update(params);
-    startTransition(() => {
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-    });
+    // A full document handoff is materially faster for this server-authored report
+    // than waiting on a streamed RSC replacement. Keep replace semantics so filter
+    // changes do not fill the browser history.
+    window.location.replace(`${pathname}?${params.toString()}`);
   };
 
   const setRange = (range: ReportsRange) => {
@@ -108,7 +91,7 @@ export function ReportsRangeMenu({
   }, []);
 
   return (
-    <div className={`reports-range-menu${isPending ? " is-pending" : ""}`} ref={menuRef} aria-busy={isPending}>
+    <div className="reports-range-menu" ref={menuRef}>
       <button
         className="reports-range-menu__summary"
         type="button"
@@ -116,10 +99,7 @@ export function ReportsRangeMenu({
         aria-haspopup="menu"
         aria-expanded={open}
       title="Change report range"
-        onPointerEnter={prefetchStandardRanges}
-        onFocus={prefetchStandardRanges}
         onClick={() => {
-          prefetchStandardRanges();
           setOpen((current) => !current);
         }}
       >
