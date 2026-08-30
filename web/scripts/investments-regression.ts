@@ -82,6 +82,11 @@ assert.match(
   /className="accounts-detail__history-form"/,
   "Investment purchase and dividend activity must use the shared responsive form layout.",
 );
+assert.doesNotMatch(accountDetailSource, /Record the date, units, and total purchase value\./);
+assert.doesNotMatch(accountDetailSource, /No purchases logged yet\./);
+assert.doesNotMatch(accountDetailSource, /No dividends logged yet\./);
+assert.doesNotMatch(accountDetailSource, /<span>Reinvested<\/span>/);
+assert.match(accountDetailSource, /Reinvested the dividend back to this asset/);
 assert.match(
   globalStyles,
   /\.accounts-detail__history-form\s*\{[\s\S]{0,180}grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/,
@@ -555,4 +560,4 @@ assert.equal(
   "Hover coordinates must resolve to the visually nearest chart date."
 );
 
-console.log(`Investment regression passed: ${classificationCases.length + 72} checks.`);
+console.log(`Investment regression passed: ${classificationCases.length + 77} checks.`);

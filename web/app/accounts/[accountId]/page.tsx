@@ -4298,7 +4298,6 @@ function AccountDetailPageContent() {
                   <div>
                     <p className="eyebrow">Asset activity</p>
                     <h4>Add purchase history</h4>
-                    <p className="panel-muted">Record the date, units, and total purchase value.</p>
                   </div>
                 </div>
                 <form className="accounts-detail__history-form" onSubmit={createInvestmentPurchase}>
@@ -4374,11 +4373,7 @@ function AccountDetailPageContent() {
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <p className="panel-muted" style={{ marginTop: 12 }}>
-                    No purchases logged yet.
-                  </p>
-                )}
+                ) : null}
               </section>
 
               {canShowInvestmentDividends ? (
@@ -4409,14 +4404,13 @@ function AccountDetailPageContent() {
                     </label>
                     {canTrackInvestmentUnits(investmentSubtype) ? (
                       <label className="accounts-detail__history-form-note">
-                        <span>Reinvested</span>
                         <span className="accounts-detail__reinvest-option">
                           <input
                             type="checkbox"
                             checked={reinvestDividend}
                             onChange={(event) => setReinvestDividend(event.target.checked)}
                           />
-                          Add the dividend back to this asset
+                          Reinvested the dividend back to this asset
                         </span>
                       </label>
                     ) : null}
@@ -4476,11 +4470,7 @@ function AccountDetailPageContent() {
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <p className="panel-muted" style={{ marginTop: 12 }}>
-                      No dividends logged yet.
-                    </p>
-                  )}
+                  ) : null}
                 </section>
               ) : null}
             </div>
