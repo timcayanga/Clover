@@ -45,6 +45,16 @@ const userContextSource = readSource("lib/user-context.ts");
 assert.match(clerkSource, /unstable_cache/);
 assert.match(clerkSource, /clover-clerk-user-v1/);
 assert.match(userContextSource, /clerkUser\.authoritative/);
+assert.match(
+  userContextSource,
+  /const \[clerkUser, existing\][\s\S]{0,260}Promise\.all/,
+  "Authenticated entry should load the Clerk identity and existing database user in parallel.",
+);
+assert.match(
+  userContextSource,
+  /after\(async \(\) => \{[\s\S]{0,180}reconcileBillingPlanTier/,
+  "Billing consistency maintenance must not block authenticated page rendering.",
+);
 
 const dashboardSource = readSource("app/dashboard/page.tsx");
 const balanceVisibilitySource = readSource("components/balance-visibility-toggle.tsx");

@@ -1,4 +1,5 @@
 import { Prisma, type User } from "@prisma/client";
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { syncClerkUser, type SyncedClerkUser } from "@/lib/clerk";
 import { capturePostHogServerEvent } from "@/lib/analytics";
@@ -6,12 +7,14 @@ import { reconcileBillingPlanTier } from "@/lib/paypal-billing";
 import { getCurrentUserEnvironment, resolvePersistedUserEnvironment } from "@/lib/user-environment";
 
 export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User> => {
-  const clerkUser: SyncedClerkUser = await syncClerkUser(clerkUserId);
+  const [clerkUser, existing]: [SyncedClerkUser, User | null] = await Promise.all([
+    syncClerkUser(clerkUserId),
+    prisma.user.findUnique({
+      where: { clerkUserId },
+    }),
+  ]);
   const currentEnvironment = getCurrentUserEnvironment();
   const isLocalEnvironment = currentEnvironment === "local";
-  const existing = await prisma.user.findUnique({
-    where: { clerkUserId: clerkUser.clerkUserId },
-  });
   const syncedEmail = clerkUser.authoritative ? clerkUser.email : existing?.email ?? clerkUser.email;
   const syncedFirstName = clerkUser.authoritative ? clerkUser.firstName : existing?.firstName ?? clerkUser.firstName;
   const syncedLastName = clerkUser.authoritative ? clerkUser.lastName : existing?.lastName ?? clerkUser.lastName;
@@ -63,7 +66,9 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
     }
 
     if (!isLocalEnvironment && !user.planTierLocked) {
-      await reconcileBillingPlanTier(user.id).catch(() => null);
+      after(async () => {
+        await reconcileBillingPlanTier(user.id).catch(() => null);
+      });
     }
 
     return user;
