@@ -331,8 +331,22 @@ assert.match(
   /selectedPortfolioRow\.source === "derived"/,
   "Activity-derived rows must not expose a misleading destructive action."
 );
-assert.match(investmentsPageSource, /includeAllOption=\{false\}/, "Investments must require one portfolio currency.");
-assert.doesNotMatch(investmentsPageSource, /allLabel="All currencies"/, "Investments must not show an aggregate currency option.");
+assert.match(investmentsPageSource, /includeAllOption\s+allLabel="All Currencies"/, "Investments must offer an all-currency view.");
+assert.match(
+  investmentsPageSource,
+  /portfolioCurrencyFilter === "ALL"\s*\? visibleInvestmentAccounts/,
+  "The all-currency view must include every visible investment account."
+);
+assert.match(
+  investmentsPageSource,
+  /portfolioCurrencyFilter !== "ALL" && formatCurrencyCode\(row\.currency\) !== portfolioCurrencyFilter/,
+  "Portfolio rows and growth assets must bypass currency filtering in the all-currency view."
+);
+assert.match(
+  investmentsPageSource,
+  /portfolioCurrencyFilter === "ALL"[\s\S]{0,120}formatCurrencyCode\(defaultCurrency\)/,
+  "The mixed-currency growth chart must convert values into the user's default currency."
+);
 assert.match(investmentsPageSource, /InvestmentPortfolioGrowthChart/, "Overview must render market-priced portfolio growth.");
 assert.match(investmentsPageSource, /account\.type === "investment" \|\| isGSaveInvestmentAccount\(account\)/, "GSave manual activity must remain available to Investments.");
 assert.match(portfolioGrowthSource, /MARKET_RANGES\.map/, "Portfolio growth must support the same date ranges as Markets.");
@@ -592,4 +606,4 @@ assert.equal(
   "Hover coordinates must resolve to the visually nearest chart date."
 );
 
-console.log(`Investment regression passed: ${classificationCases.length + 84} checks.`);
+console.log(`Investment regression passed: ${classificationCases.length + 88} checks.`);

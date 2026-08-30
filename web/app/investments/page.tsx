@@ -1678,14 +1678,17 @@ export default function InvestmentsPage() {
   }, [investmentAccounts, investmentSearch, investmentSortKey, investmentSubtypeFilter]);
 
   const selectedCurrencyInvestmentAccounts = useMemo(
-    () => visibleInvestmentAccounts.filter((account) => formatCurrencyCode(account.currency) === portfolioCurrencyFilter),
+    () =>
+      portfolioCurrencyFilter === "ALL"
+        ? visibleInvestmentAccounts
+        : visibleInvestmentAccounts.filter((account) => formatCurrencyCode(account.currency) === portfolioCurrencyFilter),
     [portfolioCurrencyFilter, visibleInvestmentAccounts]
   );
 
   const visiblePortfolioRows = useMemo(() => {
     const search = normalizeInvestmentSearchText(investmentSearch);
     const filtered = portfolioSourceRows.filter((row) => {
-      if (formatCurrencyCode(row.currency) !== portfolioCurrencyFilter) {
+      if (portfolioCurrencyFilter !== "ALL" && formatCurrencyCode(row.currency) !== portfolioCurrencyFilter) {
         return false;
       }
 
@@ -1762,11 +1765,19 @@ export default function InvestmentsPage() {
   );
 
   const selectedCurrencyCodes = useMemo(
-    () => portfolioCurrencyFilter ? [portfolioCurrencyFilter] : getCurrencyCodes(selectedCurrencyInvestmentAccounts).slice(0, 1),
+    () =>
+      portfolioCurrencyFilter === "ALL"
+        ? getCurrencyCodes(selectedCurrencyInvestmentAccounts)
+        : portfolioCurrencyFilter
+          ? [portfolioCurrencyFilter]
+          : getCurrencyCodes(selectedCurrencyInvestmentAccounts).slice(0, 1),
     [portfolioCurrencyFilter, selectedCurrencyInvestmentAccounts]
   );
   const hasVisibleCurrencySelection = selectedCurrencyInvestmentAccounts.length > 0;
   const canAggregateSelectedCurrency = selectedCurrencyCodes.length === 1;
+  const growthDisplayCurrency = portfolioCurrencyFilter === "ALL"
+    ? formatCurrencyCode(defaultCurrency)
+    : selectedCurrencyCodes[0] ?? portfolioCurrencyFilter ?? "PHP";
   const estimatedPortfolioTotals = portfolioTotals;
   const growthAssets = useMemo<PortfolioGrowthAsset[]>(() => {
     const seen = new Set<string>();
@@ -1782,7 +1793,7 @@ export default function InvestmentsPage() {
       investmentAccounts.map((account) => [account.id, account.investmentStartDate] as const)
     );
     return portfolioSourceRows.flatMap((row) => {
-      if (formatCurrencyCode(row.currency) !== portfolioCurrencyFilter) return [];
+      if (portfolioCurrencyFilter !== "ALL" && formatCurrencyCode(row.currency) !== portfolioCurrencyFilter) return [];
       const isMarketPriced = Boolean(
         row.symbol?.trim()
         && (row.subtype === "stock" || row.subtype === "etf" || row.subtype === "reit" || row.subtype === "crypto")
@@ -1871,7 +1882,7 @@ export default function InvestmentsPage() {
       }),
     [canAggregateSelectedCurrency, selectedCurrencyInvestmentAccounts]
   );
-  const portfolioRoi = estimatedPortfolioTotals.purchaseValue > 0
+  const portfolioRoi = canAggregateSelectedCurrency && estimatedPortfolioTotals.purchaseValue > 0
     ? estimatedPortfolioTotals.gainLoss / estimatedPortfolioTotals.purchaseValue
     : null;
   const portfolioRisk = useMemo(() => {
@@ -1951,7 +1962,7 @@ export default function InvestmentsPage() {
     };
 
     for (const row of portfolioSourceRows) {
-      if (formatCurrencyCode(row.currency) !== formatCurrencyCode(portfolioCurrencyFilter)) {
+      if (portfolioCurrencyFilter !== "ALL" && formatCurrencyCode(row.currency) !== formatCurrencyCode(portfolioCurrencyFilter)) {
         continue;
       }
 
@@ -2109,11 +2120,15 @@ export default function InvestmentsPage() {
     }
 
     const storedCurrency = readSelectedCurrency(selectedWorkspaceId);
-    const preferredCurrency = storedCurrency && storedCurrency !== "all" ? storedCurrency : defaultCurrency;
+    const preferredCurrency = storedCurrency === "" ? "ALL" : storedCurrency ?? defaultCurrency;
     const selectedCurrency = portfolioCurrencyFilter.trim().toUpperCase();
-    if (!selectedCurrency || selectedCurrency === "ALL" || !portfolioCurrencyOptions.includes(selectedCurrency)) {
-      const validPreferred = preferredCurrency && preferredCurrency !== "all" && portfolioCurrencyOptions.includes(formatCurrencyCode(preferredCurrency));
-      const nextCurrency = validPreferred ? formatCurrencyCode(preferredCurrency) : portfolioCurrencyOptions[0];
+    if (selectedCurrency === "ALL") {
+      return;
+    }
+    if (!selectedCurrency || !portfolioCurrencyOptions.includes(selectedCurrency)) {
+      const preferredCode = formatCurrencyCode(preferredCurrency);
+      const validPreferred = preferredCode === "ALL" || portfolioCurrencyOptions.includes(preferredCode);
+      const nextCurrency = validPreferred ? preferredCode : portfolioCurrencyOptions[0];
       setPortfolioCurrencyFilter(nextCurrency);
       persistSelectedCurrency(selectedWorkspaceId, nextCurrency);
     }
@@ -2818,7 +2833,8 @@ export default function InvestmentsPage() {
               persistSelectedCurrency(selectedWorkspaceId, currency);
             }}
             options={portfolioCurrencyOptions}
-            includeAllOption={false}
+            includeAllOption
+            allLabel="All Currencies"
             ariaLabel="Select investment currency"
             className="transactions-currency-filter investments-currency-filter"
             buttonClassName="button button-secondary button-small investments-page__toolbar-button"
@@ -2894,7 +2910,7 @@ export default function InvestmentsPage() {
                   </div>
                 </div>
               </div>
-              <InvestmentPortfolioGrowthChart assets={growthAssets} currency={selectedCurrencyCodes[0] ?? portfolioCurrencyFilter ?? "PHP"} />
+              <InvestmentPortfolioGrowthChart assets={growthAssets} currency={growthDisplayCurrency} />
             </section>
             <section className="investments-allocation investments-allocation--overview glass">
               {!canAggregateSelectedCurrency && selectedCurrencyInvestmentAccounts.length > 0 ? (
