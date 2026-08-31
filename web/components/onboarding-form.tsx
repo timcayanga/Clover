@@ -10,6 +10,8 @@ import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { getFinancialExperienceDefinition, type FinancialExperienceLevel } from "@/lib/goals";
 import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
 import { CloverRouteLoadingScreen } from "@/components/clover-route-loading-screen";
+import { CurrencySelector } from "@/components/currency-selector";
+import { getCurrencyCatalogCodes, getCurrencyCatalogOption } from "@/lib/currencies";
 import {
   normalizeRegionalPreferences,
   persistRegionalPreferences,
@@ -103,22 +105,31 @@ export function OnboardingForm({
   const [isCompleting, setIsCompleting] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
+  const [regionalPreferences, setRegionalPreferences] = useState<RegionalPreferences>(regionalDefaults);
+  const [currencyError, setCurrencyError] = useState<string | null>(null);
+  const [isSavingCurrency, setIsSavingCurrency] = useState(false);
   const [selectedUpgradeInterval, setSelectedUpgradeInterval] = useState<"monthly" | "annual">(upgradeInterval);
   const getBrowserRegionalDefaults = () =>
     normalizeRegionalPreferences({
+      ...regionalPreferences,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || regionalPreferences.timeZone,
+      locale: navigator.languages?.[0] || navigator.language || regionalPreferences.locale,
+    });
+
+  useEffect(() => {
+    const resolved = normalizeRegionalPreferences({
       ...regionalDefaults,
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || regionalDefaults.timeZone,
       locale: navigator.languages?.[0] || navigator.language || regionalDefaults.locale,
     });
-
-  useEffect(() => {
-    const resolved = getBrowserRegionalDefaults();
+    setRegionalPreferences(resolved);
     persistRegionalPreferences(resolved);
     // The server-provided defaults change only when this onboarding page is recreated.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [regionalDefaults]);
 
   const selectedExperienceDefinition = getFinancialExperienceDefinition(experience);
+  const selectedCurrency = getCurrencyCatalogOption(regionalPreferences.baseCurrency);
 
   const upgradePlanId = selectedUpgradeInterval === "annual" ? paypalAnnualPlanId : paypalMonthlyPlanId;
 
@@ -142,6 +153,21 @@ export function OnboardingForm({
       const result = (await response.json().catch(() => null)) as { error?: string } | null;
       throw new Error(result?.error || "Unable to finish Clover setup.");
     }
+  };
+
+  const saveRegionalPreferences = async () => {
+    const preferences = getBrowserRegionalDefaults();
+    persistRegionalPreferences(preferences);
+    const response = await fetch("/api/onboarding", {
+      method: "PATCH",
+      headers: jsonHeaders,
+      body: JSON.stringify({ regionalPreferences: preferences }),
+    });
+    if (!response.ok) {
+      const result = (await response.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(result?.error || "Unable to save your default currency.");
+    }
+    return preferences;
   };
 
   const openImportFiles = (files: File[]) => {
@@ -203,18 +229,58 @@ export function OnboardingForm({
         ))}
       </div>
 
+      <div className="onboarding-currency">
+        <div className="onboarding-currency__copy">
+          <strong>Default currency</strong>
+          <span>
+            {regionalPreferences.detectionSource === "manual"
+              ? `${selectedCurrency.name} will be used for your starter Cash account.`
+              : `Suggested from your location or device. You can change it now.`}
+          </span>
+        </div>
+        <CurrencySelector
+          value={regionalPreferences.baseCurrency}
+          options={getCurrencyCatalogCodes()}
+          onChange={(baseCurrency) => {
+            setCurrencyError(null);
+            setRegionalPreferences((current) => ({
+              ...current,
+              baseCurrency,
+              detectionSource: "manual",
+            }));
+          }}
+          ariaLabel="Select your default currency"
+          className="onboarding-currency__selector"
+          buttonClassName="onboarding-currency__button"
+          menuClassName="onboarding-currency__menu"
+          showGroupedSections
+          portalMenu
+        />
+      </div>
+      {currencyError ? <p className="onboarding-currency__error" role="alert">{currencyError}</p> : null}
+
       <div className="onboarding-actions onboarding-actions--single">
         <div className="onboarding-actions__group onboarding-actions__group--primary">
           <button
             className="button button-primary"
             type="button"
-            disabled={isPending || experience === null}
+            disabled={isPending || isSavingCurrency || experience === null}
             onClick={() => {
-              setStep("upload");
-              setMessage("Upload a statement, screenshot, or receipt to see Clover read it with OCR.");
+              setIsSavingCurrency(true);
+              setCurrencyError(null);
+              void saveRegionalPreferences()
+                .then((preferences) => {
+                  setRegionalPreferences(preferences);
+                  setStep("upload");
+                  setMessage("Upload a statement, screenshot, or receipt to see Clover read it with OCR.");
+                })
+                .catch((error) => {
+                  setCurrencyError(error instanceof Error ? error.message : "Unable to save your default currency.");
+                })
+                .finally(() => setIsSavingCurrency(false));
             }}
           >
-            Continue
+            {isSavingCurrency ? "Saving..." : "Continue"}
           </button>
         </div>
       </div>

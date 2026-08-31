@@ -11,6 +11,7 @@ import {
   isCircleInvitationToken,
 } from "@/lib/circle-invitations";
 import { resolveNewUserRegionalDefaults } from "@/lib/new-user-regional-defaults";
+import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -38,7 +39,29 @@ export default async function OnboardingPage({ searchParams }: { searchParams?: 
     redirect(completionUrl);
   }
 
-  const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
+  const requestHeaders = await headers();
+  const detectedRegionalDefaults = resolveNewUserRegionalDefaults({
+    countryCode: requestHeaders.get("x-vercel-ip-country"),
+    acceptLanguage: requestHeaders.get("accept-language"),
+  });
+  const regionalDefaults = user.regionalPreferences
+    ? normalizeRegionalPreferences(user.regionalPreferences, detectedRegionalDefaults)
+    : detectedRegionalDefaults;
+  const regionalUser = user.regionalPreferencesInitializedAt
+    ? user
+    : await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          regionalPreferences: regionalDefaults,
+          regionalPreferencesInitializedAt: new Date(),
+        },
+      });
+  const starterWorkspace = await ensureStarterWorkspace(
+    regionalUser,
+    regionalUser.email,
+    regionalUser.verified,
+    regionalDefaults.baseCurrency
+  );
   const onboardingWorkspace = await prisma.workspace.findUnique({
     where: { id: starterWorkspace.id },
     select: {
@@ -56,11 +79,6 @@ export default async function OnboardingPage({ searchParams }: { searchParams?: 
   const upgradeForPro = params.upgrade === "pro";
   const upgradeInterval = params.interval === "monthly" ? "monthly" : "annual";
   const env = getEnv();
-  const requestHeaders = await headers();
-  const regionalDefaults = resolveNewUserRegionalDefaults({
-    countryCode: requestHeaders.get("x-vercel-ip-country"),
-    acceptLanguage: requestHeaders.get("accept-language"),
-  });
 
   return (
     <main className="onboarding-page">

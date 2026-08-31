@@ -4,9 +4,15 @@ import { DEFAULT_CATEGORY_ROWS } from "@/lib/default-categories";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { isCryptoAssetCurrencyCode } from "@/lib/financial-identity-detection";
+import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
 import type { Prisma } from "@prisma/client";
 
-type StarterWorkspaceUser = Pick<User, "id" | "clerkUserId" | "email" | "verified" | "dataWipedAt">;
+type StarterWorkspaceUser = Pick<
+  User,
+  "id" | "clerkUserId" | "email" | "verified" | "dataWipedAt"
+> & {
+  regionalPreferences?: Prisma.JsonValue | null;
+};
 
 const starterAccountSelect = {
   id: true,
@@ -64,6 +70,19 @@ const workspaceDefaultsLockKey = (workspaceId: string) => `workspace-defaults:${
 
 type TransactionClient = Prisma.TransactionClient;
 
+const normalizeStarterCurrency = (currency: unknown) => {
+  const requestedCurrency = String(currency || "PHP").trim().toUpperCase() || "PHP";
+  return isCryptoAssetCurrencyCode(requestedCurrency) ? "PHP" : requestedCurrency;
+};
+
+const getUserStarterCurrency = (
+  regionalPreferences: Prisma.JsonValue | null | undefined,
+  fallbackCurrency = "PHP"
+) =>
+  regionalPreferences
+    ? normalizeStarterCurrency(normalizeRegionalPreferences(regionalPreferences).baseCurrency)
+    : normalizeStarterCurrency(fallbackCurrency);
+
 const lockTransaction = async (tx: TransactionClient, key: string) => {
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))::text AS locked`;
 };
@@ -111,8 +130,7 @@ const ensureWorkspaceCashAccountWithClient = async (
 };
 
 export const ensureWorkspaceCashAccount = async (workspaceId: string, currency = "PHP") => {
-  const requestedCurrency = String(currency || "PHP").trim().toUpperCase() || "PHP";
-  const normalizedCurrency = isCryptoAssetCurrencyCode(requestedCurrency) ? "PHP" : requestedCurrency;
+  const normalizedCurrency = normalizeStarterCurrency(currency);
 
   await prisma.$transaction(async (tx) => {
     await lockTransaction(tx, workspaceDefaultsLockKey(workspaceId));
@@ -120,8 +138,95 @@ export const ensureWorkspaceCashAccount = async (workspaceId: string, currency =
   });
 };
 
-const ensureStarterCashAccount = async (workspaceId: string) => {
-  await ensureWorkspaceCashAccount(workspaceId, "PHP");
+const starterCashAccountRelations = {
+  transactions: true,
+  importFiles: true,
+  documentImports: true,
+  statementCheckpoints: true,
+  financialCommitments: true,
+  accountRules: true,
+  investmentPurchases: true,
+  investmentDividends: true,
+  receiptDocuments: true,
+  investmentSnapshots: true,
+  investmentHoldings: true,
+  recurringPatterns: true,
+  budgets: true,
+  circleInvestmentShares: true,
+} as const;
+
+const alignWorkspaceStarterCashCurrencyWithClient = async (
+  tx: TransactionClient,
+  workspaceId: string,
+  currency: string
+) => {
+  const normalizedCurrency = normalizeStarterCurrency(currency);
+  const existingPreferredCash = await tx.account.findFirst({
+    where: { workspaceId, type: "cash", currency: normalizedCurrency },
+    select: { id: true },
+  });
+  if (existingPreferredCash) return existingPreferredCash.id;
+
+  const starterCashCandidates = await tx.account.findMany({
+    where: {
+      workspaceId,
+      type: "cash",
+      source: "manual",
+      name: { in: ["Cash", "Cash on hand"] },
+      institution: "Cash",
+      nameCustomized: false,
+      institutionCustomized: false,
+      logoCustomized: false,
+    },
+    select: {
+      id: true,
+      balance: true,
+      finverseAccountLink: { select: { id: true } },
+      _count: { select: starterCashAccountRelations },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  const pristineCash = starterCashCandidates.find(
+    (account) =>
+      Number(account.balance ?? 0) === 0 &&
+      !account.finverseAccountLink &&
+      Object.values(account._count).every((count) => count === 0)
+  );
+
+  if (pristineCash) {
+    await tx.account.update({
+      where: { id: pristineCash.id },
+      data: {
+        name: "Cash",
+        institution: "Cash",
+        currency: normalizedCurrency,
+      },
+    });
+    return pristineCash.id;
+  }
+
+  await ensureWorkspaceCashAccountWithClient(tx, workspaceId, normalizedCurrency);
+  const created = await tx.account.findFirst({
+    where: { workspaceId, type: "cash", currency: normalizedCurrency },
+    select: { id: true },
+  });
+  return created?.id ?? null;
+};
+
+export const alignUserStarterCashCurrencyWithClient = async (
+  tx: TransactionClient,
+  userId: string,
+  currency: string
+) => {
+  const workspaces = await tx.workspace.findMany({
+    where: { userId, type: "personal" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (workspaces[0]) {
+    await lockTransaction(tx, workspaceDefaultsLockKey(workspaces[0].id));
+    await alignWorkspaceStarterCashCurrencyWithClient(tx, workspaces[0].id, currency);
+  }
 };
 
 const duplicateStarterWorkspaceSelect = {
@@ -193,7 +298,7 @@ const isPristineStarterWorkspace = (workspace: {
     cash?.name === "Cash" &&
     cash.institution === "Cash" &&
     cash.type === "cash" &&
-    cash.currency === "PHP" &&
+    /^[A-Z]{3}$/.test(cash.currency) &&
     cash.source === "manual" &&
     Number(cash.balance ?? 0) === 0 &&
     !cash.nameCustomized &&
@@ -239,12 +344,17 @@ export const repairDuplicateStarterWorkspaces = async (userId: string) =>
 export const ensureStarterWorkspace = async (
   userOrClerkUserId: StarterWorkspaceUser | string,
   email?: string,
-  verified?: boolean
+  verified?: boolean,
+  preferredCurrency?: string
 ) => {
   const user =
     typeof userOrClerkUserId === "string"
       ? await getOrCreateCurrentUser(userOrClerkUserId)
       : userOrClerkUserId;
+  const starterCurrency = getUserStarterCurrency(
+    user.regionalPreferences,
+    preferredCurrency ?? "PHP"
+  );
 
   const ensured = await prisma.$transaction(async (tx) => {
     await lockTransaction(tx, starterWorkspaceLockKey(user.id));
@@ -262,7 +372,7 @@ export const ensureStarterWorkspace = async (
         name: "Personal",
         type: "personal",
         accounts: {
-          create: [{ name: "Cash", institution: "Cash", type: "cash", currency: "PHP", source: "manual", balance: 0 }],
+          create: [{ name: "Cash", institution: "Cash", type: "cash", currency: starterCurrency, source: "manual", balance: 0 }],
         },
         categories: {
           create: DEFAULT_CATEGORY_ROWS.map((category) => ({ name: category.name, type: category.type, isSystem: true })),
@@ -274,7 +384,12 @@ export const ensureStarterWorkspace = async (
   });
 
   const workspace = ensured.workspace;
-  if (!ensured.created) await ensureStarterCashAccount(workspace.id);
+  if (!ensured.created) {
+    await prisma.$transaction(async (tx) => {
+      await lockTransaction(tx, workspaceDefaultsLockKey(workspace.id));
+      await alignWorkspaceStarterCashCurrencyWithClient(tx, workspace.id, starterCurrency);
+    });
+  }
 
   if (ensured.created) {
     void capturePostHogServerEvent("workspace_created", user.clerkUserId, {
@@ -288,9 +403,17 @@ export const ensureStarterWorkspace = async (
   return workspace;
 };
 
-export const seedWorkspaceDefaults = async (workspaceId: string) => {
+export const seedWorkspaceDefaults = async (workspaceId: string, preferredCurrency?: string) => {
   await prisma.$transaction(async (tx) => {
     await lockTransaction(tx, workspaceDefaultsLockKey(workspaceId));
+    const workspace = await tx.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { user: { select: { regionalPreferences: true } } },
+    });
+    const starterCurrency = getUserStarterCurrency(
+      workspace?.user.regionalPreferences,
+      preferredCurrency ?? "PHP"
+    );
     const existingCategories = await tx.category.findMany({ where: { workspaceId } });
     const categoryByName = new Set(existingCategories.map((category) => category.name.trim().toLowerCase()));
     for (const category of DEFAULT_CATEGORY_ROWS) {
@@ -301,6 +424,6 @@ export const seedWorkspaceDefaults = async (workspaceId: string) => {
         categoryByName.add(category.name.trim().toLowerCase());
       }
     }
-    await ensureWorkspaceCashAccountWithClient(tx, workspaceId, "PHP");
+    await alignWorkspaceStarterCashCurrencyWithClient(tx, workspaceId, starterCurrency);
   });
 };
