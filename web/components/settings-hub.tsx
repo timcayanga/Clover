@@ -2210,7 +2210,6 @@ export function SettingsHub({
                       </option>
                     ))}
                   </select>
-                  <small>Used as the initial currency view and for estimated totals when All currencies is selected.</small>
                 </label>
                 <label className="settings-inline-field">
                   <span>Number format</span>

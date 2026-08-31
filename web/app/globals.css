@@ -44178,6 +44178,24 @@ body:has(.pricing-page) {
   min-width: 0;
 }
 
+.settings-section--regional .settings-preference-grid,
+.settings-section--regional .settings-preference-card,
+.settings-section--regional .settings-inline-field {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.settings-section--regional .settings-inline-field {
+  width: 100%;
+}
+
+.settings-section--regional .settings-inline-field select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .settings-preference-card__head {
   display: flex;
   align-items: center;
