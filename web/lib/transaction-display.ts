@@ -250,6 +250,84 @@ export const getEffectiveTransactionMerchantName = (params: {
   return summarized || params.merchantRaw;
 };
 
+const genericSpendingMerchantPatterns = [
+  /^(?:pymt|payment|paymt)\s*[-:]?\s*(?:credit\s*)?card$/i,
+  /^(?:credit\s*)?card\s+payment$/i,
+  /^(?:cash|bill(?:s)?)\s+payment$/i,
+  /^payment\s*[-:]?\s*(?:thank\s+you|received)$/i,
+  /^(?:paypal|apple\s+pay|google\s+pay|gcash|maya)$/i,
+  /^(?:purchase|payment|transaction|merchant)$/i,
+];
+
+const isGenericSpendingMerchantName = (value: string) => {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  return !normalized || genericSpendingMerchantPatterns.some((pattern) => pattern.test(normalized));
+};
+
+const getRawPayloadMerchantCandidates = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return [];
+  }
+
+  const candidateKeys = new Set([
+    "merchantclean",
+    "merchantraw",
+    "merchant",
+    "description",
+    "name",
+    "payee",
+    "label",
+    "title",
+    "transactionname",
+    "narration",
+    "details",
+    "memo",
+    "rawtext",
+  ]);
+  const candidates: string[] = [];
+  const visit = (value: unknown, depth: number) => {
+    if (!value || typeof value !== "object" || Array.isArray(value) || depth > 2) {
+      return;
+    }
+
+    Object.entries(value).forEach(([key, candidate]) => {
+      const normalizedKey = key.replace(/[^a-z]/gi, "").toLowerCase();
+      if (candidateKeys.has(normalizedKey) && typeof candidate === "string" && candidate.trim()) {
+        candidates.push(candidate.trim());
+      } else if (typeof candidate === "object") {
+        visit(candidate, depth + 1);
+      }
+    });
+  };
+
+  visit(rawPayload, 0);
+  return candidates;
+};
+
+export const getVerifiedSpendingMerchantName = (params: {
+  merchantClean?: string | null;
+  merchantRaw: string;
+  description?: string | null;
+  rawPayload?: Prisma.JsonValue | null;
+  institution?: string | null;
+}) => {
+  const candidates = [
+    params.merchantClean,
+    params.merchantRaw,
+    params.description,
+    ...getRawPayloadMerchantCandidates(params.rawPayload),
+  ].filter((value): value is string => Boolean(value?.trim()));
+
+  for (const candidate of candidates) {
+    const summarized = summarizeMerchantText(candidate, params.institution).trim();
+    if (summarized && !isGenericSpendingMerchantName(summarized)) {
+      return summarized;
+    }
+  }
+
+  return null;
+};
+
 export const getLandbankTransactionDisplayOverride = (params: {
   institution?: string | null;
   merchantRaw: string;

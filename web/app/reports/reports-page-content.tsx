@@ -22,7 +22,7 @@ import { InfoTooltip as ReportInfoTip } from "@/components/info-tooltip";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { getCategoryIconTone } from "@/lib/category-icons";
-import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
+import { getEffectiveTransactionCategoryName, getVerifiedSpendingMerchantName } from "@/lib/transaction-display";
 import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
 import { getTransactionSummaryTypeOverrides } from "@/lib/transaction-summary";
 import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
@@ -1160,7 +1160,14 @@ export async function ReportsStream({
     >();
 
     reportRecentExpenseTransactions.forEach((transaction) => {
-      const label = transaction.merchantClean ?? transaction.merchantRaw;
+      const label = getVerifiedSpendingMerchantName({
+        merchantClean: transaction.merchantClean,
+        merchantRaw: transaction.merchantRaw,
+        description: transaction.description,
+        rawPayload: transaction.rawPayload as never,
+        institution: transaction.account.institution,
+      });
+      if (!label) return;
       const key = normalizeMerchant(label);
       const existing = recentMerchantSpend.get(key) ?? { label, amount: 0, count: 0 };
       existing.amount += Math.abs(Number(transaction.amount));
@@ -1169,7 +1176,14 @@ export async function ReportsStream({
     });
 
     reportHistoricalExpenseTransactions.forEach((transaction) => {
-      const label = transaction.merchantClean ?? transaction.merchantRaw;
+      const label = getVerifiedSpendingMerchantName({
+        merchantClean: transaction.merchantClean,
+        merchantRaw: transaction.merchantRaw,
+        description: transaction.description,
+        rawPayload: transaction.rawPayload as never,
+        institution: transaction.account.institution,
+      });
+      if (!label) return;
       const key = normalizeMerchant(label);
       const existing = historicalMerchantSpend.get(key) ?? { label, amount: 0, count: 0 };
       existing.amount += Math.abs(Number(transaction.amount));
@@ -2053,12 +2067,12 @@ export async function ReportsStream({
                   <Link
                     key={merchant.label}
                     href={buildTransactionsHref({ merchant: merchant.label })}
-                    className="report-list__item report-list__item--link"
+                    className="report-list__item report-list__item--link report-list__item--ranked-merchant"
                   >
                     <div className="report-list__meta">
                       <strong>{merchant.label}</strong>
                       <span>
-                        {merchant.count} transaction{merchant.count === 1 ? "" : "s"} · {formatCurrency(merchant.amount)}
+                        {formatCurrency(merchant.amount)} · {merchant.count} transaction{merchant.count === 1 ? "" : "s"}
                       </span>
                       <small>
                         {merchant.cadenceLabel}

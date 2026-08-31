@@ -1,11 +1,38 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { getVerifiedSpendingMerchantName } from "../lib/transaction-display";
 
 const root = process.cwd();
 const readSource = (relativePath: string) => readFile(path.join(root, relativePath), "utf8");
 
 async function main() {
+  assert.equal(
+    getVerifiedSpendingMerchantName({
+      merchantClean: "PayPal",
+      merchantRaw: "PAYPAL*SPOTIFY*P 402 EBB",
+      institution: "BPI",
+    }),
+    "Spotify",
+    "Biggest Merchants must resolve the payee behind a payment intermediary when the raw evidence identifies it.",
+  );
+  assert.equal(
+    getVerifiedSpendingMerchantName({
+      merchantClean: "Pymt - Credit Card",
+      merchantRaw: "PYMT - CREDIT CARD",
+      institution: "BPI",
+    }),
+    null,
+    "Generic card payments must not be presented as verified merchants.",
+  );
+  assert.equal(
+    getVerifiedSpendingMerchantName({
+      merchantRaw: "Cebu AIR IN 0 Jozti Https://Www.cph",
+      institution: "BPI",
+    }),
+    "Cebu Pacific",
+    "Cebu Air descriptors must resolve to the customer-facing Cebu Pacific merchant.",
+  );
   const [
     shellSource,
     dashboardSource,

@@ -2008,6 +2008,10 @@ const genericSimplifierRules: SimplifierRule[] = [
     replacement: "AirAsia",
   },
   {
+    patterns: [/\bcebu\s+air(?:\s+inc)?\b/i, /\bcebupacific\b/i],
+    replacement: "Cebu Pacific",
+  },
+  {
     patterns: [/\bstudio\s+300\b/i],
     replacement: "Studio 300",
   },
