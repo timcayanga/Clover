@@ -116,7 +116,7 @@ import {
   type WorkspaceCacheUpdatedEventDetail,
   type ImportedWorkspaceTransaction,
 } from "@/lib/workspace-cache";
-import { fetchJsonOnce } from "@/lib/request-dedupe";
+import { clearJsonRequestCache, fetchJsonOnce } from "@/lib/request-dedupe";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { useDefaultCurrency } from "@/lib/use-default-currency";
 import { convertAmount, useExchangeRates } from "@/lib/use-exchange-rates";
@@ -2348,6 +2348,7 @@ function TransactionsPageContent() {
   const warningPopoverRefs = useRef(new Map<string, HTMLDivElement | null>());
   const selectionActionsMenuRef = useRef<HTMLDivElement | null>(null);
   const transactionsLoadRequestRef = useRef(0);
+  const deletedTransactionIdsRef = useRef(new Set<string>());
   const transactionsHydrationVersionRef = useRef(new Map<string, number>());
   const mobileLoadMoreRef = useRef<HTMLDivElement | null>(null);
   const mobileLoadMoreInFlightRef = useRef(false);
@@ -2871,12 +2872,18 @@ function TransactionsPageContent() {
         ...getDeletingWorkspaceAccountIds(workspaceId),
       ]);
       const fetchedTransactions = Array.isArray(payload?.transactions)
-        ? payload.transactions.filter((transaction) => !deletedAccountIds.has(transaction.accountId))
+        ? payload.transactions.filter(
+            (transaction) =>
+              !deletedAccountIds.has(transaction.accountId) &&
+              !deletedTransactionIdsRef.current.has(transaction.id)
+          )
         : [];
       const cachedWorkspaceSnapshot = getCachedTransactionsWorkspace(workspaceId);
       const cachedWorkspaceTransactions = cachedWorkspaceSnapshot?.transactions as Transaction[] | undefined;
       const visibleCachedWorkspaceTransactions = (cachedWorkspaceTransactions ?? []).filter(
-        (transaction) => !deletedAccountIds.has(transaction.accountId)
+        (transaction) =>
+          !deletedAccountIds.has(transaction.accountId) &&
+          !deletedTransactionIdsRef.current.has(transaction.id)
       );
       const importedTransactionsToPreserve =
         transactionsRef.current.length > 0
@@ -2900,7 +2907,11 @@ function TransactionsPageContent() {
       );
       const stableBaseTransactions =
         transactionsRef.current.length > 0
-          ? transactionsRef.current.filter((transaction) => !deletedAccountIds.has(transaction.accountId))
+          ? transactionsRef.current.filter(
+              (transaction) =>
+                !deletedAccountIds.has(transaction.accountId) &&
+                !deletedTransactionIdsRef.current.has(transaction.id)
+            )
           : visibleCachedWorkspaceTransactions;
       const summaryPayload = payload?.summary && typeof payload.summary === "object" ? payload.summary : null;
       const exactServerTotalCount =
@@ -5197,21 +5208,31 @@ function TransactionsPageContent() {
     setBulkDeleteConfirmOpen(false);
   };
 
-  const syncAfterTransactionRemoval = (transactionId: string) => {
+  const syncAfterTransactionRemovals = (transactionIds: readonly string[]) => {
+    const deletedIds = new Set(transactionIds);
+    if (deletedIds.size === 0) return;
+
+    deletedIds.forEach((transactionId) => deletedTransactionIdsRef.current.add(transactionId));
     if (selectedWorkspaceId) {
-      applyOptimisticWorkspaceTransactionDeletion(selectedWorkspaceId, transactionId);
+      deletedIds.forEach((transactionId) => {
+        applyOptimisticWorkspaceTransactionDeletion(selectedWorkspaceId, transactionId);
+      });
     }
-    setTransactions((current) => current.filter((entry) => entry.id !== transactionId));
-    setSelectedTransactionIds((current) => current.filter((entryId) => entryId !== transactionId));
-    setActiveWarningTransactionId((current) => (current === transactionId ? null : current));
-    setSelectedTransaction((current) => (current?.id === transactionId ? null : current));
+    setTransactions((current) => current.filter((entry) => !deletedIds.has(entry.id)));
+    setSelectedTransactionIds((current) => current.filter((entryId) => !deletedIds.has(entryId)));
+    setActiveWarningTransactionId((current) => (current && deletedIds.has(current) ? null : current));
+    setSelectedTransaction((current) => (current && deletedIds.has(current.id) ? null : current));
     setDetailDraft((current) => {
-      if (!current || selectedTransaction?.id !== transactionId) {
+      if (!current || !selectedTransaction?.id || !deletedIds.has(selectedTransaction.id)) {
         return current;
       }
 
       return null;
     });
+  };
+
+  const syncAfterTransactionRemoval = (transactionId: string) => {
+    syncAfterTransactionRemovals([transactionId]);
   };
 
   const openBulkEdit = () => {
@@ -5918,6 +5939,28 @@ function TransactionsPageContent() {
       throw new Error("Unable to delete transaction.");
     }
 
+    clearJsonRequestCache("transactions:list:");
+    transactionPrefetchRef.current.clear();
+    clearAccountsWorkspaceCache(selectedWorkspaceId);
+  };
+
+  const deleteTransactionsRemote = async (transactionIds: readonly string[]) => {
+    const response = await fetch("/api/transactions/bulk-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspaceId: selectedWorkspaceId,
+        transactionIds,
+      }),
+    });
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(payload?.error || "Unable to delete the selected transactions.");
+    }
+
+    clearJsonRequestCache("transactions:list:");
+    transactionPrefetchRef.current.clear();
     clearAccountsWorkspaceCache(selectedWorkspaceId);
   };
 
@@ -6281,12 +6324,22 @@ function TransactionsPageContent() {
       return;
     }
 
-    const transactionIds = [...selectedTransactionIds];
-    const count = selectedTransactionIds.length;
+    const transactionIds = Array.from(new Set(selectedTransactionIds));
+    const count = transactionIds.length;
+    const deletedIds = new Set(transactionIds);
+    const hasRemainingVisibleTransactions = visibleTransactions.some((transaction) => !deletedIds.has(transaction.id));
     setIsSaving(true);
-    transactionIds.forEach((transactionId) => {
-      syncAfterTransactionRemoval(transactionId);
-    });
+    // Invalidate any list request that began before this deletion. Its response
+    // must not be allowed to put a just-deleted row back into the table.
+    transactionsLoadRequestRef.current += 1;
+    syncAfterTransactionRemovals(transactionIds);
+    setTransactionsSummary((current) => ({
+      ...current,
+      totalCount: Math.max(0, current.totalCount - count),
+    }));
+    setIsMobileLoadingMore(false);
+    mobileLoadMoreInFlightRef.current = false;
+    setMobilePaginationExhausted(!hasRemainingVisibleTransactions);
     clearSelection();
     setBulkDeleteConfirmOpen(false);
     setUndoStack([]);
@@ -6294,38 +6347,35 @@ function TransactionsPageContent() {
     setMessage(`Deleting ${count} transaction${count === 1 ? "" : "s"}...`);
 
     try {
-      const results = await Promise.allSettled(transactionIds.map((transactionId) => deleteTransactionRemote(transactionId)));
-      const failedCount = results.filter((result) => result.status === "rejected").length;
-
-      refreshTransactionsSummary();
+      await deleteTransactionsRemote(transactionIds);
+      setTransactionsPage(1);
+      if (selectedWorkspaceId) {
+        await loadTransactionsPage(selectedWorkspaceId, {
+          background: true,
+          pageOverride: 1,
+          pageSizeOverride: transactionsPageSize,
+          summaryMode: "light",
+        });
+      }
 
       capturePostHogClientEvent("bulk_transaction_deleted", {
         workspace_id: selectedWorkspaceId || null,
         selected_count: count,
-        deleted_count: count - failedCount,
+        deleted_count: count,
       });
-
-      if (failedCount > 0) {
-        void loadTransactionsPage(selectedWorkspaceId || "", {
-          background: true,
-          pageOverride: transactionsPage,
-          pageSizeOverride: transactionsPageSize,
-          summaryMode: "light",
-        });
-        setMessage(
-          `${count - failedCount} transaction${count - failedCount === 1 ? "" : "s"} deleted. ${failedCount} could not be deleted.`
-        );
-        return;
-      }
 
       setMessage(`${count} transaction${count === 1 ? "" : "s"} deleted.`);
     } catch (error) {
-      void loadTransactionsPage(selectedWorkspaceId || "", {
-        background: true,
-        pageOverride: transactionsPage,
-        pageSizeOverride: transactionsPageSize,
-        summaryMode: "light",
-      });
+      deletedIds.forEach((transactionId) => deletedTransactionIdsRef.current.delete(transactionId));
+      clearJsonRequestCache("transactions:list:");
+      if (selectedWorkspaceId) {
+        await loadTransactionsPage(selectedWorkspaceId, {
+          background: true,
+          pageOverride: 1,
+          pageSizeOverride: transactionsPageSize,
+          summaryMode: "light",
+        });
+      }
       setMessage(error instanceof Error ? error.message : "Unable to delete transactions.");
     } finally {
       setIsSaving(false);
