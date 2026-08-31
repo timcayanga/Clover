@@ -28,6 +28,8 @@ async function main() {
     investmentsSource,
     investmentMarketSource,
     accountsSource,
+    reportsSource,
+    reportsPeriodChartSource,
   ] = await Promise.all([
     readSource("components/clover-shell.tsx"),
     readSource("app/dashboard/page.tsx"),
@@ -50,7 +52,35 @@ async function main() {
     readSource("app/investments/page.tsx"),
     readSource("components/investment-market-chart.tsx"),
     readSource("app/accounts/page.tsx"),
+    readSource("app/reports/reports-page-content.tsx"),
+    readSource("components/reports-period-comparison-chart.tsx"),
   ]);
+
+  assert.match(
+    reportsSource,
+    /const weeklyTrendBuckets = getRollingWeekBuckets\(currentWindowEnd\)/,
+    "Reports Trends must prepare recent weekly comparison periods without another data request.",
+  );
+  assert.match(
+    reportsSource,
+    /points=\{weeklyTrendPoints\}[\s\S]{0,160}label="Recent weekly summary"/,
+    "The Weekly Summary must render its recent income and expense chart.",
+  );
+  assert.match(
+    reportsSource,
+    /points=\{monthlyTrendPoints\}[\s\S]{0,160}label="Recent monthly summary"/,
+    "The Monthly Summary must render its recent income and expense chart.",
+  );
+  assert.match(
+    reportsPeriodChartSource,
+    /reports-period-chart__bar--income[\s\S]{0,500}reports-period-chart__bar--expense/,
+    "Report period charts must keep income and expense in separate bars.",
+  );
+  assert.match(
+    globalStyles,
+    /@media \(max-width: 700px\) \{[\s\S]{0,900}\.reports-period-chart__plot/,
+    "Report period charts must have a compact mobile layout.",
+  );
   const protectedPageSources = await Promise.all(
     [
       "app/adviser/page.tsx",

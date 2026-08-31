@@ -39,6 +39,10 @@ import {
   type ReportsMoneyPoint,
 } from "@/components/reports-money-over-time-chart";
 import { ReportsCashFlowMap } from "@/components/reports-cash-flow-map";
+import {
+  ReportsPeriodComparisonChart,
+  type ReportsPeriodComparisonPoint,
+} from "@/components/reports-period-comparison-chart";
 
 const ReportsReviewQueue = nextDynamic(() => import("@/components/reports-review-queue").then((module) => module.ReportsReviewQueue), {
   loading: () => (
@@ -331,6 +335,27 @@ const getMonthBuckets = (anchor: Date) => {
     });
   }
   return buckets;
+};
+
+const getRollingWeekBuckets = (anchor: Date, count = 8) => {
+  return Array.from({ length: count }, (_, index) => {
+    const offset = count - index - 1;
+    const end = new Date(anchor);
+    end.setDate(end.getDate() - offset * 7);
+    const start = new Date(end);
+    start.setDate(start.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+
+    return {
+      key: `${start.toISOString().slice(0, 10)}:${end.toISOString().slice(0, 10)}`,
+      label: start.toLocaleDateString("en-PH", { month: "short", day: "numeric" }),
+      detailLabel: `${formatShortDate(start)} - ${formatShortDate(end)}`,
+      start,
+      end,
+      income: 0,
+      expense: 0,
+    };
+  });
 };
 
 function ReportsStreamFallback() {
@@ -720,21 +745,37 @@ export async function ReportsStream({
     );
 
     const monthBuckets = getMonthBuckets(currentWindowEnd);
+    const weeklyTrendBuckets = getRollingWeekBuckets(currentWindowEnd);
     reportTrendTransactions.forEach((transaction) => {
       const bucket = bucketMonth(transaction.date, monthBuckets);
-      if (!bucket) {
-        return;
-      }
-
       const amount = toReportMagnitude(transaction.amount);
       const transactionType = getResolvedReportTransactionType(transaction);
-      if (transactionType === "income") {
-        bucket.income += amount;
-      } else if (transactionType === "expense") {
-        bucket.expense += amount;
+      if (bucket) {
+        if (transactionType === "income") {
+          bucket.income += amount;
+        } else if (transactionType === "expense") {
+          bucket.expense += amount;
+        }
+        bucket.net = bucket.income - bucket.expense;
       }
-      bucket.net = bucket.income - bucket.expense;
+
+      const weekBucket = weeklyTrendBuckets.find(
+        (candidate) => transaction.date >= candidate.start && transaction.date <= candidate.end
+      );
+      if (weekBucket && transactionType === "income") {
+        weekBucket.income += amount;
+      } else if (weekBucket && transactionType === "expense") {
+        weekBucket.expense += amount;
+      }
     });
+    const weeklyTrendPoints: ReportsPeriodComparisonPoint[] = weeklyTrendBuckets.map(({ start: _start, end: _end, ...bucket }) => bucket);
+    const monthlyTrendPoints: ReportsPeriodComparisonPoint[] = monthBuckets.map((bucket) => ({
+      key: bucket.key,
+      label: bucket.label.split(" ")[0],
+      detailLabel: bucket.label,
+      income: bucket.income,
+      expense: bucket.expense,
+    }));
 
     const allWorkspaceAccountSummaries = Array.isArray(workspaceAccountSnapshots)
       ? (workspaceAccountSnapshots as Array<WorkspaceAccountSnapshot | null | undefined>).flatMap((account) => {
@@ -1938,6 +1979,11 @@ export async function ReportsStream({
                 <small>{formatShortDate(previousWeeklySummaryStart)} - {formatShortDate(previousWeeklySummaryEnd)}</small>
               </div>
             </div>
+            <ReportsPeriodComparisonChart
+              points={weeklyTrendPoints}
+              currency={displayCurrency}
+              label="Recent weekly summary"
+            />
             <div className="report-subsection report-subsection--compact">
               <Link
                 className="pill-link pill-link--inline"
@@ -1981,6 +2027,11 @@ export async function ReportsStream({
                 <small>{previousMonthBucket.label} · {monthlyNetChange >= 0 ? "improving" : "softening"}</small>
               </div>
             </div>
+            <ReportsPeriodComparisonChart
+              points={monthlyTrendPoints}
+              currency={displayCurrency}
+              label="Recent monthly summary"
+            />
             <div className="report-subsection report-subsection--compact">
               <Link className="pill-link pill-link--inline" href={buildTransactionsHref({ month: currentMonthBucket.key })}>
                 Open {currentMonthBucket.label}
