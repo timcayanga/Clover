@@ -67,6 +67,10 @@ import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { getTransactionReviewReason, getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import {
+  getNextMobileTransactionPage,
+  isMobileTransactionPaginationExhausted,
+} from "@/lib/transaction-mobile-pagination";
+import {
   getTransactionParsedNoteValue,
   getTransactionUserNoteValue,
   normalizeTransactionNoteValue,
@@ -2959,11 +2963,6 @@ function TransactionsPageContent() {
         shouldPreserveImportedTransactions && importedTransactionsToPreserveAfterServerResponse.length > 0
           ? mergeImportedWorkspaceTransactions(mergedTransactions, importedTransactionsToPreserveAfterServerResponse as unknown as ImportedWorkspaceTransaction[])
           : mergedTransactions;
-      const stableTransactionIds = new Set(stableBaseTransactions.map((transaction) => transaction.id));
-      const appendedUniqueTransactionCount = fetchedTransactions.reduce(
-        (count, transaction) => count + (stableTransactionIds.has(transaction.id) ? 0 : 1),
-        0
-      );
       const responseCurrencyCodes = Array.isArray(payload?.currencyCodes)
         ? payload.currencyCodes.map((value: unknown) => formatCurrencyCode(String(value ?? ""))).filter(Boolean)
         : [];
@@ -3036,13 +3035,19 @@ function TransactionsPageContent() {
       setTransactions(mergedTransactionsWithImports);
       if (options?.append) {
         setMobileVisibleCount((current) => current + fetchedTransactions.length);
-        // Stop the observer when the server page is empty or contains only rows
-        // already present locally. Without this guard, the mobile sentinel can
-        // request the same no-op page forever and remain on "Loading more".
-        setMobilePaginationExhausted(fetchedTransactions.length === 0 || appendedUniqueTransactionCount === 0);
+        setMobilePaginationExhausted(
+          isMobileTransactionPaginationExhausted({
+            previousTransactionCount: stableBaseTransactions.length,
+            nextTransactionCount: mergedTransactionsWithImports.length,
+            fetchedTransactionCount: fetchedTransactions.length,
+            totalTransactionCount: exactServerTotalCount,
+          })
+        );
       } else {
         setMobileVisibleCount(MOBILE_TRANSACTIONS_BATCH_SIZE);
-        setMobilePaginationExhausted(false);
+        setMobilePaginationExhausted(
+          exactServerTotalCount > 0 && mergedTransactionsWithImports.length >= exactServerTotalCount
+        );
       }
       if (options?.append) {
         setIsMobileLoadingMore(false);
@@ -4485,10 +4490,10 @@ function TransactionsPageContent() {
       return;
     }
 
-    // The first fetch currently contains 25 rows while mobile batches contain
-    // 12. floor + 1 resumes at offset 24, preserving the boundary row for
-    // de-duplication without skipping transactions 25-36.
-    const nextPage = Math.max(2, Math.floor(transactions.length / MOBILE_TRANSACTIONS_BATCH_SIZE) + 1);
+    // Keep the server page size stable. Mixing the 25-row initial request with
+    // 12-row mobile display batches can skip server pages or retry one forever.
+    const serverPageSize = Math.max(1, transactionsPageSize);
+    const nextPage = getNextMobileTransactionPage(transactions.length, serverPageSize);
     mobileLoadMoreInFlightRef.current = true;
     setIsMobileLoadingMore(true);
     try {
@@ -4496,7 +4501,7 @@ function TransactionsPageContent() {
         background: true,
         append: true,
         pageOverride: nextPage,
-        pageSizeOverride: MOBILE_TRANSACTIONS_BATCH_SIZE,
+        pageSizeOverride: serverPageSize,
         summaryMode: "light",
       });
     } finally {
@@ -4510,6 +4515,7 @@ function TransactionsPageContent() {
     loadTransactionsPage,
     mobileVisibleCount,
     transactions.length,
+    transactionsPageSize,
     transactionsSummary.totalCount,
     visibleTransactions.length,
     selectedWorkspaceId,

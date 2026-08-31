@@ -251,13 +251,13 @@ assert.match(
 );
 assert.match(
   transactionsPageSource,
-  /Math\.floor\(transactions\.length \/ MOBILE_TRANSACTIONS_BATCH_SIZE\) \+ 1/,
-  "Mobile pagination must continue from the 25-row first page without skipping a 12-row batch."
+  /const serverPageSize = Math\.max\(1, transactionsPageSize\)[\s\S]{0,180}?getNextMobileTransactionPage\(transactions\.length, serverPageSize\)/,
+  "Mobile pagination must keep the initial server page size instead of mixing it with the display batch size."
 );
 assert.match(
   transactionsPageSource,
-  /setMobilePaginationExhausted\(fetchedTransactions\.length === 0 \|\| appendedUniqueTransactionCount === 0\)/,
-  "Mobile pagination must stop when a server page adds no transactions."
+  /setMobilePaginationExhausted\([\s\S]{0,160}?isMobileTransactionPaginationExhausted\([\s\S]{0,420}?fetchedTransactionCount: fetchedTransactions\.length/,
+  "Mobile pagination must stop when a server page adds no transactions or reaches the known total."
 );
 assert.match(
   transactionsPageSource,
