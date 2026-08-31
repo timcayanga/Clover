@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { syncClerkUser } from "@/lib/clerk";
-import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
+import { ensureStarterWorkspace, repairDuplicateStarterWorkspaces, seedWorkspaceDefaults } from "@/lib/starter-data";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getCurrentUserEnvironment, resolvePersistedUserEnvironment } from "@/lib/user-environment";
 import { getEffectiveProfileLimit } from "@/lib/user-limits";
@@ -52,6 +52,15 @@ export async function GET() {
 
     if (user?.workspaces?.length && !user.workspaces.some((workspace) => workspace.type === "personal")) {
       await ensureStarterWorkspace(user, clerkUser.email, clerkUser.verified);
+    }
+
+    if (user?.workspaces?.length) {
+      await repairDuplicateStarterWorkspaces(user.id).catch((error) => {
+        console.warn("Unable to reconcile duplicate starter profiles", {
+          userId: user.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
     }
 
     const refreshedUser = user?.workspaces?.length
