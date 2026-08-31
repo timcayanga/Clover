@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import { ADMIN_ANALYTICS_EVENTS, type AdminAnalyticsSnapshot } from "@/lib/admin-analytics";
 
 const formatDate = (value: string) =>
@@ -16,6 +17,12 @@ const categoryLabels: Record<string, string> = {
 
 const percent = (value: number, total: number) =>
   total > 0 ? `${Math.min(100, Math.round((value / total) * 100))}%` : "—";
+
+const formatDuration = (milliseconds: number) => {
+  const seconds = Math.max(0, Math.round(milliseconds / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+};
 
 const posthogStatusCopy = (snapshot: AdminAnalyticsSnapshot) => {
   const live = snapshot.posthog.live;
@@ -64,6 +71,7 @@ function MetricCard({ label, value, detail, tone = "default" }: { label: string;
 export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalyticsSnapshot }) {
   const posthogStatus = posthogStatusCopy(snapshot);
   const livePostHog = snapshot.posthog.live;
+  const growth = snapshot.growth.posthog;
 
   return (
     <section className="admin-analytics-workspace">
@@ -107,6 +115,88 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
           value={livePostHog.status === "ready" ? percent(livePostHog.observedInstrumentedEvents, livePostHog.instrumentedEventTypes) : "—"}
           detail={livePostHog.status === "ready" ? `${livePostHog.observedInstrumentedEvents} of ${livePostHog.instrumentedEventTypes} instrumented events seen` : "Available after Query Read setup"}
         />
+      </div>
+
+      <section className="admin-hub__panel glass admin-growth-panel" aria-labelledby="admin-acquisition-title">
+        <div className="admin-hub__panel-head">
+          <div>
+            <p className="eyebrow">Acquisition</p>
+            <h3 id="admin-acquisition-title">Website visits to unique account creation</h3>
+          </div>
+          <span className="admin-analytics__caption">Tracking from {formatDate(snapshot.growth.trackingStartedAt)}</span>
+        </div>
+        {growth.status === "ready" ? (
+          <>
+            <div className="admin-acquisition-funnel" aria-label="Acquisition funnel">
+              <div><span>Website visits</span><strong>{growth.websiteVisits.toLocaleString()}</strong></div>
+              <i aria-hidden="true">→</i>
+              <div><span>Unique visitors</span><strong>{growth.uniqueVisitors.toLocaleString()}</strong></div>
+              <i aria-hidden="true">→</i>
+              <div><span>Unique accounts</span><strong>{snapshot.growth.uniqueAccountsCreated.toLocaleString()}</strong></div>
+              <div className="admin-acquisition-funnel__rate"><span>Visitor conversion</span><strong>{percent(snapshot.growth.uniqueAccountsCreated, growth.uniqueVisitors)}</strong></div>
+            </div>
+            <div className="admin-analytics-table-wrap">
+              <table className="admin-analytics-table">
+                <thead><tr><th>Channel</th><th>Source</th><th>Visitors</th><th>Visits</th><th>Attributed accounts</th></tr></thead>
+                <tbody>
+                  {growth.channels.map((row) => (
+                    <tr key={`${row.channel}:${row.source}`}><td><strong>{row.channel}</strong></td><td>{row.source}</td><td>{row.visitors.toLocaleString()}</td><td>{row.visits.toLocaleString()}</td><td>{row.accounts.toLocaleString()}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="admin-analytics__footnote">Unique accounts come from Clover's database. Attribution is first-touch and begins at the tracking date, so earlier accounts are intentionally excluded.</p>
+          </>
+        ) : (
+          <p className="panel-muted">Behavior aggregates are {growth.status === "not_configured" ? "not configured" : "temporarily unavailable"}. Add PostHog Query Read credentials to show acquisition sources; database account counts remain available.</p>
+        )}
+      </section>
+
+      <div className="admin-behavior-grid">
+        <section className="admin-hub__panel glass" aria-labelledby="admin-engagement-title">
+          <div className="admin-hub__panel-head">
+            <div><p className="eyebrow">Engagement</p><h3 id="admin-engagement-title">Time and scroll depth by page</h3></div>
+          </div>
+          {growth.status === "ready" && growth.pages.length ? (
+            <div className="admin-analytics-table-wrap">
+              <table className="admin-analytics-table">
+                <thead><tr><th>Page</th><th>Views</th><th>Visitors</th><th>Avg. time</th><th>Avg. scroll</th></tr></thead>
+                <tbody>{growth.pages.map((page) => (
+                  <tr key={page.route}><td><code>{page.route}</code></td><td>{page.views.toLocaleString()}</td><td>{page.uniqueVisitors.toLocaleString()}</td><td>{formatDuration(page.averageDurationMs)}</td><td>{page.averageScrollPercent}%</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+          ) : <p className="panel-muted">Page engagement will appear after visitors browse pages under the new tracking schema.</p>}
+        </section>
+
+        <section className="admin-hub__panel glass" aria-labelledby="admin-heatmaps-title">
+          <div className="admin-hub__panel-head">
+            <div><p className="eyebrow">Behavior</p><h3 id="admin-heatmaps-title">Click and scroll heatmaps</h3></div>
+            <span className="admin-analytics__caption">5 × 5 viewport grid</span>
+          </div>
+          {growth.status === "ready" && growth.heatmaps.length ? (
+            <div className="admin-heatmap-list">
+              {growth.heatmaps.map((heatmap) => {
+                const cells = new Map(heatmap.cells.map((cell) => [`${cell.x}:${cell.y}`, cell.count]));
+                const maximum = Math.max(1, ...heatmap.cells.map((cell) => cell.count));
+                return (
+                  <article className="admin-heatmap-card" key={heatmap.route}>
+                    <div><code>{heatmap.route}</code><span>{heatmap.totalClicks.toLocaleString()} clicks</span></div>
+                    <div className="admin-heatmap-grid" aria-label={`Click heatmap for ${heatmap.route}`}>
+                      {Array.from({ length: 25 }, (_, index) => {
+                        const x = index % 5;
+                        const y = Math.floor(index / 5);
+                        const count = cells.get(`${x}:${y}`) ?? 0;
+                        return <span key={index} title={`${count} clicks`} aria-label={`Column ${x + 1}, row ${y + 1}: ${count} clicks`} style={{ "--heat": count / maximum } as CSSProperties} />;
+                      })}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : <p className="panel-muted">Heatmaps will appear after visitors interact with Clover under the new tracking schema.</p>}
+          <p className="admin-analytics__footnote">Clover records normalized positions and page routes only. Input text, financial values, and clicked labels are never included.</p>
+        </section>
       </div>
 
       <div className="admin-analytics-workspace__grid">

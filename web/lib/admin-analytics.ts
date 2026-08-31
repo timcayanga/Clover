@@ -10,11 +10,11 @@ import {
   ANALYTICS_BETA_EPOCH,
   ANALYTICS_EVENT_NAMES,
   getAnalyticsBetaStartedAt,
-  getAnalyticsEnvironment,
+  getBehaviorAnalyticsStartedAt,
   getPostHogConfig,
   type AnalyticsEventName,
 } from "@/lib/analytics";
-import { getPostHogLiveAnalytics, type PostHogLiveAnalytics } from "@/lib/posthog-query";
+import { getPostHogGrowthAnalytics, getPostHogLiveAnalytics, type PostHogGrowthAnalytics, type PostHogLiveAnalytics } from "@/lib/posthog-query";
 import { getAdminImportActivityCutoff } from "@/lib/admin-import-activity";
 
 export type AdminAnalyticsEvent = {
@@ -81,6 +81,11 @@ export type AdminAnalyticsSnapshot = {
     description: string;
     steps: Array<{ label: string; count: number }>;
   }>;
+  growth: {
+    trackingStartedAt: string;
+    uniqueAccountsCreated: number;
+    posthog: PostHogGrowthAnalytics;
+  };
   posthog: {
     configured: boolean;
     captureConfigured: boolean;
@@ -98,6 +103,7 @@ const activeTransaction = { deletedAt: null } as const;
 export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapshot> {
   const now = Date.now();
   const betaStartedAt = getAnalyticsBetaStartedAt();
+  const behaviorStartedAt = getBehaviorAnalyticsStartedAt();
   const sinceBeta = (candidate: Date) => candidate > betaStartedAt ? candidate : betaStartedAt;
   const sevenDaysAgo = sinceBeta(new Date(now - 7 * 24 * 60 * 60 * 1000));
   const thirtyDaysAgo = sinceBeta(new Date(now - 30 * 24 * 60 * 60 * 1000));
@@ -170,6 +176,8 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
     usersWithTransactions,
     usersWithRecentTransactions,
     posthogLive,
+    uniqueAccountsCreated,
+    posthogGrowth,
   ] = await Promise.all([
     prisma.user.count({ where: betaParticipantUser }),
     prisma.user.count({ where: { AND: [betaParticipantUser, { createdAt: { gte: sevenDaysAgo } }] } }),
@@ -325,6 +333,8 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
       },
     }),
     getPostHogLiveAnalytics(getAdminDataEnvironment()),
+    prisma.user.count({ where: { AND: [productionUser, { createdAt: { gte: behaviorStartedAt } }] } }),
+    getPostHogGrowthAnalytics(getAdminDataEnvironment()),
   ]);
 
   const posthogConfig = getPostHogConfig();
@@ -384,6 +394,11 @@ export async function getAdminAnalyticsSnapshot(): Promise<AdminAnalyticsSnapsho
         ],
       },
     ],
+    growth: {
+      trackingStartedAt: behaviorStartedAt.toISOString(),
+      uniqueAccountsCreated,
+      posthog: posthogGrowth,
+    },
     posthog: {
       configured: Boolean(posthogConfig.key && projectId),
       captureConfigured: Boolean(posthogConfig.key),

@@ -34170,6 +34170,129 @@ button.accounts-detail__transaction-head-cell {
   margin: 0;
 }
 
+.admin-growth-panel,
+.admin-behavior-grid {
+  min-width: 0;
+}
+
+.admin-acquisition-funnel {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 24px minmax(120px, 1fr) 24px minmax(120px, 1fr) minmax(140px, 0.8fr);
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.admin-acquisition-funnel > div {
+  display: grid;
+  gap: 4px;
+  padding: 13px 14px;
+  border: 1px solid rgba(3, 168, 192, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.admin-acquisition-funnel > i {
+  color: var(--accent);
+  font-style: normal;
+  text-align: center;
+}
+
+.admin-acquisition-funnel span,
+.admin-heatmap-card span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-acquisition-funnel strong {
+  font-size: 1.2rem;
+}
+
+.admin-acquisition-funnel .admin-acquisition-funnel__rate {
+  border-color: rgba(16, 185, 129, 0.2);
+  background: rgba(236, 253, 245, 0.74);
+}
+
+.admin-analytics-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-analytics-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.admin-analytics-table th,
+.admin-analytics-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid rgba(219, 227, 232, 0.8);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.admin-analytics-table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.admin-analytics-table code {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.admin-behavior-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 18px;
+}
+
+.admin-heatmap-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.admin-heatmap-card {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid rgba(219, 227, 232, 0.9);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.admin-heatmap-card > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.admin-heatmap-card code {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3px;
+  aspect-ratio: 1.55;
+}
+
+.admin-heatmap-grid > span {
+  border-radius: 4px;
+  background: var(--accent);
+  opacity: calc(0.08 + var(--heat) * 0.82);
+}
+
 .admin-audit-logs {
   display: grid;
   gap: 18px;
@@ -34338,6 +34461,18 @@ button.accounts-detail__transaction-head-cell {
   .admin-analytics-workspace__grid {
     grid-template-columns: 1fr;
   }
+
+  .admin-behavior-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-acquisition-funnel {
+    grid-template-columns: minmax(110px, 1fr) 20px minmax(110px, 1fr) 20px minmax(110px, 1fr);
+  }
+
+  .admin-acquisition-funnel__rate {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 1100px) {
@@ -34359,6 +34494,24 @@ button.accounts-detail__transaction-head-cell {
 
   .admin-analytics-workspace__hero h2 {
     max-width: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .admin-acquisition-funnel {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-acquisition-funnel > i {
+    transform: rotate(90deg);
+  }
+
+  .admin-acquisition-funnel__rate {
+    grid-column: auto;
+  }
+
+  .admin-heatmap-list {
+    grid-template-columns: 1fr;
   }
 }
 

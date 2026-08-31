@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { getPostHogLiveAnalytics } from "@/lib/posthog-query";
+import { getPostHogGrowthAnalytics, getPostHogLiveAnalytics } from "@/lib/posthog-query";
 
 const originalFetch = global.fetch;
 const originalPersonalApiKey = process.env.POSTHOG_PERSONAL_API_KEY;
@@ -36,6 +36,8 @@ const main = async () => {
     const notConfigured = await getPostHogLiveAnalytics();
     assert.equal(notConfigured.status, "not_configured");
     assert.equal(notConfigured.errorCode, "missing_credentials");
+    const growthNotConfigured = await getPostHogGrowthAnalytics();
+    assert.equal(growthNotConfigured.status, "not_configured");
 
     process.env.POSTHOG_PERSONAL_API_KEY = "test-personal-key";
     process.env.POSTHOG_PROJECT_ID = "388373";
@@ -76,6 +78,32 @@ const main = async () => {
     assert.match(capturedRequest.body, /2026-07-28T11:40:00\.000Z/);
     assert.equal(ready.rangeStartedAt, "2026-07-28T11:40:00.000Z");
     assert.doesNotMatch(capturedRequest.body, /test-personal-key/);
+
+    const growthBodies: string[] = [];
+    global.fetch = async (_input, init) => {
+      const body = typeof init?.body === "string" ? init.body : "";
+      growthBodies.push(body);
+      if (body.includes("clover_admin_acquisition")) {
+        return Response.json({ columns: ["channel", "source", "unique_visitors", "website_visits"], results: [["AI", "chatgpt.com", 5, 8]], is_cached: true });
+      }
+      if (body.includes("clover_admin_conversion")) {
+        return Response.json({ columns: ["channel", "source", "converted_accounts"], results: [["AI", "chatgpt.com", 2]], is_cached: true });
+      }
+      if (body.includes("clover_admin_engagement")) {
+        return Response.json({ columns: ["route", "views", "unique_visitors", "average_duration_ms", "average_scroll_percent"], results: [["/pricing", 6, 4, 12500, 72]], is_cached: true });
+      }
+      return Response.json({ columns: ["route", "x_bucket", "y_bucket", "clicks", "unique_visitors"], results: [["/pricing", 2, 3, 7, 4]], is_cached: true });
+    };
+    const growth = await getPostHogGrowthAnalytics("staging");
+    assert.equal(growth.status, "ready");
+    assert.equal(growth.websiteVisits, 8);
+    assert.equal(growth.uniqueVisitors, 5);
+    assert.equal(growth.attributedAccounts, 2);
+    assert.equal(growth.pages[0]?.averageScrollPercent, 72);
+    assert.equal(growth.heatmaps[0]?.cells[0]?.count, 7);
+    assert.equal(growthBodies.length, 4);
+    assert.ok(growthBodies.every((body) => body.includes("analytics_environment")));
+    assert.ok(growthBodies.some((body) => body.includes("is_public_website")));
 
     global.fetch = async () => new Response(null, { status: 401 });
     const unauthorized = await getPostHogLiveAnalytics();

@@ -139,6 +139,9 @@ export type AnalyticsEventName =
   | "circle_investment_shared"
   | "session_started"
   | "session_returned"
+  | "acquisition_identified"
+  | "page_engagement"
+  | "ui_interaction"
   | "feature_used"
   | "settings_updated"
   | "goal_target_saved"
@@ -184,18 +187,25 @@ export const ANALYTICS_EVENT_NAMES: AnalyticsEventName[] = [
   "split_bill_qr_viewed", "split_bill_qr_uploaded", "split_bill_qr_saved", "split_bill_qr_updated", "split_bill_qr_deleted", "split_bill_qr_detection_failed",
   "circle_created", "circle_updated", "circle_deleted", "circle_invitation_created", "circle_invitation_accepted", "circle_member_updated",
   "circle_budget_created", "circle_goal_created", "circle_contribution_recorded", "circle_commitment_created", "circle_transaction_shared", "circle_investment_shared",
-  "session_started", "session_returned", "feature_used", "settings_updated", "goal_target_saved", "goal_updated", "goal_target_reached",
+  "session_started", "session_returned", "acquisition_identified", "page_engagement", "ui_interaction", "feature_used", "settings_updated", "goal_target_saved", "goal_updated", "goal_target_reached",
   "goal_progress_updated", "goal_reset", "plan_limit_reached", "billing_started", "billing_success", "billing_cancelled", "upgrade_cta_clicked",
   "trial_to_paid_conversion", "upgrade_prompt_viewed", "support_contacted", "admin_support_action", "error_shown",
 ];
 
 export const ANALYTICS_BETA_EPOCH = "beta-2026-07-28";
 export const DEFAULT_ANALYTICS_BETA_STARTED_AT = "2026-07-28T11:40:00.000Z";
+export const DEFAULT_BEHAVIOR_ANALYTICS_STARTED_AT = "2026-08-31T00:00:00.000Z";
 
 export const getAnalyticsBetaStartedAt = () => {
   const configured = process.env.NEXT_PUBLIC_ANALYTICS_BETA_STARTED_AT?.trim();
   const parsed = configured ? new Date(configured) : new Date(DEFAULT_ANALYTICS_BETA_STARTED_AT);
   return Number.isNaN(parsed.getTime()) ? new Date(DEFAULT_ANALYTICS_BETA_STARTED_AT) : parsed;
+};
+
+export const getBehaviorAnalyticsStartedAt = () => {
+  const configured = process.env.NEXT_PUBLIC_BEHAVIOR_ANALYTICS_STARTED_AT?.trim();
+  const parsed = configured ? new Date(configured) : new Date(DEFAULT_BEHAVIOR_ANALYTICS_STARTED_AT);
+  return Number.isNaN(parsed.getTime()) ? new Date(DEFAULT_BEHAVIOR_ANALYTICS_STARTED_AT) : parsed;
 };
 
 export const getAnalyticsEpochProperties = (): AnalyticsProperties => ({
