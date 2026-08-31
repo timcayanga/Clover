@@ -57,6 +57,7 @@ import {
   shouldQueueDifficultVisualImportInsteadOfFailing,
   type VisualImportRecoveryMode,
 } from "@/lib/import-visual-recovery";
+import { isNonFinancialUploadError } from "@/lib/financial-upload-scope";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -64,6 +65,19 @@ export const maxDuration = 300;
 // Clover's Singapore database. Keeping this Node function in sin1 avoids
 // multiplying inter-region latency across the parse-and-confirm pipeline.
 export const preferredRegion = "sin1";
+
+const persistNonFinancialImport = async (importFileId: string, error: unknown) => {
+  if (!isNonFinancialUploadError(error)) return false;
+  const message = error instanceof Error ? error.message : String(error);
+  await updateImportFileCompat(importFileId, {
+    status: "failed",
+    processingPhase: "non_financial",
+    processingMessage: message,
+    parsedRowsCount: 0,
+    confirmedTransactionsCount: 0,
+  }).catch(() => null);
+  return true;
+};
 
 type ImportResponseAccountSummary = {
   accountId: string;
@@ -1508,6 +1522,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               });
             } catch (error) {
               console.error("Deferred background import failed", { importId, error: summarizeErrorForLog(error) });
+              if (await persistNonFinancialImport(importId, error)) return;
               await updateImportFileCompat(importId, {
                 status: "processing",
                 processingPhase: "queued_retry",
@@ -1621,6 +1636,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           }
         } catch (error) {
           console.error("Deferred upload import queue failed", { importId, error: summarizeErrorForLog(error) });
+          if (await persistNonFinancialImport(importId, error)) return;
           await updateImportFileCompat(importId, {
             status: "processing",
             processingPhase: "queued_retry",
@@ -1695,6 +1711,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             importId,
             error: summarizeErrorForLog(error),
           });
+          if (await persistNonFinancialImport(importId, error)) return;
           if (isTransientDatabaseCapacityError(error)) {
             await updateImportFileCompat(importId, {
               status: "processing",
@@ -3188,6 +3205,21 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             error: passwordMessage,
             code: "IMPORT_PASSWORD_REQUIRED",
             stage,
+            importFileId: importId,
+          },
+          { status: 422 }
+        );
+      }
+
+      if (isNonFinancialUploadError(error)) {
+        await persistNonFinancialImport(importId, error);
+
+        return NextResponse.json(
+          {
+            error: errorMessage,
+            code: "I-108",
+            retryable: false,
+            stage: "scope",
             importFileId: importId,
           },
           { status: 422 }

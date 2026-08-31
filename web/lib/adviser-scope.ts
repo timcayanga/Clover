@@ -44,4 +44,10 @@ export const classifyAdviserScope = (
 };
 
 export const ADVISER_OUT_OF_SCOPE_REPLY =
-  "I’m Clover Adviser, so I can help with your Clover accounts, transactions, spending, bills, budgets, goals, and investments. Ask me about your financial picture or a record in Clover.";
+  "I can’t help with that kind of question, but I’d be happy to help with your finances in Clover. Try asking about your accounts, transactions, spending, bills, budgets, goals, or investments.";
+
+export const ADVISER_OUT_OF_SCOPE_SUGGESTIONS = [
+  { id: "scope-spending", group: "Spending", label: "Review my spending", prompt: "What changed in my spending this month?" },
+  { id: "scope-bills", group: "Bills", label: "Check upcoming bills", prompt: "What bills do I have coming up?" },
+  { id: "scope-cash", group: "Cash flow", label: "Check my cash flow", prompt: "How is my cash flow looking this month?" },
+];

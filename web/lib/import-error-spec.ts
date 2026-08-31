@@ -1,5 +1,6 @@
 export type ImportErrorStage =
   | "validation"
+  | "scope"
   | "password"
   | "upload"
   | "process"
@@ -55,6 +56,19 @@ const SPEC_BY_STAGE: Record<
       "Re-upload a clearer PDF, CSV, or image file.",
       "If the statement is a scan, try the original PDF instead of a screenshot.",
       "If Clover still misses rows, add the missing transactions manually in Transactions.",
+    ],
+    resumable: false,
+  },
+  scope: {
+    code: "I-108",
+    category: "Validation",
+    httpClass: "400 client-side error",
+    title: "Try another financial file",
+    message: "Clover did not find a financial record to import.",
+    nextSteps: [
+      "Upload the full receipt showing the purchase date and total amount.",
+      "You can also upload a statement, invoice, transaction screenshot, portfolio record, or financial note.",
+      "Coupons, advertisements, menus, and promotional offers cannot create transactions.",
     ],
     resumable: false,
   },
@@ -159,6 +173,7 @@ const STAGE_BY_CODE: Record<string, ImportErrorStage> = {
   "I-105": "confirm",
   "I-106": "background",
   "I-107": "monitor",
+  "I-108": "scope",
   "I-199": "unknown",
 };
 
@@ -187,7 +202,8 @@ export const getImportErrorStageFromCode = (code?: string | null): ImportErrorSt
 };
 
 export const getImportErrorSpec = (stage: ImportErrorStage, fileName?: string | null, reason?: string | null): ImportErrorSpec => {
-  const spec = SPEC_BY_STAGE[stage];
+  const resolvedStage = /does not look like a financial record|coupon, voucher, or promotion/i.test(reason ?? "") ? "scope" : stage;
+  const spec = SPEC_BY_STAGE[resolvedStage];
   const fileLabel = fileName ? `${fileName}` : "This file";
   const safeReason = sanitizeReasonForUser(reason);
   const messageParts = [
@@ -197,7 +213,7 @@ export const getImportErrorSpec = (stage: ImportErrorStage, fileName?: string | 
 
   return {
     ...spec,
-    stage,
+    stage: resolvedStage,
     message: `${fileLabel}: ${messageParts.join(" ")}`,
   };
 };

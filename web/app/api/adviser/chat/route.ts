@@ -29,7 +29,7 @@ import {
 } from "@/lib/adviser-everyday";
 import { ADVISER_LIMITS_ENABLED, BETA_FULL_ACCESS_ENABLED } from "@/lib/beta-access";
 import { assertContentLengthWithin, assertTrustedRequestOrigin } from "@/lib/request-security";
-import { ADVISER_OUT_OF_SCOPE_REPLY, classifyAdviserScope } from "@/lib/adviser-scope";
+import { ADVISER_OUT_OF_SCOPE_REPLY, ADVISER_OUT_OF_SCOPE_SUGGESTIONS, classifyAdviserScope } from "@/lib/adviser-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -895,7 +895,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         reply: ADVISER_OUT_OF_SCOPE_REPLY,
         actions: [],
-        suggestions: [],
+        suggestions: ADVISER_OUT_OF_SCOPE_SUGGESTIONS,
         scopeRejected: true,
       });
     }

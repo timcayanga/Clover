@@ -5701,7 +5701,11 @@ export function ImportFilesModal({
           error_code: String(payload.error ?? "unknown"),
           limit_type: limitPayload?.limitType ?? null,
         });
-        throw new Error(payload.error || "Unable to parse this file.");
+        const processError = new Error(payload.error || "Unable to parse this file.");
+        if (typeof payload.code === "string" && payload.code.trim()) {
+          processError.name = payload.code.trim();
+        }
+        throw processError;
       }
 
       const processPayload = await processResponse.json().catch(() => ({}));
@@ -6840,6 +6844,16 @@ export function ImportFilesModal({
         }
         requestPasswordForItem(itemId, Boolean(item.password.trim()));
       return { status: "needs_password", importedRows: null, summary: null };
+      }
+
+      if (error instanceof Error && error.name === "I-108") {
+        capturePostHogClientEvent("import_failed", {
+          error_stage: "scope",
+          error_code: "I-108",
+          ...fileAnalyticsBase(item.file, workspaceId),
+        });
+        closeImportAfterError(itemId, "scope", item.file.name, error.message);
+        return { status: "error", importedRows: null, summary: null };
       }
 
       const recoverableStatus = importFileId
@@ -8393,7 +8407,11 @@ export function ImportFilesModal({
         progress={visibleOverallProgress}
         summary={completedImportSummary}
         detail={
-          (currentErrorItem ? compactErrorSpec?.message ?? currentErrorItem.errorTitle ?? "Clover could not finish this import." : null) ??
+          (currentErrorItem
+            ? currentErrorItem.errorCode === "I-108"
+              ? currentErrorItem.error
+              : compactErrorSpec?.message ?? currentErrorItem.errorTitle ?? "Clover could not finish this import."
+            : null) ??
           (activeProgressItem
             ? friendlyImportProgressLabel(
                 activeProgressItem.progressLabel,
@@ -8570,7 +8588,7 @@ export function ImportFilesModal({
                   {item.error ? (
                     <div className="accounts-import-file__error">
                       <strong>{item.errorTitle ?? "Import issue"}</strong>
-                      <p>{item.errorCode ? getImportErrorSpecForCode(item.errorCode).message : item.error}</p>
+                      <p>{item.errorCode === "I-108" ? item.error : item.errorCode ? getImportErrorSpecForCode(item.errorCode).message : item.error}</p>
                       {item.errorCode ? <p className="accounts-import-file__error-code">Error code {item.errorCode}</p> : null}
                       {item.errorNextSteps?.length ? (
                         <ul className="accounts-import-file__error-list">

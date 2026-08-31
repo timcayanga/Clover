@@ -131,7 +131,7 @@ import {
 } from "@/lib/import-visual-recovery";
 import { isProtectedTransactionReviewStatus } from "@/lib/data-engine-safety";
 import { reconcileStatementTransactionYears } from "@/lib/import-date-reconciliation";
-import { assessFinancialUploadScope, NON_FINANCIAL_UPLOAD_MESSAGE } from "@/lib/financial-upload-scope";
+import { assessFinancialUploadScope, getNonFinancialUploadMessage } from "@/lib/financial-upload-scope";
 import { applyImportValidationToRows, validateParsedImportRows } from "@/lib/data-engine-validation";
 import { assessStatementExtractionQuality, compareStatementExtractionCandidates } from "@/lib/import-quality";
 import {
@@ -9741,7 +9741,7 @@ export const processImportFileText = async (
       confidence: uploadScopeDecision.confidence,
       reasons: uploadScopeDecision.reasons,
     });
-    throw new Error(NON_FINANCIAL_UPLOAD_MESSAGE);
+    throw new Error(getNonFinancialUploadMessage(uploadScopeDecision));
   }
   const shouldPrioritizeBackupEarly =
     !skipVisualBackupParser &&

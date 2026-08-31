@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { ADVISER_OUT_OF_SCOPE_REPLY, classifyAdviserScope } from "../lib/adviser-scope";
-import { assessFinancialUploadScope, NON_FINANCIAL_UPLOAD_MESSAGE } from "../lib/financial-upload-scope";
+import { ADVISER_OUT_OF_SCOPE_REPLY, ADVISER_OUT_OF_SCOPE_SUGGESTIONS, classifyAdviserScope } from "../lib/adviser-scope";
+import { assessFinancialUploadScope, NON_FINANCIAL_UPLOAD_MESSAGE, PROMOTIONAL_UPLOAD_MESSAGE } from "../lib/financial-upload-scope";
 
 const allowedAdviserQuestions = [
   "Can I safely spend ₱20,000 from my accounts?",
@@ -39,7 +39,8 @@ assert.equal(
   true,
   "financial follow-up should preserve scope"
 );
-assert.match(ADVISER_OUT_OF_SCOPE_REPLY, /Clover accounts/);
+assert.match(ADVISER_OUT_OF_SCOPE_REPLY, /help with your finances in Clover/);
+assert.equal(ADVISER_OUT_OF_SCOPE_SUGGESTIONS.length, 3);
 
 const financialUploads = [
   { text: "Statement Date 08/31/2026 Account Balance PHP 10,500.00", fileName: "upload.pdf" },
@@ -70,7 +71,30 @@ assert.equal(
   }).decision,
   "non_financial"
 );
-assert.match(NON_FINANCIAL_UPLOAD_MESSAGE, /financial records/);
+assert.match(NON_FINANCIAL_UPLOAD_MESSAGE, /financial record/);
+assert.match(PROMOTIONAL_UPLOAD_MESSAGE, /coupon, voucher, or promotion/);
+assert.deepEqual(
+  assessFinancialUploadScope({
+    text: "GUAM BAKERY COUPON. Get PHP 100.00 off your next order. Redeem before 09/30/2026. Terms apply.",
+    fileName: "IMG_1009.jpg",
+    fileType: "image/jpeg",
+  }),
+  {
+    decision: "non_financial",
+    confidence: 96,
+    reasons: ["promotion without completed purchase evidence"],
+    kind: "promotion",
+  }
+);
+assert.equal(
+  assessFinancialUploadScope({
+    text: "GUAM BAKERY RECEIPT 08/31/2026 Coupon discount PHP 20.00 Subtotal PHP 250.00 Tax PHP 30.00 Grand Total PHP 260.00 Paid cash",
+    fileName: "IMG_1010.jpg",
+    fileType: "image/jpeg",
+  }).decision,
+  "financial",
+  "a completed receipt from the same merchant must remain eligible"
+);
 assert.equal(
   assessFinancialUploadScope({
     text: "This article discusses the history of architecture and how public buildings evolved across several centuries. It contains narrative prose, references to artists, and observations about materials, cities, and culture, without presenting a ledger or any commercial record.",
@@ -99,5 +123,27 @@ const importWorkerSource = fs.readFileSync(path.join(process.cwd(), "workers/imp
 const workerGuardIndex = importWorkerSource.indexOf("const uploadScopeDecision = assessFinancialUploadScope({");
 const workerBackupIndex = importWorkerSource.indexOf("const earlyOpenAiFallbackPromise =", workerGuardIndex);
 assert.ok(workerGuardIndex >= 0 && workerGuardIndex < workerBackupIndex, "Worker must reject non-financial files before backup parsing.");
+
+const processRouteSource = fs.readFileSync(path.join(process.cwd(), "app/api/imports/[importId]/process/route.ts"), "utf8");
+const processScopeResponseIndex = processRouteSource.indexOf("if (isNonFinancialUploadError(error))");
+const processVisualRecoveryIndex = processRouteSource.indexOf("const savedTransactionsCount", processScopeResponseIndex);
+assert.ok(processScopeResponseIndex >= 0, "Import processing must expose a dedicated non-financial response.");
+assert.ok(processScopeResponseIndex < processVisualRecoveryIndex, "Non-financial uploads must stop before visual recovery.");
+assert.match(processRouteSource, /code: "I-108"/);
+
+const statusRouteSource = fs.readFileSync(path.join(process.cwd(), "app/api/imports/[importId]/status/route.ts"), "utf8");
+assert.match(statusRouteSource, /processingPhase !== "non_financial"/, "Status polling must not restart rejected uploads.");
+
+const queueWorkerSource = fs.readFileSync(path.join(process.cwd(), "workers/imports-worker.ts"), "utf8");
+assert.match(queueWorkerSource, /job\.discard\(\)/, "Queued non-financial uploads must not consume retry attempts.");
+assert.match(queueWorkerSource, /processingPhase: "non_financial"/);
+
+const importUiSource = fs.readFileSync(path.join(process.cwd(), "components/import-files-modal.tsx"), "utf8");
+assert.match(importUiSource, /error\.name === "I-108"/, "Import UI must render non-financial rejection without generic recovery.");
+assert.match(importUiSource, /errorCode === "I-108"[\s\S]{0,120}item\.error/, "Import UI must preserve the specific rejection explanation.");
+
+const importErrorSpecSource = fs.readFileSync(path.join(process.cwd(), "lib/import-error-spec.ts"), "utf8");
+assert.match(importErrorSpecSource, /Try another financial file/);
+assert.match(importErrorSpecSource, /Coupons, advertisements, menus, and promotional offers cannot create transactions/);
 
 console.log("Financial upload and Adviser scope gate regression passed.");

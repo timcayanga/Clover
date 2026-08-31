@@ -16,6 +16,7 @@ import {
 import { processImportEnrichmentJobs, processImportFileText } from "@/workers/import-processor";
 import { summarizeErrorForLog } from "@/lib/security-logging";
 import { purgeExpiredImportFiles } from "@/lib/import-retention";
+import { isNonFinancialUploadError } from "@/lib/financial-upload-scope";
 
 void purgeExpiredImportFiles({ limit: 50 }).catch((error) => {
   console.warn("Unable to purge expired raw import files at worker startup", { error: summarizeErrorForLog(error) });
@@ -43,6 +44,16 @@ const worker = new Worker(
           : null,
       });
     } catch (error) {
+      if (isNonFinancialUploadError(error)) {
+        job.discard();
+        await updateImportFileCompat(importFileId, {
+          status: "failed",
+          processingPhase: "non_financial",
+          processingMessage: error instanceof Error ? error.message : String(error),
+          parsedRowsCount: 0,
+          confirmedTransactionsCount: 0,
+        }).catch(() => null);
+      }
       if (isPdfPasswordError(error)) {
         job.discard();
         await updateImportFileCompat(importFileId, {
@@ -81,6 +92,16 @@ worker.on("failed", async (job, error) => {
   console.error("Import job failed", { jobId: job?.id ?? null, error: summarizeErrorForLog(error) });
   const importFileId = job?.data?.importFileId;
   if (importFileId) {
+    if (isNonFinancialUploadError(error)) {
+      await updateImportFileCompat(importFileId, {
+        status: "failed",
+        processingPhase: "non_financial",
+        processingMessage: error.message,
+        parsedRowsCount: 0,
+        confirmedTransactionsCount: 0,
+      }).catch(() => null);
+      return;
+    }
     if (isPdfPasswordError(error)) {
       await updateImportFileCompat(importFileId, {
         status: "failed",
