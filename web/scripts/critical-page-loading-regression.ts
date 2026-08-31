@@ -35,6 +35,23 @@ assert.match(
   "The persistent notification button should show the live notification count."
 );
 assert.match(
+  shellSource,
+  /href="\/settings"[\s\S]{0,220}sidebar-footer__settings[\s\S]{0,500}<MenuIcon name="settings" \/>/,
+  "Desktop Settings must remain directly accessible beside the profile control.",
+);
+const profileMenuStart = shellSource.indexOf('className="sidebar-popover sidebar-popover--profile"');
+const profileMenuEnd = shellSource.indexOf("\n          ) : null}", profileMenuStart);
+assert.ok(profileMenuStart >= 0 && profileMenuEnd > profileMenuStart, "The desktop Profile menu must be present.");
+const profileMenuSource = shellSource.slice(profileMenuStart, profileMenuEnd);
+assert.match(profileMenuSource, /href="\/settings\?section=account"/);
+assert.match(profileMenuSource, /<MenuIcon name="profile" \/>[\s\S]{0,120}<span>Account<\/span>/);
+assert.match(profileMenuSource, /<span>Log Out<\/span>/);
+assert.doesNotMatch(
+  profileMenuSource,
+  /<span>Settings<\/span>/,
+  "Settings belongs in the desktop footer row instead of the Profile submenu.",
+);
+assert.match(
   globalStylesSource,
   /\.notification-count-badge\s*\{[^}]*position:\s*absolute;[^}]*top:\s*-2px;[^}]*right:\s*-3px;/s,
   "The notification count should sit at the top-right of its button."

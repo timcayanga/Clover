@@ -856,7 +856,8 @@ export function CloverShell({
     };
   }, [pathname]);
   const profileImage = user?.imageUrl ?? cachedProfileImage;
-  const isProfileActive = isProfileDrawerOpen || active === "profile" || pathname?.startsWith("/profile") || pathname?.startsWith("/settings");
+  const isProfileActive = isProfileDrawerOpen || active === "profile" || pathname?.startsWith("/profile");
+  const isSettingsActive = pathname?.startsWith("/settings");
   const isMoreActive = active === "more" || pathname?.startsWith("/more");
   const isNotificationsActive = openMenu === "notifications";
   const isProfileMenuOpen = openMenu === "profile";
@@ -1855,6 +1856,18 @@ export function CloverShell({
             )}
             <span className="sr-only">{displayName}</span>
           </button>
+          <Link
+            href="/settings"
+            prefetch={false}
+            className={`sidebar-icon-button sidebar-footer__settings${isSettingsActive ? " is-active" : ""}`}
+            aria-label="Settings"
+            aria-current={isSettingsActive ? "page" : undefined}
+            onClick={(event) => handleNavigationLinkClick(event, "/settings")}
+            onMouseEnter={() => prefetchNavTarget("/settings")}
+            onTouchStart={() => prefetchNavTarget("/settings")}
+          >
+            <MenuIcon name="settings" />
+          </Link>
           <button
             ref={notificationsButtonRef}
             className={`sidebar-icon-button sidebar-notifications-button ${isNotificationsActive ? "is-active" : ""}`}
@@ -1887,18 +1900,18 @@ export function CloverShell({
               </div>
               <div className="sidebar-popover__links sidebar-popover__links--bare">
                 <Link
-                  href="/settings"
+                  href="/settings?section=account"
                   prefetch={false}
                   className="sidebar-popover__link sidebar-popover__button sidebar-popover__link--bare"
-                  onClick={(event) => handleNavigationLinkClick(event, "/settings")}
-                  onMouseEnter={() => prefetchNavTarget("/settings")}
-                  onTouchStart={() => prefetchNavTarget("/settings")}
+                  onClick={(event) => handleNavigationLinkClick(event, "/settings?section=account")}
+                  onMouseEnter={() => prefetchNavTarget("/settings?section=account")}
+                  onTouchStart={() => prefetchNavTarget("/settings?section=account")}
                   role="menuitem"
                 >
                   <span className="sidebar-popover__link-icon" aria-hidden="true">
-                    <MenuIcon name="settings" />
+                    <MenuIcon name="profile" />
                   </span>
-                  <span>Settings</span>
+                  <span>Account</span>
                 </Link>
                 <div className="sidebar-popover__separator" aria-hidden="true" />
                 <button
