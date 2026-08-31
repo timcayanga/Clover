@@ -2338,6 +2338,7 @@ function TransactionsPageContent() {
   const [mobileVisibleCount, setMobileVisibleCount] = useState(MOBILE_TRANSACTIONS_BATCH_SIZE);
   const [isMobileLoadingMore, setIsMobileLoadingMore] = useState(false);
   const [mobilePaginationExhausted, setMobilePaginationExhausted] = useState(false);
+  const [postImportRefreshVersion, setPostImportRefreshVersion] = useState(0);
   const transactionRowRefs = useRef(new Map<string, HTMLElement>());
   const warningPopoverRefs = useRef(new Map<string, HTMLDivElement | null>());
   const selectionActionsMenuRef = useRef<HTMLDivElement | null>(null);
@@ -3233,21 +3234,32 @@ function TransactionsPageContent() {
             .filter(Boolean)
         )
       );
-      const shouldRevealAllCurrencies = Boolean(
-        currencyFilter &&
-          importedCurrencyCodes.length > 0 &&
-          importedCurrencyCodes.some((currency) => currency !== formatCurrencyCode(currencyFilter))
-      );
-
       flushSync(() => {
         setIsWorkspaceDataReady(true);
 
-        if (shouldRevealAllCurrencies) {
-          // The import succeeded even when the current table is scoped to a
-          // different currency. Move to the inclusive view so the new row is
-          // visible immediately instead of making users leave and re-enter.
-          setCurrencyFilter("");
-        }
+        // Receipt completion must always return Transactions to a stable,
+        // inclusive first-page view. Otherwise a stale drilldown, mobile page,
+        // or currency selection can make the new row appear to replace the
+        // table until the user leaves and comes back.
+        setQuery("");
+        setCurrencyFilter("");
+        setCategoryFilters([]);
+        setAccountFilters([]);
+        setTypeFilters([]);
+        setDateFilterMode("ltd");
+        setDateFilterAnchor(todayIso);
+        setCustomStart("");
+        setCustomEnd("");
+        setAmountMin("");
+        setAmountMax("");
+        setSortField("date");
+        setSortDirection("desc");
+        setActiveHeaderSort(null);
+        setTransactionsPage(1);
+        setMobileVisibleCount(MOBILE_TRANSACTIONS_BATCH_SIZE);
+        setMobilePaginationExhausted(false);
+        mobileLoadMoreInFlightRef.current = false;
+        setIsMobileLoadingMore(false);
 
         if (optimisticAccount) {
           setAccounts((current) =>
@@ -3335,9 +3347,7 @@ function TransactionsPageContent() {
         }
       });
 
-      if (shouldRevealAllCurrencies) {
-        persistSelectedCurrency(selectedWorkspaceId, "");
-      }
+      persistSelectedCurrency(selectedWorkspaceId, "");
 
       const settledAccountId =
         (nextAccountsSnapshot ? resolvePersistedImportedAccountId(summary, nextAccountsSnapshot) : null) ??
@@ -3352,6 +3362,7 @@ function TransactionsPageContent() {
             }
           : summary;
       setPendingImportSummary(settledSummary);
+      setPostImportRefreshVersion((current) => current + 1);
 
       if (!selectedWorkspaceId) {
         return;
@@ -3671,6 +3682,22 @@ function TransactionsPageContent() {
     transactionsPage,
     transactionsPageSize,
   ]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId || postImportRefreshVersion === 0) {
+      return;
+    }
+
+    // This effect runs after React commits the filter reset above, so the
+    // authoritative refresh cannot reuse the stale pre-import filter closure.
+    void loadTransactionsPage(selectedWorkspaceId, {
+      background: true,
+      pageOverride: 1,
+      pageSizeOverride: transactionsPageSize,
+      summaryMode: "light",
+      preserveKnownTotal: true,
+    });
+  }, [postImportRefreshVersion, selectedWorkspaceId, transactionsPageSize]);
 
   useEffect(() => {
     setTransactionsPage(1);

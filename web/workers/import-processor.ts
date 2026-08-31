@@ -46,6 +46,7 @@ import {
 import { downloadImportObject } from "@/lib/import-storage.server";
 import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import { resolveReceiptCategoryWithPaymentEvidence } from "@/lib/receipt-transaction-classification";
+import { repairReceiptDateFromEvidence } from "@/lib/receipt-date-evidence";
 import { syncWorkspaceRecurringPatterns } from "@/lib/recurring-detection";
 import {
   assessReceiptPreviewQuality,
@@ -10758,6 +10759,7 @@ export const processImportFileText = async (
       ? trainedReceiptDetails
       : chooseBetterReceiptDetails(openAiReceiptDetailsCandidate, receiptPreviewDetailsCandidate);
   receiptDetails = preferSpecificReceiptMerchant(receiptDetails, receiptPreview);
+  receiptDetails = receiptDetails ? repairReceiptDateFromEvidence(receiptDetails) : null;
   const promotesNotesSplitBillToReceipt =
     effectiveImportMode === "notes" &&
     Boolean(

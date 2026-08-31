@@ -2097,7 +2097,7 @@ export const buildOpenAIBackupSystemPrompt = (importMode: ImportMode | null | un
   return [...baseGuidance, ...familyGuidance, ...inputGuidance].join(" ");
 };
 
-const inferOpenAIDocumentFamily = (params: {
+export const inferOpenAIDocumentFamily = (params: {
   fileName?: string | null;
   text?: string | null;
   detectedMetadata?: DetectedStatementMetadata | null;
@@ -2122,7 +2122,12 @@ const inferOpenAIDocumentFamily = (params: {
   );
 
   if (params.importMode === "receipt") {
-    if (/gcash|maya|wise|wallet/i.test(combinedText)) {
+    const hasWalletProvider = /\b(?:gcash|maya|wise|wallet)\b/i.test(combinedText);
+    const hasWalletScreenEvidence =
+      /\b(?:transaction\s+(?:details|history)|express\s+send|send\s+money|money\s+(?:sent|received)|sent\s+(?:to|via)|received\s+from|recipient|sender|cash\s+in|cash\s+out|wallet\s+balance)\b/i.test(
+        combinedText
+      );
+    if (hasWalletProvider && hasWalletScreenEvidence) {
       return "wallet_screenshot" satisfies OpenAIDocumentFamily;
     }
     if (/ticket|booking|itinerary|electronic ticket/i.test(combinedText)) {

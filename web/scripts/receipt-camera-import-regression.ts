@@ -6,6 +6,49 @@ import { resolveReceiptCategoryWithPaymentEvidence } from "../lib/receipt-transa
 import { parseReceiptText } from "../lib/split-bill";
 import { getImportImageHashDistance } from "../lib/import-image-perceptual-hash";
 import { buildReceiptSummaryFromReceiptTransaction } from "../lib/import-receipt-summary";
+import { inferOpenAIDocumentFamily } from "../lib/openai-import-parser";
+import { repairReceiptDateFromEvidence } from "../lib/receipt-date-evidence";
+
+assert.equal(
+  inferOpenAIDocumentFamily({
+    fileName: "restaurant-receipt.jpg",
+    text: "好食特 Restaurant. Paid via GCash. Total PHP 1,250.00.",
+    detectedMetadata: null,
+    importMode: "receipt",
+  }),
+  "generic_document",
+  "Mentioning a wallet as the payment method must not send a merchant receipt through the slower wallet parser."
+);
+assert.equal(
+  inferOpenAIDocumentFamily({
+    fileName: "wallet-confirmation.jpg",
+    text: "GCash Transaction Details. Express Send. Sent to Maria. Reference No. 123456.",
+    detectedMetadata: null,
+    importMode: "receipt",
+  }),
+  "wallet_screenshot",
+  "A genuine wallet transfer screen must retain wallet-specific extraction."
+);
+assert.equal(
+  repairReceiptDateFromEvidence({
+    transaction_date: "2026-10-13",
+    parser_evidence: {
+      source_text: "Transaction date: 13 October 2025",
+    },
+  }).transaction_date,
+  "2025-10-13",
+  "The explicit printed year must repair an otherwise matching model date."
+);
+assert.equal(
+  repairReceiptDateFromEvidence({
+    transaction_date: "2026-10-13",
+    parser_evidence: {
+      source_text: "Transaction date: 10/13/2025",
+    },
+  }).transaction_date,
+  "2025-10-13",
+  "Numeric receipt evidence must repair the year without changing the supported month and day."
+);
 
 const receiptText = [
   "UNKNOWN MERCHANT",
@@ -178,6 +221,16 @@ assert.match(
 );
 assert.match(
   transactionsPageSource,
+  /Receipt completion must always return Transactions[\s\S]{0,900}?setCurrencyFilter\(""\)[\s\S]{0,900}?setDateFilterMode\("ltd"\)[\s\S]{0,900}?setTransactionsPage\(1\)/,
+  "Receipt completion must clear stale mobile drilldowns and return to the inclusive first page."
+);
+assert.match(
+  transactionsPageSource,
+  /postImportRefreshVersion[\s\S]{0,900}?pageOverride: 1[\s\S]{0,300}?preserveKnownTotal: true/,
+  "Transactions must perform an authoritative unfiltered refresh after React commits the import reset."
+);
+assert.match(
+  transactionsPageSource,
   /mergeImportedPreviewTransactions\(current, previewTransactions\);[\s\S]{0,180}?transactionsRef\.current = next/,
   "The import callback must expose its new receipt row to the same-turn settlement refresh."
 );
@@ -213,11 +266,10 @@ assert.match(
 );
 assert.match(
   transactionsPageSource,
-  /const shouldRevealAllCurrencies =[\s\S]{0,400}?importedCurrencyCodes\.some/,
-  "A foreign-currency receipt must become visible immediately even when the table started on another currency."
+  /Receipt completion must always return Transactions[\s\S]{0,900}?setCurrencyFilter\(""\)/,
+  "Every completed receipt must return to All Currencies so a foreign-currency row cannot lock the table."
 );
-assert.match(transactionsPageSource, /if \(shouldRevealAllCurrencies\) \{[\s\S]{0,280}?setCurrencyFilter\(""\)/);
-assert.match(transactionsPageSource, /if \(shouldRevealAllCurrencies\) \{\s*persistSelectedCurrency\(selectedWorkspaceId, ""\)/);
+assert.match(transactionsPageSource, /persistSelectedCurrency\(selectedWorkspaceId, ""\)/);
 assert.match(
   importModalSource,
   /file\.size > Math\.min\(imageOptimizationTarget, MAX_IMPORT_FILE_SIZE\)/,
