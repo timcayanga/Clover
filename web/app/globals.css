@@ -9267,6 +9267,148 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
   grid-column: 1 / -1;
 }
 
+.recurring-overview-card--commitments {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.recurring-overview-card--commitments .recurring-overview-card__heading > div {
+  display: grid;
+  gap: 4px;
+}
+
+.recurring-overview-card--commitments .recurring-overview-card__heading small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.recurring-overview-legend {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 2px 0 4px;
+}
+
+.recurring-overview-legend span {
+  --recurring-kind: var(--accent);
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 11px;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.recurring-overview-legend i,
+.recurring-overview-commitment-name i,
+.recurring-overview-commitment-row > i {
+  background: var(--recurring-kind);
+  border-radius: 50%;
+  display: block;
+  flex: 0 0 auto;
+  height: 8px;
+  width: 8px;
+}
+
+:is(.recurring-overview-legend span, .recurring-overview-kind, .recurring-overview-commitments-table tr, .recurring-overview-commitment-row)[data-kind="planned_payment"] {
+  --recurring-kind: #08a9c4;
+  --recurring-kind-bg: rgba(8, 169, 196, 0.12);
+}
+
+:is(.recurring-overview-legend span, .recurring-overview-kind, .recurring-overview-commitments-table tr, .recurring-overview-commitment-row)[data-kind="debt"] {
+  --recurring-kind: #ef6461;
+  --recurring-kind-bg: rgba(239, 100, 97, 0.12);
+}
+
+:is(.recurring-overview-legend span, .recurring-overview-kind, .recurring-overview-commitments-table tr, .recurring-overview-commitment-row)[data-kind="receivable"] {
+  --recurring-kind: #22a06b;
+  --recurring-kind-bg: rgba(34, 160, 107, 0.12);
+}
+
+:is(.recurring-overview-legend span, .recurring-overview-kind, .recurring-overview-commitments-table tr, .recurring-overview-commitment-row)[data-kind="reminder"] {
+  --recurring-kind: #8b5cf6;
+  --recurring-kind-bg: rgba(139, 92, 246, 0.12);
+}
+
+.recurring-overview-commitments__desktop {
+  border: 1px solid var(--stroke);
+  border-radius: 14px;
+  overflow-x: auto;
+}
+
+.transactions-table.recurring-overview-commitments-table {
+  min-width: 840px;
+}
+
+.recurring-overview-commitments-table thead th {
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.recurring-overview-commitments-table td {
+  color: var(--foreground);
+  font-size: 12px;
+}
+
+.recurring-overview-commitment-name {
+  --recurring-kind: var(--accent);
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--foreground);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 800;
+  gap: 9px;
+  max-width: 260px;
+  padding: 0;
+  text-align: left;
+}
+
+.recurring-overview-commitment-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recurring-overview-kind {
+  --recurring-kind: var(--accent);
+  background: var(--recurring-kind-bg);
+  border-radius: 999px;
+  color: var(--recurring-kind);
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.recurring-overview-commitments-table__amount {
+  font-weight: 800;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.recurring-overview-commitments__mobile {
+  display: none;
+}
+
+.recurring-overview-commitments__empty {
+  align-items: center;
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+  padding: 18px 0 4px;
+}
+
+.recurring-overview-commitments__empty strong {
+  color: var(--foreground);
+}
+
 .recurring-overview-card--review .recurring-overview-card__heading > div {
   display: grid;
   gap: 4px;
@@ -9445,6 +9587,88 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
 
   .recurring-overview-card--review {
     grid-column: auto;
+  }
+
+  .recurring-overview-card--commitments {
+    grid-column: auto;
+  }
+
+  .recurring-overview-card--commitments .recurring-overview-card__heading {
+    align-items: start;
+  }
+
+  .recurring-overview-legend {
+    flex-wrap: nowrap;
+    margin-inline: -2px;
+    overflow-x: auto;
+    padding: 2px 2px 6px;
+    scrollbar-width: none;
+  }
+
+  .recurring-overview-legend::-webkit-scrollbar {
+    display: none;
+  }
+
+  .recurring-overview-commitments__desktop {
+    display: none;
+  }
+
+  .recurring-overview-commitments__mobile {
+    display: grid;
+  }
+
+  .recurring-overview-commitment-row {
+    --recurring-kind: var(--accent);
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-top: 1px solid var(--stroke);
+    color: var(--foreground);
+    display: grid;
+    font: inherit;
+    gap: 9px;
+    grid-template-columns: 8px minmax(0, 1fr) auto 16px;
+    padding: 11px 0;
+    text-align: left;
+    width: 100%;
+  }
+
+  .recurring-overview-commitment-row__copy,
+  .recurring-overview-commitment-row__value {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .recurring-overview-commitment-row__copy strong,
+  .recurring-overview-commitment-row__copy small,
+  .recurring-overview-commitment-row__value strong,
+  .recurring-overview-commitment-row__value small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .recurring-overview-commitment-row__copy strong,
+  .recurring-overview-commitment-row__value strong {
+    font-size: 12px;
+  }
+
+  .recurring-overview-commitment-row__copy small,
+  .recurring-overview-commitment-row__value small {
+    color: var(--muted);
+    font-size: 10px;
+  }
+
+  .recurring-overview-commitment-row__value {
+    justify-items: end;
+    max-width: 110px;
+  }
+
+  .recurring-overview-commitment-row > svg {
+    height: 16px;
+    stroke: var(--muted);
+    width: 16px;
   }
 
   .recurring-suggestion-review-modal {

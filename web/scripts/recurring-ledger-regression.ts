@@ -54,6 +54,15 @@ for (const field of ["kind", "recurrence", "status", "accountId", "categoryName"
 assert.match(commitmentRouteSource, /categoryName: Object\.hasOwn\(body, "categoryName"\)/, "Recurring category changes must persist through the protected mutation route.");
 assert.match(schemaSource, /categoryName\s+String\?/, "Recurring items must retain an explicit editable category override.");
 assert.doesNotMatch(panelSource, /Next 30 days/i, "Recurring Overview must not duplicate the calendar with a Next 30 Days card.");
+assert.doesNotMatch(panelSource, /Upcoming payments/i, "Recurring Overview must not duplicate commitments in an upcoming-payments card.");
+assert.doesNotMatch(panelSource, /Monthly commitments/i, "Recurring Overview must not duplicate commitments in a monthly-summary card.");
+assert.match(panelSource, /Every saved recurring item at a glance/, "Recurring Overview must explain that the merged table includes every saved commitment.");
+for (const label of ["Planned Payments", "Debts & Loans", "Money Owed", "Installments"]) {
+  assert.match(panelSource, new RegExp(label.replace(/[&]/g, "\\&")), `Recurring Overview must include the ${label} legend label.`);
+}
+assert.match(panelSource, /recurring-overview-commitments-table[\s\S]{0,1600}<th>Status<\/th>/, "The merged commitments table must expose status so inactive items are not silently omitted.");
+assert.match(stylesSource, /\.recurring-overview-card--commitments\s*\{[\s\S]{0,100}grid-column: 1 \/ -1/, "The merged commitments table must span the desktop overview.");
+assert.match(stylesSource, /\.recurring-overview-commitments__mobile\s*\{[\s\S]{0,50}display: grid/, "The merged commitments table must provide a compact mobile view.");
 assert.match(panelSource, /Review suggestions/, "Recurring Overview must identify detected candidates as review suggestions.");
 assert.match(stylesSource, /\.recurring-overview-card--review\s*\{[\s\S]{0,100}grid-column: 1 \/ -1/, "Review Suggestions must span the desktop overview.");
 assert.match(stylesSource, /@media \(max-width: 700px\)[\s\S]{0,150}\.recurring-overview-grid\s*\{[\s\S]{0,100}grid-template-columns: minmax\(0, 1fr\)/, "Recurring overview cards must stack on mobile.");

@@ -73,6 +73,13 @@ type CommitmentKind = "planned_payment" | "debt" | "receivable" | "reminder";
 type CommitmentFormKind = CommitmentKind;
 type EditableCommitmentField = RecurringDetailEditableField | "counterparty" | "notes";
 
+const recurringOverviewKindLabels: Record<CommitmentKind, string> = {
+  planned_payment: "Planned Payments",
+  debt: "Debts & Loans",
+  receivable: "Money Owed",
+  reminder: "Installments",
+};
+
 type CommitmentFormCopy = {
   eyebrow: string;
   headline: string;
@@ -372,43 +379,15 @@ export function CommitmentsPanel({
   const [completingCommitmentId, setCompletingCommitmentId] = useState<string | null>(null);
   const [mobileDetailId, setMobileDetailId] = useState<string | null>(null);
   const [calendarDetail, setCalendarDetail] = useState<{ commitmentId: string; occurrenceDate: string } | null>(null);
-  const overviewStats = useMemo(() => {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const activeCommitments = visibleCommitments.filter((item) => item.status === "active");
-    const upcoming = activeCommitments
-      .map((item) => ({ item, date: getCommitmentDateValue(item) }))
-      .filter(({ date }) => {
-        if (!date) {
-          return false;
-        }
-
-        const timestamp = new Date(date).getTime();
-        return Number.isFinite(timestamp) && timestamp >= start.getTime();
-      })
-      .sort((left, right) => new Date(left.date!).getTime() - new Date(right.date!).getTime());
-    const monthlyTotal = activeCommitments.reduce((total, item) => {
-      const value = Number(item.amount);
-      if (!Number.isFinite(value)) {
-        return total;
-      }
-
-      const multiplier = {
-        weekly: 52 / 12,
-        biweekly: 26 / 12,
-        monthly: 1,
-        quarterly: 1 / 3,
-        annual: 1 / 12,
-        once: 0,
-      }[item.recurrence] ?? 0;
-      return total + value * multiplier;
-    }, 0);
-
-    return {
-      upcoming,
-      monthlyTotal,
-      activeCount: activeCommitments.length,
-    };
+  const overviewCommitments = useMemo(() => {
+    const statusOrder = { active: 0, paused: 1, resolved: 2 } as const;
+    return [...visibleCommitments].sort((left, right) => {
+      const leftDateValue = getCommitmentDateValue(left);
+      const rightDateValue = getCommitmentDateValue(right);
+      const leftDate = leftDateValue ? new Date(leftDateValue).getTime() : Number.POSITIVE_INFINITY;
+      const rightDate = rightDateValue ? new Date(rightDateValue).getTime() : Number.POSITIVE_INFINITY;
+      return statusOrder[left.status] - statusOrder[right.status] || leftDate - rightDate || left.title.localeCompare(right.title);
+    });
   }, [visibleCommitments]);
 
   useEffect(() => {
@@ -1585,33 +1564,96 @@ export function CommitmentsPanel({
 
       {activeTab === "overview" ? <>
       <section className="recurring-overview-grid" aria-label="Recurring overview">
-        <article className="panel recurring-overview-card recurring-overview-card--list">
+        <article className="panel recurring-overview-card recurring-overview-card--commitments">
           <div className="recurring-overview-card__heading">
-            <p className="eyebrow">Upcoming payments</p>
-          </div>
-          {overviewStats.upcoming.length > 0 ? (
-            <div className="recurring-overview-list">
-              {overviewStats.upcoming.slice(0, 4).map(({ item }) => (
-                <div key={item.id} className="recurring-overview-list__item">
-                  <span>
-                    <strong>{item.title}</strong>
-                    <small>{formatDate(getCommitmentDateValue(item))}</small>
-                  </span>
-                  <strong>{formatCurrency(item.amount)}</strong>
-                </div>
-              ))}
+            <div>
+              <p className="eyebrow">Commitments</p>
+              <small>Every saved recurring item at a glance</small>
             </div>
-          ) : (
-            <p className="recurring-overview-card__empty">Add recurring items to see what is coming up.</p>
-          )}
-        </article>
-
-        <article className="panel recurring-overview-card">
-          <div className="recurring-overview-card__heading">
-            <p className="eyebrow">Monthly commitments</p>
+            <span>{overviewCommitments.length} {overviewCommitments.length === 1 ? "item" : "items"}</span>
           </div>
-          <strong className="recurring-overview-card__value">{formatCurrency(String(overviewStats.monthlyTotal))}</strong>
-          <p>Estimated from recurring active items</p>
+          <div className="recurring-overview-legend" aria-label="Recurring transaction types">
+            {(Object.entries(recurringOverviewKindLabels) as [CommitmentKind, string][]).map(([kindValue, label]) => (
+              <span key={kindValue} data-kind={kindValue}>
+                <i aria-hidden="true" />
+                {label}
+              </span>
+            ))}
+          </div>
+          {overviewCommitments.length > 0 ? (
+            <>
+              <div className="table-wrap recurring-overview-commitments__desktop">
+                <table className="transactions-table recurring-overview-commitments-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Type</th>
+                      <th>Date</th>
+                      <th>Repeats</th>
+                      <th>Status</th>
+                      <th>Account</th>
+                      <th>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {overviewCommitments.map((commitment) => (
+                      <tr key={commitment.id} data-kind={commitment.kind}>
+                        <td>
+                          <button
+                            className="recurring-overview-commitment-name"
+                            type="button"
+                            onClick={() => setCalendarDetail({
+                              commitmentId: commitment.id,
+                              occurrenceDate: getCommitmentDateValue(commitment) ?? commitment.createdAt,
+                            })}
+                          >
+                            <i aria-hidden="true" />
+                            <span>{commitment.title}</span>
+                          </button>
+                        </td>
+                        <td><span className="recurring-overview-kind" data-kind={commitment.kind}>{recurringOverviewKindLabels[commitment.kind]}</span></td>
+                        <td>{formatDate(getCommitmentDateValue(commitment))}</td>
+                        <td>{commitmentRecurrenceLabels[commitment.recurrence]}</td>
+                        <td>{commitmentStatusLabels[commitment.status]}</td>
+                        <td>{(commitment.account ?? commitment.inferredAccount)?.name ?? "Not linked"}</td>
+                        <td className="recurring-overview-commitments-table__amount">{formatCurrency(commitment.amount, commitment.currency)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="recurring-overview-commitments__mobile">
+                {overviewCommitments.map((commitment) => (
+                  <button
+                    key={commitment.id}
+                    className="recurring-overview-commitment-row"
+                    data-kind={commitment.kind}
+                    type="button"
+                    onClick={() => openMobileDetail(commitment.id)}
+                  >
+                    <i aria-hidden="true" />
+                    <span className="recurring-overview-commitment-row__copy">
+                      <strong>{commitment.title}</strong>
+                      <small>{recurringOverviewKindLabels[commitment.kind]} · {formatDate(getCommitmentDateValue(commitment))}</small>
+                    </span>
+                    <span className="recurring-overview-commitment-row__value">
+                      <strong>{formatCurrency(commitment.amount, commitment.currency)}</strong>
+                      <small>{commitmentStatusLabels[commitment.status]}</small>
+                    </span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="m9 6 6 6-6 6" />
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="recurring-overview-card__empty recurring-overview-commitments__empty">
+              <strong>No commitments yet</strong>
+              <span>Add a recurring item to see it here.</span>
+              <button className="button button-primary button-small" type="button" onClick={openRecurringAdd}>Add recurring</button>
+            </div>
+          )}
         </article>
 
         <article className="panel recurring-overview-card recurring-overview-card--list recurring-overview-card--review">
