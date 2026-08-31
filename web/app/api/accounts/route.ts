@@ -38,6 +38,7 @@ import {
   resolveEffectiveAccountBalance,
 } from "@/lib/account-balance-projection";
 import { isCryptoAssetCurrencyCode } from "@/lib/financial-identity-detection";
+import { removeEmptyNonDefaultCashAccounts } from "@/lib/empty-cash-account-cleanup";
 import {
   getCanonicalPdaxHoldingIdentity,
   isPdaxWalletHoldingLabel,
@@ -3131,6 +3132,17 @@ export async function GET(request: Request) {
     }
 
     await assertWorkspaceAccess(userId, workspaceId);
+    const shouldCleanupEmptyCashAccounts = ["1", "true"].includes(
+      (searchParams.get("cleanupEmptyCashAccounts") ?? "").trim().toLowerCase()
+    );
+    if (shouldCleanupEmptyCashAccounts) {
+      await prisma.$transaction((tx) =>
+        removeEmptyNonDefaultCashAccounts(tx, {
+          workspaceId,
+          actorUserId: userId,
+        })
+      );
+    }
     const shouldRunAccountMaintenance = ["1", "true"].includes(
       (searchParams.get("maintenance") ?? "").trim().toLowerCase()
     );

@@ -11,6 +11,7 @@ import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directi
 import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
 import { normalizeTransactionTagKey, sanitizeTransactionTagNames } from "@/lib/transaction-tags";
 import { revalidateTag } from "next/cache";
+import { removeEmptyNonDefaultCashAccounts } from "@/lib/empty-cash-account-cleanup";
 
 export const dynamic = "force-dynamic";
 
@@ -522,7 +523,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     await assertWorkspaceAccess(userId, transaction.workspaceId);
 
     const hasStatementCheckpoints = await hasCompatibleTable("AccountStatementCheckpoint");
-    await prisma.$transaction(async (tx) => {
+    const removedAccountIds = await prisma.$transaction(async (tx) => {
       await tx.transaction.update({
         where: { id: transactionId },
         data: {
@@ -554,6 +555,12 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
           },
         });
       }
+
+      return removeEmptyNonDefaultCashAccounts(tx, {
+        workspaceId: transaction.workspaceId,
+        accountIds: [transaction.accountId],
+        actorUserId: userId,
+      });
     });
 
     const siblingTransactions = await prisma.transaction.findMany({
@@ -625,7 +632,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
     revalidateTag("admin-financial-totals");
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, removedAccountIds });
   } catch {
     return NextResponse.json({ error: "Unable to delete transaction" }, { status: 400 });
   }

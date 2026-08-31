@@ -8,6 +8,7 @@ import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { removeEmptyNonDefaultCashAccounts } from "@/lib/empty-cash-account-cleanup";
 
 export const dynamic = "force-dynamic";
 
@@ -62,8 +63,9 @@ export async function POST(request: Request) {
     const hasStatementCheckpoints = activeTransactions.length > 0 && await hasCompatibleTable("AccountStatementCheckpoint");
     const deletedAt = new Date();
 
+    let removedAccountIds: string[] = [];
     if (activeTransactions.length > 0) {
-      await prisma.$transaction(async (tx) => {
+      removedAccountIds = await prisma.$transaction(async (tx) => {
         await tx.transaction.updateMany({
           where: {
             workspaceId: payload.workspaceId,
@@ -126,6 +128,12 @@ export async function POST(request: Request) {
             },
           })),
         });
+
+        return removeEmptyNonDefaultCashAccounts(tx, {
+          workspaceId: payload.workspaceId,
+          accountIds: affectedAccountIds,
+          actorUserId: userId,
+        });
       });
 
       void capturePostHogServerEvent("transaction_deleted", userId, {
@@ -142,6 +150,7 @@ export async function POST(request: Request) {
       deletedIds: activeTransactions.map((transaction) => transaction.id),
       alreadyDeletedIds,
       unresolvedIds: transactionIds.filter((transactionId) => !knownIds.has(transactionId)),
+      removedAccountIds,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

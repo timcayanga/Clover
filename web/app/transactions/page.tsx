@@ -2717,7 +2717,7 @@ function TransactionsPageContent() {
           route: "transactions.accounts",
           workspaceId,
           detail: options?.background ? "background" : "foreground",
-          input: `/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`,
+          input: `/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}&cleanupEmptyCashAccounts=true`,
         }),
         fetchJsonOnce<{ categories?: Category[] }>({
           key: `transactions:categories:${workspaceId}:defaults-v2`,
@@ -6006,15 +6006,27 @@ function TransactionsPageContent() {
     });
   };
 
+  const syncRemovedCashAccounts = (accountIds: readonly string[]) => {
+    const removedAccountIds = new Set(accountIds);
+    if (removedAccountIds.size === 0) {
+      return;
+    }
+
+    setAccounts((current) => current.filter((account) => !removedAccountIds.has(account.id)));
+    setAccountFilters((current) => current.filter((accountId) => !removedAccountIds.has(accountId)));
+  };
+
   const deleteTransactionRemote = async (transactionId: string) => {
     const response = await fetch(`/api/transactions/${transactionId}`, {
       method: "DELETE",
     });
+    const payload = await response.json().catch(() => null) as { error?: string; removedAccountIds?: string[] } | null;
 
     if (!response.ok) {
-      throw new Error("Unable to delete transaction.");
+      throw new Error(payload?.error || "Unable to delete transaction.");
     }
 
+    syncRemovedCashAccounts(Array.isArray(payload?.removedAccountIds) ? payload.removedAccountIds : []);
     clearJsonRequestCache("transactions:list:");
     transactionPrefetchRef.current.clear();
     clearAccountsWorkspaceCache(selectedWorkspaceId);
@@ -6029,12 +6041,13 @@ function TransactionsPageContent() {
         transactionIds,
       }),
     });
+    const payload = await response.json().catch(() => null) as { error?: string; removedAccountIds?: string[] } | null;
 
     if (!response.ok) {
-      const payload = await response.json().catch(() => null) as { error?: string } | null;
       throw new Error(payload?.error || "Unable to delete the selected transactions.");
     }
 
+    syncRemovedCashAccounts(Array.isArray(payload?.removedAccountIds) ? payload.removedAccountIds : []);
     clearJsonRequestCache("transactions:list:");
     transactionPrefetchRef.current.clear();
     clearAccountsWorkspaceCache(selectedWorkspaceId);
