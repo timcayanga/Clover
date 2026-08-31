@@ -68,6 +68,13 @@ async function main() {
     );
   }
 
+  const settingsHub = consumers.find(({ relativePath }) => relativePath === "components/settings-hub.tsx")?.source ?? "";
+  assert.match(
+    settingsHub,
+    /plan:\s*{\s*title:\s*"Plan",\s*icon:\s*<SettingsIcon name="plan" \/>/,
+    "The Settings Plan submenu must use the dedicated Plan icon.",
+  );
+
   console.log(
     `Navigation icon regression passed for ${Object.keys(NAVIGATION_ICON_SOURCE_FILES).length} canonical 3D icons.`,
   );

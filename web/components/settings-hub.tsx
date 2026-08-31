@@ -490,7 +490,7 @@ const sectionCopy: Record<
   },
   plan: {
     title: "Plan",
-    icon: <SettingsIcon name="goals" />,
+    icon: <SettingsIcon name="plan" />,
   },
 };
 
