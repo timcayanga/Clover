@@ -27,12 +27,17 @@ assert.match(queries, /properties\.analytics_environment/);
 assert.match(queries, /event = '\$pageview'/);
 assert.match(queries, /event = 'page_engagement'/);
 assert.match(queries, /event = 'ui_interaction'/);
+assert.match(queries, /\$geoip_country_name/);
+assert.match(queries, /\$geoip_city_name/);
+assert.match(queries, /clover_admin_active_account_locations/);
 
 assert.match(snapshot, /uniqueAccountsCreated/);
 assert.match(snapshot, /prisma\.user\.count\(\{ where: \{ AND: \[productionUser/);
 assert.match(workspace, /Website visits to unique account creation/);
 assert.match(workspace, /Time and scroll depth by page/);
 assert.match(workspace, /Click and scroll heatmaps/);
+assert.match(workspace, /Where visitors and active accounts are located/);
+assert.match(workspace, /Clover does not store IP addresses or precise coordinates/);
 assert.match(workspace, /Input text, financial values, and clicked labels are never included/);
 
 console.log("Admin behavior analytics regression passed: privacy, attribution, engagement, and heatmap checks.");

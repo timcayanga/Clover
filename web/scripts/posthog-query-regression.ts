@@ -92,6 +92,12 @@ const main = async () => {
       if (body.includes("clover_admin_engagement")) {
         return Response.json({ columns: ["route", "views", "unique_visitors", "average_duration_ms", "average_scroll_percent"], results: [["/pricing", 6, 4, 12500, 72]], is_cached: true });
       }
+      if (body.includes("clover_admin_website_locations")) {
+        return Response.json({ columns: ["level", "country", "city", "people"], results: [["country", "Philippines", "", 5], ["city", "Philippines", "Manila", 4]], is_cached: true });
+      }
+      if (body.includes("clover_admin_active_account_locations")) {
+        return Response.json({ columns: ["level", "country", "city", "people"], results: [["country", "Philippines", "", 3], ["city", "Philippines", "Manila", 2]], is_cached: true });
+      }
       return Response.json({ columns: ["route", "x_bucket", "y_bucket", "clicks", "unique_visitors"], results: [["/pricing", 2, 3, 7, 4]], is_cached: true });
     };
     const growth = await getPostHogGrowthAnalytics("staging");
@@ -101,7 +107,11 @@ const main = async () => {
     assert.equal(growth.attributedAccounts, 2);
     assert.equal(growth.pages[0]?.averageScrollPercent, 72);
     assert.equal(growth.heatmaps[0]?.cells[0]?.count, 7);
-    assert.equal(growthBodies.length, 4);
+    assert.equal(growth.countries[0]?.country, "Philippines");
+    assert.equal(growth.countries[0]?.activeAccounts, 3);
+    assert.equal(growth.cities[0]?.city, "Manila");
+    assert.equal(growth.cities[0]?.activeAccounts, 2);
+    assert.equal(growthBodies.length, 6);
     assert.ok(growthBodies.every((body) => body.includes("analytics_environment")));
     assert.ok(growthBodies.some((body) => body.includes("is_public_website")));
 

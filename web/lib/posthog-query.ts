@@ -64,6 +64,8 @@ export type PostHogGrowthAnalytics = {
   uniqueVisitors: number;
   attributedAccounts: number;
   channels: Array<{ channel: string; source: string; visitors: number; visits: number; accounts: number }>;
+  countries: Array<{ country: string; websiteVisitors: number; activeAccounts: number }>;
+  cities: Array<{ city: string; country: string; websiteVisitors: number; activeAccounts: number }>;
   pages: Array<{ route: string; views: number; uniqueVisitors: number; averageDurationMs: number; averageScrollPercent: number }>;
   heatmaps: Array<{ route: string; totalClicks: number; uniqueVisitors: number; cells: Array<{ x: number; y: number; count: number }> }>;
   errorCode: PostHogLiveAnalytics["errorCode"];
@@ -127,6 +129,8 @@ const emptyGrowthResult = (
   uniqueVisitors: 0,
   attributedAccounts: 0,
   channels: [],
+  countries: [],
+  cities: [],
   pages: [],
   heatmaps: [],
   errorCode,
@@ -222,6 +226,7 @@ export async function getPostHogGrowthAnalytics(
 
   const startedAt = escapeHogQl(getBehaviorAnalyticsStartedAt().toISOString());
   const scopedEnvironment = escapeHogQl(environment);
+  const activeStartedAt = escapeHogQl(new Date(Math.max(getBehaviorAnalyticsStartedAt().getTime(), Date.now() - 30 * 86_400_000)).toISOString());
   const environmentCondition = `toString(properties.analytics_environment) = '${scopedEnvironment}'`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), POSTHOG_QUERY_TIMEOUT_MS);
@@ -266,13 +271,45 @@ export async function getPostHogGrowthAnalytics(
     WHERE event = 'ui_interaction' AND timestamp >= toDateTime('${startedAt}') AND ${environmentCondition}
     GROUP BY route, x_bucket, y_bucket ORDER BY clicks DESC LIMIT 500
   `;
+  const websiteLocationQuery = `
+    SELECT 'country' AS level, toString(properties.$geoip_country_name) AS country, '' AS city,
+      count(DISTINCT distinct_id) AS people
+    FROM events
+    WHERE event = '$pageview' AND timestamp >= toDateTime('${startedAt}') AND ${environmentCondition}
+      AND properties.is_public_website = true AND notEmpty(toString(properties.$geoip_country_name))
+    GROUP BY country
+    UNION ALL
+    SELECT 'city' AS level, toString(properties.$geoip_country_name) AS country,
+      toString(properties.$geoip_city_name) AS city, count(DISTINCT distinct_id) AS people
+    FROM events
+    WHERE event = '$pageview' AND timestamp >= toDateTime('${startedAt}') AND ${environmentCondition}
+      AND properties.is_public_website = true AND notEmpty(toString(properties.$geoip_city_name))
+    GROUP BY country, city
+  `;
+  const activeAccountLocationQuery = `
+    SELECT 'country' AS level, toString(properties.$geoip_country_name) AS country, '' AS city,
+      count(DISTINCT distinct_id) AS people
+    FROM events
+    WHERE event = 'page_engagement' AND timestamp >= toDateTime('${activeStartedAt}') AND ${environmentCondition}
+      AND toString(distinct_id) LIKE '${scopedEnvironment}:%' AND notEmpty(toString(properties.$geoip_country_name))
+    GROUP BY country
+    UNION ALL
+    SELECT 'city' AS level, toString(properties.$geoip_country_name) AS country,
+      toString(properties.$geoip_city_name) AS city, count(DISTINCT distinct_id) AS people
+    FROM events
+    WHERE event = 'page_engagement' AND timestamp >= toDateTime('${activeStartedAt}') AND ${environmentCondition}
+      AND toString(distinct_id) LIKE '${scopedEnvironment}:%' AND notEmpty(toString(properties.$geoip_city_name))
+    GROUP BY country, city
+  `;
 
   try {
-    const [acquisitionPayload, conversionPayload, engagementPayload, heatmapPayload] = await Promise.all([
+    const [acquisitionPayload, conversionPayload, engagementPayload, heatmapPayload, websiteLocationPayload, activeLocationPayload] = await Promise.all([
       queryPostHog(config, acquisitionQuery, `clover_admin_acquisition_${environment}`, controller.signal),
       queryPostHog(config, conversionQuery, `clover_admin_conversion_${environment}`, controller.signal),
       queryPostHog(config, engagementQuery, `clover_admin_engagement_${environment}`, controller.signal),
       queryPostHog(config, heatmapQuery, `clover_admin_heatmap_${environment}`, controller.signal),
+      queryPostHog(config, websiteLocationQuery, `clover_admin_website_locations_${environment}`, controller.signal),
+      queryPostHog(config, activeAccountLocationQuery, `clover_admin_active_account_locations_${environment}`, controller.signal),
     ]);
     const conversions = new Map(
       rowsAsRecords(conversionPayload).map((row) => [`${String(row.channel)}\u0000${String(row.source)}`, toFiniteNumber(row.converted_accounts)])
@@ -304,15 +341,53 @@ export async function getPostHogGrowthAnalytics(
     const heatmaps = Array.from(heatmapGroups, ([route, values]) => ({ route, ...values }))
       .sort((left, right) => right.totalClicks - left.totalClicks)
       .slice(0, 6);
+    const websiteLocations = rowsAsRecords(websiteLocationPayload);
+    const activeLocations = new Map(rowsAsRecords(activeLocationPayload).map((row) => [
+      `${String(row.level)}\u0000${String(row.country)}\u0000${String(row.city)}`,
+      toFiniteNumber(row.people),
+    ]));
+    const countries = websiteLocations
+      .filter((row) => row.level === "country")
+      .map((row) => ({
+        country: String(row.country || "Unknown"),
+        websiteVisitors: toFiniteNumber(row.people),
+        activeAccounts: activeLocations.get(`country\u0000${String(row.country)}\u0000`) ?? 0,
+      }))
+      .sort((left, right) => right.websiteVisitors - left.websiteVisitors || right.activeAccounts - left.activeAccounts);
+    const websiteLocationKeys = new Set(websiteLocations.map((row) => `${String(row.level)}\u0000${String(row.country)}\u0000${String(row.city)}`));
+    for (const row of rowsAsRecords(activeLocationPayload)) {
+      const key = `${String(row.level)}\u0000${String(row.country)}\u0000${String(row.city)}`;
+      if (row.level === "country" && !websiteLocationKeys.has(key)) {
+        countries.push({ country: String(row.country || "Unknown"), websiteVisitors: 0, activeAccounts: toFiniteNumber(row.people) });
+      }
+    }
+    countries.sort((left, right) => right.websiteVisitors - left.websiteVisitors || right.activeAccounts - left.activeAccounts);
+    const cities = websiteLocations
+      .filter((row) => row.level === "city")
+      .map((row) => ({
+        city: String(row.city || "Unknown"),
+        country: String(row.country || "Unknown"),
+        websiteVisitors: toFiniteNumber(row.people),
+        activeAccounts: activeLocations.get(`city\u0000${String(row.country)}\u0000${String(row.city)}`) ?? 0,
+      }));
+    for (const row of rowsAsRecords(activeLocationPayload)) {
+      const key = `${String(row.level)}\u0000${String(row.country)}\u0000${String(row.city)}`;
+      if (row.level === "city" && !websiteLocationKeys.has(key)) {
+        cities.push({ city: String(row.city || "Unknown"), country: String(row.country || "Unknown"), websiteVisitors: 0, activeAccounts: toFiniteNumber(row.people) });
+      }
+    }
+    cities.sort((left, right) => right.websiteVisitors - left.websiteVisitors || right.activeAccounts - left.activeAccounts);
     return {
       status: "ready",
       generatedAt: new Date().toISOString(),
       trackingStartedAt: getBehaviorAnalyticsStartedAt().toISOString(),
-      isCached: [acquisitionPayload, conversionPayload, engagementPayload, heatmapPayload].every((payload) => payload.is_cached === true),
+      isCached: [acquisitionPayload, conversionPayload, engagementPayload, heatmapPayload, websiteLocationPayload, activeLocationPayload].every((payload) => payload.is_cached === true),
       websiteVisits: channels.reduce((sum, item) => sum + item.visits, 0),
       uniqueVisitors: channels.reduce((sum, item) => sum + item.visitors, 0),
       attributedAccounts: channels.reduce((sum, item) => sum + item.accounts, 0),
       channels,
+      countries: countries.slice(0, 20),
+      cities: cities.slice(0, 30),
       pages,
       heatmaps,
       errorCode: null,

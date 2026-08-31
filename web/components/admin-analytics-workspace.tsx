@@ -152,6 +152,41 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
         )}
       </section>
 
+      <section className="admin-hub__panel glass" aria-labelledby="admin-geography-title">
+        <div className="admin-hub__panel-head">
+          <div>
+            <p className="eyebrow">Geography</p>
+            <h3 id="admin-geography-title">Where visitors and active accounts are located</h3>
+          </div>
+          <span className="admin-analytics__caption">Active accounts used Clover in the last 30 days</span>
+        </div>
+        {growth.status === "ready" && (growth.countries.length || growth.cities.length) ? (
+          <div className="admin-geography-grid">
+            <div className="admin-analytics-table-wrap">
+              <table className="admin-analytics-table">
+                <caption>Countries</caption>
+                <thead><tr><th>Country</th><th>Website visitors</th><th>Active accounts</th></tr></thead>
+                <tbody>{growth.countries.map((location) => (
+                  <tr key={location.country}><td><strong>{location.country}</strong></td><td>{location.websiteVisitors.toLocaleString()}</td><td>{location.activeAccounts.toLocaleString()}</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+            <div className="admin-analytics-table-wrap">
+              <table className="admin-analytics-table">
+                <caption>Cities</caption>
+                <thead><tr><th>City</th><th>Country</th><th>Website visitors</th><th>Active accounts</th></tr></thead>
+                <tbody>{growth.cities.map((location) => (
+                  <tr key={`${location.country}:${location.city}`}><td><strong>{location.city}</strong></td><td>{location.country}</td><td>{location.websiteVisitors.toLocaleString()}</td><td>{location.activeAccounts.toLocaleString()}</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <p className="panel-muted">Location summaries will appear after PostHog receives geolocation-enriched visitor and signed-in activity.</p>
+        )}
+        <p className="admin-analytics__footnote">Locations are approximate city and country aggregates supplied by PostHog. Clover does not store IP addresses or precise coordinates in this dashboard.</p>
+      </section>
+
       <div className="admin-behavior-grid">
         <section className="admin-hub__panel glass" aria-labelledby="admin-engagement-title">
           <div className="admin-hub__panel-head">
