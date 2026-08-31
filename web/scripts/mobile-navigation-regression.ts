@@ -44,6 +44,31 @@ async function main() {
     /document\.addEventListener\("scroll", handleDocumentScroll, \{ passive: true, capture: true \}\)/,
     "Compaction must observe nested page scrollers without blocking scroll performance.",
   );
+  assert.match(
+    shell,
+    /document\.addEventListener\("touchmove", handleTouchMove, \{ passive: false \}\)/,
+    "Pull-to-refresh must be able to contain the browser gesture after a vertical pull is recognized.",
+  );
+  assert.match(
+    shell,
+    /getGestureScrollTop\(target\) > 0 \|\| isMobileGestureBlockedTarget\(target\)/,
+    "Pull-to-refresh must not activate inside a scrolled region or an interactive gesture surface.",
+  );
+  assert.match(
+    shell,
+    /window\.dispatchEvent\(new CustomEvent\(cloverPullToRefreshEvent,[\s\S]{0,220}router\.refresh\(\)/,
+    "A completed pull must notify client data views and refresh the current server route.",
+  );
+  assert.match(
+    shell,
+    /touch\.clientX <= MOBILE_EDGE_SWIPE_WIDTH[\s\S]{0,900}kind: "open-sidebar"/,
+    "A rightward gesture from the left edge must offer a mobile navigation shortcut.",
+  );
+  assert.match(
+    shell,
+    /kind === "close-sidebar" && deltaX <= -MOBILE_SIDEBAR_SWIPE_THRESHOLD[\s\S]{0,120}setIsSidebarOpen\(false\)/,
+    "The mobile navigation drawer must close with a leftward swipe.",
+  );
   assert.match(shell, /scrollTop - previousScrollTop >= 5[\s\S]{0,100}setIsBottomNavCompact\(true\)/);
   assert.match(shell, /previousScrollTop - scrollTop >= 8[\s\S]{0,100}setIsBottomNavCompact\(false\)/);
   assert.match(
@@ -81,6 +106,16 @@ async function main() {
     styles,
     /@media \(prefers-reduced-motion: reduce\) \{[\s\S]{0,500}\.shell-bottom-nav[\s\S]{0,500}transition: none !important;/,
     "Navigation motion must respect reduced-motion preferences.",
+  );
+  assert.match(
+    styles,
+    /App-wide mobile gestures[\s\S]{0,1400}\.mobile-pull-refresh--refreshing[\s\S]{0,900}clover-mobile-refresh-spin/,
+    "The mobile refresh gesture must provide visible pulling, release, and loading feedback.",
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 1100px\) and \(prefers-reduced-motion: reduce\)[\s\S]{0,260}\.mobile-pull-refresh[\s\S]{0,180}transition: none !important;/,
+    "Pull-to-refresh feedback must respect reduced-motion preferences.",
   );
   assert.match(
     navigationIcons,

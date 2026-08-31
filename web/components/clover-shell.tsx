@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ChangeEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
@@ -130,6 +131,56 @@ type CloverShellProps = {
   hideCompactBarKickerAndSubtitleOnMobile?: boolean;
   workspaceId?: string;
   children: ReactNode;
+};
+
+type MobileShellGesture = {
+  kind: "idle" | "pull-refresh" | "open-sidebar" | "close-sidebar";
+  startX: number;
+  startY: number;
+  pullDistance: number;
+};
+
+const MOBILE_SHELL_BREAKPOINT = "(max-width: 1100px)";
+const MOBILE_EDGE_SWIPE_WIDTH = 24;
+const MOBILE_SIDEBAR_SWIPE_THRESHOLD = 64;
+const MOBILE_PULL_REFRESH_THRESHOLD = 68;
+const MOBILE_PULL_REFRESH_MAX_DISTANCE = 96;
+export const cloverPullToRefreshEvent = "clover:pull-to-refresh";
+
+const idleMobileShellGesture = (): MobileShellGesture => ({
+  kind: "idle",
+  startX: 0,
+  startY: 0,
+  pullDistance: 0,
+});
+
+const isMobileGestureBlockedTarget = (target: EventTarget | null) =>
+  target instanceof Element && Boolean(target.closest([
+    "input",
+    "textarea",
+    "select",
+    "button",
+    "a",
+    "[role='button']",
+    "[contenteditable='true']",
+    "[role='dialog']",
+    "[data-mobile-gesture-lock]",
+    ".animated-tabs",
+    ".recurring-calendar__grid",
+    ".mobile-swipe-delete",
+  ].join(",")));
+
+const getGestureScrollTop = (target: EventTarget | null) => {
+  let element = target instanceof Element ? target : null;
+
+  while (element && element !== document.documentElement) {
+    const style = window.getComputedStyle(element);
+    const canScrollVertically = /(auto|scroll)/.test(style.overflowY) && element.scrollHeight > element.clientHeight + 1;
+    if (canScrollVertically) return element.scrollTop;
+    element = element.parentElement;
+  }
+
+  return window.scrollY || document.scrollingElement?.scrollTop || 0;
 };
 
 type SidebarSearchAccount = {
@@ -735,6 +786,10 @@ export function CloverShell({
   const quickAddFileInputRef = useRef<HTMLInputElement | null>(null);
   const quickAddPhotoInputRef = useRef<HTMLInputElement | null>(null);
   const quickAddPhotoLibraryInputRef = useRef<HTMLInputElement | null>(null);
+  const mobileShellGestureRef = useRef<MobileShellGesture>(idleMobileShellGesture());
+  const mobilePullFrameRef = useRef<number | null>(null);
+  const mobileRefreshTimerRef = useRef<number | null>(null);
+  const mobileRefreshStateRef = useRef<"idle" | "pulling" | "ready" | "refreshing">("idle");
   const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | "more" | null>(null);
   const [guidanceMenuVisibility, setGuidanceMenuVisibility] = useState<GuidanceMenuVisibility>(() =>
     getGuidanceMenuPreset("very-comfortable")
@@ -760,6 +815,8 @@ export function CloverShell({
   const [notificationCount, setNotificationCount] = useState(0);
   const [cachedProfileImage, setCachedProfileImage] = useState<string | null>(null);
   const [isBottomNavCompact, setIsBottomNavCompact] = useState(false);
+  const [mobilePullDistance, setMobilePullDistance] = useState(0);
+  const [mobileRefreshState, setMobileRefreshState] = useState<"idle" | "pulling" | "ready" | "refreshing">("idle");
   const [mobileOverlayChrome, setMobileOverlayChrome] = useState<{ title: string; onBack: () => void } | null>(null);
   const [previousPathname, setPreviousPathname] = useState<string | null>(null);
   const quickAddAccounts = useMemo(
@@ -855,6 +912,170 @@ export function CloverShell({
       mobileQuery.removeEventListener("change", handleViewportChange);
     };
   }, [pathname]);
+
+  useEffect(() => {
+    const mobileQuery = window.matchMedia(MOBILE_SHELL_BREAKPOINT);
+
+    const schedulePullDistance = (distance: number) => {
+      if (mobilePullFrameRef.current !== null) {
+        window.cancelAnimationFrame(mobilePullFrameRef.current);
+      }
+      mobilePullFrameRef.current = window.requestAnimationFrame(() => {
+        setMobilePullDistance(distance);
+        const nextState = distance >= MOBILE_PULL_REFRESH_THRESHOLD ? "ready" : "pulling";
+        mobileRefreshStateRef.current = nextState;
+        setMobileRefreshState(nextState);
+        mobilePullFrameRef.current = null;
+      });
+    };
+
+    const resetPullGesture = () => {
+      mobileShellGestureRef.current = idleMobileShellGesture();
+      if (mobilePullFrameRef.current !== null) {
+        window.cancelAnimationFrame(mobilePullFrameRef.current);
+        mobilePullFrameRef.current = null;
+      }
+      setMobilePullDistance(0);
+      if (mobileRefreshStateRef.current !== "refreshing") {
+        mobileRefreshStateRef.current = "idle";
+        setMobileRefreshState("idle");
+      }
+    };
+
+    const hasBlockingOverlay = () =>
+      isProfileDrawerOpen ||
+      quickAddModal !== null ||
+      openMenu !== null ||
+      document.body.dataset.cloverImportModalOpen === "true" ||
+      document.body.hasAttribute("data-clover-page-modal") ||
+      Boolean(document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]'));
+
+    const handleTouchStart = (event: TouchEvent) => {
+      if (!mobileQuery.matches || event.touches.length !== 1 || mobileRefreshStateRef.current === "refreshing") return;
+
+      const touch = event.touches[0];
+      const target = event.target;
+      const sidebar = shellRef.current?.querySelector(".sidebar");
+
+      if (isSidebarOpen && target instanceof Node && sidebar?.contains(target)) {
+        mobileShellGestureRef.current = {
+          kind: "close-sidebar",
+          startX: touch.clientX,
+          startY: touch.clientY,
+          pullDistance: 0,
+        };
+        return;
+      }
+
+      if (hasBlockingOverlay() || isSidebarOpen) return;
+
+      if (touch.clientX <= MOBILE_EDGE_SWIPE_WIDTH) {
+        mobileShellGestureRef.current = {
+          kind: "open-sidebar",
+          startX: touch.clientX,
+          startY: touch.clientY,
+          pullDistance: 0,
+        };
+        return;
+      }
+
+      if (getGestureScrollTop(target) > 0 || isMobileGestureBlockedTarget(target)) return;
+
+      mobileShellGestureRef.current = {
+        kind: "pull-refresh",
+        startX: touch.clientX,
+        startY: touch.clientY,
+        pullDistance: 0,
+      };
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      if (!mobileQuery.matches || event.touches.length !== 1) return;
+
+      const gesture = mobileShellGestureRef.current;
+      if (gesture.kind === "idle") return;
+
+      const touch = event.touches[0];
+      const deltaX = touch.clientX - gesture.startX;
+      const deltaY = touch.clientY - gesture.startY;
+      const horizontalDistance = Math.abs(deltaX);
+      const verticalDistance = Math.abs(deltaY);
+
+      if (gesture.kind === "pull-refresh") {
+        if (deltaY <= 0 || (horizontalDistance > 10 && horizontalDistance > verticalDistance)) {
+          resetPullGesture();
+          return;
+        }
+        if (deltaY < 6 || verticalDistance < horizontalDistance * 1.15) return;
+
+        event.preventDefault();
+        const distance = Math.min(MOBILE_PULL_REFRESH_MAX_DISTANCE, deltaY * 0.48);
+        gesture.pullDistance = distance;
+        schedulePullDistance(distance);
+        return;
+      }
+
+      if (horizontalDistance < 12 || horizontalDistance < verticalDistance * 1.15) return;
+      event.preventDefault();
+
+      if (gesture.kind === "open-sidebar" && deltaX >= MOBILE_SIDEBAR_SWIPE_THRESHOLD) {
+        setIsSidebarOpen(true);
+        mobileShellGestureRef.current = idleMobileShellGesture();
+      } else if (gesture.kind === "close-sidebar" && deltaX <= -MOBILE_SIDEBAR_SWIPE_THRESHOLD) {
+        setIsSidebarOpen(false);
+        mobileShellGestureRef.current = idleMobileShellGesture();
+      }
+    };
+
+    const handleTouchEnd = () => {
+      const gesture = mobileShellGestureRef.current;
+      if (gesture.kind !== "pull-refresh") {
+        mobileShellGestureRef.current = idleMobileShellGesture();
+        return;
+      }
+
+      if (gesture.pullDistance < MOBILE_PULL_REFRESH_THRESHOLD) {
+        resetPullGesture();
+        return;
+      }
+
+      mobileShellGestureRef.current = idleMobileShellGesture();
+      if (mobilePullFrameRef.current !== null) {
+        window.cancelAnimationFrame(mobilePullFrameRef.current);
+        mobilePullFrameRef.current = null;
+      }
+      setMobilePullDistance(MOBILE_PULL_REFRESH_THRESHOLD);
+      mobileRefreshStateRef.current = "refreshing";
+      setMobileRefreshState("refreshing");
+      clearJsonRequestCache();
+      window.dispatchEvent(new CustomEvent(cloverPullToRefreshEvent, {
+        detail: { pathname, workspaceId: workspaceId ?? null },
+      }));
+      startTransition(() => router.refresh());
+
+      if (mobileRefreshTimerRef.current !== null) window.clearTimeout(mobileRefreshTimerRef.current);
+      mobileRefreshTimerRef.current = window.setTimeout(() => {
+        setMobilePullDistance(0);
+        mobileRefreshStateRef.current = "idle";
+        setMobileRefreshState("idle");
+        mobileRefreshTimerRef.current = null;
+      }, 900);
+    };
+
+    document.addEventListener("touchstart", handleTouchStart, { passive: true });
+    document.addEventListener("touchmove", handleTouchMove, { passive: false });
+    document.addEventListener("touchend", handleTouchEnd, { passive: true });
+    document.addEventListener("touchcancel", resetPullGesture, { passive: true });
+
+    return () => {
+      document.removeEventListener("touchstart", handleTouchStart);
+      document.removeEventListener("touchmove", handleTouchMove);
+      document.removeEventListener("touchend", handleTouchEnd);
+      document.removeEventListener("touchcancel", resetPullGesture);
+      if (mobilePullFrameRef.current !== null) window.cancelAnimationFrame(mobilePullFrameRef.current);
+      if (mobileRefreshTimerRef.current !== null) window.clearTimeout(mobileRefreshTimerRef.current);
+    };
+  }, [isProfileDrawerOpen, isSidebarOpen, openMenu, pathname, quickAddModal, router, workspaceId]);
   const profileImage = user?.imageUrl ?? cachedProfileImage;
   const isProfileActive = isProfileDrawerOpen || active === "profile" || pathname?.startsWith("/profile");
   const isSettingsActive = pathname?.startsWith("/settings");
@@ -1706,11 +1927,36 @@ export function CloverShell({
     void signOutToLanding(signOut);
   };
 
+  const mobilePullRefreshLabel = mobileRefreshState === "refreshing"
+    ? "Refreshing"
+    : mobileRefreshState === "ready"
+      ? "Release to refresh"
+      : "Pull to refresh";
+  const mobilePullRefreshStyle = {
+    "--mobile-pull-distance": `${mobilePullDistance}px`,
+    "--mobile-pull-progress": Math.min(1, mobilePullDistance / MOBILE_PULL_REFRESH_THRESHOLD),
+  } as CSSProperties;
+
   return (
     <CloverChromeContext.Provider value={{ closeChrome, setMobileOverlayChrome }}>
       <OnboardingMissionTracker />
       <RegionalPreferencesSync />
       <div className={`app-shell ${isSidebarOpen ? "is-sidebar-open" : ""}`} ref={shellRef}>
+      <div
+        className={`mobile-pull-refresh mobile-pull-refresh--${mobileRefreshState}`}
+        style={mobilePullRefreshStyle}
+        role="status"
+        aria-live="polite"
+        aria-hidden={mobileRefreshState === "idle"}
+      >
+        <span className="mobile-pull-refresh__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M20 7v5h-5" />
+            <path d="M19 12a7 7 0 1 0-2.05 4.95" />
+          </svg>
+        </span>
+        <span>{mobilePullRefreshLabel}</span>
+      </div>
       <div
         className="sidebar-backdrop"
         role="presentation"
