@@ -49,6 +49,26 @@ assert.equal(
   "2025-10-13",
   "Numeric receipt evidence must repair the year without changing the supported month and day."
 );
+assert.equal(
+  repairReceiptDateFromEvidence({
+    transaction_date: "2026-12-03",
+    parser_evidence: {
+      source_text: "Transaction date: 08/29/2026",
+    },
+  }).transaction_date,
+  "2026-08-29",
+  "One unambiguous printed receipt date must repair a model month/day hallucination."
+);
+assert.equal(
+  repairReceiptDateFromEvidence({
+    transaction_date: "2026-12-03",
+    parser_evidence: {
+      source_text: "Date: 03/12/2026",
+    },
+  }).transaction_date,
+  "2026-12-03",
+  "Ambiguous numeric dates must not be flipped without supporting evidence."
+);
 
 const receiptText = [
   "UNKNOWN MERCHANT",

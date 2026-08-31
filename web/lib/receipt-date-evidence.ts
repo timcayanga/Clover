@@ -62,8 +62,23 @@ export const repairReceiptDateFromEvidence = <T extends ReceiptDateDetails>(deta
   const sourceText = details.parser_evidence?.source_text?.trim() ?? "";
   if (!currentDate || !sourceText) return details;
 
+  const explicitEvidenceDates = getExplicitEvidenceDates(sourceText);
+  // A receipt with one explicit, valid date is stronger evidence than a model
+  // transcription. This also repairs month/day hallucinations, not only an
+  // incorrect year. Ambiguous numeric dates intentionally produce multiple
+  // candidates and continue through the conservative matching path below.
+  if (explicitEvidenceDates.length === 1) {
+    const [explicitDate] = explicitEvidenceDates;
+    return explicitDate === currentDate
+      ? details
+      : {
+          ...details,
+          transaction_date: explicitDate,
+        };
+  }
+
   const monthDay = currentDate.slice(4);
-  const matchingEvidenceDates = getExplicitEvidenceDates(sourceText).filter((date) => date.slice(4) === monthDay);
+  const matchingEvidenceDates = explicitEvidenceDates.filter((date) => date.slice(4) === monthDay);
   const uniqueMatch = matchingEvidenceDates.length === 1 ? matchingEvidenceDates[0] : null;
   if (!uniqueMatch || uniqueMatch === currentDate) return details;
 
