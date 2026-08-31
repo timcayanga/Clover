@@ -1648,12 +1648,14 @@ model FinancialCommitment {
   amount                Decimal?                        @db.Decimal(18, 2)
   currency              String                          @default("PHP")
   dueDate               DateTime?
+  plannedPaymentDate    DateTime?
   recurrence            CommitmentRecurrence            @default(once)
   nextDueDate           DateTime?
   notes                 String?
   categoryName          String?
   accountId             String?
   transactionId         String?
+  evidenceTransactionIds Json?
   statementCheckpointId String?
   status                CommitmentStatus                @default(active)
   source                String                          @default("manual")
@@ -1671,6 +1673,7 @@ model FinancialCommitment {
   @@index([status])
   @@index([workspaceId, status, kind])
   @@index([dueDate])
+  @@index([plannedPaymentDate])
   @@index([nextDueDate])
   @@index([accountId])
   @@index([transactionId])

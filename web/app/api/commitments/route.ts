@@ -25,8 +25,27 @@ export async function POST(request: Request) {
     if (!payload.workspaceId || !payload.kind || !payload.title) {
       return NextResponse.json({ error: "workspaceId, kind, and title are required" }, { status: 400 });
     }
+    if (payload.plannedPaymentDate && payload.dueDate && new Date(payload.plannedPaymentDate) > new Date(payload.dueDate)) {
+      return NextResponse.json({ error: "Planned payment date must be on or before the due date" }, { status: 400 });
+    }
 
     await assertWorkspaceAccess(userId, payload.workspaceId);
+
+    const requestedEvidenceIds = payload.evidenceTransactionIds.length > 0
+      ? payload.evidenceTransactionIds
+      : payload.transactionId
+        ? [payload.transactionId]
+        : [];
+    const validEvidence = requestedEvidenceIds.length > 0
+      ? await prisma.transaction.findMany({
+          where: { id: { in: requestedEvidenceIds }, workspaceId: payload.workspaceId, deletedAt: null },
+          select: { id: true },
+        })
+      : [];
+    if (validEvidence.length !== requestedEvidenceIds.length) {
+      return NextResponse.json({ error: "One or more linked transactions are unavailable" }, { status: 400 });
+    }
+    const evidenceTransactionIds = validEvidence.map((transaction) => transaction.id);
 
     const commitment = await prisma.financialCommitment.create({
       data: {
@@ -37,11 +56,13 @@ export async function POST(request: Request) {
         amount: payload.amount,
         currency: payload.currency,
         dueDate: payload.dueDate ? new Date(payload.dueDate) : null,
+        plannedPaymentDate: payload.plannedPaymentDate ? new Date(payload.plannedPaymentDate) : null,
         recurrence: payload.recurrence,
         nextDueDate: payload.nextDueDate ? new Date(payload.nextDueDate) : payload.dueDate ? new Date(payload.dueDate) : null,
         notes: payload.notes,
         accountId: payload.accountId,
-        transactionId: payload.transactionId,
+        transactionId: evidenceTransactionIds[0] ?? payload.transactionId,
+        evidenceTransactionIds,
         statementCheckpointId: payload.statementCheckpointId,
         status: payload.status,
         source: "manual",

@@ -42,12 +42,14 @@ export async function PATCH(
       amount: Object.hasOwn(body, "amount") ? body.amount : current.amount?.toString(),
       currency: body.currency ?? current.currency,
       dueDate: Object.hasOwn(body, "dueDate") ? body.dueDate : current.dueDate?.toISOString(),
+      plannedPaymentDate: Object.hasOwn(body, "plannedPaymentDate") ? body.plannedPaymentDate : current.plannedPaymentDate?.toISOString(),
       recurrence: body.recurrence ?? current.recurrence,
       nextDueDate: Object.hasOwn(body, "nextDueDate") ? body.nextDueDate : current.nextDueDate?.toISOString(),
       notes: Object.hasOwn(body, "notes") ? body.notes : current.notes,
       categoryName: Object.hasOwn(body, "categoryName") ? body.categoryName : current.categoryName,
       accountId: Object.hasOwn(body, "accountId") ? body.accountId : current.accountId,
       transactionId: Object.hasOwn(body, "transactionId") ? body.transactionId : current.transactionId,
+      evidenceTransactionIds: Object.hasOwn(body, "evidenceTransactionIds") ? body.evidenceTransactionIds : current.evidenceTransactionIds,
       statementCheckpointId: Object.hasOwn(body, "statementCheckpointId") ? body.statementCheckpointId : current.statementCheckpointId,
       status: body.status ?? current.status,
     });
@@ -55,6 +57,25 @@ export async function PATCH(
     if (!payload.kind || !payload.title) {
       return NextResponse.json({ error: "A title and valid recurring type are required" }, { status: 400 });
     }
+    if (payload.plannedPaymentDate && payload.dueDate && new Date(payload.plannedPaymentDate) > new Date(payload.dueDate)) {
+      return NextResponse.json({ error: "Planned payment date must be on or before the due date" }, { status: 400 });
+    }
+
+    const requestedEvidenceIds = payload.evidenceTransactionIds.length > 0
+      ? payload.evidenceTransactionIds
+      : payload.transactionId
+        ? [payload.transactionId]
+        : [];
+    const validEvidence = requestedEvidenceIds.length > 0
+      ? await prisma.transaction.findMany({
+          where: { id: { in: requestedEvidenceIds }, workspaceId: current.workspaceId, deletedAt: null },
+          select: { id: true },
+        })
+      : [];
+    if (validEvidence.length !== requestedEvidenceIds.length) {
+      return NextResponse.json({ error: "One or more linked transactions are unavailable" }, { status: 400 });
+    }
+    const evidenceTransactionIds = validEvidence.map((transaction) => transaction.id);
 
     const commitment = await prisma.financialCommitment.update({
       where: { id: commitmentId },
@@ -65,12 +86,14 @@ export async function PATCH(
         amount: payload.amount,
         currency: payload.currency,
         dueDate: payload.dueDate ? new Date(payload.dueDate) : null,
+        plannedPaymentDate: payload.plannedPaymentDate ? new Date(payload.plannedPaymentDate) : null,
         recurrence: payload.recurrence,
         nextDueDate: payload.nextDueDate ? new Date(payload.nextDueDate) : payload.dueDate ? new Date(payload.dueDate) : null,
         notes: payload.notes,
         categoryName: payload.categoryName,
         accountId: payload.accountId,
-        transactionId: payload.transactionId,
+        transactionId: evidenceTransactionIds[0] ?? null,
+        evidenceTransactionIds,
         statementCheckpointId: payload.statementCheckpointId,
         status: payload.status,
       },

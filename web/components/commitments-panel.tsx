@@ -38,6 +38,7 @@ type CommitmentTransactionOption = {
   merchantRaw: string;
   merchantClean: string | null;
   account: {
+    id: string;
     name: string;
   };
 };
@@ -70,7 +71,7 @@ const dateFormatter = new Intl.DateTimeFormat("en-PH", {
 
 type CommitmentKind = "planned_payment" | "debt" | "receivable" | "reminder";
 type CommitmentFormKind = CommitmentKind;
-type EditableCommitmentField = RecurringDetailEditableField | "counterparty" | "dueDate" | "notes";
+type EditableCommitmentField = RecurringDetailEditableField | "counterparty" | "notes";
 
 type CommitmentFormCopy = {
   eyebrow: string;
@@ -166,11 +167,13 @@ const toDateInputValue = (value: string | null) => {
 const formatTransactionLabel = (transaction: CommitmentTransactionOption) => {
   const merchant = transaction.merchantClean ?? transaction.merchantRaw;
   const amount = Number(transaction.amount);
-  const amountLabel = Number.isFinite(amount) ? currencyFormatter.format(amount) : transaction.amount;
+  const amountLabel = Number.isFinite(amount)
+    ? new Intl.NumberFormat("en-PH", { style: "currency", currency: transaction.currency || "PHP" }).format(Math.abs(amount))
+    : transaction.amount;
   return `${merchant} · ${amountLabel} · ${dateFormatter.format(new Date(transaction.date))}`;
 };
 
-const getCommitmentDateValue = (commitment: FinancialCommitmentSummary) => commitment.nextDueDate ?? commitment.dueDate;
+const getCommitmentDateValue = (commitment: FinancialCommitmentSummary) => commitment.plannedPaymentDate ?? commitment.nextDueDate ?? commitment.dueDate;
 
 const mobileDateFormatter = new Intl.DateTimeFormat("en-PH", {
   month: "short",
@@ -324,6 +327,7 @@ export function CommitmentsPanel({
     amount: string;
     currency: string;
     dueDate: string;
+    plannedPaymentDate: string;
     recurrence: (typeof commitmentRecurrenceOptions)[number]["value"];
     accountId: string;
     notes: string;
@@ -333,6 +337,7 @@ export function CommitmentsPanel({
     reasonTags: string[];
     statementCheckpointId: string | null;
     installmentTerms: string;
+    transactionIds: string[];
   } | null>(null);
   const [patternDraft, setPatternDraft] = useState({
     title: "",
@@ -340,12 +345,15 @@ export function CommitmentsPanel({
     amount: "",
     currency: "PHP",
     dueDate: "",
+    plannedPaymentDate: "",
     recurrence: "monthly" as (typeof commitmentRecurrenceOptions)[number]["value"],
     accountId: "",
     notes: "",
     statementCheckpointId: "",
     installmentTerms: "",
+    transactionIds: [] as string[],
   });
+  const [transactionSearch, setTransactionSearch] = useState("");
   const [kind, setKind] = useState<CommitmentKind>(initialKind);
   const [title, setTitle] = useState("");
   const [counterparty, setCounterparty] = useState("");
@@ -367,8 +375,6 @@ export function CommitmentsPanel({
   const overviewStats = useMemo(() => {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 30);
     const activeCommitments = visibleCommitments.filter((item) => item.status === "active");
     const upcoming = activeCommitments
       .map((item) => ({ item, date: getCommitmentDateValue(item) }))
@@ -381,7 +387,6 @@ export function CommitmentsPanel({
         return Number.isFinite(timestamp) && timestamp >= start.getTime();
       })
       .sort((left, right) => new Date(left.date!).getTime() - new Date(right.date!).getTime());
-    const dueWithin30Days = upcoming.filter(({ date }) => new Date(date!).getTime() <= end.getTime());
     const monthlyTotal = activeCommitments.reduce((total, item) => {
       const value = Number(item.amount);
       if (!Number.isFinite(value)) {
@@ -401,8 +406,6 @@ export function CommitmentsPanel({
 
     return {
       upcoming,
-      dueWithin30Days,
-      dueWithin30DaysTotal: dueWithin30Days.reduce((total, { item }) => total + (Number(item.amount) || 0), 0),
       monthlyTotal,
       activeCount: activeCommitments.length,
     };
@@ -457,6 +460,17 @@ export function CommitmentsPanel({
     return Array.from(deduped.values());
   }, [dismissedPatternIds, recurringPatterns, visibleCommitments]);
   const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
+  const transactionById = useMemo(() => new Map(transactions.map((transaction) => [transaction.id, transaction])), [transactions]);
+  const addableTransactions = useMemo(() => {
+    const search = transactionSearch.trim().toLowerCase();
+    return transactions
+      .filter((transaction) => !patternDraft.transactionIds.includes(transaction.id))
+      .filter((transaction) => {
+        if (!search) return transaction.currency === patternDraft.currency && (!patternDraft.accountId || transaction.account.id === patternDraft.accountId);
+        return `${transaction.merchantClean ?? ""} ${transaction.merchantRaw} ${transaction.account.name} ${transaction.amount} ${transaction.date}`.toLowerCase().includes(search);
+      })
+      .slice(0, 8);
+  }, [patternDraft.accountId, patternDraft.currency, patternDraft.transactionIds, transactionSearch, transactions]);
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === accountId) ?? null,
     [accountId, accounts]
@@ -525,11 +539,13 @@ export function CommitmentsPanel({
       amount: "",
       currency: "PHP",
       dueDate: "",
+      plannedPaymentDate: "",
       recurrence: "monthly",
       accountId: "",
       notes: "",
       statementCheckpointId: "",
       installmentTerms: "",
+      transactionIds: [],
     });
     setReviewingSuggestion(null);
   };
@@ -591,11 +607,13 @@ export function CommitmentsPanel({
           amount: formCopy.showAmount && amount.trim() ? amount.trim() : null,
           currency: formCopy.showCurrency ? currency.trim() || "PHP" : "PHP",
           dueDate: formCopy.showDueDate && dueDate ? new Date(`${dueDate}T00:00:00`).toISOString() : null,
+          plannedPaymentDate: null,
           recurrence: formCopy.showRecurrence ? recurrence : "once",
           nextDueDate: formCopy.showDueDate && dueDate ? new Date(`${dueDate}T00:00:00`).toISOString() : null,
           notes: notes.trim() || null,
           accountId: formCopy.showLinkedAccount && accountId ? accountId : null,
           transactionId: formCopy.showTransaction && transactionId ? transactionId : null,
+          evidenceTransactionIds: formCopy.showTransaction && transactionId ? [transactionId] : [],
           statementCheckpointId: null,
           status: "active",
           source: "manual",
@@ -690,7 +708,9 @@ export function CommitmentsPanel({
       case "counterparty":
         return commitment.counterparty ?? "";
       case "dueDate":
-        return toDateInputValue(getCommitmentDateValue(commitment));
+        return toDateInputValue(commitment.dueDate);
+      case "plannedPaymentDate":
+        return toDateInputValue(commitment.plannedPaymentDate);
       case "recurrence":
         return commitment.recurrence;
       case "kind":
@@ -797,6 +817,7 @@ export function CommitmentsPanel({
     amount: string;
     currency: string;
     dueDate: string;
+    plannedPaymentDate: string;
     recurrence: (typeof commitmentRecurrenceOptions)[number]["value"];
     accountId: string;
     notes: string;
@@ -806,6 +827,7 @@ export function CommitmentsPanel({
     reasonTags: string[];
     statementCheckpointId: string | null;
     installmentTerms: string;
+    transactionIds: string[];
   }) => {
     setReviewingSuggestion(suggestion);
     setPatternDraft({
@@ -814,12 +836,15 @@ export function CommitmentsPanel({
       amount: suggestion.amount,
       currency: suggestion.currency || "PHP",
       dueDate: suggestion.dueDate,
+      plannedPaymentDate: suggestion.plannedPaymentDate ?? "",
       recurrence: suggestion.recurrence,
       accountId: suggestion.accountId,
       notes: suggestion.notes,
       statementCheckpointId: suggestion.statementCheckpointId ?? "",
       installmentTerms: suggestion.installmentTerms ?? "",
+      transactionIds: suggestion.transactionIds,
     });
+    setTransactionSearch("");
   };
 
   const openPatternReview = (pattern: RecurringPatternSummary) => {
@@ -836,6 +861,7 @@ export function CommitmentsPanel({
       amount: pattern.amount ?? "",
       currency: pattern.currency ?? "PHP",
       dueDate: toDateInputValue(pattern.nextExpectedDate),
+      plannedPaymentDate: "",
       recurrence: recurrenceValue,
       accountId: pattern.account?.id ?? "",
       notes: `Detected from ${pattern.transactionCount} matching transaction${pattern.transactionCount === 1 ? "" : "s"}.`,
@@ -845,6 +871,7 @@ export function CommitmentsPanel({
       reasonTags: pattern.reasonTags,
       statementCheckpointId: "",
       installmentTerms: "",
+      transactionIds: pattern.transactionIds,
     });
   };
 
@@ -857,6 +884,7 @@ export function CommitmentsPanel({
       amount: suggestion.amount ?? "",
       currency: suggestion.currency,
       dueDate: toDateInputValue(suggestion.dueDate),
+      plannedPaymentDate: "",
       recurrence: suggestion.recurrence,
       accountId: suggestion.accountId ?? "",
       notes: suggestion.notes ?? "",
@@ -866,6 +894,7 @@ export function CommitmentsPanel({
       reasonTags: suggestion.reasonTags,
       statementCheckpointId: suggestion.statementCheckpointId,
       installmentTerms: suggestion.installmentTerms ?? "",
+      transactionIds: suggestion.transactionIds,
     });
   };
 
@@ -902,10 +931,12 @@ export function CommitmentsPanel({
             amount: patternDraft.amount.trim() ? patternDraft.amount : null,
             currency: patternDraft.currency.trim() || "PHP",
             dueDate: patternDraft.dueDate || null,
+            plannedPaymentDate: patternDraft.plannedPaymentDate || null,
             recurrence: patternDraft.recurrence,
             notes: notesToSave || null,
             accountId: patternDraft.accountId || null,
             transactionId: null,
+            evidenceTransactionIds: patternDraft.transactionIds,
             statementCheckpointId: patternDraft.statementCheckpointId || null,
             status: "active",
           }),
@@ -958,6 +989,7 @@ export function CommitmentsPanel({
           action: "dismissed",
         });
 
+        setReviewingSuggestion(null);
         router.refresh();
       })
       .catch((error: unknown) => {
@@ -971,40 +1003,6 @@ export function CommitmentsPanel({
       })
       .finally(() => {
         setDismissingPatternId(null);
-      });
-  };
-
-  const handleQuickAddPattern = (pattern: RecurringPatternSummary) => {
-    setConfirmingPatternId(pattern.id);
-    void fetch(`/api/recurring-patterns/${pattern.id}/confirm`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    })
-      .then(async (response) => {
-        const payload = (await response.json().catch(() => null)) as { commitment?: FinancialCommitmentSummary; error?: string } | null;
-        if (!response.ok) {
-          throw new Error(payload?.error ?? "Unable to add recurring item");
-        }
-
-        if (payload?.commitment) {
-          setVisibleCommitments((current) => [payload.commitment as FinancialCommitmentSummary, ...current]);
-        }
-        setDismissedPatternIds((current) => new Set(current).add(pattern.id));
-        capturePostHogClientEvent("recurring_item_confirmed", {
-          workspace_id: workspaceId,
-          source_kind: "recurring_pattern",
-          recurrence: pattern.frequency ?? "monthly",
-          has_amount: Boolean(pattern.amount),
-        });
-        router.refresh();
-      })
-      .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : "Unable to add recurring item";
-        window.alert(message);
-      })
-      .finally(() => {
-        setConfirmingPatternId(null);
       });
   };
 
@@ -1480,10 +1478,20 @@ export function CommitmentsPanel({
               <label className="recurring-mobile-detail__field">
                 <span>Due date</span>
                 <input
-                  key={`date-${getCommitmentDateValue(mobileDetailCommitment)}`}
+                  key={`date-${mobileDetailCommitment.dueDate}`}
                   type="date"
-                  defaultValue={toDateInputValue(getCommitmentDateValue(mobileDetailCommitment))}
+                  defaultValue={toDateInputValue(mobileDetailCommitment.dueDate)}
                   onBlur={(event) => void saveCommitmentField(mobileDetailCommitment, "dueDate", event.currentTarget.value)}
+                />
+              </label>
+              <label className="recurring-mobile-detail__field">
+                <span>Planned payment date</span>
+                <input
+                  key={`planned-date-${mobileDetailCommitment.plannedPaymentDate}`}
+                  type="date"
+                  max={toDateInputValue(mobileDetailCommitment.dueDate) || undefined}
+                  defaultValue={toDateInputValue(mobileDetailCommitment.plannedPaymentDate)}
+                  onBlur={(event) => void saveCommitmentField(mobileDetailCommitment, "plannedPaymentDate", event.currentTarget.value)}
                 />
               </label>
               <label className="recurring-mobile-detail__field">
@@ -1516,6 +1524,15 @@ export function CommitmentsPanel({
                   onKeyDown={(event) => handleEditorKeyDown(event, mobileDetailCommitment, "counterparty")}
                 />
               </label>
+              {mobileDetailCommitment.evidenceTransactionIds.length > 0 ? (
+                <section className="recurring-mobile-detail__field recurring-mobile-detail__field--wide recurring-saved-evidence">
+                  <span>Transaction history</span>
+                  {mobileDetailCommitment.evidenceTransactionIds.map((transactionId) => {
+                    const transaction = transactionById.get(transactionId);
+                    return transaction ? <small key={transactionId}>{formatTransactionLabel(transaction)}</small> : null;
+                  })}
+                </section>
+              ) : null}
               <div className="recurring-mobile-detail__field recurring-mobile-detail__field--wide recurring-mobile-detail__category">
                 <span>Category</span>
                 <strong>{mobileDetailCommitment.categoryName ?? "Other"}</strong>
@@ -1568,14 +1585,6 @@ export function CommitmentsPanel({
 
       {activeTab === "overview" ? <>
       <section className="recurring-overview-grid" aria-label="Recurring overview">
-        <article className="panel recurring-overview-card">
-          <div className="recurring-overview-card__heading">
-            <p className="eyebrow">Next 30 days</p>
-          </div>
-          <strong className="recurring-overview-card__value">{formatCurrency(String(overviewStats.dueWithin30DaysTotal))}</strong>
-          <p>{overviewStats.dueWithin30Days.length === 0 ? "No payments due yet" : `${overviewStats.dueWithin30Days.length} payment${overviewStats.dueWithin30Days.length === 1 ? "" : "s"} due`}</p>
-        </article>
-
         <article className="panel recurring-overview-card recurring-overview-card--list">
           <div className="recurring-overview-card__heading">
             <p className="eyebrow">Upcoming payments</p>
@@ -1605,13 +1614,16 @@ export function CommitmentsPanel({
           <p>Estimated from recurring active items</p>
         </article>
 
-        <article className="panel recurring-overview-card recurring-overview-card--list">
+        <article className="panel recurring-overview-card recurring-overview-card--list recurring-overview-card--review">
           <div className="recurring-overview-card__heading">
-            <p className="eyebrow">Needs attention</p>
+            <div>
+              <p className="eyebrow">Review suggestions</p>
+              <small>Potential recurring transactions found in your transaction history</small>
+            </div>
           </div>
           {actionablePlannedPaymentSuggestions.length > 0 || suggestedRecurringPatterns.length > 0 ? (
             <div className="recurring-overview-list">
-              {actionablePlannedPaymentSuggestions.slice(0, 2).map((suggestion) => (
+              {actionablePlannedPaymentSuggestions.slice(0, 6).map((suggestion) => (
                 <div key={suggestion.id} className="recurring-overview-list__item">
                   <span>
                     <strong>{suggestion.title}</strong>
@@ -1622,7 +1634,7 @@ export function CommitmentsPanel({
                   </button>
                 </div>
               ))}
-              {actionablePlannedPaymentSuggestions.length < 2 ? suggestedRecurringPatterns.slice(0, 2).map((pattern) => (
+              {actionablePlannedPaymentSuggestions.length < 6 ? suggestedRecurringPatterns.slice(0, 6 - actionablePlannedPaymentSuggestions.length).map((pattern) => (
                 <div key={pattern.id} className="recurring-overview-list__item">
                   <span>
                     <strong>{pattern.merchantClean ?? pattern.merchantRaw}</strong>
@@ -1635,55 +1647,10 @@ export function CommitmentsPanel({
               )) : null}
             </div>
           ) : (
-            <p className="recurring-overview-card__empty">Clover will show suggestions and missing details here.</p>
+            <p className="recurring-overview-card__empty">Clover will show potential recurring transactions here for you to review.</p>
           )}
         </article>
       </section>
-
-      {suggestedRecurringPatterns.length > 0 ? (
-        <article className="panel commitments-suggestions-panel">
-          <div>
-            <p className="eyebrow">Potential recurring payments</p>
-            <h3 style={{ margin: 0 }}>Clover found possible subscriptions and bills</h3>
-          </div>
-          <div className="recurring-suggestion-list">
-            {suggestedRecurringPatterns.slice(0, 6).map((pattern) => (
-              <article key={pattern.id} className="recurring-suggestion-row">
-                <div className="recurring-suggestion-row__main">
-                  <h4>{pattern.merchantClean ?? pattern.merchantRaw}</h4>
-                  <p>{formatDate(pattern.nextExpectedDate)}</p>
-                  {pattern.accountCount > 1 && pattern.distinctMonthCount > 1 ? (
-                    <small>Seen across {pattern.accountCount} accounts and {pattern.distinctMonthCount} months</small>
-                  ) : pattern.distinctMonthCount > 1 ? (
-                    <small>Seen across {pattern.distinctMonthCount} months</small>
-                  ) : null}
-                </div>
-                <div className="recurring-suggestion-row__actions">
-                  <button
-                    type="button"
-                    className="button button-primary button-small"
-                    onClick={() => handleQuickAddPattern(pattern)}
-                    disabled={confirmingPatternId === pattern.id}
-                  >
-                    {confirmingPatternId === pattern.id ? "Keeping..." : "Keep"}
-                  </button>
-                  <button
-                    type="button"
-                    className="button button-secondary button-small recurring-suggestion-row__dismiss"
-                    onClick={() => handleDismissPattern(pattern.id)}
-                    disabled={dismissingPatternId === pattern.id}
-                    aria-label={`Delete ${pattern.merchantClean ?? pattern.merchantRaw} suggestion`}
-                    title="Delete suggestion"
-                  >
-                    {dismissingPatternId === pattern.id ? "Deleting..." : "Delete"}
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        </article>
-      ) : null}
-
       </> : null}
 
       {calendarDetailCommitment ? (
@@ -1693,6 +1660,7 @@ export function CommitmentsPanel({
           accountOptions={accounts}
           categoryOptions={categoryOptions}
           currencyOptions={currencyCatalogCodes}
+          transactionOptions={transactions}
           saving={savingCommitmentId === calendarDetailCommitment.id}
           onSaveField={(field, value) => saveCommitmentField(calendarDetailCommitment, field, value)}
           onClose={() => setCalendarDetail(null)}
@@ -1763,13 +1731,24 @@ export function CommitmentsPanel({
                   />
                 </label>
                 <label className="settings-field">
-                  <span>Next due date</span>
+                  <span>Due date</span>
                   <input
                     className="settings-input"
                     type="date"
                     value={patternDraft.dueDate}
                     onChange={(event) => setPatternDraft((draft) => ({ ...draft, dueDate: event.target.value }))}
                   />
+                </label>
+                <label className="settings-field">
+                  <span>Planned payment date <small>(optional)</small></span>
+                  <input
+                    className="settings-input"
+                    type="date"
+                    value={patternDraft.plannedPaymentDate}
+                    max={patternDraft.dueDate || undefined}
+                    onChange={(event) => setPatternDraft((draft) => ({ ...draft, plannedPaymentDate: event.target.value }))}
+                  />
+                  <small>Use an earlier date if you want Clover to remind you before the bill is due.</small>
                 </label>
               </div>
 
@@ -1838,6 +1817,62 @@ export function CommitmentsPanel({
                 </label>
               </div>
 
+              <section className="recurring-suggestion-evidence" aria-labelledby="recurring-suggestion-evidence-title">
+                <div className="recurring-suggestion-evidence__heading">
+                  <div>
+                    <span id="recurring-suggestion-evidence-title">Detected transactions</span>
+                    <small>Keep only the transactions that belong to this recurring bill.</small>
+                  </div>
+                  <strong>{patternDraft.transactionIds.length}</strong>
+                </div>
+                <div className="recurring-suggestion-evidence__selected">
+                  {patternDraft.transactionIds.map((transactionId) => {
+                    const transaction = transactionById.get(transactionId);
+                    if (!transaction) return null;
+                    return (
+                      <div key={transactionId} className="recurring-suggestion-evidence__row">
+                        <span>{formatTransactionLabel(transaction)}</span>
+                        <button
+                          type="button"
+                          onClick={() => setPatternDraft((draft) => ({ ...draft, transactionIds: draft.transactionIds.filter((id) => id !== transactionId) }))}
+                          aria-label={`Remove ${transaction.merchantClean ?? transaction.merchantRaw}`}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {patternDraft.transactionIds.length === 0 ? <p>No transactions selected. Search below to add one.</p> : null}
+                </div>
+                <label className="settings-field">
+                  <span>Add another transaction</span>
+                  <input
+                    className="settings-input"
+                    type="search"
+                    value={transactionSearch}
+                    onChange={(event) => setTransactionSearch(event.currentTarget.value)}
+                    placeholder="Search merchant, account, amount, or date"
+                  />
+                </label>
+                {addableTransactions.length > 0 ? (
+                  <div className="recurring-suggestion-evidence__results">
+                    {addableTransactions.map((transaction) => (
+                      <button
+                        key={transaction.id}
+                        type="button"
+                        onClick={() => {
+                          setPatternDraft((draft) => ({ ...draft, transactionIds: [...draft.transactionIds, transaction.id] }));
+                          setTransactionSearch("");
+                        }}
+                      >
+                        <span>{formatTransactionLabel(transaction)}</span>
+                        <strong>+ Add</strong>
+                      </button>
+                    ))}
+                  </div>
+                ) : transactionSearch ? <p className="recurring-suggestion-evidence__empty">No matching transactions found.</p> : null}
+              </section>
+
               <label className="settings-field">
                 <span>Notes</span>
                 <textarea
@@ -1861,9 +1896,21 @@ export function CommitmentsPanel({
               ) : null}
 
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <button className="button button-secondary button-small recurring-compact-action" type="button" onClick={() => setReviewingSuggestion(null)}>
-                  Cancel
-                </button>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button className="button button-secondary button-small recurring-compact-action" type="button" onClick={() => setReviewingSuggestion(null)}>
+                    Cancel
+                  </button>
+                  {reviewingSuggestion.sourceKind === "recurring_pattern" ? (
+                    <button
+                      className="button button-secondary button-small recurring-compact-action"
+                      type="button"
+                      onClick={() => handleDismissPattern(reviewingSuggestion.id)}
+                      disabled={dismissingPatternId === reviewingSuggestion.id}
+                    >
+                      {dismissingPatternId === reviewingSuggestion.id ? "Dismissing..." : "Dismiss suggestion"}
+                    </button>
+                  ) : null}
+                </div>
                 <button className="button button-primary button-small recurring-compact-action" type="submit" disabled={confirmingPatternId === reviewingSuggestion.id}>
                   {confirmingPatternId === reviewingSuggestion.id
                     ? "Saving..."

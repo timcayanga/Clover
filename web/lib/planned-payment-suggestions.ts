@@ -53,6 +53,7 @@ export type PlannedPaymentSuggestion = {
   sourceFileName: string | null;
   combinedSuggestionCount?: number;
   relatedAccountNames?: string[];
+  transactionIds: string[];
 };
 
 type ConfirmedRecurringMemory = {
@@ -304,6 +305,7 @@ const buildReminderSuggestions = (reminders: StatementReminder[], existingCheckp
       confidenceTier: getRecurringConfidenceTier(reminder.detectionSource === "explicit" ? 92 : reminder.detectionSource === "projected" ? 88 : 84),
       confidence: reminder.detectionSource === "explicit" ? 92 : reminder.detectionSource === "projected" ? 88 : 84,
       sourceFileName: reminder.sourceFileName,
+      transactionIds: [],
     });
 
   }
@@ -423,6 +425,7 @@ const buildInstallmentSuggestions = (
       confidenceTier: getRecurringConfidenceTier(confidence),
       confidence,
       sourceFileName: readTransactionImportFileName(first),
+      transactionIds: group.map((transaction) => transaction.id),
     });
   }
 
@@ -532,6 +535,7 @@ const buildRecurringTransactionSuggestions = (
       confidenceTier: getRecurringConfidenceTier(confidence),
       confidence,
       sourceFileName: pattern.importFile?.fileName ?? null,
+      transactionIds: pattern.transactionIds,
     });
   }
 
@@ -650,6 +654,7 @@ const buildRecurringTransactionSuggestions = (
       confidenceTier: getRecurringConfidenceTier(confidence),
       confidence,
       sourceFileName: readTransactionImportFileName(latest),
+      transactionIds: group.map((transaction) => transaction.id),
     });
   }
 
@@ -762,6 +767,7 @@ export const combineLikelySameRecurringSuggestions = (
       sourceFileName: sourceFiles.length === 1 ? sourceFiles[0] ?? null : null,
       combinedSuggestionCount: group.length,
       relatedAccountNames: accountNames,
+      transactionIds: Array.from(new Set(group.flatMap((suggestion) => suggestion.transactionIds))),
     } satisfies PlannedPaymentSuggestion;
   });
 

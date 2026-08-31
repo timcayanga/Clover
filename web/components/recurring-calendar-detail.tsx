@@ -29,7 +29,9 @@ export type RecurringDetailEditableField =
   | "status"
   | "categoryName"
   | "currency"
-  | "accountId";
+  | "accountId"
+  | "dueDate"
+  | "plannedPaymentDate";
 
 type SelectOption = { value: string; label: string };
 
@@ -39,6 +41,7 @@ type RecurringCalendarDetailProps = {
   accountOptions: Array<{ id: string; name: string; institution: string | null }>;
   categoryOptions: string[];
   currencyOptions: string[];
+  transactionOptions: Array<{ id: string; date: string; amount: string; currency: string; merchantRaw: string; merchantClean: string | null; account: { id: string; name: string } }>;
   saving: boolean;
   onSaveField: (field: RecurringDetailEditableField, value: string) => Promise<boolean>;
   onClose: () => void;
@@ -50,6 +53,7 @@ export function RecurringCalendarDetail({
   accountOptions,
   categoryOptions,
   currencyOptions,
+  transactionOptions,
   saving,
   onSaveField,
   onClose,
@@ -128,6 +132,30 @@ export function RecurringCalendarDetail({
       </dd>
     </div>
   );
+  const renderDate = (field: "dueDate" | "plannedPaymentDate", value: string | null, label: string) => (
+    <div className={editingField === field ? "is-editing" : undefined}>
+      <dt>{label}</dt>
+      <dd>
+        {editingField === field ? (
+          <input
+            className="recurring-calendar-detail__select"
+            type="date"
+            value={draft}
+            autoFocus
+            max={field === "plannedPaymentDate" ? commitment.dueDate?.slice(0, 10) : undefined}
+            disabled={saving}
+            onChange={(event) => setDraft(event.currentTarget.value)}
+            onBlur={() => void finishEdit(field)}
+            onKeyDown={(event) => handleInputKeyDown(event, field)}
+          />
+        ) : (
+          <button type="button" className="recurring-calendar-detail__editable" onClick={() => beginEdit(field, value?.slice(0, 10) ?? "")}>
+            {formatDetailDate(value)}
+          </button>
+        )}
+      </dd>
+    </div>
+  );
 
   return (
     <div className="recurring-calendar-detail" role="presentation" onClick={onClose}>
@@ -168,7 +196,7 @@ export function RecurringCalendarDetail({
         </header>
 
         <div className="recurring-calendar-detail__hero">
-          <span>{commitment.kind === "receivable" ? "Expected" : "Due"} {formatDetailDate(occurrenceDate)}</span>
+          <span>{commitment.plannedPaymentDate ? "Planned payment" : commitment.kind === "receivable" ? "Expected" : "Due"} {formatDetailDate(occurrenceDate)}</span>
           {editingField === "amount" ? (
             <input
               className="recurring-calendar-detail__amount-input"
@@ -192,6 +220,8 @@ export function RecurringCalendarDetail({
         </div>
 
         <dl className="recurring-calendar-detail__facts">
+          {renderDate("dueDate", commitment.dueDate, "Due date")}
+          {renderDate("plannedPaymentDate", commitment.plannedPaymentDate, "Planned payment")}
           {renderSelect("kind", commitment.kind, "Type", commitmentKindOptions)}
           {renderSelect("recurrence", commitment.recurrence, "Repeats", commitmentRecurrenceOptions)}
           {renderSelect("status", commitment.status, "Status", commitmentStatusOptions)}
@@ -208,6 +238,19 @@ export function RecurringCalendarDetail({
           ])}
           {renderSelect("currency", commitment.currency, "Currency", currencyOptions.map((currency) => ({ value: currency, label: currency })))}
         </dl>
+
+        {commitment.evidenceTransactionIds.length > 0 ? (
+          <section className="recurring-calendar-detail__notes recurring-saved-evidence">
+            <span>Transaction history</span>
+            {commitment.evidenceTransactionIds.map((transactionId) => {
+              const transaction = transactionOptions.find((option) => option.id === transactionId);
+              if (!transaction) return null;
+              const merchant = transaction.merchantClean ?? transaction.merchantRaw;
+              const amount = formatCurrencyAmount(Math.abs(Number(transaction.amount)), transaction.currency);
+              return <p key={transactionId}>{merchant} · {amount} · {formatDetailDate(transaction.date)} · {transaction.account.name}</p>;
+            })}
+          </section>
+        ) : null}
 
         {commitment.notes ? (
           <section className="recurring-calendar-detail__notes">

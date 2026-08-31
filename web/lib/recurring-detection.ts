@@ -42,6 +42,7 @@ type DetectedRecurringPattern = {
   nextExpectedDate: Date;
   expectedDayOfMonth: number | null;
   transactionCount: number;
+  transactionIds: string[];
   confidence: number;
   reasonSummary: string;
   reasonTags: string[];
@@ -755,6 +756,7 @@ const buildPatternFromTransactions = (
     nextExpectedDate,
     expectedDayOfMonth,
     transactionCount: candidateTransactions.length,
+    transactionIds: candidateTransactions.map((transaction) => transaction.id),
     confidence,
     reasonSummary,
     reasonTags,

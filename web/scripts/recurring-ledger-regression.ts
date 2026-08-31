@@ -53,6 +53,15 @@ for (const field of ["kind", "recurrence", "status", "accountId", "categoryName"
 }
 assert.match(commitmentRouteSource, /categoryName: Object\.hasOwn\(body, "categoryName"\)/, "Recurring category changes must persist through the protected mutation route.");
 assert.match(schemaSource, /categoryName\s+String\?/, "Recurring items must retain an explicit editable category override.");
+assert.doesNotMatch(panelSource, /Next 30 days/i, "Recurring Overview must not duplicate the calendar with a Next 30 Days card.");
+assert.match(panelSource, /Review suggestions/, "Recurring Overview must identify detected candidates as review suggestions.");
+assert.match(stylesSource, /\.recurring-overview-card--review\s*\{[\s\S]{0,100}grid-column: 1 \/ -1/, "Review Suggestions must span the desktop overview.");
+assert.match(stylesSource, /@media \(max-width: 700px\)[\s\S]{0,150}\.recurring-overview-grid\s*\{[\s\S]{0,100}grid-template-columns: minmax\(0, 1fr\)/, "Recurring overview cards must stack on mobile.");
+assert.match(panelSource, /Detected transactions/, "Suggestion review must show its detected transaction history.");
+assert.match(panelSource, /evidenceTransactionIds: patternDraft\.transactionIds/, "Edited suggestion evidence must persist when saved.");
+assert.match(panelSource, /Planned payment date/, "Suggestion review must support an earlier planned-payment date.");
+assert.match(schemaSource, /plannedPaymentDate\s+DateTime\?/, "Recurring items must persist the optional planned-payment date.");
+assert.match(schemaSource, /evidenceTransactionIds\s+Json\?/, "Recurring items must persist all reviewed transaction evidence.");
 
 const commitment = (
   overrides: Partial<FinancialCommitmentSummary>,
@@ -65,6 +74,7 @@ const commitment = (
   amount: "1599",
   currency: "PHP",
   dueDate: "2026-01-31T00:00:00.000Z",
+  plannedPaymentDate: null,
   recurrence: "monthly",
   nextDueDate: "2026-01-31T00:00:00.000Z",
   notes: null,
@@ -73,6 +83,7 @@ const commitment = (
   inferredAccountConfidence: null,
   inferredAccountReason: null,
   transactionId: null,
+  evidenceTransactionIds: [],
   categoryName: null,
   status: "active",
   confidence: 100,
@@ -101,6 +112,11 @@ const mixedOccurrences = buildRecurringCalendarOccurrences([
   commitment({ id: "paused", status: "paused", dueDate: "2026-08-20T00:00:00.000Z", recurrence: "once" }),
 ], 2026, 7);
 assert.deepEqual(mixedOccurrences.map((item) => item.commitment.id), ["planned", "loan", "owed"], "Overview must combine active payment types and omit paused items.");
+
+const plannedPaymentOccurrences = buildRecurringCalendarOccurrences([
+  commitment({ id: "early-reminder", dueDate: "2026-08-20T00:00:00.000Z", plannedPaymentDate: "2026-08-15T00:00:00.000Z", recurrence: "once" }),
+], 2026, 7);
+assert.deepEqual(plannedPaymentOccurrences.map((item) => item.dateKey), ["2026-08-15"], "An optional planned-payment date must move the calendar reminder without replacing the actual due date.");
 
 const beforeNextWindow = resolveTrackedCommitmentDueDate({
   dueDate: new Date("2026-08-10T00:00:00.000Z"),

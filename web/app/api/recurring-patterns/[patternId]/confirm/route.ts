@@ -73,6 +73,7 @@ export async function POST(
     const amountOverride = readOptionalString(payload, "amount");
     const currencyOverride = readOptionalString(payload, "currency");
     const dueDateOverride = readOptionalDate(payload, "dueDate");
+    const plannedPaymentDateOverride = readOptionalDate(payload, "plannedPaymentDate");
     const accountIdOverride = readOptionalString(payload, "accountId");
     const notesOverride = readOptionalString(payload, "notes");
     const title = readOptionalString(payload, "title") ?? detectedTitle;
@@ -86,6 +87,22 @@ export async function POST(
       notesOverride === undefined
         ? `Detected from ${pattern.transactionCount} matching transaction${pattern.transactionCount === 1 ? "" : "s"}.`
         : notesOverride;
+    const rawEvidenceIds = Array.isArray(payload.evidenceTransactionIds)
+      ? Array.from(new Set(payload.evidenceTransactionIds.filter((value): value is string => typeof value === "string").map((value) => value.trim()).filter(Boolean)))
+      : [];
+    const validEvidence = rawEvidenceIds.length > 0
+      ? await prisma.transaction.findMany({
+          where: { id: { in: rawEvidenceIds }, workspaceId: pattern.workspaceId, deletedAt: null },
+          select: { id: true },
+        })
+      : [];
+    if (validEvidence.length !== rawEvidenceIds.length) {
+      return NextResponse.json({ error: "One or more linked transactions are unavailable" }, { status: 400 });
+    }
+    const evidenceTransactionIds = validEvidence.map((transaction) => transaction.id);
+    if (plannedPaymentDateOverride && dueDate && plannedPaymentDateOverride > dueDate) {
+      return NextResponse.json({ error: "Planned payment date must be on or before the due date" }, { status: 400 });
+    }
 
     const commitment = await prisma.$transaction(async (tx) => {
       const savedCommitment = await tx.financialCommitment.create({
@@ -97,9 +114,12 @@ export async function POST(
           amount,
           currency,
           dueDate,
+          plannedPaymentDate: plannedPaymentDateOverride ?? null,
           recurrence,
           nextDueDate: dueDate,
           accountId,
+          transactionId: evidenceTransactionIds[0] ?? null,
+          evidenceTransactionIds,
           status: "active",
           source: "recurring_detection",
           confidence: pattern.confidence,

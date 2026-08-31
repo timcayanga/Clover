@@ -48,7 +48,7 @@ export const buildRecurringCalendarOccurrences = (
   for (const commitment of commitments) {
     if (commitment.status !== "active") continue;
 
-    const anchor = parseCommitmentDate(commitment.dueDate ?? commitment.nextDueDate);
+    const anchor = parseCommitmentDate(commitment.plannedPaymentDate ?? commitment.dueDate ?? commitment.nextDueDate);
     if (!anchor || anchor.getTime() > monthEnd.getTime()) continue;
 
     if (commitment.recurrence === "once") {
@@ -93,7 +93,7 @@ export const getRecurringCalendarYearOptions = (
   currentYear: number,
 ) => {
   const years = commitments.flatMap((commitment) => {
-    const date = parseCommitmentDate(commitment.dueDate ?? commitment.nextDueDate);
+    const date = parseCommitmentDate(commitment.plannedPaymentDate ?? commitment.dueDate ?? commitment.nextDueDate);
     return date ? [date.getFullYear()] : [];
   });
   const minimum = Math.min(currentYear - 3, ...years);

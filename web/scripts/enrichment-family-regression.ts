@@ -133,6 +133,7 @@ const runPlannedPaymentCombinationChecks = () => {
     confidenceTier: "medium",
     confidence: 78,
     sourceFileName: null,
+    transactionIds: [],
     ...overrides,
   });
 

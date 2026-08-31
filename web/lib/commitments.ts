@@ -30,12 +30,14 @@ export type FinancialCommitmentSummary = {
   amount: string | null;
   currency: string;
   dueDate: string | null;
+  plannedPaymentDate: string | null;
   recurrence: CommitmentRecurrence;
   nextDueDate: string | null;
   notes: string | null;
   categoryName?: string | null;
   accountId: string | null;
   transactionId: string | null;
+  evidenceTransactionIds: string[];
   statementCheckpointId: string | null;
   status: CommitmentStatus;
   source: string;
@@ -138,12 +140,14 @@ export const serializeFinancialCommitment = <T extends {
   amount: { toString: () => string } | null;
   currency: string;
   dueDate: Date | null;
+  plannedPaymentDate: Date | null;
   recurrence: CommitmentRecurrence;
   nextDueDate: Date | null;
   notes: string | null;
   categoryName?: string | null;
   accountId: string | null;
   transactionId: string | null;
+  evidenceTransactionIds: unknown;
   statementCheckpointId: string | null;
   status: CommitmentStatus;
   source: string;
@@ -173,12 +177,18 @@ export const serializeFinancialCommitment = <T extends {
   amount: commitment.amount?.toString() ?? null,
   currency: commitment.currency,
   dueDate: commitment.dueDate?.toISOString() ?? null,
+  plannedPaymentDate: commitment.plannedPaymentDate?.toISOString() ?? null,
   recurrence: commitment.recurrence,
   nextDueDate: commitment.nextDueDate?.toISOString() ?? null,
   notes: commitment.notes,
   categoryName: commitment.categoryName ?? null,
   accountId: commitment.accountId,
   transactionId: commitment.transactionId,
+  evidenceTransactionIds: Array.isArray(commitment.evidenceTransactionIds)
+    ? commitment.evidenceTransactionIds.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    : commitment.transactionId
+      ? [commitment.transactionId]
+      : [],
   statementCheckpointId: commitment.statementCheckpointId,
   status: commitment.status,
   source: commitment.source,
@@ -217,12 +227,16 @@ export const parseCommitmentPayload = (payload: Record<string, unknown>) => {
     amount,
     currency,
     dueDate: parseNullableDate(payload.dueDate),
+    plannedPaymentDate: parseNullableDate(payload.plannedPaymentDate),
     recurrence: typeof recurrence === "string" && recurrence in commitmentRecurrenceLabels ? (recurrence as CommitmentRecurrence) : "once",
     nextDueDate: parseNullableDate(payload.nextDueDate),
     notes: parseNullableText(payload.notes),
     categoryName: parseNullableText(payload.categoryName),
     accountId: parseNullableText(payload.accountId),
     transactionId: parseNullableText(payload.transactionId),
+    evidenceTransactionIds: Array.isArray(payload.evidenceTransactionIds)
+      ? Array.from(new Set(payload.evidenceTransactionIds.filter((value): value is string => typeof value === "string").map((value) => value.trim()).filter(Boolean)))
+      : [],
     statementCheckpointId: parseNullableText(payload.statementCheckpointId),
     status: typeof status === "string" && status in commitmentStatusLabels ? (status as CommitmentStatus) : "active",
   };
