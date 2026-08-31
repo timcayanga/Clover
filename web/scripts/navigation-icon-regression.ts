@@ -45,6 +45,16 @@ async function main() {
     })),
   );
 
+  const globalStyles = await readFile(path.join(root, "app/globals.css"), "utf8");
+  assert.ok(
+    globalStyles.includes(`  .nav-link .menu-icon-3d--home {
+    width: 32px;
+    height: 32px;
+    transform: none;
+  }`),
+    "The desktop Home icon must match the 32px size of the other product navigation icons.",
+  );
+
   for (const consumer of consumers) {
     assert.doesNotMatch(
       consumer.source,
