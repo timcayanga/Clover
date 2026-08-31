@@ -681,7 +681,7 @@ const getWorkspaceCurrencyCodes = async (workspaceId: string) => {
     )
   );
 
-  return codes.length > 0 ? codes : ["PHP"];
+  return codes;
 };
 
 const RECENT_IMPORT_VISIBILITY_WINDOW_MS = 10 * 60 * 1000;

@@ -301,22 +301,24 @@ const buildTransactionAccountFilterOptions = (accounts: Account[]) => {
   );
   const seenKeys = new Set<string>();
 
-  return accounts.flatMap((account) => {
-    const key = getTransactionAccountFilterKey(account);
-    if (seenKeys.has(key)) {
-      return [];
-    }
+  return accounts
+    .flatMap((account) => {
+      const key = getTransactionAccountFilterKey(account);
+      if (seenKeys.has(key)) {
+        return [];
+      }
 
-    seenKeys.add(key);
-    const isCash = account.type === "cash";
-    const currency = formatCurrencyCode(account.currency || "PHP");
-    return [
-      {
-        value: account.id,
-        label: isCash && cashCurrencies.size > 1 ? `Cash ${currency}` : formatTransactionAccountName(account),
-      },
-    ];
-  });
+      seenKeys.add(key);
+      const isCash = account.type === "cash";
+      const currency = formatCurrencyCode(account.currency || "PHP");
+      return [
+        {
+          value: account.id,
+          label: isCash && cashCurrencies.size > 1 ? `Cash ${currency}` : formatTransactionAccountName(account),
+        },
+      ];
+    })
+    .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base", numeric: true }));
 };
 
 const formatTransactionAccountDisplayName = (
@@ -2049,6 +2051,64 @@ function ActionIcon({
   }
 }
 
+function TransactionsManageMenu({ compact = false }: { compact?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && !rootRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div
+      ref={rootRef}
+      className={`transactions-manage-menu${compact ? " transactions-manage-menu--mobile-leading" : ""}`}
+    >
+      <button
+        className={`button button-secondary button-small transactions-manage-menu__trigger${compact ? " transactions-manage-icon-button" : ""}`}
+        type="button"
+        aria-label={compact ? "Manage transaction organization" : undefined}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={compact ? "Manage" : undefined}
+        onClick={() => setOpen((current) => !current)}
+      >
+        {compact ? <ActionIcon name="summary" /> : "Manage"}
+      </button>
+      {open ? (
+        <div className="transactions-manage-menu__popover" role="menu">
+          <Link href="/transactions/categories" role="menuitem" onClick={() => setOpen(false)}>
+            {compact ? "Categories" : "Manage categories"}
+          </Link>
+          <Link href="/transactions/tags" role="menuitem" onClick={() => setOpen(false)}>
+            {compact ? "Tags" : "Manage tags"}
+          </Link>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function MultiSelectFilterGroup({
   label,
   options,
@@ -2348,6 +2408,7 @@ function TransactionsPageContent() {
   const warningPopoverRefs = useRef(new Map<string, HTMLDivElement | null>());
   const selectionActionsMenuRef = useRef<HTMLDivElement | null>(null);
   const transactionsLoadRequestRef = useRef(0);
+  const authoritativeCurrencyWorkspaceRef = useRef("");
   const deletedTransactionIdsRef = useRef(new Set<string>());
   const transactionsHydrationVersionRef = useRef(new Map<string, number>());
   const mobileLoadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -2991,6 +3052,7 @@ function TransactionsPageContent() {
         mergedTransactionsWithImports.length > 0 ? mergedTransactionsWithImports : fetchedTransactions
       );
       const nextCurrencyCodes = responseCurrencyCodes.length > 0 ? responseCurrencyCodes : workspaceCurrencyCodesFromData;
+      authoritativeCurrencyWorkspaceRef.current = workspaceId;
       const serverDisplayedTotalCount =
         hasServerSideFilters
           ? exactServerTotalCount
@@ -3568,7 +3630,21 @@ function TransactionsPageContent() {
     setCurrencyFilter(readSelectedCurrency(selectedWorkspaceId) ?? defaultCurrency);
   }, [defaultCurrency, selectedWorkspaceId]);
 
+  useEffect(() => {
+    if (
+      !currencyFilter ||
+      authoritativeCurrencyWorkspaceRef.current !== selectedWorkspaceId ||
+      workspaceCurrencyCodes.includes(formatCurrencyCode(currencyFilter))
+    ) {
+      return;
+    }
+
+    setCurrencyFilter("");
+    persistSelectedCurrency(selectedWorkspaceId, "");
+  }, [currencyFilter, selectedWorkspaceId, workspaceCurrencyCodes]);
+
   useLayoutEffect(() => {
+    authoritativeCurrencyWorkspaceRef.current = "";
     setSelectedTransactionIds([]);
     setSelectedTransaction(null);
     setDetailDraft(null);
@@ -7244,15 +7320,9 @@ function TransactionsPageContent() {
     </div>
   ) : (
     <div className="transactions-shell-actions" style={transactionsShellActionsStyle}>
-      <details className="transactions-manage-menu">
-        <summary className="button button-secondary button-small">Manage</summary>
-        <div className="transactions-manage-menu__popover">
-          <Link href="/transactions/categories">Manage categories</Link>
-          <Link href="/transactions/tags">Manage tags</Link>
-        </div>
-      </details>
+      <TransactionsManageMenu />
 
-      <CurrencySelector
+      {workspaceCurrencyCodes.length > 0 ? <CurrencySelector
         value={workspaceCurrencyCodes.length > 1 ? currencyFilter : workspaceCurrencyCodes[0] ?? "PHP"}
         onChange={(next) => {
           const nextCurrency = next && next.toLowerCase() !== "all" ? formatCurrencyCode(next) : "";
@@ -7269,7 +7339,7 @@ function TransactionsPageContent() {
         optionClassName="transactions-currency-filter__option"
         menuAlignment="end"
         showChevron={false}
-      />
+      /> : null}
 
       <input
         ref={addFileInputRef}
@@ -7379,19 +7449,7 @@ function TransactionsPageContent() {
       mobileLeadingAction={
         <div className="transactions-mobile-leading-actions">
           <ContextualAskClover context="transactions" planTier={planTier} />
-          <details className="transactions-manage-menu transactions-manage-menu--mobile-leading">
-            <summary
-              className="button button-secondary button-small transactions-manage-icon-button"
-              aria-label="Manage transaction organization"
-              title="Manage"
-            >
-              <ActionIcon name="summary" />
-            </summary>
-            <div className="transactions-manage-menu__popover">
-              <Link href="/transactions/categories">Categories</Link>
-              <Link href="/transactions/tags">Tags</Link>
-            </div>
-          </details>
+          <TransactionsManageMenu compact />
         </div>
       }
       actions={transactionsShellActions}
@@ -7433,7 +7491,7 @@ function TransactionsPageContent() {
                 </button>
               </div>
               <div className="form-grid">
-                {isCompactViewport ? (
+                {isCompactViewport && workspaceCurrencyCodes.length > 0 ? (
                   <div className="transactions-filter-group transactions-filter-group--currency" role="group" aria-label="Currency">
                     <div className="transactions-filter-group__head">
                       <span className="transactions-filter-group__label">Currency</span>

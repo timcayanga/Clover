@@ -3121,13 +3121,8 @@ body.transactions-manual-open .shell-bug-report-button {
   position: relative;
 }
 
-.transactions-manage-menu > summary {
-  list-style: none;
+.transactions-manage-menu__trigger {
   cursor: pointer;
-}
-
-.transactions-manage-menu > summary::-webkit-details-marker {
-  display: none;
 }
 
 .transactions-manage-menu__popover {
@@ -3150,7 +3145,7 @@ body.transactions-manual-open .shell-bug-report-button {
   border-radius: 10px;
   color: var(--text);
   font-size: 0.86rem;
-  font-weight: 650;
+  font-weight: 400;
 }
 
 .transactions-manage-menu__popover a:hover,
