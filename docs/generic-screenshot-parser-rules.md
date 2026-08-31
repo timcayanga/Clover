@@ -18,6 +18,8 @@ These rules apply when an uploaded screenshot does not match a trained instituti
 
 ## Cold and untrained visual layouts
 
+- Before any AI fallback, score extracted local text, deterministic rows, financial metadata, filename hints, currency-and-amount evidence, and table headers. A confidently non-financial document must stop before the model call.
+- The scope check must fail open when local OCR is sparse or inconclusive. Ordinary camera filenames, foreign-language receipts, and low-light images remain eligible for visual parsing rather than being rejected for missing English keywords.
 - Use the deterministic parser first. The cold-layout path only applies when a statement image or rendered PDF has no usable local rows and weak or unknown identity.
 - Send at most two representative pages to the fast backup model for the first decision. This keeps a new layout from paying the full multi-page vision cost when the compact result is already complete.
 - Require visible evidence for every extracted row. A usable fast result needs account or institution identity, dated rows, finite amounts, transaction names, and parser evidence.

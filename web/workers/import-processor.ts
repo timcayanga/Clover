@@ -127,6 +127,7 @@ import {
 } from "@/lib/import-visual-recovery";
 import { isProtectedTransactionReviewStatus } from "@/lib/data-engine-safety";
 import { reconcileStatementTransactionYears } from "@/lib/import-date-reconciliation";
+import { assessFinancialUploadScope, NON_FINANCIAL_UPLOAD_MESSAGE } from "@/lib/financial-upload-scope";
 import { applyImportValidationToRows, validateParsedImportRows } from "@/lib/data-engine-validation";
 import { assessStatementExtractionQuality, compareStatementExtractionCandidates } from "@/lib/import-quality";
 import {
@@ -9701,6 +9702,23 @@ export const processImportFileText = async (
     parsedDateCoverage: preliminaryParsedDateCoverage,
     historicalRoutingHint,
   });
+  const uploadScopeDecision = assessFinancialUploadScope({
+    text: textForParse,
+    fileName,
+    fileType,
+    parsedRowsCount: parsedRows.length,
+    metadataConfidence: metadataForParse.confidence ?? 0,
+    hasInstitution: preliminaryHasKnownInstitution,
+  });
+  if (uploadScopeDecision.decision === "non_financial") {
+    console.info("[import-scope] rejected upload before backup parser", {
+      importFileId,
+      fileName,
+      confidence: uploadScopeDecision.confidence,
+      reasons: uploadScopeDecision.reasons,
+    });
+    throw new Error(NON_FINANCIAL_UPLOAD_MESSAGE);
+  }
   const shouldPrioritizeBackupEarly =
     !skipVisualBackupParser &&
     !hasStructuredWorkbookRows &&

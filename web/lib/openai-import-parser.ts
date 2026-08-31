@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getEnv } from "@/lib/env";
+import { assessFinancialUploadScope } from "@/lib/financial-upload-scope";
 import {
   parseGfundsAccountDetailSnapshotText,
   parseGfundsPortfolioSnapshotText,
@@ -2655,6 +2656,28 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         }),
       },
     };
+  }
+
+  const uploadScope = assessFinancialUploadScope({
+    text: params.text,
+    fileName: params.fileName,
+    fileType: params.fileType,
+    parsedRowsCount: params.parsedRows.length,
+    metadataConfidence: params.detectedMetadata?.confidence ?? 0,
+    hasInstitution: Boolean(
+      params.detectedMetadata?.institution &&
+      params.detectedMetadata.institution !== "Unknown"
+    ),
+  });
+  if (uploadScope.decision === "non_financial") {
+    console.info("[import-scope] skipped OpenAI for a confidently non-financial upload", {
+      fileName: params.fileName ?? null,
+      fileType: params.fileType ?? null,
+      confidence: uploadScope.confidence,
+      reasons: uploadScope.reasons,
+      textLength: params.text.trim().length,
+    });
+    return null;
   }
 
   const env = getEnv();

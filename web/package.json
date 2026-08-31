@@ -83,6 +83,7 @@
     "qa:budgeting": "tsx scripts/budgeting-regression.ts",
     "qa:investments": "tsx scripts/investments-regression.ts",
     "qa:adviser-everyday": "tsx scripts/adviser-everyday-regression.ts",
+    "qa:financial-scope-gates": "tsx scripts/financial-scope-gates-regression.ts",
     "qa:adviser-reports": "tsx scripts/adviser-report-controls-regression.ts",
     "qa:posthog-query": "NODE_OPTIONS=--conditions=react-server tsx scripts/posthog-query-regression.ts",
     "qa:supabase-security": "tsx scripts/supabase-security-regression.ts",

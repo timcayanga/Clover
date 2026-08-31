@@ -27,6 +27,7 @@ import {
 } from "@/lib/adviser-everyday";
 import { ADVISER_LIMITS_ENABLED, BETA_FULL_ACCESS_ENABLED } from "@/lib/beta-access";
 import { assertContentLengthWithin, assertTrustedRequestOrigin } from "@/lib/request-security";
+import { ADVISER_OUT_OF_SCOPE_REPLY, classifyAdviserScope } from "@/lib/adviser-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -867,6 +868,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Clover needs a short pause before the next question." }, { status: 429 });
     }
 
+    const body = (await request.json().catch(() => null)) as RequestBody | null;
+    const streamRequested = body?.stream === true;
+    const incomingMessages = Array.isArray(body?.messages)
+      ? body?.messages
+          .filter(
+            (message): message is ChatMessage =>
+              Boolean(message && (message.role === "user" || message.role === "assistant") && typeof message.content === "string")
+          )
+          .slice(-10)
+      : [];
+
+    if (incomingMessages.length === 0) {
+      return NextResponse.json({ error: "A message is required." }, { status: 400 });
+    }
+
+    const latestIncomingQuestion = incomingMessages[incomingMessages.length - 1]?.content?.trim() ?? "";
+    const scopeDecision = classifyAdviserScope(latestIncomingQuestion, incomingMessages);
+    if (!scopeDecision.allowed) {
+      console.info("[adviser-scope] rejected out-of-scope question before usage, workspace, or model work", {
+        actorUserId: user.id,
+        messageLength: latestIncomingQuestion.length,
+      });
+      return NextResponse.json({
+        reply: ADVISER_OUT_OF_SCOPE_REPLY,
+        actions: [],
+        suggestions: [],
+        scopeRejected: true,
+      });
+    }
+
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const resetsAt = getNextMonthStart(now);
@@ -903,21 +934,6 @@ export async function POST(request: Request) {
         },
         { status: 429 }
       );
-    }
-
-    const body = (await request.json().catch(() => null)) as RequestBody | null;
-    const streamRequested = body?.stream === true;
-    const incomingMessages = Array.isArray(body?.messages)
-      ? body?.messages
-          .filter(
-            (message): message is ChatMessage =>
-              Boolean(message && (message.role === "user" || message.role === "assistant") && typeof message.content === "string")
-          )
-          .slice(-10)
-      : [];
-
-    if (incomingMessages.length === 0) {
-      return NextResponse.json({ error: "A message is required." }, { status: 400 });
     }
 
     const cookieStore = await cookies();
@@ -2911,7 +2927,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ reply: fallbackReply, actions: fallbackActions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
     }
 
-    const model = env.OPENAI_ADVISER_MODEL?.trim() || "gpt-4.1";
+    // The financial calculations and workspace retrieval are deterministic;
+    // the model turns those grounded results into a concise explanation. The
+    // mini model is the safer default cost tier, while an environment override
+    // can still opt selected deployments into a larger model after evals.
+    const model = env.OPENAI_ADVISER_MODEL?.trim() || "gpt-4.1-mini";
     const actions: AdviserAction[] = [];
     const allTools = [
       {
@@ -3214,6 +3234,7 @@ export async function POST(request: Request) {
           headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({
             model,
+            prompt_cache_key: "clover-adviser-v1",
             temperature: 0.2,
             max_output_tokens: 450,
             tools: relevantTools,
@@ -3814,7 +3835,7 @@ export async function POST(request: Request) {
           upstreamResponse = await fetch("https://api.openai.com/v1/responses", {
             method: "POST",
             headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ model, stream: true, temperature: 0.2, max_output_tokens: 900, tools: [], input: modelInput }),
+            body: JSON.stringify({ model, prompt_cache_key: "clover-adviser-v1", stream: true, temperature: 0.2, max_output_tokens: 900, tools: [], input: modelInput }),
           });
         } catch (error) {
           console.error("Adviser upstream stream failed", error instanceof Error ? error.message : error);
@@ -3893,7 +3914,7 @@ export async function POST(request: Request) {
       finalResponse = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model, temperature: 0.2, max_output_tokens: 900, tools: [], input: modelInput }),
+        body: JSON.stringify({ model, prompt_cache_key: "clover-adviser-v1", temperature: 0.2, max_output_tokens: 900, tools: [], input: modelInput }),
         signal: finalController.signal,
       });
     } catch (error) {
