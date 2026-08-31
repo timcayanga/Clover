@@ -104,7 +104,11 @@ import {
   normalizePayPalAccountType,
 } from "@/lib/import-parser";
 import { guessCategoryName } from "@/lib/import-parser";
-import { parseImportTextWithOpenAIFallback, transcribeImportImagesWithOpenAI } from "@/lib/openai-import-parser";
+import {
+  parseImportTextWithOpenAIFallback,
+  transcribeImportImagesWithOpenAI,
+  type OpenAIImportModelUsage,
+} from "@/lib/openai-import-parser";
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
 import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
 import { coerceTransactionTypeFromCategoryName, isTransferCategoryName, toInternalTransactionType } from "@/lib/transaction-directions";
@@ -8282,6 +8286,25 @@ export const processImportFileText = async (
   const autoRerunEnabled = options.qaSource === "import_processing" || options.qaSource === "import_confirmation";
   const skipVisualBackupParser = Boolean(options.skipVisualBackupParser);
   const importFile = await fetchImportFileCompat(importFileId);
+  const recordOpenAIImportUsage = (usage: OpenAIImportModelUsage) => {
+    if (!options.actorUserId || !importFile?.workspaceId) return;
+    void prisma.auditLog.create({
+      data: {
+        workspaceId: String(importFile.workspaceId),
+        actorUserId: options.actorUserId,
+        action: "import.openai_model_call",
+        entity: "ImportFile",
+        entityId: importFileId,
+        metadata: usage,
+      },
+    }).catch((error) => {
+      console.warn("Unable to record OpenAI import usage", {
+        importFileId,
+        stage: usage.stage,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  };
   const updateImportProgress = (data: Partial<Record<string, unknown>>) =>
     updateImportFileCompat(importFileId, data, { fetchUpdated: false });
   const traceId =
@@ -9266,6 +9289,7 @@ export const processImportFileText = async (
       importMode,
       timeoutMs: 25_000,
       strategy: "fast_only",
+      onUsage: recordOpenAIImportUsage,
     }).catch(() => null);
     usedFastOnlyImageTranscript = Boolean(transcript?.transcript.trim());
 
@@ -9774,6 +9798,7 @@ export const processImportFileText = async (
             pageImageLimit: preliminaryWiseImageStatement ? 1 : null,
             timeoutMs: preliminaryWiseImageStatement ? 60_000 : null,
             retryTimeoutMs: preliminaryWiseImageStatement ? 20_000 : null,
+            onUsage: recordOpenAIImportUsage,
           }).catch((error) => {
             console.warn("Early backup parser kickoff failed; falling back to standard handoff path", {
               importFileId,
@@ -9884,6 +9909,7 @@ export const processImportFileText = async (
       pageImages,
       importMode,
       timeoutMs: 45_000,
+      onUsage: recordOpenAIImportUsage,
     }).catch(() => null);
 
     if (transcript?.transcript.trim()) {
@@ -9942,6 +9968,7 @@ export const processImportFileText = async (
       pageImages,
       importMode,
       timeoutMs: 45_000,
+      onUsage: recordOpenAIImportUsage,
     }).catch(() => null);
 
     if (transcript?.transcript.trim()) {
@@ -9981,6 +10008,7 @@ export const processImportFileText = async (
       pageImages,
       importMode,
       timeoutMs: 45_000,
+      onUsage: recordOpenAIImportUsage,
     });
     if (transcript?.transcript.trim()) {
       const transcriptText = normalizeStatementImageOcrText(transcript.transcript);
@@ -10020,6 +10048,7 @@ export const processImportFileText = async (
       importMode,
       timeoutMs: 25_000,
       strategy: usedFastOnlyImageTranscript ? "strong_only" : "quality_fallback",
+      onUsage: recordOpenAIImportUsage,
     }).catch(() => null);
 
     if (transcript?.transcript.trim()) {
@@ -10576,6 +10605,7 @@ export const processImportFileText = async (
       importMode: "portfolio",
       timeoutMs: 45_000,
       strategy: "strong_only",
+      onUsage: recordOpenAIImportUsage,
     }).catch(() => null);
     if (transcript?.transcript.trim()) {
       const transcriptRows = parseImportText(
@@ -10668,6 +10698,7 @@ export const processImportFileText = async (
               timeoutMs: isWiseImageStatement ? 60_000 : null,
               retryTimeoutMs: isWiseImageStatement ? 20_000 : null,
               receiptCoreOnly: effectiveImportMode === "receipt" && !receiptNeedsCompleteFirstPass,
+              onUsage: recordOpenAIImportUsage,
             });
       backupParserRaceResolved = Boolean(importMode === "statement" && earlyOpenAiFallbackPromise);
     }
@@ -10895,6 +10926,7 @@ export const processImportFileText = async (
       importMode,
       timeoutMs: 15_000,
       strategy: "fast_only",
+      onUsage: recordOpenAIImportUsage,
     });
 
     if (transcript?.transcript.trim()) {
@@ -10920,6 +10952,7 @@ export const processImportFileText = async (
             importMode,
             timeoutMs: 20_000,
             retryTimeoutMs: 15_000,
+            onUsage: recordOpenAIImportUsage,
           });
 
       const transcriptReceiptDetails =
@@ -11049,6 +11082,7 @@ export const processImportFileText = async (
       detectedMetadata: openAiMetadata ?? metadataForParse,
       pageImages: pageImages ?? [],
       importMode,
+      onUsage: recordOpenAIImportUsage,
     });
 
     if (transcript?.transcript.trim()) {
@@ -11063,6 +11097,7 @@ export const processImportFileText = async (
         fileDataBase64: pdfFileDataBase64,
         preferPrimary: true,
         importMode: transcriptImportMode,
+        onUsage: recordOpenAIImportUsage,
       });
 
       const shouldAdoptTranscriptParse = (() => {
@@ -12660,6 +12695,7 @@ export const processImportFileText = async (
             forceReceiptHighDetail: true,
             timeoutMs: 30_000,
             retryTimeoutMs: 18_000,
+            onUsage: recordOpenAIImportUsage,
           });
           const refinedDetails = refined?.receiptDetails ?? null;
           if (!refinedDetails) return;

@@ -24,6 +24,48 @@ const OPENAI_IMPORT_LEGACY_TEXT_MODEL_FALLBACK = "gpt-5.4-mini";
 const OPENAI_IMPORT_LEGACY_PDF_MODEL_FALLBACK = "gpt-5.5";
 const RECEIPT_VISION_HEDGE_DELAY_MS = 2_500;
 
+export type OpenAIImportModelUsage = {
+  model: string;
+  stage: string;
+  importMode: ImportMode | null;
+  documentFamily: string;
+  durationMs: number | null;
+  requestNumber: number | null;
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  reasoningTokens: number;
+  totalTokens: number;
+  imageCount: number;
+  maxOutputTokens: number;
+  reasoningEffort: string | null;
+  imageDetail: string;
+};
+
+export const extractOpenAIImportUsage = (payload: Record<string, unknown>) => {
+  const usage =
+    payload.usage && typeof payload.usage === "object" && !Array.isArray(payload.usage)
+      ? (payload.usage as Record<string, unknown>)
+      : {};
+  const inputDetails =
+    usage.input_tokens_details && typeof usage.input_tokens_details === "object" && !Array.isArray(usage.input_tokens_details)
+      ? (usage.input_tokens_details as Record<string, unknown>)
+      : {};
+  const outputDetails =
+    usage.output_tokens_details && typeof usage.output_tokens_details === "object" && !Array.isArray(usage.output_tokens_details)
+      ? (usage.output_tokens_details as Record<string, unknown>)
+      : {};
+  const inputTokens = Math.max(0, Math.round(Number(usage.input_tokens ?? 0) || 0));
+  const outputTokens = Math.max(0, Math.round(Number(usage.output_tokens ?? 0) || 0));
+  return {
+    inputTokens,
+    cachedInputTokens: Math.min(inputTokens, Math.max(0, Math.round(Number(inputDetails.cached_tokens ?? 0) || 0))),
+    outputTokens,
+    reasoningTokens: Math.max(0, Math.round(Number(outputDetails.reasoning_tokens ?? 0) || 0)),
+    totalTokens: Math.max(0, Math.round(Number(usage.total_tokens ?? 0) || inputTokens + outputTokens)),
+  };
+};
+
 export const getRemainingOpenAIImportAttemptTimeout = (params: {
   deadlineMs: number;
   requestedTimeoutMs: number;
@@ -2583,6 +2625,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   retryTimeoutMs?: number | null;
   receiptCoreOnly?: boolean;
   forceReceiptHighDetail?: boolean;
+  onUsage?: (usage: OpenAIImportModelUsage) => void;
 }): Promise<
   | {
       documentType: "statement" | "receipt" | "notes" | "portfolio" | "account_detail";
@@ -2959,27 +3002,21 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     model: string;
     stage: string;
   }) => {
-    const usage =
-      usageParams.payload.usage &&
-      typeof usageParams.payload.usage === "object" &&
-      !Array.isArray(usageParams.payload.usage)
-        ? (usageParams.payload.usage as Record<string, unknown>)
-        : null;
-    console.info("[import-performance] OpenAI parser request completed", {
+    const usage: OpenAIImportModelUsage = {
       model: usageParams.model,
       stage: usageParams.stage,
       importMode: params.importMode ?? null,
       documentFamily: inferredDocumentFamily,
       durationMs: responseDurations.get(usageParams.response) ?? null,
       requestNumber: responseRequestNumbers.get(usageParams.response) ?? null,
-      inputTokens: Number(usage?.input_tokens ?? 0) || null,
-      outputTokens: Number(usage?.output_tokens ?? 0) || null,
-      totalTokens: Number(usage?.total_tokens ?? 0) || null,
+      ...extractOpenAIImportUsage(usageParams.payload),
       imageCount: pageImagesToSend.length,
       maxOutputTokens,
       reasoningEffort: receiptReasoningEffort,
       imageDetail: responseImageDetails.get(usageParams.response) ?? "auto",
-    });
+    };
+    console.info("[import-performance] OpenAI parser request completed", usage);
+    params.onUsage?.(usage);
   };
 
   const callOpenAI = async (
@@ -3496,6 +3533,12 @@ export const parseImportTextWithOpenAIFallback = async (params: {
             );
       if (repairResponse?.ok) {
         const repairPayload = (await repairResponse.json()) as Record<string, unknown>;
+        logOpenAIResponseUsage({
+          payload: repairPayload,
+          response: repairResponse,
+          model: selectedModel,
+          stage: "structured_split_bill_repair",
+        });
         const repairOutputText = extractOutputText(repairPayload);
         const repairParsedJson = repairOutputText ? parseStructuredJsonText(repairOutputText) : null;
         const repairValidation = repairParsedJson ? importedStatementSchema.safeParse(repairParsedJson) : null;
@@ -3816,6 +3859,7 @@ export const transcribeImportImagesWithOpenAI = async (params: {
   importMode?: ImportMode | null;
   timeoutMs?: number | null;
   strategy?: "quality_fallback" | "fast_only" | "strong_only";
+  onUsage?: (usage: OpenAIImportModelUsage) => void;
 }): Promise<{
   documentType: "statement" | "receipt" | "notes" | "portfolio" | "account_detail";
   transcript: string;
@@ -3931,8 +3975,12 @@ export const transcribeImportImagesWithOpenAI = async (params: {
   );
 
   try {
-    const fetchTranscript = async (selectedModel: string) =>
-      fetch("https://api.openai.com/v1/responses", {
+    let requestNumber = 0;
+    const fetchTranscript = async (selectedModel: string) => {
+      const startedAt = Date.now();
+      requestNumber += 1;
+      const currentRequestNumber = requestNumber;
+      const response = await fetch("https://api.openai.com/v1/responses", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -3992,9 +4040,32 @@ export const transcribeImportImagesWithOpenAI = async (params: {
         }),
         signal: controller.signal,
       });
+      return { response, startedAt, requestNumber: currentRequestNumber };
+    };
 
-    const parseTranscriptResponse = async (response: Response, selectedModel: string) => {
+    const parseTranscriptResponse = async (
+      response: Response,
+      selectedModel: string,
+      startedAt: number,
+      currentRequestNumber: number
+    ) => {
       const payload = (await response.json()) as Record<string, unknown>;
+      const usage: OpenAIImportModelUsage = {
+        model: selectedModel,
+        stage: "image_transcription",
+        importMode: params.importMode ?? null,
+        documentFamily: inferredDocumentFamily,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        requestNumber: currentRequestNumber,
+        ...extractOpenAIImportUsage(payload),
+        imageCount: pageImagesToSend.length,
+        maxOutputTokens:
+          params.importMode === "receipt" ? 1_800 : params.importMode === "notes" ? 3_000 : 6_000,
+        reasoningEffort: null,
+        imageDetail: "auto",
+      };
+      console.info("[import-performance] OpenAI transcription request completed", usage);
+      params.onUsage?.(usage);
       const outputText = extractOutputText(payload);
       if (!outputText) {
         return null;
@@ -4031,7 +4102,8 @@ export const transcribeImportImagesWithOpenAI = async (params: {
       | null = null;
 
     for (const candidateModel of modelCandidates) {
-      const response = await fetchTranscript(candidateModel);
+      const request = await fetchTranscript(candidateModel);
+      const response = request.response;
       if (!response.ok) {
         const errorText = await response.text().catch(() => "");
         console.warn("OpenAI image transcription failed", {
@@ -4046,7 +4118,7 @@ export const transcribeImportImagesWithOpenAI = async (params: {
         continue;
       }
 
-      const parsed = await parseTranscriptResponse(response, candidateModel);
+      const parsed = await parseTranscriptResponse(response, candidateModel, request.startedAt, request.requestNumber);
       if (!parsed) {
         continue;
       }

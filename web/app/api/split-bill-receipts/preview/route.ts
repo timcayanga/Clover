@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { normalizeReceiptImageForVision, readUploadedFileText, renderReceiptPdfPagesForVision } from "@/lib/import-file-text.server";
-import { parseImportTextWithOpenAIFallback } from "@/lib/openai-import-parser";
+import { parseImportTextWithOpenAIFallback, type OpenAIImportModelUsage } from "@/lib/openai-import-parser";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
 import { assessReceiptPreviewQuality, normalizeCurrencyCode, parseAmountValue, parseReceiptText, type ReceiptPreviewResult } from "@/lib/split-bill";
 import { isLocalDevHost } from "@/lib/auth";
@@ -9,6 +10,8 @@ import { assertContentLengthWithin, assertTrustedRequestOrigin } from "@/lib/req
 import { assertRateLimit } from "@/lib/rate-limit";
 import { uploadObject } from "@/lib/s3";
 import { randomUUID } from "node:crypto";
+import { prisma } from "@/lib/prisma";
+import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -158,7 +161,12 @@ const mergeReceiptBackup = (
   };
 };
 
-const tryReceiptBackup = async (params: { file: File; receiptText: string; preview: ReceiptPreviewResult }) => {
+const tryReceiptBackup = async (params: {
+  file: File;
+  receiptText: string;
+  preview: ReceiptPreviewResult;
+  onUsage?: (usage: OpenAIImportModelUsage) => void;
+}) => {
   const isImage = params.file.type.startsWith("image/");
   const isPdf = params.file.type === "application/pdf" || /\.pdf$/i.test(params.file.name);
   if (!process.env.OPENAI_API_KEY?.trim() || !assessReceiptPreviewQuality(params.preview).issues.length || (!isImage && !isPdf)) {
@@ -186,6 +194,7 @@ const tryReceiptBackup = async (params: { file: File; receiptText: string; previ
       importMode: "receipt",
       pageImageLimit: Math.min(3, pageImages.length),
       timeoutMs: 25_000,
+      onUsage: params.onUsage,
     });
     return result?.receiptDetails
       ? mergeReceiptBackup(
@@ -213,6 +222,35 @@ export async function POST(request: Request) {
     }
     assertContentLengthWithin(request, MAX_RECEIPT_REQUEST_BYTES);
     const user = await getSplitBillCurrentUser();
+    const selectedWorkspaceId = (await cookies()).get(selectedWorkspaceKey)?.value ?? "";
+    const workspace =
+      (selectedWorkspaceId
+        ? await prisma.workspace.findFirst({
+            where: { id: selectedWorkspaceId, userId: user.id },
+            select: { id: true },
+          })
+        : null) ??
+      await prisma.workspace.findFirst({
+        where: { userId: user.id },
+        select: { id: true },
+        orderBy: { createdAt: "asc" },
+      });
+    const recordUsage = workspace
+      ? (usage: OpenAIImportModelUsage) => {
+          after(async () => {
+            await prisma.auditLog.create({
+              data: {
+                workspaceId: workspace.id,
+                actorUserId: user.id,
+                action: "import.openai_model_call",
+                entity: "SplitBillReceiptPreview",
+                entityId: null,
+                metadata: usage,
+              },
+            }).catch(() => null);
+          });
+        }
+      : undefined;
     try {
       assertRateLimit(`split-bill-receipt-preview:${user.id}`, 12, 60_000);
     } catch {
@@ -248,7 +286,12 @@ export async function POST(request: Request) {
       console.warn("Local receipt extraction failed; trying backup parser", error);
       localPreview = parseReceiptText("");
     }
-    const preview = await tryReceiptBackup({ file: selectedFile, receiptText, preview: localPreview });
+    const preview = await tryReceiptBackup({
+      file: selectedFile,
+      receiptText,
+      preview: localPreview,
+      onUsage: recordUsage,
+    });
     const receiptStorageKey = [
       "split-bill-receipts",
       user.id,
