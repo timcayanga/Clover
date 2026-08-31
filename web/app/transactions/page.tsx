@@ -67,6 +67,7 @@ import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { getTransactionReviewReason, getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import {
+  getKnownMobileTransactionTotal,
   getNextMobileTransactionPage,
   isMobileTransactionPaginationExhausted,
 } from "@/lib/transaction-mobile-pagination";
@@ -2910,6 +2911,15 @@ function TransactionsPageContent() {
             : fetchedTransactions.length;
       const hasRecentImportEvidence = hasRecentWorkspaceImportEvidence(importActivitySnapshot, workspaceId);
       const cachedTotalCount = Number(cachedWorkspaceSnapshot?.totalCount ?? cachedWorkspaceSnapshot?.summary?.totalCount ?? 0);
+      // A lightweight first-page response can temporarily report only the page
+      // length while the cached/previous summary already knows about older rows.
+      // Keep the largest trustworthy count so mobile pagination is not marked
+      // complete before those rows have been requested.
+      const knownServerTotalCount = getKnownMobileTransactionTotal(
+        exactServerTotalCount,
+        transactionsSummary.totalCount,
+        Number.isFinite(cachedTotalCount) ? cachedTotalCount : 0
+      );
       const hasRecentCachedTotalCount =
         cachedTotalCount > exactServerTotalCount &&
         Number.isFinite(Number(cachedWorkspaceSnapshot?.updatedAt)) &&
@@ -3040,13 +3050,13 @@ function TransactionsPageContent() {
             previousTransactionCount: stableBaseTransactions.length,
             nextTransactionCount: mergedTransactionsWithImports.length,
             fetchedTransactionCount: fetchedTransactions.length,
-            totalTransactionCount: exactServerTotalCount,
+            totalTransactionCount: knownServerTotalCount,
           })
         );
       } else {
         setMobileVisibleCount(MOBILE_TRANSACTIONS_BATCH_SIZE);
         setMobilePaginationExhausted(
-          exactServerTotalCount > 0 && mergedTransactionsWithImports.length >= exactServerTotalCount
+          knownServerTotalCount > 0 && mergedTransactionsWithImports.length >= knownServerTotalCount
         );
       }
       if (options?.append) {

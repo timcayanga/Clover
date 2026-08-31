@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  getKnownMobileTransactionTotal,
   getNextMobileTransactionPage,
   isMobileTransactionPaginationExhausted,
 } from "../lib/transaction-mobile-pagination";
@@ -18,6 +19,16 @@ assert.equal(
   getNextMobileTransactionPage(50, 25),
   3,
   "Two complete server pages must continue with page 3."
+);
+assert.equal(
+  getKnownMobileTransactionTotal(25, 29, 25),
+  29,
+  "A lightweight page total must not hide a larger known transaction total."
+);
+assert.equal(
+  getKnownMobileTransactionTotal(25, Number.NaN, -1),
+  25,
+  "Invalid known totals must be ignored."
 );
 
 assert.equal(

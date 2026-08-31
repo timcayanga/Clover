@@ -8,6 +8,9 @@ type MobilePaginationExhaustionInput = {
 const normalizeCount = (value: number) =>
   Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 
+export const getKnownMobileTransactionTotal = (...counts: number[]) =>
+  Math.max(0, ...counts.map(normalizeCount));
+
 export const getNextMobileTransactionPage = (
   loadedTransactionCount: number,
   serverPageSize: number
