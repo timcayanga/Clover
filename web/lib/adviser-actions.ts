@@ -39,6 +39,9 @@ export type AdviserLocalResponsePayload = {
   actorUserId: string;
   questionSignature: string;
   reason: string;
+  intent?: string | null;
+  confidence?: number | null;
+  routingVersion?: string | null;
 };
 
 export const recordAdviserActionCompletion = async (payload: AdviserActionCompletionPayload) => {
@@ -126,6 +129,9 @@ export const recordAdviserLocalResponse = async (payload: AdviserLocalResponsePa
       metadata: {
         kind: "local_response",
         reason: payload.reason,
+        intent: payload.intent ?? null,
+        confidence: payload.confidence ?? null,
+        routingVersion: payload.routingVersion ?? null,
         modelCalls: 0,
         totalTokens: 0,
         estimatedCostUsd: 0,

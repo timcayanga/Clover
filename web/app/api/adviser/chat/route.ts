@@ -18,6 +18,7 @@ import { assertRateLimit } from "@/lib/rate-limit";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
 import { normalizeAdviserPreferences } from "@/lib/adviser-preferences";
 import { selectAdviserToolNames } from "@/lib/adviser-tool-routing";
+import { decideAdviserAnswerRoute } from "@/lib/adviser-local-routing";
 import {
   buildInvestmentReview,
   calculateDailySpendingPlan,
@@ -2433,11 +2434,14 @@ export async function POST(request: Request) {
       pathname: "/adviser",
       question: latestQuestion,
     }).catch(() => null);
-    const recordLocalResponse = (reason: string) => recordAdviserLocalResponse({
+    const recordLocalResponse = (reason: string, routing?: { intent: string; confidence: number }) => recordAdviserLocalResponse({
       workspaceId: workspace.id,
       actorUserId: user.id,
       questionSignature,
       reason,
+      intent: routing?.intent,
+      confidence: routing?.confidence,
+      routingVersion: routing ? "tiered-v1" : null,
     }).catch(() => null);
 
     const topCategorySpend = topCategoryName
@@ -2910,6 +2914,14 @@ export async function POST(request: Request) {
               : ["open_cashflow", "open_recurring", "open_accounts", "open_split_bills", "open_budgeting"];
       return [preferredTypes.map((type) => candidates.find((action) => action.type === type)).find(Boolean) ?? candidates[0]];
     };
+    const selectedAdviserToolNames = selectAdviserToolNames({
+      question: latestQuestion,
+      everydayIntent,
+      asksForOverallMoneyOverview,
+      asksForSuggestedGoal,
+      asksAboutSpecificPurchase,
+      includesPurchaseAmount,
+    });
     if (everydayIntent === "purchase_savings" && !everydayTargetAmount) {
       await recordLocalResponse("requires_purchase_target_amount");
       return NextResponse.json({
@@ -2930,6 +2942,28 @@ export async function POST(request: Request) {
         usage: usageForResponse(),
         grounding,
         requiresInput: "purchase_price",
+      });
+    }
+    const answerRoute = decideAdviserAnswerRoute({
+      question: latestQuestion,
+      selectedTools: selectedAdviserToolNames,
+      everydayIntent,
+      asksForOverallMoneyOverview,
+      asksForSuggestedGoal,
+      asksAboutTransfers,
+    });
+    if (answerRoute.source === "local") {
+      const localReply = asksForSuggestedGoal && suggestedGoal
+        ? `A practical place to start is ${suggestedGoal.title.toLowerCase()}.\n\n${suggestedGoal.explanation}\n\nUse the button below to create it now. You can adjust it later as Clover learns from more transactions.`
+        : fallbackReply;
+      await recordLocalResponse(answerRoute.reason, answerRoute);
+      return NextResponse.json({
+        reply: localReply,
+        actions: selectPrimaryAdviserAction(fallbackActions),
+        suggestions: suggestedQuestions,
+        usage: usageForResponse(),
+        grounding,
+        answerSource: "local",
       });
     }
     if (!env.OPENAI_API_KEY) {
@@ -3234,14 +3268,7 @@ export async function POST(request: Request) {
       },
     ] as const;
 
-    const relevantToolNames = new Set(selectAdviserToolNames({
-      question: latestQuestion,
-      everydayIntent,
-      asksForOverallMoneyOverview,
-      asksForSuggestedGoal,
-      asksAboutSpecificPurchase,
-      includesPurchaseAmount,
-    }));
+    const relevantToolNames = new Set(selectedAdviserToolNames);
     const relevantTools = allTools.filter((tool) => relevantToolNames.has(tool.name));
     const focusedToolRule = relevantTools.length > 0
       ? "Use the focused tool result supplied for this question, then answer directly. Do not ask to call another tool. Use prepare_write_action only for an explicit user-requested write, and never claim a write happened before confirmation."
