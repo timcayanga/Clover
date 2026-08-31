@@ -15,6 +15,8 @@ assert.match(rootLayoutSource, /import \{ Poppins, Raleway \} from "next\/font\/
 assert.doesNotMatch(globalStylesSource, /fonts\.googleapis\.com/);
 
 const shellSource = readSource("components/clover-shell.tsx");
+const settingsHubSource = readSource("components/settings-hub.tsx");
+const avatarEditorSource = readSource("components/user-avatar-editor.tsx");
 assert.match(shellSource, /const loadImportFilesModal = \(\) =>[\s\S]{0,100}import\("@\/components\/import-files-modal"\)/);
 assert.match(shellSource, /const ImportFilesModal = dynamic\(\s*loadImportFilesModal/);
 assert.match(shellSource, /onPointerEnter=\{\(\) => \{[\s\S]{0,350}loadDashboardManualTransactionModal\(\)[\s\S]{0,120}loadImportFilesModal\(\)/);
@@ -50,6 +52,26 @@ assert.doesNotMatch(
   profileMenuSource,
   /<span>Settings<\/span>/,
   "Settings belongs in the desktop footer row instead of the Profile submenu.",
+);
+assert.match(
+  settingsHubSource,
+  /avatarUrl=\{user\?\.imageUrl \?\? avatarUrl\}/,
+  "Settings Account must prefer the live authenticated profile photo over a stale cached image.",
+);
+assert.match(
+  settingsHubSource,
+  /onAvatarChange=\{\(nextAvatarUrl\) => \{[\s\S]{0,260}setAvatarUrl\(nextAvatarUrl\)[\s\S]{0,260}writeAccountIdentityCache/,
+  "Settings Account must synchronize profile photo changes with its visible and cached identity.",
+);
+assert.match(
+  avatarEditorSource,
+  /const resolvedAvatarUrl = user\?\.imageUrl \?\? avatarUrl;/,
+  "The account photo editor must display the current authenticated photo when available.",
+);
+assert.match(
+  avatarEditorSource,
+  /const reloadedUser = await user\.reload\(\);[\s\S]{0,120}onAvatarChange\?\.\(reloadedUser\.imageUrl \?\? null\)/,
+  "Photo uploads must notify Settings with the refreshed authenticated image URL.",
 );
 assert.match(
   globalStylesSource,

@@ -6,15 +6,17 @@ import { useUser } from "@clerk/nextjs";
 type UserAvatarEditorProps = {
   displayName: string;
   avatarUrl: string | null;
+  onAvatarChange?: (avatarUrl: string | null) => void;
 };
 
-export function UserAvatarEditor({ displayName, avatarUrl }: UserAvatarEditorProps) {
+export function UserAvatarEditor({ displayName, avatarUrl, onAvatarChange }: UserAvatarEditorProps) {
   void displayName;
   const { isLoaded, isSignedIn, user } = useUser();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const resolvedAvatarUrl = user?.imageUrl ?? avatarUrl;
 
   const updateProfileImage = (updater: () => Promise<void>) => {
     if (!isLoaded || !isSignedIn || !user) {
@@ -26,7 +28,8 @@ export function UserAvatarEditor({ displayName, avatarUrl }: UserAvatarEditorPro
     startTransition(async () => {
       try {
         await updater();
-        await user.reload();
+        const reloadedUser = await user.reload();
+        onAvatarChange?.(reloadedUser.imageUrl ?? null);
         setIsMenuOpen(false);
         setMessage("Profile picture updated.");
       } catch (error) {
@@ -58,8 +61,8 @@ export function UserAvatarEditor({ displayName, avatarUrl }: UserAvatarEditorPro
   return (
     <div className="user-avatar-editor">
       <div className="user-avatar-editor__preview">
-        {avatarUrl ? (
-          <img className="user-avatar-editor__image" src={avatarUrl} alt="" loading="eager" fetchPriority="high" decoding="async" />
+        {resolvedAvatarUrl ? (
+          <img className="user-avatar-editor__image" src={resolvedAvatarUrl} alt="" loading="eager" fetchPriority="high" decoding="async" />
         ) : (
           <img className="user-avatar-editor__image user-avatar-editor__image--fallback" src="/assets/3d%20icons/account.png" alt="" />
         )}

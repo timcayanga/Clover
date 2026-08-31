@@ -556,7 +556,7 @@ export function SettingsHub({
   const [selectedProfileId, setSelectedProfileId] = useState(initialSelectedProfileId);
   const [firstName, setFirstName] = useState<string | null>(initialFirstName);
   const [lastName, setLastName] = useState<string | null>(initialLastName);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(() => initialAvatarUrl ?? readAccountIdentityCache()?.imageUrl ?? user?.imageUrl ?? null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(() => user?.imageUrl ?? initialAvatarUrl ?? readAccountIdentityCache()?.imageUrl ?? null);
   const [email, setEmail] = useState(initialEmail);
   const [planTier, setPlanTier] = useState<"free" | "pro">(initialPlanTier);
   const [paypalClientId, setPaypalClientId] = useState<string | null>(initialPaypalClientId ?? null);
@@ -699,7 +699,7 @@ export function SettingsHub({
     setFirstName((current) => current ?? clerkFirstName);
     setLastName((current) => current ?? clerkLastName);
     setEmail((current) => current || clerkEmail);
-    setAvatarUrl((current) => current ?? clerkImageUrl ?? null);
+    setAvatarUrl(clerkImageUrl ?? null);
 
     if (!accountNameDraftDirtyRef.current) {
       setFirstNameDraft((current) => current || clerkFirstName || "");
@@ -1785,7 +1785,19 @@ export function SettingsHub({
                 <div className="settings-account-card__head">
                   <h5>Photo</h5>
                 </div>
-                <UserAvatarEditor displayName={`${firstNameDraft} ${lastNameDraft}`.trim() || workspaceName} avatarUrl={avatarUrl ?? user?.imageUrl ?? null} />
+                <UserAvatarEditor
+                  displayName={`${firstNameDraft} ${lastNameDraft}`.trim() || workspaceName}
+                  avatarUrl={user?.imageUrl ?? avatarUrl}
+                  onAvatarChange={(nextAvatarUrl) => {
+                    setAvatarUrl(nextAvatarUrl);
+                    writeAccountIdentityCache({
+                      firstName,
+                      lastName,
+                      email,
+                      imageUrl: nextAvatarUrl,
+                    });
+                  }}
+                />
               </article>
 
               <article className="settings-action-card settings-account-card settings-account-card--details">
