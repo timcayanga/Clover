@@ -1148,6 +1148,7 @@ export async function ReportsStream({
         label: string;
         amount: number;
         count: number;
+        categoryAmounts: Map<string, number>;
       }
     >();
     const historicalMerchantSpend = new Map<
@@ -1169,9 +1170,12 @@ export async function ReportsStream({
       });
       if (!label) return;
       const key = normalizeMerchant(label);
-      const existing = recentMerchantSpend.get(key) ?? { label, amount: 0, count: 0 };
-      existing.amount += Math.abs(Number(transaction.amount));
+      const amount = Math.abs(Number(transaction.amount));
+      const categoryName = getReportTransactionCategoryName(transaction);
+      const existing = recentMerchantSpend.get(key) ?? { label, amount: 0, count: 0, categoryAmounts: new Map<string, number>() };
+      existing.amount += amount;
       existing.count += 1;
+      existing.categoryAmounts.set(categoryName, (existing.categoryAmounts.get(categoryName) ?? 0) + amount);
       recentMerchantSpend.set(key, existing);
     });
 
@@ -1191,8 +1195,12 @@ export async function ReportsStream({
       historicalMerchantSpend.set(key, existing);
     });
 
-    const topMerchants = Array.from(recentMerchantSpend.values()).sort((a, b) => b.amount - a.amount).slice(0, 5);
-    const merchantMovements = Array.from(recentMerchantSpend.values())
+    const recentMerchantSummaries = Array.from(recentMerchantSpend.values()).map(({ categoryAmounts, ...merchant }) => ({
+      ...merchant,
+      categoryName: Array.from(categoryAmounts.entries()).sort((left, right) => right[1] - left[1])[0]?.[0] ?? "Other",
+    }));
+    const topMerchants = recentMerchantSummaries.sort((a, b) => b.amount - a.amount).slice(0, 5);
+    const merchantMovements = recentMerchantSummaries
       .map((merchant) => {
         const historicalMerchant = historicalMerchantSpend.get(normalizeMerchant(merchant.label));
         const historicalAmount = historicalMerchant?.amount ?? 0;
@@ -2111,20 +2119,23 @@ export async function ReportsStream({
               <ReportInfoTip className="reports-container-info" label="The merchants taking the biggest share of spend." />
             </div>
 
-            <div className="report-list">
+            <div className="report-list report-list--merchant-table">
               {topMerchants.length > 0 ? (
                 topMerchants.map((merchant, index) => (
                   <Link
                     key={merchant.label}
                     href={buildTransactionsHref({ merchant: merchant.label })}
-                    className="report-list__item report-list__item--link"
+                    className="report-list__item report-list__item--link report-list__item--ranked-merchant report-list__item--merchant-table"
                   >
                     <span className="report-merchant-rank" aria-hidden="true">{index + 1}</span>
-                    <div className="report-list__meta">
-                      <strong>{merchant.label}</strong>
-                      <span>
-                        {merchant.count} transaction{merchant.count === 1 ? "" : "s"} · {formatCurrency(merchant.amount)}
-                      </span>
+                    <div className="report-merchant-details">
+                      <CategoryBrandMark categoryName={merchant.categoryName} size={30} radius={9} />
+                      <div className="report-list__meta">
+                        <strong>{merchant.label}</strong>
+                        <span>
+                          {formatCurrency(merchant.amount)} · {merchant.count} transaction{merchant.count === 1 ? "" : "s"}
+                        </span>
+                      </div>
                     </div>
                   </Link>
                 ))

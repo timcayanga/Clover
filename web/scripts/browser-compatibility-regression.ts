@@ -83,6 +83,11 @@ async function main() {
     readSource("components/reports-period-comparison-chart.tsx"),
   ]);
 
+  assert.match(reportsSource, /report-list--merchant-table/, "Biggest Merchants must use compact table-style rows.");
+  assert.match(reportsSource, /report-list__item--ranked-merchant report-list__item--merchant-table/, "Merchant ranks must remain in the left-hand grid column.");
+  assert.match(reportsSource, /CategoryBrandMark categoryName=\{merchant\.categoryName\}/, "Biggest Merchants must show the dominant category icon.");
+  assert.match(globalStyles, /\.report-list__item--merchant-table \{[\s\S]*grid-template-columns: 30px minmax\(0, 1fr\)/, "Merchant rows must keep a compact rank and detail layout.");
+
   assert.match(
     reportsSource,
     /const weeklyTrendBuckets = getRollingWeekBuckets\(currentWindowEnd\)/,

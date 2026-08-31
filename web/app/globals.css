@@ -12623,6 +12623,64 @@ html[data-theme="dark"] .reports-period-chart__tooltip {
   min-width: 0;
 }
 
+.report-list--merchant-table {
+  gap: 0;
+}
+
+.report-list__item--merchant-table {
+  grid-template-columns: 30px minmax(0, 1fr);
+  min-height: 52px;
+  padding: 8px 4px;
+  column-gap: 10px;
+  border: 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 0;
+  background: transparent;
+  align-items: center;
+}
+
+.report-list__item--merchant-table:first-child {
+  border-top: 1px solid rgba(15, 23, 42, 0.1);
+}
+
+.report-list__item--merchant-table:hover {
+  background: rgba(3, 168, 192, 0.045);
+}
+
+.report-list__item--merchant-table .report-merchant-rank {
+  display: block;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.report-merchant-details {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.report-list__item--merchant-table .report-list__meta {
+  gap: 1px;
+}
+
+.report-list__item--merchant-table .report-list__meta strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-list__item--merchant-table .report-list__meta span {
+  line-height: 1.35;
+}
+
 @media (max-width: 700px) {
   .report-list__item--ranked-merchant {
     grid-template-columns: 28px minmax(0, 1fr);
@@ -12633,6 +12691,19 @@ html[data-theme="dark"] .reports-period-chart__tooltip {
     width: 26px;
     height: 26px;
     font-size: 12px;
+  }
+
+  .report-list__item--merchant-table {
+    grid-template-columns: 24px minmax(0, 1fr);
+    min-height: 48px;
+    padding-block: 7px;
+    column-gap: 8px;
+  }
+
+  .report-list__item--merchant-table .report-merchant-rank {
+    width: auto;
+    height: auto;
+    font-size: 13px;
   }
 }
 
@@ -61410,6 +61481,19 @@ html[data-theme="dark"] .split-bill-action-button--add:focus-visible {
 .content--reports .reports-grid--trends .report-list__item:first-child,
 .content--reports .reports-brief-grid__split :is(.report-ai-signal, .report-list__item):first-child {
   border-top: 1px solid var(--stroke);
+}
+
+.content--reports .reports-grid--trends .report-list__item--merchant-table {
+  min-height: 52px;
+  padding: 8px 4px;
+  background: transparent !important;
+}
+
+@media (max-width: 700px) {
+  .content--reports .reports-grid--trends .report-list__item--merchant-table {
+    min-height: 48px;
+    padding-block: 7px;
+  }
 }
 
 .content--reports .report-sankey {
