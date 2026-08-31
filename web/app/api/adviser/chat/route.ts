@@ -11,7 +11,8 @@ import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format"
 import { getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
-import { recordAdviserChatQuestion } from "@/lib/adviser-actions";
+import { recordAdviserChatQuestion, recordAdviserLocalResponse, recordAdviserModelCall } from "@/lib/adviser-actions";
+import { extractAdviserModelUsage, type AdviserModelCallStage, type AdviserModelCallStatus } from "@/lib/adviser-model-usage";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { assertRateLimit } from "@/lib/rate-limit";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
@@ -2420,7 +2421,7 @@ export async function POST(request: Request) {
       }
       return "Use the most relevant read tool for the user's question; preserve the recent conversation topic if this is a short follow-up.";
     })();
-    const questionSignature = `chat:${latestQuestionLower.replace(/[^a-z0-9]+/g, " ").trim().slice(0, 80) || "question"}`;
+    const questionSignature = `chat:${Date.now()}:${crypto.randomUUID().slice(0, 8)}`;
     await recordAdviserChatQuestion({
       workspaceId: workspace.id,
       actorUserId: user.id,
@@ -2431,6 +2432,12 @@ export async function POST(request: Request) {
       href: "/adviser",
       pathname: "/adviser",
       question: latestQuestion,
+    }).catch(() => null);
+    const recordLocalResponse = (reason: string) => recordAdviserLocalResponse({
+      workspaceId: workspace.id,
+      actorUserId: user.id,
+      questionSignature,
+      reason,
     }).catch(() => null);
 
     const topCategorySpend = topCategoryName
@@ -2904,6 +2911,7 @@ export async function POST(request: Request) {
       return [preferredTypes.map((type) => candidates.find((action) => action.type === type)).find(Boolean) ?? candidates[0]];
     };
     if (everydayIntent === "purchase_savings" && !everydayTargetAmount) {
+      await recordLocalResponse("requires_purchase_target_amount");
       return NextResponse.json({
         reply: "What target price should I use? If you do not have a deadline yet, I can compare 3, 6, and 12 month saving plans from that one number.",
         actions: [],
@@ -2914,6 +2922,7 @@ export async function POST(request: Request) {
       });
     }
     if (asksAboutSpecificPurchase && !includesPurchaseAmount) {
+      await recordLocalResponse("requires_purchase_price");
       return NextResponse.json({
         reply: "I can check that safely, but I need the purchase price first. If timing matters, tell me the date you need it by or how long you want your cash to last. I will compare it with your available cash, known obligations, and a reasonable buffer.",
         actions: [],
@@ -2924,6 +2933,7 @@ export async function POST(request: Request) {
       });
     }
     if (!env.OPENAI_API_KEY) {
+      await recordLocalResponse("openai_not_configured");
       return NextResponse.json({ reply: fallbackReply, actions: fallbackActions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
     }
 
@@ -2932,6 +2942,24 @@ export async function POST(request: Request) {
     // mini model is the safer default cost tier, while an environment override
     // can still opt selected deployments into a larger model after evals.
     const model = env.OPENAI_ADVISER_MODEL?.trim() || "gpt-4.1-mini";
+    const recordModelUsage = (
+      payload: unknown,
+      stage: AdviserModelCallStage,
+      startedAt: number,
+      options: { status?: AdviserModelCallStatus; httpStatus?: number | null; failureReason?: string | null } = {},
+    ) => recordAdviserModelCall({
+      workspaceId: workspace.id,
+      actorUserId: user.id,
+      questionSignature,
+      ...extractAdviserModelUsage(payload, {
+        fallbackModel: model,
+        stage,
+        latencyMs: Date.now() - startedAt,
+        status: options.status,
+      }),
+      httpStatus: options.httpStatus,
+      failureReason: options.failureReason,
+    }).catch(() => null);
     const actions: AdviserAction[] = [];
     const allTools = [
       {
@@ -3227,6 +3255,7 @@ export async function POST(request: Request) {
     if (relevantTools.length > 0) {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
+      const toolSelectionStartedAt = Date.now();
       let response: Response;
       try {
         response = await fetch("https://api.openai.com/v1/responses", {
@@ -3246,6 +3275,11 @@ export async function POST(request: Request) {
         });
       } catch (error) {
         console.error("Adviser model request failed", error instanceof Error ? error.message : error);
+        await recordModelUsage({}, "tool_selection", toolSelectionStartedAt, {
+          status: error instanceof Error && error.name === "AbortError" ? "aborted" : "failed",
+          failureReason: error instanceof Error ? error.message : "request_failed",
+        });
+        await recordLocalResponse("tool_selection_failed");
         return NextResponse.json({ reply: fallbackReply, actions: selectPrimaryAdviserAction(actions.length > 0 ? actions : fallbackActions), suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
       } finally {
         clearTimeout(timeout);
@@ -3253,10 +3287,17 @@ export async function POST(request: Request) {
 
       if (!response.ok) {
         console.error("Adviser model request returned an error", response.status);
+        await recordModelUsage({}, "tool_selection", toolSelectionStartedAt, {
+          status: "failed",
+          httpStatus: response.status,
+          failureReason: "provider_error",
+        });
+        await recordLocalResponse("tool_selection_provider_error");
         return NextResponse.json({ reply: fallbackReply, actions: selectPrimaryAdviserAction(actions.length > 0 ? actions : fallbackActions), suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
       }
 
       const toolSelectionPayload = (await response.json()) as Record<string, unknown>;
+      await recordModelUsage(toolSelectionPayload, "tool_selection", toolSelectionStartedAt, { httpStatus: response.status });
       const output = Array.isArray(toolSelectionPayload.output) ? toolSelectionPayload.output : [];
       const calls = output.filter((item): item is { type: "function_call"; name: string; call_id: string; arguments: string } => Boolean(item && typeof item === "object" && (item as { type?: unknown }).type === "function_call"));
 
@@ -3830,6 +3871,7 @@ export async function POST(request: Request) {
     if (streamRequested) {
       const encoder = new TextEncoder();
       let upstreamResponse: Response | null = null;
+      const streamStartedAt = Date.now();
       if (!deterministicReply) {
         try {
           upstreamResponse = await fetch("https://api.openai.com/v1/responses", {
@@ -3839,7 +3881,25 @@ export async function POST(request: Request) {
           });
         } catch (error) {
           console.error("Adviser upstream stream failed", error instanceof Error ? error.message : error);
+          await recordModelUsage({}, "final_response", streamStartedAt, {
+            status: error instanceof Error && error.name === "AbortError" ? "aborted" : "failed",
+            failureReason: error instanceof Error ? error.message : "stream_request_failed",
+          });
         }
+      }
+
+      if (!deterministicReply && upstreamResponse && !upstreamResponse.ok) {
+        await recordModelUsage({}, "final_response", streamStartedAt, {
+          status: "failed",
+          httpStatus: upstreamResponse.status,
+          failureReason: "provider_error",
+        });
+      }
+
+      if (deterministicReply) {
+        await recordLocalResponse("deterministic_goal_reply");
+      } else if (!upstreamResponse?.ok || !upstreamResponse.body) {
+        await recordLocalResponse("stream_fallback");
       }
 
       const responseStream = upstreamResponse?.ok && upstreamResponse.body
@@ -3848,6 +3908,7 @@ export async function POST(request: Request) {
               const reader = upstreamResponse.body!.getReader();
               const decoder = new TextDecoder();
               let buffer = "";
+              let usageRecorded = false;
               try {
                 while (true) {
                   const { value, done } = await reader.read();
@@ -3858,9 +3919,16 @@ export async function POST(request: Request) {
                     const dataLine = event.split("\n").find((line) => line.startsWith("data: "));
                     if (!dataLine || dataLine.slice(6).trim() === "[DONE]") continue;
                     try {
-                      const data = JSON.parse(dataLine.slice(6)) as { type?: string; delta?: string };
+                      const data = JSON.parse(dataLine.slice(6)) as { type?: string; delta?: string; response?: Record<string, unknown> };
                       if (data.type === "response.output_text.delta" && data.delta) {
                         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "delta", text: data.delta })}\n\n`));
+                      } else if (["response.completed", "response.incomplete", "response.failed"].includes(data.type ?? "") && data.response && !usageRecorded) {
+                        await recordModelUsage(data.response, "final_response", streamStartedAt, {
+                          status: data.type === "response.completed" ? "completed" : "failed",
+                          httpStatus: upstreamResponse.status,
+                          failureReason: data.type === "response.completed" ? null : data.type,
+                        });
+                        usageRecorded = true;
                       }
                     } catch {
                       // Ignore provider keep-alive events that are not JSON.
@@ -3868,10 +3936,24 @@ export async function POST(request: Request) {
                   }
                   if (done) break;
                 }
+                if (!usageRecorded) {
+                  await recordModelUsage({}, "final_response", streamStartedAt, {
+                    status: "failed",
+                    httpStatus: upstreamResponse.status,
+                    failureReason: "stream_completed_without_usage",
+                  });
+                }
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "complete", usage: usageForResponse(), actions: responseActions, suggestions: suggestedQuestions, grounding })}\n\n`));
                 controller.close();
               } catch (error) {
                 console.error("Adviser upstream stream read failed", error instanceof Error ? error.message : error);
+                if (!usageRecorded) {
+                  await recordModelUsage({}, "final_response", streamStartedAt, {
+                    status: "failed",
+                    httpStatus: upstreamResponse.status,
+                    failureReason: error instanceof Error ? error.message : "stream_read_failed",
+                  });
+                }
                 controller.error(error);
               }
             },
@@ -3904,11 +3986,13 @@ export async function POST(request: Request) {
     }
 
     if (deterministicReply) {
+      await recordLocalResponse("deterministic_goal_reply");
       return NextResponse.json({ reply: deterministicReply, actions: responseActions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding });
     }
 
     const finalController = new AbortController();
     const finalTimeout = setTimeout(() => finalController.abort(), 15000);
+    const finalStartedAt = Date.now();
     let finalResponse: Response;
     try {
       finalResponse = await fetch("https://api.openai.com/v1/responses", {
@@ -3919,6 +4003,11 @@ export async function POST(request: Request) {
       });
     } catch (error) {
       console.error("Adviser final response failed", error instanceof Error ? error.message : error);
+      await recordModelUsage({}, "final_response", finalStartedAt, {
+        status: error instanceof Error && error.name === "AbortError" ? "aborted" : "failed",
+        failureReason: error instanceof Error ? error.message : "request_failed",
+      });
+      await recordLocalResponse("final_response_failed");
       return NextResponse.json({ reply: fallbackReply, actions: responseActions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
     } finally {
       clearTimeout(finalTimeout);
@@ -3926,10 +4015,17 @@ export async function POST(request: Request) {
 
     if (!finalResponse.ok) {
       console.error("Adviser final response returned an error", finalResponse.status);
+      await recordModelUsage({}, "final_response", finalStartedAt, {
+        status: "failed",
+        httpStatus: finalResponse.status,
+        failureReason: "provider_error",
+      });
+      await recordLocalResponse("final_response_provider_error");
       return NextResponse.json({ reply: fallbackReply, actions: responseActions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
     }
 
     const finalPayload = (await finalResponse.json()) as Record<string, unknown>;
+    await recordModelUsage(finalPayload, "final_response", finalStartedAt, { httpStatus: finalResponse.status });
     const reply = extractOutputText(finalPayload) || fallbackReply;
     return NextResponse.json({ reply, actions: responseActions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding });
   } catch (error) {
