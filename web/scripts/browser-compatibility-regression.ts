@@ -71,6 +71,11 @@ async function main() {
     /points=\{monthlyTrendPoints\}[\s\S]{0,160}label="Recent monthly summary"/,
     "The Monthly Summary must render its recent income and expense chart.",
   );
+  assert.equal(
+    reportsSource.match(/className="button button-primary button-small reports-trend-open-button"/g)?.length,
+    2,
+    "Weekly and Monthly Summary links must use the shared compact blue button treatment.",
+  );
   assert.match(
     reportsPeriodChartSource,
     /reports-period-chart__bar--income[\s\S]{0,500}reports-period-chart__bar--expense/,

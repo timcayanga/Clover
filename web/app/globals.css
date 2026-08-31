@@ -12605,6 +12605,14 @@ html[data-theme="dark"] .reports-period-chart__tooltip {
   margin-top: 0;
 }
 
+.reports-trend-open-button {
+  justify-self: start;
+  min-height: 30px;
+  padding-inline: 10px;
+  font-size: var(--action-button-font-size-compact);
+  text-decoration: none;
+}
+
 .report-list__meta {
   display: grid;
   gap: 4px;

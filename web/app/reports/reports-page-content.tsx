@@ -1986,7 +1986,7 @@ export async function ReportsStream({
             />
             <div className="report-subsection report-subsection--compact">
               <Link
-                className="pill-link pill-link--inline"
+                className="button button-primary button-small reports-trend-open-button"
                 href={buildTransactionsHref({
                   customStart: weeklySummaryStart.toISOString().slice(0, 10),
                   customEnd: weeklySummaryEnd.toISOString().slice(0, 10),
@@ -2033,8 +2033,8 @@ export async function ReportsStream({
               label="Recent monthly summary"
             />
             <div className="report-subsection report-subsection--compact">
-              <Link className="pill-link pill-link--inline" href={buildTransactionsHref({ month: currentMonthBucket.key })}>
-                Open {currentMonthBucket.label}
+              <Link className="button button-primary button-small reports-trend-open-button" href={buildTransactionsHref({ month: currentMonthBucket.key })}>
+                Open this month
               </Link>
             </div>
           </article>
