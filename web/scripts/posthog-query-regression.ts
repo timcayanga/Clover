@@ -102,6 +102,10 @@ const main = async () => {
     };
     const growth = await getPostHogGrowthAnalytics("staging");
     assert.equal(growth.status, "ready");
+    assert.equal(growth.sections.acquisition, "ready");
+    assert.equal(growth.sections.engagement, "ready");
+    assert.equal(growth.sections.heatmaps, "ready");
+    assert.equal(growth.sections.geography, "ready");
     assert.equal(growth.websiteVisits, 8);
     assert.equal(growth.uniqueVisitors, 5);
     assert.equal(growth.attributedAccounts, 2);
@@ -114,6 +118,48 @@ const main = async () => {
     assert.equal(growthBodies.length, 6);
     assert.ok(growthBodies.every((body) => body.includes("analytics_environment")));
     assert.ok(growthBodies.some((body) => body.includes("is_public_website")));
+
+    const cachedGrowthBodies: string[] = [];
+    global.fetch = async (_input, init) => {
+      const body = typeof init?.body === "string" ? init.body : "";
+      cachedGrowthBodies.push(body);
+      assert.doesNotMatch(body, /clover_admin_(website|active_account)_locations/);
+      if (body.includes("clover_admin_acquisition")) return Response.json({ columns: ["channel", "source", "unique_visitors", "website_visits"], results: [["AI", "chatgpt.com", 5, 8]], is_cached: true });
+      if (body.includes("clover_admin_conversion")) return Response.json({ columns: ["channel", "source", "converted_accounts"], results: [["AI", "chatgpt.com", 2]], is_cached: true });
+      if (body.includes("clover_admin_engagement")) return Response.json({ columns: ["route", "views", "unique_visitors", "average_duration_ms", "average_scroll_percent"], results: [["/pricing", 6, 4, 12500, 72]], is_cached: true });
+      return Response.json({ columns: ["route", "x_bucket", "y_bucket", "clicks", "unique_visitors"], results: [["/pricing", 2, 3, 7, 4]], is_cached: true });
+    };
+    const cachedGrowth = await getPostHogGrowthAnalytics("staging");
+    assert.equal(cachedGrowth.sections.geography, "ready");
+    assert.equal(cachedGrowth.geographySource, "fresh_cache");
+    assert.equal(cachedGrowth.cities[0]?.city, "Manila");
+    assert.equal(cachedGrowthBodies.length, 4);
+
+    global.fetch = async (_input, init) => {
+      const body = typeof init?.body === "string" ? init.body : "";
+      if (body.includes("clover_admin_website_locations") || body.includes("clover_admin_active_account_locations")) {
+        return new Response(null, { status: 504 });
+      }
+      if (body.includes("clover_admin_acquisition")) {
+        return Response.json({ columns: ["channel", "source", "unique_visitors", "website_visits"], results: [["Direct", "direct", 3, 4]] });
+      }
+      if (body.includes("clover_admin_conversion")) {
+        return Response.json({ columns: ["channel", "source", "converted_accounts"], results: [["Direct", "direct", 1]] });
+      }
+      if (body.includes("clover_admin_engagement")) {
+        return Response.json({ columns: ["route", "views", "unique_visitors", "average_duration_ms", "average_scroll_percent"], results: [["/", 4, 3, 8000, 60]] });
+      }
+      return Response.json({ columns: ["route", "x_bucket", "y_bucket", "clicks", "unique_visitors"], results: [["/", 1, 1, 2, 2]] });
+    };
+    const partialGrowth = await getPostHogGrowthAnalytics("local");
+    assert.equal(partialGrowth.status, "ready");
+    assert.equal(partialGrowth.sections.acquisition, "ready");
+    assert.equal(partialGrowth.sections.engagement, "ready");
+    assert.equal(partialGrowth.sections.heatmaps, "ready");
+    assert.equal(partialGrowth.sections.geography, "unavailable");
+    assert.equal(partialGrowth.uniqueVisitors, 3);
+    assert.equal(partialGrowth.pages[0]?.route, "/");
+    assert.equal(partialGrowth.heatmaps[0]?.totalClicks, 2);
 
     global.fetch = async () => new Response(null, { status: 401 });
     const unauthorized = await getPostHogLiveAnalytics();

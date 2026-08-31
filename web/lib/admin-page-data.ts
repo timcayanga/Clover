@@ -21,7 +21,7 @@ const cachedCommandCenter = unstable_cache(
 
 const cachedAnalytics = unstable_cache(
   async (_environment: string) => getAdminAnalyticsSnapshot(),
-  ["admin-analytics-v5"],
+  ["admin-analytics-v6"],
   { revalidate: 30 },
 );
 

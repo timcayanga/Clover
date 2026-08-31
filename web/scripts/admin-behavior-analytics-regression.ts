@@ -30,6 +30,13 @@ assert.match(queries, /event = 'ui_interaction'/);
 assert.match(queries, /\$geoip_country_name/);
 assert.match(queries, /\$geoip_city_name/);
 assert.match(queries, /clover_admin_active_account_locations/);
+assert.match(queries, /sections:/);
+assert.match(queries, /geographySource/);
+assert.match(queries, /geographyCache/);
+assert.match(queries, /POSTHOG_GEOGRAPHY_CACHE_MS/);
+assert.match(queries, /POSTHOG_GEOGRAPHY_STALE_MS/);
+assert.match(queries, /query: name, errorCode, durationMs/);
+assert.match(queries, /Promise\.all/);
 
 assert.match(snapshot, /uniqueAccountsCreated/);
 assert.match(snapshot, /prisma\.user\.count\(\{ where: \{ AND: \[productionUser/);
@@ -38,6 +45,10 @@ assert.match(workspace, /Time and scroll depth by page/);
 assert.match(workspace, /Click and scroll heatmaps/);
 assert.match(workspace, /Where visitors and active accounts are located/);
 assert.match(workspace, /Clover does not store IP addresses or precise coordinates/);
+assert.match(workspace, /growth\.sections\.acquisition/);
+assert.match(workspace, /growth\.sections\.geography/);
+assert.match(workspace, /growth\.sections\.engagement/);
+assert.match(workspace, /growth\.sections\.heatmaps/);
 assert.match(workspace, /Input text, financial values, and clicked labels are never included/);
 
 console.log("Admin behavior analytics regression passed: privacy, attribution, engagement, and heatmap checks.");

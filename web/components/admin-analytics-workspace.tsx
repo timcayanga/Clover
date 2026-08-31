@@ -125,7 +125,7 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
           </div>
           <span className="admin-analytics__caption">Tracking from {formatDate(snapshot.growth.trackingStartedAt)}</span>
         </div>
-        {growth.status === "ready" ? (
+        {growth.sections.acquisition === "ready" ? (
           <>
             <div className="admin-acquisition-funnel" aria-label="Acquisition funnel">
               <div><span>Website visits</span><strong>{growth.websiteVisits.toLocaleString()}</strong></div>
@@ -148,7 +148,7 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
             <p className="admin-analytics__footnote">Unique accounts come from Clover's database. Attribution is first-touch and begins at the tracking date, so earlier accounts are intentionally excluded.</p>
           </>
         ) : (
-          <p className="panel-muted">Behavior aggregates are {growth.status === "not_configured" ? "not configured" : "temporarily unavailable"}. Add PostHog Query Read credentials to show acquisition sources; database account counts remain available.</p>
+          <p className="panel-muted">Acquisition aggregates are {growth.status === "not_configured" ? "not configured" : "temporarily unavailable"}. Database account counts and the other analytics panels remain available.</p>
         )}
       </section>
 
@@ -158,9 +158,11 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
             <p className="eyebrow">Geography</p>
             <h3 id="admin-geography-title">Where visitors and active accounts are located</h3>
           </div>
-          <span className="admin-analytics__caption">Active accounts used Clover in the last 30 days</span>
+          <span className="admin-analytics__caption">
+            {growth.geographySource === "stale_cache" ? "Showing cached locations while PostHog refreshes" : "Active accounts used Clover in the last 30 days"}
+          </span>
         </div>
-        {growth.status === "ready" && (growth.countries.length || growth.cities.length) ? (
+        {growth.sections.geography === "ready" && (growth.countries.length || growth.cities.length) ? (
           <div className="admin-geography-grid">
             <div className="admin-analytics-table-wrap">
               <table className="admin-analytics-table">
@@ -181,8 +183,10 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
               </table>
             </div>
           </div>
-        ) : (
+        ) : growth.sections.geography === "ready" ? (
           <p className="panel-muted">Location summaries will appear after PostHog receives geolocation-enriched visitor and signed-in activity.</p>
+        ) : (
+          <p className="panel-muted">Location aggregates are temporarily unavailable. Acquisition, engagement, and heatmap data continue loading independently.</p>
         )}
         <p className="admin-analytics__footnote">Locations are approximate city and country aggregates supplied by PostHog. Clover does not store IP addresses or precise coordinates in this dashboard.</p>
       </section>
@@ -192,7 +196,7 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
           <div className="admin-hub__panel-head">
             <div><p className="eyebrow">Engagement</p><h3 id="admin-engagement-title">Time and scroll depth by page</h3></div>
           </div>
-          {growth.status === "ready" && growth.pages.length ? (
+          {growth.sections.engagement === "ready" && growth.pages.length ? (
             <div className="admin-analytics-table-wrap">
               <table className="admin-analytics-table">
                 <thead><tr><th>Page</th><th>Views</th><th>Visitors</th><th>Avg. time</th><th>Avg. scroll</th></tr></thead>
@@ -201,7 +205,11 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
                 ))}</tbody>
               </table>
             </div>
-          ) : <p className="panel-muted">Page engagement will appear after visitors browse pages under the new tracking schema.</p>}
+          ) : growth.sections.engagement === "ready" ? (
+            <p className="panel-muted">Page engagement will appear after visitors browse pages under the new tracking schema.</p>
+          ) : (
+            <p className="panel-muted">Page engagement is temporarily unavailable. Other analytics panels remain available.</p>
+          )}
         </section>
 
         <section className="admin-hub__panel glass" aria-labelledby="admin-heatmaps-title">
@@ -209,7 +217,7 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
             <div><p className="eyebrow">Behavior</p><h3 id="admin-heatmaps-title">Click and scroll heatmaps</h3></div>
             <span className="admin-analytics__caption">5 × 5 viewport grid</span>
           </div>
-          {growth.status === "ready" && growth.heatmaps.length ? (
+          {growth.sections.heatmaps === "ready" && growth.heatmaps.length ? (
             <div className="admin-heatmap-list">
               {growth.heatmaps.map((heatmap) => {
                 const cells = new Map(heatmap.cells.map((cell) => [`${cell.x}:${cell.y}`, cell.count]));
@@ -229,7 +237,11 @@ export function AdminAnalyticsWorkspace({ snapshot }: { snapshot: AdminAnalytics
                 );
               })}
             </div>
-          ) : <p className="panel-muted">Heatmaps will appear after visitors interact with Clover under the new tracking schema.</p>}
+          ) : growth.sections.heatmaps === "ready" ? (
+            <p className="panel-muted">Heatmaps will appear after visitors interact with Clover under the new tracking schema.</p>
+          ) : (
+            <p className="panel-muted">Heatmap aggregates are temporarily unavailable. Other analytics panels remain available.</p>
+          )}
           <p className="admin-analytics__footnote">Clover records normalized positions and page routes only. Input text, financial values, and clicked labels are never included.</p>
         </section>
       </div>
