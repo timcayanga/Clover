@@ -57,6 +57,10 @@ async function main() {
     accountsSource,
     reportsSource,
     reportsPeriodChartSource,
+    importModalSource,
+    transientRecoverySource,
+    notificationsSource,
+    publicAccountActionsSource,
   ] = await Promise.all([
     readSource("components/clover-shell.tsx"),
     readSource("app/dashboard/page.tsx"),
@@ -81,7 +85,24 @@ async function main() {
     readSource("app/accounts/page.tsx"),
     readSource("app/reports/reports-page-content.tsx"),
     readSource("components/reports-period-comparison-chart.tsx"),
+    readSource("components/import-files-modal.tsx"),
+    readSource("components/transient-data-recovery.tsx"),
+    readSource("app/notifications/notifications-client.tsx"),
+    readSource("components/public-account-actions.tsx"),
   ]);
+
+  assert.match(importModalSource, /role="region"[\s\S]{0,180}aria-label="Upload files"/, "Uploads must render as a full-page region instead of a dialog.");
+  assert.match(importModalSource, /capture="environment"/, "The full-page upload flow must expose the device camera directly.");
+  assert.match(importModalSource, />\s*Take photo\s*</, "The full-page upload flow must lead with direct CTA buttons.");
+  assert.match(globalStyles, /Final responsive overrides[\s\S]*\.modal-backdrop--import-fullscreen \.accounts-import-modal \{[\s\S]{0,240}height: 100dvh;/, "The upload surface must fill the viewport.");
+  assert.match(globalStyles, /@media \(max-width: 360px\), \(max-height: 560px\)/, "Clover must support narrow effective viewports and enlarged device text.");
+  assert.match(globalStyles, /\.content--notifications \.content-body \{[\s\S]{0,120}margin-inline: -18px;/, "Notifications must use the full mobile content width.");
+  assert.match(transientRecoverySource, /MAX_AUTOMATIC_RETRIES = 3/, "Transient Home failures must retry before presenting a persistent recovery state.");
+  assert.match(transientRecoverySource, /addEventListener\("online", retryWhenAvailable\)/, "Home recovery must resume when a mobile connection returns.");
+  assert.match(notificationsSource, /className="notifications-layout"/, "The Notifications route must retain its shared full-width layout hook.");
+  assert.match(rootLayoutSource, /<head>[\s\S]{0,240}<script[\s\S]{0,160}id="clover-theme-bootstrap"/, "The theme bootstrap must remain inside the document head.");
+  assert.doesNotMatch(rootLayoutSource, /<\/body>[\s\S]{0,200}<Script/, "Root scripts must not render outside the document body.");
+  assert.match(publicAccountActionsSource, /if \(!accountState\?\.signedIn\)[\s\S]{0,900}return <SignedInPublicAccountActions/, "Signed-out public pages must not call Clerk hooks without a provider.");
 
   assert.match(reportsSource, /report-list--merchant-table/, "Biggest Merchants must use compact table-style rows.");
   assert.match(reportsSource, /report-list__item--ranked-merchant report-list__item--merchant-table/, "Merchant ranks must remain in the left-hand grid column.");

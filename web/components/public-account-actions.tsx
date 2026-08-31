@@ -15,14 +15,40 @@ type PublicAccountActionsProps = {
 };
 
 export function PublicAccountActions({ variant = "desktop", accountState }: PublicAccountActionsProps) {
+  if (!accountState?.signedIn) {
+    return variant === "mobile" ? (
+      <Link className="button button-primary landing-nav__mobile-signup" href="/sign-up" prefetch={false}>
+        Sign up
+      </Link>
+    ) : (
+      <div className="landing-nav__desktop-actions">
+        <Link className="landing-nav__link" href="/sign-in" prefetch={false}>
+          Log in
+        </Link>
+        <Link className="button button-primary landing-nav__button" href="/sign-up" prefetch={false}>
+          Sign up
+        </Link>
+      </div>
+    );
+  }
+
+  return <SignedInPublicAccountActions variant={variant} accountState={accountState} />;
+}
+
+function SignedInPublicAccountActions({
+  variant,
+  accountState,
+}: {
+  variant: "desktop" | "mobile";
+  accountState: PublicAccountState;
+}) {
   const { signOut } = useClerk();
-  const { isLoaded, isSignedIn, user } = useUser();
+  const { user } = useUser();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [signOutBusy, setSignOutBusy] = useState(false);
   const accountMenuId = useId();
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const accountMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const resolvedSignedIn = isLoaded ? isSignedIn : accountState?.signedIn ?? false;
 
   useEffect(() => {
     if (!accountMenuOpen) return;
@@ -58,15 +84,10 @@ export function PublicAccountActions({ variant = "desktop", accountState }: Publ
     void signOutToLanding(signOut).finally(() => setSignOutBusy(false));
   };
 
-  if (!isLoaded && !accountState?.signedIn) {
-    return <span className={`landing-account-actions--loading landing-account-actions--loading-${variant}`} aria-hidden="true" />;
-  }
+  const displayName = accountState.displayName ?? user?.firstName ?? user?.emailAddresses[0]?.emailAddress?.split("@")[0] ?? "Account";
+  const avatar = accountState.avatarUrl ?? user?.imageUrl ?? null;
 
-  if (resolvedSignedIn) {
-    const displayName = accountState?.displayName ?? user?.firstName ?? user?.emailAddresses[0]?.emailAddress?.split("@")[0] ?? "Account";
-    const avatar = accountState?.avatarUrl ?? user?.imageUrl ?? null;
-
-    return (
+  return (
       <div ref={accountMenuRef} className={`landing-account-menu landing-account-menu--${variant}`}>
         <button
           ref={accountMenuTriggerRef}
@@ -96,38 +117,5 @@ export function PublicAccountActions({ variant = "desktop", accountState }: Publ
           </div>
         ) : null}
       </div>
-    );
-  }
-
-  if (isLoaded ? !isSignedIn : accountState && !accountState.signedIn) {
-    return variant === "mobile" ? (
-      <Link className="button button-primary landing-nav__mobile-signup" href="/sign-up" prefetch={false}>
-        Sign up
-      </Link>
-    ) : (
-      <div className="landing-nav__desktop-actions">
-        <Link className="landing-nav__link" href="/sign-in" prefetch={false}>
-          Log in
-        </Link>
-        <Link className="button button-primary landing-nav__button" href="/sign-up" prefetch={false}>
-          Sign up
-        </Link>
-      </div>
-    );
-  }
-
-  return variant === "mobile" ? (
-    <Link className="button button-primary landing-nav__mobile-signup" href="/sign-up" prefetch={false}>
-      Sign up
-    </Link>
-  ) : (
-    <div className="landing-nav__desktop-actions">
-      <Link className="landing-nav__link" href="/sign-in" prefetch={false}>
-        Log in
-      </Link>
-      <Link className="button button-primary landing-nav__button" href="/sign-up" prefetch={false}>
-        Sign up
-      </Link>
-    </div>
   );
 }

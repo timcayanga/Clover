@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 
-const MAX_AUTOMATIC_RETRIES = 1;
-const INITIAL_RETRY_DELAY_MS = 1200;
+const MAX_AUTOMATIC_RETRIES = 3;
+const INITIAL_RETRY_DELAY_MS = 700;
 const RETRY_STATE_TTL_MS = 120000;
 
 type RetryState = {
@@ -95,6 +95,25 @@ export function TransientDataRecovery({
 
     return () => window.clearTimeout(timer);
   }, [isRetrying, key, retryState.attempts, router]);
+
+  useEffect(() => {
+    const retryWhenAvailable = () => {
+      const current = readRetryState(key);
+      if (current.attempts >= MAX_AUTOMATIC_RETRIES) {
+        window.sessionStorage.removeItem(key);
+        setRetryState({ attempts: 0, lastAttemptAt: 0 });
+      }
+      setIsRetrying(true);
+      router.refresh();
+    };
+
+    window.addEventListener("online", retryWhenAvailable);
+    window.addEventListener("focus", retryWhenAvailable);
+    return () => {
+      window.removeEventListener("online", retryWhenAvailable);
+      window.removeEventListener("focus", retryWhenAvailable);
+    };
+  }, [key, router]);
 
   const retryNow = () => {
     const nextState = { attempts: 0, lastAttemptAt: Date.now() };

@@ -225,10 +225,10 @@ export function OnboardingForm({
     <>
       <h3>Upload your first file</h3>
       <p className="onboarding-card__copy">
-        Drop a statement, screenshot, or receipt here. Clover will read it with OCR and show you the magic behind the import.
+        Add a statement, receipt, or financial screenshot. Clover will read it and create your transactions.
       </p>
       <p className="onboarding-card__copy onboarding-card__copy--subtle">
-        On mobile, you can choose a photo or pick files from your device. On desktop, you can drag files straight onto this page.
+        Take a photo or choose a file. You can review every detail before relying on it.
       </p>
 
       <div
@@ -242,8 +242,8 @@ export function OnboardingForm({
       >
         <PageFileDropZone
           enabled={!importOpen}
-          title="Drop statements, screenshots, or receipts anywhere"
-          subtitle="Clover will start the import flow as soon as you release the files."
+          title="Add a statement, receipt, or financial screenshot"
+          subtitle="Clover starts reading it as soon as you add it."
           onFilesDropped={(files) => openImportFiles(files)}
         />
 
@@ -258,8 +258,8 @@ export function OnboardingForm({
         </div>
 
         <div className="onboarding-upload__copy">
-          <strong>Files only, nothing manual.</strong>
-          <span>Use Clover to turn the file into transactions with OCR and parsing.</span>
+          <strong>Add your file</strong>
+          <span>Choose the quickest option for your device.</span>
         </div>
 
         <div className="onboarding-upload__actions">

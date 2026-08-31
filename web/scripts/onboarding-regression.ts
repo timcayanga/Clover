@@ -34,6 +34,12 @@ assert.match(
 assert.match(onboardingForm, /capture="environment"/u, "Mobile onboarding must offer the rear camera");
 assert.match(onboardingForm, /Upload photos/u, "Onboarding must offer photo upload");
 assert.match(onboardingForm, /Upload files/u, "Onboarding must offer file upload");
+assert.match(
+  onboardingForm,
+  /Add a statement, receipt, or financial screenshot\. Clover will read it and create your transactions\./u,
+  "The first-upload message must use the same simple language as the main import flow",
+);
+assert.doesNotMatch(onboardingForm, /show you the magic behind the import/u, "Onboarding upload copy must stay concrete and concise");
 assert.doesNotMatch(onboardingForm, /Set a goal/u, "Onboarding must not include goal setup");
 assert.doesNotMatch(
   onboardingRoute,

@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
-import Script from "next/script";
 import { Poppins, Raleway } from "next/font/google";
 import "./globals.css";
 import { GlobalImportActivity } from "@/components/global-import-activity";
@@ -135,6 +134,29 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     >
       <head>
         <script
+          id="clover-theme-bootstrap"
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{
+            __html: `
+              (() => {
+                try {
+                  const key = ${JSON.stringify(THEME_STORAGE_KEY)};
+                  const saved = window.localStorage.getItem(key);
+                  const pathname = window.location.pathname;
+                  const lightOnlyRoutes = ${JSON.stringify(LIGHT_ONLY_THEME_ROUTES)};
+                  const lightOnlyPrefixes = ${JSON.stringify(LIGHT_ONLY_THEME_PREFIXES)};
+                  const isLightOnlyRoute =
+                    lightOnlyRoutes.includes(pathname) ||
+                    lightOnlyPrefixes.some((prefix) => pathname.startsWith(prefix));
+                  const resolved = isLightOnlyRoute ? "light" : saved === "light" || saved === "dark" ? saved : "light";
+                  document.documentElement.dataset.theme = resolved;
+                  document.documentElement.style.colorScheme = resolved;
+                } catch (error) {}
+              })();
+            `,
+          }}
+        />
+        <script
           id="clover-chunk-recovery"
           suppressHydrationWarning
           dangerouslySetInnerHTML={{ __html: getChunkRecoveryBootstrapScript(buildInfo.buildId) }}
@@ -179,38 +201,6 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           </>
         )}
       </body>
-      <Script id="clover-theme-bootstrap" strategy="beforeInteractive">
-        {`
-          (() => {
-            try {
-              const key = ${JSON.stringify(THEME_STORAGE_KEY)};
-              const saved = window.localStorage.getItem(key);
-              const pathname = window.location.pathname;
-              const lightOnlyRoutes = ${JSON.stringify(LIGHT_ONLY_THEME_ROUTES)};
-              const lightOnlyPrefixes = ${JSON.stringify(LIGHT_ONLY_THEME_PREFIXES)};
-              const isLightOnlyRoute =
-                lightOnlyRoutes.includes(pathname) ||
-                lightOnlyPrefixes.some((prefix) => pathname.startsWith(prefix));
-              const mode = isLightOnlyRoute
-                ? "light"
-                : saved === "light" || saved === "dark"
-                  ? saved
-                  : "light";
-              const resolved = mode;
-              document.documentElement.dataset.theme = resolved;
-              document.documentElement.style.colorScheme = resolved;
-              let themeColor = document.querySelector('meta[data-clover-theme-color="true"]');
-              if (!themeColor) {
-                themeColor = document.createElement("meta");
-                themeColor.name = "theme-color";
-                themeColor.dataset.cloverThemeColor = "true";
-                document.head.appendChild(themeColor);
-              }
-              themeColor.content = resolved === "dark" ? ${JSON.stringify(THEME_COLORS.dark)} : ${JSON.stringify(THEME_COLORS.light)};
-            } catch (error) {}
-          })();
-        `}
-      </Script>
     </html>
   );
 }

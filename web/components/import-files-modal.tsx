@@ -420,6 +420,7 @@ export function ImportFilesModal({
 }: ImportFilesModalProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const accountIdByKeyRef = useRef(new Map<string, string>());
   const autoStartRef = useRef(false);
   const [items, setItems] = useState<QueuedFile[]>([]);
@@ -8430,15 +8431,18 @@ export function ImportFilesModal({
         }}
         />
     ) : (
-    <div className="modal-backdrop modal-backdrop--import-fullscreen" role="presentation" onClick={onClose}>
+    <div className="modal-backdrop modal-backdrop--import-fullscreen">
       <section
         className="modal-card modal-card--wide accounts-import-modal glass"
-        role="dialog"
-        aria-modal="true"
+        role="region"
         aria-label="Upload files"
-        onClick={(event) => event.stopPropagation()}
       >
         <div className="accounts-import-modal__toolbar">
+          <div className="accounts-import-modal__heading">
+            <span className="eyebrow">Import</span>
+            <h2>Add financial files</h2>
+            <p>Take a photo or choose statements, receipts, spreadsheets, and screenshots.</p>
+          </div>
           <button className="accounts-import-close" type="button" onClick={onClose} aria-label="Close upload files">
             ×
           </button>
@@ -8480,10 +8484,24 @@ export function ImportFilesModal({
             multiple
             onChange={handleInputChange}
           />
-          <strong>Drop statements, spreadsheets, receipts, and screenshots here</strong>
-          <button className="button button-secondary button-small" type="button" onClick={openFilePicker}>
-            Choose files
-          </button>
+          <input
+            ref={cameraInputRef}
+            className="hidden-file-input"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleInputChange}
+          />
+          <strong>Drop files anywhere on this page</strong>
+          <span>Or use one of the options below.</span>
+          <div className="accounts-import-dropzone__actions">
+            <button className="button button-primary button-small" type="button" onClick={() => cameraInputRef.current?.click()}>
+              Take photo
+            </button>
+            <button className="button button-secondary button-small" type="button" onClick={openFilePicker}>
+              Choose files
+            </button>
+          </div>
         </div>
 
         <div className="accounts-import-footer-copy">
