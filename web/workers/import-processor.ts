@@ -134,6 +134,7 @@ import { reconcileStatementTransactionYears } from "@/lib/import-date-reconcilia
 import { assessFinancialUploadScope, getNonFinancialUploadMessage } from "@/lib/financial-upload-scope";
 import { applyImportValidationToRows, validateParsedImportRows } from "@/lib/data-engine-validation";
 import { assessStatementExtractionQuality, compareStatementExtractionCandidates } from "@/lib/import-quality";
+import { estimateLocalParserTokens } from "@/lib/import-token-usage";
 import {
   arbitrateImportCandidates,
   assessImportCandidate,
@@ -8282,16 +8283,18 @@ export const processImportFileText = async (
   } = {}
 ): Promise<ProcessImportResult> => {
   const startedAt = Date.now();
+  const openAIUsageEntries: OpenAIImportModelUsage[] = [];
   const autoRerunAttempt = Number(options.autoRerunAttempt ?? 0);
   const autoRerunEnabled = options.qaSource === "import_processing" || options.qaSource === "import_confirmation";
   const skipVisualBackupParser = Boolean(options.skipVisualBackupParser);
   const importFile = await fetchImportFileCompat(importFileId);
   const recordOpenAIImportUsage = (usage: OpenAIImportModelUsage) => {
-    if (!options.actorUserId || !importFile?.workspaceId) return;
+    openAIUsageEntries.push(usage);
+    if (!importFile?.workspaceId) return;
     void prisma.auditLog.create({
       data: {
         workspaceId: String(importFile.workspaceId),
-        actorUserId: options.actorUserId,
+        actorUserId: options.actorUserId ?? "system",
         action: "import.openai_model_call",
         entity: "ImportFile",
         entityId: importFileId,
@@ -11310,6 +11313,73 @@ export const processImportFileText = async (
       (openAiMetadata
         ? (openAiMetadata?.confidence ?? 0) >= (metadataForParse.confidence ?? 0)
         : parsedRows.length === 0));
+  const localTokenEstimate = estimateLocalParserTokens(textForParse);
+  const backupUsageByModel = openAIUsageEntries.reduce<Record<string, {
+    calls: number;
+    inputTokens: number;
+    cachedInputTokens: number;
+    outputTokens: number;
+    reasoningTokens: number;
+    totalTokens: number;
+  }>>((summary, usage) => {
+    const current = summary[usage.model] ?? {
+      calls: 0,
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      outputTokens: 0,
+      reasoningTokens: 0,
+      totalTokens: 0,
+    };
+    current.calls += 1;
+    current.inputTokens += usage.inputTokens;
+    current.cachedInputTokens += usage.cachedInputTokens;
+    current.outputTokens += usage.outputTokens;
+    current.reasoningTokens += usage.reasoningTokens;
+    current.totalTokens += usage.totalTokens;
+    summary[usage.model] = current;
+    return summary;
+  }, {});
+  const backupParserUsage = {
+    calls: openAIUsageEntries.length,
+    inputTokens: openAIUsageEntries.reduce((total, usage) => total + usage.inputTokens, 0),
+    cachedInputTokens: openAIUsageEntries.reduce((total, usage) => total + usage.cachedInputTokens, 0),
+    outputTokens: openAIUsageEntries.reduce((total, usage) => total + usage.outputTokens, 0),
+    reasoningTokens: openAIUsageEntries.reduce((total, usage) => total + usage.reasoningTokens, 0),
+    totalTokens: openAIUsageEntries.reduce((total, usage) => total + usage.totalTokens, 0),
+    byModel: backupUsageByModel,
+  };
+  await prisma.auditLog.create({
+    data: {
+      workspaceId: String(importFile.workspaceId),
+      actorUserId: options.actorUserId ?? "system",
+      action: "import.parser_usage",
+      entity: "ImportFile",
+      entityId: importFileId,
+      metadata: {
+        version: 1,
+        processingAttempt: Number(importFile.processingAttempt ?? 0),
+        autoRerunAttempt,
+        selectedParser: useOpenAiParse ? "backup_parser" : "local_parser",
+        backupParserInvoked: backupParserUsage.calls > 0,
+        localParser: {
+          ...localTokenEstimate,
+          parsedRows: parsedRows.length,
+          pageCount: pageImages?.length ?? 0,
+          sourceBytes: options.sourceBytes?.byteLength ?? null,
+          allowanceTokensDeducted: 0,
+        },
+        backupParser: {
+          ...backupParserUsage,
+          allowanceTokensDeducted: backupParserUsage.totalTokens,
+        },
+      },
+    },
+  }).catch((error) => {
+    console.warn("Unable to persist import parser usage", {
+      importFileId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
   const shouldBlockRejectedScreenshotRows = Boolean(
     shouldDiscardGenericScreenshotRowsBeforeBackup &&
       effectiveImportMode === "statement" &&
