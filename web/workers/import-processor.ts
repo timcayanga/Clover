@@ -11370,7 +11370,9 @@ export const processImportFileText = async (
         },
         backupParser: {
           ...backupParserUsage,
-          allowanceTokensDeducted: backupParserUsage.totalTokens,
+          rawBillableTokens: backupParserUsage.totalTokens,
+          allowanceTokensDeducted: 0,
+          quotaEnforcementApplied: false,
         },
       },
     },
