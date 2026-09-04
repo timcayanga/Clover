@@ -324,7 +324,7 @@
   .chapter h1{font-size:clamp(30px,2.7vw,43px)}
   .chapter p{max-width:430px;font-size:clamp(13px,1vw,16px)}
   .supportStage{z-index:20;top:90px;right:2.5vw;bottom:1.8vh;left:49%;width:auto;height:auto}
-  .heroEvidence{right:8vw;bottom:-4vh;width:min(28vw,400px);height:min(31vh,260px)}
+  .heroEvidence{right:8vw;bottom:1vh;width:min(28vw,400px);height:min(31vh,260px)}
   .journey .phone{top:auto;right:1vw;bottom:1vh;left:auto;width:min(245px,18vw);min-height:min(430px,54vh);translate:0 0;transform-origin:bottom right}
   .journey .laptop{top:auto;right:0;bottom:1vh;left:auto;width:min(600px,43vw);translate:0 0;transform-origin:bottom right}
   .journey .adviser{top:auto;right:1vw;bottom:4vh;left:auto;width:min(470px,35vw);translate:0 0;transform-origin:bottom right}
