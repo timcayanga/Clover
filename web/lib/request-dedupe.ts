@@ -35,6 +35,19 @@ declare global {
 
 const inFlightJsonRequests = new Map<string, Promise<FetchJsonOnceResult<JsonValue>>>();
 const resolvedJsonRequests = new Map<string, { expiresAt: number; value: FetchJsonOnceResult<JsonValue> }>();
+const RESOLVED_JSON_REQUEST_CACHE_LIMIT = 64;
+
+const pruneResolvedJsonRequestCache = (now = Date.now()) => {
+  for (const [key, entry] of resolvedJsonRequests) {
+    if (entry.expiresAt <= now) resolvedJsonRequests.delete(key);
+  }
+
+  while (resolvedJsonRequests.size >= RESOLVED_JSON_REQUEST_CACHE_LIMIT) {
+    const oldestKey = resolvedJsonRequests.keys().next().value as string | undefined;
+    if (!oldestKey) break;
+    resolvedJsonRequests.delete(oldestKey);
+  }
+};
 
 export const clearJsonRequestCache = (keyPrefix?: string) => {
   if (!keyPrefix) {
@@ -59,6 +72,9 @@ const pushBreadcrumb = (breadcrumb: RequestBreadcrumb) => {
 export const fetchJsonOnce = async <T>(params: FetchJsonOnceParams): Promise<FetchJsonOnceResult<T>> => {
   const cached = resolvedJsonRequests.get(params.key);
   if (cached && cached.expiresAt > Date.now()) {
+    // Refresh insertion order so the bounded map behaves like a small LRU.
+    resolvedJsonRequests.delete(params.key);
+    resolvedJsonRequests.set(params.key, cached);
     return cached.value as FetchJsonOnceResult<T>;
   }
   if (cached) resolvedJsonRequests.delete(params.key);
@@ -125,6 +141,7 @@ export const fetchJsonOnce = async <T>(params: FetchJsonOnceParams): Promise<Fet
         json,
       };
       if (response.ok && params.cacheTtlMs && params.cacheTtlMs > 0) {
+        pruneResolvedJsonRequestCache();
         resolvedJsonRequests.set(params.key, {
           expiresAt: Date.now() + params.cacheTtlMs,
           value: result,

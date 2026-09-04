@@ -58,6 +58,7 @@
     "qa:pdax-account-repair": "tsx scripts/pdax-portfolio-account-repair-regression.ts",
     "qa:multi-account-import-cache": "tsx scripts/multi-account-import-cache-regression.ts",
     "qa:large-import-cache": "tsx scripts/large-import-cache-regression.ts",
+    "qa:cache-strategy": "tsx scripts/cache-strategy-regression.ts",
     "qa:gstocks-screenshot-import": "tsx scripts/gstocks-screenshot-import-regression.ts",
     "qa:gotrade-screenshots": "tsx scripts/gotrade-screenshot-regression.ts",
     "qa:gotyme-directions": "tsx scripts/gotyme-transaction-direction-regression.ts",

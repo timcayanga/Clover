@@ -176,7 +176,7 @@ type AdviserChatAccountSource = {
   investmentCostBasis: unknown;
   investmentPrincipal: unknown;
   investmentMaturityDate: Date | null;
-  transactions: Array<{
+  transactions?: Array<{
     amount: unknown;
     type: "income" | "expense" | "transfer";
     isTransfer?: boolean;
@@ -883,7 +883,7 @@ export async function POST(request: Request) {
             (message): message is ChatMessage =>
               Boolean(message && (message.role === "user" || message.role === "assistant") && typeof message.content === "string")
           )
-          .slice(-10)
+          .slice(-6)
       : [];
 
     if (incomingMessages.length === 0) {
@@ -973,21 +973,6 @@ export async function POST(request: Request) {
                   investmentCostBasis: true,
                   investmentPrincipal: true,
                   investmentMaturityDate: true,
-                  transactions: {
-                    where: { isExcluded: false, deletedAt: null },
-                    select: {
-                      amount: true,
-                      type: true,
-                      isExcluded: true,
-                      merchantRaw: true,
-                      merchantClean: true,
-                      description: true,
-                      date: true,
-                      createdAt: true,
-                      rawPayload: true,
-                    },
-                    orderBy: { date: "desc" },
-                  },
                   statementCheckpoints: {
                     select: {
                       endingBalance: true,
@@ -1027,21 +1012,6 @@ export async function POST(request: Request) {
                 investmentCostBasis: true,
                 investmentPrincipal: true,
                 investmentMaturityDate: true,
-                transactions: {
-                  where: { isExcluded: false, deletedAt: null },
-                  select: {
-                    amount: true,
-                    type: true,
-                    isExcluded: true,
-                    merchantRaw: true,
-                    merchantClean: true,
-                    description: true,
-                    date: true,
-                    createdAt: true,
-                    rawPayload: true,
-                  },
-                  orderBy: { date: "desc" },
-                },
                 statementCheckpoints: {
                   select: {
                     endingBalance: true,
@@ -1064,7 +1034,10 @@ export async function POST(request: Request) {
 
     await assertWorkspaceAccess(user.clerkUserId, workspace.id);
 
-    const reconcileChatAccountBalance = (account: AdviserChatAccountSource) => {
+    const reconcileChatAccountBalance = (
+      account: AdviserChatAccountSource,
+      transactions: NonNullable<AdviserChatAccountSource["transactions"]>
+    ) => {
       const latestCheckpoint = account.statementCheckpoints[0] ?? null;
       const checkpointBalance =
         latestCheckpoint?.status !== "mismatch" && latestCheckpoint?.endingBalance ? latestCheckpoint.endingBalance : null;
@@ -1072,27 +1045,13 @@ export async function POST(request: Request) {
         checkpointBalance ??
         deriveReconciledBalance({
           balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
-          transactions: account.transactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
+          transactions: transactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
           checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
           treatStoredBalanceAsOpening: account.source === "manual",
         });
       const parsed = Number(reconciledBalance ?? account.balance ?? 0);
       return Number.isFinite(parsed) ? parsed : 0;
     };
-
-    const chatAccounts = (workspace.accounts as AdviserChatAccountSource[]).map((account) => ({
-      id: account.id,
-      name: account.name,
-      institution: account.institution,
-      type: account.type,
-      currency: account.currency,
-      balance: reconcileChatAccountBalance(account),
-      investmentSubtype: account.investmentSubtype,
-      investmentSymbol: account.investmentSymbol,
-      investmentQuantity: Number(account.investmentQuantity ?? 0),
-      investmentCostBasis: Number(account.investmentCostBasis ?? account.investmentPrincipal ?? 0),
-      investmentMaturityDate: account.investmentMaturityDate,
-    }));
 
     const nextSevenDays = new Date(now);
     nextSevenDays.setDate(nextSevenDays.getDate() + 7);
@@ -1109,7 +1068,9 @@ export async function POST(request: Request) {
           },
           select: {
             id: true,
+            accountId: true,
             date: true,
+            createdAt: true,
             amount: true,
             type: true,
             isTransfer: true,
@@ -1318,7 +1279,9 @@ export async function POST(request: Request) {
 
     const allTransactions = allTransactionsQuery as Array<{
       id: string;
+      accountId: string;
       date: Date;
+      createdAt: Date;
       amount: unknown;
       type: "income" | "expense" | "transfer";
       isTransfer: boolean;
@@ -1335,6 +1298,36 @@ export async function POST(request: Request) {
         name: string;
       } | null;
     }>;
+    const transactionsByAccountId = new Map<string, NonNullable<AdviserChatAccountSource["transactions"]>>();
+    for (const transaction of allTransactions) {
+      const accountTransactions = transactionsByAccountId.get(transaction.accountId) ?? [];
+      accountTransactions.push({
+        amount: transaction.amount,
+        type: transaction.type,
+        isTransfer: transaction.isTransfer,
+        isExcluded: false,
+        merchantRaw: transaction.merchantRaw,
+        merchantClean: transaction.merchantClean,
+        description: transaction.description,
+        date: transaction.date,
+        createdAt: transaction.createdAt,
+        rawPayload: transaction.rawPayload,
+      });
+      transactionsByAccountId.set(transaction.accountId, accountTransactions);
+    }
+    const chatAccounts = (workspace.accounts as AdviserChatAccountSource[]).map((account) => ({
+      id: account.id,
+      name: account.name,
+      institution: account.institution,
+      type: account.type,
+      currency: account.currency,
+      balance: reconcileChatAccountBalance(account, transactionsByAccountId.get(account.id) ?? []),
+      investmentSubtype: account.investmentSubtype,
+      investmentSymbol: account.investmentSymbol,
+      investmentQuantity: Number(account.investmentQuantity ?? 0),
+      investmentCostBasis: Number(account.investmentCostBasis ?? account.investmentPrincipal ?? 0),
+      investmentMaturityDate: account.investmentMaturityDate,
+    }));
     const normalizedAllTransactions = allTransactions.map((transaction) => ({
       ...transaction,
       type: resolveFinancialTransactionType({

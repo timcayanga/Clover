@@ -112,6 +112,7 @@ import {
   getDeletingWorkspaceAccountIds,
   normalizeImportedAccountKey,
   matchesImportedAccountIdentity as isImportedAccountIdentityMatch,
+  persistTransactionsWorkspaceCache as persistTransactionsWorkspaceCacheShared,
   transactionsWorkspaceCacheKey,
   workspaceCacheUpdatedEventName,
   type WorkspaceCacheUpdatedEventDetail,
@@ -1525,9 +1526,7 @@ const persistTransactionsWorkspaceCache = (
   workspaceId: string,
   snapshot: Omit<TransactionsWorkspaceCacheSnapshot, "workspaceId" | "updatedAt">
 ) => {
-  const localStorageRef = getLocalStorage();
-  const sessionStorageRef = getSessionStorage();
-  if ((!localStorageRef && !sessionStorageRef) || !workspaceId) {
+  if (!workspaceId) {
     return null;
   }
 
@@ -1552,26 +1551,14 @@ const persistTransactionsWorkspaceCache = (
   // back after the server has returned a settled list can resurrect duplicates.
   const mergedTransactions = snapshot.transactions;
 
-  const nextSnapshot: TransactionsWorkspaceCacheSnapshot = {
-    workspaceId,
-    updatedAt: Date.now(),
+  // Route all writes through the shared capped cache. It keeps the live
+  // in-memory snapshot, persists to one browser storage tier, and progressively
+  // reduces transaction history if the device is under storage pressure.
+  return persistTransactionsWorkspaceCacheShared(workspaceId, {
     ...snapshot,
     transactions: mergedTransactions,
     totalCount: snapshot.totalCount,
-  };
-
-  const nextState: TransactionsWorkspaceCacheState = {
-    selectedWorkspaceId: workspaceId,
-    snapshots: {
-      ...(cache?.snapshots ?? {}),
-      [workspaceId]: nextSnapshot,
-    },
-  };
-
-  const serialized = JSON.stringify(nextState);
-  localStorageRef?.setItem(transactionsWorkspaceCacheKey, serialized);
-  sessionStorageRef?.setItem(transactionsWorkspaceCacheKey, serialized);
-  return nextSnapshot.updatedAt;
+  });
 };
 
 const getTransactionUserNote = (

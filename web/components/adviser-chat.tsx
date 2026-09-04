@@ -234,7 +234,10 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          messages: nextMessages,
+          // Preserve a longer on-device transcript for continuity, but send
+          // only the recent conversational turn window to keep request memory
+          // and model input tokens bounded.
+          messages: nextMessages.slice(-6),
           stream: true,
           surface,
           activeDraft: planningDraft,

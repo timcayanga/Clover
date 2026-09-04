@@ -41,6 +41,9 @@ export type TransactionsWorkspaceCacheSnapshot = {
   transactions: CachedRecord[];
   imports: CachedRecord[];
   totalCount?: number;
+  page?: number;
+  pageSize?: number;
+  currencyCodes?: string[];
   summary?: Record<string, unknown> | null;
   updatedAt: number;
 };
