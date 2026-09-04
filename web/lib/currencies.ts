@@ -157,6 +157,11 @@ const SUGGESTED_CURRENCY_CODES: Set<string> = new Set(
 
 const normalizeCurrencyCode = (value?: string | null) => String(value ?? "").trim().toUpperCase();
 
+export const isAllCurrencySelection = (value?: string | null) => {
+  const normalized = normalizeCurrencyCode(value);
+  return normalized === "" || normalized === "ALL" || normalized === "__ALL__";
+};
+
 const uniqueValues = (values: string[]) => Array.from(new Set(values.filter((value) => value.trim().length > 0)));
 
 const getFallbackDefinition = (currency: string): CurrencyCatalogOption => ({

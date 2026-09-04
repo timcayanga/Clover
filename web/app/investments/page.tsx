@@ -55,6 +55,7 @@ import {
   canTrackInvestmentDividends,
   canTrackInvestmentPurchaseHistory,
   canTrackInvestmentUnits,
+  convertInvestmentRowsForPortfolioMix,
   inferInvestmentClassification,
   getInvestmentFieldConfigs,
   getInvestmentPurchaseSummaryLabel,
@@ -1894,9 +1895,30 @@ export default function InvestmentsPage() {
     });
   }, [investmentAccounts, investmentTransactions, portfolioCurrencyFilter, portfolioSourceRows, positionActivities]);
 
+  const portfolioAllocationAccounts = useMemo(() => {
+    if (usesPortfolioFxEstimates) {
+      if (portfolioEstimateUnavailable) {
+        return [];
+      }
+      return convertInvestmentRowsForPortfolioMix(
+        selectedCurrencyInvestmentAccounts,
+        defaultCurrencyCode,
+        portfolioExchangeRates.rates
+      ) ?? [];
+    }
+    return canAggregateSelectedCurrency ? selectedCurrencyInvestmentAccounts : [];
+  }, [
+    canAggregateSelectedCurrency,
+    defaultCurrencyCode,
+    portfolioEstimateUnavailable,
+    portfolioExchangeRates.rates,
+    selectedCurrencyInvestmentAccounts,
+    usesPortfolioFxEstimates,
+  ]);
+
   const investmentGroups = useMemo<InvestmentGroup[]>(
-    () => (canAggregateSelectedCurrency ? buildInvestmentGroups(selectedCurrencyInvestmentAccounts) : []),
-    [canAggregateSelectedCurrency, selectedCurrencyInvestmentAccounts]
+    () => buildInvestmentGroups(portfolioAllocationAccounts),
+    [portfolioAllocationAccounts]
   );
 
   const portfolioTableRows = useMemo(() => visiblePortfolioRows, [visiblePortfolioRows]);
@@ -2974,10 +2996,15 @@ export default function InvestmentsPage() {
               <InvestmentPortfolioGrowthChart assets={growthAssets} currency={growthDisplayCurrency} />
             </section>
             <section className="investments-allocation investments-allocation--overview glass">
-              {!canAggregateSelectedCurrency && selectedCurrencyInvestmentAccounts.length > 0 ? (
+              {usesPortfolioFxEstimates && portfolioExchangeRates.loading ? (
                 <div className="investments-currency-comparison-state">
-                  <strong>Choose one currency to view Portfolio Mix</strong>
-                  <p>Allocation percentages only make sense when every holding uses the same currency.</p>
+                  <strong>Calculating Portfolio Mix</strong>
+                  <p>Converting your holdings into {defaultCurrencyCode} using the latest available FX rates.</p>
+                </div>
+              ) : portfolioEstimateUnavailable ? (
+                <div className="investments-currency-comparison-state">
+                  <strong>Portfolio Mix is temporarily unavailable</strong>
+                  <p>Clover could not load every FX rate needed to compare these holdings. Try again shortly.</p>
                 </div>
               ) : portfolioAllocation.length > 0 ? (
                 <>
@@ -3002,7 +3029,7 @@ export default function InvestmentsPage() {
                       </div>
                       <InvestmentInsightDonut
                         ariaLabel="Portfolio mix by investment type pie chart"
-                        centerValue={hasVisibleCurrencySelection ? formatInvestmentAggregate(portfolioTotals.currentValue, selectedCurrencyInvestmentAccounts) : "—"}
+                        centerValue={hasVisibleCurrencySelection ? formatPortfolioSummary(estimatedPortfolioTotals.currentValue) : "—"}
                         centerLabel=""
                         slices={allocationAnalysisSlices}
                         onSliceSelect={(slice) => setSelectedOverviewMixKey(slice.key)}

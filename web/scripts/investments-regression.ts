@@ -7,9 +7,11 @@ import {
   canTrackInvestmentDividends,
   canTrackInvestmentPurchaseHistory,
   canTrackInvestmentUnits,
+  convertInvestmentRowsForPortfolioMix,
   inferInvestmentClassification,
   isActivityOnlyGcryptoAccount,
 } from "@/lib/investments";
+import { isAllCurrencySelection } from "@/lib/currencies";
 import {
   getInvestmentActivityAmountTone,
   getInvestmentActivityAssetName,
@@ -288,6 +290,33 @@ const latestCanonicalPdaxHoldings = canonicalizePdaxInvestmentHoldings([
 assert.equal(latestCanonicalPdaxHoldings.length, 1, "Equivalent XRP positions across snapshots must collapse.");
 assert.equal(latestCanonicalPdaxHoldings[0]?.currentValue, 7_729.05, "The later equally strong XRP position should win.");
 
+assert.equal(isAllCurrencySelection("ALL"), true, "The all-currency sentinel must not be rendered as a real currency.");
+assert.equal(isAllCurrencySelection("__all__"), true, "Legacy all-currency sentinels should remain recognized.");
+assert.equal(isAllCurrencySelection("PHP"), false, "Real ISO currencies must remain selectable.");
+
+const convertedPortfolioMixRows = convertInvestmentRowsForPortfolioMix(
+  [
+    { id: "php", currency: "PHP", balance: "100", investmentCostBasis: "80", investmentPrincipal: null },
+    { id: "usd", currency: "USD", balance: "10", investmentCostBasis: null, investmentPrincipal: "8" },
+  ],
+  "PHP",
+  { PHP: 1, USD: 55 }
+);
+assert.ok(convertedPortfolioMixRows, "Portfolio Mix should convert mixed-currency holdings when all FX rates are available.");
+assert.equal(convertedPortfolioMixRows[0]?.balance, "100");
+assert.equal(convertedPortfolioMixRows[1]?.balance, "550");
+assert.equal(convertedPortfolioMixRows[1]?.investmentPrincipal, "440");
+assert.equal(convertedPortfolioMixRows[1]?.currency, "PHP");
+assert.equal(
+  convertInvestmentRowsForPortfolioMix(
+    [{ currency: "USD", balance: "10", investmentCostBasis: null, investmentPrincipal: null }],
+    "PHP",
+    { PHP: 1 }
+  ),
+  null,
+  "Portfolio Mix must not combine currencies when an FX rate is missing."
+);
+
 assert.equal(
   isActivityOnlyGcryptoAccount({
     source: "upload",
@@ -316,6 +345,7 @@ assert.equal(
 const investmentsPageSource = readFileSync(resolve(process.cwd(), "app/investments/page.tsx"), "utf8");
 const institutionPageSource = readFileSync(resolve(process.cwd(), "app/accounts/institutions/[institutionSlug]/page.tsx"), "utf8");
 const investmentsStyles = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
+const currencySelectorSource = readFileSync(resolve(process.cwd(), "components/currency-selector.tsx"), "utf8");
 const portfolioGrowthSource = readFileSync(resolve(process.cwd(), "components/investment-portfolio-growth-chart.tsx"), "utf8");
 const marketHistoryRouteSource = readFileSync(resolve(process.cwd(), "app/api/market-history/route.ts"), "utf8");
 
@@ -332,6 +362,21 @@ assert.match(
   "Activity-derived rows must not expose a misleading destructive action."
 );
 assert.match(investmentsPageSource, /includeAllOption\s+allLabel="All Currencies"/, "Investments must offer an all-currency view.");
+assert.match(
+  currencySelectorSource,
+  /const isAllValue = includeAllOption && isAllCurrencySelection\(current\);[\s\S]{0,120}?isKnown \|\| !current \|\| isAllValue/,
+  "The all-currency sentinel must not be duplicated as a catalog option."
+);
+assert.match(
+  investmentsPageSource,
+  /convertInvestmentRowsForPortfolioMix\([\s\S]{0,180}?defaultCurrencyCode[\s\S]{0,180}?portfolioExchangeRates\.rates/,
+  "The all-currency Portfolio Mix must convert holdings into the user's default currency."
+);
+assert.doesNotMatch(
+  investmentsPageSource,
+  /Choose one currency to view Portfolio Mix/,
+  "Portfolio Mix should no longer be disabled solely because holdings use multiple currencies."
+);
 assert.match(
   investmentsPageSource,
   /portfolioCurrencyFilter === "ALL"\s*\? visibleInvestmentAccounts/,

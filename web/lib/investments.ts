@@ -39,6 +39,51 @@ export type InvestmentFieldConfig = {
   type?: "text" | "date";
 };
 
+type FxConvertibleInvestment = {
+  currency: string;
+  balance: string | null;
+  investmentCostBasis: string | null;
+  investmentPrincipal: string | null;
+};
+
+export const convertInvestmentRowsForPortfolioMix = <T extends FxConvertibleInvestment>(
+  rows: T[],
+  targetCurrency: string,
+  rates: Record<string, number>
+): T[] | null => {
+  const target = targetCurrency.trim().toUpperCase();
+  if (!target) {
+    return null;
+  }
+
+  const convertedRows: T[] = [];
+  for (const row of rows) {
+    const source = row.currency.trim().toUpperCase();
+    const rate = source === target ? 1 : rates[source];
+    if (!Number.isFinite(rate)) {
+      return null;
+    }
+
+    const convertValue = (value: string | null) => {
+      if (value === null || value === "") {
+        return value;
+      }
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? String(parsed * rate) : value;
+    };
+
+    convertedRows.push({
+      ...row,
+      currency: target,
+      balance: convertValue(row.balance),
+      investmentCostBasis: convertValue(row.investmentCostBasis),
+      investmentPrincipal: convertValue(row.investmentPrincipal),
+    });
+  }
+
+  return convertedRows;
+};
+
 export const isActivityOnlyGcryptoAccount = (params: {
   source?: string | null;
   name?: string | null;

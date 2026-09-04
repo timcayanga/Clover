@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import {
   getCurrencyCatalogOptions,
   getCurrencyCatalogOption,
+  isAllCurrencySelection,
   type CurrencyCatalogOption,
 } from "@/lib/currencies";
 
@@ -97,8 +98,9 @@ export function CurrencySelector({
     const sortedOptions = getCurrencyCatalogOptions(values);
     const current = value.trim().toUpperCase();
     const isKnown = sortedOptions.some((option) => option.code === current);
-    return isKnown || !current ? sortedOptions : [getCurrencyCatalogOption(current), ...sortedOptions];
-  }, [options, value]);
+    const isAllValue = includeAllOption && isAllCurrencySelection(current);
+    return isKnown || !current || isAllValue ? sortedOptions : [getCurrencyCatalogOption(current), ...sortedOptions];
+  }, [includeAllOption, options, value]);
 
   const sections = useMemo(() => {
     if (!showGroupedSections) {
@@ -114,7 +116,7 @@ export function CurrencySelector({
   }, [catalogOptions, showGroupedSections]);
 
   const selectedCode = value.trim().toUpperCase();
-  const isAllSelected = includeAllOption && (selectedCode === "" || selectedCode === "ALL" || selectedCode === "__ALL__");
+  const isAllSelected = includeAllOption && isAllCurrencySelection(selectedCode);
   const selectedOption = useMemo(
     () => catalogOptions.find((option) => option.code === selectedCode) ?? getCurrencyCatalogOption(selectedCode || "PHP"),
     [catalogOptions, selectedCode]
