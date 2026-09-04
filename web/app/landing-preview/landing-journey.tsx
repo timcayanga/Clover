@@ -12,13 +12,15 @@ const chapters = [
   { title: <>Your files become one clear <em>financial picture.</em></>, copy: "Transactions, accounts, balances, and categories come together in a searchable view you can review and correct." },
   { title: <>Finally understand where your money actually <em>goes.</em></>, copy: "Ask Adviser what changed, what caused it, and what deserves your attention next—using your own financial context." },
   { title: <>Turn every insight into one clear <em>next step.</em></>, copy: "Build a budget, adjust a goal, review a recurring payment, or settle a shared expense right from the recommendation." },
-  { title: <>Stop tracking.<br /><em>Start making progress.</em></>, copy: "Clover handles the financial admin in the background, so you can make better decisions without thinking about money all day." },
+  { title: <>Your money, handled.<br /><em>Your life, uninterrupted.</em></>, copy: null },
 ] as const;
 
-function JourneyActions({ authEnabled }: { authEnabled: boolean }) {
+const scenes = ["01-organize", "02-upload", "03-picture", "04-adviser", "05-plan", "06-life"] as const;
+
+function JourneyActions({ authEnabled, final = false }: { authEnabled: boolean; final?: boolean }) {
   return <div className={styles.actions}>
     {authEnabled ? <LandingSignupModal enabled>Organize my finances for free</LandingSignupModal> : <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>Organize my finances for free</Link>}
-    <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>Log in</Link>
+    {!final && <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>Log in</Link>}
   </div>;
 }
 
@@ -70,15 +72,26 @@ export function LandingJourney({ authEnabled }: { authEnabled: boolean }) {
         <div className={styles.headerActions}><Link href="/sign-in">Log in</Link><Link href="/sign-up">Sign up</Link></div>
       </header>
 
-      <div className={styles.world} aria-hidden="true"><Image src="/assets/landing-story/clover-home.webp" alt="" fill priority sizes="100vw" /><div /><svg viewBox="0 0 1200 700" preserveAspectRatio="none"><path d="M-70 470 C160 390 210 150 450 230 C690 310 605 560 845 470 C1040 398 1000 150 1280 118" /></svg></div>
+      <div className={styles.world} aria-hidden="true">
+        <div className={styles.sceneStack}>
+          {scenes.map((scene, index) => (
+            <picture className={styles.scene} data-active={chapter === index} key={scene}>
+              <source media="(max-width: 900px)" srcSet={`/assets/landing-story-v2/${scene}-mobile.webp`} />
+              <img src={`/assets/landing-story-v2/${scene}.webp`} alt="" fetchPriority={index === 0 ? "high" : "auto"} />
+            </picture>
+          ))}
+        </div>
+        <div className={styles.worldWash} />
+        <svg viewBox="0 0 1200 700" preserveAspectRatio="none"><path d="M-70 470 C160 390 210 150 450 230 C690 310 605 560 845 470 C1040 398 1000 150 1280 118" /></svg>
+      </div>
 
       <section className={styles.story} aria-live="polite">
         {chapters.map((item, index) => <div className={styles.chapter} data-active={chapter === index} key={index} aria-hidden={chapter !== index}>
-          <h1>{item.title}</h1><p>{item.copy}</p>{(index === 0 || index === chapters.length - 1) && <JourneyActions authEnabled={authEnabled} />}
+          <h1>{item.title}</h1>
+          {item.copy ? <p>{item.copy}</p> : null}
+          {(index === 0 || index === chapters.length - 1) && <JourneyActions authEnabled={authEnabled} final={index === chapters.length - 1} />}
         </div>)}
       </section>
-
-      <div className={styles.people} data-story-visual="people" aria-hidden="true"><Image src="/assets/landing-story/clover-device-people.webp" alt="" width={820} height={1230} priority /></div>
 
       <div className={styles.documents} data-story-visual="documents" aria-hidden="true">
         <div><small>STATEMENT</small><b>12 months</b><i /><i /><i /></div>
@@ -103,7 +116,14 @@ export function LandingJourney({ authEnabled }: { authEnabled: boolean }) {
 
       <div className={styles.adviser} data-story-visual="adviser" aria-hidden="true"><div><Image src="/clover-mark.svg" alt="" width={34} height={34} /><span><small>ASK CLOVER</small><b>Your financial picture</b></span></div><p>Dining is down 12% this month. You could move the difference toward your Japan goal without changing your usual budget.</p><div className={styles.suggestion}><span>✈</span><b>Japan in spring</b><strong>₱12,000 monthly</strong></div><button type="button">Create this plan →</button></div>
 
-      <nav className={styles.markers} aria-label="Landing page chapters">
+      <div className={styles.planCard} data-story-visual="plan" aria-hidden="true">
+        <div><Image src="/clover-mark.svg" alt="" width={30} height={30} /><span><small>CLOVER RECOMMENDATION</small><b>Japan trip</b></span></div>
+        <strong>₱12,000 <small>per month</small></strong>
+        <div><i /><i /><i /><i /></div>
+        <p>Ready by March</p>
+      </div>
+
+      <nav className={styles.markers} aria-label="Landing page chapters" data-progress={`${chapter + 1}/${chapters.length}`}>
         {chapters.map((_, index) => <button key={index} type="button" className={chapter === index ? styles.activeMarker : ""} onClick={() => goToChapter(index)} aria-label={`Go to chapter ${index + 1}`} aria-current={chapter === index ? "step" : undefined}><span /></button>)}
         <b>{chapter + 1} / {chapters.length}</b>
       </nav>

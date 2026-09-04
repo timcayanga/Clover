@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { getVerifiedSpendingMerchantName } from "../lib/transaction-display";
 
@@ -7,6 +7,19 @@ const root = process.cwd();
 const readSource = (relativePath: string) => readFile(path.join(root, relativePath), "utf8");
 
 async function main() {
+  const landingJourneySource = await readSource("app/landing-preview/landing-journey.tsx");
+  const landingJourneyStyles = await readSource("app/landing-preview/landing-preview.module.css");
+  const landingSceneNames = ["01-organize", "02-upload", "03-picture", "04-adviser", "05-plan", "06-life"];
+
+  await Promise.all(
+    landingSceneNames.flatMap((scene) =>
+      ["", "-mobile"].map((suffix) => access(path.join(root, `../assets/landing-story-v2/${scene}${suffix}.webp`))),
+    ),
+  );
+  assert.match(landingJourneySource, /const scenes = \["01-organize", "02-upload", "03-picture", "04-adviser", "05-plan", "06-life"\]/, "The scrollable landing story must retain all six people-led scenes in order.");
+  assert.match(landingJourneySource, /<source media="\(max-width: 900px\)" srcSet=\{`\/assets\/landing-story-v2\/\$\{scene\}-mobile\.webp`\}/, "The landing story must use mobile-specific crops that keep its recurring cast visible.");
+  assert.match(landingJourneyStyles, /@media\(max-width:900px\)\{[\s\S]*?\.markers\{right:8px;top:50%;bottom:auto;flex-direction:column;/, "The landing-story chapter tracker must remain on the right on mobile.");
+
   assert.equal(
     getVerifiedSpendingMerchantName({
       merchantClean: "PayPal",
