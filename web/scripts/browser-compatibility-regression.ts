@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
+import sharp from "sharp";
 import { getVerifiedSpendingMerchantName } from "../lib/transaction-display";
 
 const root = process.cwd();
@@ -17,14 +18,26 @@ async function main() {
       ["", "-mobile"].map((suffix) => access(path.join(root, `../assets/landing-story-v2/${scene}${suffix}.webp`))),
     ),
   );
+  const mobileSceneMetadata = await Promise.all(
+    landingSceneNames.map((scene) => sharp(path.join(root, `../assets/landing-story-v2/${scene}-mobile.webp`)).metadata()),
+  );
+  assert.ok(
+    mobileSceneMetadata.every((metadata) => (metadata.height ?? 0) > (metadata.width ?? 0)),
+    "Every mobile landing scene must use a portrait source so full-viewport cover does not crop out the cast.",
+  );
   assert.match(landingJourneySource, /const scenes = \["01-organize", "02-upload", "03-picture", "04-adviser", "05-plan", "06-life"\]/, "The scrollable landing story must retain all six people-led scenes in order.");
   assert.match(landingJourneySource, /<source media="\(max-width: 900px\)" srcSet=\{`\/assets\/landing-story-v2\/\$\{scene\}-mobile\.webp`\}/, "The landing story must use mobile-specific crops that keep its recurring cast visible.");
+  assert.match(landingJourneySource, /className=\{styles\.sceneBackdrop\}/, "Intermediate desktop sizes must retain a full-bleed backdrop behind the uncropped cast.");
   assert.match(landingJourneyStyles, /@media\(max-width:900px\)\{[\s\S]*?\.markers\{right:8px;top:50%;bottom:auto;flex-direction:column;/, "The landing-story chapter tracker must remain on the right on mobile.");
   assert.match(landingPreviewPageSource, /x-vercel-ip-country/, "The landing preview must choose localized finance examples from the visitor country.");
   assert.match(landingJourneySource, /BPI STATEMENT[\s\S]*GCASH EXPORT[\s\S]*CHASE STATEMENT[\s\S]*PAYPAL EXPORT/, "The landing preview must keep Philippine and global document examples.");
   assert.match(landingJourneySource, /data-market=\{market\}/, "The selected landing market must remain observable for browser verification.");
   assert.match(landingJourneyStyles, /Keep the cast in a clear, unfiltered scene plane/, "The landing composition must preserve an unobstructed people layer.");
-  assert.match(landingJourneyStyles, /@media\(max-width:900px\)\{[\s\S]*?\.sceneStack\{top:31%;height:45%\}/, "Mobile must keep people and product surfaces in separate vertical planes.");
+  assert.match(landingJourneySource, /progress \* \(chapters\.length - 1\)/, "Landing chapters must advance continuously with scroll progress.");
+  assert.match(landingJourneySource, /style=\{sceneMotion\(index\)\}/, "Landing backgrounds must interpolate on every scroll update.");
+  assert.match(landingJourneySource, /data-story-visual="ingestion"/, "The hero must visibly show Clover ingesting existing financial files.");
+  assert.match(landingJourneyStyles, /Continuous story engine:[\s\S]*?\.journey\{height:520svh\}/, "The landing journey must avoid long inactive scroll intervals.");
+  assert.match(landingJourneyStyles, /@media\(max-width:900px\)\{[\s\S]*?\.sceneStack\{inset:0;height:100%\}[\s\S]*?\.sceneSubject img\{object-fit:cover;/, "Mobile scenes must fill the viewport from portrait-safe sources.");
 
   assert.equal(
     getVerifiedSpendingMerchantName({
