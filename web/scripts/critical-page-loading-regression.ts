@@ -155,8 +155,12 @@ assert.match(
 );
 assert.match(dashboardSource, /plannedPaymentsDueSoon\.length === 1 \? "payment is" : "payments are"/);
 assert.ok(
-  dashboardSource.indexOf('aria-label="Week and month snapshot"') < dashboardSource.indexOf("<DashboardBudgetPulse />"),
-  "Budgeting should appear below the weekly and monthly reports.",
+  dashboardSource.indexOf('aria-label="Week and month snapshot"') < dashboardSource.indexOf('<OnboardingMissions surface="home" />'),
+  "Next Steps should appear below the weekly and monthly reports.",
+);
+assert.ok(
+  dashboardSource.indexOf('<OnboardingMissions surface="home" />') < dashboardSource.indexOf("<DashboardBudgetPulse />"),
+  "Next Steps should appear above Budgeting.",
 );
 assert.match(
   globalStylesSource,

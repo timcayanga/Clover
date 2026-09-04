@@ -1232,8 +1232,6 @@ async function DashboardStream({
           ))}
         </section>
 
-        <OnboardingMissions surface="home" />
-
         <article className="dashboard-home__insight-strip glass" aria-label="Home Adviser">
           <p className="eyebrow">Adviser</p>
           {insightItems.length > 0 ? (
@@ -1322,6 +1320,8 @@ async function DashboardStream({
             </Link>
           </article>
         </div>
+
+        <OnboardingMissions surface="home" />
 
         <DashboardBudgetPulse />
 
