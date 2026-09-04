@@ -335,6 +335,13 @@
 
 @media(min-width:901px) and (min-height:760px){
   .heroEvidence{bottom:2vh}
+  .journey .laptop{right:auto;bottom:2vh;left:-43vw;width:min(500px,34vw);transform-origin:bottom left}
+  .journey .adviser{right:auto;bottom:2vh;left:-43vw;width:min(430px,31vw);transform-origin:bottom left}
+  .journey .planCard{right:auto;bottom:4vh;left:-43vw;width:min(390px,29vw);transform-origin:bottom left}
+}
+
+@media(min-width:901px) and (max-height:759px){
+  .journey .laptop,.journey .adviser,.journey .planCard{display:none}
 }
 
 @media(max-width:900px){

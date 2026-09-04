@@ -48,7 +48,7 @@ const marketContent = {
 
 const clamp = (value: number, minimum = 0, maximum = 1) => Math.min(maximum, Math.max(minimum, value));
 const sceneAsset = (scene: (typeof scenes)[number], mobile = false) => {
-  const folder = scene === "01-organize" ? "landing-story-v3" : "landing-story-v2";
+  const folder = scene === "06-life" ? "landing-story-v2" : "landing-story-v3";
   return `/assets/${folder}/${scene}${mobile ? "-mobile" : ""}.webp`;
 };
 

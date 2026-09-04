@@ -18,19 +18,20 @@ async function main() {
       ["", "-mobile"].map((suffix) => access(path.join(root, `../assets/landing-story-v2/${scene}${suffix}.webp`))),
     ),
   );
-  await Promise.all([
-    access(path.join(root, "../assets/landing-story-v3/01-organize.webp")),
-    access(path.join(root, "../assets/landing-story-v3/01-organize-mobile.webp")),
-  ]);
+  await Promise.all(
+    landingSceneNames.slice(0, -1).flatMap((scene) =>
+      ["", "-mobile"].map((suffix) => access(path.join(root, `../assets/landing-story-v3/${scene}${suffix}.webp`))),
+    ),
+  );
   const mobileSceneMetadata = await Promise.all(
-    landingSceneNames.map((scene) => sharp(path.join(root, `../assets/${scene === "01-organize" ? "landing-story-v3" : "landing-story-v2"}/${scene}-mobile.webp`)).metadata()),
+    landingSceneNames.map((scene) => sharp(path.join(root, `../assets/${scene === "06-life" ? "landing-story-v2" : "landing-story-v3"}/${scene}-mobile.webp`)).metadata()),
   );
   assert.ok(
     mobileSceneMetadata.every((metadata) => (metadata.height ?? 0) > (metadata.width ?? 0)),
     "Every mobile landing scene must use a portrait source so full-viewport cover does not crop out the cast.",
   );
   assert.match(landingJourneySource, /const scenes = \["01-organize", "02-upload", "03-picture", "04-adviser", "05-plan", "06-life"\]/, "The scrollable landing story must retain all six people-led scenes in order.");
-  assert.match(landingJourneySource, /const folder = scene === "01-organize" \? "landing-story-v3" : "landing-story-v2"/, "The rebuilt hero must use its safer desktop and mobile compositions while retaining the rest of the story.");
+  assert.match(landingJourneySource, /const folder = scene === "06-life" \? "landing-story-v2" : "landing-story-v3"/, "The rebuilt personal-finance chapters must use their safer desktop and mobile compositions while retaining the group finale.");
   assert.match(landingJourneySource, /<source media="\(max-width: 900px\)" srcSet=\{sceneAsset\(scene, true\)\}/, "The landing story must use mobile-specific crops that keep its recurring cast visible.");
   assert.match(landingJourneySource, /className=\{styles\.sceneBackdrop\}/, "Intermediate desktop sizes must retain a full-bleed backdrop behind the uncropped cast.");
   assert.match(landingJourneyStyles, /@media\(max-width:900px\)\{[\s\S]*?\.markers\{right:8px;top:50%;bottom:auto;flex-direction:column;/, "The landing-story chapter tracker must remain on the right on mobile.");
