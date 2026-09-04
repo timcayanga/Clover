@@ -9,10 +9,11 @@ import styles from "./landing-preview.module.css";
 
 const chapters = [
   { title: <>Months of finances.<br /><em>Organized in minutes.</em></>, copy: "Upload statements, receipts, screenshots, or spreadsheets. Understand your money and take one clearer step at a time." },
-  { title: <>Skip the manual <em>rebuilding.</em></>, copy: "Clover securely reads dates, merchants, amounts, and accounts from your files. You control what gets confirmed." },
-  { title: <>See your money clearly, <em>all in one place.</em></>, copy: "Search every transaction, compare account balances, and understand your spending." },
-  { title: <>Ask what your money can make <em>possible.</em></>, copy: "Thinking about a trip next year? Adviser can check the idea against your actual spending, commitments, savings, and goals." },
-  { title: <>Turn advice into a plan <em>you can follow.</em></>, copy: "Create an editable budget or savings goal from your conversation with Clover, with a monthly amount based on what you can comfortably afford." },
+  { title: <>Stop tracking.<br /><em>Start organizing.</em></>, copy: "Most finance apps ask you to enter transactions one by one. Clover starts with the records you already have, so you can spend less time rebuilding your finances and more time understanding them." },
+  { title: <>Skip the manual <em>rebuilding.</em></>, copy: "Bring in bank statements, receipts, wallet screenshots, spreadsheets, and other financial records. Clover extracts the useful details, organizes transactions by account and category, and shows you only what needs review." },
+  { title: <>See what changed and where your <em>money actually goes.</em></>, copy: "Once your records are organized, Clover turns them into a clear financial picture. Track balances, spending, cash flow, recurring obligations, and trends across your accounts without piecing everything together yourself." },
+  { title: <>Ask what your money can make <em>possible.</em></>, copy: "Clover Adviser helps turn your financial history into practical answers. Ask what you can safely spend, what changed this month, whether a goal is still on track, or what deserves your attention next." },
+  { title: <>Manage money together <em>without sharing everything.</em></>, copy: "Split expenses, track who owes what, and organize shared money with a partner, household, family, or friends. Keep personal finances private while sharing only what makes sense." },
   { title: <>Ready to make clearer <em>money decisions?</em></>, copy: null },
 ] as const;
 
@@ -69,9 +70,22 @@ const marketContent = {
 
 const clamp = (value: number, minimum = 0, maximum = 1) => Math.min(maximum, Math.max(minimum, value));
 const sceneAsset = (scene: (typeof scenes)[number], mobile = false) => {
-  const folder = scene === "06-life" ? "landing-story-v2" : "landing-story-v3";
+  const folder = scene === "06-life" || scene === "05-plan" ? "landing-story-v2" : "landing-story-v3";
   return `/assets/${folder}/${scene}${mobile ? "-mobile" : ""}.webp`;
 };
+
+function ComparisonTable() {
+  return <table className={styles.comparisonTable}>
+    <caption>The old way compared with organizing your finances in Clover</caption>
+    <thead><tr><th scope="col">The old way</th><th scope="col">A simpler way</th></tr></thead>
+    <tbody>
+      <tr><td>Enter transactions one by one</td><td><strong>1. Upload</strong> statements, receipts, or screenshots</td></tr>
+      <tr><td>Build your financial history manually</td><td><strong>2. Organize</strong> months of transactions in minutes</td></tr>
+      <tr><td>Guess what changed in your finances</td><td><strong>3. Understand</strong> patterns, reports, and Adviser guidance</td></tr>
+      <tr><td>Make decisions without knowing what to do next</td><td><strong>4. Improve</strong> by acting on one clear recommendation at a time</td></tr>
+    </tbody>
+  </table>;
+}
 
 function JourneyActions({ authEnabled, final = false }: { authEnabled: boolean; final?: boolean }) {
   return <div className={styles.actions}>
@@ -158,7 +172,8 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
   const chapterPhase = storyPosition - chapterFloor;
   const displayedChapter = chapterPhase < 0.5 ? chapterFloor : Math.min(chapters.length - 1, chapterFloor + 1);
   const sceneMotion = (index: number): CSSProperties => {
-    const distance = storyPosition - index;
+    // The comparison shares the hero setting; subsequent scenes start one chapter later.
+    const distance = Math.max(0, storyPosition - 1) - index;
     const proximity = clamp(1 - Math.abs(distance));
     const easedProximity = proximity * proximity * (3 - 2 * proximity);
     const depth = Math.min(1, Math.abs(distance));
@@ -175,7 +190,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
     };
   };
   const productMotion = (index: number, direction = 1): CSSProperties => {
-    const distance = storyPosition - index;
+    const distance = storyPosition - (index === 0 ? 0 : index + 1);
     const proximity = clamp(1 - Math.abs(distance) * 1.35);
     return {
       opacity: proximity,
@@ -184,7 +199,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
     };
   };
 
-  return <div ref={journeyRef} className={styles.journey} data-chapter={chapter} data-market={market} style={{ "--journey-progress": 0 } as CSSProperties}>
+  return <div ref={journeyRef} className={styles.journey} data-chapter={Math.max(0, chapter - 1)} data-comparison={chapter === 1} data-market={market} style={{ "--journey-progress": 0 } as CSSProperties}>
     <div className={styles.stage}>
       <header ref={headerRef} className={styles.header}>
         <Link href="/" className={styles.brand} aria-label="Clover home">
@@ -249,7 +264,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
       <div className={styles.world} aria-hidden="true">
         <div className={styles.sceneStack}>
           {scenes.map((scene, index) => (
-            <div className={styles.scene} data-active={chapter === index} key={scene} style={sceneMotion(index)}>
+            <div className={styles.scene} data-active={Math.max(0, chapter - 1) === index} key={scene} style={sceneMotion(index)}>
               <span className={styles.sceneBackdrop} style={{ "--scene-backdrop": `url("${sceneAsset(scene)}")` } as CSSProperties} />
               <picture className={styles.sceneSubject}>
                 <source media="(max-width: 900px)" srcSet={sceneAsset(scene, true)} />
@@ -263,14 +278,15 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
       </div>
 
       <section className={styles.story} aria-live="polite">
-        {chapters.map((item, index) => <div className={styles.chapter} data-active={chapter === index} key={index} aria-hidden={chapter !== index} style={chapterMotion(index)}>
-          <h1>{item.title}</h1>
-          {item.copy ? <p>{item.copy}</p> : null}
+        {chapters.map((item, index) => <div className={`${styles.chapter} ${index === 1 ? styles.comparisonChapter : ""}`} data-active={chapter === index} key={index} aria-hidden={chapter !== index} style={chapterMotion(index)}>
+          <div><h1>{item.title}</h1>
+          {item.copy ? <p>{item.copy}</p> : null}</div>
+          {index === 1 ? <ComparisonTable /> : null}
           {(index === 0 || index === chapters.length - 1) && <JourneyActions authEnabled={authEnabled} final={index === chapters.length - 1} />}
         </div>)}
       </section>
 
-      <div className={styles.supportStage} data-active={displayedChapter < chapters.length - 1} aria-hidden="true">
+      <div className={styles.supportStage} data-active={displayedChapter !== 1 && displayedChapter < chapters.length - 1} aria-hidden="true">
       <div className={styles.heroEvidence} data-story-visual="evidence" style={productMotion(0)}>
         <div className={styles.evidenceDocuments}>
           {local.documents.slice(0, 3).map(([label, detail], index) => <div className={styles.evidenceDocument} key={label}>
@@ -304,10 +320,12 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
       <div className={styles.adviser} data-story-visual="adviser" style={productMotion(3, -1)}><div><Image src="/clover-mark.svg" alt="" width={34} height={34} /><span><small>Ask Clover</small><b>Your financial picture</b></span></div><div className={styles.userPrompt}>Could I comfortably plan a Japan trip next year?</div><p>{local.insight}</p><div className={styles.suggestion}><span>✈</span><b>Japan in spring</b><strong>{local.planAmount} monthly</strong></div><button type="button">Create this plan →</button></div>
 
       <div className={styles.planCard} data-story-visual="plan" style={productMotion(4)}>
-        <div className={styles.planHeader}><Image src="/clover-mark.svg" alt="" width={30} height={30} /><span><small>Goals</small><b>Japan trip</b></span><button type="button">Edit</button></div>
-        <div className={styles.goalHero}><span>✈️</span><div><small>Monthly contribution</small><strong>{local.planAmount}</strong></div></div>
-        <div className={styles.planProgress}><span><i /><i /><i /></span><b>Ready by March</b></div>
-        <div className={styles.budgetCompanion}><span>🧳</span><div><small>Travel budget</small><b>{market === "ph" ? "₱144,000 target" : "$9,840 target"}</b></div><strong>On track</strong></div>
+        <div className={styles.planHeader}><Image src="/clover-mark.svg" alt="" width={30} height={30} /><span><small>Split Bills</small><b>Airport lunch</b></span></div>
+        <div className={styles.sharedExpense}><small>Shared equally · 4 people</small><strong>{market === "ph" ? "₱2,400" : "$120"}</strong><span>Paid by Maya</span></div>
+        <div className={styles.sharedPeople}>
+          {["Maya", "Alex", "Sam", "Leo"].map((name, index) => <div key={name}><b>{name}</b><span>{market === "ph" ? "₱600" : "$30"}</span><small>{index === 0 ? "Paid" : index === 1 ? "Settled" : "Owes"}</small></div>)}
+        </div>
+        <p className={styles.sharedPrivacy}>Only the shared expense is visible. Personal accounts stay private.</p>
       </div>
       </div>
 

@@ -31,7 +31,7 @@ async function main() {
     "Every mobile landing scene must use a portrait source so full-viewport cover does not crop out the cast.",
   );
   assert.match(landingJourneySource, /const scenes = \["01-organize", "02-upload", "03-picture", "04-adviser", "05-plan", "06-life"\]/, "The scrollable landing story must retain all six people-led scenes in order.");
-  assert.match(landingJourneySource, /const folder = scene === "06-life" \? "landing-story-v2" : "landing-story-v3"/, "The rebuilt personal-finance chapters must use their safer desktop and mobile compositions while retaining the group finale.");
+  assert.match(landingJourneySource, /const folder = scene === "06-life" \|\| scene === "05-plan" \? "landing-story-v2" : "landing-story-v3"/, "Shared finances and the finale use the group scenes; personal finance keeps the individual scenes.");
   assert.match(landingJourneySource, /<source media="\(max-width: 900px\)" srcSet=\{sceneAsset\(scene, true\)\}/, "The landing story must use mobile-specific crops that keep its recurring cast visible.");
   assert.match(landingJourneySource, /className=\{styles\.sceneBackdrop\}/, "Intermediate desktop sizes must retain a full-bleed backdrop behind the uncropped cast.");
   assert.match(landingJourneyStyles, /@media\(max-width:900px\)\{[\s\S]*?\.markers\{right:8px;top:50%;bottom:auto;flex-direction:column;/, "The landing-story chapter tracker must remain on the right on mobile.");
@@ -46,7 +46,7 @@ async function main() {
   assert.match(landingJourneySource, /Transactions[\s\S]*?Search transactions[\s\S]*?Add transaction/, "The phone surface must demonstrate Clover's mobile Transactions experience.");
   assert.match(landingJourneySource, /Accounts[\s\S]*?Estimated total[\s\S]*?local\.accountCards/, "The laptop surface must demonstrate a sample Accounts view without exposing user data.");
   assert.match(landingJourneySource, /Could I comfortably plan a Japan trip next year\?[\s\S]*?Create this plan/, "The Adviser surface must show a grounded planning conversation.");
-  assert.match(landingJourneySource, /Goals[\s\S]*?Monthly contribution[\s\S]*?Travel budget[\s\S]*?On track/, "The planning surface must use recognizable Clover goal and budget details.");
+  assert.match(landingJourneySource, /Split Bills[\s\S]*?Shared equally[\s\S]*?Personal accounts stay private/, "The shared-money surface must explain the expense split and personal-account privacy.");
   assert.match(landingJourneySource, /const displayedChapter = chapterPhase < 0\.5/, "Landing copy must switch quickly without disappearing between chapters.");
   assert.match(landingJourneySource, /const productMotion = \(index: number, direction = 1\)/, "Product evidence must move with the scroll while remaining fully opaque.");
   assert.match(landingJourneySource, /bpi\.png[\s\S]*grabpay\.png[\s\S]*gcash\.png[\s\S]*chase bank\.png[\s\S]*paypal\.png[\s\S]*wise\.png/, "Upload examples must use real bank and wallet marks in both supported markets.");
