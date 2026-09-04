@@ -124,6 +124,7 @@
     "qa:browser-compatibility": "tsx scripts/browser-compatibility-regression.ts",
     "qa:ui-consistency": "tsx scripts/ui-theme-consistency-regression.ts && tsx scripts/account-dropdown-audit.ts",
     "qa:title-case": "tsx scripts/title-case-regression.ts",
+    "qa:production-audit": "tsx scripts/production-audit-ci.ts",
     "qa:header-cta-typography": "tsx scripts/header-cta-typography-regression.ts",
     "qa:navigation-icons": "tsx scripts/navigation-icon-regression.ts",
     "qa:bug-report": "tsx scripts/bug-report-regression.ts",
