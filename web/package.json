@@ -39,6 +39,7 @@
     "qa:structured-csv": "tsx scripts/structured-csv-parser-regression.ts",
     "qa:financial-exchange": "tsx scripts/financial-exchange-parser-regression.ts",
     "qa:image-formats": "tsx scripts/image-format-regression.ts",
+    "qa:pdf-text-layer": "tsx scripts/pdf-text-layer-fast-path-regression.ts",
     "qa:spreadsheet-import": "tsx scripts/spreadsheet-import-regression.ts",
     "qa:chinabank-deep": "tsx scripts/chinabank-deep-qa.ts",
     "qa:chinabank-process": "tsx scripts/chinabank-process-route-regression.ts",

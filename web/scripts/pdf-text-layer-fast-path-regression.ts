@@ -70,6 +70,114 @@ assert.equal(
   "A structurally complete zero-activity Wise statement should not spend time on OCR."
 );
 
+const mayaSavingsSplitColumnText = [
+  "Maya Savings",
+  "Statement of Account",
+  "Account holder Sample User",
+  "Period covered August 1, 2026 to August 31, 2026",
+  "Date & Time",
+  "Transaction Type & Details",
+  "Transaction No.",
+  "Amount (PHP)",
+  "Running Balance",
+  "08/01/2026 09:14 AM",
+  "Payroll disbursement from employer",
+  "123456789001",
+  "25,000.00",
+  "31,450.00",
+  "08/07/2026 02:31 PM",
+  "Interest earned",
+  "123456789002",
+  "18.42",
+  "31,468.42",
+  "08/15/2026 08:02 AM",
+  "Withholding tax",
+  "123456789003",
+  "3.68",
+  "31,464.74",
+  "08/26/2026 07:48 PM",
+  "Online banking activity",
+  "123456789004",
+  "1,250.00",
+  "30,214.74",
+].join("\n");
+
+assert.equal(
+  pdfTextLayerLooksSufficientForParsing(mayaSavingsSplitColumnText),
+  true,
+  "A structured split-column Maya Savings statement should bypass redundant rendered OCR."
+);
+
+assert.equal(
+  pdfTextLayerLooksSufficientForParsing(
+    [
+      "Maya Savings",
+      "Statement of Account",
+      "Date & Time",
+      "Transaction Type & Details",
+      "Transaction No.",
+      "Amount (PHP)",
+      "Running Balance",
+      "Statement Date 08/31/2026",
+      "Closing Balance 30,214.74",
+      "This summary does not contain enough transaction rows to parse safely.",
+    ].join("\n")
+  ),
+  false,
+  "A sparse Maya statement shell must still receive OCR instead of being mistaken for transaction data."
+);
+
+const mayaSavingsHeaderlessText = [
+  "Account activity export",
+  "08/01/2026 09:14 AM",
+  "08/03/2026 11:20 AM",
+  "08/07/2026 02:31 PM",
+  "08/11/2026 04:05 PM",
+  "08/15/2026 08:02 AM",
+  "08/19/2026 12:46 PM",
+  "08/24/2026 03:17 PM",
+  "08/26/2026 07:48 PM",
+  "Payroll disbursement from employer",
+  "Interest earned",
+  "Withholding tax",
+  "Online banking activity",
+  "Groceries",
+  "Utility bill",
+  "Restaurant",
+  "ATM activity",
+  "25,000.00",
+  "31,450.00",
+  "250.00",
+  "31,200.00",
+  "18.42",
+  "31,218.42",
+  "3.68",
+  "31,214.74",
+  "1,250.00",
+  "29,964.74",
+  "950.00",
+  "29,014.74",
+  "340.00",
+  "28,674.74",
+  "2,000.00",
+  "26,674.74",
+].join("\n");
+
+assert.equal(
+  pdfTextLayerLooksSufficientForParsing(
+    mayaSavingsHeaderlessText,
+    "MayaSavings_SoA_example_2026AUG.pdf"
+  ),
+  true,
+  "A dense Maya Savings text layer identified by its source filename should bypass OCR even when PDF headers are omitted."
+);
+
+assert.equal(
+  pdfTextLayerLooksSufficientForParsing(mayaSavingsHeaderlessText, "unknown-statement.pdf"),
+  false,
+  "The filename-assisted dense-column exception must remain scoped to Maya Savings exports."
+);
+
 const pnbProjectReportText = [
   "STATEMENT OF ACCOUNT REPORT",
   "Account Number 001234567890",

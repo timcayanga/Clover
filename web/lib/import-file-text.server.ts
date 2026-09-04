@@ -1094,11 +1094,20 @@ const scoreStatementTextCandidate = (text: string) => {
   return score;
 };
 
-export const pdfTextLayerLooksSufficientForParsing = (text: string) => {
+export const pdfTextLayerLooksSufficientForParsing = (text: string, fileName?: string | null) => {
   const normalized = text.trim();
   if (normalized.length < 250) {
     return false;
   }
+
+  const lines = normalized.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  const datePattern = /(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}|\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:[a-z]+)?\.?\s+\d{4}\b|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b\d{4}-\d{2}-\d{2}\b)/i;
+  const amountPattern = /(?:[₱$€£¥]\s*)?\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b|\b\d+(?:\.\d{2})\b/;
+  const transactionPattern = /\b(?:card transaction|transaction:|transfer|payment|purchase|refund|withdraw|deposit|debit|credit)\b/i;
+  const datedAmountLines = lines.filter((line) => datePattern.test(line) && amountPattern.test(line)).length;
+  const dateLines = lines.filter((line) => datePattern.test(line)).length;
+  const amountLines = lines.filter((line) => amountPattern.test(line)).length;
+  const transactionLines = lines.filter((line) => transactionPattern.test(line)).length;
 
   // PNB's Project/SOA report is a text PDF whose glyph positions collapse into
   // a single long line. Its deterministic parser deliberately consumes that
@@ -1122,17 +1131,30 @@ export const pdfTextLayerLooksSufficientForParsing = (text: string) => {
     return true;
   }
 
-  const lines = normalized.split(/\r?\n/).filter((line) => line.trim().length > 0);
-  const datePattern = /(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}|\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:[a-z]+)?\.?\s+\d{4}\b|\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b\d{4}-\d{2}-\d{2}\b)/i;
-  const amountPattern = /(?:[₱$€£¥]\s*)?\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b|\b\d+(?:\.\d{2})\b/;
-  const transactionPattern = /\b(?:card transaction|transaction:|transfer|payment|purchase|refund|withdraw|deposit|debit|credit)\b/i;
-  const datedAmountLines = lines.filter((line) => datePattern.test(line) && amountPattern.test(line)).length;
-  const dateLines = lines.filter((line) => datePattern.test(line)).length;
-  const amountLines = lines.filter((line) => amountPattern.test(line)).length;
-  const transactionLines = lines.filter((line) => transactionPattern.test(line)).length;
+  // Maya Savings text PDFs commonly expose each table column as a separate
+  // line. Their dates and amounts therefore do not share a line, and ordinary
+  // transaction keywords can be sparse even though the dedicated Maya parser
+  // can reconstruct every row deterministically. Recognize the complete table
+  // shape so these PDFs do not pay for rendered OCR after native extraction.
+  const isStructuredMayaSavingsStatement =
+    /\b(?:Maya|Consumer)\s+Savings\b/i.test(normalized) &&
+    /\bDate\s*&\s*Time\b/i.test(normalized) &&
+    /\bTransaction\s+Type\s*&\s*Details\b/i.test(normalized) &&
+    /\bTransaction\s+No\.?\b/i.test(normalized) &&
+    /\bAmount\s*\(\s*PHP\s*\)/i.test(normalized) &&
+    /\bRunning\s+Balance\b/i.test(normalized) &&
+    dateLines >= 3 &&
+    amountLines >= 4;
+  const isDenseMayaSavingsTextLayer =
+    /maya[\s_-]*savings/i.test(fileName ?? "") &&
+    dateLines >= 8 &&
+    amountLines >= Math.max(12, dateLines * 2);
   const hasSplitTransactionLayout = dateLines >= 3 && amountLines >= 4 && transactionLines >= 3;
 
-  return (datedAmountLines >= 2 || hasSplitTransactionLayout) && scoreStatementTextCandidate(normalized) >= 25;
+  return (
+    (datedAmountLines >= 2 || hasSplitTransactionLayout || isStructuredMayaSavingsStatement || isDenseMayaSavingsTextLayer) &&
+    scoreStatementTextCandidate(normalized) >= 25
+  );
 };
 
 const normalizeStatementTextLine = (line: string) =>
@@ -1740,7 +1762,8 @@ const extractTextFromPdfBytesWithRenderFirstFallback = async (
   data: Uint8Array,
   password?: string,
   baseUrl?: string | null,
-  profile: PdfOcrProfile = "standard"
+  profile: PdfOcrProfile = "standard",
+  fileName?: string | null
 ) => {
   const maxPages = profile === "aggressive" ? 8 : 6;
   const renderScale = profile === "aggressive" ? 3.8 : 3.2;
@@ -1757,7 +1780,7 @@ const extractTextFromPdfBytesWithRenderFirstFallback = async (
   }
 
   try {
-    return await extractTextFromPdfBytesWithOcrFallback(data, password, baseUrl, profile);
+    return await extractTextFromPdfBytesWithOcrFallback(data, password, baseUrl, profile, fileName);
   } catch (error) {
     if (isPdfPasswordError(error)) {
       throw error;
@@ -2370,8 +2393,11 @@ const extractTextFromPdfBytesWithOcrFallback = async (
   data: Uint8Array,
   password?: string,
   baseUrl?: string | null,
-  profile: PdfOcrProfile = "standard"
+  profile: PdfOcrProfile = "standard",
+  fileName?: string | null
 ) => {
+  const extractionStartedAt = Date.now();
+  const textLayerStartedAt = Date.now();
   let extractedText = "";
   try {
     extractedText = await extractTextFromPdfBytes(data, password, baseUrl);
@@ -2382,9 +2408,25 @@ const extractTextFromPdfBytesWithOcrFallback = async (
     console.warn("PDF text extraction failed; retrying with rendered page OCR", error);
   }
 
-  if (pdfTextLayerLooksSufficientForParsing(extractedText)) {
+  const textLayerDurationMs = Date.now() - textLayerStartedAt;
+
+  if (pdfTextLayerLooksSufficientForParsing(extractedText, fileName)) {
+    console.info("[import-performance] PDF extraction used native text", {
+      profile,
+      sourceBytes: data.byteLength,
+      textLength: extractedText.length,
+      textLayerDurationMs,
+      totalDurationMs: Date.now() - extractionStartedAt,
+    });
     return extractedText;
   }
+
+  console.info("[import-performance] PDF extraction started OCR fallback", {
+    profile,
+    sourceBytes: data.byteLength,
+    textLength: extractedText.length,
+    textLayerDurationMs,
+  });
 
   try {
     const maxPages = profile === "aggressive" ? 4 : 2;
@@ -2419,6 +2461,13 @@ const extractTextFromPdfBytesWithOcrFallback = async (
       { text: lighterOcrText, label: "ocr-render-2.2" },
     ]);
     if (bestText) {
+      console.info("[import-performance] PDF extraction completed OCR fallback", {
+        profile,
+        sourceBytes: data.byteLength,
+        textLength: bestText.length,
+        textLayerDurationMs,
+        totalDurationMs: Date.now() - extractionStartedAt,
+      });
       return bestText;
     }
     return extractedText;
@@ -2647,9 +2696,9 @@ export const readUploadedFileText = async (
     }
     const aggressiveProfile = shouldUseAggressivePdfOcrProfile(file.name) ? "aggressive" : "standard";
     if (shouldPreferPdfOcrFirst(file.name)) {
-      return extractTextFromPdfBytesWithRenderFirstFallback(data, password, null, aggressiveProfile);
+      return extractTextFromPdfBytesWithRenderFirstFallback(data, password, null, aggressiveProfile, file.name);
     }
-    return extractTextFromPdfBytesWithOcrFallback(data, password, null, aggressiveProfile);
+    return extractTextFromPdfBytesWithOcrFallback(data, password, null, aggressiveProfile, file.name);
   }
 
   if (isImageImportFileName(lowerType, lowerName)) {
@@ -2896,9 +2945,9 @@ export const readImportedFileTextWithCacheInfo = async (
         }
       }
       if (shouldPreferPdfOcrFirst(params.fileName)) {
-        return await extractTextFromPdfBytesWithRenderFirstFallback(bytes, password, pdfJsBaseUrl, aggressiveProfile);
+        return await extractTextFromPdfBytesWithRenderFirstFallback(bytes, password, pdfJsBaseUrl, aggressiveProfile, params.fileName);
       }
-      return await extractTextFromPdfBytesWithOcrFallback(bytes, password, pdfJsBaseUrl, aggressiveProfile);
+      return await extractTextFromPdfBytesWithOcrFallback(bytes, password, pdfJsBaseUrl, aggressiveProfile, params.fileName);
     } catch (error) {
       if (!pdfJsBaseUrl || isPdfPasswordError(error)) {
         throw error;
@@ -2909,9 +2958,9 @@ export const readImportedFileTextWithCacheInfo = async (
         error,
       });
       if (shouldPreferPdfOcrFirst(params.fileName)) {
-        return extractTextFromPdfBytesWithRenderFirstFallback(bytes, password, null, aggressiveProfile);
+        return extractTextFromPdfBytesWithRenderFirstFallback(bytes, password, null, aggressiveProfile, params.fileName);
       }
-      return extractTextFromPdfBytesWithOcrFallback(bytes, password, null, aggressiveProfile);
+      return extractTextFromPdfBytesWithOcrFallback(bytes, password, null, aggressiveProfile, params.fileName);
     }
   })();
 
