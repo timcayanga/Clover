@@ -56260,8 +56260,21 @@ html[data-theme="dark"] .shell-quick-add-popover__item--camera:focus-visible {
 
 .dashboard-home__hero--balance {
   position: sticky;
-  top: 58px;
+  top: 78px;
   z-index: 44;
+  overflow: visible;
+}
+
+.dashboard-home__hero--balance::after {
+  content: "";
+  position: absolute;
+  right: 12px;
+  bottom: -14px;
+  left: 12px;
+  height: 14px;
+  border-radius: 0 0 20px 20px;
+  background: linear-gradient(180deg, rgba(247, 250, 251, 0.78), rgba(247, 250, 251, 0));
+  pointer-events: none;
 }
 
 .dashboard-home__balance-heading {
@@ -56321,8 +56334,12 @@ body[data-clover-home-balances-hidden] .home-sensitive-amount__mask {
 
 @media (max-width: 1100px) {
   .dashboard-home__hero--balance {
-    top: 64px;
+    top: 84px;
   }
+}
+
+html[data-theme="dark"] .dashboard-home__hero--balance::after {
+  background: linear-gradient(180deg, rgba(8, 17, 30, 0.78), rgba(8, 17, 30, 0));
 }
 
 @media (prefers-reduced-motion: reduce) {

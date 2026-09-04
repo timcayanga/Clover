@@ -200,6 +200,21 @@ assert.match(
 );
 assert.match(
   globalStylesSource,
+  /\.dashboard-home__hero--balance\s*\{[^}]*position:\s*sticky;[^}]*top:\s*78px;[^}]*overflow:\s*visible;/s,
+  "My Balance should remain at its initial desktop offset instead of shifting into the header.",
+);
+assert.match(
+  globalStylesSource,
+  /\.dashboard-home__hero--balance::after\s*\{[^}]*height:\s*14px;[^}]*linear-gradient/s,
+  "Content passing beneath My Balance should receive a shallow fade treatment.",
+);
+assert.match(
+  globalStylesSource,
+  /@media \(max-width:\s*1100px\)[\s\S]*?\.dashboard-home__hero--balance\s*\{[^}]*top:\s*84px;/,
+  "My Balance should remain below the mobile header and its original page gap.",
+);
+assert.match(
+  globalStylesSource,
   /body\[data-clover-home-balances-hidden\] \.home-sensitive-amount__mask\s*\{[^}]*display:\s*inline/s,
 );
 assert.match(
