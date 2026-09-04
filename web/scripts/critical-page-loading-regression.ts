@@ -200,7 +200,7 @@ assert.match(
 );
 assert.match(
   globalStylesSource,
-  /\.dashboard-home__hero--balance\s*\{[^}]*position:\s*sticky;[^}]*top:\s*78px;[^}]*overflow:\s*visible;/s,
+  /\.dashboard-home__hero--balance\s*\{[^}]*position:\s*sticky;[^}]*top:\s*82px;[^}]*overflow:\s*visible;/s,
   "My Balance should remain at its initial desktop offset instead of shifting into the header.",
 );
 assert.match(

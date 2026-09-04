@@ -56260,7 +56260,7 @@ html[data-theme="dark"] .shell-quick-add-popover__item--camera:focus-visible {
 
 .dashboard-home__hero--balance {
   position: sticky;
-  top: 78px;
+  top: 82px;
   z-index: 44;
   overflow: visible;
 }
