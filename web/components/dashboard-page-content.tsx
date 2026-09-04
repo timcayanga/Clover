@@ -1033,7 +1033,9 @@ async function DashboardStream({
       ? {
           emoji: "🗓️",
           label: "Upcoming payment",
-          copy: `${plannedPaymentsDueSoon.length} planned payment${plannedPaymentsDueSoon.length === 1 ? "" : "s"} are due in the next 7 days.`,
+          copy: `${plannedPaymentsDueSoon.length} planned ${
+            plannedPaymentsDueSoon.length === 1 ? "payment is" : "payments are"
+          } due in the next 7 days.`,
           href: "/recurring",
           actionLabel: "Review payments",
           tone: "warning",
@@ -1259,8 +1261,6 @@ async function DashboardStream({
           )}
         </article>
 
-        <DashboardBudgetPulse />
-
         <div className="dashboard-home__snapshot-grid" aria-label="Week and month snapshot">
           <article className={`dashboard-home__report-card dashboard-home__report-card--${weeklyReportTone} glass`}>
             <div className="dashboard-home__report-card-head">
@@ -1322,6 +1322,8 @@ async function DashboardStream({
             </Link>
           </article>
         </div>
+
+        <DashboardBudgetPulse />
 
         <div className="dashboard-home__snapshot-grid dashboard-home__snapshot-grid--lower">
           <HomeRecurringPaymentsCard

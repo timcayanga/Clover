@@ -52,7 +52,7 @@ export function DashboardBudgetPulse() {
           <strong>
             {alert
               ? `${alert.name} is at ${Math.round(alert.progressPercent)}% (${alert.statusLabel.toLowerCase()})`
-              : `${pulse.activeBudgetCount} budget${pulse.activeBudgetCount === 1 ? "" : "s"} are being tracked`}
+              : `${pulse.activeBudgetCount} ${pulse.activeBudgetCount === 1 ? "budget is" : "budgets are"} being tracked`}
           </strong>
           {alert ? (
             <span>{formatCurrencyAmount(alert.actualAmount, alert.currency)} of {formatCurrencyAmount(alert.targetAmount, alert.currency)}</span>

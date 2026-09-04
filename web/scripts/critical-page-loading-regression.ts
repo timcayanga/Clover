@@ -141,6 +141,11 @@ assert.match(dashboardSource, /const todayStart = toDayStart\(now\)/);
 assert.doesNotMatch(dashboardSource, /activityAnchorDate/);
 assert.match(dashboardSource, /Weekly Report/);
 assert.match(dashboardSource, /Monthly Report/);
+assert.match(dashboardSource, /plannedPaymentsDueSoon\.length === 1 \? "payment is" : "payments are"/);
+assert.ok(
+  dashboardSource.indexOf('aria-label="Week and month snapshot"') < dashboardSource.indexOf("<DashboardBudgetPulse />"),
+  "Budgeting should appear below the weekly and monthly reports.",
+);
 assert.match(
   globalStylesSource,
   /\.dashboard-home__report-card h4\s*\{[^}]*font-family:\s*var\(--font-body\)/s,

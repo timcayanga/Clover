@@ -15,6 +15,12 @@ for (const file of ["app/api/budgets/route.ts", "app/api/budgets/[budgetId]/rout
 }
 assert.match(readSource("app/api/budget-plans/route.ts"), /data: \{ workspaceId: context\.workspaceId, name: parsed\.data\.name \}/, "plan ownership must come from the authenticated context");
 const budgetUi = readSource("components/budgeting-workspace.tsx");
+const dashboardBudgetPulse = readSource("components/dashboard-budget-pulse.tsx");
+assert.match(
+  dashboardBudgetPulse,
+  /pulse\.activeBudgetCount === 1 \? "budget is" : "budgets are"/,
+  "The dashboard budget count must use singular and plural grammar correctly.",
+);
 assert.match(budgetUi, /useCollectionSelection\("budget"\)/);
 assert.match(budgetUi, /budgets\.map\(\(budget\)/, "one card per individual budget, including paused budgets");
 assert.doesNotMatch(budgetUi, /AnimatedTabs|selectedPlan|collection-switcher|Your budget plans|Limits on track/);
@@ -100,6 +106,7 @@ const planOverview = buildBudgetOverview({
   budgets: [budget({ id: "legacy" }), budget({ id: "travel", planId: "travel-plan" }), budget({ id: "paused", planId: "travel-plan", isActive: false })],
   transactions: [transaction()], commitments: [], now,
 });
+assert.equal(planOverview.activeBudgetCount, 2, "the dashboard count must reflect every active budget, not the number of plans");
 assert.equal(planOverview.budgets.find((row) => row.id === "legacy")?.planId, null, "existing limits remain in Personal budget without rewriting records");
 assert.equal(planOverview.budgets.find((row) => row.id === "travel")?.planId, "travel-plan", "named plan membership survives progress calculation");
 assert.equal(planOverview.inactiveBudgets[0]?.planId, "travel-plan", "paused limits remain associated with their plan");
