@@ -40,11 +40,15 @@ const marketContent = {
 
 const clamp = (value: number, minimum = 0, maximum = 1) => Math.min(maximum, Math.max(minimum, value));
 const presenceAround = (position: number, center: number, radius: number) => clamp(1 - Math.abs(position - center) / radius);
+const smoothstep = (start: number, end: number, value: number) => {
+  const normalized = clamp((value - start) / (end - start));
+  return normalized * normalized * (3 - 2 * normalized);
+};
 
 function JourneyActions({ authEnabled, final = false }: { authEnabled: boolean; final?: boolean }) {
   return <div className={styles.actions}>
-    {authEnabled ? <LandingSignupModal enabled>Organize my finances for free</LandingSignupModal> : <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>Organize my finances for free</Link>}
     {!final && <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>Log in</Link>}
+    {authEnabled ? <LandingSignupModal enabled>Organize my finances for free <span aria-hidden="true">→</span></LandingSignupModal> : <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>Organize my finances for free <span aria-hidden="true">→</span></Link>}
   </div>;
 }
 
@@ -98,18 +102,25 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
 
   const local = marketContent[market];
   const sceneMotion = (index: number): CSSProperties => {
+    const activeScene = Math.min(chapters.length - 1, Math.floor(storyPosition));
+    const phase = storyPosition - activeScene;
+    const reveal = smoothstep(0.06, 0.94, phase);
+    const isOutgoing = index === activeScene;
+    const isIncoming = index === activeScene + 1;
     const distance = storyPosition - index;
     return {
-      opacity: clamp(1 - Math.abs(distance)),
-      transform: `translate3d(${distance * -1.2}%, ${distance * -0.6}%, 0) scale(${1 + Math.min(1, Math.abs(distance)) * 0.065})`,
+      opacity: isOutgoing || isIncoming ? 1 : 0,
+      clipPath: isIncoming ? `inset(0 ${100 - reveal * 100}% 0 0)` : "inset(0)",
+      transform: `translate3d(${distance * -2.4}%, ${distance * -0.5}%, 0) scale(${1 + Math.min(1, Math.abs(distance)) * 0.075})`,
     };
   };
   const chapterMotion = (index: number): CSSProperties => {
-    const distance = storyPosition - index;
+    const activeChapter = Math.min(chapters.length - 1, Math.floor(storyPosition));
+    const phase = storyPosition - activeChapter;
+    const displayedChapter = phase < 0.5 ? activeChapter : Math.min(chapters.length - 1, activeChapter + 1);
     return {
-      opacity: clamp(1 - Math.abs(distance) * 1.35),
-      filter: `blur(${Math.min(8, Math.abs(distance) * 8)}px)`,
-      transform: `translate3d(0, ${distance * -22}px, 0)`,
+      opacity: index === displayedChapter ? 1 : 0,
+      transform: "translate3d(0, 0, 0)",
     };
   };
   const visualMotion = (center: number, radius: number, direction = 1): CSSProperties => {
@@ -153,20 +164,26 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
         </div>)}
       </section>
 
-      <div className={styles.ingestionPortal} data-story-visual="ingestion" aria-hidden="true" style={visualMotion(0.15, 0.48)}>
+      <div className={styles.supportStage} aria-hidden="true">
+      <div className={styles.ingestionPortal} data-story-visual="ingestion" style={visualMotion(0.28, 0.82)}>
         <span className={styles.ingestionPulse}><Image src="/clover-mark.svg" alt="" width={46} height={46} /></span>
         <span><small>CLOVER UPLOAD</small><b>Drop in what you already have</b></span>
         <i /><i /><i />
       </div>
 
-      <div className={styles.documents} data-story-visual="documents" aria-hidden="true" style={visualMotion(0.1, 0.42)}>
+      <div className={styles.documents} data-story-visual="documents" style={visualMotion(0.32, 0.92)}>
         <div><small>{local.documents[0][0]}</small><b>{local.documents[0][1]}</b><i /><i /><i /></div>
         <div><small>{local.documents[1][0]}</small><b>{local.documents[1][1]}</b><i /><i /></div>
         <div><small>{local.documents[2][0]}</small><b>{local.documents[2][1]}</b><span>▦</span></div>
         <div><small>{local.documents[3][0]}</small><b>{local.documents[3][1]}</b><span>▤</span></div>
       </div>
 
-      <div className={styles.phone} data-story-visual="phone" aria-hidden="true" style={visualMotion(1, 0.58, -1)}>
+      <div className={styles.financialOutputs} data-story-visual="outputs" style={visualMotion(0.46, 0.82, -1)}>
+        <span><small>ACCOUNT CREATED</small><b>{market === "ph" ? "BPI 3012" : "Chase 8042"}</b><i>{market === "ph" ? "PHP" : "USD"}</i></span>
+        <span><small>TRANSACTIONS READY</small><b>248 organized</b><i>Review</i></span>
+      </div>
+
+      <div className={styles.phone} data-story-visual="phone" style={visualMotion(1.05, 0.82, -1)}>
         <div className={styles.phoneBar}><Image src="/clover-mark.svg" alt="" width={28} height={28} /><span>Upload files</span><i /></div>
         <strong>Add financial files</strong><p>Take a photo or choose statements, receipts, spreadsheets, and screenshots.</p>
         <div className={styles.uploadDrop}><b>Drop files anywhere</b><span>Take photo</span><span>Choose files</span></div>
@@ -174,20 +191,21 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
         <button type="button">Upload 3 files</button>
       </div>
 
-      <div className={styles.laptop} data-story-visual="laptop" aria-hidden="true" style={visualMotion(2, 0.58)}><div className={styles.laptopScreen}>
+      <div className={styles.laptop} data-story-visual="laptop" style={visualMotion(1.7, 1.2)}><div className={styles.laptopScreen}>
         <div className={styles.appBar}><Image src="/clover-mark.svg" alt="" width={26} height={26} /><span>Home</span><i /><i /></div>
         <div className={styles.balance}><small>MY BALANCE</small><strong>{local.balance}</strong><span>Across your accounts</span></div>
         <div className={styles.summary}><div><small>INCOME</small><b>{local.income}</b></div><div><small>EXPENSES</small><b>{local.expenses}</b></div><div><small>NET CASH FLOW</small><b>{local.cashFlow}</b></div></div>
         <div className={styles.transactionRows}>{local.transactions.map(([label, amount]) => <span key={label}><i />{label}<b>{amount}</b></span>)}</div>
       </div><span className={styles.laptopBase} /></div>
 
-      <div className={styles.adviser} data-story-visual="adviser" aria-hidden="true" style={visualMotion(3, 0.58, -1)}><div><Image src="/clover-mark.svg" alt="" width={34} height={34} /><span><small>ASK CLOVER</small><b>Your financial picture</b></span></div><p>{local.insight}</p><div className={styles.suggestion}><span>✈</span><b>Japan in spring</b><strong>{local.planAmount} monthly</strong></div><button type="button">Create this plan →</button></div>
+      <div className={styles.adviser} data-story-visual="adviser" style={visualMotion(3.05, 0.82, -1)}><div><Image src="/clover-mark.svg" alt="" width={34} height={34} /><span><small>ASK CLOVER</small><b>Your financial picture</b></span></div><p>{local.insight}</p><div className={styles.suggestion}><span>✈</span><b>Japan in spring</b><strong>{local.planAmount} monthly</strong></div><button type="button">Create this plan →</button></div>
 
-      <div className={styles.planCard} data-story-visual="plan" aria-hidden="true" style={visualMotion(4, 0.58)}>
+      <div className={styles.planCard} data-story-visual="plan" style={visualMotion(4.02, 0.96)}>
         <div><Image src="/clover-mark.svg" alt="" width={30} height={30} /><span><small>CLOVER RECOMMENDATION</small><b>Japan trip</b></span></div>
         <strong>{local.planAmount} <small>per month</small></strong>
         <div><i /><i /><i /><i /></div>
         <p>Ready by March</p>
+      </div>
       </div>
 
       <nav className={styles.markers} aria-label="Landing page chapters" data-progress={`${chapter + 1}/${chapters.length}`}>

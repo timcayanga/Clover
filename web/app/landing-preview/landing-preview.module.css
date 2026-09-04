@@ -161,3 +161,90 @@
   .chapter h1{font-size:clamp(23px,6.7vw,28px)}
   .chapter p{max-width:35ch;font-size:11px}
 }
+
+/* Final protected composition. Desktop reserves the left rail for copy;
+   mobile turns the lower portion into a stable caption deck. Photographs and
+   Clover surfaces animate in the remaining stage without crossing either. */
+.chapter{filter:none!important}
+.scene{overflow:hidden;transition:none!important}
+.sceneSubject{z-index:1;display:block}
+.supportStage{position:absolute;z-index:20;inset:0;pointer-events:none}
+.actions :global(.button){display:inline-flex;align-items:center;justify-content:center;gap:9px}
+.actions :global(.button) span{font-size:1.35em;line-height:.7;transition:transform .2s ease}
+.actions :global(.button):hover span{transform:translateX(3px)}
+.financialOutputs{position:absolute;z-index:25;display:grid;gap:8px;width:190px;pointer-events:none;will-change:opacity,transform}
+.financialOutputs>span{display:grid;grid-template-columns:1fr auto;gap:3px 8px;padding:11px 13px;border:1px solid rgba(255,255,255,.94);border-radius:14px;background:rgba(255,255,255,.94);box-shadow:0 18px 45px rgba(15,73,83,.16);backdrop-filter:blur(14px)}
+.financialOutputs small{grid-column:1/-1;color:#71858d;font-size:6px;font-weight:850;letter-spacing:.13em}.financialOutputs b{font-size:10px}.financialOutputs i{color:#008fa5;font-size:8px;font-style:normal;font-weight:850}
+
+@media(min-width:901px){
+  .sceneStack{inset:88px 0 0 34%;width:auto;height:auto;background:linear-gradient(135deg,#edf9f7,#fbf6ed)}
+  .supportStage{top:88px;right:0;bottom:0;left:34%;overflow:hidden}
+  .sceneBackdrop{display:block;background-image:var(--scene-backdrop);background-position:center;background-size:cover;filter:saturate(.72);opacity:.1;transform:scale(1.035)}
+  .sceneSubject img{object-fit:contain;object-position:right center}
+  .worldWash,.journey[data-chapter="5"] .worldWash{background:linear-gradient(90deg,#f9fdfd 0 31%,rgba(249,253,253,.98) 34%,rgba(249,253,253,.74) 38%,transparent 44%)}
+  .chapter{top:50%;left:clamp(34px,5.4vw,86px);width:min(390px,29vw);translate:0 -50%}
+  .chapter h1{font-size:clamp(34px,3.15vw,48px)}
+  .chapter p{max-width:370px;font-size:clamp(14px,1.05vw,16px)}
+  .actions{align-items:center;flex-direction:row;width:auto}
+  .journey .documents{top:auto;right:22%;bottom:3vh;left:auto;width:225px;height:300px;transform-origin:bottom right}
+  .journey .ingestionPortal{top:auto;right:4vw;bottom:5vh;left:auto;width:min(285px,21vw)}
+  .journey .financialOutputs{top:auto;right:23vw;bottom:6vh;left:auto}
+  .journey .phone{top:18%;right:5vw;bottom:auto;left:auto;width:270px;min-height:440px;transform-origin:center right}
+  .journey .laptop{top:23%;right:3vw;bottom:auto;left:auto;width:min(48vw,680px);transform-origin:center right}
+  .journey .adviser{top:25%;right:5vw;bottom:auto;left:auto;width:min(40vw,540px);transform-origin:center right}
+  .journey .planCard{top:auto;right:6vw;bottom:8vh;left:auto;width:min(32vw,420px);transform-origin:bottom right}
+}
+
+@media(min-width:901px) and (max-width:1100px){
+  .actions{align-items:stretch;flex-direction:column;width:250px}
+  .actions :global(.button){width:100%}
+}
+
+@media(max-width:900px){
+  .stage{min-height:568px;background:#f7fcfc}
+  .sceneStack{top:66px;right:0;bottom:auto;left:0;height:54%;background:#eef8f6}
+  .sceneBackdrop{display:none}
+  .sceneSubject img{object-fit:cover;object-position:center 64%}
+  .world>.worldWash,.journey[data-chapter="5"] .worldWash{z-index:9;background:linear-gradient(180deg,transparent 0 48%,rgba(249,253,253,.42) 54%,rgba(249,253,253,.97) 61%,#f9fdfd 68%)}
+  .story{z-index:30;top:56%;bottom:0;height:auto;background:linear-gradient(180deg,rgba(249,253,253,0),rgba(249,253,253,.96) 14%,#f9fdfd 34%)}
+  .supportStage{top:66px;right:0;bottom:auto;left:0;height:49%;overflow:hidden}
+  .chapter{top:50%;left:50%;width:calc(100vw - 44px);max-width:460px;translate:-50% -47%;text-align:center}
+  .chapter h1{max-width:none;font-size:clamp(25px,7.2vw,32px)}
+  .chapter p{max-width:39ch;margin:10px auto 0;font-size:12px;line-height:1.38}
+  .actions{align-items:stretch;flex-direction:column;width:min(285px,78vw);margin:13px auto 0}
+  .actions :global(.button){width:100%;min-height:38px}
+  .journey .documents{top:24%;right:auto;bottom:auto;left:1px;width:112px;height:142px;transform-origin:center left}
+  .journey .ingestionPortal{top:42%;right:auto;bottom:auto;left:10px;width:min(218px,56vw)}
+  .journey .financialOutputs{top:43%;right:8px;bottom:auto;left:auto;width:min(158px,42vw);gap:5px}
+  .financialOutputs>span{padding:8px 9px;border-radius:11px}.financialOutputs small{font-size:5px}.financialOutputs b{font-size:8px}.financialOutputs i{font-size:7px}
+  .journey .phone{top:15%;right:4vw;bottom:auto;left:auto;width:min(43vw,180px);min-height:280px;transform-origin:center right}
+  .journey .laptop{top:25%;right:3vw;bottom:auto;left:auto;width:78vw;transform-origin:center right}
+  .journey .adviser{top:22%;right:3vw;bottom:auto;left:auto;width:78vw;transform-origin:center right}
+  .journey .planCard{top:28%;right:4vw;bottom:auto;left:auto;width:min(68vw,310px);transform-origin:center right}
+  .markers{z-index:44;right:7px;top:31%;bottom:auto}
+}
+
+@media(max-width:540px){
+  .chapter{translate:-50% -49%}
+  .chapter h1{font-size:clamp(23px,6.8vw,29px)}
+  .chapter p{font-size:11px}
+  .actions{gap:7px;width:min(270px,80vw);margin-top:10px}
+  .actions :global(.button){min-height:36px}
+  .journey .ingestionPortal{top:43%;width:58vw}
+  .journey .financialOutputs{top:43%;width:40vw}
+}
+
+@media(max-height:650px) and (max-width:900px){
+  .sceneStack{height:47%}
+  .story{top:49%}
+  .chapter h1{font-size:clamp(22px,6.5vw,27px)}
+  .chapter p{margin-top:7px;font-size:10.5px}
+  .actions{margin-top:8px}
+  .journey .documents{top:17%}
+  .journey .phone{top:10%;width:38vw;min-height:208px;padding:10px;border-width:4px;scale:.7;transform-origin:top right}
+  .journey .phone::before{top:6px;width:42px;height:10px}.journey .phoneBar{margin:7px -2px 8px;padding-bottom:5px}.journey .phone>strong{font-size:12px}.journey .phone>p{font-size:6px}.journey .phone .uploadDrop{padding:4px}.journey .phone .uploadRows>span{padding:3px}.journey .phone>button{margin-top:4px;padding:5px}
+  .journey .laptop{top:16%;width:66vw}
+  .journey .adviser{top:12%;width:66vw;padding:10px}.journey .adviser>p{margin:6px 0;font-size:9px}.journey .adviser .suggestion{gap:5px;padding:5px}.journey .adviser .suggestion span{width:27px}.journey .adviser>button{margin-top:5px;padding:7px}
+  .journey .planCard{top:17%;width:58vw;padding:10px}
+  .journey .ingestionPortal,.journey .financialOutputs{top:36%}
+}
