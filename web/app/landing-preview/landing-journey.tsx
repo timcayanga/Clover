@@ -7,12 +7,12 @@ import { LandingSignupModal } from "@/components/landing-signup-modal";
 import styles from "./landing-preview.module.css";
 
 const chapters = [
-  { title: <>Months of finances.<br /><em>Organized in minutes.</em></>, copy: "Drop in statements, receipts, screenshots, or spreadsheets. Clover turns what you already have into a financial picture you can use." },
-  { title: <>Do not rebuild your financial history <em>by hand.</em></>, copy: "Clover reads dates, merchants, amounts, and accounts while you stay in control of what gets confirmed." },
-  { title: <>Everything lands in one clear <em>financial picture.</em></>, copy: "Your accounts, transactions, balances, and categories become searchable, reviewable, and easy to correct." },
-  { title: <>Ask what your money can make <em>possible.</em></>, copy: "Could you comfortably afford Japan next spring? Adviser answers using your own spending, commitments, and goals." },
-  { title: <>Turn the answer into a plan that <em>fits.</em></>, copy: "Clover suggests a realistic monthly amount and lets you adjust the plan before making it yours." },
-  { title: <>Your money, handled.<br /><em>Your life, uninterrupted.</em></>, copy: null },
+  { title: <>Months of finances.<br /><em>Organized in minutes.</em></>, copy: "Upload statements, receipts, screenshots, or spreadsheets. Understand your money and take one clearer step at a time." },
+  { title: <>Skip the manual <em>rebuilding.</em></>, copy: "Clover securely reads dates, merchants, amounts, and accounts from your files. You control what gets confirmed." },
+  { title: <>See your money clearly, <em>all in one place.</em></>, copy: "Search every transaction, compare account balances, and understand your spending." },
+  { title: <>Ask what your money can make <em>possible.</em></>, copy: "Thinking about a trip next year? Adviser can check the idea against your actual spending, commitments, savings, and goals." },
+  { title: <>Turn advice into a plan <em>you can follow.</em></>, copy: "Create an editable budget or savings goal from your conversation with Clover, with a monthly amount based on what you can comfortably afford." },
+  { title: <>Ready to make clearer <em>money decisions?</em></>, copy: null },
 ] as const;
 
 const scenes = ["01-organize", "02-upload", "03-picture", "04-adviser", "05-plan", "06-life"] as const;
