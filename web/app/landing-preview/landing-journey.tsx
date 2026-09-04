@@ -75,8 +75,8 @@ const sceneAsset = (scene: (typeof scenes)[number], mobile = false) => {
 
 function JourneyActions({ authEnabled, final = false }: { authEnabled: boolean; final?: boolean }) {
   return <div className={styles.actions}>
-    {!final && <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>Log in</Link>}
     {authEnabled ? <LandingSignupModal enabled>Organize my finances for free <span aria-hidden="true">→</span></LandingSignupModal> : <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>Organize my finances for free <span aria-hidden="true">→</span></Link>}
+    {!final && <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>Log in</Link>}
   </div>;
 }
 
@@ -99,7 +99,8 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
 
   useEffect(() => {
     const closeMenus = (event: MouseEvent) => {
-      if (!headerRef.current?.contains(event.target as Node)) {
+      const target = event.target as Element;
+      if (!headerRef.current?.contains(target) && !target.closest("[data-mobile-navigation]")) {
         setFeaturesOpen(false);
         setMobileMenuOpen(false);
       }
@@ -214,13 +215,26 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
           <button
             type="button"
             className={styles.mobileMenuTrigger}
+            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileMenuOpen}
             aria-controls="preview-mobile-menu"
             onClick={() => setMobileMenuOpen((open) => !open)}
           >
-            Menu <span aria-hidden="true">▾</span>
+            <span aria-hidden="true" /><span aria-hidden="true" /><span aria-hidden="true" />
           </button>
-          {mobileMenuOpen ? <div className={styles.mobileDropdown} id="preview-mobile-menu">
+        </div>
+        <div className={styles.headerActions}><Link href="/sign-in">Log in</Link><Link href="/sign-up">Sign up</Link></div>
+      </header>
+
+      {mobileMenuOpen ? <div data-mobile-navigation="true">
+        <button className={styles.mobileMenuBackdrop} type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)} />
+        <div className={styles.mobileDrawer} id="preview-mobile-menu" role="dialog" aria-modal="true" aria-label="Clover navigation">
+          <div className={styles.mobileDrawerHeader}>
+            <Image src="/clover-mark.svg" alt="" width={34} height={34} />
+            <strong>Menu</strong>
+            <button type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}>×</button>
+          </div>
+          <div className={styles.mobileDrawerLinks}>
             <p>Features</p>
             {FEATURE_LINKS.map((item) => <Link key={item.href} href={item.href} onClick={() => setMobileMenuOpen(false)}>{item.label}</Link>)}
             <span />
@@ -228,10 +242,9 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
             <Link href="/contact-us" onClick={() => setMobileMenuOpen(false)}>Contact</Link>
             <Link href="/privacy-policy" onClick={() => setMobileMenuOpen(false)}>Privacy Policy</Link>
             <Link href="/terms-of-service" onClick={() => setMobileMenuOpen(false)}>Terms of Service</Link>
-          </div> : null}
+          </div>
         </div>
-        <div className={styles.headerActions}><Link href="/sign-in">Log in</Link><Link href="/sign-up">Sign up</Link></div>
-      </header>
+      </div> : null}
 
       <div className={styles.world} aria-hidden="true">
         <div className={styles.sceneStack}>

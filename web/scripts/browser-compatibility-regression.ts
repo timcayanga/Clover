@@ -51,9 +51,10 @@ async function main() {
   assert.match(landingJourneySource, /const productMotion = \(index: number, direction = 1\)/, "Product evidence must move with the scroll while remaining fully opaque.");
   assert.match(landingJourneySource, /bpi\.png[\s\S]*grabpay\.png[\s\S]*gcash\.png[\s\S]*chase bank\.png[\s\S]*paypal\.png[\s\S]*wise\.png/, "Upload examples must use real bank and wallet marks in both supported markets.");
   assert.doesNotMatch(landingJourneySource, /chapterMotion[\s\S]{0,500}filter:/, "Landing copy must not blur during chapter transitions.");
-  assert.match(landingJourneySource, /href="\/sign-in"[\s\S]*?Organize my finances for free[\s\S]*?→/, "The landing actions must present Log in before the arrow-led organization CTA.");
+  assert.match(landingJourneySource, /Organize my finances for free[\s\S]*?→[\s\S]*?href="\/sign-in"/, "The landing actions must lead with the arrow-led organization CTA before Log in.");
   assert.match(landingJourneySource, /FEATURE_LINKS\.map[\s\S]*?Privacy Policy[\s\S]*?Terms of Service/, "The preview header must expose the shared Features menu and both legal pages.");
   assert.match(landingJourneySource, /aria-expanded=\{featuresOpen\}[\s\S]*?preview-features-menu/, "The preview Features dropdown must expose its expanded state to assistive technology.");
+  assert.match(landingJourneySource, /aria-label=\{mobileMenuOpen \? "Close menu" : "Open menu"\}[\s\S]*?role="dialog"[\s\S]*?Clover navigation/, "Mobile navigation must use an accessible burger-triggered drawer.");
   assert.match(landingJourneyStyles, /\.featuresDropdown,\.mobileDropdown\{[\s\S]*?background:#fff/, "Preview navigation menus must remain opaque over the landing photography.");
   assert.match(landingJourneyStyles, /Continuous story engine:[\s\S]*?\.journey\{height:520svh\}/, "The landing journey must avoid long inactive scroll intervals.");
   assert.match(landingJourneyStyles, /@media\(max-width:900px\)\{[\s\S]*?\.sceneStack\{inset:0;height:100%\}[\s\S]*?\.sceneSubject img\{object-fit:cover;/, "Mobile scenes must fill the viewport from portrait-safe sources.");
@@ -65,6 +66,7 @@ async function main() {
   assert.doesNotMatch(landingJourneySource, /clipPath:/, "Scene transitions must use matched movement instead of directional wipes.");
   assert.match(landingJourneyStyles, /@media\(min-width:901px\)[\s\S]*?\.sceneStack\{inset:0;width:100%;height:100%;background:#eef8f6\}[\s\S]*?\.sceneSubject img\{object-fit:cover;/, "Desktop photographs must cover the complete stage.");
   assert.match(landingJourneyStyles, /@media\(max-width:900px\)[\s\S]*?\.world>\.worldWash[\s\S]*?linear-gradient\(180deg[\s\S]*?\.supportStage\{display:none\}/, "Mobile must let the portrait photography drive the story and protect its lower copy with a bottom fade.");
+  assert.match(landingJourneyStyles, /Mobile landing navigation and portrait composition[\s\S]*?\.mobileDrawer\{position:fixed;z-index:102;top:0;bottom:0;left:0/, "The mobile menu must open as a partial-width, full-height left drawer.");
 
   assert.equal(
     getVerifiedSpendingMerchantName({
