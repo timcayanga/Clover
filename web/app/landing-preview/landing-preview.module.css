@@ -248,3 +248,53 @@
   .journey .planCard{top:17%;width:58vw;padding:10px}
   .journey .ingestionPortal,.journey .financialOutputs{top:36%}
 }
+
+/* Opaque three-plane story: full-bleed people, protected copy, and a separate
+   evidence rail. The rails never share pixels, while the photograph remains
+   visible around them and continues moving beneath the scroll-driven wipe. */
+.supportStage{border:1px solid #dce9eb;background:#fff;box-shadow:0 22px 65px rgba(16,66,76,.2);backdrop-filter:none;transition:opacity .16s ease,transform .28s cubic-bezier(.16,1,.3,1)}
+.supportStage[data-active="false"]{opacity:0;transform:translateY(18px);visibility:hidden}
+.supportStage[data-active="true"]{opacity:1;transform:none;visibility:visible}
+.heroEvidence{position:absolute;inset:0;display:grid;place-items:center;background:#fff;will-change:transform}
+.heroEvidence img{display:block;width:100%;height:100%;object-fit:contain}
+.phone,.adviser,.planCard{background:#fff!important;backdrop-filter:none!important}
+.uploadRows>span{align-items:center;background:#eef6f7}.uploadRows img{width:16px;height:16px;margin-right:5px;object-fit:contain;border-radius:4px}
+
+@media(min-width:901px){
+  .sceneStack{inset:0;width:100%;height:100%;background:#eef8f6}
+  .sceneBackdrop{display:none}
+  .sceneSubject img{object-fit:cover;object-position:center center}
+  .worldWash,.journey[data-chapter="5"] .worldWash{background:linear-gradient(90deg,rgba(243,250,250,.34),transparent 35%,transparent 100%)}
+  .chapter{top:50%;left:3vw;width:min(390px,29vw);padding:clamp(22px,2.2vw,34px);border:1px solid #dce9eb;border-radius:28px;translate:0 -50%;background:#fff;box-shadow:0 22px 65px rgba(16,66,76,.18)}
+  .chapter h1{font-size:clamp(31px,2.75vw,43px)}
+  .chapter p{font-size:clamp(13px,.98vw,15px)}
+  .supportStage{top:auto;right:3vw;bottom:3vh;left:auto;width:min(560px,39vw);height:min(430px,48vh);overflow:hidden;border-radius:30px}
+  .journey .phone{top:50%;right:auto;bottom:auto;left:50%;width:250px;min-height:400px;translate:-50% -50%;transform-origin:center}
+  .journey .laptop{top:50%;right:auto;bottom:auto;left:50%;width:92%;translate:-50% -50%;transform-origin:center}
+  .journey .adviser{top:50%;right:auto;bottom:auto;left:50%;width:90%;translate:-50% -50%;transform-origin:center}
+  .journey .planCard{top:50%;right:auto;bottom:auto;left:50%;width:82%;translate:-50% -50%;transform-origin:center}
+}
+
+@media(max-width:900px){
+  .sceneStack{inset:0;width:100%;height:100%;background:#eef8f6}
+  .sceneSubject img{object-fit:cover;object-position:center center}
+  .world>.worldWash,.journey[data-chapter="5"] .worldWash{z-index:9;background:linear-gradient(180deg,rgba(249,253,253,.08),transparent 43%,rgba(249,253,253,.2) 54%,#f9fdfd 62%)}
+  .supportStage{top:max(72px,10%);right:3vw;bottom:auto;left:3vw;width:auto;height:20%;overflow:hidden;border-radius:22px}
+  .story{top:57%;background:linear-gradient(180deg,rgba(249,253,253,.75),#f9fdfd 16%,#f9fdfd)}
+  .chapter{width:calc(100vw - 36px);padding:14px 16px;border:1px solid #e1ecee;border-radius:22px;background:#fff;box-shadow:0 14px 38px rgba(16,66,76,.12)}
+  .journey .phone{top:50%;right:auto;bottom:auto;left:50%;width:min(155px,40vw);height:94%;min-height:0;padding:11px;border-width:5px;translate:-50% -50%;transform-origin:center}
+  .journey .phone::before{top:5px;width:43px;height:10px}.journey .phoneBar{margin:5px -2px 7px;padding-bottom:5px}.journey .phone>strong{font-size:13px}.journey .phone>p{margin:4px 0 6px;font-size:6px}.journey .phone .uploadDrop{gap:3px;margin-bottom:4px;padding:4px}.journey .phone .uploadRows{gap:3px}.journey .phone .uploadRows>span{padding:3px;font-size:6px}.journey .phone .uploadRows img{width:10px;height:10px}.journey .phone>button{margin-top:4px;padding:5px}
+  .journey .laptop{top:50%;right:auto;bottom:auto;left:50%;width:88%;translate:-50% -50%;transform-origin:center}
+  .journey .adviser{top:50%;right:auto;bottom:auto;left:50%;width:88%;padding:11px;translate:-50% -50%;transform-origin:center}.journey .adviser>p{margin:7px 0;font-size:10px}.journey .adviser .suggestion{padding:6px}.journey .adviser>button{margin-top:6px;padding:7px}
+  .journey .planCard{top:50%;right:auto;bottom:auto;left:50%;width:76%;padding:11px;translate:-50% -50%;transform-origin:center}
+  .markers{top:43%;z-index:44}
+}
+
+@media(max-height:650px) and (max-width:900px){
+  .supportStage{top:72px;height:18%}
+  .story{top:49%}
+  .chapter{padding:10px 13px}
+  .chapter h1{font-size:clamp(21px,6.2vw,26px)}
+  .chapter p{font-size:10px}
+  .markers{top:38%}
+}

@@ -35,15 +35,17 @@ async function main() {
   assert.match(landingJourneyStyles, /Keep the cast in a clear, unfiltered scene plane/, "The landing composition must preserve an unobstructed people layer.");
   assert.match(landingJourneySource, /progress \* \(chapters\.length - 1\)/, "Landing chapters must advance continuously with scroll progress.");
   assert.match(landingJourneySource, /style=\{sceneMotion\(index\)\}/, "Landing backgrounds must interpolate on every scroll update.");
-  assert.match(landingJourneySource, /data-story-visual="ingestion"/, "The hero must visibly show Clover ingesting existing financial files.");
-  assert.match(landingJourneySource, /data-story-visual="outputs"[\s\S]*?ACCOUNT CREATED[\s\S]*?TRANSACTIONS READY/, "The hero must show uploaded records becoming Clover accounts and transactions.");
-  assert.match(landingJourneySource, /const displayedChapter = phase < 0\.5/, "Landing copy must switch quickly without disappearing between chapters.");
+  assert.match(landingJourneySource, /data-story-visual="evidence"[\s\S]*?hero card\.png/, "The hero must use Clover's real document-to-dashboard evidence artwork.");
+  assert.match(landingJourneySource, /const displayedChapter = chapterPhase < 0\.5/, "Landing copy must switch quickly without disappearing between chapters.");
+  assert.match(landingJourneySource, /const productMotion = \(index: number, direction = 1\)/, "Product evidence must move with the scroll while remaining fully opaque.");
+  assert.match(landingJourneySource, /bpi\.png[\s\S]*grabpay\.png[\s\S]*gcash\.png[\s\S]*chase bank\.png[\s\S]*paypal\.png[\s\S]*wise\.png/, "Upload examples must use real bank and wallet marks in both supported markets.");
   assert.doesNotMatch(landingJourneySource, /chapterMotion[\s\S]{0,500}filter:/, "Landing copy must not blur during chapter transitions.");
   assert.match(landingJourneySource, /href="\/sign-in"[\s\S]*?Organize my finances for free[\s\S]*?→/, "The landing actions must present Log in before the arrow-led organization CTA.");
   assert.match(landingJourneyStyles, /Continuous story engine:[\s\S]*?\.journey\{height:520svh\}/, "The landing journey must avoid long inactive scroll intervals.");
   assert.match(landingJourneyStyles, /@media\(max-width:900px\)\{[\s\S]*?\.sceneStack\{inset:0;height:100%\}[\s\S]*?\.sceneSubject img\{object-fit:cover;/, "Mobile scenes must fill the viewport from portrait-safe sources.");
-  assert.match(landingJourneyStyles, /Final protected composition[\s\S]*?@media\(min-width:901px\)[\s\S]*?\.sceneStack\{inset:88px 0 0 34%;width:auto;height:auto/, "Desktop must reserve a protected copy rail and keep people below the header.");
-  assert.match(landingJourneyStyles, /@media\(max-width:900px\)[\s\S]*?\.story\{z-index:30;top:56%;bottom:0/, "Mobile must keep its copy in a protected lower caption deck.");
+  assert.match(landingJourneyStyles, /Opaque three-plane story[\s\S]*?\.supportStage\{border:1px solid #dce9eb;background:#fff/, "Product evidence must occupy its own opaque surface.");
+  assert.match(landingJourneyStyles, /@media\(min-width:901px\)[\s\S]*?\.sceneStack\{inset:0;width:100%;height:100%;background:#eef8f6\}[\s\S]*?\.sceneSubject img\{object-fit:cover;/, "Desktop photographs must cover the complete stage.");
+  assert.match(landingJourneyStyles, /@media\(max-width:900px\)[\s\S]*?\.supportStage\{top:max\(72px,10%\)[\s\S]*?\.story\{top:57%/, "Mobile must separate product evidence from its protected lower copy deck.");
 
   assert.equal(
     getVerifiedSpendingMerchantName({

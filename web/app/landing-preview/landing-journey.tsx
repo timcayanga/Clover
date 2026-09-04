@@ -22,7 +22,11 @@ type LandingMarket = "ph" | "global";
 const marketContent = {
   ph: {
     documents: [["BPI STATEMENT", "12 months"], ["RECEIPT", "₱2,480"], ["GCASH EXPORT", "Old records"], ["MERALCO BILL", "Card activity"]],
-    uploadRows: ["BPI statement", "SM receipt", "GCash export"],
+    uploadRows: [
+      ["BPI statement", "/assets/banks/philippines/bpi.png"],
+      ["Grab receipt", "/assets/banks/philippines/grabpay.png"],
+      ["GCash export", "/assets/banks/philippines/gcash.png"],
+    ],
     balance: "₱633,688.84", income: "₱68,000", expenses: "₱31,420", cashFlow: "₱36,580",
     transactions: [["Pay day • BPI", "+ ₱68,000"], ["SM Supermarket", "− ₱2,480"], ["Meralco", "− ₱4,920"], ["Grab", "− ₱220"]],
     insight: "Dining is down 12% this month. You could move the difference toward your Japan goal without changing your usual budget.",
@@ -30,7 +34,11 @@ const marketContent = {
   },
   global: {
     documents: [["CHASE STATEMENT", "12 months"], ["RECEIPT", "$84.20"], ["PAYPAL EXPORT", "Old records"], ["UTILITY BILL", "Card activity"]],
-    uploadRows: ["Chase statement", "Whole Foods receipt", "PayPal export"],
+    uploadRows: [
+      ["Chase statement", "/assets/banks/uk/chase bank.png"],
+      ["PayPal receipt", "/assets/banks/philippines/paypal.png"],
+      ["Wise export", "/assets/banks/philippines/wise.png"],
+    ],
     balance: "$24,860.42", income: "$6,800", expenses: "$3,142", cashFlow: "$3,658",
     transactions: [["Pay day • Chase", "+ $6,800"], ["Whole Foods", "− $84"], ["National Grid", "− $192"], ["Uber", "− $22"]],
     insight: "Dining is down 12% this month. You could move the difference toward your Japan goal without changing your usual budget.",
@@ -39,7 +47,6 @@ const marketContent = {
 } as const;
 
 const clamp = (value: number, minimum = 0, maximum = 1) => Math.min(maximum, Math.max(minimum, value));
-const presenceAround = (position: number, center: number, radius: number) => clamp(1 - Math.abs(position - center) / radius);
 const smoothstep = (start: number, end: number, value: number) => {
   const normalized = clamp((value - start) / (end - start));
   return normalized * normalized * (3 - 2 * normalized);
@@ -101,6 +108,9 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
   };
 
   const local = marketContent[market];
+  const chapterFloor = Math.min(chapters.length - 1, Math.floor(storyPosition));
+  const chapterPhase = storyPosition - chapterFloor;
+  const displayedChapter = chapterPhase < 0.5 ? chapterFloor : Math.min(chapters.length - 1, chapterFloor + 1);
   const sceneMotion = (index: number): CSSProperties => {
     const activeScene = Math.min(chapters.length - 1, Math.floor(storyPosition));
     const phase = storyPosition - activeScene;
@@ -115,18 +125,18 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
     };
   };
   const chapterMotion = (index: number): CSSProperties => {
-    const activeChapter = Math.min(chapters.length - 1, Math.floor(storyPosition));
-    const phase = storyPosition - activeChapter;
-    const displayedChapter = phase < 0.5 ? activeChapter : Math.min(chapters.length - 1, activeChapter + 1);
     return {
       opacity: index === displayedChapter ? 1 : 0,
       transform: "translate3d(0, 0, 0)",
     };
   };
-  const visualMotion = (center: number, radius: number, direction = 1): CSSProperties => {
-    const presence = presenceAround(storyPosition, center, radius);
-    const travel = (storyPosition - center) * 34 * direction;
-    return { opacity: presence, transform: `translate3d(${travel}px, ${Math.abs(storyPosition - center) * 8}px, 0) scale(${0.88 + presence * 0.12})` };
+  const productMotion = (index: number, direction = 1): CSSProperties => {
+    const distance = storyPosition - index;
+    return {
+      opacity: displayedChapter === index ? 1 : 0,
+      visibility: displayedChapter === index ? "visible" : "hidden",
+      transform: `translate3d(${clamp(distance, -1, 1) * 22 * direction}px, ${Math.abs(distance) * 5}px, 0) scale(${1 - Math.min(1, Math.abs(distance)) * 0.025})`,
+    };
   };
 
   return <div ref={journeyRef} className={styles.journey} data-chapter={chapter} data-market={market} style={{ "--journey-progress": 0 } as CSSProperties}>
@@ -164,43 +174,29 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
         </div>)}
       </section>
 
-      <div className={styles.supportStage} aria-hidden="true">
-      <div className={styles.ingestionPortal} data-story-visual="ingestion" style={visualMotion(0.28, 0.82)}>
-        <span className={styles.ingestionPulse}><Image src="/clover-mark.svg" alt="" width={46} height={46} /></span>
-        <span><small>CLOVER UPLOAD</small><b>Drop in what you already have</b></span>
-        <i /><i /><i />
+      <div className={styles.supportStage} data-active={displayedChapter < chapters.length - 1} aria-hidden="true">
+      <div className={styles.heroEvidence} data-story-visual="evidence" style={productMotion(0)}>
+        <Image src="/assets/landing page/hero card.png" alt="" width={1536} height={1024} priority />
       </div>
 
-      <div className={styles.documents} data-story-visual="documents" style={visualMotion(0.32, 0.92)}>
-        <div><small>{local.documents[0][0]}</small><b>{local.documents[0][1]}</b><i /><i /><i /></div>
-        <div><small>{local.documents[1][0]}</small><b>{local.documents[1][1]}</b><i /><i /></div>
-        <div><small>{local.documents[2][0]}</small><b>{local.documents[2][1]}</b><span>▦</span></div>
-        <div><small>{local.documents[3][0]}</small><b>{local.documents[3][1]}</b><span>▤</span></div>
-      </div>
-
-      <div className={styles.financialOutputs} data-story-visual="outputs" style={visualMotion(0.46, 0.82, -1)}>
-        <span><small>ACCOUNT CREATED</small><b>{market === "ph" ? "BPI 3012" : "Chase 8042"}</b><i>{market === "ph" ? "PHP" : "USD"}</i></span>
-        <span><small>TRANSACTIONS READY</small><b>248 organized</b><i>Review</i></span>
-      </div>
-
-      <div className={styles.phone} data-story-visual="phone" style={visualMotion(1.05, 0.82, -1)}>
+      <div className={styles.phone} data-story-visual="phone" style={productMotion(1, -1)}>
         <div className={styles.phoneBar}><Image src="/clover-mark.svg" alt="" width={28} height={28} /><span>Upload files</span><i /></div>
         <strong>Add financial files</strong><p>Take a photo or choose statements, receipts, spreadsheets, and screenshots.</p>
         <div className={styles.uploadDrop}><b>Drop files anywhere</b><span>Take photo</span><span>Choose files</span></div>
-        <div className={styles.uploadRows}>{local.uploadRows.map((label, index) => <span key={label}>{["▤", "▧", "▦"][index]} {label} <b>Ready</b></span>)}</div>
+        <div className={styles.uploadRows}>{local.uploadRows.map(([label, logo]) => <span key={label}><Image src={logo} alt="" width={16} height={16} /> {label} <b>Ready</b></span>)}</div>
         <button type="button">Upload 3 files</button>
       </div>
 
-      <div className={styles.laptop} data-story-visual="laptop" style={visualMotion(1.7, 1.2)}><div className={styles.laptopScreen}>
+      <div className={styles.laptop} data-story-visual="laptop" style={productMotion(2)}><div className={styles.laptopScreen}>
         <div className={styles.appBar}><Image src="/clover-mark.svg" alt="" width={26} height={26} /><span>Home</span><i /><i /></div>
         <div className={styles.balance}><small>MY BALANCE</small><strong>{local.balance}</strong><span>Across your accounts</span></div>
         <div className={styles.summary}><div><small>INCOME</small><b>{local.income}</b></div><div><small>EXPENSES</small><b>{local.expenses}</b></div><div><small>NET CASH FLOW</small><b>{local.cashFlow}</b></div></div>
         <div className={styles.transactionRows}>{local.transactions.map(([label, amount]) => <span key={label}><i />{label}<b>{amount}</b></span>)}</div>
       </div><span className={styles.laptopBase} /></div>
 
-      <div className={styles.adviser} data-story-visual="adviser" style={visualMotion(3.05, 0.82, -1)}><div><Image src="/clover-mark.svg" alt="" width={34} height={34} /><span><small>ASK CLOVER</small><b>Your financial picture</b></span></div><p>{local.insight}</p><div className={styles.suggestion}><span>✈</span><b>Japan in spring</b><strong>{local.planAmount} monthly</strong></div><button type="button">Create this plan →</button></div>
+      <div className={styles.adviser} data-story-visual="adviser" style={productMotion(3, -1)}><div><Image src="/clover-mark.svg" alt="" width={34} height={34} /><span><small>ASK CLOVER</small><b>Your financial picture</b></span></div><p>{local.insight}</p><div className={styles.suggestion}><span>✈</span><b>Japan in spring</b><strong>{local.planAmount} monthly</strong></div><button type="button">Create this plan →</button></div>
 
-      <div className={styles.planCard} data-story-visual="plan" style={visualMotion(4.02, 0.96)}>
+      <div className={styles.planCard} data-story-visual="plan" style={productMotion(4)}>
         <div><Image src="/clover-mark.svg" alt="" width={30} height={30} /><span><small>CLOVER RECOMMENDATION</small><b>Japan trip</b></span></div>
         <strong>{local.planAmount} <small>per month</small></strong>
         <div><i /><i /><i /><i /></div>
