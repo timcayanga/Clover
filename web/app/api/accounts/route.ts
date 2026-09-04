@@ -39,6 +39,7 @@ import {
 } from "@/lib/account-balance-projection";
 import { isCryptoAssetCurrencyCode } from "@/lib/financial-identity-detection";
 import { removeEmptyNonDefaultCashAccounts } from "@/lib/empty-cash-account-cleanup";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 import {
   getCanonicalPdaxHoldingIdentity,
   isPdaxWalletHoldingLabel,
@@ -4130,6 +4131,7 @@ export async function POST(request: Request) {
       confidence: 100,
     }).catch(() => null);
 
+    invalidateWorkspaceSummaryCache(workspaceId);
     return NextResponse.json({ account: serializeAccount(account) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to create account.";

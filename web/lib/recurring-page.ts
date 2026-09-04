@@ -12,6 +12,7 @@ import { resolveTrackedCommitmentDueDate, toCommitmentOccurrenceKey } from "@/li
 import { DEFAULT_CATEGORY_ROWS } from "@/lib/default-categories";
 import { after } from "next/server";
 import { isRecurringSuggestionCurrent } from "@/lib/recurring-suggestion-policy";
+import { loadCachedWorkspaceSummary } from "@/lib/workspace-summary-cache";
 
 export type RecurringPageAccount = {
   id: string;
@@ -528,3 +529,9 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
     liabilityAccountCount,
   };
 }
+
+export const getCachedRecurringPageData = (workspaceId: string) => loadCachedWorkspaceSummary({
+  workspaceId,
+  area: "recurring",
+  load: () => getRecurringPageData(workspaceId),
+});

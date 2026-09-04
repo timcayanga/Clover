@@ -3,7 +3,8 @@ import { z } from "zod";
 import { isBudgetEmoji } from "@/lib/budget-appearance";
 import { prisma } from "@/lib/prisma";
 import { resolveBudgetingWorkspace } from "@/lib/budgeting-context";
-import { isMissingBudgetTableError, loadBudgetWorkspaceData } from "@/lib/budgeting-data";
+import { isMissingBudgetTableError, loadBudgetWorkspaceData, loadCachedBudgetWorkspaceData } from "@/lib/budgeting-data";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { isAdminOnlyDataError, isUnauthorizedDataError } from "@/lib/transient-data";
 
@@ -63,7 +64,7 @@ export async function GET() {
     return NextResponse.json({ error: "Workspace unavailable" }, { status: 400 });
   }
 
-  const data = await loadBudgetWorkspaceData(context.workspaceId);
+  const data = await loadCachedBudgetWorkspaceData(context.workspaceId);
   return NextResponse.json({
     plans: data.plans,
     budgets: data.overview.budgets,
@@ -145,6 +146,7 @@ export async function POST(request: Request) {
     throw error;
   }
 
+  invalidateWorkspaceSummaryCache(context.workspaceId);
   const data = await loadBudgetWorkspaceData(context.workspaceId);
   return NextResponse.json({
     budget,

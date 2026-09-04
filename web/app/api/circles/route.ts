@@ -5,7 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { circleRoles, circleTypes } from "@/lib/circles";
 import { getCircleCurrentUser, getCircleErrorResponse } from "@/lib/circle-access";
 import { loadCirclesWorkspaceData } from "@/lib/circle-loaders";
-import { loadCirclesDirectoryData } from "@/lib/circle-directory";
+import { loadCachedCirclesDirectoryData } from "@/lib/circle-directory";
+import { invalidateUserSummaryCache } from "@/lib/workspace-summary-cache";
 import { getUserDisplayName } from "@/lib/user-display-name";
 import {
   assertContentLengthWithin,
@@ -50,7 +51,7 @@ export async function GET(request: Request) {
     const params = new URL(request.url).searchParams;
     const circleId = params.get("circle");
     const data = params.get("view") === "directory"
-      ? await loadCirclesDirectoryData(user)
+      ? await loadCachedCirclesDirectoryData(user)
       : await loadCirclesWorkspaceData(user, circleId || undefined);
     if (circleId && !data.circles.some((circle) => circle.id === circleId)) {
       return NextResponse.json({ error: "Circle not found or you no longer have access." }, { status: 404 });
@@ -173,6 +174,7 @@ export async function POST(request: Request) {
       circle_type: circle.type,
       initial_member_count: invitationDrafts.length + 1,
     });
+    invalidateUserSummaryCache(user.id, "circles");
 
     const origin = new URL(request.url).origin;
     after(async () => {

@@ -5,6 +5,7 @@ import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { commitmentRecurrenceLabels, serializeFinancialCommitment } from "@/lib/commitments";
 import type { CommitmentRecurrence } from "@prisma/client";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -140,6 +141,7 @@ export async function POST(
       await tx.recurringPattern.delete({ where: { id: pattern.id } });
       return savedCommitment;
     });
+    invalidateWorkspaceSummaryCache(pattern.workspaceId);
 
     return NextResponse.json({ commitment: serializeFinancialCommitment(commitment) }, { status: 201 });
   } catch (error) {

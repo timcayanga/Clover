@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { resolveBudgetingWorkspace } from "@/lib/budgeting-context";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { isBudgetEmoji } from "@/lib/budget-appearance";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 
 const appearanceSchema = z.object({
   name: z.string().trim().min(2).max(80),
@@ -23,5 +24,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ bu
     data: { name: parsed.data.name, emoji: parsed.data.emoji },
   });
   if (!updated.count) return NextResponse.json({ error: "Budget not found" }, { status: 404 });
+  invalidateWorkspaceSummaryCache(context.workspaceId);
   return NextResponse.json({ appearance: parsed.data });
 }

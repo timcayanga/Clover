@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { buildBudgetHistory } from "@/lib/budgeting";
 import { resolveBudgetingWorkspace } from "@/lib/budgeting-context";
 import { isMissingBudgetTableError, loadBudgetWorkspaceData } from "@/lib/budgeting-data";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 
 const budgetUpdateSchema = z
@@ -364,6 +365,7 @@ export async function PATCH(request: Request, { params }: Params) {
     throw error;
   }
 
+  invalidateWorkspaceSummaryCache(context.workspaceId);
   const data = await loadBudgetWorkspaceData(context.workspaceId);
   return NextResponse.json({
     budget,
@@ -409,6 +411,7 @@ export async function DELETE(_request: Request, { params }: Params) {
     throw error;
   }
 
+  invalidateWorkspaceSummaryCache(context.workspaceId);
   const data = await loadBudgetWorkspaceData(context.workspaceId);
   return NextResponse.json({
     budgets: data.overview.budgets,

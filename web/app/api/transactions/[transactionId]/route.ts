@@ -12,6 +12,7 @@ import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
 import { normalizeTransactionTagKey, sanitizeTransactionTagNames } from "@/lib/transaction-tags";
 import { revalidateTag } from "next/cache";
 import { removeEmptyNonDefaultCashAccounts } from "@/lib/empty-cash-account-cleanup";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -460,6 +461,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
     }
 
     revalidateTag("admin-financial-totals");
+    invalidateWorkspaceSummaryCache(transaction.workspaceId);
 
     return NextResponse.json({
       transaction: {
@@ -631,6 +633,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     });
 
     revalidateTag("admin-financial-totals");
+    invalidateWorkspaceSummaryCache(transaction.workspaceId);
 
     return NextResponse.json({ ok: true, removedAccountIds });
   } catch {

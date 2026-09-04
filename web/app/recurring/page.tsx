@@ -4,7 +4,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { RecurringPageClient } from "@/components/recurring-page-client";
 import { getPageSessionContext } from "@/lib/page-auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
-import { getRecurringPageData, getRecurringWorkspaceId } from "@/lib/recurring-page";
+import { getCachedRecurringPageData, getRecurringWorkspaceId } from "@/lib/recurring-page";
 import { isNextNavigationSignal, recordServerPageError } from "@/lib/server-page-error";
 import { isTransientDataError } from "@/lib/transient-data";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
@@ -52,7 +52,7 @@ export default async function RecurringPage({
     const cookieStore = await cookies();
     const selectedWorkspaceId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
     const workspaceId = await getRecurringWorkspaceId(user.clerkUserId, user.email, user.verified, selectedWorkspaceId);
-    const recurringData = await getRecurringPageData(workspaceId);
+    const recurringData = await getCachedRecurringPageData(workspaceId);
     const { accounts: workspaceAccounts, categoryOptions, transactions: recentTransactions, commitments, recurringPatterns, plannedPaymentSuggestions } = recurringData;
 
     return (

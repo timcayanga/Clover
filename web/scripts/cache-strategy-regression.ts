@@ -39,6 +39,39 @@ const importParserSource = readSource("lib/openai-import-parser.ts");
 assert.match(importParserSource, /prompt_cache_key: `clover-import-\$\{params\.importMode\}-v1`/);
 assert.match(importParserSource, /prompt_cache_key: `clover-import-transcription-\$\{params\.importMode\}-v1`/);
 
+const summaryCacheSource = readSource("lib/workspace-summary-cache.ts");
+assert.match(summaryCacheSource, /DEFAULT_REVALIDATE_SECONDS = 15/);
+assert.match(summaryCacheSource, /workspaceSummaryCacheTag\(params\.workspaceId\)/);
+assert.match(summaryCacheSource, /workspaceSummaryAreaCacheTag\(params\.workspaceId, params\.area\)/);
+assert.match(summaryCacheSource, /revalidateTag\(workspaceSummaryCacheTag\(workspaceId\)\)/);
+
+for (const [page, expected] of [
+  ["app/budgeting/page.tsx", "loadCachedBudgetWorkspaceData"],
+  ["app/circles/page.tsx", "loadCachedCirclesDirectoryData"],
+  ["app/recurring/page.tsx", "getCachedRecurringPageData"],
+  ["app/goals/page.tsx", "loadCachedWorkspaceSummary"],
+  ["app/reports/reports-page-content.tsx", "loadCachedWorkspaceSummary"],
+] as const) {
+  assert.match(readSource(page), new RegExp(expected), `${page} should use its scoped summary cache.`);
+}
+
+for (const route of [
+  "app/api/transactions/route.ts",
+  "app/api/transactions/[transactionId]/route.ts",
+  "app/api/transactions/bulk-delete/route.ts",
+  "app/api/accounts/route.ts",
+  "app/api/accounts/[accountId]/route.ts",
+  "app/api/budgets/route.ts",
+  "app/api/goals/route.ts",
+  "app/api/commitments/route.ts",
+] as const) {
+  assert.match(
+    readSource(route),
+    /invalidateWorkspaceSummaryCache/,
+    `${route} should invalidate derived financial summaries after writes.`
+  );
+}
+
 void (async () => {
   let fetchCalls = 0;
   globalThis.fetch = (async () => {

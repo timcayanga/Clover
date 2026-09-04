@@ -4,6 +4,7 @@ import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { parseCommitmentPayload, serializeFinancialCommitment } from "@/lib/commitments";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -108,6 +109,7 @@ export async function PATCH(
         },
       },
     });
+    invalidateWorkspaceSummaryCache(current.workspaceId);
 
     return NextResponse.json({ commitment: serializeFinancialCommitment(commitment) });
   } catch (error) {
@@ -135,6 +137,7 @@ export async function DELETE(
 
     await assertWorkspaceAccess(userId, commitment.workspaceId);
     await prisma.financialCommitment.delete({ where: { id: commitmentId } });
+    invalidateWorkspaceSummaryCache(commitment.workspaceId);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

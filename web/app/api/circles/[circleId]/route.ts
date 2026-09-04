@@ -12,6 +12,7 @@ import {
   assertTrustedRequestOrigin,
 } from "@/lib/request-security";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { invalidateUserSummaryCache } from "@/lib/workspace-summary-cache";
 
 const updateCircleSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
@@ -74,6 +75,7 @@ export async function PATCH(
       circle_id: circleId,
       changed_field_count: Object.keys(body).length,
     });
+    invalidateUserSummaryCache(user.id, "circles");
 
     return NextResponse.json({ circle });
   } catch (error) {
@@ -102,6 +104,7 @@ export async function DELETE(
     }
 
     await prisma.circle.delete({ where: { id: circleId } });
+    invalidateUserSummaryCache(user.id, "circles");
 
     void capturePostHogServerEvent("circle_deleted", user.id, {
       circle_id: circleId,

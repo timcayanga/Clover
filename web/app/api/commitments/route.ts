@@ -4,6 +4,7 @@ import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { parseCommitmentPayload, serializeFinancialCommitment } from "@/lib/commitments";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,7 @@ export async function POST(request: Request) {
         },
       },
     });
+    invalidateWorkspaceSummaryCache(payload.workspaceId);
 
     return NextResponse.json({ commitment: serializeFinancialCommitment(commitment) }, { status: 201 });
   } catch (error) {

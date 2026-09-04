@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getMonthBounds, type CirclesWorkspaceData } from "@/lib/circles";
 import { getUserDisplayName } from "@/lib/user-display-name";
 import type { User } from "@prisma/client";
+import { loadCachedUserSummary } from "@/lib/workspace-summary-cache";
 
 // Match the detail view's ordering, limits and split-bill de-duplication exactly.
 // Only the amount/date fields needed for the card cross the database boundary.
@@ -55,3 +56,9 @@ export async function loadCirclesDirectoryData(user: User): Promise<CirclesWorks
     }),
   };
 }
+
+export const loadCachedCirclesDirectoryData = (user: User) => loadCachedUserSummary({
+  userId: user.id,
+  area: "circles",
+  load: () => loadCirclesDirectoryData(user),
+});

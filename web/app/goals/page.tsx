@@ -27,6 +27,7 @@ import {
 } from "@/lib/goals";
 import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
 import { ContextualAskClover } from "@/components/contextual-ask-clover";
+import { loadCachedWorkspaceSummary } from "@/lib/workspace-summary-cache";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -296,7 +297,10 @@ async function GoalsPageStream() {
     goalHistoryRows,
     currentWindowTransactionsQuery,
     investmentAccountRows,
-  ] = await Promise.all([
+  ] = await loadCachedWorkspaceSummary({
+    workspaceId: resolvedWorkspace.id,
+    area: "goals",
+    load: () => Promise.all([
     prisma.$queryRaw<SummaryRow[]>`
       SELECT
         "type",
@@ -416,7 +420,8 @@ async function GoalsPageStream() {
         updatedAt: "desc",
       },
     }),
-  ]);
+    ]),
+  });
 
   const currentWindowTransactions = currentWindowTransactionsQuery as GoalTransaction[];
   const investmentAccounts = investmentAccountRows as InvestmentAccountSnapshot[];

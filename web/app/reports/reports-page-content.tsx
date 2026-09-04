@@ -44,6 +44,7 @@ import {
   ReportsPeriodComparisonChart,
   type ReportsPeriodComparisonPoint,
 } from "@/components/reports-period-comparison-chart";
+import { loadCachedWorkspaceSummary } from "@/lib/workspace-summary-cache";
 
 const ReportsReviewQueue = nextDynamic(() => import("@/components/reports-review-queue").then((module) => module.ReportsReviewQueue), {
   loading: () => (
@@ -479,7 +480,11 @@ export async function ReportsStream({
       latestImport,
       importStatusRows,
       parsedReportRowCandidates,
-    ] = await Promise.all([
+    ] = await loadCachedWorkspaceSummary({
+      workspaceId: selectedWorkspaceId,
+      area: "reports",
+      keyParts: [reportQueryStart.toISOString(), currentWindowEnd.toISOString(), needsAdvancedData ? "advanced" : "core"],
+      load: () => Promise.all([
       prisma.transaction.findMany({
         where: buildActiveWorkspaceTransactionWhere(selectedWorkspaceId, {
           date: { gte: reportQueryStart, lte: currentWindowEnd },
@@ -586,7 +591,8 @@ export async function ReportsStream({
           orderBy: [{ date: "desc" }, { createdAt: "desc" }],
         })
         .catch(() => []),
-    ]);
+      ]),
+    });
 
     const importCountByStatus = new Map(
       importStatusRows.map((row) => [row.status, Number(row._count._all ?? 0)])

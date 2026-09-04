@@ -94,7 +94,7 @@ assert.match(
 );
 assert.match(
   reportsSource,
-  /const \[[\s\S]{0,220}parsedReportRowCandidates[\s\S]{0,120}Promise\.all/,
+  /const \[[\s\S]{0,220}parsedReportRowCandidates[\s\S]{0,520}Promise\.all/,
   "Report transactions and parsed-row fallbacks should load in parallel for fast filter changes.",
 );
 assert.match(

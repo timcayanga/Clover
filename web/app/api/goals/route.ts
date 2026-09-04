@@ -9,6 +9,7 @@ import { capturePostHogServerEvent } from "@/lib/analytics";
 import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { summarizeErrorForLog } from "@/lib/security-logging";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -178,6 +179,7 @@ const saveGoal = async (request: Request) => {
       });
     }
 
+    if (workspace) invalidateWorkspaceSummaryCache(workspace.id);
     return NextResponse.json({
       user: {
         id: updated.id,

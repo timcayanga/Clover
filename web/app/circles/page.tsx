@@ -1,7 +1,7 @@
 import { CirclesPageClient } from "@/components/circles-page-client";
 import { RouteSplash } from "@/components/route-splash";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
-import { loadCirclesDirectoryData } from "@/lib/circle-directory";
+import { loadCachedCirclesDirectoryData } from "@/lib/circle-directory";
 import { getPageSessionContext } from "@/lib/page-auth";
 import { hasCompletedOnboarding } from "@/lib/user-context";
 import { redirect } from "next/navigation";
@@ -17,7 +17,7 @@ async function CirclesPageContent() {
   const session = await getPageSessionContext();
   const user = await getSplitBillCurrentUser(session);
   if (!session.isGuest && !hasCompletedOnboarding(user)) redirect("/onboarding");
-  const data = await loadCirclesDirectoryData(user);
+  const data = await loadCachedCirclesDirectoryData(user);
   return <CirclesPageClient initialData={data} />;
 }
 

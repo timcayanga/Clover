@@ -33,6 +33,7 @@ import {
   getTransactionSummaryTypeOverrides,
   type TransactionSummaryCandidate,
 } from "@/lib/transaction-summary";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -1727,6 +1728,7 @@ export async function POST(request: Request) {
       });
     }
 
+    invalidateWorkspaceSummaryCache(payload.workspaceId);
     return NextResponse.json({
       transaction: {
         ...transaction,

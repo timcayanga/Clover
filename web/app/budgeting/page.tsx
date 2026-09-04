@@ -4,7 +4,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { RouteSplash } from "@/components/route-splash";
 import { resolveBudgetingWorkspace } from "@/lib/budgeting-context";
 import { getPageSessionContext } from "@/lib/page-auth";
-import { loadBudgetWorkspaceData } from "@/lib/budgeting-data";
+import { loadCachedBudgetWorkspaceData } from "@/lib/budgeting-data";
 import { BudgetingWorkspace } from "@/components/budgeting-workspace";
 import { hasCompletedOnboarding } from "@/lib/user-context";
 
@@ -46,7 +46,7 @@ async function BudgetingPageContent() {
     redirect(hasCompletedOnboarding(context.user) ? "/dashboard" : "/onboarding");
   }
 
-  const data = await loadBudgetWorkspaceData(context.workspaceId, new Date(), { directory: true });
+  const data = await loadCachedBudgetWorkspaceData(context.workspaceId, { directory: true });
 
   return (
     <BudgetingWorkspace

@@ -6,6 +6,7 @@ import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
 import { buildRecurringMerchantFamilySignature, makeRecurringSuppressionKey } from "@/lib/recurring-detection";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 
 export async function POST(request: Request) {
   try {
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
         } } })
       )]);
     } else await dismissal;
+    invalidateWorkspaceSummaryCache(body.workspaceId);
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Unable to hide recurring suggestion", error);

@@ -16,6 +16,7 @@ import { hasCompatibleTable } from "@/lib/data-engine";
 import { isWiseWalletWithoutVisibleAccountNumber, normalizeImportedCurrencyCode } from "@/lib/imported-account-identity";
 import { compareAccountCheckpointFreshness, resolveEffectiveAccountBalance } from "@/lib/account-balance-projection";
 import { isValidAccountLogoUrl } from "@/lib/account-logo";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -643,6 +644,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
       confidence: 100,
     }).catch(() => null);
 
+    invalidateWorkspaceSummaryCache(account.workspaceId);
     return NextResponse.json({ account: serializeAccount(account) });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -673,6 +675,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ a
       });
     });
 
+    invalidateWorkspaceSummaryCache(existingAccount.workspaceId);
     return NextResponse.json({ account: serializeAccount(existingAccount), deletedTransactions: deletionResult.transactionsDeleted });
   } catch (error) {
     return NextResponse.json(

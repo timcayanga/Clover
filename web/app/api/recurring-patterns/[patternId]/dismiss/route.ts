@@ -4,6 +4,7 @@ import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { buildRecurringMerchantFamilySignature } from "@/lib/recurring-detection";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -94,6 +95,7 @@ export async function POST(
         },
       },
     });
+    invalidateWorkspaceSummaryCache(pattern.workspaceId);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

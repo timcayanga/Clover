@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { buildBudgetOverview, buildBudgetSuggestions, getBudgetPeriodStart, type BudgetRecord } from "@/lib/budgeting";
 import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
 import { isInvestmentAccountOption } from "@/lib/account-option-label";
+import { loadCachedWorkspaceSummary } from "@/lib/workspace-summary-cache";
 
 export const budgetLookbackDays = 400;
 
@@ -195,3 +196,13 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
     overview,
   };
 };
+
+export const loadCachedBudgetWorkspaceData = (
+  workspaceId: string,
+  options: { directory?: boolean } = {}
+) => loadCachedWorkspaceSummary({
+  workspaceId,
+  area: "budgeting",
+  keyParts: [options.directory ? "directory" : "detail"],
+  load: () => loadBudgetWorkspaceData(workspaceId, new Date(), options),
+});

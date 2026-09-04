@@ -9,6 +9,7 @@ import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { removeEmptyNonDefaultCashAccounts } from "@/lib/empty-cash-account-cleanup";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -142,6 +143,7 @@ export async function POST(request: Request) {
         deletion_mode: "bulk",
       });
       revalidateTag("admin-financial-totals");
+      invalidateWorkspaceSummaryCache(payload.workspaceId);
     }
 
     const knownIds = new Set(transactions.map((transaction) => transaction.id));

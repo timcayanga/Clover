@@ -5,6 +5,7 @@ import { parseCommitmentOccurrenceDate } from "@/lib/commitment-occurrences";
 import { prisma } from "@/lib/prisma";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,7 @@ export async function PATCH(
       revalidatePath("/home");
       revalidatePath("/dashboard");
       revalidatePath("/recurring");
+      invalidateWorkspaceSummaryCache(commitment.workspaceId);
       return NextResponse.json({ completed: true, completedAt: occurrence.completedAt.toISOString() });
     }
 
@@ -81,6 +83,7 @@ export async function PATCH(
     revalidatePath("/home");
     revalidatePath("/dashboard");
     revalidatePath("/recurring");
+    invalidateWorkspaceSummaryCache(commitment.workspaceId);
     return NextResponse.json({ completed: false, completedAt: null });
   } catch (error) {
     console.error("Unable to update recurring payment completion", error);

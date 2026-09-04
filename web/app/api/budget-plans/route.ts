@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { resolveBudgetingWorkspace } from "@/lib/budgeting-context";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { isAdminOnlyDataError, isUnauthorizedDataError } from "@/lib/transient-data";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 
 const planSchema = z.object({ name: z.string().trim().min(2).max(80) });
 
@@ -24,5 +25,6 @@ export async function POST(request: Request) {
     data: { workspaceId: context.workspaceId, name: parsed.data.name },
     select: { id: true, name: true },
   });
+  invalidateWorkspaceSummaryCache(context.workspaceId);
   return NextResponse.json({ plan }, { status: 201 });
 }

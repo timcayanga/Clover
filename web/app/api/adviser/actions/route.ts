@@ -12,6 +12,7 @@ import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
 import { normalizeAdviserPreferences } from "@/lib/adviser-preferences";
 import { GOAL_OPTIONS } from "@/lib/goals";
 import { isBudgetEmoji } from "@/lib/budget-appearance";
+import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -304,6 +305,7 @@ export async function POST(request: Request) {
       pathname: "/adviser",
     });
 
+    invalidateWorkspaceSummaryCache(workspace.id);
     return NextResponse.json({ ok: true, result });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to complete the Adviser action." }, { status: 400 });
