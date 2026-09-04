@@ -62,6 +62,7 @@ localStorage.setItem(selectedCurrencyByWorkspaceKey, "{invalid");
 assert.equal(readSelectedCurrency("workspace-a"), null, "Corrupt browser storage must safely fall back to page defaults.");
 
 const accountsPageSource = readFileSync(resolve(process.cwd(), "app/accounts/page.tsx"), "utf8");
+const investmentsPageSource = readFileSync(resolve(process.cwd(), "app/investments/page.tsx"), "utf8");
 const transactionsPageSource = readFileSync(resolve(process.cwd(), "app/transactions/page.tsx"), "utf8");
 const currencySelectorSource = readFileSync(resolve(process.cwd(), "components/currency-selector.tsx"), "utf8");
 const globalStylesSource = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8");
@@ -99,6 +100,23 @@ assert.ok(
     accountsPageSource.includes("groupCurrencies.some((currency) => currency !== defaultCurrencyCode)") &&
     accountsPageSource.includes(': formatAggregateAmount(group.total, group.rows)'),
   "Sections containing only the default currency should retain their exact total without an estimate label."
+);
+assert.ok(
+  investmentsPageSource.includes("const usesPortfolioFxEstimates =") &&
+    investmentsPageSource.includes("convertAmount(currentValue, account.currency, portfolioExchangeRates.rates)") &&
+    investmentsPageSource.includes("convertAmount(purchaseValue, account.currency, portfolioExchangeRates.rates)"),
+  "Investments should convert each holding value and purchase value before calculating mixed-currency totals."
+);
+assert.ok(
+  investmentsPageSource.includes("formatPortfolioSummary(estimatedPortfolioTotals.currentValue)") &&
+    investmentsPageSource.includes("formatPortfolioSummary(estimatedPortfolioTotals.gainLoss)") &&
+    !investmentsPageSource.includes('? formatInvestmentAggregate(estimatedPortfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)'),
+  "Investment summary cards should show FX estimates instead of a Mixed currencies placeholder."
+);
+assert.ok(
+  investmentsPageSource.includes("Values are estimated in ${defaultCurrencyCode} using the latest available exchange rates.") &&
+    investmentsPageSource.includes("!portfolioEstimateUnavailable && estimatedPortfolioTotals.purchaseValue > 0"),
+  "Investment FX summaries should explain their rates and calculate ROI from converted values only when rates are complete."
 );
 
 const exchangeRateSource = readFileSync(resolve(process.cwd(), "lib/use-exchange-rates.ts"), "utf8");

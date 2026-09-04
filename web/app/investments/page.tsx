@@ -20,6 +20,7 @@ import { GrowthPlanner } from "@/components/growth-planner";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { useDefaultCurrency } from "@/lib/use-default-currency";
+import { convertAmount, useExchangeRates } from "@/lib/use-exchange-rates";
 import { BETA_FULL_ACCESS_ENABLED, hasFullFeatureAccess } from "@/lib/beta-access";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
@@ -1775,10 +1776,70 @@ export default function InvestmentsPage() {
   );
   const hasVisibleCurrencySelection = selectedCurrencyInvestmentAccounts.length > 0;
   const canAggregateSelectedCurrency = selectedCurrencyCodes.length === 1;
+  const defaultCurrencyCode = formatCurrencyCode(defaultCurrency);
+  const usesPortfolioFxEstimates =
+    portfolioCurrencyFilter === "ALL" &&
+    selectedCurrencyCodes.some((currency) => currency !== defaultCurrencyCode);
+  const portfolioExchangeRates = useExchangeRates(
+    selectedCurrencyCodes,
+    defaultCurrency,
+    usesPortfolioFxEstimates
+  );
   const growthDisplayCurrency = portfolioCurrencyFilter === "ALL"
     ? formatCurrencyCode(defaultCurrency)
     : selectedCurrencyCodes[0] ?? portfolioCurrencyFilter ?? "PHP";
-  const estimatedPortfolioTotals = portfolioTotals;
+  const estimatedPortfolioTotals = useMemo(() => {
+    if (!usesPortfolioFxEstimates) {
+      return portfolioTotals;
+    }
+
+    return selectedCurrencyInvestmentAccounts.reduce(
+      (accumulator, account) => {
+        const currentValue = parseNullableAmount(account.balance);
+        const purchaseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
+        const convertedCurrentValue = currentValue === null
+          ? null
+          : convertAmount(currentValue, account.currency, portfolioExchangeRates.rates);
+        const convertedPurchaseValue = purchaseValue === null
+          ? null
+          : convertAmount(purchaseValue, account.currency, portfolioExchangeRates.rates);
+
+        if (convertedCurrentValue !== null) {
+          accumulator.currentValue += convertedCurrentValue;
+        }
+        if (convertedPurchaseValue !== null) {
+          accumulator.purchaseValue += convertedPurchaseValue;
+        }
+        if (convertedCurrentValue !== null && convertedPurchaseValue !== null) {
+          accumulator.gainLoss += convertedCurrentValue - convertedPurchaseValue;
+        }
+        return accumulator;
+      },
+      { currentValue: 0, purchaseValue: 0, gainLoss: 0 }
+    );
+  }, [portfolioExchangeRates.rates, portfolioTotals, selectedCurrencyInvestmentAccounts, usesPortfolioFxEstimates]);
+  const portfolioEstimateUnavailable =
+    usesPortfolioFxEstimates &&
+    selectedCurrencyCodes.some(
+      (currency) => currency !== defaultCurrencyCode && !Number.isFinite(portfolioExchangeRates.rates[currency])
+    );
+  const formatPortfolioSummary = (value: number) => {
+    if (portfolioEstimateUnavailable) {
+      return "—";
+    }
+    return usesPortfolioFxEstimates
+      ? formatInvestmentAmount(value, defaultCurrencyCode)
+      : formatInvestmentAggregate(value, selectedCurrencyInvestmentAccounts);
+  };
+  const getPortfolioSummaryTooltip = (calculation: string) => {
+    if (!usesPortfolioFxEstimates) {
+      return calculation;
+    }
+    const rateDate = portfolioExchangeRates.asOf
+      ? ` Rates are current as of ${formatDate(portfolioExchangeRates.asOf)}.`
+      : "";
+    return `${calculation} Values are estimated in ${defaultCurrencyCode} using the latest available exchange rates.${rateDate}`;
+  };
   const growthAssets = useMemo<PortfolioGrowthAsset[]>(() => {
     const seen = new Set<string>();
     const earliestActivityByAccount = new Map<string, string>();
@@ -1882,7 +1943,7 @@ export default function InvestmentsPage() {
       }),
     [canAggregateSelectedCurrency, selectedCurrencyInvestmentAccounts]
   );
-  const portfolioRoi = canAggregateSelectedCurrency && estimatedPortfolioTotals.purchaseValue > 0
+  const portfolioRoi = hasVisibleCurrencySelection && !portfolioEstimateUnavailable && estimatedPortfolioTotals.purchaseValue > 0
     ? estimatedPortfolioTotals.gainLoss / estimatedPortfolioTotals.purchaseValue
     : null;
   const portfolioRisk = useMemo(() => {
@@ -2866,20 +2927,20 @@ export default function InvestmentsPage() {
           <>
             <section className="investments-overview-metrics" aria-label="Portfolio totals">
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
-                <InfoTooltip className="summary-card-info" label="The total value of the visible investment holdings for the selected currency view." />
+                <InfoTooltip className="summary-card-info" label={getPortfolioSummaryTooltip("The total value of the visible investment holdings for the selected currency view.")} />
                 <p className="eyebrow">Estimated value</p>
                 <strong className="accounts-overview-card__amount is-good">
                   {hasVisibleCurrencySelection
-                    ? formatInvestmentAggregate(estimatedPortfolioTotals.currentValue, selectedCurrencyInvestmentAccounts)
+                    ? formatPortfolioSummary(estimatedPortfolioTotals.currentValue)
                     : "—"}
                 </strong>
               </article>
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
-                <InfoTooltip className="summary-card-info" label="Recorded gain or loss for visible holdings with an available purchase value." />
+                <InfoTooltip className="summary-card-info" label={getPortfolioSummaryTooltip("Recorded gain or loss for visible holdings with an available purchase value.")} />
                 <p className="eyebrow">Total returns</p>
-                <strong className={`accounts-overview-card__amount ${estimatedPortfolioTotals.gainLoss > 0 ? "is-good" : estimatedPortfolioTotals.gainLoss < 0 ? "is-danger" : "is-neutral"}`}>
+                <strong className={`accounts-overview-card__amount ${portfolioEstimateUnavailable ? "is-neutral" : estimatedPortfolioTotals.gainLoss > 0 ? "is-good" : estimatedPortfolioTotals.gainLoss < 0 ? "is-danger" : "is-neutral"}`}>
                   {hasVisibleCurrencySelection
-                    ? formatInvestmentAggregate(estimatedPortfolioTotals.gainLoss, selectedCurrencyInvestmentAccounts)
+                    ? formatPortfolioSummary(estimatedPortfolioTotals.gainLoss)
                     : "—"}
                 </strong>
               </article>
@@ -2899,7 +2960,7 @@ export default function InvestmentsPage() {
               </article>
             </section>
             <p className="investments-estimate-note">
-              Portfolio values are estimates. Check your investment apps for the latest amounts.
+              Portfolio values are estimates.{usesPortfolioFxEstimates ? ` Mixed-currency totals use the latest available FX rates in ${defaultCurrencyCode}.` : ""} Check your investment apps for the latest amounts.
             </p>
             <section className="investments-growth-hero glass">
               <div className="investments-allocation__head">
