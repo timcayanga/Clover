@@ -2454,7 +2454,28 @@ const extractTextFromPdfBytesWithOcrFallback = async (
     }
 
     const compactOcrText = ocrPages.join("\n").trim();
-    const lighterOcrText = await renderPdfPagesToOcrText(data, password, baseUrl, profile === "aggressive" ? 8 : 6, profile === "aggressive" ? 2.8 : 2.2);
+    const needsSecondaryOcr = shouldRunSecondaryPdfOcrPass({
+      primaryOcrText: compactOcrText,
+      renderedPages: pageImages,
+      fileName,
+    });
+    const lighterOcrText = needsSecondaryOcr
+      ? await renderPdfPagesToOcrText(
+          data,
+          password,
+          baseUrl,
+          profile === "aggressive" ? 8 : 6,
+          profile === "aggressive" ? 2.8 : 2.2
+        )
+      : "";
+    if (!needsSecondaryOcr) {
+      console.info("[import-performance] PDF extraction skipped redundant secondary OCR", {
+        profile,
+        sourceBytes: data.byteLength,
+        renderedPages: pageImages.length,
+        textLength: compactOcrText.length,
+      });
+    }
     const bestText = pickBestStatementTextCandidate([
       { text: extractedText, label: "text-layer" },
       { text: compactOcrText, label: "ocr-render-3.5" },
@@ -2590,7 +2611,7 @@ const renderPdfPageImagesFromBytes = async (
     };
     const loadingTask = pdfjs.getDocument(options as any);
     const pdf = await loadingTask.promise;
-    const pageImages: Array<{ page: number; dataUrl: string }> = [];
+    const pageImages: Array<{ page: number; totalPages: number; dataUrl: string }> = [];
     const pageCount = Math.max(0, Math.min(pdf.numPages, maxPages));
 
     for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
@@ -2603,6 +2624,7 @@ const renderPdfPageImagesFromBytes = async (
         const buffer = enhanceForOcr ? await enhancePageImageBufferForOcr(canvas.toBuffer("image/jpeg", 65)) : canvas.toBuffer("image/jpeg", 65);
         pageImages.push({
           page: pageNumber,
+          totalPages: pdf.numPages,
           dataUrl: `data:image/jpeg;base64,${buffer.toString("base64")}`,
         });
       } catch (error) {
@@ -2625,6 +2647,32 @@ const renderPdfPageImagesFromBytes = async (
 
     return renderPdfPages("");
   }
+};
+
+export const shouldRunSecondaryPdfOcrPass = (params: {
+  primaryOcrText: string;
+  renderedPages: Array<{ page: number; totalPages: number }>;
+  fileName?: string | null;
+}) => {
+  const { renderedPages } = params;
+  if (renderedPages.length === 0) {
+    return true;
+  }
+
+  const totalPages = renderedPages[0]?.totalPages ?? 0;
+  const renderedEveryPage =
+    totalPages > 0 &&
+    renderedPages.length === totalPages &&
+    renderedPages.every((page, index) => page.page === index + 1 && page.totalPages === totalPages);
+
+  // Never accept a strong-looking prefix of a longer statement. The lighter
+  // pass covers more pages and remains necessary whenever the primary render
+  // did not include the complete document.
+  if (!renderedEveryPage) {
+    return true;
+  }
+
+  return !pdfTextLayerLooksSufficientForParsing(params.primaryOcrText, params.fileName);
 };
 
 export const renderReceiptPdfPagesForVision = async (bytes: Uint8Array) =>

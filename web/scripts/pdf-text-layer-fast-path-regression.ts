@@ -3,6 +3,7 @@ import {
   buildLayoutAwarePdfTextFromContentItems,
   ensurePdfJsTextPolyfills,
   pdfTextLayerLooksSufficientForParsing,
+  shouldRunSecondaryPdfOcrPass,
 } from "@/lib/import-file-text.server";
 import { pdfjs } from "@/lib/pdfjs.server";
 
@@ -29,6 +30,41 @@ assert.equal(
   pdfTextLayerLooksSufficientForParsing(healthyStatementText),
   true,
   "A transaction-rich PDF text layer should bypass redundant server OCR."
+);
+
+assert.equal(
+  shouldRunSecondaryPdfOcrPass({
+    primaryOcrText: healthyStatementText,
+    renderedPages: [{ page: 1, totalPages: 1 }],
+    fileName: "unfamiliar-bank-statement.pdf",
+  }),
+  false,
+  "A complete, parseable primary OCR result should not trigger a redundant second OCR pass."
+);
+
+assert.equal(
+  shouldRunSecondaryPdfOcrPass({
+    primaryOcrText: healthyStatementText,
+    renderedPages: [
+      { page: 1, totalPages: 8 },
+      { page: 2, totalPages: 8 },
+      { page: 3, totalPages: 8 },
+      { page: 4, totalPages: 8 },
+    ],
+    fileName: "unfamiliar-bank-statement.pdf",
+  }),
+  true,
+  "A parseable prefix must not suppress OCR for the unrendered remainder of a statement."
+);
+
+assert.equal(
+  shouldRunSecondaryPdfOcrPass({
+    primaryOcrText: "Statement Date Mar 22, 2026\nTotal Amount Due 12,746.52",
+    renderedPages: [{ page: 1, totalPages: 1 }],
+    fileName: "unfamiliar-bank-statement.pdf",
+  }),
+  true,
+  "A complete render with insufficient transaction evidence must retain the secondary OCR pass."
 );
 
 const wiseStatementText = [
