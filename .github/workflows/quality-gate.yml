@@ -36,8 +36,8 @@ jobs:
       - name: Generate Prisma Client
         run: npm --prefix web exec -- prisma generate --schema web/prisma/schema.prisma
 
+      - name: Reject high-risk production dependency advisories
+        run: npm audit --prefix web --omit=dev --audit-level=high
+
       - name: Run the same pre-push quality gate used locally
         run: npm run qa:prepush
-
-      - name: Reject critical dependency advisories
-        run: npm audit --prefix web --omit=dev --audit-level=high
