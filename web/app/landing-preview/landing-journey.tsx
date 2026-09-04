@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { LandingSignupModal } from "@/components/landing-signup-modal";
+import { FEATURE_LINKS } from "@/lib/public-site";
 import styles from "./landing-preview.module.css";
 
 const chapters = [
@@ -61,10 +62,13 @@ function JourneyActions({ authEnabled, final = false }: { authEnabled: boolean; 
 
 export function LandingJourney({ authEnabled, initialMarket, countryResolved }: { authEnabled: boolean; initialMarket: LandingMarket; countryResolved: boolean }) {
   const journeyRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
   const frameRef = useRef<number | null>(null);
   const [chapter, setChapter] = useState(0);
   const [storyPosition, setStoryPosition] = useState(0);
   const [market, setMarket] = useState<LandingMarket>(initialMarket);
+  const [featuresOpen, setFeaturesOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     if (countryResolved || initialMarket === "ph") return;
@@ -72,6 +76,27 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
     const timezoneLooksPhilippine = Intl.DateTimeFormat().resolvedOptions().timeZone === "Asia/Manila";
     if (localeLooksPhilippine || timezoneLooksPhilippine) setMarket("ph");
   }, [countryResolved, initialMarket]);
+
+  useEffect(() => {
+    const closeMenus = (event: MouseEvent) => {
+      if (!headerRef.current?.contains(event.target as Node)) {
+        setFeaturesOpen(false);
+        setMobileMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setFeaturesOpen(false);
+        setMobileMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", closeMenus);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeMenus);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, []);
 
   useEffect(() => {
     const journey = journeyRef.current;
@@ -137,12 +162,51 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
 
   return <div ref={journeyRef} className={styles.journey} data-chapter={chapter} data-market={market} style={{ "--journey-progress": 0 } as CSSProperties}>
     <div className={styles.stage}>
-      <header className={styles.header}>
+      <header ref={headerRef} className={styles.header}>
         <Link href="/" className={styles.brand} aria-label="Clover home">
           <Image src="/clover-mark.svg" alt="" width={44} height={44} priority />
           <Image src="/clover-name-teal.svg" alt="Clover" width={132} height={32} priority />
         </Link>
-        <nav aria-label="Public site"><Link href="/features">Features</Link><Link href="/help">Help</Link><Link href="/contact-us">Contact</Link></nav>
+        <nav aria-label="Public site">
+          <div className={styles.featureMenu}>
+            <button
+              type="button"
+              className={styles.navTrigger}
+              aria-expanded={featuresOpen}
+              aria-controls="preview-features-menu"
+              onClick={() => setFeaturesOpen((open) => !open)}
+            >
+              Features <span aria-hidden="true">▾</span>
+            </button>
+            {featuresOpen ? <div className={styles.featuresDropdown} id="preview-features-menu">
+              {FEATURE_LINKS.map((item) => <Link key={item.href} href={item.href} onClick={() => setFeaturesOpen(false)}>{item.label}</Link>)}
+            </div> : null}
+          </div>
+          <Link href="/help">Help</Link>
+          <Link href="/contact-us">Contact</Link>
+          <Link href="/privacy-policy">Privacy Policy</Link>
+          <Link href="/terms-of-service">Terms of Service</Link>
+        </nav>
+        <div className={styles.mobileMenu}>
+          <button
+            type="button"
+            className={styles.mobileMenuTrigger}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="preview-mobile-menu"
+            onClick={() => setMobileMenuOpen((open) => !open)}
+          >
+            Menu <span aria-hidden="true">▾</span>
+          </button>
+          {mobileMenuOpen ? <div className={styles.mobileDropdown} id="preview-mobile-menu">
+            <p>Features</p>
+            {FEATURE_LINKS.map((item) => <Link key={item.href} href={item.href} onClick={() => setMobileMenuOpen(false)}>{item.label}</Link>)}
+            <span />
+            <Link href="/help" onClick={() => setMobileMenuOpen(false)}>Help</Link>
+            <Link href="/contact-us" onClick={() => setMobileMenuOpen(false)}>Contact</Link>
+            <Link href="/privacy-policy" onClick={() => setMobileMenuOpen(false)}>Privacy Policy</Link>
+            <Link href="/terms-of-service" onClick={() => setMobileMenuOpen(false)}>Terms of Service</Link>
+          </div> : null}
+        </div>
         <div className={styles.headerActions}><Link href="/sign-in">Log in</Link><Link href="/sign-up">Sign up</Link></div>
       </header>
 

@@ -47,6 +47,9 @@ async function main() {
   assert.match(landingJourneySource, /bpi\.png[\s\S]*grabpay\.png[\s\S]*gcash\.png[\s\S]*chase bank\.png[\s\S]*paypal\.png[\s\S]*wise\.png/, "Upload examples must use real bank and wallet marks in both supported markets.");
   assert.doesNotMatch(landingJourneySource, /chapterMotion[\s\S]{0,500}filter:/, "Landing copy must not blur during chapter transitions.");
   assert.match(landingJourneySource, /href="\/sign-in"[\s\S]*?Organize my finances for free[\s\S]*?→/, "The landing actions must present Log in before the arrow-led organization CTA.");
+  assert.match(landingJourneySource, /FEATURE_LINKS\.map[\s\S]*?Privacy Policy[\s\S]*?Terms of Service/, "The preview header must expose the shared Features menu and both legal pages.");
+  assert.match(landingJourneySource, /aria-expanded=\{featuresOpen\}[\s\S]*?preview-features-menu/, "The preview Features dropdown must expose its expanded state to assistive technology.");
+  assert.match(landingJourneyStyles, /\.featuresDropdown,\.mobileDropdown\{[\s\S]*?background:#fff/, "Preview navigation menus must remain opaque over the landing photography.");
   assert.match(landingJourneyStyles, /Continuous story engine:[\s\S]*?\.journey\{height:520svh\}/, "The landing journey must avoid long inactive scroll intervals.");
   assert.match(landingJourneyStyles, /@media\(max-width:900px\)\{[\s\S]*?\.sceneStack\{inset:0;height:100%\}[\s\S]*?\.sceneSubject img\{object-fit:cover;/, "Mobile scenes must fill the viewport from portrait-safe sources.");
   assert.match(landingJourneyStyles, /Frameless matched-motion story[\s\S]*?\.supportStage\{border:0!important[\s\S]*?background:transparent!important/, "Supporting objects must not be cropped inside a visible parent rail.");
