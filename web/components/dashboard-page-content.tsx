@@ -852,7 +852,6 @@ async function DashboardStream({
   const currentSummary = comparePeriods(currentThirtyDayTransactions, previousTransactionsWindow);
   const weeklySummary = comparePeriods(currentSevenDayTransactions, previousSevenDayTransactions);
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const currentMonthTransactions = currentTransactions.filter(
     (transaction) => transaction.date >= monthStart && transaction.date < tomorrowStart
@@ -860,12 +859,13 @@ async function DashboardStream({
   const previousMonthTransactions = currentTransactions.filter(
     (transaction) => transaction.date >= previousMonthStart && transaction.date < monthStart
   );
-  const monthDayCount = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const monthSummary = summarizeWindow(currentMonthTransactions, "This month");
   const previousMonthSummary = summarizeWindow(previousMonthTransactions, "Previous month");
   const weeklyFlowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
   const weeklyFlow = buildDailyFlow(currentTransactions, weeklyFlowStart, 7, { weekday: "short" });
-  const monthlyFlow = buildDailyFlow(currentMonthTransactions, monthStart, monthDayCount, { day: "numeric" });
+  const rollingThirtyDaySummary = currentSummary.current;
+  const rollingThirtyDayNet = currentSummary.net;
+  const monthlyFlow = buildDailyFlow(currentThirtyDayTransactions, thirtyDaysAgo, 30, { day: "numeric" });
   const currentSavingsRate = currentSummary.current.income > 0 ? currentSummary.net / currentSummary.current.income : null;
   const previousNet = currentSummary.previous.income - currentSummary.previous.expense;
   const previousSavingsRate = currentSummary.previous.income > 0 ? previousNet / currentSummary.previous.income : null;
@@ -1130,7 +1130,7 @@ async function DashboardStream({
     },
   ];
   const weeklyReportTone = weeklySummary.net >= 0 ? "positive" : "warning";
-  const monthlyReportTone = monthSummary.net >= 0 ? "positive" : "warning";
+  const monthlyReportTone = rollingThirtyDayNet >= 0 ? "positive" : "warning";
   return (
     <>
       <PostHogPersonProperties
@@ -1267,7 +1267,7 @@ async function DashboardStream({
               <div>
                 <p className="eyebrow">Weekly Report</p>
                 <h4><HomeSensitiveAmount value={formatCurrency(weeklySummary.current.expense, displayCurrency)} currency={displayCurrency} /></h4>
-                <p className="dashboard-home__report-note">Recorded spending in the last 7 days</p>
+                <p className="dashboard-home__report-note">Recorded spending in the past 7 days</p>
               </div>
             </div>
             <div className="dashboard-home__report-metrics" aria-label="Weekly report metrics">
@@ -1296,23 +1296,23 @@ async function DashboardStream({
             <div className="dashboard-home__report-card-head">
               <div>
                 <p className="eyebrow">Monthly Report</p>
-                <h4><HomeSensitiveAmount value={formatCurrency(monthSummary.expense, displayCurrency)} currency={displayCurrency} /></h4>
-                <p className="dashboard-home__report-note">Recorded spending this month to date</p>
+                <h4><HomeSensitiveAmount value={formatCurrency(rollingThirtyDaySummary.expense, displayCurrency)} currency={displayCurrency} /></h4>
+                <p className="dashboard-home__report-note">Recorded spending in the past 30 days</p>
               </div>
             </div>
             <div className="dashboard-home__report-metrics" aria-label="Monthly report metrics">
               <span>
                 <small>Income</small>
-                <strong className="dashboard-home__report-metric-value--income"><HomeSensitiveAmount value={formatCurrency(monthSummary.income, displayCurrency)} currency={displayCurrency} /></strong>
+                <strong className="dashboard-home__report-metric-value--income"><HomeSensitiveAmount value={formatCurrency(rollingThirtyDaySummary.income, displayCurrency)} currency={displayCurrency} /></strong>
               </span>
               <span>
                 <small>Expenses</small>
-                <strong className="dashboard-home__report-metric-value--expense"><HomeSensitiveAmount value={formatCurrency(monthSummary.expense, displayCurrency)} currency={displayCurrency} /></strong>
+                <strong className="dashboard-home__report-metric-value--expense"><HomeSensitiveAmount value={formatCurrency(rollingThirtyDaySummary.expense, displayCurrency)} currency={displayCurrency} /></strong>
               </span>
               <span>
                 <small>Net Cash Flow</small>
-                <strong className={monthSummary.net >= 0 ? "dashboard-home__report-metric-value--income" : "dashboard-home__report-metric-value--expense"}>
-                  <HomeSensitiveAmount value={formatSignedCurrency(monthSummary.net, displayCurrency)} currency={displayCurrency} />
+                <strong className={rollingThirtyDayNet >= 0 ? "dashboard-home__report-metric-value--income" : "dashboard-home__report-metric-value--expense"}>
+                  <HomeSensitiveAmount value={formatSignedCurrency(rollingThirtyDayNet, displayCurrency)} currency={displayCurrency} />
                 </strong>
               </span>
             </div>

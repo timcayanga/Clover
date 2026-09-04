@@ -141,6 +141,18 @@ assert.match(dashboardSource, /const todayStart = toDayStart\(now\)/);
 assert.doesNotMatch(dashboardSource, /activityAnchorDate/);
 assert.match(dashboardSource, /Weekly Report/);
 assert.match(dashboardSource, /Monthly Report/);
+assert.match(dashboardSource, /Recorded spending in the past 7 days/);
+assert.match(dashboardSource, /Recorded spending in the past 30 days/);
+assert.match(
+  dashboardSource,
+  /const monthlyFlow = buildDailyFlow\(currentThirtyDayTransactions, thirtyDaysAgo, 30, \{ day: "numeric" \}\)/,
+  "The Monthly Report chart must represent a rolling 30-day window.",
+);
+assert.match(
+  dashboardSource,
+  /Monthly Report[\s\S]{0,350}formatCurrency\(rollingThirtyDaySummary\.expense/,
+  "The Monthly Report total must use the rolling 30-day summary.",
+);
 assert.match(dashboardSource, /plannedPaymentsDueSoon\.length === 1 \? "payment is" : "payments are"/);
 assert.ok(
   dashboardSource.indexOf('aria-label="Week and month snapshot"') < dashboardSource.indexOf("<DashboardBudgetPulse />"),
