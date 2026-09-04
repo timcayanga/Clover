@@ -47,9 +47,9 @@ const marketContent = {
 } as const;
 
 const clamp = (value: number, minimum = 0, maximum = 1) => Math.min(maximum, Math.max(minimum, value));
-const smoothstep = (start: number, end: number, value: number) => {
-  const normalized = clamp((value - start) / (end - start));
-  return normalized * normalized * (3 - 2 * normalized);
+const sceneAsset = (scene: (typeof scenes)[number], mobile = false) => {
+  const folder = scene === "01-organize" ? "landing-story-v3" : "landing-story-v2";
+  return `/assets/${folder}/${scene}${mobile ? "-mobile" : ""}.webp`;
 };
 
 function JourneyActions({ authEnabled, final = false }: { authEnabled: boolean; final?: boolean }) {
@@ -112,16 +112,11 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
   const chapterPhase = storyPosition - chapterFloor;
   const displayedChapter = chapterPhase < 0.5 ? chapterFloor : Math.min(chapters.length - 1, chapterFloor + 1);
   const sceneMotion = (index: number): CSSProperties => {
-    const activeScene = Math.min(chapters.length - 1, Math.floor(storyPosition));
-    const phase = storyPosition - activeScene;
-    const reveal = smoothstep(0.06, 0.94, phase);
-    const isOutgoing = index === activeScene;
-    const isIncoming = index === activeScene + 1;
     const distance = storyPosition - index;
+    const proximity = clamp(1 - Math.abs(distance));
     return {
-      opacity: isOutgoing || isIncoming ? 1 : 0,
-      clipPath: isIncoming ? `inset(0 ${100 - reveal * 100}% 0 0)` : "inset(0)",
-      transform: `translate3d(${distance * -2.4}%, ${distance * -0.5}%, 0) scale(${1 + Math.min(1, Math.abs(distance)) * 0.075})`,
+      opacity: proximity,
+      transform: `translate3d(${clamp(distance, -1, 1) * -1.8}%, ${clamp(distance, -1, 1) * -0.7}%, 0) scale(${1.035 - proximity * 0.035})`,
     };
   };
   const chapterMotion = (index: number): CSSProperties => {
@@ -132,10 +127,11 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
   };
   const productMotion = (index: number, direction = 1): CSSProperties => {
     const distance = storyPosition - index;
+    const proximity = clamp(1 - Math.abs(distance) * 1.35);
     return {
-      opacity: displayedChapter === index ? 1 : 0,
-      visibility: displayedChapter === index ? "visible" : "hidden",
-      transform: `translate3d(${clamp(distance, -1, 1) * 22 * direction}px, ${Math.abs(distance) * 5}px, 0) scale(${1 - Math.min(1, Math.abs(distance)) * 0.025})`,
+      opacity: proximity,
+      visibility: proximity > 0 ? "visible" : "hidden",
+      transform: `translate3d(${clamp(distance, -1, 1) * 34 * direction}px, ${clamp(distance, -1, 1) * 18}px, 0) scale(${0.94 + proximity * 0.06})`,
     };
   };
 
@@ -154,10 +150,10 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
         <div className={styles.sceneStack}>
           {scenes.map((scene, index) => (
             <div className={styles.scene} data-active={chapter === index} key={scene} style={sceneMotion(index)}>
-              <span className={styles.sceneBackdrop} style={{ "--scene-backdrop": `url("/assets/landing-story-v2/${scene}.webp")` } as CSSProperties} />
+              <span className={styles.sceneBackdrop} style={{ "--scene-backdrop": `url("${sceneAsset(scene)}")` } as CSSProperties} />
               <picture className={styles.sceneSubject}>
-                <source media="(max-width: 900px)" srcSet={`/assets/landing-story-v2/${scene}-mobile.webp`} />
-                <img src={`/assets/landing-story-v2/${scene}.webp`} alt="" fetchPriority={index === 0 ? "high" : "auto"} />
+                <source media="(max-width: 900px)" srcSet={sceneAsset(scene, true)} />
+                <img src={sceneAsset(scene)} alt="" fetchPriority={index === 0 ? "high" : "auto"} />
               </picture>
             </div>
           ))}
@@ -176,7 +172,18 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
 
       <div className={styles.supportStage} data-active={displayedChapter < chapters.length - 1} aria-hidden="true">
       <div className={styles.heroEvidence} data-story-visual="evidence" style={productMotion(0)}>
-        <Image src="/assets/landing page/hero card.png" alt="" width={1536} height={1024} priority />
+        <div className={styles.evidenceDocuments}>
+          {local.documents.slice(0, 3).map(([label, detail], index) => <div className={styles.evidenceDocument} key={label}>
+            <Image src={local.uploadRows[index][1]} alt="" width={34} height={34} />
+            <small>{label}</small><strong>{detail}</strong><i /><i /><i />
+          </div>)}
+        </div>
+        <div className={styles.evidenceFlow}><span /><span /><span /></div>
+        <div className={styles.evidenceDestination}>
+          <Image src="/clover-mark.svg" alt="" width={34} height={34} />
+          <span><small>CLOVER IMPORT</small><strong>Accounts and transactions ready</strong></span>
+          <b>{market === "ph" ? "248 organized" : "186 organized"}</b>
+        </div>
       </div>
 
       <div className={styles.phone} data-story-visual="phone" style={productMotion(1, -1)}>

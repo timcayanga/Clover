@@ -18,15 +18,20 @@ async function main() {
       ["", "-mobile"].map((suffix) => access(path.join(root, `../assets/landing-story-v2/${scene}${suffix}.webp`))),
     ),
   );
+  await Promise.all([
+    access(path.join(root, "../assets/landing-story-v3/01-organize.webp")),
+    access(path.join(root, "../assets/landing-story-v3/01-organize-mobile.webp")),
+  ]);
   const mobileSceneMetadata = await Promise.all(
-    landingSceneNames.map((scene) => sharp(path.join(root, `../assets/landing-story-v2/${scene}-mobile.webp`)).metadata()),
+    landingSceneNames.map((scene) => sharp(path.join(root, `../assets/${scene === "01-organize" ? "landing-story-v3" : "landing-story-v2"}/${scene}-mobile.webp`)).metadata()),
   );
   assert.ok(
     mobileSceneMetadata.every((metadata) => (metadata.height ?? 0) > (metadata.width ?? 0)),
     "Every mobile landing scene must use a portrait source so full-viewport cover does not crop out the cast.",
   );
   assert.match(landingJourneySource, /const scenes = \["01-organize", "02-upload", "03-picture", "04-adviser", "05-plan", "06-life"\]/, "The scrollable landing story must retain all six people-led scenes in order.");
-  assert.match(landingJourneySource, /<source media="\(max-width: 900px\)" srcSet=\{`\/assets\/landing-story-v2\/\$\{scene\}-mobile\.webp`\}/, "The landing story must use mobile-specific crops that keep its recurring cast visible.");
+  assert.match(landingJourneySource, /const folder = scene === "01-organize" \? "landing-story-v3" : "landing-story-v2"/, "The rebuilt hero must use its safer desktop and mobile compositions while retaining the rest of the story.");
+  assert.match(landingJourneySource, /<source media="\(max-width: 900px\)" srcSet=\{sceneAsset\(scene, true\)\}/, "The landing story must use mobile-specific crops that keep its recurring cast visible.");
   assert.match(landingJourneySource, /className=\{styles\.sceneBackdrop\}/, "Intermediate desktop sizes must retain a full-bleed backdrop behind the uncropped cast.");
   assert.match(landingJourneyStyles, /@media\(max-width:900px\)\{[\s\S]*?\.markers\{right:8px;top:50%;bottom:auto;flex-direction:column;/, "The landing-story chapter tracker must remain on the right on mobile.");
   assert.match(landingPreviewPageSource, /x-vercel-ip-country/, "The landing preview must choose localized finance examples from the visitor country.");
@@ -35,7 +40,7 @@ async function main() {
   assert.match(landingJourneyStyles, /Keep the cast in a clear, unfiltered scene plane/, "The landing composition must preserve an unobstructed people layer.");
   assert.match(landingJourneySource, /progress \* \(chapters\.length - 1\)/, "Landing chapters must advance continuously with scroll progress.");
   assert.match(landingJourneySource, /style=\{sceneMotion\(index\)\}/, "Landing backgrounds must interpolate on every scroll update.");
-  assert.match(landingJourneySource, /data-story-visual="evidence"[\s\S]*?hero card\.png/, "The hero must use Clover's real document-to-dashboard evidence artwork.");
+  assert.match(landingJourneySource, /data-story-visual="evidence"[\s\S]*?evidenceDocuments[\s\S]*?local\.uploadRows\[index\]\[1\][\s\S]*?CLOVER IMPORT/, "The hero must connect localized, real-logo documents to a Clover import result.");
   assert.match(landingJourneySource, /const displayedChapter = chapterPhase < 0\.5/, "Landing copy must switch quickly without disappearing between chapters.");
   assert.match(landingJourneySource, /const productMotion = \(index: number, direction = 1\)/, "Product evidence must move with the scroll while remaining fully opaque.");
   assert.match(landingJourneySource, /bpi\.png[\s\S]*grabpay\.png[\s\S]*gcash\.png[\s\S]*chase bank\.png[\s\S]*paypal\.png[\s\S]*wise\.png/, "Upload examples must use real bank and wallet marks in both supported markets.");
@@ -43,9 +48,12 @@ async function main() {
   assert.match(landingJourneySource, /href="\/sign-in"[\s\S]*?Organize my finances for free[\s\S]*?→/, "The landing actions must present Log in before the arrow-led organization CTA.");
   assert.match(landingJourneyStyles, /Continuous story engine:[\s\S]*?\.journey\{height:520svh\}/, "The landing journey must avoid long inactive scroll intervals.");
   assert.match(landingJourneyStyles, /@media\(max-width:900px\)\{[\s\S]*?\.sceneStack\{inset:0;height:100%\}[\s\S]*?\.sceneSubject img\{object-fit:cover;/, "Mobile scenes must fill the viewport from portrait-safe sources.");
-  assert.match(landingJourneyStyles, /Opaque three-plane story[\s\S]*?\.supportStage\{border:1px solid #dce9eb;background:#fff/, "Product evidence must occupy its own opaque surface.");
+  assert.match(landingJourneyStyles, /Frameless matched-motion story[\s\S]*?\.supportStage\{border:0!important[\s\S]*?background:transparent!important/, "Supporting objects must not be cropped inside a visible parent rail.");
+  assert.match(landingJourneyStyles, /\.evidenceDocument\{[\s\S]{0,600}background:#fff/, "Individual document objects must remain opaque and readable.");
+  assert.match(landingJourneyStyles, /\.evidenceDestination\{[\s\S]{0,600}background:#fff/, "The Clover import result must remain opaque and readable.");
+  assert.doesNotMatch(landingJourneySource, /clipPath:/, "Scene transitions must use matched movement instead of directional wipes.");
   assert.match(landingJourneyStyles, /@media\(min-width:901px\)[\s\S]*?\.sceneStack\{inset:0;width:100%;height:100%;background:#eef8f6\}[\s\S]*?\.sceneSubject img\{object-fit:cover;/, "Desktop photographs must cover the complete stage.");
-  assert.match(landingJourneyStyles, /@media\(max-width:900px\)[\s\S]*?\.supportStage\{top:max\(72px,10%\)[\s\S]*?\.story\{top:57%/, "Mobile must separate product evidence from its protected lower copy deck.");
+  assert.match(landingJourneyStyles, /@media\(max-width:900px\)[\s\S]*?\.world>\.worldWash[\s\S]*?linear-gradient\(180deg[\s\S]*?\.supportStage\{display:none\}/, "Mobile must let the portrait photography drive the story and protect its lower copy with a bottom fade.");
 
   assert.equal(
     getVerifiedSpendingMerchantName({
