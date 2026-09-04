@@ -17,6 +17,27 @@ const chapters = [
 
 const scenes = ["01-organize", "02-upload", "03-picture", "04-adviser", "05-plan", "06-life"] as const;
 
+type LandingMarket = "ph" | "global";
+
+const marketContent = {
+  ph: {
+    documents: [["BPI STATEMENT", "12 months"], ["RECEIPT", "₱2,480"], ["GCASH EXPORT", "Old records"], ["MERALCO BILL", "Card activity"]],
+    uploadRows: ["BPI statement", "SM receipt", "GCash export"],
+    balance: "₱633,688.84", income: "₱68,000", expenses: "₱31,420", cashFlow: "₱36,580",
+    transactions: [["Pay day • BPI", "+ ₱68,000"], ["SM Supermarket", "− ₱2,480"], ["Meralco", "− ₱4,920"], ["Grab", "− ₱220"]],
+    insight: "Dining is down 12% this month. You could move the difference toward your Japan goal without changing your usual budget.",
+    planAmount: "₱12,000",
+  },
+  global: {
+    documents: [["CHASE STATEMENT", "12 months"], ["RECEIPT", "$84.20"], ["PAYPAL EXPORT", "Old records"], ["UTILITY BILL", "Card activity"]],
+    uploadRows: ["Chase statement", "Whole Foods receipt", "PayPal export"],
+    balance: "$24,860.42", income: "$6,800", expenses: "$3,142", cashFlow: "$3,658",
+    transactions: [["Pay day • Chase", "+ $6,800"], ["Whole Foods", "− $84"], ["National Grid", "− $192"], ["Uber", "− $22"]],
+    insight: "Dining is down 12% this month. You could move the difference toward your Japan goal without changing your usual budget.",
+    planAmount: "$820",
+  },
+} as const;
+
 function JourneyActions({ authEnabled, final = false }: { authEnabled: boolean; final?: boolean }) {
   return <div className={styles.actions}>
     {authEnabled ? <LandingSignupModal enabled>Organize my finances for free</LandingSignupModal> : <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>Organize my finances for free</Link>}
@@ -24,10 +45,18 @@ function JourneyActions({ authEnabled, final = false }: { authEnabled: boolean; 
   </div>;
 }
 
-export function LandingJourney({ authEnabled }: { authEnabled: boolean }) {
+export function LandingJourney({ authEnabled, initialMarket, countryResolved }: { authEnabled: boolean; initialMarket: LandingMarket; countryResolved: boolean }) {
   const journeyRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<number | null>(null);
   const [chapter, setChapter] = useState(0);
+  const [market, setMarket] = useState<LandingMarket>(initialMarket);
+
+  useEffect(() => {
+    if (countryResolved || initialMarket === "ph") return;
+    const localeLooksPhilippine = navigator.languages.some((locale) => /(?:^|-)PH$/i.test(locale) || /^fil(?:-|$)/i.test(locale));
+    const timezoneLooksPhilippine = Intl.DateTimeFormat().resolvedOptions().timeZone === "Asia/Manila";
+    if (localeLooksPhilippine || timezoneLooksPhilippine) setMarket("ph");
+  }, [countryResolved, initialMarket]);
 
   useEffect(() => {
     const journey = journeyRef.current;
@@ -61,7 +90,9 @@ export function LandingJourney({ authEnabled }: { authEnabled: boolean }) {
     window.scrollTo({ top, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   };
 
-  return <div ref={journeyRef} className={styles.journey} data-chapter={chapter} style={{ "--journey-progress": 0 } as CSSProperties}>
+  const local = marketContent[market];
+
+  return <div ref={journeyRef} className={styles.journey} data-chapter={chapter} data-market={market} style={{ "--journey-progress": 0 } as CSSProperties}>
     <div className={styles.stage}>
       <header className={styles.header}>
         <Link href="/" className={styles.brand} aria-label="Clover home">
@@ -94,31 +125,31 @@ export function LandingJourney({ authEnabled }: { authEnabled: boolean }) {
       </section>
 
       <div className={styles.documents} data-story-visual="documents" aria-hidden="true">
-        <div><small>STATEMENT</small><b>12 months</b><i /><i /><i /></div>
-        <div><small>RECEIPT</small><b>₱2,480</b><i /><i /></div>
-        <div><small>SPREADSHEET</small><b>Old records</b><span>▦</span></div>
-        <div><small>SCREENSHOT</small><b>Card activity</b><span>▤</span></div>
+        <div><small>{local.documents[0][0]}</small><b>{local.documents[0][1]}</b><i /><i /><i /></div>
+        <div><small>{local.documents[1][0]}</small><b>{local.documents[1][1]}</b><i /><i /></div>
+        <div><small>{local.documents[2][0]}</small><b>{local.documents[2][1]}</b><span>▦</span></div>
+        <div><small>{local.documents[3][0]}</small><b>{local.documents[3][1]}</b><span>▤</span></div>
       </div>
 
       <div className={styles.phone} data-story-visual="phone" aria-hidden="true">
         <div className={styles.phoneBar}><Image src="/clover-mark.svg" alt="" width={28} height={28} /><span>Upload files</span><i /></div>
         <strong>Bring in your finances</strong><p>Choose the records already on your device.</p>
-        <div className={styles.uploadRows}><span>▤ Statement <b>Ready</b></span><span>▧ Receipt <b>Ready</b></span><span>▦ Spreadsheet <b>Ready</b></span></div>
+        <div className={styles.uploadRows}>{local.uploadRows.map((label, index) => <span key={label}>{["▤", "▧", "▦"][index]} {label} <b>Ready</b></span>)}</div>
         <button type="button">Upload 3 files</button>
       </div>
 
       <div className={styles.laptop} data-story-visual="laptop" aria-hidden="true"><div className={styles.laptopScreen}>
         <div className={styles.appBar}><Image src="/clover-mark.svg" alt="" width={26} height={26} /><span>Home</span><i /><i /></div>
-        <div className={styles.balance}><small>MY BALANCE</small><strong>₱633,688.84</strong><span>Across your accounts</span></div>
-        <div className={styles.summary}><div><small>INCOME</small><b>₱68,000</b></div><div><small>EXPENSES</small><b>₱31,420</b></div><div><small>NET CASH FLOW</small><b>₱36,580</b></div></div>
-        <div className={styles.transactionRows}>{['Pay day', 'Groceries', 'Rent', 'Coffee shop'].map((label, index) => <span key={label}><i />{label}<b>{index === 0 ? '+' : '−'} ₱{[68000,2480,24000,220][index].toLocaleString()}</b></span>)}</div>
+        <div className={styles.balance}><small>MY BALANCE</small><strong>{local.balance}</strong><span>Across your accounts</span></div>
+        <div className={styles.summary}><div><small>INCOME</small><b>{local.income}</b></div><div><small>EXPENSES</small><b>{local.expenses}</b></div><div><small>NET CASH FLOW</small><b>{local.cashFlow}</b></div></div>
+        <div className={styles.transactionRows}>{local.transactions.map(([label, amount]) => <span key={label}><i />{label}<b>{amount}</b></span>)}</div>
       </div><span className={styles.laptopBase} /></div>
 
-      <div className={styles.adviser} data-story-visual="adviser" aria-hidden="true"><div><Image src="/clover-mark.svg" alt="" width={34} height={34} /><span><small>ASK CLOVER</small><b>Your financial picture</b></span></div><p>Dining is down 12% this month. You could move the difference toward your Japan goal without changing your usual budget.</p><div className={styles.suggestion}><span>✈</span><b>Japan in spring</b><strong>₱12,000 monthly</strong></div><button type="button">Create this plan →</button></div>
+      <div className={styles.adviser} data-story-visual="adviser" aria-hidden="true"><div><Image src="/clover-mark.svg" alt="" width={34} height={34} /><span><small>ASK CLOVER</small><b>Your financial picture</b></span></div><p>{local.insight}</p><div className={styles.suggestion}><span>✈</span><b>Japan in spring</b><strong>{local.planAmount} monthly</strong></div><button type="button">Create this plan →</button></div>
 
       <div className={styles.planCard} data-story-visual="plan" aria-hidden="true">
         <div><Image src="/clover-mark.svg" alt="" width={30} height={30} /><span><small>CLOVER RECOMMENDATION</small><b>Japan trip</b></span></div>
-        <strong>₱12,000 <small>per month</small></strong>
+        <strong>{local.planAmount} <small>per month</small></strong>
         <div><i /><i /><i /><i /></div>
         <p>Ready by March</p>
       </div>

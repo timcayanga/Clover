@@ -59,3 +59,55 @@
   .phone{width:60vw}
   .planCard{width:72vw}
 }
+
+/* Keep the cast in a clear, unfiltered scene plane. Copy and interactive
+   product moments occupy their own zones instead of covering people. */
+@media(min-width:901px){
+  .worldWash{background:linear-gradient(90deg,rgba(249,253,253,.96) 0 22%,rgba(249,253,253,.72) 25%,transparent 27.5%)}
+  .chapter{top:128px;left:clamp(34px,5.4vw,82px);width:min(360px,26vw);translate:0 0}
+  .chapter h1{font-size:clamp(32px,2.9vw,42px);line-height:1.06}
+  .chapter p{max-width:350px;font-size:clamp(13px,1vw,15px)}
+  .documents{top:auto;right:auto;bottom:3vh;left:clamp(250px,23vw,350px);transform-origin:bottom left}
+  .phone{top:auto;right:auto;bottom:3vh;left:clamp(34px,5.4vw,82px);transform-origin:bottom left}
+  .laptop{top:auto;right:auto;bottom:3vh;left:clamp(34px,5.4vw,82px);width:min(34vw,480px);transform-origin:bottom left}
+  .adviser{top:auto;right:auto;bottom:4vh;left:clamp(34px,5.4vw,82px);width:min(33vw,450px);transform-origin:bottom left}
+  .planCard{right:auto;bottom:7vh;left:clamp(34px,5.4vw,82px);width:min(28vw,380px);transform-origin:bottom left}
+  .journey[data-chapter="0"] .documents{transform:scale(.4)}
+  .journey[data-chapter="0"] .laptop{transform:scale(.53)}
+  .journey[data-chapter="1"] .documents{right:auto;left:clamp(230px,21vw,320px);transform:scale(.5)}
+  .journey[data-chapter="1"] .phone{transform:scale(.58) rotate(0)}
+  .journey[data-chapter="2"] .laptop{transform:scale(.68)}
+  .journey[data-chapter="3"] .adviser{transform:scale(.72) rotate(0)}
+  .journey[data-chapter="4"] .planCard{transform:scale(.88)}
+  .journey[data-chapter="5"] .worldWash{background:linear-gradient(90deg,rgba(249,253,253,.92) 0 22%,rgba(249,253,253,.6) 25%,transparent 27.5%)}
+}
+
+@media(max-width:900px){
+  .sceneStack{top:31%;height:45%}
+  .scene img{object-fit:contain;object-position:center top}
+  .world>.worldWash,.journey[data-chapter="5"] .worldWash{background:linear-gradient(180deg,rgba(249,253,253,.99) 0 29.8%,transparent 30%)}
+  .chapter{top:82px;left:14px;width:calc(100vw - 44px)}
+  .chapter h1{max-width:15ch;font-size:clamp(25px,7vw,32px);line-height:1.04}
+  .chapter p{max-width:39ch;margin-top:10px;font-size:12px;line-height:1.38}
+  .actions{margin-top:13px}
+  .actions :global(.button){min-height:38px}
+  .documents{top:auto;right:auto;bottom:8px;left:4px;transform-origin:bottom left}
+  .phone{top:auto;right:auto;bottom:9px;left:14px;width:min(54vw,220px);min-height:350px;transform-origin:bottom left}
+  .laptop{top:auto;right:auto;bottom:10px;left:14px;width:86vw;transform-origin:bottom left}
+  .adviser{top:auto;right:auto;bottom:10px;left:14px;width:76vw;padding:16px;transform-origin:bottom left}
+  .planCard{right:auto;bottom:12px;left:14px;width:min(72vw,320px);transform-origin:bottom left}
+  .journey[data-chapter="0"] .documents{transform:scale(.3)}
+  .journey[data-chapter="0"] .laptop{transform:scale(.7)}
+  .journey[data-chapter="1"] .documents{right:auto;left:2px;transform:scale(.32)}
+  .journey[data-chapter="1"] .phone{transform:scale(.52) rotate(0)}
+  .journey[data-chapter="2"] .laptop{transform:scale(.86)}
+  .journey[data-chapter="3"] .adviser{transform:scale(.63) rotate(0)}
+  .journey[data-chapter="4"] .planCard{transform:scale(.78)}
+}
+
+@media(max-width:540px){
+  .chapter h1{font-size:clamp(24px,6.8vw,29px)}
+  .chapter p{font-size:11.5px}
+  .actions{width:min(228px,67vw)}
+  .sceneStack{top:31%;height:45%}
+}

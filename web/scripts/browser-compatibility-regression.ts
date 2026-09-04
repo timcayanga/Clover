@@ -9,6 +9,7 @@ const readSource = (relativePath: string) => readFile(path.join(root, relativePa
 async function main() {
   const landingJourneySource = await readSource("app/landing-preview/landing-journey.tsx");
   const landingJourneyStyles = await readSource("app/landing-preview/landing-preview.module.css");
+  const landingPreviewPageSource = await readSource("app/landing-preview/page.tsx");
   const landingSceneNames = ["01-organize", "02-upload", "03-picture", "04-adviser", "05-plan", "06-life"];
 
   await Promise.all(
@@ -19,6 +20,11 @@ async function main() {
   assert.match(landingJourneySource, /const scenes = \["01-organize", "02-upload", "03-picture", "04-adviser", "05-plan", "06-life"\]/, "The scrollable landing story must retain all six people-led scenes in order.");
   assert.match(landingJourneySource, /<source media="\(max-width: 900px\)" srcSet=\{`\/assets\/landing-story-v2\/\$\{scene\}-mobile\.webp`\}/, "The landing story must use mobile-specific crops that keep its recurring cast visible.");
   assert.match(landingJourneyStyles, /@media\(max-width:900px\)\{[\s\S]*?\.markers\{right:8px;top:50%;bottom:auto;flex-direction:column;/, "The landing-story chapter tracker must remain on the right on mobile.");
+  assert.match(landingPreviewPageSource, /x-vercel-ip-country/, "The landing preview must choose localized finance examples from the visitor country.");
+  assert.match(landingJourneySource, /BPI STATEMENT[\s\S]*GCASH EXPORT[\s\S]*CHASE STATEMENT[\s\S]*PAYPAL EXPORT/, "The landing preview must keep Philippine and global document examples.");
+  assert.match(landingJourneySource, /data-market=\{market\}/, "The selected landing market must remain observable for browser verification.");
+  assert.match(landingJourneyStyles, /Keep the cast in a clear, unfiltered scene plane/, "The landing composition must preserve an unobstructed people layer.");
+  assert.match(landingJourneyStyles, /@media\(max-width:900px\)\{[\s\S]*?\.sceneStack\{top:31%;height:45%\}/, "Mobile must keep people and product surfaces in separate vertical planes.");
 
   assert.equal(
     getVerifiedSpendingMerchantName({
