@@ -210,6 +210,11 @@ assert.match(
 );
 assert.match(
   globalStylesSource,
+  /\.dashboard-home__hero--balance::before\s*\{[^}]*bottom:\s*100%;[^}]*height:\s*20px;[^}]*background:\s*var\(--surface\);/s,
+  "Content passing above My Balance should be fully hidden across the header gap.",
+);
+assert.match(
+  globalStylesSource,
   /@media \(max-width:\s*1100px\)[\s\S]*?\.dashboard-home__hero--balance\s*\{[^}]*top:\s*84px;/,
   "My Balance should remain below the mobile header and its original page gap.",
 );
