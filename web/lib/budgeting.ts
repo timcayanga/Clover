@@ -4,6 +4,8 @@ import { resolveFinancialTransactionType } from "@/lib/transaction-directions";
 
 export type BudgetRecord = {
   id: string;
+  emoji?: string | null;
+  planId?: string | null;
   name: string;
   kind: BudgetKind;
   scope: BudgetScope;
@@ -47,6 +49,8 @@ export type BudgetAlertStage = "safe" | "watch" | "warning" | "critical" | "exce
 
 export type BudgetProgress = {
   id: string;
+  emoji?: string | null;
+  planId: string | null;
   name: string;
   kind: BudgetKind;
   scope: BudgetScope;
@@ -488,7 +492,9 @@ export const buildBudgetOverview = (params: {
 
       return {
         id: budget.id,
+        planId: budget.planId ?? null,
         name: budget.name,
+        emoji: budget.emoji ?? null,
         kind: budget.kind,
         scope: budget.scope,
         cadence: budget.cadence,

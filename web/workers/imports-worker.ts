@@ -24,6 +24,8 @@ void purgeExpiredImportFiles({ limit: 50 }).catch((error) => {
 
 const connection = getRedisConnection();
 const passwordRequiredMessage = "This file is password-protected. Enter the password to continue.";
+const isMissingImportFileError = (error: unknown) =>
+  error instanceof Error && error.message === "Import file not found";
 
 const worker = new Worker(
   getImportQueueName(),
@@ -44,6 +46,13 @@ const worker = new Worker(
           : null,
       });
     } catch (error) {
+      // The user or an idempotent QA cleanup can remove an import after it was
+      // queued. Treat that as successful cancellation so BullMQ does not retry
+      // a source that no longer exists or emit a misleading processing error.
+      if (isMissingImportFileError(error)) {
+        job.discard();
+        return { skipped: true, reason: "import_deleted" };
+      }
       if (isNonFinancialUploadError(error)) {
         job.discard();
         await updateImportFileCompat(importFileId, {

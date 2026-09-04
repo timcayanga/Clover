@@ -6,7 +6,7 @@ const root = process.cwd();
 const readSource = (relativePath: string) => readFile(path.join(root, relativePath), "utf8");
 
 async function main() {
-  const [shell, styles, navigationIcons, animatedTabs, reportsPage, recurringPage, investmentsPage] = await Promise.all([
+  const [shell, styles, navigationIcons, animatedTabs, reportsPage, recurringPage, investmentsPage, transactionsPage] = await Promise.all([
     readSource("components/clover-shell.tsx"),
     readSource("app/globals.css"),
     readSource("lib/navigation-icons.ts"),
@@ -14,6 +14,7 @@ async function main() {
     readSource("app/reports/reports-page-content.tsx"),
     readSource("components/recurring-page-client.tsx"),
     readSource("app/investments/page.tsx"),
+    readSource("app/transactions/page.tsx"),
   ]);
 
   assert.match(
@@ -33,12 +34,13 @@ async function main() {
   );
   assert.match(
     shell,
-    /href="\/more"[\s\S]{0,700}<span className="shell-bottom-nav__label">More<\/span>/,
-    "More must occupy the fifth mobile navigation slot.",
+    /aria-controls="mobile-settings-drawer"[\s\S]{0,700}<span className="shell-bottom-nav__label">Account<\/span>/,
+    "Account must occupy the fifth mobile navigation slot and control the settings drawer.",
   );
   assert.match(shell, /className="sidebar-nav sidebar-nav--mobile"[\s\S]*desktopNavSections\.map/);
   assert.match(shell, /id="mobile-settings-drawer"[\s\S]{0,300}shell-profile-drawer/);
-  assert.doesNotMatch(shell, /shell-bottom-nav__label">Profile<\/span>/, "Profile belongs inside More instead of the primary mobile navigation.");
+  assert.match(shell, /shell-profile-drawer__account-card[\s\S]{0,500}\{displayName\}/, "The settings drawer must lead with a separate account identity card.");
+  assert.match(shell, /shell-bottom-nav__profile-photo[\s\S]{0,250}profileImage/, "The Account tab must show the user's profile photo when available.");
   assert.match(
     shell,
     /document\.addEventListener\("scroll", handleDocumentScroll, \{ passive: true, capture: true \}\)/,
@@ -48,6 +50,16 @@ async function main() {
     shell,
     /document\.addEventListener\("touchmove", handleTouchMove, \{ passive: false \}\)/,
     "Pull-to-refresh must be able to contain the browser gesture after a vertical pull is recognized.",
+  );
+  assert.match(
+    shell,
+    /MOBILE_PULL_REFRESH_THRESHOLD = 54/,
+    "Pull-to-refresh must use a reachable release threshold.",
+  );
+  assert.match(
+    shell,
+    /deltaY \* 0\.75/,
+    "Pull-to-refresh must trigger after a natural mobile gesture rather than an excessive damped distance.",
   );
   assert.match(
     shell,
@@ -234,6 +246,36 @@ async function main() {
     styles,
     /\.content--circles \.circles-title-tab\.is-active \.circles-title-tab__name \{[\s\S]{0,120}display: block !important/,
     "The active Circle title must remain visible beside the mobile menu.",
+  );
+  assert.match(
+    styles,
+    /Compact-device resilience:[\s\S]{0,900}\.transactions-pagination__nav \.transactions-pagination__page[\s\S]{0,160}min-height: 40px/,
+    "Compact transaction pagination must retain usable touch targets.",
+  );
+  assert.match(
+    styles,
+    /\.dashboard-home__hero-mini-label \{[\s\S]{0,260}white-space: normal;[\s\S]{0,80}overflow-wrap: anywhere;/,
+    "Compact Home labels must reflow instead of clipping at narrow widths or larger text sizes.",
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 360px\) \{[\s\S]{0,160}\.dashboard-home__report-metrics \{[\s\S]{0,100}grid-template-columns: minmax\(0, 1fr\)/,
+    "Ultra-compact Home reports must stack monetary metrics instead of truncating amounts.",
+  );
+  assert.match(
+    styles,
+    /\.budget-summary-card__items \{[\s\S]{0,180}grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/,
+    "Budget account labels must have two stable compact columns instead of collapsing four flex items.",
+  );
+  assert.match(
+    styles,
+    /Mobile Transactions uses the document as its only vertical scroll owner[\s\S]{0,700}\.content--transactions \{[\s\S]{0,160}height: auto;[\s\S]{0,160}overflow: visible;[\s\S]{0,500}\.content--transactions \.transactions-mobile-view \{[\s\S]{0,180}overflow: visible;/,
+    "Mobile Transactions must use document scrolling so older rows and the pagination sentinel remain reachable.",
+  );
+  assert.match(
+    transactionsPage,
+    /<button[\s\S]{0,180}ref=\{mobileLoadMoreRef\}[\s\S]{0,260}onClick=\{\(\) => void loadMoreMobileTransactions\(\)\}/,
+    "Mobile Transactions must provide a manual load-more fallback when automatic loading is unavailable.",
   );
 
   console.log("Mobile navigation regression passed.");

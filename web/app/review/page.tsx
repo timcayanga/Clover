@@ -61,6 +61,7 @@ export default async function ReviewPage() {
       select: {
         id: true,
         name: true,
+        currency: true,
       },
     }),
     prisma.category.findMany({

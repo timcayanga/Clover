@@ -716,6 +716,26 @@ const main = async () => {
   assert.match(processRouteSource, /sourceFingerprint: fileFingerprint/);
   assert.match(
     processRouteSource,
+    /Promise\.all\(\[[\s\S]{0,500}?assertWorkspaceAccess\(userId, formWorkspaceId\)[\s\S]{0,300}?getOrCreateCurrentUser\(userId\)[\s\S]{0,300}?countWorkspaceOwnerImportFilesThisMonth\(formWorkspaceId\)/,
+    "workspace access, plan, and upload-count reads should share one database wait"
+  );
+  assert.match(
+    processRouteSource,
+    /Promise\.all\(\[uploadStatePromise, file\.arrayBuffer\(\)\]\)/,
+    "multipart byte preparation should overlap the upload progress write"
+  );
+  assert.match(
+    processRouteSource,
+    /assertTrustedRequestOrigin\(_request\)[\s\S]{0,500}?const multipartFormDataPromise = isMultipart \? _request\.formData\(\) : null;[\s\S]{0,300}?const authPromise =/,
+    "multipart decoding should overlap authentication only after origin validation"
+  );
+  assert.match(
+    processRouteSource,
+    /const canonicalCandidatesPromise =[\s\S]{0,900}?prisma\.importFile\.findMany[\s\S]{0,1500}?await fingerprintPersistPromise[\s\S]{0,900}?await canonicalCandidatesPromise/,
+    "fingerprint persistence, extraction-cache lookup, storage, and duplicate election should start together"
+  );
+  assert.match(
+    processRouteSource,
     /const shouldProcessHighConfidenceTextPdfInline =[\s\S]{0,350}parsedMetadataConfidence >= 85/,
     "Small, high-confidence text PDFs should use the inline statement path instead of waiting for queue handoff."
   );
@@ -846,7 +866,7 @@ const main = async () => {
   );
   assert.ok(
     processRouteSource.indexOf('const importProcessorPromise = import("@/workers/import-processor");') <
-      processRouteSource.indexOf("const formData = await _request.formData();"),
+      processRouteSource.indexOf("const multipartFormDataPromise = isMultipart ? _request.formData() : null;"),
     "The import worker should begin loading before multipart decoding so cold module startup overlaps the upload handoff."
   );
   assert.doesNotMatch(
@@ -856,7 +876,7 @@ const main = async () => {
   );
   assert.ok(
     processRouteSource.indexOf('const importFileTextPromise = import("@/lib/import-file-text.server");') <
-      processRouteSource.indexOf("const formData = await _request.formData();"),
+      processRouteSource.indexOf("const multipartFormDataPromise = isMultipart ? _request.formData() : null;"),
     "The extraction module should begin loading before multipart decoding so cold PDF readers overlap the upload handoff."
   );
   assert.match(
@@ -909,7 +929,7 @@ const main = async () => {
   );
   assert.match(
     processRouteSource,
-    /const cachedDocRecordPromise = shouldUseCachedExtractionRecord[\s\S]{0,700}if \(!allowDuplicateStatement\)/,
+    /const cachedDocRecordPromise = shouldUseCachedExtractionRecord[\s\S]{0,1800}?const canonicalCandidatesPromise = !allowDuplicateStatement/,
     "The extraction-cache lookup should overlap canonical-import election instead of waiting behind it."
   );
   assert.match(
@@ -1099,8 +1119,8 @@ const main = async () => {
   );
   assert.match(
     importProcessorSource,
-    /if \(options\.rawFileReady\) \{\s*await options\.rawFileReady;/,
-    "Normalized import writes must wait for durable raw-file storage."
+    /const rawFileReady = options\.rawFileReady \?\? null;[\s\S]*if \(rawFileReady\) \{\s*await rawFileReady;\s*\}[\s\S]*hasCompatibleTable\("ParsedTransaction"\)/,
+    "Parsing may overlap storage, but normalized import writes must wait for the durable raw-file copy."
   );
   assert.match(
     importProcessorSource,

@@ -1,3 +1,5 @@
+import { ADDITIONAL_BANK_LOGOS, normalizeLogoName } from "@/lib/bank-logo-catalog";
+
 export type InstitutionAutocompleteVariant = "account" | "investment";
 
 export type InstitutionSuggestionCategory = "bank" | "wallet" | "investment_platform";
@@ -298,7 +300,13 @@ const PLATFORM_SUGGESTIONS: InstitutionSuggestion[] = [
   },
 ];
 
-const ALL_SUGGESTIONS = [...BANK_SUGGESTIONS, ...PLATFORM_SUGGESTIONS];
+const knownInstitutionNames = new Set([...BANK_SUGGESTIONS, ...PLATFORM_SUGGESTIONS].flatMap((item) => [item.label, ...item.aliases].map(normalizeLogoName)));
+const additionalSuggestions: InstitutionSuggestion[] = ADDITIONAL_BANK_LOGOS.filter((logo, index, logos) =>
+  !knownInstitutionNames.has(normalizeLogoName(logo.label)) &&
+  !logo.aliases.some((alias) => knownInstitutionNames.has(normalizeLogoName(alias))) &&
+  logos.findIndex((item) => normalizeLogoName(item.label) === normalizeLogoName(logo.label)) === index
+).map((logo) => ({ label: logo.label, aliases: logo.aliases, category: /alipay|wechat|airwallex|atome/i.test(logo.label) ? "wallet" : "bank", description: "Financial institution or provider", popularity: 50 }));
+const ALL_SUGGESTIONS = [...BANK_SUGGESTIONS, ...PLATFORM_SUGGESTIONS, ...additionalSuggestions];
 const INVESTMENT_BANK_SUGGESTIONS = BANK_SUGGESTIONS.filter((suggestion) => suggestion.supportsInvestments);
 
 const matchesQuery = (suggestion: InstitutionSuggestion, query: string) => {

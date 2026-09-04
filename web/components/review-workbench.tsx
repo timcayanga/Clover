@@ -7,10 +7,12 @@ import type { AnalyticsEventName } from "@/lib/analytics";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 import { formatTransactionDirectionLabel } from "@/lib/transaction-directions";
+import { formatAccountOptionLabel } from "@/lib/account-option-label";
 
 type ReviewAccount = {
   id: string;
   name: string;
+  currency: string;
 };
 
 type ReviewCategory = {
@@ -839,7 +841,7 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
               <select value={currentDraft?.accountId ?? current.accountId} onChange={(event) => updateDraft({ accountId: event.target.value })}>
                 {accounts.map((account) => (
                   <option key={account.id} value={account.id}>
-                    {account.name}
+                    {formatAccountOptionLabel(account)}
                   </option>
                 ))}
               </select>

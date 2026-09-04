@@ -6,12 +6,13 @@ import { createPortal } from "react-dom";
 import { AdviserChat, type AdviserPrompt } from "@/components/adviser-chat";
 import { hasFullFeatureAccess } from "@/lib/beta-access";
 
-type AskCloverContext = "accounts" | "transactions" | "recurring";
+type AskCloverContext = "accounts" | "transactions" | "recurring" | "budgeting" | "goals";
 type PlanTier = "free" | "pro" | "unknown";
 
 type ContextualAskCloverProps = {
   context: AskCloverContext;
   planTier?: PlanTier;
+  showLabel?: boolean;
 };
 
 const contextCopy: Record<
@@ -112,9 +113,69 @@ const contextCopy: Record<
       },
     ],
   },
+  budgeting: {
+    label: "Plan a budget with Adviser",
+    title: "Plan a budget",
+    prompts: [
+      {
+        id: "budgeting-design",
+        group: "budgeting",
+        label: "Help me design a budget",
+        prompt: "Help me create an appropriate budget from my recent spending. Ask only for details Clover cannot determine, then prepare a budget card for me to review.",
+      },
+      {
+        id: "budgeting-groceries",
+        group: "budgeting",
+        label: "Plan a grocery budget",
+        prompt: "Help me create a monthly grocery budget based on the spending Clover can see.",
+      },
+      {
+        id: "budgeting-room",
+        group: "cashflow",
+        label: "What limit can I afford?",
+        prompt: "What monthly spending limit fits my income, commitments, and current financial goals?",
+      },
+      {
+        id: "budgeting-review",
+        group: "budgeting",
+        label: "Review my current budgets",
+        prompt: "Review my current budgets and tell me which limit is least realistic based on my recent activity.",
+      },
+    ],
+  },
+  goals: {
+    label: "Plan a goal with Adviser",
+    title: "Plan a goal",
+    prompts: [
+      {
+        id: "goals-design",
+        group: "goals",
+        label: "Help me design a goal",
+        prompt: "Help me create a realistic financial goal using the cash flow Clover can see. Ask only for missing details, then prepare a goal card for me to review.",
+      },
+      {
+        id: "goals-emergency",
+        group: "goals",
+        label: "Plan an emergency fund",
+        prompt: "Help me create an emergency fund goal that fits my recent income, spending, and commitments.",
+      },
+      {
+        id: "goals-target",
+        group: "goals",
+        label: "Choose a realistic target",
+        prompt: "Suggest a realistic monthly goal target from my Clover data and explain the tradeoff briefly.",
+      },
+      {
+        id: "goals-progress",
+        group: "goals",
+        label: "Improve my current goal",
+        prompt: "Review my current goal progress and suggest one realistic adjustment.",
+      },
+    ],
+  },
 };
 
-export function ContextualAskClover({ context, planTier = "unknown" }: ContextualAskCloverProps) {
+export function ContextualAskClover({ context, planTier = "unknown", showLabel = false }: ContextualAskCloverProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [resolvedPlanTier, setResolvedPlanTier] = useState<PlanTier>(planTier);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -178,7 +239,7 @@ export function ContextualAskClover({ context, planTier = "unknown" }: Contextua
       <button
         ref={triggerRef}
         type="button"
-        className="contextual-ask-clover__trigger"
+        className={`contextual-ask-clover__trigger${showLabel ? " contextual-ask-clover__trigger--labeled" : ""}`}
         aria-label={copy.label}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
@@ -192,6 +253,7 @@ export function ContextualAskClover({ context, planTier = "unknown" }: Contextua
           className="contextual-ask-clover__icon"
           aria-hidden="true"
         />
+        {showLabel ? <span className="contextual-ask-clover__trigger-label">Plan with Adviser</span> : null}
         <span className="contextual-ask-clover__tooltip" role="tooltip">
           {copy.label}
         </span>
@@ -236,6 +298,7 @@ export function ContextualAskClover({ context, planTier = "unknown" }: Contextua
                       prompts={copy.prompts}
                       isPro={hasFullFeatureAccess(resolvedPlanTier)}
                       storageKey={`clover-adviser-chat-${context}-v1`}
+                      surface={context === "budgeting" || context === "goals" ? context : "general"}
                     />
                   )}
                 </div>

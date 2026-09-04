@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CollectionCard } from "@/components/collection-card";
 import {
   useEffect,
   useMemo,
@@ -20,6 +21,7 @@ import {
 } from "@/lib/circles";
 import { isSplitBillBuiltInAvatarUrl } from "@/lib/split-bill-avatars";
 import { getNavigationIconSrc } from "@/lib/navigation-icons";
+import { formatAccountOptionLabel } from "@/lib/account-option-label";
 
 const tabs = [
   "overview",
@@ -148,14 +150,37 @@ export function CirclesWorkspace({
   const [message, setMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [latestInviteUrl, setLatestInviteUrl] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailRetry, setDetailRetry] = useState(0);
 
   const selectedCircle = useMemo(
     () =>
       data.circles.find((circle) => circle.id === selectedCircleId) ??
-      data.circles[0] ??
       null,
     [data.circles, selectedCircleId],
   );
+
+  const needsDetails = selectedCircle?.detailsLoaded === false;
+  useEffect(() => {
+    setDetailError(null);
+    if (!selectedCircleId || !needsDetails) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const response = await fetch(`/api/circles?circle=${encodeURIComponent(selectedCircleId)}`, { cache: "no-store", signal: controller.signal });
+        const payload = await response.json() as CirclesWorkspaceData & { error?: string };
+        const circle = payload.circles?.find((item) => item.id === selectedCircleId);
+        if (!response.ok || !circle || circle.detailsLoaded === false) throw new Error(payload.error || "Unable to load this Circle.");
+        if (!controller.signal.aborted) setData((current) => ({
+          ...current, personalTransactions: payload.personalTransactions, investmentAccounts: payload.investmentAccounts,
+          circles: current.circles.map((item) => item.id === circle.id ? circle : item),
+        }));
+      } catch (error) {
+        if (!controller.signal.aborted) setDetailError(error instanceof Error ? error.message : "Unable to load this Circle.");
+      }
+    })();
+    return () => controller.abort();
+  }, [selectedCircleId, needsDetails, detailRetry]);
 
   useEffect(() => {
     if (createRequest > 0) {
@@ -185,7 +210,8 @@ export function CirclesWorkspace({
     setOpenForm(null);
     setMessage(null);
     window.requestAnimationFrame(() => {
-      workspaceRef.current?.scrollIntoView({ block: "start" });
+      window.scrollTo({ top: 0, behavior: "instant" });
+      workspaceRef.current?.closest(".content")?.scrollTo({ top: 0, behavior: "instant" });
     });
   }, [selectedCircleId]);
 
@@ -234,27 +260,41 @@ export function CirclesWorkspace({
     }
   };
 
+  const updateCardIdentity = async (circle: CircleSummary, name: string, photo?: File | null) => {
+    const avatarUrl = photo === null ? null : photo ? await createCircleAvatarDataUrl(photo) : undefined;
+    const response = await fetch(`/api/circles/${circle.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, ...(avatarUrl !== undefined ? { avatarUrl } : {}) }),
+    });
+    const payload = await response.json() as { error?: string };
+    if (!response.ok) throw new Error(payload.error || "Unable to update this Circle.");
+    setData((current) => ({ ...current, circles: current.circles.map((item) => item.id === circle.id ? { ...item, name, ...(avatarUrl !== undefined ? { avatarUrl } : {}) } : item) }));
+  };
+
   const selectTab = (tab: CircleTab) => {
     setActiveTab(tab);
     setOpenForm(null);
     setMessage(null);
     window.requestAnimationFrame(() => {
-      workspaceRef.current?.scrollIntoView({ block: "start" });
+      window.scrollTo({ top: 0, behavior: "instant" });
+      workspaceRef.current?.closest(".content")?.scrollTo({ top: 0, behavior: "instant" });
     });
   };
 
-  const refresh = async (preferredCircleId?: string) => {
-    const response = await fetch("/api/circles", { cache: "no-store" });
+  const refresh = async (preferredCircleId?: string | null) => {
+    const nextId = preferredCircleId === undefined ? selectedCircleId : preferredCircleId;
+    const response = await fetch(nextId ? `/api/circles?circle=${encodeURIComponent(nextId)}` : "/api/circles?view=directory", { cache: "no-store" });
     const payload = (await response.json()) as CirclesWorkspaceData & {
       error?: string;
     };
     if (!response.ok)
       throw new Error(payload.error || "Unable to refresh Circles.");
-    setData(payload);
-    const nextId = preferredCircleId || selectedCircleId;
+    setData((current) => nextId ? {
+      ...payload,
+      circles: [...current.circles.filter((circle) => !payload.circles.some((item) => item.id === circle.id)), ...payload.circles],
+    } : payload);
     if (nextId && payload.circles.some((circle) => circle.id === nextId))
       onSelectedCircleChange(nextId);
-    else onSelectedCircleChange(payload.circles[0]?.id ?? null);
+    else onSelectedCircleChange(null);
   };
 
   const runResource = async (
@@ -542,7 +582,7 @@ export function CirclesWorkspace({
       const payload = (await response.json()) as { error?: string };
       if (!response.ok)
         throw new Error(payload.error || "Unable to delete this Circle.");
-      await refresh();
+      await refresh(null);
       setMessage("Circle deleted.");
     } catch (error) {
       setMessage(
@@ -557,7 +597,16 @@ export function CirclesWorkspace({
 
   return (
     <section className="circles-page">
-      {data.circles.length === 0 ? (
+      {!selectedCircle ? (
+        <>
+        <div className="collection-directory-heading"><p>Split bills, coordinate shared expenses, track commitments, and work toward budgets and goals together—while keeping personal accounts private.</p></div>
+        <div className="collection-card-grid" aria-label="Your Circles">
+          {data.circles.map((circle) => <CollectionCard key={circle.id} kind="circle" name={circle.name} subtitle={`${circle.memberCount} member${circle.memberCount === 1 ? "" : "s"}`} editable={circle.role === "organizer"} icon={<img className={getCircleAvatarUrl(circle) === CIRCLE_MARK_URL ? "collection-clover-logo" : "collection-custom-photo"} src={getCircleAvatarUrl(circle)} alt="" width={48} height={48} />} onOpen={() => onSelectedCircleChange(circle.id)} onSave={(name, _emoji, photo) => updateCardIdentity(circle, name, photo)}>
+            <span className="collection-card__value"><small>Shared expenses this month</small><strong>{formatMoney(circle.expenseTotalThisMonth, circle.currency)}</strong></span>
+          </CollectionCard>)}
+          <button type="button" className="collection-create-card" onClick={() => openCreate()}><span aria-hidden="true">＋</span><strong>Create Circle</strong><small>Start sharing with a new group</small></button>
+        </div>
+        {data.circles.length === 0 ? (
         <section className="circles-empty panel glass">
           <img
             src={getNavigationIconSrc("profiles")}
@@ -591,6 +640,12 @@ export function CirclesWorkspace({
           >
             Create your first Circle
           </button>
+        </section>
+        ) : null}
+        </>
+      ) : needsDetails ? (
+        <section className="panel glass" aria-busy={!detailError}>
+          {detailError ? <p role="alert">{detailError} <button type="button" className="button button-secondary button-small" onClick={() => setDetailRetry((value) => value + 1)}>Try again</button></p> : <p role="status">Loading Circle details…</p>}
         </section>
       ) : (
         <div className="circles-layout">
@@ -1438,7 +1493,7 @@ function CircleGoals({
               <select name="accountId" required>
                 {investmentAccounts.map((account) => (
                   <option key={account.id} value={account.id}>
-                    {account.name} ·{" "}
+                    {formatAccountOptionLabel(account)} ·{" "}
                     {account.balance === null
                       ? "No value"
                       : formatMoney(account.balance, account.currency)}

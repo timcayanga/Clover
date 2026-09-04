@@ -23,11 +23,13 @@ const toIso = (value: Date | null | undefined) => value?.toISOString() ?? null;
 
 export const loadCirclesWorkspaceData = async (
   user: User,
+  circleId?: string,
 ): Promise<CirclesWorkspaceData> => {
   const now = new Date();
   const { start, end } = getMonthBounds(now);
   const circles = await prisma.circle.findMany({
     where: {
+      ...(circleId ? { id: circleId } : {}),
       archivedAt: null,
       OR: [
         { ownerUserId: user.id },
@@ -312,6 +314,7 @@ export const loadCirclesWorkspaceData = async (
     }).length;
 
     return {
+      detailsLoaded: true,
       id: circle.id,
       name: circle.name,
       type: circle.type,

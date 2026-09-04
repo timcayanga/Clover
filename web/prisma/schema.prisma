@@ -299,16 +299,31 @@ model InAppNotificationRead {
   @@index([userId, readAt])
 }
 
+model BudgetPlan {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  budgets     Budget[]
+
+  @@index([workspaceId])
+}
+
 model Budget {
   id           String        @id @default(cuid())
   workspaceId  String
   accountId    String?
   categoryId   String?
   name         String
+  emoji        String?
   kind         BudgetKind    @default(spend_limit)
   scope        BudgetScope   @default(global)
   cadence      BudgetCadence @default(monthly)
   targetAmount Decimal       @db.Decimal(18, 2)
+  planId       String?
+  plan         BudgetPlan?   @relation(fields: [planId], references: [id], onDelete: SetNull)
   currency     String        @default("PHP")
   isActive     Boolean       @default(true)
   createdAt    DateTime      @default(now())
@@ -319,6 +334,7 @@ model Budget {
 
   @@index([workspaceId])
   @@index([workspaceId, scope, cadence, isActive])
+  @@index([planId])
   @@index([accountId])
   @@index([categoryId])
 }
@@ -554,6 +570,7 @@ model Workspace {
   investmentHoldings             InvestmentHolding[]
   recurringPatterns              RecurringPattern[]
   budgets                        Budget[]
+  budgetPlans                    BudgetPlan[]
   tags                           Tag[]
 
   @@index([userId])

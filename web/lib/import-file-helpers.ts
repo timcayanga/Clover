@@ -17,6 +17,7 @@ export const fileKey = (file: FileLike) => `${file.name}:${file.size}:${file.las
 export const fileTypeLabel = (file: Pick<FileLike, "name" | "type">) => {
   const lowerName = file.name.toLowerCase();
   if (lowerName.endsWith(".pdf") || file.type === "application/pdf") return "PDF";
+  if (/\.(?:ofx|qfx|qif|mt940|sta|xml|json)$/.test(lowerName)) return "Financial export";
   if (lowerName.endsWith(".csv")) return "CSV";
   if (lowerName.endsWith(".tsv")) return "TSV";
   if (/\.(?:xlsx|xls|xlsm|xlsb|ods)$/.test(lowerName)) return "Spreadsheet";

@@ -69,6 +69,45 @@ assert.equal(
   "2026-12-03",
   "Ambiguous numeric dates must not be flipped without supporting evidence."
 );
+assert.equal(
+  repairReceiptDateFromEvidence(
+    {
+      transaction_date: "2026-01-09",
+      parser_evidence: {
+        source_text: "DATE: 09/01/2026 TIME: 12:26:04",
+      },
+    },
+    null,
+    { referenceDate: "2026-09-01T12:37:34.000Z", sourceLocale: "en-PH" }
+  ).transaction_date,
+  "2026-09-01",
+  "A newly photographed receipt must use the recent upload date to resolve month/day ambiguity."
+);
+assert.equal(
+  repairReceiptDateFromEvidence(
+    {
+      transaction_date: "2026-01-09",
+      parser_evidence: {
+        source_text: "DATE: 09/01/2026 TIME: 12:26:04",
+      },
+    },
+    null,
+    { referenceDate: "2026-06-01T12:00:00.000Z" }
+  ).transaction_date,
+  "2026-01-09",
+  "An older ambiguous receipt must remain unchanged when upload proximity is not decisive."
+);
+assert.equal(
+  repairReceiptDateFromEvidence(
+    {
+      transaction_date: "2026-10-13",
+      parser_evidence: { source_text: "Transaction date: 13 October 2026" },
+    },
+    "GUAM BAKERY\nTransaction date: 13 October 2025\nTOTAL USD 12.50"
+  ).transaction_date,
+  "2025-10-13",
+  "Independent local receipt text must outrank a model-transcribed year."
+);
 
 const receiptText = [
   "UNKNOWN MERCHANT",
@@ -169,10 +208,52 @@ assert.equal(
 assert.equal(
   resolveReceiptCategoryWithPaymentEvidence({
     proposedCategory: "Transfers",
+    receiptContext: "Restaurant receipt paid by GCash transfer. Sent via GCash to merchant account.",
+    lineItemCategory: "Food & Dining",
+  }),
+  "Food & Dining",
+  "Structured food line items must outrank the payment rail used to settle a purchase receipt."
+);
+assert.equal(
+  resolveReceiptCategoryWithPaymentEvidence({
+    proposedCategory: "Transfers",
+    receiptContext: "GCash transfer receipt. Sent via GCash to recipient account 09171234567.",
+    lineItemCategory: null,
+  }),
+  "Transfers",
+  "A genuine transfer receipt without purchase line items must remain Transfers."
+);
+assert.equal(
+  resolveReceiptCategoryWithPaymentEvidence({
+    proposedCategory: "Transfers",
     receiptContext: "QA City Market sales receipt. Total USD 29.70.",
   }),
   null,
   "A generic Transfers guess must not override purchase-receipt merchant context."
+);
+assert.equal(
+  resolveReceiptCategoryWithPaymentEvidence({
+    proposedCategory: "Transfers",
+    receiptContext: "GUAM BAKERY Official Receipt. Grand total USD 18.40. Payment method: credit card.",
+  }),
+  null,
+  "A card payment method on a merchant receipt must not turn the purchase into a transfer."
+);
+assert.equal(
+  resolveReceiptCategoryWithPaymentEvidence({
+    proposedCategory: "Transfers",
+    receiptContext: "Restaurant receipt. Order 42. Paid by GCash transfer to merchant account. Grand total PHP 680.00.",
+  }),
+  null,
+  "A wallet transfer used as the payment rail must not override clear purchase evidence."
+);
+assert.equal(
+  resolveReceiptCategoryWithPaymentEvidence({
+    proposedCategory: "Transfers",
+    receiptContext: "Credit card statement balance payment. Payment - thank you. Amount PHP 5,000.00.",
+  }),
+  "Transfers",
+  "A genuine credit-card balance payment must remain a transfer-like settlement."
 );
 
 const root = process.cwd();
@@ -292,13 +373,23 @@ assert.match(
 assert.match(transactionsPageSource, /persistSelectedCurrency\(selectedWorkspaceId, ""\)/);
 assert.match(
   importModalSource,
-  /file\.size > Math\.min\(imageOptimizationTarget, MAX_IMPORT_FILE_SIZE\)/,
+  /isHeicImportImage\(file\) \|\| file\.size > Math\.min\(imageOptimizationTarget, MAX_IMPORT_FILE_SIZE\)/,
   "Large camera photos must be optimized proactively rather than only after exceeding the upload limit."
 );
 assert.match(
   imageCompressionSource,
-  /RECEIPT_IMPORT_IMAGE_TARGET_SIZE = 1_250_000[\s\S]{0,2000}?isReceiptProfile \? 1_800 : 2_600/,
-  "Receipt photos should use a smaller upload and pixel budget without reducing statement resolution."
+  /file\.size <= targetUploadBytes && !isHeicImportImage\(file\)/,
+  "HEIC and HEIF photos must always be converted to JPEG, even when already below the upload-size target."
+);
+assert.match(
+  imageCompressionSource,
+  /RECEIPT_IMPORT_IMAGE_TARGET_SIZE = 750_000[\s\S]{0,3000}?isReceiptProfile \? 1_440 : 2_600/,
+  "Receipt photos should match the server detail budget instead of uploading pixels Clover discards."
+);
+assert.match(
+  imageCompressionSource,
+  /Math\.max\(isReceiptProfile \? 1_120 : 1_400/,
+  "receipt compression retries must retain the server core reader's full resolution"
 );
 assert.match(
   importModalSource,
@@ -332,6 +423,16 @@ assert.match(
   processRouteSource,
   /resolvedResponseImportMode === "receipt" && visibleRows > 0[\s\S]{0,180}?loadCommittedReceiptTransactionForResponse\(importId\)/,
   "A completed receipt process response must directly recover its committed transaction when the status snapshot races the write."
+);
+assert.match(
+  processRouteSource,
+  /const canUseCommittedWorkerResult =[\s\S]*?result\.status === "done"[\s\S]*?const statusSnapshot = canUseCommittedWorkerResult\s*\? null/,
+  "A committed receipt must skip the full recovery snapshot before its upload response is returned."
+);
+assert.match(
+  processRouteSource,
+  /\[import-performance\] inline response assembled[\s\S]{0,400}?responseAssemblyMs/,
+  "The receipt response handoff must expose its own UI-critical timing."
 );
 assert.match(
   openAIParserSource,
@@ -381,8 +482,28 @@ assert.match(
 );
 assert.match(
   openAIParserSource,
-  /useReceiptCoreOnly[\s\S]{0,300}?\? 900/,
+  /useReceiptCoreOnly[\s\S]{0,300}?\? 850/,
   "core receipt extraction should use a bounded output budget"
+);
+assert.match(
+  openAIParserSource,
+  /const openAIReceiptCoreJsonSchema =[\s\S]{0,2800}?line_items:[\s\S]{0,700}?maxItems: 0/,
+  "the first receipt model call should defer optional line items until after the visible transaction handoff"
+);
+assert.match(
+  openAIParserSource,
+  /const buildOpenAIReceiptCoreSystemPrompt =[\s\S]{0,1800}?Return line_items and transactions as empty arrays/,
+  "the core receipt prompt should not spend visible latency transcribing optional itemization"
+);
+assert.match(
+  openAIParserSource,
+  /const userPrompt = useReceiptCoreOnly[\s\S]{0,300}?buildCompactReceiptCoreInputPayload/,
+  "the first receipt call should not inherit the generic multi-document input prompt"
+);
+assert.match(
+  openAIParserSource,
+  /const systemPrompt = useReceiptCoreOnly[\s\S]{0,220}?buildOpenAIReceiptCoreSystemPrompt\(\)[\s\S]{0,260}?: buildOpenAIBackupSystemPrompt/,
+  "the first receipt call should not inherit statement, portfolio, and reconciliation instructions"
 );
 assert.match(
   openAIParserSource,
@@ -393,6 +514,16 @@ assert.match(
   openAIParserSource,
   /const shouldHedgeSlowReceiptVision =\s*isReceiptMode &&/,
   "a slow one-page receipt read should start a bounded fallback without waiting for the primary timeout"
+);
+assert.match(
+  openAIParserSource,
+  /const hedgeModel = primaryModel;/,
+  "slow receipt hedges should race a second copy of the bounded fast model"
+);
+assert.match(
+  openAIParserSource,
+  /Both raced attempts used models\[0\][\s\S]{0,220}?firstSequentialModelIndex = 1;/,
+  "the stronger model should remain available as the first true fallback after a hedged receipt race"
 );
 assert.match(openAIParserSource, /const firstResult = await Promise\.race\(\[primaryPromise, delayedHedgePromise\]\)/);
 assert.match(
@@ -407,8 +538,13 @@ assert.match(
 );
 assert.match(
   importModalSource,
-  /new EventSource\([\s\S]{0,180}?\/api\/imports\/\$\{importFileId\}\/events\?mode=[\s\S]{0,7000}?completionTransport: "server_sent_event"/,
+  /new EventSource\([\s\S]{0,180}?\/api\/imports\/\$\{importFileId\}\/events\?mode=[\s\S]{0,7000}?reportReceiptVisibilityTiming\("server_sent_event"\)/,
   "the uploader should react to server-pushed receipt visibility while retaining polling fallback"
+);
+assert.match(
+  importModalSource,
+  /upload_transfer_complete[\s\S]{0,900}?uploadTransferMs[\s\S]{0,1400}?serverWaitAfterUploadMs/,
+  "receipt telemetry should separate mobile upload transfer time from server processing and UI visibility"
 );
 assert.match(
   importModalSource,
@@ -482,6 +618,16 @@ assert.match(
 );
 assert.match(
   workerSource,
+  /launching receipt vision before routing[\s\S]{0,1000}?earlyReceiptVisionPromise = parseImportTextWithOpenAIFallback\([\s\S]{0,600}?receiptCoreOnly: true/,
+  "ordinary receipt vision should overlap parser routing and cache/database work"
+);
+assert.match(
+  workerSource,
+  /backupParserStartedAt \?\?= earlyReceiptVisionStartedAt \?\? Date\.now\(\)[\s\S]{0,1800}?importMode === "receipt" && earlyReceiptVisionPromise[\s\S]{0,180}?await earlyReceiptVisionPromise/,
+  "the standard receipt fallback should reuse the early model request rather than issuing a duplicate call"
+);
+assert.match(
+  workerSource,
   /schedulePostVisibleImportWork\(`receipt-details:\$\{importFileId\}`[\s\S]{0,5000}?preservedConfirmedCore: true/,
   "full line-item extraction should run after visibility without replacing confirmed core fields"
 );
@@ -489,6 +635,19 @@ assert.match(
   workerSource,
   /RECEIPT_VISIBLE_TARGET_MS = 8_000[\s\S]{0,100}?RECEIPT_VISIBLE_SLOW_BUDGET_MS = 12_000/,
   "receipt telemetry should enforce explicit target and slow-tail budgets"
+);
+const eagerReceiptImageStartIndex = workerSource.indexOf(
+  "const eagerReceiptImagePromise = eagerReceiptImagePreparationStartedAt"
+);
+const receiptCachePreflightIndex = workerSource.indexOf("const priorExactReceiptCachePromise =");
+const eagerReceiptImageAwaitIndex = workerSource.indexOf(
+  "const eagerReceiptImages = eagerReceiptImagePromise ? await eagerReceiptImagePromise : null"
+);
+assert.ok(
+  eagerReceiptImageStartIndex >= 0 &&
+    receiptCachePreflightIndex > eagerReceiptImageStartIndex &&
+    eagerReceiptImageAwaitIndex > receiptCachePreflightIndex,
+  "receipt image preparation should overlap cache preflight without starting paid vision early"
 );
 assert.match(
   workerSource,
@@ -532,7 +691,7 @@ assert.match(
 assert.match(workerSource, /receiptDetails = preferSpecificReceiptMerchant\(receiptDetails, receiptPreview\)/);
 assert.match(
   openAIParserSource,
-  /merchant must be the actual business name[\s\S]{0,280}?Test Receipt[\s\S]{0,280}?Official Receipt/,
+  /merchant must be the actual business name[\s\S]{0,280}?Test Receipt[\s\S]{0,280}?Official Receipt/i,
   "The fast vision prompt must not return a document heading as the merchant."
 );
 assert.match(
@@ -572,8 +731,13 @@ assert.match(
 );
 assert.match(
   workerSource,
-  /resolveReceiptCategoryWithPaymentEvidence\(\{[\s\S]{0,180}?proposedCategory: trainedCategoryName/,
-  "trained receipt categories must still pass through POS-versus-transfer safety"
+  /const receiptLineItemCategoryText = receiptLineItems[\s\S]{0,260}?guessCategoryName\(receiptLineItemCategoryText, "expense"\)/,
+  "receipt confirmation must categorize structured line items independently from payment-method text"
+);
+assert.match(
+  workerSource,
+  /resolveReceiptCategoryWithPaymentEvidence\(\{[\s\S]{0,180}?proposedCategory: trainedCategoryName,[\s\S]{0,180}?lineItemCategory: receiptLineItemCategory/,
+  "trained receipt categories must pass itemized purchase evidence through POS-versus-transfer safety"
 );
 const receiptConfirmationSection = workerSource.slice(
   workerSource.indexOf('if (createdTransactionId) {', workerSource.indexOf('if (importMode === "receipt")')),
@@ -597,6 +761,17 @@ assert.doesNotMatch(
 const receiptFastHandoffSection = workerSource.slice(
   workerSource.indexOf("const isFastTransactionDocument ="),
   workerSource.indexOf("try {\n    const qaRunResult", workerSource.indexOf("const isFastTransactionDocument ="))
+);
+const receiptRawAuditWaitIndex = workerSource.indexOf("if (rawFileReady) {");
+assert.ok(
+  receiptRawAuditWaitIndex > workerSource.lastIndexOf("openAiParsed =", receiptRawAuditWaitIndex) &&
+    receiptRawAuditWaitIndex < workerSource.indexOf('hasCompatibleTable("ParsedTransaction")', receiptRawAuditWaitIndex),
+  "Receipt vision should overlap raw-file storage but parsed rows must wait for the audit copy."
+);
+assert.match(
+  receiptFastHandoffSection,
+  /receiptAlreadyHasItemDetails[\s\S]{0,900}!receiptAlreadyHasItemDetails &&[\s\S]{0,100}localReceiptTextSuggestsMissingDetails/,
+  "post-visible receipt detail parsing should run only when independent local evidence shows missing details"
 );
 assert.match(
   receiptFastHandoffSection,

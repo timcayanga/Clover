@@ -17,11 +17,9 @@ export const metadata = {
 function BudgetingPageShell() {
   return (
     <RouteSplash label="budgeting">
-      <CloverShell active="budgeting" title="Budgeting" mobileBackHref="/more">
-        <Suspense fallback={<BudgetingLoadingState />}>
+        <Suspense fallback={<CloverShell active="budgeting" title="Budgeting"><BudgetingLoadingState /></CloverShell>}>
           <BudgetingPageContent />
         </Suspense>
-      </CloverShell>
     </RouteSplash>
   );
 }
@@ -48,7 +46,7 @@ async function BudgetingPageContent() {
     redirect(hasCompletedOnboarding(context.user) ? "/dashboard" : "/onboarding");
   }
 
-  const data = await loadBudgetWorkspaceData(context.workspaceId);
+  const data = await loadBudgetWorkspaceData(context.workspaceId, new Date(), { directory: true });
 
   return (
     <BudgetingWorkspace
@@ -58,6 +56,7 @@ async function BudgetingPageContent() {
         categories: data.categories,
         accounts: data.accounts,
         suggestions: data.suggestions,
+        editorOptionsLoaded: false,
       }}
     />
   );

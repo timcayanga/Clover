@@ -28,7 +28,11 @@ export function HomeTransactionReviewLauncher({ transactions }: { transactions: 
             <div className="dashboard-home__action-row-copy">
               <strong>{transaction.title}</strong>
               <small>
-                {new Date(transaction.date).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                {new Date(transaction.date).toLocaleDateString("en-PH", {
+                  month: "short",
+                  day: "numeric",
+                  timeZone: "UTC",
+                })}
                 {" · "}{formatCurrencyAmount(Math.abs(Number(transaction.amount)), transaction.currency)}
               </small>
               <small className="dashboard-home__review-reason">{transaction.reviewReasons.join(" · ")}</small>

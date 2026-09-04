@@ -1,0 +1,725 @@
+[
+  {
+    "file": "china/alipay.webp",
+    "region": "china",
+    "label": "Alipay",
+    "aliases": [],
+    "src": "/assets/banks/optimized/china/alipay-bf34656120.webp"
+  },
+  {
+    "file": "china/wechat pay.avif",
+    "region": "china",
+    "label": "WeChat Pay",
+    "aliases": [
+      "WeChat Pay"
+    ],
+    "src": "/assets/banks/optimized/china/wechat-pay-ed9521eb6d.webp"
+  },
+  {
+    "file": "hong kong/bank of china.png",
+    "region": "hong kong",
+    "label": "Bank Of China",
+    "aliases": [],
+    "src": "/assets/banks/optimized/hong kong/bank-of-china-2c374310c7.webp"
+  },
+  {
+    "file": "hong kong/bank of communications.jpeg",
+    "region": "hong kong",
+    "label": "Bank Of Communications",
+    "aliases": [
+      "Bank of Communications"
+    ],
+    "src": "/assets/banks/optimized/hong kong/bank-of-communications-86d72a7eaf.webp"
+  },
+  {
+    "file": "hong kong/bank of east asia.png",
+    "region": "hong kong",
+    "label": "Bank Of East Asia",
+    "aliases": [
+      "BEA"
+    ],
+    "src": "/assets/banks/optimized/hong kong/bank-of-east-asia-d09cf73fde.webp"
+  },
+  {
+    "file": "hong kong/china construction bank.png",
+    "region": "hong kong",
+    "label": "China Construction Bank",
+    "aliases": [
+      "CCB"
+    ],
+    "src": "/assets/banks/optimized/hong kong/china-construction-bank-7f8274f8af.webp"
+  },
+  {
+    "file": "hong kong/citibank.png",
+    "region": "hong kong",
+    "label": "Citibank",
+    "aliases": [],
+    "src": "/assets/banks/optimized/hong kong/citibank-04fd090c66.webp"
+  },
+  {
+    "file": "hong kong/dbs bank.jpeg",
+    "region": "hong kong",
+    "label": "DBS Bank",
+    "aliases": [
+      "DBS"
+    ],
+    "src": "/assets/banks/optimized/hong kong/dbs-bank-5b08bc9e7c.webp"
+  },
+  {
+    "file": "hong kong/hsbc.png",
+    "region": "hong kong",
+    "label": "HSBC",
+    "aliases": [],
+    "src": "/assets/banks/optimized/hong kong/hsbc-86845a86ae.webp"
+  },
+  {
+    "file": "hong kong/icbc.png",
+    "region": "hong kong",
+    "label": "ICBC",
+    "aliases": [],
+    "src": "/assets/banks/optimized/hong kong/icbc-a33000ddfa.webp"
+  },
+  {
+    "file": "hong kong/standard chartered.jpg",
+    "region": "hong kong",
+    "label": "Standard Chartered",
+    "aliases": [],
+    "src": "/assets/banks/optimized/hong kong/standard-chartered-ef71b0b605.webp"
+  },
+  {
+    "file": "indonesia/bank central asia.png",
+    "region": "indonesia",
+    "label": "Bank Central Asia",
+    "aliases": [
+      "BCA"
+    ],
+    "src": "/assets/banks/optimized/indonesia/bank-central-asia-86ee9c85ba.webp"
+  },
+  {
+    "file": "indonesia/bank danamon.png",
+    "region": "indonesia",
+    "label": "Bank Danamon",
+    "aliases": [],
+    "src": "/assets/banks/optimized/indonesia/bank-danamon-1a04cbf6f0.webp"
+  },
+  {
+    "file": "indonesia/bank mandiri.png",
+    "region": "indonesia",
+    "label": "Bank Mandiri",
+    "aliases": [
+      "Mandiri"
+    ],
+    "src": "/assets/banks/optimized/indonesia/bank-mandiri-15012ef466.webp"
+  },
+  {
+    "file": "indonesia/bank negara indonesia.png",
+    "region": "indonesia",
+    "label": "Bank Negara Indonesia",
+    "aliases": [
+      "BNI"
+    ],
+    "src": "/assets/banks/optimized/indonesia/bank-negara-indonesia-b53ab59874.webp"
+  },
+  {
+    "file": "indonesia/bank rakyat indonesia.png",
+    "region": "indonesia",
+    "label": "Bank Rakyat Indonesia",
+    "aliases": [
+      "BRI"
+    ],
+    "src": "/assets/banks/optimized/indonesia/bank-rakyat-indonesia-b32fd57970.webp"
+  },
+  {
+    "file": "indonesia/bank syariah indonesia.png",
+    "region": "indonesia",
+    "label": "Bank Syariah Indonesia",
+    "aliases": [
+      "BSI"
+    ],
+    "src": "/assets/banks/optimized/indonesia/bank-syariah-indonesia-86c8711a19.webp"
+  },
+  {
+    "file": "indonesia/bank tabungan negara.png",
+    "region": "indonesia",
+    "label": "Bank Tabungan Negara",
+    "aliases": [
+      "BTN"
+    ],
+    "src": "/assets/banks/optimized/indonesia/bank-tabungan-negara-f1b4a01ef8.webp"
+  },
+  {
+    "file": "indonesia/cimb.png",
+    "region": "indonesia",
+    "label": "CIMB",
+    "aliases": [],
+    "src": "/assets/banks/optimized/indonesia/cimb-cdae879c09.webp"
+  },
+  {
+    "file": "indonesia/dbs bank.jpeg",
+    "region": "indonesia",
+    "label": "DBS Bank",
+    "aliases": [
+      "DBS"
+    ],
+    "src": "/assets/banks/optimized/indonesia/dbs-bank-5b08bc9e7c.webp"
+  },
+  {
+    "file": "indonesia/hsbc.png",
+    "region": "indonesia",
+    "label": "HSBC",
+    "aliases": [],
+    "src": "/assets/banks/optimized/indonesia/hsbc-86845a86ae.webp"
+  },
+  {
+    "file": "indonesia/ocbc.png",
+    "region": "indonesia",
+    "label": "OCBC",
+    "aliases": [],
+    "src": "/assets/banks/optimized/indonesia/ocbc-67a885648c.webp"
+  },
+  {
+    "file": "indonesia/permata bank.png",
+    "region": "indonesia",
+    "label": "Permata Bank",
+    "aliases": [
+      "Permata"
+    ],
+    "src": "/assets/banks/optimized/indonesia/permata-bank-2a99e93661.webp"
+  },
+  {
+    "file": "indonesia/standard chartered.jpg",
+    "region": "indonesia",
+    "label": "Standard Chartered",
+    "aliases": [],
+    "src": "/assets/banks/optimized/indonesia/standard-chartered-ef71b0b605.webp"
+  },
+  {
+    "file": "malaysia/ambank.webp",
+    "region": "malaysia",
+    "label": "AmBank",
+    "aliases": [],
+    "src": "/assets/banks/optimized/malaysia/ambank-e70a8e0a49.webp"
+  },
+  {
+    "file": "malaysia/bank islam.jpeg",
+    "region": "malaysia",
+    "label": "Bank Islam",
+    "aliases": [],
+    "src": "/assets/banks/optimized/malaysia/bank-islam-64b862c96d.webp"
+  },
+  {
+    "file": "malaysia/bank rakyat.jpg",
+    "region": "malaysia",
+    "label": "Bank Rakyat",
+    "aliases": [],
+    "src": "/assets/banks/optimized/malaysia/bank-rakyat-81810709ea.webp"
+  },
+  {
+    "file": "malaysia/cimb.png",
+    "region": "malaysia",
+    "label": "CIMB",
+    "aliases": [],
+    "src": "/assets/banks/optimized/malaysia/cimb-cdae879c09.webp"
+  },
+  {
+    "file": "malaysia/hong leong bank.webp",
+    "region": "malaysia",
+    "label": "Hong Leong Bank",
+    "aliases": [],
+    "src": "/assets/banks/optimized/malaysia/hong-leong-bank-05590ef45d.webp"
+  },
+  {
+    "file": "malaysia/hsbc.png",
+    "region": "malaysia",
+    "label": "HSBC",
+    "aliases": [],
+    "src": "/assets/banks/optimized/malaysia/hsbc-86845a86ae.webp"
+  },
+  {
+    "file": "malaysia/maybank.jpg",
+    "region": "malaysia",
+    "label": "Maybank",
+    "aliases": [],
+    "src": "/assets/banks/optimized/malaysia/maybank-a836bd35c6.webp"
+  },
+  {
+    "file": "malaysia/ocbc.png",
+    "region": "malaysia",
+    "label": "OCBC",
+    "aliases": [],
+    "src": "/assets/banks/optimized/malaysia/ocbc-67a885648c.webp"
+  },
+  {
+    "file": "malaysia/public bank berhad.jpeg",
+    "region": "malaysia",
+    "label": "Public Bank Berhad",
+    "aliases": [],
+    "src": "/assets/banks/optimized/malaysia/public-bank-berhad-6f72f1008f.webp"
+  },
+  {
+    "file": "malaysia/rhb.png",
+    "region": "malaysia",
+    "label": "RHB",
+    "aliases": [],
+    "src": "/assets/banks/optimized/malaysia/rhb-337f38f6c8.webp"
+  },
+  {
+    "file": "malaysia/standard chartered.jpg",
+    "region": "malaysia",
+    "label": "Standard Chartered",
+    "aliases": [],
+    "src": "/assets/banks/optimized/malaysia/standard-chartered-ef71b0b605.webp"
+  },
+  {
+    "file": "malaysia/uob.webp",
+    "region": "malaysia",
+    "label": "UOB",
+    "aliases": [
+      "United Overseas Bank"
+    ],
+    "src": "/assets/banks/optimized/malaysia/uob-fb99f559b2.webp"
+  },
+  {
+    "file": "netherlands/abn amro bank nv",
+    "region": "netherlands",
+    "label": "ABN AMRO Bank NV",
+    "aliases": [
+      "ABN AMRO"
+    ],
+    "src": "/assets/banks/optimized/netherlands/abn-amro-bank-nv-b750f103f8.webp"
+  },
+  {
+    "file": "netherlands/asn bank.png",
+    "region": "netherlands",
+    "label": "ASN Bank",
+    "aliases": [],
+    "src": "/assets/banks/optimized/netherlands/asn-bank-e16547d9d1.webp"
+  },
+  {
+    "file": "netherlands/ayvens bank.png",
+    "region": "netherlands",
+    "label": "Ayvens Bank",
+    "aliases": [],
+    "src": "/assets/banks/optimized/netherlands/ayvens-bank-b472a50bfd.webp"
+  },
+  {
+    "file": "netherlands/bng bank nv.jpeg",
+    "region": "netherlands",
+    "label": "BNG Bank NV",
+    "aliases": [
+      "BNG Bank"
+    ],
+    "src": "/assets/banks/optimized/netherlands/bng-bank-nv-424a431fa6.webp"
+  },
+  {
+    "file": "netherlands/bunq.png",
+    "region": "netherlands",
+    "label": "bunq",
+    "aliases": [],
+    "src": "/assets/banks/optimized/netherlands/bunq-53cddfe35d.webp"
+  },
+  {
+    "file": "netherlands/cooperatieve rabobank ua.png",
+    "region": "netherlands",
+    "label": "Cooperatieve Rabobank UA",
+    "aliases": [
+      "Rabobank"
+    ],
+    "src": "/assets/banks/optimized/netherlands/cooperatieve-rabobank-ua-cafc591fe1.webp"
+  },
+  {
+    "file": "netherlands/ing.jpeg",
+    "region": "netherlands",
+    "label": "Ing",
+    "aliases": [],
+    "src": "/assets/banks/optimized/netherlands/ing-639caf9903.webp"
+  },
+  {
+    "file": "netherlands/nationale nederlanden.png",
+    "region": "netherlands",
+    "label": "Nationale Nederlanden",
+    "aliases": [],
+    "src": "/assets/banks/optimized/netherlands/nationale-nederlanden-3c4ae4f8f8.webp"
+  },
+  {
+    "file": "netherlands/natwest.jpg",
+    "region": "netherlands",
+    "label": "Natwest",
+    "aliases": [],
+    "src": "/assets/banks/optimized/netherlands/natwest-00aef33f5d.webp"
+  },
+  {
+    "file": "netherlands/nibc bank.jpeg",
+    "region": "netherlands",
+    "label": "NIBC Bank",
+    "aliases": [],
+    "src": "/assets/banks/optimized/netherlands/nibc-bank-5b72da71aa.webp"
+  },
+  {
+    "file": "netherlands/nwb bank.jpeg",
+    "region": "netherlands",
+    "label": "NWB Bank",
+    "aliases": [],
+    "src": "/assets/banks/optimized/netherlands/nwb-bank-883136aab0.webp"
+  },
+  {
+    "file": "philippines/atome.png",
+    "region": "philippines",
+    "label": "Atome",
+    "aliases": [],
+    "src": "/assets/banks/optimized/philippines/atome-50c1acfa1b.webp"
+  },
+  {
+    "file": "singapore/airwallex",
+    "region": "singapore",
+    "label": "Airwallex",
+    "aliases": [],
+    "src": "/assets/banks/optimized/singapore/airwallex-71ed056755.webp"
+  },
+  {
+    "file": "singapore/bank of singapore.webp",
+    "region": "singapore",
+    "label": "Bank Of Singapore",
+    "aliases": [],
+    "src": "/assets/banks/optimized/singapore/bank-of-singapore-72d3b6292f.webp"
+  },
+  {
+    "file": "singapore/bnp paribas.png",
+    "region": "singapore",
+    "label": "BNP Paribas",
+    "aliases": [],
+    "src": "/assets/banks/optimized/singapore/bnp-paribas-dfdb881449.webp"
+  },
+  {
+    "file": "singapore/citibank.png",
+    "region": "singapore",
+    "label": "Citibank",
+    "aliases": [],
+    "src": "/assets/banks/optimized/singapore/citibank-04fd090c66.webp"
+  },
+  {
+    "file": "singapore/dbs bank.jpeg",
+    "region": "singapore",
+    "label": "DBS Bank",
+    "aliases": [
+      "DBS"
+    ],
+    "src": "/assets/banks/optimized/singapore/dbs-bank-5b08bc9e7c.webp"
+  },
+  {
+    "file": "singapore/hsbc.png",
+    "region": "singapore",
+    "label": "HSBC",
+    "aliases": [],
+    "src": "/assets/banks/optimized/singapore/hsbc-86845a86ae.webp"
+  },
+  {
+    "file": "singapore/maybank.jpg",
+    "region": "singapore",
+    "label": "Maybank",
+    "aliases": [],
+    "src": "/assets/banks/optimized/singapore/maybank-a836bd35c6.webp"
+  },
+  {
+    "file": "singapore/ocbc.png",
+    "region": "singapore",
+    "label": "OCBC",
+    "aliases": [],
+    "src": "/assets/banks/optimized/singapore/ocbc-67a885648c.webp"
+  },
+  {
+    "file": "singapore/rhb.png",
+    "region": "singapore",
+    "label": "RHB",
+    "aliases": [],
+    "src": "/assets/banks/optimized/singapore/rhb-337f38f6c8.webp"
+  },
+  {
+    "file": "singapore/uob.webp",
+    "region": "singapore",
+    "label": "UOB",
+    "aliases": [
+      "United Overseas Bank"
+    ],
+    "src": "/assets/banks/optimized/singapore/uob-fb99f559b2.webp"
+  },
+  {
+    "file": "thailand/bangkok bank.png",
+    "region": "thailand",
+    "label": "Bangkok Bank",
+    "aliases": [],
+    "src": "/assets/banks/optimized/thailand/bangkok-bank-d94864e2ab.webp"
+  },
+  {
+    "file": "thailand/cimb.png",
+    "region": "thailand",
+    "label": "CIMB",
+    "aliases": [],
+    "src": "/assets/banks/optimized/thailand/cimb-cdae879c09.webp"
+  },
+  {
+    "file": "thailand/kasikorn bank.png",
+    "region": "thailand",
+    "label": "Kasikorn Bank",
+    "aliases": [
+      "Kasikorn",
+      "KBank"
+    ],
+    "src": "/assets/banks/optimized/thailand/kasikorn-bank-184ad80655.webp"
+  },
+  {
+    "file": "thailand/krungsri bank.jpg",
+    "region": "thailand",
+    "label": "Krungsri Bank",
+    "aliases": [],
+    "src": "/assets/banks/optimized/thailand/krungsri-bank-7936f12870.webp"
+  },
+  {
+    "file": "thailand/krungthai.webp",
+    "region": "thailand",
+    "label": "Krungthai",
+    "aliases": [
+      "Krung Thai Bank"
+    ],
+    "src": "/assets/banks/optimized/thailand/krungthai-c7ee44da5f.webp"
+  },
+  {
+    "file": "thailand/scb.jpg",
+    "region": "thailand",
+    "label": "SCB",
+    "aliases": [
+      "Siam Commercial Bank"
+    ],
+    "src": "/assets/banks/optimized/thailand/scb-5d5b6a6bfe.webp"
+  },
+  {
+    "file": "thailand/tmb.jpg",
+    "region": "thailand",
+    "label": "Tmb",
+    "aliases": [],
+    "src": "/assets/banks/optimized/thailand/tmb-e102d093b5.webp"
+  },
+  {
+    "file": "thailand/uob.webp",
+    "region": "thailand",
+    "label": "UOB",
+    "aliases": [
+      "United Overseas Bank"
+    ],
+    "src": "/assets/banks/optimized/thailand/uob-fb99f559b2.webp"
+  },
+  {
+    "file": "uk/american express.png",
+    "region": "uk",
+    "label": "American Express",
+    "aliases": [
+      "Amex"
+    ],
+    "src": "/assets/banks/optimized/uk/american-express-ee6c10eb2b.webp"
+  },
+  {
+    "file": "uk/barclays.jpg",
+    "region": "uk",
+    "label": "Barclays",
+    "aliases": [],
+    "src": "/assets/banks/optimized/uk/barclays-e4b9692525.webp"
+  },
+  {
+    "file": "uk/chase bank.png",
+    "region": "uk",
+    "label": "Chase Bank",
+    "aliases": [],
+    "src": "/assets/banks/optimized/uk/chase-bank-64f4e3cfd9.webp"
+  },
+  {
+    "file": "uk/first direct.png",
+    "region": "uk",
+    "label": "First Direct",
+    "aliases": [],
+    "src": "/assets/banks/optimized/uk/first-direct-f2da4483c5.webp"
+  },
+  {
+    "file": "uk/halifax.jpg",
+    "region": "uk",
+    "label": "Halifax",
+    "aliases": [],
+    "src": "/assets/banks/optimized/uk/halifax-9084d1c7ae.webp"
+  },
+  {
+    "file": "uk/lloyds bank.jpg",
+    "region": "uk",
+    "label": "Lloyds Bank",
+    "aliases": [],
+    "src": "/assets/banks/optimized/uk/lloyds-bank-2c6a4fe5dc.webp"
+  },
+  {
+    "file": "uk/metro bank.jpeg",
+    "region": "uk",
+    "label": "Metro Bank",
+    "aliases": [],
+    "src": "/assets/banks/optimized/uk/metro-bank-ccb94ed71f.webp"
+  },
+  {
+    "file": "uk/monzo.png",
+    "region": "uk",
+    "label": "Monzo",
+    "aliases": [],
+    "src": "/assets/banks/optimized/uk/monzo-532884a9eb.webp"
+  },
+  {
+    "file": "uk/nationwide.webp",
+    "region": "uk",
+    "label": "Nationwide",
+    "aliases": [],
+    "src": "/assets/banks/optimized/uk/nationwide-2b84961bc3.webp"
+  },
+  {
+    "file": "uk/natwest.jpg",
+    "region": "uk",
+    "label": "Natwest",
+    "aliases": [],
+    "src": "/assets/banks/optimized/uk/natwest-00aef33f5d.webp"
+  },
+  {
+    "file": "uk/revolut.png",
+    "region": "uk",
+    "label": "Revolut",
+    "aliases": [],
+    "src": "/assets/banks/optimized/uk/revolut-ff9c4cb006.webp"
+  },
+  {
+    "file": "uk/royal bank of scotland.png",
+    "region": "uk",
+    "label": "Royal Bank Of Scotland",
+    "aliases": [
+      "RBS"
+    ],
+    "src": "/assets/banks/optimized/uk/royal-bank-of-scotland-349eb8b211.webp"
+  },
+  {
+    "file": "uk/santander.png",
+    "region": "uk",
+    "label": "Santander",
+    "aliases": [],
+    "src": "/assets/banks/optimized/uk/santander-4b3191bd59.webp"
+  },
+  {
+    "file": "uk/starling bank.webp",
+    "region": "uk",
+    "label": "Starling Bank",
+    "aliases": [],
+    "src": "/assets/banks/optimized/uk/starling-bank-fb3e871fe7.webp"
+  },
+  {
+    "file": "vietnam/acb.png",
+    "region": "vietnam",
+    "label": "ACB",
+    "aliases": [],
+    "src": "/assets/banks/optimized/vietnam/acb-b2e4243e43.webp"
+  },
+  {
+    "file": "vietnam/bidv.jpg",
+    "region": "vietnam",
+    "label": "BIDV",
+    "aliases": [],
+    "src": "/assets/banks/optimized/vietnam/bidv-c7ba0896db.webp"
+  },
+  {
+    "file": "vietnam/hd bank.png",
+    "region": "vietnam",
+    "label": "HD Bank",
+    "aliases": [
+      "HDBank"
+    ],
+    "src": "/assets/banks/optimized/vietnam/hd-bank-f5934b5667.webp"
+  },
+  {
+    "file": "vietnam/hsbc.png",
+    "region": "vietnam",
+    "label": "HSBC",
+    "aliases": [],
+    "src": "/assets/banks/optimized/vietnam/hsbc-86845a86ae.webp"
+  },
+  {
+    "file": "vietnam/mb bank.png",
+    "region": "vietnam",
+    "label": "MB Bank",
+    "aliases": [
+      "MBBank"
+    ],
+    "src": "/assets/banks/optimized/vietnam/mb-bank-999dbc2638.webp"
+  },
+  {
+    "file": "vietnam/saigon commercial bank.jpeg",
+    "region": "vietnam",
+    "label": "Saigon Commercial Bank",
+    "aliases": [],
+    "src": "/assets/banks/optimized/vietnam/saigon-commercial-bank-0846617dec.webp"
+  },
+  {
+    "file": "vietnam/saigon hanoi bank.jpeg",
+    "region": "vietnam",
+    "label": "Saigon Hanoi Bank",
+    "aliases": [
+      "SHB"
+    ],
+    "src": "/assets/banks/optimized/vietnam/saigon-hanoi-bank-1dacda0771.webp"
+  },
+  {
+    "file": "vietnam/standard chartered.jpg",
+    "region": "vietnam",
+    "label": "Standard Chartered",
+    "aliases": [],
+    "src": "/assets/banks/optimized/vietnam/standard-chartered-ef71b0b605.webp"
+  },
+  {
+    "file": "vietnam/techcom bank.png",
+    "region": "vietnam",
+    "label": "Techcom Bank",
+    "aliases": [
+      "Techcombank"
+    ],
+    "src": "/assets/banks/optimized/vietnam/techcom-bank-9be28bc4e1.webp"
+  },
+  {
+    "file": "vietnam/tpbank.png",
+    "region": "vietnam",
+    "label": "TPBank",
+    "aliases": [
+      "TP Bank"
+    ],
+    "src": "/assets/banks/optimized/vietnam/tpbank-f548430a30.webp"
+  },
+  {
+    "file": "vietnam/vib bank.png",
+    "region": "vietnam",
+    "label": "VIB Bank",
+    "aliases": [],
+    "src": "/assets/banks/optimized/vietnam/vib-bank-fdce04ddec.webp"
+  },
+  {
+    "file": "vietnam/vietcombank.png",
+    "region": "vietnam",
+    "label": "Vietcombank",
+    "aliases": [],
+    "src": "/assets/banks/optimized/vietnam/vietcombank-47b4679015.webp"
+  },
+  {
+    "file": "vietnam/vietin bank.png",
+    "region": "vietnam",
+    "label": "Vietin Bank",
+    "aliases": [
+      "VietinBank"
+    ],
+    "src": "/assets/banks/optimized/vietnam/vietin-bank-17bda4a770.webp"
+  },
+  {
+    "file": "vietnam/vpbank.png",
+    "region": "vietnam",
+    "label": "VPBank",
+    "aliases": [
+      "VP Bank"
+    ],
+    "src": "/assets/banks/optimized/vietnam/vpbank-9d26c8d1a7.webp"
+  }
+]

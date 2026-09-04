@@ -45,6 +45,8 @@ const prepareSchema = z.object({
   bankName: z.string().optional(),
   trainingMode: z.enum(["bank_context", "generic_parser"]).optional(),
   importMode: z.enum(["statement", "receipt", "notes", "portfolio", "account_detail"]).optional(),
+  sourceTimezone: z.string().trim().max(100).optional(),
+  sourceLocale: z.string().trim().max(64).optional(),
 });
 
 const upsertUploadBankHint = async (params: {
@@ -200,6 +202,8 @@ export async function POST(request: Request) {
       storageKey,
       status: "processing",
       rawExpiresAt: payload.skipUpload ? null : new Date(Date.now() + 72 * 60 * 60 * 1000),
+      sourceTimezone: payload.sourceTimezone ?? null,
+      sourceLocale: payload.sourceLocale ?? null,
     });
 
     if (!importFile) {

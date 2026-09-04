@@ -2013,7 +2013,50 @@ const normalizeImportedImageBytes = async (
       buffer: output,
       dataUrl: `data:image/jpeg;base64,${output.toString("base64")}`,
     } satisfies NormalizedImageBytes;
-  } catch {
+  } catch (error) {
+    if (isHeicLike) {
+      try {
+        // libvips/libheif applies a conservative reference-count ceiling that
+        // rejects some valid iPhone HEIC photos. The WASM decoder is a bounded
+        // fallback for those files; client uploads still convert HEIC first.
+        const decodeHeic = nodeRequire("heic-decode") as (params: {
+          buffer: Buffer | Uint8Array;
+        }) => Promise<{ width: number; height: number; data: Uint8ClampedArray }>;
+        const sharpModule = await import("sharp");
+        const decoded = await decodeHeic({ buffer: Buffer.from(bytes) });
+        const rawBuffer = Buffer.from(decoded.data.buffer, decoded.data.byteOffset, decoded.data.byteLength);
+        const longestEdge = Math.max(decoded.width, decoded.height);
+        const resizeLimit = profile === "receipt" ? 1_800 : 2_200;
+        const image = sharpModule.default(rawBuffer, {
+          raw: { width: decoded.width, height: decoded.height, channels: 4 },
+        });
+        if (longestEdge > resizeLimit) {
+          image.resize({
+            width: decoded.width >= decoded.height ? resizeLimit : undefined,
+            height: decoded.height > decoded.width ? resizeLimit : undefined,
+            fit: "inside",
+            withoutEnlargement: true,
+          });
+        }
+        image.removeAlpha().flatten({ background: "#ffffff" });
+        if (profile === "receipt") {
+          image.grayscale().normalize().linear(1.08, -6).sharpen({ sigma: 1.1, m1: 0.6, m2: 2.2 }).median(1);
+        } else {
+          image.normalize().sharpen({ sigma: 0.8, m1: 0.3, m2: 1.2 });
+        }
+        const output = await image.jpeg({ quality: 88, chromaSubsampling: "4:4:4" }).toBuffer();
+        return {
+          mimeType: "image/jpeg",
+          buffer: output,
+          dataUrl: `data:image/jpeg;base64,${output.toString("base64")}`,
+        } satisfies NormalizedImageBytes;
+      } catch (fallbackError) {
+        throw new Error(
+          "Clover could not decode this HEIC photo. Please choose it again from Photos so Clover can convert it, or save it as JPEG and retry.",
+          { cause: fallbackError ?? error }
+        );
+      }
+    }
     const fallbackMimeType = mimeType || "image/png";
     const fallbackBuffer = Buffer.from(bytes);
     return {
@@ -2548,6 +2591,17 @@ export const readUploadedFileText = async (
   const importMode = options?.importMode ?? null;
 
   if (
+    /\.(?:ofx|qfx|qif|mt940|sta|xml|json)$/.test(lowerName) ||
+    /(?:x-ofx|intu\.qfx|application\/qif|text\/qif|mt940|application\/xml|text\/xml|application\/json)/.test(lowerType)
+  ) {
+    if (typeof file.arrayBuffer === "function") {
+      return new TextDecoder("utf-8", { fatal: false }).decode(await file.arrayBuffer());
+    }
+    if (typeof file.text === "function") return file.text();
+    throw new Error("Unable to read imported financial export.");
+  }
+
+  if (
     lowerName.endsWith(".csv") ||
     lowerName.endsWith(".tsv") ||
     lowerType.includes("csv") ||
@@ -2618,7 +2672,7 @@ export const readUploadedFileText = async (
     });
   }
 
-  throw new Error("Only PDF, CSV, TSV, XLSX, and common image files are supported.");
+  throw new Error("Only PDF, CSV, TSV, spreadsheets, financial exports, and common image files are supported.");
 };
 
 export const readImportedFileTextWithCacheInfo = async (
@@ -2788,6 +2842,13 @@ export const readImportedFileTextWithCacheInfo = async (
       /csv|tab-separated-values/.test(`${lowerName} ${params.fileType}`)
     ) {
       return decodeStructuredDelimitedBytes(bytes);
+    }
+
+    if (
+      /\.(?:ofx|qfx|qif|mt940|sta|xml|json)$/.test(lowerName) ||
+      /(?:x-ofx|intu\.qfx|application\/qif|text\/qif|mt940|application\/xml|text\/xml|application\/json)/.test(params.fileType.toLowerCase())
+    ) {
+      return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
     }
 
     if (

@@ -14,7 +14,7 @@ const main = async () => {
       readFile(join(webRoot, "app/api/imports/[importId]/events/route.ts"), "utf8"),
       readFile(join(webRoot, "app/api/accounts/route.ts"), "utf8"),
       readFile(join(webRoot, "app/accounts/page.tsx"), "utf8"),
-      readFile(join(webRoot, "app/dashboard/page.tsx"), "utf8"),
+      readFile(join(webRoot, "components/dashboard-page-content.tsx"), "utf8"),
       readFile(join(webRoot, "lib/import-enrichment-jobs.ts"), "utf8"),
     ]);
 

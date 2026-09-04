@@ -1,952 +1,231 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { InfoTooltip } from "@/components/info-tooltip";
+import { useEffect, useRef, useState } from "react";
+import { CloverShell } from "@/components/clover-shell";
+import { CollectionBack, useCollectionSelection } from "@/components/collection-navigation";
+import { CollectionCard } from "@/components/collection-card";
+import { getBudgetAppearance, budgetIcons } from "@/lib/budget-appearance";
 import { formatCurrencyAmount } from "@/lib/currency-format";
-
-type BudgetKind = "spend_limit" | "savings_target";
-type BudgetScope = "global" | "account" | "category";
-type BudgetCadence = "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "annual";
-type BudgetStage = "safe" | "watch" | "warning" | "critical" | "exceeded";
-
-type BudgetItem = {
-  id: string;
-  name: string;
-  kind: BudgetKind;
-  scope: BudgetScope;
-  cadence: BudgetCadence;
-  currency: string;
-  targetAmount: number;
-  actualAmount: number;
-  progressPercent: number;
-  remainingAmount: number;
-  stage: BudgetStage;
-  scopeLabel: string;
-  periodLabel: string;
-  nextThreshold: number | null;
-  accountId: string | null;
-  accountName: string | null;
-  categoryId: string | null;
-  categoryName: string | null;
-  kindLabel: string;
-  statusLabel: string;
-  statusDetail: string;
-  isAtRisk: boolean;
-  plannedAmount: number;
-  plannedCount: number;
-  projectedAmount: number;
-  projectedProgressPercent: number;
-  isActive: boolean;
-};
-
-type BudgetAlert = BudgetItem & {
-  tone: "positive" | "warning" | "danger";
-  actionLabel: string;
-  href: string;
-};
-
-type BudgetHistoryPoint = {
-  label: string;
-  periodStart: string;
-  periodEnd: string;
-  actualAmount: number;
-  targetAmount: number;
-  progressPercent: number;
-  stage: BudgetStage;
-};
-
-type BudgetHistoryTransaction = {
-  id: string;
-  date: string;
-  amount: number;
-  type: "income" | "expense";
-  merchantName: string;
-  categoryName: string | null;
-};
-
-type BudgetHistoryResponse = {
-  budget: Pick<
-    BudgetItem,
-    "id" | "name" | "kind" | "scope" | "cadence" | "currency" | "targetAmount" | "accountId" | "accountName" | "categoryId" | "categoryName"
-  >;
-  history: {
-    points: BudgetHistoryPoint[];
-    recentTransactions: BudgetHistoryTransaction[];
-  };
-};
-
-type BudgetOverview = {
-  budgets: BudgetItem[];
-  inactiveBudgets: BudgetItem[];
-  alerts: BudgetAlert[];
-  activeBudgetCount: number;
-  totalTargetAmount: number;
-  totalActualAmount: number;
-  totalProgressPercent: number;
-  highestAlert: BudgetItem | null;
-  uncategorizedTransactionCount: number;
-  uncategorizedAmount: number;
-  overlappingBudgetNames?: string[];
-};
-
-type BudgetSuggestion = {
-  id: string;
-  title: string;
-  detail: string;
-  amount: number;
-  currency: string;
-  kind: BudgetKind;
-  cadence: BudgetCadence;
-  accountId: string | null;
-  categoryId: string | null;
-  actionLabel: string;
-  tone: "positive" | "warning" | "neutral";
-};
-
-type BudgetExample = {
-  id: string;
-  label: string;
-  emoji: string;
-  amount: number;
-  kind: BudgetKind;
-  categoryId: string;
-};
-
-type BudgetCategoryOption = {
-  id: string;
-  name: string;
-};
-
-type BudgetAccountOption = {
-  id: string;
-  name: string;
-  currency: string;
-  type: string;
-};
+import { formatAccountOptionLabel } from "@/lib/account-option-label";
+import { ContextualAskClover } from "@/components/contextual-ask-clover";
+import type { BudgetProgress, BudgetOverview, BudgetSuggestion, BudgetHistory } from "@/lib/budgeting";
 
 type BudgetingData = {
-  budgets: BudgetItem[];
+  editorOptionsLoaded?: boolean;
+  budgets: BudgetProgress[];
   overview: BudgetOverview;
-  categories: BudgetCategoryOption[];
-  accounts: BudgetAccountOption[];
+  categories: Array<{ id: string; name: string }>;
+  accounts: Array<{ id: string; name: string; currency: string; type: string }>;
   suggestions: BudgetSuggestion[];
 };
-
-type BudgetFormState = {
-  kind: BudgetKind;
-  name: string;
-  categoryId: string;
-  accountId: string;
-  cadence: BudgetCadence;
-  targetAmount: string;
-  currency: string;
+type BudgetForm = {
+  name: string; emoji: string | null;
+  kind: BudgetProgress["kind"]; scope: BudgetProgress["scope"]; cadence: BudgetProgress["cadence"];
+  currency: string; targetAmount: string; accountId: string | null; categoryId: string | null;
 };
+const cadenceLabels = { daily: "Daily", weekly: "Weekly", biweekly: "Every 2 weeks", monthly: "Monthly", quarterly: "Quarterly", annual: "Yearly" };
+const money = (value: number, currency: string) => formatCurrencyAmount(value, currency);
+const percent = (value: number) => `${Math.max(0, Math.round(value))}%`;
+const barWidth = (value: number) => `${Math.min(100, Math.max(0, value))}%`;
 
-type BudgetingWorkspaceProps = {
-  initialData: BudgetingData;
-};
-
-const cadenceLabels: Record<BudgetCadence, string> = {
-  daily: "Daily",
-  weekly: "Weekly",
-  biweekly: "Every 2 weeks",
-  monthly: "Monthly",
-  quarterly: "Quarterly",
-  annual: "Yearly",
-};
-
-const scopeLabels: Record<BudgetScope, string> = {
-  global: "All spending",
-  account: "Account",
-  category: "Category",
-};
-
-const formatCurrency = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
-const formatShortDate = (value: string) =>
-  new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-  }).format(new Date(value));
-
-const defaultFormState = (currency = "PHP"): BudgetFormState => ({
-  kind: "spend_limit",
-  name: "",
-  categoryId: "__all__",
-  accountId: "__none__",
-  cadence: "monthly",
-  targetAmount: "",
-  currency,
-});
-
-const toPercentage = (value: number) => `${Math.max(0, Math.round(value))}%`;
-
-const getBudgetDraftName = (form: BudgetFormState, categories: BudgetCategoryOption[], accounts: BudgetAccountOption[]) => {
-  const customName = form.name.trim();
-  if (customName) {
-    return customName;
-  }
-
-  if (form.kind === "savings_target") {
-    return "Savings target";
-  }
-
-  if (form.accountId !== "__none__") {
-    return accounts.find((account) => account.id === form.accountId)?.name ?? "Account budget";
-  }
-
-  if (form.categoryId === "__all__") {
-    return "All spending";
-  }
-
-  return categories.find((category) => category.id === form.categoryId)?.name ?? "Category";
-};
-
-const getBudgetScopeHint = (form: BudgetFormState) => {
-  if (form.kind === "savings_target") return "Savings are measured across this profile's income and spending.";
-  if (form.accountId !== "__none__") return "Only transactions from this account are counted.";
-  if (form.categoryId !== "__all__") return "Only transactions in this category are counted.";
-  return "All spending in this Clover profile is counted.";
-};
-
-export function BudgetingWorkspace({ initialData }: BudgetingWorkspaceProps) {
-  const [data, setData] = useState<BudgetingData>(initialData);
-  const [isEditorOpen, setIsEditorOpen] = useState(false);
-  const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
-  const [editorPreset, setEditorPreset] = useState<BudgetFormState | null>(null);
-  const [form, setForm] = useState<BudgetFormState>(() => defaultFormState(initialData.budgets[0]?.currency ?? "PHP"));
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [historyBudgetId, setHistoryBudgetId] = useState<string | null>(null);
-  const [historyData, setHistoryData] = useState<BudgetHistoryResponse | null>(null);
-  const [historyLoading, setHistoryLoading] = useState(false);
+export function BudgetingWorkspace({ initialData }: { initialData: BudgetingData }) {
+  const [data, setData] = useState(initialData);
+  const [selectedId, selectBudget] = useCollectionSelection("budget");
+  const [editorId, selectEditor] = useCollectionSelection("edit");
+  const [mobile, setMobile] = useState(false);
+  const [history, setHistory] = useState<BudgetHistory | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
-
-  const editingBudget = useMemo(
-    () => [...data.budgets, ...data.overview.inactiveBudgets].find((budget) => budget.id === editingBudgetId) ?? null,
-    [data.budgets, data.overview.inactiveBudgets, editingBudgetId]
-  );
-
-  useEffect(() => {
-    document.body.dataset.budgetEditorOpen = isEditorOpen ? "true" : "false";
-    return () => {
-      if (document.body.dataset.budgetEditorOpen === "true") {
-        document.body.dataset.budgetEditorOpen = "false";
-      }
-    };
-  }, [isEditorOpen]);
+  const [historyVersion, setHistoryVersion] = useState(0);
+  const budgets = [...data.budgets, ...data.overview.inactiveBudgets];
+  const selectedBudget = budgets.find((budget) => budget.id === selectedId) ?? null;
+  const editingBudget = budgets.find((budget) => budget.id === editorId) ?? null;
+  const editorOpen = editorId === "new" || Boolean(editingBudget);
 
   useEffect(() => {
-    if (!historyBudgetId) {
-      return;
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setHistoryBudgetId(null);
-        setHistoryData(null);
-        setHistoryError(null);
-        setHistoryLoading(false);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [historyBudgetId]);
-
+    const media = window.matchMedia("(max-width: 1100px)");
+    const update = () => setMobile(media.matches);
+    update(); media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   useEffect(() => {
-    if (!isEditorOpen) {
-      return;
-    }
-
-    const nextCurrency = editingBudget?.currency ?? data.budgets[0]?.currency ?? "PHP";
-    setForm(
-      editingBudget
-        ? {
-            name: editingBudget.name,
-            categoryId: editingBudget.categoryId ?? "__all__",
-            accountId: editingBudget.accountId ?? "__none__",
-            kind: editingBudget.kind,
-            cadence: editingBudget.cadence,
-            targetAmount: String(editingBudget.targetAmount),
-            currency: editingBudget.currency,
-          }
-        : editorPreset ?? defaultFormState(nextCurrency)
-    );
-  }, [data.budgets, editingBudget, editorPreset, isEditorOpen]);
-
-  const visibleBudgets = data.budgets;
-  const pausedBudgets = data.overview.inactiveBudgets;
-  const onTrackBudgets = visibleBudgets.filter((budget) => !budget.isAtRisk);
-  const atRiskBudgets = visibleBudgets.filter((budget) => budget.isAtRisk);
-  const suggestions = data.suggestions.slice(0, 2);
-  const budgetCurrencies = [...new Set(visibleBudgets.map((budget) => budget.currency.toUpperCase()))];
-  const selectedHistoryBudget = historyBudgetId ? data.budgets.find((budget) => budget.id === historyBudgetId) ?? null : null;
-  const budgetExamples = useMemo<BudgetExample[]>(() => {
-    const categoryFor = (terms: string[]) =>
-      data.categories.find((category) => terms.some((term) => category.name.toLowerCase().includes(term))) ?? null;
-    const categoryExamples = [
-      { id: "groceries", label: "Groceries", emoji: "🛒", terms: ["grocery", "groceries", "food"], amount: 10000 },
-      { id: "shopping", label: "Shopping", emoji: "🛍️", terms: ["shopping", "clothing", "retail"], amount: 5000 },
-      { id: "dining", label: "Eating out", emoji: "🍽️", terms: ["dining", "restaurant", "food"], amount: 5000 },
-    ]
-      .map((example): BudgetExample | null => {
-        const category = categoryFor(example.terms);
-        return category
-          ? { id: example.id, label: category.name, emoji: example.emoji, amount: example.amount, kind: "spend_limit" as const, categoryId: category.id }
-          : null;
-      })
-      .filter((example): example is BudgetExample => example !== null);
-
-    return [
-      ...categoryExamples.filter((example, index, examples) => examples.findIndex((candidate) => candidate.categoryId === example.categoryId) === index),
-      { id: "all-spending", label: "All spending", emoji: "🧾", amount: 30000, kind: "spend_limit", categoryId: "__all__" },
-      { id: "save-monthly", label: "Save monthly", emoji: "🌱", amount: 10000, kind: "savings_target", categoryId: "__all__" },
-    ].slice(0, 4) as BudgetExample[];
-  }, [data.categories]);
-
-  const budgetGroups = useMemo(() => {
-    const grouped = new Map<string, BudgetItem[]>();
-    for (const budget of visibleBudgets) {
-      const group = grouped.get(budget.name) ?? [];
-      group.push(budget);
-      grouped.set(budget.name, group);
-    }
-
-    return [...grouped.entries()]
-      .map(([name, budgets]) => ({
-        name,
-        budgets: [...budgets].sort((left, right) => {
-          const cadenceOrder: Record<BudgetCadence, number> = { daily: 0, weekly: 1, biweekly: 2, monthly: 3, quarterly: 4, annual: 5 };
-          return cadenceOrder[left.cadence] - cadenceOrder[right.cadence] || right.progressPercent - left.progressPercent;
-        }),
-        maxProgress: Math.max(...budgets.map((budget) => budget.progressPercent)),
-      }))
-      .sort((left, right) => right.maxProgress - left.maxProgress || left.name.localeCompare(right.name));
-  }, [visibleBudgets]);
-
-  const resetEditor = () => {
-    setEditingBudgetId(null);
-    setEditorPreset(null);
-    setError(null);
-    setIsEditorOpen(false);
-  };
-
-  const openCreateEditor = () => {
-    setEditingBudgetId(null);
-    setEditorPreset(null);
-    setError(null);
-    setIsEditorOpen(true);
-  };
-
-  const openBudgetExample = (example: BudgetExample) => {
-    setEditingBudgetId(null);
-    setError(null);
-    setEditorPreset({
-      kind: example.kind,
-      name: "",
-      categoryId: example.categoryId,
-      accountId: "__none__",
-      cadence: "monthly",
-      targetAmount: String(example.amount),
-      currency: data.budgets[0]?.currency ?? data.accounts[0]?.currency ?? "PHP",
-    });
-    setIsEditorOpen(true);
-  };
-
-  const openSuggestion = (suggestion: BudgetSuggestion) => {
-    setEditingBudgetId(null);
-    setError(null);
-    setEditorPreset({
-      kind: suggestion.kind,
-      name: "",
-      categoryId: suggestion.categoryId ?? "__all__",
-      accountId: suggestion.accountId ?? "__none__",
-      cadence: suggestion.cadence,
-      targetAmount: String(suggestion.amount),
-      currency: suggestion.currency,
-    });
-    setIsEditorOpen(true);
-  };
-
-  const openEditEditor = (budgetId: string) => {
-    setEditingBudgetId(budgetId);
-    setEditorPreset(null);
-    setError(null);
-    setIsEditorOpen(true);
-  };
-
-  const openCopyEditor = (budget: BudgetItem) => {
-    setEditingBudgetId(null);
-    setError(null);
-    setEditorPreset({
-      name: "",
-      kind: budget.kind,
-      categoryId: budget.categoryId ?? "__all__",
-      accountId: budget.accountId ?? "__none__",
-      cadence: budget.cadence,
-      targetAmount: String(budget.targetAmount),
-      currency: budget.currency,
-    });
-    setIsEditorOpen(true);
-  };
-
-  const closeHistoryModal = () => {
-    setHistoryBudgetId(null);
-    setHistoryData(null);
-    setHistoryError(null);
-    setHistoryLoading(false);
-  };
-
-  const openHistoryModal = async (budget: BudgetItem) => {
-    setIsEditorOpen(false);
-    setEditingBudgetId(null);
-    setEditorPreset(null);
-    setError(null);
-    setHistoryBudgetId(budget.id);
-    setHistoryData(null);
-    setHistoryError(null);
-    setHistoryLoading(true);
-
-    try {
-      const response = await fetch(`/api/budgets/${budget.id}`);
-      const result = (await response.json()) as Partial<BudgetHistoryResponse> & { error?: unknown };
-      if (!response.ok) {
-        throw new Error(typeof result.error === "string" ? result.error : "Unable to load budget history");
+    window.scrollTo({ top: 0, behavior: "instant" });
+    document.querySelector(".content--budgeting")?.scrollTo({ top: 0, behavior: "instant" });
+  }, [selectedId, editorId]);
+  useEffect(() => {
+    setHistory(null); setHistoryError(null);
+    if (!selectedId) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const response = await fetch(`/api/budgets/${encodeURIComponent(selectedId)}`, { signal: controller.signal });
+        const result = await response.json() as { history?: BudgetHistory; error?: unknown };
+        if (!response.ok || !result.history) throw new Error(typeof result.error === "string" ? result.error : "Unable to load budget history.");
+        if (!controller.signal.aborted) setHistory(result.history);
+      } catch (error) {
+        if (!controller.signal.aborted) setHistoryError(error instanceof Error ? error.message : "Unable to load budget history.");
       }
+    })();
+    return () => controller.abort();
+  }, [selectedId, historyVersion]);
 
-      if (!result.history || !result.budget) {
-        throw new Error("Unable to load budget history");
-      }
-
-      setHistoryData(result as BudgetHistoryResponse);
-    } catch (historyLoadError) {
-      setHistoryError(historyLoadError instanceof Error ? historyLoadError.message : "Unable to load budget history");
-    } finally {
-      setHistoryLoading(false);
-    }
+  const updateAppearance = async (budget: BudgetProgress, name: string, emoji: string | null) => {
+    const response = await fetch(`/api/budgets/${budget.id}/appearance`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, emoji }) });
+    const result = await response.json() as { error?: string };
+    if (!response.ok) throw new Error(result.error || "Unable to update this budget.");
+    const replace = (item: BudgetProgress) => item.id === budget.id ? { ...item, name, emoji } : item;
+    setData((current) => ({ ...current, budgets: current.budgets.map(replace), overview: { ...current.overview, budgets: current.overview.budgets.map(replace), inactiveBudgets: current.overview.inactiveBudgets.map(replace) } }));
   };
-
-  const updateFormField = <Key extends keyof BudgetFormState>(field: Key, value: BudgetFormState[Key]) => {
-    setForm((current) => ({ ...current, [field]: value }));
-  };
-
-  const runBudgetRequest = async (payload: Record<string, unknown>, mode: "create" | "update", budgetId?: string) => {
-    if (saving) {
-      return;
-    }
-
-    setSaving(true);
-    setError(null);
-
-    try {
-      const response = await fetch(mode === "update" ? `/api/budgets/${budgetId}` : "/api/budgets", {
-        method: mode === "update" ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const result = (await response.json()) as Partial<BudgetingData> & { error?: unknown };
-      if (!response.ok) {
-        throw new Error(typeof result.error === "string" ? result.error : "Unable to save budget");
-      }
-
-      if (result.budgets && result.overview) {
-        setData((current) => ({
-          ...current,
-          budgets: result.budgets ?? current.budgets,
-          overview: result.overview ?? current.overview,
-        }));
-      }
-
-      resetEditor();
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Unable to save budget");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const saveBudget = async () => {
-    const draftName = getBudgetDraftName(form, data.categories, data.accounts);
-    const isAccountBudget = form.accountId !== "__none__" && form.kind === "spend_limit";
-    const isAllCategories = form.categoryId === "__all__";
-    const payload = {
-      name: draftName,
-      kind: form.kind,
-      scope: form.kind === "savings_target" ? ("global" as const) : isAccountBudget ? ("account" as const) : isAllCategories ? ("global" as const) : ("category" as const),
-      cadence: form.cadence,
-      targetAmount: Number(form.targetAmount),
-      currency: form.currency.trim() || "PHP",
-      accountId: isAccountBudget ? form.accountId : null,
-      categoryId: form.kind === "savings_target" || isAccountBudget || isAllCategories ? null : form.categoryId,
-    };
-
-    await runBudgetRequest(payload, editingBudgetId ? "update" : "create", editingBudgetId ?? undefined);
-  };
-
-  const toggleBudgetActive = async () => {
-    if (!editingBudget || saving) {
-      return;
-    }
-
-    const draftName = getBudgetDraftName(form, data.categories, data.accounts);
-    const isAccountBudget = form.accountId !== "__none__" && form.kind === "spend_limit";
-    const isAllCategories = form.categoryId === "__all__";
-    await runBudgetRequest(
-      {
-        name: draftName,
-        kind: form.kind,
-        scope: form.kind === "savings_target" ? "global" : isAccountBudget ? "account" : isAllCategories ? "global" : "category",
-        cadence: form.cadence,
-        targetAmount: Number(form.targetAmount),
-        currency: form.currency.trim() || "PHP",
-        accountId: isAccountBudget ? form.accountId : null,
-        categoryId: form.kind === "savings_target" || isAccountBudget || isAllCategories ? null : form.categoryId,
-        isActive: !editingBudget.isActive,
-      },
-      "update",
-      editingBudget.id
-    );
-  };
-
-  const deleteBudget = async () => {
-    if (!editingBudgetId || saving) {
-      return;
-    }
-
-    setSaving(true);
-    setError(null);
-
-    try {
-      const response = await fetch(`/api/budgets/${editingBudgetId}`, {
-        method: "DELETE",
-      });
-
-      const result = (await response.json()) as Partial<BudgetingData> & { error?: unknown };
-      if (!response.ok) {
-        throw new Error(typeof result.error === "string" ? result.error : "Unable to delete budget");
-      }
-
-      if (result.budgets && result.overview) {
-        setData((current) => ({
-          ...current,
-          budgets: result.budgets ?? current.budgets,
-          overview: result.overview ?? current.overview,
-        }));
-      }
-
-      resetEditor();
-    } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete budget");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <section className="budgeting-page">
-      <section className="budget-summary-grid">
-        <article className="accounts-overview-card summary-aligned-card budget-summary-card glass budget-summary-card--positive">
-          <InfoTooltip
-            className="summary-card-info"
-            label="Budgets whose current and projected spending remain within their configured limits."
-          />
-          <div className="budget-summary-card__head">
-            <p className="eyebrow">On Track</p>
-            <strong className="accounts-overview-card__amount is-good">{onTrackBudgets.length}</strong>
+  const back = () => editorOpen ? selectEditor(null) : selectBudget(null);
+  const mobileEditor = editorOpen && mobile;
+  const title = mobileEditor ? (editingBudget ? "Edit Budget" : "Create Budget") : selectedBudget ? "Budget Details" : "Budgeting";
+  return <CloverShell active="budgeting" title={title}
+    mobileLeadingAction={selectedBudget || editorOpen ? <CollectionBack label="Budgeting" onClick={back} /> : undefined}
+    desktopTitleAction={selectedBudget ? <CollectionBack label="All budgets" onClick={() => selectBudget(null)} /> : undefined}
+    actions={!mobileEditor ? <div className="collection-toolbar-actions"><ContextualAskClover context="budgeting" showLabel /><button className="button button-primary button-small accounts-toolbar-button accounts-toolbar-button--upload collection-toolbar-action" type="button" aria-label="Create Budget" onClick={() => selectEditor("new")}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg><span>Create Budget</span></button></div> : undefined}
+  >
+    <section className={`budgeting-page${editorOpen ? " budgeting-page--editing" : ""}`}>
+      <div className="budget-directory-content" hidden={mobileEditor}>
+        {!selectedBudget ? <>
+          <div className="collection-directory-heading"><p>Set spending limits, build savings, and track your progress by category or account over time.</p></div>
+          <div className="collection-card-grid" aria-label="Budgets">
+            {budgets.map((budget) => {
+              const appearance = getBudgetAppearance(budget);
+              return <CollectionCard key={budget.id} kind="budget" name={budget.name} subtitle={`${cadenceLabels[budget.cadence]}${budget.isActive ? "" : " · Paused"}`} icon={<span aria-hidden="true">{appearance.emoji}</span>} emoji={budget.emoji} color={appearance.color} onOpen={() => selectBudget(budget.id)} onSave={(name, emoji) => updateAppearance(budget, name, emoji)}>
+                <div className="collection-card__value"><small>{budget.kind === "savings_target" ? "Saved" : "Spent"} · {budget.periodLabel}</small><strong>{money(budget.actualAmount, budget.currency)}</strong><small>of {money(budget.targetAmount, budget.currency)}</small></div>
+                <div className="collection-card__progress" role="meter" aria-label={`${budget.name} progress`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.max(0, budget.progressPercent))} aria-valuetext={percent(budget.progressPercent)}><span style={{ width: barWidth(budget.progressPercent) }} /></div>
+              </CollectionCard>;
+            })}
+            <button className="collection-create-card" type="button" onClick={() => selectEditor("new")}><span aria-hidden="true">＋</span><strong>Create Budget</strong><small>Plan for what matters to you</small></button>
           </div>
-          <div className="budget-summary-card__items">
-            {onTrackBudgets.slice(0, 3).map((budget) => (
-              <button key={budget.id} className="budget-summary-card__item" type="button" title={`Edit ${budget.name}`} onClick={() => openEditEditor(budget.id)}>
-                <span>{budget.name}</span>
-              </button>
-            ))}
-            {onTrackBudgets.length > 3 ? <span className="budget-summary-card__more">and {onTrackBudgets.length - 3} others</span> : null}
-          </div>
-        </article>
-
-        <article className="accounts-overview-card summary-aligned-card budget-summary-card glass budget-summary-card--warning">
-          <InfoTooltip
-            className="summary-card-info"
-            label="Budgets that are close to, projected to exceed, or have already exceeded their configured limits."
-          />
-          <div className="budget-summary-card__head">
-            <p className="eyebrow">At Risk</p>
-            <strong className="accounts-overview-card__amount is-danger">{atRiskBudgets.length}</strong>
-          </div>
-          <div className="budget-summary-card__items">
-            {atRiskBudgets.slice(0, 3).map((budget) => (
-              <button key={budget.id} className="budget-summary-card__item" type="button" title={`Edit ${budget.name}`} onClick={() => openEditEditor(budget.id)}>
-                <span>{budget.name}</span>
-              </button>
-            ))}
-            {atRiskBudgets.length > 3 ? <span className="budget-summary-card__more">and {atRiskBudgets.length - 3} others</span> : null}
-          </div>
-        </article>
-      </section>
-
-      <section className="budgeting-section glass">
-        {budgetGroups.length > 0 ? (
-          <div className="budgeting-section__head budgeting-section__head--actions-only">
-            <button className="button button-secondary button-pill" type="button" onClick={openCreateEditor}>
-              Add budget
-            </button>
-          </div>
-        ) : null}
-        {data.overview.uncategorizedTransactionCount > 0 ? (
-          <p className="budgeting-section__note">
-            {formatCurrency(data.overview.uncategorizedAmount, data.budgets[0]?.currency)} across {data.overview.uncategorizedTransactionCount} uncategorized transaction
-            {data.overview.uncategorizedTransactionCount === 1 ? "" : "s"}. Category budgets will not include it yet.
-          </p>
-        ) : null}
-        {(data.overview.overlappingBudgetNames?.length ?? 0) > 0 ? (
-          <p className="budgeting-section__note">
-            More than one cadence is active for {data.overview.overlappingBudgetNames?.join(", ")}. Each limit is tracked separately, not added together.
-          </p>
-        ) : null}
-        {budgetCurrencies.length > 1 ? (
-          <p className="budgeting-section__note">
-            Budgets use their own currencies ({budgetCurrencies.join(", ")}). Clover does not combine them into one total.
-          </p>
-        ) : null}
-
-        {suggestions.length > 0 ? (
-          <div className="budget-suggestions" aria-label="Budget suggestions based on recent spending">
-            <div>
-              <p className="eyebrow">Based on your spending</p>
-              <p className="budget-suggestions__detail">Start with a limit that matches your recent activity.</p>
-            </div>
-            <div className="budget-suggestions__list">
-              {suggestions.map((suggestion) => (
-                <button
-                  key={suggestion.id}
-                  className={`budget-suggestion budget-suggestion--${suggestion.tone}`}
-                  type="button"
-                  onClick={() => openSuggestion(suggestion)}
-                >
-                  <span>
-                    <strong>{suggestion.title}</strong>
-                    <small>{suggestion.detail}</small>
-                  </span>
-                  <em>{suggestion.actionLabel}</em>
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {budgetGroups.length > 0 ? (
-          <div className="budgeting-grid">
-            {budgetGroups.map((group) => (
-              <article key={group.name} className="budget-card glass">
-                <div className="report-card__head report-card__head--compact">
-                  <div>
-                    <h4>{group.name}</h4>
-                    <p className="budget-card__subhead">{group.budgets.length} cadence{group.budgets.length === 1 ? "" : "s"}</p>
-                  </div>
-                </div>
-
-                <div className="budget-card__cadences">
-                  {group.budgets.map((budget) => (
-                    <div key={budget.id} className={`budget-card__cadence-row budget-card__cadence-row--${budget.stage}`}>
-                      <div className="budget-card__cadence-head">
-                        <span>
-                          {cadenceLabels[budget.cadence]} · {budget.scopeLabel || scopeLabels[budget.scope]}
-                        </span>
-                        <strong>{toPercentage(budget.progressPercent)}</strong>
-                      </div>
-                      <div className="budget-card__bar" aria-hidden="true">
-                        <span
-                          className={`budget-card__bar-fill budget-card__bar-fill--${budget.kind === "savings_target" && budget.stage === "exceeded" ? "safe" : budget.stage}`}
-                          style={{ width: `${Math.min(budget.progressPercent, 100)}%` }}
-                        />
-                      </div>
-                      <div className="budget-card__meta budget-card__meta--compact">
-                        <span>
-                          {formatCurrency(budget.actualAmount, budget.currency)} of {formatCurrency(budget.targetAmount, budget.currency)}
-                        </span>
-                        <span>
-                          {budget.stage === "exceeded" ? "Over limit" : budget.statusLabel}
-                          {budget.plannedCount > 0 ? ` · ${formatCurrency(budget.plannedAmount, budget.currency)} planned` : ""}
-                        </span>
-                        {budget.plannedCount > 0 && budget.kind !== "savings_target" ? (
-                          <span className="budget-card__meta-projected">
-                            Projected {toPercentage(budget.projectedProgressPercent)} · {formatCurrency(budget.projectedAmount, budget.currency)}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="budget-card__actions">
-                        <button className="pill-link pill-link--inline" type="button" onClick={() => openEditEditor(budget.id)}>
-                          Edit
-                        </button>
-                        <button className="pill-link pill-link--inline" type="button" onClick={() => openCopyEditor(budget)}>
-                          Copy
-                        </button>
-                        <button
-                          className="budget-card__chevron-button"
-                          type="button"
-                          onClick={() => void openHistoryModal(budget)}
-                          aria-label={`Open history for ${budget.name} ${cadenceLabels[budget.cadence]}`}
-                        >
-                          ›
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <article className="budget-empty">
-            <div className="budget-empty__head">
-              <p className="eyebrow">Start with an example</p>
-              <h4>Choose a budget to get started</h4>
-              <p>Pick a simple starting point. You can adjust the amount and cadence before saving.</p>
-            </div>
-            <div className="budget-empty__chips" aria-label="Budget examples">
-              {budgetExamples.map((example) => (
-                <button key={example.id} className="budget-empty__chip" type="button" onClick={() => openBudgetExample(example)}>
-                  <span aria-hidden="true">{example.emoji}</span>
-                  <strong>{example.label}</strong>
-                  <small>{formatCurrency(example.amount, data.budgets[0]?.currency ?? data.accounts[0]?.currency ?? "PHP")} monthly</small>
-                </button>
-              ))}
-            </div>
-            <button className="button button-secondary button-pill" type="button" onClick={openCreateEditor}>
-              Create custom budget
-            </button>
-          </article>
-        )}
-        {pausedBudgets.length > 0 ? (
-          <div className="budget-paused-list">
-            <span>{pausedBudgets.length} paused budget{pausedBudgets.length === 1 ? "" : "s"}</span>
-            <button className="pill-link pill-link--inline" type="button" onClick={() => openEditEditor(pausedBudgets[0].id)}>
-              Review
-            </button>
-          </div>
-        ) : null}
-      </section>
-
-      {isEditorOpen ? (
-        <div className="budget-editor__backdrop" role="presentation" onClick={() => !saving && resetEditor()}>
-          <div
-            className="budget-editor glass"
-            role="dialog"
-            aria-modal="true"
-            aria-label={editingBudget ? "Edit budget" : "Set budget"}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="budget-editor__head">
-              <div>
-                <p className="eyebrow">{editingBudget ? "Edit budget" : "Set budget"}</p>
-                <h4>{editingBudget ? "Update the limit" : "Create a budget"}</h4>
-              </div>
-              <button className="icon-button" type="button" onClick={resetEditor} aria-label="Close budget editor">
-                ×
-              </button>
-            </div>
-
-            <div className="budget-editor__form">
-              <div className="budget-editor__inline-controls">
-                <label className="budget-editor__field">
-                  <span>Type</span>
-                  <select
-                    value={form.kind}
-                    onChange={(event) => {
-                      const kind = event.target.value as BudgetKind;
-                      setForm((current) => ({
-                        ...current,
-                        kind,
-                        accountId: kind === "savings_target" ? "__none__" : current.accountId,
-                        categoryId: kind === "savings_target" ? "__all__" : current.categoryId,
-                      }));
-                    }}
-                  >
-                    <option value="spend_limit">Spending limit</option>
-                    <option value="savings_target">Savings target</option>
-                  </select>
-                </label>
-
-                <label className="budget-editor__field">
-                  <span>Applies to</span>
-                  <select
-                    value={form.accountId !== "__none__" ? `account:${form.accountId}` : form.categoryId}
-                    disabled={form.kind === "savings_target"}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      if (value.startsWith("account:")) {
-                        setForm((current) => ({ ...current, accountId: value.slice("account:".length), categoryId: "__all__" }));
-                      } else {
-                        setForm((current) => ({ ...current, accountId: "__none__", categoryId: value }));
-                      }
-                    }}
-                  >
-                    <option value="__all__">All spending</option>
-                    <optgroup label="Categories">
-                      {data.categories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Accounts">
-                      {data.accounts.map((account) => (
-                        <option key={account.id} value={`account:${account.id}`}>
-                          {account.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  </select>
-                </label>
-
-                <label className="budget-editor__field">
-                  <span>Cadence</span>
-                  <select value={form.cadence} onChange={(event) => updateFormField("cadence", event.target.value as BudgetCadence)}>
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="biweekly">Every 2 weeks</option>
-                    <option value="monthly">Monthly</option>
-                    <option value="quarterly">Quarterly</option>
-                    <option value="annual">Yearly</option>
-                  </select>
-                </label>
-              </div>
-
-              <p className="budget-editor__scope-hint">{getBudgetScopeHint(form)}</p>
-
-              <div className="budget-editor__inline-controls">
-                <label className="budget-editor__field">
-                  <span>Currency</span>
-                  <input value={form.currency} onChange={(event) => updateFormField("currency", event.target.value)} placeholder="PHP" />
-                </label>
-
-                <label className="budget-editor__field">
-                  <span>Amount</span>
-                  <input
-                    inputMode="decimal"
-                    value={form.targetAmount}
-                    onChange={(event) => updateFormField("targetAmount", event.target.value)}
-                    placeholder="5000"
-                  />
-                </label>
-              </div>
-            </div>
-
-            {error ? <p className="budget-editor__error">{error}</p> : null}
-
-            <div className="budget-editor__actions">
-              {editingBudget ? (
-                <>
-                  <button className="button button-secondary button-pill" type="button" onClick={() => void toggleBudgetActive()} disabled={saving}>
-                    {editingBudget.isActive ? "Pause" : "Resume"}
-                  </button>
-                  <button className="button button-secondary button-pill" type="button" onClick={deleteBudget} disabled={saving}>
-                    Delete
-                  </button>
-                </>
-              ) : null}
-              <div className="budget-editor__spacer" />
-              <button className="button button-secondary button-pill" type="button" onClick={resetEditor} disabled={saving}>
-                Cancel
-              </button>
-              <button className="button button-primary button-pill" type="button" onClick={saveBudget} disabled={saving || !form.targetAmount.trim()}>
-                {saving ? "Saving..." : editingBudget ? "Save changes" : "Save budget"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {historyBudgetId ? (
-        <div className="budget-history__backdrop" role="presentation" onClick={closeHistoryModal}>
-          <div
-            className="budget-history glass"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Budget history"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="budget-history__head">
-              <div>
-                <p className="eyebrow">Budget history</p>
-                <h4>{historyData?.budget.name ?? selectedHistoryBudget?.name ?? "Budget"}</h4>
-                <p className="budget-history__subhead">
-                  {historyData?.budget.categoryName ?? selectedHistoryBudget?.categoryName ?? historyData?.budget.accountName ?? selectedHistoryBudget?.accountName ?? "All spending"} ·{" "}
-                  {cadenceLabels[historyData?.budget.cadence ?? selectedHistoryBudget?.cadence ?? "monthly"]} ·{" "}
-                  {scopeLabels[historyData?.budget.scope ?? selectedHistoryBudget?.scope ?? "global"]}
-                </p>
-              </div>
-              <button className="icon-button" type="button" onClick={closeHistoryModal} aria-label="Close budget history">
-                ×
-              </button>
-            </div>
-
-            {historyLoading ? (
-              <div className="budget-history__loading">
-                <div className="budget-history__skeleton" />
-                <div className="budget-history__skeleton" />
-                <div className="budget-history__skeleton" />
-              </div>
-            ) : historyError ? (
-              <p className="budget-history__error">{historyError}</p>
-            ) : historyData ? (
-              <div className="budget-history__body">
-                <div className="budget-history__chart">
-                  {historyData.history.points.map((point) => (
-                    <div key={point.periodStart} className={`budget-history__point budget-history__point--${point.stage}`}>
-                      <div className="budget-history__point-head">
-                        <span>{point.label}</span>
-                        <strong>{toPercentage(point.progressPercent)}</strong>
-                      </div>
-                      <div className="budget-history__bar" aria-hidden="true">
-                        <span
-                          className={`budget-history__bar-fill budget-history__bar-fill--${point.stage}`}
-                          style={{ width: `${Math.min(point.progressPercent, 100)}%` }}
-                        />
-                      </div>
-                      <div className="budget-history__point-meta">
-                        <span>
-                          {formatCurrency(point.actualAmount, historyData.budget.currency)} of{" "}
-                          {formatCurrency(point.targetAmount, historyData.budget.currency)}
-                        </span>
-                        <span>{point.stage === "exceeded" ? "Over limit" : point.stage === "critical" ? "At risk" : "Tracked"}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="budget-history__activity">
-                  <div className="budget-history__activity-head">
-                    <h5>Recent activity</h5>
-                    <span>{historyData.history.recentTransactions.length} items</span>
-                  </div>
-                  <div className="budget-history__activity-list">
-                    {historyData.history.recentTransactions.length > 0 ? (
-                      historyData.history.recentTransactions.map((transaction) => (
-                        <div key={transaction.id} className="budget-history__activity-item">
-                          <div>
-                            <strong>{transaction.merchantName}</strong>
-                            <span>
-                              {transaction.categoryName ?? "Uncategorized"} · {formatShortDate(transaction.date)}
-                            </span>
-                          </div>
-                          <div className="budget-history__activity-meta">
-                            <strong>{formatCurrency(transaction.amount, historyData.budget.currency)}</strong>
-                            <span>{transaction.type === "income" ? "Income" : "Expense"}</span>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="budget-history__empty">No recent activity found for this budget.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+        </> : <>
+          <section className="budgeting-section glass budget-single-view" aria-label="Budget overview">
+            <div className="budget-single-view__head"><span className="budget-detail-emoji" aria-hidden="true">{getBudgetAppearance(selectedBudget).emoji}</span><div><h2>{selectedBudget.name}</h2><p>{cadenceLabels[selectedBudget.cadence]} · {selectedBudget.scopeLabel} · {selectedBudget.periodLabel}{!selectedBudget.isActive ? " · Paused" : ""}</p></div><button className="button button-secondary button-small" onClick={() => selectEditor(selectedBudget.id)} type="button">Edit budget</button></div>
+            <div className="budget-single-view__amount"><strong>{money(selectedBudget.actualAmount, selectedBudget.currency)}</strong><span>of {money(selectedBudget.targetAmount, selectedBudget.currency)} {selectedBudget.kind === "savings_target" ? "savings target" : "spending limit"}</span></div>
+            <div className="budget-card__bar" role="meter" aria-label="Budget progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, Math.max(0, selectedBudget.progressPercent))} aria-valuetext={percent(selectedBudget.progressPercent)}><span className={`budget-card__bar-fill budget-card__bar-fill--${selectedBudget.kind === "savings_target" ? "safe" : selectedBudget.stage}`} style={{ width: barWidth(selectedBudget.progressPercent) }} /></div>
+            <p>{percent(selectedBudget.progressPercent)} · {selectedBudget.statusLabel}. {selectedBudget.statusDetail}</p>
+            {selectedBudget.plannedCount > 0 ? <p>{money(selectedBudget.plannedAmount, selectedBudget.currency)} in planned payments · Projected {money(selectedBudget.projectedAmount, selectedBudget.currency)}</p> : null}
+            {selectedBudget.scope === "category" && data.overview.uncategorizedTransactionCount > 0 ? <p className="budgeting-section__note">Uncategorized transactions are not included in this category budget.</p> : null}
+          </section>
+          <section className="budgeting-section glass" aria-label="Budget reports"><h3>Reports</h3><p className="budgeting-section__note">Compare recent periods against the current {selectedBudget.kind === "savings_target" ? "target" : "limit"}.</p>
+            {historyError ? <p role="alert">{historyError} <button type="button" className="button button-secondary button-small" onClick={() => setHistoryVersion((value) => value + 1)}>Try again</button></p> : !history ? <p role="status">Loading reports…</p> : <div className="budget-history__chart">{history.points.map((point) => <div className="budget-history__point" key={point.periodStart}>
+              <div className="budget-history__point-head"><span>{point.label}</span><strong>{percent(point.progressPercent)}</strong></div>
+              <div className="budget-history__bar" aria-hidden="true"><span className={`budget-history__bar-fill budget-history__bar-fill--${selectedBudget.kind === "savings_target" ? "safe" : point.stage}`} style={{ width: barWidth(point.progressPercent) }} /></div>
+              <div className="budget-history__point-meta"><span>{money(point.actualAmount, selectedBudget.currency)} of {money(point.targetAmount, selectedBudget.currency)}</span></div>
+            </div>)}</div>}
+          </section>
+          <section className="budgeting-section glass" aria-label="Budget transaction history"><h3>History</h3><p className="budgeting-section__note">Recent transactions included in this budget.</p>
+            {history ? <div className="budget-history__activity-list">{history.recentTransactions.length ? history.recentTransactions.map((transaction) => <div className="budget-history__activity-item" key={transaction.id}><div><strong>{transaction.merchantName}</strong><span>{transaction.categoryName ?? "Uncategorized"} · {new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" }).format(new Date(transaction.date))}</span></div><div className="budget-history__activity-meta"><strong>{money(transaction.amount, selectedBudget.currency)}</strong><span>{transaction.type === "income" ? "Income" : "Expense"}</span></div></div>) : <p>No recent transactions for this budget yet.</p>}</div> : <p>{historyError ? "History is temporarily unavailable." : "Loading history…"}</p>}
+          </section>
+        </>}
+      </div>
+      {editorOpen ? <BudgetEditor key={editorId} budget={editingBudget} data={data} mobile={mobile} onClose={() => selectEditor(null)} onSaved={(result, deleted) => {
+        setData((current) => ({ ...current, budgets: result.budgets, overview: result.overview }));
+        selectEditor(null);
+        if (deleted) selectBudget(null);
+        else if (result.budget?.id) selectBudget(result.budget.id);
+        setHistoryVersion((value) => value + 1);
+      }} /> : null}
     </section>
-  );
+  </CloverShell>;
+}
+
+type SaveResult = Pick<BudgetingData, "budgets" | "overview"> & { budget?: { id: string } };
+function BudgetEditor({ budget, data: initialData, mobile, onClose, onSaved }: { budget: BudgetProgress | null; data: BudgetingData; mobile: boolean; onClose: () => void; onSaved: (result: SaveResult, deleted?: boolean) => void }) {
+  const [data, setData] = useState(initialData);
+  const [optionsError, setOptionsError] = useState<string | null>(null);
+  const [optionsRetry, setOptionsRetry] = useState(0);
+  const optionsReady = data.editorOptionsLoaded !== false;
+  const [form, setForm] = useState<BudgetForm>(() => ({ name: budget?.name ?? "", emoji: budget?.emoji ?? null, kind: budget?.kind ?? "spend_limit", scope: budget?.scope ?? "global", cadence: budget?.cadence ?? "monthly", currency: budget?.currency ?? data.budgets[0]?.currency ?? data.accounts[0]?.currency ?? "PHP", targetAmount: budget ? String(budget.targetAmount) : "", accountId: budget?.accountId ?? null, categoryId: budget?.categoryId ?? null }));
+  const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const dialog = useRef<HTMLDivElement>(null);
+  const inFlight = useRef(false);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    if (optionsReady) return;
+    const controller = new AbortController();
+    setOptionsError(null);
+    void (async () => {
+      try {
+        const response = await fetch("/api/budgets/options", { cache: "no-store", signal: controller.signal });
+        const result = await response.json() as Pick<BudgetingData, "accounts" | "categories"> & { error?: string };
+        if (!response.ok || !Array.isArray(result.accounts) || !Array.isArray(result.categories)) throw new Error(result.error || "Unable to load budget options.");
+        if (controller.signal.aborted) return;
+        setData((current) => ({ ...current, ...result, editorOptionsLoaded: true }));
+        if (!budget) setForm((current) => ({ ...current, currency: initialData.budgets[0]?.currency ?? result.accounts[0]?.currency ?? "PHP" }));
+        window.requestAnimationFrame(() => dialog.current?.querySelector<HTMLInputElement>("input")?.focus());
+      } catch (error) {
+        if (!controller.signal.aborted) setOptionsError(error instanceof Error ? error.message : "Unable to load budget options.");
+      }
+    })();
+    return () => controller.abort();
+  }, [optionsReady, optionsRetry, budget, initialData.budgets]);
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.body.dataset.budgetEditorOpen = "true";
+    dialog.current?.querySelector<HTMLInputElement>("input")?.focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !inFlight.current) { event.preventDefault(); closeRef.current(); }
+      if (event.key === "Tab" && !mobile) {
+        const elements = Array.from(dialog.current?.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled])') ?? []);
+        const first = elements[0], last = elements[elements.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
+    };
+    const originalOverflow = document.body.style.overflow;
+    if (!mobile) document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKey);
+    return () => { document.body.dataset.budgetEditorOpen = "false"; document.body.style.overflow = originalOverflow; window.removeEventListener("keydown", handleKey); previousFocus?.focus(); };
+  }, [mobile]);
+  const field = <K extends keyof BudgetForm>(key: K, value: BudgetForm[K]) => setForm((current) => ({ ...current, [key]: value }));
+  const request = async (action: "save" | "toggle" | "delete") => {
+    if (inFlight.current || !optionsReady) return;
+    inFlight.current = true; setSaving(true); setError(null);
+    try {
+      const response = await fetch(budget ? `/api/budgets/${budget.id}` : "/api/budgets", {
+        method: action === "delete" ? "DELETE" : budget ? "PATCH" : "POST", headers: { "Content-Type": "application/json" },
+        body: action === "delete" ? undefined : JSON.stringify({ ...form, name: form.name.trim() || data.categories.find((category) => category.id === form.categoryId)?.name || data.accounts.find((account) => account.id === form.accountId)?.name || (form.kind === "savings_target" ? "Savings target" : "All spending"), targetAmount: Number(form.targetAmount), ...(action === "toggle" ? { isActive: !budget?.isActive } : {}) }),
+      });
+      const result = await response.json() as SaveResult & { error?: unknown };
+      if (!response.ok || !result.budgets || !result.overview) throw new Error(typeof result.error === "string" ? result.error : "Check the budget name, amount, currency and scope, then try again.");
+      onSaved(result, action === "delete");
+    } catch (err) { setError(err instanceof Error ? err.message : "Unable to save this budget."); }
+    finally { inFlight.current = false; setSaving(false); }
+  };
+  return <div className={mobile ? "budget-editor-page" : "budget-editor__backdrop"} onClick={mobile ? undefined : () => { if (!saving) onClose(); }}>
+    <div ref={dialog} className={`budget-editor glass${mobile ? " budget-editor--page" : ""}`} role={mobile ? undefined : "dialog"} aria-modal={mobile ? undefined : true} aria-label={budget ? "Edit budget" : "Create Budget"} onClick={(event) => event.stopPropagation()}>
+      <div className="budget-editor__head"><h2>{budget ? "Edit budget" : "Create Budget"}</h2>{!mobile ? <button className="icon-button" type="button" aria-label="Close budget editor" disabled={saving} onClick={onClose}>×</button> : null}</div>
+      <form onSubmit={(event) => { event.preventDefault(); void request("save"); }}>
+        {!optionsReady ? <p role={optionsError ? "alert" : "status"}>{optionsError || "Loading accounts and categories…"}{optionsError ? <button type="button" className="button button-secondary button-small" onClick={() => setOptionsRetry((value) => value + 1)}>Try again</button> : null}</p> : null}
+        <fieldset disabled={saving || !optionsReady} className="budget-editor-fields">
+          <div className="budget-editor__inline-controls">
+            <label className="budget-editor__field"><span>Budget name</span><input value={form.name} maxLength={80} minLength={2} placeholder="e.g. Groceries" onChange={(event) => field("name", event.target.value)} /></label>
+            <label className="budget-editor__field"><span>Icon</span><select value={form.emoji ?? ""} onChange={(event) => field("emoji", event.target.value || null)}><option value="">Automatic — {getBudgetAppearance({ name: form.name, categoryName: data.categories.find((category) => category.id === form.categoryId)?.name, kind: form.kind }).emoji}</option>{budgetIcons.map((icon) => <option key={icon.emoji} value={icon.emoji}>{icon.emoji} {icon.label}</option>)}</select></label>
+          </div>
+          <div className="budget-editor__inline-controls">
+            <label className="budget-editor__field"><span>Type</span><select value={form.kind} onChange={(event) => setForm((current) => ({ ...current, kind: event.target.value as BudgetForm["kind"], scope: "global", accountId: null, categoryId: null }))}><option value="spend_limit">Spending limit</option><option value="savings_target">Savings target</option></select></label>
+            <label className="budget-editor__field"><span>Applies to</span><select disabled={form.kind === "savings_target"} value={form.accountId ? `account:${form.accountId}` : form.categoryId ?? "__all__"} onChange={(event) => {
+              const value = event.target.value;
+              if (value.startsWith("account:")) { const account = data.accounts.find((item) => item.id === value.slice(8)); setForm((current) => ({ ...current, scope: "account", accountId: value.slice(8), categoryId: null, currency: account?.currency ?? current.currency })); }
+              else setForm((current) => ({ ...current, scope: value === "__all__" ? "global" : "category", accountId: null, categoryId: value === "__all__" ? null : value }));
+            }}><option value="__all__">All spending</option><optgroup label="Categories">{data.categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</optgroup><optgroup label="Accounts">{data.accounts.map((item) => <option key={item.id} value={`account:${item.id}`}>{formatAccountOptionLabel(item)}</option>)}</optgroup></select></label>
+          </div>
+          <p className="budget-editor__scope-hint">{form.kind === "savings_target" ? "Savings are measured across this profile's income and spending." : form.scope === "account" ? "Only transactions from this account are counted." : form.scope === "category" ? "Only transactions in this category are counted." : "All spending in this Clover profile is counted."}</p>
+          <div className="budget-editor__inline-controls">
+            <label className="budget-editor__field"><span>Currency</span><input required minLength={3} maxLength={8} value={form.currency} onChange={(event) => field("currency", event.target.value.toUpperCase())} /></label>
+            <label className="budget-editor__field"><span>Amount</span><input required type="number" min="0.01" max="1000000000" step="0.01" inputMode="decimal" value={form.targetAmount} onChange={(event) => field("targetAmount", event.target.value)} /></label>
+          </div>
+          <div className="budget-editor__inline-controls budget-editor__inline-controls--single">
+            <label className="budget-editor__field"><span>Cadence</span><select value={form.cadence} onChange={(event) => field("cadence", event.target.value as BudgetForm["cadence"])}>{Object.entries(cadenceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          </div>
+        </fieldset>
+        {error ? <p className="budget-editor__error" role="alert">{error}</p> : null}
+        {confirmDelete ? <div role="alert"><p>Delete this budget? Your transactions will stay unchanged.</p><button className="button button-secondary button-small" type="button" disabled={saving} onClick={() => setConfirmDelete(false)}>Keep budget</button><button className="button button-secondary button-small" type="button" disabled={saving} onClick={() => void request("delete")}>Confirm delete</button></div> : null}
+        <div className="budget-editor__actions">{budget ? <><button className="button button-secondary button-pill" type="button" disabled={saving || !optionsReady} onClick={() => void request("toggle")}>{budget.isActive ? "Pause" : "Resume"}</button><button className="button button-secondary button-pill" type="button" disabled={saving || !optionsReady} onClick={() => setConfirmDelete(true)}>Delete</button></> : null}<div className="budget-editor__spacer" /><button className="button button-secondary button-pill" type="button" disabled={saving} onClick={onClose}>Cancel</button><button className="button button-primary button-pill" type="submit" disabled={saving || !optionsReady}>{saving ? "Saving…" : budget ? "Save changes" : "Create Budget"}</button></div>
+      </form>
+    </div>
+  </div>;
 }

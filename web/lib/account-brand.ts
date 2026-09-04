@@ -1,4 +1,6 @@
 import { sanitizeBankNameLabel } from "@/lib/data-qa-banks";
+import { findAdditionalBankLogo, normalizeLogoName } from "@/lib/bank-logo-catalog";
+import { getCurrentBuiltInAccountLogoUrl } from "@/lib/account-logo";
 import { inferBankNameFromText, normalizeBankName } from "@/lib/data-qa-banks";
 
 type AccountBrandInput = {
@@ -1056,6 +1058,20 @@ const getBaseAccountBrand = (params: AccountBrandInput): AccountBrand => {
   const brandInput = [params.institution, params.name, inferredInstitution]
     .filter(Boolean)
     .join(" ");
+  const existingBrand = BANK_BRANDS.find((entry) => entry.match.test(brandInput))?.brand;
+  // Prefer the supplied institution over an account nickname. Existing providers
+  // retain their established branding unless a regional logo is explicitly named.
+  const additionalLogo = findAdditionalBankLogo(params.institution?.trim() || params.name || "");
+  const sameExistingProvider = existingBrand && additionalLogo && [additionalLogo.label, ...additionalLogo.aliases].some((name) => normalizeLogoName(name) === normalizeLogoName(existingBrand.label));
+  if (additionalLogo && (additionalLogo.explicitRegion || !existingBrand || !sameExistingProvider)) {
+    return makeBrand({
+      label: additionalLogo.label,
+      logoSrc: additionalLogo.src,
+      fallbackIconSrc: type === "wallet" ? walletIcon : bankIcon,
+      accent: existingBrand?.accent ?? "#087D91",
+      logoBackground: "#ffffff", logoFit: "contain", logoPadding: "4px",
+    });
+  }
   for (const entry of BANK_BRANDS) {
     if (entry.match.test(brandInput)) {
       return entry.brand;
@@ -1192,12 +1208,13 @@ const getBaseAccountBrand = (params: AccountBrandInput): AccountBrand => {
 export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
   const brand = getBaseAccountBrand(params);
   if (!params.logoUrl) return brand;
+  const logoUrl = getCurrentBuiltInAccountLogoUrl(params.logoUrl) ?? params.logoUrl;
   const isCustomImage = params.logoUrl.startsWith("data:image/");
 
   return {
     ...brand,
-    logoSrc: params.logoUrl,
-    logoSrcs: [params.logoUrl],
+    logoSrc: logoUrl,
+    logoSrcs: [logoUrl],
     logoBackground: "#ffffff",
     logoFit: isCustomImage ? "cover" : "contain",
     logoPadding: isCustomImage ? undefined : "4px",

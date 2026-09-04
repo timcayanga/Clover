@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
+import NextImage from "next/image";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { GENERIC_ACCOUNT_LOGO_OPTIONS, INSTITUTION_ACCOUNT_LOGO_OPTIONS } from "@/lib/account-logo";
 import type { AccountBrand } from "@/lib/account-brand";
@@ -180,7 +181,7 @@ export function AccountLogoPicker({
                         onClick={() => void commit(option.src)}
                         disabled={saving}
                       >
-                        <img src={option.src} alt="" aria-hidden="true" />
+                        <NextImage src={option.src} alt="" aria-hidden="true" width={48} height={48} unoptimized />
                       </button>
                     ))}
                   </div>
@@ -198,7 +199,7 @@ export function AccountLogoPicker({
                         onClick={() => void commit(option.src)}
                         disabled={saving}
                       >
-                        <img src={option.src} alt="" aria-hidden="true" />
+                        <NextImage src={option.src} alt="" aria-hidden="true" width={48} height={48} unoptimized />
                       </button>
                     ))}
                   </div>

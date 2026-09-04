@@ -39,6 +39,7 @@ import {
   type ReportsMoneyPoint,
 } from "@/components/reports-money-over-time-chart";
 import { ReportsCashFlowMap } from "@/components/reports-cash-flow-map";
+import { formatAccountOptionLabel } from "@/lib/account-option-label";
 import {
   ReportsPeriodComparisonChart,
   type ReportsPeriodComparisonPoint,
@@ -935,7 +936,7 @@ export async function ReportsStream({
 
     reportSankeyIncomeTransactions.forEach((transaction) => {
       const accountLastFour = transaction.account.accountNumber?.replace(/\D/g, "").slice(-4);
-      const accountLabel = `${transaction.account.name?.trim() || "Account"}${accountLastFour ? ` ${accountLastFour}` : ""}`;
+      const accountLabel = formatAccountOptionLabel(transaction.account, `${transaction.account.name?.trim() || "Account"}${accountLastFour ? ` ${accountLastFour}` : ""}`);
       const key = transaction.account.id;
       const existing = reportSankeyAccountIncome.get(key) ?? { id: key, label: accountLabel, amount: 0 };
       existing.amount += Math.abs(Number(transaction.amount));
@@ -944,7 +945,7 @@ export async function ReportsStream({
 
     reportSankeyExpenseTransactions.forEach((transaction) => {
       const accountLastFour = transaction.account.accountNumber?.replace(/\D/g, "").slice(-4);
-      const accountLabel = `${transaction.account.name?.trim() || "Account"}${accountLastFour ? ` ${accountLastFour}` : ""}`;
+      const accountLabel = formatAccountOptionLabel(transaction.account, `${transaction.account.name?.trim() || "Account"}${accountLastFour ? ` ${accountLastFour}` : ""}`);
       const accountKey = transaction.account.id;
       if (!reportSankeyAccountIncome.has(accountKey)) {
         reportSankeyAccountIncome.set(accountKey, { id: accountKey, label: accountLabel, amount: 0 });

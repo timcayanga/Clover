@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isBudgetEmoji } from "@/lib/budget-appearance";
 import { prisma } from "@/lib/prisma";
 import { resolveBudgetingWorkspace } from "@/lib/budgeting-context";
 import { isMissingBudgetTableError, loadBudgetWorkspaceData } from "@/lib/budgeting-data";
@@ -9,6 +10,8 @@ import { isAdminOnlyDataError, isUnauthorizedDataError } from "@/lib/transient-d
 const budgetPayloadSchema = z
   .object({
     name: z.string().trim().min(2).max(80),
+    emoji: z.string().refine(isBudgetEmoji).nullable().optional(),
+    planId: z.string().trim().min(1).nullable().optional(),
     kind: z.enum(["spend_limit", "savings_target"]).default("spend_limit"),
     scope: z.enum(["global", "account", "category"]).default("global"),
     cadence: z.enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"]).default("monthly"),
@@ -62,6 +65,7 @@ export async function GET() {
 
   const data = await loadBudgetWorkspaceData(context.workspaceId);
   return NextResponse.json({
+    plans: data.plans,
     budgets: data.overview.budgets,
     overview: data.overview,
     categories: data.categories,
@@ -94,6 +98,9 @@ export async function POST(request: Request) {
   }
 
   const payload = parsed.data;
+  if (payload.planId && !await prisma.budgetPlan.findFirst({ where: { id: payload.planId, workspaceId: context.workspaceId }, select: { id: true } })) {
+    return NextResponse.json({ error: "Choose a valid budget plan." }, { status: 400 });
+  }
   const accountId = payload.scope === "account" ? payload.accountId ?? null : null;
   const categoryId = payload.scope === "category" ? payload.categoryId ?? null : null;
 
@@ -114,6 +121,8 @@ export async function POST(request: Request) {
       data: {
         workspaceId: context.workspaceId,
         name: payload.name,
+        emoji: payload.emoji ?? null,
+        planId: payload.planId ?? null,
         kind: payload.kind,
         scope: payload.kind === "savings_target" ? "global" : payload.scope,
         cadence: payload.cadence,

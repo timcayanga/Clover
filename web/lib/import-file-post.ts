@@ -5,7 +5,7 @@ export const postFileWithProgress = (
   file: File,
   fields: Record<string, string | undefined> = {},
   onProgress?: (progress: number) => void,
-  options?: { signal?: AbortSignal | null; timeoutMs?: number }
+  options?: { signal?: AbortSignal | null; timeoutMs?: number; onUploadComplete?: () => void }
 ) =>
   new Promise<Response>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -45,6 +45,7 @@ export const postFileWithProgress = (
     };
     xhr.upload.onload = () => {
       onProgress?.(100);
+      options?.onUploadComplete?.();
     };
 
     xhr.onload = () => {

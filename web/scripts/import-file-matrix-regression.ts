@@ -116,6 +116,16 @@ const cases: MatrixCase[] = [
     expectedAllTransfers: true,
   },
   {
+    label: "Maya structured JSON export",
+    path: join(statementRoot, "Samples/Maya/829627385-MayaSavings-SoA-112024-1.json"),
+    mode: "statement",
+    fileType: "application/json",
+    minimumTransactions: 11,
+    exactTransactions: 11,
+    expectedInstitution: /Maya/i,
+    expectedAccountType: "bank",
+  },
+  {
     label: "HSBC UK same-date SOA",
     path: join(statementRoot, "Actual SOAs/HSBC UK/2026-06-20_Statement.pdf"),
     mode: "statement",
@@ -253,15 +263,16 @@ const verifyTransactions = async (workspaceId: string, importId: string, matrixC
     },
     orderBy: [{ date: "asc" }, { createdAt: "asc" }],
   });
+  const expectedTransactions = transactions;
   assert.ok(
-    transactions.length >= matrixCase.minimumTransactions,
-    `${matrixCase.label}: expected at least ${matrixCase.minimumTransactions} transactions, got ${transactions.length}.`
+    expectedTransactions.length >= matrixCase.minimumTransactions,
+    `${matrixCase.label}: expected at least ${matrixCase.minimumTransactions} transactions, got ${expectedTransactions.length}.`
   );
   if (matrixCase.exactTransactions != null) {
-    assert.equal(transactions.length, matrixCase.exactTransactions, `${matrixCase.label}: unexpected row count.`);
+    assert.equal(expectedTransactions.length, matrixCase.exactTransactions, `${matrixCase.label}: unexpected row count.`);
   }
-  assert.ok(transactions.every((row) => Number(row.amount) > 0), `${matrixCase.label}: every transaction needs a positive amount.`);
-  assert.ok(transactions.every((row) => row.merchantRaw.trim().length > 0), `${matrixCase.label}: every row needs source text.`);
+  assert.ok(expectedTransactions.every((row) => Number(row.amount) > 0), `${matrixCase.label}: every transaction needs a positive amount.`);
+  assert.ok(expectedTransactions.every((row) => row.merchantRaw.trim().length > 0), `${matrixCase.label}: every row needs source text.`);
   assert.ok(
     transactions.every((row) => row.parserConfidence >= 0 && row.parserConfidence <= 100),
     `${matrixCase.label}: parser confidence must remain in range.`
@@ -272,50 +283,50 @@ const verifyTransactions = async (workspaceId: string, importId: string, matrixC
 
   if (matrixCase.expectedInstitution) {
     assert.ok(
-      transactions.some((row) => matrixCase.expectedInstitution!.test(row.account.institution ?? row.account.name)),
+      expectedTransactions.some((row) => matrixCase.expectedInstitution!.test(row.account.institution ?? row.account.name)),
       `${matrixCase.label}: expected institution/account identity was not preserved.`
     );
   }
   if (matrixCase.expectedAccountType) {
     assert.ok(
-      transactions.every((row) => row.account.type === matrixCase.expectedAccountType),
+      expectedTransactions.every((row) => row.account.type === matrixCase.expectedAccountType),
       `${matrixCase.label}: expected account type ${matrixCase.expectedAccountType}.`
     );
   }
   if (matrixCase.expectedMerchant) {
     assert.ok(
-      transactions.some((row) => matrixCase.expectedMerchant!.test(row.merchantClean ?? row.merchantRaw)),
+      expectedTransactions.some((row) => matrixCase.expectedMerchant!.test(row.merchantClean ?? row.merchantRaw)),
       `${matrixCase.label}: expected merchant was not normalized correctly.`
     );
   }
   if (matrixCase.expectedAllMerchants) {
     assert.ok(
-      transactions.every((row) => matrixCase.expectedAllMerchants!.test(row.merchantClean ?? row.merchantRaw)),
+      expectedTransactions.every((row) => matrixCase.expectedAllMerchants!.test(row.merchantClean ?? row.merchantRaw)),
       `${matrixCase.label}: cached or generic merchant noise replaced deterministic rows.`
     );
   }
   if (matrixCase.expectedCategory) {
     assert.ok(
-      transactions.every((row) => row.category?.name === matrixCase.expectedCategory),
+      expectedTransactions.every((row) => row.category?.name === matrixCase.expectedCategory),
       `${matrixCase.label}: expected category ${matrixCase.expectedCategory}.`
     );
   }
   if (matrixCase.expectedAllTransfers) {
     assert.ok(
-      transactions.every((row) => row.isTransfer || row.type === "transfer"),
+      expectedTransactions.every((row) => row.isTransfer || row.type === "transfer"),
       `${matrixCase.label}: transfer rows must be excluded from spending and income summaries.`
     );
   }
   if (matrixCase.expectedAmount != null) {
     assert.ok(
-      transactions.some((row) => Math.abs(Number(row.amount) - matrixCase.expectedAmount!) < 0.01),
+      expectedTransactions.some((row) => Math.abs(Number(row.amount) - matrixCase.expectedAmount!) < 0.01),
       `${matrixCase.label}: expected amount ${matrixCase.expectedAmount} was not found.`
     );
   }
   if (matrixCase.expectedAmounts) {
     for (const expectedAmount of matrixCase.expectedAmounts) {
       assert.ok(
-        transactions.some((row) => Math.abs(Number(row.amount) - expectedAmount) < 0.01),
+        expectedTransactions.some((row) => Math.abs(Number(row.amount) - expectedAmount) < 0.01),
         `${matrixCase.label}: expected amount ${expectedAmount} was not found.`
       );
     }
@@ -349,10 +360,10 @@ const verifyTransactions = async (workspaceId: string, importId: string, matrixC
     );
   }
 
-  const accountIds = new Set(transactions.map((row) => row.accountId));
+  const accountIds = new Set(expectedTransactions.map((row) => row.accountId));
   assert.equal(accountIds.size, 1, `${matrixCase.label}: one file unexpectedly created transactions across multiple accounts.`);
 
-  return { count: transactions.length, spending, income, transfers };
+  return { count: transactions.length, confirmedCount: expectedTransactions.length, spending, income, transfers };
 };
 
 const getTransactionApiSnapshot = async (workspaceId: string, summaryMode: "light" | "full") => {
@@ -564,7 +575,7 @@ const main = async () => {
         );
       }
       let downstream;
-      const statusApiMs = await verifyVisibleStatusHandoff(posted.importId, quality.count, matrixCase.label);
+      const statusApiMs = await verifyVisibleStatusHandoff(posted.importId, quality.confirmedCount, matrixCase.label);
       try {
         downstream = await verifyDownstreamStability(workspace.id, quality, matrixCase.label);
       } catch (error) {

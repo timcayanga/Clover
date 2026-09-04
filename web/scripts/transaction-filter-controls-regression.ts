@@ -51,6 +51,11 @@ async function main() {
     /workspaceCurrencyCodes\.length > 0 \? <CurrencySelector/,
     "The toolbar must hide its currency selector when the workspace has no transaction currencies."
   );
+  assert.match(
+    styles,
+    /\.transactions-selected-count \{[\s\S]{0,700}?height: var\(--action-button-height\);[\s\S]{0,400}?font-size: var\(--action-button-font-size\);[\s\S]{0,200}?font-weight: var\(--action-button-font-weight\);/,
+    "The selected-count status must share the Actions button height and typography."
+  );
 
   console.log("Transaction filter controls regression passed.");
 }

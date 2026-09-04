@@ -1325,6 +1325,7 @@ const readImportedStatementTextWithCache = async (params: {
 };
 
 export async function POST(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
+  const requestStartedAt = Date.now();
   let stage = "initializing";
   let responsePlanTier: "free" | "pro" | "unknown" = "unknown";
   // The parser worker is substantial. Start loading it while authentication,
@@ -1338,10 +1339,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     if (!localDev) {
       assertTrustedRequestOrigin(_request);
     }
-    const { userId } = localDev ? { userId: "local-admin" } : await requireAuth();
-    const pdfJsBaseUrl = new URL(_request.url).origin;
     const contentType = _request.headers.get("content-type") ?? "";
     const isMultipart = contentType.includes("multipart/form-data");
+    // Origin validation has already completed. Body decoding and authentication
+    // are independent, so overlap them instead of leaving mobile upload bytes
+    // waiting while the auth round trip finishes.
+    const multipartFormDataPromise = isMultipart ? _request.formData() : null;
+    const authPromise = localDev ? Promise.resolve({ userId: "local-admin" }) : requireAuth();
+    const { userId } = await authPromise;
+    const pdfJsBaseUrl = new URL(_request.url).origin;
     let allowDuplicateStatement = false;
     let forceInlineProcessing = false;
     let importMode: ImportImageMode | null = null;
@@ -1811,13 +1817,21 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
     if (isMultipart) {
       stage = "reading multipart form";
-      const formData = await _request.formData();
+      const formData = await multipartFormDataPromise!;
       const uploadedFile = formData.get("file");
       const formPassword = formData.get("password");
       const formWorkspaceId = typeof formData.get("workspaceId") === "string" ? String(formData.get("workspaceId")) : "";
       const formFileName = typeof formData.get("fileName") === "string" ? String(formData.get("fileName")) : "";
       const formFileType = typeof formData.get("fileType") === "string" ? String(formData.get("fileType")) : "";
       const formBankName = typeof formData.get("bankName") === "string" ? String(formData.get("bankName")) : "";
+      const formSourceTimezone =
+        typeof formData.get("sourceTimezone") === "string"
+          ? String(formData.get("sourceTimezone")).trim().slice(0, 100)
+          : "";
+      const formSourceLocale =
+        typeof formData.get("sourceLocale") === "string"
+          ? String(formData.get("sourceLocale")).trim().slice(0, 64)
+          : "";
       const formExtractedText =
         typeof formData.get("extractedText") === "string"
           ? String(formData.get("extractedText"))
@@ -1893,11 +1907,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
         stage = "creating import record";
         if (!localDev) {
-          await assertWorkspaceAccess(userId, formWorkspaceId);
-          const user = await getOrCreateCurrentUser(userId);
+          // These are independent reads. Running them together removes two
+          // Singapore database round trips from the critical upload path while
+          // still requiring the access check before any record is created.
+          const [, user, currentMonthUploads] = await Promise.all([
+            assertWorkspaceAccess(userId, formWorkspaceId),
+            getOrCreateCurrentUser(userId),
+            countWorkspaceOwnerImportFilesThisMonth(formWorkspaceId),
+          ]);
           responsePlanTier = user.planTier;
           const effectiveLimits = getEffectiveUserLimits(user);
-          const currentMonthUploads = await countWorkspaceOwnerImportFilesThisMonth(formWorkspaceId);
           if (effectiveLimits.monthlyUploadLimit !== null && currentMonthUploads >= effectiveLimits.monthlyUploadLimit) {
             const isFreePlan = user.planTier === "free";
             return NextResponse.json(
@@ -1920,6 +1939,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           fileType: formFileType || file.type || "unknown",
           storageKey: buildImportKey(formWorkspaceId, formFileName || file.name || "imported-file"),
           status: "processing",
+          sourceTimezone: formSourceTimezone || null,
+          sourceLocale: formSourceLocale || null,
         });
 
         if (!importFile) {
@@ -1967,12 +1988,22 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
 
       stage = "uploading raw file";
-      await updateImportFileCompat(importId, {
+      const uploadStatePromise = updateImportFileCompat(importId, {
         status: "processing",
         processingPhase: "uploading",
         processingMessage: "Uploading file...",
+        sourceTimezone: formSourceTimezone || importFile.sourceTimezone || null,
+        sourceLocale: formSourceLocale || importFile.sourceLocale || null,
       });
-      const bytes = new Uint8Array(await file.arrayBuffer());
+      importFile = {
+        ...importFile,
+        sourceTimezone: formSourceTimezone || importFile.sourceTimezone || null,
+        sourceLocale: formSourceLocale || importFile.sourceLocale || null,
+      };
+      // The multipart body is already resident when formData() resolves, so
+      // byte materialization does not depend on the progress-row update.
+      const [, fileBuffer] = await Promise.all([uploadStatePromise, file.arrayBuffer()]);
+      const bytes = new Uint8Array(fileBuffer);
       const byteValidationError = validateImportFileBytes({
         fileName: file.name || formFileName || "imported-file",
         contentType: file.type || formFileType || null,
@@ -1988,16 +2019,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       // and the confirmation lock, while each import retains its own audit raw.
       const rawStorageKey = String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName));
       const uploadPromise = uploadObject(rawStorageKey, bytes, file.type || "application/octet-stream");
-      await updateImportFileCompat(importId, {
-        sourceFingerprint: fileFingerprint,
-        storageKey: rawStorageKey,
-      });
-      importFile = { ...importFile, sourceFingerprint: fileFingerprint, storageKey: rawStorageKey };
-
-      // Start the extraction-cache lookup as soon as the byte fingerprint is
-      // known. Canonical-import election below is another database round trip
-      // and neither operation depends on the other; previously every PDF paid
-      // for them serially before it could start reading the statement.
       const effectiveFileName = file.name || formFileName || "imported-file";
       const effectiveFileType = file.type || formFileType || "";
       const earlyImageUpload = isImageUploadFile(effectiveFileName, effectiveFileType);
@@ -2013,27 +2034,39 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             cacheVersion: extractionCacheVersion,
           }).catch(() => null)
         : null;
+      const fingerprintPersistPromise = updateImportFileCompat(importId, {
+        sourceFingerprint: fileFingerprint,
+        storageKey: rawStorageKey,
+      });
+      const recentProcessingCutoff = new Date(Date.now() - 15 * 60 * 1000);
+      const activeCanonicalImportCutoff = new Date(Date.now() - 90 * 1000);
+      const canonicalCandidatesPromise = !allowDuplicateStatement
+        ? prisma.importFile.findMany({
+            where: {
+              workspaceId: String(importFile.workspaceId),
+              sourceFingerprint: fileFingerprint,
+              OR: [
+                { status: "done" },
+                { status: "processing", createdAt: { gte: recentProcessingCutoff } },
+              ],
+            },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            take: 12,
+            include: { account: true },
+          })
+        : null;
+      // Storage, fingerprint persistence, extraction-cache lookup, and
+      // duplicate election all depend only on the bytes/fingerprint. Start
+      // them together instead of paying a database waterfall before parsing.
+      await fingerprintPersistPromise;
+      importFile = { ...importFile, sourceFingerprint: fileFingerprint, storageKey: rawStorageKey };
 
       // File selection can be delivered more than once when two import surfaces
       // overlap or a client retries while the first request is still running.
       // Elect the oldest matching upload as the canonical owner before parsing,
       // otherwise both requests can create and confirm the same transactions.
       if (!allowDuplicateStatement) {
-        const recentProcessingCutoff = new Date(Date.now() - 15 * 60 * 1000);
-        const activeCanonicalImportCutoff = new Date(Date.now() - 90 * 1000);
-        const canonicalCandidates = await prisma.importFile.findMany({
-          where: {
-            workspaceId: String(importFile.workspaceId),
-            sourceFingerprint: fileFingerprint,
-            OR: [
-              { status: "done" },
-              { status: "processing", createdAt: { gte: recentProcessingCutoff } },
-            ],
-          },
-          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-          take: 12,
-          include: { account: true },
-        });
+        const canonicalCandidates = await canonicalCandidatesPromise!;
         let canonicalImport: (typeof canonicalCandidates)[number] | null = null;
         let canonicalVisibleRows = 0;
         for (const candidate of canonicalCandidates) {
@@ -2206,6 +2239,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         trainingMode: formTrainingMode,
       });
       const cachedDocRecord = cachedDocRecordPromise ? await cachedDocRecordPromise : null;
+      console.info("[import-performance] upload preparation complete", {
+        importId,
+        importMode: importMode ?? "statement",
+        requestPreparationMs: Date.now() - requestStartedAt,
+        fileBytes: bytes.length,
+        cacheLookupUsed: Boolean(cachedDocRecordPromise),
+      });
       const hasReusableCachedDocRecord = Boolean(
         cachedDocRecord?.parsedRows &&
         cachedDocRecord.statementFingerprint &&
@@ -2835,9 +2875,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             canProcessSpreadsheetFromRequestBytes
               ? bytes
               : null,
-          // The processor awaits this promise immediately before its first
-          // persistence write. That retains the raw-file audit guarantee while
-          // allowing storage, PDF extraction, and local parsing to overlap.
+          // The processor awaits this promise immediately before normalized
+          // financial rows are written. That retains the raw-file audit
+          // guarantee while allowing storage and parsing to overlap.
           rawFileReady:
             canProcessImageFromRequestBytes || canExtractPdfFromRequestBytes
               ? uploadPromise
@@ -2849,12 +2889,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
               }
             : null,
         });
-        const canUseCommittedStatementResult =
-          (importMode ?? "statement") === "statement" &&
+        const responseAssemblyStartedAt = Date.now();
+        const canUseCommittedWorkerResult =
           result.status === "done" &&
           (Number(result.confirmedTransactionsCount ?? result.imported ?? 0) > 0 ||
             Number(result.accountSummaries?.length ?? 0) > 0);
-        const statusSnapshot = canUseCommittedStatementResult
+        // Successful inline confirmation is already the durable source of
+        // truth. The full recovery snapshot performs several additional
+        // account, checkpoint, enrichment, receipt, and settlement queries.
+        // Reserve that waterfall for incomplete and error states.
+        const statusSnapshot = canUseCommittedWorkerResult
           ? null
           : await loadImportStatusSnapshot(importId, {
               importFile: (await fetchImportFileCompat(importId)) ?? importFile,
@@ -2908,11 +2952,21 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         // The worker has already committed the receipt when visibleRows is positive.
         // If the broader status snapshot raced that commit, return the transaction
         // directly so the client can publish it without waiting for SSE or a reload.
+        const receiptLookupStartedAt = Date.now();
         const responseReceiptTransaction =
           statusSnapshot?.receiptTransaction ??
           (resolvedResponseImportMode === "receipt" && visibleRows > 0
             ? await loadCommittedReceiptTransactionForResponse(importId)
             : null);
+        console.info("[import-performance] inline response assembled", {
+          importFileId: importId,
+          importMode: resolvedResponseImportMode,
+          usedCommittedWorkerFastPath: canUseCommittedWorkerResult,
+          usedFullStatusSnapshot: Boolean(statusSnapshot),
+          receiptLookupMs: Date.now() - receiptLookupStartedAt,
+          responseAssemblyMs: Date.now() - responseAssemblyStartedAt,
+          visibleRows,
+        });
 
         return NextResponse.json({
           ok: true,

@@ -143,6 +143,18 @@ const runInlineRenameUat = () => {
   assert.match(pageSource, /body: JSON\.stringify\(\{ name \}\)/);
   assert.match(pageSource, /event\.key === "Escape"/);
   assert.match(pageSource, /maxLength=\{100\}/);
+  assert.match(pageSource, /useCollectionSelection\("circle"\)/);
+  assert.doesNotMatch(pageSource, /window\.history\.replaceState\(null, "", "\/circles"\)/, "deep links must survive hydration");
+  assert.match(workspaceSource, /collection-card-grid/);
+  assert.match(workspaceSource, /collection-create-card/);
+  assert.match(workspaceSource, /editable=\{circle.role === "organizer"\}/, "only organizers may edit card identity");
+  assert.match(workspaceSource, /updateCardIdentity/);
+  assert.doesNotMatch(workspaceSource, /<h2>Your Circles<\/h2>|collection-card__footer/);
+  const cardStyles = readFileSync(path.join(process.cwd(), "app/collection-layouts.css"), "utf8");
+  assert.match(cardStyles, /:not\(\.collection-card__icon\)/, "read-only member icons must not stretch like the card title");
+  assert.match(cardStyles, /img.collection-clover-logo \{ width: 24px; height: 24px/);
+  assert.doesNotMatch(workspaceSource, /data\.circles\[0\] \?\?/, "no selection must show the directory, not the first Circle");
+  assert.doesNotMatch(workspaceSource, /scrollIntoView/, "detail entry must not scroll the first row behind sticky navigation");
   assert.match(
     workspaceSource,
     /circle\.id === circleRename\.circleId[\s\S]*name: circleRename\.name/,

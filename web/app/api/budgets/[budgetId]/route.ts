@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isBudgetEmoji } from "@/lib/budget-appearance";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { buildBudgetHistory } from "@/lib/budgeting";
@@ -10,6 +11,8 @@ import { assertTrustedRequestOrigin } from "@/lib/request-security";
 const budgetUpdateSchema = z
   .object({
     name: z.string().trim().min(2).max(80),
+    emoji: z.string().refine(isBudgetEmoji).nullable().optional(),
+    planId: z.string().trim().min(1).nullable().optional(),
     kind: z.enum(["spend_limit", "savings_target"]).default("spend_limit"),
     scope: z.enum(["global", "account", "category"]).default("global"),
     cadence: z.enum(["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"]).default("monthly"),
@@ -314,6 +317,9 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   const payload = parsed.data;
+  if (payload.planId && !await prisma.budgetPlan.findFirst({ where: { id: payload.planId, workspaceId: context.workspaceId }, select: { id: true } })) {
+    return NextResponse.json({ error: "Choose a valid budget plan." }, { status: 400 });
+  }
   const accountId = payload.scope === "account" ? payload.accountId ?? null : null;
   const categoryId = payload.scope === "category" ? payload.categoryId ?? null : null;
 
@@ -333,6 +339,8 @@ export async function PATCH(request: Request, { params }: Params) {
       },
       data: {
         name: payload.name,
+        emoji: payload.emoji,
+        planId: payload.planId,
         kind: payload.kind,
         scope: payload.kind === "savings_target" ? "global" : payload.scope,
         cadence: payload.cadence,

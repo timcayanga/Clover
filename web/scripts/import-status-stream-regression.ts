@@ -13,6 +13,12 @@ const main = async () => {
     readFile(join(webRoot, "lib/import-settled-visibility.ts"), "utf8"),
     readFile(join(webRoot, "components/import-files-modal.tsx"), "utf8"),
   ]);
+  const workerSource = await readFile(join(webRoot, "workers/imports-worker.ts"), "utf8");
+  assert.match(
+    workerSource,
+    /isMissingImportFileError[\s\S]{0,900}?job\.discard\(\);[\s\S]{0,120}?reason: "import_deleted"/,
+    "a deleted queued import should settle as a cancellation instead of retrying a missing source"
+  );
 
   assert.match(routeSource, /IMPORT_STATUS_STREAM_POLL_MS\s*=\s*2_500/);
   assert.match(routeSource, /fetchImportFileStatusCompat/);

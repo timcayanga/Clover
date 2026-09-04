@@ -63,7 +63,7 @@ async function main() {
     publicAccountActionsSource,
   ] = await Promise.all([
     readSource("components/clover-shell.tsx"),
-    readSource("app/dashboard/page.tsx"),
+    readSource("components/dashboard-page-content.tsx"),
     readSource("lib/workspace-selection.ts"),
     readSource("components/onboarding-form.tsx"),
     readSource("components/circles-page-client.tsx"),

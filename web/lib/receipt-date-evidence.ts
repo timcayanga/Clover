@@ -5,6 +5,11 @@ type ReceiptDateDetails = {
   } | null;
 };
 
+type ReceiptDateContext = {
+  referenceDate?: Date | string | null;
+  sourceLocale?: string | null;
+};
+
 const monthIndexes = new Map<string, number>(
   [
     ["jan", 1], ["january", 1], ["feb", 2], ["february", 2], ["mar", 3], ["march", 3],
@@ -55,11 +60,47 @@ const getExplicitEvidenceDates = (sourceText: string) => {
   return Array.from(dates);
 };
 
-export const repairReceiptDateFromEvidence = <T extends ReceiptDateDetails>(details: T): T => {
+const toUtcDayNumber = (value: Date | string | null | undefined) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return Math.floor(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) / 86_400_000);
+};
+
+const resolveRecentEvidenceDate = (
+  dates: string[],
+  referenceDate: Date | string | null | undefined
+) => {
+  const referenceDay = toUtcDayNumber(referenceDate);
+  if (referenceDay === null || dates.length < 2) return null;
+
+  const ranked = dates
+    .map((date) => ({ date, distance: Math.abs((toUtcDayNumber(date) ?? Number.POSITIVE_INFINITY) - referenceDay) }))
+    .sort((left, right) => left.distance - right.distance);
+  const best = ranked[0];
+  const runnerUp = ranked[1];
+
+  // Camera receipts are overwhelmingly uploaded on or shortly after the
+  // purchase. Use that evidence only when one interpretation is recent and
+  // the competing interpretation is materially farther away. Old receipts
+  // remain ambiguous instead of being silently rewritten.
+  return best && runnerUp && best.distance <= 7 && runnerUp.distance - best.distance >= 30
+    ? best.date
+    : null;
+};
+
+export const repairReceiptDateFromEvidence = <T extends ReceiptDateDetails>(
+  details: T,
+  trustedSourceText?: string | null,
+  context: ReceiptDateContext = {}
+): T => {
   const currentDate = /^20\d{2}-\d{2}-\d{2}$/.test(details.transaction_date ?? "")
     ? details.transaction_date
     : null;
-  const sourceText = details.parser_evidence?.source_text?.trim() ?? "";
+  // Prefer Clover's own OCR/text extraction over model-returned evidence. A
+  // model can transcribe the same wrong year into parser_evidence, while the
+  // locally extracted receipt text remains an independent source of truth.
+  const sourceText = trustedSourceText?.trim() || details.parser_evidence?.source_text?.trim() || "";
   if (!currentDate || !sourceText) return details;
 
   const explicitEvidenceDates = getExplicitEvidenceDates(sourceText);
@@ -74,7 +115,15 @@ export const repairReceiptDateFromEvidence = <T extends ReceiptDateDetails>(deta
       : {
           ...details,
           transaction_date: explicitDate,
-        };
+      };
+  }
+
+  const recentEvidenceDate = resolveRecentEvidenceDate(explicitEvidenceDates, context.referenceDate);
+  if (recentEvidenceDate && recentEvidenceDate !== currentDate) {
+    return {
+      ...details,
+      transaction_date: recentEvidenceDate,
+    };
   }
 
   const monthDay = currentDate.slice(4);

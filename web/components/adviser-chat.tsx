@@ -6,6 +6,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { trackAdviserInteraction } from "@/lib/adviser-interactions";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
+import { formatCurrencyAmount } from "@/lib/currency-format";
+import type { AdviserPlanningDraft, AdviserPlanningSurface } from "@/lib/adviser-planning";
 
 export type AdviserPrompt = {
   id: string;
@@ -72,9 +74,36 @@ type AdviserChatProps = {
   storageKey?: string;
   initialPrompt?: string;
   layout?: "embedded" | "workspace";
+  surface?: AdviserPlanningSurface;
 };
 
 const adviserChatStorageKey = "clover-adviser-chat-session-v1";
+
+const planningDraftFromAction = (action: AdviserAction): AdviserPlanningDraft | null => {
+  if (action.kind !== "confirm" || (action.type !== "create_budget" && action.type !== "set_goal") || !action.payload) return null;
+  const isBudget = action.type === "create_budget";
+  const goalLabels: Record<string, string> = {
+    save_more: "Save more",
+    pay_down_debt: "Pay down debt",
+    track_spending: "Track spending",
+    build_emergency_fund: "Build an emergency fund",
+    invest_better: "Invest better",
+  };
+  const title = isBudget
+    ? String(action.payload.name || "New budget")
+    : goalLabels[String(action.payload.goal || "")] || "New goal";
+  return {
+    id: action.id.replace(/^planning-/, ""),
+    kind: isBudget ? "budget" : "goal",
+    title,
+    emoji: isBudget ? (action.payload.kind === "savings_target" ? "🌱" : "💰") : "🎯",
+    summary: `${String(action.payload.cadence || (isBudget ? "monthly" : "monthly")).replaceAll("_", " ")} ${isBudget ? (action.payload.kind === "savings_target" ? "savings target" : "spending limit") : "target"}`,
+    payload: action.payload,
+    missingFields: [],
+    ready: true,
+    action: action as AdviserPlanningDraft["action"],
+  };
+};
 
 const inferFeedbackGroup = (question: string) => {
   const normalized = question.toLowerCase();
@@ -93,7 +122,7 @@ const inferFeedbackGroup = (question: string) => {
   return "cashflow";
 };
 
-export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey, initialPrompt = "", layout = "embedded" }: AdviserChatProps) {
+export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey, initialPrompt = "", layout = "embedded", surface = "general" }: AdviserChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -105,6 +134,8 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
   const [suggestedPrompts, setSuggestedPrompts] = useState<AdviserPrompt[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
   const [feedbackByMessage, setFeedbackByMessage] = useState<Record<number, "helpful" | "not_helpful">>({});
+  const [planningDraft, setPlanningDraft] = useState<AdviserPlanningDraft | null>(null);
+  const [planningDetailsOpen, setPlanningDetailsOpen] = useState(false);
   const threadRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -116,7 +147,7 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
     try {
       const stored = window.sessionStorage.getItem(storageKey);
       if (stored) {
-        const parsed = JSON.parse(stored) as { messages?: ChatMessage[]; suggestions?: AdviserPrompt[]; grounding?: AdviserGrounding };
+        const parsed = JSON.parse(stored) as { messages?: ChatMessage[]; suggestions?: AdviserPrompt[]; grounding?: AdviserGrounding; planningDraft?: AdviserPlanningDraft };
         if (Array.isArray(parsed.messages)) {
           setMessages(parsed.messages.filter((message) => (message?.role === "user" || message?.role === "assistant") && typeof message.content === "string").slice(-10));
         }
@@ -125,6 +156,9 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
         }
         if (parsed.grounding) {
           setGrounding(parsed.grounding);
+        }
+        if (parsed.planningDraft?.kind === "budget" || parsed.planningDraft?.kind === "goal") {
+          setPlanningDraft(parsed.planningDraft);
         }
       }
     } catch {
@@ -160,12 +194,12 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
     try {
       window.sessionStorage.setItem(
         storageKey,
-        JSON.stringify({ messages: messages.slice(-10), suggestions: suggestedPrompts.slice(0, 6), grounding })
+        JSON.stringify({ messages: messages.slice(-10), suggestions: suggestedPrompts.slice(0, 6), grounding, planningDraft })
       );
     } catch {
       // Session persistence is helpful but never required for chat.
     }
-  }, [grounding, isHydrated, messages, storageKey, suggestedPrompts]);
+  }, [grounding, isHydrated, messages, planningDraft, storageKey, suggestedPrompts]);
 
   const scrollToBottom = () => {
     const thread = threadRef.current;
@@ -202,6 +236,8 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
         body: JSON.stringify({
           messages: nextMessages,
           stream: true,
+          surface,
+          activeDraft: planningDraft,
         }),
       });
 
@@ -220,13 +256,14 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
         let streamedSuggestions: AdviserPrompt[] = [];
         let streamedUsage: AdviserUsage | undefined;
         let streamedGrounding: AdviserGrounding | undefined;
+        let streamedPlanningDraft: AdviserPlanningDraft | undefined;
 
         const handleEvent = (event: string) => {
           const dataLine = event.split("\n").find((line) => line.startsWith("data: "));
           if (!dataLine) {
             return;
           }
-          const data = JSON.parse(dataLine.slice(6)) as { type?: string; text?: string; usage?: AdviserUsage; actions?: AdviserAction[]; suggestions?: AdviserPrompt[]; grounding?: AdviserGrounding };
+          const data = JSON.parse(dataLine.slice(6)) as { type?: string; text?: string; usage?: AdviserUsage; actions?: AdviserAction[]; suggestions?: AdviserPrompt[]; grounding?: AdviserGrounding; planningDraft?: AdviserPlanningDraft };
           if (data.type === "delta" && data.text) {
             streamedReply += data.text;
             setMessages((current) => current.map((message, index) => (index === assistantIndex ? { ...message, content: streamedReply } : message)));
@@ -236,6 +273,7 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
             streamedSuggestions = data.suggestions ?? [];
             streamedUsage = data.usage;
             streamedGrounding = data.grounding;
+            streamedPlanningDraft = data.planningDraft;
           }
         };
 
@@ -260,11 +298,16 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
           setSuggestedPrompts(streamedSuggestions);
         }
         setActions(streamedActions.slice(0, 1));
+        const nextDraft = streamedPlanningDraft ?? streamedActions.map(planningDraftFromAction).find(Boolean) ?? null;
+        if (nextDraft) {
+          setPlanningDraft(nextDraft);
+          setPlanningDetailsOpen(true);
+        }
         window.setTimeout(scrollToBottom, 0);
         return;
       }
 
-      const payload = (await response.json().catch(() => null)) as { error?: string; usage?: AdviserUsage; actions?: AdviserAction[]; suggestions?: AdviserPrompt[]; reply?: string; grounding?: AdviserGrounding } | null;
+      const payload = (await response.json().catch(() => null)) as { error?: string; usage?: AdviserUsage; actions?: AdviserAction[]; suggestions?: AdviserPrompt[]; reply?: string; grounding?: AdviserGrounding; planningDraft?: AdviserPlanningDraft } | null;
       if (payload?.usage) {
         setUsage(payload.usage);
       }
@@ -287,7 +330,13 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
       const reply = payload.reply?.trim() || "I could not generate a response just now.";
 
       setMessages((current) => [...current, { role: "assistant", content: reply }]);
-      setActions((payload.actions ?? []).slice(0, 1));
+      const responseActions = (payload.actions ?? []).slice(0, 1);
+      setActions(responseActions);
+      const nextDraft = payload.planningDraft ?? responseActions.map(planningDraftFromAction).find(Boolean) ?? null;
+      if (nextDraft) {
+        setPlanningDraft(nextDraft);
+        setPlanningDetailsOpen(true);
+      }
       window.setTimeout(scrollToBottom, 0);
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to get a response from Adviser.");
@@ -317,13 +366,31 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      const payload = (await response.json().catch(() => null)) as { error?: string; result?: unknown } | null;
+      const payload = (await response.json().catch(() => null)) as { error?: string; result?: { budget?: { id?: string }; goal?: unknown } } | null;
       if (!response.ok) {
         throw new Error(payload?.error ?? "Clover could not complete that action.");
       }
 
       setActions((current) => current.filter((item) => item.id !== action.id));
-      setMessages((current) => [...current, { role: "assistant", content: `${action.label} completed. You can ask me to check the updated picture.` }]);
+      if (planningDraft?.action?.id === action.id) {
+        const savedHref = action.type === "create_budget" && payload?.result?.budget?.id
+          ? `/budgeting?budget=${encodeURIComponent(payload.result.budget.id)}`
+          : action.type === "set_goal" ? "/goals" : undefined;
+        setPlanningDraft((current) => current ? {
+          ...current,
+          ready: false,
+          action: undefined,
+          savedHref,
+          savedLabel: action.type === "create_budget" ? "Open budget" : "Open goal",
+        } : current);
+      }
+      const completionMessage =
+        action.type === "create_budget"
+          ? "Your budget is now saved in Clover. You can ask me to adjust your plan or review how it fits your recent spending."
+          : action.type === "set_goal"
+            ? "Your goal is now saved in Clover. You can ask me to adjust the target or review your progress anytime."
+            : `${action.label} completed. You can ask me to check the updated picture.`;
+      setMessages((current) => [...current, { role: "assistant", content: completionMessage }]);
       capturePostHogClientEvent("adviser_action_completed", {
         action_type: action.type,
       });
@@ -365,6 +432,8 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
     setSuggestedPrompts([]);
     setFeedbackByMessage({});
     setGrounding(null);
+    setPlanningDraft(null);
+    setPlanningDetailsOpen(false);
     setError(null);
     try {
       window.sessionStorage.removeItem(storageKey);
@@ -464,6 +533,13 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
       </div>
     </form>
   );
+  const planningAmount = planningDraft ? Number(planningDraft.payload.targetAmount ?? 0) : 0;
+  const planningCurrency = planningDraft ? String(planningDraft.payload.currency || "PHP").toUpperCase() : "PHP";
+  const planningCadence = planningDraft
+    ? String(planningDraft.payload.cadence || ((planningDraft.payload.goalPlan as Record<string, unknown> | undefined)?.cadence ?? "monthly"))
+    : "monthly";
+  const planningCadenceLabel = planningCadence === "annual" ? "Yearly" : planningCadence === "quarterly" ? "Quarterly" : planningCadence === "biweekly" ? "Every 2 weeks" : planningCadence.charAt(0).toUpperCase() + planningCadence.slice(1);
+  const nonPlanningActions = actions.filter((action) => action.id !== planningDraft?.action?.id);
 
   return (
     <div className={`adviser-chat${layout === "workspace" ? " adviser-chat--workspace" : ""}${messages.length === 0 ? " adviser-chat--empty" : ""}`}>
@@ -544,9 +620,58 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
         </div>
       ) : null}
 
-      {actions.length > 0 ? (
+      {planningDraft ? (
+        <article className={`adviser-planning-card adviser-planning-card--${planningDraft.kind}`} aria-label={`${planningDraft.title} draft`}>
+          <div className="adviser-planning-card__hero">
+            <span className="adviser-planning-card__emoji" aria-hidden="true">{planningDraft.emoji}</span>
+            <div>
+              <span className="adviser-planning-card__status">{planningDraft.savedHref ? "Saved in Clover" : planningDraft.ready ? "Ready for your review" : "Planning draft"}</span>
+              <h3>{planningDraft.title}</h3>
+              <p>{planningDraft.summary}</p>
+            </div>
+          </div>
+          <div className="adviser-planning-card__amount">
+            <span>{planningDraft.kind === "budget" ? "Target amount" : "Goal target"}</span>
+            <strong>{planningAmount > 0 ? formatCurrencyAmount(planningAmount, planningCurrency) : "Add an amount"}</strong>
+            <small>{planningCadenceLabel}</small>
+          </div>
+          <button
+            type="button"
+            className="adviser-planning-card__details-toggle"
+            aria-expanded={planningDetailsOpen}
+            onClick={() => setPlanningDetailsOpen((current) => !current)}
+          >
+            {planningDetailsOpen ? "Hide details" : "Open details"}
+          </button>
+          {planningDetailsOpen ? (
+            <div className="adviser-planning-card__details">
+              <dl>
+                <div><dt>Currency</dt><dd>{planningCurrency}</dd></div>
+                <div><dt>Cadence</dt><dd>{planningCadenceLabel}</dd></div>
+                {planningDraft.kind === "budget" ? <div><dt>Type</dt><dd>{planningDraft.payload.kind === "savings_target" ? "Savings target" : "Spending limit"}</dd></div> : null}
+              </dl>
+              {planningDraft.missingFields.length > 0 ? <p>Still needed: {planningDraft.missingFields.join(" and ")}.</p> : <p>Ask Adviser to change any detail before you confirm.</p>}
+            </div>
+          ) : null}
+          <div className="adviser-planning-card__actions">
+            {planningDraft.savedHref ? <Link className="button button-primary button-small" href={planningDraft.savedHref}>{planningDraft.savedLabel ?? "Open in Clover"}</Link> : null}
+            {planningDraft.action ? (
+              <button
+                type="button"
+                className="button button-primary button-small"
+                disabled={pendingActionId === planningDraft.action.id}
+                onClick={() => void completeAction(planningDraft.action as AdviserAction)}
+              >
+                {pendingActionId === planningDraft.action.id ? "Saving..." : planningDraft.action.label}
+              </button>
+            ) : null}
+          </div>
+        </article>
+      ) : null}
+
+      {nonPlanningActions.length > 0 ? (
         <div className="adviser-chat__actions" aria-label="Suggested action">
-          {actions.slice(0, 1).map((action) => (
+          {nonPlanningActions.slice(0, 1).map((action) => (
             <button
               key={action.id}
               type="button"

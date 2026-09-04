@@ -26,6 +26,7 @@ import {
   type GoalKey,
 } from "@/lib/goals";
 import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
+import { ContextualAskClover } from "@/components/contextual-ask-clover";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -732,7 +733,12 @@ async function GoalsPageStream() {
 
   return (
     <RouteSplash label="goals">
-      <CloverShell active="goals" title="Goals" mobileBackHref="/more">
+      <CloverShell
+        active="goals"
+        title="Goals"
+        mobileBackHref="/more"
+        actions={<ContextualAskClover context="goals" planTier={isPro ? "pro" : "free"} showLabel />}
+      >
         <section className="goals-page">
           {!hasGoalSelection ? (
             <section className="goals-blank-state glass">

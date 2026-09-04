@@ -22,15 +22,19 @@ import { getAccountBrand } from "@/lib/account-brand";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { RecurringCalendar } from "@/components/recurring-calendar";
 import { RecurringCalendarDetail, type RecurringDetailEditableField } from "@/components/recurring-calendar-detail";
+import { suggestRecurringTitle, getRecurringSuggestionCategory } from "@/lib/recurring-suggestion-policy";
+import { formatAccountOptionLabel } from "@/lib/account-option-label";
 
 type CommitmentAccountOption = {
   id: string;
   name: string;
   institution: string | null;
   type: string;
+  currency: string;
 };
 
 type CommitmentTransactionOption = {
+  category?: { name: string } | null;
   id: string;
   date: string;
   amount: string;
@@ -414,7 +418,7 @@ export function CommitmentsPanel({
   const recentTransactions = transactions.slice(0, 24);
   // Home counts recurring-transaction suggestions as potential payments, so
   // the Recurring overview must expose the same records for review.
-  const actionablePlannedPaymentSuggestions = plannedPaymentSuggestions;
+  const actionablePlannedPaymentSuggestions = plannedPaymentSuggestions.filter((suggestion) => !dismissedPatternIds.has(suggestion.id));
   const suggestedRecurringPatterns = useMemo(() => {
     const deduped = new Map<string, RecurringPatternSummary>();
     for (const pattern of recurringPatterns) {
@@ -442,10 +446,10 @@ export function CommitmentsPanel({
   const transactionById = useMemo(() => new Map(transactions.map((transaction) => [transaction.id, transaction])), [transactions]);
   const addableTransactions = useMemo(() => {
     const search = transactionSearch.trim().toLowerCase();
+    if (!search) return [];
     return transactions
       .filter((transaction) => !patternDraft.transactionIds.includes(transaction.id))
       .filter((transaction) => {
-        if (!search) return transaction.currency === patternDraft.currency && (!patternDraft.accountId || transaction.account.id === patternDraft.accountId);
         return `${transaction.merchantClean ?? ""} ${transaction.merchantRaw} ${transaction.account.name} ${transaction.amount} ${transaction.date}`.toLowerCase().includes(search);
       })
       .slice(0, 8);
@@ -827,7 +831,7 @@ export function CommitmentsPanel({
   };
 
   const openPatternReview = (pattern: RecurringPatternSummary) => {
-    const title = pattern.merchantClean ?? pattern.merchantRaw;
+    const title = suggestRecurringTitle(pattern.merchantClean ?? pattern.merchantRaw);
     const recurrenceValue = commitmentRecurrenceOptions.some((option) => option.value === pattern.frequency)
       ? (pattern.frequency as (typeof commitmentRecurrenceOptions)[number]["value"])
       : "monthly";
@@ -858,7 +862,7 @@ export function CommitmentsPanel({
     openSuggestionReview({
       id: suggestion.id,
       sourceKind: suggestion.sourceKind,
-      title: suggestion.title,
+      title: suggestRecurringTitle(suggestion.title),
       counterparty: suggestion.counterparty ?? suggestion.title,
       amount: suggestion.amount ?? "",
       currency: suggestion.currency,
@@ -954,8 +958,11 @@ export function CommitmentsPanel({
   const handleDismissPattern = (patternId: string) => {
     setDismissingPatternId(patternId);
     setDismissedPatternIds((current) => new Set(current).add(patternId));
-    void fetch(`/api/recurring-patterns/${patternId}/dismiss`, {
+    const isPattern = reviewingSuggestion?.sourceKind === "recurring_pattern";
+    void fetch(isPattern ? `/api/recurring-patterns/${patternId}/dismiss` : "/api/recurring-suggestions/dismiss", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspaceId, suggestionId: patternId }),
     })
       .then(async (response) => {
         if (!response.ok) {
@@ -1342,7 +1349,7 @@ export function CommitmentsPanel({
                           .sort((left, right) => left.name.localeCompare(right.name))
                           .map((account) => (
                             <option key={account.id} value={account.id}>
-                              {account.name}{account.institution ? ` · ${account.institution}` : ""}
+                              {formatAccountOptionLabel(account)}
                             </option>
                           ))}
                       </select>
@@ -1490,7 +1497,7 @@ export function CommitmentsPanel({
                 >
                   <option value="">Not linked</option>
                   {[...accounts].sort((left, right) => left.name.localeCompare(right.name)).map((account) => (
-                    <option key={account.id} value={account.id}>{account.name}</option>
+                    <option key={account.id} value={account.id}>{formatAccountOptionLabel(account)}</option>
                   ))}
                 </select>
               </label>
@@ -1666,9 +1673,10 @@ export function CommitmentsPanel({
           {actionablePlannedPaymentSuggestions.length > 0 || suggestedRecurringPatterns.length > 0 ? (
             <div className="recurring-overview-list">
               {actionablePlannedPaymentSuggestions.slice(0, 6).map((suggestion) => (
-                <div key={suggestion.id} className="recurring-overview-list__item">
+                <div key={suggestion.id} className="recurring-overview-list__item recurring-overview-list__item--suggestion">
+                  <CategoryBrandMark categoryName={suggestion.categoryName ?? getRecurringSuggestionCategory(suggestion.transactionIds.map((id) => transactionById.get(id)?.category?.name), suggestion.reasonTags)} size={30} />
                   <span>
-                    <strong>{suggestion.title}</strong>
+                    <strong>{suggestRecurringTitle(suggestion.title)}</strong>
                     <small>{suggestion.sourceLabel}</small>
                   </span>
                   <button className="button button-secondary button-small recurring-overview-review-button" type="button" onClick={() => openPlannedPaymentReview(suggestion)}>
@@ -1677,9 +1685,10 @@ export function CommitmentsPanel({
                 </div>
               ))}
               {actionablePlannedPaymentSuggestions.length < 6 ? suggestedRecurringPatterns.slice(0, 6 - actionablePlannedPaymentSuggestions.length).map((pattern) => (
-                <div key={pattern.id} className="recurring-overview-list__item">
+                <div key={pattern.id} className="recurring-overview-list__item recurring-overview-list__item--suggestion">
+                  <CategoryBrandMark categoryName={getRecurringSuggestionCategory(pattern.transactionIds.map((id) => transactionById.get(id)?.category?.name), pattern.reasonTags)} size={30} />
                   <span>
-                    <strong>{pattern.merchantClean ?? pattern.merchantRaw}</strong>
+                    <strong>{suggestRecurringTitle(pattern.merchantClean ?? pattern.merchantRaw)}</strong>
                     <small>{formatDate(pattern.nextExpectedDate)}</small>
                   </span>
                   <button className="button button-secondary button-small recurring-overview-review-button" type="button" onClick={() => openPatternReview(pattern)}>
@@ -1851,8 +1860,7 @@ export function CommitmentsPanel({
                     <option value="">None</option>
                     {accounts.map((account) => (
                       <option key={account.id} value={account.id}>
-                        {account.name}
-                        {account.institution ? ` · ${account.institution}` : ""}
+                        {formatAccountOptionLabel(account)}
                       </option>
                     ))}
                   </select>
@@ -1912,7 +1920,7 @@ export function CommitmentsPanel({
                       </button>
                     ))}
                   </div>
-                ) : transactionSearch ? <p className="recurring-suggestion-evidence__empty">No matching transactions found.</p> : null}
+                ) : transactionSearch.trim() ? <p className="recurring-suggestion-evidence__empty">No matching transactions found.</p> : null}
               </section>
 
               <label className="settings-field">
@@ -1942,18 +1950,16 @@ export function CommitmentsPanel({
                   <button className="button button-secondary button-small recurring-compact-action" type="button" onClick={() => setReviewingSuggestion(null)}>
                     Cancel
                   </button>
-                  {reviewingSuggestion.sourceKind === "recurring_pattern" ? (
                     <button
                       className="button button-secondary button-small recurring-compact-action"
                       type="button"
                       onClick={() => handleDismissPattern(reviewingSuggestion.id)}
-                      disabled={dismissingPatternId === reviewingSuggestion.id}
+                      disabled={dismissingPatternId !== null || confirmingPatternId !== null}
                     >
-                      {dismissingPatternId === reviewingSuggestion.id ? "Dismissing..." : "Dismiss suggestion"}
+                      {dismissingPatternId === reviewingSuggestion.id ? "Hiding..." : "Not a recurring payment"}
                     </button>
-                  ) : null}
                 </div>
-                <button className="button button-primary button-small recurring-compact-action" type="submit" disabled={confirmingPatternId === reviewingSuggestion.id}>
+                <button className="button button-primary button-small recurring-compact-action" type="submit" disabled={confirmingPatternId !== null || dismissingPatternId !== null}>
                   {confirmingPatternId === reviewingSuggestion.id
                     ? "Saving..."
                     : reviewingSuggestion.sourceKind === "installment"
@@ -2141,8 +2147,7 @@ export function CommitmentsPanel({
                             <option value="">None</option>
                             {accounts.map((account) => (
                               <option key={account.id} value={account.id}>
-                                {account.name}
-                                {account.institution ? ` · ${account.institution}` : ""}
+                                {formatAccountOptionLabel(account)}
                               </option>
                             ))}
                           </select>

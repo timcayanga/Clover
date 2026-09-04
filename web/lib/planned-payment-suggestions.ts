@@ -2,6 +2,7 @@ import { type CommitmentRecurrence, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { getUpcomingStatementReminders, type StatementReminder } from "@/lib/statement-reminders";
+import { isRecurringSuggestionCurrent, suggestRecurringTitle, getRecurringSuggestionCategory } from "@/lib/recurring-suggestion-policy";
 import {
   buildRecurringMerchantFamilySignature,
   classifyRecurringObligation,
@@ -31,6 +32,7 @@ type PlannedPaymentTransactionLike = {
 };
 
 export type PlannedPaymentSuggestion = {
+  categoryName?: string;
   id: string;
   sourceKind: "statement_reminder" | "installment" | "recurring_transaction";
   title: string;
@@ -445,7 +447,7 @@ const buildRecurringTransactionSuggestions = (
   const detectedFamilyKeys = new Set<string>();
 
   for (const pattern of patterns) {
-    const title = (pattern.canonicalTitle || pattern.merchantClean || pattern.merchantRaw).trim();
+    const title = suggestRecurringTitle(pattern.canonicalTitle || pattern.merchantClean || pattern.merchantRaw);
     if (!title || GENERIC_RECURRING_TITLE_PATTERN.test(title)) {
       continue;
     }
@@ -482,7 +484,6 @@ const buildRecurringTransactionSuggestions = (
       ) ?? confirmedMatches[0] ?? null;
     const hasConfirmedMatch = Boolean(confirmedMatch);
     const dueDate = selectRememberedDueDate(pattern.nextExpectedDate, confirmedMatch);
-    const daysUntilDue = Math.round((dueDate.getTime() - Date.now()) / DAY_IN_MS);
     const distinctMonthCount = readPatternMetric(pattern.rawPayload, "distinctMonthCount");
     const accountCount = readPatternMetric(pattern.rawPayload, "accountCount");
     const suggestionType = describeRecurringSuggestionType(title, pattern.reasonTags);
@@ -494,13 +495,10 @@ const buildRecurringTransactionSuggestions = (
       continue;
     }
 
-    if (pattern.frequency === "annual" && daysUntilDue > 180) {
-      continue;
-    }
-
     const confidence = Math.min(98, pattern.confidence + (hasConfirmedMatch ? 6 : 0));
     suggestions.push({
       id: key,
+      categoryName: pattern.categoryName,
       sourceKind: "recurring_transaction",
       title,
       counterparty: title,
@@ -573,7 +571,8 @@ const buildRecurringTransactionSuggestions = (
       continue;
     }
 
-    const title = (latest.merchantClean ?? latest.merchantRaw ?? latest.description ?? "").trim();
+    const title = suggestRecurringTitle(latest.merchantClean ?? latest.merchantRaw ?? latest.description ?? "");
+    if (!isRecurringSuggestionCurrent(latest.date, "monthly")) continue;
     if (!title || GENERIC_RECURRING_TITLE_PATTERN.test(title)) {
       continue;
     }
@@ -629,6 +628,7 @@ const buildRecurringTransactionSuggestions = (
 
     suggestions.push({
       id: `potential_recurring_transaction::${groupKey}`,
+      categoryName: getRecurringSuggestionCategory(group.map((transaction) => transaction.category?.name)),
       sourceKind: "recurring_transaction",
       title,
       counterparty: title,
@@ -817,7 +817,7 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
               gte: new Date(Date.now() - 400 * DAY_IN_MS),
             },
           },
-          orderBy: [{ date: "asc" }, { merchantClean: "asc" }, { merchantRaw: "asc" }],
+          orderBy: [{ date: "desc" }, { id: "desc" }],
           take: 1200,
           select: {
             id: true,
@@ -903,7 +903,7 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
     )
   );
   const dismissedSuppressionKeys = new Set(
-    dismissedPatterns.map((pattern) => {
+    dismissedPatterns.filter((pattern) => (pattern.rawPayload as Record<string, unknown> | null)?.dismissalScope !== "suggestion").map((pattern) => {
       const payload =
         pattern.rawPayload && typeof pattern.rawPayload === "object" && !Array.isArray(pattern.rawPayload)
           ? (pattern.rawPayload as Record<string, unknown>)
@@ -919,13 +919,14 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
   );
   const dismissedFamilyKeys = new Set(
     dismissedPatterns
+      .filter((pattern) => (pattern.rawPayload as Record<string, unknown> | null)?.dismissalScope !== "suggestion")
       .map((pattern) => {
         const payload =
           pattern.rawPayload && typeof pattern.rawPayload === "object" && !Array.isArray(pattern.rawPayload)
             ? (pattern.rawPayload as Record<string, unknown>)
             : null;
         if (typeof payload?.familySuppressionKey === "string" && payload.familySuppressionKey.trim()) {
-          return payload.familySuppressionKey.trim();
+          return buildRecurringMerchantFamilySignature(payload.familySuppressionKey.trim());
         }
         return buildRecurringMerchantFamilySignature(pattern.merchantClean ?? pattern.merchantRaw ?? "");
       })
@@ -970,11 +971,15 @@ export const getPlannedPaymentSuggestions = async (workspaceId: string) => {
     confirmedRecurringMemoryByFamily
   );
 
+  const dismissedSuggestionIds = new Set(dismissedPatterns.flatMap((pattern) => {
+    const payload = pattern.rawPayload as Record<string, unknown> | null;
+    return typeof payload?.suggestionId === "string" ? [payload.suggestionId] : [];
+  }));
   return combineLikelySameRecurringSuggestions([
     ...reminderSuggestions,
     ...installmentSuggestions,
     ...recurringTransactionSuggestions,
-  ]).sort((left, right) => {
+  ]).filter((suggestion) => !dismissedSuggestionIds.has(suggestion.id)).sort((left, right) => {
     const leftDueDate = new Date(left.dueDate ?? 0).getTime();
     const rightDueDate = new Date(right.dueDate ?? 0).getTime();
     const leftPriority = getSuggestionKindPriority(left);

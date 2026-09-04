@@ -103,6 +103,7 @@ import {
   isSupportedAccountType,
   type SupportedAccountType,
 } from "@/lib/account-types";
+import { formatAccountOptionLabel } from "@/lib/account-option-label";
 
 type Account = {
   id: string;
@@ -5388,9 +5389,7 @@ function AccountDetailPageContent() {
                 <option value="">Select an account</option>
                 {mergeableAccounts.map((candidate) => (
                   <option key={candidate.id} value={candidate.id}>
-                    {candidate.institution ? `${candidate.institution} · ` : ""}
-                    {candidate.name}
-                    {candidate.accountNumber ? ` · ${candidate.accountNumber}` : ""}
+                    {formatAccountOptionLabel(candidate, `${candidate.institution ? `${candidate.institution} · ` : ""}${candidate.name}${candidate.accountNumber ? ` · ${candidate.accountNumber}` : ""}`)}
                   </option>
                 ))}
               </select>

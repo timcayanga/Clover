@@ -21,7 +21,7 @@ async function main() {
   ]);
 
   assert.match(shell, /label: "Understand"[\s\S]{0,300}href: "\/reports"[\s\S]{0,220}href: "\/adviser"/);
-  assert.match(shell, /shell-bottom-nav__label">More<\/span>/);
+  assert.match(shell, /aria-controls="mobile-settings-drawer"[\s\S]{0,700}shell-bottom-nav__label">Account<\/span>/);
   assert.match(reports, /<ReportsPageStream searchParams=\{searchParams\}/);
   assert.match(reports, /<AdviserHeaderLink \/>/);
   assert.doesNotMatch(adviser, /<ReportsStream/);

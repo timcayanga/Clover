@@ -2790,6 +2790,8 @@ export const buildImportFileInsertData = async (params: {
   storageKey: string;
   status?: string;
   rawExpiresAt?: Date | null;
+  sourceTimezone?: string | null;
+  sourceLocale?: string | null;
 }) => {
   const columns = new Set(await getCompatibleImportFileColumns());
   const record: Record<string, unknown> = {};
@@ -2802,6 +2804,8 @@ export const buildImportFileInsertData = async (params: {
   if (columns.has("storageKey")) record.storageKey = params.storageKey;
   if (columns.has("status")) record.status = params.status ?? "processing";
   if (columns.has("rawExpiresAt")) record.rawExpiresAt = params.rawExpiresAt ?? null;
+  if (columns.has("sourceTimezone")) record.sourceTimezone = params.sourceTimezone ?? null;
+  if (columns.has("sourceLocale")) record.sourceLocale = params.sourceLocale ?? null;
   if (columns.has("parsedRowsCount")) record.parsedRowsCount = 0;
   if (columns.has("confirmedTransactionsCount")) record.confirmedTransactionsCount = 0;
   if (columns.has("confirmedAt")) record.confirmedAt = null;
@@ -2822,6 +2826,8 @@ export const insertImportFileCompat = async (params: {
   storageKey: string;
   status?: string;
   rawExpiresAt?: Date | null;
+  sourceTimezone?: string | null;
+  sourceLocale?: string | null;
 }): Promise<any> => {
   const record = await buildImportFileInsertData(params);
   const columns = Object.keys(record);

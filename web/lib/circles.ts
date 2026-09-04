@@ -218,6 +218,8 @@ export type CircleInsight = {
 };
 
 export type CircleSummary = {
+  // Directory cards contain summaries only; never render their empty detail arrays.
+  detailsLoaded?: boolean;
   id: string;
   name: string;
   type: CircleTypeValue;

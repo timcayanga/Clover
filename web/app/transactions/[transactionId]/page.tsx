@@ -17,6 +17,7 @@ import { buildTransactionDetailDraft, type TransactionDetailDraftValue } from "@
 import { buildTransactionUpdatePayload } from "@/lib/transaction-update-payload";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { formatCurrencyAmount } from "@/lib/currency-format";
+import { formatAccountOptionLabel } from "@/lib/account-option-label";
 import {
   createEmptyReceiptLineItem,
   getManualReceiptLineItemTotal,
@@ -216,7 +217,7 @@ export default function TransactionDetailPage() {
         .filter((account) => account.type !== "investment")
         .map((account) => ({
           id: account.id,
-          label: displayAccountName(account),
+          label: formatAccountOptionLabel(account, displayAccountName(account)),
           subtitle: account.institution ?? account.type.replaceAll("_", " "),
           brand: getAccountBrand(account),
         })),

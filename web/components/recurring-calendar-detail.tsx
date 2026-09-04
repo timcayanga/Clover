@@ -8,6 +8,7 @@ import {
   commitmentStatusOptions,
 } from "@/lib/commitments";
 import { formatCurrencyAmount } from "@/lib/currency-format";
+import { formatAccountOptionLabel } from "@/lib/account-option-label";
 
 const detailDateFormatter = new Intl.DateTimeFormat("en-PH", {
   month: "long",
@@ -38,7 +39,7 @@ type SelectOption = { value: string; label: string };
 type RecurringCalendarDetailProps = {
   commitment: FinancialCommitmentSummary;
   occurrenceDate: string;
-  accountOptions: Array<{ id: string; name: string; institution: string | null }>;
+  accountOptions: Array<{ id: string; name: string; institution: string | null; currency: string }>;
   categoryOptions: string[];
   currencyOptions: string[];
   transactionOptions: Array<{ id: string; date: string; amount: string; currency: string; merchantRaw: string; merchantClean: string | null; account: { id: string; name: string } }>;
@@ -229,7 +230,7 @@ export function RecurringCalendarDetail({
             { value: "", label: "Not linked" },
             ...accountOptions.map((account) => ({
               value: account.id,
-              label: account.institution ? `${account.name} · ${account.institution}` : account.name,
+              label: formatAccountOptionLabel(account),
             })),
           ])}
           {renderSelect("categoryName", commitment.categoryName ?? "", "Category", [

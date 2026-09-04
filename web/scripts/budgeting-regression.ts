@@ -1,8 +1,43 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import type { BudgetRecord, BudgetTransaction, BudgetCommitment } from "@/lib/budgeting";
 import { buildBudgetOverview, buildBudgetSuggestions } from "@/lib/budgeting";
+import { budgetIcons, getBudgetAppearance, isBudgetEmoji } from "@/lib/budget-appearance";
 
 const now = new Date("2026-07-14T12:00:00.000Z");
+
+const readSource = (file: string) => readFileSync(resolve(process.cwd(), file), "utf8");
+for (const file of ["app/api/budgets/route.ts", "app/api/budgets/[budgetId]/route.ts"]) {
+  const source = readSource(file);
+  assert.match(source, /budgetPlan\.findFirst\(\{ where: \{ id: payload\.planId, workspaceId: context\.workspaceId \}/, "plan assignments must be workspace-scoped");
+  assert.match(source, /assertTrustedRequestOrigin\(request\)/);
+}
+assert.match(readSource("app/api/budget-plans/route.ts"), /data: \{ workspaceId: context\.workspaceId, name: parsed\.data\.name \}/, "plan ownership must come from the authenticated context");
+const budgetUi = readSource("components/budgeting-workspace.tsx");
+assert.match(budgetUi, /useCollectionSelection\("budget"\)/);
+assert.match(budgetUi, /budgets\.map\(\(budget\)/, "one card per individual budget, including paused budgets");
+assert.doesNotMatch(budgetUi, /AnimatedTabs|selectedPlan|collection-switcher|Your budget plans|Limits on track/);
+assert.ok(budgetUi.indexOf('aria-label="Budget overview"') < budgetUi.indexOf('aria-label="Budget reports"'));
+assert.ok(budgetUi.indexOf('aria-label="Budget reports"') < budgetUi.indexOf('aria-label="Budget transaction history"'));
+assert.match(budgetUi, /controller\.abort\(\)/, "cancel stale history requests when navigating");
+assert.match(budgetUi, /mobile \? "budget-editor-page" : "budget-editor__backdrop"/, "mobile creation must be a page, not a modal");
+const appearanceRoute = readSource("app/api/budgets/[budgetId]/appearance/route.ts");
+assert.match(appearanceRoute, /where: \{ id: budgetId, workspaceId: context.workspaceId \}/);
+assert.match(appearanceRoute, /data: \{ name: parsed.data.name, emoji: parsed.data.emoji \}/, "identity edits cannot update financial settings");
+assert.match(appearanceRoute, /\.strict\(\)/);
+assert.match(appearanceRoute, /assertTrustedRequestOrigin\(request\)/);
+assert.equal(getBudgetAppearance({ name: "Weekly Groceries" }).emoji, "🛒");
+assert.equal(getBudgetAppearance({ name: "Travel fund" }).emoji, "✈️");
+assert.equal(getBudgetAppearance({ name: "Our limit", categoryName: "Food & Dining" }).emoji, "🍔");
+assert.equal(getBudgetAppearance({ name: "Groceries", emoji: "🎁" }).emoji, "🎁", "user-selected icons override suggestions");
+assert.equal(getBudgetAppearance({ name: "New", kind: "savings_target" }).emoji, "🌱");
+assert.equal(isBudgetEmoji("<script>"), false);
+for (const icon of budgetIcons) {
+  assert.equal(getBudgetAppearance({ name: "Any", emoji: icon.emoji }).color, icon.color);
+  assert.match(icon.color, /^#[0-9a-f]{6}$/i);
+}
+assert.match(readSource("components/collection-navigation.tsx"), /window\.history\.pushState/);
 
 const budget = (overrides: Partial<BudgetRecord> = {}): BudgetRecord => ({
   id: "budget-1",
@@ -60,6 +95,18 @@ assert.equal(overview.budgets[0]?.plannedAmount, 250, "only matching planned com
 assert.equal(overview.budgets[0]?.plannedCount, 1, "planned commitment count should match the planned amount");
 assert.equal(overview.budgets[0]?.projectedAmount, 350, "projected spend should combine actual and planned amounts");
 assert.equal(overview.budgets[0]?.projectedProgressPercent, 35, "projected progress should use the budget target");
+
+const planOverview = buildBudgetOverview({
+  budgets: [budget({ id: "legacy" }), budget({ id: "travel", planId: "travel-plan" }), budget({ id: "paused", planId: "travel-plan", isActive: false })],
+  transactions: [transaction()], commitments: [], now,
+});
+assert.equal(planOverview.budgets.find((row) => row.id === "legacy")?.planId, null, "existing limits remain in Personal budget without rewriting records");
+assert.equal(planOverview.budgets.find((row) => row.id === "travel")?.planId, "travel-plan", "named plan membership survives progress calculation");
+assert.equal(planOverview.inactiveBudgets[0]?.planId, "travel-plan", "paused limits remain associated with their plan");
+assert.equal(planOverview.budgets.find((row) => row.id === "travel")?.actualAmount, 100, "plan grouping must not change transaction matching or totals");
+const decorated = buildBudgetOverview({ budgets: [budget({ name: "Groceries", emoji: "🛒" })], transactions: [transaction()], commitments: [], now });
+assert.equal(decorated.budgets[0].emoji, "🛒");
+assert.equal(decorated.budgets[0].actualAmount, 100, "presentation fields must not affect calculation");
 
 const scopedOverview = buildBudgetOverview({
   budgets: [

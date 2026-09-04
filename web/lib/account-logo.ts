@@ -1,3 +1,5 @@
+import { ADDITIONAL_BANK_LOGOS } from "@/lib/bank-logo-catalog";
+
 export type AccountLogoOption = {
   id: string;
   src: string;
@@ -44,14 +46,24 @@ const INSTITUTION_LOGO_FILES = [
   "truemoney.png", "ucpb.png", "unionbank.jpg", "united overseas bank.png", "uno bank.png", "wise.png",
 ] as const;
 
-export const INSTITUTION_ACCOUNT_LOGO_OPTIONS = INSTITUTION_LOGO_FILES.map(institutionLogo);
+export const INSTITUTION_ACCOUNT_LOGO_OPTIONS: AccountLogoOption[] = [
+  ...INSTITUTION_LOGO_FILES.map(institutionLogo),
+  ...ADDITIONAL_BANK_LOGOS.map((logo) => ({
+    id: `institution-${logo.file.replace(/[^a-z0-9]+/gi, "-")}`,
+    src: logo.src,
+    accessibleLabel: `${logo.label} logo (${logo.region === "uk" ? "UK" : logo.region.replace(/\b\w/g, (letter) => letter.toUpperCase())})`,
+    kind: "institution" as const,
+  })),
+];
 export const ACCOUNT_LOGO_OPTIONS = [...GENERIC_ACCOUNT_LOGO_OPTIONS, ...INSTITUTION_ACCOUNT_LOGO_OPTIONS];
 
 const BUILT_IN_ACCOUNT_LOGOS = new Set(ACCOUNT_LOGO_OPTIONS.map((option) => option.src));
+const currentLogoByPath = new Map(ACCOUNT_LOGO_OPTIONS.map((option) => [option.src.split("?")[0], option.src]));
+export const getCurrentBuiltInAccountLogoUrl = (value: string) => currentLogoByPath.get(value.split("?")[0]) ?? null;
 export const MAX_CUSTOM_ACCOUNT_LOGO_LENGTH = 350_000;
 
 export const isValidAccountLogoUrl = (value: string | null) => {
   if (value === null) return true;
-  if (BUILT_IN_ACCOUNT_LOGOS.has(value)) return true;
+  if (BUILT_IN_ACCOUNT_LOGOS.has(value) || getCurrentBuiltInAccountLogoUrl(value)) return true;
   return /^data:image\/(?:png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(value) && value.length <= MAX_CUSTOM_ACCOUNT_LOGO_LENGTH;
 };

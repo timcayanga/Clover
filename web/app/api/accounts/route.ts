@@ -3135,8 +3135,9 @@ export async function GET(request: Request) {
     const shouldCleanupEmptyCashAccounts = ["1", "true"].includes(
       (searchParams.get("cleanupEmptyCashAccounts") ?? "").trim().toLowerCase()
     );
+    let removedEmptyCashAccountIds: string[] = [];
     if (shouldCleanupEmptyCashAccounts) {
-      await prisma.$transaction((tx) =>
+      removedEmptyCashAccountIds = await prisma.$transaction((tx) =>
         removeEmptyNonDefaultCashAccounts(tx, {
           workspaceId,
           actorUserId: userId,
@@ -3820,6 +3821,7 @@ export async function GET(request: Request) {
       accountRules,
       statementCheckpoints,
       investmentSnapshots,
+      removedEmptyCashAccountIds,
       maintenance: shouldCleanupImportedAccounts
         ? {
             removedStalePdaxBucketHoldings,

@@ -47,6 +47,30 @@ assert.ok(unsafeStatement.findings.some((finding) => finding.code === "row.balan
 
 assert.equal(validateImportFileBytes({ fileName: "statement.pdf", contentType: "application/pdf", bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]) }), null);
 assert.match(String(validateImportFileBytes({ fileName: "statement.pdf", contentType: "application/pdf", bytes: new Uint8Array([1, 2, 3]) })), /valid PDF/i);
+assert.equal(
+  validateImportFileBytes({
+    fileName: "receipt.webp",
+    contentType: "image/webp",
+    bytes: new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]),
+  }),
+  null
+);
+assert.match(
+  String(validateImportFileBytes({ fileName: "receipt.webp", contentType: "image/webp", bytes: new Uint8Array([1, 2, 3]) })),
+  /valid WebP/i
+);
+assert.equal(
+  validateImportFileBytes({
+    fileName: "receipt.heic",
+    contentType: "image/heic",
+    bytes: new Uint8Array([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63]),
+  }),
+  null
+);
+assert.match(
+  String(validateImportFileBytes({ fileName: "receipt.heif", contentType: "image/heif", bytes: new Uint8Array([1, 2, 3]) })),
+  /valid HEIC or HEIF/i
+);
 assert.equal(MAX_IMPORT_FILE_SIZE, 4 * 1024 * 1024);
 assert.equal(MAX_IMPORT_IMAGE_SOURCE_SIZE, 16 * 1024 * 1024);
 assert.ok(IMPORT_IMAGE_TARGET_SIZE < MAX_IMPORT_FILE_SIZE);

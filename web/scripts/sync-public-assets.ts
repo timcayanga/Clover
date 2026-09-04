@@ -1,6 +1,8 @@
 import { cp, mkdir, rm, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
+import path from "node:path";
+import { ADDITIONAL_BANK_LOGOS } from "../lib/bank-logo-catalog";
 import {
   NAVIGATION_ICON_SOURCE_FILES,
   type NavigationIconName,
@@ -34,6 +36,19 @@ const main = async () => {
   await rm(destinationRoot, { recursive: true, force: true });
   await mkdir(destinationRoot, { recursive: true });
   await cp(sourceRoot, destinationRoot, { recursive: true, force: true });
+  // Keep legacy generic URLs working after the source library moved folders.
+  for (const file of ["bank.png", "cash.png", "credit card.png", "investment.png", "others.png", "wallet.png"]) {
+    await cp(`${sourceRoot}banks/1 generic/${file}`, `${destinationRoot}banks/${file}`);
+  }
+  // Decode sequentially: some originals are 4K, and extensionless inputs need a
+  // browser-safe content type. Versioned WebP outputs are small and cache-safe.
+  for (const logo of ADDITIONAL_BANK_LOGOS) {
+    const target = fileURLToPath(new URL(`../public${logo.src.split("?")[0]}`, import.meta.url));
+    await mkdir(path.dirname(target), { recursive: true });
+    await sharp(`${sourceRoot}banks/${logo.file}`)
+      .resize({ width: 128, height: 128, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 90, alphaQuality: 100, effort: 4 }).toFile(target);
+  }
   await stat(errorSourcePath);
   await sharp(errorSourcePath)
     .resize({ width: 480, height: 480, fit: "cover", position: "center" })

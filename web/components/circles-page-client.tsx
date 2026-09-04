@@ -11,6 +11,7 @@ import {
 } from "react";
 import { CloverShell } from "@/components/clover-shell";
 import { CirclesWorkspace } from "@/components/circles-workspace";
+import { CollectionBack, useCollectionSelection } from "@/components/collection-navigation";
 import type { CircleSummary, CirclesWorkspaceData } from "@/lib/circles";
 import { isSplitBillBuiltInAvatarUrl } from "@/lib/split-bill-avatars";
 
@@ -246,9 +247,8 @@ export function CirclesPageClient({
   initialData: CirclesWorkspaceData;
 }) {
   const [circles, setCircles] = useState(initialData.circles);
-  const [selectedCircleId, setSelectedCircleId] = useState<string | null>(
-    initialData.circles[0]?.id ?? null,
-  );
+  const [requestedCircleId, setSelectedCircleId] = useCollectionSelection("circle");
+  const selectedCircleId = circles.some((circle) => circle.id === requestedCircleId) ? requestedCircleId : null;
   const [createRequest, setCreateRequest] = useState(0);
   const [circleRename, setCircleRename] = useState<CircleRenameEvent | null>(
     null,
@@ -280,33 +280,25 @@ export function CirclesPageClient({
     }));
   };
 
-  useEffect(() => {
-    if (window.location.pathname === "/circles") {
-      window.history.replaceState(null, "", "/circles");
-    }
-  }, []);
-
-  useEffect(() => {
-    if (
-      selectedCircleId &&
-      !circles.some((circle) => circle.id === selectedCircleId)
-    ) {
-      setSelectedCircleId(circles[0]?.id ?? null);
-    }
-  }, [circles, selectedCircleId]);
-
   return (
     <CloverShell
       active="circles"
       title="Circles"
+      mobileLeadingAction={selectedCircleId ? <CollectionBack label="Circles" onClick={() => setSelectedCircleId(null)} /> : undefined}
+      desktopTitleAction={selectedCircleId ? <CollectionBack label="All Circles" onClick={() => setSelectedCircleId(null)} /> : undefined}
       titleAddon={
-        circles.length ? (
+        selectedCircleId ? (
+          <div className="collection-title-controls">
           <CircleTitleTabs
-            circles={circles}
-            activeCircleId={selectedCircleId ?? circles[0].id}
+            circles={circles.filter((circle) => circle.id === selectedCircleId)}
+            activeCircleId={selectedCircleId}
             onChange={setSelectedCircleId}
             onRename={renameCircle}
           />
+          {circles.length > 1 ? <select className="collection-switcher" aria-label="Switch Circle" value={selectedCircleId} onChange={(event) => setSelectedCircleId(event.target.value)}>
+            {circles.map((circle) => <option key={circle.id} value={circle.id}>{circle.name}</option>)}
+          </select> : null}
+          </div>
         ) : null
       }
       actions={

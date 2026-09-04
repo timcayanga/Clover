@@ -61,6 +61,7 @@ import {
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import type { AccountType } from "@/lib/domain-types";
 import { getAccountCardName, getAccountDisplayName, formatUploadAccountDisplayName } from "@/lib/account-display";
+import { formatAccountOptionLabel } from "@/lib/account-option-label";
 import { getAccountBrand } from "@/lib/account-brand";
 import { guessCategoryName, inferAccountTypeFromStatement } from "@/lib/financial-classification";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
@@ -257,48 +258,17 @@ const getTransactionAccountFilterKey = (account: Account) => {
   return normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency);
 };
 
-const getTransactionAccountFamilyKey = (account: Account) => {
-  if (account.type === "cash") {
-    return "cash";
-  }
-
-  const family = (account.institution || account.name)
-    .toLowerCase()
-    .replace(/\b(?:account|wallet|savings?)\b/g, " ")
-    .replace(/\d+/g, " ")
-    .replace(/[^a-z]+/g, " ")
-    .trim();
-  return family || account.name.toLowerCase().trim();
-};
-
 const buildTransactionAccountLabels = (accounts: Account[]) => {
-  const currenciesByFamily = new Map<string, Set<string>>();
-  for (const account of accounts) {
-    const family = getTransactionAccountFamilyKey(account);
-    const currencies = currenciesByFamily.get(family) ?? new Set<string>();
-    currencies.add(formatCurrencyCode(account.currency || "PHP"));
-    currenciesByFamily.set(family, currencies);
-  }
-
   return new Map(
     accounts.map((account) => {
       const baseLabel = formatTransactionAccountName(account);
-      const currency = formatCurrencyCode(account.currency || "PHP");
-      const familyCurrencies = currenciesByFamily.get(getTransactionAccountFamilyKey(account));
-      const alreadyNamesCurrency = new RegExp(`(?:^|\\s|\\()${currency}(?:\\)|$)`, "i").test(baseLabel);
-      const label =
-        familyCurrencies && familyCurrencies.size > 1 && !alreadyNamesCurrency
-          ? `${baseLabel} (${currency})`
-          : baseLabel;
+      const label = formatAccountOptionLabel(account, baseLabel);
       return [account.id, label] as const;
     })
   );
 };
 
 const buildTransactionAccountFilterOptions = (accounts: Account[]) => {
-  const cashCurrencies = new Set(
-    accounts.filter((account) => account.type === "cash").map((account) => formatCurrencyCode(account.currency || "PHP"))
-  );
   const seenKeys = new Set<string>();
 
   return accounts
@@ -310,11 +280,10 @@ const buildTransactionAccountFilterOptions = (accounts: Account[]) => {
 
       seenKeys.add(key);
       const isCash = account.type === "cash";
-      const currency = formatCurrencyCode(account.currency || "PHP");
       return [
         {
           value: account.id,
-          label: isCash && cashCurrencies.size > 1 ? `Cash ${currency}` : formatTransactionAccountName(account),
+          label: formatAccountOptionLabel(account, isCash ? "Cash" : formatTransactionAccountName(account)),
         },
       ];
     })
@@ -2411,7 +2380,7 @@ function TransactionsPageContent() {
   const authoritativeCurrencyWorkspaceRef = useRef("");
   const deletedTransactionIdsRef = useRef(new Set<string>());
   const transactionsHydrationVersionRef = useRef(new Map<string, number>());
-  const mobileLoadMoreRef = useRef<HTMLDivElement | null>(null);
+  const mobileLoadMoreRef = useRef<HTMLButtonElement | null>(null);
   const mobileLoadMoreInFlightRef = useRef(false);
   const transactionDetailScrollYRef = useRef<number | null>(null);
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
@@ -8138,14 +8107,17 @@ function TransactionsPageContent() {
                   </section>
                 ))}
                 {hasMoreMobileTransactions ? (
-                  <div
+                  <button
+                    type="button"
                     ref={mobileLoadMoreRef}
                     className={`transactions-mobile-load-more${isMobileLoadingMore ? " is-loading" : ""}`}
                     aria-live="polite"
+                    onClick={() => void loadMoreMobileTransactions()}
+                    disabled={isMobileLoadingMore}
                   >
                     {isMobileLoadingMore ? <span className="transactions-mobile-load-more__spinner" aria-hidden="true" /> : null}
-                    <span>{isMobileLoadingMore ? "Loading more transactions…" : "Scroll for more"}</span>
-                  </div>
+                    <span>{isMobileLoadingMore ? "Loading more transactions…" : "Load more transactions"}</span>
+                  </button>
                 ) : null}
               </div>
             ) : totalTransactionCountForDisplay === 0 && !hasActiveServerSideFilters ? (
@@ -8419,7 +8391,7 @@ function TransactionsPageContent() {
                     <option value="">Leave unchanged</option>
                     {selectableTransactionAccounts.map((account) => (
                       <option key={account.id} value={account.id}>
-                        {formatTransactionAccountName(account)}
+                        {formatAccountOptionLabel(account, formatTransactionAccountName(account))}
                       </option>
                     ))}
                   </select>

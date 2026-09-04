@@ -1314,6 +1314,22 @@ const openAIReceiptCoreJsonSchema = {
             currency: { type: ["string", "null"] },
             total: { type: ["number", "null"] },
             payment_method: { type: ["string", "null"] },
+            line_items: {
+              // Itemization is optional enrichment, not part of the visible
+              // transaction handoff. Keeping the full nested line-item schema
+              // in this first request made the model transcribe the receipt
+              // before Clover could show merchant/date/total. A typed empty
+              // array keeps the strict schema valid while substantially
+              // reducing both schema input and generated output.
+              type: "array",
+              maxItems: 0,
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {},
+                required: [],
+              },
+            },
             confidence_score: { type: "number" },
             parser_evidence: openAIJsonSchema.properties.receipt_details.anyOf[0].properties.parser_evidence,
           },
@@ -1326,6 +1342,7 @@ const openAIReceiptCoreJsonSchema = {
             "currency",
             "total",
             "payment_method",
+            "line_items",
             "confidence_score",
             "parser_evidence",
           ],
@@ -2140,6 +2157,19 @@ export const buildOpenAIBackupSystemPrompt = (importMode: ImportMode | null | un
   return [...baseGuidance, ...familyGuidance, ...inputGuidance].join(" ");
 };
 
+const buildOpenAIReceiptCoreSystemPrompt = () =>
+  [
+    "You are Clover's fast receipt transaction extractor.",
+    "Read the supplied image directly and return JSON matching the supplied schema.",
+    "Extract only the actual merchant, transaction date and time, currency, paid total, payment method, visible account/card hint, confidence, and concise verbatim source evidence.",
+    "Do not invent data; use null when a value is not visible.",
+    "Return transaction_date as ISO YYYY-MM-DD when a complete date is visible, using visible locale, language, currency, and upload-date proximity to resolve numeric date order.",
+    "The merchant must be the actual business name, never Receipt, Test Receipt, Sales Receipt, Official Receipt, Invoice, Proof of Purchase, or another generic heading.",
+    "A coupon, menu, advertisement, product image, or offer without evidence of a completed purchase is not a financial transaction; return receipt_details null.",
+    "Do not extract itemization, tax, discounts, tips, split allocations, categories, or transaction rows in this pass.",
+    "Return line_items and transactions as empty arrays.",
+  ].join(" ");
+
 export const inferOpenAIDocumentFamily = (params: {
   fileName?: string | null;
   text?: string | null;
@@ -2510,6 +2540,19 @@ const buildCompactGenericImageInputPayload = (params: {
     "Return only valid JSON matching the supplied schema.",
   ].join("\n");
 
+const buildCompactReceiptCoreInputPayload = (params: {
+  fileName?: string | null;
+  fileType?: string | null;
+}) =>
+  [
+    "Extract the core completed-purchase details from this one-page receipt image.",
+    `File name: ${params.fileName ?? "unknown"}`,
+    `File type: ${params.fileType ?? "unknown"}`,
+    "Use only clearly visible evidence. Preserve the original date wording in parser_evidence.source_text.",
+    "If this is not evidence of a completed financial transaction, return receipt_details null.",
+    "Return only valid JSON matching the supplied schema.",
+  ].join("\n");
+
 const buildImageTranscriptionInputPayload = (params: {
   fileName?: string | null;
   fileType?: string | null;
@@ -2857,7 +2900,12 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     ),
   });
 
-  const userPrompt = isSinglePageGenericImage && inputText.trim().length === 0
+  const userPrompt = useReceiptCoreOnly
+    ? buildCompactReceiptCoreInputPayload({
+        fileName: params.fileName ?? null,
+        fileType: params.fileType ?? null,
+      })
+    : isSinglePageGenericImage && inputText.trim().length === 0
     ? buildCompactGenericImageInputPayload({
         fileName: params.fileName ?? null,
         fileType: params.fileType ?? null,
@@ -2872,11 +2920,13 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         fileDataBase64: pdfFileDataBase64,
         importMode: promptImportMode,
       });
-  const systemPrompt = `${buildOpenAIBackupSystemPrompt(promptImportMode, pageImagesToSend.length > 0, Boolean(pdfFileDataBase64))}${
-    useReceiptCoreOnly
-      ? " CORE-FIRST RECEIPT: Return only the merchant, transaction date/time, currency, total, payment method, account evidence, confidence, and visible source evidence. Return transaction_date as ISO YYYY-MM-DD whenever a complete date is visible, using visible locale, language, and currency to resolve date order. The merchant must be the actual business name, never a generic document heading such as Receipt, Test Receipt, Sales Receipt, Official Receipt, Invoice, or Proof of Purchase. Prefer a distinct business name near the top of the image. Do not extract line items, tax, discounts, tips, or split allocations in this pass. Return transactions as an empty array."
-      : ""
-  }`;
+  const systemPrompt = useReceiptCoreOnly
+    ? buildOpenAIReceiptCoreSystemPrompt()
+    : buildOpenAIBackupSystemPrompt(
+        promptImportMode,
+        pageImagesToSend.length > 0,
+        Boolean(pdfFileDataBase64)
+      );
   const fastModel = resolveOpenAIImportModel(
     (env as { OPENAI_IMPORT_PARSER_MODEL?: string }).OPENAI_IMPORT_PARSER_MODEL,
     OPENAI_IMPORT_FAST_MODEL_FALLBACK,
@@ -2941,7 +2991,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   // while leaving multi-page and known-statement quality paths unchanged.
   const maxOutputTokens = isReceiptMode
     ? useReceiptCoreOnly
-      ? 900
+      ? 850
       : inferredDifficulty === "hard"
       ? 2_600
       : 1_600
@@ -3110,7 +3160,12 @@ export const parseImportTextWithOpenAIFallback = async (params: {
 
     if (shouldHedgeSlowReceiptVision) {
       const primaryModel = models[0]!;
-      const hedgeModel = models[1]!;
+      // Hedge latency variance with the same bounded receipt model. Starting
+      // the stronger fallback here made every slow-but-healthy receipt pay for
+      // a larger model that commonly finished later than the primary anyway.
+      // If both fast attempts fail, the sequential chain below still advances
+      // to the stronger model for accuracy and recovery.
+      const hedgeModel = primaryModel;
       const primaryTimeoutMs = getRemainingOpenAIImportAttemptTimeout({
         deadlineMs,
         requestedTimeoutMs: timeoutMs,
@@ -3194,7 +3249,9 @@ export const parseImportTextWithOpenAIFallback = async (params: {
 
       primaryController.abort();
       hedgeController.abort();
-      firstSequentialModelIndex = 2;
+      // Both raced attempts used models[0]. Preserve models[1] as the first
+      // true fallback rather than accidentally skipping it.
+      firstSequentialModelIndex = 1;
       for (const result of [firstResult, secondResult]) {
         const errorText = shouldReadOpenAIImportErrorBody(result.response)
           ? await result.response!.text().catch(() => "")

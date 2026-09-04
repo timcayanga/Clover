@@ -12,6 +12,7 @@ import { TransactionCategoryPicker, type TransactionPickerCategory } from "@/com
 import { TransactionNameAutocomplete, type TransactionNameSuggestion } from "@/components/transaction-name-autocomplete";
 import { getAccountBrand } from "@/lib/account-brand";
 import { getAccountDisplayName } from "@/lib/account-display";
+import { formatAccountOptionLabel } from "@/lib/account-option-label";
 import { getCategoryIconSrc, getCategoryIconTone } from "@/lib/category-icons";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
@@ -76,15 +77,8 @@ const getManualAccountOptionKey = (account: DashboardTopActionsProps["accounts"]
   return account.id;
 };
 
-const getManualAccountOptionLabel = (
-  account: DashboardTopActionsProps["accounts"][number],
-  cashCurrencyCount: number
-) => {
-  if (account.type === "cash" && cashCurrencyCount > 1) {
-    return `Cash ${formatCurrencyCode(account.currency || "PHP")}`;
-  }
-
-  return getAccountDisplayName(account);
+const getManualAccountOptionLabel = (account: DashboardTopActionsProps["accounts"][number]) => {
+  return formatAccountOptionLabel(account, account.type === "cash" ? "Cash" : getAccountDisplayName(account));
 };
 
 export function DashboardManualTransactionModal({
@@ -263,11 +257,6 @@ export function DashboardManualTransactionModal({
     [accounts]
   );
   const manualAccountOptions = useMemo(() => {
-    const cashCurrencyCount = new Set(
-      accounts
-        .filter((account) => account.type === "cash" || normalizeName(account.name) === "cash")
-        .map((account) => formatCurrencyCode(account.currency || "PHP"))
-    ).size;
     const seenKeys = new Set<string>();
 
     return accounts.flatMap((account) => {
@@ -277,7 +266,7 @@ export function DashboardManualTransactionModal({
       }
 
       seenKeys.add(key);
-      return [{ account, label: getManualAccountOptionLabel(account, cashCurrencyCount) }];
+      return [{ account, label: getManualAccountOptionLabel(account) }];
     });
   }, [accounts]);
   const transferDestinationOptions = useMemo(

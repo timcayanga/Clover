@@ -1924,16 +1924,19 @@ function AccountsPageContent() {
         accountRules?: AccountRule[];
         statementCheckpoints?: StatementCheckpoint[];
         investmentSnapshots?: AccountInvestmentSnapshot[];
+        removedEmptyCashAccountIds?: string[];
       }>({
         // An import may finish while the initial workspace request is still in
         // flight. Give the completion handoff its own request so it cannot
         // reuse that pre-import response and leave new snapshot accounts
         // invisible until the user reloads.
-        key: options?.forceFresh ? `accounts:data:${workspaceId}:import:${loadSeq}` : `accounts:data:${workspaceId}`,
+        key: options?.forceFresh
+          ? `accounts:data:${workspaceId}:cleanup-v2:import:${loadSeq}`
+          : `accounts:data:${workspaceId}:cleanup-v2`,
         route: "accounts.data",
         workspaceId,
         detail: options?.awaitHydration ? "awaitHydration" : options?.silent ? "silent" : "foreground",
-        input: `/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`,
+        input: `/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}&cleanupEmptyCashAccounts=true`,
         timeoutMs: options?.silent ? null : 6500,
       });
       if (workspaceLoadSeqRef.current !== loadSeq) {
@@ -1943,6 +1946,13 @@ function AccountsPageContent() {
       if (accountsResponse.ok) {
         setAccountsLoadFailed(false);
         const payload = accountsResponse.json;
+        const removedEmptyCashAccountIds = Array.isArray(payload?.removedEmptyCashAccountIds)
+          ? payload.removedEmptyCashAccountIds.filter((accountId): accountId is string => typeof accountId === "string" && Boolean(accountId))
+          : [];
+        for (const accountId of removedEmptyCashAccountIds) {
+          markDeletedWorkspaceAccount(workspaceId, accountId);
+          applyOptimisticWorkspaceAccountDeletion(workspaceId, accountId);
+        }
         fetchedAccounts = Array.isArray(payload?.accounts)
           ? (payload.accounts as Account[]).filter((account) => isWorkspaceAccount(account, workspaceId))
           : [];
@@ -2115,7 +2125,7 @@ function AccountsPageContent() {
       if (!options?.silent && shouldRunAccountsMaintenance(workspaceId, options?.forceFresh === true)) {
         void (async () => {
           try {
-            const maintenanceResponse = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}&repairImportedAccounts=1&cleanupImportedAccounts=1&maintenance=1`, {
+            const maintenanceResponse = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}&repairImportedAccounts=1&cleanupImportedAccounts=1&cleanupEmptyCashAccounts=true&maintenance=1`, {
               cache: "no-store",
             });
             const maintenancePayload = maintenanceResponse.ok
@@ -2126,7 +2136,8 @@ function AccountsPageContent() {
             }
             if (
               workspaceLoadSeqRef.current === loadSeq &&
-              (Number(maintenancePayload?.maintenance?.removedStalePdaxBucketHoldings ?? 0) > 0 ||
+              ((Array.isArray(maintenancePayload?.removedEmptyCashAccountIds) && maintenancePayload.removedEmptyCashAccountIds.length > 0) ||
+                Number(maintenancePayload?.maintenance?.removedStalePdaxBucketHoldings ?? 0) > 0 ||
                 Number(maintenancePayload?.maintenance?.repairedPdaxPortfolioAssetLabels ?? 0) > 0 ||
                 Number(maintenancePayload?.maintenance?.repairedPdaxPortfolioAccounts ?? 0) > 0 ||
                 Number(maintenancePayload?.maintenance?.repairedDuplicatePdaxWalletAccounts ?? 0) > 0 ||

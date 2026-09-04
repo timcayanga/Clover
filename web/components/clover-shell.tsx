@@ -143,7 +143,7 @@ type MobileShellGesture = {
 const MOBILE_SHELL_BREAKPOINT = "(max-width: 1100px)";
 const MOBILE_EDGE_SWIPE_WIDTH = 24;
 const MOBILE_SIDEBAR_SWIPE_THRESHOLD = 64;
-const MOBILE_PULL_REFRESH_THRESHOLD = 68;
+const MOBILE_PULL_REFRESH_THRESHOLD = 54;
 const MOBILE_PULL_REFRESH_MAX_DISTANCE = 96;
 export const cloverPullToRefreshEvent = "clover:pull-to-refresh";
 
@@ -159,9 +159,7 @@ const isMobileGestureBlockedTarget = (target: EventTarget | null) =>
     "input",
     "textarea",
     "select",
-    "button",
     "a",
-    "[role='button']",
     "[contenteditable='true']",
     "[role='dialog']",
     "[data-mobile-gesture-lock]",
@@ -814,6 +812,8 @@ export function CloverShell({
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
   const [notificationCount, setNotificationCount] = useState(0);
   const [cachedProfileImage, setCachedProfileImage] = useState<string | null>(null);
+  const [cachedReporterEmail, setCachedReporterEmail] = useState("");
+  const [hasMounted, setHasMounted] = useState(false);
   const [isBottomNavCompact, setIsBottomNavCompact] = useState(false);
   const [mobilePullDistance, setMobilePullDistance] = useState(0);
   const [mobileRefreshState, setMobileRefreshState] = useState<"idle" | "pulling" | "ready" | "refreshing">("idle");
@@ -830,8 +830,17 @@ export function CloverShell({
       })),
     [searchAccounts]
   );
-  const displayName = user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Account";
-  const reporterEmail = user?.primaryEmailAddress?.emailAddress ?? readAccountIdentityCache()?.email ?? "";
+  const displayName = hasMounted
+    ? user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Account"
+    : "Account";
+  const reporterEmail = hasMounted ? user?.primaryEmailAddress?.emailAddress ?? cachedReporterEmail : "";
+
+  useEffect(() => {
+    const cachedIdentity = readAccountIdentityCache();
+    setCachedProfileImage(cachedIdentity?.imageUrl ?? null);
+    setCachedReporterEmail(cachedIdentity?.email ?? "");
+    setHasMounted(true);
+  }, []);
 
   useEffect(() => installClientDiagnostics(), []);
 
@@ -1009,7 +1018,10 @@ export function CloverShell({
         if (deltaY < 6 || verticalDistance < horizontalDistance * 1.15) return;
 
         event.preventDefault();
-        const distance = Math.min(MOBILE_PULL_REFRESH_MAX_DISTANCE, deltaY * 0.48);
+        // Reach the refresh threshold after a natural ~72px finger pull. The
+        // previous damping required more than 140px, which made the gesture
+        // feel unavailable on short phones and installed PWAs.
+        const distance = Math.min(MOBILE_PULL_REFRESH_MAX_DISTANCE, deltaY * 0.75);
         gesture.pullDistance = distance;
         schedulePullDistance(distance);
         return;
@@ -1076,9 +1088,10 @@ export function CloverShell({
       if (mobileRefreshTimerRef.current !== null) window.clearTimeout(mobileRefreshTimerRef.current);
     };
   }, [isProfileDrawerOpen, isSidebarOpen, openMenu, pathname, quickAddModal, router, workspaceId]);
-  const profileImage = user?.imageUrl ?? cachedProfileImage;
+  const profileImage = hasMounted ? user?.imageUrl ?? cachedProfileImage : null;
   const isProfileActive = isProfileDrawerOpen || active === "profile" || pathname?.startsWith("/profile");
   const isSettingsActive = pathname?.startsWith("/settings");
+  const isAccountNavActive = isProfileActive || isSettingsActive;
   const isMoreActive = active === "more" || pathname?.startsWith("/more");
   const isNotificationsActive = openMenu === "notifications";
   const isProfileMenuOpen = openMenu === "profile";
@@ -1494,10 +1507,6 @@ export function CloverShell({
       cancelled = true;
     };
   }, [searchWorkspaceId]);
-
-  useEffect(() => {
-    setCachedProfileImage(readAccountIdentityCache()?.imageUrl ?? null);
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -2187,13 +2196,25 @@ export function CloverShell({
       />
       <aside id="mobile-settings-drawer" className={`shell-profile-drawer${isProfileDrawerOpen ? " is-open" : ""}`} aria-label="Settings" aria-hidden={!isProfileDrawerOpen}>
         <div className="shell-profile-drawer__head">
-          <div>
-            <span>Profile</span>
-            <strong>{displayName}</strong>
+          <div className="shell-profile-drawer__title-row">
+            <strong>Settings</strong>
+            <button type="button" aria-label="Close settings menu" onClick={() => setIsProfileDrawerOpen(false)}>
+              <MenuIcon name="menu" open />
+            </button>
           </div>
-          <button type="button" aria-label="Close settings menu" onClick={() => setIsProfileDrawerOpen(false)}>
-            <MenuIcon name="menu" open />
-          </button>
+          <div className="shell-profile-drawer__account-card">
+            <span className="shell-profile-drawer__account-avatar" aria-hidden="true">
+              {profileImage ? (
+                <img src={profileImage} alt="" loading="eager" decoding="async" fetchPriority="high" />
+              ) : (
+                <MenuIcon name="profile" />
+              )}
+            </span>
+            <div className="shell-profile-drawer__account-copy">
+              <span>Account</span>
+              <strong>{displayName}</strong>
+            </div>
+          </div>
         </div>
         <nav className="shell-profile-drawer__nav" aria-label="Settings sections">
           {mobileSettingsSections.map((item) => (
@@ -2503,20 +2524,29 @@ export function CloverShell({
           </span>
           <span className="shell-bottom-nav__label">Adviser</span>
         </Link>
-        <Link
-          href="/more"
-          prefetch={false}
-          className={`shell-bottom-nav__item${isMoreActive ? " is-active" : ""}`}
-          aria-current={isMoreActive ? "page" : undefined}
-          onClick={(event) => handleNavigationLinkClick(event, "/more")}
-          onMouseEnter={() => prefetchNavTarget("/more")}
-          onTouchStart={() => prefetchNavTarget("/more")}
+        <button
+          type="button"
+          className={`shell-bottom-nav__item shell-bottom-nav__item--account${isAccountNavActive ? " is-active" : ""}`}
+          aria-label={isProfileDrawerOpen ? "Close Account settings menu" : "Open Account settings menu"}
+          aria-expanded={isProfileDrawerOpen}
+          aria-controls="mobile-settings-drawer"
+          onClick={() => {
+            setIsBottomNavCompact(false);
+            setOpenMenu(null);
+            setIsSidebarOpen(false);
+            setIsQuickAddOpen(false);
+            setIsProfileDrawerOpen((current) => !current);
+          }}
         >
           <span className="shell-bottom-nav__icon" aria-hidden="true">
-            <MenuIcon name="more" />
+            {profileImage ? (
+              <img className="shell-bottom-nav__profile-photo" src={profileImage} alt="" loading="eager" decoding="async" fetchPriority="high" />
+            ) : (
+              <MenuIcon name="profile" />
+            )}
           </span>
-          <span className="shell-bottom-nav__label">More</span>
-        </Link>
+          <span className="shell-bottom-nav__label">Account</span>
+        </button>
       </nav>
 
       <main

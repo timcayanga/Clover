@@ -120,10 +120,23 @@ assert.match(
   "Billing consistency maintenance must not block authenticated page rendering.",
 );
 
-const dashboardSource = readSource("app/dashboard/page.tsx");
+const dashboardSource = readSource("components/dashboard-page-content.tsx");
+const homePageSource = readSource("app/home/page.tsx");
 const balanceVisibilitySource = readSource("components/balance-visibility-toggle.tsx");
+const homeReviewLauncherSource = readSource("components/home-transaction-review-launcher.tsx");
 assert.match(dashboardSource, /DashboardTopActionsLazy/);
 assert.doesNotMatch(dashboardSource, /from "@\/components\/dashboard-top-actions";/);
+assert.doesNotMatch(
+  dashboardSource,
+  /RouteSplash|<Suspense fallback=\{<DashboardStreamFallback \/>\}>/,
+  "Home must rely on its route-level loading boundary so custom async trees cannot race hydration.",
+);
+assert.match(dashboardSource, /export async function DashboardPageContent\(\) \{[\s\S]{0,80}return DashboardPageStream\(\)/);
+assert.match(
+  homePageSource,
+  /export default async function HomePage[\s\S]{0,200}return DashboardPageContent\(\)/,
+  "The Home route must await its server tree inside the standard segment loading boundary.",
+);
 assert.match(dashboardSource, /const todayStart = toDayStart\(now\)/);
 assert.doesNotMatch(dashboardSource, /activityAnchorDate/);
 assert.match(dashboardSource, /Weekly Report/);
@@ -153,6 +166,11 @@ assert.match(
   "The monthly report total must respect the Home amount toggle.",
 );
 assert.match(balanceVisibilitySource, /applyHomeAmountVisibility/);
+assert.match(
+  homeReviewLauncherSource,
+  /toLocaleDateString\("en-PH", \{[\s\S]{0,140}timeZone: "UTC"/,
+  "Home review dates must use one time zone on the server and client to avoid hydration mismatches.",
+);
 assert.match(balanceVisibilitySource, /M4 14c2\.2-2\.5 4\.9-3\.8 8-3\.8s5\.8 1\.3 8 3\.8/);
 assert.doesNotMatch(balanceVisibilitySource, /balance-visibility-slash|m4 4 16 16/i);
 assert.match(

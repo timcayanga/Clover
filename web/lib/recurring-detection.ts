@@ -1,6 +1,7 @@
 import { Prisma, type CommitmentRecurrence } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hasCompatibleTable } from "@/lib/data-engine";
+import { isRecurringSuggestionCurrent, suggestRecurringTitle, recurringSuggestionAliases, getRecurringSuggestionCategory } from "@/lib/recurring-suggestion-policy";
 
 type RecurringSourceTransaction = {
   id: string;
@@ -27,6 +28,7 @@ type RecurringSourceTransaction = {
 };
 
 type DetectedRecurringPattern = {
+  categoryName: string;
   workspaceId: string;
   accountId: string | null;
   merchantRaw: string;
@@ -88,6 +90,7 @@ const recurringDiscretionaryMerchantPattern =
   /\b(grab|toby'?s\s+estate|coffee|cafe|restaurant|bistro|bakery|starbucks|jollibee|mcdonald'?s|foodpanda)\b/i;
 
 const recurringMerchantAliases = [
+  ...recurringSuggestionAliases,
   { pattern: /\bopenai\b.*\b(chatgpt|subscr(?:iption)?)\b|\bchatgpt\b/i, label: "OpenAI ChatGPT" },
   { pattern: /\bnetflix\b/i, label: "Netflix" },
   { pattern: /\bspotify\b/i, label: "Spotify" },
@@ -146,7 +149,7 @@ export const normalizeRecurringMerchantKey = (value: string) =>
     .trim();
 
 export const buildRecurringMerchantFamilySignature = (value: string) => {
-  const normalized = normalizeRecurringMerchantKey(value)
+  const normalized = normalizeRecurringMerchantKey(suggestRecurringTitle(value))
     .replace(recurringFamilyNoisePattern, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -508,9 +511,10 @@ const inferFrequency = (
     representativeTypicalInterval >= 10 &&
     representativeTypicalInterval <= 45;
   const looksAnnualAcrossGaps =
-    positiveMonthGaps.length > 0 &&
-    sameDayOfMonthCount >= Math.min(2, monthlyRepresentativeDates.length) &&
-    positiveMonthGaps.every((gap) => gap >= 10 && gap <= 14);
+    intervals.length > 0 &&
+    sortedDates.slice(1).every((date, index) =>
+      Math.abs(daysBetween(addMonths(sortedDates[index] as Date, 12), date)) <= 21
+    );
 
   if (typicalInterval >= 6 && typicalInterval <= 8) {
     return { frequency: "weekly", nextExpectedDate: addDays(lastSeenDate, 7), cadenceConfidence: 84 };
@@ -537,7 +541,7 @@ const inferFrequency = (
     return { frequency: "quarterly", nextExpectedDate: addMonths(lastSeenDate, 3), cadenceConfidence: 78 };
   }
 
-  if ((typicalInterval >= 300 && typicalInterval <= 430) || looksAnnualAcrossGaps) {
+  if (looksAnnualAcrossGaps) {
     return { frequency: "annual", nextExpectedDate: addMonths(lastSeenDate, 12), cadenceConfidence: looksAnnualAcrossGaps ? 80 : 72 };
   }
 
@@ -596,13 +600,13 @@ const buildPatternFromTransactions = (
       return counts;
     }, new Map<string, number>()).entries()
   ).sort((left, right) => right[1] - left[1])[0]?.[0];
-  const canonicalTitle =
+  const canonicalTitle = suggestRecurringTitle(
     normalizedMerchantTitle ||
     canonicalizeRecurringMerchant(
       preferredMerchantLabels
         .find((value) => Boolean(value && canonicalizeRecurringMerchant(value).length > 0)) ?? candidateTransactions[0]?.merchantRaw ?? ""
     ) ||
-    normalizeRecurringMerchantKey(candidateTransactions[0]?.merchantRaw ?? "");
+    normalizeRecurringMerchantKey(candidateTransactions[0]?.merchantRaw ?? ""));
   if (!canonicalTitle) {
     return null;
   }
@@ -741,6 +745,7 @@ const buildPatternFromTransactions = (
   }
 
   return {
+    categoryName: getRecurringSuggestionCategory(candidateTransactions.map((transaction) => transaction.category?.name), reasonTags),
     workspaceId: first.workspaceId,
     accountId: scope === "workspace" && spansMultipleAccounts ? null : first.accountId,
     merchantRaw: first.merchantRaw,
@@ -789,7 +794,7 @@ const buildPatternFromTransactions = (
   };
 };
 
-export const detectRecurringPatterns = (transactions: RecurringSourceTransaction[]) => {
+export const detectRecurringPatterns = (transactions: RecurringSourceTransaction[], now = new Date()) => {
   const accountGroups = new Map<string, RecurringSourceTransaction[]>();
   const workspaceGroups = new Map<string, RecurringSourceTransaction[]>();
 
@@ -831,7 +836,7 @@ export const detectRecurringPatterns = (transactions: RecurringSourceTransaction
   }
 
   return Array.from(dedupedPatterns.values())
-    .filter((pattern): pattern is DetectedRecurringPattern => Boolean(pattern))
+    .filter((pattern) => isRecurringSuggestionCurrent(pattern.lastSeenDate, pattern.frequency, now))
     .sort((left, right) => right.confidence - left.confidence || right.transactionCount - left.transactionCount);
 };
 
@@ -857,7 +862,7 @@ export const getRecurringSourceTransactions = async (workspaceId: string): Promi
             deletedAt: null,
             isExcluded: false,
             date: {
-              gte: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000),
+              gte: new Date(Date.now() - 800 * 24 * 60 * 60 * 1000),
             },
           },
           select: {
@@ -889,16 +894,18 @@ export const getRecurringSourceTransactions = async (workspaceId: string): Promi
               },
             },
           },
-          orderBy: [{ date: "asc" }, { merchantClean: "asc" }, { merchantRaw: "asc" }],
-          take: 1200,
+          orderBy: [{ date: "desc" }, { id: "desc" }],
+          take: 6000,
         })
       : Promise.resolve([]),
-    hasParsedTransactionTable
+    // Raw parser evidence must not resurrect deleted or excluded transactions.
+    // It is a legacy fallback only when the normalized ledger does not exist.
+    hasParsedTransactionTable && !hasTransactionTable
       ? prisma.parsedTransaction.findMany({
           where: {
             workspaceId,
             date: {
-              gte: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000),
+              gte: new Date(Date.now() - 800 * 24 * 60 * 60 * 1000),
             },
           },
           select: {
@@ -918,8 +925,8 @@ export const getRecurringSourceTransactions = async (workspaceId: string): Promi
               },
             },
           },
-          orderBy: [{ date: "asc" }, { merchantClean: "asc" }, { merchantRaw: "asc" }],
-          take: 1200,
+          orderBy: [{ date: "desc" }, { id: "desc" }],
+          take: 6000,
         })
       : Promise.resolve([]),
   ]);
@@ -1051,7 +1058,7 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
     },
   });
   const dismissedSuppressionKeys = new Set(
-    dismissedPatterns.map((pattern) => {
+    dismissedPatterns.filter((pattern) => (pattern.rawPayload as Record<string, unknown> | null)?.dismissalScope !== "suggestion").map((pattern) => {
       const payload =
         pattern.rawPayload && typeof pattern.rawPayload === "object" && !Array.isArray(pattern.rawPayload)
           ? (pattern.rawPayload as Record<string, unknown>)
@@ -1067,13 +1074,14 @@ export const syncWorkspaceRecurringPatterns = async (workspaceId: string) => {
   );
   const dismissedFamilyKeys = new Set(
     dismissedPatterns
+      .filter((pattern) => (pattern.rawPayload as Record<string, unknown> | null)?.dismissalScope !== "suggestion")
       .map((pattern) => {
         const payload =
           pattern.rawPayload && typeof pattern.rawPayload === "object" && !Array.isArray(pattern.rawPayload)
             ? (pattern.rawPayload as Record<string, unknown>)
             : null;
         if (typeof payload?.familySuppressionKey === "string" && payload.familySuppressionKey.trim()) {
-          return payload.familySuppressionKey.trim();
+          return buildRecurringMerchantFamilySignature(payload.familySuppressionKey.trim());
         }
         return buildRecurringMerchantFamilySignature(pattern.merchantClean ?? pattern.merchantRaw ?? "");
       })

@@ -101,6 +101,7 @@ export type ImportParseContext = {
   institution?: string | null;
   accountName?: string | null;
   accountNumber?: string | null;
+  currency?: string | null;
 };
 
 type GenericParserOptions = {
@@ -25907,12 +25908,450 @@ const parseHeuristicLines = (text: string, institution?: string | null, fileName
     .filter(Boolean) as ParsedImportRow[];
 };
 
+const decodeFinancialExchangeText = (value: string) =>
+  value
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .trim();
+
+const parseFinancialExchangeDate = (value?: string | null) => {
+  const normalized = value?.trim() ?? "";
+  const mt940Compact = normalized.match(/^(\d{2})(\d{2})(\d{2})(?!\d)/);
+  if (mt940Compact) {
+    const twoDigitYear = Number(mt940Compact[1]);
+    const fullYear = twoDigitYear >= 70 ? 1900 + twoDigitYear : 2000 + twoDigitYear;
+    return `${fullYear}-${mt940Compact[2]}-${mt940Compact[3]}`;
+  }
+  const compact = normalized.match(/^(\d{4})(\d{2})(\d{2})/);
+  if (compact) return `${compact[1]}-${compact[2]}-${compact[3]}`;
+  return parseDateValue(normalized.replace(/'/g, "/"))?.toISOString().slice(0, 10) ?? null;
+};
+
+const parseOfxFinancialExport = (text: string, context: ImportParseContext): ParsedImportRow[] | null => {
+  if (!/(?:^|\n)OFXHEADER:|<OFX\b|<STMTTRN>/i.test(text)) return null;
+  const readTag = (block: string, tag: string) => {
+    const match = block.match(new RegExp(`<${tag}>\\s*([^<\\r\\n]+)`, "i"));
+    return match?.[1] ? decodeFinancialExchangeText(match[1]) : null;
+  };
+  const currency = readTag(text, "CURDEF") ?? context.currency ?? null;
+  const accountNumber = readTag(text, "ACCTID") ?? context.accountNumber ?? null;
+  // BANKID is commonly a routing/clearing number, not a displayable bank
+  // name. Keep it as provenance and never turn it into an institution label.
+  const institution = readTag(text, "ORG") ?? context.institution ?? null;
+  const bankId = readTag(text, "BANKID");
+  const rows: ParsedImportRow[] = [];
+  for (const match of text.matchAll(/<STMTTRN>([\s\S]*?)(?:<\/STMTTRN>|(?=<STMTTRN>)|$)/gi)) {
+    const block = match[1];
+    const date = parseFinancialExchangeDate(readTag(block, "DTPOSTED") ?? readTag(block, "DTUSER"));
+    const rawAmount = Number((readTag(block, "TRNAMT") ?? "").replaceAll(",", ""));
+    const name = readTag(block, "NAME") ?? readTag(block, "PAYEE") ?? readTag(block, "MEMO") ?? "Imported transaction";
+    if (!date || !Number.isFinite(rawAmount) || rawAmount === 0) continue;
+    const transactionCode = readTag(block, "TRNTYPE") ?? "OTHER";
+    const memo = readTag(block, "MEMO");
+    const type: TransactionType = /XFER|TRANSFER/i.test(transactionCode)
+      ? "transfer"
+      : rawAmount > 0
+        ? "income"
+        : "expense";
+    rows.push({
+      date,
+      amount: String(Math.abs(rawAmount)),
+      currency: currency ?? undefined,
+      merchantRaw: humanizeMerchantText(name),
+      merchantClean: summarizeMerchantText(name, institution),
+      description: memo || name,
+      categoryName: guessCategoryName(`${name} ${memo ?? ""}`, type),
+      accountName: context.accountName ?? (accountNumber ? `Account ${accountNumber.slice(-4)}` : undefined),
+      accountNumber: accountNumber ?? undefined,
+      institution: institution ?? undefined,
+      type,
+      confidence: 100,
+      parserConfidence: 100,
+      categoryConfidence: 70,
+      rawPayload: {
+        kind: "financial_exchange_transaction",
+        format: "ofx",
+        transactionCode,
+        fitId: readTag(block, "FITID"),
+        checkNumber: readTag(block, "CHECKNUM"),
+        bankId,
+        rawAmount,
+      },
+    });
+  }
+  return rows;
+};
+
+const parseQifFinancialExport = (text: string, context: ImportParseContext): ParsedImportRow[] | null => {
+  if (!/^!Type:/im.test(text)) return null;
+  const rows: ParsedImportRow[] = [];
+  const records = text.split(/^\^\s*$/m);
+  for (const record of records) {
+    const fields = new Map<string, string>();
+    for (const line of record.split(/\r?\n/)) {
+      const code = line[0];
+      if (!code || code === "!" || line.startsWith("!Type:")) continue;
+      const value = line.slice(1).trim();
+      if (value && !fields.has(code)) fields.set(code, value);
+    }
+    const date = parseFinancialExchangeDate(fields.get("D"));
+    const rawAmount = Number((fields.get("T") ?? "").replaceAll(",", ""));
+    const payee = fields.get("P") ?? fields.get("M") ?? "Imported transaction";
+    if (!date || !Number.isFinite(rawAmount) || rawAmount === 0) continue;
+    const category = fields.get("L") ?? null;
+    const type: TransactionType = /transfer|\[[^\]]+\]/i.test(category ?? "")
+      ? "transfer"
+      : rawAmount > 0
+        ? "income"
+        : "expense";
+    rows.push({
+      date,
+      amount: String(Math.abs(rawAmount)),
+      currency: context.currency,
+      merchantRaw: humanizeMerchantText(payee),
+      merchantClean: summarizeMerchantText(payee, context.institution),
+      description: fields.get("M") ?? payee,
+      categoryName: category?.replace(/^\[|\]$/g, "") || guessCategoryName(payee, type),
+      accountName: context.accountName ?? undefined,
+      accountNumber: context.accountNumber ?? undefined,
+      institution: context.institution ?? undefined,
+      type,
+      confidence: 100,
+      parserConfidence: 100,
+      categoryConfidence: category ? 100 : 70,
+      rawPayload: {
+        kind: "financial_exchange_transaction",
+        format: "qif",
+        category,
+        number: fields.get("N") ?? null,
+        clearedStatus: fields.get("C") ?? null,
+        rawAmount,
+      },
+    });
+  }
+  return rows;
+};
+
+const parseMt940FinancialExport = (text: string, context: ImportParseContext): ParsedImportRow[] | null => {
+  if (!/(?:^|\n):20:[^\n]+[\s\S]*?(?:^|\n):25:[^\n]+[\s\S]*?(?:^|\n):61:/m.test(text)) return null;
+  const institution = context.institution ?? null;
+  const lines = text.split(/\r?\n/);
+  const rows: ParsedImportRow[] = [];
+  let activeAccountNumber = context.accountNumber ?? null;
+  let activeCurrency = context.currency ?? null;
+  for (let index = 0; index < lines.length; index += 1) {
+    const accountMatch = lines[index]?.match(/^:25:([^\r\n]+)/);
+    if (accountMatch?.[1]) {
+      activeAccountNumber = accountMatch[1].trim();
+      continue;
+    }
+    const balanceMatch = lines[index]?.match(/^:6[02][FM]:[CD]\d{6}([A-Z]{3})/);
+    if (balanceMatch?.[1]) {
+      activeCurrency = balanceMatch[1];
+      continue;
+    }
+    if (!lines[index]?.startsWith(":61:")) continue;
+    const transactionLine = lines[index]!.slice(4).trim();
+    const match = transactionLine.match(/^(\d{6})(?:\d{4})?\s*([R]?[DC])([A-Z])?\s*([\d,]+)\s*([A-Z][A-Z0-9]{3})?(.*)$/);
+    if (!match) continue;
+    const date = parseFinancialExchangeDate(match[1]);
+    const rawAmount = Number(match[4].replace(",", "."));
+    if (!date || !Number.isFinite(rawAmount) || rawAmount === 0) continue;
+    const directionCode = match[2];
+    const reversed = directionCode.startsWith("R");
+    const credit = directionCode.endsWith("C");
+    const isIncome = reversed ? !credit : credit;
+    const transactionCode = match[5] ?? null;
+    const inlineReference = match[6]?.trim() ?? "";
+    const narrativeLines: string[] = [];
+    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+      const next = lines[cursor] ?? "";
+      if (/^:\d{2}[A-Z]?:/.test(next)) {
+        if (next.startsWith(":86:")) narrativeLines.push(next.slice(4).trim());
+        break;
+      }
+      if (next.trim()) narrativeLines.push(next.trim());
+    }
+    const narrative = decodeFinancialExchangeText([inlineReference, ...narrativeLines].filter(Boolean).join(" "));
+    const name = narrative.replace(/^\?\d{2}/, "").replace(/\?\d{2}/g, " ").trim() || transactionCode || "Imported transaction";
+    const type: TransactionType = /NTRF|TRANSFER|TRF/i.test(`${transactionCode ?? ""} ${name}`)
+      ? "transfer"
+      : isIncome
+        ? "income"
+        : "expense";
+    rows.push({
+      date,
+      amount: String(Math.abs(rawAmount)),
+      currency: activeCurrency ?? undefined,
+      merchantRaw: humanizeMerchantText(name),
+      merchantClean: summarizeMerchantText(name, institution),
+      description: narrative || name,
+      categoryName: guessCategoryName(name, type),
+      accountName: context.accountName ?? (activeAccountNumber ? `Account ${activeAccountNumber.slice(-4)}` : undefined),
+      accountNumber: activeAccountNumber ?? undefined,
+      institution: institution ?? undefined,
+      type,
+      confidence: 100,
+      parserConfidence: 100,
+      categoryConfidence: 70,
+      rawPayload: {
+        kind: "financial_exchange_transaction",
+        format: "mt940",
+        directionCode,
+        transactionCode,
+        rawAmount: isIncome ? rawAmount : -rawAmount,
+        sourceLine: index + 1,
+      },
+    });
+  }
+  return rows;
+};
+
+const readCamtTag = (block: string, tag: string) => {
+  const match = block.match(new RegExp(`<(?:\\w+:)?${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/(?:\\w+:)?${tag}>`, "i"));
+  return match?.[1] ? decodeFinancialExchangeText(match[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")) : null;
+};
+
+const parseCamtFinancialExport = (text: string, context: ImportParseContext): ParsedImportRow[] | null => {
+  if (!(/<(?:\w+:)?Document\b[\s\S]*?<(?:\w+:)?BkToCstmrStmt\b/i.test(text) || /camt\.053/i.test(text.slice(0, 2_048)))) {
+    return null;
+  }
+  const contextInstitution = context.institution ?? null;
+  const rows: ParsedImportRow[] = [];
+  const statementBlocks = Array.from(
+    text.matchAll(/<(?:\w+:)?Stmt(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?Stmt>/gi),
+    (match) => match[1]
+  );
+  const statements = statementBlocks.length > 0 ? statementBlocks : [text];
+  const readAmount = (block: string) => {
+    const match = block.match(/<(?:\w+:)?Amt\b([^>]*)>([\d.,-]+)<\/(?:\w+:)?Amt>/i);
+    const amount = Number((match?.[2] ?? "").replaceAll(",", ""));
+    return {
+      amount,
+      currency: match?.[1]?.match(/\bCcy=["']([A-Z]{3})["']/i)?.[1] ?? null,
+    };
+  };
+  const readTransactionDetailAmount = (block: string) => {
+    const amountContainer =
+      block.match(/<(?:\w+:)?TxAmt(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?TxAmt>/i)?.[1] ??
+      block.match(/<(?:\w+:)?InstdAmt(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?InstdAmt>/i)?.[1] ??
+      null;
+    return amountContainer ? readAmount(amountContainer) : null;
+  };
+
+  for (const statement of statements) {
+    const accountBlock = statement.match(/<(?:\w+:)?Acct(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?Acct>/i)?.[1] ?? statement;
+    const otherAccountBlock = accountBlock.match(/<(?:\w+:)?Othr(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?Othr>/i)?.[1] ?? "";
+    const accountNumber =
+      readCamtTag(accountBlock, "IBAN") ??
+      readCamtTag(otherAccountBlock, "Id") ??
+      context.accountNumber ??
+      null;
+    const accountCurrency = readCamtTag(accountBlock, "Ccy") ?? context.currency ?? null;
+    const ownerBlock = statement.match(/<(?:\w+:)?Ownr(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?Ownr>/i)?.[1] ?? "";
+    const serviceProviderBlock = statement.match(/<(?:\w+:)?Svcr(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?Svcr>/i)?.[1] ?? "";
+    const accountOwner = readCamtTag(ownerBlock, "Nm");
+    const institution = contextInstitution ?? readCamtTag(serviceProviderBlock, "Nm") ?? null;
+    const bic = readCamtTag(statement, "BICFI") ?? readCamtTag(statement, "BIC");
+    for (const match of statement.matchAll(/<(?:\w+:)?Ntry(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?Ntry>/gi)) {
+      const entryBlock = match[1];
+      const entryAmount = readAmount(entryBlock);
+      const entryDate = parseFinancialExchangeDate(readCamtTag(entryBlock, "BookgDt") ?? readCamtTag(entryBlock, "ValDt"));
+      const entryDirection = readCamtTag(entryBlock, "CdtDbtInd") ?? "";
+      if (!entryDate || !Number.isFinite(entryAmount.amount) || entryAmount.amount === 0 || !/^(?:CRDT|DBIT)$/i.test(entryDirection)) continue;
+
+      const transactionDetails = Array.from(
+        entryBlock.matchAll(/<(?:\w+:)?TxDtls(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?TxDtls>/gi),
+        (detailMatch) => detailMatch[1]
+      );
+      const detailAmounts = transactionDetails.map(readTransactionDetailAmount);
+      const detailTotal = detailAmounts.reduce(
+        (total, detail) => total + (detail && Number.isFinite(detail.amount) ? Math.abs(detail.amount) : 0),
+        0
+      );
+      const canSplitBatch =
+        transactionDetails.length > 1 &&
+        detailAmounts.every((detail) => detail && Number.isFinite(detail.amount) && detail.amount !== 0) &&
+        Math.abs(detailTotal - Math.abs(entryAmount.amount)) <= 0.01;
+      const rowSources = canSplitBatch
+        ? transactionDetails.map((detailBlock, detailIndex) => ({
+            detailBlock,
+            detailIndex,
+            amount: detailAmounts[detailIndex]!.amount,
+            currency: detailAmounts[detailIndex]!.currency ?? entryAmount.currency ?? accountCurrency,
+          }))
+        : [{ detailBlock: entryBlock, detailIndex: null, amount: entryAmount.amount, currency: entryAmount.currency ?? accountCurrency }];
+
+      for (const source of rowSources) {
+        const direction = readCamtTag(source.detailBlock, "CdtDbtInd") ?? entryDirection;
+        if (!/^(?:CRDT|DBIT)$/i.test(direction)) continue;
+        const reference =
+          readCamtTag(source.detailBlock, "EndToEndId") ??
+          readCamtTag(source.detailBlock, "TxId") ??
+          readCamtTag(source.detailBlock, "AcctSvcrRef") ??
+          readCamtTag(entryBlock, "AcctSvcrRef") ??
+          readCamtTag(entryBlock, "NtryRef");
+        const narrative =
+          readCamtTag(source.detailBlock, "Ustrd") ??
+          readCamtTag(source.detailBlock, "AddtlTxInf") ??
+          readCamtTag(source.detailBlock, "Nm") ??
+          readCamtTag(entryBlock, "AddtlNtryInf") ??
+          reference ??
+          "Imported transaction";
+        const type: TransactionType = /transfer|xfer|trf|ntrf/i.test(narrative)
+          ? "transfer"
+          : direction.toUpperCase() === "CRDT"
+            ? "income"
+            : "expense";
+        rows.push({
+          date: entryDate,
+          amount: String(Math.abs(source.amount)),
+          currency: source.currency ?? undefined,
+          merchantRaw: humanizeMerchantText(narrative),
+          merchantClean: summarizeMerchantText(narrative, institution),
+          description: narrative,
+          categoryName: guessCategoryName(narrative, type),
+          accountName: context.accountName ?? accountOwner ?? (accountNumber ? `Account ${accountNumber.slice(-4)}` : undefined),
+          accountNumber: accountNumber ?? undefined,
+          institution: institution ?? undefined,
+          type,
+          confidence: 100,
+          parserConfidence: 100,
+          categoryConfidence: 70,
+          rawPayload: {
+            kind: "financial_exchange_transaction",
+            format: "camt053",
+            creditDebitIndicator: direction.toUpperCase(),
+            reference,
+            entryReference: readCamtTag(entryBlock, "NtryRef"),
+            bic,
+            batchDetailIndex: source.detailIndex === null ? null : source.detailIndex + 1,
+            batchDetailCount: canSplitBatch ? transactionDetails.length : null,
+            rawAmount: direction.toUpperCase() === "CRDT" ? source.amount : -source.amount,
+          },
+        });
+      }
+    }
+  }
+  return rows;
+};
+
+const parseJsonFinancialExport = (text: string, context: ImportParseContext): ParsedImportRow[] | null => {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const root = payload && typeof payload === "object" && !Array.isArray(payload) ? payload as Record<string, unknown> : null;
+  const nestedData = root?.data && typeof root.data === "object" && !Array.isArray(root.data)
+    ? root.data as Record<string, unknown>
+    : null;
+  const candidates = Array.isArray(payload)
+    ? payload
+    : [root?.transactions, root?.records, root?.items, root?.activities, nestedData?.transactions, nestedData?.records]
+        .find(Array.isArray) ?? [];
+  if (!candidates.length) return [];
+  const rootCurrency = typeof root?.currency === "string" ? root.currency : context.currency ?? null;
+  const institution = [root?.bankName, root?.institution, root?.provider].find((value): value is string => typeof value === "string") ?? context.institution ?? null;
+  const accountName = [root?.accountName, root?.account_name].find((value): value is string => typeof value === "string") ?? context.accountName ?? null;
+  const accountNumber = [root?.accountNumber, root?.account_number].find((value): value is string => typeof value === "string") ?? context.accountNumber ?? null;
+  const readValue = (row: Record<string, unknown>, keys: string[]) => keys.map((key) => row[key]).find((value) => value != null);
+  const readConfidence = (row: Record<string, unknown>, keys: string[]) => {
+    const numeric = Number(readValue(row, keys));
+    if (!Number.isFinite(numeric)) return undefined;
+    return Math.round(Math.max(0, Math.min(100, numeric <= 1 ? numeric * 100 : numeric)));
+  };
+  const rows: ParsedImportRow[] = [];
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index];
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
+    const record = candidate as Record<string, unknown>;
+    const dateValue = readValue(record, ["date", "transactionDate", "transaction_date", "postedDate", "posted_at", "bookingDate"]);
+    const date = parseFinancialExchangeDate(dateValue == null ? null : String(dateValue));
+    const debit = readValue(record, ["debit", "debitAmount", "debit_amount"]);
+    const credit = readValue(record, ["credit", "creditAmount", "credit_amount"]);
+    const amountValue = debit ?? credit ?? readValue(record, ["amount", "value", "transactionAmount", "transaction_amount"]);
+    const rawAmount = Number(String(amountValue ?? "").replace(/[^\d.-]/g, ""));
+    const explicitType = String(readValue(record, ["type", "direction", "transactionType", "transaction_type"]) ?? "").toLowerCase();
+    const name = String(readValue(record, ["merchantClean", "normalizedName", "transactionName", "merchant", "payee", "name", "description", "memo"]) ?? "").trim();
+    if (!date || !Number.isFinite(rawAmount) || rawAmount === 0 || !name) continue;
+    const type: TransactionType = /transfer|xfer/.test(explicitType)
+      ? "transfer"
+      : debit != null || /debit|expense|spend|withdraw/.test(explicitType)
+        ? "expense"
+        : credit != null || /credit|income|deposit|refund/.test(explicitType)
+          ? "income"
+          : rawAmount < 0
+            ? "expense"
+            : "income";
+    const rowCurrency = readValue(record, ["currency", "currencyCode", "currency_code"]);
+    const category = readValue(record, ["categoryName", "category_name", "category"]);
+    rows.push({
+      date,
+      amount: String(Math.abs(rawAmount)),
+      currency: typeof rowCurrency === "string" ? rowCurrency : rootCurrency ?? undefined,
+      merchantRaw: humanizeMerchantText(name),
+      merchantClean: summarizeMerchantText(name, institution),
+      description: String(readValue(record, ["description", "memo", "notes"]) ?? name),
+      categoryName: typeof category === "string" && category.trim() ? category.trim() : guessCategoryName(name, type),
+      accountName: accountName ?? undefined,
+      accountNumber: accountNumber ?? undefined,
+      institution: institution ?? undefined,
+      type,
+      confidence: readConfidence(record, ["confidence", "parserConfidence", "parser_confidence"]) ?? 100,
+      parserConfidence: readConfidence(record, ["parserConfidence", "parser_confidence", "confidence"]) ?? 100,
+      categoryConfidence: readConfidence(record, ["categoryConfidence", "category_confidence"]) ?? (typeof category === "string" ? 100 : 70),
+      rawPayload: {
+        kind: "financial_exchange_transaction",
+        format: "json",
+        sourceIndex: index,
+        sourceRecord: record,
+      },
+    });
+  }
+  return rows;
+};
+
+export const parseFinancialExchangeImport = (
+  text: string,
+  fileName: string,
+  fileType: string,
+  context: ImportParseContext = {}
+): ParsedImportRow[] | null => {
+  const normalizedName = fileName.toLowerCase();
+  const normalizedType = fileType.toLowerCase();
+  if (/\.(?:ofx|qfx)$/.test(normalizedName) || /(?:x-ofx|intu\.qfx)/.test(normalizedType)) {
+    return parseOfxFinancialExport(text, context) ?? [];
+  }
+  if (normalizedName.endsWith(".qif") || /(?:application|text)\/qif/.test(normalizedType)) {
+    return parseQifFinancialExport(text, context) ?? [];
+  }
+  if (/\.(?:mt940|sta)$/.test(normalizedName) || /mt940/.test(normalizedType)) {
+    return parseMt940FinancialExport(text, context) ?? [];
+  }
+  if (normalizedName.endsWith(".xml") || /(?:application|text)\/xml/.test(normalizedType)) {
+    return parseCamtFinancialExport(text, context) ?? [];
+  }
+  if (normalizedName.endsWith(".json") || normalizedType === "application/json") {
+    return parseJsonFinancialExport(text, context) ?? [];
+  }
+  return null;
+};
+
 export const parseImportText = (
   text: string,
   fileName: string,
   fileType: string,
   context: ImportParseContext = {}
 ): ParsedImportRow[] => {
+  const financialExchangeRows = parseFinancialExchangeImport(text, fileName, fileType, context);
+  if (financialExchangeRows) {
+    return financialExchangeRows;
+  }
   const structuredWorkbookRows = parseStructuredWorkbookImport(text, fileName, fileType, context);
   if (structuredWorkbookRows) {
     return structuredWorkbookRows;

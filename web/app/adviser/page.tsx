@@ -14,7 +14,7 @@ import { getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/
 import { loadSplitBillWorkspaceData } from "@/lib/split-bill-loaders";
 import { loadBudgetWorkspaceData } from "@/lib/budgeting-data";
 import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
-import { AdviserChat } from "@/components/adviser-chat";
+import { AdviserChat, type AdviserPrompt as ChatAdviserPrompt } from "@/components/adviser-chat";
 import { isLiabilityAccountType, isSpendableAccountType, isTrackedAssetAccountType } from "@/lib/account-types";
 import { deriveReconciledBalance, normalizeAccountBalanceSign, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
@@ -3147,6 +3147,21 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
     6
   );
 
+  const planningPromptSuggestions: ChatAdviserPrompt[] = [
+    {
+      id: "adviser-plan-budget",
+      group: "budgeting",
+      label: "Help me create a budget",
+      prompt: "Help me create a realistic budget from my recent spending. Ask for anything Clover cannot determine, then prepare a budget card for me to review.",
+    },
+    {
+      id: "adviser-plan-goal",
+      group: "goals",
+      label: "Help me create a goal",
+      prompt: "Help me create a realistic financial goal from my cash flow. Ask for anything Clover cannot determine, then prepare a goal card for me to review.",
+    },
+  ];
+
   const hasCompleteAccess = hasFullFeatureAccess(user.planTier);
 
   return (
@@ -3157,10 +3172,11 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
       >
       <section className="adviser-page adviser-page--chat">
         <AdviserChat
-          prompts={promptSuggestions}
+          prompts={[...planningPromptSuggestions, ...promptSuggestions].slice(0, 6)}
           isPro={hasCompleteAccess}
           initialPrompt={resolvedSearchParams?.prompt?.slice(0, 1600)}
           layout="workspace"
+          surface="general"
         />
       </section>
       </CloverShell>

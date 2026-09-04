@@ -4,9 +4,12 @@ import { isImageImportFile } from "@/lib/import-file-helpers";
 
 export const MAX_IMPORT_IMAGE_SOURCE_SIZE = 16 * 1024 * 1024;
 export const IMPORT_IMAGE_TARGET_SIZE = 3_500_000;
-export const RECEIPT_IMPORT_IMAGE_TARGET_SIZE = 1_250_000;
+export const RECEIPT_IMPORT_IMAGE_TARGET_SIZE = 750_000;
 
 export type ImportImageOptimizationProfile = "default" | "receipt";
+
+export const isHeicImportImage = (file: Pick<File, "name" | "type">) =>
+  /\.(?:heic|heif)$/i.test(file.name) || /image\/hei[cf](?:-sequence)?/i.test(file.type);
 
 const loadImage = (file: File) =>
   new Promise<HTMLImageElement>((resolve, reject) => {
@@ -47,7 +50,7 @@ export const optimizeImportImage = async (
     isReceiptProfile ? RECEIPT_IMPORT_IMAGE_TARGET_SIZE : IMPORT_IMAGE_TARGET_SIZE,
     maxUploadBytes
   );
-  if (!isImageImportFile(file) || file.size <= targetUploadBytes) {
+  if (!isImageImportFile(file) || (file.size <= targetUploadBytes && !isHeicImportImage(file))) {
     return file;
   }
 
@@ -56,12 +59,12 @@ export const optimizeImportImage = async (
   }
 
   const image = await loadImage(file);
-  // The server's core receipt reader uses a 1120px visual budget. Preparing
-  // receipt photos at 1800px keeps headroom for later line-item enrichment
-  // while avoiding an unnecessary second megabyte over mobile networks.
+  // The server's core receipt reader uses a 1120px visual budget and its
+  // optional detail reader uses 1440px. Match that upper bound in the browser
+  // so mobile users do not upload pixels Clover immediately discards.
   // Statement screenshots keep the larger canvas because their tables are denser.
-  let maxDimension = isReceiptProfile ? 1_800 : 2_600;
-  let quality = isReceiptProfile ? 0.84 : 0.9;
+  let maxDimension = isReceiptProfile ? 1_440 : 2_600;
+  let quality = isReceiptProfile ? 0.82 : 0.9;
   let output: Blob | null = null;
 
   for (let attempt = 0; attempt < 7; attempt += 1) {
@@ -84,7 +87,7 @@ export const optimizeImportImage = async (
       break;
     }
 
-    maxDimension = Math.max(1_400, Math.round(maxDimension * 0.82));
+    maxDimension = Math.max(isReceiptProfile ? 1_120 : 1_400, Math.round(maxDimension * 0.82));
     quality = Math.max(0.68, quality - 0.06);
   }
 

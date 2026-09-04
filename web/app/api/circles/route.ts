@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { circleRoles, circleTypes } from "@/lib/circles";
 import { getCircleCurrentUser, getCircleErrorResponse } from "@/lib/circle-access";
 import { loadCirclesWorkspaceData } from "@/lib/circle-loaders";
+import { loadCirclesDirectoryData } from "@/lib/circle-directory";
 import { getUserDisplayName } from "@/lib/user-display-name";
 import {
   assertContentLengthWithin,
@@ -43,10 +44,18 @@ const createCircleSchema = z.object({
   members: z.array(memberSchema).max(30).default([]),
 });
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const user = await getCircleCurrentUser();
-    return NextResponse.json(await loadCirclesWorkspaceData(user));
+    const params = new URL(request.url).searchParams;
+    const circleId = params.get("circle");
+    const data = params.get("view") === "directory"
+      ? await loadCirclesDirectoryData(user)
+      : await loadCirclesWorkspaceData(user, circleId || undefined);
+    if (circleId && !data.circles.some((circle) => circle.id === circleId)) {
+      return NextResponse.json({ error: "Circle not found or you no longer have access." }, { status: 404 });
+    }
+    return NextResponse.json(data, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const failure = getCircleErrorResponse(error);
     return NextResponse.json(

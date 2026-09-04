@@ -10,6 +10,8 @@ import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { prisma } from "@/lib/prisma";
 import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
 import { normalizeAdviserPreferences } from "@/lib/adviser-preferences";
+import { GOAL_OPTIONS } from "@/lib/goals";
+import { isBudgetEmoji } from "@/lib/budget-appearance";
 
 export const dynamic = "force-dynamic";
 
@@ -114,6 +116,7 @@ export async function POST(request: Request) {
       result = { adviserPreferences: preferences };
     } else if (action.type === "set_goal") {
       const goal = stringValue(payload.goal, null as unknown as string) || null;
+      if (goal && !GOAL_OPTIONS.some((option) => option.value === goal)) return NextResponse.json({ error: "Choose a supported Clover goal before confirming." }, { status: 400 });
       const targetAmount = payload.targetAmount === null || payload.targetAmount === undefined || payload.targetAmount === "" ? null : numberValue(payload.targetAmount);
       if (!goal && targetAmount === null) return NextResponse.json({ error: "Add a goal or target amount before confirming." }, { status: 400 });
       if (targetAmount !== null && targetAmount <= 0) return NextResponse.json({ error: "A goal target must be greater than zero." }, { status: 400 });
@@ -141,15 +144,34 @@ export async function POST(request: Request) {
     } else if (action.type === "create_budget") {
       const targetAmount = numberValue(payload.targetAmount);
       if (targetAmount <= 0) return NextResponse.json({ error: "A budget limit must be greater than zero." }, { status: 400 });
+      const requestedScope = stringValue(payload.scope, "global");
+      const scope = requestedScope === "account" || requestedScope === "category" ? requestedScope : "global";
+      const accountId = scope === "account" ? stringValue(payload.accountId) : "";
+      const categoryId = scope === "category" ? stringValue(payload.categoryId) : "";
+      const [account, category] = await Promise.all([
+        accountId ? prisma.account.findFirst({ where: { id: accountId, workspaceId: workspace.id, type: { not: "investment" } }, select: { id: true, currency: true } }) : null,
+        categoryId ? prisma.category.findFirst({ where: { id: categoryId, workspaceId: workspace.id, type: "expense" }, select: { id: true } }) : null,
+      ]);
+      if (scope === "account" && !account) return NextResponse.json({ error: "Choose a valid non-investment account for this budget." }, { status: 400 });
+      if (scope === "category" && !category) return NextResponse.json({ error: "Choose a valid expense category for this budget." }, { status: 400 });
+      const currency = stringValue(payload.currency, account?.currency ?? "PHP").toUpperCase();
+      if (account?.currency && account.currency.toUpperCase() !== currency) return NextResponse.json({ error: `Use ${account.currency} for this account budget.` }, { status: 400 });
+      const cadence = ["daily", "weekly", "biweekly", "monthly", "quarterly", "annual"].includes(stringValue(payload.cadence))
+        ? stringValue(payload.cadence) as "daily" | "weekly" | "biweekly" | "monthly" | "quarterly" | "annual"
+        : "monthly";
+      const kind = stringValue(payload.kind, "spend_limit") === "savings_target" ? "savings_target" : "spend_limit";
       const budget = await prisma.budget.create({
         data: {
           workspaceId: workspace.id,
           name: stringValue(payload.name, "Adviser budget"),
-          kind: stringValue(payload.kind, "spend_limit") === "savings_target" ? "savings_target" : "spend_limit",
-          scope: "global",
-          cadence: ["daily", "weekly", "monthly", "annual"].includes(stringValue(payload.cadence)) ? (stringValue(payload.cadence) as "daily" | "weekly" | "monthly" | "annual") : "monthly",
+          emoji: typeof payload.emoji === "string" && isBudgetEmoji(payload.emoji) ? payload.emoji : null,
+          kind,
+          scope: kind === "savings_target" ? "global" : scope,
+          cadence,
           targetAmount: new Prisma.Decimal(targetAmount),
-          currency: stringValue(payload.currency, "PHP").toUpperCase(),
+          currency,
+          accountId: kind === "savings_target" ? null : account?.id ?? null,
+          categoryId: kind === "savings_target" ? null : category?.id ?? null,
         },
         select: { id: true, name: true, targetAmount: true, currency: true },
       });

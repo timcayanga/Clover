@@ -11,12 +11,14 @@ import { syncReceivableAccountCommitments } from "@/lib/imported-receivables.ser
 import { resolveTrackedCommitmentDueDate, toCommitmentOccurrenceKey } from "@/lib/commitment-occurrences";
 import { DEFAULT_CATEGORY_ROWS } from "@/lib/default-categories";
 import { after } from "next/server";
+import { isRecurringSuggestionCurrent } from "@/lib/recurring-suggestion-policy";
 
 export type RecurringPageAccount = {
   id: string;
   name: string;
   institution: string | null;
   type: string;
+  currency: string;
   balance: string | null;
 };
 
@@ -260,6 +262,7 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
         name: true,
         institution: true,
         type: true,
+        currency: true,
         balance: true,
       },
     }),
@@ -379,6 +382,28 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
     }),
   ]);
 
+  // Include older annual evidence without sending the entire detection window to the browser.
+  const loadedIds = new Set(transactions.map((transaction) => transaction.id));
+  const evidenceIds = [...new Set([
+    ...plannedPaymentSuggestions.flatMap((suggestion) => suggestion.transactionIds),
+    ...recurringPatterns.flatMap((pattern) => {
+      const payload = pattern.rawPayload as Record<string, unknown> | null;
+      return Array.isArray(payload?.transactionIds) ? payload.transactionIds.filter((id): id is string => typeof id === "string") : [];
+    }),
+  ])].filter((id) => !loadedIds.has(id) && !id.startsWith("parsed:"));
+  if (evidenceIds.length) {
+    const evidence = await prisma.transaction.findMany({
+      where: buildActiveWorkspaceTransactionWhere(workspaceId, { id: { in: evidenceIds } }),
+      select: {
+        id: true, date: true, amount: true, currency: true, type: true,
+        merchantRaw: true, merchantClean: true, description: true,
+        category: { select: { name: true } },
+        account: { select: { id: true, name: true, institution: true, currency: true } },
+      },
+      orderBy: { date: "desc" },
+    });
+    transactions.push(...evidence);
+  }
   const recurringItems = buildRecurringTransactionSummaries(transactions as RecurringTransactionLike[]);
   const liabilityAccountCount = accounts.filter((account) => account.type === "credit_card").length;
   const serializedAccounts = accounts.map((account) => ({
@@ -386,6 +411,7 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
     name: account.name,
     institution: account.institution,
     type: account.type,
+    currency: account.currency ?? "PHP",
     balance: account.balance?.toString() ?? null,
   }));
   const serializedTransactions = transactions.map((transaction) => ({
@@ -405,7 +431,9 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
       currency: transaction.account.currency ?? null,
     },
   }));
-  const serializedRecurringPatterns = recurringPatterns.map((pattern) => ({
+  const serializedRecurringPatterns = recurringPatterns
+    .filter((pattern) => isRecurringSuggestionCurrent(pattern.lastSeenDate, pattern.frequency))
+    .map((pattern) => ({
     id: pattern.id,
     merchantRaw: pattern.merchantRaw,
     merchantClean: pattern.merchantClean,

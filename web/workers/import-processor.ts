@@ -3236,6 +3236,19 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isJsonImportFile = (fileType: string | null | undefined, fileName: string | null | undefined) =>
   /\.json$/i.test(fileName ?? "") || /(?:^|\/)json$/i.test(fileType ?? "") || /\bjson\b/i.test(fileType ?? "");
 
+const isExplicitJsonTrainingFile = (jsonText: string, fileName: string | null | undefined) => {
+  if (/\b(?:training|instructions?|parser[\s_-]*rules?|corpus|examples?)\b/i.test(fileName ?? "")) {
+    return true;
+  }
+  try {
+    const root = JSON.parse(jsonText) as unknown;
+    if (!isRecord(root)) return false;
+    return Boolean(detectGenericTrainingBundle(root, fileName ?? "training.json"));
+  } catch {
+    return false;
+  }
+};
+
 const isImageImportFile = (fileType: string | null | undefined, fileName: string | null | undefined) => {
   const lowerName = `${fileName ?? ""} ${fileType ?? ""}`.toLowerCase();
   return (
@@ -8284,6 +8297,11 @@ export const processImportFileText = async (
 ): Promise<ProcessImportResult> => {
   const startedAt = Date.now();
   const openAIUsageEntries: OpenAIImportModelUsage[] = [];
+  const rawFileReady = options.rawFileReady ?? null;
+  // Attach a rejection handler immediately so an early validation return does
+  // not leave the concurrent object-storage upload as an unhandled promise.
+  // The original promise is still awaited before normalized rows are written.
+  void rawFileReady?.catch(() => undefined);
   const autoRerunAttempt = Number(options.autoRerunAttempt ?? 0);
   const autoRerunEnabled = options.qaSource === "import_processing" || options.qaSource === "import_confirmation";
   const skipVisualBackupParser = Boolean(options.skipVisualBackupParser);
@@ -8422,6 +8440,30 @@ export const processImportFileText = async (
     traceUpdatePromise,
   ]);
   let importMode = options.importMode ?? readCheckpointImportMode(statementCheckpoint?.sourceMetadata) ?? "statement";
+  const storageKey = String(importFile.storageKey ?? "");
+  // Image normalization is local and token-free. Overlap it with the receipt
+  // cache/history preflight so a cache miss can launch vision immediately.
+  const eagerReceiptImagePreparationStartedAt =
+    imageImport && importMode === "receipt" && Boolean(storageKey) ? Date.now() : null;
+  const eagerReceiptImagePromise = eagerReceiptImagePreparationStartedAt
+    ? readImportedFileImageDataUrls({
+        storageKey,
+        fileType,
+        fileName,
+        importMode,
+        sourceBytes: options.sourceBytes ?? null,
+      })
+        .then((value) => ({
+          value,
+          error: null as unknown,
+          durationMs: Date.now() - eagerReceiptImagePreparationStartedAt,
+        }))
+        .catch((error: unknown) => ({
+          value: null,
+          error,
+          durationMs: Date.now() - eagerReceiptImagePreparationStartedAt,
+        }))
+    : null;
   const earlyTextCachePromise =
     !imageImport &&
     !options.text &&
@@ -9055,6 +9097,11 @@ export const processImportFileText = async (
   let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
   let pdfFileDataBase64: string | null = null;
   let usedFastOnlyImageTranscript = false;
+  let receiptImagePreparationMs: number | null = null;
+  let earlyReceiptVisionStartedAt: number | null = null;
+  let earlyReceiptVisionPromise: Promise<
+    Awaited<ReturnType<typeof parseImportTextWithOpenAIFallback>> | null
+  > | null = null;
   const loadFallbackAssets = async () => {
     if (!storageKey) {
       throw new Error("Missing imported file.");
@@ -9119,7 +9166,6 @@ export const processImportFileText = async (
     };
   };
   let textCacheInfo: ImportFileTextCacheInfo | null = options.textCacheInfo ?? null;
-  const storageKey = String(importFile.storageKey ?? "");
   const noisyPdfBankByFileName =
     fileType === "application/pdf" &&
     /landbank|land bank|eastwest|chinabank|china bank/i.test(fileName);
@@ -9249,12 +9295,60 @@ export const processImportFileText = async (
       throw new Error("Missing imported file.");
     }
 
-    pageImages = await readImportedFileImageDataUrls({
-      storageKey,
-      fileType,
+    const eagerReceiptImages = eagerReceiptImagePromise ? await eagerReceiptImagePromise : null;
+    if (eagerReceiptImages?.error) {
+      throw eagerReceiptImages.error;
+    }
+    receiptImagePreparationMs = eagerReceiptImages?.durationMs ?? null;
+    pageImages =
+      eagerReceiptImages?.value ??
+      (await readImportedFileImageDataUrls({
+        storageKey,
+        fileType,
+        fileName,
+        importMode,
+        sourceBytes: options.sourceBytes ?? null,
+      }));
+  }
+
+  const receiptNeedsFullVisualPassFromHints =
+    /\b(?:split\s*bill|shared\s*bill|participant|participants|payer|paid\s+by|amount\s+due\s+per\s+person)\b/i.test(text) ||
+    /\b(?:handwritten|handwriting)\b/i.test(fileName);
+  const shouldStartEarlyReceiptVision = Boolean(
+    imageImport &&
+    importMode === "receipt" &&
+    pageImages?.length &&
+    !trainedReceiptDetails &&
+    !cachedReceiptExtraction &&
+    !skipVisualBackupParser &&
+    !receiptNeedsFullVisualPassFromHints
+  );
+  if (shouldStartEarlyReceiptVision) {
+    earlyReceiptVisionStartedAt = Date.now();
+    console.info("[import-performance] launching receipt vision before routing", {
+      importFileId,
+      pageCount: pageImages?.length ?? 0,
+      receiptImagePreparationMs,
+      imagePreparationOverlappedWithPreflight: Boolean(eagerReceiptImagePromise),
+    });
+    earlyReceiptVisionPromise = parseImportTextWithOpenAIFallback({
+      text: "",
       fileName,
-      importMode,
-      sourceBytes: options.sourceBytes ?? null,
+      fileType,
+      detectedMetadata: null,
+      parsedRows: [],
+      pageImages,
+      fileDataBase64: null,
+      preferPrimary: true,
+      importMode: "receipt",
+      receiptCoreOnly: true,
+      onUsage: recordOpenAIImportUsage,
+    }).catch((error) => {
+      console.warn("Early receipt vision failed; retaining standard fallback path", {
+        importFileId,
+        error,
+      });
+      return null;
     });
   }
 
@@ -9357,7 +9451,7 @@ export const processImportFileText = async (
     }
   }
 
-  if (isJsonImportFile(fileType, fileName)) {
+  if (isJsonImportFile(fileType, fileName) && isExplicitJsonTrainingFile(text, fileName)) {
     return processImportTrainingJson(importFileId, importFile, text, options, startedAt);
   }
 
@@ -9487,6 +9581,7 @@ export const processImportFileText = async (
         institution: metadataForParse.institution,
         accountName: metadataForParse.accountName,
         accountNumber: metadataForParse.accountNumber,
+        currency: metadataForParse.currency,
       }));
   const isBpiHybridFallbackCandidate = (() => {
     const lowerFileName = String(importFile.fileName ?? "").toLowerCase();
@@ -9527,6 +9622,17 @@ export const processImportFileText = async (
         typeof payload === "object" &&
         !Array.isArray(payload) &&
         typeof (payload as Record<string, unknown>).worksheetName === "string"
+      );
+    });
+  const hasFinancialExchangeRows =
+    parsedRows.length > 0 &&
+    parsedRows.every((row) => {
+      const payload = row.rawPayload;
+      return (
+        payload &&
+        typeof payload === "object" &&
+        !Array.isArray(payload) &&
+        (payload as Record<string, unknown>).kind === "financial_exchange_transaction"
       );
     });
   const pdaxCryptoPositions = parsedRows.flatMap((row) => {
@@ -9713,7 +9819,8 @@ export const processImportFileText = async (
     hasReliableDeterministicStatementParse:
       preliminaryStrongStructuredPdfParse ||
       preliminaryHasStrongWisePdfDeterministicParse ||
-      hasStructuredWorkbookRows,
+      hasStructuredWorkbookRows ||
+      hasFinancialExchangeRows,
     imageStatementParseLooksUsable: preliminaryImageStatementParseLooksUsable,
     textForParse,
     parsedRowsLength: parsedRows.length,
@@ -9749,6 +9856,7 @@ export const processImportFileText = async (
   const shouldPrioritizeBackupEarly =
     !skipVisualBackupParser &&
     !hasStructuredWorkbookRows &&
+    !hasFinancialExchangeRows &&
     // Generic screenshot OCR can manufacture dozens of statement-looking
     // rows from receipt labels, totals, and timestamps. Wait until those rows
     // have been rejected and document classification has run; otherwise the
@@ -9811,9 +9919,6 @@ export const processImportFileText = async (
           });
         })()
       : null;
-  if (options.rawFileReady) {
-    await options.rawFileReady;
-  }
   if (await hasCompatibleTable("AccountStatementCheckpoint")) {
     const preliminaryCheckpointSourceMetadata = {
       ...metadataForParse,
@@ -10194,6 +10299,7 @@ export const processImportFileText = async (
     (importFile.fileType === "application/pdf" || imageImport) &&
     Boolean(textForParse.trim()) &&
     !hasStructuredWorkbookRows &&
+    !hasFinancialExchangeRows &&
     !shouldDiscardGenericScreenshotRowsBeforeBackup &&
     (
       parsedRows.length === 0 ||
@@ -10364,6 +10470,7 @@ export const processImportFileText = async (
   });
   const hasReliableDeterministicStatementParse =
     hasStructuredWorkbookRows ||
+    hasFinancialExchangeRows ||
     strongStructuredPdfParse ||
     hasStrongWiseDeterministicParse ||
     hasKnownUnionBankSampleRows ||
@@ -10635,6 +10742,7 @@ export const processImportFileText = async (
   const shouldRunOpenAiFallback =
     !skipVisualBackupParser &&
     !hasStructuredWorkbookRows &&
+    !hasFinancialExchangeRows &&
     // Exact-fingerprint note training is confirmed deterministic evidence.
     // Do not spend a model call on it or allow a variable model extraction to
     // replace the known rows with a lower-quality candidate.
@@ -10652,11 +10760,11 @@ export const processImportFileText = async (
     effectiveImportMode !== "receipt" ||
     trainedReceiptDetails ||
     cachedReceiptExtraction ||
-    /\b(?:split\s*bill|shared\s*bill|participant|participants|payer|paid\s+by|amount\s+due\s+per\s+person)\b/i.test(textForParse) ||
-    /\b(?:handwritten|handwriting)\b/i.test(fileName)
+    receiptNeedsFullVisualPassFromHints ||
+    /\b(?:split\s*bill|shared\s*bill|participant|participants|payer|paid\s+by|amount\s+due\s+per\s+person)\b/i.test(textForParse)
   );
   if (shouldRunOpenAiFallback) {
-    backupParserStartedAt ??= Date.now();
+    backupParserStartedAt ??= earlyReceiptVisionStartedAt ?? Date.now();
     if (importMode === "receipt") {
       await updateImportProgress({
         status: "processing",
@@ -10681,7 +10789,9 @@ export const processImportFileText = async (
       }
     } else {
       openAiParsed =
-        importMode === "statement" && earlyOpenAiFallbackPromise
+        importMode === "receipt" && earlyReceiptVisionPromise
+          ? await earlyReceiptVisionPromise
+          : importMode === "statement" && earlyOpenAiFallbackPromise
           ? await earlyOpenAiFallbackPromise
           : await parseImportTextWithOpenAIFallback({
               text: textForParse,
@@ -10703,6 +10813,21 @@ export const processImportFileText = async (
               receiptCoreOnly: effectiveImportMode === "receipt" && !receiptNeedsCompleteFirstPass,
               onUsage: recordOpenAIImportUsage,
             });
+      if (!openAiParsed && importMode === "receipt" && earlyReceiptVisionPromise) {
+        openAiParsed = await parseImportTextWithOpenAIFallback({
+          text: textForParse,
+          fileName,
+          fileType,
+          detectedMetadata: metadataForParse,
+          parsedRows,
+          pageImages,
+          fileDataBase64: pdfFileDataBase64,
+          preferPrimary: openAiPrimaryMode || Boolean(pageImages?.length),
+          importMode: effectiveImportMode,
+          receiptCoreOnly: effectiveImportMode === "receipt" && !receiptNeedsCompleteFirstPass,
+          onUsage: recordOpenAIImportUsage,
+        });
+      }
       backupParserRaceResolved = Boolean(importMode === "statement" && earlyOpenAiFallbackPromise);
     }
     backupParserDecisionDurationMs =
@@ -10811,7 +10936,12 @@ export const processImportFileText = async (
       ? trainedReceiptDetails
       : chooseBetterReceiptDetails(openAiReceiptDetailsCandidate, receiptPreviewDetailsCandidate);
   receiptDetails = preferSpecificReceiptMerchant(receiptDetails, receiptPreview);
-  receiptDetails = receiptDetails ? repairReceiptDateFromEvidence(receiptDetails) : null;
+  receiptDetails = receiptDetails
+    ? repairReceiptDateFromEvidence(receiptDetails, textForParse, {
+        referenceDate: importFile.uploadedAt,
+        sourceLocale: importFile.sourceLocale,
+      })
+    : null;
   const promotesNotesSplitBillToReceipt =
     effectiveImportMode === "notes" &&
     Boolean(
@@ -11909,6 +12039,11 @@ export const processImportFileText = async (
     metadata: resolvedMetadata,
     statementFingerprint,
   });
+  // Parsing and vision can run while the audit copy uploads. Do not publish
+  // parsed or normalized financial rows until the raw source is safely stored.
+  if (rawFileReady) {
+    await rawFileReady;
+  }
   if (await hasCompatibleTable("ParsedTransaction")) {
     await prisma.parsedTransaction.deleteMany({
       where: { importFileId },
@@ -12715,6 +12850,8 @@ export const processImportFileText = async (
         usedOpenAiFallback: Boolean(useOpenAiParse),
         parserDecisionMs: backupParserDecisionDurationMs,
         persistenceMs: Math.max(0, parsedRowsPersistedAt - startedAt),
+        receiptImagePreparationMs,
+        imagePreparationOverlappedWithPreflight: Boolean(eagerReceiptImagePromise),
         withinReceiptTarget: effectiveImportMode !== "receipt" || Date.now() - startedAt <= RECEIPT_VISIBLE_TARGET_MS,
         exceededReceiptSlowBudget: effectiveImportMode === "receipt" && Date.now() - startedAt > RECEIPT_VISIBLE_SLOW_BUDGET_MS,
       });
@@ -12736,15 +12873,25 @@ export const processImportFileText = async (
         time_to_usable_ms: Date.now() - startedAt,
         parser_decision_ms: backupParserDecisionDurationMs,
         confirmation_ms: Date.now() - documentConfirmationStartedAt,
+        receipt_image_preparation_ms: receiptImagePreparationMs,
+        image_preparation_overlapped_with_preflight: Boolean(eagerReceiptImagePromise),
         visible_target_ms: RECEIPT_VISIBLE_TARGET_MS,
         visible_slow_budget_ms: RECEIPT_VISIBLE_SLOW_BUDGET_MS,
         background_enrichment: true,
       });
+      const receiptAlreadyHasItemDetails = Boolean(
+        receiptDetails?.line_items.length || receiptDetails?.split_allocations.length
+      );
+      const localReceiptTextSuggestsMissingDetails =
+        /\b(?:qty|quantity|unit\s*price|subtotal|tax|vat|service\s*charge|discount|item(?:s)?|description)\b/i.test(textForParse) ||
+        (textForParse.match(/(?:^|\n).{2,80}\s(?:[$€£¥₱]|PHP|USD|EUR|GBP|THB|CNY|RMB)?\s*-?\d[\d,.]*\s*(?=\n|$)/gim)?.length ?? 0) >= 3;
       const shouldRefineReceiptDetails = Boolean(
         effectiveImportMode === "receipt" &&
         openAiParsed?.audit.receiptCoreOnly &&
         documentImportRecord?.id &&
-        pageImages?.length
+        pageImages?.length &&
+        !receiptAlreadyHasItemDetails &&
+        localReceiptTextSuggestsMissingDetails
       );
       if (shouldRefineReceiptDetails) {
         const coreReceiptDetails = receiptDetails;
@@ -13694,6 +13841,10 @@ export const confirmImportFile = async (
       const cashAccountIdPromise = explicitlyResolvedReceiptAccountId
         ? Promise.resolve(explicitlyResolvedReceiptAccountId)
         : resolveWorkspaceCashAccountId(String(importFile.workspaceId), receiptCurrency);
+      const receiptLineItemCategoryText = receiptLineItems.map((item) => item.description).join(" ").trim();
+      const receiptLineItemCategory = receiptLineItemCategoryText
+        ? guessCategoryName(receiptLineItemCategoryText, "expense")
+        : "Other";
       const receiptCategoryName = (() => {
         const trainedCategoryName =
           typeof receiptDetailsRecord?.category_name === "string" && receiptDetailsRecord.category_name.trim()
@@ -13733,6 +13884,7 @@ export const confirmImportFile = async (
         const paymentAwareCategory = resolveReceiptCategoryWithPaymentEvidence({
           proposedCategory: trainedCategoryName,
           receiptContext: receiptContextText,
+          lineItemCategory: receiptLineItemCategory,
         });
         if (paymentAwareCategory) {
           return paymentAwareCategory;
@@ -13767,9 +13919,22 @@ export const confirmImportFile = async (
           resolveReceiptCategoryWithPaymentEvidence({
             proposedCategory: contextualGuess,
             receiptContext: receiptContextText,
+            lineItemCategory: receiptLineItemCategory,
           }) ?? (contextualGuess !== "Other" ? contextualGuess : "Food & Dining")
         );
       })();
+      console.info("[receipt-category] resolved", {
+        importFileId,
+        proposedCategory:
+          typeof receiptDetailsRecord?.category_name === "string"
+            ? receiptDetailsRecord.category_name
+            : typeof receiptDetailsRecord?.categoryName === "string"
+              ? receiptDetailsRecord.categoryName
+              : null,
+        lineItemCategory: receiptLineItemCategory,
+        resolvedCategory: receiptCategoryName,
+        lineItemCount: receiptLineItems.length,
+      });
       const [cashAccountId, receiptCategoryId] = await Promise.all([
         cashAccountIdPromise,
         resolveOrCreateWorkspaceCategoryId({
@@ -15398,9 +15563,31 @@ export const confirmImportFile = async (
         rowAccount.name
       ) ?? "PHP";
     const atmCashAccount = findSameCurrencyCashAccount(workspaceAccountsForTransferMatching, rowCurrency);
+    const financialExchangePayload =
+      row.rawPayload && typeof row.rawPayload === "object" && !Array.isArray(row.rawPayload)
+        ? (row.rawPayload as Record<string, unknown>)
+        : null;
+    const financialExchangeSourceRecord =
+      financialExchangePayload?.kind === "financial_exchange_transaction" &&
+      financialExchangePayload.format === "json" &&
+      financialExchangePayload.sourceRecord &&
+      typeof financialExchangePayload.sourceRecord === "object" &&
+      !Array.isArray(financialExchangePayload.sourceRecord)
+        ? (financialExchangePayload.sourceRecord as Record<string, unknown>)
+        : null;
+    const explicitFinancialExchangeCategory = String(
+      financialExchangeSourceRecord?.categoryName ??
+        financialExchangeSourceRecord?.category_name ??
+        financialExchangeSourceRecord?.category ??
+        ""
+    ).trim();
+    const structuredExportExplicitlyNonCash = Boolean(
+      explicitFinancialExchangeCategory && !/^cash(?:\s*&|\s+and)?\s*atm$/i.test(explicitFinancialExchangeCategory)
+    );
     const shouldTransferAtmWithdrawalToCash = Boolean(
       atmCashAccount &&
         atmCashAccount.id !== rowResolvedAccountId &&
+        !structuredExportExplicitlyNonCash &&
         isAtmCashWithdrawalCandidate({
           type: rowType ?? "expense",
           merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : null,

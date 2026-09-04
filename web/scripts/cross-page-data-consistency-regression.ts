@@ -49,7 +49,7 @@ for (const domain of ["accounts", "investments", "circles", "goals", "adviser", 
 
 const source = (relativePath: string) => readFileSync(path.join(process.cwd(), relativePath), "utf8");
 for (const file of [
-  "app/dashboard/page.tsx",
+  "components/dashboard-page-content.tsx",
   "app/adviser/page.tsx",
   "app/reports/reports-page-content.tsx",
   "lib/budgeting-data.ts",
@@ -69,7 +69,7 @@ assert.ok(
   "Every raw Goals aggregate must retain account-linked legacy rows."
 );
 
-const dashboardSource = source("app/dashboard/page.tsx");
+const dashboardSource = source("components/dashboard-page-content.tsx");
 assert.match(dashboardSource, /account\.source === "manual"/);
 assert.match(dashboardSource, /selectLatestAccountCheckpoint\(account\.statementCheckpoints\)/);
 assert.match(dashboardSource, /resolveEffectiveAccountBalance\(\{/);

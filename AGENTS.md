@@ -44,6 +44,7 @@ Clover is a personal finance app focused on statement import, transaction parsin
 37. `docs/structured-csv-parser-rules.md` when working on CSV, TSV, or other delimited financial imports
 38. `docs/digital-notes-split-bills-parser-rules.md` when working on digital notes or split-bill receipt imports
 39. `docs/import-parser-arbitration.md` when changing fallback routing, parser selection, or import safety scoring
+40. `docs/financial-exchange-parser-rules.md` when working on OFX, QFX, QIF, MT940, CAMT.053, or structured JSON financial exports
 
 If `docs/product-spec.md` is added later, it should become the primary product spec and supersede `docs/user-management-spec.md` for implementation guidance.
 

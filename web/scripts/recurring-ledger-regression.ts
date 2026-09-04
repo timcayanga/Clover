@@ -42,6 +42,8 @@ assert.match(panelSource, /activeTab !== "overview" \? renderRecurringTable\(\) 
 assert.match(stylesSource, /\.recurring-calendar__grid[\s\S]{0,260}grid-template-columns: repeat\(7, minmax\(0, 1fr\)\)/, "The recurring calendar must render a full-width seven-day grid.");
 assert.match(stylesSource, /touch-action: pan-y/, "The recurring calendar must preserve vertical scrolling while supporting horizontal month swipes.");
 assert.match(clientSource, /aria-label=\{tab\.label\}/, "Recurring icon tabs must retain accessible names on mobile.");
+assert.match(clientSource, /<RecurringTabIcon tab=\{tab.id\}/, "Desktop and mobile Recurring tabs must reuse the same icons.");
+assert.match(stylesSource, /@media \(min-width: 1101px\)\s*\{[\s\S]{0,600}\.recurring-tabs--top \.recurring-tab-icon svg\s*\{\s*display: block;\s*width: 16px;\s*height: 16px;/, "Desktop Recurring tabs must show compact icons beside their labels without changing mobile sizing.");
 assert.match(calendarSource, />\s*Today\s*</, "The calendar header must offer a compact Today control.");
 assert.match(calendarSource, /Previous month[\s\S]{0,1600}Next month/, "The selected month must sit between previous and next arrows.");
 assert.match(stylesSource, /height: clamp\(72px, calc\(\(100dvh - 330px\) \/ 6\), 118px\)/, "Desktop calendar rows must fit the available viewport when possible.");

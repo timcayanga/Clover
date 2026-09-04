@@ -24,6 +24,7 @@ import { postFileWithProgress } from "@/lib/import-file-post";
 import {
   IMPORT_IMAGE_TARGET_SIZE,
   RECEIPT_IMPORT_IMAGE_TARGET_SIZE,
+  isHeicImportImage,
   optimizeImportImages,
 } from "@/lib/import-image-compression";
 import {
@@ -1497,7 +1498,9 @@ export function ImportFilesModal({
     if (
       !options?.imagesPrepared &&
       nextFiles.some(
-        (file) => isImageImportFile(file) && file.size > Math.min(imageOptimizationTarget, MAX_IMPORT_FILE_SIZE)
+        (file) =>
+          isImageImportFile(file) &&
+          (isHeicImportImage(file) || file.size > Math.min(imageOptimizationTarget, MAX_IMPORT_FILE_SIZE))
       )
     ) {
       setValidationNotice(null);
@@ -5317,6 +5320,33 @@ export function ImportFilesModal({
       let receiptVisibilityPublished = false;
       let receiptModeDetectedInFlight = itemImportMode === "receipt";
       const importRequestStartedAt = performance.now();
+      let uploadCompletedAt: number | null = null;
+      let receiptVisibilityTimingReported = false;
+      const markUploadComplete = () => {
+        if (uploadCompletedAt !== null) return;
+        uploadCompletedAt = performance.now();
+        reportImportClientStage("upload_transfer_complete", {
+          importFileId: importFileId!,
+          importMode: itemImportMode,
+          fileSize: item.file.size,
+          uploadTransferMs: Math.round(uploadCompletedAt - importRequestStartedAt),
+        });
+      };
+      const reportReceiptVisibilityTiming = (completionTransport: string) => {
+        if (receiptVisibilityTimingReported) return;
+        receiptVisibilityTimingReported = true;
+        const visibleAt = performance.now();
+        reportImportClientStage("receipt_visible_in_ui", {
+          importFileId: importFileId!,
+          importMode: itemImportMode,
+          clientTimeToVisibleMs: Math.round(visibleAt - importRequestStartedAt),
+          uploadTransferMs:
+            uploadCompletedAt === null ? null : Math.round(uploadCompletedAt - importRequestStartedAt),
+          serverWaitAfterUploadMs:
+            uploadCompletedAt === null ? null : Math.round(visibleAt - uploadCompletedAt),
+          completionTransport,
+        });
+      };
       const processResponsePromise = postFileWithProgress(
         `/api/imports/${importFileId}/process`,
         item.file,
@@ -5333,6 +5363,8 @@ export function ImportFilesModal({
                 ? "BPI"
                 : undefined,
           extractedText: extractedTextForUpload,
+          sourceTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
+          sourceLocale: navigator.languages?.[0] || navigator.language || undefined,
         },
         (progress) => {
           publishImportActivity({
@@ -5355,7 +5387,10 @@ export function ImportFilesModal({
             status: "importing",
           });
         },
-        { signal: options?.signal ?? null }
+        {
+          signal: options?.signal ?? null,
+          onUploadComplete: markUploadComplete,
+        }
       ).finally(() => {
         processResponseSettled = true;
         // The process response and the visibility stream race on very fast
@@ -5463,12 +5498,7 @@ export function ImportFilesModal({
               errorMessage: null,
             });
             setMessage(`Imported ${item.file.name}.`);
-            reportImportClientStage("receipt_visible_in_ui", {
-              importFileId,
-              importMode: itemImportMode,
-              clientTimeToVisibleMs: Math.round(performance.now() - importRequestStartedAt),
-              completionTransport: "server_sent_event",
-            });
+            reportReceiptVisibilityTiming("server_sent_event");
             inFlightStatusMonitorStopped = true;
             importEventStream?.close();
             importEventStream = null;
@@ -5596,6 +5626,9 @@ export function ImportFilesModal({
                   errorMessage: null,
                 });
                 setMessage(`Imported ${item.file.name}.`);
+                if (receiptModeDetectedInFlight) {
+                  reportReceiptVisibilityTiming("progress_poll");
+                }
                 router.refresh();
                 inFlightStatusMonitorStopped = true;
                 break;
@@ -5683,6 +5716,18 @@ export function ImportFilesModal({
         });
       }
       const processResponse = await processResponsePromise;
+      const processResponseReceivedAt = performance.now();
+      reportImportClientStage("process_response_received", {
+        importFileId,
+        importMode: itemImportMode,
+        fileSize: item.file.size,
+        requestDurationMs: Math.round(processResponseReceivedAt - importRequestStartedAt),
+        uploadTransferMs:
+          uploadCompletedAt === null ? null : Math.round(uploadCompletedAt - importRequestStartedAt),
+        serverWaitAfterUploadMs:
+          uploadCompletedAt === null ? null : Math.round(processResponseReceivedAt - uploadCompletedAt),
+        responseStatus: processResponse.status,
+      });
       capturePostHogClientEvent("file_uploaded", {
         file_type: fileTypeLabel(item.file),
         file_size_bytes: item.file.size,
@@ -5778,6 +5823,7 @@ export function ImportFilesModal({
           );
 
           if (receiptSummary) {
+            reportReceiptVisibilityTiming("process_response");
             if (!receiptVisibilityPublished) {
               receiptVisibilityPublished = true;
               seedImportedWorkspaceCaches(workspaceId, receiptSummary);
@@ -8498,7 +8544,7 @@ export function ImportFilesModal({
             ref={fileInputRef}
             className="hidden-file-input"
             type="file"
-            accept=".csv,.tsv,.xlsx,.xls,.xlsm,.xlsb,.ods,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
+            accept=".csv,.tsv,.ofx,.qfx,.qif,.mt940,.sta,.xml,.json,.xlsx,.xls,.xlsm,.xlsb,.ods,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
             multiple
             onChange={handleInputChange}
           />

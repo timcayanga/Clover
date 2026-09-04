@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
 import { assertContentLengthWithin, assertTrustedRequestOrigin } from "@/lib/request-security";
+import { capturePostHogServerEvent } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,13 @@ export async function POST(request: Request) {
       stage: payload.stage,
       userId,
       details: payload.details ?? {},
+    });
+
+    after(async () => {
+      await capturePostHogServerEvent("import_client_stage", userId, {
+        stage: payload.stage,
+        ...(payload.details ?? {}),
+      });
     });
 
     return new NextResponse(null, { status: 204 });

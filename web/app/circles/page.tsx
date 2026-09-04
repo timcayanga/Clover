@@ -1,8 +1,10 @@
 import { CirclesPageClient } from "@/components/circles-page-client";
 import { RouteSplash } from "@/components/route-splash";
-import { getCircleCurrentUser } from "@/lib/circle-access";
-import { loadCirclesWorkspaceData } from "@/lib/circle-loaders";
-import { ensureOnboardingAccess } from "@/lib/onboarding-access";
+import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
+import { loadCirclesDirectoryData } from "@/lib/circle-directory";
+import { getPageSessionContext } from "@/lib/page-auth";
+import { hasCompletedOnboarding } from "@/lib/user-context";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +14,10 @@ export const metadata = {
 };
 
 async function CirclesPageContent() {
-  await ensureOnboardingAccess();
-  const user = await getCircleCurrentUser();
-  const data = await loadCirclesWorkspaceData(user);
+  const session = await getPageSessionContext();
+  const user = await getSplitBillCurrentUser(session);
+  if (!session.isGuest && !hasCompletedOnboarding(user)) redirect("/onboarding");
+  const data = await loadCirclesDirectoryData(user);
   return <CirclesPageClient initialData={data} />;
 }
 

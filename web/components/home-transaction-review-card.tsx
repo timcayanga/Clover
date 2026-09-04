@@ -10,6 +10,7 @@ import { TransactionTagsEditor } from "@/components/transaction-tags-editor";
 import { getAccountBrand } from "@/lib/account-brand";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { formatCurrencyAmount } from "@/lib/currency-format";
+import { formatAccountOptionLabel } from "@/lib/account-option-label";
 import type { AccountType } from "@/lib/domain-types";
 import { buildTransactionDetailDraft, type TransactionDetailDraftValue } from "@/lib/transaction-detail-draft";
 import { buildTransactionUpdatePayload } from "@/lib/transaction-update-payload";
@@ -144,7 +145,7 @@ export function HomeTransactionDetailModal({
   const accountPickerOptions = useMemo<TransactionPickerAccount[]>(
     () => accounts.map((account) => ({
       id: account.id,
-      label: displayAccountName(account),
+      label: formatAccountOptionLabel(account, displayAccountName(account)),
       subtitle: account.institution ?? account.type.replaceAll("_", " "),
       brand: getAccountBrand(account),
     })),

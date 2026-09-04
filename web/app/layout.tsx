@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 import { Poppins, Raleway } from "next/font/google";
 import "./globals.css";
+import "./collection-layouts.css";
 import { GlobalImportActivity } from "@/components/global-import-activity";
 import { ClerkAppProvider } from "@/components/clerk-app-provider";
 import { PostHogAnalytics, PostHogClerkIdentity } from "@/components/posthog-analytics";
