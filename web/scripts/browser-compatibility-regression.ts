@@ -96,6 +96,16 @@ async function main() {
   assert.match(importModalSource, />\s*Take photo\s*</, "The full-page upload flow must lead with direct CTA buttons.");
   assert.match(globalStyles, /Final responsive overrides[\s\S]*\.modal-backdrop--import-fullscreen \.accounts-import-modal \{[\s\S]{0,240}height: 100dvh;/, "The upload surface must fill the viewport.");
   assert.match(globalStyles, /@media \(max-width: 360px\), \(max-height: 560px\)/, "Clover must support narrow effective viewports and enlarged device text.");
+  assert.match(
+    globalStyles,
+    /html:has\(\.landing-page\) \{[\s\S]{0,100}overflow-y: auto;[\s\S]{0,100}body:has\(\.landing-page\) \{[\s\S]{0,80}overflow: visible !important;/,
+    "Every public landing and feature page must use one document scroll root on mobile.",
+  );
+  assert.doesNotMatch(
+    globalStyles,
+    /html:has\(\.landing-page--snap\)/,
+    "Landing-page scrolling must not be limited to the home-page variant.",
+  );
   assert.match(globalStyles, /\.content--notifications \.content-body \{[\s\S]{0,120}margin-inline: -18px;/, "Notifications must use the full mobile content width.");
   assert.match(transientRecoverySource, /MAX_AUTOMATIC_RETRIES = 3/, "Transient Home failures must retry before presenting a persistent recovery state.");
   assert.match(transientRecoverySource, /addEventListener\("online", retryWhenAvailable\)/, "Home recovery must resume when a mobile connection returns.");

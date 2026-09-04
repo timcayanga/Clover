@@ -2851,13 +2851,14 @@ body {
   accent-color: var(--accent);
 }
 
-/* Public landing content scrolls with the document, not inside the body. */
-html:has(.landing-page--snap) {
+/* Every public landing and feature page scrolls on the document root. Keeping
+   body as a second scroll container can trap touch scrolling on mobile. */
+html:has(.landing-page) {
   overflow-x: clip;
   overflow-y: auto;
 }
 
-body:has(.landing-page--snap) {
+body:has(.landing-page) {
   overflow: visible !important;
 }
 
