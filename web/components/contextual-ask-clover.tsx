@@ -298,7 +298,8 @@ export function ContextualAskClover({ context, planTier = "unknown", showLabel =
                       prompts={copy.prompts}
                       isPro={hasFullFeatureAccess(resolvedPlanTier)}
                       storageKey={`clover-adviser-chat-${context}-v1`}
-                      surface={context === "budgeting" || context === "goals" ? context : "general"}
+                      surface={context}
+                      pageLabel={copy.title}
                     />
                   )}
                 </div>

@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { GOAL_OPTIONS, type GoalKey } from "@/lib/goals";
 
-export type AdviserPlanningSurface = "general" | "budgeting" | "goals";
+export type AdviserPlanningSurface =
+  | "general"
+  | "accounts"
+  | "transactions"
+  | "recurring"
+  | "budgeting"
+  | "goals"
+  | "investments";
 export type AdviserPlanningKind = "budget" | "goal";
 
 export type AdviserPlanningAction = {

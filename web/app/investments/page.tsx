@@ -3501,7 +3501,13 @@ export default function InvestmentsPage() {
                   </div>
                 </div>
               </div>
-              <AdviserChat prompts={investmentAdviserPrompts} isPro={canUseProTabs} />
+              <AdviserChat
+                prompts={investmentAdviserPrompts}
+                isPro={canUseProTabs}
+                storageKey="clover-adviser-chat-investments-v1"
+                surface="investments"
+                pageLabel="Your investments"
+              />
             </article>
           </section>
         )}

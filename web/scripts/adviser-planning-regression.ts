@@ -61,6 +61,9 @@ assert.match(chat, /activeDraft:\s*planningDraft/);
 assert.match(chat, /adviser-planning-card/);
 assert.match(chat, /planningDraft\.action/);
 assert.match(readFileSync("components/contextual-ask-clover.tsx", "utf8"), /budgeting:[\s\S]*goals:/);
+assert.match(readFileSync("components/contextual-ask-clover.tsx", "utf8"), /surface=\{context\}/);
+assert.match(readFileSync("app\/api\/adviser\/chat\/route.ts", "utf8"), /Recent merchant profile:/);
+assert.match(readFileSync("app\/api\/adviser\/chat\/route.ts", "utf8"), /adviserSurfaceGuidance\[planningSurface\]/);
 assert.match(readFileSync("app/api/adviser/actions/route.ts", "utf8"), /Choose a supported Clover goal/);
 assert.match(readFileSync("app/api/adviser/chat/route.ts", "utf8"), /deterministic_planning_draft/);
 

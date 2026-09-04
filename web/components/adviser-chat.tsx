@@ -75,6 +75,7 @@ type AdviserChatProps = {
   initialPrompt?: string;
   layout?: "embedded" | "workspace";
   surface?: AdviserPlanningSurface;
+  pageLabel?: string;
 };
 
 const adviserChatStorageKey = "clover-adviser-chat-session-v1";
@@ -122,7 +123,7 @@ const inferFeedbackGroup = (question: string) => {
   return "cashflow";
 };
 
-export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey, initialPrompt = "", layout = "embedded", surface = "general" }: AdviserChatProps) {
+export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey, initialPrompt = "", layout = "embedded", surface = "general", pageLabel }: AdviserChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -240,6 +241,7 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
           messages: nextMessages.slice(-6),
           stream: true,
           surface,
+          pageLabel,
           activeDraft: planningDraft,
         }),
       });
@@ -567,7 +569,7 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
         <div className="adviser-chat__welcome">
           <Image className="adviser-chat__welcome-mark" src="/clover-mark.svg" alt="" width={42} height={42} priority />
           <div className="adviser-chat__welcome-copy">
-            <h2>Make your next money move.</h2>
+            {layout === "workspace" ? <h2>Make your next money move.</h2> : null}
             <p className="adviser-chat__question-lead">Ask Adviser to compare your options, spot risks, and suggest what to do next.</p>
           </div>
           {layout === "workspace" ? composer : null}

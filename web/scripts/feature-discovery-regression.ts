@@ -27,7 +27,8 @@ async function main() {
   assert.doesNotMatch(adviser, /<ReportsStream/);
   assert.match(adviser, /title="Adviser"[\s\S]{0,500}<AdviserChat[\s\S]{0,220}layout="workspace"/);
   assert.match(adviserChat, /src="\/clover-mark\.svg"/, "Adviser must use the Clover mark in its empty state.");
-  assert.match(adviserChat, /Make your next money move\./, "Adviser must open with an actionable prompt.");
+  assert.match(adviserChat, /layout === "workspace" \? <h2>Make your next money move\.<\/h2> : null/, "The full Adviser workspace should retain its welcome headline.");
+  assert.doesNotMatch(adviserChat, /<h2>Make your next money move\.<\/h2>\s*<p/, "The contextual Adviser popup should not render the workspace headline unconditionally.");
   assert.match(adviserChat, /layout === "workspace" \? composer : null/, "The empty Adviser workspace must center its composer with the welcome state.");
   assert.match(adviserChat, /messages\.length > 0 \|\| layout === "embedded" \? composer : null/, "The composer must move below an active Adviser conversation.");
   assert.doesNotMatch(adviserChat, /className="button button-primary button-small adviser-chat__send"/, "Adviser must not show the misleading upward-arrow button.");
