@@ -23,6 +23,11 @@ type LandingMarket = "ph" | "global";
 const marketContent = {
   ph: {
     documents: [["BPI STATEMENT", "12 months"], ["RECEIPT", "₱2,480"], ["GCASH EXPORT", "Old records"], ["MERALCO BILL", "Card activity"]],
+    documentLines: [
+      [["Payroll", "+ ₱68,000"], ["SM Supermarket", "− ₱2,480"], ["Meralco", "− ₱4,920"]],
+      [["Groceries", "₱2,480"], ["VAT", "₱265"], ["Total", "₱2,745"]],
+      [["Grab", "− ₱220"], ["Transfer received", "+ ₱3,000"], ["Mobile load", "− ₱599"]],
+    ],
     uploadRows: [
       ["BPI statement", "/assets/banks/philippines/bpi.png"],
       ["Grab receipt", "/assets/banks/philippines/grabpay.png"],
@@ -30,11 +35,21 @@ const marketContent = {
     ],
     balance: "₱633,688.84", income: "₱68,000", expenses: "₱31,420", cashFlow: "₱36,580",
     transactions: [["Pay day • BPI", "+ ₱68,000"], ["SM Supermarket", "− ₱2,480"], ["Meralco", "− ₱4,920"], ["Grab", "− ₱220"]],
+    accountCards: [
+      ["BPI Savings • PHP", "₱428,350.84", "/assets/banks/philippines/bpi.png"],
+      ["Cash • PHP", "₱18,500.00", "/assets/banks/1 generic/cash.png"],
+      ["GCash Wallet • PHP", "₱12,838.00", "/assets/banks/philippines/gcash.png"],
+    ],
     insight: "Dining is down 12% this month. You could move the difference toward your Japan goal without changing your usual budget.",
     planAmount: "₱12,000",
   },
   global: {
     documents: [["CHASE STATEMENT", "12 months"], ["RECEIPT", "$84.20"], ["PAYPAL EXPORT", "Old records"], ["UTILITY BILL", "Card activity"]],
+    documentLines: [
+      [["Pay day", "+ $6,800"], ["Whole Foods", "− $84"], ["National Grid", "− $192"]],
+      [["Groceries", "$84.20"], ["Tax", "$7.31"], ["Total", "$91.51"]],
+      [["Uber", "− $22"], ["Transfer received", "+ $300"], ["Streaming", "− $15"]],
+    ],
     uploadRows: [
       ["Chase statement", "/assets/banks/uk/chase bank.png"],
       ["PayPal receipt", "/assets/banks/philippines/paypal.png"],
@@ -42,6 +57,11 @@ const marketContent = {
     ],
     balance: "$24,860.42", income: "$6,800", expenses: "$3,142", cashFlow: "$3,658",
     transactions: [["Pay day • Chase", "+ $6,800"], ["Whole Foods", "− $84"], ["National Grid", "− $192"], ["Uber", "− $22"]],
+    accountCards: [
+      ["Chase Checking • USD", "$18,420.42", "/assets/banks/uk/chase bank.png"],
+      ["Cash • USD", "$1,240.00", "/assets/banks/1 generic/cash.png"],
+      ["Wise Wallet • USD", "$5,200.00", "/assets/banks/philippines/wise.png"],
+    ],
     insight: "Dining is down 12% this month. You could move the difference toward your Japan goal without changing your usual budget.",
     planAmount: "$820",
   },
@@ -139,9 +159,12 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
   const sceneMotion = (index: number): CSSProperties => {
     const distance = storyPosition - index;
     const proximity = clamp(1 - Math.abs(distance));
+    const easedProximity = proximity * proximity * (3 - 2 * proximity);
+    const depth = Math.min(1, Math.abs(distance));
+    const scale = distance < 0 ? 0.955 + easedProximity * 0.045 : 1 + depth * 0.065;
     return {
-      opacity: proximity,
-      transform: `translate3d(${clamp(distance, -1, 1) * -1.8}%, ${clamp(distance, -1, 1) * -0.7}%, 0) scale(${1.035 - proximity * 0.035})`,
+      opacity: easedProximity,
+      transform: `translate3d(${clamp(distance, -1, 1) * -5.5}%, ${clamp(distance, -1, 1) * -1.8}%, 0) scale(${scale})`,
     };
   };
   const chapterMotion = (index: number): CSSProperties => {
@@ -239,7 +262,8 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
         <div className={styles.evidenceDocuments}>
           {local.documents.slice(0, 3).map(([label, detail], index) => <div className={styles.evidenceDocument} key={label}>
             <Image src={local.uploadRows[index][1]} alt="" width={34} height={34} />
-            <small>{label}</small><strong>{detail}</strong><i /><i /><i />
+            <small>{label}</small><strong>{detail}</strong>
+            <div className={styles.documentLineItems}>{local.documentLines[index].map(([name, amount]) => <span key={name}><b>{name}</b><i>{amount}</i></span>)}</div>
           </div>)}
         </div>
         <div className={styles.evidenceFlow}><span /><span /><span /></div>
@@ -251,27 +275,26 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
       </div>
 
       <div className={styles.phone} data-story-visual="phone" style={productMotion(1, -1)}>
-        <div className={styles.phoneBar}><Image src="/clover-mark.svg" alt="" width={28} height={28} /><span>Upload files</span><i /></div>
-        <strong>Add financial files</strong><p>Take a photo or choose statements, receipts, spreadsheets, and screenshots.</p>
-        <div className={styles.uploadDrop}><b>Drop files anywhere</b><span>Take photo</span><span>Choose files</span></div>
-        <div className={styles.uploadRows}>{local.uploadRows.map(([label, logo]) => <span key={label}><Image src={logo} alt="" width={16} height={16} /> {label} <b>Ready</b></span>)}</div>
-        <button type="button">Upload 3 files</button>
+        <div className={styles.phoneBar}><Image src="/clover-mark.svg" alt="" width={28} height={28} /><span>Transactions</span><i /></div>
+        <strong>Your transactions</strong><p>Everything Clover found in your uploaded files, ready to review.</p>
+        <div className={styles.transactionSearch}>Search transactions</div>
+        <div className={styles.mobileTransactions}>{local.transactions.map(([label, amount], index) => <span key={label}><Image src={local.uploadRows[index % 3][1]} alt="" width={22} height={22} /><b>{label}</b><i>{amount}</i><small>{index === 0 ? "Income" : "Confirmed"}</small></span>)}</div>
+        <button type="button">Add transaction</button>
       </div>
 
       <div className={styles.laptop} data-story-visual="laptop" style={productMotion(2)}><div className={styles.laptopScreen}>
-        <div className={styles.appBar}><Image src="/clover-mark.svg" alt="" width={26} height={26} /><span>Home</span><i /><i /></div>
-        <div className={styles.balance}><small>MY BALANCE</small><strong>{local.balance}</strong><span>Across your accounts</span></div>
-        <div className={styles.summary}><div><small>INCOME</small><b>{local.income}</b></div><div><small>EXPENSES</small><b>{local.expenses}</b></div><div><small>NET CASH FLOW</small><b>{local.cashFlow}</b></div></div>
-        <div className={styles.transactionRows}>{local.transactions.map(([label, amount]) => <span key={label}><i />{label}<b>{amount}</b></span>)}</div>
+        <div className={styles.appBar}><Image src="/clover-mark.svg" alt="" width={26} height={26} /><span>Accounts</span><i /><i /></div>
+        <div className={styles.accountsHeading}><span><small>Estimated total</small><strong>{local.balance}</strong></span><button type="button">+ Add account</button></div>
+        <div className={styles.accountGrid}>{local.accountCards.map(([label, amount, logo]) => <div key={label}><Image src={logo} alt="" width={34} height={34} /><span><small>{label}</small><strong>{amount}</strong></span><b>›</b></div>)}</div>
       </div><span className={styles.laptopBase} /></div>
 
-      <div className={styles.adviser} data-story-visual="adviser" style={productMotion(3, -1)}><div><Image src="/clover-mark.svg" alt="" width={34} height={34} /><span><small>ASK CLOVER</small><b>Your financial picture</b></span></div><p>{local.insight}</p><div className={styles.suggestion}><span>✈</span><b>Japan in spring</b><strong>{local.planAmount} monthly</strong></div><button type="button">Create this plan →</button></div>
+      <div className={styles.adviser} data-story-visual="adviser" style={productMotion(3, -1)}><div><Image src="/clover-mark.svg" alt="" width={34} height={34} /><span><small>Ask Clover</small><b>Your financial picture</b></span></div><div className={styles.userPrompt}>Could I comfortably plan a Japan trip next year?</div><p>{local.insight}</p><div className={styles.suggestion}><span>✈</span><b>Japan in spring</b><strong>{local.planAmount} monthly</strong></div><button type="button">Create this plan →</button></div>
 
       <div className={styles.planCard} data-story-visual="plan" style={productMotion(4)}>
-        <div><Image src="/clover-mark.svg" alt="" width={30} height={30} /><span><small>CLOVER RECOMMENDATION</small><b>Japan trip</b></span></div>
-        <strong>{local.planAmount} <small>per month</small></strong>
-        <div><i /><i /><i /><i /></div>
-        <p>Ready by March</p>
+        <div className={styles.planHeader}><Image src="/clover-mark.svg" alt="" width={30} height={30} /><span><small>Goals</small><b>Japan trip</b></span><button type="button">Edit</button></div>
+        <div className={styles.goalHero}><span>✈️</span><div><small>Monthly contribution</small><strong>{local.planAmount}</strong></div></div>
+        <div className={styles.planProgress}><span><i /><i /><i /></span><b>Ready by March</b></div>
+        <div className={styles.budgetCompanion}><span>🧳</span><div><small>Travel budget</small><b>{market === "ph" ? "₱144,000 target" : "$9,840 target"}</b></div><strong>On track</strong></div>
       </div>
       </div>
 

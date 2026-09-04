@@ -42,6 +42,11 @@ async function main() {
   assert.match(landingJourneySource, /progress \* \(chapters\.length - 1\)/, "Landing chapters must advance continuously with scroll progress.");
   assert.match(landingJourneySource, /style=\{sceneMotion\(index\)\}/, "Landing backgrounds must interpolate on every scroll update.");
   assert.match(landingJourneySource, /data-story-visual="evidence"[\s\S]*?evidenceDocuments[\s\S]*?local\.uploadRows\[index\]\[1\][\s\S]*?CLOVER IMPORT/, "The hero must connect localized, real-logo documents to a Clover import result.");
+  assert.match(landingJourneySource, /documentLineItems[\s\S]*?local\.documentLines/, "Hero statements and receipts must show realistic imported line items.");
+  assert.match(landingJourneySource, /Transactions[\s\S]*?Search transactions[\s\S]*?Add transaction/, "The phone surface must demonstrate Clover's mobile Transactions experience.");
+  assert.match(landingJourneySource, /Accounts[\s\S]*?Estimated total[\s\S]*?local\.accountCards/, "The laptop surface must demonstrate a sample Accounts view without exposing user data.");
+  assert.match(landingJourneySource, /Could I comfortably plan a Japan trip next year\?[\s\S]*?Create this plan/, "The Adviser surface must show a grounded planning conversation.");
+  assert.match(landingJourneySource, /Goals[\s\S]*?Monthly contribution[\s\S]*?Travel budget[\s\S]*?On track/, "The planning surface must use recognizable Clover goal and budget details.");
   assert.match(landingJourneySource, /const displayedChapter = chapterPhase < 0\.5/, "Landing copy must switch quickly without disappearing between chapters.");
   assert.match(landingJourneySource, /const productMotion = \(index: number, direction = 1\)/, "Product evidence must move with the scroll while remaining fully opaque.");
   assert.match(landingJourneySource, /bpi\.png[\s\S]*grabpay\.png[\s\S]*gcash\.png[\s\S]*chase bank\.png[\s\S]*paypal\.png[\s\S]*wise\.png/, "Upload examples must use real bank and wallet marks in both supported markets.");
@@ -55,6 +60,8 @@ async function main() {
   assert.match(landingJourneyStyles, /Frameless matched-motion story[\s\S]*?\.supportStage\{border:0!important[\s\S]*?background:transparent!important/, "Supporting objects must not be cropped inside a visible parent rail.");
   assert.match(landingJourneyStyles, /\.evidenceDocument\{[\s\S]{0,600}background:#fff/, "Individual document objects must remain opaque and readable.");
   assert.match(landingJourneyStyles, /\.evidenceDestination\{[\s\S]{0,600}background:#fff/, "The Clover import result must remain opaque and readable.");
+  assert.match(landingJourneyStyles, /\.journey \.phone\{[\s\S]{0,220}aspect-ratio:9\/19\.5/, "The supporting phone must use realistic modern handset proportions.");
+  assert.match(landingJourneyStyles, /@keyframes cta-attention[\s\S]*?@keyframes cta-shimmer/, "The primary landing CTA must receive a restrained attention animation.");
   assert.doesNotMatch(landingJourneySource, /clipPath:/, "Scene transitions must use matched movement instead of directional wipes.");
   assert.match(landingJourneyStyles, /@media\(min-width:901px\)[\s\S]*?\.sceneStack\{inset:0;width:100%;height:100%;background:#eef8f6\}[\s\S]*?\.sceneSubject img\{object-fit:cover;/, "Desktop photographs must cover the complete stage.");
   assert.match(landingJourneyStyles, /@media\(max-width:900px\)[\s\S]*?\.world>\.worldWash[\s\S]*?linear-gradient\(180deg[\s\S]*?\.supportStage\{display:none\}/, "Mobile must let the portrait photography drive the story and protect its lower copy with a bottom fade.");
