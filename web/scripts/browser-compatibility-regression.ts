@@ -11,6 +11,9 @@ async function main() {
   const landingJourneySource = await readSource("app/landing-preview/landing-journey.tsx");
   const landingJourneyStyles = await readSource("app/landing-preview/landing-preview.module.css");
   const landingPreviewPageSource = await readSource("app/landing-preview/page.tsx");
+  const mainLandingPageSource = await readSource("app/page.tsx");
+  assert.match(mainLandingPageSource, /export \{ default, metadata \} from "\.\/landing-preview\/page"/, "The main landing route must use the approved journey and its Clover metadata without duplicating the implementation.");
+  assert.match(landingPreviewPageSource, /window.location.pathname === "\/" \|\| window.location.pathname === "\/landing-preview"/, "Both public landing routes must retain their light appearance regardless of the saved app theme.");
   assert.match(landingJourneyStyles, /\.journey \.chapter\[data-active=false\]\{overflow:hidden\}/, "Inactive mobile chapters must not leak nested scrollbars over the current scene.");
   assert.match(landingJourneyStyles, /\.comparisonChapter,\.proChapter\{scrollbar-width:none\}/, "Scrollable mobile tables must not paint an extra scrollbar.");
   assert.match(landingJourneyStyles, /\.comparisonChapter::-webkit-scrollbar,\.proChapter::-webkit-scrollbar\{display:none;width:0;height:0\}/, "Mobile Safari must also hide nested table scrollbars.");

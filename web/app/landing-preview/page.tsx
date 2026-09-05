@@ -17,7 +17,7 @@ export default async function ScrollableLandingPreviewPage() {
   return (
     <main id="main-content" tabIndex={-1}>
       <Script id="scroll-landing-force-light-theme" strategy="beforeInteractive">
-        {`try { if (window.location.pathname === "/landing-preview") { document.documentElement.dataset.theme = "light"; document.documentElement.style.colorScheme = "light"; } } catch (error) {}`}
+        {`try { if (window.location.pathname === "/" || window.location.pathname === "/landing-preview") { document.documentElement.dataset.theme = "light"; document.documentElement.style.colorScheme = "light"; } } catch (error) {}`}
       </Script>
       <LandingJourney authEnabled={authEnabled} initialMarket={initialMarket} countryResolved={countryCode !== null} />
     </main>
