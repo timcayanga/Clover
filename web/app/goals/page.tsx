@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { GoalDirectory, type GoalCardData } from "@/components/goal-directory";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
@@ -219,7 +220,7 @@ const createGoalChart = (buckets: MonthBucket[]) => {
   return { chartWidth, chartHeight, chartPadding, points, path };
 };
 
-async function GoalsPageStream() {
+async function GoalsPageStream({ goalId }: { goalId?: string }) {
   const session = await getPageSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
 
@@ -280,6 +281,28 @@ async function GoalsPageStream() {
     redirect("/dashboard");
   }
 
+  if (!goalId) {
+    const [savedGoals, currencies] = await Promise.all([
+      prisma.personalGoal.findMany({ where: { workspaceId: resolvedWorkspace.id }, orderBy: { createdAt: "asc" } }),
+      prisma.account.findMany({ where: { workspaceId: resolvedWorkspace.id }, select: { currency: true }, distinct: ["currency"] }),
+    ]);
+    const currency = currencies.length === 1 ? currencies[0].currency ?? "PHP" : "PHP";
+    const cards: GoalCardData[] = savedGoals.map((goal) => {
+      const plan = normalizeGoalPlan(goal.goalPlan, goal.goalKey as GoalKey, Number(goal.targetAmount));
+      return { id: goal.id, name: plan?.purpose || getGoalDefinition(goal.goalKey).title, category: getGoalDefinition(goal.goalKey).title, amount: Number(goal.targetAmount), currency: goal.currency, cadence: plan?.cadence === "annual" ? "Annual" : "Monthly", emoji: "🎯" };
+    });
+    // Keep the existing account-level focus and history intact, rather than
+    // treating its historical updates as separate active goals.
+    if (user.primaryGoal) {
+      const plan = normalizeGoalPlan(user.goalPlan, user.primaryGoal as GoalKey, user.goalTargetAmount ? Number(user.goalTargetAmount) : null);
+      cards.unshift({ id: "primary", name: plan?.purpose || getGoalDefinition(user.primaryGoal).title, category: "Existing account goal", amount: plan?.targetMode === "amount" ? plan.targetAmount : user.goalTargetAmount ? Number(user.goalTargetAmount) : null, currency, cadence: plan?.cadence === "annual" ? "Annual" : "Monthly", emoji: "🌱" });
+    }
+    return <RouteSplash label="goals"><CloverShell active="goals" title="Goals" mobileBackHref="/more" actions={<ContextualAskClover context="goals" planTier={isPro ? "pro" : "free"} />}><GoalDirectory goals={cards} /></CloverShell></RouteSplash>;
+  }
+  const savedGoal = goalId === "primary" ? null : await prisma.personalGoal.findFirst({ where: { id: goalId, workspaceId: resolvedWorkspace.id } });
+  if (goalId !== "primary" && !savedGoal) notFound();
+  const goalFilterCurrency = savedGoal?.currency ?? null;
+
   const now = new Date();
   const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -300,6 +323,7 @@ async function GoalsPageStream() {
   ] = await loadCachedWorkspaceSummary({
     workspaceId: resolvedWorkspace.id,
     area: "goals",
+    keyParts: [goalFilterCurrency ?? "all-currencies"],
     load: () => Promise.all([
     prisma.$queryRaw<SummaryRow[]>`
       SELECT
@@ -311,6 +335,7 @@ async function GoalsPageStream() {
         AND "isExcluded" = false
         AND "deletedAt" IS NULL
         AND "date" >= ${thirtyDaysAgo}
+        AND (${goalFilterCurrency}::text IS NULL OR COALESCE("currency", (SELECT "currency" FROM "Account" WHERE "id" = "Transaction"."accountId"), 'PHP') = ${goalFilterCurrency})
       GROUP BY "type"
     `,
     prisma.$queryRaw<SummaryRow[]>`
@@ -324,6 +349,7 @@ async function GoalsPageStream() {
         AND "deletedAt" IS NULL
         AND "date" >= ${sixtyDaysAgo}
         AND "date" < ${thirtyDaysAgo}
+        AND (${goalFilterCurrency}::text IS NULL OR COALESCE("currency", (SELECT "currency" FROM "Account" WHERE "id" = "Transaction"."accountId"), 'PHP') = ${goalFilterCurrency})
       GROUP BY "type"
     `,
     prisma.$queryRaw<MerchantSummaryRow[]>`
@@ -338,6 +364,7 @@ async function GoalsPageStream() {
         AND "deletedAt" IS NULL
         AND "type" = 'expense'
         AND "date" >= ${ninetyDaysAgo}
+        AND (${goalFilterCurrency}::text IS NULL OR COALESCE("currency", (SELECT "currency" FROM "Account" WHERE "id" = "Transaction"."accountId"), 'PHP') = ${goalFilterCurrency})
       GROUP BY 1
       HAVING COUNT(*) > 1
       ORDER BY amount DESC
@@ -354,6 +381,7 @@ async function GoalsPageStream() {
         AND "isExcluded" = false
         AND "deletedAt" IS NULL
         AND "date" >= ${sixMonthsAgo}
+        AND (${goalFilterCurrency}::text IS NULL OR COALESCE("currency", (SELECT "currency" FROM "Account" WHERE "id" = "Transaction"."accountId"), 'PHP') = ${goalFilterCurrency})
       GROUP BY 1, 2
       ORDER BY 1 ASC, 2 ASC
     `,
@@ -376,6 +404,7 @@ async function GoalsPageStream() {
     prisma.transaction.findMany({
       where: buildActiveWorkspaceTransactionWhere(resolvedWorkspace.id, {
         date: { gte: thirtyDaysAgo },
+        ...(goalFilterCurrency ? { currency: goalFilterCurrency } : {}),
       }),
       select: {
         date: true,
@@ -404,6 +433,7 @@ async function GoalsPageStream() {
       where: {
         workspaceId: resolvedWorkspace.id,
         type: "investment",
+        ...(goalFilterCurrency ? { currency: goalFilterCurrency } : {}),
       },
       select: {
         id: true,
@@ -438,13 +468,13 @@ async function GoalsPageStream() {
       goalCurrencyCandidates.add(formatCurrencyCode(investment.currency));
     }
   }
-  const goalCurrency = goalCurrencyCandidates.size === 1 ? Array.from(goalCurrencyCandidates)[0] : "PHP";
-  const selectedGoalKey = user.primaryGoal?.trim() ?? null;
+  const goalCurrency = savedGoal?.currency ?? (goalCurrencyCandidates.size === 1 ? Array.from(goalCurrencyCandidates)[0] : "PHP");
+  const selectedGoalKey = savedGoal?.goalKey ?? user.primaryGoal?.trim() ?? null;
   const selectedGoal = getGoalDefinition(selectedGoalKey);
   const playbook = getGoalPlaybook(selectedGoalKey);
   const experienceProfile = getFinancialExperienceProfile(user.financialExperience);
-  const goalTargetAmount = user.goalTargetAmount ? Number(user.goalTargetAmount) : null;
-  const goalTargetSource = user.goalTargetSource ?? null;
+  const goalTargetAmount = savedGoal ? Number(savedGoal.targetAmount) : user.goalTargetAmount ? Number(user.goalTargetAmount) : null;
+  const goalTargetSource = savedGoal ? "goals" : user.goalTargetSource ?? null;
   const hasGoalSelection = Boolean(selectedGoalKey);
   const hasGoalTarget = goalTargetAmount !== null && goalTargetAmount > 0;
   const isBeginnerMode = user.financialExperience === "beginner";
@@ -496,7 +526,7 @@ async function GoalsPageStream() {
   );
   const monthlyIncome = currentSummary.income > 0 ? currentSummary.income : null;
   const suggestedGoalTarget = getSuggestedGoalAmount(selectedGoalKey as GoalKey | null, monthlyIncome);
-  const currentGoalPlan = normalizeGoalPlan(user.goalPlan, selectedGoalKey as GoalKey | null, goalTargetAmount);
+  const currentGoalPlan = normalizeGoalPlan(savedGoal?.goalPlan ?? user.goalPlan, selectedGoalKey as GoalKey | null, goalTargetAmount);
 
   const monthBuckets = getMonthBuckets(now);
   sixMonthSummaryRows.forEach((row) => {
@@ -591,7 +621,7 @@ async function GoalsPageStream() {
     .reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount)), 0);
   const goalProgress = getGoalProgressSnapshot({
     goalKey: selectedGoalKey as GoalKey | null,
-    targetAmount: goalTargetAmount,
+    targetAmount: savedGoal ? null : goalTargetAmount,
     goalPlan: currentGoalPlan,
     currentNet,
     currentSpend,
@@ -625,7 +655,7 @@ async function GoalsPageStream() {
   const progressRingPercent = goalDialProgress;
 
   const currentTargetValue =
-    hasGoalTarget && goalProgress.targetAmount !== null
+    savedGoal ? formatCurrency(Number(savedGoal.targetAmount), goalCurrency) : hasGoalTarget && goalProgress.targetAmount !== null
       ? formatCurrency(goalProgress.targetAmount, goalCurrency)
       : suggestedGoalTarget !== null
         ? formatCurrency(suggestedGoalTarget, goalCurrency)
@@ -688,7 +718,7 @@ async function GoalsPageStream() {
     },
   ];
 
-  const goalTimelineEntries =
+  const goalTimelineEntries = savedGoal ? [{ label: formatShortDate(savedGoal.updatedAt), detail: getGoalPlanSummary(currentGoalPlan, monthlyIncome, goalCurrency)?.detail ?? selectedGoal.title }] :
     goalHistoryRows.length > 0
       ? goalHistoryRows.map((row) => {
           const rowGoal = getGoalDefinition(row.primaryGoal);
@@ -741,10 +771,13 @@ async function GoalsPageStream() {
       <CloverShell
         active="goals"
         title="Goals"
-        mobileBackHref="/more"
+        mobileBackHref="/goals"
         actions={<ContextualAskClover context="goals" planTier={isPro ? "pro" : "free"} />}
       >
         <section className="goals-page">
+          <Link href="/goals" className="collection-back">← All goals</Link>
+          {currentGoalPlan?.purpose ? <h2 className="collection-detail-name">{currentGoalPlan.purpose}</h2> : null}
+          {savedGoal ? <p className="muted">Progress reflects this Profile’s recent financial activity in {goalCurrency}, not money reserved separately for this goal. Annual targets are shown as a monthly pace.</p> : null}
           {!hasGoalSelection ? (
             <section className="goals-blank-state glass">
               <span className="goals-blank-state__emoji" aria-hidden="true">🎯</span>
@@ -755,7 +788,7 @@ async function GoalsPageStream() {
             <section className="goals-section goals-section--summary">
               <div className="goals-overview__cards">
                 <article className="goals-overview__card goals-overview__card--current glass">
-                  <span>Primary goal</span>
+                  <span>Goal</span>
                   <strong><span aria-hidden="true">{goalEmoji}</span> {selectedGoal.title}</strong>
                   <small>{currentTargetValue}{currentTargetNote ? ` · ${currentTargetNote}` : ""}</small>
                 </article>
@@ -868,7 +901,8 @@ async function GoalsPageStream() {
           {hasGoalSelection ? (
             <section className="goals-goal-actions">
               <span>Want to change direction?</span>
-              <GoalsEditor
+              {savedGoal ? <Link className="pill-link pill-link--inline" href={`/goals/new?edit=${encodeURIComponent(savedGoal.id)}`}>Edit goal</Link> : <GoalsEditor
+                mobileBase="/goals/primary"
                 goals={GOAL_OPTIONS.filter((goal) => goal.value !== "track_spending")}
                 currentGoal={selectedGoalKey}
                 currentTargetAmount={goalTargetAmount !== null ? String(goalTargetAmount) : null}
@@ -882,7 +916,7 @@ async function GoalsPageStream() {
                 compact
                 triggerLabel="Edit goal"
                 triggerClassName="pill-link pill-link--inline"
-              />
+              />}
             </section>
           ) : null}
         </section>
@@ -891,6 +925,6 @@ async function GoalsPageStream() {
   );
 }
 
-export default function GoalsPage() {
-  return <GoalsPageStream />;
+export default async function GoalsPage({ searchParams }: { searchParams: Promise<{ goal?: string }> }) {
+  return <GoalsPageStream goalId={(await searchParams).goal} />;
 }

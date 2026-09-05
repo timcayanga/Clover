@@ -112,7 +112,7 @@
     "qa:finverse": "tsx scripts/finverse-integration-regression.ts",
     "qa:billing-lifecycle": "tsx scripts/billing-lifecycle-regression.ts",
     "qa:goal-intent": "tsx scripts/goal-intent-regression.ts",
-    "qa:goal-persistence": "tsx scripts/goal-persistence-regression.ts",
+    "qa:goal-persistence": "tsx scripts/goal-persistence-regression.ts && tsx scripts/personal-goals-regression.ts",
     "qa:split-bill-quick-add": "tsx scripts/split-bill-quick-add-regression.ts",
     "qa:split-bill-qr": "tsx scripts/split-bill-qr-regression.ts",
     "qa:production-readiness": "tsx scripts/production-readiness-regression.ts",

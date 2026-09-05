@@ -32,6 +32,7 @@ type GoalsEditorProps = {
   compact?: boolean;
   triggerLabel?: string;
   triggerClassName?: string;
+  mobileBase?: string;
 };
 
 const formatCurrency = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
@@ -70,10 +71,11 @@ export function GoalsEditor({
   compact = false,
   triggerLabel,
   triggerClassName,
+  mobileBase = "/goals",
 }: GoalsEditorProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-  const mobileCreation = useMobileCreationRoute(isOpen, setIsOpen, "/goals");
+  const mobileCreation = useMobileCreationRoute(isOpen, setIsOpen, mobileBase);
   const [selectedGoal, setSelectedGoal] = useState(currentGoal ?? goals[0]?.value ?? null);
   const initialPlan =
     currentGoalPlan ??

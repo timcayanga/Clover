@@ -13,7 +13,7 @@ type Props = {
   emoji?: string | null;
   onOpen: () => void;
   onSave: (name: string, emoji: string | null, photo?: File | null) => Promise<void>;
-  kind: "budget" | "circle";
+  kind: "budget" | "circle" | "goal";
 };
 
 export function CollectionCard({ name, subtitle, icon, children, color, editable = true, emoji, onOpen, onSave, kind }: Props) {

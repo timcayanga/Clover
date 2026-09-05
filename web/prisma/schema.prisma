@@ -571,6 +571,7 @@ model Workspace {
   recurringPatterns              RecurringPattern[]
   budgets                        Budget[]
   budgetPlans                    BudgetPlan[]
+  personalGoals                  PersonalGoal[]
   tags                           Tag[]
 
   @@index([userId])
@@ -1215,6 +1216,20 @@ model GoalSetting {
 
   @@index([userId])
   @@index([userId, createdAt])
+}
+
+model PersonalGoal {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  goalKey      String
+  targetAmount Decimal   @db.Decimal(18, 2)
+  currency     String    @default("PHP")
+  goalPlan     Json
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
 }
 
 model Circle {

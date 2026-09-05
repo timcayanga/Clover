@@ -101,6 +101,12 @@ Phase 2 introduces monetization and deeper personalization without changing the 
 
 ### Financial Goals Screen
 
+- Goals opens as a card directory, using the same collection layout as Budgets and Circles.
+- Users can create multiple independent goals, including multiple goals of the same type; there is no single-goal restriction.
+- New personal goals belong to the active Profile and are saved separately from the account-level onboarding focus. Creating or editing one must not replace another.
+- Preserve the existing account goal and its historical settings as a separate card; historical settings are not additional active goals.
+- Each goal has its own purpose, currency, amount, and monthly or annual target. Progress uses the active Profile’s matching-currency financial activity, not a claim that money has been reserved for that goal.
+
 - Add a dedicated screen where users choose their financial goals.
 - Goal selection should drive:
   - report emphasis

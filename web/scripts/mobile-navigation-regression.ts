@@ -291,7 +291,14 @@ async function main() {
   assert.match(transactionsPage, /if \(publishingTransactionsCacheRef\.current\) return;/, "Transactions must not rehydrate its own synchronous cache publication.");
   assert.match(transactionsPage, /publishingTransactionsCacheRef\.current = true;[\s\S]{0,800}finally[\s\S]{0,100}publishingTransactionsCacheRef\.current = false;/, "The cache guard must always reset, including when publication fails.");
   for (const page of ["transactions", "accounts", "investments", "recurring", "circles", "goals"]) {
-    assert.match(await readSource(`app/${page}/new/page.tsx`), /export \{ default \} from "\.\.\/page"/, `${page} creation must remain reloadable and reuse the existing authorized page.`);
+    const creationPage = await readSource(`app/${page}/new/page.tsx`);
+    if (page === "goals") {
+      assert.match(creationPage, /resolveBudgetingWorkspace\(await getPageSessionContext\(\)\)/, "Goal creation must resolve the authenticated active Profile.");
+      assert.match(creationPage, /<GoalInlineSetup[\s\S]*personalGoal=/, "Goal creation must create an independent goal on its own page.");
+      assert.match(creationPage, /mobileBackHref="\/goals"/);
+    } else {
+      assert.match(creationPage, /export \{ default \} from "\.\.\/page"/, `${page} creation must remain reloadable and reuse the existing authorized page.`);
+    }
   }
   assert.match(await readSource("components/settings-hub.tsx"), /router\.push\(`\/settings\/\$\{sectionKey\}`\)/, "Mobile Settings entries must navigate to dedicated pages.");
   assert.match(await readSource("app/settings/[section]/page.tsx"), /if \(!sections\.has\(section\)\) notFound\(\)/, "Settings routes must reject unknown sections.");
