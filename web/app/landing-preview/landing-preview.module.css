@@ -572,3 +572,19 @@
   .comparisonChapter,.proChapter{scrollbar-width:none}
   .comparisonChapter::-webkit-scrollbar,.proChapter::-webkit-scrollbar{display:none;width:0;height:0}
 }
+
+/* Shared composition: copy stays centered-left; tables sit beside that copy. */
+.journey{height:380svh}
+@media(min-width:901px){
+  .journey[data-chapter] .chapter{left:6vw;top:50%;bottom:auto;translate:0 -50%;width:36vw;text-align:left}
+  .journey[data-chapter] .comparisonChapter,.journey[data-chapter] .proChapter{width:86vw;grid-template-columns:minmax(0,36fr) minmax(0,45fr);gap:5vw;align-items:center}
+  .journey[data-chapter] .chapter p{max-width:45ch}
+  .journey[data-chapter] .proActions{align-items:flex-start;justify-content:flex-start;justify-items:start;text-align:left}
+  .journey[data-chapter="4"] .planCard{left:auto;right:0;bottom:2vh;width:min(300px,24vw)}
+  .journey[data-chapter] .world>.worldWash{background:linear-gradient(90deg,#f8fcfc 0%,rgba(248,252,252,.97) 19%,rgba(248,252,252,.82) 29%,rgba(248,252,252,.34) 40%,transparent 56%)}
+}
+@media(max-width:900px){
+  .journey{height:380svh}
+  .journey[data-chapter] .world>.worldWash{background:linear-gradient(180deg,transparent 0 75%,rgba(249,253,253,.92) 82%,#f9fdfd 88%)}
+  .journey[data-comparison=true] .comparisonChapter,.journey[data-pro=true] .proChapter{padding:16px!important;background:rgba(249,253,253,.97)!important;border-radius:16px!important}
+}

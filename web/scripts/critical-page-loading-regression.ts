@@ -8,6 +8,14 @@ import {
 import "./in-app-notifications-regression";
 import { FEATURE_STORIES } from "../lib/feature-stories";
 import { FEATURE_LINKS, resolveFeatureSlug } from "../lib/public-site";
+import { landingScenePosition, featurePhotoPosition } from "../lib/landing-motion";
+
+for (const position of [0, .5, .75, 1, 1.25, 1.5]) assert.equal(landingScenePosition(position), 0);
+for (const position of [6, 6.5, 6.75, 7, 7.25, 7.5]) assert.equal(landingScenePosition(position), 5);
+for (const position of [2, 2.5, 2.75, 3, 3.25, 3.5]) assert.equal(featurePhotoPosition(position, true), 2);
+assert.equal(landingScenePosition(8), 7);
+assert.equal(featurePhotoPosition(4, true), 4);
+assert.equal(featurePhotoPosition(3, false), 3);
 
 const readSource = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { LandingSignupModal } from "@/components/landing-signup-modal";
 import { FEATURE_LINKS } from "@/lib/public-site";
+import { landingScenePosition } from "@/lib/landing-motion";
+import typography from "@/components/landing-type.module.css";
 import styles from "./landing-preview.module.css";
 
 const chapters = [
@@ -103,7 +105,14 @@ export function JourneyActions({ authEnabled, final = false }: { authEnabled: bo
   </div>;
 }
 
-export function ProComparison({ market, style }: { market: LandingMarket; style: CSSProperties }) {
+export function ProActions() {
+  return <div className={styles.proActions} data-landing-actions>
+    <Link className="button button-primary button-pill" href="/sign-up?intent=pro&interval=annual" prefetch={false}>Upgrade to Pro <span aria-hidden="true">→</span></Link>
+    <small>You can keep using Clover for free.</small>
+  </div>;
+}
+
+export function ProComparison({ market, style, showActions = true }: { market: LandingMarket; style: CSSProperties; showActions?: boolean }) {
   const prices = market === "ph" ? ["PHP 169", "PHP 1,699"] : ["USD 2.69", "USD 26.99"];
   return <div className={styles.proDetails} style={style}>
     <table className={styles.proTable}>
@@ -118,10 +127,7 @@ export function ProComparison({ market, style }: { market: LandingMarket; style:
         <tr><th scope="row">Investments</th><td>Basic tracking</td><td>Full portfolio tools</td></tr>
       </tbody>
     </table>
-    <div className={styles.proActions}>
-      <Link className="button button-primary button-pill" href="/sign-up?intent=pro&interval=annual" prefetch={false}>Upgrade to Pro <span aria-hidden="true">→</span></Link>
-      <small>You can keep using Clover for free.</small>
-    </div>
+    {showActions ? <ProActions /> : null}
   </div>;
 }
 
@@ -240,7 +246,6 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
       const nextPosition = progress * (chapters.length - 1);
       const nextChapter = Math.min(chapters.length - 1, Math.round(nextPosition));
       journey.style.setProperty("--journey-progress", progress.toFixed(4));
-      journey.style.setProperty("--path-offset", `${progress * -240}px`);
       setChapter((current) => current === nextChapter ? current : nextChapter);
       setStoryPosition((current) => Math.abs(current - nextPosition) < 0.002 ? current : nextPosition);
     };
@@ -269,7 +274,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
   const displayedChapter = chapterPhase < 0.5 ? chapterFloor : Math.min(chapters.length - 1, chapterFloor + 1);
   const sceneMotion = (index: number): CSSProperties => {
     // The comparison shares the hero setting; subsequent scenes start one chapter later.
-    const distance = Math.max(0, storyPosition - 1) - index;
+    const distance = landingScenePosition(storyPosition) - index;
     const proximity = clamp(1 - Math.abs(distance));
     const easedProximity = proximity * proximity * (3 - 2 * proximity);
     const depth = Math.min(1, Math.abs(distance));
@@ -302,7 +307,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
     };
   };
 
-  return <div ref={journeyRef} className={styles.journey} data-chapter={chapterLayouts[chapter]} data-comparison={chapter === 1} data-pro={chapter === 7} data-has-cta={chapter === 0 || chapter === 7 || chapter === chapters.length - 1} data-market={market} style={{ "--journey-progress": 0 } as CSSProperties}>
+  return <div ref={journeyRef} className={`${styles.journey} ${typography.standard}`} data-chapter={chapterLayouts[chapter]} data-comparison={chapter === 1} data-pro={chapter === 7} data-has-cta={chapter === 0 || chapter === 7 || chapter === chapters.length - 1} data-market={market} style={{ "--journey-progress": 0 } as CSSProperties}>
     <div className={styles.stage}>
       <JourneyHeader />
 
@@ -319,16 +324,16 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
           ))}
         </div>
         <div className={styles.worldWash} />
-        <svg viewBox="0 0 1200 700" preserveAspectRatio="none"><path d="M-70 470 C160 390 210 150 450 230 C690 310 605 560 845 470 C1040 398 1000 150 1280 118" /></svg>
       </div>
 
       <section className={styles.story} aria-live="polite">
-        {chapters.map((item, index) => <div className={`${styles.chapter} ${index === 1 ? styles.comparisonChapter : ""} ${index === 7 ? styles.proChapter : ""} ${index === 8 ? styles.finalChapter : ""}`} data-active={chapter === index} key={index} aria-hidden={chapter !== index} inert={chapter !== index} style={chapterMotion(index)}>
+        {chapters.map((item, index) => <div className={`${styles.chapter} ${index === 1 ? styles.comparisonChapter : ""} ${index === 7 ? styles.proChapter : ""} ${index === 8 ? styles.finalChapter : ""}`} data-landing-copy data-active={chapter === index} key={index} aria-hidden={chapter !== index} inert={chapter !== index} style={chapterMotion(index)}>
           <div style={{ opacity: index === displayedChapter ? 1 : 0 }}><h1>{item.title}</h1>
-          {item.copy ? <p>{item.copy}</p> : null}</div>
+          {item.copy ? <p>{item.copy}</p> : null}
+          {index === 7 ? <ProActions /> : null}</div>
           {index === 1 ? <div className={styles.comparisonDetails} style={tableMotion(index)}><ComparisonTable /></div> : null}
           {index === 3 ? <div className={styles.trustLinks}><Link href="/privacy-policy">Privacy Policy</Link><Link href="/features/security">How Clover protects your data →</Link></div> : null}
-          {index === 7 ? <ProComparison market={market} style={tableMotion(index)} /> : null}
+          {index === 7 ? <ProComparison market={market} style={tableMotion(index)} showActions={false} /> : null}
           {(index === 0 || index === chapters.length - 1) && <JourneyActions authEnabled={authEnabled} final={index === chapters.length - 1} />}
         </div>)}
       </section>

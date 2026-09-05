@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { JourneyActions, JourneyHeader, ProComparison } from "@/app/landing-preview/landing-journey";
+import { JourneyActions, JourneyHeader, ProActions, ProComparison } from "@/app/landing-preview/landing-journey";
 import type { FeatureStory as Story } from "@/lib/feature-stories";
 import { FeatureStoryDemo } from "./feature-story-demo";
 import landing from "@/app/landing-preview/landing-preview.module.css";
 import styles from "./feature-story.module.css";
+import typography from "./landing-type.module.css";
+import { featurePhotoPosition } from "@/lib/landing-motion";
 
 export function FeatureStory({ story, authEnabled, initialMarket, countryResolved }: { story: Story; authEnabled: boolean; initialMarket: "ph" | "global"; countryResolved: boolean }) {
   const root = useRef<HTMLDivElement>(null);
@@ -52,10 +54,11 @@ export function FeatureStory({ story, authEnabled, initialMarket, countryResolve
     if(!element)return;
     window.scrollTo({top:window.scrollY+element.getBoundingClientRect().top+(element.offsetHeight-innerHeight)*index/(story.chapters.length-1),behavior:reducedMotion?"instant":"smooth"});
   };
-  const endReveal = Math.max(0,Math.min(1,(position-2.25)/1.25));
-  const photographMotion = reducedMotion ? undefined : `scale(${1+position*.008}) translate3d(${-position*.3}%,0,0)`;
+  const photoPosition = featurePhotoPosition(position, story.slug === "pro");
+  const endReveal = Math.max(0,Math.min(1,(photoPosition-2.25)/1.25));
+  const photographMotion = reducedMotion ? undefined : `scale(${1+photoPosition*.008}) translate3d(${-photoPosition*.3}%,0,0)`;
 
-  return <div ref={root} className={`${landing.journey} ${styles.journey}`} data-feature-story={story.slug} data-market={market} data-pricing={pricing} style={{height:`${100+(story.chapters.length-1)*55}svh`} as CSSProperties}>
+  return <div ref={root} className={`${landing.journey} ${styles.journey} ${typography.standard}`} data-feature-story={story.slug} data-market={market} data-pricing={pricing} style={{height:`${100+(story.chapters.length-1)*35}svh`} as CSSProperties}>
     <div className={styles.stage}>
       <JourneyHeader />
       <div className={styles.background} aria-hidden="true" style={{transform:photographMotion}}>
@@ -65,16 +68,17 @@ export function FeatureStory({ story, authEnabled, initialMarket, countryResolve
         </picture>)}
       </div>
       <div className={styles.wash} aria-hidden="true" />
-      <section className={`${styles.content} ${pricing?styles.pricingContent:""}`} data-final={final} aria-live="polite" aria-atomic="true">
+      <section className={`${styles.content} ${pricing?styles.pricingContent:""}`} data-landing-copy data-final={final} aria-live="polite" aria-atomic="true">
         <div className={styles.copy} key={current.id}>
-          {!final && <p className={styles.eyebrow}>{active===0?story.title:current.id.split("-").map(word=>word.charAt(0).toUpperCase()+word.slice(1)).join(" ")}</p>}
+          {!final && <p className={styles.eyebrow} data-eyebrow>{active===0?story.title:current.id.split("-").map(word=>word.charAt(0).toUpperCase()+word.slice(1)).join(" ")}</p>}
           <h1>{current.title} <em>{current.accent}</em></h1>
           {current.copy && <p className={styles.description}>{current.copy}</p>}
-          {active===0 && story.products && <p className={styles.products}>{story.products}</p>}
+          {active===0 && story.products && <p className={styles.products} data-products>{story.products}</p>}
           {current.link && <Link className={styles.contextLink} href={current.link.href}>{current.link.label}</Link>}
+          {pricing ? <ProActions /> : null}
           {(active===0 || final) && (story.slug==="pro" ? <div className={styles.proCta}><Link className="button button-primary button-pill" href="/sign-up?intent=pro&interval=annual">Upgrade to Pro <span aria-hidden="true">→</span></Link><small>You can keep using Clover for free.</small></div> : <JourneyActions authEnabled={authEnabled} final={final} />)}
         </div>
-        {pricing && <div className={styles.pricing}><ProComparison market={market} style={{opacity:1}} /></div>}
+        {pricing && <div className={styles.pricing}><ProComparison market={market} style={{opacity:1}} showActions={false} /></div>}
       </section>
       {current.visual && !pricing && <div key={current.visual} className={styles.support} data-visual={current.visual} aria-hidden="true" inert>
         <FeatureStoryDemo visual={current.visual} market={market} />

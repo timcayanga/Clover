@@ -32,3 +32,11 @@ Run the browser matrix against a local server with:
 The default test origin is http://localhost:3012; override FEATURE_TEST_URL when needed.
 
 Image generation prompts and repository asset paths are recorded in feature-story-art-direction.md. The 24 optimized WebP assets total approximately 2.6 MB.
+
+## Shared landing polish
+
+Main and feature stories share title, body, action, and table type scales through landing-type.module.css. Desktop copy is vertically centered and left aligned. The decorative dashed path is removed.
+
+Main story scroll distance is 280 viewport heights in percent units (2.8 screen heights total), down from 4.2 on desktop / 4.4 on mobile. Each feature transition uses 35svh instead of 55svh. Background scene timing has explicit holds for both main tables and the feature Pro table; table entry/exit animation does not alter the held photograph.
+
+landing-polish-browser-check.mjs checks all nine main chapters at desktop and two mobile sizes, identical type sizes by role, viewport bounds, dashed-path removal, and identical scene transforms/opacity at three points inside each table chapter. The 180-check feature browser matrix was repeated after the shared typography change.
