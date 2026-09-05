@@ -119,7 +119,7 @@
     "qa:environment-readiness": "tsx scripts/check-environment-readiness.ts",
     "qa:dependency-boundaries": "tsx scripts/dependency-boundary-regression.ts",
     "qa:environment-isolation": "tsx scripts/environment-isolation-regression.ts",
-    "qa:critical-page-loading": "tsx scripts/critical-page-loading-regression.ts",
+    "qa:critical-page-loading": "tsx scripts/critical-page-loading-regression.ts && tsx scripts/summary-cache-dates-regression.ts",
     "qa:in-app-notifications": "tsx scripts/in-app-notifications-regression.ts",
     "qa:browser-compatibility": "tsx scripts/browser-compatibility-regression.ts",
     "qa:ui-consistency": "tsx scripts/ui-theme-consistency-regression.ts && tsx scripts/account-dropdown-audit.ts",

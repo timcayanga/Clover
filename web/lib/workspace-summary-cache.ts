@@ -1,8 +1,9 @@
 import { revalidateTag, unstable_cache } from "next/cache";
+import { decodeSummaryCacheValue, encodeSummaryCacheValue } from "@/lib/summary-cache-codec";
 
 export type WorkspaceSummaryArea = "budgeting" | "circles" | "goals" | "recurring" | "reports";
 
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2-typed";
 const DEFAULT_REVALIDATE_SECONDS = 15;
 
 export const workspaceSummaryCacheTag = (workspaceId: string) => `clover:workspace-summary:${workspaceId}`;
@@ -19,14 +20,14 @@ export async function loadCachedWorkspaceSummary<T>(params: {
   load: () => Promise<T>;
 }): Promise<T> {
   const cached = unstable_cache(
-    params.load,
+    async () => encodeSummaryCacheValue(await params.load()),
     ["clover-workspace-summary", CACHE_VERSION, params.area, params.workspaceId, ...(params.keyParts ?? [])],
     {
       revalidate: params.revalidateSeconds ?? DEFAULT_REVALIDATE_SECONDS,
       tags: [workspaceSummaryCacheTag(params.workspaceId), workspaceSummaryAreaCacheTag(params.workspaceId, params.area)],
     }
   );
-  return cached();
+  return decodeSummaryCacheValue(await cached()) as T;
 }
 
 export async function loadCachedUserSummary<T>(params: {
@@ -37,14 +38,14 @@ export async function loadCachedUserSummary<T>(params: {
   load: () => Promise<T>;
 }): Promise<T> {
   const cached = unstable_cache(
-    params.load,
+    async () => encodeSummaryCacheValue(await params.load()),
     ["clover-user-summary", CACHE_VERSION, params.area, params.userId, ...(params.keyParts ?? [])],
     {
       revalidate: params.revalidateSeconds ?? DEFAULT_REVALIDATE_SECONDS,
       tags: [userSummaryCacheTag(params.userId, params.area)],
     }
   );
-  return cached();
+  return decodeSummaryCacheValue(await cached()) as T;
 }
 
 export function invalidateWorkspaceSummaryCache(workspaceId: string) {
