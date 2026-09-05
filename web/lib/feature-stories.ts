@@ -14,14 +14,14 @@ export const FEATURE_STORIES: FeatureStory[] = [
     { id: "overview", title: "Understand the story", accent: "behind your spending.", copy: "A total tells you how much. Clover helps you see what changed, what contributed to it, and what deserves a closer look.", visual: "reports" },
     { id: "reports", title: "See the pattern", accent: "behind the total.", copy: "Explore spending, income, cash flow, and balance trends across your accounts. Compare periods and connect the bigger picture to your records.", visual: "reports" },
     { id: "adviser", title: "Ask your next", accent: "money question.", copy: "Ask Adviser about your actual spending, commitments, savings, and goals. Start with a question in your own words—not a spreadsheet formula.", visual: "adviser" },
-    { id: "next-step", title: "From an answer", accent: "to a clearer next step.", copy: "Use the explanation to decide what to review or adjust. Adviser suggests; you remain in control of the decision.", visual: "adviser", link: { href: "/features/plan-ahead", label: "Explore Budgeting and Goals →" } },
+    { id: "next-step", title: "From an answer", accent: "to a clearer next step.", copy: "Use the explanation to decide what to review or adjust. Adviser suggests; you remain in control of the decision.", visual: "adviser", link: { href: "/features/plan-ahead", label: "Explore Investments, Budgeting and Goals →" } },
     { id: "start", title: "Know what changed.", accent: "Decide what comes next." },
   ] },
-  { slug: "plan-ahead", title: "Plan Ahead", products: "Budgeting · Goals", asset: "plan", chapters: [
-    { id: "overview", title: "Make room for", accent: "what matters next.", copy: "A better workspace. A savings cushion. Something you have been putting off. Give the idea a place in your financial picture.", visual: "goal" },
+  { slug: "plan-ahead", title: "Plan Ahead", products: "Investments · Budgeting · Goals", asset: "plan", chapters: [
+    { id: "overview", title: "Make room for", accent: "what matters next.", copy: "See your investments in context, build a budget around real life, and give your savings goals a practical next step. Bring today's decisions and longer-term plans into one financial picture." },
+    { id: "investments", title: "See how your investments fit", accent: "into the bigger picture.", copy: "Track your holdings, estimated values, and returns alongside your accounts, budgets, and goals. Understand your portfolio in the context of your wider finances." },
     { id: "budgeting", title: "Build a budget", accent: "around real life.", copy: "Use your recorded spending as a starting point. Choose the amount, currency, scope, and cadence, then edit the budget as your needs change.", visual: "budget" },
-    { id: "goals", title: "Give the goal", accent: "a practical next step.", copy: "Set a savings target and track your progress. Review what you can contribute alongside existing spending and commitments.", visual: "goal" },
-    { id: "progress", title: "Check in.", accent: "Adjust as you go.", copy: "Plans do not need to be perfect on day one. Keep budgets and goals visible, review progress, and make changes when life changes.", visual: "budget" },
+    { id: "goals", title: "Give the goal", accent: "a practical next step.", copy: "Set a savings target and track your progress. Review what you can contribute alongside existing spending and commitments, and adjust the plan as life changes.", visual: "goal" },
     { id: "start", title: "Give your plans", accent: "a clearer path forward." },
   ] },
   { slug: "manage-money-together", title: "Manage Money Together", products: "Circles · Split Bills", asset: "together", chapters: [

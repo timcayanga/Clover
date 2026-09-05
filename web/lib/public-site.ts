@@ -119,9 +119,20 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
     slug: "plan-ahead",
     navLabel: "Plan Ahead",
     shortLabel: "Plan Ahead",
-    overview: "Use real financial history to shape practical budgets and savings goals.",
+    overview: "Track your investments, shape practical budgets, and work toward savings goals in one financial picture.",
     accent: "sky",
     sections: [
+      {
+        id: "investments",
+        eyebrow: "Investments",
+        title: "See how your investments fit into the bigger picture.",
+        body: [
+          "Track your holdings, estimated values, and returns alongside your accounts, budgets, and goals.",
+          "Review your portfolio as part of your wider finances, with estimates clearly distinguished from live investment values.",
+        ],
+        imageSrc: "/assets/feature-stories/plan-hero.webp",
+        imageAlt: "A person reviewing financial plans at a desk",
+      },
       {
         id: "budgeting",
         eyebrow: "Budgeting",
@@ -297,7 +308,7 @@ export const FEATURE_LINKS: PublicNavLink[] = [
     products: ({
       "manage-money": "Transactions · Accounts · Recurring",
       "understand-your-money": "Adviser · Reports",
-      "plan-ahead": "Budgeting · Goals",
+      "plan-ahead": "Investments · Budgeting · Goals",
       "manage-money-together": "Circles · Split Bills",
     } as Record<string, string>)[page.slug],
     href: `/features/${page.slug}`,

@@ -7,7 +7,7 @@ import {
 } from "../lib/financial-classification";
 import "./in-app-notifications-regression";
 import { FEATURE_STORIES } from "../lib/feature-stories";
-import { FEATURE_LINKS, resolveFeatureSlug } from "../lib/public-site";
+import { FEATURE_LINKS, FEATURE_PAGE_MAP, resolveFeatureSlug } from "../lib/public-site";
 import { landingScenePosition, featurePhotoPosition } from "../lib/landing-motion";
 
 for (const position of [0, .5, .75, 1, 1.25, 1.5]) assert.equal(landingScenePosition(position), 0);
@@ -303,6 +303,9 @@ const featureStoriesSource = readSource("lib/feature-stories.ts");
 const featureStorySource = readSource("components/feature-story.tsx");
 assert.equal(FEATURE_STORIES.length, 6);
 assert.equal(FEATURE_LINKS.length, 6);
+assert.equal(FEATURE_LINKS.find(link => link.href === "/features/plan-ahead")?.products, "Investments · Budgeting · Goals");
+assert.deepEqual(FEATURE_STORIES.find(story => story.slug === "plan-ahead")?.chapters.map(chapter => chapter.id), ["overview", "investments", "budgeting", "goals", "start"]);
+assert.deepEqual(FEATURE_PAGE_MAP.get("plan-ahead")?.sections.map(section => section.id), ["investments", "budgeting", "goals"]);
 for (const story of FEATURE_STORIES) {
   assert.equal(story.chapters.length, 5);
   assert.equal(new Set(story.chapters.map(chapter => chapter.id)).size, 5);

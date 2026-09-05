@@ -6,7 +6,7 @@ The main landing journey remains the public home page. Six focused stories reuse
 | --- | --- | --- |
 | /features/manage-money | Transactions · Accounts · Recurring | Asian woman organizing records after errands |
 | /features/understand-your-money | Adviser · Reports | Black woman reviewing her money at a park-side café |
-| /features/plan-ahead | Budgeting · Goals | Asian man planning a workspace upgrade |
+| /features/plan-ahead | Investments · Budgeting · Goals | Asian man reviewing longer-term finances and planning a workspace upgrade |
 | /features/manage-money-together | Circles · Split Bills | Light-skinned man hosting dinner with the same four friends |
 | /features/security | Data review and account controls | Asian woman reviewing records privately in a library alcove |
 | /features/pro | Free and Pro comparison | Black woman managing a more involved financial life from her studio |
