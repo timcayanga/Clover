@@ -563,5 +563,9 @@
   .journey[data-pro=true] .world>.worldWash{background:rgba(249,253,253,.96)}
   .trustLinks{justify-content:center;gap:9px;margin-top:12px;font-size:11px}
   .finalChapter h1{font-size:clamp(20px,5.6vw,28px)}
-  .markers{gap:4px}
+  .markers{gap:4px;background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;border:0;box-shadow:none;border-radius:0}
+  /* Inactive table chapters still fade visually, but must not paint scrollbars. */
+  .journey .chapter[data-active=false]{overflow:hidden}
+  .comparisonChapter,.proChapter{scrollbar-width:none}
+  .comparisonChapter::-webkit-scrollbar,.proChapter::-webkit-scrollbar{display:none;width:0;height:0}
 }

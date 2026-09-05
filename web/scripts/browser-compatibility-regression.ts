@@ -11,6 +11,10 @@ async function main() {
   const landingJourneySource = await readSource("app/landing-preview/landing-journey.tsx");
   const landingJourneyStyles = await readSource("app/landing-preview/landing-preview.module.css");
   const landingPreviewPageSource = await readSource("app/landing-preview/page.tsx");
+  assert.match(landingJourneyStyles, /\.journey \.chapter\[data-active=false\]\{overflow:hidden\}/, "Inactive mobile chapters must not leak nested scrollbars over the current scene.");
+  assert.match(landingJourneyStyles, /\.comparisonChapter,\.proChapter\{scrollbar-width:none\}/, "Scrollable mobile tables must not paint an extra scrollbar.");
+  assert.match(landingJourneyStyles, /\.comparisonChapter::-webkit-scrollbar,\.proChapter::-webkit-scrollbar\{display:none;width:0;height:0\}/, "Mobile Safari must also hide nested table scrollbars.");
+  assert.match(landingJourneyStyles, /\.markers\{gap:4px;background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;border:0;box-shadow:none;border-radius:0\}/, "Mobile chapter dots must remain frameless like desktop.");
   const landingSceneNames = ["01-organize", "02-upload", "03-picture", "04-adviser", "05-plan", "06-life"];
 
   await Promise.all(
