@@ -1,4 +1,5 @@
 "use client";
+import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 
 import Link from "next/link";
 import { CollectionCard } from "@/components/collection-card";
@@ -143,6 +144,7 @@ export function CirclesWorkspace({
   const [data, setData] = useState(initialData);
   const [activeTab, setActiveTab] = useState<CircleTab>("overview");
   const [showCreate, setShowCreate] = useState(false);
+  const mobileCreation = useMobileCreationRoute(showCreate, setShowCreate, "/circles");
   const [createInitialType, setCreateInitialType] =
     useState<CircleTypeValue | null>(null);
   const [isLoadingCreatedCircle, setIsLoadingCreatedCircle] = useState(false);
@@ -749,6 +751,7 @@ export function CirclesWorkspace({
 
       <CircleCreateDialog
         open={showCreate}
+        creationPage={mobileCreation}
         initialType={createInitialType}
         onClose={closeCreate}
         onCreated={(circleId) => {

@@ -278,6 +278,23 @@ async function main() {
     "Mobile Transactions must provide a manual load-more fallback when automatic loading is unavailable.",
   );
 
+  const creationRoute = await readSource("lib/use-mobile-creation-route.ts");
+  assert.match(creationRoute, /pushState\(\{ cloverCreation: newPath \}/, "Mobile creation must update Next's pathname without copying its private __NA flag.");
+  assert.match(creationRoute, /addEventListener\("popstate", sync\)/, "Creation forms must follow browser Back and Forward.");
+  assert.match(shell, /if \(creationParent\)[\s\S]{0,220}router\.replace\(creationParent\)/, "Direct Add links must return to their own parent page.");
+  assert.match(shell, /shell-bottom-nav__label">Account<\/span>[\s\S]{0,120}NotificationCountBadge/, "Unread notifications belong on the bottom Account tab.");
+  assert.match(shell, /item\.href === "\/notifications" \? <NotificationCountBadge/, "The Account drawer must repeat the unread badge on Notifications.");
+  const accountMenu = shell.slice(shell.indexOf("const mobileSettingsSections ="), shell.indexOf("const shouldPrefetchNavHref"));
+  assert.deepEqual([...accountMenu.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]), ["Notifications", "Settings", "Help", "Plan"]);
+  assert.match(styles, /Shared signed-in mobile chrome[\s\S]*right: 12px !important/, "The shared mobile Menu belongs at the right edge.");
+  assert.match(styles, /body\.mobile-creation-page \.content-body \{ animation: none !important; transform: none !important;/, "Entry animations must not establish a clipping container for full-page creation.");
+  assert.match(transactionsPage, /if \(publishingTransactionsCacheRef\.current\) return;/, "Transactions must not rehydrate its own synchronous cache publication.");
+  assert.match(transactionsPage, /publishingTransactionsCacheRef\.current = true;[\s\S]{0,800}finally[\s\S]{0,100}publishingTransactionsCacheRef\.current = false;/, "The cache guard must always reset, including when publication fails.");
+  for (const page of ["transactions", "accounts", "investments", "recurring", "circles", "goals"]) {
+    assert.match(await readSource(`app/${page}/new/page.tsx`), /export \{ default \} from "\.\.\/page"/, `${page} creation must remain reloadable and reuse the existing authorized page.`);
+  }
+  assert.match(await readSource("components/settings-hub.tsx"), /router\.push\(`\/settings\/\$\{sectionKey\}`\)/, "Mobile Settings entries must navigate to dedicated pages.");
+  assert.match(await readSource("app/settings/[section]/page.tsx"), /if \(!sections\.has\(section\)\) notFound\(\)/, "Settings routes must reject unknown sections.");
   console.log("Mobile navigation regression passed.");
 }
 

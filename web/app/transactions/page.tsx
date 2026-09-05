@@ -1,4 +1,5 @@
 "use client";
+import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 
 import dynamic from "next/dynamic";
 import {
@@ -2237,6 +2238,7 @@ function TransactionsPageContent() {
     () => []
   );
   const transactionsRef = useRef<Transaction[]>([]);
+  const publishingTransactionsCacheRef = useRef(false);
   const [imports, setImports] = useState<ImportFile[]>(
     () => []
   );
@@ -2286,6 +2288,7 @@ function TransactionsPageContent() {
   const [importSeedMode, setImportSeedMode] = useState<ImportImageMode>("statement");
   const [importBackgroundOnly, setImportBackgroundOnly] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
+  const mobileCreation = useMobileCreationRoute(manualOpen, setManualOpen, "/transactions");
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
@@ -3692,6 +3695,9 @@ function TransactionsPageContent() {
     };
 
     const handleWorkspaceCacheUpdated = (event: Event) => {
+      // Cache publication dispatches synchronously. Do not hydrate our own
+      // state back into itself before its version has been marked consumed.
+      if (publishingTransactionsCacheRef.current) return;
       const customEvent = event as CustomEvent<WorkspaceCacheUpdatedEventDetail>;
       if (!shouldReactToCacheKey(customEvent.detail?.key ?? null)) {
         return;
@@ -4576,7 +4582,6 @@ function TransactionsPageContent() {
 
   useEffect(() => {
     if (!isCompactViewport) {
-      setIsMobileLoadingMore(false);
       return;
     }
 
@@ -4602,6 +4607,12 @@ function TransactionsPageContent() {
 
     return () => observer.disconnect();
   }, [hasMoreMobileTransactions, isCompactViewport, loadMoreMobileTransactions]);
+
+  // Keep this reset independent of the recreated pagination callback. Dispatching
+  // it on every callback change can starve navigation and viewport updates.
+  useEffect(() => {
+    if (!isCompactViewport && isMobileLoadingMore) setIsMobileLoadingMore(false);
+  }, [isCompactViewport, isMobileLoadingMore]);
 
   useEffect(() => {
     if (!isCompactViewport) {
@@ -7378,18 +7389,23 @@ function TransactionsPageContent() {
       return;
     }
 
-    const updatedAt = persistTransactionsWorkspaceCache(selectedWorkspaceId, {
-      accounts,
-      categories,
-      transactions,
-      imports,
-      page: transactionsPage,
-      pageSize: transactionsPageSize,
-      totalCount: transactionsSummary.totalCount,
-      currencyCodes: workspaceCurrencyCodes,
-      summary: transactionsSummary,
-    });
-    markTransactionsHydrated(selectedWorkspaceId, updatedAt);
+    publishingTransactionsCacheRef.current = true;
+    try {
+      const updatedAt = persistTransactionsWorkspaceCache(selectedWorkspaceId, {
+        accounts,
+        categories,
+        transactions,
+        imports,
+        page: transactionsPage,
+        pageSize: transactionsPageSize,
+        totalCount: transactionsSummary.totalCount,
+        currencyCodes: workspaceCurrencyCodes,
+        summary: transactionsSummary,
+      });
+      markTransactionsHydrated(selectedWorkspaceId, updatedAt);
+    } finally {
+      publishingTransactionsCacheRef.current = false;
+    }
   }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary, workspaceCurrencyCodes]);
 
   useEffect(() => {
@@ -7418,6 +7434,9 @@ function TransactionsPageContent() {
       mobileLeadingAction={
         <div className="transactions-mobile-leading-actions">
           <ContextualAskClover context="transactions" planTier={planTier} />
+          <button className="icon-button mobile-header-filter" type="button" onClick={toggleFiltersPanel} aria-label="Filter transactions" aria-expanded={filterOpen}>
+            <ActionIcon name="filters" />
+          </button>
           <TransactionsManageMenu compact />
         </div>
       }
@@ -8412,8 +8431,8 @@ function TransactionsPageContent() {
           <section
             className="modal-card modal-card--manual glass"
             style={manualModalStyle}
-            role="dialog"
-            aria-modal="true"
+            role={mobileCreation ? "region" : "dialog"}
+            aria-modal={mobileCreation ? undefined : true}
             aria-labelledby="add-transaction-title"
             onClick={(event) => event.stopPropagation()}
           >

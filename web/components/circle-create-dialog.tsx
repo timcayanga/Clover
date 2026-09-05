@@ -5,6 +5,7 @@ import { circleTemplates, type CircleTypeValue } from "@/lib/circles";
 
 type CircleCreateDialogProps = {
   open: boolean;
+  creationPage?: boolean;
   initialType?: CircleTypeValue | null;
   onClose: () => void;
   onCreated: (circleId: string) => void;
@@ -14,6 +15,7 @@ type DraftMember = { displayName: string; email: string };
 
 export function CircleCreateDialog({
   open,
+  creationPage = false,
   initialType = null,
   onClose,
   onCreated,
@@ -146,8 +148,8 @@ export function CircleCreateDialog({
     >
       <section
         className="modal-card circles-create-dialog"
-        role="dialog"
-        aria-modal="true"
+        role={creationPage ? "region" : "dialog"}
+        aria-modal={creationPage ? undefined : true}
         aria-labelledby="circle-create-title"
       >
         <div className="circles-dialog__head">

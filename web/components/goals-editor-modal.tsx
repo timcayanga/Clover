@@ -1,4 +1,5 @@
 "use client";
+import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 
 import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -72,6 +73,7 @@ export function GoalsEditor({
 }: GoalsEditorProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+  const mobileCreation = useMobileCreationRoute(isOpen, setIsOpen, "/goals");
   const [selectedGoal, setSelectedGoal] = useState(currentGoal ?? goals[0]?.value ?? null);
   const initialPlan =
     currentGoalPlan ??
@@ -299,8 +301,8 @@ export function GoalsEditor({
           >
             <section
               className="modal-card modal-card--wide goals-editor__modal glass"
-              role="dialog"
-              aria-modal="true"
+              role={mobileCreation ? "region" : "dialog"}
+              aria-modal={mobileCreation ? undefined : true}
               aria-labelledby="goals-editor-modal-title"
               aria-describedby="goals-editor-modal-copy"
               onClick={(event) => event.stopPropagation()}
@@ -550,8 +552,8 @@ export function GoalsEditor({
         >
           <section
             className="modal-card modal-card--wide goals-editor__modal glass"
-            role="dialog"
-            aria-modal="true"
+            role={mobileCreation ? "region" : "dialog"}
+            aria-modal={mobileCreation ? undefined : true}
             aria-labelledby="goals-editor-modal-title"
             aria-describedby="goals-editor-modal-copy"
             onClick={(event) => event.stopPropagation()}

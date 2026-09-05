@@ -1,4 +1,5 @@
 "use client";
+import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -1067,6 +1068,7 @@ export default function InvestmentsPage() {
   const [portfolioView, setPortfolioView] = useState<PortfolioView>("all");
   const [selectedOverviewMixKey, setSelectedOverviewMixKey] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const mobileCreation = useMobileCreationRoute(addOpen, setAddOpen, "/investments");
   const [selectedInvestmentAssetId, setSelectedInvestmentAssetId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -3966,8 +3968,8 @@ export default function InvestmentsPage() {
           <div className="modal-backdrop modal-backdrop--investments-add" role="presentation" onClick={() => setAddOpen(false)}>
             <section
             className="modal-card modal-card--wide accounts-add-modal investments-add-modal glass"
-            role="dialog"
-            aria-modal="true"
+            role={mobileCreation ? "region" : "dialog"}
+            aria-modal={mobileCreation ? undefined : true}
             aria-labelledby="add-investment-title"
             onClick={(event) => event.stopPropagation()}
           >

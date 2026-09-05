@@ -1,4 +1,5 @@
 "use client";
+import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from "react";
@@ -1559,6 +1560,7 @@ function AccountsPageContent() {
   const [luxuryAccountCardsEnabled, setLuxuryAccountCardsEnabled] = useState(false);
   const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const mobileCreation = useMobileCreationRoute(addOpen, setAddOpen, "/accounts");
   const [importOpen, setImportOpen] = useState(false);
   const [importSessionId, setImportSessionId] = useState(0);
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
@@ -3381,7 +3383,7 @@ function AccountsPageContent() {
 
   useEffect(() => {
     if (mobileAccountRows.length === 0) {
-      setMobileExpandedAccountKey(null);
+      if (mobileExpandedAccountKey !== null) setMobileExpandedAccountKey(null);
       return;
     }
 
@@ -3399,8 +3401,9 @@ function AccountsPageContent() {
       ? rememberedKey
       : null;
 
-    setMobileExpandedAccountKey((current) => current && availableKeys.has(current) ? current : nextKey);
-  }, [mobileAccountRows, selectedCurrency, selectedWorkspaceId]);
+    const resolvedKey = mobileExpandedAccountKey && availableKeys.has(mobileExpandedAccountKey) ? mobileExpandedAccountKey : nextKey;
+    if (resolvedKey !== mobileExpandedAccountKey) setMobileExpandedAccountKey(resolvedKey);
+  }, [mobileAccountRows, mobileExpandedAccountKey, selectedCurrency, selectedWorkspaceId]);
 
   useEffect(() => () => {
     if (mobileDrawerCloseTimerRef.current) {
@@ -4628,7 +4631,7 @@ function AccountsPageContent() {
         menuAlignment="end"
         showChevron={false}
       />
-      <button className="button button-secondary button-small accounts-toolbar-add" type="button" onClick={openAddAccount}>
+      <button className="button button-secondary button-small accounts-toolbar-add" type="button" onClick={openAddAccount} aria-label="Add account">
         <ActionIcon name="plus" />
         <span>Add account</span>
       </button>
@@ -5252,8 +5255,8 @@ function AccountsPageContent() {
         <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={() => setAddOpen(false)}>
           <section
             className="modal-card modal-card--wide accounts-add-modal glass"
-            role="dialog"
-            aria-modal="true"
+            role={mobileCreation ? "region" : "dialog"}
+            aria-modal={mobileCreation ? undefined : true}
             aria-labelledby="add-account-title"
             ref={addRef}
             onClick={(event) => event.stopPropagation()}

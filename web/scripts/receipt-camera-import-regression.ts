@@ -292,7 +292,7 @@ assert.match(
 );
 assert.match(
   cloverShellSource,
-  /shell-quick-add-popover__item--receipt[\s\S]{0,420}?Receipt Photo/,
+  /shell-quick-add-popover__item--receipt[\s\S]{0,420}?Photo Library/,
   "Desktop and tablet users must have an explicit receipt-photo upload entry point."
 );
 assert.match(

@@ -1733,7 +1733,7 @@ export function SettingsHub({
                     className={`settings-hub__menu-item${isActive ? " is-active" : ""}`}
                     onClick={() => {
                       if (window.matchMedia(MOBILE_LAYOUT_MEDIA_QUERY).matches) {
-                        router.push(`/settings?section=${sectionKey}`);
+                        router.push(`/settings/${sectionKey}`);
                         return;
                       }
                       setActiveSection(sectionKey);

@@ -1,10 +1,12 @@
 "use client";
+import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CommitmentsPanel } from "@/components/commitments-panel";
 import { ContextualAskClover } from "@/components/contextual-ask-clover";
+import { MOBILE_LAYOUT_MEDIA_QUERY } from "@/lib/responsive-layout";
 
 type RecurringPageClientProps = {
   workspaceId: string;
@@ -77,6 +79,7 @@ export function RecurringPageClient({
 }: RecurringPageClientProps) {
   const router = useRouter();
   const [addOpen, setAddOpen] = useState(initialAddOpen);
+  const mobileCreation = useMobileCreationRoute(addOpen, setAddOpen, "/recurring");
   const [activeTab, setActiveTab] = useState<RecurringTab>(initialTab);
   const [addKind, setAddKind] = useState<RecurringAddKind>(addKindForTab(initialTab));
 
@@ -103,6 +106,7 @@ export function RecurringPageClient({
         setAddKind(detail.kind);
       }
       setAddOpen(true);
+      if (window.matchMedia(MOBILE_LAYOUT_MEDIA_QUERY).matches) return;
       const query = new URLSearchParams(window.location.search);
       query.set("add", "1");
       window.history.replaceState({}, "", `${window.location.pathname}?${query.toString()}`);
@@ -117,6 +121,7 @@ export function RecurringPageClient({
   const openAddModal = () => {
     setAddKind(addKindForTab(activeTab));
     setAddOpen(true);
+    if (window.matchMedia(MOBILE_LAYOUT_MEDIA_QUERY).matches) return;
     const query = new URLSearchParams(window.location.search);
     query.set("add", "1");
     window.history.replaceState({}, "", `${window.location.pathname}?${query.toString()}`);
@@ -124,6 +129,7 @@ export function RecurringPageClient({
 
   const closeAddModal = () => {
     setAddOpen(false);
+    if (window.matchMedia(MOBILE_LAYOUT_MEDIA_QUERY).matches) return;
     const query = new URLSearchParams(window.location.search);
     query.delete("add");
     const suffix = query.toString();
@@ -172,6 +178,7 @@ export function RecurringPageClient({
           <button
             type="button"
             className="button button-primary button-small recurring-topbar-add transactions-action-button"
+            aria-label="Add recurring"
             onClick={openAddModal}
           >
             <span className="button-icon" aria-hidden="true" style={addButtonIconStyle}>
@@ -202,6 +209,7 @@ export function RecurringPageClient({
           activeTab={activeTab}
           initialKind={addKind}
           showAddModal={addOpen}
+          creationPage={mobileCreation}
           onCloseAdd={closeAddModal}
         />
       </div>

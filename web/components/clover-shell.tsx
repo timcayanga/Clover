@@ -48,6 +48,7 @@ import { BugReportWidget } from "@/components/bug-report-widget";
 import { getNavigationIconSrc, type NavigationIconName } from "@/lib/navigation-icons";
 import { OnboardingMissionTracker } from "@/components/onboarding-mission-tracker";
 import { RegionalPreferencesSync } from "@/components/regional-preferences-sync";
+import { AdviserHeaderLink } from "@/components/adviser-header-link";
 import {
   getWorkspaceDataDomainForPath,
   installWorkspaceMutationObserver,
@@ -421,16 +422,10 @@ const desktopNavSections = [
 ];
 
 const mobileSettingsSections = [
-  { href: "/settings?section=account", label: "Account", icon: "profile" as const },
-  { href: "/settings?section=profiles", label: "Profiles", icon: "profile" as const },
-  { href: "/settings?section=notifications", label: "Notifications", icon: "notifications" as const },
-  { href: "/settings?section=security", label: "Security", icon: "settings" as const },
-  { href: "/settings?section=imports", label: "Review", icon: "transactions" as const },
-  { href: "/settings?section=regional", label: "Region & currency", icon: "settings" as const },
-  { href: "/settings?section=display", label: "Display", icon: "settings" as const },
-  { href: "/settings?section=data", label: "Data", icon: "settings" as const },
-  { href: "/settings?section=categories", label: "Categories", icon: "transactions" as const },
-  { href: "/settings?section=plan", label: "Plan", icon: "settings" as const },
+  { href: "/notifications", label: "Notifications", icon: "notifications" as const },
+  { href: "/settings", label: "Settings", icon: "settings" as const },
+  { href: "/help", label: "Help", icon: "help" as const },
+  { href: "/settings/plan", label: "Plan", icon: "settings" as const },
 ];
 
 const shouldPrefetchNavHref = (_href: string) => true;
@@ -1135,13 +1130,19 @@ export function CloverShell({
     "/notifications",
     "/settings",
   ]).has(pathname ?? "");
-  const resolvedMobileBackHref = mobileBackHref ?? (active === "dashboard" ? undefined : "/home");
+  const creationParent = pathname?.endsWith("/new") ? pathname.slice(0, -4) : null;
+  const resolvedMobileBackHref = creationParent ?? mobileBackHref ?? (active === "dashboard" ? undefined : "/home");
   const shouldShowBackButton = Boolean(mobileOverlayChrome) || (active !== "dashboard" && (!isMobileRootRoute || mobileBackHref === "/settings"));
   const mobileFallbackBackOnly = !mobileOverlayChrome && !hasHistoryBackTarget && Boolean(resolvedMobileBackHref);
   const handleBack = () => {
     closeChrome();
     if (mobileOverlayChrome) {
       mobileOverlayChrome.onBack();
+      return;
+    }
+    if (creationParent) {
+      if (window.history.state?.cloverCreation === pathname) router.back();
+      else router.replace(creationParent);
       return;
     }
     if (mobileFallbackBackOnly && resolvedMobileBackHref) {
@@ -1891,7 +1892,8 @@ export function CloverShell({
     }
 
     input.value = "";
-    input.click();
+    if (typeof input.showPicker === "function") input.showPicker();
+    else input.click();
   };
 
   const openQuickAddFilePicker = () => {
@@ -1901,7 +1903,8 @@ export function CloverShell({
     }
 
     input.value = "";
-    input.click();
+    if (typeof input.showPicker === "function") input.showPicker();
+    else input.click();
   };
 
   const handleQuickAddFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -2194,11 +2197,10 @@ export function CloverShell({
         aria-hidden={!isProfileDrawerOpen}
         onClick={() => setIsProfileDrawerOpen(false)}
       />
-      <aside id="mobile-settings-drawer" className={`shell-profile-drawer${isProfileDrawerOpen ? " is-open" : ""}`} aria-label="Settings" aria-hidden={!isProfileDrawerOpen}>
+      <aside id="mobile-settings-drawer" className={`shell-profile-drawer${isProfileDrawerOpen ? " is-open" : ""}`} aria-label="Account" aria-hidden={!isProfileDrawerOpen} inert={!isProfileDrawerOpen}>
         <div className="shell-profile-drawer__head">
           <div className="shell-profile-drawer__title-row">
-            <strong>Settings</strong>
-            <button type="button" aria-label="Close settings menu" onClick={() => setIsProfileDrawerOpen(false)}>
+            <button type="button" aria-label="Close Account menu" onClick={() => setIsProfileDrawerOpen(false)}>
               <MenuIcon name="menu" open />
             </button>
           </div>
@@ -2216,7 +2218,7 @@ export function CloverShell({
             </div>
           </div>
         </div>
-        <nav className="shell-profile-drawer__nav" aria-label="Settings sections">
+        <nav className="shell-profile-drawer__nav" aria-label="Account sections">
           {mobileSettingsSections.map((item) => (
             <Link
               key={item.href}
@@ -2226,6 +2228,7 @@ export function CloverShell({
             >
               <span aria-hidden="true"><MenuIcon name={item.icon} /></span>
               {item.label}
+              {item.href === "/notifications" ? <NotificationCountBadge count={notificationCount} /> : null}
               <span aria-hidden="true">›</span>
             </Link>
           ))}
@@ -2364,7 +2367,6 @@ export function CloverShell({
         ref={quickAddFileInputRef}
         className="hidden-file-input"
         type="file"
-        accept=".csv,.tsv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
         multiple
         onChange={handleQuickAddFileChange}
         aria-hidden="true"
@@ -2414,7 +2416,7 @@ export function CloverShell({
             }}
           >
             <span className="shell-quick-add-popover__emoji" aria-hidden="true">🖼️</span>
-            <strong>Receipt Photo</strong>
+            <strong>Photo Library</strong>
           </button>
           <button
             className="shell-quick-add-popover__item shell-quick-add-popover__item--primary"
@@ -2434,7 +2436,8 @@ export function CloverShell({
             role="menuitem"
             onClick={() => {
               setIsQuickAddOpen(false);
-              setQuickAddModal("transaction");
+              if (window.matchMedia("(max-width: 1100px)").matches) navigateTo("/transactions/new");
+              else setQuickAddModal("transaction");
             }}
           >
             <MenuIcon name="plus" />
@@ -2527,7 +2530,7 @@ export function CloverShell({
         <button
           type="button"
           className={`shell-bottom-nav__item shell-bottom-nav__item--account${isAccountNavActive ? " is-active" : ""}`}
-          aria-label={isProfileDrawerOpen ? "Close Account settings menu" : "Open Account settings menu"}
+          aria-label={`${isProfileDrawerOpen ? "Close" : "Open"} Account menu${notificationCount > 0 ? `, ${notificationCount} unread notifications` : ""}`}
           aria-expanded={isProfileDrawerOpen}
           aria-controls="mobile-settings-drawer"
           onClick={() => {
@@ -2546,6 +2549,7 @@ export function CloverShell({
             )}
           </span>
           <span className="shell-bottom-nav__label">Account</span>
+          <NotificationCountBadge count={notificationCount} />
         </button>
       </nav>
 
@@ -2575,7 +2579,7 @@ export function CloverShell({
               >
                 <MenuIcon name="menu" open={isSidebarOpen} />
               </button>
-              {shouldShowBackButton && !mobileFallbackBackOnly ? (
+              {shouldShowBackButton ? (
                 <button
                   className="shell-back-button"
                   type="button"
@@ -2585,7 +2589,7 @@ export function CloverShell({
                   <MenuIcon name="chevron-left" />
                 </button>
               ) : null}
-              {mobileLeadingAction ? <div className="shell-topbar-leading__actions">{mobileLeadingAction}</div> : null}
+              <div className="shell-topbar-leading__actions">{mobileLeadingAction ?? (active !== "adviser" ? <AdviserHeaderLink /> : null)}</div>
             </div>
             <div
               className={`shell-compact-bar__copy ${hideCompactBarCopyOnMobile ? "shell-compact-bar__copy--hide-mobile" : ""} ${
@@ -2631,7 +2635,7 @@ export function CloverShell({
                   <MenuIcon name="chevron-left" />
                 </button>
               ) : null}
-              {mobileLeadingAction ? <div className="shell-topbar-leading__actions">{mobileLeadingAction}</div> : null}
+              <div className="shell-topbar-leading__actions">{mobileLeadingAction ?? (active !== "adviser" ? <AdviserHeaderLink /> : null)}</div>
             </div>
             <div className="topbar__title-wrap">
               {kicker ? <p className="eyebrow">{kicker}</p> : null}

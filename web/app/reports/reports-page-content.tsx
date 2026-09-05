@@ -2233,7 +2233,7 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
         title="Reports"
         titleAddon={<ReportsTopTabs />}
         mobileSubheader={<ReportsTopTabs />}
-        mobileLeadingAction={<AdviserHeaderLink />}
+        mobileLeadingAction={<><AdviserHeaderLink /><ReportsRangeMenu currentRange={selectedRange} currentRangeLabel={selectedRangeLabel} currentFrom={reportWindow.from} currentTo={reportWindow.to} /></>}
         actions={
           <div className="reports-page__actions">
             <AdviserHeaderLink />

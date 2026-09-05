@@ -303,7 +303,7 @@ export function CirclesPageClient({
       }
       actions={
         <button
-          className="button button-primary button-small accounts-toolbar-button accounts-toolbar-button--upload circles-topbar-action"
+          className="button button-primary button-small accounts-toolbar-add circles-topbar-action"
           type="button"
           onClick={() => setCreateRequest((current) => current + 1)}
           aria-label="Create Circle"

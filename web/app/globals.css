@@ -64208,3 +64208,115 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
     justify-content: space-between;
   }
 }
+
+/* Shared signed-in mobile chrome: Back / Adviser / Filters, then actions / Menu. */
+@media (max-width: 1100px) {
+  .content > :is(.topbar, .shell-compact-bar) :is(.topbar-actions, .shell-compact-bar__actions) :is(.transactions-manage-menu, .transactions-toolbar-filter) { display: none !important; }
+  .mobile-header-filter { width: 36px; min-width: 36px; height: 36px; border-radius: 50%; }
+  .content > :is(.topbar, .shell-compact-bar) {
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    gap: 8px !important;
+  }
+  .content > :is(.topbar, .shell-compact-bar) .shell-topbar-leading {
+    position: static !important;
+    display: flex !important;
+    grid-column: 1 !important;
+    gap: 6px;
+    min-width: 0;
+  }
+  .content > :is(.topbar, .shell-compact-bar) .shell-mobile-more-link {
+    position: absolute !important;
+    right: 12px !important;
+    left: auto !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
+    z-index: 3;
+  }
+  .content > :is(.topbar, .shell-compact-bar) :is(.topbar-actions, .shell-compact-bar__actions) {
+    grid-column: 3 !important;
+    margin-right: 44px !important;
+    min-width: 0;
+    gap: 6px !important;
+  }
+  .content > :is(.topbar, .shell-compact-bar):not(:has(.topbar-actions, .shell-compact-bar__actions)) {
+    padding-right: 56px !important;
+  }
+  .content > :is(.topbar, .shell-compact-bar) :is(.home-notifications-button, a[href="/notifications"], .accounts-toolbar-button--upload, .transactions-toolbar-upload) {
+    display: none !important;
+  }
+  .content > :is(.topbar, .shell-compact-bar) :is(.currency-selector__button, .accounts-toolbar-add, .investments-page__add-button, button[aria-label^="Add "]) {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 36px !important;
+    width: 36px !important;
+    min-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    font-size: 14px !important;
+  }
+  .content > :is(.topbar, .shell-compact-bar) :is(.accounts-toolbar-add, .investments-page__add-button, button[aria-label^="Add "]) > span:not(.button-icon) {
+    display: none !important;
+  }
+  .content > :is(.topbar, .shell-compact-bar) :is(.accounts-toolbar-add, .investments-page__add-button, button[aria-label^="Add "]) {
+    background: var(--brand-gradient) !important;
+    color: #fff !important;
+    border: 0 !important;
+  }
+  .content > :is(.topbar, .shell-compact-bar) :is(.topbar-actions, .shell-compact-bar__actions) .contextual-ask-clover { display: none !important; }
+  .content > :is(.topbar, .shell-compact-bar) .recurring-topbar-add > .button-icon:last-child { display: none !important; }
+  .content > :is(.topbar, .shell-compact-bar) :is(.topbar-actions, .shell-compact-bar__actions) .reports-range-menu { display: none !important; }
+  .shell-topbar-leading__actions .reports-range-menu__panel { left: 0; right: auto; }
+  .content > :is(.topbar, .shell-compact-bar) .currency-selector__trigger-all {
+    display: grid !important; place-items: center; font-size: 0 !important;
+  }
+  .content > :is(.topbar, .shell-compact-bar) .currency-selector__all-icon {
+    display: block !important; width: 20px !important; height: 20px !important;
+  }
+  .content > :is(.topbar, .shell-compact-bar) :is(.currency-selector__all-label, .currency-selector__chevron) { display: none !important; }
+  .shell-bottom-nav { z-index: 120 !important; pointer-events: auto; }
+  .shell-bottom-nav__item--account { position: relative; }
+  .shell-profile-drawer:not(.is-open), .shell-profile-drawer-backdrop:not(.is-open) { pointer-events: none !important; visibility: hidden; }
+  .shell-profile-drawer__title-row { justify-content: flex-end; }
+  .shell-profile-drawer { grid-template-rows: auto auto auto; align-content: start; padding-bottom: 100px; overflow-y: auto; }
+  .shell-profile-drawer__nav { overflow: visible; }
+  .shell-profile-drawer__nav a { position: relative; }
+  .manual-form-actions, .manual-form-actions--closed, .manual-form-actions--expanded {
+    background: transparent !important; box-shadow: none !important;
+    border: 0 !important; backdrop-filter: none !important;
+    position: static !important; inset: auto !important; transform: none !important;
+    width: 100% !important; display: flex !important; flex-wrap: wrap; gap: 8px;
+  }
+  .manual-form-actions__right { flex-wrap: wrap; max-width: 100%; }
+  .accounts-add-fields__row--meta { flex-wrap: wrap; }
+  .accounts-add-fields__row--meta > label { flex: 1 1 160px !important; width: auto !important; }
+  .accounts-add-fields__row--meta .field-label-inline { flex-wrap: wrap; }
+  /* URL-backed creation screens reuse the app's validated forms, without modal chrome. */
+  body.mobile-creation-page .content-body { animation: none !important; transform: none !important; }
+  body.mobile-creation-page .content > :is(.topbar, .shell-compact-bar) :is(.topbar-actions, .shell-compact-bar__actions, .mobile-header-filter, .transactions-manage-menu) { visibility: hidden; pointer-events: none; }
+  body.mobile-creation-page :is(.modal-backdrop, .recurring-add-modal) {
+    position: fixed !important; inset: 80px 0 92px !important;
+    display: block !important; padding: 0 !important;
+    background: var(--background, #f7fafb) !important;
+    backdrop-filter: none !important; overflow-y: auto !important;
+    z-index: 100 !important;
+  }
+  body.mobile-creation-page :is(.modal-backdrop, .recurring-add-modal) > :is(.modal-card, section) {
+    position: relative !important; inset: auto !important; transform: none !important;
+    width: 100% !important; max-width: none !important;
+    height: auto !important; max-height: none !important; min-height: 100%;
+    margin: 0 !important; border: 0 !important; border-radius: 0 !important;
+    box-shadow: none !important; overflow: visible !important;
+  }
+  body.mobile-creation-page .content > :is(.topbar, .shell-compact-bar) { z-index: 125 !important; }
+  body.mobile-creation-page .shell-profile-drawer { z-index: 150 !important; }
+  body.mobile-creation-page .shell-profile-drawer-backdrop { z-index: 140 !important; }
+  body.mobile-creation-page .sidebar { z-index: 150 !important; }
+  body.mobile-creation-page .sidebar-backdrop { z-index: 140 !important; }
+}

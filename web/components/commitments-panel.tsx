@@ -58,6 +58,7 @@ type CommitmentsPanelProps = {
   activeTab?: "overview" | "planned" | "debt" | "owed" | "installments";
   initialKind?: CommitmentKind;
   showAddModal?: boolean;
+  creationPage?: boolean;
   onCloseAdd?: () => void;
 };
 
@@ -323,6 +324,7 @@ export function CommitmentsPanel({
   activeTab = "overview",
   initialKind = "planned_payment",
   showAddModal = false,
+  creationPage = false,
   onCloseAdd,
 }: CommitmentsPanelProps) {
   const router = useRouter();
@@ -1983,8 +1985,8 @@ export function CommitmentsPanel({
           <section
             className="panel glass recurring-add-modal__card"
             style={{ width: "min(760px, 100%)", display: "grid", gap: 16, maxHeight: "min(92vh, 920px)", overflow: "auto", position: "relative" }}
-            role="dialog"
-            aria-modal="true"
+            role={creationPage ? "region" : "dialog"}
+            aria-modal={creationPage ? undefined : true}
             aria-label="Add recurring"
             onClick={(event) => event.stopPropagation()}
           >

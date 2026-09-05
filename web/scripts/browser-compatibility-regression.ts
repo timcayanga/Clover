@@ -286,8 +286,8 @@ async function main() {
   );
   assert.match(
     circlesSource,
-    /accounts-toolbar-button accounts-toolbar-button--upload circles-topbar-action/,
-    "Create Circle must use the same compact toolbar sizing as Upload files."
+    /accounts-toolbar-add circles-topbar-action/,
+    "Create Circle must use the shared Add control, not the mobile-hidden Upload control."
   );
   assert.match(
     pageAuthSource,
