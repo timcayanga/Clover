@@ -42,3 +42,9 @@ Main and feature stories share title, body, action, and table type scales throug
 Main story scroll distance remains 2.8 screen heights. Feature chapters each receive a full 42svh reading interval (2.1 screen heights total across five chapters). Chapter selection uses equal intervals, independent of photo interpolation. The final content chapter is tested throughout its 60–80% scroll interval. The closing photograph starts transitioning only when the final CTA enters, so it cannot intrude behind the preceding product screen. Background scene timing has explicit holds for both main tables and the feature Pro table.
 
 landing-polish-browser-check.mjs checks all nine main chapters at desktop and two mobile sizes, identical type sizes by role, viewport bounds, dashed-path removal, and identical scene transforms/opacity at three points inside each table chapter. The 180-check feature browser matrix was repeated after the shared typography change.
+# Larger phones and natural group composition — September 5, 2026
+
+- All six feature stories, all five chapters: passed at 1440×900, 1024×768, 1440×600, 820×1180, 390×844 and 320×568.
+- Main landing page: all nine chapters passed at 1440×900, 1024×768, 1440×600, 390×844 and 320×568; the Skip manual rebuilding phone uses the same shared width as every feature phone.
+- Visually inspected the revised kitchen scene at 1440×900, 1440×600 and 1024×768, plus the other feature phone layouts and main Transactions phone. The kitchen lead is life-sized, friends are naturally staggered, and phone frames stay clear of faces. Mobile retains dedicated photography without supplementary phones.
+- Regression coverage asserts common responsive phone width, viewport/header bounds, actual Clover capture paths, hidden mobile overlays and equal penultimate-chapter pacing.

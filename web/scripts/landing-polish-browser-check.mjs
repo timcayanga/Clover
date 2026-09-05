@@ -23,6 +23,12 @@ for(const [w,h] of [[1440,900],[1024,768],[1440,600],[390,844],[320,568]]){
   assert.ok(result.box.top>=64,"Title behind header "+w+" "+i);
   assert.ok(result.box.bottom<=h,"Title outside viewport "+w+" "+i);
   if(w>900){
+   if(i===2){
+    const phone=read('JSON.stringify((()=>{const e=document.querySelector("[class*=iphoneFrame]");return {width:parseFloat(getComputedStyle(e).width),box:e.getBoundingClientRect().toJSON()}})())');
+    assert.ok(Math.abs(phone.width-Math.min(280,w*.21,h*.345))<2,"Main phone differs from shared feature size");
+    assert.ok(phone.box.top>=80,"Main phone reaches the header");
+    run("screenshot","/tmp/main-phone-"+w+"-"+h+".png");
+   }
    assert.ok(result.box.x<=w*.1,"Copy not left-aligned");
    const alignment=read('JSON.stringify((()=>{const e=document.querySelector("[data-landing-copy][data-active=true]"),box=e.getBoundingClientRect(),parent=e.offsetParent.getBoundingClientRect();return {center:box.top+box.height/2,target:parent.top+parent.height/2}})())');
    assert.ok(Math.abs(alignment.center-alignment.target)<2,"Copy not vertically centered: "+w+" chapter "+i+" "+JSON.stringify(alignment));

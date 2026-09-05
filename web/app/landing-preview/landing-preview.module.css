@@ -438,7 +438,7 @@
 
 /* iPhone 17 Pro body: 71.9 × 150 mm; display: 1206 × 2622 px.
    The app capture is 402 × 778 CSS px at 3x, between the iOS safe areas. */
-.iphoneFrame{position:absolute;right:1vw;bottom:1vh;width:min(250px,19vw,33.55svh);aspect-ratio:71.9/150;border-radius:17% / 8.15%;background:linear-gradient(105deg,#8c929b 0%,#f4f6f8 2%,#aeb4bc 3.5%,#424853 6%,#eef1f5 48%,#5c6571 96%,#f8fafc 98%,#7d8490);box-shadow:0 26px 48px rgba(15,29,39,.3),-2px 1px 4px rgba(255,255,255,.85),inset 0 0 0 1px #89909a;transform-origin:bottom right}
+.iphoneFrame{position:absolute;right:1vw;bottom:1vh;width:var(--landing-phone-width);aspect-ratio:71.9/150;border-radius:17% / 8.15%;background:linear-gradient(105deg,#8c929b 0%,#f4f6f8 2%,#aeb4bc 3.5%,#424853 6%,#eef1f5 48%,#5c6571 96%,#f8fafc 98%,#7d8490);box-shadow:0 26px 48px rgba(15,29,39,.3),-2px 1px 4px rgba(255,255,255,.85),inset 0 0 0 1px #89909a;transform-origin:bottom right}
 .iphoneFrame::before{content:"";position:absolute;inset:.6% 1.5%;border-radius:inherit;background:#080b0f;box-shadow:inset 0 0 0 1px #454c55}
 .iphoneDisplay{position:absolute;inset:1.3% 3.3%;overflow:hidden;border-radius:15.5% / 7.15%;background:#f7fafb}
 .iphoneStatusBar{position:absolute;top:0;left:0;right:0;height:7.1%;display:flex;align-items:center;justify-content:space-between;padding:0 8%;color:#11161d;font-family:Arial,sans-serif;font-size:clamp(7px,.72vw,10px)}
