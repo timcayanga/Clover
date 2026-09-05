@@ -1,0 +1,61 @@
+.journey{--teal:#03a8c0;--mint:#64d9cb;--ink:#1e3039;background:#f9fdfd;color:var(--ink)}
+.stage{position:sticky;top:0;height:100svh;min-height:0;overflow:hidden;isolation:isolate;background:#f9fdfd}
+.background{position:absolute;inset:0;transform-origin:68% 40%;pointer-events:none;user-select:none}
+.photograph,.photograph img{position:absolute;inset:0;width:100%;height:100%}
+.photograph img{object-fit:cover;object-position:right top;-webkit-user-drag:none;user-select:none}
+.wash{position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,#f9fdfd 0%,rgba(249,253,253,.97) 22%,rgba(249,253,253,.86) 36%,rgba(249,253,253,.08) 53%,transparent 60%)}
+.content{position:absolute;z-index:15;left:6vw;top:50%;translate:0 -40%;width:36vw;max-width:540px}
+.copy{animation:copy-settle .25s ease-out}
+.eyebrow{margin:0 0 15px;font-size:11px;line-height:1.5;font-weight:700;letter-spacing:.08em;color:#087e8c}
+.content h1{margin:0;color:#1e3039;font-family:var(--font-raleway),sans-serif;font-size:clamp(27px,2.35vw,38px);font-weight:600;letter-spacing:-.045em;line-height:1.13;text-wrap:balance}
+.content h1 em{font-style:normal;color:#00a9c1}
+.description{margin:19px 0 0;font-size:clamp(14px,1.13vw,17px);line-height:1.6;color:#435b6c;max-width:45ch}
+.products{margin:17px 0 0;font-size:11px;line-height:1.65;color:#087e8c}
+.contextLink{display:inline-block;margin-top:22px;color:#008fa5;font-size:13px;font-weight:600;text-underline-offset:4px}
+.markers{position:absolute;right:15px;top:50%;translate:0 -50%;z-index:45;display:flex;flex-direction:column;align-items:center;gap:8px;background:transparent}
+.markers button{display:grid;place-items:center;width:24px;height:24px;padding:0;border:0;background:transparent;cursor:pointer}
+.markers button span{width:6px;height:6px;border:1px solid #087e8c;border-radius:50%;background:#fff;transition:transform .25s,background .25s}
+.markers [aria-current=step] span{background:#00a9c1;transform:scale(1.7);box-shadow:0 0 0 4px rgba(3,168,192,.12)}
+.markers small{font-size:9px;color:#087e8c;font-weight:600}
+.next{position:absolute;bottom:24px;left:6vw;z-index:16;border:0;padding:8px 0;background:transparent;color:#4c6976;font-size:10px;font-weight:600;letter-spacing:.12em;cursor:pointer}
+.next span{display:inline-block;margin-left:16px;animation:scroll-nudge 2s ease-in-out infinite}
+.support{position:absolute;z-index:10;right:4.5vw;bottom:3svh;width:min(350px,27vw);pointer-events:none;user-select:none;animation:object-arrive .4s cubic-bezier(.2,.7,.2,1) both}
+.support[data-visual=transactions]{width:min(230px,17vw,27svh)}
+.demoCard{padding:16px;border:1px solid #dce9ed;border-radius:20px;background:#fff;box-shadow:0 20px 45px rgba(20,52,62,.19);color:#263b46}
+.demoHeader{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:12px}
+.demoHeader small{margin-left:auto;color:#7d929b;font-size:9px;font-weight:400}
+.demoTitle{font-size:16px;font-weight:650;margin:10px 0;color:#203c47}
+.demoCard>small{font-size:10px;color:#597582}
+.accountSamples{display:grid;gap:8px}.accountSamples :global(.financial-account-card){min-height:95px;padding:15px;border-radius:14px;box-shadow:none}.accountSamples :global(.financial-account-card__name){font-size:12px}.accountSamples :global(.financial-account-card__amount){font-size:20px}
+.demoCard :global(.reports-money-chart){font-size:9px}.demoCard :global(.reports-money-chart__chart){min-height:0}
+.phone{position:relative;border:5px solid #8b969f;border-radius:17%/8%;background:#f7fafb;aspect-ratio:71.9/150;box-shadow:0 22px 48px rgba(20,40,51,.3),inset 1px 0 2px #fff;padding:9% 2% 5%;overflow:hidden}
+.phone img{display:block;width:100%;height:100%;object-fit:contain;user-select:none;-webkit-user-drag:none}
+.island{position:absolute;top:2%;left:36%;width:28%;height:4%;border-radius:999px;background:#071119;box-shadow:inset -3px 1px 4px #233e52}
+.homeBar{position:absolute;bottom:1.5%;left:35%;width:30%;height:3px;background:#17242e;border-radius:20px}
+.conversation{display:grid;gap:8px;font-size:12px;line-height:1.65}.conversation p{margin:0;padding:12px;border-radius:14px;background:#edf9f7}.conversation .question{margin-left:25px;background:#f2f5f7}.grounded{margin-top:8px;color:#087e8c;font-size:10px;line-height:1.5}
+.budgetSample>small{font-size:10px}.budgetSample>strong{display:block;margin:20px 0;font-size:25px;color:#008fa0}.budgetSample>strong span{font-size:12px;font-weight:400;color:#617681}
+.sampleRows{display:grid;gap:0;font-size:12px}.sampleRows>div{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #e9f0f2}.sampleRows>div>strong{margin-left:auto;font-size:11px}.sampleRows small{display:block;font-size:10px;color:#667e8a}.sharedTotal{padding:12px;color:#fff;background:linear-gradient(110deg,#03a8c0,#57cec6);border-radius:13px;font-size:24px;font-weight:700}.sharedTotal small{display:block;font-size:10px;font-weight:400}
+.sourceSample{display:grid;justify-items:stretch;text-align:center;gap:7px}.sourceSample>div{display:flex;align-items:center;justify-content:center;gap:10px;padding:12px;background:#eefaf8;border-radius:12px;flex-wrap:wrap}.sourceSample strong{font-size:12px}.sourceSample small{font-size:9px;color:#617b87}.sourceSample>span{color:#03a8c0}
+.controlSample{display:grid;gap:12px}.controlSample>div{display:flex;align-items:center;gap:12px;font-size:12px}.controlSample span{color:#03a8c0;font-size:10px;font-weight:700}
+.pricingContent{width:85vw;max-width:none;display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:5vw;align-items:center}
+.journey[data-pricing=true] .wash{background:rgba(249,253,253,.96)}
+.pricing{animation:object-arrive .45s ease-out both}.pricing tbody tr{animation:object-arrive .4s ease-out both}.pricing tbody tr:nth-child(2){animation-delay:35ms}.pricing tbody tr:nth-child(3){animation-delay:70ms}.pricing tbody tr:nth-child(4){animation-delay:105ms}.pricing tbody tr:nth-child(5){animation-delay:140ms}.pricing tbody tr:nth-child(6){animation-delay:175ms}
+.proCta{display:grid;justify-items:start;gap:10px;margin-top:24px}.proCta small{font-size:11px;color:#4c6976}
+@keyframes object-arrive{from{opacity:0;transform:translate3d(0,12px,0) scale(.98)}to{opacity:1;transform:translate3d(0,0,0) scale(1)}}
+@keyframes copy-settle{from{transform:translateY(3px)}to{transform:translateY(0)}}
+@keyframes scroll-nudge{50%{transform:translateY(4px)}}
+@media(max-width:900px){
+ .background{top:64px}
+ .photograph img{object-position:center top}
+ .wash{background:linear-gradient(180deg,transparent 0 52%,rgba(249,253,253,.6) 62%,rgba(249,253,253,.97) 70%,#f9fdfd 80%)}
+ .content{left:20px;right:38px;bottom:34px;top:auto;translate:0 0;width:auto;max-width:none;text-align:center;max-height:48svh;overflow-y:auto;scrollbar-width:none}
+ .content::-webkit-scrollbar{display:none}.copy{padding-bottom:4px}
+ .eyebrow{font-size:9px;margin-bottom:9px}.content h1{font-size:clamp(22px,6.1vw,29px);line-height:1.15}.description{font-size:14px;line-height:1.5;margin:14px auto 0;max-width:40ch}.products{font-size:10px;margin:12px auto 0}
+ .content :global(.button){min-height:40px}.content [class*=actions]{margin:18px auto 0;width:min(285px,100%)}
+ .support{display:none}.markers{right:6px;top:34%;gap:4px}.markers button{width:22px;height:22px}.markers small{font-size:8px}.next{left:50%;translate:-50% 0;bottom:6px;font-size:8px;padding:6px;white-space:nowrap}
+ .content[data-final=true]{bottom:6svh;max-height:42svh}
+ .pricingContent{top:78px;bottom:25px;left:18px;right:40px;display:block;width:auto;max-height:none;translate:0 0;text-align:left;overscroll-behavior:contain}
+ .pricing{margin-top:18px}.pricing table th,.pricing table td{padding:9px 7px;font-size:11px}.pricing table strong{font-size:13px}.pricing table thead th{font-size:13px}.proCta{justify-items:center;margin-top:18px}.contextLink{font-size:12px;margin-top:15px}
+}
+@media(max-width:900px) and (max-height:680px){.content{bottom:24px;max-height:49svh}.content h1{font-size:22px}.description{font-size:12px}.eyebrow{display:none}.products{font-size:9px;margin-top:9px}.content [class*=actions]{margin-top:12px;gap:8px}.content :global(.button){min-height:35px;font-size:10px}.pricingContent{top:76px;bottom:23px;max-height:none}.next{bottom:1px}}
+@media(prefers-reduced-motion:reduce){.copy,.support,.pricing,.pricing tbody tr,.next span{animation:none}.markers button span{transition:none}}

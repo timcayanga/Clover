@@ -1,5 +1,6 @@
 export type PublicNavLink = {
   label: string;
+  products?: string;
   href: string;
   description?: string;
   featured?: boolean;
@@ -84,9 +85,9 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
     ],
   },
   {
-    slug: "gain-insights",
-    navLabel: "Gain Insights",
-    shortLabel: "Gain Insights",
+    slug: "understand-your-money",
+    navLabel: "Understand Your Money",
+    shortLabel: "Understand Your Money",
     overview: "Turn organized financial data into reports, Adviser guidance, and clearer next steps.",
     accent: "gold",
     sections: [
@@ -118,7 +119,7 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
     slug: "plan-ahead",
     navLabel: "Plan Ahead",
     shortLabel: "Plan Ahead",
-    overview: "Use real financial history to shape budgets, goals, and investment decisions.",
+    overview: "Use real financial history to shape practical budgets and savings goals.",
     accent: "sky",
     sections: [
       {
@@ -143,23 +144,12 @@ export const FEATURE_PAGES: FeatureNeedPage[] = [
         imageSrc: "/assets/landing page/Give each goal a clear path forward.png",
         imageAlt: "Financial goal progress and recommended actions in Clover",
       },
-      {
-        id: "investments",
-        eyebrow: "Investments",
-        title: "Keep long-term growth in the same picture.",
-        body: [
-          "Track holdings, purchases, dividends, and market movement alongside the rest of your accounts.",
-          "See how investing contributes to your net worth without losing sight of the money you use today.",
-        ],
-        imageSrc: "/assets/landing page/Keep long-term growth in the same picture.png",
-        imageAlt: "Investments shown alongside a complete Clover net worth view",
-      },
     ],
   },
   {
-    slug: "grow-together",
-    navLabel: "Grow Together",
-    shortLabel: "Grow Together",
+    slug: "manage-money-together",
+    navLabel: "Manage Money Together",
+    shortLabel: "Manage Money Together",
     overview: "Manage group plans and shared expenses without mixing them into your private finances.",
     accent: "mint",
     sections: [
@@ -268,7 +258,9 @@ export const FEATURE_PAGE_MAP = new Map(FEATURE_PAGES.map((page) => [page.slug, 
 export const FEATURE_SLUG_ALIASES: Record<string, string> = {
   "track-finances": "manage-money",
   "budgeting": "plan-ahead",
-  "split-bills": "grow-together",
+  "split-bills": "manage-money-together",
+  "gain-insights": "understand-your-money",
+  "grow-together": "manage-money-together",
 };
 
 export const resolveFeatureSlug = (slug: string) => FEATURE_SLUG_ALIASES[slug] ?? slug;
@@ -302,6 +294,12 @@ export const LEGAL_LINKS: PublicNavLink[] = [
 export const FEATURE_LINKS: PublicNavLink[] = [
   ...FEATURE_PAGES.map((page) => ({
     label: page.navLabel,
+    products: ({
+      "manage-money": "Transactions · Accounts · Recurring",
+      "understand-your-money": "Adviser · Reports",
+      "plan-ahead": "Budgeting · Goals",
+      "manage-money-together": "Circles · Split Bills",
+    } as Record<string, string>)[page.slug],
     href: `/features/${page.slug}`,
     description: page.overview,
     featured: page.featured ?? false,

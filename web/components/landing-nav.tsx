@@ -149,6 +149,7 @@ export function LandingNav({ accountState }: LandingNavProps) {
                         onClick={() => setActiveDesktopMenu(null)}
                       >
                         <strong>{item.label}</strong>
+                        {item.products ? <small style={{display:"block",fontWeight:400,fontSize:11,lineHeight:1.5}}>{item.products}</small> : null}
                       </Link>
                     ))}
                   </div>
@@ -218,6 +219,7 @@ export function LandingNav({ accountState }: LandingNavProps) {
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     <strong>{item.label}</strong>
+                    {item.products ? <small style={{display:"block",fontWeight:400,fontSize:11,lineHeight:1.5}}>{item.products}</small> : null}
                   </Link>
                 ))}
               </div>

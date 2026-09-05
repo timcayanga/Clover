@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   guessCategoryName,
   inferAccountTypeFromStatement,
 } from "../lib/financial-classification";
 import "./in-app-notifications-regression";
+import { FEATURE_STORIES } from "../lib/feature-stories";
+import { FEATURE_LINKS, resolveFeatureSlug } from "../lib/public-site";
 
 const readSource = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
 
@@ -289,11 +291,36 @@ assert.equal(guessCategoryName("OpenAI ChatGPT", "expense"), "Bills & Utilities"
 
 const featuresSource = readSource("app/features/page.tsx");
 const featureDetailSource = readSource("app/features/[slug]/page.tsx");
+const featureStoriesSource = readSource("lib/feature-stories.ts");
+const featureStorySource = readSource("components/feature-story.tsx");
+assert.equal(FEATURE_STORIES.length, 6);
+assert.equal(FEATURE_LINKS.length, 6);
+for (const story of FEATURE_STORIES) {
+  assert.equal(story.chapters.length, 5);
+  assert.equal(new Set(story.chapters.map(chapter => chapter.id)).size, 5);
+  assert.equal(FEATURE_LINKS.find(link => link.href === `/features/${story.slug}`)?.products, story.products);
+  for (const scene of ["hero", "hero-mobile", "end", "end-mobile"]) {
+    assert.ok(existsSync(resolve(process.cwd(), "../assets/feature-stories", `${story.asset}-${scene}.webp`)));
+  }
+}
+assert.equal(resolveFeatureSlug("gain-insights"), "understand-your-money");
+assert.equal(resolveFeatureSlug("grow-together"), "manage-money-together");
+assert.equal(resolveFeatureSlug("split-bills"), "manage-money-together");
+assert.match(featureDetailSource, /<FeatureStory /);
+assert.match(featureDetailSource, /permanentRedirect/);
+for (const slug of ["manage-money", "understand-your-money", "plan-ahead", "manage-money-together", "security", "pro"]) {
+  assert.ok(featureStoriesSource.includes(`slug: "${slug}"`), `Missing feature story: ${slug}`);
+}
+assert.match(featureStorySource, /prefers-reduced-motion/);
+assert.match(featureStorySource, /draggable=\{false\}/);
+assert.match(featureStorySource, /aria-current/);
+assert.match(featureStorySource, /hashchange/);
+assert.doesNotMatch(readSource("components/feature-story-demo.tsx"), /fetch\(|localStorage|useUser\(/);
 const helpSource = readSource("app/help/page.tsx");
 const landingSource = readSource("app/page.tsx");
 const landingCtaSource = readSource("components/landing-cta-actions.tsx");
-assert.match(featuresSource, /title: "Features"/);
-assert.doesNotMatch(featuresSource, /title: "Features \| Clover"/);
+assert.match(featuresSource, /permanentRedirect\("\/"\)/);
+assert.doesNotMatch(featureDetailSource, /resolvePublicAccountState/);
 assert.match(featureDetailSource, /title: page\.navLabel/);
 assert.doesNotMatch(featureDetailSource, /page\.navLabel\} \| Clover/);
 assert.match(helpSource, /title: "Help Center"/);

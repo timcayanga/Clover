@@ -24,7 +24,7 @@ const scenes = ["01-organize", "02-upload", "07-trust", "03-picture", "04-advise
 const chapterLayouts = [0, 0, 1, 5, 2, 3, 4, 6, 7] as const;
 const productChapters = [0, 2, 4, 5, 6] as const;
 
-type LandingMarket = "ph" | "global";
+export type LandingMarket = "ph" | "global";
 
 const marketContent = {
   ph: {
@@ -96,14 +96,14 @@ function ComparisonTable() {
   </table>;
 }
 
-function JourneyActions({ authEnabled, final = false }: { authEnabled: boolean; final?: boolean }) {
+export function JourneyActions({ authEnabled, final = false }: { authEnabled: boolean; final?: boolean }) {
   return <div className={styles.actions}>
     {authEnabled ? <LandingSignupModal enabled>Organize my finances for free <span aria-hidden="true">→</span></LandingSignupModal> : <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>Organize my finances for free <span aria-hidden="true">→</span></Link>}
     {!final && <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>Log in</Link>}
   </div>;
 }
 
-function ProComparison({ market, style }: { market: LandingMarket; style: CSSProperties }) {
+export function ProComparison({ market, style }: { market: LandingMarket; style: CSSProperties }) {
   const prices = market === "ph" ? ["PHP 169", "PHP 1,699"] : ["USD 2.69", "USD 26.99"];
   return <div className={styles.proDetails} style={style}>
     <table className={styles.proTable}>
@@ -125,23 +125,10 @@ function ProComparison({ market, style }: { market: LandingMarket; style: CSSPro
   </div>;
 }
 
-export function LandingJourney({ authEnabled, initialMarket, countryResolved }: { authEnabled: boolean; initialMarket: LandingMarket; countryResolved: boolean }) {
-  const journeyRef = useRef<HTMLDivElement>(null);
+export function JourneyHeader() {
   const headerRef = useRef<HTMLElement>(null);
-  const frameRef = useRef<number | null>(null);
-  const [chapter, setChapter] = useState(0);
-  const [storyPosition, setStoryPosition] = useState(0);
-  const [market, setMarket] = useState<LandingMarket>(initialMarket);
   const [featuresOpen, setFeaturesOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  useEffect(() => {
-    if (countryResolved || initialMarket === "ph") return;
-    const localeLooksPhilippine = navigator.languages.some((locale) => /(?:^|-)PH$/i.test(locale) || /^fil(?:-|$)/i.test(locale));
-    const timezoneLooksPhilippine = Intl.DateTimeFormat().resolvedOptions().timeZone === "Asia/Manila";
-    if (localeLooksPhilippine || timezoneLooksPhilippine) setMarket("ph");
-  }, [countryResolved, initialMarket]);
-
   useEffect(() => {
     const closeMenus = (event: MouseEvent) => {
       const target = event.target as Element;
@@ -163,6 +150,84 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, []);
+  return <>      <header ref={headerRef} className={styles.header}>
+        <Link href="/" className={styles.brand} aria-label="Clover home">
+          <Image src="/clover-mark.svg" alt="" width={44} height={44} priority />
+          <Image src="/clover-name-teal.svg" alt="Clover" width={132} height={32} priority />
+        </Link>
+        <nav aria-label="Public site">
+          <div className={styles.featureMenu}>
+            <button
+              type="button"
+              className={styles.navTrigger}
+              aria-expanded={featuresOpen}
+              aria-controls="preview-features-menu"
+              onClick={() => setFeaturesOpen((open) => !open)}
+            >
+              Features <span aria-hidden="true">▾</span>
+            </button>
+            {featuresOpen ? <div className={styles.featuresDropdown} id="preview-features-menu">
+              {FEATURE_LINKS.map((item) => <Link key={item.href} href={item.href} onClick={() => setFeaturesOpen(false)}><strong>{item.label}</strong>{item.products ? <small>{item.products}</small> : null}</Link>)}
+            </div> : null}
+          </div>
+          <Link href="/help">Help</Link>
+          <Link href="/contact-us">Contact</Link>
+          <Link href="/privacy-policy">Privacy Policy</Link>
+          <Link href="/terms-of-service">Terms of Service</Link>
+        </nav>
+        <div className={styles.mobileMenu}>
+          <button
+            type="button"
+            className={styles.mobileMenuTrigger}
+            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="preview-mobile-menu"
+            onClick={() => setMobileMenuOpen((open) => !open)}
+          >
+            <span aria-hidden="true" /><span aria-hidden="true" /><span aria-hidden="true" />
+          </button>
+        </div>
+        <div className={styles.headerActions}><Link href="/sign-in">Log in</Link><Link href="/sign-up">Sign up</Link></div>
+      </header>
+
+      {mobileMenuOpen ? <div data-mobile-navigation="true">
+        <button className={styles.mobileMenuBackdrop} type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)} />
+        <div className={styles.mobileDrawer} id="preview-mobile-menu" role="dialog" aria-modal="true" aria-label="Clover navigation">
+          <div className={styles.mobileDrawerHeader}>
+            <Image src="/clover-mark.svg" alt="" width={34} height={34} />
+            <strong>Menu</strong>
+            <button type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}>×</button>
+          </div>
+          <div className={styles.mobileDrawerLinks}>
+            <p>Features</p>
+            {FEATURE_LINKS.map((item) => <Link key={item.href} href={item.href} onClick={() => setMobileMenuOpen(false)}><strong>{item.label}</strong>{item.products ? <small>{item.products}</small> : null}</Link>)}
+            <span />
+            <Link href="/help" onClick={() => setMobileMenuOpen(false)}>Help</Link>
+            <Link href="/contact-us" onClick={() => setMobileMenuOpen(false)}>Contact</Link>
+            <Link href="/privacy-policy" onClick={() => setMobileMenuOpen(false)}>Privacy Policy</Link>
+            <Link href="/terms-of-service" onClick={() => setMobileMenuOpen(false)}>Terms of Service</Link>
+          </div>
+        </div>
+      </div> : null}
+
+</>;
+}
+
+export function LandingJourney({ authEnabled, initialMarket, countryResolved }: { authEnabled: boolean; initialMarket: LandingMarket; countryResolved: boolean }) {
+  const journeyRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<number | null>(null);
+  const [chapter, setChapter] = useState(0);
+  const [storyPosition, setStoryPosition] = useState(0);
+  const [market, setMarket] = useState<LandingMarket>(initialMarket);
+
+  useEffect(() => {
+    if (countryResolved || initialMarket === "ph") return;
+    const localeLooksPhilippine = navigator.languages.some((locale) => /(?:^|-)PH$/i.test(locale) || /^fil(?:-|$)/i.test(locale));
+    const timezoneLooksPhilippine = Intl.DateTimeFormat().resolvedOptions().timeZone === "Asia/Manila";
+    if (localeLooksPhilippine || timezoneLooksPhilippine) setMarket("ph");
+  }, [countryResolved, initialMarket]);
+
+
 
   useEffect(() => {
     const journey = journeyRef.current;
@@ -239,65 +304,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
 
   return <div ref={journeyRef} className={styles.journey} data-chapter={chapterLayouts[chapter]} data-comparison={chapter === 1} data-pro={chapter === 7} data-has-cta={chapter === 0 || chapter === 7 || chapter === chapters.length - 1} data-market={market} style={{ "--journey-progress": 0 } as CSSProperties}>
     <div className={styles.stage}>
-      <header ref={headerRef} className={styles.header}>
-        <Link href="/" className={styles.brand} aria-label="Clover home">
-          <Image src="/clover-mark.svg" alt="" width={44} height={44} priority />
-          <Image src="/clover-name-teal.svg" alt="Clover" width={132} height={32} priority />
-        </Link>
-        <nav aria-label="Public site">
-          <div className={styles.featureMenu}>
-            <button
-              type="button"
-              className={styles.navTrigger}
-              aria-expanded={featuresOpen}
-              aria-controls="preview-features-menu"
-              onClick={() => setFeaturesOpen((open) => !open)}
-            >
-              Features <span aria-hidden="true">▾</span>
-            </button>
-            {featuresOpen ? <div className={styles.featuresDropdown} id="preview-features-menu">
-              {FEATURE_LINKS.map((item) => <Link key={item.href} href={item.href} onClick={() => setFeaturesOpen(false)}>{item.label}</Link>)}
-            </div> : null}
-          </div>
-          <Link href="/help">Help</Link>
-          <Link href="/contact-us">Contact</Link>
-          <Link href="/privacy-policy">Privacy Policy</Link>
-          <Link href="/terms-of-service">Terms of Service</Link>
-        </nav>
-        <div className={styles.mobileMenu}>
-          <button
-            type="button"
-            className={styles.mobileMenuTrigger}
-            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
-            aria-expanded={mobileMenuOpen}
-            aria-controls="preview-mobile-menu"
-            onClick={() => setMobileMenuOpen((open) => !open)}
-          >
-            <span aria-hidden="true" /><span aria-hidden="true" /><span aria-hidden="true" />
-          </button>
-        </div>
-        <div className={styles.headerActions}><Link href="/sign-in">Log in</Link><Link href="/sign-up">Sign up</Link></div>
-      </header>
-
-      {mobileMenuOpen ? <div data-mobile-navigation="true">
-        <button className={styles.mobileMenuBackdrop} type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)} />
-        <div className={styles.mobileDrawer} id="preview-mobile-menu" role="dialog" aria-modal="true" aria-label="Clover navigation">
-          <div className={styles.mobileDrawerHeader}>
-            <Image src="/clover-mark.svg" alt="" width={34} height={34} />
-            <strong>Menu</strong>
-            <button type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}>×</button>
-          </div>
-          <div className={styles.mobileDrawerLinks}>
-            <p>Features</p>
-            {FEATURE_LINKS.map((item) => <Link key={item.href} href={item.href} onClick={() => setMobileMenuOpen(false)}>{item.label}</Link>)}
-            <span />
-            <Link href="/help" onClick={() => setMobileMenuOpen(false)}>Help</Link>
-            <Link href="/contact-us" onClick={() => setMobileMenuOpen(false)}>Contact</Link>
-            <Link href="/privacy-policy" onClick={() => setMobileMenuOpen(false)}>Privacy Policy</Link>
-            <Link href="/terms-of-service" onClick={() => setMobileMenuOpen(false)}>Terms of Service</Link>
-          </div>
-        </div>
-      </div> : null}
+      <JourneyHeader />
 
       <div className={styles.world} aria-hidden="true">
         <div className={styles.sceneStack}>
