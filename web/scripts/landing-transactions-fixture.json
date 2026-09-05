@@ -1,0 +1,24 @@
+{
+  "workspaces": [{"id":"landing-demo","name":"My finances","type":"personal"}],
+  "accounts": [
+    {"id":"demo-bank","name":"BPI Savings","institution":"BPI","accountNumber":"00001234","type":"bank","currency":"PHP","source":"upload","balance":"84250"},
+    {"id":"demo-wallet","name":"GCash","institution":"GCash","type":"wallet","currency":"PHP","source":"upload","balance":"4250"}
+  ],
+  "categories": [
+    {"id":"salary","name":"Salary","type":"income"},
+    {"id":"food","name":"Food & Dining","type":"expense"},
+    {"id":"shopping","name":"Shopping","type":"expense"},
+    {"id":"transport","name":"Transport","type":"expense"},
+    {"id":"bills","name":"Bills & Utilities","type":"expense"}
+  ],
+  "rows": [
+    ["2026-09-04","SM Supermarket","2480","shopping","demo-bank"],
+    ["2026-09-04","Grab","220","transport","demo-wallet"],
+    ["2026-09-03","Meralco","1920","bills","demo-bank"],
+    ["2026-09-03","Starbucks","185","food","demo-wallet"],
+    ["2026-09-02","Salary","48000","salary","demo-bank"],
+    ["2026-09-02","Jollibee","245","food","demo-wallet"],
+    ["2026-09-01","Globe","999","bills","demo-bank"],
+    ["2026-09-01","Uniqlo","1490","shopping","demo-bank"]
+  ]
+}

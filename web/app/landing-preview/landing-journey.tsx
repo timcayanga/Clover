@@ -103,9 +103,9 @@ function JourneyActions({ authEnabled, final = false }: { authEnabled: boolean; 
   </div>;
 }
 
-function ProComparison({ market }: { market: LandingMarket }) {
+function ProComparison({ market, style }: { market: LandingMarket; style: CSSProperties }) {
   const prices = market === "ph" ? ["PHP 169", "PHP 1,699"] : ["USD 2.69", "USD 26.99"];
-  return <div className={styles.proDetails}>
+  return <div className={styles.proDetails} style={style}>
     <table className={styles.proTable}>
       <caption>Compare Clover Free and Pro</caption>
       <thead><tr><th scope="col">Plan</th><th scope="col">Free</th><th scope="col">Pro</th></tr></thead>
@@ -216,8 +216,15 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
   };
   const chapterMotion = (index: number): CSSProperties => {
     return {
-      opacity: index === displayedChapter ? 1 : 0,
+      opacity: index === 1 || index === 7 || index === displayedChapter ? 1 : 0,
       transform: "translate3d(0, 0, 0)",
+    };
+  };
+  const tableMotion = (index: number): CSSProperties => {
+    const visibility = clamp((0.58 - Math.abs(storyPosition - index)) / 0.25);
+    return {
+      opacity: visibility,
+      transform: `translate3d(0, ${(1 - visibility) * 10}px, 0)`,
     };
   };
   const productMotion = (index: number, direction = 1): CSSProperties => {
@@ -310,11 +317,11 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
 
       <section className={styles.story} aria-live="polite">
         {chapters.map((item, index) => <div className={`${styles.chapter} ${index === 1 ? styles.comparisonChapter : ""} ${index === 7 ? styles.proChapter : ""} ${index === 8 ? styles.finalChapter : ""}`} data-active={chapter === index} key={index} aria-hidden={chapter !== index} inert={chapter !== index} style={chapterMotion(index)}>
-          <div><h1>{item.title}</h1>
+          <div style={{ opacity: index === displayedChapter ? 1 : 0 }}><h1>{item.title}</h1>
           {item.copy ? <p>{item.copy}</p> : null}</div>
-          {index === 1 ? <ComparisonTable /> : null}
+          {index === 1 ? <div className={styles.comparisonDetails} style={tableMotion(index)}><ComparisonTable /></div> : null}
           {index === 3 ? <div className={styles.trustLinks}><Link href="/privacy-policy">Privacy Policy</Link><Link href="/features/security">How Clover protects your data →</Link></div> : null}
-          {index === 7 ? <ProComparison market={market} /> : null}
+          {index === 7 ? <ProComparison market={market} style={tableMotion(index)} /> : null}
           {(index === 0 || index === chapters.length - 1) && <JourneyActions authEnabled={authEnabled} final={index === chapters.length - 1} />}
         </div>)}
       </section>
@@ -336,12 +343,14 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
         </div>
       </div>
 
-      <div className={styles.phone} data-story-visual="phone" style={productMotion(1, -1)}>
-        <div className={styles.phoneBar}><Image src="/clover-mark.svg" alt="" width={28} height={28} /><span>Transactions</span><i /></div>
-        <strong>Your transactions</strong><p>Everything Clover found in your uploaded files, ready to review.</p>
-        <div className={styles.transactionSearch}>Search transactions</div>
-        <div className={styles.mobileTransactions}>{local.transactions.map(([label, amount], index) => <span key={label}><Image src={local.uploadRows[index % 3][1]} alt="" width={22} height={22} /><b>{label}</b><i>{amount}</i><small>{index === 0 ? "Income" : "Confirmed"}</small></span>)}</div>
-        <button type="button">Add transaction</button>
+      <div className={styles.iphoneFrame} data-story-visual="phone" style={productMotion(1, -1)}>
+        <span className={styles.iphoneSideButtons} />
+        <div className={styles.iphoneDisplay}>
+          <div className={styles.iphoneStatusBar}><b>9:41</b><span className={styles.iphoneIsland} /><span className={styles.iphoneIndicators}><svg viewBox="0 0 18 12"><path d="M1 11V8h2v3M5 11V6h2v5M9 11V3h2v8M13 11V1h2v10" stroke="currentColor" strokeWidth="1.5" /></svg><svg viewBox="0 0 16 12"><path d="M1 3q7-5 14 0M4 6q4-3 8 0M7 9q1-1 2 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg><i /></span></div>
+          <Image className={styles.iphoneAppScreen} src={`/assets/landing-screens/transactions-${market}.webp`} alt="Clover mobile Transactions page with fictional sample records" width={1206} height={2334} sizes="250px" draggable={false} unoptimized />
+          <span className={styles.iphoneHomeIndicator} />
+        </div>
+        <span className={styles.iphoneGlass} />
       </div>
 
       <div className={styles.laptop} data-story-visual="laptop" style={productMotion(2)}><div className={styles.laptopScreen}>

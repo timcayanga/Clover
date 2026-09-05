@@ -43,7 +43,12 @@ async function main() {
   assert.match(landingJourneySource, /style=\{sceneMotion\(index\)\}/, "Landing backgrounds must interpolate on every scroll update.");
   assert.match(landingJourneySource, /data-story-visual="evidence"[\s\S]*?evidenceDocuments[\s\S]*?local\.uploadRows\[index\]\[1\][\s\S]*?CLOVER IMPORT/, "The hero must connect localized, real-logo documents to a Clover import result.");
   assert.match(landingJourneySource, /documentLineItems[\s\S]*?local\.documentLines/, "Hero statements and receipts must show realistic imported line items.");
-  assert.match(landingJourneySource, /Transactions[\s\S]*?Search transactions[\s\S]*?Add transaction/, "The phone surface must demonstrate Clover's mobile Transactions experience.");
+  assert.match(landingJourneySource, /landing-screens\/transactions-\$\{market\}/, "The phone must show a localized capture of Clover's actual Transactions page.");
+  for (const market of ["ph", "global"]) {
+    const screen = await sharp(path.join(root, `../assets/landing-screens/transactions-${market}.webp`)).metadata();
+    assert.equal(screen.width, 1206, "Screenshots must retain 3x mobile resolution.");
+    assert.equal(screen.height, 2334, "The app viewport must fit between the iPhone safe areas without cropping.");
+  }
   assert.match(landingJourneySource, /Accounts[\s\S]*?Estimated total[\s\S]*?local\.accountCards/, "The laptop surface must demonstrate a sample Accounts view without exposing user data.");
   assert.match(landingJourneySource, /Could I comfortably plan a Japan trip next year\?[\s\S]*?Create this plan/, "The Adviser surface must show a grounded planning conversation.");
   assert.match(landingJourneySource, /Split Bills[\s\S]*?Shared equally[\s\S]*?Personal accounts stay private/, "The shared-money surface must explain the expense split and personal-account privacy.");
@@ -61,7 +66,7 @@ async function main() {
   assert.match(landingJourneyStyles, /Frameless matched-motion story[\s\S]*?\.supportStage\{border:0!important[\s\S]*?background:transparent!important/, "Supporting objects must not be cropped inside a visible parent rail.");
   assert.match(landingJourneyStyles, /\.evidenceDocument\{[\s\S]{0,600}background:#fff/, "Individual document objects must remain opaque and readable.");
   assert.match(landingJourneyStyles, /\.evidenceDestination\{[\s\S]{0,600}background:#fff/, "The Clover import result must remain opaque and readable.");
-  assert.match(landingJourneyStyles, /\.journey \.phone\{[\s\S]{0,220}aspect-ratio:9\/19\.5/, "The supporting phone must use realistic modern handset proportions.");
+  assert.match(landingJourneyStyles, /\.iphoneFrame\{[\s\S]{0,220}aspect-ratio:71\.9\/150/, "The phone body must retain iPhone 17 Pro dimensions.");
   assert.match(landingJourneyStyles, /@keyframes cta-attention[\s\S]*?@keyframes cta-shimmer/, "The primary landing CTA must receive a restrained attention animation.");
   assert.doesNotMatch(landingJourneySource, /clipPath:/, "Scene transitions must use matched movement instead of directional wipes.");
   assert.match(landingJourneyStyles, /@media\(min-width:901px\)[\s\S]*?\.sceneStack\{inset:0;width:100%;height:100%;background:#eef8f6\}[\s\S]*?\.sceneSubject img\{object-fit:cover;/, "Desktop photographs must cover the complete stage.");

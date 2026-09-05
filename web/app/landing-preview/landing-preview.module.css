@@ -436,6 +436,21 @@
 
 .goalHero{height:auto!important}
 
+/* iPhone 17 Pro body: 71.9 × 150 mm; display: 1206 × 2622 px.
+   The app capture is 402 × 778 CSS px at 3x, between the iOS safe areas. */
+.iphoneFrame{position:absolute;right:1vw;bottom:1vh;width:min(250px,19vw,33.55svh);aspect-ratio:71.9/150;border-radius:17% / 8.15%;background:linear-gradient(105deg,#8c929b 0%,#f4f6f8 2%,#aeb4bc 3.5%,#424853 6%,#eef1f5 48%,#5c6571 96%,#f8fafc 98%,#7d8490);box-shadow:0 26px 48px rgba(15,29,39,.3),-2px 1px 4px rgba(255,255,255,.85),inset 0 0 0 1px #89909a;transform-origin:bottom right}
+.iphoneFrame::before{content:"";position:absolute;inset:.6% 1.5%;border-radius:inherit;background:#080b0f;box-shadow:inset 0 0 0 1px #454c55}
+.iphoneDisplay{position:absolute;inset:1.3% 3.3%;overflow:hidden;border-radius:15.5% / 7.15%;background:#f7fafb}
+.iphoneStatusBar{position:absolute;top:0;left:0;right:0;height:7.1%;display:flex;align-items:center;justify-content:space-between;padding:0 8%;color:#11161d;font-family:Arial,sans-serif;font-size:clamp(7px,.72vw,10px)}
+.iphoneStatusBar>b{font-weight:700}.iphoneIsland{position:absolute;top:20%;left:50%;width:25%;height:57%;translate:-50% 0;border-radius:999px;background:#050609;box-shadow:inset 0 1px 2px #252932}
+.iphoneIsland::after{content:"";position:absolute;right:10%;top:27%;height:45%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 38% 35%,#304a6d,#0c1423 50%,#040608 72%)}
+.iphoneIndicators{display:flex;align-items:center;gap:3px;width:23%}.iphoneIndicators svg{width:28%;height:auto}.iphoneIndicators i{position:relative;width:38%;height:7px;border:1px solid #555c66;border-radius:2px;background:linear-gradient(90deg,#11161d 0 85%,transparent 85%);background-clip:content-box;padding:1px}.iphoneIndicators i::after{content:"";position:absolute;top:1px;right:-3px;width:1px;height:3px;background:#555c66}
+.iphoneAppScreen{position:absolute;top:7.1%;left:0;width:100%!important;height:89%!important;max-height:none!important;object-fit:fill}
+.iphoneHomeIndicator{position:absolute;bottom:1%;left:34%;width:32%;height:.55%;border-radius:999px;background:#12161b}
+.iphoneSideButtons{position:absolute;left:-1%;top:19%;width:1.5%;height:5%;border-radius:2px;background:linear-gradient(90deg,#727b88,#e5e9ef);box-shadow:0 38px 0 #a7afba,0 62px 0 #a7afba}
+.iphoneSideButtons::after{content:"";position:absolute;left:calc(min(250px,19vw,33.55svh) + 1px);top:35px;width:3px;height:42px;border-radius:2px;background:linear-gradient(90deg,#d5dbe3,#646f7c)}
+.iphoneGlass{position:absolute;inset:.6% 1.5%;border-radius:inherit;pointer-events:none;background:linear-gradient(112deg,rgba(255,255,255,.14),transparent 24%,transparent 76%,rgba(255,255,255,.07));box-shadow:inset 1px 1px 2px rgba(255,255,255,.8),inset -1px -1px 2px rgba(255,255,255,.28)}
+
 /* Decorative layers never intercept a text-selection drag. */
 .world,.supportStage{pointer-events:none;user-select:none;-webkit-user-select:none}
 .journey img{-webkit-user-drag:none;user-select:none;-webkit-user-select:none}
@@ -443,6 +458,19 @@
 .trustLinks{display:flex;flex-wrap:wrap;gap:12px 20px;margin-top:20px;font-size:13px}
 .trustLinks a{color:#007e91;text-underline-offset:4px}
 .proDetails{min-width:0}
+.comparisonDetails,.proDetails{transition:opacity 160ms ease-out,transform 220ms cubic-bezier(.2,.7,.2,1);will-change:opacity,transform}
+.chapter[data-active=true] :is(.comparisonTable,.proTable) tbody tr{animation:table-row-arrive 420ms ease-out both}
+.chapter[data-active=true] :is(.comparisonTable,.proTable) tbody tr:nth-child(2){animation-delay:35ms}
+.chapter[data-active=true] :is(.comparisonTable,.proTable) tbody tr:nth-child(3){animation-delay:70ms}
+.chapter[data-active=true] :is(.comparisonTable,.proTable) tbody tr:nth-child(4){animation-delay:105ms}
+.chapter[data-active=true] :is(.comparisonTable,.proTable) tbody tr:nth-child(5){animation-delay:140ms}
+.chapter[data-active=true] :is(.comparisonTable,.proTable) tbody tr:nth-child(6){animation-delay:175ms}
+.chapter[data-active=true] .proActions{animation:table-row-arrive 420ms 180ms ease-out both}
+@keyframes table-row-arrive{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){
+  .comparisonDetails,.proDetails{transition:none;transform:none!important;will-change:auto}
+  .chapter[data-active=true] :is(.comparisonTable,.proTable) tbody tr,.chapter[data-active=true] .proActions{animation:none}
+}
 .proTable{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid #d6e9e8;border-radius:18px;background:#fff;text-align:left}
 .proTable caption{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 .proTable th,.proTable td{padding:13px 14px;border-bottom:1px solid #e1eeee;font-size:13px;line-height:1.4;vertical-align:middle}

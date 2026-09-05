@@ -4,7 +4,7 @@ import Script from "next/script";
 import { LandingJourney } from "./landing-journey";
 
 export const metadata: Metadata = {
-  title: "More life. Less money admin. | Clover",
+  title: { absolute: "Clover" },
   description: "Follow one day with Clover, from scattered financial records to a clearer plan and more time for life.",
 };
 
