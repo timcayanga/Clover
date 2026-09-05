@@ -11,15 +11,18 @@ const chapters = [
   { title: <>Months of finances.<br /><em>Organized in minutes.</em></>, copy: "Upload statements, receipts, screenshots, or spreadsheets. Understand your money and take one clearer step at a time." },
   { title: <>Stop tracking.<br /><em>Start organizing.</em></>, copy: "Most finance apps ask you to enter transactions one by one. Clover starts with the records you already have, so you can spend less time rebuilding your finances and more time understanding them." },
   { title: <>Skip the manual <em>rebuilding.</em></>, copy: "Bring in bank statements, receipts, wallet screenshots, spreadsheets, and other financial records. Clover extracts the useful details, organizes transactions by account and category, and shows you only what needs review." },
+  { title: <>Your financial data stays <em>under your control.</em></>, copy: "Your financial records are private, reviewable, and traceable. You can edit, export, or delete your data through your account." },
   { title: <>See what changed and where your <em>money actually goes.</em></>, copy: "Once your records are organized, Clover turns them into a clear financial picture. Track balances, spending, cash flow, recurring obligations, and trends across your accounts without piecing everything together yourself." },
   { title: <>Ask what your money can make <em>possible.</em></>, copy: "Clover Adviser helps turn your financial history into practical answers. Ask what you can safely spend, what changed this month, whether a goal is still on track, or what deserves your attention next." },
   { title: <>Manage money together <em>without sharing everything.</em></>, copy: "Split expenses, track who owes what, and organize shared money with a partner, household, family, or friends. Keep personal finances private while sharing only what makes sense." },
-  { title: <>Your financial data stays <em>under your control.</em></>, copy: "Your financial records are private, reviewable, and traceable. You can edit, export, or delete your data through your account." },
   { title: <>Do more when your finances <em>get more complex.</em></>, copy: "Start free and upgrade when Clover becomes a bigger part of how you manage your money. Pro gives you more room, more intelligence, and more ways to understand your financial life." },
   { title: <>Feel clearer about your money, and more confident <em>about what comes next.</em></>, copy: null },
 ] as const;
 
-const scenes = ["01-organize", "02-upload", "03-picture", "04-adviser", "05-plan", "07-trust", "08-pro", "06-life"] as const;
+const scenes = ["01-organize", "02-upload", "07-trust", "03-picture", "04-adviser", "05-plan", "08-pro", "06-life"] as const;
+// Preserve each scene's responsive composition when its place in the story changes.
+const chapterLayouts = [0, 0, 1, 5, 2, 3, 4, 6, 7] as const;
+const productChapters = [0, 2, 4, 5, 6] as const;
 
 type LandingMarket = "ph" | "global";
 
@@ -72,8 +75,9 @@ const marketContent = {
 
 const clamp = (value: number, minimum = 0, maximum = 1) => Math.min(maximum, Math.max(minimum, value));
 const sceneAsset = (scene: (typeof scenes)[number], mobile = false) => {
-  // Pro carries the private setting forward, with a softer wash behind its table.
-  if (scene === "07-trust" || scene === "08-pro") return `/assets/landing-story-v3/07-private-review${mobile ? "-mobile" : ""}.webp`;
+  if (scene === "07-trust") return `/assets/landing-story-v3/07-records-away${mobile ? "-mobile" : ""}.webp`;
+  // Keep Pro in the airport setting rather than returning home before the finale.
+  if (scene === "08-pro") return `/assets/landing-story-v2/05-plan${mobile ? "-mobile" : ""}.webp`;
   if (scene === "06-life" && mobile) return "/assets/landing-story-v3/06-life-mobile-clear.webp";
   const folder = scene === "06-life" || scene === "05-plan" ? "landing-story-v2" : "landing-story-v3";
   return `/assets/${folder}/${scene}${mobile ? "-mobile" : ""}.webp`;
@@ -217,7 +221,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
     };
   };
   const productMotion = (index: number, direction = 1): CSSProperties => {
-    const distance = storyPosition - (index === 0 ? 0 : index + 1);
+    const distance = storyPosition - productChapters[index];
     const proximity = clamp(1 - Math.abs(distance) * 1.35);
     return {
       opacity: proximity,
@@ -226,7 +230,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
     };
   };
 
-  return <div ref={journeyRef} className={styles.journey} data-chapter={Math.max(0, chapter - 1)} data-comparison={chapter === 1} data-pro={chapter === 7} data-has-cta={chapter === 0 || chapter === 7 || chapter === chapters.length - 1} data-market={market} style={{ "--journey-progress": 0 } as CSSProperties}>
+  return <div ref={journeyRef} className={styles.journey} data-chapter={chapterLayouts[chapter]} data-comparison={chapter === 1} data-pro={chapter === 7} data-has-cta={chapter === 0 || chapter === 7 || chapter === chapters.length - 1} data-market={market} style={{ "--journey-progress": 0 } as CSSProperties}>
     <div className={styles.stage}>
       <header ref={headerRef} className={styles.header}>
         <Link href="/" className={styles.brand} aria-label="Clover home">
@@ -309,7 +313,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
           <div><h1>{item.title}</h1>
           {item.copy ? <p>{item.copy}</p> : null}</div>
           {index === 1 ? <ComparisonTable /> : null}
-          {index === 6 ? <div className={styles.trustLinks}><Link href="/privacy-policy">Privacy Policy</Link><Link href="/features/security">How Clover protects your data →</Link></div> : null}
+          {index === 3 ? <div className={styles.trustLinks}><Link href="/privacy-policy">Privacy Policy</Link><Link href="/features/security">How Clover protects your data →</Link></div> : null}
           {index === 7 ? <ProComparison market={market} /> : null}
           {(index === 0 || index === chapters.length - 1) && <JourneyActions authEnabled={authEnabled} final={index === chapters.length - 1} />}
         </div>)}

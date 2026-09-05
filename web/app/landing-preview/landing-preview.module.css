@@ -517,7 +517,7 @@
   .scene[data-scene="01-organize"] .sceneSubject img{object-position:center 20%;transform:translateY(-2%)}
   .scene[data-scene="05-plan"] .sceneSubject img{object-position:center 46%;transform:translateY(-4%)}
   .scene[data-scene="06-life"] .sceneSubject img{transform:none}
-  .journey .scene[data-scene="07-trust"] .sceneSubject img,
+  .journey .scene[data-scene="07-trust"] .sceneSubject img{transform:translateY(-12%)}
   .journey .scene[data-scene="08-pro"] .sceneSubject img{transform:none}
   .world{background:#f9fdfd}
 }

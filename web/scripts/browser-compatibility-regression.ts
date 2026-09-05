@@ -19,18 +19,18 @@ async function main() {
     ),
   );
   await Promise.all(
-    [...landingSceneNames.slice(0, -1), "07-private-review"].flatMap((scene) =>
+    [...landingSceneNames.slice(0, -1), "07-records-away"].flatMap((scene) =>
       ["", "-mobile"].map((suffix) => access(path.join(root, `../assets/landing-story-v3/${scene}${suffix}.webp`))),
     ),
   );
   const mobileSceneMetadata = await Promise.all(
-    [...landingSceneNames, "07-private-review"].map((scene) => sharp(path.join(root, `../assets/${scene === "06-life" ? "landing-story-v2" : "landing-story-v3"}/${scene}-mobile.webp`)).metadata()),
+    [...landingSceneNames, "07-records-away"].map((scene) => sharp(path.join(root, `../assets/${scene === "06-life" ? "landing-story-v2" : "landing-story-v3"}/${scene}-mobile.webp`)).metadata()),
   );
   assert.ok(
     mobileSceneMetadata.every((metadata) => (metadata.height ?? 0) > (metadata.width ?? 0)),
     "Every mobile landing scene must use a portrait source so full-viewport cover does not crop out the cast.",
   );
-  assert.match(landingJourneySource, /const scenes = \["01-organize", "02-upload", "03-picture", "04-adviser", "05-plan", "07-trust", "08-pro", "06-life"\]/, "Trust and Pro must appear between shared finances and the final CTA.");
+  assert.match(landingJourneySource, /const scenes = \["01-organize", "02-upload", "07-trust", "03-picture", "04-adviser", "05-plan", "08-pro", "06-life"\]/, "Trust reassures after Upload; the travel story then continues through Pro and the final CTA.");
   assert.match(landingJourneySource, /const folder = scene === "06-life" \|\| scene === "05-plan" \? "landing-story-v2" : "landing-story-v3"/, "Shared finances and the finale use the group scenes; personal finance keeps the individual scenes.");
   assert.match(landingJourneySource, /<source media="\(max-width: 900px\)" srcSet=\{sceneAsset\(scene, true\)\}/, "The landing story must use mobile-specific crops that keep its recurring cast visible.");
   assert.match(landingJourneySource, /className=\{styles\.sceneBackdrop\}/, "Intermediate desktop sizes must retain a full-bleed backdrop behind the uncropped cast.");
