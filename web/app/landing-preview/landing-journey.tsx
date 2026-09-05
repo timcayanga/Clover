@@ -14,10 +14,12 @@ const chapters = [
   { title: <>See what changed and where your <em>money actually goes.</em></>, copy: "Once your records are organized, Clover turns them into a clear financial picture. Track balances, spending, cash flow, recurring obligations, and trends across your accounts without piecing everything together yourself." },
   { title: <>Ask what your money can make <em>possible.</em></>, copy: "Clover Adviser helps turn your financial history into practical answers. Ask what you can safely spend, what changed this month, whether a goal is still on track, or what deserves your attention next." },
   { title: <>Manage money together <em>without sharing everything.</em></>, copy: "Split expenses, track who owes what, and organize shared money with a partner, household, family, or friends. Keep personal finances private while sharing only what makes sense." },
-  { title: <>Ready to make clearer <em>money decisions?</em></>, copy: null },
+  { title: <>Your financial data stays <em>under your control.</em></>, copy: "Your financial records are private, reviewable, and traceable. You can edit, export, or delete your data through your account." },
+  { title: <>Do more when your finances <em>get more complex.</em></>, copy: "Start free and upgrade when Clover becomes a bigger part of how you manage your money. Pro gives you more room, more intelligence, and more ways to understand your financial life." },
+  { title: <>Feel clearer about your money, and more confident <em>about what comes next.</em></>, copy: null },
 ] as const;
 
-const scenes = ["01-organize", "02-upload", "03-picture", "04-adviser", "05-plan", "06-life"] as const;
+const scenes = ["01-organize", "02-upload", "03-picture", "04-adviser", "05-plan", "07-trust", "08-pro", "06-life"] as const;
 
 type LandingMarket = "ph" | "global";
 
@@ -70,6 +72,8 @@ const marketContent = {
 
 const clamp = (value: number, minimum = 0, maximum = 1) => Math.min(maximum, Math.max(minimum, value));
 const sceneAsset = (scene: (typeof scenes)[number], mobile = false) => {
+  if (scene === "07-trust") return `/assets/landing-story-v3/05-plan${mobile ? "-mobile" : ""}.webp`;
+  if (scene === "08-pro") return `/assets/landing-story-v3/03-picture${mobile ? "-mobile" : ""}.webp`;
   if (scene === "06-life" && mobile) return "/assets/landing-story-v3/06-life-mobile-clear.webp";
   const folder = scene === "06-life" || scene === "05-plan" ? "landing-story-v2" : "landing-story-v3";
   return `/assets/${folder}/${scene}${mobile ? "-mobile" : ""}.webp`;
@@ -92,6 +96,28 @@ function JourneyActions({ authEnabled, final = false }: { authEnabled: boolean; 
   return <div className={styles.actions}>
     {authEnabled ? <LandingSignupModal enabled>Organize my finances for free <span aria-hidden="true">→</span></LandingSignupModal> : <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>Organize my finances for free <span aria-hidden="true">→</span></Link>}
     {!final && <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>Log in</Link>}
+  </div>;
+}
+
+function ProComparison({ market }: { market: LandingMarket }) {
+  const prices = market === "ph" ? ["PHP 169", "PHP 1,699"] : ["USD 2.69", "USD 26.99"];
+  return <div className={styles.proDetails}>
+    <table className={styles.proTable}>
+      <caption>Compare Clover Free and Pro</caption>
+      <thead><tr><th scope="col">Plan</th><th scope="col">Free</th><th scope="col">Pro</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Monthly billing</th><td>Free</td><td><strong>{prices[0]}</strong> / month</td></tr>
+        <tr><th scope="row">Annual billing</th><td>Free</td><td><strong>{prices[1]}</strong> / year</td></tr>
+        <tr><th scope="row">Uploads & accounts</th><td>No caps for now</td><td>No caps for now</td></tr>
+        <tr><th scope="row">Reports & Adviser</th><td>Basic guidance</td><td>Advanced guidance</td></tr>
+        <tr><th scope="row">Goals</th><td>Basic tracking</td><td>Tracking + advice</td></tr>
+        <tr><th scope="row">Investments</th><td>Basic tracking</td><td>Full portfolio tools</td></tr>
+      </tbody>
+    </table>
+    <div className={styles.proActions}>
+      <Link className="button button-primary button-pill" href="/sign-up?intent=pro&interval=annual" prefetch={false}>Upgrade to Pro <span aria-hidden="true">→</span></Link>
+      <small>You can keep using Clover for free.</small>
+    </div>
   </div>;
 }
 
@@ -200,7 +226,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
     };
   };
 
-  return <div ref={journeyRef} className={styles.journey} data-chapter={Math.max(0, chapter - 1)} data-comparison={chapter === 1} data-has-cta={chapter === 0 || chapter === chapters.length - 1} data-market={market} style={{ "--journey-progress": 0 } as CSSProperties}>
+  return <div ref={journeyRef} className={styles.journey} data-chapter={Math.max(0, chapter - 1)} data-comparison={chapter === 1} data-pro={chapter === 7} data-has-cta={chapter === 0 || chapter === 7 || chapter === chapters.length - 1} data-market={market} style={{ "--journey-progress": 0 } as CSSProperties}>
     <div className={styles.stage}>
       <header ref={headerRef} className={styles.header}>
         <Link href="/" className={styles.brand} aria-label="Clover home">
@@ -269,7 +295,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
               <span className={styles.sceneBackdrop} style={{ "--scene-backdrop": `url("${sceneAsset(scene)}")` } as CSSProperties} />
               <picture className={styles.sceneSubject}>
                 <source media="(max-width: 900px)" srcSet={sceneAsset(scene, true)} />
-                <img src={sceneAsset(scene)} alt="" fetchPriority={index === 0 ? "high" : "auto"} />
+                <img src={sceneAsset(scene)} alt="" draggable={false} fetchPriority={index === 0 ? "high" : "auto"} />
               </picture>
             </div>
           ))}
@@ -279,10 +305,12 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
       </div>
 
       <section className={styles.story} aria-live="polite">
-        {chapters.map((item, index) => <div className={`${styles.chapter} ${index === 1 ? styles.comparisonChapter : ""}`} data-active={chapter === index} key={index} aria-hidden={chapter !== index} style={chapterMotion(index)}>
+        {chapters.map((item, index) => <div className={`${styles.chapter} ${index === 1 ? styles.comparisonChapter : ""} ${index === 7 ? styles.proChapter : ""} ${index === 8 ? styles.finalChapter : ""}`} data-active={chapter === index} key={index} aria-hidden={chapter !== index} inert={chapter !== index} style={chapterMotion(index)}>
           <div><h1>{item.title}</h1>
           {item.copy ? <p>{item.copy}</p> : null}</div>
           {index === 1 ? <ComparisonTable /> : null}
+          {index === 6 ? <div className={styles.trustLinks}><Link href="/privacy-policy">Privacy Policy</Link><Link href="/features/security">How Clover protects your data →</Link></div> : null}
+          {index === 7 ? <ProComparison market={market} /> : null}
           {(index === 0 || index === chapters.length - 1) && <JourneyActions authEnabled={authEnabled} final={index === chapters.length - 1} />}
         </div>)}
       </section>

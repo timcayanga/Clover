@@ -436,8 +436,31 @@
 
 .goalHero{height:auto!important}
 
-/* Seven chapters, with the original comparison as a readable pause after upload. */
-.journey{height:620svh}
+/* Decorative layers never intercept a text-selection drag. */
+.world,.supportStage{pointer-events:none;user-select:none;-webkit-user-select:none}
+.journey img{-webkit-user-drag:none;user-select:none;-webkit-user-select:none}
+.chapter{user-select:text;-webkit-user-select:text}
+.trustLinks{display:flex;flex-wrap:wrap;gap:12px 20px;margin-top:20px;font-size:13px}
+.trustLinks a{color:#007e91;text-underline-offset:4px}
+.proDetails{min-width:0}
+.proTable{width:100%;table-layout:fixed;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid #d6e9e8;border-radius:18px;background:#fff;text-align:left}
+.proTable caption{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.proTable th,.proTable td{padding:13px 14px;border-bottom:1px solid #e1eeee;font-size:13px;line-height:1.4;vertical-align:middle}
+.proTable thead th{background:#e8f6f5;color:#12606b;font-size:16px}
+.proTable tbody th{font-weight:600;color:#4c6370}
+.proTable td:last-child,.proTable th:last-child{background:#edfbf5}
+.proTable tr:last-child th,.proTable tr:last-child td{border-bottom:0}
+.proTable strong{display:block;color:#008a94;font-size:16px}
+.proActions{display:grid;justify-items:center;gap:10px;margin-top:18px}
+.proActions small{font-size:12px;color:#4c6370}
+@media(min-width:901px){
+  .proChapter{left:6vw;width:86vw;top:50%;translate:0 -40%;display:grid;grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:5vw;align-items:center}
+  .journey[data-pro=true] .worldWash{background:rgba(249,253,253,.94)}
+  .finalChapter{width:min(620px,44vw)}
+}
+
+/* Nine chapters, including readable comparison and plan-selection pauses. */
+.journey{height:800svh}
 .comparisonTable{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;border:1px solid #d8e8e9;border-radius:20px;overflow:hidden;background:#fff;text-align:left;box-shadow:0 14px 44px rgba(16,66,76,.08)}
 .comparisonTable caption{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 .comparisonTable th,.comparisonTable td{padding:18px 20px;font-size:15px;line-height:1.45;vertical-align:top;border-bottom:1px solid #dcebed}
@@ -495,4 +518,20 @@
   .scene[data-scene="05-plan"] .sceneSubject img{object-position:center 46%;transform:translateY(-4%)}
   .scene[data-scene="06-life"] .sceneSubject img{transform:none}
   .world{background:#f9fdfd}
+}
+
+@media(max-width:900px){
+  .journey{height:825svh}
+  .journey[data-pro=true] .stage{min-height:0}
+  .journey[data-pro=true] .story{top:76px;bottom:20px}
+  .journey[data-pro=true] .proChapter{top:0;bottom:auto;left:calc(50% - 10px);width:calc(100vw - 62px);max-width:590px;max-height:100%;overflow-y:auto;overscroll-behavior:contain;translate:-50% 0;text-align:left}
+  .proChapter h1{font-size:clamp(22px,5.5vw,28px)}
+  .proChapter p{font-size:13px;line-height:1.45;margin:12px 0 18px}
+  .proTable th,.proTable td{padding:9px 7px;font-size:11px;line-height:1.35;overflow-wrap:break-word}
+  .proTable thead th{font-size:13px}
+  .proTable strong{font-size:13px}
+  .journey[data-pro=true] .world>.worldWash{background:rgba(249,253,253,.96)}
+  .trustLinks{justify-content:center;gap:9px;margin-top:12px;font-size:11px}
+  .finalChapter h1{font-size:clamp(20px,5.6vw,28px)}
+  .markers{gap:4px}
 }
