@@ -77,6 +77,28 @@ async function main() {
     "Product subtabs must preserve the same hierarchy in dark mode.",
   );
 
+  const [journey, featureStory, journeyCss, featureCss, tableFit, sectionStatusCss] = await Promise.all([
+    readSource("app/landing-preview/landing-journey.tsx"),
+    readSource("components/feature-story.tsx"),
+    readSource("app/landing-preview/landing-preview.module.css"),
+    readSource("components/feature-story.module.css"),
+    readSource("lib/use-landing-table-fit.ts"),
+    readSource("components/landing-section-status.module.css"),
+  ]);
+  for (const source of [journey, featureStory]) {
+    assert.ok(source.includes("useLandingTableFit("), "Both public stories must fit complete mobile tables.");
+    assert.ok(source.includes("<LandingSectionStatus"), "Mobile stories must identify the current section.");
+  }
+  for (const css of [journeyCss, featureCss]) {
+    assert.match(css, /transparent 0 60%/, "Mobile image fading must begin at 60%.");
+    assert.match(css, /scale:\s*var\(--landing-table-scale,\s*1\)/);
+    assert.match(css, /max-height:\s*none;\s*overflow:\s*visible/);
+  }
+  assert.match(tableFit, /chapter\.style\.width = "";[\s\S]*if \(!chapter\.querySelector\("table"\)\) return/,
+    "Leaving a table must clear the fitted width before rendering normal copy.");
+  assert.match(sectionStatusCss, /prefers-reduced-motion/);
+  assert.match(globalStyles, /Public feature links[\s\S]*flex-direction: column;[\s\S]*white-space: normal/);
+
   console.log("UI theme and layout consistency regression passed.");
 }
 

@@ -1,4 +1,6 @@
 "use client";
+import { LandingSectionStatus } from "@/components/landing-section-status";
+import { useLandingTableFit } from "@/lib/use-landing-table-fit";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -241,6 +243,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
   const [chapter, setChapter] = useState(0);
   const [storyPosition, setStoryPosition] = useState(0);
   const [market, setMarket] = useState<LandingMarket>(initialMarket);
+  useLandingTableFit(journeyRef);
 
   useEffect(() => {
     if (countryResolved || initialMarket === "ph") return;
@@ -378,6 +381,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
       <LandingTransactionPhone market={market} screen="split" style={productMotion(4)} />
       </div>
 
+      <LandingSectionStatus index={chapter} total={chapters.length} label={["Get organized", "A simpler way", "Upload your records", "Your privacy", "Understand your money", "Your Adviser", "Shared money", "Free and Pro", "Get started"][chapter]} />
       <nav className={styles.markers} aria-label="Landing page chapters" data-progress={`${chapter + 1}/${chapters.length}`}>
         {chapters.map((_, index) => <button key={index} type="button" className={chapter === index ? styles.activeMarker : ""} onClick={() => goToChapter(index)} aria-label={`Go to chapter ${index + 1}`} aria-current={chapter === index ? "step" : undefined}><span /></button>)}
         <b>{chapter + 1} / {chapters.length}</b>

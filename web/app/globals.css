@@ -64433,3 +64433,21 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
   .portfolio-filter-menu__label { display: block; font-size: 12px; color: var(--muted); }
   .portfolio-filter-menu__options .investments-portfolio-view-toggle { display: flex; flex-wrap: wrap; }
 }
+
+/* Public feature links are one column: task first, products beneath it. */
+.landing-nav__submenu { width: min(310px, calc(100vw - 32px)); }
+.landing-nav__submenu a,
+.landing-nav__mobile-menu .landing-nav__mobile-menu-link {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 11px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.landing-nav__submenu a strong,
+.landing-nav__mobile-menu-link strong { font-weight: 600; line-height: 1.35; }
+.landing-nav__submenu a small,
+.landing-nav__mobile-menu-link small { width: 100%; font-weight: 400; line-height: 1.5; }

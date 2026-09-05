@@ -594,3 +594,23 @@
   .journey[data-chapter] .world>.worldWash{background:linear-gradient(180deg,transparent 0 75%,rgba(249,253,253,.92) 82%,#f9fdfd 88%)}
   .journey[data-comparison=true] .comparisonChapter,.journey[data-pro=true] .proChapter{padding:16px!important;background:rgba(249,253,253,.97)!important;border-radius:16px!important}
 }
+
+.featuresDropdown{width:min(310px,calc(100vw - 32px));min-width:0}
+.featuresDropdown a,.mobileDrawerLinks a{white-space:normal;overflow-wrap:anywhere;padding-block:9px}
+.featuresDropdown a strong,.mobileDrawerLinks a strong{font-weight:600;line-height:1.35}
+@media(max-width:900px){
+ .journey[data-chapter] .world>.worldWash{background:linear-gradient(180deg,transparent 0 60%,rgba(249,253,253,.72) 68%,rgba(249,253,253,.97) 76%,#f9fdfd 84%)}
+ .journey[data-comparison=true] .story,.journey[data-pro=true] .story{top:0;bottom:0}
+ .journey[data-comparison=true] .comparisonChapter,.journey[data-pro=true] .proChapter{
+   top:118px;bottom:auto;max-height:none;overflow:visible;overscroll-behavior:auto;
+   translate:-50% 0;scale:var(--landing-table-scale,1);transform-origin:top center;
+   width:calc(100vw - 46px);left:calc(50% - 6px);
+ }
+ .journey[data-comparison=true] .comparisonChapter table,
+ .journey[data-pro=true] .proChapter table{overflow:clip;overflow-wrap:anywhere}
+ .journey[data-comparison=true] .world>.worldWash,.journey[data-pro=true] .world>.worldWash{background:rgba(249,253,253,.96)}
+ .comparisonTable th,.comparisonTable td,.proTable th,.proTable td{padding:7px 6px}
+ .comparisonChapter p,.proChapter p{margin:10px 0}
+ .proActions{margin-top:12px;gap:6px}
+ .markers .activeMarker span{height:13px;border-radius:8px}
+}

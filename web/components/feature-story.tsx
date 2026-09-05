@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { PublicFooter } from "@/components/public-footer";
+import { LandingSectionStatus } from "@/components/landing-section-status";
+import { useLandingTableFit } from "@/lib/use-landing-table-fit";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { JourneyActions, JourneyHeader, ProActions, ProComparison } from "@/app/landing-preview/landing-journey";
 import type { FeatureStory as Story } from "@/lib/feature-stories";
@@ -13,6 +15,7 @@ import { featurePhotoPosition, featureChapterPosition, featureChapterProgress } 
 
 export function FeatureStory({ story, authEnabled, initialMarket, countryResolved }: { story: Story; authEnabled: boolean; initialMarket: "ph" | "global"; countryResolved: boolean }) {
   const root = useRef<HTMLDivElement>(null);
+  useLandingTableFit(root);
   const frame = useRef<number | null>(null);
   const [position, setPosition] = useState(0);
   const [market, setMarket] = useState(initialMarket);
@@ -82,6 +85,7 @@ export function FeatureStory({ story, authEnabled, initialMarket, countryResolve
       {current.visual && FEATURE_CAPTURE_VISUALS.includes(current.visual) && <div key={current.visual} className={styles.support} data-visual={current.visual} aria-hidden="true" inert>
         <FeatureStoryDemo visual={current.visual} market={market} />
       </div>}
+      <LandingSectionStatus index={active} total={story.chapters.length} label={current.id.replaceAll("-", " ")} />
       <nav className={styles.markers} aria-label="Feature story chapters">
         {story.chapters.map((chapter,index)=><button type="button" key={chapter.id} onClick={()=>goTo(index)} aria-label={`Go to ${chapter.id.replaceAll("-"," ")}`} aria-current={index===active?"step":undefined}><span /></button>)}
         <small>{active+1}/{story.chapters.length}</small>
