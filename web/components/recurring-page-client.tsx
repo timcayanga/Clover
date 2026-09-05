@@ -37,7 +37,7 @@ function RecurringTabIcon({ tab }: { tab: RecurringTab }) {
   if (tab === "debt") return <svg viewBox="0 0 24 24" fill="none"><path d="M4 8h16v11H4zM7 8V5h10v3m-9 5h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>;
   if (tab === "owed") return <svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16m-4-4 4 4-4 4M8 8l-4 4 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>;
   if (tab === "installments") return <svg viewBox="0 0 24 24" fill="none"><path d="M6 6h12M6 12h12M6 18h12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><circle cx="4" cy="6" r="1" fill="currentColor" /><circle cx="4" cy="12" r="1" fill="currentColor" /><circle cx="4" cy="18" r="1" fill="currentColor" /></svg>;
-  return <svg viewBox="0 0 24 24" fill="none"><path d="M4 5h7v6H4zm9 0h7v6h-7zM4 13h7v6H4zm9 0h7v6h-7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>;
+  return <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.8" /><rect x="14" y="4" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.8" /><rect x="4" y="14" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.8" /><rect x="14" y="14" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.8" /></svg>;
 }
 
 const addKindForTab = (tab: RecurringTab): RecurringAddKind => {

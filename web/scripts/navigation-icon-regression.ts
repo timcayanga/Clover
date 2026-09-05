@@ -13,6 +13,20 @@ const sourceRoot = path.resolve(root, "../assets/3d icons");
 const publicRoot = path.resolve(root, "public");
 
 async function main() {
+  const overviewIcons = await Promise.all([
+    ["components/recurring-page-client.tsx", "RecurringTabIcon"],
+    ["components/reports-tabs.tsx", "ReportsTabIcon"],
+    ["app/investments/page.tsx", "InvestmentTabIcon"],
+  ].map(async ([file, component]) => {
+    const source = await readFile(path.join(root, file), "utf8");
+    const body = source.split(`function ${component}(`)[1]?.split("\n}")[0];
+    const icons = body?.match(/return <svg[^\n]+<\/svg>;/g);
+    assert.ok(icons?.length, `${component} must render its tab icons.`);
+    return icons.at(-1);
+  }));
+  assert.equal(overviewIcons[0], overviewIcons[1], "Recurring and Reports must use the same Overview icon.");
+  assert.equal(overviewIcons[0], overviewIcons[2], "Recurring and Investments must use the same Overview icon.");
+
   for (const [name, sourceFile] of Object.entries(NAVIGATION_ICON_SOURCE_FILES)) {
     const iconName = name as NavigationIconName;
     const sourcePath = path.join(sourceRoot, sourceFile);
