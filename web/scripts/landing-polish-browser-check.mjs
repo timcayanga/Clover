@@ -6,6 +6,14 @@ const read=js=>JSON.parse(JSON.parse(run("eval",js)));
 for(const [w,h] of [[1440,900],[1024,768],[1440,600],[390,844],[320,568]]){
  run("set","viewport",String(w),String(h));run("open",process.env.LANDING_TEST_URL||"http://localhost:3012/");
  run("wait","[data-chapter]");
+ if(w>900){
+  for(const outside of ['header a[aria-label="Clover home"]','h1']){
+   run("find","role","button","click","--name","Features");
+   run("wait","#preview-features-menu");
+   run("eval",`document.querySelector(${JSON.stringify(outside)}).dispatchEvent(new PointerEvent("pointerdown",{bubbles:true}))`);
+   run("wait","--fn",'!document.querySelector("#preview-features-menu")');
+  }
+ }
  const styles=[];
  for(let i=0;i<9;i++){
   run("eval",'window.scrollTo({top:(document.querySelector("[data-chapter]").offsetHeight-innerHeight)*'+i+'/8,behavior:"instant"})');

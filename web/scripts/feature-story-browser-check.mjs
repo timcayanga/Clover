@@ -22,6 +22,17 @@ for(const [width,height] of [[1440,900],[390,844],[320,568],[1024,768],[1440,600
    assert.ok(result.text.top>=64,slug+" "+width+" chapter "+i+": title behind header");
    assert.ok(result.text.bottom<=height,slug+" "+width+" chapter "+i+": title outside viewport");
    if(width<=900&&result.support)assert.equal(result.support,"none");
+   const overlay=evaluate('JSON.stringify((()=>{const e=document.querySelector("[data-visual]");return {labels:!!document.querySelector("[data-eyebrow],[data-products]"),kind:e?.dataset.visual,box:e?.getBoundingClientRect().toJSON(),capture:e?.querySelector("img")?.getAttribute("src")}})())');
+   assert.equal(overlay.labels,false,"Redundant feature labels remain");
+   if(overlay.kind){
+    assert.equal(overlay.kind,"transactions","Unverified marketing screen");
+    assert.match(overlay.capture,/landing-screens\/transactions-(ph|global)\.webp/);
+    if(width>900){
+     assert.ok(overlay.box.left>=width*.8,"Phone leaves the clear right-hand area");
+     assert.ok(overlay.box.right<=width*.96,"Phone collides with page edge");
+     assert.ok(overlay.box.top>=80,"Phone reaches header");
+    }
+   }
    if((width===1440||width===390)&&(i===0||i===4||slug==="pro"&&i===3||slug==="understand-your-money"&&i===2))run("screenshot","/tmp/feature-"+slug+"-"+width+"-"+i+".png");
   }
   console.log("PASS "+slug+" "+width+"x"+height+": all five chapters");

@@ -78,7 +78,7 @@ export function FeatureStory({ story, authEnabled, initialMarket, countryResolve
         </div>
         {pricing && <div className={styles.pricing}><ProComparison market={market} style={{opacity:1}} showActions={false} /></div>}
       </section>
-      {current.visual && !pricing && <div key={current.visual} className={styles.support} data-visual={current.visual} aria-hidden="true" inert>
+      {current.visual === "transactions" && <div key={current.visual} className={styles.support} data-visual={current.visual} aria-hidden="true" inert>
         <FeatureStoryDemo visual={current.visual} market={market} />
       </div>}
       <nav className={styles.markers} aria-label="Feature story chapters">

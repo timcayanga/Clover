@@ -20,7 +20,7 @@
 .next{position:absolute;bottom:24px;left:6vw;z-index:16;border:0;padding:8px 0;background:transparent;color:#4c6976;font-size:10px;font-weight:600;letter-spacing:.12em;cursor:pointer}
 .next span{display:inline-block;margin-left:16px;animation:scroll-nudge 2s ease-in-out infinite}
 .support{position:absolute;z-index:10;right:4.5vw;bottom:3svh;width:min(350px,27vw);pointer-events:none;user-select:none;animation:object-arrive .4s cubic-bezier(.2,.7,.2,1) both}
-.support[data-visual=transactions]{width:min(230px,17vw,27svh)}
+.support[data-visual=transactions]{width:min(190px,13vw,20svh)}
 .demoCard{padding:16px;border:1px solid #dce9ed;border-radius:20px;background:#fff;box-shadow:0 20px 45px rgba(20,52,62,.19);color:#263b46}
 .demoHeader{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:12px}
 .demoHeader small{margin-left:auto;color:#7d929b;font-size:9px;font-weight:400}
@@ -39,6 +39,7 @@
 .controlSample{display:grid;gap:12px}.controlSample>div{display:flex;align-items:center;gap:12px;font-size:12px}.controlSample span{color:#03a8c0;font-size:10px;font-weight:700}
 .pricingContent{width:85vw;max-width:none;display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:5vw;align-items:center}
 .journey[data-pricing=true] .wash{background:rgba(249,253,253,.88)}
+.journey[data-pricing=true] .background{filter:blur(5px)}
 .pricing{animation:object-arrive .45s ease-out both}.pricing tbody tr{animation:object-arrive .4s ease-out both}.pricing tbody tr:nth-child(2){animation-delay:35ms}.pricing tbody tr:nth-child(3){animation-delay:70ms}.pricing tbody tr:nth-child(4){animation-delay:105ms}.pricing tbody tr:nth-child(5){animation-delay:140ms}.pricing tbody tr:nth-child(6){animation-delay:175ms}
 .proCta{display:grid;justify-items:start;gap:10px;margin-top:24px}.proCta small{font-size:11px;color:#4c6976}
 @keyframes object-arrive{from{opacity:0;transform:translate3d(0,12px,0) scale(.98)}to{opacity:1;transform:translate3d(0,0,0) scale(1)}}

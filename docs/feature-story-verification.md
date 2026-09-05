@@ -15,7 +15,9 @@ Each story has five chapters, scroll-linked background motion, a closing outcome
 
 The old /features hub redirects home. gain-insights, grow-together, and older feature aliases resolve to the renamed pages. Product names beneath dropdown tasks use regular weight.
 
-Supporting visuals use the existing fictional Transactions capture, FinancialAccountCard, ReportsMoneyOverTimeChart, GoalIllustration, and SplitBillEntityAvatar. Other read-only cards illustrate sample Adviser, budget, recurring, and source-record states. No user records, account storage, or workspace requests are used. PHP and USD demonstrations follow the landing page's country selection.
+Supporting visuals now use only the existing real Transactions-page capture with fictional records, in the same shared phone component as the main landing page. The hand-built Accounts, Reports, Adviser, Budgeting, Goals, Recurring, Circles, and Split Bills marketing cards have been removed, not relabelled as screenshots. Those chapters currently keep their photography and copy without supplementary screens. No user records, account storage, or workspace requests are used. PHP and USD captures follow the landing page's country selection.
+
+The phone is limited to the clear far-right strip on desktop and hidden on mobile. Pro comparison uses a translucent wash and blurred background. Extra chapter eyebrows and product subtitles are removed from the story copy; product subtitles remain in the Features dropdown. Outside pointer presses dismiss the dropdown independently of the rest of the header.
 
 ## Verification
 
