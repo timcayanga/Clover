@@ -1009,16 +1009,6 @@ async function DashboardStream({
           tone: daysSinceLastImport === null ? "neutral" : "warning",
         }
       : null,
-    !balanceEstimateUnavailable && savingsTotal > 0
-      ? {
-          emoji: "💚",
-          label: "Balance in view",
-          copy: <><HomeSensitiveAmount value={formatCurrency(savingsTotal, balanceCurrency)} currency={balanceCurrency} /> is currently tracked across your spendable accounts.</>,
-          href: "/accounts",
-          actionLabel: "View accounts",
-          tone: "positive",
-        }
-      : null,
     categorySpike
       ? {
           emoji: "📈",
@@ -1033,9 +1023,7 @@ async function DashboardStream({
       ? {
           emoji: "🗓️",
           label: "Upcoming payment",
-          copy: `${plannedPaymentsDueSoon.length} planned ${
-            plannedPaymentsDueSoon.length === 1 ? "payment is" : "payments are"
-          } due in the next 7 days.`,
+          copy: `${plannedPaymentsDueSoon.map((payment) => payment.title).join(", ")} ${plannedPaymentsDueSoon.length === 1 ? "is" : "are"} due in the next 7 days.`,
           href: "/recurring",
           actionLabel: "Review payments",
           tone: "warning",
@@ -1235,7 +1223,7 @@ async function DashboardStream({
         <article className="dashboard-home__insight-strip glass" aria-label="Home Adviser">
           <p className="eyebrow">Adviser</p>
           {insightItems.length > 0 ? (
-            <div className="dashboard-home__insight-strip-list">
+            <div className="dashboard-home__insight-strip-list" role="region" aria-label="Adviser suggestions" tabIndex={0}>
               {insightItems.map((item) => (
                 <div key={item.label} className={`dashboard-home__insight-strip-item${item.tone ? ` dashboard-home__insight-strip-item--${item.tone}` : ""}`}>
                   <div className="dashboard-home__insight-strip-label">
@@ -1257,6 +1245,7 @@ async function DashboardStream({
               <span>No new suggestions right now. Clover will surface helpful next steps here.</span>
             </div>
           )}
+          {insightItems.length > 1 ? <small className="dashboard-home__insight-swipe-hint">Swipe left or right for more advice</small> : null}
         </article>
 
         <div className="dashboard-home__snapshot-grid" aria-label="Week and month snapshot">

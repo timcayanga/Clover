@@ -175,7 +175,7 @@ assert.match(
   /Monthly Report[\s\S]{0,350}formatCurrency\(rollingThirtyDaySummary\.expense/,
   "The Monthly Report total must use the rolling 30-day summary.",
 );
-assert.match(dashboardSource, /plannedPaymentsDueSoon\.length === 1 \? "payment is" : "payments are"/);
+assert.match(dashboardSource, /plannedPaymentsDueSoon\.length === 1 \? "is" : "are"/);
 assert.ok(
   dashboardSource.indexOf('aria-label="Week and month snapshot"') < dashboardSource.indexOf('<OnboardingMissions surface="home" />'),
   "Next Steps should appear below the weekly and monthly reports.",
@@ -195,9 +195,16 @@ assert.match(dashboardSource, /function HomeSensitiveAmount/);
 assert.match(dashboardSource, /home-sensitive-amount__mask/);
 assert.match(
   dashboardSource,
-  /label: "Balance in view"[\s\S]{0,220}<HomeSensitiveAmount/,
+  /label: "Spending spike"[\s\S]{0,220}<HomeSensitiveAmount/,
   "The Home Adviser must respect amount privacy for monetary insights.",
 );
+assert.doesNotMatch(dashboardSource, /label: "Balance in view"/i, "Home Adviser must not show the balance-in-view card.");
+assert.match(dashboardSource, /plannedPaymentsDueSoon\.map\(\(payment\) => payment\.title\)/, "Upcoming payment advice must name the payments.");
+assert.match(dashboardSource, /aria-label="Adviser suggestions" tabIndex=\{0\}/, "The advice scroller must be keyboard accessible.");
+assert.match(globalStylesSource, /grid-auto-columns: 100%;[\s\S]{0,200}scroll-snap-type: x mandatory;/, "Mobile advice must snap one full-width card at a time.");
+assert.match(globalStylesSource, /\.content--transactions \.transactions-mobile-simple-row \{\s*min-height: 56px;\s*padding: 14px/, "Mobile transaction rows must retain their more breathable padding.");
+assert.match(globalStylesSource, /\.content--transactions \.transactions-mobile-simple-row__amount \{\s*font-size: 0\.92rem;/, "Mobile transaction names and amounts must retain the larger text size.");
+assert.match(globalStylesSource, /\.content--transactions \.transactions-mobile-date-divider \{\s*font-size: 0\.76rem;/, "Mobile transaction dates must retain the larger text size.");
 assert.match(
   dashboardSource,
   /Weekly Report[\s\S]{0,240}<h4><HomeSensitiveAmount/,
