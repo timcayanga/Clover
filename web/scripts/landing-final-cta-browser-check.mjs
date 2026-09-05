@@ -21,6 +21,11 @@ try {
         assert.equal(hint, !final, `${route} ${width}: incorrect final CTA scroll hint`);
       }
       assert.equal(read('JSON.stringify(!!document.querySelector("[data-nextjs-dialog]"))'), false);
+      const footer=read('JSON.stringify((()=>{const f=document.querySelector("footer[aria-label=\\"Clover site footer\\"]");return {count:document.querySelectorAll("footer").length,links:[...f.querySelectorAll("a")].map(a=>a.getAttribute("href")),bottom:f.getBoundingClientRect().bottom,overflow:document.documentElement.scrollWidth>innerWidth}})())');
+      assert.equal(footer.count,1);
+      assert.equal(footer.overflow,false);
+      assert.ok(footer.bottom<=height+2,"Footer must be reachable after the final CTA");
+      for(const target of ["/","/features/manage-money","/features/understand-your-money","/features/plan-ahead","/features/manage-money-together","/features/security","/features/pro","/help","/contact","/privacy-policy","/terms-of-service"]) assert.ok(footer.links.includes(target),"Missing footer link: "+target);
       if (route === "/") run("screenshot", `/tmp/clover-final-cta-${width}.png`);
       console.log(`PASS ${route} ${width}×${height}: hint hides at final CTA and returns earlier`);
     }

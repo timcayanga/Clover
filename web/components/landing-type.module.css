@@ -3,7 +3,7 @@
   --landing-body: 16px;
   --landing-action: 13px;
   --landing-table: 14px;
-  --landing-phone-width: min(280px, 21vw, 34.5svh);
+  --landing-phone-width: calc((100svh - 108px) * .4793333333);
 }
 /* One typography contract overrides the older scene-specific marketing rules. */
 .standard [data-landing-copy] h1 {

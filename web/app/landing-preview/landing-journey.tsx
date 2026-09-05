@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { PublicFooter } from "@/components/public-footer";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { LandingSignupModal } from "@/components/landing-signup-modal";
 import { FEATURE_LINKS } from "@/lib/public-site";
@@ -136,7 +137,7 @@ export function LandingTransactionPhone({ market, style, screen = "transactions"
         <span className={styles.iphoneSideButtons} />
         <div className={styles.iphoneDisplay}>
           <div className={styles.iphoneStatusBar}><b>9:41</b><span className={styles.iphoneIsland} /><span className={styles.iphoneIndicators}><svg viewBox="0 0 18 12"><path d="M1 11V8h2v3M5 11V6h2v5M9 11V3h2v8M13 11V1h2v10" stroke="currentColor" strokeWidth="1.5" /></svg><svg viewBox="0 0 16 12"><path d="M1 3q7-5 14 0M4 6q4-3 8 0M7 9q1-1 2 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg><i /></span></div>
-          <Image className={styles.iphoneAppScreen} src={`/assets/landing-screens/${screen}-${market}.webp`} alt={`Clover mobile ${screen} screen with fictional sample data`} width={1206} height={2334} sizes="250px" draggable={false} unoptimized />
+          <Image className={styles.iphoneAppScreen} src={`/assets/landing-screens/${screen}-${market}.webp`} alt={`Clover mobile ${screen} screen with fictional sample data`} width={1206} height={2334} sizes="(max-width: 900px) 1px, 40vw" draggable={false} unoptimized />
           <span className={styles.iphoneHomeIndicator} />
         </div>
         <span className={styles.iphoneGlass} />
@@ -322,7 +323,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
     };
   };
 
-  return <div ref={journeyRef} className={`${styles.journey} ${typography.standard}`} data-chapter={chapterLayouts[chapter]} data-comparison={chapter === 1} data-pro={chapter === 7} data-has-cta={chapter === 0 || chapter === 7 || chapter === chapters.length - 1} data-market={market} style={{ "--journey-progress": 0 } as CSSProperties}>
+  return <><div ref={journeyRef} className={`${styles.journey} ${typography.standard}`} data-chapter={chapterLayouts[chapter]} data-comparison={chapter === 1} data-pro={chapter === 7} data-has-cta={chapter === 0 || chapter === 7 || chapter === chapters.length - 1} data-market={market} style={{ "--journey-progress": 0 } as CSSProperties}>
     <div className={styles.stage}>
       <JourneyHeader />
 
@@ -372,22 +373,9 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
 
       <LandingTransactionPhone market={market} style={productMotion(1, -1)} />
 
-      <div className={styles.laptop} data-story-visual="laptop" style={productMotion(2)}><div className={styles.laptopScreen}>
-        <div className={styles.appBar}><Image src="/clover-mark.svg" alt="" width={26} height={26} /><span>Accounts</span><i /><i /></div>
-        <div className={styles.accountsHeading}><span><small>Estimated total</small><strong>{local.balance}</strong></span><button type="button">+ Add account</button></div>
-        <div className={styles.accountGrid}>{local.accountCards.map(([label, amount, logo]) => <div key={label}><Image src={logo} alt="" width={34} height={34} /><span><small>{label}</small><strong>{amount}</strong></span><b>›</b></div>)}</div>
-      </div><span className={styles.laptopBase} /></div>
-
-      <div className={styles.adviser} data-story-visual="adviser" style={productMotion(3, -1)}><div><Image src="/clover-mark.svg" alt="" width={34} height={34} /><span><small>Ask Clover</small><b>Your financial picture</b></span></div><div className={styles.userPrompt}>Could I comfortably plan a Japan trip next year?</div><p>{local.insight}</p><div className={styles.suggestion}><span>✈</span><b>Japan in spring</b><strong>{local.planAmount} monthly</strong></div><button type="button">Create this plan →</button></div>
-
-      <div className={styles.planCard} data-story-visual="plan" style={productMotion(4)}>
-        <div className={styles.planHeader}><Image src="/clover-mark.svg" alt="" width={30} height={30} /><span><small>Split Bills</small><b>Airport lunch</b></span></div>
-        <div className={styles.sharedExpense}><small>Shared equally · 4 people</small><strong>{market === "ph" ? "₱2,400" : "$120"}</strong><span>Paid by Maya</span></div>
-        <div className={styles.sharedPeople}>
-          {["Maya", "Alex", "Sam", "Leo"].map((name, index) => <div key={name}><b>{name}</b><span>{market === "ph" ? "₱600" : "$30"}</span><small>{index === 0 ? "Paid" : index === 1 ? "Settled" : "Owes"}</small></div>)}
-        </div>
-        <p className={styles.sharedPrivacy}>Only the shared expense is visible. Personal accounts stay private.</p>
-      </div>
+      <LandingTransactionPhone market={market} screen="accounts" style={productMotion(2)} />
+      <LandingTransactionPhone market={market} screen="adviser" style={productMotion(3, -1)} />
+      <LandingTransactionPhone market={market} screen="split" style={productMotion(4)} />
       </div>
 
       <nav className={styles.markers} aria-label="Landing page chapters" data-progress={`${chapter + 1}/${chapters.length}`}>
@@ -397,5 +385,5 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
       {chapter < chapters.length - 1 && <div className={styles.scrollHint} aria-hidden="true"><span>Keep scrolling</span><i /></div>}
       <div className={styles.grain} aria-hidden="true" />
     </div>
-  </div>;
+  </div><PublicFooter /></>;
 }

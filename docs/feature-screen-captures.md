@@ -14,7 +14,7 @@ Captured September 5, 2026, using fictional local fixtures and the actual Clover
 | circles | `CirclesPageClient`, circle directory |
 | split | `SplitBillWorkspace`, bill directory; settlement computed by `buildSplitBillSettlement` |
 
-All files are saved under `assets/landing-screens/`. Existing Transactions captures remain unchanged. New captures are 402×778, matching the content-area ratio of the shared phone. The phone retains the main landing page's silver frame, status bar, Dynamic Island, glass and home indicator.
+All files are saved under `assets/landing-screens/`. All ten screen types, including Transactions, were refreshed after the mobile navigation update. Captures are 1206×2334 pixels (402×778 CSS pixels at 3× device scale), matching the content-area ratio of the shared phone. The phone retains the main landing page's silver frame, status bar, Dynamic Island, glass and home indicator.
 
 ## Reproduction and isolation
 
@@ -38,6 +38,14 @@ Initial composition prompt: “Use case: identity-preserve. Recompose this Clove
 
 Final refinement prompt: “Keep the foreground man EXACTLY this large natural scale and position, same face/outfit/phone/receipt and same kitchen. Change ONLY the three friends behind him: position them a little farther back in the kitchen, with their heads higher in the frame. All three background friends' complete faces and hair must lie between y14% and y25% of the entire image height, with their chins no lower than y25%. Their bodies can continue downward naturally. They should be comfortably spaced across the upper right, around x68%,79%,90%, with natural perspective and anatomy, not squeezed. Their slightly smaller scale must read as depth in the room. This ensures an opaque phone overlay beginning at y28% on the far right will not hide ANY face. Preserve the foreground man's scale, full-bleed background, warm light, empty left wall and all four identities. No added text or screens.”
 
-All main/feature phones now use `--landing-phone-width: min(280px, 21vw, 34.5svh)`. On wide, short desktops the kitchen photograph retains its intrinsic aspect ratio at full height, with the quiet wall continuing under the left copy wash. Mobile retains its dedicated image and hides supplementary phones.
+All main/feature phones now use `--landing-phone-width: calc((100svh - 108px) * .4793333333)`, filling the available height with header and bottom clearance. Mobile retains its dedicated image and hides supplementary phones.
 
 The image-generation skill influenced composition only; all financial UI was captured deterministically from Clover code.
+
+## Full-height phone refresh (September 5)
+
+Main-page Accounts, Adviser and Split Bills illustrations were replaced with the same real captured UI used on feature pages. Reports includes the actual Reports tabs, range menu, currency selector, Adviser link and chart. Capture route contexts now map Budgeting, Goals and Split Bills to their canonical routes, preserving the real header order. All capture-only authentication substitutions were restored before build.
+
+New desktop background: `assets/feature-stories/together-hero-tall-phone.webp`, produced with the built-in image tool (not CLI). Dedicated mobile backgrounds remain unchanged. Final prompt: “Use case: identity-preserve. Recompose this photograph for a full-bleed 16:9 desktop website with large app phone overlaid in the rightmost 30% and copy in the leftmost 40%. Retain the same four people, faces, hairstyles, clothes, natural body proportions, warm kitchen, grocery receipt and phone narrative. All four people must fit in the middle band, using natural depth, not squeezing bodies. Main curly-haired man in olive overshirt in foreground holding receipt and phone; three friends chatting behind him. Heads comfortably below the header. Quiet beige wall on the left and quiet kitchen cabinets and countertop on the right. Wide camera, natural perspective and photorealistic daylight. All faces visible. No text, graphic panels, generated app screen or gradients.”
+
+PublicFooter sits after, not inside, each sticky journey so it never alters chapter duration. It reuses FEATURE_LINKS and includes Home, Help, Contact and legal pages. Browser regressions cover all six features at six viewport sizes and footer/final-CTA behavior on all eight public story routes.

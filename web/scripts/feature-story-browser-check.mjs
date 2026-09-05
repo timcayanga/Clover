@@ -30,11 +30,12 @@ for(const [width,height] of [[1440,900],[390,844],[320,568],[1024,768],[1440,600
     assert.ok(["transactions","accounts","recurring","reports","adviser","investments","budget","goal","circles","split"].includes(overlay.kind),"Unverified marketing screen");
     assert.match(overlay.capture,new RegExp("landing-screens/"+overlay.kind+"-(ph|global)\\.webp"));
     if(width>900){
-     assert.ok(overlay.box.left>=width*.74,"Phone leaves the clear right-hand area");
-     const expectedWidth=Math.min(280,width*.21,height*.345);
+     assert.ok(overlay.box.left>=width*.6,"Phone leaves the clear right-hand area");
+     const expectedWidth=(height-108)*.4793333333;
      assert.ok(Math.abs(overlay.box.width-expectedWidth)<2,"Feature phone must use the shared landing phone size");
      assert.ok(overlay.box.right<=width*.97,"Phone collides with page edge");
      assert.ok(overlay.box.top>=80,"Phone reaches header");
+     assert.ok(overlay.box.top<120,"Phone should fill the area below the header");
     }
    }
    if((width===1440||width===390)&&(i===0||i===4||slug==="pro"&&i===3||slug==="understand-your-money"&&i===2))run("screenshot","/tmp/feature-"+slug+"-"+width+"-"+i+".png");

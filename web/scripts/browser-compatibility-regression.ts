@@ -55,8 +55,8 @@ async function main() {
   for (const page of ["accounts", "recurring", "reports", "adviser", "investments", "budget", "goal", "circles", "split"]) {
     for (const market of ["ph", "global"]) {
       const capture = await sharp(path.join(root, `../assets/landing-screens/${page}-${market}.webp`)).metadata();
-      assert.equal(capture.width, 402);
-      assert.equal(capture.height, 778, "Feature captures must match the real mobile viewport without stretching.");
+      assert.equal(capture.width, 1206, "Real mobile screens must retain sharp 3x resolution.");
+      assert.equal(capture.height, 2334, "Feature captures must match the real mobile viewport without stretching.");
     }
   }
   for (const market of ["ph", "global"]) {
@@ -64,9 +64,9 @@ async function main() {
     assert.equal(screen.width, 1206, "Screenshots must retain 3x mobile resolution.");
     assert.equal(screen.height, 2334, "The app viewport must fit between the iPhone safe areas without cropping.");
   }
-  assert.match(landingJourneySource, /Accounts[\s\S]*?Estimated total[\s\S]*?local\.accountCards/, "The laptop surface must demonstrate a sample Accounts view without exposing user data.");
-  assert.match(landingJourneySource, /Could I comfortably plan a Japan trip next year\?[\s\S]*?Create this plan/, "The Adviser surface must show a grounded planning conversation.");
-  assert.match(landingJourneySource, /Split Bills[\s\S]*?Shared equally[\s\S]*?Personal accounts stay private/, "The shared-money surface must explain the expense split and personal-account privacy.");
+  assert.match(landingJourneySource, /LandingTransactionPhone market=\{market\} screen="accounts"/, "Accounts must use a real localized Clover capture.");
+  assert.match(landingJourneySource, /LandingTransactionPhone market=\{market\} screen="adviser"/, "Adviser must use a real localized Clover capture.");
+  assert.match(landingJourneySource, /LandingTransactionPhone market=\{market\} screen="split"/, "Shared money must use a real localized Split Bills capture.");
   assert.match(landingJourneySource, /const displayedChapter = chapterPhase < 0\.5/, "Landing copy must switch quickly without disappearing between chapters.");
   assert.match(landingJourneySource, /const productMotion = \(index: number, direction = 1\)/, "Product evidence must move with the scroll while remaining fully opaque.");
   assert.match(landingJourneySource, /bpi\.png[\s\S]*grabpay\.png[\s\S]*gcash\.png[\s\S]*chase bank\.png[\s\S]*paypal\.png[\s\S]*wise\.png/, "Upload examples must use real bank and wallet marks in both supported markets.");

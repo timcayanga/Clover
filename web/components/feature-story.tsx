@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PublicFooter } from "@/components/public-footer";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { JourneyActions, JourneyHeader, ProActions, ProComparison } from "@/app/landing-preview/landing-journey";
 import type { FeatureStory as Story } from "@/lib/feature-stories";
@@ -58,13 +59,13 @@ export function FeatureStory({ story, authEnabled, initialMarket, countryResolve
   const endReveal = Math.max(0,Math.min(1,(position-3.5)*2));
   const photographMotion = reducedMotion ? undefined : `scale(${1+photoPosition*.008}) translate3d(${-photoPosition*.3}%,0,0)`;
 
-  return <div ref={root} className={`${landing.journey} ${styles.journey} ${typography.standard}`} data-feature-story={story.slug} data-market={market} data-pricing={pricing} style={{height:`${100+story.chapters.length*42}svh`} as CSSProperties}>
-    <div className={styles.stage}>
+  return <><div ref={root} className={`${landing.journey} ${styles.journey} ${typography.standard}`} data-feature-story={story.slug} data-market={market} data-pricing={pricing} style={{height:`${100+story.chapters.length*42}svh`} as CSSProperties}>
+    <div className={styles.stage} style={{"--story-backdrop":`url("/assets/feature-stories/${story.asset}-${final?"end":story.asset==="together"?"hero-tall-phone":"hero"}.webp")`} as CSSProperties}>
       <JourneyHeader />
       <div className={styles.background} aria-hidden="true" style={{transform:photographMotion}}>
         {["hero","end"].map((scene,index)=><picture key={scene} className={styles.photograph} style={{opacity:index===0?1:endReveal}}>
           <source media="(max-width: 900px)" srcSet={`/assets/feature-stories/${story.asset}-${scene}-mobile.webp`} />
-          <img src={`/assets/feature-stories/${story.asset}-${scene}${story.asset==="together" && scene==="hero"?"-screens":""}.webp`} alt="" draggable={false} fetchPriority={index===0?"high":"low"} decoding={index===0?"sync":"async"} />
+          <img src={`/assets/feature-stories/${story.asset}-${scene}${story.asset==="together" && scene==="hero"?"-tall-phone":""}.webp`} alt="" draggable={false} fetchPriority={index===0?"high":"low"} decoding={index===0?"sync":"async"} />
         </picture>)}
       </div>
       <div className={styles.wash} aria-hidden="true" />
@@ -87,5 +88,5 @@ export function FeatureStory({ story, authEnabled, initialMarket, countryResolve
       </nav>
       {!final && <button className={styles.next} type="button" onClick={()=>goTo(active+1)}>Keep scrolling <span aria-hidden="true">↓</span></button>}
     </div>
-  </div>;
+  </div><PublicFooter /></>;
 }

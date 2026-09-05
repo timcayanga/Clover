@@ -45,6 +45,11 @@
 @keyframes copy-settle{from{transform:translateY(3px)}to{transform:translateY(0)}}
 @keyframes scroll-nudge{50%{transform:translateY(4px)}}
 @media(min-width:901px){
+ .stage{background-image:var(--story-backdrop);background-size:cover;background-position:right top}
+ .background{right:calc(var(--landing-phone-width) * .48);mask-image:linear-gradient(90deg,#000 0 90%,transparent)}
+ .journey[data-feature-story=manage-money-together] .background{right:calc(var(--landing-phone-width) * .5)}
+ .journey[data-feature-story=manage-money-together] .photograph img{object-fit:contain;object-position:right center}
+ .journey[data-feature-story=manage-money-together] .photograph{mask-image:linear-gradient(180deg,transparent,#000 24% 75%,transparent)}
  .journey[data-feature-story=manage-money-together] .content{width:32vw}
  .journey[data-feature-story=manage-money-together] .wash{background:linear-gradient(90deg,#f9fdfd 0%,rgba(249,253,253,.97) 25%,rgba(249,253,253,.85) 32%,rgba(249,253,253,.08) 42%,transparent 48%)}
 }
