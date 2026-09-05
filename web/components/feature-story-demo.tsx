@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { memo } from "react";
+import { LandingTransactionPhone } from "@/app/landing-preview/landing-journey";
 import { FinancialAccountCard } from "@/components/financial-account-card";
 import { ReportsMoneyOverTimeChart } from "@/components/reports-money-over-time-chart";
 import { GoalIllustration } from "@/components/goals-visuals";
@@ -18,10 +19,7 @@ export const FeatureStoryDemo = memo(function FeatureStoryDemo({ visual, market 
   const bank = ph ? "BPI" : "Chase";
   const logo = ph ? "/assets/banks/philippines/bpi.png" : "/assets/banks/uk/chase bank.png";
   const brand: AccountBrand = { label:bank,logoSrc:logo,logoSrcs:[logo],fallbackIconSrc:"/clover-mark.svg",accent:"#03a8c0",background:"linear-gradient(120deg,#e7faf8,#fff)",foreground:"#15353d" };
-  if (visual === "transactions") return <div className={styles.phone}>
-    <div className={styles.island} /><Image src={`/assets/landing-screens/transactions-${market}.webp`} width={1206} height={2334} alt="Clover Transactions with fictional example records" draggable={false} sizes="240px" unoptimized />
-    <span className={styles.homeBar} />
-  </div>;
+  if (visual === "transactions") return <LandingTransactionPhone market={market} style={{position:"relative",right:"auto",bottom:"auto",width:"100%"}} />;
   return <div className={styles.demoCard} data-demo={visual}>
     <div className={styles.demoHeader}><Image src="/clover-mark.svg" alt="" width={25} height={25} /><strong>{({accounts:"Accounts",recurring:"Recurring",reports:"Reports",adviser:"Adviser",budget:"Budgeting",goal:"Goals",circles:"Circles",split:"Split Bills",source:"Source record",control:"Your data",pricing:"Pro"} as const)[visual]}</strong><small>Sample</small></div>
     {visual === "accounts" ? <div className={styles.accountSamples}>

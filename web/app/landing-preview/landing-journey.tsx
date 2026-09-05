@@ -131,13 +131,28 @@ export function ProComparison({ market, style, showActions = true }: { market: L
   </div>;
 }
 
+export function LandingTransactionPhone({ market, style }: { market: LandingMarket; style?: CSSProperties }) {
+  return <div className={styles.iphoneFrame} data-story-visual="phone" style={style}>
+        <span className={styles.iphoneSideButtons} />
+        <div className={styles.iphoneDisplay}>
+          <div className={styles.iphoneStatusBar}><b>9:41</b><span className={styles.iphoneIsland} /><span className={styles.iphoneIndicators}><svg viewBox="0 0 18 12"><path d="M1 11V8h2v3M5 11V6h2v5M9 11V3h2v8M13 11V1h2v10" stroke="currentColor" strokeWidth="1.5" /></svg><svg viewBox="0 0 16 12"><path d="M1 3q7-5 14 0M4 6q4-3 8 0M7 9q1-1 2 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg><i /></span></div>
+          <Image className={styles.iphoneAppScreen} src={`/assets/landing-screens/transactions-${market}.webp`} alt="Clover mobile Transactions page with fictional sample records" width={1206} height={2334} sizes="250px" draggable={false} unoptimized />
+          <span className={styles.iphoneHomeIndicator} />
+        </div>
+        <span className={styles.iphoneGlass} />
+      </div>;
+}
+
 export function JourneyHeader() {
   const headerRef = useRef<HTMLElement>(null);
+  const featuresRef = useRef<HTMLDivElement>(null);
   const [featuresOpen, setFeaturesOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   useEffect(() => {
-    const closeMenus = (event: MouseEvent) => {
-      const target = event.target as Element;
+    const closeMenus = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (!featuresRef.current?.contains(target)) setFeaturesOpen(false);
       if (!headerRef.current?.contains(target) && !target.closest("[data-mobile-navigation]")) {
         setFeaturesOpen(false);
         setMobileMenuOpen(false);
@@ -149,10 +164,10 @@ export function JourneyHeader() {
         setMobileMenuOpen(false);
       }
     };
-    document.addEventListener("mousedown", closeMenus);
+    document.addEventListener("pointerdown", closeMenus);
     document.addEventListener("keydown", closeOnEscape);
     return () => {
-      document.removeEventListener("mousedown", closeMenus);
+      document.removeEventListener("pointerdown", closeMenus);
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, []);
@@ -162,7 +177,7 @@ export function JourneyHeader() {
           <Image src="/clover-name-teal.svg" alt="Clover" width={132} height={32} priority />
         </Link>
         <nav aria-label="Public site">
-          <div className={styles.featureMenu}>
+          <div ref={featuresRef} className={styles.featureMenu}>
             <button
               type="button"
               className={styles.navTrigger}
@@ -355,15 +370,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
         </div>
       </div>
 
-      <div className={styles.iphoneFrame} data-story-visual="phone" style={productMotion(1, -1)}>
-        <span className={styles.iphoneSideButtons} />
-        <div className={styles.iphoneDisplay}>
-          <div className={styles.iphoneStatusBar}><b>9:41</b><span className={styles.iphoneIsland} /><span className={styles.iphoneIndicators}><svg viewBox="0 0 18 12"><path d="M1 11V8h2v3M5 11V6h2v5M9 11V3h2v8M13 11V1h2v10" stroke="currentColor" strokeWidth="1.5" /></svg><svg viewBox="0 0 16 12"><path d="M1 3q7-5 14 0M4 6q4-3 8 0M7 9q1-1 2 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg><i /></span></div>
-          <Image className={styles.iphoneAppScreen} src={`/assets/landing-screens/transactions-${market}.webp`} alt="Clover mobile Transactions page with fictional sample records" width={1206} height={2334} sizes="250px" draggable={false} unoptimized />
-          <span className={styles.iphoneHomeIndicator} />
-        </div>
-        <span className={styles.iphoneGlass} />
-      </div>
+      <LandingTransactionPhone market={market} style={productMotion(1, -1)} />
 
       <div className={styles.laptop} data-story-visual="laptop" style={productMotion(2)}><div className={styles.laptopScreen}>
         <div className={styles.appBar}><Image src="/clover-mark.svg" alt="" width={26} height={26} /><span>Accounts</span><i /><i /></div>

@@ -70,10 +70,8 @@ export function FeatureStory({ story, authEnabled, initialMarket, countryResolve
       <div className={styles.wash} aria-hidden="true" />
       <section className={`${styles.content} ${pricing?styles.pricingContent:""}`} data-landing-copy data-final={final} aria-live="polite" aria-atomic="true">
         <div className={styles.copy} key={current.id}>
-          {!final && <p className={styles.eyebrow} data-eyebrow>{active===0?story.title:current.id.split("-").map(word=>word.charAt(0).toUpperCase()+word.slice(1)).join(" ")}</p>}
           <h1>{current.title} <em>{current.accent}</em></h1>
           {current.copy && <p className={styles.description}>{current.copy}</p>}
-          {active===0 && story.products && <p className={styles.products} data-products>{story.products}</p>}
           {current.link && <Link className={styles.contextLink} href={current.link.href}>{current.link.label}</Link>}
           {pricing ? <ProActions /> : null}
           {(active===0 || final) && (story.slug==="pro" ? <div className={styles.proCta}><Link className="button button-primary button-pill" href="/sign-up?intent=pro&interval=annual">Upgrade to Pro <span aria-hidden="true">→</span></Link><small>You can keep using Clover for free.</small></div> : <JourneyActions authEnabled={authEnabled} final={final} />)}
