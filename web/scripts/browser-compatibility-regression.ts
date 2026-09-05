@@ -50,7 +50,15 @@ async function main() {
   assert.match(landingJourneySource, /style=\{sceneMotion\(index\)\}/, "Landing backgrounds must interpolate on every scroll update.");
   assert.match(landingJourneySource, /data-story-visual="evidence"[\s\S]*?evidenceDocuments[\s\S]*?local\.uploadRows\[index\]\[1\][\s\S]*?CLOVER IMPORT/, "The hero must connect localized, real-logo documents to a Clover import result.");
   assert.match(landingJourneySource, /documentLineItems[\s\S]*?local\.documentLines/, "Hero statements and receipts must show realistic imported line items.");
-  assert.match(landingJourneySource, /landing-screens\/transactions-\$\{market\}/, "The phone must show a localized capture of Clover's actual Transactions page.");
+  assert.match(landingJourneySource, /LandingTransactionPhone\(\{ market, style, screen = "transactions" \}/, "The main landing phone must default to the actual Transactions capture.");
+  assert.match(landingJourneySource, /landing-screens\/\$\{screen\}-\$\{market\}/, "Shared phones must select a localized real capture.");
+  for (const page of ["accounts", "recurring", "reports", "adviser", "investments", "budget", "goal", "circles", "split"]) {
+    for (const market of ["ph", "global"]) {
+      const capture = await sharp(path.join(root, `../assets/landing-screens/${page}-${market}.webp`)).metadata();
+      assert.equal(capture.width, 402);
+      assert.equal(capture.height, 778, "Feature captures must match the real mobile viewport without stretching.");
+    }
+  }
   for (const market of ["ph", "global"]) {
     const screen = await sharp(path.join(root, `../assets/landing-screens/transactions-${market}.webp`)).metadata();
     assert.equal(screen.width, 1206, "Screenshots must retain 3x mobile resolution.");

@@ -131,12 +131,12 @@ export function ProComparison({ market, style, showActions = true }: { market: L
   </div>;
 }
 
-export function LandingTransactionPhone({ market, style }: { market: LandingMarket; style?: CSSProperties }) {
+export function LandingTransactionPhone({ market, style, screen = "transactions" }: { market: LandingMarket; style?: CSSProperties; screen?: string }) {
   return <div className={styles.iphoneFrame} data-story-visual="phone" style={style}>
         <span className={styles.iphoneSideButtons} />
         <div className={styles.iphoneDisplay}>
           <div className={styles.iphoneStatusBar}><b>9:41</b><span className={styles.iphoneIsland} /><span className={styles.iphoneIndicators}><svg viewBox="0 0 18 12"><path d="M1 11V8h2v3M5 11V6h2v5M9 11V3h2v8M13 11V1h2v10" stroke="currentColor" strokeWidth="1.5" /></svg><svg viewBox="0 0 16 12"><path d="M1 3q7-5 14 0M4 6q4-3 8 0M7 9q1-1 2 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg><i /></span></div>
-          <Image className={styles.iphoneAppScreen} src={`/assets/landing-screens/transactions-${market}.webp`} alt="Clover mobile Transactions page with fictional sample records" width={1206} height={2334} sizes="250px" draggable={false} unoptimized />
+          <Image className={styles.iphoneAppScreen} src={`/assets/landing-screens/${screen}-${market}.webp`} alt={`Clover mobile ${screen} screen with fictional sample data`} width={1206} height={2334} sizes="250px" draggable={false} unoptimized />
           <span className={styles.iphoneHomeIndicator} />
         </div>
         <span className={styles.iphoneGlass} />

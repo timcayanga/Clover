@@ -13,3 +13,15 @@ export function featurePhotoPosition(position: number, hasPricing: boolean) {
   if (position <= 3.5) return 2;
   return 2 + Math.min(1, (position - 3.5) * 2) * 2;
 }
+
+// Give every chapter a complete, equal scroll interval, including the final
+// content chapter. Photo interpolation must not decide how long copy is shown.
+export function featureChapterPosition(progress: number, count: number) {
+  return Math.max(0, Math.min(count - 1, progress * count - 0.5));
+}
+
+export function featureChapterProgress(index: number, count: number) {
+  if (index <= 0) return 0;
+  if (index >= count - 1) return 1;
+  return (index + 0.5) / count;
+}

@@ -19,8 +19,8 @@
 .markers small{font-size:9px;color:#087e8c;font-weight:600}
 .next{position:absolute;bottom:24px;left:6vw;z-index:16;border:0;padding:8px 0;background:transparent;color:#4c6976;font-size:10px;font-weight:600;letter-spacing:.12em;cursor:pointer}
 .next span{display:inline-block;margin-left:16px;animation:scroll-nudge 2s ease-in-out infinite}
-.support{position:absolute;z-index:10;right:4.5vw;bottom:3svh;width:min(350px,27vw);pointer-events:none;user-select:none;animation:object-arrive .4s cubic-bezier(.2,.7,.2,1) both}
-.support[data-visual=transactions]{width:min(190px,13vw,20svh)}
+.support{position:absolute;z-index:10;right:3.5vw;bottom:4svh;width:min(210px,13.5vw,27svh);pointer-events:none;user-select:none;animation:object-arrive .4s cubic-bezier(.2,.7,.2,1) both}
+.support[data-visual=transactions]{width:min(250px,17vw,30svh)}
 .demoCard{padding:16px;border:1px solid #dce9ed;border-radius:20px;background:#fff;box-shadow:0 20px 45px rgba(20,52,62,.19);color:#263b46}
 .demoHeader{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:12px}
 .demoHeader small{margin-left:auto;color:#7d929b;font-size:9px;font-weight:400}
@@ -45,6 +45,10 @@
 @keyframes object-arrive{from{opacity:0;transform:translate3d(0,12px,0) scale(.98)}to{opacity:1;transform:translate3d(0,0,0) scale(1)}}
 @keyframes copy-settle{from{transform:translateY(3px)}to{transform:translateY(0)}}
 @keyframes scroll-nudge{50%{transform:translateY(4px)}}
+@media(min-width:901px){
+ .journey[data-feature-story=manage-money-together] .content{width:32vw}
+ .journey[data-feature-story=manage-money-together] .wash{background:linear-gradient(90deg,#f9fdfd 0%,rgba(249,253,253,.97) 25%,rgba(249,253,253,.85) 32%,rgba(249,253,253,.08) 42%,transparent 48%)}
+}
 @media(max-width:900px){
  .background{top:64px}
  .photograph img{object-position:center top}

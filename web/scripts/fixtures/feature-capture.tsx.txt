@@ -1,0 +1,44 @@
+"use client";
+// Archived local capture harness. Not an application route or build input.
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { PathnameContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
+import Accounts from "@/app/accounts/page";
+import Investments from "@/app/investments/page";
+import { CloverShell } from "@/components/clover-shell";
+import { RecurringPageClient } from "@/components/recurring-page-client";
+import { AdviserChat } from "@/components/adviser-chat";
+import { BudgetingWorkspace } from "@/components/budgeting-workspace";
+import { CirclesPageClient } from "@/components/circles-page-client";
+import { SplitBillWorkspace } from "@/components/split-bill-workspace";
+import { ReportsMoneyOverTimeChart } from "@/components/reports-money-over-time-chart";
+import { GoalInlineSetup } from "@/components/goal-inline-setup";
+import { GOAL_OPTIONS } from "@/lib/goals";
+import { buildSplitBillSettlement } from "@/lib/split-bill";
+
+function Capture() {
+ const params=useSearchParams(); const page=params.get("page")||"accounts";
+ const currency=params.get("market")==="global"?"USD":"PHP";
+ const n=(value:number)=>currency==="PHP"?value:value/10;
+ const budgets=[{id:"demo-budget",name:"Everyday spending",emoji:"🛒",kind:"spending_limit",scope:"overall",cadence:"monthly",currency,targetAmount:n(20000),actualAmount:n(12480),progressPercent:62.4,remainingAmount:n(7520),isActive:true,periodLabel:"September 2026"}];
+ const circles=[{id:"demo-circle",name:"Our household",type:"household",description:"Home expenses, together.",avatarUrl:null,color:"teal",currency,role:"organizer",isOwner:true,memberCount:4,pendingCount:0,expenseTotalThisMonth:n(8400),contributionTotalThisMonth:n(6000),updatedAt:"2026-09-05",members:[],budgets:[],goals:[],commitments:[],contributions:[],expenses:[],investmentShares:[],activities:[],invitations:[],insights:[]}];
+ const commitments=[{id:"demo-rent",workspaceId:"landing-demo",kind:"planned_payment",title:"Rent",counterparty:null,amount:String(n(18000)),currency,dueDate:"2026-09-15",nextDueDate:"2026-09-15",plannedPaymentDate:null,recurrence:"monthly",notes:null,accountId:null,transactionId:null,evidenceTransactionIds:[],statementCheckpointId:null,status:"active",source:"manual",confidence:1,createdAt:"2026-09-01",updatedAt:"2026-09-01",account:null,transaction:null}];
+ let content;
+ if(page==="accounts")content=<Accounts/>;
+ else if(page==="investments")content=<Investments/>;
+ else if(page==="recurring")content=<RecurringPageClient workspaceId="landing-demo" commitments={commitments as any} recurringPatterns={[]} plannedPaymentSuggestions={[]} accounts={[]} categoryOptions={[]} transactions={[]} planTier="pro"/>;
+ else if(page==="budget")content=<BudgetingWorkspace initialData={{budgets,overview:{budgets,inactiveBudgets:[],alerts:[]},accounts:[],categories:[],suggestions:[]} as any}/>;
+ else if(page==="circles")content=<CirclesPageClient initialData={{circles,currentUserId:"demo",currentUserName:"Alex",personalTransactions:[],investmentAccounts:[]} as any}/>;
+ else if(page==="split"){
+ const participants=[{id:"alex",name:"Alex"},{id:"maya",name:"Maya"},{id:"dan",name:"Daniel"},{id:"lea",name:"Lea"}];
+ const items=[{id:"dinner",description:"Dinner together",amount:String(n(2400)),sortOrder:0,participantIds:participants.map(p=>p.id)}];
+ const payments=[{id:"paid",participantId:"alex",amount:String(n(2400)),note:null}];
+ const bill={id:"demo-dinner",userId:"demo",title:"Friday dinner",billDate:"2026-09-04",currency,sourceType:"manual",merchantName:"Dinner together",total:String(n(2400)),createdAt:"2026-09-04",updatedAt:"2026-09-04",group:null,participants,items,payments,settlement:buildSplitBillSettlement({participants,items,payments}),settlementStatus:"open"};
+ content=<SplitBillWorkspace bills={[bill] as any} groups={[]} people={[]} currentUserName="Alex"/>;
+ }
+ else if(page==="adviser")content=<CloverShell active="adviser" title="Adviser"><AdviserChat prompts={[]} isPro layout="workspace"/></CloverShell>;
+ else if(page==="reports")content=<CloverShell active="reports" title="Reports"><section className="reports-page"><ReportsMoneyOverTimeChart currency={currency} points={[84250,83100,85800,84600,90250,88500].map((balance,i)=>({date:`2026-09-0${i+1}`,balance:n(balance)}))}/></section></CloverShell>;
+ else content=<CloverShell active="goals" title="Goals"><section className="goals-page"><section className="goals-blank-state glass"><span className="goals-blank-state__emoji">🎯</span><h3>What do you want your money to help you do?</h3><GoalInlineSetup goals={GOAL_OPTIONS} suggestedTargetAmount={n(60000)} monthlyIncome={n(48000)} currency={currency}/></section></section></CloverShell>;
+ return <PathnameContext.Provider value={`/${page}`}>{content}</PathnameContext.Provider>;
+}
+export default function Page(){return <Suspense><Capture/></Suspense>}

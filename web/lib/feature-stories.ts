@@ -1,4 +1,4 @@
-export type FeatureVisual = "transactions" | "accounts" | "recurring" | "reports" | "adviser" | "budget" | "goal" | "circles" | "split" | "source" | "control" | "pricing";
+export type FeatureVisual = "transactions" | "accounts" | "recurring" | "reports" | "adviser" | "investments" | "budget" | "goal" | "circles" | "split" | "source" | "control" | "pricing";
 export type FeatureChapter = { id: string; title: string; accent: string; copy?: string; visual?: FeatureVisual; link?: { href: string; label: string } };
 export type FeatureStory = { slug: string; title: string; products?: string; asset: string; chapters: FeatureChapter[] };
 
@@ -18,8 +18,8 @@ export const FEATURE_STORIES: FeatureStory[] = [
     { id: "start", title: "Know what changed.", accent: "Decide what comes next." },
   ] },
   { slug: "plan-ahead", title: "Plan Ahead", products: "Investments · Budgeting · Goals", asset: "plan", chapters: [
-    { id: "overview", title: "Make room for", accent: "what matters next.", copy: "See your investments in context, build a budget around real life, and give your savings goals a practical next step. Bring today's decisions and longer-term plans into one financial picture." },
-    { id: "investments", title: "See how your investments fit", accent: "into the bigger picture.", copy: "Track your holdings, estimated values, and returns alongside your accounts, budgets, and goals. Understand your portfolio in the context of your wider finances." },
+    { id: "overview", title: "Make room for", accent: "what matters next.", copy: "See your investments in context, build a budget around real life, and give your savings goals a practical next step. Bring today's decisions and longer-term plans into one financial picture.", visual: "investments" },
+    { id: "investments", title: "See how your investments fit", accent: "into the bigger picture.", copy: "Track your holdings, estimated values, and returns alongside your accounts, budgets, and goals. Understand your portfolio in the context of your wider finances.", visual: "investments" },
     { id: "budgeting", title: "Build a budget", accent: "around real life.", copy: "Use your recorded spending as a starting point. Choose the amount, currency, scope, and cadence, then edit the budget as your needs change.", visual: "budget" },
     { id: "goals", title: "Give the goal", accent: "a practical next step.", copy: "Set a savings target and track your progress. Review what you can contribute alongside existing spending and commitments, and adjust the plan as life changes.", visual: "goal" },
     { id: "start", title: "Give your plans", accent: "a clearer path forward." },
