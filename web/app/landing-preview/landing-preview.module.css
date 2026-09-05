@@ -575,6 +575,9 @@
   .journey[data-chapter] .comparisonChapter,.journey[data-chapter] .proChapter{width:86vw;grid-template-columns:minmax(0,36fr) minmax(0,45fr);gap:5vw;align-items:center}
   .journey[data-chapter] .chapter p{max-width:45ch}
   .journey[data-chapter] .proActions{align-items:flex-start;justify-content:flex-start;justify-items:start;text-align:left}
+  /* Center the copy itself, not the combined copy-and-CTA height. */
+  .proChapter>div:first-child{position:relative}
+  .proChapter>div:first-child>.proActions{position:absolute;top:100%;left:0;width:100%}
   .journey[data-chapter="4"] .planCard{left:auto;right:0;bottom:2vh;width:min(300px,24vw)}
   .journey[data-chapter] .world>.worldWash{background:linear-gradient(90deg,#f8fcfc 0%,rgba(248,252,252,.97) 19%,rgba(248,252,252,.82) 29%,rgba(248,252,252,.34) 40%,transparent 56%)}
 }

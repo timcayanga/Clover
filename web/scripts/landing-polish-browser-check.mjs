@@ -26,6 +26,12 @@ for(const [w,h] of [[1440,900],[1024,768],[1440,600],[390,844],[320,568]]){
    assert.ok(result.box.x<=w*.1,"Copy not left-aligned");
    const alignment=read('JSON.stringify((()=>{const e=document.querySelector("[data-landing-copy][data-active=true]"),box=e.getBoundingClientRect(),parent=e.offsetParent.getBoundingClientRect();return {center:box.top+box.height/2,target:parent.top+parent.height/2}})())');
    assert.ok(Math.abs(alignment.center-alignment.target)<2,"Copy not vertically centered: "+w+" chapter "+i+" "+JSON.stringify(alignment));
+   if(i===7){
+    const pro=read('JSON.stringify((()=>{const e=document.querySelector("[data-landing-copy][data-active=true]"),title=e.querySelector("h1").getBoundingClientRect(),copy=e.querySelector("p").getBoundingClientRect(),actions=e.querySelector("[data-landing-actions]").getBoundingClientRect();return {center:(title.top+copy.bottom)/2,bottom:copy.bottom,actions:actions.toJSON()}})())');
+    assert.ok(Math.abs(pro.center-alignment.target)<2,"Pro text is displaced by its CTA");
+    assert.ok(pro.actions.top>=pro.bottom&&pro.actions.top-pro.bottom<=24,"Pro CTA is not immediately below text");
+    assert.ok(pro.actions.bottom<=h-12,"Pro CTA is outside the viewport");
+   }
   }
   styles.push(result);
   if(i===1||i===7) {
