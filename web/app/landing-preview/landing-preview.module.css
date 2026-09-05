@@ -335,8 +335,8 @@
 
 @media(min-width:901px) and (min-height:760px){
   .heroEvidence{bottom:2vh}
-  .journey .laptop{right:auto;bottom:2vh;left:-43vw;width:min(500px,34vw);transform-origin:bottom left}
-  .journey .adviser{right:auto;bottom:2vh;left:-43vw;width:min(430px,31vw);transform-origin:bottom left}
+  .journey .laptop{right:0;bottom:2vh;left:auto;width:min(500px,34vw);transform-origin:bottom right}
+  .journey .adviser{right:0;bottom:2vh;left:auto;width:min(430px,31vw);transform-origin:bottom right}
   .journey .planCard{right:auto;bottom:4vh;left:-43vw;width:min(390px,29vw);transform-origin:bottom left}
 }
 
