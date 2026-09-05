@@ -6685,42 +6685,11 @@ html[data-theme="dark"] .adviser-header-link {
   cursor: pointer;
 }
 
-.contextual-ask-clover__trigger--labeled {
-  width: auto;
-  min-width: 48px;
-  grid-auto-flow: column;
-  gap: 2px;
-  padding: 0 10px 0 0;
-  border: 1px solid rgba(3, 168, 192, 0.2);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
-}
-
-.contextual-ask-clover__trigger-label {
-  color: var(--accent-strong, #008da3);
-  font-size: 0.78rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
 .contextual-ask-clover__icon {
   width: 48px;
   height: 48px;
   object-fit: contain;
   transition: transform 160ms ease, filter 160ms ease;
-}
-
-@media (max-width: 720px) {
-  .contextual-ask-clover__trigger--labeled {
-    width: 48px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-  }
-
-  .contextual-ask-clover__trigger-label {
-    display: none;
-  }
 }
 
 .contextual-ask-clover__trigger:hover .contextual-ask-clover__icon,
@@ -64374,4 +64343,42 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
     line-height: 1.4;
     min-height: 26px;
   }
+}
+
+/* One container-free Adviser action across all authenticated product headers.
+   Sizes match Transactions; the artwork and clickable box share dimensions. */
+.content { --clover-adviser-action-size: 52px; }
+@media (max-width: 1100px) {
+  .content { --clover-adviser-action-size: 44px; }
+}
+.content .contextual-ask-clover,
+.content .contextual-ask-clover__trigger,
+.content .contextual-ask-clover__icon,
+.content .adviser-header-link,
+.content .adviser-header-link img,
+.content.content .shell-topbar-leading__actions .contextual-ask-clover,
+.content .shell-topbar-leading__actions .contextual-ask-clover .contextual-ask-clover__trigger,
+.content .shell-topbar-leading__actions .contextual-ask-clover .contextual-ask-clover__icon,
+.content .shell-topbar-leading__actions .adviser-header-link,
+.content .shell-topbar-leading__actions .adviser-header-link img {
+  width: var(--clover-adviser-action-size) !important;
+  min-width: var(--clover-adviser-action-size) !important;
+  height: var(--clover-adviser-action-size) !important;
+  min-height: var(--clover-adviser-action-size) !important;
+  flex: 0 0 var(--clover-adviser-action-size) !important;
+}
+.content .adviser-header-link,
+.content .adviser-header-link:hover,
+.content .adviser-header-link:focus-visible,
+.content .contextual-ask-clover__trigger {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 7px;
+}
+.content .adviser-header-link:focus-visible,
+.content .contextual-ask-clover__trigger:focus-visible {
+  outline: 2px solid rgba(3, 168, 192, 0.65);
+  outline-offset: 3px;
 }

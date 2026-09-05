@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AdviserChat, type AdviserPrompt } from "@/components/adviser-chat";
 import { hasFullFeatureAccess } from "@/lib/beta-access";
+import { getNavigationIconSrc } from "@/lib/navigation-icons";
 
 type AskCloverContext = "accounts" | "transactions" | "recurring" | "budgeting" | "goals";
 type PlanTier = "free" | "pro" | "unknown";
@@ -12,7 +13,6 @@ type PlanTier = "free" | "pro" | "unknown";
 type ContextualAskCloverProps = {
   context: AskCloverContext;
   planTier?: PlanTier;
-  showLabel?: boolean;
 };
 
 const contextCopy: Record<
@@ -175,7 +175,7 @@ const contextCopy: Record<
   },
 };
 
-export function ContextualAskClover({ context, planTier = "unknown", showLabel = false }: ContextualAskCloverProps) {
+export function ContextualAskClover({ context, planTier = "unknown" }: ContextualAskCloverProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [resolvedPlanTier, setResolvedPlanTier] = useState<PlanTier>(planTier);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -239,21 +239,20 @@ export function ContextualAskClover({ context, planTier = "unknown", showLabel =
       <button
         ref={triggerRef}
         type="button"
-        className={`contextual-ask-clover__trigger${showLabel ? " contextual-ask-clover__trigger--labeled" : ""}`}
+        className="contextual-ask-clover__trigger"
         aria-label={copy.label}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
         onClick={() => setIsOpen((current) => !current)}
       >
         <Image
-          src="/assets/3d%20icons/adviser.png?v=20260726a"
+          src={getNavigationIconSrc("adviser")}
           alt=""
           width={96}
           height={96}
           className="contextual-ask-clover__icon"
           aria-hidden="true"
         />
-        {showLabel ? <span className="contextual-ask-clover__trigger-label">Plan with Adviser</span> : null}
         <span className="contextual-ask-clover__tooltip" role="tooltip">
           {copy.label}
         </span>
@@ -278,7 +277,7 @@ export function ContextualAskClover({ context, planTier = "unknown", showLabel =
               >
                 <header className="contextual-ask-clover__panel-header">
                   <div className="contextual-ask-clover__panel-title">
-                    <Image src="/assets/3d%20icons/adviser.png?v=20260726a" alt="" width={96} height={96} aria-hidden="true" />
+                    <Image src={getNavigationIconSrc("adviser")} alt="" width={96} height={96} aria-hidden="true" />
                     <div>
                       <p className="eyebrow">Ask Clover</p>
                       <h2 id={titleId}>{copy.title}</h2>

@@ -13,6 +13,13 @@ const sourceRoot = path.resolve(root, "../assets/3d icons");
 const publicRoot = path.resolve(root, "public");
 
 async function main() {
+  const contextualAdviser = await readFile(path.join(root, "components/contextual-ask-clover.tsx"), "utf8");
+  assert.doesNotMatch(contextualAdviser, /showLabel|trigger--labeled/, "Adviser actions must not render a labeled pill.");
+  assert.match(contextualAdviser, /src=\{getNavigationIconSrc\("adviser"\)\}/, "Contextual Adviser must use the same artwork as the shared Adviser link.");
+  const adviserStyles = await readFile(path.join(root, "app/globals.css"), "utf8");
+  assert.match(adviserStyles, /--clover-adviser-action-size: 52px/, "Desktop Adviser icons must match Transactions.");
+  assert.match(adviserStyles, /@media \(max-width: 1100px\) \{\s*\.content \{ --clover-adviser-action-size: 44px;/, "Mobile Adviser icons must match Transactions.");
+  assert.match(adviserStyles, /\.content \.contextual-ask-clover__trigger \{\s*padding: 0 !important;\s*border: 0 !important;\s*background: transparent !important;\s*box-shadow: none !important;/, "Shared Adviser actions must remain container-free.");
   const overviewIcons = await Promise.all([
     ["components/recurring-page-client.tsx", "RecurringTabIcon"],
     ["components/reports-tabs.tsx", "ReportsTabIcon"],

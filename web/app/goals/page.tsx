@@ -742,7 +742,7 @@ async function GoalsPageStream() {
         active="goals"
         title="Goals"
         mobileBackHref="/more"
-        actions={<ContextualAskClover context="goals" planTier={isPro ? "pro" : "free"} showLabel />}
+        actions={<ContextualAskClover context="goals" planTier={isPro ? "pro" : "free"} />}
       >
         <section className="goals-page">
           {!hasGoalSelection ? (

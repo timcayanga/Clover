@@ -81,7 +81,7 @@ export function BudgetingWorkspace({ initialData }: { initialData: BudgetingData
   return <CloverShell active="budgeting" title={title}
     mobileLeadingAction={selectedBudget || editorOpen ? <CollectionBack label="Budgeting" onClick={back} /> : undefined}
     desktopTitleAction={selectedBudget ? <CollectionBack label="All budgets" onClick={() => selectBudget(null)} /> : undefined}
-    actions={!mobileEditor ? <div className="collection-toolbar-actions"><ContextualAskClover context="budgeting" showLabel /><button className="button button-primary button-small accounts-toolbar-button accounts-toolbar-button--upload collection-toolbar-action" type="button" aria-label="Create Budget" onClick={() => selectEditor("new")}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg><span>Create Budget</span></button></div> : undefined}
+    actions={!mobileEditor ? <div className="collection-toolbar-actions"><ContextualAskClover context="budgeting" /><button className="button button-primary button-small accounts-toolbar-button accounts-toolbar-button--upload collection-toolbar-action" type="button" aria-label="Create Budget" onClick={() => selectEditor("new")}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg><span>Create Budget</span></button></div> : undefined}
   >
     <section className={`budgeting-page${editorOpen ? " budgeting-page--editing" : ""}`}>
       <div className="budget-directory-content" hidden={mobileEditor}>
