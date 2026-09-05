@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildMarketLinePath,
   findClosestMarketPointIndex,
+  filterMarketHistoryByRange,
   MARKET_RANGES,
   type MarketHistoryPoint,
   type MarketRange,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/investment-portfolio-growth";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { useExchangeRates } from "@/lib/use-exchange-rates";
+import { DismissibleDetails } from "@/components/dismissible-details";
 
 type MarketHistoryResponse = {
   currency: string;
@@ -55,6 +57,8 @@ const loadAssetHistory = async (asset: PortfolioGrowthAsset, range: MarketRange,
   );
   const payload = (await response.json()) as MarketHistoryResponse;
   if (!response.ok) throw new Error(payload.error ?? `Market history is unavailable for ${asset.name}.`);
+  // Fallback providers may return their full series even for a short range.
+  payload.points = filterMarketHistoryByRange(payload.points, range);
   historyCache.set(key, payload);
   return payload;
 };
@@ -122,6 +126,18 @@ export function InvestmentPortfolioGrowthChart({ assets, currency }: Props) {
             unavailable.push(asset.name);
           }
         });
+        const marketWindowStart = results
+          .flatMap((result) => result.status === "fulfilled" ? result.value.points : [])
+          .map((point) => new Date(point.date).getTime())
+          .filter(Number.isFinite)
+          .sort((a, b) => a - b)[0];
+        if (range !== "MAX" && marketWindowStart !== undefined) {
+          selectedAssets.forEach((asset) => {
+            if (loaded.get(asset.id) !== recordedFallbacks.get(asset.id)) return;
+            const aligned = buildRecordedValueHistory(asset, range, new Date(), new Date(marketWindowStart).toISOString());
+            if (aligned) loaded.set(asset.id, aligned);
+          });
+        }
         setHistories([...loaded.values()]);
         setError(unavailable.length > 0 ? `No market history yet for ${unavailable.join(", ")}.` : "");
       })
@@ -205,7 +221,7 @@ export function InvestmentPortfolioGrowthChart({ assets, currency }: Props) {
   return (
     <div className={`portfolio-growth portfolio-growth--${tone}`}>
       <div className="portfolio-growth__controls">
-        <details className="portfolio-growth__asset-picker">
+        <DismissibleDetails className="portfolio-growth__asset-picker">
           <summary aria-label="Choose investments for the growth chart">
             <span>Investments</span>
             <span>{selectedIds.length} selected</span>
@@ -223,7 +239,7 @@ export function InvestmentPortfolioGrowthChart({ assets, currency }: Props) {
               </label>
             ))}
           </div>
-        </details>
+        </DismissibleDetails>
         <div className="portfolio-growth__ranges" aria-label="Investment growth period">
           {MARKET_RANGES.map((option) => (
             <button

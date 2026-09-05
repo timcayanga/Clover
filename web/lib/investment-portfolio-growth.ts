@@ -43,6 +43,7 @@ export const buildRecordedValueHistory = (
   asset: PortfolioGrowthAsset,
   range: MarketRange,
   now = new Date(),
+  marketWindowStart?: string,
 ): PortfolioGrowthHistory | null => {
   const parsedStart = asset.startDate ? new Date(asset.startDate) : null;
   if (
@@ -58,7 +59,13 @@ export const buildRecordedValueHistory = (
   if (!Number.isFinite(end.getTime()) || parsedStart > end) return null;
   const valueDivisor = asset.historyMode === "market" ? asset.units : 1;
   if (!Number.isFinite(valueDivisor) || valueDivisor <= 0) return null;
-  const rangeStart = getRangeStart(range, end);
+  // Providers use trading sessions/time zones, not always our UTC calendar
+  // cutoff. Seed saved holdings at the same boundary so an existing balance
+  // cannot appear as a new contribution on the first filtered day.
+  const providerStart = marketWindowStart ? new Date(marketWindowStart) : null;
+  const rangeStart = providerStart && Number.isFinite(providerStart.getTime())
+    ? providerStart
+    : getRangeStart(range, end);
   const effectiveStart = range === "MAX" || parsedStart > rangeStart ? parsedStart : rangeStart;
   const usesRecordedPurchase = effectiveStart.getTime() === parsedStart.getTime()
     && Number.isFinite(asset.purchaseValue)

@@ -484,6 +484,39 @@ const recordedInvestmentHistory = buildRecordedValueHistory({
   purchaseValue: 100_000,
   startDate: "2026-01-15",
 }, "MAX", new Date("2026-08-30T12:00:00Z"));
+for (const [range, firstDate, lastDate] of [
+  ["3M", "2026-06-04T16:00:00Z", "2026-09-05T12:00:00Z"],
+  ["1M", "2026-08-04T16:00:00Z", "2026-09-05T12:00:00Z"],
+  ["5D", "2026-08-31T16:00:00Z", "2026-09-05T12:00:00Z"],
+  ["1D", "2026-09-04T13:30:00Z", "2026-09-04T20:00:00Z"],
+] as const) {
+  const deposit = { id: "existing-deposit", name: "Existing deposit", symbol: "", market: "ph" as const,
+    units: 1, currency: "PHP", historyMode: "recorded" as const, currentValue: 500000, purchaseValue: 500000, startDate: "2025-01-01" };
+  const depositHistory = buildRecordedValueHistory(deposit, range, new Date("2026-09-05T12:00:00Z"), firstDate)!;
+  const series = buildPortfolioGrowthSeries({
+    assets: [deposit, { id: "market", name: "Market asset", symbol: "TEST", market: "ph", units: 1, currency: "PHP", startDate: "2025-01-01" }],
+    histories: [depositHistory, { assetId: "market", currency: "PHP", points: [{ date: firstDate, value: 100 }, { date: lastDate, value: 100 }] }],
+    exchangeRates: { PHP: 1 }, granularity: range === "1D" ? "timestamp" : "daily",
+  });
+  assert.equal(series[0]?.value, 500100, `${range}: existing ₱500k holding must be present at the provider's opening boundary.`);
+  assert.ok(series.every((point) => point.value === 500100), `${range}: changing range must not introduce a false ₱500k contribution.`);
+  const newlyPurchased = buildRecordedValueHistory({ ...deposit, startDate: "2026-09-05T10:00:00Z" }, range, new Date("2026-09-05T12:00:00Z"), firstDate)!;
+  assert.ok(Date.parse(newlyPurchased.points[0].date) >= Date.parse("2026-09-05"), "A real later purchase must not be backdated to the chart opening.");
+}
+assert.match(portfolioGrowthSource, /marketWindowStart/, "Saved valuations must align to the market window before aggregation.");
+assert.match(portfolioGrowthSource, /<DismissibleDetails className="portfolio-growth__asset-picker"/, "Growth investment picker must close on outside interaction.");
+assert.match(investmentsPageSource, /<InvestmentPortfolioFilters/, "Portfolio filters must share the mobile popover.");
+assert.match(investmentsPageSource, /<InvestmentSparkline/, "Applicable portfolio assets must display real market history.");
+const pickerSource = readFileSync(resolve(process.cwd(), "components/dismissible-details.tsx"), "utf8");
+assert.match(pickerSource, /addEventListener\("pointerdown", outside, true\)/, "The investment picker must dismiss for mouse and touch outside interaction.");
+assert.match(pickerSource, /addEventListener\("focusin", outside\)/, "Moving focus outside the investment picker must dismiss it.");
+assert.match(pickerSource, /event.key === "Escape"/, "Escape must close the investment picker.");
+const sparklineSource = readFileSync(resolve(process.cwd(), "components/investment-sparkline.tsx"), "utf8");
+assert.match(sparklineSource, /matchMedia\("\(min-width: 1101px\)"\)/, "Mini charts must not load on mobile.");
+assert.match(sparklineSource, /IntersectionObserver/, "Mini charts must load only near visible rows.");
+assert.match(sparklineSource, /range=1Y/, "Mini charts must request real one-year price history.");
+assert.match(sparklineSource, /running >= 3/, "Mini chart requests must have bounded concurrency.");
+assert.match(investmentsStyles, /\.portfolio-filter-menu\[data-open="true"\]/, "Mobile filtering must have a collapsible panel.");
 assert.deepEqual(recordedInvestmentHistory?.points, [
   { date: "2026-01-15", value: 100_000 },
   { date: "2026-08-30", value: 105_000 },

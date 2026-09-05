@@ -16,6 +16,8 @@ import { InfoTooltip } from "@/components/info-tooltip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { InvestmentMarketChart } from "@/components/investment-market-chart";
 import { InvestmentPortfolioGrowthChart } from "@/components/investment-portfolio-growth-chart";
+import { InvestmentPortfolioFilters } from "@/components/investment-portfolio-filters";
+import { InvestmentSparkline } from "@/components/investment-sparkline";
 import { AdviserHeaderLink } from "@/components/adviser-header-link";
 import { GrowthPlanner } from "@/components/growth-planner";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
@@ -3108,7 +3110,9 @@ export default function InvestmentsPage() {
                       placeholder="Search"
                     />
                   </label>
+                  <InvestmentPortfolioFilters active={investmentSubtypeFilter !== "all" || investmentSortKey !== "value_desc" || portfolioView !== "all"}>
                   <label aria-label="Filter by investment type">
+                    <span className="portfolio-filter-menu__label">Asset subtype</span>
                     <select value={investmentSubtypeFilter} onChange={(event) => setInvestmentSubtypeFilter(event.target.value as InvestmentSubtype | "all")}>
                       <option value="all">All subtypes</option>
                       {SORTED_INVESTMENT_SUBTYPES.map((subtype) => (
@@ -3119,6 +3123,7 @@ export default function InvestmentsPage() {
                     </select>
                   </label>
                   <label aria-label="Sort portfolio">
+                    <span className="portfolio-filter-menu__label">Sort by</span>
                     <select value={investmentSortKey} onChange={(event) => setInvestmentSortKey(event.target.value as InvestmentSortKey)}>
                       {INVESTMENT_SORT_OPTIONS.map((option) => (
                         <option key={option.key} value={option.key}>
@@ -3143,6 +3148,7 @@ export default function InvestmentsPage() {
                       </button>
                     ))}
                   </div>
+                  </InvestmentPortfolioFilters>
                 </div>
               </div>
 
@@ -3186,6 +3192,9 @@ export default function InvestmentsPage() {
                               className="investments-portfolio-inline-edit--name"
                               onCommit={(value) => commitPortfolioRowField(row, "name", value)}
                             />
+                            {row.symbol?.trim() && ["stock", "etf", "reit", "crypto"].includes(row.subtype ?? "") ? (
+                              <InvestmentSparkline symbol={row.symbol.trim().toUpperCase()} market={getPortfolioGrowthMarket(row.subtype, row.currency)} name={row.name} />
+                            ) : null}
                           </div>
                         </div>
                         <div className="investments-portfolio-table__cell investments-portfolio-table__institution">
