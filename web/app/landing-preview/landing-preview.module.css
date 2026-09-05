@@ -511,7 +511,6 @@
 @media(min-width:901px){
   .comparisonChapter{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:5vw;align-items:center;left:6vw;width:86vw;top:51%;translate:0 -40%}
   .comparisonChapter p{max-width:39ch;font-size:17px;line-height:1.55}
-  .journey[data-chapter="4"] .chapter{top:36%}
   .journey[data-chapter="4"] .planCard{left:-43vw;right:auto;bottom:2vh;width:min(360px,31vw)}
 }
 @media(max-width:900px){
@@ -531,11 +530,6 @@
 @media(max-width:900px) and (max-height:680px){
   .comparisonTable th,.comparisonTable td{padding:8px;font-size:11.5px}
   .comparisonChapter p{font-size:12.5px;margin:10px 0 14px}
-}
-
-@media(min-width:901px){
-  .journey[data-chapter="2"] .chapter[data-active=true],
-  .journey[data-chapter="3"] .chapter[data-active=true]{top:38%}
 }
 
 /* Keep the mobile cast clear of the copy and preserve colour until the last quarter. */
