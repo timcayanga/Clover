@@ -18,6 +18,8 @@ for(const [width,height] of [[1440,900],[390,844],[320,568],[1024,768],[1440,600
    run("wait","--fn",'document.querySelector("nav[aria-label=\\"Feature story chapters\\"] small").textContent==="'+(i+1)+'/5"');
    const result=evaluate('JSON.stringify({heading:document.querySelector("h1").textContent,overflow:document.documentElement.scrollWidth>innerWidth,broken:[...document.images].filter(i=>i.complete&&!i.naturalWidth).map(i=>i.src),text:document.querySelector("h1").getBoundingClientRect().toJSON(),support:document.querySelector("[data-visual]")?getComputedStyle(document.querySelector("[data-visual]")).display:null})');
    assert.equal(result.overflow,false,slug+" "+width+" chapter "+i+": horizontal overflow");
+   const scrollHint=evaluate('JSON.stringify([...document.querySelectorAll("button")].some(b=>/Keep scrolling/i.test(b.textContent)))');
+   assert.equal(scrollHint,i<4,slug+": scroll hint must only appear before the final CTA");
    assert.equal(result.broken.length,0,slug+": broken images "+result.broken);
    assert.ok(result.text.top>=64,slug+" "+width+" chapter "+i+": title behind header");
    assert.ok(result.text.bottom<=height,slug+" "+width+" chapter "+i+": title outside viewport");

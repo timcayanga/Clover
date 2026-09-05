@@ -20,6 +20,8 @@ for(const [w,h] of [[1440,900],[1024,768],[1440,600],[390,844],[320,568]]){
   run("wait","--fn",'document.querySelector("nav[aria-label=\\"Landing page chapters\\"] b").textContent.trim()==="'+(i+1)+' / 9"');
   const result=read('JSON.stringify((()=>{const e=document.querySelector("[data-landing-copy][data-active=true]"),t=e.querySelector("h1"),p=e.querySelector("p");return {font:getComputedStyle(t).fontSize,family:getComputedStyle(t).fontFamily,body:p?getComputedStyle(p).fontSize:null,box:t.getBoundingClientRect().toJSON(),overflow:document.documentElement.scrollWidth>innerWidth,path:!!document.querySelector("[class*=world]>svg")}})())');
   assert.equal(result.overflow,false);assert.equal(result.path,false);
+  const scrollHint=read('JSON.stringify(!!document.querySelector("[class*=scrollHint]"))');
+  assert.equal(scrollHint,i<8,"Scroll hint must only appear before the final CTA");
   assert.ok(result.box.top>=64,"Title behind header "+w+" "+i);
   assert.ok(result.box.bottom<=h,"Title outside viewport "+w+" "+i);
   if(w>900){

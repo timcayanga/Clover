@@ -394,7 +394,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
         {chapters.map((_, index) => <button key={index} type="button" className={chapter === index ? styles.activeMarker : ""} onClick={() => goToChapter(index)} aria-label={`Go to chapter ${index + 1}`} aria-current={chapter === index ? "step" : undefined}><span /></button>)}
         <b>{chapter + 1} / {chapters.length}</b>
       </nav>
-      <div className={styles.scrollHint} aria-hidden="true"><span>Keep scrolling</span><i /></div>
+      {chapter < chapters.length - 1 && <div className={styles.scrollHint} aria-hidden="true"><span>Keep scrolling</span><i /></div>}
       <div className={styles.grain} aria-hidden="true" />
     </div>
   </div>;
