@@ -19,12 +19,12 @@ async function main() {
     ),
   );
   await Promise.all(
-    landingSceneNames.slice(0, -1).flatMap((scene) =>
+    [...landingSceneNames.slice(0, -1), "07-private-review"].flatMap((scene) =>
       ["", "-mobile"].map((suffix) => access(path.join(root, `../assets/landing-story-v3/${scene}${suffix}.webp`))),
     ),
   );
   const mobileSceneMetadata = await Promise.all(
-    landingSceneNames.map((scene) => sharp(path.join(root, `../assets/${scene === "06-life" ? "landing-story-v2" : "landing-story-v3"}/${scene}-mobile.webp`)).metadata()),
+    [...landingSceneNames, "07-private-review"].map((scene) => sharp(path.join(root, `../assets/${scene === "06-life" ? "landing-story-v2" : "landing-story-v3"}/${scene}-mobile.webp`)).metadata()),
   );
   assert.ok(
     mobileSceneMetadata.every((metadata) => (metadata.height ?? 0) > (metadata.width ?? 0)),

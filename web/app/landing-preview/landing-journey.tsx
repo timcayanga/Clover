@@ -72,8 +72,8 @@ const marketContent = {
 
 const clamp = (value: number, minimum = 0, maximum = 1) => Math.min(maximum, Math.max(minimum, value));
 const sceneAsset = (scene: (typeof scenes)[number], mobile = false) => {
-  if (scene === "07-trust") return `/assets/landing-story-v3/05-plan${mobile ? "-mobile" : ""}.webp`;
-  if (scene === "08-pro") return `/assets/landing-story-v3/03-picture${mobile ? "-mobile" : ""}.webp`;
+  // Pro carries the private setting forward, with a softer wash behind its table.
+  if (scene === "07-trust" || scene === "08-pro") return `/assets/landing-story-v3/07-private-review${mobile ? "-mobile" : ""}.webp`;
   if (scene === "06-life" && mobile) return "/assets/landing-story-v3/06-life-mobile-clear.webp";
   const folder = scene === "06-life" || scene === "05-plan" ? "landing-story-v2" : "landing-story-v3";
   return `/assets/${folder}/${scene}${mobile ? "-mobile" : ""}.webp`;

@@ -456,11 +456,11 @@
 @media(min-width:901px){
   .proChapter{left:6vw;width:86vw;top:50%;translate:0 -40%;display:grid;grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:5vw;align-items:center}
   .journey[data-pro=true] .worldWash{background:rgba(249,253,253,.94)}
-  .finalChapter{width:min(620px,44vw)}
+  .finalChapter{width:min(470px,36vw)}
 }
 
 /* Nine chapters, including readable comparison and plan-selection pauses. */
-.journey{height:800svh}
+.journey{height:520svh}
 .comparisonTable{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;border:1px solid #d8e8e9;border-radius:20px;overflow:hidden;background:#fff;text-align:left;box-shadow:0 14px 44px rgba(16,66,76,.08)}
 .comparisonTable caption{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 .comparisonTable th,.comparisonTable td{padding:18px 20px;font-size:15px;line-height:1.45;vertical-align:top;border-bottom:1px solid #dcebed}
@@ -517,11 +517,13 @@
   .scene[data-scene="01-organize"] .sceneSubject img{object-position:center 20%;transform:translateY(-2%)}
   .scene[data-scene="05-plan"] .sceneSubject img{object-position:center 46%;transform:translateY(-4%)}
   .scene[data-scene="06-life"] .sceneSubject img{transform:none}
+  .journey .scene[data-scene="07-trust"] .sceneSubject img,
+  .journey .scene[data-scene="08-pro"] .sceneSubject img{transform:none}
   .world{background:#f9fdfd}
 }
 
 @media(max-width:900px){
-  .journey{height:825svh}
+  .journey{height:540svh}
   .journey[data-pro=true] .stage{min-height:0}
   .journey[data-pro=true] .story{top:76px;bottom:20px}
   .journey[data-pro=true] .proChapter{top:0;bottom:auto;left:calc(50% - 10px);width:calc(100vw - 62px);max-width:590px;max-height:100%;overflow-y:auto;overscroll-behavior:contain;translate:-50% 0;text-align:left}
