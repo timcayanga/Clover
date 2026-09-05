@@ -70,6 +70,7 @@ const marketContent = {
 
 const clamp = (value: number, minimum = 0, maximum = 1) => Math.min(maximum, Math.max(minimum, value));
 const sceneAsset = (scene: (typeof scenes)[number], mobile = false) => {
+  if (scene === "06-life" && mobile) return "/assets/landing-story-v3/06-life-mobile-clear.webp";
   const folder = scene === "06-life" || scene === "05-plan" ? "landing-story-v2" : "landing-story-v3";
   return `/assets/${folder}/${scene}${mobile ? "-mobile" : ""}.webp`;
 };
@@ -199,7 +200,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
     };
   };
 
-  return <div ref={journeyRef} className={styles.journey} data-chapter={Math.max(0, chapter - 1)} data-comparison={chapter === 1} data-market={market} style={{ "--journey-progress": 0 } as CSSProperties}>
+  return <div ref={journeyRef} className={styles.journey} data-chapter={Math.max(0, chapter - 1)} data-comparison={chapter === 1} data-has-cta={chapter === 0 || chapter === chapters.length - 1} data-market={market} style={{ "--journey-progress": 0 } as CSSProperties}>
     <div className={styles.stage}>
       <header ref={headerRef} className={styles.header}>
         <Link href="/" className={styles.brand} aria-label="Clover home">
@@ -264,7 +265,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
       <div className={styles.world} aria-hidden="true">
         <div className={styles.sceneStack}>
           {scenes.map((scene, index) => (
-            <div className={styles.scene} data-active={Math.max(0, chapter - 1) === index} key={scene} style={sceneMotion(index)}>
+            <div className={styles.scene} data-scene={scene} data-active={Math.max(0, chapter - 1) === index} key={scene} style={sceneMotion(index)}>
               <span className={styles.sceneBackdrop} style={{ "--scene-backdrop": `url("${sceneAsset(scene)}")` } as CSSProperties} />
               <picture className={styles.sceneSubject}>
                 <source media="(max-width: 900px)" srcSet={sceneAsset(scene, true)} />

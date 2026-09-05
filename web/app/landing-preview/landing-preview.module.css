@@ -483,3 +483,16 @@
   .journey[data-chapter="2"] .chapter[data-active=true],
   .journey[data-chapter="3"] .chapter[data-active=true]{top:38%}
 }
+
+/* Keep the mobile cast clear of the copy and preserve colour until the last quarter. */
+@media(max-width:900px){
+  .journey:not([data-comparison=true]) .world>.worldWash{background:linear-gradient(180deg,transparent 0 75%,rgba(249,253,253,.92) 82%,#f9fdfd 88%)}
+  .journey:not([data-comparison=true]) .story{top:0;bottom:0}
+  .journey:not([data-comparison=true]) .chapter{top:auto;bottom:max(28px,4svh);translate:-50% 0}
+  .journey[data-has-cta=false]:not([data-comparison=true]) .chapter{bottom:max(18px,3svh)}
+  .journey .scene .sceneSubject img{height:100%;object-fit:cover;object-position:center top;transform:translateY(-10%)}
+  .scene[data-scene="01-organize"] .sceneSubject img{object-position:center 20%;transform:translateY(-2%)}
+  .scene[data-scene="05-plan"] .sceneSubject img{object-position:center 46%;transform:translateY(-4%)}
+  .scene[data-scene="06-life"] .sceneSubject img{transform:none}
+  .world{background:#f9fdfd}
+}
