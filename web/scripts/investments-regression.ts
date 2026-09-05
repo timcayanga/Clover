@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { getInvestmentAssetBrand, getInvestmentAssetLogoCandidates } from "@/lib/investment-assets";
+import { getInvestmentAssetBrand, getInvestmentAssetLogoCandidates, getLocalInvestmentLogo } from "@/lib/investment-assets";
+import { INVESTMENT_LOGO_SYMBOLS } from "@/lib/investment-logo-catalog";
 import { getGotradeSecurityName, resolveGotradeSecuritySymbol } from "@/lib/gotrade-securities";
 import {
   canTrackInvestmentDividends,
@@ -242,8 +243,23 @@ const logoCandidates = getInvestmentAssetLogoCandidates({
   subtype: "stock",
   currency: "PHP",
 });
-assert.equal(logoCandidates.length, 1, "Investment assets should use one stable local fallback");
-assert.match(logoCandidates[0] ?? "", /^data:image\/svg\+xml,/);
+for (const [market, symbols] of Object.entries(INVESTMENT_LOGO_SYMBOLS)) {
+  for (const symbol of symbols) {
+    const svg = readFileSync(resolve(process.cwd(), `../assets/investments/${market}/${symbol}.svg`), "utf8");
+    assert.match(svg, /<svg\b/, `${market}/${symbol} must be valid SVG artwork.`);
+    assert.doesNotMatch(svg, /<script\b|<foreignObject\b|\bonload\s*=|(?:href|src)=["']https?:/i, "Local artwork must be self-contained and passive.");
+    assert.equal(getLocalInvestmentLogo({ symbol, market: market === "philippines" ? "ph" : market as "us" | "crypto" | "japan" | "indices", subtype: market === "crypto" ? "crypto" : "stock" }), `/assets/investments/${market}/${symbol}.svg`);
+  }
+}
+assert.equal(getLocalInvestmentLogo({ symbol: "MER.PS", subtype: "stock", currency: "USD" }), "/assets/investments/philippines/MER.svg");
+assert.equal(getLocalInvestmentLogo({ symbol: "BTC-USD", subtype: "crypto" }), "/assets/investments/crypto/BTC.svg");
+assert.equal(getLocalInvestmentLogo({ symbol: "1306.T", subtype: "etf" }), "/assets/investments/japan/1306.svg");
+assert.equal(getLocalInvestmentLogo({ symbol: "^IXIC" }), "/assets/investments/indices/IXIC.svg");
+assert.equal(getLocalInvestmentLogo({ symbol: "AAPL", subtype: "stock", currency: "PHP" }), null, "Do not guess another country's security.");
+assert.equal(getLocalInvestmentLogo({ symbol: "MISSING", subtype: "stock", currency: "USD" }), null);
+assert.equal(getInvestmentAssetBrand({ symbol: "BTC", subtype: "crypto", logoUrl: "/custom-logo.png" }).logoSrc, "/custom-logo.png");
+assert.equal(logoCandidates[0], "/assets/investments/philippines/MER.svg", "Known securities use the uploaded local artwork.");
+assert.match(logoCandidates[1] ?? "", /^data:image\/svg\+xml,/, "Keep a stable fallback for a failed image.");
 
 const hsbcBrand = getInvestmentAssetBrand({
   name: "HSBC Savings",
@@ -269,7 +285,7 @@ const gotradeBrand = getInvestmentAssetBrand({
   subtype: "stock",
   currency: "USD",
 });
-assert.match(gotradeBrand.logoSrcs[0] ?? "", /gotrade/i, "Every GoTrade holding should prefer the GoTrade mark.");
+assert.equal(gotradeBrand.logoSrcs[0], "/assets/investments/us/XOM.svg", "Identify the security, not just its brokerage.");
 assert.equal(resolveGotradeSecuritySymbol({ institution: "GoTrade", name: "Exxon Mobil" }), "XOM");
 assert.equal(resolveGotradeSecuritySymbol({ institution: "GoTrade", name: "Verizon" }), "VZ");
 assert.equal(getGotradeSecurityName("VZ"), "Verizon");

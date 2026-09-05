@@ -64435,6 +64435,9 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
 }
 
 /* Public feature links are one column: task first, products beneath it. */
+.investment-market-identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.investment-market-identity > .accounts-brand-mark { width: 36px; height: 36px; flex: 0 0 36px; }
+.investment-market-identity h3 { margin: 0; overflow-wrap: anywhere; }
 .landing-nav__submenu { width: min(310px, calc(100vw - 32px)); }
 .landing-nav__submenu a,
 .landing-nav__mobile-menu .landing-nav__mobile-menu-link {

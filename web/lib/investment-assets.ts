@@ -1,5 +1,7 @@
 import { getAccountBrand, type AccountBrand } from "@/lib/account-brand";
 import { isFixedIncomeInvestmentSubtype, type InvestmentSubtype } from "@/lib/investments";
+import { INVESTMENT_LOGO_SYMBOLS } from "@/lib/investment-logo-catalog";
+import { resolveGotradeSecuritySymbol } from "@/lib/gotrade-securities";
 
 type InvestmentAssetBrandInput = {
   symbol?: string | null;
@@ -8,9 +10,36 @@ type InvestmentAssetBrandInput = {
   currency?: string | null;
   institution?: string | null;
   logoUrl?: string | null;
+  market?: "ph" | "us" | "crypto" | "japan" | "indices" | null;
 };
 
 const assetIconPath = "/assets/banks/investment.png";
+const logoSets = Object.fromEntries(Object.entries(INVESTMENT_LOGO_SYMBOLS).map(([market, symbols]) => [market, new Set<string>(symbols)]));
+
+export const getLocalInvestmentLogo = (params: InvestmentAssetBrandInput): string | null => {
+  if (Boolean(isFixedIncomeInvestmentSubtype(params.subtype)) || params.subtype === "real_world_asset") return null;
+  let symbol = (resolveGotradeSecuritySymbol(params) || params.name || "").trim().toUpperCase();
+  let market: string | null = params.market ?? (params.subtype === "crypto" ? "crypto" : null);
+  const prefix = symbol.match(/^(PSE|NASDAQ|NYSE|AMEX|TYO|JPX|INDEX):(.+)$/);
+  if (prefix) {
+    market = ({ PSE: "philippines", NASDAQ: "us", NYSE: "us", AMEX: "us", TYO: "japan", JPX: "japan", INDEX: "indices" } as Record<string,string>)[prefix[1]];
+    symbol = prefix[2];
+  } else if (symbol.endsWith(".PS")) { market = "philippines"; symbol = symbol.slice(0, -3); }
+  else if (symbol.endsWith(".T")) { market = "japan"; symbol = symbol.slice(0, -2); }
+  else if (symbol.startsWith("^")) { market = "indices"; symbol = symbol.slice(1); }
+  if (market === "ph") market = "philippines";
+  if (market === "crypto") {
+    symbol = symbol.replace(/[-/]?(USDT|USD|PHP)$/, (suffix) => logoSets.crypto.has(symbol) ? suffix : "");
+    symbol = ({ BITCOIN: "BTC", ETHEREUM: "ETH", SOLANA: "SOL", RIPPLE: "XRP", DOGECOIN: "DOGE" } as Record<string,string>)[symbol] ?? symbol;
+  }
+  market ??= params.currency?.toUpperCase() === "PHP" ? "philippines" : params.currency?.toUpperCase() === "USD" ? "us" : params.currency?.toUpperCase() === "JPY" ? "japan" : null;
+  if (market !== "crypto" && logoSets.indices.has(symbol) && !logoSets[market ?? ""]?.has(symbol)) market = "indices";
+  // Alphabet's two share classes use the same company artwork.
+  if (market === "us" && symbol === "GOOGL" && !logoSets.us.has(symbol)) symbol = "GOOG";
+  if (market === "us" && ["BRK-B", "BRK.B", "BRK-A"].includes(symbol)) symbol = "BRK.A";
+  if (!market || !logoSets[market]?.has(symbol)) return null;
+  return `/assets/investments/${market}/${encodeURIComponent(symbol)}.svg`;
+};
 
 const uniqueValues = (values: string[]) => Array.from(new Set(values.filter((value) => value.length > 0)));
 
@@ -40,9 +69,8 @@ export const getInvestmentAssetLogoCandidates = (params: InvestmentAssetBrandInp
     return [];
   }
 
-  // A deterministic local monogram avoids probing dozens of missing image URLs,
-  // which previously made investment marks flicker while their fallbacks loaded.
-  return [getAssetMonogramDataUri(params)];
+  const localLogo = getLocalInvestmentLogo(params);
+  return localLogo ? [localLogo, getAssetMonogramDataUri(params)] : [getAssetMonogramDataUri(params)];
 };
 
 export const getInvestmentAssetBrand = (params: InvestmentAssetBrandInput): AccountBrand => {
@@ -60,8 +88,9 @@ export const getInvestmentAssetBrand = (params: InvestmentAssetBrandInput): Acco
         type: "investment",
       })
     : null;
-  const shouldPreferInstitutionLogo =
-    isGotradeAsset || !params.symbol?.trim() || !params.subtype || params.subtype === "other" || isFixedIncome;
+  const localLogo = getLocalInvestmentLogo(params);
+  const shouldPreferInstitutionLogo = !localLogo && (
+    isGotradeAsset || !params.symbol?.trim() || !params.subtype || params.subtype === "other" || isFixedIncome);
   const institutionLogoCandidates = uniqueValues([
     ...(institutionBrand?.logoSrcs ?? []),
     ...(institutionBrand?.logoSrc ? [institutionBrand.logoSrc] : []),
@@ -76,9 +105,9 @@ export const getInvestmentAssetBrand = (params: InvestmentAssetBrandInput): Acco
     logoSrc: null,
     logoSrcs,
     fallbackIconSrc: assetIconPath,
-    logoBackground: shouldPreferInstitutionLogo ? institutionBrand?.logoBackground : undefined,
+    logoBackground: localLogo ? "#ffffff" : shouldPreferInstitutionLogo ? institutionBrand?.logoBackground : undefined,
     logoFit: shouldPreferInstitutionLogo ? institutionBrand?.logoFit ?? "contain" : "contain",
-    logoPadding: shouldPreferInstitutionLogo ? institutionBrand?.logoPadding : undefined,
+    logoPadding: localLogo ? "4px" : shouldPreferInstitutionLogo ? institutionBrand?.logoPadding : undefined,
     accent: isCrypto ? "#22c55e" : isRealWorldAsset ? "#d69e2e" : isFixedIncome ? "#2563eb" : "#14b8a6",
     background: isCrypto
       ? "linear-gradient(135deg, rgba(34, 197, 94, 0.16), rgba(14, 165, 233, 0.06))"

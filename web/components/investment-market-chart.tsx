@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { AccountBrandMark } from "@/components/account-brand-mark";
+import { getInvestmentAssetBrand } from "@/lib/investment-assets";
 import {
   buildMarketLinePath,
   formatMarketSymbolForRegion,
@@ -1044,7 +1046,10 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
         <div className="investments-market-insights__head">
           <div>
             <p className="eyebrow">Market Insights</p>
-            <h3>{submittedSymbol ? `${submittedSymbol} at a glance` : "Portfolio watchlist"}</h3>
+            <div className="investment-market-identity">
+              {submittedSymbol ? <AccountBrandMark accountBrand={getInvestmentAssetBrand({ symbol: submittedSymbol, market: submittedMarket, subtype: submittedMarket === "crypto" ? "crypto" : "stock" })} label={submittedSymbol} /> : null}
+              <h3>{submittedSymbol ? `${submittedSymbol} at a glance` : "Portfolio watchlist"}</h3>
+            </div>
           </div>
           <div className="investments-market-insights__links">
             {externalMarketUrl ? (
