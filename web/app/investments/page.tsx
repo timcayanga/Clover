@@ -1854,7 +1854,7 @@ export default function InvestmentsPage() {
       if (!current || date < current) earliestActivityByAccount.set(transaction.accountId, date);
     }
     const accountStartDateById = new Map(
-      investmentAccounts.map((account) => [account.id, account.investmentStartDate] as const)
+      investmentAccounts.map((account) => [account.id, account.investmentStartDate || account.createdAt] as const)
     );
     return portfolioSourceRows.flatMap((row) => {
       if (portfolioCurrencyFilter !== "ALL" && formatCurrencyCode(row.currency) !== portfolioCurrencyFilter) return [];

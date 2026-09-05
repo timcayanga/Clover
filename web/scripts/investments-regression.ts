@@ -398,6 +398,34 @@ assert.match(portfolioGrowthSource, /MARKET_RANGES\.map/, "Portfolio growth must
 assert.match(portfolioGrowthSource, /portfolio-growth__asset-picker/, "Portfolio growth investments must use one compact picker.");
 assert.match(portfolioGrowthSource, /type="checkbox"/, "Portfolio growth picker must retain multi-selection.");
 assert.match(portfolioGrowthSource, /useState<MarketRange>\("MAX"\)/, "Portfolio growth must open with the full recorded period.");
+assert.match(
+  investmentsPageSource,
+  /account\.investmentStartDate \|\| account\.createdAt/,
+  "Undated investments must start at their saved Clover creation date, not the beginning of market history.",
+);
+
+const creationDateGrowthSeries = buildPortfolioGrowthSeries({
+  assets: [
+    { id: "dated", name: "Dated investment", symbol: "A", market: "us", units: 1, currency: "USD", startDate: "2026-01-02" },
+    { id: "undated", name: "Added later", symbol: "B", market: "us", units: 1, currency: "USD", startDate: "2026-01-04T08:30:00Z" },
+  ],
+  histories: ["dated", "undated"].map((assetId) => ({
+    assetId, currency: "USD",
+    points: [
+      { date: "2026-01-01", value: 10 },
+      { date: "2026-01-05", value: 20 },
+    ],
+  })),
+  exchangeRates: { USD: 1 },
+});
+assert.equal(creationDateGrowthSeries[0]?.date, "2026-01-02", "Max must begin at the earliest investment date.");
+assert.equal(creationDateGrowthSeries.find((point) => point.date === "2026-01-03")?.value, 10, "A later-added investment must not contribute before its creation date.");
+assert.equal(creationDateGrowthSeries.find((point) => point.date === "2026-01-04")?.value, 20, "An undated investment must join the chart on its Clover creation date.");
+assert.equal(buildRecordedValueHistory({
+  id: "recorded-undated", name: "Savings", symbol: "", market: "ph",
+  units: 1, currency: "PHP", historyMode: "recorded",
+  startDate: "2026-01-04T08:30:00Z", currentValue: 100,
+}, "MAX", new Date("2026-01-05T12:00:00Z"))?.points[0]?.date, "2026-01-04", "The same fallback must support non-market investments.");
 assert.doesNotMatch(portfolioGrowthSource, /<strong>\{asset\.symbol\}<\/strong>/, "Investment picker labels must not be bold.");
 assert.match(portfolioGrowthSource, /onPointerMove/, "Portfolio growth must expose hover and pointer values.");
 assert.match(portfolioGrowthSource, /preserveAspectRatio="none"/, "Portfolio growth must not letterbox chart coordinates at short browser heights.");
