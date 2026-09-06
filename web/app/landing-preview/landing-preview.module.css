@@ -605,6 +605,37 @@
 }
 .featuresDropdown a,.mobileDrawerLinks a{white-space:normal;overflow-wrap:anywhere;padding-block:9px}
 .featuresDropdown a strong,.mobileDrawerLinks a strong{font-weight:600;line-height:1.35}
+/* These photos share a stage with a full-height phone. Reserve a real gutter,
+   rather than putting the phone over a full-bleed person or duplicating photos.
+   Contain preserves the cast and image proportions at different desktop ratios. */
+.journey .scene{transition:opacity 240ms ease-out!important;will-change:opacity}
+@media(min-width:901px){
+ .journey .scene:is([data-scene="03-picture"],[data-scene="04-adviser"],[data-scene="05-plan"],[data-scene="08-pro"]){background:linear-gradient(110deg,#f9fdfd 20%,#ede9df 72%,#eaf4f2)}
+ .journey .scene:is([data-scene="03-picture"],[data-scene="04-adviser"],[data-scene="05-plan"],[data-scene="08-pro"]) .sceneSubject{
+   top:88px;bottom:0;height:auto;width:calc(100% - var(--landing-phone-width) - 6vw);
+ }
+ .journey .scene:is([data-scene="03-picture"],[data-scene="04-adviser"],[data-scene="05-plan"],[data-scene="08-pro"]) .sceneSubject img{
+   object-fit:contain;object-position:right center;transform:none;
+   height:auto;max-height:100%;top:50%;bottom:auto;translate:0 -50%;
+   mask-image:linear-gradient(90deg,transparent,#000 25%,#000 94%,transparent),linear-gradient(180deg,transparent,#000 8%,#000 92%,transparent);
+   mask-composite:intersect;
+   -webkit-mask-image:linear-gradient(90deg,transparent,#000 25%,#000 94%,transparent),linear-gradient(180deg,transparent,#000 8%,#000 92%,transparent);
+   -webkit-mask-composite:source-in;
+ }
+ .journey .scene:is([data-scene="05-plan"],[data-scene="08-pro"]) .sceneSubject img{width:85%;left:auto;right:0}
+ .journey[data-chapter="4"] .chapter{width:30vw}
+ .journey[data-chapter="4"] .world>.worldWash{background:linear-gradient(90deg,#f9fdfd 0 20%,rgba(249,253,253,.95) 29%,transparent 41%)}
+}
+@media(min-width:901px) and (max-aspect-ratio:3/2){
+ .journey .scene:is([data-scene="03-picture"],[data-scene="04-adviser"],[data-scene="05-plan"],[data-scene="08-pro"]) .sceneSubject{bottom:auto;height:52svh}
+ .journey:is([data-chapter="2"],[data-chapter="3"],[data-chapter="4"]) .chapter{
+   top:auto;bottom:8svh;translate:0 0;width:calc(100% - var(--landing-phone-width) - 13vw);
+ }
+ .journey:is([data-chapter="2"],[data-chapter="3"],[data-chapter="4"]) .world>.worldWash{
+   background:linear-gradient(180deg,transparent 0 55%,rgba(249,253,253,.94) 68%,#f9fdfd);
+ }
+}
+@media(prefers-reduced-motion:reduce){.journey .scene{transition:none!important}}
 @media(max-width:900px){
  .journey[data-chapter] .world>.worldWash{background:linear-gradient(180deg,transparent 0 60%,rgba(249,253,253,.72) 68%,rgba(249,253,253,.97) 76%,#f9fdfd 84%)}
  .journey[data-comparison=true] .story,.journey[data-pro=true] .story{top:0;bottom:0}
