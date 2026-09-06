@@ -2,6 +2,61 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Server-only notification configuration. Deletion preserves overrides and audit history.
+model NotificationTemplate {
+  key            String
+  environment    String
+  name           String
+  triggerKey     String
+  enabled        Boolean  @default(false)
+  inApp          Boolean  @default(true)
+  email          Boolean  @default(false)
+  title          String
+  body           String
+  ctaLabel       String
+  emailSubject   String
+  emailBody      String
+  emailEnabledAt DateTime?
+  archived       Boolean  @default(false)
+  version        Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@id([environment, key])
+}
+
+model NotificationTemplateAudit {
+  id          String   @id @default(cuid())
+  environment String
+  templateKey String
+  actorId     String
+  action      String
+  before      Json?
+  after       Json
+  createdAt   DateTime @default(now())
+  @@index([environment, createdAt])
+}
+
+// No rendered financial content is retained in the email ledger.
+model NotificationEmailDelivery {
+  id          String   @id @default(cuid())
+  environment String
+  userId      String
+  templateKey String
+  eventKey    String
+  status      String   @default("sending")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@unique([environment, userId, templateKey, eventKey], map: "NotificationEmailDelivery_dedupe_key")
+  @@index([environment, createdAt])
+}
+
+model NotificationDispatchCursor {
+  environment String   @id
+  userId      String   @default("")
+  leaseUntil  DateTime?
+  updatedAt   DateTime @updatedAt
+}
+
 // Editorial data is separate from users' financial records. Public readers only
 // receive the approved snapshot; saves and AI generations modify draft only.
 model KnowledgeArticle {

@@ -65,14 +65,14 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     const shareUrl = getCircleInvitationPath(updated.token);
     let emailSent = false;
     try {
-      await sendCircleInvitationEmail({
+      emailSent = await sendCircleInvitationEmail({
+        environment: user.environment,
         to: updated.email!,
         circleName: access.circle.name,
         inviterName: getUserDisplayName(user),
         inviteUrl: new URL(shareUrl, request.url).toString(),
         expiresAt: updated.expiresAt,
       });
-      emailSent = true;
     } catch (error) {
       console.error("[Circles] Resent invitation email failed", {
         circleId,

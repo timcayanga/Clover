@@ -6,6 +6,8 @@ import { getCircleInvitationPath } from "@/lib/circle-invitations";
 import { getUserDisplayName } from "@/lib/user-display-name";
 import { buildReviewQueueWhere } from "@/lib/review-queue";
 import { prisma } from "@/lib/prisma";
+import { applyInAppTemplates } from "@/lib/notification-template-rules";
+import { loadRuntimeNotificationTemplates } from "@/lib/notification-templates.server";
 
 type NotificationUser = {
   id: string;
@@ -73,6 +75,7 @@ export const buildInAppNotificationCandidates = async (
   user: NotificationUser,
   workspaceId: string,
   now = new Date(),
+  options: { raw?: boolean } = {},
 ): Promise<InAppNotification[]> => {
   const sevenDaysAgo = new Date(now.getTime() - 7 * DAY_MS);
   const thirtyDaysAgo = new Date(now.getTime() - 30 * DAY_MS);
@@ -434,7 +437,10 @@ export const buildInAppNotificationCandidates = async (
     });
   }
 
-  return items
+  const configured = options.raw ? items : applyInAppTemplates(items, await loadRuntimeNotificationTemplates(
+    (await prisma.user.findUnique({ where: { id: user.id }, select: { environment: true } }))?.environment ?? "local",
+  ));
+  return configured
     .sort((left, right) => priorityRank[left.priority] - priorityRank[right.priority] || right.createdAt.localeCompare(left.createdAt))
     .slice(0, 40);
 };

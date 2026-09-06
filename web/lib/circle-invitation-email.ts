@@ -1,7 +1,7 @@
-import nodemailer from "nodemailer";
-import { getEnv } from "@/lib/env";
-
-const DEFAULT_SENDER = "hello@clover.ph";
+import { loadRuntimeNotificationTemplates } from "@/lib/notification-templates.server";
+import { renderNotificationText } from "@/lib/notification-template-rules";
+import { sendNotificationMail } from "@/lib/notification-mail.server";
+import { getCurrentUserEnvironment } from "@/lib/user-environment";
 
 const stripNewlines = (value: string) => value.replace(/[\r\n]+/g, " ").trim();
 
@@ -60,27 +60,15 @@ export async function sendCircleInvitationEmail(input: {
   inviterName: string;
   inviteUrl: string;
   expiresAt: Date;
+  environment?: string;
 }) {
-  const env = getEnv();
-  const username = env.ZOHO_SMTP_USER ?? DEFAULT_SENDER;
-  const senderAddress = env.CIRCLE_INVITATION_FROM ?? username;
-  if (!env.ZOHO_SMTP_PASSWORD) {
-    throw new Error("Circle invitation email delivery is not configured.");
-  }
-
-  const port = env.ZOHO_SMTP_PORT ?? 465;
-  const transporter = nodemailer.createTransport({
-    host: env.ZOHO_SMTP_HOST ?? "smtp.zoho.com",
-    port,
-    secure: port === 465,
-    auth: { user: username, pass: env.ZOHO_SMTP_PASSWORD },
-  });
   const message = buildCircleInvitationEmail(input);
-
-  await transporter.sendMail({
-    from: `Clover Circles <${senderAddress}>`,
-    to: input.to.trim().toLowerCase(),
-    replyTo: senderAddress,
-    ...message,
-  });
+  const templates = (await loadRuntimeNotificationTemplates(input.environment ?? getCurrentUserEnvironment()))
+    .filter(t => t.triggerKey === "circle-invitation" && t.enabled && t.email && !t.archived);
+  if (!templates.length) return false;
+  const values = { title: message.subject, message: message.text, ctaLabel: "Join the Circle", actionUrl: input.inviteUrl };
+  // One immediate email even when Admin creates additional invitation variants.
+  const bodies = templates.map(t => renderNotificationText(t.emailBody, values));
+  await sendNotificationMail(input.to, renderNotificationText(templates[0].emailSubject, values), bodies.join("\n\n———\n\n"));
+  return true;
 }
