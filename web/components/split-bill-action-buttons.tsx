@@ -42,7 +42,7 @@ export function SplitBillActionButtons({
 }) {
   return (
     <div className={`split-bill-page-actions ${className}`.trim()}>
-      <button className="button button-secondary button-small transactions-action-button split-bill-action-button split-bill-action-button--add" type="button" onClick={onAddBill}>
+      <button className="button button-secondary button-small transactions-action-button split-bill-action-button split-bill-action-button--add" type="button" aria-label="Add split bill" onClick={onAddBill}>
         <span className="button-icon" aria-hidden="true">
           <SplitBillActionIcon name="plus" />
         </span>

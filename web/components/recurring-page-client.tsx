@@ -174,7 +174,7 @@ export function RecurringPageClient({
       mobileLeadingAction={<ContextualAskClover context="recurring" planTier={planTier} />}
       actions={
         <div className="recurring-shell-actions">
-          <ContextualAskClover context="recurring" planTier={planTier} />
+          <span className="recurring-desktop-adviser"><ContextualAskClover context="recurring" planTier={planTier} /></span>
           <button
             type="button"
             className="button button-primary button-small recurring-topbar-add transactions-action-button"

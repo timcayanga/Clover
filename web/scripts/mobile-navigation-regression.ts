@@ -17,6 +17,12 @@ async function main() {
     readSource("app/transactions/page.tsx"),
   ]);
 
+  assert.match(recurringPage, /className="recurring-desktop-adviser"><ContextualAskClover/, "Recurring's desktop Adviser needs a separately hidden mobile wrapper.");
+  assert.match(styles, /\.recurring-desktop-adviser \{ display: none !important; \}/);
+  assert.match(styles, /\.split-bill-home > \.split-bill-pulse \{ display: none; \}/, "Split Bills summaries must be hidden on mobile.");
+  assert.match(await readSource("components/split-bill-action-buttons.tsx"), /aria-label="Add split bill"/, "Split Bills must participate in the shared circular mobile Add controls.");
+  assert.doesNotMatch(styles, /\.content--investments \.topbar-actions \.currency-selector__trigger-(?:token|all)[^{]*\{\s*display: none/, "Investment currency symbols must not be hidden.");
+
   assert.match(
     shell,
     /className=\{`shell-mobile-more-link[\s\S]{0,300}aria-expanded=\{isSidebarOpen\}[\s\S]{0,160}aria-controls="primary-navigation"/,

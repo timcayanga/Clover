@@ -10,13 +10,15 @@ Captured September 5, 2026, using fictional local fixtures and the actual Clover
 | adviser | `AdviserChat`, actual conversation UI with an illustrative fixture response, not a live recommendation |
 | investments | `web/app/investments/page.tsx`, Overview |
 | budget | `BudgetingWorkspace`, budget directory |
-| goal | `GoalInlineSetup`, Goals setup section |
+| goal | `GoalDirectory`, current multi-goal card directory |
 | circles | `CirclesPageClient`, circle directory |
 | split | `SplitBillWorkspace`, bill directory; settlement computed by `buildSplitBillSettlement` |
 
 All files are saved under `assets/landing-screens/`. All ten screen types, including Transactions, were refreshed after the mobile navigation update. Captures are 1206×2334 pixels (402×778 CSS pixels at 3× device scale), matching the content-area ratio of the shared phone. The phone retains the main landing page's silver frame, status bar, Dynamic Island, glass and home indicator.
 
 ## Reproduction and isolation
+
+September 6 refresh: all ten PH and Global screens were recaptured after the header fixes. Split Bills uses the shared teal circular Add action and hides mobile summary cards. Adviser uses the Transactions sizing (44px mobile, 52px desktop), with one visible Recurring header action. Investments explicitly selects All Currencies to demonstrate the globe. Goals now shows two fictional cards rather than the obsolete single-goal setup. `web/scripts/verify-feature-capture-headers.mjs` checks the current components at 320, 402, 768, 1100, and 1440px in the isolated capture session.
 
 `web/scripts/fixtures/feature-capture.tsx.txt` archives the local-only harness. It is deliberately outside app routes and is not compiled or deployed. `web/scripts/capture-feature-screens.mjs` drives the isolated browser session, intercepts every `/api/**` request with fictional responses, captures the UI, and encodes WebP assets. Run from `web/` with `ph` or `global` and optional product stems.
 

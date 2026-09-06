@@ -19,6 +19,8 @@ body.transactions.forEach(t=>Object.assign(t,{merchantRaw:t.merchant,merchantCle
 run("network","unroute");
 run("network","route","**/api/**","--body",JSON.stringify(body));
 run("set","viewport","402","778","3");
+run("open","http://localhost:3012/");
+run("eval",`localStorage.clear(); sessionStorage.clear(); localStorage.setItem('clover.settings.regional.v1',JSON.stringify({baseCurrency:'${currency}'}));`);
 for(const page of process.argv.slice(3).length?process.argv.slice(3):["transactions","accounts","recurring","reports","adviser","investments","budget","goal","circles","split"]){
  run("open",`http://localhost:3012/capture-local?page=${page}&market=${market}`);
  run("wait","--fn","document.querySelector('.app-shell') !== null || document.querySelector('.clover-shell') !== null || document.querySelector('main') !== null");
@@ -28,6 +30,11 @@ for(const page of process.argv.slice(3).length?process.argv.slice(3):["transacti
  run("wait","--fn","document.fonts.status === 'loaded'");
  run("wait","--fn","document.querySelector('main') && !document.body.innerText.includes('Loading your')");
  run("wait","1000");
+ if(page==="investments"){
+  run("find","role","button","click","--name","Select investment currency");
+  run("find","role","option","click","--name","All Currencies Show every currency");
+  run("wait","500");
+ }
  if(run("get","text","body").includes("Something Went Wrong")) throw new Error(`Capture failed: ${page}`);
  run("eval","document.querySelector('nextjs-portal')?.remove()");
  run("screenshot",`/tmp/clover-${page}-${market}.png`);

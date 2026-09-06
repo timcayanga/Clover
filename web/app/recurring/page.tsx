@@ -23,7 +23,7 @@ function RecurringUnavailableState() {
       active="recurring"
       title="Recurring"
       mobileLeadingAction={<ContextualAskClover context="recurring" />}
-      actions={<ContextualAskClover context="recurring" />}
+      actions={<span className="recurring-desktop-adviser"><ContextualAskClover context="recurring" /></span>}
     >
       <section className="recurring-page">
         <TransientDataRecovery eyebrow="Recurring" pageLabel="Recurring" transactionHref="/transactions?manual=1" transactionLabel="Add a transaction" />

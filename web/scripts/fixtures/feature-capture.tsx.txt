@@ -17,8 +17,8 @@ import { BudgetingWorkspace } from "@/components/budgeting-workspace";
 import { CirclesPageClient } from "@/components/circles-page-client";
 import { SplitBillWorkspace } from "@/components/split-bill-workspace";
 import { ReportsMoneyOverTimeChart } from "@/components/reports-money-over-time-chart";
-import { GoalInlineSetup } from "@/components/goal-inline-setup";
-import { GOAL_OPTIONS } from "@/lib/goals";
+import { GoalDirectory } from "@/components/goal-directory";
+import { ContextualAskClover } from "@/components/contextual-ask-clover";
 import { buildSplitBillSettlement } from "@/lib/split-bill";
 
 function Capture() {
@@ -44,7 +44,7 @@ function Capture() {
  }
  else if(page==="adviser")content=<CloverShell active="adviser" title="Adviser"><AdviserChat prompts={[]} isPro layout="workspace"/></CloverShell>;
  else if(page==="reports")content=<ReportsTabsProvider initialSection="overview" availableSections={["overview","spending","trends","advanced"]}><CloverShell active="reports" title="Reports" titleAddon={<ReportsTopTabs/>} mobileSubheader={<ReportsTopTabs/>} mobileLeadingAction={<><AdviserHeaderLink/><ReportsRangeMenu currentRange="month" currentRangeLabel="This month" currentFrom="2026-09-01" currentTo="2026-09-30"/></>} actions={<div className="reports-page__actions"><ReportsCurrencyFilter/></div>}><section className="reports-page"><ReportsMoneyOverTimeChart currency={currency} points={[84250,83100,85800,84600,90250,88500].map((balance,i)=>({date:`2026-09-0${i+1}`,balance:n(balance)}))}/></section></CloverShell></ReportsTabsProvider>;
- else content=<CloverShell active="goals" title="Goals"><section className="goals-page"><section className="goals-blank-state glass"><span className="goals-blank-state__emoji">🎯</span><h3>What do you want your money to help you do?</h3><GoalInlineSetup goals={GOAL_OPTIONS} suggestedTargetAmount={n(60000)} monthlyIncome={n(48000)} currency={currency}/></section></section></CloverShell>;
+ else content=<CloverShell active="goals" title="Goals" mobileBackHref="/more" actions={<ContextualAskClover context="goals" planTier="pro"/>}><GoalDirectory goals={[{id:"demo-trip",name:"Next year's trip",category:"Save More",amount:n(60000),currency,cadence:"One-time",emoji:"✈️"},{id:"demo-buffer",name:"Emergency fund",category:"Emergency Fund",amount:n(120000),currency,cadence:"One-time",emoji:"🛟"}]}/></CloverShell>;
  return <PathnameContext.Provider value={`/${({budget:"budgeting",goal:"goals",split:"split-bill"} as Record<string,string>)[page] || page}`}>{content}</PathnameContext.Provider>;
 }
 export default function Page(){return <Suspense><Capture/></Suspense>}

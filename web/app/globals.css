@@ -63454,9 +63454,7 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
     border-radius: 50% !important;
   }
 
-  .content--investments .topbar-actions .investments-page__add-button-label,
-  .content--investments .topbar-actions .currency-selector__trigger-token,
-  .content--investments .topbar-actions .currency-selector__trigger-all {
+  .content--investments .topbar-actions .investments-page__add-button-label {
     display: none !important;
   }
 
@@ -64350,6 +64348,9 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
 .content { --clover-adviser-action-size: 52px; }
 @media (max-width: 1100px) {
   .content { --clover-adviser-action-size: 44px; }
+  .split-bill-home > .split-bill-pulse { display: none; }
+  .recurring-desktop-adviser { display: none !important; }
+  .content > :is(.topbar, .shell-compact-bar) .split-bill-action-button--add :is(span, svg) { color: #fff !important; }
 }
 .content .contextual-ask-clover,
 .content .contextual-ask-clover__trigger,
