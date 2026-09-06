@@ -1,6 +1,7 @@
 "use client";
 
 import Script from "next/script";
+import { ReferralCheckoutField, prepareCheckout } from "./referral-checkout-field";
 import { useEffect, useRef, useState } from "react";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import type { BillingInterval } from "@/lib/billing-plans";
@@ -63,6 +64,8 @@ export function PaddleCheckoutButton({
   const initializedTokenRef = useRef<string | null>(null);
   const [scriptReady, setScriptReady] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [referralCode, setReferralCode] = useState("");
+  const [preparing, setPreparing] = useState(false);
 
   const initialize = () => {
     if (
@@ -112,7 +115,8 @@ export function PaddleCheckoutButton({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientToken, environment]);
 
-  const openCheckout = () => {
+  const openCheckout = async () => {
+    if (preparing) return;
     if (!window.Paddle) {
       setMessage("Paddle checkout is still loading.");
       return;
@@ -127,11 +131,15 @@ export function PaddleCheckoutButton({
     });
     setMessage(null);
 
+    setPreparing(true);
+    try {
+    const checkout = await prepareCheckout("paddle", priceId, referralCode);
     window.Paddle.Checkout.open({
       items: [{ priceId, quantity: 1 }],
       customer: customerEmail ? { email: customerEmail } : undefined,
       customData: {
         cloverUserId: customerId,
+        cloverCheckoutId: checkout.checkoutId,
         planTier: "pro",
         interval,
       },
@@ -141,10 +149,13 @@ export function PaddleCheckoutButton({
         locale: "en",
       },
     });
+    } catch(error) { setMessage(error instanceof Error ? error.message : "Unable to prepare checkout."); }
+    finally { setPreparing(false); }
   };
 
   return (
     <div className={className}>
+      <ReferralCheckoutField value={referralCode} onChange={setReferralCode} provider="paddle" planId={priceId} />
       <Script
         src="https://cdn.paddle.com/paddle/v2/paddle.js"
         strategy="afterInteractive"
@@ -157,9 +168,9 @@ export function PaddleCheckoutButton({
         type="button"
         className="button-primary settings-plan-card__paddle-button"
         onClick={openCheckout}
-        disabled={!scriptReady}
+        disabled={!scriptReady || preparing}
       >
-        {scriptReady ? "Subscribe" : "Loading secure checkout..."}
+        {preparing ? "Preparing checkout…" : scriptReady ? "Subscribe" : "Loading secure checkout..."}
       </button>
       {message ? <p className="billing-helper" aria-live="polite">{message}</p> : null}
     </div>

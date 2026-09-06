@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { BillingActions } from "@/components/billing-actions";
+import { ReferralAccount } from "@/components/referral-account";
 import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
 import { PaddleCheckoutButton } from "@/components/paddle-checkout-button";
 import { PlanFeatureItem } from "@/components/plan-feature-item";
@@ -207,6 +208,7 @@ export function SettingsPlanPanel({
 
   return (
     <section className="settings-section settings-section--plan settings-section--swap" role="tabpanel">
+      <ReferralAccount summary />
       <div className="settings-section__intro settings-section__intro--single">
         <h4>Plan</h4>
       </div>

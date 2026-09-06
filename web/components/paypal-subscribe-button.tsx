@@ -1,6 +1,7 @@
 "use client";
 
 import Script from "next/script";
+import { ReferralCheckoutField, prepareCheckout } from "./referral-checkout-field";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 
@@ -59,6 +60,7 @@ export function PayPalSubscribeButton({
   const instanceRef = useRef<{ close?: () => void } | null>(null);
   const [scriptReady, setScriptReady] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [referralCode, setReferralCode] = useState("");
 
   useEffect(() => {
     if (window.paypal) {
@@ -121,9 +123,10 @@ export function PayPalSubscribeButton({
             billing_action: "create_subscription",
             funding_source: fundingSource,
           });
+          const checkout = await prepareCheckout("paypal", planId, referralCode);
           return actions.subscription.create({
             plan_id: planId,
-            custom_id: customId,
+            custom_id: checkout.checkoutId,
           });
         },
         onApprove: async () => {
@@ -174,10 +177,11 @@ export function PayPalSubscribeButton({
         containerRef.current.innerHTML = "";
       }
     };
-  }, [customId, disabled, fundingSource, onApproved, onCancelled, onStart, planId, scriptReady]);
+  }, [customId, disabled, fundingSource, onApproved, onCancelled, onStart, planId, scriptReady, referralCode]);
 
   return (
     <div className={className}>
+      <ReferralCheckoutField value={referralCode} onChange={setReferralCode} provider="paypal" planId={planId} />
       <Script
         src={scriptSrc}
         strategy="afterInteractive"

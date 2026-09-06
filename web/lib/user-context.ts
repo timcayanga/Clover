@@ -1,9 +1,8 @@
 import { Prisma, type User } from "@prisma/client";
-import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { syncClerkUser, type SyncedClerkUser } from "@/lib/clerk";
 import { capturePostHogServerEvent } from "@/lib/analytics";
-import { reconcileBillingPlanTier } from "@/lib/paypal-billing";
+import { refreshProAccess } from "@/lib/pro-access";
 import { getCurrentUserEnvironment, resolvePersistedUserEnvironment } from "@/lib/user-environment";
 
 export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User> => {
@@ -66,9 +65,7 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
     }
 
     if (!isLocalEnvironment && !user.planTierLocked) {
-      after(async () => {
-        await reconcileBillingPlanTier(user.id).catch(() => null);
-      });
+      user.planTier = await refreshProAccess(user.id);
     }
 
     return user;

@@ -316,6 +316,8 @@ model User {
   circleSharedTransactions         CircleSharedTransaction[]
   circleInvestmentShares           CircleInvestmentShare[]
   billingSubscription              BillingSubscription?
+  proGrants                        ProAccessGrant[]
+  referralCodes                    ReferralCode[]
   billingEvents                    BillingEvent[]
   adminSupportActions              AdminSupportAction[]         @relation("SupportActionTarget")
   adminSupportNotes                AdminSupportNote[]           @relation("SupportNoteTarget")
@@ -403,6 +405,7 @@ model BillingSubscription {
   pendingPlanId          String?
   pendingInterval        BillingInterval?
   currentPeriodEnd       DateTime?
+  paidThrough            DateTime?
   nextBillingTime        DateTime?
   cancelledAt            DateTime?
   approvedAt             DateTime?
@@ -434,6 +437,113 @@ model BillingEvent {
   @@index([subscriptionId])
   @@index([userId])
   @@index([eventType])
+}
+
+model ProAccessGrant {
+  id        String   @id @default(cuid())
+  userId    String
+  startsAt  DateTime
+  endsAt    DateTime
+  revokedAt DateTime?
+  source    String   @default("admin")
+  reason    String
+  actorId   String
+  rewardId  String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, endsAt])
+}
+
+model GrowthCampaign {
+  id          String   @id @default(cuid())
+  environment String
+  name        String
+  status      String   @default("draft")
+  startsAt    DateTime
+  endsAt      DateTime
+  rules       Json
+  terms       String
+  publishedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  codes       ReferralCode[]
+  @@index([environment, status, endsAt])
+}
+
+model ReferralCode {
+  id         String @id @default(cuid())
+  code       String @unique
+  userId     String
+  campaignId String
+  createdAt  DateTime @default(now())
+  user       User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign   GrowthCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  @@unique([userId, campaignId])
+}
+
+model ReferralCheckout {
+  id          String   @id
+  userId      String
+  environment String
+  provider    String
+  planId      String
+  interval    String
+  campaignId  String?
+  referrerId  String?
+  code        String?
+  rules       Json
+  terms       String
+  country     String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  @@index([userId, createdAt])
+}
+
+model GrowthPayment {
+  id             String @id
+  provider       String
+  paymentId      String
+  subscriptionId String?
+  userId         String?
+  checkoutId     String?
+  amount         String?
+  currency       String?
+  paidAt         DateTime?
+  paidThrough    DateTime?
+  reversedAt     DateTime?
+  createdAt      DateTime @default(now())
+  @@index([userId, paidAt])
+}
+
+model ReferralReward {
+  id            String @id @default(cuid())
+  campaignId    String
+  referrerId    String
+  referredId    String @unique
+  paymentId     String @unique
+  checkoutId    String @unique
+  months        Int
+  status        String @default("pending")
+  availableAt   DateTime
+  expiresAt     DateTime?
+  claimedAt     DateTime?
+  reason        String?
+  createdAt     DateTime @default(now())
+  @@index([referrerId, status])
+  @@index([campaignId, status])
+}
+
+model GrowthAudit {
+  id        String @id @default(cuid())
+  actorId   String
+  targetId  String
+  action    String
+  reason    String
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+  @@index([targetId, createdAt])
 }
 
 model AdminSupportAction {

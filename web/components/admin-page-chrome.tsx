@@ -5,6 +5,7 @@ type AdminPageChromeProps = {
   active:
     | "home"
     | "content"
+    | "campaigns"
     | "users"
     | "support"
     | "operations"
@@ -25,6 +26,7 @@ const adminNavItems = [
   { key: "home", href: "/admin", label: "Home" },
   { key: "content", href: "/admin/content", label: "Content" },
   { key: "users", href: "/admin/users", label: "Users" },
+  { key: "campaigns", href: "/admin/campaigns", label: "Campaigns & Referrals" },
   { key: "support", href: "/admin/support", label: "Support" },
   { key: "operations", href: "/admin/operations", label: "Operations" },
   { key: "analytics", href: "/admin/analytics", label: "Analytics" },

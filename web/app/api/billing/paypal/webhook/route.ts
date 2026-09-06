@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { handlePayPalGrowth } from "@/lib/growth-webhooks";
 import {
   applyPayPalEntitlement,
   type PayPalWebhookBody,
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
     }
 
     await applyPayPalEntitlement(body);
+    await handlePayPalGrowth(body);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

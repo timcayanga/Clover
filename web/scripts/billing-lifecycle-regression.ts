@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import "./growth-regression";
 import { createHmac } from "node:crypto";
 import { BillingProvider, BillingSubscriptionStatus, PlanTier } from "@prisma/client";
 import { shouldCancelBillingSubscription } from "@/lib/account-management";

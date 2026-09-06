@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { handlePaddleGrowth } from "@/lib/growth-webhooks";
 import {
   applyPaddleEntitlement,
   type PaddleWebhookEvent,
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
 
     const event = JSON.parse(rawBody) as PaddleWebhookEvent;
     await applyPaddleEntitlement(event, env);
+    await handlePaddleGrowth(event);
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("[paddle-webhook] unable to process event", summarizeErrorForLog(error));

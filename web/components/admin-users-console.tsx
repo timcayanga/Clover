@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import type { AdminUserListItem, AdminUserListResponse, AdminUserOverview, AdminUserUpdateInput } from "@/lib/admin-users";
 import type { AdminErrorLogListResponse } from "@/lib/admin-error-logs";
@@ -841,11 +842,12 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
                       <td className="admin-users__activity-cell">
                         <strong>{formatDate(user.updatedAt)}</strong>
                         <small className="admin-users__cell-note">
-                          Renewal: {formatDate(user.renewalAt)}
+                          Billing period end: {formatDate(user.renewalAt)}
                         </small>
                       </td>
                       <td>
                         <div className="admin-users__row-actions">
+                          <Link href={`/admin/users/${user.id}/plan`}>Plan &amp; Access</Link>
                           <button
                             className={`button button-small ${dirty ? "button-primary" : "button-secondary"}`}
                             type="button"

@@ -6,6 +6,8 @@ import {
   type User,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { refreshProAccess } from "@/lib/pro-access";
+import { addCalendarMonths } from "@/lib/pro-access-rules";
 import { getEnv } from "@/lib/env";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { getBillingPlanById, type BillingInterval } from "@/lib/billing-plans";
@@ -135,7 +137,7 @@ async function getPayPalAccessToken(env = getEnv()) {
   return tokenCache.accessToken;
 }
 
-async function fetchPayPalSubscription(subscriptionId: string, env = getEnv()) {
+export async function fetchPayPalSubscription(subscriptionId: string, env = getEnv()) {
   const accessToken = await getPayPalAccessToken(env);
   const response = await fetch(`${getPayPalBaseUrl(env)}/v1/billing/subscriptions/${subscriptionId}`, {
     method: "GET",
@@ -204,6 +206,10 @@ export async function resolvePayPalUser(body: PayPalWebhookBody) {
   const environment = getDeploymentEnvironment();
 
   const findByIdentifiers = async (identifier?: string | null) => {
+    if (identifier?.startsWith("clvref_")) {
+      const checkout = await prisma.referralCheckout.findFirst({ where: { id: identifier, provider: "paypal", environment } });
+      if (checkout) return prisma.user.findFirst({ where: { id: checkout.userId, environment } });
+    }
     const existingSubscription = subscriptionId
       ? await prisma.billingSubscription.findUnique({
           where: { providerSubscriptionId: subscriptionId },
@@ -376,7 +382,7 @@ function getPayPalLinks(responseBody: Record<string, unknown>) {
   };
 }
 
-function snapshotPayPalSubscription(subscription: Record<string, unknown>, env = getEnv()): PayPalSubscriptionSnapshot | null {
+export function snapshotPayPalSubscription(subscription: Record<string, unknown>, env = getEnv()): PayPalSubscriptionSnapshot | null {
   const providerSubscriptionId = readString(subscription.id);
   if (!providerSubscriptionId) {
     return null;
@@ -424,6 +430,14 @@ async function applyBillingSubscriptionSnapshot(
   const wasCancelled = existing?.status === BillingSubscriptionStatus.cancelled;
 
   const rawPayload: Prisma.InputJsonValue = toJsonValue(snapshot.rawPayload);
+  const lastPayment = asRecord(asRecord(snapshot.rawPayload.billing_info)?.last_payment);
+  const hasPaid = Number(asRecord(lastPayment?.amount)?.value ?? 0) > 0;
+  const paymentTime = new Date(String(lastPayment?.time ?? ""));
+  // A future next-billing date alone isn't evidence of a paid period.
+  const verifiedEnd = hasPaid && snapshot.interval && Number.isFinite(+paymentTime)
+    ? addCalendarMonths(paymentTime, snapshot.interval === "annual" ? 12 : 1) : null;
+  const paidThrough = verifiedEnd && (!existing?.paidThrough || verifiedEnd > existing.paidThrough)
+    ? verifiedEnd : existing?.paidThrough ?? null;
 
   const data: Prisma.BillingSubscriptionUncheckedCreateInput = {
     provider: BillingProvider.paypal,
@@ -435,6 +449,7 @@ async function applyBillingSubscriptionSnapshot(
     pendingPlanId: shouldClearPending ? null : pendingPlanId ?? existing?.pendingPlanId ?? null,
     pendingInterval: shouldClearPending ? null : pendingInterval ?? existing?.pendingInterval ?? null,
     currentPeriodEnd: snapshot.currentPeriodEnd,
+    paidThrough,
     nextBillingTime: snapshot.nextBillingTime,
     approvedAt: snapshot.status === BillingSubscriptionStatus.active ? snapshot.approvedAt ?? new Date() : existing?.approvedAt ?? null,
     cancelledAt: snapshot.status === BillingSubscriptionStatus.cancelled ? new Date() : existing?.cancelledAt ?? null,
@@ -454,10 +469,7 @@ async function applyBillingSubscriptionSnapshot(
       });
 
   if (!user.planTierLocked) {
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { planTier },
-    });
+    await refreshProAccess(user.id);
   }
 
   if (snapshot.status === BillingSubscriptionStatus.active && !wasActive) {
@@ -494,44 +506,7 @@ export async function getUserBillingSubscription(userId: string) {
 }
 
 export async function reconcileBillingPlanTier(userId: string) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, planTier: true, planTierLocked: true },
-  });
-
-  if (!user) {
-    return null;
-  }
-
-  if (user.planTierLocked) {
-    return user.planTier;
-  }
-
-  const subscription = await getUserBillingSubscription(userId);
-  if (!subscription) {
-    return null;
-  }
-
-  const nextPlanTier = getBillingPlanTierForSubscription(subscription.status, subscription.interval);
-
-  if (subscription.planTier !== nextPlanTier) {
-    await prisma.billingSubscription.update({
-      where: { userId },
-      data: {
-        planTier: nextPlanTier,
-        lastSyncedAt: new Date(),
-      },
-    });
-  }
-
-  if (user.planTier !== nextPlanTier) {
-    await prisma.user.update({
-      where: { id: userId },
-      data: { planTier: nextPlanTier },
-    });
-  }
-
-  return nextPlanTier;
+  return refreshProAccess(userId);
 }
 
 export async function upsertBillingEvent(params: {

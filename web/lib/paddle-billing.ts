@@ -10,6 +10,7 @@ import { capturePostHogServerEvent } from "@/lib/analytics";
 import { getDeploymentEnvironment } from "@/lib/deployment-environment";
 import { getEnv, type AppEnv } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import { refreshProAccess } from "@/lib/pro-access";
 
 export type PaddleWebhookEvent = {
   event_id?: string;
@@ -317,6 +318,7 @@ export async function applyPaddleEntitlement(
     pendingPlanId: null,
     pendingInterval: null,
     currentPeriodEnd,
+    paidThrough: (await prisma.growthPayment.findFirst({ where: { userId: user.id, subscriptionId, provider: "paddle", reversedAt: null, paidThrough: { not: null } }, orderBy: { paidThrough: "desc" } }))?.paidThrough ?? existing?.paidThrough ?? null,
     nextBillingTime: parseDate(data.next_billed_at),
     approvedAt:
       status === BillingSubscriptionStatus.active
@@ -338,10 +340,7 @@ export async function applyPaddleEntitlement(
   });
 
   if (!user.planTierLocked) {
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { planTier },
-    });
+    await refreshProAccess(user.id);
   }
 
   if (status === BillingSubscriptionStatus.active && !wasActive) {

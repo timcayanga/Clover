@@ -138,8 +138,8 @@ assert.match(
 );
 assert.match(
   userContextSource,
-  /after\(async \(\) => \{[\s\S]{0,180}reconcileBillingPlanTier/,
-  "Billing consistency maintenance must not block authenticated page rendering.",
+  /user\.planTier = await refreshProAccess\(user\.id\)/,
+  "Dated Pro access must be resolved before authorization, not after the response.",
 );
 
 const dashboardSource = readSource("components/dashboard-page-content.tsx");
