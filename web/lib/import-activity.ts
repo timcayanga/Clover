@@ -36,6 +36,31 @@ export type ImportActivitySnapshot = {
 
 export type ImportActivityState = ImportActivitySnapshot;
 
+// Filename/message pairs recur when someone retries the same statement. A
+// dismissal belongs to this import attempt, never to the document forever.
+export const getImportActivityDismissKey = (activity: ImportActivitySnapshot | null) => {
+  if (!activity) return null;
+  return JSON.stringify([
+    activity.workspaceId,
+    activity.importFileId ?? activity.timing?.startedAt ?? activity.updatedAt,
+    activity.status,
+    activity.fileName,
+    activity.errorCode,
+    activity.detail,
+  ]);
+};
+
+export const isFirstCompletedImportActivity = (
+  previous: ImportActivitySnapshot | null,
+  next: ImportActivitySnapshot
+) => {
+  const complete = (snapshot: ImportActivitySnapshot | null) => Boolean(
+    snapshot?.status === "done" && snapshot.fileTotal > 0 &&
+    snapshot.completedFiles >= snapshot.fileTotal && snapshot.progress >= 100
+  );
+  return complete(next) && !complete(previous);
+};
+
 export const importActivityStorageKey = "clover.import.activity.v2";
 export const importActivityEventName = "clover:import-activity-changed";
 const maxPersistedPreviewTransactions = 25;

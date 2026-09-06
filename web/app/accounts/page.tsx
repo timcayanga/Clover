@@ -92,7 +92,6 @@ import type { InstitutionSuggestion } from "@/lib/institution-suggestions";
 import type { UserLimits } from "@/lib/user-limits";
 import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 import {
-  clearImportActivity,
   getCompletedImportActivitySummary,
   importActivityIsComplete,
   readImportActivity,
@@ -1806,43 +1805,8 @@ function AccountsPageContent() {
     }
   }, [reconciledAccounts]);
 
-  useEffect(() => {
-    const currentActivity = readImportActivity();
-    if (currentActivity?.status !== "active") {
-      return;
-    }
-    const activeImportFileId =
-      typeof currentActivity.importFileId === "string" && currentActivity.importFileId.trim()
-        ? currentActivity.importFileId.trim()
-        : null;
-    const hasVisibleCurrentImportTransactions = activeImportFileId
-      ? transactions.some((transaction) => {
-          const rawPayload = transaction.rawPayload;
-          const sourceImportFileId =
-            rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
-              ? (rawPayload as Record<string, unknown>).sourceImportFileId
-              : null;
-          return transaction.importFileId === activeImportFileId || sourceImportFileId === activeImportFileId;
-        })
-      : false;
-    const importBatchStillRunning =
-      Number(currentActivity.fileTotal ?? 0) > 0 &&
-      Number(currentActivity.completedFiles ?? 0) < Number(currentActivity.fileTotal ?? 0);
-    if (importBatchStillRunning && !hasVisibleCurrentImportTransactions) {
-      return;
-    }
-
-    const hasVisibleImportedAccount = reconciledAccounts.some(
-      (account) => account.source === "upload" && !account.id.startsWith("optimistic-")
-    );
-    const hasVisibleImportedTransactions = transactions.some(
-      (transaction) => transaction.source === "upload" || Boolean(transaction.importFileId)
-    );
-
-    if (hasVisibleCurrentImportTransactions || (hasVisibleImportedAccount && hasVisibleImportedTransactions)) {
-      clearImportActivity();
-    }
-  }, [reconciledAccounts, transactions]);
+  // Rendering saved rows is not a dismissal. The uploader/status monitor owns
+  // completion so its 100% confirmation survives this page's data refresh.
 
   const deletingAccountIdsSet = useMemo(
     () => new Set([...deletingAccountIds, ...getDeletingWorkspaceAccountIds(selectedWorkspaceId)]),

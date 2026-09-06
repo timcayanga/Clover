@@ -3,8 +3,35 @@ import { readFileSync } from "node:fs";
 import { getImportStageLabel } from "../lib/import-progress";
 import { resolveImportModalStatusDecision } from "../lib/import-modal-status";
 import { waitForImportSettledVisibility } from "../lib/import-settled-visibility";
+import { getImportActivityDismissKey, isFirstCompletedImportActivity, type ImportActivitySnapshot } from "../lib/import-activity";
 
 async function main() {
+  const active: ImportActivitySnapshot = {
+    workspaceId: "fixture", surface: "background", status: "active",
+    importFileId: "attempt-1", fileName: "statement.pdf", fileIndex: 1,
+    fileTotal: 1, completedFiles: 0, progress: 90, detail: "Saving transactions",
+    summary: null, errorCode: null, errorMessage: null, errorTitle: null,
+    errorNextSteps: null, timing: null, updatedAt: 1000,
+  };
+  const done: ImportActivitySnapshot = {
+    ...active, status: "done", completedFiles: 1, progress: 100, detail: "Import complete",
+  };
+  assert.equal(isFirstCompletedImportActivity(active, done), true, "Retiring the filename must not suppress the first full success snapshot.");
+  assert.equal(isFirstCompletedImportActivity(null, done), true);
+  assert.equal(isFirstCompletedImportActivity(done, done), false, "Late duplicate completion should remain suppressed.");
+  assert.equal(isFirstCompletedImportActivity(active, { ...done, fileTotal: 2 }), false, "One file must not finish a multi-file batch.");
+  assert.equal(isFirstCompletedImportActivity(active, { ...done, status: "error" }), false);
+  assert.equal(isFirstCompletedImportActivity(active, { ...done, progress: 99 }), false);
+  assert.notEqual(getImportActivityDismissKey(done), getImportActivityDismissKey({ ...done, importFileId: "attempt-2" }), "Retrying a dismissed filename needs its own confirmation.");
+  assert.equal(getImportActivityDismissKey(done), getImportActivityDismissKey({ ...done, updatedAt: 2000 }), "A later update to the same attempt must stay dismissed.");
+  assert.notEqual(getImportActivityDismissKey({ ...done, importFileId: null }), getImportActivityDismissKey({ ...done, importFileId: null, updatedAt: 2000 }));
+  const accountsPage = readFileSync("app/accounts/page.tsx", "utf8");
+  assert.doesNotMatch(accountsPage, /clearImportActivity\(/, "Accounts data refresh must not delete active progress before terminal success.");
+  const modal = readFileSync("components/import-files-modal.tsx", "utf8");
+  assert.match(modal, /retiredImportActivityFileNamesRef\.current\.has\(nextSnapshot\.fileName\) &&\s*!isFirstCompletedImportActivity\(previousSnapshot, nextSnapshot\)/, "Terminal publishing must bypass filename retirement for first success.");
+  const globalActivity = readFileSync("components/global-import-activity.tsx", "utf8");
+  assert.match(globalActivity, /if \(!shouldShowOnCurrentPath \|\| pageModalActive \|\| importModalVisible\) return;\s*const timeout/);
+  assert.doesNotMatch(globalActivity, /completedImportDismissDelayMs -/, "Time hidden behind a modal must not consume success display time.");
   for (const progress of [75, 90, 95, 99]) {
     assert.equal(getImportStageLabel("Saving transactions", progress), "Saving transactions");
     assert.equal(getImportStageLabel("Reading file details", progress), "Reading file");

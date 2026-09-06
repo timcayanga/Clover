@@ -74,6 +74,7 @@ import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } f
 import { getImportErrorSpec, getImportErrorSpecForCode, isResumableImportErrorCode, type ImportErrorStage, type ImportErrorSpec } from "@/lib/import-error-spec";
 import {
   clearImportActivity,
+  isFirstCompletedImportActivity,
   readImportActivity,
   setImportActivity,
   subscribeImportActivity,
@@ -650,10 +651,13 @@ export function ImportFilesModal({
           ? nextSnapshot.detail
           : "That file is visible in Clover. Continuing with the remaining files.";
     }
+    // Visibility can retire the filename before this publisher runs. Keep
+    // suppressing late updates, but never discard the first batch success.
     if (
       nextSnapshot.fileName &&
       !isPartialBatchCompletion &&
       retiredImportActivityFileNamesRef.current.has(nextSnapshot.fileName) &&
+      !isFirstCompletedImportActivity(previousSnapshot, nextSnapshot) &&
       nextSnapshot.status !== "error"
     ) {
       return;

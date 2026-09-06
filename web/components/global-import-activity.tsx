@@ -9,6 +9,7 @@ import { resolveImportModalStatusDecision } from "@/lib/import-modal-status";
 import { publishWorkspaceDataChange } from "@/lib/workspace-data-sync";
 import {
   clearImportActivity,
+  getImportActivityDismissKey,
   readImportActivity,
   setImportActivity,
   subscribeImportActivity,
@@ -60,19 +61,7 @@ const getStaleActiveImportTimeoutMs = (activity: ImportActivitySnapshot) => {
   );
 };
 
-const getDismissKey = (activity: ImportActivitySnapshot | null) => {
-  if (!activity) {
-    return null;
-  }
-
-  return [
-    activity.workspaceId,
-    activity.status,
-    activity.fileName ?? "file",
-    activity.errorCode ?? "no-code",
-    activity.detail ?? "",
-  ].join("|");
-};
+const getDismissKey = getImportActivityDismissKey;
 
 const readDismissedKeys = () => {
   if (typeof window === "undefined") {
@@ -511,8 +500,9 @@ export function GlobalImportActivity() {
     if (!activity || activity.status !== "done") {
       return;
     }
-
-    const remainingMs = Math.max(0, completedImportDismissDelayMs - (Date.now() - activity.updatedAt));
+    // Count the confirmation window only while this surface can show it.
+    // A picker, navigation, or page modal must not consume the success timer.
+    if (!shouldShowOnCurrentPath || pageModalActive || importModalVisible) return;
     const timeout = window.setTimeout(() => {
       const current = readImportActivity();
       // Never dismiss a newer import that reused the global activity store.
@@ -522,12 +512,12 @@ export function GlobalImportActivity() {
 
       clearImportActivity();
       setActivity(null);
-    }, remainingMs);
+    }, completedImportDismissDelayMs);
 
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [activity]);
+  }, [activity, shouldShowOnCurrentPath, pageModalActive, importModalVisible]);
 
   if (!activity || !shouldShowOnCurrentPath || pageModalActive || importModalVisible) {
     return null;
