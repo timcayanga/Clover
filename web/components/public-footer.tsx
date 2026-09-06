@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { FEATURE_LINKS } from "@/lib/public-site";
+import { FEATURE_LINKS, SOCIAL_LINKS } from "@/lib/public-site";
 import styles from "./public-footer.module.css";
 
 /** Outside the sticky story so footer height never changes chapter timing. */
@@ -9,6 +9,9 @@ export function PublicFooter() {
     <div className={styles.brand}>
       <Link href="/" aria-label="Clover home"><Image src="/clover-mark.svg" alt="" width={36} height={36} loading="eager" /><Image src="/clover-name-teal.svg" alt="Clover" width={110} height={32} loading="eager" /></Link>
       <p>Feel clearer about your money.</p>
+      <nav aria-label="Follow Clover">
+        {SOCIAL_LINKS.map(link => <a key={link.href} href={link.href}>{link.label}</a>)}
+      </nav>
     </div>
     <nav aria-label="Explore Clover">
       <h2>Explore Clover</h2>

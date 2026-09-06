@@ -325,6 +325,11 @@ export const HEADER_NAV_CATEGORIES: PublicNavCategory[] = [
   },
 ];
 
+export const SOCIAL_LINKS = [
+  { label: "Facebook", href: "https://www.facebook.com/cloverpersonalfinance" },
+  { label: "Instagram", href: "https://www.instagram.com/cloverpersonalfinance/" },
+] as const;
+
 export const PUBLIC_NAV_CATEGORIES: PublicNavCategory[] = [
   {
     label: "Features",

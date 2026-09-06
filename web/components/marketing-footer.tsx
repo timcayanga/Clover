@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PUBLIC_NAV_CATEGORIES } from "@/lib/public-site";
+import { PUBLIC_NAV_CATEGORIES, SOCIAL_LINKS } from "@/lib/public-site";
 
 export function MarketingFooter() {
   return (
@@ -18,6 +18,11 @@ export function MarketingFooter() {
                 {item.label}
               </Link>
             ))}
+            {category.label === "Product" && <nav aria-label="Follow Clover" className="landing-footer__column">
+              {SOCIAL_LINKS.map((link) => (
+                <a key={link.href} href={link.href} className="landing-footer__link">{link.label}</a>
+              ))}
+            </nav>}
           </div>
         ))}
       </div>

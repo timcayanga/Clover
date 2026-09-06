@@ -4,11 +4,19 @@ import path from "node:path";
 import sharp from "sharp";
 import { getVerifiedSpendingMerchantName } from "../lib/transaction-display";
 import { PLAN_COMPARISON_KEYS, PLAN_COMPARISON_ROWS, plannedProPrices } from "../lib/public-plan-comparison";
+import { SOCIAL_LINKS } from "../lib/public-site";
 
 const root = process.cwd();
 const readSource = (relativePath: string) => readFile(path.join(root, relativePath), "utf8");
 
 async function main() {
+  assert.deepEqual(SOCIAL_LINKS, [
+    { label: "Facebook", href: "https://www.facebook.com/cloverpersonalfinance" },
+    { label: "Instagram", href: "https://www.instagram.com/cloverpersonalfinance/" },
+  ]);
+  for (const footer of ["components/public-footer.tsx", "components/marketing-footer.tsx"]) {
+    assert.match(await readSource(footer), /aria-label="Follow Clover"[\s\S]*?SOCIAL_LINKS\.map/, "Both public footer layouts must render the shared social links.");
+  }
   const landingJourneySource = await readSource("app/landing-preview/landing-journey.tsx");
   const landingJourneyStyles = await readSource("app/landing-preview/landing-preview.module.css");
   const landingPreviewPageSource = await readSource("app/landing-preview/page.tsx");
