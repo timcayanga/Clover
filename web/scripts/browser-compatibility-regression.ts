@@ -14,9 +14,14 @@ async function main() {
     { label: "Facebook", href: "https://www.facebook.com/cloverpersonalfinance" },
     { label: "Instagram", href: "https://www.instagram.com/cloverpersonalfinance/" },
   ]);
-  for (const footer of ["components/public-footer.tsx", "components/marketing-footer.tsx"]) {
-    assert.match(await readSource(footer), /aria-label="Follow Clover"[\s\S]*?SOCIAL_LINKS\.map/, "Both public footer layouts must render the shared social links.");
-  }
+  const footer = await readSource("components/public-footer.tsx");
+  assert.match(footer, /aria-label="Follow Clover"[\s\S]*?SOCIAL_LINKS\.map/);
+  assert.match(footer, /aria-label=\{link.label\}/, "Icon-only social links need accessible names.");
+  assert.match(footer, /Money looks better from here<\/p>/);
+  assert.match(footer, /Help &amp; Support/);
+  assert.match(footer, /Other Resources[\s\S]*?Privacy and Security[\s\S]*?>Pro<[\s\S]*?Privacy Policy[\s\S]*?Terms of Service/);
+  assert.doesNotMatch(footer, />Home<|Explore Clover|Here to help/);
+  assert.match(await readSource("components/marketing-footer.tsx"), /PublicFooter as MarketingFooter/, "Every public layout must use the same footer.");
   const landingJourneySource = await readSource("app/landing-preview/landing-journey.tsx");
   const landingJourneyStyles = await readSource("app/landing-preview/landing-preview.module.css");
   const landingPreviewPageSource = await readSource("app/landing-preview/page.tsx");
