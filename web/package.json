@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
+    "qa:mobile-api": "tsx scripts/mobile-api-regression.ts",
     "qa:knowledge": "tsx scripts/knowledge-regression.ts",
     "predev": "tsx scripts/sync-public-assets.ts",
     "dev": "next dev",

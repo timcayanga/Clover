@@ -5,6 +5,14 @@
 - Clerk is Clover's user authentication provider.
 - Supabase Auth is not used by the Clover web application.
 - Browser requests authenticate with Clerk and call Clover's server routes.
+- The guarded native preview API (`/api/mobile/v1`) verifies Clerk session JWTs
+  independently. It never inherits browser cookies, staging guest sessions, or
+  local-admin fallbacks. Request-local principals are established only after
+  verification; native mutations still require explicit workspace ownership.
+- Browser origin checks are unchanged. The native exemption only recognizes the
+  exact Request authenticated inside the server's mobile request context.
+- Native financial responses are no-store and omit raw import payloads/storage
+  keys. Device financial lists are in-memory; session tokens use secure storage.
 
 ## Database Access
 

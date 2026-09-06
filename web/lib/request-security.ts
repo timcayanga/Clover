@@ -1,3 +1,5 @@
+import { getMobileRequestContext } from "@/lib/mobile-request-context";
+
 const parseOrigin = (value: string | null) => {
   if (!value) {
     return "";
@@ -21,6 +23,9 @@ export const getRequestClientIp = (request: Request) => {
 };
 
 export const assertTrustedRequestOrigin = (request: Request) => {
+  // Native clients have no browser Origin. This exemption requires the exact
+  // Request authenticated by the mobile boundary, not a spoofable header.
+  if (getMobileRequestContext()?.request === request) return;
   const requestOrigin = parseOrigin(request.url);
   const originHeader = parseOrigin(request.headers.get("origin"));
   const refererHeader = parseOrigin(request.headers.get("referer"));

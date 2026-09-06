@@ -28,16 +28,22 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: |
+            web/package-lock.json
+            mobile/package-lock.json
 
       - name: Install dependencies
-        run: npm ci --prefix web
+        run: |
+          npm ci --prefix web
+          npm ci --prefix mobile
 
       - name: Generate Prisma Client
         run: npm --prefix web exec -- prisma generate --schema web/prisma/schema.prisma
 
       - name: Reject high-risk production dependency advisories
-        run: npm --prefix web run qa:production-audit
+        run: |
+          npm --prefix web run qa:production-audit
+          npm --prefix mobile audit --omit=dev --audit-level=high
 
       - name: Run the same pre-push quality gate used locally
         run: npm run qa:prepush
