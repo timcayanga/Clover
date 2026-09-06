@@ -3,9 +3,9 @@
 export function landingScenePosition(position: number) {
   if (position <= 1.5) return 0;
   if (position < 2) return (position - 1.5) * 2;
-  if (position <= 6) return position - 1;
-  if (position <= 7.5) return 5;
-  return 5 + Math.min(1, (position - 7.5) * 2) * 2;
+  if (position <= 5) return position - 1;
+  if (position <= 6.5) return 4;
+  return 4 + Math.min(1, (position - 6.5) * 2) * 2;
 }
 
 export function featurePhotoPosition(position: number, hasPricing: boolean) {

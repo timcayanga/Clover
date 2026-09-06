@@ -16,20 +16,19 @@ import styles from "./landing-preview.module.css";
 
 const chapters = [
   { title: <>Months of finances.<br /><em>Organized in minutes.</em></>, copy: "Upload statements, receipts, screenshots, or spreadsheets. Understand your money and take one clearer step at a time." },
-  { title: <>Stop tracking.<br /><em>Start organizing.</em></>, copy: "Most finance apps ask you to enter transactions one by one. Clover starts with the records you already have, so you can spend less time rebuilding your finances and more time understanding them." },
-  { title: <>Skip the manual <em>rebuilding.</em></>, copy: "Bring in bank statements, receipts, wallet screenshots, spreadsheets, and other financial records. Clover extracts the useful details, organizes transactions by account and category, and shows you only what needs review." },
+  { title: <>Skip the <em>manual typing</em></>, copy: "Most finance apps require you to enter transactions manually. With Clover, simply upload your records and gain insights right away." },
   { title: <>Your financial data stays <em>under your control.</em></>, copy: "Your financial records are private, reviewable, and traceable. You can edit, export, or delete your data through your account." },
-  { title: <>See what changed and where your <em>money actually goes.</em></>, copy: "Once your records are organized, Clover turns them into a clear financial picture. Track balances, spending, cash flow, recurring obligations, and trends across your accounts without piecing everything together yourself." },
-  { title: <>Ask what your money can make <em>possible.</em></>, copy: "Clover Adviser helps turn your financial history into practical answers. Ask what you can safely spend, what changed this month, whether a goal is still on track, or what deserves your attention next." },
-  { title: <>Manage money together <em>without sharing everything.</em></>, copy: "Split expenses, track who owes what, and organize shared money with a partner, household, family, or friends. Keep personal finances private while sharing only what makes sense." },
+  { title: <>Understand your finances.<br /><em>Build better habits.</em></>, copy: "Your financial life in one view. Track accounts, balances, recurring obligations, investments, and trends across your accounts." },
+  { title: <>Ask what your money can make <em>possible.</em></>, copy: "Your Clover Adviser can tell you what you can safely spend, what changed this month, or assist you with creating budgets and goals." },
+  { title: <>Manage money together <em>with less effort.</em></>, copy: "Split expenses with friends on Split Bills. Manage household expenses with a partner on Circles." },
   { title: <>Do more when your finances <em>get more complex.</em></>, copy: "Start free. Upgrade for more accounts, deeper insights, and more help from Clover Adviser." },
   { title: <>Feel clearer about your money, and more confident <em>about what comes next.</em></>, copy: null },
 ] as const;
 
-const scenes = ["01-organize", "02-upload", "07-trust", "03-picture", "04-adviser", "05-plan", "08-pro", "06-life"] as const;
+const scenes = ["01-organize", "07-trust", "03-picture", "04-adviser", "05-plan", "08-pro", "06-life"] as const;
 // Preserve each scene's responsive composition when its place in the story changes.
-const chapterLayouts = [0, 0, 1, 5, 2, 3, 4, 6, 7] as const;
-const productChapters = [0, 2, 4, 5, 6] as const;
+const chapterLayouts = [0, 0, 5, 2, 3, 4, 6, 7] as const;
+const productChapters = [0, 3, 4, 5] as const;
 
 export type LandingMarket = "ph" | "global";
 
@@ -321,7 +320,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
   };
   const chapterMotion = (index: number): CSSProperties => {
     return {
-      opacity: index === 1 || index === 7 || index === displayedChapter ? 1 : 0,
+      opacity: index === 1 || index === 6 || index === displayedChapter ? 1 : 0,
       transform: "translate3d(0, 0, 0)",
     };
   };
@@ -342,7 +341,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
     };
   };
 
-  return <><div ref={journeyRef} className={`${styles.journey} ${typography.standard}`} data-chapter={chapterLayouts[chapter]} data-comparison={chapter === 1} data-pro={chapter === 7} data-has-cta={chapter === 0 || chapter === 7 || chapter === chapters.length - 1} data-market={market} style={{ "--journey-progress": 0 } as CSSProperties}>
+  return <><div ref={journeyRef} className={`${styles.journey} ${typography.standard}`} data-chapter={chapterLayouts[chapter]} data-comparison={chapter === 1} data-pro={chapter === 6} data-has-cta={chapter === 0 || chapter === 6 || chapter === chapters.length - 1} data-market={market} style={{ "--journey-progress": 0 } as CSSProperties}>
     <div className={styles.stage}>
       <JourneyHeader />
 
@@ -361,13 +360,13 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
       </div>
 
       <section className={styles.story} aria-live="polite">
-        {chapters.map((item, index) => <div className={`${styles.chapter} ${index === 1 ? styles.comparisonChapter : ""} ${index === 7 ? styles.proChapter : ""} ${index === 8 ? styles.finalChapter : ""}`} data-landing-copy data-active={chapter === index} key={index} aria-hidden={chapter !== index} inert={chapter !== index} style={chapterMotion(index)}>
+        {chapters.map((item, index) => <div className={`${styles.chapter} ${index === 1 ? styles.comparisonChapter : ""} ${index === 6 ? styles.proChapter : ""} ${index === 7 ? styles.finalChapter : ""}`} data-landing-copy data-active={chapter === index} key={index} aria-hidden={chapter !== index} inert={chapter !== index} style={chapterMotion(index)}>
           <div style={{ opacity: index === displayedChapter ? 1 : 0 }}><h1>{item.title}</h1>
           {item.copy ? <p>{item.copy}</p> : null}
-          {index === 7 ? <ProActions market={market} /> : null}</div>
+          {index === 6 ? <ProActions market={market} /> : null}</div>
           {index === 1 ? <div className={styles.comparisonDetails} style={tableMotion(index)}><ComparisonTable /></div> : null}
-          {index === 3 ? <div className={styles.trustLinks}><Link href="/privacy-policy">Privacy Policy</Link><Link href="/features/security">How Clover protects your data →</Link></div> : null}
-          {index === 7 ? <ProComparison market={market} style={tableMotion(index)} showActions={false} /> : null}
+          {index === 2 ? <div className={styles.trustLinks}><Link href="/privacy-policy">Privacy Policy</Link><Link href="/features/security">How Clover protects your data →</Link></div> : null}
+          {index === 6 ? <ProComparison market={market} style={tableMotion(index)} showActions={false} /> : null}
           {(index === 0 || index === chapters.length - 1) && <JourneyActions authEnabled={authEnabled} final={index === chapters.length - 1} />}
         </div>)}
       </section>
@@ -389,14 +388,12 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
         </div>
       </div>
 
-      <LandingTransactionPhone market={market} style={productMotion(1, -1)} />
-
-      <LandingTransactionPhone market={market} screen="accounts" style={productMotion(2)} />
-      <LandingTransactionPhone market={market} screen="adviser" style={productMotion(3, -1)} />
-      <LandingTransactionPhone market={market} screen="split" style={productMotion(4)} />
+      <LandingTransactionPhone market={market} screen="accounts" style={productMotion(1)} />
+      <LandingTransactionPhone market={market} screen="adviser" style={productMotion(2, -1)} />
+      <LandingTransactionPhone market={market} screen="split" style={productMotion(3)} />
       </div>
 
-      <LandingSectionStatus index={chapter} total={chapters.length} label={["Get organized", "A simpler way", "Upload your records", "Your privacy", "Understand your money", "Your Adviser", "Shared money", "Free and Pro", "Get started"][chapter]} />
+      <LandingSectionStatus index={chapter} total={chapters.length} label={["Get organized", "Skip manual typing", "Your privacy", "Understand your finances", "Your Adviser", "Shared money", "Free and Pro", "Get started"][chapter]} />
       <nav className={styles.markers} aria-label="Landing page chapters" data-progress={`${chapter + 1}/${chapters.length}`}>
         {chapters.map((_, index) => <button key={index} type="button" className={chapter === index ? styles.activeMarker : ""} onClick={() => goToChapter(index)} aria-label={`Go to chapter ${index + 1}`} aria-current={chapter === index ? "step" : undefined}><span /></button>)}
         <b>{chapter + 1} / {chapters.length}</b>

@@ -65,7 +65,12 @@ async function main() {
     mobileSceneMetadata.every((metadata) => (metadata.height ?? 0) > (metadata.width ?? 0)),
     "Every mobile landing scene must use a portrait source so full-viewport cover does not crop out the cast.",
   );
-  assert.match(landingJourneySource, /const scenes = \["01-organize", "02-upload", "07-trust", "03-picture", "04-adviser", "05-plan", "08-pro", "06-life"\]/, "Trust reassures after Upload; the travel story then continues through Pro and the final CTA.");
+  assert.match(landingJourneySource, /const scenes = \["01-organize", "07-trust", "03-picture", "04-adviser", "05-plan", "08-pro", "06-life"\]/, "The condensed story must remove the standalone upload scene and preserve the remaining photo sequence.");
+  assert.match(landingJourneySource, /const chapterLayouts = \[0, 0, 5, 2, 3, 4, 6, 7\]/);
+  assert.match(landingJourneySource, /const productChapters = \[0, 3, 4, 5\]/);
+  assert.doesNotMatch(landingJourneySource, /rebuilding\.<\/em>|Once your records are organized|Clover Adviser helps turn your financial history/);
+  assert.match(landingJourneySource, /Most finance apps require you to enter transactions manually\. With Clover, simply upload your records and gain insights right away\./);
+  assert.match(landingJourneyStyles, /background:transparent!important;border-radius:0!important;backdrop-filter:none;-webkit-backdrop-filter:none;text-align:center/, "Mobile table sections must have centered copy without an enclosing frosted panel.");
   assert.match(landingJourneySource, /const folder = scene === "06-life" \|\| scene === "05-plan" \? "landing-story-v2" : "landing-story-v3"/, "Shared finances and the finale use the group scenes; personal finance keeps the individual scenes.");
   assert.match(landingJourneySource, /<source media="\(max-width: 900px\)" srcSet=\{sceneAsset\(scene, true\)\}/, "The landing story must use mobile-specific crops that keep its recurring cast visible.");
   assert.doesNotMatch(landingJourneySource, /className=\{styles\.sceneBackdrop\}/, "Each scene must use one photo layer rather than offset duplicates of the cast.");
