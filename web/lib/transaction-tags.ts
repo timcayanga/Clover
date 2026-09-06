@@ -37,3 +37,10 @@ export const getTransactionTagSignature = (values: readonly string[]) =>
   sanitizeTransactionTagNames(values)
     .map((value) => normalizeTransactionTagKey(value))
     .join("|");
+
+export const applyTransactionTagSelection = (existing: readonly string[], selected: readonly string[], action: "add" | "remove") => {
+  const selectedKeys = new Set(sanitizeTransactionTagNames(selected).map(normalizeTransactionTagKey));
+  return action === "add"
+    ? sanitizeTransactionTagNames([...existing, ...selected])
+    : sanitizeTransactionTagNames(existing.filter((name) => !selectedKeys.has(normalizeTransactionTagKey(name))));
+};

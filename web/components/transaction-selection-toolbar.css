@@ -1,0 +1,50 @@
+.transaction-selection-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 48px;
+  min-height: 48px;
+  flex: 0 0 48px;
+  position: relative;
+  z-index: 8;
+}
+.transaction-selection-toolbar input[type="search"] {
+  width: clamp(200px, 28vw, 360px);
+  max-width: 65%;
+  height: 40px;
+  border: 1px solid var(--border, #dbe3e8);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  color: inherit;
+  padding: 0 12px;
+  font: inherit;
+}
+.transaction-selection-toolbar button { min-height: 40px; cursor: pointer; font: inherit; color: inherit; }
+.transaction-selection-toolbar__actions { display: flex; align-items: center; gap: 8px; }
+.transaction-selection-toolbar__actions button, .transaction-selection-toolbar__trigger {
+  border: 1px solid var(--border, #dbe3e8); border-radius: 12px; padding: 0 14px; background: var(--surface, #fff);
+}
+.transaction-selection-toolbar .transaction-selection-toolbar__delete { color: #be394d; }
+.transaction-selection-toolbar__count { font-size: 14px; white-space: nowrap; }
+.transaction-selection-toolbar__filter { display: flex; align-items: center; gap: 6px; width: auto; padding: 0 10px; }
+.transaction-selection-toolbar--compact { height: 40px; min-height: 40px; flex: 0 0 auto; }
+.transaction-selection-toolbar--compact .transaction-selection-toolbar__trigger { font-size: 12px; white-space: nowrap; padding: 0 8px; color: var(--accent, #008da4); }
+.transaction-selection-toolbar__popover {
+  position: absolute; left: 0; top: calc(100% + 8px); width: 180px;
+  max-width: calc(100vw - 24px); padding: 6px; display: grid; gap: 2px;
+  border: 1px solid var(--border, #dbe3e8); border-radius: 14px;
+  background: var(--surface, #fff); box-shadow: 0 10px 35px #12333f26; z-index: 100;
+}
+.transaction-selection-toolbar__popover button { text-align: left; padding: 8px 12px; border: 0; background: transparent; border-radius: 8px; min-height: 44px; }
+.transaction-selection-toolbar button:hover { background: #03a8c014; }
+.transaction-selection-toolbar :focus-visible { outline: 2px solid #03a8c0; outline-offset: 2px; }
+.transaction-tags-dialog { max-height: 85dvh; overflow-y: auto; }
+.transaction-tags-dialog fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 16px; }
+.transaction-tags-dialog label { display: grid; gap: 6px; }
+.transaction-tags-dialog select { min-height: 44px; }
+@media (max-width: 1100px) {
+  .content--transactions .transactions-mobile-simple-row--selectable { position: relative; padding-left: 44px; }
+  .transactions-mobile-select { position: absolute; left: 0; top: 0; bottom: 0; width: 44px; display: grid; place-items: center; }
+  .transactions-mobile-select input { width: 18px; height: 18px; min-height: 0; min-width: 0; margin: 0; padding: 0; accent-color: #03a8c0; }
+  .transactions-mobile-simple-row--selectable.is-selected { background: #03a8c012; }
+}

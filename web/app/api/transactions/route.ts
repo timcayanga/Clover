@@ -625,6 +625,19 @@ const mapTransactionRow = (transaction: {
   };
 };
 
+// Only hydrate labels for the returned page, not every transaction used by
+// summary calculations. This keeps search-by-tag and the row cache consistent.
+const withTransactionTags = async <T extends { id: string }>(rows: T[], workspaceId: string) => {
+  if (!rows.length) return rows;
+  const links = await prisma.transactionTag.findMany({
+    where: { transactionId: { in: rows.map((row) => row.id) }, transaction: { workspaceId } },
+    select: { transactionId: true, tag: { select: { id: true, name: true } } },
+  });
+  const tagsById = new Map<string, Array<{ id: string; name: string }>>();
+  for (const link of links) tagsById.set(link.transactionId, [...(tagsById.get(link.transactionId) ?? []), link.tag]);
+  return rows.map((row) => ({ ...row, tags: tagsById.get(row.id) ?? [] }));
+};
+
 const transactionMatchesEffectiveCategoryFilters = (transaction: TransactionApiRow, categoryFilterNames: Set<string>) => {
   if (categoryFilterNames.size === 0) {
     return true;
@@ -1138,7 +1151,7 @@ export async function GET(request: Request) {
       }
 
       return NextResponse.json({
-        transactions,
+        transactions: await withTransactionTags(transactions, workspaceId),
         page: includeAll ? 1 : requestedPage,
         pageSize: includeAll ? totalCount : requestedPageSize ?? 25,
         totalCount,
@@ -1475,7 +1488,7 @@ export async function GET(request: Request) {
     const pageTransactions = includeAll ? transactions : transactions.slice(pageStart, pageStart + (requestedPageSize ?? 25));
 
     return NextResponse.json({
-      transactions: pageTransactions,
+      transactions: await withTransactionTags(pageTransactions, workspaceId),
       page: includeAll ? 1 : requestedPage,
       pageSize: includeAll ? summaryState.totalCount : requestedPageSize ?? 25,
       totalCount: summaryState.totalCount,

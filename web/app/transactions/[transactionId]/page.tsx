@@ -113,6 +113,9 @@ export default function TransactionDetailPage() {
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("edit") === "1") setEditing(true);
+  }, [transactionId]);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [splitBillOpen, setSplitBillOpen] = useState(false);
   const [splitBillSaving, setSplitBillSaving] = useState(false);

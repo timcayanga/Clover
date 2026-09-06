@@ -300,6 +300,9 @@ export const buildTransactionQueryWhere = (workspaceId: string, filters: Transac
         { merchantRaw: { contains: query, mode: "insensitive" } },
         { merchantClean: { contains: query, mode: "insensitive" } },
         { description: { contains: query, mode: "insensitive" } },
+        { normalizedPayload: { path: ["userNote"], string_contains: query, mode: "insensitive" } },
+        { normalizedPayload: { path: ["user_note"], string_contains: query, mode: "insensitive" } },
+        { transactionTags: { some: { tag: { name: { contains: query, mode: "insensitive" } } } } },
       ],
     });
   }

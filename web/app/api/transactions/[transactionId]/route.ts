@@ -9,7 +9,7 @@ import { capturePostHogServerEvent } from "@/lib/analytics";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { recordAdviserActionCompletion } from "@/lib/adviser-actions";
-import { normalizeTransactionTagKey, sanitizeTransactionTagNames } from "@/lib/transaction-tags";
+import { applyTransactionTagSelection, normalizeTransactionTagKey, sanitizeTransactionTagNames } from "@/lib/transaction-tags";
 import { revalidateTag } from "next/cache";
 import { removeEmptyNonDefaultCashAccounts } from "@/lib/empty-cash-account-cleanup";
 import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
@@ -27,6 +27,7 @@ const patchSchema = z.object({
   description: z.string().nullable().optional(),
   userNote: z.string().nullable().optional(),
   tags: z.array(z.string()).optional(),
+  tagAction: z.enum(["add", "remove"]).optional(),
   date: z.string().optional(),
   amount: z.union([z.string(), z.number()]).optional(),
   currency: z.string().min(1).optional(),
@@ -178,6 +179,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
 
     const transaction = await prisma.transaction.findFirst({
       where: { id: transactionId },
+      include: { transactionTags: { include: { tag: true } } },
     });
 
     if (!transaction) {
@@ -185,6 +187,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
     }
 
     await assertWorkspaceAccess(userId, transaction.workspaceId);
+    const existingTagNames = transaction.transactionTags.map((entry) => entry.tag.name);
+    const nextTagNames = payload.tags === undefined ? undefined : payload.tagAction
+      ? applyTransactionTagSelection(existingTagNames, payload.tags, payload.tagAction)
+      : sanitizeTransactionTagNames(payload.tags);
+    const existingTagKeys = new Set(existingTagNames.map(normalizeTransactionTagKey));
+    const removedTagKeys = new Set((payload.tags ?? []).map(normalizeTransactionTagKey));
+    const removedTagIds = transaction.transactionTags.filter((entry) => removedTagKeys.has(entry.tag.normalizedName)).map((entry) => entry.tagId);
     const resolvedCategoryId = payload.categoryId === undefined ? transaction.categoryId : payload.categoryId;
     const resolvedCategory = resolvedCategoryId
       ? await prisma.category.findUnique({
@@ -264,7 +273,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
               rawPayload: payload.rawPayload === undefined ? transaction.rawPayload : (payload.rawPayload as Prisma.JsonValue),
               isTransfer: resolvedIsTransfer,
               isExcluded: payload.isExcluded ?? transaction.isExcluded,
-              tags: payload.tags === undefined ? undefined : sanitizeTransactionTagNames(payload.tags),
+              tags: nextTagNames,
               reviewStatus: payload.reviewStatus ?? (editedFields ? "edited" : transaction.reviewStatus),
               editedAt: new Date().toISOString(),
             }
@@ -273,6 +282,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         transactionTags:
           payload.tags === undefined
             ? undefined
+            : payload.tagAction === "add"
+              ? { create: buildTransactionTagWrites(transaction.workspaceId, (nextTagNames ?? []).filter((name) => !existingTagKeys.has(normalizeTransactionTagKey(name)))) }
+            : payload.tagAction === "remove"
+              ? { deleteMany: { tagId: { in: removedTagIds } } }
             : {
                 deleteMany: {},
                 create: buildTransactionTagWrites(transaction.workspaceId, payload.tags),

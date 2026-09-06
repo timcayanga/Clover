@@ -31,6 +31,7 @@ import { TransactionCategoryPicker, type TransactionPickerCategory } from "@/com
 import { TransactionAccountPicker, type TransactionPickerAccount } from "@/components/transaction-account-picker";
 import { TransactionNameAutocomplete, type TransactionNameSuggestion } from "@/components/transaction-name-autocomplete";
 import { TransactionTagsEditor } from "@/components/transaction-tags-editor";
+import { TransactionSelectionToolbar } from "@/components/transaction-selection-toolbar";
 import { getCategoryIconTone } from "@/lib/category-icons";
 import { MOBILE_LAYOUT_MEDIA_QUERY } from "@/lib/responsive-layout";
 import type { ImportImageMode } from "@/lib/import-image-mode";
@@ -416,6 +417,7 @@ type Transaction = {
   merchantRaw: string;
   merchantClean: string | null;
   description?: string | null;
+  tags?: Array<{ id: string; name: string }>;
   isTransfer: boolean;
   isExcluded: boolean;
   splitBill?: { id: string; title: string } | null;
@@ -1218,6 +1220,9 @@ const matchesTransactionSearch = (transaction: Transaction, searchText: string) 
     transaction.merchantRaw,
     transaction.accountName,
     transaction.categoryName ?? "",
+    transaction.description ?? "",
+    getTransactionUserNoteValue(transaction),
+    ...(transaction.tags ?? []).map((tag) => tag.name),
     transaction.date,
     transaction.currency,
     String(transaction.amount),
@@ -2290,6 +2295,12 @@ function TransactionsPageContent() {
   const [manualOpen, setManualOpen] = useState(false);
   const mobileCreation = useMobileCreationRoute(manualOpen, setManualOpen, "/transactions");
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [tagsOpen, setTagsOpen] = useState(false);
+  const tagsDialogRef = useRef<HTMLElement>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
+  const [tagAction, setTagAction] = useState<"add" | "remove">("add");
+  const [tagError, setTagError] = useState("");
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
@@ -3728,9 +3739,13 @@ function TransactionsPageContent() {
       return;
     }
 
-    void loadTransactionsPage(selectedWorkspaceId, { preserveKnownTotal: true });
+    const timer = window.setTimeout(() => {
+      void loadTransactionsPage(selectedWorkspaceId, { preserveKnownTotal: true });
+    }, query ? 250 : 0);
+    return () => window.clearTimeout(timer);
   }, [
     selectedWorkspaceId,
+    query,
     currencyFilter,
     categoryFilters,
     accountFilters,
@@ -4252,7 +4267,7 @@ function TransactionsPageContent() {
       { income: 0, spending: 0, transfers: 0 }
     );
   }, [displayedTransactionsSummary, isAllCurrenciesView, transactionExchangeRates.rates, transactionSummaryCurrencies.length]);
-  const totalTransactionCountForDisplay = searchText || shouldUseVisibleFilteredSummary ? visibleTransactions.length : transactionsSummary.totalCount;
+  const totalTransactionCountForDisplay = shouldUseVisibleFilteredSummary ? visibleTransactions.length : transactionsSummary.totalCount;
   const activeFinalizingImportIds = useMemo(
     () => new Set(imports.filter(isActiveEnrichmentJob).map((importFile) => importFile.id)),
     [imports]
@@ -5248,6 +5263,7 @@ function TransactionsPageContent() {
 
   const clearSelection = () => {
     setSelectedTransactionIds([]);
+    setSelectionMenuOpen(false);
     setBulkDeleteConfirmOpen(false);
   };
 
@@ -5281,6 +5297,77 @@ function TransactionsPageContent() {
   const openBulkEdit = () => {
     setBulkEditForm(createEmptyBulkEditForm());
     setBulkEditOpen(true);
+  };
+
+  const editSelection = () => {
+    if (selectedTransactionIds.length !== 1) { openBulkEdit(); return; }
+    const transaction = transactions.find((entry) => entry.id === selectedTransactionIds[0]);
+    if (!transaction) return;
+    if (isCompactViewport) { router.push(`/transactions/${encodeURIComponent(transaction.id)}?edit=1`); return; }
+    openTransactionDetail(transaction);
+    if (!isCompactViewport) setDetailEditing(true);
+  };
+
+  const openSelectionTags = () => {
+    setSelectedTags([]);
+    setTagAction("add");
+    setTagError("");
+    setTagsOpen(true);
+  };
+  useEffect(() => {
+    if (!tagsOpen) return;
+    const previousFocus = document.activeElement;
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const controls = Array.from(tagsDialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]') ?? []);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (!first) { event.preventDefault(); return; }
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", trapFocus);
+    return () => { document.removeEventListener("keydown", trapFocus); if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus(); };
+  }, [tagsOpen]);
+  useEffect(() => {
+    if (!tagsOpen || !selectedWorkspaceId) return;
+    let cancelled = false;
+    setTagSuggestions([]);
+    void fetch(`/api/tags?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`, { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : { tags: [] })
+      .then((payload) => { if (!cancelled) setTagSuggestions((payload.tags ?? []).map((tag: { name: string }) => tag.name)); })
+      .catch(() => { /* New tags remain available if suggestions cannot load. */ });
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape" && !isSaving) setTagsOpen(false); };
+    document.addEventListener("keydown", escape);
+    return () => { cancelled = true; document.removeEventListener("keydown", escape); };
+  }, [tagsOpen, selectedWorkspaceId, isSaving]);
+
+  const applySelectionTags = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isSaving || !selectedTags.length) return;
+    setIsSaving(true);
+    setTagError("");
+    const failed: string[] = [];
+    // Bounded requests; the server adds/removes only these tags, never replaces
+    // the other labels on a selected transaction with a stale client snapshot.
+    for (let start = 0; start < selectedTransactionIds.length; start += 4) {
+      await Promise.all(selectedTransactionIds.slice(start, start + 4).map(async (id) => {
+        try { await updateTransaction(id, { tags: selectedTags, tagAction }, { recordHistory: false, refreshSummary: false }); }
+        catch { failed.push(id); }
+      }));
+    }
+    setIsSaving(false);
+    setUndoStack([]);
+    setRedoStack([]);
+    clearJsonRequestCache("transactions:list:");
+    refreshTransactionsSummary();
+    if (failed.length) {
+      setSelectedTransactionIds(failed);
+      setTagError(`${failed.length} transaction${failed.length === 1 ? "" : "s"} could not be updated. Retry to apply tags to those remaining.`);
+      return;
+    }
+    setMessage(`Tags ${tagAction === "add" ? "added" : "removed"} for ${selectedTransactionIds.length} transaction${selectedTransactionIds.length === 1 ? "" : "s"}.`);
+    setTagsOpen(false);
+    clearSelection();
   };
 
   const applyDateFilterMode = (mode: DateFilterMode) => {
@@ -7264,17 +7351,6 @@ function TransactionsPageContent() {
       />
 
       <button
-        className={`button button-secondary button-small transactions-toolbar-filter transactions-toolbar-filter--compact${filterOpen ? " is-active" : ""}`}
-        type="button"
-        onClick={toggleFiltersPanel}
-        aria-label="Filter transactions"
-        title="Filter transactions"
-        aria-expanded={filterOpen}
-      >
-        <ActionIcon name="filters" />
-        <span>Filters</span>
-      </button>
-      <button
         className="button button-secondary button-small accounts-toolbar-add transactions-toolbar-add transactions-toolbar-add--compact"
         type="button"
         onClick={() => void openManualAdd()}
@@ -7434,10 +7510,8 @@ function TransactionsPageContent() {
       mobileLeadingAction={
         <div className="transactions-mobile-leading-actions">
           <ContextualAskClover context="transactions" planTier={planTier} />
-          <button className="icon-button mobile-header-filter" type="button" onClick={toggleFiltersPanel} aria-label="Filter transactions" aria-expanded={filterOpen}>
-            <ActionIcon name="filters" />
-          </button>
-          <TransactionsManageMenu compact />
+          <TransactionSelectionToolbar compact count={selectedTransactionCount} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} />
+          {!hasSelectedTransactions ? <TransactionsManageMenu compact /> : null}
         </div>
       }
       actions={transactionsShellActions}
@@ -7646,6 +7720,8 @@ function TransactionsPageContent() {
             : null}
 
           {headerMenuPanel}
+
+          {!isCompactViewport ? <TransactionSelectionToolbar count={selectedTransactionCount} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} /> : null}
 
           {!isCompactViewport ? (
             <div
@@ -8047,6 +8123,7 @@ function TransactionsPageContent() {
                         return (
                           <MobileSwipeDelete
                             key={transaction.id}
+                            disabled={hasSelectedTransactions}
                             deleteLabel={`Delete ${merchantSummary}`}
                             onDelete={() => {
                               if (!window.confirm(`Delete transaction "${merchantSummary}"?`)) return;
@@ -8062,21 +8139,26 @@ function TransactionsPageContent() {
 
                               transactionRowRefs.current.delete(transaction.id);
                             }}
-                            className={`transactions-mobile-simple-row${transaction.isExcluded ? " is-muted" : ""}`}
+                            className={`transactions-mobile-simple-row transactions-mobile-simple-row--selectable${transaction.isExcluded ? " is-muted" : ""}${selectedTransactionIds.includes(transaction.id) ? " is-selected" : ""}`}
                             tabIndex={0}
-                            role="button"
+                            role="group"
                             aria-label={`${merchantSummary}, ${formatDate(transaction.date)}, ${formatTransactionAmount(
                               amount,
                               transaction.currency
                             )}`}
-                            onClick={() => openTransactionDetail(transaction)}
+                            onClick={() => hasSelectedTransactions ? toggleSelectedTransaction(transaction.id, !selectedTransactionIds.includes(transaction.id)) : openTransactionDetail(transaction)}
                             onKeyDown={(event) => {
+                              if (event.target !== event.currentTarget) return;
                               if (event.key === "Enter" || event.key === " ") {
                                 event.preventDefault();
-                                openTransactionDetail(transaction);
+                                if (hasSelectedTransactions) toggleSelectedTransaction(transaction.id, !selectedTransactionIds.includes(transaction.id));
+                                else openTransactionDetail(transaction);
                               }
                             }}
                           >
+                            <label className="transactions-mobile-select" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+                              <input type="checkbox" checked={selectedTransactionIds.includes(transaction.id)} onChange={(event) => toggleSelectedTransaction(transaction.id, event.target.checked)} aria-label={`Select ${merchantSummary}`} />
+                            </label>
                             <div className="transactions-mobile-simple-row__name">
                               <span className="transactions-mobile-simple-row__account-brand" aria-hidden="true">
                                 <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
@@ -8137,52 +8219,7 @@ function TransactionsPageContent() {
           {!isCompactViewport ? (
             <div className="transactions-footer" style={{ ...transactionsFooterStyle, marginTop: "auto" }}>
               <div className="table-footer__summary">
-                {hasSelectedTransactions ? (
-                  <>
-                    <span className="pill pill-neutral transactions-selected-count" role="status" aria-live="polite">
-                      {selectedTransactionIds.length} selected
-                    </span>
-                    <div className="transactions-selection-menu transactions-selection-menu--footer" ref={selectionActionsMenuRef}>
-                      <button
-                        className="button button-secondary button-small transactions-action-button transactions-selection-menu__toggle"
-                        type="button"
-                        onClick={() => setSelectionMenuOpen((current) => !current)}
-                        aria-expanded={selectionMenuOpen}
-                        aria-label="Selected transactions actions"
-                      >
-                        <span>Actions</span>
-                        <span className="button-icon" aria-hidden="true">
-                          <ActionIcon name="chevron-down" />
-                        </span>
-                      </button>
-                      {selectionMenuOpen ? (
-                        <div className="transactions-selection-menu__panel">
-                          <button
-                            className="transactions-selection-menu__item"
-                            type="button"
-                            onClick={() => {
-                              setSelectionMenuOpen(false);
-                              openBulkEdit();
-                            }}
-                          >
-                            Bulk edit
-                          </button>
-                          <button
-                            className="transactions-selection-menu__item transactions-selection-menu__item--danger"
-                            type="button"
-                            onClick={() => {
-                              setSelectionMenuOpen(false);
-                              setBulkDeleteConfirmOpen(true);
-                            }}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                  </>
-                ) : null}
-                {!hasSelectedTransactions && totalTransactionCountForDisplay > 0 ? (
+                {totalTransactionCountForDisplay > 0 ? (
                   <span className="transactions-footer__showing">Showing {currentPageLabel}</span>
                 ) : null}
                 {warningTransactionCount > 0 ? (
@@ -8358,6 +8395,22 @@ function TransactionsPageContent() {
         </aside>
       </section>
 
+      {tagsOpen ? createPortal(
+        <div className="modal-backdrop" onClick={() => { if (!isSaving) setTagsOpen(false); }}>
+          <section ref={tagsDialogRef} className="modal-card glass transaction-tags-dialog" role="dialog" aria-modal="true" aria-labelledby="selection-tags-title" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-head"><h4 id="selection-tags-title">Tags · {selectedTransactionCount} selected</h4><button type="button" className="icon-button" aria-label="Close tags" disabled={isSaving} onClick={() => setTagsOpen(false)}>×</button></div>
+            <form onSubmit={applySelectionTags}>
+              <fieldset disabled={isSaving}>
+                <label>Action<select autoFocus value={tagAction} onChange={(event) => setTagAction(event.target.value as "add" | "remove")}><option value="add">Add tags</option><option value="remove">Remove tags</option></select></label>
+                <p>Other tags on each transaction will stay unchanged.</p>
+                <TransactionTagsEditor tags={selectedTags} onChange={setSelectedTags} suggestions={tagSuggestions} placeholder="Find or create a tag" />
+              </fieldset>
+              {tagError ? <p role="alert">{tagError}</p> : null}
+              <div className="form-actions"><button className="button button-secondary" type="button" disabled={isSaving} onClick={() => setTagsOpen(false)}>Cancel</button><button className="button button-primary" type="submit" disabled={isSaving || !selectedTags.length}>{isSaving ? "Saving…" : tagAction === "add" ? "Add tags" : "Remove tags"}</button></div>
+            </form>
+          </section>
+        </div>, document.body
+      ) : null}
       {bulkEditOpen ? (
         <div className="modal-backdrop" role="presentation" onClick={() => setBulkEditOpen(false)}>
           <section
@@ -8370,7 +8423,7 @@ function TransactionsPageContent() {
             <div className="modal-head">
               <div>
                 <p className="eyebrow">Transactions</p>
-                <h4 id="bulk-edit-title">Bulk edit</h4>
+                <h4 id="bulk-edit-title">Edit selected</h4>
                 <p className="modal-copy">{selectedTransactionIds.length} selected · apply the same changes to all rows.</p>
               </div>
               <button className="icon-button" type="button" onClick={() => setBulkEditOpen(false)} aria-label="Close bulk edit">

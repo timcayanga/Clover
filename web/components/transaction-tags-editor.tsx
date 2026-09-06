@@ -22,8 +22,8 @@ export function TransactionTagsEditor({
 
   const availableSuggestions = useMemo(() => {
     const selected = new Set(sanitizeTransactionTagNames(tags).map((tag) => tag.toLowerCase()));
-    return sanitizeTransactionTagNames(suggestions).filter((suggestion) => !selected.has(suggestion.toLowerCase())).slice(0, 8);
-  }, [suggestions, tags]);
+    return sanitizeTransactionTagNames(suggestions).filter((suggestion) => !selected.has(suggestion.toLowerCase()) && suggestion.toLowerCase().includes(inputValue.trim().toLowerCase())).slice(0, 8);
+  }, [inputValue, suggestions, tags]);
 
   const addTags = (values: string[]) => {
     const nextTags = sanitizeTransactionTagNames([...tags, ...values]);
