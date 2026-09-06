@@ -11,7 +11,7 @@ import { FeatureStoryDemo, FEATURE_CAPTURE_VISUALS } from "./feature-story-demo"
 import landing from "@/app/landing-preview/landing-preview.module.css";
 import styles from "./feature-story.module.css";
 import typography from "./landing-type.module.css";
-import { featurePhotoPosition, featureChapterPosition, featureChapterProgress } from "@/lib/landing-motion";
+import { featureChapterPosition, featureChapterProgress } from "@/lib/landing-motion";
 
 export function FeatureStory({ story, authEnabled, initialMarket, countryResolved }: { story: Story; authEnabled: boolean; initialMarket: "ph" | "global"; countryResolved: boolean }) {
   const root = useRef<HTMLDivElement>(null);
@@ -58,17 +58,16 @@ export function FeatureStory({ story, authEnabled, initialMarket, countryResolve
     if(!element)return;
     window.scrollTo({top:window.scrollY+element.getBoundingClientRect().top+(element.offsetHeight-innerHeight)*featureChapterProgress(index,story.chapters.length),behavior:reducedMotion?"instant":"smooth"});
   };
-  const photoPosition = featurePhotoPosition(position, story.slug === "pro");
-  const endReveal = Math.max(0,Math.min(1,(position-3.5)*2));
-  const photographMotion = reducedMotion ? undefined : `scale(${1+photoPosition*.008}) translate3d(${-photoPosition*.3}%,0,0)`;
 
   return <><div ref={root} className={`${landing.journey} ${styles.journey} ${typography.standard}`} data-feature-story={story.slug} data-market={market} data-pricing={pricing} style={{height:`${100+story.chapters.length*42}svh`} as CSSProperties}>
-    <div className={styles.stage} style={{"--story-backdrop":`url("/assets/feature-stories/${story.asset}-${final?"end":story.asset==="together"?"hero-tall-phone":"hero"}.webp")`} as CSSProperties}>
+    <div className={styles.stage}>
       <JourneyHeader />
-      <div className={styles.background} aria-hidden="true" style={{transform:photographMotion}}>
-        {["hero","end"].map((scene,index)=><picture key={scene} className={styles.photograph} style={{opacity:index===0?1:endReveal}}>
-          <source media="(max-width: 900px)" srcSet={`/assets/feature-stories/${story.asset}-${scene}-mobile.webp`} />
-          <img src={`/assets/feature-stories/${story.asset}-${scene}${story.asset==="together" && scene==="hero"?"-tall-phone":""}.webp`} alt="" draggable={false} fetchPriority={index===0?"high":"low"} decoding={index===0?"sync":"async"} />
+      <div className={styles.background} data-feature-background aria-hidden="true">
+        {/* Time-based transitions always finish, even when scrolling stops. Never
+            repeat the photo beneath this layer at a different crop or scale. */}
+        {["hero","end"].map((scene,index)=><picture key={scene} data-feature-scene={scene} className={styles.photograph} style={{opacity:(scene==="end")===final?1:0}}>
+          <source media="(max-width: 900px)" srcSet={`/assets/feature-stories/${story.asset}-${scene}${story.asset==="together" && scene==="hero"?"-repaired":""}-mobile.webp`} />
+          <img src={`/assets/feature-stories/${story.asset}-${scene}${story.asset==="together" && scene==="hero"?"-repaired":""}.webp`} alt="" draggable={false} fetchPriority={index===0?"high":"low"} decoding={index===0?"sync":"async"} />
         </picture>)}
       </div>
       <div className={styles.wash} aria-hidden="true" />
