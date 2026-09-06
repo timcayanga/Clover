@@ -4,16 +4,20 @@ import { KnowledgeBrowser } from "@/components/knowledge-browser";
 import { getKnowledge } from "@/lib/knowledge-store";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
-  title: "Help Center",
+  title: "Guides",
   description:
-    "Find answers about Clover uploads, accounts, transactions, Reports, Adviser, budgets, goals, investments, Circles, and your account.",
-  alternates: { canonical: "https://clover.ph/help" },
+    "Download statements and wallet history, organize credit-card transactions, and understand records across multiple accounts with Clover.",
+  alternates: { canonical: "https://clover.ph/guides" },
 };
-export default async function HelpPage() {
+export default async function Guides() {
   const { entries, categories } = await getKnowledge();
   return (
-    <KnowledgeShell>
-      <KnowledgeBrowser entries={entries} categories={categories} />
+    <KnowledgeShell active="guide">
+      <KnowledgeBrowser
+        entries={entries}
+        categories={categories}
+        mode="guide"
+      />
       <KnowledgeContact />
     </KnowledgeShell>
   );

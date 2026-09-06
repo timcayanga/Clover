@@ -1,64 +1,49 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { HelpArticlePage } from "@/components/help-article-page";
-import { findHelpSectionArticle, isHelpArticleSlug, isHelpSection, resolveHelpSection } from "@/lib/help-center";
-import { resolvePublicAccountState } from "@/lib/public-account-state";
-
+import { notFound, permanentRedirect } from "next/navigation";
+import { getKnowledge } from "@/lib/knowledge-store";
+import { legacyKnowledgePaths } from "@/lib/knowledge-seed";
+import { KnowledgeShell, KnowledgeContact } from "@/components/knowledge-shell";
+import { KnowledgeArticle } from "@/components/knowledge-article";
+type Props = { params: Promise<{ section: string; article: string }> };
 export const dynamic = "force-dynamic";
-
-type HelpArticlePageProps = {
-  params: Promise<{
-    section: string;
-    article: string;
-  }>;
-  searchParams?: Promise<{
-    returnTo?: string;
-  }>;
-};
-
-export async function generateMetadata({ params }: HelpArticlePageProps): Promise<Metadata> {
-  const resolvedParams = await params;
-  const section = resolveHelpSection(resolvedParams.section);
-  const article = findHelpSectionArticle(resolvedParams.section, resolvedParams.article);
-
-  if (!section || !article) {
-    return {
-      title: "Help",
-    };
-  }
-
+async function resolve(params: Props["params"]) {
+  const { section, article } = await params;
+  const path = `/help/${section}/${article}`;
+  const canonical = legacyKnowledgePaths.get(path) ?? path;
+  const data = await getKnowledge();
   return {
-    title: article.seoTitle,
-    description: article.seoDescription,
-    keywords: Array.from(
-      new Set([
-        section.title,
-        section.summary,
-        article.title,
-        article.summary,
-        ...section.keywords,
-        ...article.keywords,
-        ...article.questions.map((question) => question.question),
-      ])
-    ),
+    ...data,
+    path,
+    canonical,
+    entry: data.entries.find((e) => e.path === canonical),
   };
 }
-
-export default async function HelpArticleRoute({ params, searchParams }: HelpArticlePageProps) {
-  const resolvedParams = await params;
-  const resolvedSearchParams = searchParams ? await searchParams : null;
-  const accountState = await resolvePublicAccountState();
-
-  if (!isHelpSection(resolvedParams.section) || !isHelpArticleSlug(resolvedParams.section, resolvedParams.article)) {
-    notFound();
-  }
-
-  const section = resolveHelpSection(resolvedParams.section);
-  const article = findHelpSectionArticle(resolvedParams.section, resolvedParams.article);
-
-  if (!section || !article) {
-    notFound();
-  }
-
-  return <HelpArticlePage section={section} article={article} returnTo={resolvedSearchParams?.returnTo ?? null} accountState={accountState} />;
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { entry, canonical } = await resolve(params);
+  return {
+    title: entry?.content.title ?? "Help",
+    description: entry?.content.summary,
+    alternates: { canonical: `https://clover.ph${canonical}` },
+  };
+}
+export default async function Article({ params }: Props) {
+  const { entry, entries, categories, path, canonical } = await resolve(params);
+  if (!entry) notFound();
+  if (path !== canonical) permanentRedirect(canonical);
+  return (
+    <KnowledgeShell>
+      <KnowledgeArticle
+        entry={entry}
+        category={categories.find((c) => c.slug === entry.content.category)}
+        related={entries
+          .filter(
+            (e) =>
+              e.path !== entry.path &&
+              e.content.category === entry.content.category,
+          )
+          .slice(0, 3)}
+      />
+      <KnowledgeContact />
+    </KnowledgeShell>
+  );
 }

@@ -1,59 +1,47 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { HelpSectionPage } from "@/components/help-section-page";
-import { isHelpSection, resolveHelpSection } from "@/lib/help-center";
-import { resolvePublicAccountState } from "@/lib/public-account-state";
-
+import { notFound, permanentRedirect } from "next/navigation";
+import { KnowledgeShell, KnowledgeContact } from "@/components/knowledge-shell";
+import { KnowledgeBrowser } from "@/components/knowledge-browser";
+import { getKnowledge } from "@/lib/knowledge-store";
+import { categoryForLegacy } from "@/lib/knowledge-seed";
+type Props = { params: Promise<{ section: string }> };
 export const dynamic = "force-dynamic";
-
-type HelpSectionPageProps = {
-  params: Promise<{
-    section: string;
-  }>;
-  searchParams?: Promise<{
-    returnTo?: string;
-  }>;
-};
-
-export async function generateMetadata({ params }: HelpSectionPageProps): Promise<Metadata> {
-  const resolvedParams = await params;
-  const section = resolveHelpSection(resolvedParams.section);
-
-  if (!section) {
-    return {
-      title: "Help",
-    };
-  }
-
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { section } = await params;
+  const { categories } = await getKnowledge();
+  const category = categories.find((c) => c.slug === section);
   return {
-    title: section.title,
-    description: section.summary,
-    keywords: Array.from(
-      new Set([
-        section.title,
-        section.summary,
-        ...section.keywords,
-        ...section.highlights,
-        ...section.questions.map((question) => question.question),
-      ])
-    ),
+    title: category?.title ?? "Help Center",
+    description: category?.summary,
+    alternates: { canonical: `https://clover.ph/help/${section}` },
   };
 }
-
-export default async function HelpSectionRoute({ params, searchParams }: HelpSectionPageProps) {
-  const resolvedParams = await params;
-  const resolvedSearchParams = searchParams ? await searchParams : null;
-  const accountState = await resolvePublicAccountState();
-
-  if (!isHelpSection(resolvedParams.section)) {
+export default async function HelpSection({ params }: Props) {
+  const { section } = await params;
+  const { entries, categories } = await getKnowledge();
+  const category = categories.find((c) => c.slug === section);
+  if (!category) {
+    const alias =
+      categoryForLegacy(section) ??
+      (
+        {
+          "product-features": "manage-money",
+          "billing-and-accounts": "account-security",
+          "privacy-and-security": "account-security",
+          security: "account-security",
+        } as Record<string, string>
+      )[section];
+    if (alias) permanentRedirect(`/help/${alias}`);
     notFound();
   }
-
-  const section = resolveHelpSection(resolvedParams.section);
-
-  if (!section) {
-    notFound();
-  }
-
-  return <HelpSectionPage section={section} returnTo={resolvedSearchParams?.returnTo ?? null} accountState={accountState} />;
+  return (
+    <KnowledgeShell>
+      <KnowledgeBrowser
+        entries={entries}
+        categories={categories}
+        category={category}
+      />
+      <KnowledgeContact />
+    </KnowledgeShell>
+  );
 }

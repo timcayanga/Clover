@@ -2,6 +2,58 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Editorial data is separate from users' financial records. Public readers only
+// receive the approved snapshot; saves and AI generations modify draft only.
+model KnowledgeArticle {
+  path         String   @id
+  draft        Json
+  published    Json?
+  version      Int      @default(1)
+  sortOrder    Int      @default(1000)
+  draftOrder   Int      @default(1000)
+  archived     Boolean  @default(false)
+  needsReview  Boolean  @default(true)
+  origin       String   @default("admin")
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+}
+
+model KnowledgeRevision {
+  id        String   @id @default(cuid())
+  path      String
+  version   Int
+  action    String
+  actor     String
+  content   Json
+  createdAt DateTime @default(now())
+  @@index([path, createdAt])
+}
+
+model KnowledgeSettings {
+  id            String   @id @default("editorial")
+  ai            Json
+  categoryOrder String[] @default([])
+  updatedAt     DateTime @updatedAt
+}
+
+model KnowledgeGeneration {
+  id        String   @id
+  topic     String
+  status    String   @default("running")
+  details   String?
+  tokens    Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model KnowledgeFeedback {
+  path      String
+  voter     String
+  helpful   Boolean
+  updatedAt DateTime @updatedAt
+  @@id([path, voter])
+}
+
 datasource db {
   provider = "postgresql"
 }

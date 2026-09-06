@@ -4,6 +4,10 @@
   "regions": ["sin1"],
   "crons": [
     {
+      "path": "/api/cron/content-drafts",
+      "schedule": "0 2 * * *"
+    },
+    {
       "path": "/api/cron/import-recovery",
       "schedule": "0 18 * * *"
     }

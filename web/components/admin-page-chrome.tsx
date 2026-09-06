@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 type AdminPageChromeProps = {
   active:
     | "home"
+    | "content"
     | "users"
     | "support"
     | "operations"
@@ -22,6 +23,7 @@ type AdminPageChromeProps = {
 
 const adminNavItems = [
   { key: "home", href: "/admin", label: "Home" },
+  { key: "content", href: "/admin/content", label: "Content" },
   { key: "users", href: "/admin/users", label: "Users" },
   { key: "support", href: "/admin/support", label: "Support" },
   { key: "operations", href: "/admin/operations", label: "Operations" },

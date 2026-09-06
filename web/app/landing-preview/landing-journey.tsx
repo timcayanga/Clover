@@ -141,10 +141,36 @@ export function LandingTransactionPhone({ market, style, screen = "transactions"
 }
 
 export function JourneyHeader() {
+  const drawerRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const featuresRef = useRef<HTMLDivElement>(null);
   const [featuresOpen, setFeaturesOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusable = () => Array.from(drawerRef.current?.querySelectorAll<HTMLElement>('a[href],button:not([disabled])') ?? []);
+    focusable()[0]?.focus();
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const targets = focusable();
+      const first = targets[0];
+      const last = targets[targets.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !drawerRef.current?.contains(document.activeElement))) {
+        event.preventDefault(); last?.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !drawerRef.current?.contains(document.activeElement))) {
+        event.preventDefault(); first?.focus();
+      }
+    };
+    document.addEventListener("keydown", trapFocus);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", trapFocus);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [mobileMenuOpen]);
   useEffect(() => {
     const closeMenus = (event: PointerEvent) => {
       const target = event.target;
@@ -209,7 +235,7 @@ export function JourneyHeader() {
 
       {mobileMenuOpen ? <div data-mobile-navigation="true">
         <button className={styles.mobileMenuBackdrop} type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)} />
-        <div className={styles.mobileDrawer} id="preview-mobile-menu" role="dialog" aria-modal="true" aria-label="Clover navigation">
+        <div ref={drawerRef} className={styles.mobileDrawer} id="preview-mobile-menu" role="dialog" aria-modal="true" aria-label="Clover navigation">
           <div className={styles.mobileDrawerHeader}>
             <Image src="/clover-mark.svg" alt="" width={34} height={34} />
             <strong>Menu</strong>

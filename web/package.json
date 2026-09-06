@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
+    "qa:knowledge": "tsx scripts/knowledge-regression.ts",
     "predev": "tsx scripts/sync-public-assets.ts",
     "dev": "next dev",
     "prebuild": "tsx scripts/check-environment-isolation.ts && tsx scripts/apply-migrations.ts && tsx scripts/sync-public-assets.ts && node -e \"require('fs').rmSync('.next', { recursive: true, force: true })\"",

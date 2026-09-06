@@ -22,6 +22,7 @@ export function PublicFooter() {
     <nav aria-label="Help and legal">
       <h2>Here to help</h2>
       <Link href="/help">Help</Link>
+      <Link href="/guides">Guides</Link>
       <Link href="/contact">Contact</Link>
       <Link href="/privacy-policy">Privacy Policy</Link>
       <Link href="/terms-of-service">Terms of Service</Link>

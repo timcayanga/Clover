@@ -895,7 +895,7 @@ const main = async () => {
     "Vercel project configuration must place generated functions in Singapore, not only rely on route metadata."
   );
   assert.deepEqual(
-    JSON.parse(vercelConfigSource).crons,
+    JSON.parse(vercelConfigSource).crons.filter((job: { path: string }) => job.path === "/api/cron/import-recovery"),
     [{ path: "/api/cron/import-recovery", schedule: "0 18 * * *" }],
     "The Hobby-compatible nightly safety net must recover old imports without waiting for a browser."
   );
