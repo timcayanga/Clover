@@ -12,6 +12,19 @@ import {
   aiSettingsSchema,
 } from "../lib/knowledge-types";
 import { helpSections, publicHelpSections } from "../lib/help-center";
+import { philippineBankGuideSeeds } from "../lib/knowledge-ph-bank-guides";
+
+assert.equal(philippineBankGuideSeeds.length, 8);
+for (const guide of philippineBankGuideSeeds) {
+  assert.equal(guide.content.market, "ph");
+  assert.equal(guide.content.kind, "guide");
+  assert(guide.content.sources.length > 0, `${guide.path}: official source required`);
+  assert(guide.content.reviewedAt, `${guide.path}: review date required`);
+  assert(knowledgeSeeds.some(entry => entry.path === guide.path));
+}
+for (const bank of ["BDO", "UnionBank", "RCBC", "Security Bank", "Chinabank", "LANDBANK", "CIMB", "GoTyme"]) {
+  assert(searchKnowledge(philippineBankGuideSeeds, bank).length > 0, `${bank}: guide must be searchable`);
+}
 
 assert.equal(
   new Set(knowledgeSeeds.map((entry) => entry.path)).size,
