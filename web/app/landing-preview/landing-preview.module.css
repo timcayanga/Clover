@@ -596,13 +596,12 @@
 }
 
 .featuresDropdown{width:min(310px,calc(100vw - 32px));min-width:0}
-.proNote{display:block;margin:8px 0;font-size:11px;line-height:1.5;color:#496073}
 .proCompareLink{display:inline-block;font-size:12px;color:#008fa4;margin-top:4px}
 .proPrice{font-size:13px;font-weight:600;line-height:1.5;max-width:100%}
 /* A single full-width photo avoids ghosted people from offset duplicate layers. */
 .journey .scene .sceneSubject{width:100%;mask-image:none;-webkit-mask-image:none}
 @media(min-width:901px){
- .journey[data-pro=true] .world>.worldWash{background:rgba(249,253,253,.94)}
+ .journey[data-pro=true] .world>.worldWash{background:linear-gradient(90deg,#f9fdfd 0 31%,rgba(249,253,253,.98) 34%,rgba(249,253,253,.74) 38%,transparent 55%)}
 }
 .featuresDropdown a,.mobileDrawerLinks a{white-space:normal;overflow-wrap:anywhere;padding-block:9px}
 .featuresDropdown a strong,.mobileDrawerLinks a strong{font-weight:600;line-height:1.35}
@@ -616,7 +615,7 @@
  }
  .journey[data-comparison=true] .comparisonChapter table,
  .journey[data-pro=true] .proChapter table{overflow:clip;overflow-wrap:anywhere}
- .journey[data-comparison=true] .world>.worldWash,.journey[data-pro=true] .world>.worldWash{background:rgba(249,253,253,.96)}
+ .journey[data-comparison=true] .world>.worldWash,.journey[data-pro=true] .world>.worldWash{background:linear-gradient(180deg,transparent 0 60%,rgba(249,253,253,.72) 68%,rgba(249,253,253,.97) 76%,#f9fdfd 84%)}
  .comparisonTable th,.comparisonTable td,.proTable th,.proTable td{padding:7px 6px}
  .comparisonChapter p,.proChapter p{margin:10px 0}
  .proActions{margin-top:12px;gap:6px}

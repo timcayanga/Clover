@@ -112,7 +112,7 @@ export function JourneyActions({ authEnabled, final = false }: { authEnabled: bo
 
 export function ProActions({ market }: { market?: LandingMarket }) {
   return <div className={styles.proActions} data-landing-actions>
-    {market ? <strong className={styles.proPrice}>Planned Pro: {plannedProPrices(market).monthly}/month or {plannedProPrices(market).annual}/year</strong> : null}
+    {market ? <strong className={styles.proPrice}>Pro: {plannedProPrices(market).monthly}/month or {plannedProPrices(market).annual}/year</strong> : null}
     <Link className="button button-primary button-pill" href="/sign-up?intent=pro&interval=annual" prefetch={false}>Upgrade to Pro <span aria-hidden="true">→</span></Link>
     <small>You can keep using Clover for free.</small>
   </div>;
@@ -120,9 +120,7 @@ export function ProActions({ market }: { market?: LandingMarket }) {
 
 export function ProComparison({ market, style, showActions = true, variant = "landing" }: { market: LandingMarket; style: CSSProperties; showActions?: boolean; variant?: "landing" | "feature" }) {
   return <div className={styles.proDetails} style={style}>
-    <small className={styles.proNote}>Statement and receipt uploads included in both plans.</small>
     <PlanComparisonTable variant={variant} className={styles.proTable} />
-    <small className={styles.proNote}>Planned limits. Not enforced during beta.</small>
     <Link className={styles.proCompareLink} href="/pricing">Compare all Free and Pro features →</Link>
     {showActions ? <ProActions market={market} /> : null}
   </div>;

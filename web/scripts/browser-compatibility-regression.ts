@@ -23,6 +23,7 @@ async function main() {
   assert.doesNotMatch(footer, />Home<|Explore Clover|Here to help/);
   assert.match(await readSource("components/marketing-footer.tsx"), /PublicFooter as MarketingFooter/, "Every public layout must use the same footer.");
   const landingJourneySource = await readSource("app/landing-preview/landing-journey.tsx");
+  assert.doesNotMatch(landingJourneySource, /Planned Pro:|Planned limits\. Not enforced during beta\.|Statement and receipt uploads included in both plans\./, "Landing Pro comparisons should use concise Pro messaging.");
   const landingJourneyStyles = await readSource("app/landing-preview/landing-preview.module.css");
   const landingPreviewPageSource = await readSource("app/landing-preview/page.tsx");
   const mainLandingPageSource = await readSource("app/page.tsx");
