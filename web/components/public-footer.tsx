@@ -13,6 +13,7 @@ export function PublicFooter() {
     <nav aria-label="Explore Clover">
       <h2>Explore Clover</h2>
       <Link href="/">Home</Link>
+      <Link href="/pricing">Pricing</Link>
       {FEATURE_LINKS.map(link => <Link key={link.href} href={link.href}>{link.label}</Link>)}
     </nav>
     <nav aria-label="Help and legal">

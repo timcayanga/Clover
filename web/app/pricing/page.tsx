@@ -1,141 +1,53 @@
+import { headers } from "next/headers";
 import Link from "next/link";
-import { PlanFeatureItem } from "@/components/plan-feature-item";
-import { LandingNav } from "@/components/landing-nav";
-import { MarketingFooter } from "@/components/marketing-footer";
-import { PricingProSelector } from "@/components/pricing-pro-selector";
+import { JourneyHeader } from "@/app/landing-preview/landing-journey";
+import { PublicFooter } from "@/components/public-footer";
+import { PlanComparisonTable } from "@/components/plan-comparison-table";
+import { plannedProPrices } from "@/lib/public-plan-comparison";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
-import { getOrCreateCurrentUser } from "@/lib/user-context";
-import type { PublicAccountState } from "@/lib/public-account-state";
+import styles from "./pricing.module.css";
 
-function PlanIcon({ name }: { name: "starter" | "growth" }) {
-  const common = {
-    width: 24,
-    height: 24,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.8,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    "aria-hidden": true,
-  };
-
-  if (name === "starter") {
-    return (
-      <svg {...common}>
-        <path d="M12 3 4 8l8 5 8-5-8-5Z" />
-        <path d="M4 16l8 5 8-5" />
-        <path d="M4 12l8 5 8-5" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg {...common}>
-      <path d="M4 19V5" />
-      <path d="M8 15l4-4 4 3 4-6" />
-      <path d="M16 8h4v4" />
-    </svg>
-  );
-}
+export const metadata = { title: { absolute: "Clover" }, description: "Compare Clover Free and Pro features and planned regional pricing." };
 
 export default async function PricingPage() {
-  let session: Awaited<ReturnType<typeof getSessionContext>> | null = null;
-  try {
-    session = await getSessionContext();
-  } catch {
-    session = null;
-  }
-  const user = session?.userId ? await getOrCreateCurrentUser(session.userId) : null;
-  const planTier = user?.planTier ?? null;
-  const accountState: PublicAccountState = user
-    ? {
-        signedIn: true,
-        displayName: user.firstName ?? user.email?.split("@")[0] ?? "Account",
-        avatarUrl: null,
-      }
-    : {
-        signedIn: false,
-        displayName: null,
-        avatarUrl: null,
-      };
-
-  return (
-    <main className="landing-page pricing-page">
-      <LandingNav accountState={accountState} />
-
-      <header className="pricing-page__header">
-        <h1>Pricing</h1>
+  const country = (await headers()).get("x-vercel-ip-country")?.toUpperCase();
+  const market = country === "PH" ? "ph" : "global";
+  const prices = plannedProPrices(market);
+  const session = await getSessionContext().catch(() => null);
+  const signedIn = Boolean(session?.userId);
+  const proHref = signedIn ? "/settings#billing" : "/sign-up?intent=pro&interval=annual";
+  return <main className={styles.page} data-pricing-market={market}>
+    <JourneyHeader />
+    <PostHogEvent event="upgrade_prompt_viewed" onceKey={analyticsOnceKey("upgrade_prompt_viewed", `pricing:${signedIn ? "signed-in" : "guest"}`)} properties={{ prompt_location: "pricing_page", cta_href: proHref }} />
+    <div className={styles.content}>
+      <header className={styles.intro}>
+        <p className={styles.eyebrow}>Free and Pro</p>
+        <h1>Choose what works for your money.</h1>
+        <p>Start with the records you already have. Get more room and deeper insights when you need them.</p>
       </header>
-
-      <PostHogEvent
-        event="upgrade_prompt_viewed"
-        onceKey={analyticsOnceKey("upgrade_prompt_viewed", `pricing:${accountState.signedIn ? "signed-in" : "guest"}`)}
-        properties={{
-          plan_tier: accountState.signedIn ? "free" : "guest",
-          prompt_location: "pricing_page",
-          cta_href: accountState.signedIn ? "/settings#billing" : "/sign-up",
-        }}
-      />
-
-      <section className="pricing-page__comparison" aria-label="Clover pricing plans">
-        <article className="pricing-card">
-            <div className="pricing-card__top">
-              <span className="pricing-card__icon">
-                <PlanIcon name="starter" />
-              </span>
-              <div>
-                <h2>Free</h2>
-              </div>
-            </div>
-            <p className="pricing-card__summary">
-              Organize your finances with the core Clover tools.
-            </p>
-            <ul className="pricing-card__list">
-              <PlanFeatureItem label="Manual transaction tracking" detailPlan="free" />
-              <PlanFeatureItem label="No profile, account, upload, or transaction row caps for now" detailPlan="free" />
-              <PlanFeatureItem label="Receipt scanning" detailPlan="free" />
-              <PlanFeatureItem label="Basic investment tracking" detailPlan="free" />
-              <PlanFeatureItem label="Basic reports and Adviser guidance" detailPlan="free" />
-              <PlanFeatureItem label="Basic goal tracking" detailPlan="free" />
-            </ul>
-            {!accountState.signedIn ? (
-              <Link className="button button-secondary button-pill pricing-card__cta" href="/sign-up?intent=free" prefetch={false}>
-                Organize my finances for free
-              </Link>
-            ) : null}
-          </article>
-
-        <article className="pricing-card pricing-card--featured">
-            <div className="pricing-card__top">
-              <span className="pricing-card__icon pricing-card__icon--featured">
-                <PlanIcon name="growth" />
-              </span>
-              <div>
-                <h2>Pro</h2>
-              </div>
-            </div>
-            <p className="pricing-card__summary">
-              More room for uploads, accounts, reports, Adviser guidance, and investments.
-            </p>
-            <ul className="pricing-card__list">
-              <PlanFeatureItem label="Manual transaction tracking" detailPlan="pro" />
-              <PlanFeatureItem label="No profile, account, upload, or transaction row caps for now" detailPlan="pro" />
-              <PlanFeatureItem label="Receipt scanning" detailPlan="pro" />
-              <PlanFeatureItem label="Full investment portfolio tools" detailPlan="pro" />
-              <PlanFeatureItem label="Advanced reports and Adviser guidance" detailPlan="pro" />
-              <PlanFeatureItem label="Enhanced goal tracking and recommendations" detailPlan="pro" />
-            </ul>
-            <PricingProSelector
-              signedIn={accountState.signedIn}
-              planTier={planTier}
-            />
-          </article>
+      <aside className={styles.notice}>
+        <strong>Planned pricing and limits</strong>
+        <p>These limits are not enforced during beta. We’ll notify you before they take effect. Final subscription pricing is shown before payment.</p>
+      </aside>
+      <section className={styles.plans} aria-label="Planned regional pricing">
+        <article><h2>Free</h2><strong>Free</strong><p>Organize your finances with Clover’s core tools.</p><Link className="button button-secondary button-pill" href={signedIn ? "/home" : "/sign-up"}>{signedIn ? "Open Clover" : "Start free"} →</Link></article>
+        <article><h2>Pro</h2><strong>{prices.monthly}<small> / month</small></strong><p>Or {prices.annual} per year</p><Link className="button button-primary button-pill" href={proHref}>Upgrade to Pro →</Link><small>You can keep using Clover for free.</small></article>
       </section>
-
-      <MarketingFooter />
-    </main>
-  );
+      <p className={styles.region}>Pricing region: {market === "ph" ? "Philippines · PHP" : "Global · USD"}</p>
+      <PlanComparisonTable variant="full" className={styles.table} />
+      <section className={styles.notes} aria-label="Plan details">
+        <h2>How the planned allowances work</h2>
+        <ul>
+          <li>Statement and receipt uploads are included in both plans. Upload allowances and file limits are still being finalized.</li>
+          <li>Both plans include Adviser help with creating budgets, goals, and Circles. Pro adds external information and interactive Adviser visuals.</li>
+          <li>Limits apply across your Profiles combined. Completed or archived budgets and goals do not count toward active limits.</li>
+          <li>Circle allowances count Circles you create, not invitations you accept.</li>
+          <li>AI allowances reset monthly, with a separate rolling 24-hour cap. Detailed usage accounting will be confirmed before enforcement begins.</li>
+        </ul>
+      </section>
+    </div>
+    <PublicFooter />
+  </main>;
 }

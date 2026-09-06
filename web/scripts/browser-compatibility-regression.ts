@@ -3,6 +3,7 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { getVerifiedSpendingMerchantName } from "../lib/transaction-display";
+import { PLAN_COMPARISON_KEYS, PLAN_COMPARISON_ROWS, plannedProPrices } from "../lib/public-plan-comparison";
 
 const root = process.cwd();
 const readSource = (relativePath: string) => readFile(path.join(root, relativePath), "utf8");
@@ -12,6 +13,19 @@ async function main() {
   const landingJourneyStyles = await readSource("app/landing-preview/landing-preview.module.css");
   const landingPreviewPageSource = await readSource("app/landing-preview/page.tsx");
   const mainLandingPageSource = await readSource("app/page.tsx");
+  assert.equal(PLAN_COMPARISON_KEYS.landing.length, 4);
+  assert.equal(PLAN_COMPARISON_KEYS.feature.length, 6);
+  assert.equal(PLAN_COMPARISON_KEYS.full.length, 11);
+  assert.deepEqual(plannedProPrices("ph"), { monthly: "₱169", annual: "₱1,699" });
+  assert.deepEqual(plannedProPrices("global"), { monthly: "US$9.99", annual: "US$99.99" });
+  assert.deepEqual(PLAN_COMPARISON_ROWS.accounts, ["Financial accounts", "5", "20"]);
+  assert.deepEqual(PLAN_COMPARISON_ROWS.daily, ["AI usage per rolling 24 hours", "Up to 30,000 tokens", "Up to 250,000 tokens"]);
+  assert.doesNotMatch(JSON.stringify(PLAN_COMPARISON_ROWS), /connected|linked bank/i, "Bank connections must not be advertised yet.");
+  const pricingPageSource = await readSource("app/pricing/page.tsx");
+  assert.match(pricingPageSource, /x-vercel-ip-country[\s\S]*?country === "PH"/, "Pricing must select the market from the visitor country.");
+  assert.match(pricingPageSource, /variant="full"/, "Pricing must display the full shared comparison.");
+  assert.match(pricingPageSource, /not enforced during beta/, "Planned limits must not be presented as active restrictions.");
+  assert.match(await readSource("components/public-footer.tsx"), /Pricing[\s\S]*?Privacy Policy[\s\S]*?Terms of Service/, "Pricing and legal links must remain available in the footer.");
   assert.match(mainLandingPageSource, /export \{ default, metadata \} from "\.\/landing-preview\/page"/, "The main landing route must use the approved journey and its Clover metadata without duplicating the implementation.");
   assert.match(landingPreviewPageSource, /window.location.pathname === "\/" \|\| window.location.pathname === "\/landing-preview"/, "Both public landing routes must retain their light appearance regardless of the saved app theme.");
   assert.match(landingJourneyStyles, /\.journey \.chapter\[data-active=false\]\{overflow:hidden\}/, "Inactive mobile chapters must not leak nested scrollbars over the current scene.");
@@ -40,7 +54,8 @@ async function main() {
   assert.match(landingJourneySource, /const scenes = \["01-organize", "02-upload", "07-trust", "03-picture", "04-adviser", "05-plan", "08-pro", "06-life"\]/, "Trust reassures after Upload; the travel story then continues through Pro and the final CTA.");
   assert.match(landingJourneySource, /const folder = scene === "06-life" \|\| scene === "05-plan" \? "landing-story-v2" : "landing-story-v3"/, "Shared finances and the finale use the group scenes; personal finance keeps the individual scenes.");
   assert.match(landingJourneySource, /<source media="\(max-width: 900px\)" srcSet=\{sceneAsset\(scene, true\)\}/, "The landing story must use mobile-specific crops that keep its recurring cast visible.");
-  assert.match(landingJourneySource, /className=\{styles\.sceneBackdrop\}/, "Intermediate desktop sizes must retain a full-bleed backdrop behind the uncropped cast.");
+  assert.doesNotMatch(landingJourneySource, /className=\{styles\.sceneBackdrop\}/, "Each scene must use one photo layer rather than offset duplicates of the cast.");
+  assert.match(landingJourneyStyles, /\.journey \.scene \.sceneSubject\{width:100%;mask-image:none;-webkit-mask-image:none\}/, "The single scene photo must cover the full stage without a duplicate backdrop.");
   assert.match(landingJourneyStyles, /@media\(max-width:900px\)\{[\s\S]*?\.markers\{right:8px;top:50%;bottom:auto;flex-direction:column;/, "The landing-story chapter tracker must remain on the right on mobile.");
   assert.match(landingPreviewPageSource, /x-vercel-ip-country/, "The landing preview must choose localized finance examples from the visitor country.");
   assert.match(landingJourneySource, /BPI STATEMENT[\s\S]*GCASH EXPORT[\s\S]*CHASE STATEMENT[\s\S]*PAYPAL EXPORT/, "The landing preview must keep Philippine and global document examples.");
@@ -72,7 +87,9 @@ async function main() {
   assert.match(landingJourneySource, /bpi\.png[\s\S]*grabpay\.png[\s\S]*gcash\.png[\s\S]*chase bank\.png[\s\S]*paypal\.png[\s\S]*wise\.png/, "Upload examples must use real bank and wallet marks in both supported markets.");
   assert.doesNotMatch(landingJourneySource, /chapterMotion[\s\S]{0,500}filter:/, "Landing copy must not blur during chapter transitions.");
   assert.match(landingJourneySource, /Organize my finances for free[\s\S]*?→[\s\S]*?href="\/sign-in"/, "The landing actions must lead with the arrow-led organization CTA before Log in.");
-  assert.match(landingJourneySource, /FEATURE_LINKS\.map[\s\S]*?Privacy Policy[\s\S]*?Terms of Service/, "The preview header must expose the shared Features menu and both legal pages.");
+  assert.match(landingJourneySource, /FEATURE_LINKS\.map[\s\S]*?href="\/pricing"/, "The public header must expose Features and Pricing.");
+  const publicHeaderSource = landingJourneySource.split("export function JourneyHeader()")[1].split("export function LandingJourney")[0];
+  assert.doesNotMatch(publicHeaderSource, /href="\/(privacy-policy|terms-of-service)"/, "Legal links belong in the footer, not the journey header.");
   assert.match(landingJourneySource, /aria-expanded=\{featuresOpen\}[\s\S]*?preview-features-menu/, "The preview Features dropdown must expose its expanded state to assistive technology.");
   assert.match(landingJourneySource, /aria-label=\{mobileMenuOpen \? "Close menu" : "Open menu"\}[\s\S]*?role="dialog"[\s\S]*?Clover navigation/, "Mobile navigation must use an accessible burger-triggered drawer.");
   assert.match(landingJourneyStyles, /\.featuresDropdown,\.mobileDropdown\{[\s\S]*?background:#fff/, "Preview navigation menus must remain opaque over the landing photography.");

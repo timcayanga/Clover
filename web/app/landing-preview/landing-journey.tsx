@@ -5,6 +5,8 @@ import { useLandingTableFit } from "@/lib/use-landing-table-fit";
 import Image from "next/image";
 import Link from "next/link";
 import { PublicFooter } from "@/components/public-footer";
+import { PlanComparisonTable } from "@/components/plan-comparison-table";
+import { plannedProPrices } from "@/lib/public-plan-comparison";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { LandingSignupModal } from "@/components/landing-signup-modal";
 import { FEATURE_LINKS } from "@/lib/public-site";
@@ -20,7 +22,7 @@ const chapters = [
   { title: <>See what changed and where your <em>money actually goes.</em></>, copy: "Once your records are organized, Clover turns them into a clear financial picture. Track balances, spending, cash flow, recurring obligations, and trends across your accounts without piecing everything together yourself." },
   { title: <>Ask what your money can make <em>possible.</em></>, copy: "Clover Adviser helps turn your financial history into practical answers. Ask what you can safely spend, what changed this month, whether a goal is still on track, or what deserves your attention next." },
   { title: <>Manage money together <em>without sharing everything.</em></>, copy: "Split expenses, track who owes what, and organize shared money with a partner, household, family, or friends. Keep personal finances private while sharing only what makes sense." },
-  { title: <>Do more when your finances <em>get more complex.</em></>, copy: "Start free and upgrade when Clover becomes a bigger part of how you manage your money. Pro gives you more room, more intelligence, and more ways to understand your financial life." },
+  { title: <>Do more when your finances <em>get more complex.</em></>, copy: "Start free. Upgrade for more accounts, deeper insights, and more help from Clover Adviser." },
   { title: <>Feel clearer about your money, and more confident <em>about what comes next.</em></>, copy: null },
 ] as const;
 
@@ -108,29 +110,21 @@ export function JourneyActions({ authEnabled, final = false }: { authEnabled: bo
   </div>;
 }
 
-export function ProActions() {
+export function ProActions({ market }: { market?: LandingMarket }) {
   return <div className={styles.proActions} data-landing-actions>
+    {market ? <strong className={styles.proPrice}>Planned Pro: {plannedProPrices(market).monthly}/month or {plannedProPrices(market).annual}/year</strong> : null}
     <Link className="button button-primary button-pill" href="/sign-up?intent=pro&interval=annual" prefetch={false}>Upgrade to Pro <span aria-hidden="true">→</span></Link>
     <small>You can keep using Clover for free.</small>
   </div>;
 }
 
-export function ProComparison({ market, style, showActions = true }: { market: LandingMarket; style: CSSProperties; showActions?: boolean }) {
-  const prices = market === "ph" ? ["PHP 169", "PHP 1,699"] : ["USD 2.69", "USD 26.99"];
+export function ProComparison({ market, style, showActions = true, variant = "landing" }: { market: LandingMarket; style: CSSProperties; showActions?: boolean; variant?: "landing" | "feature" }) {
   return <div className={styles.proDetails} style={style}>
-    <table className={styles.proTable}>
-      <caption>Compare Clover Free and Pro</caption>
-      <thead><tr><th scope="col">Plan</th><th scope="col">Free</th><th scope="col">Pro</th></tr></thead>
-      <tbody>
-        <tr><th scope="row">Monthly billing</th><td>Free</td><td><strong>{prices[0]}</strong> / month</td></tr>
-        <tr><th scope="row">Annual billing</th><td>Free</td><td><strong>{prices[1]}</strong> / year</td></tr>
-        <tr><th scope="row">Uploads & accounts</th><td>No caps for now</td><td>No caps for now</td></tr>
-        <tr><th scope="row">Reports & Adviser</th><td>Basic guidance</td><td>Advanced guidance</td></tr>
-        <tr><th scope="row">Goals</th><td>Basic tracking</td><td>Tracking + advice</td></tr>
-        <tr><th scope="row">Investments</th><td>Basic tracking</td><td>Full portfolio tools</td></tr>
-      </tbody>
-    </table>
-    {showActions ? <ProActions /> : null}
+    <small className={styles.proNote}>Statement and receipt uploads included in both plans.</small>
+    <PlanComparisonTable variant={variant} className={styles.proTable} />
+    <small className={styles.proNote}>Planned limits. Not enforced during beta.</small>
+    <Link className={styles.proCompareLink} href="/pricing">Compare all Free and Pro features →</Link>
+    {showActions ? <ProActions market={market} /> : null}
   </div>;
 }
 
@@ -196,8 +190,7 @@ export function JourneyHeader() {
           </div>
           <Link href="/help">Help</Link>
           <Link href="/contact-us">Contact</Link>
-          <Link href="/privacy-policy">Privacy Policy</Link>
-          <Link href="/terms-of-service">Terms of Service</Link>
+          <Link href="/pricing">Pricing</Link>
         </nav>
         <div className={styles.mobileMenu}>
           <button
@@ -228,8 +221,7 @@ export function JourneyHeader() {
             <span />
             <Link href="/help" onClick={() => setMobileMenuOpen(false)}>Help</Link>
             <Link href="/contact-us" onClick={() => setMobileMenuOpen(false)}>Contact</Link>
-            <Link href="/privacy-policy" onClick={() => setMobileMenuOpen(false)}>Privacy Policy</Link>
-            <Link href="/terms-of-service" onClick={() => setMobileMenuOpen(false)}>Terms of Service</Link>
+            <Link href="/pricing" onClick={() => setMobileMenuOpen(false)}>Pricing</Link>
           </div>
         </div>
       </div> : null}
@@ -334,7 +326,6 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
         <div className={styles.sceneStack}>
           {scenes.map((scene, index) => (
             <div className={styles.scene} data-scene={scene} data-active={Math.max(0, chapter - 1) === index} key={scene} style={sceneMotion(index)}>
-              <span className={styles.sceneBackdrop} style={{ "--scene-backdrop": `url("${sceneAsset(scene)}")` } as CSSProperties} />
               <picture className={styles.sceneSubject}>
                 <source media="(max-width: 900px)" srcSet={sceneAsset(scene, true)} />
                 <img src={sceneAsset(scene)} alt="" draggable={false} fetchPriority={index === 0 ? "high" : "auto"} />
@@ -349,7 +340,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
         {chapters.map((item, index) => <div className={`${styles.chapter} ${index === 1 ? styles.comparisonChapter : ""} ${index === 7 ? styles.proChapter : ""} ${index === 8 ? styles.finalChapter : ""}`} data-landing-copy data-active={chapter === index} key={index} aria-hidden={chapter !== index} inert={chapter !== index} style={chapterMotion(index)}>
           <div style={{ opacity: index === displayedChapter ? 1 : 0 }}><h1>{item.title}</h1>
           {item.copy ? <p>{item.copy}</p> : null}
-          {index === 7 ? <ProActions /> : null}</div>
+          {index === 7 ? <ProActions market={market} /> : null}</div>
           {index === 1 ? <div className={styles.comparisonDetails} style={tableMotion(index)}><ComparisonTable /></div> : null}
           {index === 3 ? <div className={styles.trustLinks}><Link href="/privacy-policy">Privacy Policy</Link><Link href="/features/security">How Clover protects your data →</Link></div> : null}
           {index === 7 ? <ProComparison market={market} style={tableMotion(index)} showActions={false} /> : null}

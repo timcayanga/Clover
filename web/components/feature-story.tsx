@@ -77,10 +77,10 @@ export function FeatureStory({ story, authEnabled, initialMarket, countryResolve
           <h1>{current.title} <em>{current.accent}</em></h1>
           {current.copy && <p className={styles.description}>{current.copy}</p>}
           {current.link && <Link className={styles.contextLink} href={current.link.href}>{current.link.label}</Link>}
-          {pricing ? <ProActions /> : null}
+          {pricing ? <ProActions market={market} /> : null}
           {(active===0 || final) && (story.slug==="pro" ? <div className={styles.proCta}><Link className="button button-primary button-pill" href="/sign-up?intent=pro&interval=annual">Upgrade to Pro <span aria-hidden="true">→</span></Link><small>You can keep using Clover for free.</small></div> : <JourneyActions authEnabled={authEnabled} final={final} />)}
         </div>
-        {pricing && <div className={styles.pricing}><ProComparison market={market} style={{opacity:1}} showActions={false} /></div>}
+        {pricing && <div className={styles.pricing}><ProComparison market={market} variant="feature" style={{opacity:1}} showActions={false} /></div>}
       </section>
       {current.visual && FEATURE_CAPTURE_VISUALS.includes(current.visual) && <div key={current.visual} className={styles.support} data-visual={current.visual} aria-hidden="true" inert>
         <FeatureStoryDemo visual={current.visual} market={market} />

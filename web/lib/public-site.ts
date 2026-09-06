@@ -277,6 +277,7 @@ export const FEATURE_SLUG_ALIASES: Record<string, string> = {
 export const resolveFeatureSlug = (slug: string) => FEATURE_SLUG_ALIASES[slug] ?? slug;
 
 export const PRODUCT_LINKS: PublicNavLink[] = [
+  { label: "Pricing", href: "/pricing", description: "Compare Clover Free and Pro." },
   {
     label: "Help",
     href: "/help",
