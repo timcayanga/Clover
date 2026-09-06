@@ -447,6 +447,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     const shouldSelfHealEnrichment =
       snapshot.visibleImportComplete &&
       (!snapshot.enrichmentJob ||
+        snapshot.enrichmentJob.status === "queued" ||
+        snapshot.enrichmentJob.status === "retrying" ||
         snapshot.enrichmentJob.status === "failed" ||
         isImportEnrichmentJobStale(snapshot.enrichmentJob));
     if (shouldSelfHealEnrichment) {

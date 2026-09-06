@@ -8,7 +8,7 @@ import { getEffectiveProfileLimit } from "@/lib/user-limits";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { createTransientDataUnavailableResponse, isTransientDataError, isUnauthorizedDataError } from "@/lib/transient-data";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
@@ -77,7 +77,19 @@ export async function GET() {
     if (refreshedUser?.workspaces?.length) {
       const orderedWorkspaces = orderWorkspaces(refreshedUser.workspaces);
 
-      void Promise.all(orderedWorkspaces.map((workspace) => seedWorkspaceDefaults(workspace.id)));
+      // Keep background transactions alive until commit/rollback. An unowned
+      // promise can be frozen after the response while holding the defaults
+      // lock needed by an upload in another function instance.
+      after(async () => {
+        for (const workspace of orderedWorkspaces) {
+          await seedWorkspaceDefaults(workspace.id).catch((error) => {
+            console.warn("Unable to finish profile defaults", {
+              workspaceId: workspace.id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
+        }
+      });
 
       return NextResponse.json({
         workspaces: orderedWorkspaces,

@@ -426,8 +426,8 @@ const main = async () => {
   );
   assert.match(
     uploadDockSource,
-    /displayedStageRef[\s\S]{0,1200}stageCandidate\.rank > displayedStageRef\.current\.rank/,
-    "A long-running import must not flicker backward through earlier progress phases."
+    /getImportStageLabel\(phaseLabel \|\| detail \|\| "", value\)/,
+    "The dock must show the current durable phase, not latch a percentage-derived enrichment label during retries."
   );
   assert.match(
     uploadDockSource,

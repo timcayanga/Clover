@@ -1938,31 +1938,9 @@ export function ImportFilesModal({
       summaryContext.accountType ?? null
     );
 
-    let finalizingProgress = 90;
+    const finalizingProgress = IMPORT_PROGRESS.finalizing;
     let lastKnownConfirmedRows = 0;
     let lastKnownAccountBalance: string | null = null;
-    const finalizingTimer = window.setInterval(() => {
-      finalizingProgress = Math.min(IMPORT_PROGRESS.finalizing, finalizingProgress + 1);
-      emitItemUpdate({
-        status: "importing",
-        progress: finalizingProgress,
-        progressLabel: "Finalizing import",
-        targetAccountId: resolvedAccountId,
-      });
-      emitImportActivity({
-        workspaceId,
-        surface: importActivitySurfaceRef.current,
-        status: "active",
-        fileName: summaryContext.fileName,
-        fileIndex: items.findIndex((item) => item.id === itemId) + 1,
-        fileTotal: items.length,
-        completedFiles: completedFileCount,
-        progress: finalizingProgress,
-        detail: "Clover is wrapping things up",
-        summary: null,
-        errorMessage: null,
-      });
-    }, 700);
 
     emitItemUpdate({
       status: "importing",
@@ -1984,7 +1962,7 @@ export function ImportFilesModal({
       errorMessage: null,
     });
 
-    try {
+    {
       // Background confirmation is a lightweight wait while the worker owns
       // the save. Give it enough time to observe a durable result rather than
       // publishing an optimistic success before the UI can read the rows.
@@ -2274,8 +2252,6 @@ export function ImportFilesModal({
         "Clover kept finalizing this import for too long. Try again, or add the account and transactions manually."
       );
       return { status: "error", importedRows: null, summary: null };
-    } finally {
-      window.clearInterval(finalizingTimer);
     }
   };
 

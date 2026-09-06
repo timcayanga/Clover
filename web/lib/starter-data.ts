@@ -84,6 +84,10 @@ const getUserStarterCurrency = (
     : normalizeStarterCurrency(fallbackCurrency);
 
 const lockTransaction = async (tx: TransactionClient, key: string) => {
+  // A frozen/default-seeding request must not hold an upload behind the
+  // database's much longer statement timeout. Roll back and let the caller
+  // retry, instead of expiring the transaction while it waits for this lock.
+  await tx.$queryRaw`SELECT set_config('lock_timeout', '1500ms', true)`;
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))::text AS locked`;
 };
 
@@ -131,6 +135,15 @@ const ensureWorkspaceCashAccountWithClient = async (
 
 export const ensureWorkspaceCashAccount = async (workspaceId: string, currency = "PHP") => {
   const normalizedCurrency = normalizeStarterCurrency(currency);
+
+  // Most imports already have a Cash account. A read is sufficient in that
+  // case: do not acquire the shared defaults lock or run a no-op UPDATE for
+  // every bank/wallet row group. Creation still rechecks inside the lock.
+  const existingCashAccount = await prisma.account.findFirst({
+    where: { workspaceId, type: "cash", currency: normalizedCurrency },
+    select: { id: true, name: true },
+  });
+  if (existingCashAccount && existingCashAccount.name !== "Cash on hand") return;
 
   await prisma.$transaction(async (tx) => {
     await lockTransaction(tx, workspaceDefaultsLockKey(workspaceId));
@@ -404,6 +417,24 @@ export const ensureStarterWorkspace = async (
 };
 
 export const seedWorkspaceDefaults = async (workspaceId: string, preferredCurrency?: string) => {
+  // Profile refreshes happen during upload progress. Established profiles
+  // must stay read-only here so they cannot block transaction confirmation.
+  const current = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: {
+      user: { select: { regionalPreferences: true } },
+      categories: { select: { name: true } },
+      accounts: { where: { type: "cash" }, select: { currency: true } },
+    },
+  });
+  if (!current) return;
+  const currentCurrency = getUserStarterCurrency(current.user.regionalPreferences, preferredCurrency ?? "PHP");
+  const currentCategoryNames = new Set(current.categories.map((category) => category.name.trim().toLowerCase()));
+  if (
+    current.accounts.some((account) => account.currency === currentCurrency) &&
+    DEFAULT_CATEGORY_ROWS.every((category) => currentCategoryNames.has(category.name.trim().toLowerCase()))
+  ) return;
+
   await prisma.$transaction(async (tx) => {
     await lockTransaction(tx, workspaceDefaultsLockKey(workspaceId));
     const workspace = await tx.workspace.findUnique({
@@ -416,13 +447,11 @@ export const seedWorkspaceDefaults = async (workspaceId: string, preferredCurren
     );
     const existingCategories = await tx.category.findMany({ where: { workspaceId } });
     const categoryByName = new Set(existingCategories.map((category) => category.name.trim().toLowerCase()));
-    for (const category of DEFAULT_CATEGORY_ROWS) {
-      if (!categoryByName.has(category.name.trim().toLowerCase())) {
-        await tx.category.create({
-          data: { workspaceId, name: category.name, type: category.type, isSystem: true },
-        });
-        categoryByName.add(category.name.trim().toLowerCase());
-      }
+    const missingCategories = DEFAULT_CATEGORY_ROWS.filter((category) => !categoryByName.has(category.name.trim().toLowerCase()));
+    if (missingCategories.length > 0) {
+      await tx.category.createMany({
+        data: missingCategories.map((category) => ({ workspaceId, name: category.name, type: category.type, isSystem: true })),
+      });
     }
     await alignWorkspaceStarterCashCurrencyWithClient(tx, workspaceId, starterCurrency);
   });

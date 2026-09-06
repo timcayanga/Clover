@@ -12759,7 +12759,7 @@ export const processImportFileText = async (
         pageCount: pageImages?.length ?? 0,
         actorUserId: options.actorUserId ?? null,
       });
-      void (async () => {
+      schedulePostVisibleImportWork(`statement-enrichment-queue:${importFileId}`, async () => {
         const cleanupRowsAfterConfirmation = await countImportTransactionsNeedingCleanup(importFileId).catch(() => 0);
         if (cleanupRowsAfterConfirmation <= 0) {
           return;
@@ -12779,11 +12779,6 @@ export const processImportFileText = async (
         });
 
         processImportEnrichmentJobsInBackground(importFileId, Math.max(rows.length, cleanupRowsAfterConfirmation));
-      })().catch((error) => {
-        console.warn("Unable to start background statement enrichment", {
-          importFileId,
-          error,
-        });
       });
 
       return {

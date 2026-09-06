@@ -137,11 +137,11 @@ export function GlobalImportActivity() {
     };
 
     const publishVisibleImport = (snapshot: ImportActivitySnapshot) => {
-      if (publishedImportIdsRef.current.has(importFileId)) return;
-      publishedImportIdsRef.current.add(importFileId);
       if (snapshot.summary) {
         publishImportedSummary(snapshot.workspaceId, snapshot.summary);
       }
+      if (publishedImportIdsRef.current.has(importFileId)) return;
+      publishedImportIdsRef.current.add(importFileId);
       publishWorkspaceDataChange({
         workspaceId: snapshot.workspaceId,
         source: "transactions",
@@ -251,6 +251,11 @@ export function GlobalImportActivity() {
           return;
         }
 
+        // Refresh real saved rows immediately, even while the account-summary
+        // check is finishing. Do not publish preliminary parser rows as fact.
+        if (decision.kind === "visible") {
+          publishVisibleImport({ ...current, summary: null });
+        }
         const durablySettled =
           payload.settledImportComplete === true || Boolean(payload.receiptTransaction);
         if (durablySettled) {

@@ -138,9 +138,27 @@ const waitWithStatusStream = async (params: {
       };
     };
 
+    let accountCheckRunning = false;
+    const checkAccount = async () => {
+      if (finished || accountCheckRunning) return;
+      accountCheckRunning = true;
+      try {
+        const payload = await fetchAccountPayload(params.accountId);
+        if (!finished && evaluate(payload?.account ?? null)) {
+          cleanup();
+          resolve(true);
+        }
+      } catch {
+        // The bounded stream/fallback can retry transient reads.
+      } finally {
+        accountCheckRunning = false;
+      }
+    };
+
     source.addEventListener("snapshot", (event) => {
       try {
         captureStatusSnapshot(JSON.parse((event as MessageEvent<string>).data) as ImportStatusSnapshot);
+        if (latestStatusRef.current?.settledImportComplete) void checkAccount();
       } catch {
         // Ignore malformed payloads and keep the fallback poll running.
       }
@@ -149,23 +167,14 @@ const waitWithStatusStream = async (params: {
     source.addEventListener("complete", (event) => {
       try {
         captureStatusSnapshot(JSON.parse((event as MessageEvent<string>).data) as ImportStatusSnapshot);
+        if (latestStatusRef.current?.settledImportComplete) void checkAccount();
       } catch {
         // Ignore malformed payloads.
       }
     });
 
     source.addEventListener("visible", () => {
-      void (async () => {
-        try {
-          const payload = await fetchAccountPayload(params.accountId);
-          if (evaluate(payload?.account ?? null)) {
-            cleanup();
-            resolve(true);
-          }
-        } catch {
-          // Fall back to the regular poll loop.
-        }
-      })();
+      void checkAccount();
     });
 
     source.onerror = () => {
@@ -173,17 +182,7 @@ const waitWithStatusStream = async (params: {
       resolve(null);
     };
 
-    const accountPoll = window.setInterval(async () => {
-      try {
-        const payload = await fetchAccountPayload(params.accountId);
-        if (evaluate(payload?.account ?? null)) {
-          cleanup();
-          resolve(true);
-        }
-      } catch {
-        // Keep waiting until timeout or a later poll succeeds.
-      }
-    }, params.pollDelayMs);
+    const accountPoll = window.setInterval(() => void checkAccount(), params.pollDelayMs);
   });
 };
 
@@ -209,7 +208,8 @@ export const waitForImportSettledVisibility = async (params: SettledVisibilityPa
       importFileId: params.importFileId ?? null,
       importedRows: params.importedRows,
       expectedBalance,
-      timeoutMs,
+      // A connected but silent EventSource must leave time for HTTP fallback.
+      timeoutMs: Math.min(timeoutMs, 5_000),
       pollDelayMs,
     });
     if (streamResult !== null) {
