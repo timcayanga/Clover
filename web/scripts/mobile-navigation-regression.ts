@@ -296,6 +296,11 @@ async function main() {
   assert.match(shell, /shell-mobile-more-link--replaced/);
   assert.match(shell, /if \(mobileBackAction\)[\s\S]{0,100}mobileBackAction\(\)/, "In-place collection details must use their explicit Back action.");
   assert.match(transactionsPage, /mobileTrailingAction=\{isCompactViewport/, "Mobile transaction filters belong beside right-side actions.");
+  assert.match(transactionsPage, /ContextualAskClover context="transactions"[^\n]*\n\s*<span id="transactions-mobile-search-trigger"/, "Search must follow Adviser in the left header group.");
+  assert.match(shell, /label: "Plan", icon: "plan"/);
+  assert.match(shell, /active === "adviser" \? null : mobileLeadingAction/);
+  const splitBillManual = await readSource("components/split-bill-manual-modal.tsx");
+  assert.match(splitBillManual, /return createPortal\([\s\S]*document.body/, "The Split Bills add form must escape the header's clipping and stacking context.");
   assert.match(styles, /body\.mobile-creation-page \.content-body \{ animation: none !important; transform: none !important;/, "Entry animations must not establish a clipping container for full-page creation.");
   assert.match(transactionsPage, /if \(publishingTransactionsCacheRef\.current\) return;/, "Transactions must not rehydrate its own synchronous cache publication.");
   assert.match(transactionsPage, /publishingTransactionsCacheRef\.current = true;[\s\S]{0,800}finally[\s\S]{0,100}publishingTransactionsCacheRef\.current = false;/, "The cache guard must always reset, including when publication fails.");

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CurrencySelector } from "@/components/currency-selector";
 import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
@@ -244,11 +245,11 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
     }
   };
 
-  if (!open) {
+  if (!open || typeof document === "undefined") {
     return null;
   }
 
-  return (
+  return createPortal(
     <div className="split-bill-modal split-bill-manual-modal-backdrop" role="presentation" onClick={closeModal}>
       <section className="split-bill-modal__card glass split-bill-manual-modal" role="dialog" aria-modal="true" aria-label="Add manual split bill" onClick={(event) => event.stopPropagation()}>
         <div className="split-bill-manual-modal__head">
@@ -403,6 +404,7 @@ export function SplitBillManualModal({ open, currentUserName, people, groups, on
           </button>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body
   );
 }

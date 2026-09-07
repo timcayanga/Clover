@@ -64564,6 +64564,20 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
     position: absolute; top: calc(100% + 12px); bottom: auto; left: auto; right: -76px; width: min(340px, calc(100vw - 24px)); max-height: calc(100dvh - 180px); overflow-y: auto;
   }
 }
+
+@media (max-width: 1100px) {
+  #transactions-mobile-search-trigger { display: inline-flex; align-items: center; }
+  body > .split-bill-manual-modal-backdrop { z-index: 1400; }
+  .split-bill-manual-modal__back { width: 36px !important; height: 36px !important; min-width: 36px !important; min-height: 36px !important; border: 1px solid var(--stroke) !important; border-radius: 50% !important; }
+  #transactions-mobile-search-trigger button { width: 36px; min-width: 36px; height: 36px; min-height: 36px; padding: 0; border-radius: 50%; }
+  .content.content > :is(.topbar, .shell-compact-bar) :is(.shell-back-button, .reports-range-menu__summary) {
+    width: 36px !important; min-width: 36px !important; height: 36px !important; min-height: 36px !important;
+    flex: 0 0 36px !important; border-radius: 50% !important; padding: 0 !important;
+    border: 1px solid var(--stroke) !important; background: var(--surface, #fff) !important;
+    display: inline-flex !important; align-items: center; justify-content: center; box-shadow: none !important;
+  }
+  .content:is(.content--circles, .content--budgeting, .content--goals) > :is(.topbar, .shell-compact-bar) :is(.accounts-toolbar-add, .collection-toolbar-action) { display: none !important; }
+}
 @media (max-width: 380px) {
   .content--transactions > :is(.topbar, .shell-compact-bar) { grid-template-columns: auto 1fr auto !important; height: auto !important; min-height: 76px !important; row-gap: 0 !important; }
   .content.content--transactions > :is(.topbar, .shell-compact-bar) :is(.topbar__title-wrap, .shell-compact-bar__copy) { grid-column: 1 / -1 !important; grid-row: 2 !important; text-align: center; }

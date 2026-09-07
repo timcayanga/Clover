@@ -426,7 +426,7 @@ const desktopNavSections = [
 const mobileSettingsSections = [
   { href: "/settings", label: "Settings", icon: "settings" as const },
   { href: "/help", label: "Help", icon: "help" as const },
-  { href: "/settings/plan", label: "Plan", icon: "settings" as const },
+  { href: "/settings/plan", label: "Plan", icon: "plan" as const },
 ];
 
 const shouldPrefetchNavHref = (_href: string) => true;
@@ -452,6 +452,7 @@ type IconName =
   | "profile"
   | "settings"
   | "help"
+  | "plan"
   | "sign-out";
 
 const MENU_ICON_NAMES: Partial<Record<IconName, NavigationIconName>> = {
@@ -470,6 +471,7 @@ const MENU_ICON_NAMES: Partial<Record<IconName, NavigationIconName>> = {
   notifications: "notifications",
   settings: "settings",
   help: "help",
+  plan: "plan",
   search: "search",
   profile: "profile",
   "sign-out": "signOut",
@@ -2595,7 +2597,7 @@ export function CloverShell({
                   <MenuIcon name="chevron-left" />
                 </button>
               ) : null}
-              <div className="shell-topbar-leading__actions">{mobileLeadingAction ?? <AdviserHeaderLink />}</div>
+              <div className="shell-topbar-leading__actions">{active === "adviser" ? null : mobileLeadingAction ?? <AdviserHeaderLink />}</div>
             </div>
             <div
               className={`shell-compact-bar__copy ${hideCompactBarCopyOnMobile ? "shell-compact-bar__copy--hide-mobile" : ""} ${
@@ -2642,7 +2644,7 @@ export function CloverShell({
                   <MenuIcon name="chevron-left" />
                 </button>
               ) : null}
-              <div className="shell-topbar-leading__actions">{mobileLeadingAction ?? <AdviserHeaderLink />}</div>
+              <div className="shell-topbar-leading__actions">{active === "adviser" ? null : mobileLeadingAction ?? <AdviserHeaderLink />}</div>
             </div>
             <div className="topbar__title-wrap">
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
