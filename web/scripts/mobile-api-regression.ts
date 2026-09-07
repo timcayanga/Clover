@@ -36,6 +36,10 @@ async function main() {
   assert.equal(mobileOperation("DELETE", ["transactions", "abc"]), "transaction");
   assert.equal(mobileOperation("POST", ["transactions"]), "transaction-create");
   assert.equal(mobileOperation("GET", ["home"]), "home");
+  assert.equal(mobileOperation("GET", ["notifications"]), "notifications");
+  assert.equal(mobileOperation("PATCH", ["notifications"]), "notifications");
+  assert.equal(mobileOperation("DELETE", ["notifications"]), null);
+  assert.ok(routeSource.includes('body.ids.some(id => !allowed.has(id))'));
   assert.equal(mobileOperation("GET", ["options"]), "options");
   assert.equal(mobileOperation("DELETE", ["accounts", "abc"]), null);
   for (const input of [{rawPayload:{tampered:true}}, {workspaceId:"other"}, {amount:"NaN"}, {date:"2026-02-30"}, {date:"2026-1-1"}, {amount:"1e6"}, {userNote:"x".repeat(2001)}]) assert.equal(mobileEditSchema.safeParse(input).success, false);

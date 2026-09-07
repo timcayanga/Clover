@@ -1,5 +1,6 @@
 export function mobileOperation(method: string, segments: string[]) {
   const path = segments.join("/");
+  if (path === "notifications" && ["GET", "PATCH"].includes(method)) return "notifications";
   if (method === "POST" && path === "transactions") return "transaction-create";
   if (
     method === "GET" &&

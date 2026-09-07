@@ -14,6 +14,7 @@ import { mobileApiResponse } from "@/lib/mobile-api-response";
 import { getCurrentUserEnvironment } from "@/lib/user-environment";
 import { mobileEditSchema, mobileCreateSchema } from "@/lib/mobile-edit-schema";
 import { mobileHome } from "@/lib/mobile-home";
+import { loadActiveInAppNotificationFeed } from "@/lib/in-app-notifications.server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -60,7 +61,7 @@ async function handle(
     // on the website until its native equivalent is ready.
     const user = await prisma.user.findUnique({
       where: { clerkUserId: userId },
-      select: { id: true, firstName: true },
+      select: { id: true, firstName: true, email: true },
     });
     if (!user)
       return reply(
@@ -95,6 +96,18 @@ async function handle(
     const workspaceId = url.searchParams.get("workspaceId");
     if (!workspaceId) return reply({ error: "Choose a Profile first." }, 400);
     await assertWorkspaceAccess(userId, workspaceId);
+    if (operation === "notifications") {
+      const feed = await loadActiveInAppNotificationFeed(user, workspaceId);
+      if (request.method === "PATCH") {
+        const body = z.object({ ids: z.array(z.string().min(1).max(240)).min(1).max(40) }).strict().parse(await request.json());
+        const allowed = new Set(feed.notifications.map(item => item.id));
+        if (body.ids.some(id => !allowed.has(id))) return reply({ error: "Notification not found in this Profile." }, 400);
+        await prisma.inAppNotificationRead.createMany({ data: [...new Set(body.ids)].map(notificationKey => ({ userId: user.id, notificationKey })), skipDuplicates: true });
+        const refreshed = await loadActiveInAppNotificationFeed(user, workspaceId);
+        return reply({ notifications: refreshed.notifications, count: refreshed.unreadCount });
+      }
+      return reply({ notifications: feed.notifications, count: feed.unreadCount });
+    }
     if (operation === "options") {
       const [accounts, categories, tags] = await Promise.all([
         prisma.account.findMany({ where: { workspaceId, type: { not: "investment" } }, select: { id: true, name: true, currency: true, institution: true, type: true }, orderBy: { name: "asc" } }),
