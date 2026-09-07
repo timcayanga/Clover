@@ -104,7 +104,6 @@ export function MobileSwipeDelete({
       startY: event.clientY,
       startOffset: offset,
     };
-    event.currentTarget.setPointerCapture(event.pointerId);
   };
 
   const moveGesture = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -123,6 +122,7 @@ export function MobileSwipeDelete({
         return;
       }
       setIsDragging(true);
+      event.currentTarget.setPointerCapture(event.pointerId);
     }
 
     if (!gesture.horizontal) return;

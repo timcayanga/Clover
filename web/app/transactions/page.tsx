@@ -31,6 +31,8 @@ import { TransactionCategoryPicker, type TransactionPickerCategory } from "@/com
 import { TransactionAccountPicker, type TransactionPickerAccount } from "@/components/transaction-account-picker";
 import { TransactionNameAutocomplete, type TransactionNameSuggestion } from "@/components/transaction-name-autocomplete";
 import { TransactionTagsEditor } from "@/components/transaction-tags-editor";
+import { TransactionsHeaderOverlay, TransactionFilterRow } from "@/components/transactions-header-overlay";
+import { useTransactionLongPress } from "@/components/use-transaction-long-press";
 import { TransactionSelectionToolbar } from "@/components/transaction-selection-toolbar";
 import { getCategoryIconTone } from "@/lib/category-icons";
 import { MOBILE_LAYOUT_MEDIA_QUERY } from "@/lib/responsive-layout";
@@ -2083,12 +2085,13 @@ function MultiSelectFilterGroup({
   onClear,
 }: {
   label: string;
-  options: Array<{ value: string; label: string }>;
+  options: Array<{ value: string; label: string; icon?: React.ReactNode }>;
   selected: string[];
   onToggle: (value: string) => void;
   onClear: () => void;
 }) {
   return (
+    <TransactionFilterRow label={label} summary={options.filter((option) => selected.includes(option.value)).map((option) => option.label).join(", ") || "All"}>
     <div className="transactions-filter-group" role="group" aria-label={label}>
       <div className="transactions-filter-group__head">
         <span className="transactions-filter-group__label">{label}</span>
@@ -2109,12 +2112,13 @@ function MultiSelectFilterGroup({
               aria-pressed={isSelected}
               onClick={() => onToggle(option.value)}
             >
-              {option.label}
+              {option.icon ? <span className="transaction-filter-option-icon" aria-hidden="true">{option.icon}</span> : null}{option.label}
             </button>
           );
         })}
       </div>
     </div>
+    </TransactionFilterRow>
   );
 }
 
@@ -2464,6 +2468,7 @@ function TransactionsPageContent() {
     return () => { controller.abort(); document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", escape); };
   }, [filterOpen, selectedWorkspaceId]);
 
+  const longPress = useTransactionLongPress((id) => { setSelectedTransactionIds((current) => current.includes(id) ? current : [...current, id]); setFilterOpen(false); });
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
   const workspaceTransactionCount = transactions.length;
   const otherCategoryId = useMemo(() => getOtherCategoryId(categories), [categories]);
@@ -5630,6 +5635,11 @@ function TransactionsPageContent() {
           return;
         }
 
+        if (hasSelectedTransactions) {
+          setSelectedTransactionIds([]);
+          return;
+        }
+
         if (headerMenuOpen) {
           setHeaderMenuOpen(null);
           setHeaderMenuPosition(null);
@@ -7577,8 +7587,8 @@ function TransactionsPageContent() {
       mobileLeadingAction={
         <div className="transactions-mobile-leading-actions">
           <ContextualAskClover context="transactions" planTier={planTier} />
-          <TransactionSelectionToolbar compact count={selectedTransactionCount} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} />
-          {!hasSelectedTransactions ? <TransactionsManageMenu compact /> : null}
+          {isCompactViewport ? <TransactionSelectionToolbar compact count={selectedTransactionCount} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} /> : null}
+
         </div>
       }
       actions={transactionsShellActions}
@@ -7612,131 +7622,37 @@ function TransactionsPageContent() {
               </button>
             </div>
           ) : null}
-      {filterOpen ? (
-            <div className="transactions-inline-filters glass" role="region" aria-label="Transaction filters">
-              <div className="transactions-inline-filters__head">
-                <button className="icon-button" type="button" onClick={toggleFiltersPanel} aria-label="Close filters">
-                  ×
-                </button>
-              </div>
-              <div className="form-grid">
-                {isCompactViewport && workspaceCurrencyCodes.length > 0 ? (
-                  <div className="transactions-filter-group transactions-filter-group--currency" role="group" aria-label="Currency">
-                    <div className="transactions-filter-group__head">
-                      <span className="transactions-filter-group__label">Currency</span>
-                    </div>
-                    <CurrencySelector
-                      value={workspaceCurrencyCodes.length > 1 ? currencyFilter : workspaceCurrencyCodes[0] ?? "PHP"}
-                      onChange={(next) => {
-                        const nextCurrency = next && next.toLowerCase() !== "all" ? formatCurrencyCode(next) : "";
-                        setCurrencyFilter(nextCurrency);
-                        persistSelectedCurrency(selectedWorkspaceId, nextCurrency);
-                      }}
-                      options={workspaceCurrencyCodes}
-                      includeAllOption={workspaceCurrencyCodes.length > 1}
-                      allLabel="All currencies"
-                      ariaLabel="Filter transactions by currency"
-                      className="transactions-filter-currency"
-                      buttonClassName="transactions-filter-currency__button"
-                      menuClassName="transactions-filter-currency__menu"
-                      optionClassName="transactions-filter-currency__option"
-                      menuAlignment="start"
-                      portalMenu
-                    />
-                  </div>
-                ) : null}
-                <div className="transactions-filter-group" role="group" aria-label="Dates">
-                  <div className="transactions-filter-group__head">
-                    <span className="transactions-filter-group__label">Dates</span>
-                  </div>
-                  <div className="transactions-filter-group__options">
-                    {[
-                      ["ltd", "Lifetime"],
-                      ["day", "Today"],
-                      ["week", "This week"],
-                      ["month", "This month"],
-                      ["year", "This year"],
-                    ].map(([mode, label]) => {
-                      const isSelected = dateFilterMode === mode;
-                      return (
-                        <button
-                          key={mode}
-                          className={`pill pill-interactive transactions-filter-pill ${isSelected ? "pill-is-selected" : ""}`}
-                          type="button"
-                          aria-pressed={isSelected}
-                          onClick={() => applyDateFilterMode(isSelected && mode !== "ltd" ? "ltd" : (mode as DateFilterMode))}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                <MultiSelectFilterGroup
-                  label="Tags"
-                  options={filterTags.map((tag) => ({ value: tag.id, label: tag.name }))}
-                  selected={tagFilters}
-                  onToggle={(value) => setTagFilters((current) => toggleFilterValue(current, value))}
-                  onClear={() => setTagFilters([])}
-                />
-                <MultiSelectFilterGroup
-                  label="Categories"
-                  options={categories.map((category) => ({
-                    value: category.id,
-                    label: category.name,
-                  }))}
-                  selected={categoryFilters}
-                  onToggle={(value) => setCategoryFilters((current) => toggleFilterValue(current, value))}
-                  onClear={() => setCategoryFilters([])}
-                />
-                <MultiSelectFilterGroup
-                  label="Accounts"
-                  options={accountFilterOptions}
-                  selected={accountFilters}
-                  onToggle={(value) => setAccountFilters((current) => toggleFilterValue(current, value))}
-                  onClear={() => setAccountFilters([])}
-                />
-                <MultiSelectFilterGroup
-                  label="Types"
-                  options={[
-                    { value: "debit", label: "Expense" },
-                    { value: "credit", label: "Income" },
-                    { value: "transfer", label: "Transfer" },
-                  ]}
-                  selected={typeFilters}
-                  onToggle={(value) => setTypeFilters((current) => toggleTypedFilterValue(current, value as TransactionTypeFilter))}
-                  onClear={() => setTypeFilters([])}
-                />
-                <div className="transactions-filter-group transactions-filter-group--amount" role="group" aria-label="Amount range">
-                  <div className="transactions-filter-group__head">
-                    <span className="transactions-filter-group__label">Amount range</span>
-                  </div>
-                  <div className="transactions-column-menu__fields transactions-column-menu__fields--amount-range">
-                    <label className="transactions-column-menu__field">
-                      <span>Minimum</span>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        value={amountMin}
-                        onChange={(event) => setAmountMin(event.target.value)}
-                        placeholder="0.00"
-                      />
-                    </label>
-                    <label className="transactions-column-menu__field">
-                      <span>Maximum</span>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        value={amountMax}
-                        onChange={(event) => setAmountMax(event.target.value)}
-                        placeholder="0.00"
-                      />
-                    </label>
-                  </div>
-                </div>
-              </div>
+      {filterOpen ? <TransactionsHeaderOverlay className="transactions-filters-overlay">
+        <section className="transactions-inline-filters" aria-label="Transaction filters">
+          <div className="transactions-inline-filters__head"><span>Filters</span><button className="icon-button" type="button" onClick={toggleFiltersPanel} aria-label="Close filters">×</button></div>
+          <TransactionFilterRow label="Currency" summary={currencyFilter || "All currencies"}>
+            <div className="transactions-filter-group__options">
+              {["", ...workspaceCurrencyCodes].map((code) => <button key={code} type="button" className="transactions-filter-pill" aria-pressed={currencyFilter === code} onClick={() => { setCurrencyFilter(code); persistSelectedCurrency(selectedWorkspaceId, code); }}>{code || "All currencies"}</button>)}
             </div>
-          ) : null}
+          </TransactionFilterRow>
+          <TransactionFilterRow label="Dates" summary={({ ltd: "Lifetime", day: "Today", week: "This week", month: "This month", year: "This year", quarter: "This quarter", custom: [customStart, customEnd].filter(Boolean).join(" – ") || "Custom" })[dateFilterMode]}>
+            <div className="transactions-filter-group__options">
+              {([["ltd", "Lifetime"], ["day", "Today"], ["week", "This week"], ["month", "This month"], ["quarter", "This quarter"], ["year", "This year"], ["custom", "Custom range"]] as const).map(([mode, label]) => <button key={mode} className="transactions-filter-pill" type="button" aria-pressed={dateFilterMode === mode} onClick={() => applyDateFilterMode(mode)}>{label}</button>)}
+            </div>
+            {dateFilterMode === "custom" ? <div className="transactions-column-menu__fields transactions-column-menu__fields--amount-range"><label className="transactions-column-menu__field">From<input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></label><label className="transactions-column-menu__field">To<input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></label></div> : null}
+          </TransactionFilterRow>
+          <MultiSelectFilterGroup label="Tags" options={filterTags.map((tag) => ({ value: tag.id, label: tag.name }))} selected={tagFilters} onToggle={(value) => setTagFilters((current) => toggleFilterValue(current, value))} onClear={() => setTagFilters([])} />
+          <MultiSelectFilterGroup label="Categories" options={categories.map((category) => ({ value: category.id, label: category.name, icon: <CategoryBrandMark categoryName={category.name} size={22} radius={7} /> }))} selected={categoryFilters} onToggle={(value) => setCategoryFilters((current) => toggleFilterValue(current, value))} onClear={() => setCategoryFilters([])} />
+          <MultiSelectFilterGroup label="Accounts" options={accountFilterOptions.map((option) => ({ ...option, icon: <AccountBrandMark accountBrand={accountBrandById.get(option.value) ?? getAccountBrand({ name: option.label, institution: option.label, type: "bank" })} label={option.label} /> }))} selected={accountFilters} onToggle={(value) => setAccountFilters((current) => toggleFilterValue(current, value))} onClear={() => setAccountFilters([])} />
+          <MultiSelectFilterGroup label="Types" options={[
+            { value: "debit", label: "Expense", icon: <span className="negative">↓</span> },
+            { value: "credit", label: "Income", icon: <span className="positive">↑</span> },
+            { value: "transfer", label: "Transfer", icon: <span>↔</span> },
+          ]} selected={typeFilters} onToggle={(value) => setTypeFilters((current) => toggleTypedFilterValue(current, value as TransactionTypeFilter))} onClear={() => setTypeFilters([])} />
+          <div className="transactions-filter-group transactions-filter-group--amount" role="group" aria-label="Amount Range">
+            <span className="transactions-filter-group__label">Amount Range</span>
+            <div className="transactions-column-menu__fields transactions-column-menu__fields--amount-range">
+              <label className="transactions-column-menu__field"><span>Minimum</span><input type="number" inputMode="decimal" value={amountMin} onChange={(event) => setAmountMin(event.target.value)} placeholder="0.00" /></label>
+              <label className="transactions-column-menu__field"><span>Maximum</span><input type="number" inputMode="decimal" value={amountMax} onChange={(event) => setAmountMax(event.target.value)} placeholder="0.00" /></label>
+            </div>
+          </div>
+        </section>
+      </TransactionsHeaderOverlay> : null}
 
           {bulkDeleteConfirmOpen && typeof document !== "undefined"
             ? createPortal(
@@ -8213,26 +8129,32 @@ function TransactionsPageContent() {
 
                               transactionRowRefs.current.delete(transaction.id);
                             }}
-                            className={`transactions-mobile-simple-row transactions-mobile-simple-row--selectable${transaction.isExcluded ? " is-muted" : ""}${selectedTransactionIds.includes(transaction.id) ? " is-selected" : ""}`}
+                            className={`transactions-mobile-simple-row${hasSelectedTransactions ? " transactions-mobile-simple-row--selectable" : ""}${transaction.isExcluded ? " is-muted" : ""}${selectedTransactionIds.includes(transaction.id) ? " is-selected" : ""}`}
                             tabIndex={0}
                             role="group"
                             aria-label={`${merchantSummary}, ${formatDate(transaction.date)}, ${formatTransactionAmount(
                               amount,
                               transaction.currency
                             )}`}
-                            onClick={() => hasSelectedTransactions ? toggleSelectedTransaction(transaction.id, !selectedTransactionIds.includes(transaction.id)) : openTransactionDetail(transaction)}
+                            onPointerDown={(event) => longPress.start(event, transaction.id)}
+                            onPointerMove={longPress.move}
+                            onPointerLeave={longPress.cancel}
+                            onPointerUp={longPress.cancel}
+                            onPointerCancel={longPress.cancel}
+                            onContextMenu={(event) => event.preventDefault()}
+                            onClick={() => { if (longPress.consume()) return; hasSelectedTransactions ? toggleSelectedTransaction(transaction.id, !selectedTransactionIds.includes(transaction.id)) : openTransactionDetail(transaction); }}
                             onKeyDown={(event) => {
                               if (event.target !== event.currentTarget) return;
                               if (event.key === "Enter" || event.key === " ") {
                                 event.preventDefault();
-                                if (hasSelectedTransactions) toggleSelectedTransaction(transaction.id, !selectedTransactionIds.includes(transaction.id));
+                                if (hasSelectedTransactions || event.key === " ") toggleSelectedTransaction(transaction.id, !selectedTransactionIds.includes(transaction.id));
                                 else openTransactionDetail(transaction);
                               }
                             }}
                           >
-                            <label className="transactions-mobile-select" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+                            {hasSelectedTransactions ? <label className="transactions-mobile-select" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
                               <input type="checkbox" checked={selectedTransactionIds.includes(transaction.id)} onChange={(event) => toggleSelectedTransaction(transaction.id, event.target.checked)} aria-label={`Select ${merchantSummary}`} />
-                            </label>
+                            </label> : null}
                             <div className="transactions-mobile-simple-row__name">
                               <span className="transactions-mobile-simple-row__account-brand" aria-hidden="true">
                                 <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
@@ -8290,11 +8212,12 @@ function TransactionsPageContent() {
           </div>
           ) : null}
 
+          {isCompactViewport && hasSelectedTransactions ? <div className="transactions-mobile-selection-status" role="status"><span>{selectedTransactionCount} selected</span><button className="button button-secondary button-small" type="button" onClick={clearSelection}>Clear selection</button></div> : null}
           {!isCompactViewport ? (
             <div className="transactions-footer" style={{ ...transactionsFooterStyle, marginTop: "auto" }}>
               <div className="table-footer__summary">
                 {totalTransactionCountForDisplay > 0 ? (
-                  <span className="transactions-footer__showing">Showing {currentPageLabel}</span>
+                  <span className="transactions-footer__showing" role="status">{hasSelectedTransactions ? `${selectedTransactionCount} selected` : `Showing ${currentPageLabel}`}</span>
                 ) : null}
                 {warningTransactionCount > 0 ? (
                   <button

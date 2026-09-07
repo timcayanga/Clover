@@ -14,9 +14,10 @@ async function main() {
   const toolbar = await readSource("components/transaction-selection-toolbar.tsx");
   const toolbarStyles = await readSource("components/transaction-selection-toolbar.css");
   const patchRoute = await readSource("app/api/transactions/[transactionId]/route.ts");
-  assert.match(toolbar, /placeholder="Search transactions"/);
-  assert.match(toolbar, /Actions · \{count\}/);
-  assert.match(toolbar, /count === 1 \? "Edit" : "Edit selected"/);
+  assert.match(toolbar, /placeholder="Search"/);
+  assert.doesNotMatch(toolbar, /Actions ·|__count|onClick=\{onClear\}/);
+  assert.match(toolbar, />Edit Selected<\/button>/);
+  assert.match(toolbar, /transaction-selection-toolbar__search/);
   assert.match(toolbar, /document.addEventListener\("pointerdown", outside\)/);
   assert.match(toolbarStyles, /height: 48px;[\s\S]{0,80}flex: 0 0 48px;/, "Toolbar space must remain fixed during selection.");
   assert.match(patchRoute, /payload.tagAction === "add"[\s\S]{0,250}create: buildTransactionTagWrites/);
@@ -27,7 +28,19 @@ async function main() {
     readSource("app/globals.css"),
   ]);
   assert.doesNotMatch(transactionsPage, /transactions-selection-menu--footer/, "Selection actions should no longer be hidden in the footer.");
-  assert.match(transactionsPage, /onClick=\{\(\) => hasSelectedTransactions \? toggleSelectedTransaction/);
+  assert.match(transactionsPage, /longPress.consume\(\)/);
+  assert.match(transactionsPage, /hasSelectedTransactions \? <label className="transactions-mobile-select"/);
+  assert.doesNotMatch(transactionsPage, /<TransactionsManageMenu compact/);
+  assert.match(transactionsPage, /selectedTransactionCount\} selected/);
+  const overlay = await readSource("components/transactions-header-overlay.tsx");
+  const longPress = await readSource("components/use-transaction-long-press.ts");
+  assert.match(overlay, /getBoundingClientRect\(\).bottom/);
+  assert.match(overlay, /createPortal/);
+  assert.match(overlay, /<details/);
+  assert.match(longPress, /450/);
+  assert.match(longPress, /Math.hypot[\s\S]{0,100}cancel\(\)/);
+  assert.match(toolbarStyles, /text-overflow: ellipsis/);
+  assert.match(transactionsPage, /label="Currency"[\s\S]*label="Dates"[\s\S]*label="Tags"[\s\S]*label="Categories"[\s\S]*label="Accounts"[\s\S]*label="Types"[\s\S]*aria-label="Amount Range"/);
   assert.match(transactionsPage, /transactions-mobile-select/);
   assert.match(transactionsRoute, /transactions: await withTransactionTags\(transactions, workspaceId\)/);
   assert.match(transactionsRoute, /transactions: await withTransactionTags\(pageTransactions, workspaceId\)/);
