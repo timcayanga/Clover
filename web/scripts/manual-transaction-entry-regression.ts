@@ -106,7 +106,8 @@ assert.match(splitBillLinkFields, /Saved people suggestions/, "Split Bills trans
 assert.match(transactions, /setDetailEditing\(true\)/, "Desktop Transaction Details must have an explicit Edit action.");
 assert.match(transactions, /Save changes/, "Desktop transaction edits must have an explicit Save action.");
 assert.doesNotMatch(transactions, /detailAutosaveTimerRef/, "Transaction Details must not silently autosave financial edits.");
-assert.match(transactions, /transaction-drawer__action-menu-popover/, "Desktop destructive actions must live in the overflow menu.");
+assert.doesNotMatch(transactions, /className="transaction-drawer__action-menu-popover"/, "Desktop details must not retain the removed overflow menu.");
+assert.match(transactions, /className="button button-danger button-small transaction-drawer-delete-footer"[\s\S]{0,160}>Delete transaction<\/button>/, "Desktop details must expose Delete at the bottom, with confirmation.");
 assert.match(transactionDetail, /beginEditing\("account"\)/, "Transaction detail fields must enter editing directly when tapped.");
 assert.match(transactionDetail, /transaction-detail-page__delete-button/, "Mobile destructive actions must remain at the bottom of the details page.");
 assert.match(transactionDetail, /AccountBrandMark/, "Transaction details must show the selected account icon.");
