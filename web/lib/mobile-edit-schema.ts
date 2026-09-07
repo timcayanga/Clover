@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+// Deliberately excludes accountNumber and investment-history fields: the shared
+// web create route may update an existing account when those fields are sent.
+export const mobileAccountCreateSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  institution: z.string().trim().max(200).optional(),
+  type: z.enum(["bank", "wallet", "credit_card", "cash", "loan", "mortgage", "line_of_credit", "receivable", "payable", "bnpl", "prepaid", "insurance", "other"]),
+  currency: z.string().regex(/^[A-Z]{3}$/),
+  balance: z.string().regex(/^-?\d{1,12}(\.\d{1,2})?$/).nullable(),
+}).strict();
+
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
   const parsed = new Date(`${value}T00:00:00Z`);
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;

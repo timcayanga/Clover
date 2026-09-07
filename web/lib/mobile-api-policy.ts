@@ -2,6 +2,7 @@ export function mobileOperation(method: string, segments: string[]) {
   const path = segments.join("/");
   if (path === "notifications" && ["GET", "PATCH"].includes(method)) return "notifications";
   if (method === "POST" && path === "transactions") return "transaction-create";
+  if (method === "POST" && path === "accounts") return "account-create";
   if (
     method === "GET" &&
     ["bootstrap", "transactions", "accounts", "imports", "options", "home"].includes(path)

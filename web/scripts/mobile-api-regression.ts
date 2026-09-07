@@ -6,7 +6,7 @@ import {
   mobileSessionUser,
 } from "../lib/mobile-api-policy";
 import { mobileApiResponse } from "../lib/mobile-api-response";
-import { mobileEditSchema, mobileCreateSchema } from "../lib/mobile-edit-schema";
+import { mobileEditSchema, mobileCreateSchema, mobileAccountCreateSchema } from "../lib/mobile-edit-schema";
 import {
   getMobileRequestContext,
   withMobileRequestContext,
@@ -35,6 +35,13 @@ async function main() {
   );
   assert.equal(mobileOperation("DELETE", ["transactions", "abc"]), "transaction");
   assert.equal(mobileOperation("POST", ["transactions"]), "transaction-create");
+  assert.equal(mobileOperation("POST", ["accounts"]), "account-create");
+  const newAccount = { name: "Travel", institution: "BPI", type: "bank", currency: "PHP", balance: "100.00" };
+  assert.equal(mobileAccountCreateSchema.safeParse(newAccount).success, true);
+  for (const extra of [{ workspaceId: "other" }, { accountNumber: "change-existing" }, { balance: "NaN" }, { type: "investment" }, { name: "" }, { rawPayload: {} }]) {
+    assert.equal(mobileAccountCreateSchema.safeParse({ ...newAccount, ...extra }).success, false);
+  }
+  assert.deepEqual(mobileApiResponse("account-create", { account: { id: "a", name: "Travel", rawPayload: { secret: true } } }), { account: { id: "a", name: "Travel" } });
   assert.equal(mobileOperation("GET", ["home"]), "home");
   assert.equal(mobileOperation("GET", ["notifications"]), "notifications");
   assert.equal(mobileOperation("PATCH", ["notifications"]), "notifications");

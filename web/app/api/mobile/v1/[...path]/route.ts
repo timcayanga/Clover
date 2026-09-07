@@ -12,7 +12,7 @@ import {
 import { getProAccess } from "@/lib/pro-access";
 import { mobileApiResponse } from "@/lib/mobile-api-response";
 import { getCurrentUserEnvironment } from "@/lib/user-environment";
-import { mobileEditSchema, mobileCreateSchema } from "@/lib/mobile-edit-schema";
+import { mobileEditSchema, mobileCreateSchema, mobileAccountCreateSchema } from "@/lib/mobile-edit-schema";
 import { mobileHome } from "@/lib/mobile-home";
 import { loadActiveInAppNotificationFeed } from "@/lib/in-app-notifications.server";
 
@@ -138,6 +138,12 @@ async function handle(
         return reply({ error: "Import not found" }, 404);
     }
     let forwarded = request;
+    if (operation === "account-create") {
+      if (Number(request.headers.get("content-length") ?? 0) > 4096)
+        return reply({ error: "Account details are too large." }, 413);
+      const body = mobileAccountCreateSchema.parse(await request.json());
+      forwarded = new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify({ ...body, workspaceId }) });
+    }
     if (operation === "transaction-create") {
       const body = mobileCreateSchema.parse(await request.json());
       forwarded = new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify({ ...body, workspaceId, merchantClean: body.merchantRaw, preserveType: true, isTransfer: body.type === "transfer" }) });
@@ -213,6 +219,8 @@ async function handle(
             return (await import("@/app/api/transactions/route")).POST(forwarded);
           case "accounts":
             return (await import("@/app/api/accounts/route")).GET(forwarded);
+          case "account-create":
+            return (await import("@/app/api/accounts/route")).POST(forwarded);
           case "imports":
             return (await import("@/app/api/imports/route")).GET(forwarded);
           case "transaction": {

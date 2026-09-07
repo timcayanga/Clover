@@ -34,6 +34,7 @@ const transactionFields = [
 export function mobileApiResponse(operation: string, value: unknown) {
   const data = record(value);
   if (data.error) return pick(data, ["error"]);
+  if (operation === "account-create") return { account: pick(data.account, ["id", "name", "institution", "type", "currency", "balance"]) };
   if (operation === "transaction-create") return { transaction: pick(data.transaction, ["id"]) };
   if (operation === "transactions")
     return {
