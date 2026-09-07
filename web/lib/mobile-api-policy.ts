@@ -1,5 +1,8 @@
 export function mobileOperation(method: string, segments: string[]) {
   const path = segments.join("/");
+  if (path === "budgets" && ["GET", "POST"].includes(method)) return "budgets";
+  if (path === "budgets/options") return method === "GET" ? "budget-options" : null;
+  if (segments.length === 2 && segments[0] === "budgets" && ["GET", "PATCH", "DELETE"].includes(method)) return "budget";
   if (path === "goals" && ["GET", "POST"].includes(method)) return "goals";
   if (path === "notifications" && ["GET", "PATCH"].includes(method)) return "notifications";
   if (method === "POST" && path === "transactions") return "transaction-create";

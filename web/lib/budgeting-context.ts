@@ -5,8 +5,19 @@ import { getSessionContext } from "@/lib/auth";
 import type { PageSessionContext } from "@/lib/page-auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
+import { getMobileRequestContext } from "@/lib/mobile-request-context";
+import { assertWorkspaceAccess } from "@/lib/workspace-access";
 
 export const resolveBudgetingWorkspace = async (pageSession?: PageSessionContext) => {
+  const mobile = getMobileRequestContext();
+  if (mobile) {
+    // Never fall back to a cookie or the first Profile for native requests.
+    const workspaceId = new URL(mobile.request.url).searchParams.get("workspaceId");
+    if (!workspaceId) throw new Error("WORKSPACE_NOT_FOUND");
+    await assertWorkspaceAccess(mobile.userId, workspaceId);
+    const user = await prisma.user.findUniqueOrThrow({ where: { clerkUserId: mobile.userId } });
+    return { user, session: { userId: mobile.userId, isGuest: false }, workspaceId, selectedWorkspaceCookieId: "" };
+  }
   const session = pageSession ?? (await getSessionContext());
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";

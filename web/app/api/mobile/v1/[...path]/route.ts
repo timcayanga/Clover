@@ -15,6 +15,7 @@ import { getCurrentUserEnvironment } from "@/lib/user-environment";
 import { mobileEditSchema, mobileCreateSchema, mobileAccountCreateSchema } from "@/lib/mobile-edit-schema";
 import { mobileHome } from "@/lib/mobile-home";
 import { loadActiveInAppNotificationFeed } from "@/lib/in-app-notifications.server";
+import { mobileBudgetInput } from "@/lib/mobile-budget-input";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -96,6 +97,16 @@ async function handle(
     const workspaceId = url.searchParams.get("workspaceId");
     if (!workspaceId) return reply({ error: "Choose a Profile first." }, 400);
     await assertWorkspaceAccess(userId, workspaceId);
+    if (operation === "budgets" && request.method === "GET") {
+      const { loadCachedBudgetWorkspaceData } = await import("@/lib/budgeting-data");
+      const { getBudgetAppearance } = await import("@/lib/budget-appearance");
+      const { overview } = await loadCachedBudgetWorkspaceData(workspaceId, { directory: true });
+      return reply({ budgets: [...overview.budgets, ...overview.inactiveBudgets].map(budget => { const { emoji, color } = getBudgetAppearance(budget); return { ...budget, appearance: { emoji, color } }; }), uncategorizedTransactionCount: overview.uncategorizedTransactionCount });
+    }
+    if (operation === "budget-options") {
+      const { loadBudgetEditorOptions } = await import("@/lib/budgeting-data");
+      return reply(await loadBudgetEditorOptions(workspaceId));
+    }
     if (operation === "goals") {
       const { mobileGoals, saveMobileGoal } = await import("@/lib/mobile-goals");
       if (request.method === "GET") return reply(await mobileGoals(workspaceId, user.id));
@@ -148,6 +159,18 @@ async function handle(
         return reply({ error: "Import not found" }, 404);
     }
     let forwarded = request;
+    if ((operation === "budgets" && request.method === "POST") || (operation === "budget" && request.method === "PATCH")) {
+      const text = await request.text();
+      if (new TextEncoder().encode(text).length > 4096) return reply({ error: "Budget details are too large." }, 413);
+      let input: unknown;
+      try { input = JSON.parse(text); } catch { return reply({ error: "Check the budget details." }, 400); }
+      const body = mobileBudgetInput.parse(input);
+      if (body.scope === "account") {
+        const account = await prisma.account.findFirst({ where: { id: body.accountId!, workspaceId, type: { not: "investment" } }, select: { currency: true } });
+        if (!account || account.currency !== body.currency) return reply({ error: "Choose an account in this Profile and use its currency." }, 400);
+      }
+      forwarded = new Request(request.url, { method: request.method, headers: request.headers, body: JSON.stringify(body) });
+    }
     if (operation === "account-create") {
       if (Number(request.headers.get("content-length") ?? 0) > 4096)
         return reply({ error: "Account details are too large." }, 413);
@@ -221,6 +244,13 @@ async function handle(
       forwarded,
       async () => {
         switch (operation) {
+          case "budgets":
+            return (await import("@/app/api/budgets/route")).POST(forwarded);
+          case "budget": {
+            const route = await import("@/app/api/budgets/[budgetId]/route");
+            const params = { params: Promise.resolve({ budgetId: path[1] }) };
+            return request.method === "PATCH" ? route.PATCH(forwarded, params) : request.method === "DELETE" ? route.DELETE(forwarded, params) : route.GET(forwarded, params);
+          }
           case "transactions":
             return (await import("@/app/api/transactions/route")).GET(
               forwarded,

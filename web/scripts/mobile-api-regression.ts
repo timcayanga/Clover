@@ -8,6 +8,7 @@ import {
 import { mobileApiResponse } from "../lib/mobile-api-response";
 import { mobileEditSchema, mobileCreateSchema, mobileAccountCreateSchema } from "../lib/mobile-edit-schema";
 import { mobileGoalInput } from "../lib/mobile-goal-input";
+import { mobileBudgetInput } from "../lib/mobile-budget-input";
 import {
   getMobileRequestContext,
   withMobileRequestContext,
@@ -30,6 +31,22 @@ async function main() {
   );
   assert.equal(mobileSessionUser({ sub: "user" }), null);
   assert.equal(mobileOperation("GET", ["bootstrap"]), "bootstrap");
+  assert.equal(mobileOperation("GET", ["budgets"]), "budgets");
+  assert.equal(mobileOperation("POST", ["budgets"]), "budgets");
+  assert.equal(mobileOperation("GET", ["budgets", "options"]), "budget-options");
+  assert.equal(mobileOperation("PATCH", ["budgets", "options"]), null);
+  assert.equal(mobileOperation("PATCH", ["budgets", "owned"]), "budget");
+  assert.equal(mobileOperation("DELETE", ["budgets", "owned"]), "budget");
+  assert.equal(mobileOperation("POST", ["budget-plans"]), null);
+  const budgetInput = { name: "Groceries", kind: "spend_limit", scope: "global", cadence: "monthly", targetAmount: 5000, currency: "PHP", accountId: null, categoryId: null };
+  assert.equal(mobileBudgetInput.safeParse(budgetInput).success, true);
+  for (const extra of [{ workspaceId: "other" }, { actualAmount: 10 }, { targetAmount: -1 }, { targetAmount: "100" }, { currency: "bad" }, { scope: "account" }, { scope: "category" }, { kind: "savings_target", scope: "category", categoryId: "x" }]) assert.equal(mobileBudgetInput.safeParse({ ...budgetInput, ...extra }).success, false);
+  assert.deepEqual(mobileApiResponse("budgets", { budget: { id: "budget", workspaceId: "private", rawPayload: "secret" }, accounts: [] }), { budget: { id: "budget" } });
+  const budgetContext = readFileSync(new URL("../lib/budgeting-context.ts", import.meta.url), "utf8");
+  assert.ok(budgetContext.indexOf("if (mobile)") < budgetContext.indexOf("await cookies()"));
+  assert.ok(budgetContext.includes("await assertWorkspaceAccess(mobile.userId, workspaceId)"));
+  assert.ok(budgetContext.includes('if (!workspaceId) throw new Error("WORKSPACE_NOT_FOUND")'));
+  assert.ok(routeSource.indexOf('if (operation === "budgets" && request.method === "GET")') > routeSource.indexOf('await assertWorkspaceAccess(userId, workspaceId)'));
   assert.equal(mobileOperation("GET", ["goals"]), "goals");
   assert.equal(mobileOperation("POST", ["goals"]), "goals");
   assert.equal(mobileOperation("DELETE", ["goals"]), null);
