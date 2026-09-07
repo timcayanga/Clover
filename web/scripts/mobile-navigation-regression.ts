@@ -288,11 +288,14 @@ async function main() {
   assert.match(creationRoute, /pushState\(\{ cloverCreation: newPath \}/, "Mobile creation must update Next's pathname without copying its private __NA flag.");
   assert.match(creationRoute, /addEventListener\("popstate", sync\)/, "Creation forms must follow browser Back and Forward.");
   assert.match(shell, /if \(creationParent\)[\s\S]{0,220}router\.replace\(creationParent\)/, "Direct Add links must return to their own parent page.");
-  assert.match(shell, /shell-bottom-nav__label">Account<\/span>[\s\S]{0,120}NotificationCountBadge/, "Unread notifications belong on the bottom Account tab.");
-  assert.match(shell, /item\.href === "\/notifications" \? <NotificationCountBadge/, "The Account drawer must repeat the unread badge on Notifications.");
+  assert.doesNotMatch(shell, /shell-bottom-nav__label">Account<\/span>[\s\S]{0,120}NotificationCountBadge/, "The bottom Account tab must not repeat notification badges.");
+  assert.match(shell, /active === "dashboard" \? \([\s\S]{0,700}NotificationCountBadge/, "Mobile notifications and their badge belong on Home.");
   const accountMenu = shell.slice(shell.indexOf("const mobileSettingsSections ="), shell.indexOf("const shouldPrefetchNavHref"));
-  assert.deepEqual([...accountMenu.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]), ["Notifications", "Settings", "Help", "Plan"]);
-  assert.match(styles, /Shared signed-in mobile chrome[\s\S]*right: 12px !important/, "The shared mobile Menu belongs at the right edge.");
+  assert.deepEqual([...accountMenu.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]), ["Settings", "Help", "Plan"]);
+  assert.match(styles, /Mobile navigation: Menu or Back[\s\S]*position: static !important/, "The mobile Menu belongs in the left leading group.");
+  assert.match(shell, /shell-mobile-more-link--replaced/);
+  assert.match(shell, /if \(mobileBackAction\)[\s\S]{0,100}mobileBackAction\(\)/, "In-place collection details must use their explicit Back action.");
+  assert.match(transactionsPage, /mobileTrailingAction=\{isCompactViewport/, "Mobile transaction filters belong beside right-side actions.");
   assert.match(styles, /body\.mobile-creation-page \.content-body \{ animation: none !important; transform: none !important;/, "Entry animations must not establish a clipping container for full-page creation.");
   assert.match(transactionsPage, /if \(publishingTransactionsCacheRef\.current\) return;/, "Transactions must not rehydrate its own synchronous cache publication.");
   assert.match(transactionsPage, /publishingTransactionsCacheRef\.current = true;[\s\S]{0,800}finally[\s\S]{0,100}publishingTransactionsCacheRef\.current = false;/, "The cache guard must always reset, including when publication fails.");

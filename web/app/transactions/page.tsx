@@ -7587,10 +7587,12 @@ function TransactionsPageContent() {
       mobileLeadingAction={
         <div className="transactions-mobile-leading-actions">
           <ContextualAskClover context="transactions" planTier={planTier} />
-          {isCompactViewport ? <TransactionSelectionToolbar compact count={selectedTransactionCount} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} /> : null}
-
         </div>
       }
+      mobileTrailingAction={isCompactViewport ? <>
+        <TransactionSelectionToolbar compact count={selectedTransactionCount} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} />
+        {workspaceCurrencyCodes.length > 0 ? <CurrencySelector value={currencyFilter} onChange={(next) => { const code = next.toLowerCase() === "all" ? "" : next; setCurrencyFilter(code); persistSelectedCurrency(selectedWorkspaceId, code); }} options={workspaceCurrencyCodes} includeAllOption compact ariaLabel="Filter transactions by currency" /> : null}
+      </> : null}
       actions={transactionsShellActions}
     >
       <PageFileDropZone

@@ -297,7 +297,7 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
       const plan = normalizeGoalPlan(user.goalPlan, user.primaryGoal as GoalKey, user.goalTargetAmount ? Number(user.goalTargetAmount) : null);
       cards.unshift({ id: "primary", name: plan?.purpose || getGoalDefinition(user.primaryGoal).title, category: "Existing account goal", amount: plan?.targetMode === "amount" ? plan.targetAmount : user.goalTargetAmount ? Number(user.goalTargetAmount) : null, currency, cadence: plan?.cadence === "annual" ? "Annual" : "Monthly", emoji: "🌱" });
     }
-    return <RouteSplash label="goals"><CloverShell active="goals" title="Goals" mobileBackHref="/more" actions={<ContextualAskClover context="goals" planTier={isPro ? "pro" : "free"} />}><GoalDirectory goals={cards} /></CloverShell></RouteSplash>;
+    return <RouteSplash label="goals"><CloverShell active="goals" title="Goals" mobileBackHref="/more" actions={<><ContextualAskClover context="goals" planTier={isPro ? "pro" : "free"} /><Link href="/goals/new" className="button button-primary button-small accounts-toolbar-add" aria-label="Create goal"><span className="button-icon" aria-hidden="true">＋</span><span>Create goal</span></Link></>}><GoalDirectory goals={cards} /></CloverShell></RouteSplash>;
   }
   const savedGoal = goalId === "primary" ? null : await prisma.personalGoal.findFirst({ where: { id: goalId, workspaceId: resolvedWorkspace.id } });
   if (goalId !== "primary" && !savedGoal) notFound();

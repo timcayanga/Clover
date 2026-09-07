@@ -1,9 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 export function InvestmentPortfolioFilters({ children, active }: { children: ReactNode; active: boolean }) {
   const [open, setOpen] = useState(false);
+  const [header, setHeader] = useState<Element | null>(null);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 1100px)");
+    const update = () => setHeader(media.matches ? document.querySelector("#investment-header-filter") : null);
+    update(); media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   const ref = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -23,7 +31,7 @@ export function InvestmentPortfolioFilters({ children, active }: { children: Rea
       document.removeEventListener("keydown", escape);
     };
   }, [open]);
-  return <div ref={ref} className="portfolio-filter-menu" data-open={open}>
+  const menu = <div ref={ref} className="portfolio-filter-menu" data-open={open}>
     <button ref={button} type="button" className="icon-button portfolio-filter-menu__trigger"
       aria-label={active ? "Filter portfolio (filters active)" : "Filter portfolio"}
       aria-expanded={open} aria-controls="portfolio-filter-options" onClick={() => setOpen(!open)}>
@@ -32,4 +40,5 @@ export function InvestmentPortfolioFilters({ children, active }: { children: Rea
     </button>
     <div id="portfolio-filter-options" className="portfolio-filter-menu__options" role="group" aria-label="Portfolio filters">{children}</div>
   </div>;
+  return header ? createPortal(menu, header) : menu;
 }

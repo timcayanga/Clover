@@ -126,6 +126,8 @@ type CloverShellProps = {
   desktopTitleAction?: ReactNode;
   actions?: ReactNode;
   mobileLeadingAction?: ReactNode;
+  mobileTrailingAction?: ReactNode;
+  mobileBackAction?: () => void;
   showTopbar?: boolean;
   mobileBackHref?: string;
   hideCompactBarCopyOnMobile?: boolean;
@@ -422,7 +424,6 @@ const desktopNavSections = [
 ];
 
 const mobileSettingsSections = [
-  { href: "/notifications", label: "Notifications", icon: "notifications" as const },
   { href: "/settings", label: "Settings", icon: "settings" as const },
   { href: "/help", label: "Help", icon: "help" as const },
   { href: "/settings/plan", label: "Plan", icon: "settings" as const },
@@ -755,6 +756,8 @@ export function CloverShell({
   desktopTitleAction,
   actions,
   mobileLeadingAction,
+  mobileTrailingAction,
+  mobileBackAction,
   showTopbar = true,
   mobileBackHref,
   hideCompactBarCopyOnMobile = false,
@@ -1131,13 +1134,18 @@ export function CloverShell({
     "/settings",
   ]).has(pathname ?? "");
   const creationParent = pathname?.endsWith("/new") ? pathname.slice(0, -4) : null;
-  const resolvedMobileBackHref = creationParent ?? mobileBackHref ?? (active === "dashboard" ? undefined : "/home");
-  const shouldShowBackButton = Boolean(mobileOverlayChrome) || (active !== "dashboard" && (!isMobileRootRoute || mobileBackHref === "/settings"));
+  const routeSegments = (pathname ?? "").split("/").filter(Boolean);
+  const resolvedMobileBackHref = creationParent ?? mobileBackHref ?? (routeSegments.length > 1 ? `/${routeSegments[0]}` : "/home");
+  const shouldShowBackButton = Boolean(mobileOverlayChrome || mobileBackAction) || active === "notifications" || (active !== "dashboard" && (!isMobileRootRoute || mobileBackHref === "/settings" || mobileBackHref === pathname));
   const mobileFallbackBackOnly = !mobileOverlayChrome && !hasHistoryBackTarget && Boolean(resolvedMobileBackHref);
   const handleBack = () => {
     closeChrome();
     if (mobileOverlayChrome) {
       mobileOverlayChrome.onBack();
+      return;
+    }
+    if (mobileBackAction) {
+      mobileBackAction();
       return;
     }
     if (creationParent) {
@@ -2228,7 +2236,6 @@ export function CloverShell({
             >
               <span aria-hidden="true"><MenuIcon name={item.icon} /></span>
               {item.label}
-              {item.href === "/notifications" ? <NotificationCountBadge count={notificationCount} /> : null}
               <span aria-hidden="true">›</span>
             </Link>
           ))}
@@ -2549,7 +2556,6 @@ export function CloverShell({
             )}
           </span>
           <span className="shell-bottom-nav__label">Account</span>
-          <NotificationCountBadge count={notificationCount} />
         </button>
       </nav>
 
@@ -2570,7 +2576,7 @@ export function CloverShell({
           <div className="shell-compact-bar glass">
             <div className="shell-topbar-leading">
               <button
-                className={`shell-mobile-more-link${isSidebarOpen ? " is-active" : ""}`}
+                className={`shell-mobile-more-link${shouldShowBackButton ? " shell-mobile-more-link--replaced" : ""}${isSidebarOpen ? " is-active" : ""}`}
                 type="button"
                 aria-label={isSidebarOpen ? "Close menu" : "Open menu"}
                 aria-expanded={isSidebarOpen}
@@ -2589,7 +2595,7 @@ export function CloverShell({
                   <MenuIcon name="chevron-left" />
                 </button>
               ) : null}
-              <div className="shell-topbar-leading__actions">{mobileLeadingAction ?? (active !== "adviser" ? <AdviserHeaderLink /> : null)}</div>
+              <div className="shell-topbar-leading__actions">{mobileLeadingAction ?? <AdviserHeaderLink />}</div>
             </div>
             <div
               className={`shell-compact-bar__copy ${hideCompactBarCopyOnMobile ? "shell-compact-bar__copy--hide-mobile" : ""} ${
@@ -2604,9 +2610,10 @@ export function CloverShell({
               </div>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
             </div>
-            {actions || homeNotificationsAction ? (
+            {actions || homeNotificationsAction || mobileTrailingAction ? (
               <div className="shell-compact-bar__actions">
                 {homeNotificationsAction}
+                {mobileTrailingAction ? <div className="shell-mobile-trailing-actions">{mobileTrailingAction}</div> : null}
                 {actions}
               </div>
             ) : null}
@@ -2616,7 +2623,7 @@ export function CloverShell({
           <header className="topbar glass">
             <div className="shell-topbar-leading">
               <button
-                className={`shell-mobile-more-link${isSidebarOpen ? " is-active" : ""}`}
+                className={`shell-mobile-more-link${shouldShowBackButton ? " shell-mobile-more-link--replaced" : ""}${isSidebarOpen ? " is-active" : ""}`}
                 type="button"
                 aria-label={isSidebarOpen ? "Close menu" : "Open menu"}
                 aria-expanded={isSidebarOpen}
@@ -2635,7 +2642,7 @@ export function CloverShell({
                   <MenuIcon name="chevron-left" />
                 </button>
               ) : null}
-              <div className="shell-topbar-leading__actions">{mobileLeadingAction ?? (active !== "adviser" ? <AdviserHeaderLink /> : null)}</div>
+              <div className="shell-topbar-leading__actions">{mobileLeadingAction ?? <AdviserHeaderLink />}</div>
             </div>
             <div className="topbar__title-wrap">
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
@@ -2648,6 +2655,7 @@ export function CloverShell({
             </div>
             <div className="topbar-actions">
               {homeNotificationsAction}
+              {mobileTrailingAction ? <div className="shell-mobile-trailing-actions">{mobileTrailingAction}</div> : null}
               {actions}
             </div>
           </header>

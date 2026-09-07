@@ -284,7 +284,7 @@ export function CirclesPageClient({
     <CloverShell
       active="circles"
       title="Circles"
-      mobileLeadingAction={selectedCircleId ? <CollectionBack label="Circles" onClick={() => setSelectedCircleId(null)} /> : undefined}
+      mobileBackAction={selectedCircleId ? () => setSelectedCircleId(null) : undefined}
       desktopTitleAction={selectedCircleId ? <CollectionBack label="All Circles" onClick={() => setSelectedCircleId(null)} /> : undefined}
       titleAddon={
         selectedCircleId ? (

@@ -64524,3 +64524,48 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
   border-color: var(--border, #dbe3e8);
   background: var(--surface, #fff);
 }
+
+/* Mobile navigation: Menu or Back + Adviser | title | Filter / Currency / Add. */
+.shell-mobile-trailing-actions { display: none; }
+@media (max-width: 1100px) {
+  .content.content > :is(.topbar, .shell-compact-bar) :is(.topbar__title-wrap, .shell-compact-bar__copy) {
+    position: static !important; inset: auto !important; transform: none !important;
+    grid-column: 2 !important; grid-row: 1 !important; width: 100% !important; min-width: 0 !important; max-width: 100% !important;
+  }
+  .content > :is(.topbar, .shell-compact-bar) .topbar__title-row h1 { width: 100% !important; min-width: 0 !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }
+  .content > :is(.topbar, .shell-compact-bar) .shell-mobile-more-link {
+    position: static !important; inset: auto !important; transform: none !important;
+    display: inline-flex !important;
+  }
+  .content > :is(.topbar, .shell-compact-bar) .shell-mobile-more-link--replaced { display: none !important; }
+  .content.content > :is(.topbar, .shell-compact-bar) .shell-topbar-leading { gap: 2px !important; width: auto !important; min-width: 0 !important; }
+  .content.content > :is(.topbar, .shell-compact-bar) .shell-back-button { position: static !important; inset: auto !important; transform: none !important; }
+  .content > :is(.topbar, .shell-compact-bar) :is(.topbar-actions, .shell-compact-bar__actions) {
+    position: static !important; margin-right: 0 !important; padding-right: 0 !important;
+    display: flex !important; align-items: center; gap: 2px !important;
+  }
+  .content > :is(.topbar, .shell-compact-bar):not(:has(.topbar-actions, .shell-compact-bar__actions)) { padding-right: 12px !important; }
+  .shell-mobile-trailing-actions { display: flex; align-items: center; gap: 2px; }
+  .content > :is(.topbar, .shell-compact-bar) :is(.topbar-actions, .shell-compact-bar__actions) .adviser-header-link { display: none !important; }
+  .content.content--dashboard > :is(.topbar, .shell-compact-bar) .home-notifications-button {
+    display: inline-flex !important; position: relative; align-items: center; justify-content: center; width: 40px; height: 40px; order: 99;
+  }
+  .sidebar-notifications-button { display: none !important; }
+  .shell-bottom-nav .notification-count-badge { display: none !important; }
+  .content > :is(.topbar, .shell-compact-bar) .shell-mobile-trailing-actions .reports-range-menu { display: block !important; }
+  .content > :is(.topbar, .shell-compact-bar) :is(.accounts-toolbar-add, .recurring-topbar-add, .investments-page__add-button) { order: 20; }
+  .content > :is(.topbar, .shell-compact-bar) .accounts-toolbar-add > svg { width: 20px; height: 20px; }
+  .content > :is(.topbar, .shell-compact-bar) .accounts-toolbar-add > span:not(.button-icon) { display: none !important; }
+  .content .shell-mobile-trailing-actions .transaction-selection-toolbar--compact button { width: 36px; min-width: 36px; height: 36px; min-height: 36px; padding: 0; border-radius: 50%; }
+  .content .shell-mobile-trailing-actions .transaction-selection-toolbar--compact { gap: 0; }
+  .content > :is(.topbar, .shell-compact-bar) { gap: 4px !important; }
+  .shell-mobile-trailing-actions .reports-range-menu__panel { left: auto; right: 0; max-width: calc(100vw - 24px); }
+  #investment-header-filter .portfolio-filter-menu[data-open="true"] .portfolio-filter-menu__options {
+    position: absolute; top: calc(100% + 12px); bottom: auto; left: auto; right: -76px; width: min(340px, calc(100vw - 24px)); max-height: calc(100dvh - 180px); overflow-y: auto;
+  }
+}
+@media (max-width: 380px) {
+  .content--transactions > :is(.topbar, .shell-compact-bar) { grid-template-columns: auto 1fr auto !important; height: auto !important; min-height: 76px !important; row-gap: 0 !important; }
+  .content.content--transactions > :is(.topbar, .shell-compact-bar) :is(.topbar__title-wrap, .shell-compact-bar__copy) { grid-column: 1 / -1 !important; grid-row: 2 !important; text-align: center; }
+  .content--transactions > :is(.topbar, .shell-compact-bar) .topbar-actions { grid-row: 1 !important; }
+}

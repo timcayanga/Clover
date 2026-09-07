@@ -2909,6 +2909,7 @@ export default function InvestmentsPage() {
       titleAddon={renderInvestmentTabs()}
       mobileSubheader={renderInvestmentTabs(true)}
       mobileLeadingAction={<AdviserHeaderLink />}
+      mobileTrailingAction={selectedTab === "portfolio" ? <span id="investment-header-filter" /> : undefined}
       actions={
         <>
           <AdviserHeaderLink />
