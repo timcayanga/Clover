@@ -67,8 +67,8 @@ assert.match(transactions, /buildTransactionAccountFilterOptions\(selectableTran
 assert.match(transactions, /\{selectableTransactionAccounts\.map\(\(account\) => \(/, "Bulk transaction edits must not reintroduce investment accounts.");
 assert.match(
   transactions,
-  /className="transactions-filter-group transactions-filter-group--currency"[\s\S]{0,1400}className="transactions-filter-currency"/,
-  "Mobile Transactions must expose the shared currency selector inside the Filter panel."
+  /TransactionFilterRow label="Currency"[\s\S]{0,700}workspaceCurrencyCodes[\s\S]{0,700}persistSelectedCurrency/,
+  "Mobile Transactions must expose persisted workspace currency choices inside the expandable Filter row."
 );
 assert.match(transactions, /TransactionAccountPicker/, "Transaction account edits must use the icon-rich account picker.");
 assert.match(transactions, /inlineAccountPickerButtonRefs\.current\.get\(transaction\.id\)\?\.click\(\)/, "Clicking a row account mark must open its account editor.");

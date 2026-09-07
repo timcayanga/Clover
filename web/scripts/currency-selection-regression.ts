@@ -77,8 +77,8 @@ assert.ok(
 );
 assert.ok(
   !compactTransactionsActions.includes("<CurrencySelector") &&
-    transactionsPageSource.includes("transactions-filter-group--currency") &&
-    transactionsPageSource.includes('ariaLabel="Filter transactions by currency"'),
+    transactionsPageSource.includes('TransactionFilterRow label="Currency"') &&
+    transactionsPageSource.includes('aria-pressed={currencyFilter === code}'),
   "Mobile Transactions must keep Currency inside Filters instead of crowding the centered page title."
 );
 assert.ok(
