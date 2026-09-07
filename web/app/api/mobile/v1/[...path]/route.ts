@@ -12,6 +12,8 @@ import {
 import { getProAccess } from "@/lib/pro-access";
 import { mobileApiResponse } from "@/lib/mobile-api-response";
 import { getCurrentUserEnvironment } from "@/lib/user-environment";
+import { mobileEditSchema, mobileCreateSchema } from "@/lib/mobile-edit-schema";
+import { mobileHome } from "@/lib/mobile-home";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,14 +22,6 @@ export const preferredRegion = "sin1";
 
 const reply = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: mobileResponseHeaders });
-const editSchema = z
-  .object({
-    merchantClean: z.string().trim().min(1).max(200).optional(),
-    description: z.string().max(2000).optional(),
-    tags: z.array(z.string().trim().min(1).max(64)).max(20).optional(),
-  })
-  .strict()
-  .refine((value) => Object.keys(value).length > 0);
 
 async function handle(
   request: Request,
@@ -101,6 +95,18 @@ async function handle(
     const workspaceId = url.searchParams.get("workspaceId");
     if (!workspaceId) return reply({ error: "Choose a Profile first." }, 400);
     await assertWorkspaceAccess(userId, workspaceId);
+    if (operation === "options") {
+      const [accounts, categories, tags] = await Promise.all([
+        prisma.account.findMany({ where: { workspaceId, type: { not: "investment" } }, select: { id: true, name: true, currency: true, institution: true, type: true }, orderBy: { name: "asc" } }),
+        prisma.category.findMany({ where: { workspaceId, isArchived: false }, select: { id: true, name: true, type: true }, orderBy: { name: "asc" } }),
+        prisma.tag.findMany({ where: { workspaceId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+      ]);
+      return reply({ accounts, categories, tags });
+    }
+    if (operation === "home") {
+      const currency = z.string().regex(/^[A-Z]{3}$/).parse(url.searchParams.get("currency") ?? "PHP");
+      return reply(await mobileHome(workspaceId, currency));
+    }
     if (operation === "transaction") {
       const row = await prisma.transaction.findFirst({
         where: { id: path[1], workspaceId, deletedAt: null },
@@ -119,14 +125,22 @@ async function handle(
         return reply({ error: "Import not found" }, 404);
     }
     let forwarded = request;
+    if (operation === "transaction-create") {
+      const body = mobileCreateSchema.parse(await request.json());
+      forwarded = new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify({ ...body, workspaceId, merchantClean: body.merchantRaw, preserveType: true, isTransfer: body.type === "transfer" }) });
+    }
     if (operation === "transaction" && request.method === "PATCH") {
       if (Number(request.headers.get("content-length") ?? 0) > 16384)
         return reply({ error: "Edit is too large." }, 413);
-      const body = editSchema.parse(await request.json());
+      const body = mobileEditSchema.parse(await request.json());
+      if (body.accountId && !(await prisma.account.findFirst({ where: { id: body.accountId, workspaceId, type: { not: "investment" } }, select: { id: true } })))
+        return reply({ error: "Choose an account in this Profile." }, 400);
+      if (body.categoryId && !(await prisma.category.findFirst({ where: { id: body.categoryId, workspaceId, isArchived: false }, select: { id: true } })))
+        return reply({ error: "Choose a category in this Profile." }, 400);
       forwarded = new Request(request.url, {
         method: "PATCH",
         headers: request.headers,
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, ...(body.type ? { isTransfer: body.type === "transfer" } : {}) }),
       });
     }
     if (["transactions", "accounts", "imports"].includes(operation)) {
@@ -182,6 +196,8 @@ async function handle(
             return (await import("@/app/api/transactions/route")).GET(
               forwarded,
             );
+          case "transaction-create":
+            return (await import("@/app/api/transactions/route")).POST(forwarded);
           case "accounts":
             return (await import("@/app/api/accounts/route")).GET(forwarded);
           case "imports":
@@ -195,6 +211,7 @@ async function handle(
             };
             return request.method === "PATCH"
               ? route.PATCH(forwarded, params)
+              : request.method === "DELETE" ? route.DELETE(forwarded, params)
               : route.GET(forwarded, params);
           }
           case "import-process":
@@ -236,4 +253,4 @@ async function handle(
   }
 }
 
-export { handle as GET, handle as PATCH, handle as POST };
+export { handle as GET, handle as PATCH, handle as POST, handle as DELETE };

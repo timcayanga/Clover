@@ -1,3 +1,5 @@
+import { getTransactionUserNoteValue, getTransactionParsedNoteValue } from "./transaction-notes";
+
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -16,6 +18,9 @@ const transactionFields = [
   "accountId",
   "accountName",
   "categoryName",
+  "categoryId",
+  "institution",
+  "isExcluded",
   "reviewStatus",
   "date",
   "amount",
@@ -29,6 +34,7 @@ const transactionFields = [
 export function mobileApiResponse(operation: string, value: unknown) {
   const data = record(value);
   if (data.error) return pick(data, ["error"]);
+  if (operation === "transaction-create") return { transaction: pick(data.transaction, ["id"]) };
   if (operation === "transactions")
     return {
       ...pick(data, ["page", "totalCount"]),
@@ -36,8 +42,14 @@ export function mobileApiResponse(operation: string, value: unknown) {
         ? data.transactions.map((row) => pick(row, transactionFields))
         : [],
     };
-  if (operation === "transaction")
-    return { transaction: pick(data.transaction, transactionFields) };
+  if (operation === "transaction") {
+    const row = record(data.transaction);
+    return {
+      transaction: { ...pick(row, transactionFields), userNote: getTransactionUserNoteValue(row), parsedNote: getTransactionParsedNoteValue(row), source: row.source },
+      accounts: Array.isArray(data.accounts) ? data.accounts.map(row => pick(row, ["id", "name", "institution", "currency", "type"])) : [],
+      categories: Array.isArray(data.categories) ? data.categories.map(row => pick(row, ["id", "name", "type"])) : [],
+    };
+  }
   if (operation === "accounts")
     return {
       accounts: Array.isArray(data.accounts)
