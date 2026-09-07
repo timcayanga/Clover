@@ -80,6 +80,7 @@ import {
   normalizeTransactionNoteValue,
 } from "@/lib/transaction-notes";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
+import { hasTransactionUserEdits } from "@/lib/transaction-user-edits";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import { getTransactionDisplayType } from "@/lib/transaction-display-type";
 import { sanitizeTransactionTagNames } from "@/lib/transaction-tags";
@@ -1238,6 +1239,7 @@ const matchesTransactionFilters = (
   filters: {
     currencyFilter: string;
     categoryFilters: string[];
+    tagFilters: string[];
     accountFilters: string[];
     typeFilters: TransactionTypeFilter[];
     dateFilterMode: DateFilterMode;
@@ -1257,13 +1259,15 @@ const matchesTransactionFilters = (
       .filter(Boolean)
   );
 
+  if (filters.tagFilters.length && !transaction.tags?.some((tag) => filters.tagFilters.includes(tag.id))) return false;
+
   if (filters.currencyFilter && formatCurrencyCode(transaction.currency) !== formatCurrencyCode(filters.currencyFilter)) {
     return false;
   }
 
   if (filters.categoryFilters.length > 0) {
     const effectiveCategoryName =
-      getEffectiveTransactionCategoryName({
+      hasTransactionUserEdits(transaction) ? transaction.categoryName ?? "Other" : getEffectiveTransactionCategoryName({
         categoryName: transaction.categoryName ?? null,
         rawPayload: transaction.rawPayload as never,
         merchantRaw: transaction.merchantRaw,
@@ -1801,7 +1805,7 @@ const createDetailDraft = (
       type: transaction.type,
     }) ?? transaction.categoryName ?? null;
   const effectiveType =
-    options.type ?? coerceTransactionTypeFromCategoryName(effectiveCategoryName, transaction.type, transaction.amount, transaction.isTransfer);
+    options.type ?? (hasTransactionUserEdits(transaction) ? transaction.type : coerceTransactionTypeFromCategoryName(effectiveCategoryName, transaction.type, transaction.amount, transaction.isTransfer));
 
   return buildTransactionDetailDraft(transaction, {
     merchantClean: transaction.merchantClean ?? transaction.merchantRaw,
@@ -2278,6 +2282,8 @@ function TransactionsPageContent() {
   } | null>(null);
   const [amountMin, setAmountMin] = useState("");
   const [amountMax, setAmountMax] = useState("");
+  const [tagFilters, setTagFilters] = useState<string[]>([]);
+  const [filterTags, setFilterTags] = useState<Array<{ id: string; name: string }>>([]);
   const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
   const [accountFilters, setAccountFilters] = useState<string[]>([]);
   const [typeFilters, setTypeFilters] = useState<TransactionTypeFilter[]>([]);
@@ -2308,6 +2314,7 @@ function TransactionsPageContent() {
   const selectedTransactionCount = selectedTransactionIds.length;
   const hasSelectedTransactions = selectedTransactionCount > 0;
   const [detailDraft, setDetailDraft] = useState<TransactionDetailDraft | null>(null);
+  const [detailTags, setDetailTags] = useState<string[]>([]);
   const [detailEditing, setDetailEditing] = useState(false);
   const [detailActionMenuOpen, setDetailActionMenuOpen] = useState(false);
   const [transactionDeleteConfirmOpen, setTransactionDeleteConfirmOpen] = useState(false);
@@ -2436,6 +2443,26 @@ function TransactionsPageContent() {
       document.body.classList.remove("transactions-manual-open");
     };
   }, [manualOpen]);
+
+  useEffect(() => {
+    setTagFilters([]);
+    setFilterTags([]);
+  }, [selectedWorkspaceId]);
+  useEffect(() => {
+    if (!filterOpen || !selectedWorkspaceId) return;
+    const controller = new AbortController();
+    fetch(`/api/tags?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`, { signal: controller.signal, cache: "no-store" })
+      .then(async (response) => { if (!response.ok) throw new Error("Unable to load tags"); return response.json(); })
+      .then((payload) => setFilterTags(payload.tags ?? []))
+      .catch(() => { if (!controller.signal.aborted) setMessage("Unable to load tag filters. Close and reopen Filters to retry."); });
+    const close = (event: PointerEvent) => {
+      if (event.target instanceof Element && !event.target.closest(".transactions-inline-filters, .transaction-selection-toolbar, .transactions-filter-currency__menu")) setFilterOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setFilterOpen(false); };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", escape);
+    return () => { controller.abort(); document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", escape); };
+  }, [filterOpen, selectedWorkspaceId]);
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
   const workspaceTransactionCount = transactions.length;
@@ -2800,7 +2827,7 @@ function TransactionsPageContent() {
     const hasServerSideFilters = Boolean(
       query.trim() ||
         currencyFilter.trim() ||
-        categoryFilters.length > 0 ||
+        categoryFilters.length > 0 || tagFilters.length > 0 ||
         expandedAccountFilters.length > 0 ||
         typeFilters.length > 0 ||
         dateFilterMode !== "ltd" ||
@@ -2815,6 +2842,7 @@ function TransactionsPageContent() {
         query,
         currencyFilter,
         categoryIds: categoryFilters,
+        tagIds: tagFilters,
         accountIds: expandedAccountFilters,
         typeFilters,
         dateFilterMode,
@@ -2838,6 +2866,7 @@ function TransactionsPageContent() {
         query,
         currencyFilter,
         categoryIds: categoryFilters,
+        tagIds: tagFilters,
         accountIds: expandedAccountFilters,
         typeFilters,
         dateFilterMode,
@@ -2927,7 +2956,7 @@ function TransactionsPageContent() {
       const hasServerSideFilters = Boolean(
         query.trim() ||
           currencyFilter.trim() ||
-          categoryFilters.length > 0 ||
+          categoryFilters.length > 0 || tagFilters.length > 0 ||
           expandedAccountFilters.length > 0 ||
           typeFilters.length > 0 ||
           dateFilterMode !== "ltd" ||
@@ -3053,7 +3082,7 @@ function TransactionsPageContent() {
           ) ?? null;
 
         setWorkspaceCurrencyCodes(fallbackCurrencyCodes);
-        setTransactions(stableBaseTransactions);
+        setTransactions(mergeImportedWorkspaceTransactions(stableBaseTransactions, fetchedTransactions));
         setTransactionsSummary((currentSummary) => ({
           ...currentSummary,
           totalCount: Math.max(currentSummary.totalCount, stableBaseTransactions.length),
@@ -3748,6 +3777,7 @@ function TransactionsPageContent() {
     query,
     currencyFilter,
     categoryFilters,
+    tagFilters,
     accountFilters,
     typeFilters,
     dateFilterMode,
@@ -3761,6 +3791,25 @@ function TransactionsPageContent() {
     transactionsPage,
     transactionsPageSize,
   ]);
+
+  const refreshListRef = useRef(() => {});
+  refreshListRef.current = () => {
+    if (!selectedWorkspaceId || document.visibilityState !== "visible") return;
+    transactionPrefetchRef.current.clear();
+    clearJsonRequestCache(`transactions:list:${selectedWorkspaceId}:`);
+    void loadTransactionsPage(selectedWorkspaceId, { background: true });
+  };
+  useEffect(() => {
+    const refresh = () => refreshListRef.current();
+    window.addEventListener("focus", refresh);
+    window.addEventListener("clover:transactions-changed", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("clover:transactions-changed", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
 
   useEffect(() => {
     if (!selectedWorkspaceId || postImportRefreshVersion === 0) {
@@ -3784,6 +3833,7 @@ function TransactionsPageContent() {
     query,
     currencyFilter,
     categoryFilters,
+    tagFilters,
     accountFilters,
     typeFilters,
     dateFilterMode,
@@ -4138,6 +4188,7 @@ function TransactionsPageContent() {
         matchesTransactionFilters(transaction, {
           currencyFilter,
           categoryFilters,
+    tagFilters,
           accountFilters: expandedAccountFilters,
           typeFilters,
           dateFilterMode,
@@ -4192,6 +4243,7 @@ function TransactionsPageContent() {
     categoryNameById,
     currencyFilter,
     categoryFilters,
+    tagFilters,
     expandedAccountFilters,
     typeFilters,
     dateFilterMode,
@@ -4209,7 +4261,7 @@ function TransactionsPageContent() {
   const hasActiveServerSideFilters = Boolean(
     query.trim() ||
       currencyFilter.trim() ||
-      categoryFilters.length > 0 ||
+      categoryFilters.length > 0 || tagFilters.length > 0 ||
       expandedAccountFilters.length > 0 ||
       typeFilters.length > 0 ||
       dateFilterMode !== "ltd" ||
@@ -4683,6 +4735,7 @@ function TransactionsPageContent() {
     query,
     currencyFilter,
     categoryFilters,
+    tagFilters,
     accountFilters,
     typeFilters,
     dateFilterMode,
@@ -4747,6 +4800,7 @@ function TransactionsPageContent() {
   const selectedTransactionConfidenceChips = selectedTransactionReviewChips.filter((chip) => chip.label === "High confidence");
   const getDisplayCategoryNameForTransaction = useCallback(
     (transaction: Transaction) => {
+      if (hasTransactionUserEdits(transaction)) return transaction.categoryName ?? getCategoryNameById(categories, transaction.categoryId ?? "") ?? "Other";
       const categoryValue = transaction.categoryId ?? otherCategoryId;
       const accountInstitution = transaction.institution ?? accountInstitutionById.get(transaction.accountId) ?? null;
 
@@ -4791,12 +4845,12 @@ function TransactionsPageContent() {
   );
   const hasDetailDraftChanges = useMemo(() => {
     const baselineCategoryId = selectedTransaction ? getDisplayCategoryIdForTransaction(selectedTransaction) : "";
-    return hasTransactionDetailDraftChanges(detailDraft, selectedTransaction, {
+    return JSON.stringify(detailTags) !== JSON.stringify((selectedTransaction?.tags ?? []).map((tag) => tag.name)) || hasTransactionDetailDraftChanges(detailDraft, selectedTransaction, {
       baselineCategoryId: baselineCategoryId || otherCategoryId,
       baselineCurrency: selectedTransaction?.currency ?? "PHP",
       baselineTransfer: Boolean(selectedTransaction?.isTransfer),
     });
-  }, [detailDraft, getDisplayCategoryIdForTransaction, otherCategoryId, selectedTransaction]);
+  }, [detailDraft, detailTags, getDisplayCategoryIdForTransaction, otherCategoryId, selectedTransaction]);
 
   useEffect(() => {
     if (!activeWarningTransactionId || !isWorkspaceDataReady) {
@@ -4959,6 +5013,7 @@ function TransactionsPageContent() {
     }
     setActiveWarningTransactionId(null);
     setSelectedTransaction(transaction);
+    setDetailTags((transaction.tags ?? []).map((tag) => tag.name));
     setDetailEditing(false);
     setDetailActionMenuOpen(false);
     setTransactionDeleteConfirmOpen(false);
@@ -5118,6 +5173,17 @@ function TransactionsPageContent() {
       transactionDetailScrollYRef.current = null;
       window.requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: "auto" }));
     }
+  };
+
+  const beginDrawerEdit = (label: string) => {
+    setDetailTags((selectedTransaction?.tags ?? []).map((tag) => tag.name));
+    setDetailEditing(true);
+    requestAnimationFrame(() => {
+      const root = document.querySelector(".transaction-drawer");
+      root?.querySelectorAll("details").forEach((element) => { element.open = true; });
+      const field = Array.from(root?.querySelectorAll("label") ?? []).find((element) => element.textContent?.trim().startsWith(label));
+      (field?.querySelector("input, textarea, button, select") as HTMLElement | null)?.focus();
+    });
   };
 
   const cancelTransactionDetailEdit = () => {
@@ -6538,7 +6604,7 @@ function TransactionsPageContent() {
         nextCategoryId: detailDraft.categoryId || "",
         lookupCategoryName: (categoryId) => categoryNameById.get(categoryId) ?? null,
       });
-      const payload = buildTransactionUpdatePayload(detailDraft, selectedTransaction);
+      const payload = { ...buildTransactionUpdatePayload(detailDraft, selectedTransaction), tags: detailTags };
 
       await updateTransaction(selectedTransaction.id, payload);
       capturePostHogClientEvent("feature_used", {
@@ -6584,6 +6650,7 @@ function TransactionsPageContent() {
         query,
         currencyFilter,
         categoryIds: categoryFilters,
+        tagIds: tagFilters,
         accountIds: accountFilters,
         typeFilters,
         dateFilterMode,
@@ -6635,7 +6702,7 @@ function TransactionsPageContent() {
           const categoryLabel = getDisplayCategoryNameForTransaction(transaction);
           const categoryTone = getCategoryIconTone(categoryLabel);
           const accountInstitution = transaction.institution ?? accountInstitutionById.get(transaction.accountId) ?? null;
-          const merchantSummary = summarizeTransactionMerchantText(
+          const merchantSummary = hasTransactionUserEdits(transaction) ? transaction.merchantClean ?? transaction.merchantRaw : summarizeTransactionMerchantText(
             transaction.merchantClean ?? transaction.merchantRaw,
             accountInstitution
           );
@@ -7376,7 +7443,7 @@ function TransactionsPageContent() {
     </div>
   ) : (
     <div className="transactions-shell-actions" style={transactionsShellActionsStyle}>
-      <TransactionsManageMenu />
+      <TransactionSelectionToolbar count={selectedTransactionCount} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} />
 
       {workspaceCurrencyCodes.length > 0 ? <CurrencySelector
         value={workspaceCurrencyCodes.length > 1 ? currencyFilter : workspaceCurrencyCodes[0] ?? "PHP"}
@@ -7546,7 +7613,7 @@ function TransactionsPageContent() {
             </div>
           ) : null}
       {filterOpen ? (
-            <div className="transactions-inline-filters glass">
+            <div className="transactions-inline-filters glass" role="region" aria-label="Transaction filters">
               <div className="transactions-inline-filters__head">
                 <button className="icon-button" type="button" onClick={toggleFiltersPanel} aria-label="Close filters">
                   ×
@@ -7605,6 +7672,13 @@ function TransactionsPageContent() {
                     })}
                   </div>
                 </div>
+                <MultiSelectFilterGroup
+                  label="Tags"
+                  options={filterTags.map((tag) => ({ value: tag.id, label: tag.name }))}
+                  selected={tagFilters}
+                  onToggle={(value) => setTagFilters((current) => toggleFilterValue(current, value))}
+                  onClear={() => setTagFilters([])}
+                />
                 <MultiSelectFilterGroup
                   label="Categories"
                   options={categories.map((category) => ({
@@ -7721,7 +7795,7 @@ function TransactionsPageContent() {
 
           {headerMenuPanel}
 
-          {!isCompactViewport ? <TransactionSelectionToolbar count={selectedTransactionCount} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} /> : null}
+
 
           {!isCompactViewport ? (
             <div
@@ -7846,7 +7920,7 @@ function TransactionsPageContent() {
                     type: effectiveType === "transfer" ? "bank" : effectiveType === "income" ? "bank" : "other",
                   })
                 );
-                const merchantSummary = summarizeTransactionMerchantText(
+                const merchantSummary = hasTransactionUserEdits(transaction) ? transaction.merchantClean ?? transaction.merchantRaw : summarizeTransactionMerchantText(
                   transaction.merchantClean ?? transaction.merchantRaw,
                   accountInstitution
                 );
@@ -8106,7 +8180,7 @@ function TransactionsPageContent() {
                         const categoryLabel = getDisplayCategoryNameForTransaction(transaction);
                         const isTransferTransaction = effectiveType === "transfer";
                         const amountToneClass = isTransferTransaction ? "neutral" : effectiveType === "income" ? "positive" : "negative";
-                        const merchantSummary = summarizeTransactionMerchantText(
+                        const merchantSummary = hasTransactionUserEdits(transaction) ? transaction.merchantClean ?? transaction.merchantRaw : summarizeTransactionMerchantText(
                           transaction.merchantClean ?? transaction.merchantRaw,
                           accountInstitution
                         );
@@ -8922,7 +8996,7 @@ function TransactionsPageContent() {
                 <div>
                   <p className="eyebrow">Transaction details</p>
                   <h4 id="transaction-notes-title">{detailTransactionSummary || selectedTransaction.merchantRaw}</h4>
-                  {hasDistinctDetailRawName ? <p className="transaction-drawer__merchant-raw">{detailTransactionRawName}</p> : null}
+
                 </div>
               </div>
               <div className="transaction-drawer__head-actions">
@@ -8935,34 +9009,6 @@ function TransactionsPageContent() {
                     Edit
                   </button>
                 )}
-                {!detailEditing ? (
-                  <div className="transaction-drawer__action-menu">
-                    <button
-                      className="icon-button"
-                      type="button"
-                      aria-label="More transaction actions"
-                      aria-expanded={detailActionMenuOpen}
-                      onClick={() => setDetailActionMenuOpen((current) => !current)}
-                    >
-                      <ActionIcon name="more" />
-                    </button>
-                    {detailActionMenuOpen ? (
-                      <div className="transaction-drawer__action-menu-popover" role="menu">
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="transaction-drawer__action-menu-danger"
-                          onClick={() => {
-                            setDetailActionMenuOpen(false);
-                            setTransactionDeleteConfirmOpen(true);
-                          }}
-                        >
-                          Delete transaction
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
                 <button className="icon-button transaction-drawer__close-button" type="button" onClick={closeTransactionDetail} aria-label="Close transaction details">
                   ×
                 </button>
@@ -9102,11 +9148,18 @@ function TransactionsPageContent() {
                   <em>{detailDraft?.type === "credit" ? "Income" : detailDraft?.type === "transfer" ? "Transfer" : "Expense"}</em>
                 </div>
                 <dl className="transaction-drawer-view__facts">
-                  <div><dt>Date</dt><dd>{formatDate(detailDraft?.date ?? selectedTransaction.date)}</dd></div>
-                  <div><dt>Account</dt><dd>{detailSelectedAccount ? formatTransactionAccountName(detailSelectedAccount) : selectedTransaction.accountName}</dd></div>
-                  <div><dt>Category</dt><dd>{detailSelectedCategory?.name ?? selectedTransaction.categoryName ?? "Other"}</dd></div>
-                  <div><dt>Notes</dt><dd>{detailDraft?.description.trim() || "No notes"}</dd></div>
+                  {[
+                    ["Name", detailDraft?.merchantClean || selectedTransaction.merchantRaw],
+                    ["Type", detailDraft?.type === "credit" ? "Income" : detailDraft?.type === "transfer" ? "Transfer" : "Expense"],
+                    ["Date", formatDate(detailDraft?.date ?? selectedTransaction.date)],
+                    ["Account", detailSelectedAccount ? formatTransactionAccountName(detailSelectedAccount) : selectedTransaction.accountName],
+                    ["Category", detailSelectedCategory?.name ?? selectedTransaction.categoryName ?? "Other"],
+                    ["Amount", formatTransactionAmount(Number(detailDraft?.amount ?? selectedTransaction.amount), detailDraft?.currency ?? selectedTransaction.currency)],
+                    ["Tags", (selectedTransaction.tags ?? []).map((tag) => tag.name).join(", ") || "Add tags"],
+                    ["Notes", detailDraft?.description.trim() || "Add a note"],
+                  ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd><button type="button" onClick={() => beginDrawerEdit(label)}>{value}</button></dd></div>)}
                 </dl>
+                <button className="button button-secondary button-small" type="button" onClick={() => beginDrawerEdit("Line Items")}>Edit / add line items</button>
               </div>
             )}
 
@@ -9155,6 +9208,7 @@ function TransactionsPageContent() {
             <details className="transaction-drawer-more">
               <summary>More</summary>
               <div className="transaction-drawer-more__body">
+                <label>Tags<TransactionTagsEditor tags={detailTags} onChange={setDetailTags} suggestions={tagSuggestions} /></label>
                 <label className="transaction-drawer-form__notes">
                   Notes
                   <textarea
@@ -9270,6 +9324,7 @@ function TransactionsPageContent() {
                     </span>
                   </div>
                   <p>Clover keeps the original source separate from the details you confirm.</p>
+                  <section aria-label="Parsed information"><h5>Parsed information</h5><p>{getTransactionParsedNote(selectedTransaction) || selectedTransaction.merchantRaw}</p></section>
                 </div>
               </details>
             )}
@@ -9329,7 +9384,8 @@ function TransactionsPageContent() {
               </div>
             ) : null}
 
-            {!detailEditing && !selectedTransactionWarningReason && transactionDeleteConfirmOpen ? (
+            {!detailEditing && !transactionDeleteConfirmOpen ? <button className="button button-danger button-small transaction-drawer-delete-footer" type="button" onClick={() => setTransactionDeleteConfirmOpen(true)}>Delete transaction</button> : null}
+            {!detailEditing && transactionDeleteConfirmOpen ? (
               <div className="transaction-drawer-delete-footer">
                   <div className="detail-warning-box transaction-delete-confirm" role="alert">
                     <p>

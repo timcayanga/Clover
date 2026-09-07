@@ -9,6 +9,7 @@ export type TransactionQueryFilters = {
   currencyFilter?: string;
   categoryIds?: string[];
   accountIds?: string[];
+  tagIds?: string[];
   typeFilters?: Array<"debit" | "credit" | "transfer">;
   merchantFilters?: string[];
   dateFilterMode?: DateFilterMode;
@@ -192,6 +193,7 @@ export const parseTransactionQueryFilters = (searchParams: Pick<URLSearchParams,
     currencyFilter,
     categoryIds,
     accountIds,
+    tagIds: searchParams.getAll("tag").filter(Boolean),
     typeFilters,
     merchantFilters,
     dateFilterMode,
@@ -223,6 +225,7 @@ export const buildTransactionQuerySearchParams = (
 
   filters.categoryIds?.filter(Boolean).forEach((value) => params.append("category", value));
   filters.accountIds?.filter(Boolean).forEach((value) => params.append("account", value));
+  filters.tagIds?.filter(Boolean).forEach((value) => params.append("tag", value));
   filters.typeFilters?.forEach((value) => params.append("type", value));
   filters.merchantFilters?.map((value) => value.trim()).filter(Boolean).forEach((value) => params.append("merchant", value));
 
@@ -318,6 +321,10 @@ export const buildTransactionQueryWhere = (workspaceId: string, filters: Transac
 
   if (accountIds.length > 0) {
     where.accountId = { in: accountIds };
+  }
+
+  if (filters.tagIds?.length) {
+    where.transactionTags = { some: { tagId: { in: filters.tagIds } } };
   }
 
   if (typeFilters.length > 0) {

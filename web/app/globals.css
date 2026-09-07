@@ -64455,3 +64455,53 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
 .landing-nav__mobile-menu-link strong { font-weight: 600; line-height: 1.35; }
 .landing-nav__submenu a small,
 .landing-nav__mobile-menu-link small { width: 100%; font-weight: 400; line-height: 1.5; }
+
+/* Transaction details use the same quiet weight for labels, values, and actions. */
+.transaction-drawer.transaction-drawer *,
+.transaction-detail-page.transaction-detail-page * { font-weight: 400; }
+.transaction-drawer :is(h4, h5, strong, b, dt, dd, label, summary, button, .button, .eyebrow),
+.transaction-detail-page :is(h1, h2, h3, strong, b, label, summary, button, .button, .eyebrow) {
+  font-weight: 400;
+}
+.transaction-drawer .transaction-cross-feature-actions__buttons .button,
+.transaction-detail-page .transaction-cross-feature-actions__buttons .button {
+  min-height: 36px;
+  height: auto;
+  padding: 7px 14px;
+  background: #fff;
+  line-height: 1.35;
+}
+@media (min-width: 1101px) {
+  .transaction-drawer__back-button,
+  .transaction-drawer__edit-button { display: none; }
+  .transaction-drawer-view__facts dd button { width: 100%; text-align: left; border: 0; background: transparent; color: inherit; font: inherit; padding: 5px 0; cursor: pointer; }
+  .transaction-drawer-view__facts dd button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .transaction-detail-page__back,
+  .transaction-detail-page__edit-button { display: none; }
+  .transaction-detail-page__header { grid-template-columns: minmax(0, 1fr) auto; }
+  .transactions-main-panel { position: relative; }
+  .transactions-main-panel .transactions-inline-filters {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 50;
+    width: min(580px, 100%);
+    max-height: calc(100dvh - 140px);
+    overflow-y: auto;
+    margin: 0;
+    padding: 18px;
+    border: 1px solid var(--stroke);
+    border-radius: 18px;
+    background: var(--surface, #fff);
+    box-shadow: 0 14px 42px #12333f26;
+  }
+  .transactions-shell-actions .transaction-selection-toolbar {
+    flex: 0 1 auto;
+    min-width: 0;
+    gap: 8px;
+  }
+  .transactions-shell-actions .transaction-selection-toolbar input[type="search"] {
+    width: clamp(160px, 18vw, 280px);
+    max-width: 100%;
+  }
+}

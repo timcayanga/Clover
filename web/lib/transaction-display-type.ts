@@ -1,9 +1,12 @@
+import { hasTransactionUserEdits } from "./transaction-user-edits";
 export type TransactionDisplayType = "income" | "expense" | "transfer";
 
 type TransactionDisplayTypeInput = {
   type: TransactionDisplayType;
   isTransfer?: boolean;
   rawPayload?: unknown;
+  normalizedPayload?: unknown;
+  reviewStatus?: string | null;
 };
 
 const normalizeDigits = (value?: string | null) => String(value ?? "").replace(/\D/g, "");
@@ -54,6 +57,7 @@ export const getTransactionDisplayType = (
   currentAccountNumber: string | null,
   workspaceAccountNumbers: Set<string>
 ): TransactionDisplayType => {
+  if (hasTransactionUserEdits(transaction)) return transaction.type;
   if (isInternalWorkspaceTransfer(transaction, currentAccountNumber, workspaceAccountNumbers)) {
     return "transfer";
   }

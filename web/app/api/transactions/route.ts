@@ -29,6 +29,7 @@ import {
 } from "@/lib/transient-data";
 import { summarizeErrorForLog } from "@/lib/security-logging";
 import { sanitizeTransactionTagNames } from "@/lib/transaction-tags";
+import { hasTransactionUserEdits } from "@/lib/transaction-user-edits";
 import {
   getTransactionSummaryTypeOverrides,
   type TransactionSummaryCandidate,
@@ -545,6 +546,7 @@ const mapTransactionRow = (transaction: {
   warningReason: string | null;
   splitBill: { id: string; title: string } | null;
 }, workspaceAccounts: Array<{ id: string; accountNumber: string | null }>): TransactionApiRow => {
+  const userEdited = hasTransactionUserEdits(transaction);
   const normalizedCurrency =
     normalizeInstitutionCurrency(
       transaction.account.institution,
@@ -603,16 +605,16 @@ const mapTransactionRow = (transaction: {
     transferConfidence: transaction.transferConfidence,
     date: transaction.date.toISOString(),
     amount: transaction.amount.toString(),
-    currency: normalizedCurrency,
-    type: effectiveType,
+    currency: userEdited ? transaction.currency : normalizedCurrency,
+    type: userEdited ? transaction.type : effectiveType,
     merchantRaw: transaction.merchantRaw,
-    merchantClean: getEffectiveTransactionMerchantName({
+    merchantClean: userEdited ? transaction.merchantClean : getEffectiveTransactionMerchantName({
       merchantClean: transaction.merchantClean,
       merchantRaw: transaction.merchantRaw,
       institution: transaction.account.institution,
     }),
     description: transaction.description,
-    isTransfer: effectiveType === "transfer",
+    isTransfer: (userEdited ? transaction.type : effectiveType) === "transfer",
     isExcluded: transaction.isExcluded,
     createdAt: transaction.createdAt.toISOString(),
     warningReason: transaction.warningReason,
@@ -621,7 +623,7 @@ const mapTransactionRow = (transaction: {
     importFileId: transaction.importFileId ?? null,
     source,
     splitBill: transaction.splitBill,
-    categoryName,
+    categoryName: userEdited ? transaction.category?.name ?? null : categoryName,
   };
 };
 
@@ -790,6 +792,7 @@ export async function GET(request: Request) {
         !filters.query?.trim() &&
         !filters.currencyFilter?.trim() &&
         (filters.accountIds ?? []).length === 0 &&
+        (filters.tagIds ?? []).length === 0 &&
         (filters.typeFilters ?? []).length === 0 &&
         (filters.merchantFilters ?? []).length === 0 &&
         (filters.dateFilterMode ?? "ltd") === "ltd" &&
@@ -1182,6 +1185,7 @@ export async function GET(request: Request) {
       !filters.query?.trim() &&
       !filters.currencyFilter?.trim() &&
       (filters.accountIds ?? []).length === 0 &&
+      (filters.tagIds ?? []).length === 0 &&
       (filters.typeFilters ?? []).length === 0 &&
       (filters.merchantFilters ?? []).length === 0 &&
       (filters.dateFilterMode ?? "ltd") === "ltd" &&
