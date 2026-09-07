@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { cookies } from "next/headers";
 import { rememberedSessionIdKey } from "@/lib/clerk-session-persistence";
 import { isAdminOnlyUserId, isConfiguredAdminEmail } from "@/lib/admin-access";
+import { getMobileRequestContext } from "@/lib/mobile-request-context";
 
 const stagingHosts = new Set(["staging.clover.ph", "clover-stage.vercel.app"]);
 const localDevHosts = new Set(["localhost", "127.0.0.1", "::1"]);
@@ -60,11 +61,14 @@ const resolveStagingUserIdFromRememberedSession = async () => {
 export const isStagingHost = async () => isPreviewDeployment() || isKnownStagingHost(await getHostname());
 
 export const isLocalDevHost = async () => {
+  if (getMobileRequestContext()) return false;
   const hostname = await getHostname();
   return localDevHosts.has(hostname);
 };
 
 export const getSessionContext = async () => {
+  const mobile = getMobileRequestContext();
+  if (mobile) return { userId: mobile.userId, isGuest: false };
   const hostname = await getHostname();
   const localDevHost = localDevHosts.has(hostname);
   const stagingHost = isPreviewDeployment() || isKnownStagingHost(hostname);
