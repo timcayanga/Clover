@@ -96,6 +96,16 @@ async function handle(
     const workspaceId = url.searchParams.get("workspaceId");
     if (!workspaceId) return reply({ error: "Choose a Profile first." }, 400);
     await assertWorkspaceAccess(userId, workspaceId);
+    if (operation === "goals") {
+      const { mobileGoals, saveMobileGoal } = await import("@/lib/mobile-goals");
+      if (request.method === "GET") return reply(await mobileGoals(workspaceId, user.id));
+      const text = await request.text();
+      if (new TextEncoder().encode(text).length > 4096) return reply({ error: "Goal details are too large." }, 413);
+      let input: unknown;
+      try { input = JSON.parse(text); } catch { return reply({ error: "Check the goal details." }, 400); }
+      const result = await saveMobileGoal(workspaceId, input);
+      return result ? reply(result) : reply({ error: "Goal not found in this Profile." }, 404);
+    }
     if (operation === "notifications") {
       const feed = await loadActiveInAppNotificationFeed(user, workspaceId);
       if (request.method === "PATCH") {
@@ -264,7 +274,7 @@ async function handle(
     );
   } catch (error) {
     if (error instanceof z.ZodError)
-      return reply({ error: "Please check the transaction fields." }, 400);
+      return reply({ error: "Please check the entered fields." }, 400);
     if (error instanceof Error && error.message === "WORKSPACE_NOT_FOUND")
       return reply({ error: "Profile not found" }, 404);
     return reply(

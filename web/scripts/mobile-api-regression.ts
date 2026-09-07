@@ -7,6 +7,7 @@ import {
 } from "../lib/mobile-api-policy";
 import { mobileApiResponse } from "../lib/mobile-api-response";
 import { mobileEditSchema, mobileCreateSchema, mobileAccountCreateSchema } from "../lib/mobile-edit-schema";
+import { mobileGoalInput } from "../lib/mobile-goal-input";
 import {
   getMobileRequestContext,
   withMobileRequestContext,
@@ -29,6 +30,16 @@ async function main() {
   );
   assert.equal(mobileSessionUser({ sub: "user" }), null);
   assert.equal(mobileOperation("GET", ["bootstrap"]), "bootstrap");
+  assert.equal(mobileOperation("GET", ["goals"]), "goals");
+  assert.equal(mobileOperation("POST", ["goals"]), "goals");
+  assert.equal(mobileOperation("DELETE", ["goals"]), null);
+  const goalInput = { goal: "save_more", targetAmount: 2000, currency: "PHP", goalPlan: { cadence: "monthly", purpose: "Travel" } };
+  assert.equal(mobileGoalInput.safeParse(goalInput).success, true);
+  for (const extra of [{ workspaceId: "other" }, { userId: "other" }, { targetAmount: -1 }, { goalPlan: { ...goalInput.goalPlan, workspaceId: "other" } }]) assert.equal(mobileGoalInput.safeParse({ ...goalInput, ...extra }).success, false);
+  const goalSource = readFileSync(new URL("../lib/mobile-goals.ts", import.meta.url), "utf8");
+  assert.ok(goalSource.includes("where: { id, workspaceId }"));
+  assert.ok(!goalSource.includes("prisma.user.update"), "Native goal edits must not overwrite the legacy account goal");
+  assert.ok(routeSource.indexOf('if (operation === "goals")') > routeSource.indexOf('await assertWorkspaceAccess(userId, workspaceId)'));
   assert.equal(
     mobileOperation("PATCH", ["transactions", "abc"]),
     "transaction",
