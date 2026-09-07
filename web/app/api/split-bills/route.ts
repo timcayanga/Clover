@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
+import { getMobileRequestContext } from "@/lib/mobile-request-context";
 import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import {
   appendSplitBillActivity,
@@ -512,9 +513,12 @@ const persistSplitBill = async (
   });
 };
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const user = await getSplitBillCurrentUser();
+    const native = getMobileRequestContext()?.request === request && request !== undefined;
+    const requestedPage = native ? Number(new URL(request.url).searchParams.get("page") ?? 1) : 1;
+    const page = Number.isInteger(requestedPage) && requestedPage > 0 && requestedPage < 100000 ? requestedPage : 1;
     const bills = await prisma.splitBill.findMany({
       where: {
         OR: [
@@ -524,12 +528,14 @@ export async function GET() {
         ],
       },
       orderBy: [{ billDate: "desc" }, { updatedAt: "desc" }],
+      ...(native ? { skip: (page - 1) * 30, take: 31 } : {}),
       include: getBillInclude,
     });
     const transferSettlementsByBillId = await loadSplitBillTransferSettlementsForBills(bills.map((bill) => bill.id));
 
     return NextResponse.json({
-      bills: bills.map((bill) =>
+      ...(native ? { page, hasMore: bills.length > 30 } : {}),
+      bills: (native ? bills.slice(0, 30) : bills).map((bill) =>
         serializeSplitBillRecord({
           ...bill,
           transferSettlements: transferSettlementsByBillId.get(bill.id) ?? [],

@@ -16,6 +16,7 @@ import { mobileEditSchema, mobileCreateSchema, mobileAccountCreateSchema } from 
 import { mobileHome } from "@/lib/mobile-home";
 import { loadActiveInAppNotificationFeed } from "@/lib/in-app-notifications.server";
 import { mobileBudgetInput } from "@/lib/mobile-budget-input";
+import { mobileCircleInput, mobileSplitBillInput, mobileSplitBillPayload } from "@/lib/mobile-together-input";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -159,6 +160,20 @@ async function handle(
         return reply({ error: "Import not found" }, 404);
     }
     let forwarded = request;
+    if ((operation === "circles" && request.method === "POST") || (operation === "circle" && request.method === "PATCH") || (operation === "split-bills" && request.method === "POST")) {
+      const text = await request.text();
+      if (new TextEncoder().encode(text).length > 12000) return reply({ error: "Details are too large." }, 413);
+      let input: unknown;
+      try { input = JSON.parse(text); } catch { return reply({ error: "Check the entered details." }, 400); }
+      const body = operation === "split-bills" ? mobileSplitBillPayload(mobileSplitBillInput.parse(input)) : mobileCircleInput.parse(input);
+      forwarded = new Request(request.url, { method: request.method, headers: request.headers, body: JSON.stringify(body) });
+    }
+    if ((operation === "circles" || operation === "circle") && request.method === "GET") {
+      url.searchParams.delete("circle"); url.searchParams.delete("view");
+      if (operation === "circles") url.searchParams.set("view", "directory");
+      else url.searchParams.set("circle", path[1]);
+      forwarded = new Request(url, { headers: request.headers });
+    }
     if ((operation === "budgets" && request.method === "POST") || (operation === "budget" && request.method === "PATCH")) {
       const text = await request.text();
       if (new TextEncoder().encode(text).length > 4096) return reply({ error: "Budget details are too large." }, 413);
@@ -244,6 +259,14 @@ async function handle(
       forwarded,
       async () => {
         switch (operation) {
+          case "circles":
+            return request.method === "POST" ? (await import("@/app/api/circles/route")).POST(forwarded) : (await import("@/app/api/circles/route")).GET(forwarded);
+          case "circle":
+            return request.method === "PATCH" ? (await import("@/app/api/circles/[circleId]/route")).PATCH(forwarded, { params: Promise.resolve({ circleId: path[1] }) }) : (await import("@/app/api/circles/route")).GET(forwarded);
+          case "split-bills":
+            return request.method === "POST" ? (await import("@/app/api/split-bills/route")).POST(forwarded) : (await import("@/app/api/split-bills/route")).GET(forwarded);
+          case "split-bill":
+            return (await import("@/app/api/split-bills/[billId]/route")).GET(forwarded, { params: Promise.resolve({ billId: path[1] }) });
           case "budgets":
             return (await import("@/app/api/budgets/route")).POST(forwarded);
           case "budget": {

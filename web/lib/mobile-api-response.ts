@@ -31,9 +31,45 @@ const transactionFields = [
   "description",
   "tags",
 ];
+const rows = (value: unknown, fields: string[]) => Array.isArray(value) ? value.map(row => pick(row, fields)) : [];
+const circleSummary = (value: unknown) => {
+  const circle = record(value);
+  return {
+    ...pick(circle, ["id", "name", "type", "description", "color", "currency", "role", "isOwner", "memberCount", "pendingCount", "expenseTotalThisMonth", "contributionTotalThisMonth", "detailsLoaded"]),
+    members: rows(circle.members, ["id", "displayName", "role", "status", "isOwner", "contributionTarget", "contributionCadence", "contributedThisMonth"]),
+    budgets: rows(circle.budgets, ["id", "name", "targetAmount", "spentAmount", "currency", "cadence", "progressPercent", "isActive"]),
+    goals: rows(circle.goals, ["id", "name", "targetAmount", "currentAmount", "currency", "targetDate", "progressPercent", "status", "estimateConfidence", "estimateReason", "estimatedCompletionDate"]),
+    commitments: rows(circle.commitments, ["id", "title", "amount", "currency", "recurrence", "nextDueDate", "assignedMemberName", "isActive"]),
+    contributions: rows(circle.contributions, ["id", "memberName", "amount", "currency", "contributionDate", "note"]),
+    expenses: rows(circle.expenses, ["id", "kind", "title", "amount", "currency", "date", "visibility"]),
+    investmentShares: rows(circle.investmentShares, ["id", "name", "institution", "balance", "currency", "visibility"]),
+    activities: rows(circle.activities, ["id", "summary", "createdAt"]),
+    insights: rows(circle.insights, ["id", "title", "detail", "confidence", "reason"]),
+  };
+};
+const splitSummary = (value: unknown) => pick(value, ["id", "title", "note", "billDate", "currency", "sourceType", "total", "settlementStatus"]);
+const splitDetail = (value: unknown) => {
+  const bill = record(value), settlement = record(bill.settlement);
+  return { ...splitSummary(bill),
+    items: rows(bill.items, ["id", "description", "amount"]),
+    settlement: {
+      ...pick(settlement, ["totalSpent", "totalPaid", "totalOwed"]),
+      participants: rows(settlement.participants, ["id", "name", "paid", "owed", "balance"]),
+      transfers: rows(settlement.transfers, ["fromParticipantName", "toParticipantName", "amount"]),
+    },
+  };
+};
 export function mobileApiResponse(operation: string, value: unknown) {
   const data = record(value);
   if (data.error) return pick(data, ["error"]);
+  if (operation === "circles" || operation === "circle") {
+    if (data.circleId) return pick(data, ["circleId"]);
+    if (data.circle) return { circleId: record(data.circle).id };
+    const circles = Array.isArray(data.circles) ? data.circles.map(circleSummary) : [];
+    return operation === "circles" ? { circles } : { circle: circles[0] ?? null };
+  }
+  if (operation === "split-bills") return data.bill ? { bill: splitDetail(data.bill) } : { ...pick(data, ["page", "hasMore"]), bills: Array.isArray(data.bills) ? data.bills.map(splitSummary) : [] };
+  if (operation === "split-bill") return { bill: splitDetail(data.bill) };
   if (operation === "budgets" || operation === "budget") return {
     budget: pick(data.budget, ["id"]),
     ...(data.history ? { history: pick(data.history, ["points", "recentTransactions"]) } : {}),

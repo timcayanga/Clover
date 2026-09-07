@@ -9,6 +9,7 @@ import { mobileApiResponse } from "../lib/mobile-api-response";
 import { mobileEditSchema, mobileCreateSchema, mobileAccountCreateSchema } from "../lib/mobile-edit-schema";
 import { mobileGoalInput } from "../lib/mobile-goal-input";
 import { mobileBudgetInput } from "../lib/mobile-budget-input";
+import { mobileCircleInput, mobileSplitBillInput, mobileSplitBillPayload } from "../lib/mobile-together-input";
 import {
   getMobileRequestContext,
   withMobileRequestContext,
@@ -31,6 +32,30 @@ async function main() {
   );
   assert.equal(mobileSessionUser({ sub: "user" }), null);
   assert.equal(mobileOperation("GET", ["bootstrap"]), "bootstrap");
+  assert.equal(mobileOperation("GET", ["circles"]), "circles");
+  assert.equal(mobileOperation("POST", ["circles"]), "circles");
+  assert.equal(mobileOperation("PATCH", ["circles", "one"]), "circle");
+  assert.equal(mobileOperation("DELETE", ["circles", "one"]), null, "Do not expose permanent Circle deletion where the spec requires archival");
+  assert.equal(mobileOperation("POST", ["circles", "one", "invitations"]), null);
+  assert.equal(mobileOperation("GET", ["split-bills"]), "split-bills");
+  assert.equal(mobileOperation("POST", ["split-bills"]), "split-bills");
+  assert.equal(mobileOperation("GET", ["split-bills", "one"]), "split-bill");
+  assert.equal(mobileOperation("PATCH", ["split-bills", "one"]), null);
+  const circleInput = { name: "Our trip", type: "travel", description: "", color: "teal", currency: "PHP" };
+  assert.equal(mobileCircleInput.safeParse(circleInput).success, true);
+  for (const extra of [{ ownerUserId: "other" }, { role: "organizer" }, { members: [{ email: "unrequested@example.com" }] }, { avatarUrl: "unsafe" }]) assert.equal(mobileCircleInput.safeParse({ ...circleInput, ...extra }).success, false);
+  const splitInput = { title: "Dinner", note: "", billDate: "2026-09-07", currency: "PHP", total: "100.01", participants: [{ name: "Alex" }, { name: "Mia" }], paidByIndex: 0 };
+  assert.equal(mobileSplitBillInput.safeParse(splitInput).success, true);
+  for (const extra of [{ rawPayload: { tampered: true } }, { transactionId: "private" }, { groupId: "foreign" }, { sourceType: "receipt" }, { paidByIndex: 2 }, { billDate: "2026-02-30" }, { total: "NaN" }, { participants: [{ name: "Alex", id: "foreign" }, { name: "Mia" }] }]) assert.equal(mobileSplitBillInput.safeParse({ ...splitInput, ...extra }).success, false);
+  const splitPayload = mobileSplitBillPayload(mobileSplitBillInput.parse(splitInput));
+  assert.equal(splitPayload.sourceType, "manual");
+  assert.equal(splitPayload.payments[0].participantId, splitPayload.participants[0].id);
+  assert.equal(new Set(splitPayload.participants.map(person => person.id)).size, 2);
+  const circleResponse = mobileApiResponse("circle", { personalTransactions: ["private"], investmentAccounts: ["private"], circles: [{ id: "one", members: [{ id: "m", displayName: "Mia", userId: "private", email: "private" }], investmentShares: [{ id: "share", name: "Investment summary", accountId: "private" }], invitations: [{ token: "secret" }] }] });
+  assert.ok(!JSON.stringify(circleResponse).includes("private"));
+  assert.ok(!JSON.stringify(circleResponse).includes("secret"));
+  const splitResponse = mobileApiResponse("split-bill", { bill: { id: "one", userId: "private", transaction: { account: "private" }, rawPayload: "private", receiptStorageKey: "private", settlement: { participants: [], transfers: [] } } });
+  assert.ok(!JSON.stringify(splitResponse).includes("private"));
   assert.equal(mobileOperation("GET", ["budgets"]), "budgets");
   assert.equal(mobileOperation("POST", ["budgets"]), "budgets");
   assert.equal(mobileOperation("GET", ["budgets", "options"]), "budget-options");
