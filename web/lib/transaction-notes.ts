@@ -161,7 +161,8 @@ export const getTransactionUserNoteValue = (params: {
   importFileId?: unknown;
 }) => {
   const normalizedUserNote = readNormalizedUserNote(params.normalizedPayload);
-  if (normalizedUserNote) {
+  const normalized = asRecord(params.normalizedPayload);
+  if (normalizedUserNote || (normalized && (typeof normalized.userNote === "string" || typeof normalized.user_note === "string"))) {
     return normalizeTransactionNoteValue(normalizedUserNote);
   }
 

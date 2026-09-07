@@ -18,6 +18,8 @@ import { buildTransactionUpdatePayload } from "@/lib/transaction-update-payload"
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { formatAccountOptionLabel } from "@/lib/account-option-label";
+import { getTransactionParsedNoteValue } from "@/lib/transaction-notes";
+import { clearJsonRequestCache } from "@/lib/request-dedupe";
 import {
   createEmptyReceiptLineItem,
   getManualReceiptLineItemTotal,
@@ -308,6 +310,8 @@ export default function TransactionDetailPage() {
       }
 
       const updated = payload.transaction;
+      clearJsonRequestCache(`transactions:list:${updated.workspaceId}:`);
+      window.dispatchEvent(new CustomEvent("clover:transactions-changed", { detail: { workspaceId: updated.workspaceId } }));
       setTransaction(updated);
       setTagDraft((updated.tags ?? []).map((tag) => tag.name));
       setDraft(
@@ -553,6 +557,10 @@ export default function TransactionDetailPage() {
                     <strong>{confidenceScore}%</strong>
                   </div>
                   <p>Clover keeps the original source separate from the details you confirm.</p>
+                  <section aria-label="Parsed information">
+                    <h3>Parsed information</h3>
+                    <p>{getTransactionParsedNoteValue(transaction) || transaction.merchantRaw || "No parsed information available."}</p>
+                  </section>
                 </div>
               </details>
             )}
@@ -580,6 +588,7 @@ export default function TransactionDetailPage() {
                     No line items yet. Tap to add one.
                   </button>
                 )}
+                {draft.receiptLineItems.length > 0 ? <button className="button button-secondary button-small" type="button" onClick={() => beginEditing("line-items")}>Add line item</button> : null}
               </section>
             ) : null}
 

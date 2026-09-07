@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { hasTransactionUserEdits } from "@/lib/transaction-user-edits";
 import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { coerceTransactionTypeFromCategoryName } from "@/lib/transaction-directions";
 import {
@@ -1218,6 +1219,9 @@ const mergeImportedAccount = <T extends CachedRecord>(
 };
 
 const mergeImportedTransactionRecord = <T extends CachedRecord>(current: T, incoming: ImportedWorkspaceTransaction) => {
+  // A refreshed saved row is authoritative, including cleared notes/categories.
+  // Import fallbacks below are only for provisional parsing results.
+  if (hasTransactionUserEdits(incoming)) return { ...current, ...incoming } as T;
   const currentCategoryName = typeof current.categoryName === "string" ? current.categoryName.trim() : "";
   const incomingCategoryName = typeof incoming.categoryName === "string" ? incoming.categoryName.trim() : "";
   const useCurrentCategory = !isGenericCategoryName(currentCategoryName) && isGenericCategoryName(incomingCategoryName);

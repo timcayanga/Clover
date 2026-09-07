@@ -28,7 +28,8 @@ export const buildTransactionUpdatePayload = (
     amount: detailDraft.amount,
     currency,
     type: detailDraftTypeToTransactionType(detailDraft.type),
-    userNote: detailDraft.description || null,
+    // An empty string explicitly clears a note; legacy nulls mean no user note was recorded.
+    userNote: detailDraft.description,
     isExcluded: detailDraft.isExcluded,
     isTransfer: detailDraft.type === "transfer",
     rawPayload: mergeReceiptLineItemsIntoPayload(
