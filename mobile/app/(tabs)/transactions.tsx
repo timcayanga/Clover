@@ -92,6 +92,15 @@ export default function Transactions() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <View style={{ padding: 20, gap: 12 }}>
+        <Button
+          title="Add transaction"
+          onPress={() =>
+            router.navigate({
+              pathname: "/(tabs)/add",
+              params: { entry: String(Date.now()) },
+            })
+          }
+        />
         <Field
           label="Find a transaction"
           placeholder="Search name, account, category…"

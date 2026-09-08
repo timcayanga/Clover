@@ -11,6 +11,8 @@ It is an early vertical slice, not a store-ready or feature-complete release.
 - Explicit sample mode with fictional data. Sample edits stay in memory and never call the API.
 - Clerk hosted sign-in integration and encrypted native session-token storage.
 - Explicit Profile selection and account-level Free/Pro status from the shared backend.
+- Add opens Manual with Ask Clover and Upload tabs. Drafts remain in memory while switching.
+- Ask Clover prepares transaction suggestions using the existing Adviser backend; Review opens the native Manual form, and Add transaction explicitly saves it.
 - Native document picker, photo library, and receipt camera; per-file confirmation before upload.
 - Existing Clover import processing, visible-completion status, and saved-import recovery.
 - Safe areas, keyboard-aware forms, scalable text, screen-reader labels, pull-to-refresh, and a background privacy cover.

@@ -33,7 +33,12 @@ export default function Home() {
         </Body>
         <Button
           title="Upload a record"
-          onPress={() => router.navigate("/(tabs)/add")}
+          onPress={() =>
+            router.navigate({
+              pathname: "/(tabs)/add",
+              params: { entry: `upload-${Date.now()}` },
+            })
+          }
         />
       </Card>
       <Card>

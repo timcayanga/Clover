@@ -32,6 +32,10 @@ async function main() {
   );
   assert.equal(mobileSessionUser({ sub: "user" }), null);
   assert.equal(mobileOperation("GET", ["bootstrap"]), "bootstrap");
+  assert.equal(mobileOperation("POST", ["adviser", "chat"]), "adviser-chat");
+  assert.equal(mobileOperation("GET", ["adviser", "chat"]), null);
+  assert.equal(mobileOperation("POST", ["adviser", "actions"]), null, "Native suggestions must go through editable manual drafts, never arbitrary Adviser writes");
+  assert.ok(routeSource.indexOf('await assertWorkspaceAccess(userId, workspaceId)') < routeSource.indexOf('if (operation === "adviser-chat")'), "Native chat must check the requested Profile before dispatch");
   assert.equal(mobileOperation("GET", ["circles"]), "circles");
   assert.equal(mobileOperation("POST", ["circles"]), "circles");
   assert.equal(mobileOperation("PATCH", ["circles", "one"]), "circle");

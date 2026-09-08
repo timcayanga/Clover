@@ -1,5 +1,6 @@
 "use client";
 import { AdviserFormAssist } from "@/components/adviser-form-assist";
+import { AdviserChat } from "@/components/adviser-chat";
 import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 
 import dynamic from "next/dynamic";
@@ -2304,6 +2305,8 @@ function TransactionsPageContent() {
   const [importSeedMode, setImportSeedMode] = useState<ImportImageMode>("statement");
   const [importBackgroundOnly, setImportBackgroundOnly] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
+  const [creationTab, setCreationTab] = useState<"manual" | "ask" | "upload">("manual");
+  const [creationChatVisited, setCreationChatVisited] = useState(false);
   const mobileCreation = useMobileCreationRoute(manualOpen, setManualOpen, "/transactions");
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
@@ -5534,6 +5537,7 @@ function TransactionsPageContent() {
     }
 
     flushSync(() => {
+      setCreationTab("manual");
       setManualForm(createEmptyManualForm("", getOtherCategoryId(categories), defaultCurrency));
       setManualMoreOpen(false);
       setManualAccountMenuOpen(false);
@@ -8500,6 +8504,19 @@ function TransactionsPageContent() {
               </button>
             </div>
 
+            {mobileCreation ? (
+              <div className="transaction-creation-tabs" role="tablist" aria-label="How to add transactions">
+                {([['manual', 'Manual'], ['ask', 'Ask Clover'], ['upload', 'Upload']] as const).map(([tab, label]) => (
+                  <button key={tab} type="button" role="tab" id={`creation-tab-${tab}`} aria-selected={creationTab === tab} aria-controls={`creation-panel-${tab}`} tabIndex={creationTab === tab ? 0 : -1} onKeyDown={(event) => {
+                    const tabs = ["manual", "ask", "upload"] as const;
+                    const index = tabs.indexOf(tab);
+                    const next = event.key === "ArrowRight" ? tabs[(index + 1) % 3] : event.key === "ArrowLeft" ? tabs[(index + 2) % 3] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[2] : null;
+                    if (next) { event.preventDefault(); setCreationTab(next); if (next === "ask") setCreationChatVisited(true); document.getElementById(`creation-tab-${next}`)?.focus(); }
+                  }} onClick={() => { setCreationTab(tab); if (tab === "ask") setCreationChatVisited(true); }}>{label}</button>
+                ))}
+              </div>
+            ) : null}
+            <div id="creation-panel-manual" role={mobileCreation ? "tabpanel" : undefined} aria-labelledby={mobileCreation ? "creation-tab-manual" : undefined} hidden={mobileCreation && creationTab !== "manual"}>
             <form onSubmit={saveManualTransaction}>
 <AdviserFormAssist workspaceId={selectedWorkspaceId} context={{kind:"transaction", fields: Object.fromEntries(Object.entries(manualForm).filter(([key,value]) => ["accountId","categoryId","merchantRaw","merchantClean","amount","date","currency","type","description"].includes(key) && typeof value === "string")) as Record<string,string>}} />
               <div className="manual-form-layout manual-form-layout--compact" data-transaction-type={manualForm.type}>
@@ -8898,6 +8915,21 @@ function TransactionsPageContent() {
                 ) : null}
               </div>
             </form>
+            </div>
+            {mobileCreation && creationChatVisited ? <div id="creation-panel-ask" role="tabpanel" aria-labelledby="creation-tab-ask" hidden={creationTab !== "ask"} className="transaction-creation-panel">
+              <h4>Tell Clover what to add</h4>
+              <p>For example: “Lunch ₱250 with cash, groceries ₱1,200 from BPI.” Review each draft before saving.</p>
+              <AdviserChat workspaceId={selectedWorkspaceId} prompts={[]} isPro={planTier === "pro"} surface="transactions" pageLabel="Add transactions: prepare editable drafts for review" />
+            </div> : null}
+            {mobileCreation ? <div id="creation-panel-upload" role="tabpanel" aria-labelledby="creation-tab-upload" hidden={creationTab !== "upload"} className="transaction-creation-panel">
+              <h4>Add from a receipt or statement</h4>
+              <p>Choose a source to open it directly.</p>
+              <div className="transaction-creation-upload">
+                <button className="button button-secondary" type="button" onClick={openPhotoCapture}>Scan receipt</button>
+                <button className="button button-secondary" type="button" onClick={openPhotoLibrary}>Choose photos</button>
+                <button className="button button-secondary" type="button" onClick={openMobileFilePicker}>Upload files</button>
+              </div>
+            </div> : null}
           </section>
         </div>
       ) : null}

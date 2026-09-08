@@ -1823,6 +1823,11 @@ export function CloverShell({
   }, [pathname, router]);
 
   const openQuickAddTransaction = () => {
+    if (window.matchMedia("(max-width: 1100px)").matches) {
+      setIsQuickAddOpen(false);
+      navigateTo("/transactions/new");
+      return;
+    }
     if (pathname?.startsWith("/accounts/institutions/")) {
       setIsQuickAddOpen(false);
       window.dispatchEvent(new Event("clover:open-institution-investment-add"));

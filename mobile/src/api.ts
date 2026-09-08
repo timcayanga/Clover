@@ -27,7 +27,7 @@ export async function apiRequest<T>(
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),
-    path.includes("/process") ? 120000 : 25000,
+    path.includes("/process") || path.startsWith("adviser/chat") ? 120000 : 25000,
   );
   try {
     const url = new URL(`${apiBase()}/api/mobile/v1/${path}`);
@@ -56,7 +56,7 @@ export async function apiRequest<T>(
   } catch (error) {
     if (controller.signal.aborted)
       throw new Error(
-        "The connection timed out. Check the import status before trying the upload again.",
+        path.includes("/process") ? "The connection timed out. Check the import status before trying the upload again." : "The connection timed out. Check your connection and try again.",
       );
     throw error;
   } finally {

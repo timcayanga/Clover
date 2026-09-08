@@ -62,6 +62,12 @@ export default function TabLayout() {
           />
           <Tabs.Screen
             name="add"
+            listeners={({ navigation }) => ({
+              tabPress: (event) => {
+                event.preventDefault();
+                navigation.navigate("add", { entry: String(Date.now()) });
+              },
+            })}
             options={{
               title: "Add",
               tabBarIcon: () => (

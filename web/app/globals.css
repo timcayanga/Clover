@@ -64883,3 +64883,11 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
+/* The mobile creation route retains each input method's draft when switching. */
+.transaction-creation-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 20px; background: #edf6f6; border-radius: 14px; }
+.transaction-creation-tabs button { flex: 1; min-width: 0; min-height: 44px; border: 0; border-radius: 11px; background: transparent; color: #355963; font: inherit; font-weight: 600; }
+.transaction-creation-tabs button[aria-selected="true"] { background: white; color: #007f90; box-shadow: 0 2px 6px #18343e12; }
+.transaction-creation-panel { min-width: 0; }
+.transaction-creation-panel p { color: #536b73; line-height: 1.5; }
+.transaction-creation-upload { display: grid; gap: 12px; margin-top: 24px; }
+.transaction-creation-upload button { min-height: 56px; }

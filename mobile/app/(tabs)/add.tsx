@@ -2,9 +2,15 @@ import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import * as Crypto from "expo-crypto";
 import { File } from "expo-file-system";
-import { router, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
-import { Platform } from "react-native";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import { Platform, View } from "react-native";
+import {
+  Choices,
+  ManualTransaction,
+  TransactionChat,
+  emptyTransaction,
+} from "../../src/transaction-entry";
 import { useSession } from "../../src/session";
 import {
   fileProblem,
@@ -22,6 +28,12 @@ import {
 } from "../../src/ui";
 export default function Add() {
   const session = useSession();
+  const [tab, setTab] = useState("manual");
+  const [draft, setDraft] = useState(emptyTransaction);
+  const { entry } = useLocalSearchParams<{ entry?: string }>();
+  useEffect(() => {
+    setTab(entry?.startsWith("upload-") ? "upload" : "manual");
+  }, [entry]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<
@@ -130,55 +142,78 @@ export default function Add() {
   };
   return (
     <Screen>
-      <Heading>Bring in your records</Heading>
-      <Body>
-        Statements, receipts, wallet screenshots, or spreadsheets. Choose one
-        file to get started.
-      </Body>
-      <Card>
-        <Icon name="documents-outline" size={40} />
-        <Button
-          title="Upload files"
-          disabled={busy}
-          onPress={() => void choose("file")}
+      <Heading>Add transaction</Heading>
+      <Choices
+        options={[
+          { value: "manual", label: "Manual" },
+          { value: "ask", label: "Ask Clover" },
+          { value: "upload", label: "Upload" },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+      <View style={{ display: tab === "manual" ? "flex" : "none" }}>
+        <ManualTransaction draft={draft} onChange={setDraft} />
+      </View>
+      <View style={{ display: tab === "ask" ? "flex" : "none" }}>
+        <TransactionChat
+          onReview={(value) => {
+            setDraft(value);
+            setTab(entry?.startsWith("upload-") ? "upload" : "manual");
+          }}
         />
-        <Button
-          title="Photo Library"
-          secondary
-          disabled={busy}
-          onPress={() => void choose("library")}
-        />
-        <Button
-          title="Take a receipt photo"
-          secondary
-          disabled={busy}
-          onPress={() => void choose("camera")}
-        />
-      </Card>
-      {error ? <Notice>{error}</Notice> : null}
-      <Body>
-        {session.demo
-          ? "Sample mode shows a completed sample import. It never opens or uploads your files."
-          : "Preview limit: 3.5 MB per file. Your upload uses Clover’s existing parser and review rules."}
-      </Body>
-      {history.length > 0 && (
+      </View>
+      <View style={{ display: tab === "upload" ? "flex" : "none", gap: 18 }}>
+        <Heading>Add from a receipt or statement</Heading>
+        <Body>
+          Statements, receipts, wallet screenshots, or spreadsheets. Choose one
+          file to get started.
+        </Body>
         <Card>
-          <Body>Recent imports</Body>
-          {history.map((item) => (
-            <Button
-              key={item.id}
-              title={`${item.fileName} · ${item.status}`}
-              secondary
-              onPress={() =>
-                router.push({
-                  pathname: "/import/[id]",
-                  params: { id: item.id },
-                })
-              }
-            />
-          ))}
+          <Icon name="documents-outline" size={40} />
+          <Button
+            title="Upload files"
+            disabled={busy}
+            onPress={() => void choose("file")}
+          />
+          <Button
+            title="Choose photos"
+            secondary
+            disabled={busy}
+            onPress={() => void choose("library")}
+          />
+          <Button
+            title="Scan receipt"
+            secondary
+            disabled={busy}
+            onPress={() => void choose("camera")}
+          />
         </Card>
-      )}
+        {error ? <Notice>{error}</Notice> : null}
+        <Body>
+          {session.demo
+            ? "Sample mode shows a completed sample import. It never opens or uploads your files."
+            : "Preview limit: 3.5 MB per file. Your upload uses Clover’s existing parser and review rules."}
+        </Body>
+        {history.length > 0 && (
+          <Card>
+            <Body>Recent imports</Body>
+            {history.map((item) => (
+              <Button
+                key={item.id}
+                title={`${item.fileName} · ${item.status}`}
+                secondary
+                onPress={() =>
+                  router.push({
+                    pathname: "/import/[id]",
+                    params: { id: item.id },
+                  })
+                }
+              />
+            ))}
+          </Card>
+        )}
+      </View>
     </Screen>
   );
 }
