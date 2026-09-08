@@ -39,6 +39,7 @@ import {
 } from "@/lib/commitment-occurrences";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { defaultCurrencyCookieKey, normalizeDefaultCurrency } from "@/lib/regional-preferences";
+import { HomeFeatureGrid } from "@/components/home-feature-grid";
 import { HomeNextSteps } from "@/components/home-next-steps";
 import { buildReviewQueueWhere } from "@/lib/review-queue";
 import { BalanceVisibilityToggle } from "@/components/balance-visibility-toggle";
@@ -1166,6 +1167,7 @@ async function DashboardStream({
             </strong>
           </div>
           <div className="dashboard-home__hero-aside" aria-label="Monthly balance summary">
+            <span className="dashboard-home__balance-month">{monthStart.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span>
             {balanceHighlights.map((pill) => (
               <div key={pill.key} className="dashboard-home__hero-mini-pill">
                 <span className="dashboard-home__hero-mini-label">{pill.label}</span>
@@ -1194,33 +1196,7 @@ async function DashboardStream({
           </div>
         </article>
 
-        <section className="dashboard-home__hero-mobile-metrics" aria-label="Monthly balance summary">
-          {balanceHighlights.map((pill) => (
-            <article key={pill.key} className="dashboard-home__hero-mobile-card glass">
-              <span className="dashboard-home__hero-mini-label">{pill.label}</span>
-              <div className="dashboard-home__hero-mini-row">
-                <strong className="dashboard-home__hero-mini-value">
-                  <HomeSensitiveAmount value={pill.value} currency={displayCurrency} />
-                </strong>
-                <span
-                  className={
-                    pill.trend === null
-                      ? "dashboard-home__hero-mini-trend dashboard-home__hero-mini-trend--unavailable"
-                      : pill.trend >= 0
-                        ? "dashboard-home__hero-mini-trend positive"
-                        : "dashboard-home__hero-mini-trend negative"
-                  }
-                >
-                  {pill.trend === null
-                    ? "No prior month"
-                    : pill.trend === 0
-                      ? "0%"
-                      : `${pill.trend > 0 ? "+" : ""}${pill.trend.toFixed(0)}%`}
-                </span>
-              </div>
-            </article>
-          ))}
-        </section>
+        <HomeFeatureGrid />
 
         <article className="dashboard-home__insight-strip glass" aria-label="Home Adviser">
           <p className="eyebrow">Adviser</p>

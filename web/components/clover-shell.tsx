@@ -45,6 +45,7 @@ import {
 } from "@/lib/guidance-menu";
 import { installClientDiagnostics, recordClientDiagnostic } from "@/lib/client-diagnostics";
 import { BugReportWidget } from "@/components/bug-report-widget";
+import { FEATURE_NAVIGATION } from "@/lib/feature-navigation";
 import { getNavigationIconSrc, type NavigationIconName } from "@/lib/navigation-icons";
 import { OnboardingMissionTracker } from "@/components/onboarding-mission-tracker";
 import { RegionalPreferencesSync } from "@/components/regional-preferences-sync";
@@ -391,36 +392,7 @@ const desktopNavSections = [
       { href: "/home", label: "Home", key: "dashboard" as const },
     ],
   },
-  {
-    label: "Understand",
-    items: [
-      { href: "/reports", label: "Reports", key: "reports" as const },
-      { href: "/adviser", label: "Adviser", key: "adviser" as const },
-    ],
-  },
-  {
-    label: "Money",
-    items: [
-      { href: "/accounts", label: "Accounts", key: "accounts" as const },
-      { href: "/transactions", label: "Transactions", key: "transactions" as const },
-      { href: "/recurring", label: "Recurring", key: "recurring" as const },
-    ],
-  },
-  {
-    label: "Together",
-    items: [
-      { href: "/split-bill", label: "Split Bills", key: "split-bill" as const },
-      { href: "/circles", label: "Circles", key: "circles" as const },
-    ],
-  },
-  {
-    label: "Plan",
-    items: [
-      { href: "/budgeting", label: "Budgeting", key: "budgeting" as const },
-      { href: "/goals", label: "Goals", key: "goals" as const },
-      { href: "/investments", label: "Investments", key: "investments" as const },
-    ],
-  },
+  ...FEATURE_NAVIGATION,
 ];
 
 const mobileSettingsSections = [

@@ -87,6 +87,7 @@ If `docs/product-spec.md` is added later, it should become the primary product s
 - Use `staging` as the only shared development and Vercel preview branch.
 - Do not push temporary `codex/*`, task, or worktree branches to GitHub.
 - Push completed changes directly to `staging`; production deployments must use the tested `staging` commit.
+- Automatically deploy completed changes to staging after the required checks pass; do not ask for staging approval again. Verify the staging deployment is ready.
 - Do not create or deploy to alternate Vercel projects for Clover.
 
 ## Safety
