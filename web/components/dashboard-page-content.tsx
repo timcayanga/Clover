@@ -39,6 +39,7 @@ import {
 } from "@/lib/commitment-occurrences";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { defaultCurrencyCookieKey, normalizeDefaultCurrency } from "@/lib/regional-preferences";
+import { getHomePeriodChange } from "@/lib/home-period-change";
 import { HomeFeatureGrid } from "@/components/home-feature-grid";
 import { HomeNextSteps } from "@/components/home-next-steps";
 import { buildReviewQueueWhere } from "@/lib/review-queue";
@@ -422,14 +423,6 @@ const comparePeriods = (currentTransactions: DashboardTransaction[], previousTra
   };
 };
 
-const getPeriodChangePercent = (current: number, previous: number) => {
-  // Values below half a cent render as zero, so they are not a meaningful comparison baseline.
-  if (Math.abs(previous) < 0.005) {
-    return null;
-  }
-
-  return ((current - previous) / Math.abs(previous)) * 100;
-};
 
 function DashboardUnavailableContent() {
   return (
@@ -1111,13 +1104,13 @@ async function DashboardStream({
       key: "income",
       label: "Monthly Income",
       value: formatCurrency(monthSummary.income, displayCurrency),
-      trend: getPeriodChangePercent(monthSummary.income, previousMonthSummary.income),
+      trend: getHomePeriodChange(monthSummary.income, previousMonthSummary.income, displayCurrency),
     },
     {
       key: "expenses",
       label: "Monthly Expenses",
       value: formatCurrency(monthSummary.expense, displayCurrency),
-      trend: getPeriodChangePercent(monthSummary.expense, previousMonthSummary.expense),
+      trend: getHomePeriodChange(monthSummary.expense, previousMonthSummary.expense, displayCurrency),
     },
   ];
   const weeklyReportTone = weeklySummary.net >= 0 ? "positive" : "warning";
@@ -1175,21 +1168,16 @@ async function DashboardStream({
                   <strong className="dashboard-home__hero-mini-value">
                     <HomeSensitiveAmount value={pill.value} currency={displayCurrency} />
                   </strong>
-                  <span
-                    className={
-                      pill.trend === null
-                        ? "dashboard-home__hero-mini-trend dashboard-home__hero-mini-trend--unavailable"
-                        : pill.trend >= 0
-                          ? "dashboard-home__hero-mini-trend positive"
-                          : "dashboard-home__hero-mini-trend negative"
-                    }
-                  >
-                    {pill.trend === null
-                      ? "No prior month"
-                      : pill.trend === 0
-                        ? "0%"
-                        : `${pill.trend > 0 ? "+" : ""}${pill.trend.toFixed(0)}%`}
-                  </span>
+                  {pill.trend ? (
+                    <span
+                      className={`dashboard-home__hero-mini-trend${pill.trend.direction === 0 ? "" : (pill.key === "income" ? pill.trend.direction > 0 : pill.trend.direction < 0) ? " positive" : " negative"}`}
+                      title="Compared with last month"
+                    >
+                      {pill.trend.amountBased
+                        ? <HomeSensitiveAmount value={pill.trend.label} currency={displayCurrency} />
+                        : pill.trend.label}
+                    </span>
+                  ) : null}
                 </div>
               </div>
             ))}

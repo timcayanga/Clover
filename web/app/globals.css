@@ -64737,3 +64737,30 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
 @media (prefers-reduced-motion: reduce) {
   .home-feature-grid__track { transition: none; }
 }
+
+/* Keep monthly summary content within the balance card at every amount length. */
+.dashboard-home__hero--balance .dashboard-home__hero-aside,
+.dashboard-home__hero--balance .dashboard-home__hero-mini-pill,
+.dashboard-home__hero--balance .dashboard-home__hero-mini-row { min-width: 0; max-width: 100%; }
+.dashboard-home__hero--balance .dashboard-home__hero-mini-row { flex-wrap: wrap; gap: 4px 8px; }
+.dashboard-home__hero--balance .dashboard-home__hero-mini-value,
+.dashboard-home__hero--balance .dashboard-home__hero-mini-trend { white-space: normal; overflow-wrap: anywhere; }
+@media (min-width: 1101px) {
+  .dashboard-home__hero--balance { grid-template-columns: minmax(0, 1fr) minmax(0, 240px); }
+  .dashboard-home__hero--balance .dashboard-home__hero-aside { width: 100%; }
+}
+.home-budget-progress__header,
+.home-budget-progress__heading,
+.home-budget-progress__amounts { display: flex; justify-content: space-between; align-items: center; gap: 8px 16px; flex-wrap: wrap; }
+.home-budget-progress__header .eyebrow { margin: 0; }
+.home-budget-progress__list { display: grid; gap: 16px; margin-top: 14px; }
+.home-budget-progress { display: grid; gap: 7px; min-width: 0; color: var(--text); text-decoration: none; border-radius: 8px; }
+.home-budget-progress:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.home-budget-progress__heading strong { font-size: 14px; overflow-wrap: anywhere; }
+.home-budget-progress__heading > span,
+.home-budget-progress__period,
+.home-budget-progress__amounts { font-size: 12px; color: var(--muted); }
+.home-budget-progress__bar { height: 8px; overflow: hidden; border-radius: 999px; background: var(--surface-3); }
+.home-budget-progress__bar > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.home-budget-progress--warning .home-budget-progress__bar > span { background: #d97706; }
+.home-budget-progress__amounts > span { min-width: 0; overflow-wrap: anywhere; }

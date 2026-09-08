@@ -16,11 +16,9 @@ for (const file of ["app/api/budgets/route.ts", "app/api/budgets/[budgetId]/rout
 assert.match(readSource("app/api/budget-plans/route.ts"), /data: \{ workspaceId: context\.workspaceId, name: parsed\.data\.name \}/, "plan ownership must come from the authenticated context");
 const budgetUi = readSource("components/budgeting-workspace.tsx");
 const dashboardBudgetPulse = readSource("components/dashboard-budget-pulse.tsx");
-assert.match(
-  dashboardBudgetPulse,
-  /pulse\.activeBudgetCount === 1 \? "budget is" : "budgets are"/,
-  "The dashboard budget count must use singular and plural grammar correctly.",
-);
+assert.match(dashboardBudgetPulse, /role="progressbar"/, "Home budgets must show accessible progress.");
+assert.match(dashboardBudgetPulse, /budget.name/);
+assert.doesNotMatch(dashboardBudgetPulse, /being tracked/);
 assert.match(budgetUi, /useCollectionSelection\("budget"\)/);
 assert.match(budgetUi, /budgets\.map\(\(budget\)/, "one card per individual budget, including paused budgets");
 assert.doesNotMatch(budgetUi, /AnimatedTabs|selectedPlan|collection-switcher|Your budget plans|Limits on track/);

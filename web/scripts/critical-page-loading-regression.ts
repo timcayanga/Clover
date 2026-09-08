@@ -1,3 +1,4 @@
+import { getHomePeriodChange } from "@/lib/home-period-change";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -430,3 +431,11 @@ assert.doesNotMatch(
 );
 
 console.log("Critical page loading regression passed.");
+
+assert.equal(getHomePeriodChange(10000, 0, "PHP"), null, "No baseline should produce no comparison.");
+assert.equal(getHomePeriodChange(10000, -5, "PHP"), null, "Negative baselines do not support a useful percentage.");
+assert.equal(getHomePeriodChange(1758.9, 5, "PHP")?.amountBased, true, "Tiny baselines should show the currency change.");
+assert.equal(getHomePeriodChange(1758.9, 5, "PHP")?.label, "₱1,753.90 more");
+assert.equal(getHomePeriodChange(110, 100, "PHP")?.label, "+10%");
+assert.equal(getHomePeriodChange(90, 100, "PHP")?.label, "-10%");
+assert.equal(getHomePeriodChange(100, 100, "PHP")?.label, "0%");
