@@ -15,6 +15,7 @@ import {
   type GuidanceMenuVisibility,
 } from "@/lib/guidance-menu";
 import { useClerk, useSession, useSessionList, useUser } from "@clerk/nextjs";
+import { AvailableSocialConnections } from "@/components/available-social-connections";
 import { UserAvatarEditor } from "@/components/user-avatar-editor";
 import { applyHelperTextPreference, HELPER_TEXT_STORAGE_KEY, readStoredHelperTextPreference } from "@/lib/helper-text-preference";
 import { applyThemeMode, readStoredThemeMode, THEME_STORAGE_KEY, type ThemeMode } from "@/lib/theme-preference";
@@ -1921,10 +1922,11 @@ export function SettingsHub({
                 ) : (
                   <div className="settings-account-connected-item">
                     <strong>No connected accounts yet</strong>
-                    <span>Sign in with Google, Facebook, or another provider to link it here.</span>
+                    <span>Connect Google to sign in to this Clover account.</span>
                   </div>
                 )}
               </div>
+              <AvailableSocialConnections />
             </article>
 
             <article className="settings-action-card settings-account-card settings-account-card--danger">
