@@ -1,4 +1,5 @@
 import type { KnowledgeEntry } from "@/lib/knowledge-types";
+import { philippineBankGuideSeeds } from "@/lib/knowledge-ph-bank-guides";
 
 export const guideSeeds: KnowledgeEntry[] = [
   {
@@ -123,7 +124,7 @@ export const guideSeeds: KnowledgeEntry[] = [
   },
   {
     path: "/guides/track-expenses-multiple-bank-accounts",
-    order: 3,
+    order: 20,
     content: {
       kind: "guide",
       category: "manage-money",
@@ -164,7 +165,7 @@ export const guideSeeds: KnowledgeEntry[] = [
   },
   {
     path: "/guides/organize-credit-card-transactions",
-    order: 4,
+    order: 21,
     content: {
       kind: "guide",
       category: "manage-money",
@@ -201,7 +202,7 @@ export const guideSeeds: KnowledgeEntry[] = [
   },
   {
     path: "/guides/budgeting-multiple-bank-accounts",
-    order: 5,
+    order: 22,
     content: {
       kind: "guide",
       category: "plan-ahead",
@@ -230,4 +231,5 @@ export const guideSeeds: KnowledgeEntry[] = [
         "Actual Clover Budgeting interface showing a fictional sample budget",
     },
   },
+  ...philippineBankGuideSeeds,
 ];

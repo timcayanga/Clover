@@ -308,14 +308,10 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
   const displayedChapter = chapterPhase < 0.5 ? chapterFloor : Math.min(chapters.length - 1, chapterFloor + 1);
   const sceneMotion = (index: number): CSSProperties => {
     // The comparison shares the hero setting; subsequent scenes start one chapter later.
-    const distance = landingScenePosition(storyPosition) - index;
-    const proximity = clamp(1 - Math.abs(distance));
-    const easedProximity = proximity * proximity * (3 - 2 * proximity);
-    const depth = Math.min(1, Math.abs(distance));
-    const scale = distance < 0 ? 0.955 + easedProximity * 0.045 : 1 + depth * 0.065;
     return {
-      opacity: easedProximity,
-      transform: `translate3d(${clamp(distance, -1, 1) * -5.5}%, ${clamp(distance, -1, 1) * -1.8}%, 0) scale(${scale})`,
+      opacity: Math.round(landingScenePosition(storyPosition)) === index ? 1 : 0,
+      // Keep the photo's reserved phone gutter fixed, including between chapters.
+      transform: "none",
     };
   };
   const chapterMotion = (index: number): CSSProperties => {
@@ -332,6 +328,10 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
     };
   };
   const productMotion = (index: number, direction = 1): CSSProperties => {
+    if (index > 0) {
+      const visible = displayedChapter === productChapters[index];
+      return { opacity: visible ? 1 : 0, visibility: visible ? "visible" : "hidden", transform: "none" };
+    }
     const distance = storyPosition - productChapters[index];
     const proximity = clamp(1 - Math.abs(distance) * 1.35);
     return {

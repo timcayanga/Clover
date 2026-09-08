@@ -181,6 +181,7 @@ export async function POST(request: Request) {
       const deliveryResults = await Promise.allSettled(
         invitationDrafts.map((invitation) =>
           sendCircleInvitationEmail({
+            environment: user.environment,
             to: invitation.email,
             circleName: circle.name,
             inviterName: ownerName,
