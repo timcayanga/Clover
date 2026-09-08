@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getPlannedPaymentSuggestions } from "@/lib/planned-payment-suggestions";
 
 export type OnboardingMissionId =
   | "add_data"
@@ -50,8 +51,8 @@ const missionDefinitions: Array<Omit<OnboardingMission, "completed">> = [
   },
   {
     id: "confirm_recurring",
-    title: "Keep a recurring payment",
-    description: "Review a repeat payment and keep it if Clover identified it correctly.",
+    title: "Review recurring suggestions",
+    description: "Keep or dismiss the repeat payments Clover found.",
     href: "/recurring",
     actionLabel: "Review recurring",
   },
@@ -68,7 +69,7 @@ export const getOnboardingMissionSnapshot = async (
   actorUserIds: string[],
   workspaceId: string,
 ): Promise<OnboardingMissionSnapshot> => {
-  const [importCount, manualAccountCount, manualTransactionCount, auditActions, recurringCount, recurringSuggestionCount] = await Promise.all([
+  const [importCount, manualAccountCount, manualTransactionCount, auditActions, recurringCount, paymentSuggestions] = await Promise.all([
     prisma.importFile.count({
       where: {
         workspaceId,
@@ -96,16 +97,19 @@ export const getOnboardingMissionSnapshot = async (
     prisma.financialCommitment.count({
       where: { workspaceId, source: "recurring_detection", status: "active" },
     }),
-    prisma.recurringPattern.count({ where: { workspaceId } }),
+    getPlannedPaymentSuggestions(workspaceId),
   ]);
 
+  const recurringSuggestionCount = paymentSuggestions.filter(
+    (suggestion) => suggestion.sourceKind === "recurring_transaction" || suggestion.sourceKind === "installment",
+  ).length;
   const actions = new Set(auditActions.map((entry) => entry.action));
   const hasData = importCount > 0 || (manualAccountCount > 0 && manualTransactionCount > 0);
   const completion: Record<OnboardingMissionId, boolean> = {
     add_data: hasData,
     check_data: hasData && actions.has("onboarding_mission.check_data"),
     review_transaction: hasData && actions.has("transaction_updated"),
-    confirm_recurring: hasData && recurringCount > 0,
+    confirm_recurring: hasData && recurringSuggestionCount === 0,
     open_insights: hasData && actions.has("onboarding_mission.open_insights"),
   };
   const missions = missionDefinitions

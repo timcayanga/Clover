@@ -5868,6 +5868,28 @@ html[data-theme="dark"] .adviser-header-link {
   gap: 18px;
 }
 
+/* Home shows the live queues together, independently of onboarding progress. */
+.home-next-steps {
+  padding: 18px;
+  border: 1px solid rgba(3, 168, 192, 0.16);
+  border-radius: 18px;
+}
+.home-next-steps > .eyebrow { margin: 0 0 12px; }
+.home-next-steps__list { display: grid; gap: 0; list-style: none; padding: 0; margin: 0; }
+.home-next-steps__item { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; }
+.home-next-steps__item + .home-next-steps__item { border-top: 1px solid rgba(128, 144, 156, 0.18); }
+.home-next-steps__item:first-child { padding-top: 0; }
+.home-next-steps__item:last-child { padding-bottom: 0; }
+.home-next-steps__copy { min-width: 0; }
+.home-next-steps__copy h3 { margin: 0; font-size: 0.94rem; line-height: 1.5; }
+.home-next-steps__copy p { margin: 4px 0 0; color: var(--muted); font-size: 0.84rem; line-height: 1.5; }
+.home-next-steps__count { display: inline-block; font-size: 0.78rem; font-weight: 500; color: var(--muted); margin-left: 6px; }
+.home-next-steps__item > .button { flex: none; min-height: 44px; }
+@media (max-width: 600px) {
+  .home-next-steps__item { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .home-next-steps__count { display: block; margin-left: 0; }
+}
+
 .onboarding-missions {
   border: 1px solid rgba(3, 168, 192, 0.16);
   background: rgba(255, 255, 255, 0.94);

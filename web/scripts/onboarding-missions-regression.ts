@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { buildHomeNextSteps } from "../lib/home-next-steps";
 
 const root = process.cwd();
 const missionSource = readFileSync(resolve(root, "lib/onboarding-missions.ts"), "utf8");
@@ -26,3 +27,18 @@ assert.match(trackerSource, /pathname === "\/accounts" \|\| pathname === "\/tran
 assert.match(trackerSource, /pathname === "\/adviser" \|\| pathname === "\/reports"/);
 
 console.log("Onboarding missions regression passed.");
+
+// Home must disappear once all live reviews have been resolved, regardless of
+// historical onboarding completion or whether any recurring payment was kept.
+assert.deepEqual(buildHomeNextSteps({ transactionCount: 0, recurringCount: 0, statementCount: 0 }), []);
+assert.deepEqual(
+  buildHomeNextSteps({ transactionCount: 3, recurringCount: 2, statementCount: 1 }).map(({ id, count }) => ({ id, count })),
+  [{ id: "transactions", count: 3 }, { id: "recurring", count: 2 }, { id: "statements", count: 1 }],
+);
+assert.deepEqual(
+  buildHomeNextSteps({ transactionCount: 3, recurringCount: 0, statementCount: 0 }).map(({ id }) => id),
+  ["transactions"],
+);
+assert.match(missionSource, /getPlannedPaymentSuggestions\(workspaceId\)/);
+assert.doesNotMatch(missionSource, /prisma\.recurringPattern\.count/);
+assert.match(missionSource, /confirm_recurring: hasData && recurringSuggestionCount === 0/);

@@ -39,7 +39,8 @@ import {
 } from "@/lib/commitment-occurrences";
 import { hasCompatibleTable } from "@/lib/data-engine";
 import { defaultCurrencyCookieKey, normalizeDefaultCurrency } from "@/lib/regional-preferences";
-import { OnboardingMissions } from "@/components/onboarding-missions";
+import { HomeNextSteps } from "@/components/home-next-steps";
+import { buildReviewQueueWhere } from "@/lib/review-queue";
 import { BalanceVisibilityToggle } from "@/components/balance-visibility-toggle";
 import { resolveEffectiveAccountBalance, selectLatestAccountCheckpoint } from "@/lib/account-balance-projection";
 import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
@@ -902,8 +903,9 @@ async function DashboardStream({
   const weeklySpendDelta = weeklySummary.current.expense - weeklySummary.previous.expense;
   const nextSevenDays = new Date(now);
   nextSevenDays.setDate(nextSevenDays.getDate() + 7);
-  const [plannedPaymentSuggestions, recurringCommitments] = await Promise.all([
+  const [plannedPaymentSuggestions, outstandingReviewCount, recurringCommitments] = await Promise.all([
     getPlannedPaymentSuggestions(workspaceSummary.id).catch(() => []),
+    prisma.transaction.count({ where: buildReviewQueueWhere(workspaceSummary.id) }),
     prisma.financialCommitment.findMany({
       where: {
         workspaceId: workspaceSummary.id,
@@ -1248,6 +1250,12 @@ async function DashboardStream({
           {insightItems.length > 1 ? <small className="dashboard-home__insight-swipe-hint">Swipe left or right for more advice</small> : null}
         </article>
 
+        <HomeNextSteps
+          transactionCount={outstandingReviewCount}
+          recurringCount={recurringSuggestionCount}
+          statementCount={plannedPaymentSuggestions.filter((suggestion) => suggestion.sourceKind === "statement_reminder").length}
+        />
+
         <div className="dashboard-home__snapshot-grid" aria-label="Week and month snapshot">
           <article className={`dashboard-home__report-card dashboard-home__report-card--${weeklyReportTone} glass`}>
             <div className="dashboard-home__report-card-head">
@@ -1309,8 +1317,6 @@ async function DashboardStream({
             </Link>
           </article>
         </div>
-
-        <OnboardingMissions surface="home" />
 
         <DashboardBudgetPulse />
 

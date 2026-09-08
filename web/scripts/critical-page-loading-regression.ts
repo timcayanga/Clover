@@ -177,12 +177,12 @@ assert.match(
 );
 assert.match(dashboardSource, /plannedPaymentsDueSoon\.length === 1 \? "is" : "are"/);
 assert.ok(
-  dashboardSource.indexOf('aria-label="Week and month snapshot"') < dashboardSource.indexOf('<OnboardingMissions surface="home" />'),
-  "Next Steps should appear below the weekly and monthly reports.",
+  dashboardSource.indexOf('aria-label="Home Adviser"') < dashboardSource.indexOf("<HomeNextSteps"),
+  "Next Steps should appear below Adviser.",
 );
 assert.ok(
-  dashboardSource.indexOf('<OnboardingMissions surface="home" />') < dashboardSource.indexOf("<DashboardBudgetPulse />"),
-  "Next Steps should appear above Budgeting.",
+  dashboardSource.indexOf("<HomeNextSteps") < dashboardSource.indexOf('aria-label="Week and month snapshot"'),
+  "Next Steps should appear above the weekly and monthly reports.",
 );
 assert.match(
   globalStylesSource,
