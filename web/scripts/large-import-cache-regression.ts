@@ -45,7 +45,7 @@ void (async () => {
     syncImportedWorkspaceTransactionCaches,
   } = await import("@/lib/workspace-cache");
   const { BETA_FULL_ACCESS_ENABLED, hasFullFeatureAccess } = await import("@/lib/beta-access");
-  const { getEffectiveProfileLimit, getEffectiveUserLimits } = await import("@/lib/user-limits");
+  const { getPlanDefaultLimits } = await import("@/lib/user-limits");
 
   const transactions = Array.from({ length: 1_200 }, (_, index) => ({
     id: `large-transaction-${index}`,
@@ -80,22 +80,14 @@ void (async () => {
     "A bounded account snapshot should remain persisted when the full transaction history exceeds quota."
   );
 
-  const explicitLimits = {
-    clerkUserId: "beta-user",
-    planTier: "free" as const,
-    accountLimit: 1,
-    monthlyUploadLimit: 1,
-    transactionLimit: 1,
-  };
-  assert.equal(BETA_FULL_ACCESS_ENABLED, true, "Beta full access must remain enabled.");
-  assert.deepEqual(getEffectiveUserLimits(explicitLimits, { ignoreDevelopmentOverride: true }), {
-    accountLimit: null,
+  assert.equal(BETA_FULL_ACCESS_ENABLED, false, "Beta full access must remain disabled after plan enforcement is restored.");
+  assert.deepEqual(getPlanDefaultLimits("free"), {
+    accountLimit: 5,
     monthlyUploadLimit: null,
     transactionLimit: null,
   });
-  assert.equal(getEffectiveProfileLimit(explicitLimits), null);
-  assert.equal(hasFullFeatureAccess("free"), true);
+  assert.equal(hasFullFeatureAccess("free"), false);
   assert.equal(hasFullFeatureAccess("pro"), true);
 
-  console.log("[PASS] Large imports survive browser quota pressure and beta accounts remain unlimited.");
+  console.log("[PASS] Large imports survive browser quota pressure and Free/Pro plan gates are restored.");
 })();

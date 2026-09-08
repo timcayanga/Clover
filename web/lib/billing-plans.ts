@@ -38,7 +38,7 @@ export const BILLING_COPY = {
   free: {
     label: "Free",
     headline: "Start free and upgrade when you need more room.",
-    detail: "Free is the default Clover plan. The current core workflow is available without account, upload, or transaction row caps.",
+    detail: "Free includes 3 Profiles, 5 non-cash accounts, and 100,000 Clover tokens each month for Adviser and AI-assisted parsing.",
   },
   pro: {
     label: "Pro",

@@ -15,6 +15,12 @@ export type InAppNotification = {
   createdAt: string;
   href: string | null;
   ctaLabel: string | null;
+  progress?: {
+    used: number;
+    limit: number;
+    percent: number;
+    label: string;
+  };
 };
 
 export type InAppNotificationFeed = {

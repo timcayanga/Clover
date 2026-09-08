@@ -64,7 +64,7 @@ async function handle(
     // on the website until its native equivalent is ready.
     const user = await prisma.user.findUnique({
       where: { clerkUserId: userId },
-      select: { id: true, firstName: true, email: true },
+      select: { id: true, firstName: true, email: true, clerkUserId: true, planTier: true },
     });
     if (!user)
       return reply(

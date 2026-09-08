@@ -60,7 +60,16 @@ export async function dispatchNotificationEmails() {
           id: { gt: cursor },
         },
         orderBy: { id: "asc" },
-        select: { id: true, email: true, workspaces: { select: { id: true } } },
+        select: {
+          id: true,
+          email: true,
+          clerkUserId: true,
+          planTier: true,
+          accountLimit: true,
+          monthlyUploadLimit: true,
+          transactionLimit: true,
+          workspaces: { select: { id: true } },
+        },
       });
       if (!user) {
         await prisma.notificationDispatchCursor.upsert({

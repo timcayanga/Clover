@@ -39,6 +39,7 @@ assert.doesNotMatch(notificationPageSource, /notification-item__tone/);
 assert.match(notificationPageSource, /formatInAppNotificationDateTime\(notification\.createdAt\)/);
 assert.match(notificationPageSource, /dismissInAppNotifications\(\{ ids: \[notificationId\] \}\)/);
 assert.match(notificationPageSource, /dismissInAppNotifications\(\{ dismissAll: true \}\)/);
+assert.match(notificationPageSource, /TokenUsageDonut/);
 
 assert.match(shellSource, /getNavigationIconSrc\(notification\.product\)/);
 assert.match(shellSource, /NotificationCountBadge count=\{notificationCount\}/);
@@ -50,6 +51,8 @@ assert.match(shellSource, /loadInAppNotificationFeed\(searchWorkspaceId \|\| nul
 assert.match(shellSource, /sidebar-popover__clear-notifications/);
 assert.doesNotMatch(shellSource, /sidebar-popover__notification-tone/);
 assert.match(shellSource, /formatInAppNotificationDateTime\(notification\.createdAt\)/);
+assert.match(shellSource, /sidebar-token-warning/);
+assert.match(shellSource, /TokenUsageDonut/);
 assert.match(feedSource, /Promise\.all\(\[/);
 assert.match(feedSource, /inAppNotificationRead\.findMany/);
 assert.match(feedSource, /_max: \{ updatedAt: true \}/);
@@ -61,6 +64,8 @@ assert.match(feedSource, /product: "recurring"/);
 assert.match(feedSource, /product: "circles"/);
 assert.match(feedSource, /product: "splitBills"/);
 assert.match(feedSource, /product: "investments"/);
+assert.match(feedSource, /clover-token:monthly/);
+assert.match(feedSource, /clover-token:rolling/);
 assert.match(stylesSource, /\.sidebar-popover--notifications\s*\{[^}]*width:\s*400px;[^}]*max-height:\s*min\(620px/s);
 
 console.log("In-app notification regression checks passed.");

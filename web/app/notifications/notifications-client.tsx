@@ -12,6 +12,7 @@ import {
 } from "@/lib/in-app-notifications.client";
 import { formatInAppNotificationDateTime, type InAppNotification } from "@/lib/in-app-notifications";
 import { getNavigationIconSrc } from "@/lib/navigation-icons";
+import { TokenUsageDonut } from "@/components/token-usage-donut";
 
 export function NotificationsClient() {
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
@@ -39,7 +40,11 @@ export function NotificationsClient() {
     void loadNotifications();
     const refresh = () => void loadNotifications(true);
     window.addEventListener(inAppNotificationsChangedEvent, refresh);
-    return () => window.removeEventListener(inAppNotificationsChangedEvent, refresh);
+    const usageRefreshTimer = window.setInterval(refresh, 60_000);
+    return () => {
+      window.removeEventListener(inAppNotificationsChangedEvent, refresh);
+      window.clearInterval(usageRefreshTimer);
+    };
   }, [loadNotifications]);
 
   const dismissOne = async (notificationId: string) => {
@@ -114,6 +119,14 @@ export function NotificationsClient() {
               <div className="notification-item__main">
                 <h4>{notification.title}</h4>
                 <p>{notification.message}</p>
+                {notification.progress ? (
+                  <div className="notification-item__progress">
+                    <TokenUsageDonut percent={notification.progress.percent} label={notification.progress.label} compact />
+                    <span>
+                      {notification.progress.used.toLocaleString()} of {notification.progress.limit.toLocaleString()} tokens
+                    </span>
+                  </div>
+                ) : null}
               </div>
               <div className="notification-item__actions">
                 <time dateTime={notification.createdAt}>{formatInAppNotificationDateTime(notification.createdAt)}</time>

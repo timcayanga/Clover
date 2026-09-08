@@ -34,7 +34,7 @@ import {
   extractEverydayMoneyAmount,
   getEverydayRoutingHint,
 } from "@/lib/adviser-everyday";
-import { ADVISER_LIMITS_ENABLED, BETA_FULL_ACCESS_ENABLED } from "@/lib/beta-access";
+import { getCloverTokenLimitError, getCloverTokenUsage } from "@/lib/clover-token-usage";
 import { assertContentLengthWithin, assertTrustedRequestOrigin } from "@/lib/request-security";
 import { ADVISER_OUT_OF_SCOPE_REPLY, ADVISER_OUT_OF_SCOPE_SUGGESTIONS, classifyAdviserScope } from "@/lib/adviser-scope";
 import { buildAdviserPlanningTurn, type AdviserPlanningSurface } from "@/lib/adviser-planning";
@@ -112,10 +112,6 @@ type AdviserAction = {
   payload?: Record<string, unknown>;
 };
 
-const ADVISER_CHAT_LIMITS = {
-  free: 5,
-  pro: 100,
-} as const;
 const MAX_ADVISER_REQUEST_BYTES = 100 * 1024;
 const ADVISER_SECURITY_RATE_LIMIT = 30;
 
@@ -956,42 +952,7 @@ export async function POST(request: Request) {
     }
 
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const resetsAt = getNextMonthStart(now);
-    const limit = ADVISER_CHAT_LIMITS[user.planTier];
-    const usageCount = ADVISER_LIMITS_ENABLED
-      ? await prisma.auditLog.count({
-          where: {
-            actorUserId: user.id,
-            action: "adviser.chat_asked",
-            createdAt: { gte: monthStart },
-          },
-        })
-      : 0;
-
-    if (ADVISER_LIMITS_ENABLED) {
-      try {
-        assertRateLimit(`adviser-chat:${user.id}`, user.planTier === "pro" ? 30 : 8, 60 * 1000);
-      } catch {
-        return NextResponse.json(
-          {
-            error: "Clover needs a short pause before the next question.",
-            usage: { plan: user.planTier, used: usageCount, limit, remaining: Math.max(0, limit - usageCount), resetsAt: resetsAt.toISOString() } satisfies AdviserUsage,
-          },
-          { status: 429 }
-        );
-      }
-    }
-
-    if (ADVISER_LIMITS_ENABLED && usageCount >= limit) {
-      return NextResponse.json(
-        {
-          error: user.planTier === "free" ? "You have used this month's Adviser preview questions. Upgrade to Pro for more room." : "You have reached this month's Adviser Chat limit.",
-          usage: { plan: user.planTier, used: usageCount, limit, remaining: 0, resetsAt: resetsAt.toISOString() } satisfies AdviserUsage,
-        },
-        { status: 429 }
-      );
-    }
 
     const nativeRequest = getMobileRequestContext()?.request === request;
     const selectedWorkspaceId = nativeRequest
@@ -2908,11 +2869,11 @@ export async function POST(request: Request) {
     };
     const usageForResponse = () => ({
       plan: user.planTier,
-      used: usageCount + 1,
-      limit,
-      remaining: Math.max(0, limit - usageCount - 1),
+      used: 0,
+      limit: 0,
+      remaining: 0,
       resetsAt: resetsAt.toISOString(),
-      unlimited: BETA_FULL_ACCESS_ENABLED,
+      unlimited: true,
     }) satisfies AdviserUsage;
     const fallbackActions: AdviserAction[] =
       inferredQuestionTheme === "goals" && !goalValue && suggestedGoal
@@ -3104,6 +3065,12 @@ export async function POST(request: Request) {
     if (!env.OPENAI_API_KEY) {
       await recordLocalResponse("openai_not_configured");
       return NextResponse.json({ reply: fallbackReply, actions: fallbackActions, suggestions: suggestedQuestions, usage: usageForResponse(), grounding, degraded: true });
+    }
+
+    const cloverTokenUsage = await getCloverTokenUsage(user);
+    const cloverTokenLimitError = getCloverTokenLimitError(cloverTokenUsage);
+    if (cloverTokenLimitError) {
+      return NextResponse.json(cloverTokenLimitError, { status: 429 });
     }
 
     // The financial calculations and workspace retrieval are deterministic;

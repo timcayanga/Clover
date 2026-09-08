@@ -27,6 +27,7 @@ import { validateImportFile, validateImportFileBytes } from "@/lib/import-file-v
 import { countWorkspaceOwnerImportFilesThisMonth } from "@/lib/plan-access";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
+import { getCloverTokenLimitError, getCloverTokenUsage } from "@/lib/clover-token-usage";
 import { summarizeErrorForLog } from "@/lib/security-logging";
 import { getErrorDetails, recordAppError } from "@/lib/error-logs";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
@@ -1916,6 +1917,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
             countWorkspaceOwnerImportFilesThisMonth(formWorkspaceId),
           ]);
           responsePlanTier = user.planTier;
+          const tokenUsage = await getCloverTokenUsage(user);
+          const tokenLimitError = getCloverTokenLimitError(tokenUsage);
+          if (tokenLimitError) {
+            return NextResponse.json(tokenLimitError, { status: 403 });
+          }
           const effectiveLimits = getEffectiveUserLimits(user);
           if (effectiveLimits.monthlyUploadLimit !== null && currentMonthUploads >= effectiveLimits.monthlyUploadLimit) {
             const isFreePlan = user.planTier === "free";

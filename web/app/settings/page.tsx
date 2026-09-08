@@ -11,6 +11,7 @@ import { getUserPlanUsage } from "@/lib/plan-access";
 import { getEnv } from "@/lib/env";
 import { isPaddleCheckoutReady } from "@/lib/paddle-billing";
 import { normalizeRegionalPreferences } from "@/lib/regional-preferences";
+import { getCloverTokenUsage, type CloverTokenUsageSnapshot } from "@/lib/clover-token-usage";
 
 export const metadata = {
   title: "Settings",
@@ -68,12 +69,17 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
   let user: Awaited<ReturnType<typeof getOrCreateCurrentUser>> | null = null;
   let initialPlanLimits: ReturnType<typeof getEffectiveUserLimits> | null = null;
   let initialPlanUsage: Awaited<ReturnType<typeof getUserPlanUsage>> | null = null;
+  let initialCloverTokenUsage: CloverTokenUsageSnapshot | null = null;
   const env = getEnv();
 
   try {
     user = session.isGuest ? null : await getOrCreateCurrentUser(session.userId);
     if (user) {
-      [initialPlanLimits, initialPlanUsage] = await Promise.all([getEffectiveUserLimits(user), getUserPlanUsage(user.id)]);
+      [initialPlanLimits, initialPlanUsage, initialCloverTokenUsage] = await Promise.all([
+        getEffectiveUserLimits(user),
+        getUserPlanUsage(user.id),
+        getCloverTokenUsage(user),
+      ]);
     }
   } catch (error) {
     console.error("[settings-page] unable to load current user", error);
@@ -184,6 +190,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
         profileLimit={user ? getEffectiveProfileLimit(user) : null}
         initialPlanLimits={initialPlanLimits}
         initialPlanUsage={initialPlanUsage}
+        initialCloverTokenUsage={initialCloverTokenUsage}
         initialRegionalPreferences={user?.regionalPreferences ? normalizeRegionalPreferences(user.regionalPreferences) : null}
         paypalClientId={env.PAYPAL_CLIENT_ID ?? null}
         paypalMonthlyPlanId={env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}

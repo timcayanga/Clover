@@ -64737,7 +64737,6 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
 @media (prefers-reduced-motion: reduce) {
   .home-feature-grid__track { transition: none; }
 }
-
 /* Keep monthly summary content within the balance card at every amount length. */
 .dashboard-home__hero--balance .dashboard-home__hero-aside,
 .dashboard-home__hero--balance .dashboard-home__hero-mini-pill,
@@ -64786,3 +64785,101 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
 .adviser-chat__attachments > span { display: flex; gap: 8px; align-items: center; border: 1px solid #8885; border-radius: 12px; padding: 6px 10px; max-width: 100%; font-size: 13px; }
 .adviser-chat__attachments > span > span { overflow-wrap: anywhere; }
 .adviser-chat__attachments button { border: 0; background: transparent; color: inherit; min-width: 32px; min-height: 32px; font-size: 20px; cursor: pointer; }
+
+/* Shared Clover-token usage visuals. */
+.token-usage-donut {
+  --token-usage-angle: 0deg;
+  --token-usage-track: color-mix(in srgb, var(--color-border, #d8e1e7) 78%, transparent);
+  --token-usage-fill: #00a9bc;
+  position: relative;
+  display: inline-grid;
+  width: 64px;
+  height: 64px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: conic-gradient(var(--token-usage-fill) var(--token-usage-angle), var(--token-usage-track) 0);
+}
+
+.token-usage-donut::before {
+  position: absolute;
+  inset: 7px;
+  border-radius: inherit;
+  background: var(--color-surface, #fff);
+  content: "";
+}
+
+.token-usage-donut > span {
+  position: relative;
+  z-index: 1;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--color-text, #172033);
+}
+
+.token-usage-donut--compact { width: 48px; height: 48px; }
+.token-usage-donut--compact::before { inset: 6px; }
+
+.sidebar-token-warning {
+  position: relative;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 10px;
+  margin: auto 12px 10px;
+  padding: 14px 11px 12px;
+  border: 1px solid color-mix(in srgb, #e6a700 32%, var(--color-border, #d8e1e7));
+  border-radius: 16px;
+  background: color-mix(in srgb, #fff7d6 72%, var(--color-surface, #fff));
+  box-shadow: 0 12px 28px rgba(30, 45, 65, 0.1);
+}
+
+.sidebar-token-warning--danger {
+  border-color: color-mix(in srgb, #e34850 42%, var(--color-border, #d8e1e7));
+  background: color-mix(in srgb, #fff0f0 74%, var(--color-surface, #fff));
+}
+
+.sidebar-token-warning > div { display: grid; min-width: 0; gap: 4px; }
+.sidebar-token-warning strong,
+.sidebar-token-warning span,
+.sidebar-token-warning a { font-size: 0.68rem; line-height: 1.35; }
+.sidebar-token-warning strong { padding-right: 18px; color: var(--color-text, #172033); }
+.sidebar-token-warning span { color: var(--color-text-muted, #667085); }
+.sidebar-token-warning a { width: fit-content; color: #008da0; font-weight: 800; text-decoration: none; }
+
+.sidebar-token-warning__dismiss {
+  position: absolute;
+  top: 5px;
+  right: 7px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted, #667085);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.notification-item__progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  color: var(--color-text-muted, #667085);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.settings-plan-token-note {
+  margin: 10px 0 22px;
+  color: var(--color-text-muted, #667085);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 1100px) {
+  .sidebar-token-warning { display: none; }
+}
+
+@media (min-width: 1351px) {
+  .settings-section--plan .settings-plan-usage {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}

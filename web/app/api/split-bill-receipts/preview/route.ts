@@ -12,6 +12,8 @@ import { uploadObject } from "@/lib/s3";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
+import { getCloverTokenLimitError, getCloverTokenUsage } from "@/lib/clover-token-usage";
+import { estimateLocalParserTokens } from "@/lib/import-token-usage";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -235,6 +237,11 @@ export async function POST(request: Request) {
         select: { id: true },
         orderBy: { createdAt: "asc" },
       });
+    const tokenUsage = await getCloverTokenUsage(user);
+    const tokenLimitError = getCloverTokenLimitError(tokenUsage);
+    if (tokenLimitError) {
+      return NextResponse.json(tokenLimitError, { status: 429 });
+    }
     const recordUsage = workspace
       ? (usage: OpenAIImportModelUsage) => {
           after(async () => {
@@ -292,6 +299,26 @@ export async function POST(request: Request) {
       preview: localPreview,
       onUsage: recordUsage,
     });
+    if (workspace) {
+      const localParser = estimateLocalParserTokens(receiptText);
+      after(async () => {
+        await prisma.auditLog.create({
+          data: {
+            workspaceId: workspace.id,
+            actorUserId: user.id,
+            action: "import.parser_usage",
+            entity: "SplitBillReceiptPreview",
+            entityId: null,
+            metadata: {
+              version: 1,
+              selectedParser: preview.backupParser ? "backup_parser" : "local_parser",
+              localParser,
+              backupParserInvoked: Boolean(preview.backupParser),
+            },
+          },
+        }).catch(() => null);
+      });
+    }
     const receiptStorageKey = [
       "split-bill-receipts",
       user.id,

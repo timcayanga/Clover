@@ -20,12 +20,12 @@ const PLAN_PROFILE_LIMITS: Record<PlanTier, number> = {
 const PLAN_DEFAULT_LIMITS: Record<PlanTier, UserLimits> = {
   free: {
     accountLimit: 5,
-    monthlyUploadLimit: 10,
-    transactionLimit: 1000,
+    monthlyUploadLimit: null,
+    transactionLimit: null,
   },
   pro: {
     accountLimit: 20,
-    monthlyUploadLimit: 100,
+    monthlyUploadLimit: null,
     transactionLimit: null,
   },
 };
@@ -44,6 +44,9 @@ type EffectiveUserLimitsOptions = {
 
 const UNLIMITED_SYNTHETIC_USER_IDS = new Set(["staging-guest", "local-admin"]);
 
+export const hasUnlimitedPlanLimits = (user: { clerkUserId?: string | null }) =>
+  Boolean(user.clerkUserId && UNLIMITED_SYNTHETIC_USER_IDS.has(user.clerkUserId));
+
 // Keep this rollout switch centralized so temporary unlimited access can be
 // restored to the plan defaults without changing every feature gate.
 export const PLAN_LIMITS_TEMPORARILY_DISABLED = BETA_FULL_ACCESS_ENABLED;
@@ -57,7 +60,7 @@ export const getEffectiveProfileLimit = (user: ProfileLimitSource): number | nul
     return null;
   }
 
-  if (user.clerkUserId && UNLIMITED_SYNTHETIC_USER_IDS.has(user.clerkUserId)) {
+  if (hasUnlimitedPlanLimits(user)) {
     return null;
   }
 
@@ -77,7 +80,7 @@ export const getEffectiveUserLimits = (user: UserLimitsLike, options: EffectiveU
     };
   }
 
-  if (user.clerkUserId && UNLIMITED_SYNTHETIC_USER_IDS.has(user.clerkUserId)) {
+  if (hasUnlimitedPlanLimits(user)) {
     return {
       accountLimit: null,
       monthlyUploadLimit: null,
@@ -94,14 +97,13 @@ export const getEffectiveUserLimits = (user: UserLimitsLike, options: EffectiveU
   }
 
   const defaults = getPlanDefaultLimits(user.planTier);
-  const defaultMonthlyUploadLimit = defaults.monthlyUploadLimit ?? 0;
-  const monthlyUploadLimit =
-    user.monthlyUploadLimit === null ? defaults.monthlyUploadLimit : Math.max(defaultMonthlyUploadLimit, user.monthlyUploadLimit);
 
   return {
     accountLimit: user.accountLimit ?? defaults.accountLimit,
-    monthlyUploadLimit,
-    transactionLimit: user.transactionLimit ?? defaults.transactionLimit,
+    // Uploads and retained rows are governed by the shared Clover-token
+    // allowance, including for accounts that still carry legacy overrides.
+    monthlyUploadLimit: defaults.monthlyUploadLimit,
+    transactionLimit: defaults.transactionLimit,
   };
 };
 

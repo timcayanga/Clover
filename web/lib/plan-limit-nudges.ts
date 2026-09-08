@@ -1,6 +1,11 @@
 export type ClientPlanTier = "free" | "pro" | "unknown";
 
-export type PlanLimitType = "account_limit" | "transaction_limit" | "upload_limit";
+export type PlanLimitType =
+  | "account_limit"
+  | "transaction_limit"
+  | "upload_limit"
+  | "clover_token_monthly_limit"
+  | "clover_token_24h_limit";
 
 export type PlanLimitPayload = {
   planTier: ClientPlanTier;
@@ -28,7 +33,11 @@ export const parsePlanLimitPayload = (payload: unknown): PlanLimitPayload | null
   const planTier =
     planTierValue === "free" || planTierValue === "pro" || planTierValue === "unknown" ? planTierValue : null;
   const limitType =
-    limitTypeValue === "account_limit" || limitTypeValue === "transaction_limit" || limitTypeValue === "upload_limit"
+    limitTypeValue === "account_limit"
+      || limitTypeValue === "transaction_limit"
+      || limitTypeValue === "upload_limit"
+      || limitTypeValue === "clover_token_monthly_limit"
+      || limitTypeValue === "clover_token_24h_limit"
       ? limitTypeValue
       : null;
   const limitValue =
@@ -90,6 +99,30 @@ export const parsePlanLimitMessage = (
 
 export const getPlanLimitNudgeCopy = ({ planTier, limitType, limitValue }: PlanLimitPayload): PlanLimitNudgeCopy => {
   const limitText = typeof limitValue === "number" ? limitValue.toLocaleString() : "the current";
+
+  if (limitType === "clover_token_monthly_limit" || limitType === "clover_token_24h_limit") {
+    const rolling = limitType === "clover_token_24h_limit";
+    if (planTier === "free") {
+      return {
+        eyebrow: rolling ? "24-hour allowance reached" : "Monthly allowance reached",
+        title: `You’ve used ${limitText} Clover tokens on Free.`,
+        body: rolling
+          ? "Earlier usage clears automatically during the next 24 hours. Pro also includes a larger safeguard for heavier days."
+          : "Upgrade to Pro for a 1,000,000-token monthly allowance shared by Adviser and AI-assisted parsing.",
+        ctaLabel: "View Pro",
+        ctaHref: "/settings?section=plan",
+      };
+    }
+    return {
+      eyebrow: rolling ? "24-hour allowance reached" : "Monthly allowance reached",
+      title: `You’ve used ${limitText} Clover tokens on Pro.`,
+      body: rolling
+        ? "Earlier usage clears automatically during the next 24 hours."
+        : "Your monthly allowance resets at the start of next month in Asia/Manila.",
+      ctaLabel: "View usage",
+      ctaHref: "/settings?section=plan",
+    };
+  }
 
   if (limitType === "account_limit") {
     if (planTier === "free") {

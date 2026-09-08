@@ -8,6 +8,8 @@ import { PaddleCheckoutButton } from "@/components/paddle-checkout-button";
 import { PlanFeatureItem } from "@/components/plan-feature-item";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import { BILLING_PLANS, type BillingInterval } from "@/lib/billing-plans";
+import type { CloverTokenUsageSnapshot } from "@/lib/clover-token-usage";
+import { TokenUsageDonut } from "@/components/token-usage-donut";
 
 type BillingSubscriptionSummary = {
   provider: "paypal" | "paddle";
@@ -27,6 +29,8 @@ type SettingsPlanPanelProps = {
   workspaceId: string;
   billingCustomerId?: string | null;
   planTier: "free" | "pro";
+  profileCount: number;
+  profileLimit: number | null;
   preferredBillingInterval?: BillingInterval;
   paypalClientId?: string | null;
   paypalMonthlyPlanId?: string | null;
@@ -50,13 +54,16 @@ type SettingsPlanPanelProps = {
     monthlyUploadCount: number;
     transactionCount: number;
   };
+  cloverTokenUsage: CloverTokenUsageSnapshot | null;
   planLoading: boolean;
   planLoaded: boolean;
 };
 
 const freeFeatures = [
   "Manual transaction tracking",
-  "No profile, account, upload, or transaction row caps for now",
+  "3 profiles and 5 non-cash accounts",
+  "100,000 Clover tokens monthly",
+  "Unlimited files and transaction rows within the token allowance",
   "Receipt scanning",
   "Basic investment tracking",
   "Basic Adviser guidance",
@@ -65,6 +72,8 @@ const freeFeatures = [
 
 const proFeatures = [
   "Everything in Free",
+  "10 profiles and 20 non-cash accounts",
+  "1,000,000 Clover tokens monthly",
   "Full investment portfolio tools",
   "Advanced Adviser guidance",
   "Enhanced goal tracking and recommendations",
@@ -89,6 +98,8 @@ function getUsagePercent(used: number, limit: number | null) {
 export function SettingsPlanPanel({
   billingCustomerId,
   planTier,
+  profileCount,
+  profileLimit,
   preferredBillingInterval,
   paypalClientId,
   paypalMonthlyPlanId,
@@ -103,6 +114,7 @@ export function SettingsPlanPanel({
   billingSubscription,
   planLimits,
   planUsage,
+  cloverTokenUsage,
   planLoading,
   planLoaded,
 }: SettingsPlanPanelProps) {
@@ -181,28 +193,36 @@ export function SettingsPlanPanel({
 
   const usageRows = [
     {
+      label: "Profiles",
+      used: `${profileCount.toLocaleString()} used`,
+      limit: profileLimit === null ? "Unlimited" : `${profileLimit.toLocaleString()} limit`,
+      percent: getUsagePercent(profileCount, profileLimit),
+      donut: false,
+    },
+    {
       label: "Accounts",
       used: `${planUsage.accountCount.toLocaleString()} used`,
       limit: planLimits.accountLimit === null ? "Unlimited" : `${planLimits.accountLimit.toLocaleString()} limit`,
       percent: getUsagePercent(planUsage.accountCount, planLimits.accountLimit),
+      donut: false,
     },
     {
-      label: "Monthly uploads",
-      used: `${planUsage.monthlyUploadCount.toLocaleString()} used`,
-      limit:
-        planLimits.monthlyUploadLimit === null
-          ? "Unlimited"
-          : `${planLimits.monthlyUploadLimit.toLocaleString()} limit`,
-      percent: getUsagePercent(planUsage.monthlyUploadCount, planLimits.monthlyUploadLimit),
+      label: "Clover tokens this month",
+      used: `${(cloverTokenUsage?.monthly.used ?? 0).toLocaleString()} used`,
+      limit: cloverTokenUsage?.monthly.limit === null
+        ? "Unlimited"
+        : `${(cloverTokenUsage?.monthly.limit ?? (planTier === "pro" ? 1_000_000 : 100_000)).toLocaleString()} limit`,
+      percent: cloverTokenUsage?.monthly.percent ?? 0,
+      donut: true,
     },
     {
-      label: "Transaction rows",
-      used: `${planUsage.transactionCount.toLocaleString()} used`,
-      limit:
-        planLimits.transactionLimit === null
-          ? "Unlimited"
-          : `${planLimits.transactionLimit.toLocaleString()} limit`,
-      percent: getUsagePercent(planUsage.transactionCount, planLimits.transactionLimit),
+      label: "Clover tokens, rolling 24h",
+      used: `${(cloverTokenUsage?.rolling24h.used ?? 0).toLocaleString()} used`,
+      limit: cloverTokenUsage?.rolling24h.limit === null
+        ? "Unlimited"
+        : `${(cloverTokenUsage?.rolling24h.limit ?? (planTier === "pro" ? 250_000 : 30_000)).toLocaleString()} limit`,
+      percent: cloverTokenUsage?.rolling24h.percent ?? 0,
+      donut: true,
     },
   ];
 
@@ -231,10 +251,11 @@ export function SettingsPlanPanel({
           <article key={usage.label} className="settings-plan-usage__card">
             <div className="settings-plan-usage__head">
               <strong>{usage.label}</strong>
+              {usage.donut ? <TokenUsageDonut percent={usage.percent} label={usage.label} compact /> : null}
             </div>
             <span className="settings-plan-usage__legend">
               <span>{usage.used}</span>
-              <span>{usage.limit}</span>
+              <span>{Math.round(usage.percent)}% · {usage.limit}</span>
             </span>
             <span className="settings-plan-usage__meter" aria-hidden="true">
               <span style={{ width: `${usage.percent}%` }} />
@@ -242,6 +263,10 @@ export function SettingsPlanPanel({
           </article>
         ))}
       </div>
+      <p className="settings-plan-token-note">
+        Adviser and AI-assisted parsing share these Clover-token allowances. The monthly allowance resets at midnight
+        Asia/Manila on the first day of each month and does not roll over.
+      </p>
 
       <div className={`settings-plan-grid settings-plan-grid--current-${planTier}`} aria-label="Available plans">
         <article className={`settings-plan-card settings-plan-card--free${planTier === "free" ? " is-current" : ""}`}>

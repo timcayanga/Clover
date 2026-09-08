@@ -8,10 +8,19 @@ import { buildReviewQueueWhere } from "@/lib/review-queue";
 import { prisma } from "@/lib/prisma";
 import { applyInAppTemplates } from "@/lib/notification-template-rules";
 import { loadRuntimeNotificationTemplates } from "@/lib/notification-templates.server";
+import { getCloverTokenUsage } from "@/lib/clover-token-usage";
+import type { PlanTier } from "@prisma/client";
+import { getEffectiveProfileLimit, getEffectiveUserLimits } from "@/lib/user-limits";
+import { countNonCashAccounts } from "@/lib/account-limit-count";
 
 type NotificationUser = {
   id: string;
   email: string;
+  clerkUserId?: string | null;
+  planTier: PlanTier;
+  accountLimit?: number | null;
+  monthlyUploadLimit?: number | null;
+  transactionLimit?: number | null;
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -94,6 +103,9 @@ export const buildInAppNotificationCandidates = async (
     dividends,
     maturingInvestments,
     billingSubscription,
+    cloverTokenUsage,
+    profileCount,
+    planAccounts,
   ] = await Promise.all([
     prisma.importFile.findMany({
       where: { workspaceId, status: { in: ["processing", "done", "failed"] } },
@@ -222,9 +234,88 @@ export const buildInAppNotificationCandidates = async (
       where: { userId: user.id },
       select: { id: true, status: true, updatedAt: true },
     }),
+    getCloverTokenUsage(user, now),
+    prisma.workspace.count({ where: { userId: user.id } }),
+    prisma.account.findMany({
+      where: { workspace: { userId: user.id } },
+      select: { type: true, name: true, institution: true },
+    }),
   ]);
 
   const items: InAppNotification[] = [];
+  const formatTokens = (value: number) => new Intl.NumberFormat("en-PH", { maximumFractionDigits: 0 }).format(value);
+  const planLimitSource = {
+    ...user,
+    accountLimit: user.accountLimit ?? null,
+    monthlyUploadLimit: user.monthlyUploadLimit ?? null,
+    transactionLimit: user.transactionLimit ?? null,
+  };
+  const effectivePlanLimits = getEffectiveUserLimits(planLimitSource);
+  const accountCount = countNonCashAccounts(planAccounts);
+  const pushPlanLimitWarning = (input: { key: "profiles" | "accounts"; label: string; used: number; limit: number | null }) => {
+    if (input.limit === null || input.limit <= 0) return;
+    const percent = (input.used / input.limit) * 100;
+    if (percent < 80) return;
+    const exhausted = input.used >= input.limit;
+    items.push({
+      id: `plan-limit:${input.key}:${input.limit}:${exhausted ? "100" : "80"}`,
+      product: "settings",
+      productLabel: "Plan",
+      productHref: "/settings?section=plan",
+      title: exhausted ? `${input.label} limit reached` : `${input.label} usage is at ${Math.round(percent)}%`,
+      message: user.planTier === "free"
+        ? `You’re using ${input.used} of ${input.limit} available ${input.label.toLowerCase()}. Upgrade to Pro for more room.`
+        : `You’re using ${input.used} of ${input.limit} available ${input.label.toLowerCase()}.`,
+      tone: exhausted ? "danger" : "warning",
+      priority: exhausted ? "critical" : "high",
+      createdAt: now.toISOString(),
+      href: "/settings?section=plan",
+      ctaLabel: user.planTier === "free" ? "View Pro" : "View plan",
+      progress: { used: input.used, limit: input.limit, percent, label: input.label },
+    });
+  };
+  pushPlanLimitWarning({ key: "profiles", label: "Profiles", used: profileCount, limit: getEffectiveProfileLimit(user) });
+  pushPlanLimitWarning({ key: "accounts", label: "Accounts", used: accountCount, limit: effectivePlanLimits.accountLimit });
+  if (cloverTokenUsage.monthly.warned && cloverTokenUsage.monthly.limit !== null) {
+    const usage = cloverTokenUsage.monthly;
+    const limit = Number(usage.limit);
+    const percentage = Math.min(100, Math.round(usage.percent));
+    items.push({
+      id: `clover-token:monthly:${usage.startsAt.slice(0, 7)}:${usage.exhausted ? "100" : "80"}`,
+      product: "settings",
+      productLabel: "Plan",
+      productHref: "/settings?section=plan",
+      title: usage.exhausted ? "Monthly Clover tokens used" : `Monthly Clover tokens are at ${percentage}%`,
+      message: user.planTier === "free"
+        ? `You’ve used ${formatTokens(usage.used)} of ${formatTokens(limit)} tokens. Upgrade to Pro for a 1,000,000-token monthly allowance.`
+        : `You’ve used ${formatTokens(usage.used)} of ${formatTokens(limit)} tokens. Your allowance resets at the start of next month.`,
+      tone: usage.exhausted ? "danger" : "warning",
+      priority: usage.exhausted ? "critical" : "high",
+      createdAt: now.toISOString(),
+      href: "/settings?section=plan",
+      ctaLabel: user.planTier === "free" ? "View Pro" : "View plan",
+      progress: { used: usage.used, limit, percent: usage.percent, label: "Monthly Clover tokens" },
+    });
+  }
+  if (cloverTokenUsage.rolling24h.warned && cloverTokenUsage.rolling24h.limit !== null) {
+    const usage = cloverTokenUsage.rolling24h;
+    const limit = Number(usage.limit);
+    const percentage = Math.min(100, Math.round(usage.percent));
+    items.push({
+      id: `clover-token:rolling:${toDateKey(now)}:${usage.exhausted ? "100" : "80"}`,
+      product: "settings",
+      productLabel: "Plan",
+      productHref: "/settings?section=plan",
+      title: usage.exhausted ? "24-hour Clover token allowance used" : `24-hour Clover tokens are at ${percentage}%`,
+      message: `You’ve used ${formatTokens(usage.used)} of ${formatTokens(limit)} tokens in the rolling 24-hour window. Earlier usage clears automatically.`,
+      tone: usage.exhausted ? "danger" : "warning",
+      priority: usage.exhausted ? "critical" : "high",
+      createdAt: now.toISOString(),
+      href: "/settings?section=plan",
+      ctaLabel: "View usage",
+      progress: { used: usage.used, limit, percent: usage.percent, label: "Rolling 24-hour Clover tokens" },
+    });
+  }
   const reviewCount = reviewSummary._count._all;
   const recentImports = imports.filter((item) => item.updatedAt >= sevenDaysAgo || item.status !== "done");
   recentImports.forEach((item) => {

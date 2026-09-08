@@ -6,6 +6,7 @@ import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { getUserPlanUsage } from "@/lib/plan-access";
 import { prisma } from "@/lib/prisma";
 import { createTransientDataUnavailableResponse, isTransientDataError, isUnauthorizedDataError } from "@/lib/transient-data";
+import { getCloverTokenUsage } from "@/lib/clover-token-usage";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export async function GET() {
   try {
     const { userId } = await requireAuth();
     const user = await getOrCreateCurrentUser(userId);
-    const [billingSubscription, planUsage, latestUpload] = await Promise.all([
+    const [billingSubscription, planUsage, latestUpload, cloverTokenUsage] = await Promise.all([
       getUserBillingSubscription(user.id),
       getUserPlanUsage(user.id),
       prisma.importFile.findFirst({
@@ -21,6 +22,7 @@ export async function GET() {
         orderBy: { createdAt: "desc" },
         select: { createdAt: true },
       }),
+      getCloverTokenUsage(user),
     ]);
     const effectiveLimits = getEffectiveUserLimits(user);
 
@@ -32,6 +34,7 @@ export async function GET() {
         monthlyUploadLimit: effectiveLimits.monthlyUploadLimit,
         transactionLimit: effectiveLimits.transactionLimit,
         usage: planUsage,
+        cloverTokenUsage,
         primaryGoal: user.primaryGoal,
         goalTargetAmount: user.goalTargetAmount ? user.goalTargetAmount.toString() : null,
         goalTargetSource: user.goalTargetSource,

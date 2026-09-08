@@ -64,6 +64,7 @@ import {
   loadInAppNotificationFeed,
   markInAppNotificationsRead,
 } from "@/lib/in-app-notifications.client";
+import { TokenUsageDonut } from "@/components/token-usage-donut";
 
 const loadDashboardManualTransactionModal = () =>
   import("@/components/dashboard-top-actions").then((module) => module.DashboardManualTransactionModal);
@@ -1515,6 +1516,7 @@ export function CloverShell({
     window.addEventListener(inAppNotificationsChangedEvent, refresh);
     window.addEventListener(inAppNotificationsReadEvent, markRead);
     window.addEventListener("focus", refresh);
+    const usageRefreshTimer = window.setInterval(refresh, 60_000);
     let importRefreshTimer: number | null = null;
     const unsubscribeImportActivity = subscribeImportActivity(() => {
       if (importRefreshTimer) window.clearTimeout(importRefreshTimer);
@@ -1525,6 +1527,7 @@ export function CloverShell({
       window.removeEventListener(inAppNotificationsChangedEvent, refresh);
       window.removeEventListener(inAppNotificationsReadEvent, markRead);
       window.removeEventListener("focus", refresh);
+      window.clearInterval(usageRefreshTimer);
       if (importRefreshTimer) window.clearTimeout(importRefreshTimer);
       unsubscribeImportActivity();
     };
@@ -1755,6 +1758,7 @@ export function CloverShell({
       setNotificationCount(previousCount);
     }
   };
+  const planUsageWarning = notifications.find((notification) => notification.progress);
   const homeNotificationsAction =
     active === "dashboard" ? (
       <Link
@@ -2060,6 +2064,25 @@ export function CloverShell({
             </div>
           ))}
         </nav>
+
+        {planUsageWarning?.progress ? (
+          <aside className={`sidebar-token-warning sidebar-token-warning--${planUsageWarning.tone}`} role="status">
+            <button
+              type="button"
+              className="sidebar-token-warning__dismiss"
+              aria-label={`Dismiss ${planUsageWarning.title}`}
+              onClick={() => void dismissNotification(planUsageWarning.id)}
+            >
+              ×
+            </button>
+            <TokenUsageDonut percent={planUsageWarning.progress.percent} label={planUsageWarning.progress.label} compact />
+            <div>
+              <strong>{planUsageWarning.title}</strong>
+              <span>{planUsageWarning.message}</span>
+              <Link href={planUsageWarning.href ?? planUsageWarning.productHref} prefetch={false}>View Plan</Link>
+            </div>
+          </aside>
+        ) : null}
 
         <div className="sidebar-footer">
           <button

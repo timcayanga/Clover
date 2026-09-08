@@ -91,6 +91,7 @@
     "qa:investments": "tsx scripts/investments-regression.ts",
     "qa:adviser-everyday": "tsx scripts/adviser-everyday-regression.ts",
     "qa:adviser-model-usage": "tsx scripts/adviser-model-usage-regression.ts",
+    "qa:clover-token-usage": "tsx scripts/clover-token-usage-regression.ts",
     "qa:adviser-local-routing": "tsx scripts/adviser-local-routing-regression.ts && tsx scripts/adviser-planning-regression.ts",
     "qa:adviser-planning": "tsx scripts/adviser-planning-regression.ts",
     "qa:import-model-usage": "tsx scripts/import-model-usage-regression.ts",

@@ -34,6 +34,7 @@ import {
   type RegionalPreferences,
 } from "@/lib/regional-preferences";
 import { getNavigationIconSrc, type NavigationIconName } from "@/lib/navigation-icons";
+import type { CloverTokenUsageSnapshot } from "@/lib/clover-token-usage";
 
 const SettingsCategoriesPanel = dynamic(
   () => import("@/components/settings-categories-panel").then((module) => module.SettingsCategoriesPanel),
@@ -166,6 +167,7 @@ type SettingsHubProps = {
     monthlyUploadCount: number;
     transactionCount: number;
   } | null;
+  initialCloverTokenUsage?: CloverTokenUsageSnapshot | null;
   initialRegionalPreferences?: RegionalPreferences | null;
   paypalClientId?: string | null;
   paypalMonthlyPlanId?: string | null;
@@ -533,6 +535,7 @@ export function SettingsHub({
   profileLimit,
   initialPlanLimits = null,
   initialPlanUsage = null,
+  initialCloverTokenUsage = null,
   initialRegionalPreferences = null,
   paypalClientId: initialPaypalClientId,
   paypalMonthlyPlanId: initialPaypalMonthlyPlanId,
@@ -604,6 +607,7 @@ export function SettingsHub({
     monthlyUploadCount: initialPlanUsage?.monthlyUploadCount ?? 0,
     transactionCount: initialPlanUsage?.transactionCount ?? 0,
   });
+  const [cloverTokenUsage, setCloverTokenUsage] = useState<CloverTokenUsageSnapshot | null>(initialCloverTokenUsage);
   const [planLoaded, setPlanLoaded] = useState(false);
   const [planLoading, setPlanLoading] = useState(false);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>({
@@ -962,6 +966,7 @@ export function SettingsHub({
               monthlyUploadCount: number;
               transactionCount: number;
             };
+            cloverTokenUsage?: CloverTokenUsageSnapshot;
           };
           error?: string;
         };
@@ -984,6 +989,7 @@ export function SettingsHub({
               transactionCount: 0,
             }
           );
+          setCloverTokenUsage(mePayload.user?.cloverTokenUsage ?? null);
           setPlanLoaded(true);
         }
       } catch (error) {
@@ -2585,6 +2591,8 @@ export function SettingsHub({
             workspaceId={workspaceId}
             billingCustomerId={billingCustomerId}
             planTier={planTier}
+            profileCount={profileList.length}
+            profileLimit={profileLimit}
             preferredBillingInterval={preferredBillingInterval}
             paypalClientId={paypalClientId}
             paypalMonthlyPlanId={paypalMonthlyPlanId}
@@ -2599,6 +2607,7 @@ export function SettingsHub({
             billingSubscription={billingSubscription}
             planLimits={planLimits}
             planUsage={planUsage}
+            cloverTokenUsage={cloverTokenUsage}
             planLoading={planLoading}
             planLoaded={planLoaded}
           />
