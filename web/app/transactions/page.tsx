@@ -1,4 +1,5 @@
 "use client";
+import { AdviserFormAssist } from "@/components/adviser-form-assist";
 import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 
 import dynamic from "next/dynamic";
@@ -8500,6 +8501,7 @@ function TransactionsPageContent() {
             </div>
 
             <form onSubmit={saveManualTransaction}>
+<AdviserFormAssist workspaceId={selectedWorkspaceId} context={{kind:"transaction", fields: Object.fromEntries(Object.entries(manualForm).filter(([key,value]) => ["accountId","categoryId","merchantRaw","merchantClean","amount","date","currency","type","description"].includes(key) && typeof value === "string")) as Record<string,string>}} />
               <div className="manual-form-layout manual-form-layout--compact" data-transaction-type={manualForm.type}>
                 <div className="transactions-manual-type-section">
                   <span className="transactions-manual-type-section__label">Transaction type</span>

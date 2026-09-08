@@ -1,4 +1,5 @@
 "use client";
+import { AdviserFormAssist } from "@/components/adviser-form-assist";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -410,6 +411,7 @@ export default function TransactionDetailPage() {
           </section>
         ) : transaction && draft ? (
           <form className="transaction-detail-page__form" onSubmit={save}>
+            <AdviserFormAssist workspaceId={transaction.workspaceId} context={{kind:"receipt",recordId:transaction.id,fields:{transactionId:transaction.id,merchant:draft.merchantClean||draft.merchantRaw,amount:draft.amount,currency:draft.currency,date:draft.date,accountId:draft.accountId,receiptLineItems:JSON.stringify(draft.receiptLineItems).slice(0,3000)}}}/>
             <section className="transaction-detail-page__summary">
               <CategoryBrandMark categoryName={selectedCategory?.name ?? transaction.categoryName ?? "Other"} size={38} radius={12} />
               <div>

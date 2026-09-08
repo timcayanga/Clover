@@ -51,6 +51,6 @@ export const hasTransactionDetailDraftChanges = (
     detailDraft.isExcluded !== selectedTransaction.isExcluded ||
     detailDraft.isTransfer !== options.baselineTransfer ||
     receiptLineItemSignature(detailDraft.receiptLineItems) !==
-      receiptLineItemSignature(parseReceiptLineItemsFromPayload(selectedTransaction.rawPayload))
+      receiptLineItemSignature(parseReceiptLineItemsFromPayload(selectedTransaction.rawPayload, selectedTransaction.normalizedPayload))
   );
 };

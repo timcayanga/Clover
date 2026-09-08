@@ -3172,6 +3172,7 @@ async function AdviserPageContent({ searchParams }: { searchParams?: Promise<Adv
       >
       <section className="adviser-page adviser-page--chat">
         <AdviserChat
+          workspaceId={resolvedWorkspace.id}
           prompts={[...planningPromptSuggestions, ...promptSuggestions].slice(0, 6)}
           isPro={hasCompleteAccess}
           initialPrompt={resolvedSearchParams?.prompt?.slice(0, 1600)}

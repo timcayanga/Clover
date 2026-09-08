@@ -33,8 +33,9 @@ export const normalizeReceiptLineItemText = (value: unknown) => {
   return typeof value === "string" ? value.trim() : "";
 };
 
-export const parseReceiptLineItemsFromPayload = (rawPayload: unknown): ReceiptLineItemValue[] => {
-  const payload = asRecord(rawPayload);
+export const parseReceiptLineItemsFromPayload = (rawPayload: unknown, normalizedPayload?: unknown): ReceiptLineItemValue[] => {
+  const normalized = asRecord(normalizedPayload);
+  const payload = normalized && Array.isArray(normalized.receiptLineItems) ? { receiptLineItems: normalized.receiptLineItems } : asRecord(rawPayload);
   if (!payload) {
     return [];
   }

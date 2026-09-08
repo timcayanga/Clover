@@ -32,6 +32,7 @@ const patchSchema = z.object({
   amount: z.union([z.string(), z.number()]).optional(),
   currency: z.string().min(1).optional(),
   rawPayload: z.unknown().optional(),
+  receiptLineItems: z.array(z.object({description:z.string().max(500),quantity:z.string().max(32).nullable().optional(),unitPrice:z.string().max(32).nullable().optional(),amount:z.string().max(32).nullable().optional(),currency:z.string().max(3).nullable().optional()}).strict()).max(100).optional(),
   reviewStatus: z.enum(["pending_review", "suggested", "confirmed", "edited", "rejected", "duplicate_skipped"]).optional(),
 });
 
@@ -222,6 +223,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       payload.amount !== undefined ||
       payload.currency !== undefined ||
       payload.rawPayload !== undefined ||
+      payload.receiptLineItems !== undefined ||
       payload.tags !== undefined;
 
     const updated = await prisma.transaction.update({
@@ -252,6 +254,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
               ...(transaction.normalizedPayload && typeof transaction.normalizedPayload === "object" && !Array.isArray(transaction.normalizedPayload)
                 ? transaction.normalizedPayload
                 : {}),
+              ...(payload.receiptLineItems !== undefined ? {receiptLineItems:payload.receiptLineItems} : {}),
               source: "manual_edit",
               merchantRaw: payload.merchantRaw ?? transaction.merchantRaw,
               merchantClean: payload.merchantClean ?? transaction.merchantClean ?? payload.merchantRaw ?? transaction.merchantRaw,

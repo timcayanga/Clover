@@ -1,3 +1,6 @@
+import { parseReceiptLineItemsFromPayload } from "./receipt-line-items";
+import { entryDraftSchema } from "./adviser-entry-schema";
+import { projectAdviserDeviceContext } from "./adviser-device-context";
 import { getTransactionUserNoteValue, getTransactionParsedNoteValue } from "./transaction-notes";
 
 const record = (value: unknown): Record<string, unknown> =>
@@ -62,6 +65,16 @@ const splitDetail = (value: unknown) => {
 export function mobileApiResponse(operation: string, value: unknown) {
   const data = record(value);
   if (data.error) return pick(data, ["error"]);
+  if (operation === "adviser-chat") return {
+    ...pick(data, ["reply", "degraded", "scopeRejected", "answerSource"]),
+    ...(projectAdviserDeviceContext(data.deviceContext) ? { deviceContext: projectAdviserDeviceContext(data.deviceContext) } : {}),
+    entryDraft: Array.isArray(data.actions) ? data.actions.filter(action => record(action).type === "create_entries").map(action => entryDraftSchema.safeParse(record(action).payload)).find(result => result.success)?.data : undefined,
+    suggestions: rows(data.suggestions, ["id", "label", "prompt"]),
+    usage: pick(data.usage, ["plan", "remaining", "resetsAt", "unlimited"]),
+    // Native action confirmation is not implemented yet; never execute or expose
+    // model-generated action payloads as if they were saved financial records.
+    hasActions: Array.isArray(data.actions) && data.actions.some(action => record(action).type !== "create_entries"),
+  };
   if (operation === "circles" || operation === "circle") {
     if (data.circleId) return pick(data, ["circleId"]);
     if (data.circle) return { circleId: record(data.circle).id };
@@ -86,7 +99,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
   if (operation === "transaction") {
     const row = record(data.transaction);
     return {
-      transaction: { ...pick(row, transactionFields), userNote: getTransactionUserNoteValue(row), parsedNote: getTransactionParsedNoteValue(row), source: row.source },
+      transaction: { ...pick(row, transactionFields), receiptLineItems: parseReceiptLineItemsFromPayload(row.rawPayload,row.normalizedPayload), userNote: getTransactionUserNoteValue(row), parsedNote: getTransactionParsedNoteValue(row), source: row.source },
       accounts: Array.isArray(data.accounts) ? data.accounts.map(row => pick(row, ["id", "name", "institution", "currency", "type"])) : [],
       categories: Array.isArray(data.categories) ? data.categories.map(row => pick(row, ["id", "name", "type"])) : [],
     };

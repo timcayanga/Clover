@@ -1,6 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { adviserFileAccept, adviserFileProblem, type AdviserAttachment } from "@/lib/adviser-attachments";
+import { AdviserEntryEditor } from "./adviser-entry-editor";
+import { readAdviserFormContext, clearAdviserFormContext } from "./adviser-form-assist";
+import { entryDraftSchema } from "@/lib/adviser-entry-schema";
+import { entryTransaction, type EntryDraft } from "@/lib/adviser-entry-types";
+import { readSelectedWorkspaceId, selectedWorkspaceEventName } from "@/lib/workspace-selection";
+const memorySessions = new Map<string,string>();
+
 import type { FormEvent, KeyboardEvent } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -69,6 +77,7 @@ type AdviserAction = {
 };
 
 type AdviserChatProps = {
+  workspaceId?: string;
   prompts: AdviserPrompt[];
   isPro: boolean;
   storageKey?: string;
@@ -123,8 +132,37 @@ const inferFeedbackGroup = (question: string) => {
   return "cashflow";
 };
 
-export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey, initialPrompt = "", layout = "embedded", surface = "general", pageLabel }: AdviserChatProps) {
+export function AdviserChat(props: AdviserChatProps) {
+  const [scope, setScope] = useState("");
+  useEffect(() => {
+    let controller: AbortController | undefined;
+    const update = () => {
+      controller?.abort(); controller = new AbortController(); const signal = controller.signal;
+      setScope("");
+      const next = props.workspaceId || readSelectedWorkspaceId() || "";
+      if (!next) return;
+      // Verify ownership before restoring any in-memory transcript. A stale
+      // browser Profile selection must never reveal a previous user's chat.
+      void fetch(`/api/adviser/entries?workspaceId=${encodeURIComponent(next)}&scopeOnly=true`,{signal,cache:"no-store"})
+        .then(async response => { if (!response.ok) return; const data = await response.json(); if (!signal.aborted && data.workspaceId === next) setScope(next); })
+        .catch(() => {});
+    };
+    update(); window.addEventListener(selectedWorkspaceEventName,update);
+    return () => { controller?.abort(); window.removeEventListener(selectedWorkspaceEventName,update); };
+  }, [props.workspaceId]);
+  return scope ? <ScopedAdviserChat key={scope} {...props} workspaceId={scope} storageKey={`${adviserChatStorageKey}:${scope}`} /> : <p>Choose a Profile to ask Adviser.</p>;
+}
+function ScopedAdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey, initialPrompt = "", layout = "embedded", surface = "general", pageLabel, workspaceId }: AdviserChatProps & {workspaceId:string}) {
+  const [entryDraft,setEntryDraft] = useState<EntryDraft|null>(null);
+  const [entryLocked,setEntryLocked] = useState(false);
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [attachments,setAttachments] = useState<AdviserAttachment[]>([]);
+  const [attaching,setAttaching] = useState(false);
+  const attachmentInput = useRef<HTMLInputElement>(null);
+  const attachmentActive = useRef(true);
+  const attachmentBusy = useRef(false);
+  useEffect(()=>{attachmentActive.current=true;return ()=>{attachmentActive.current=false;};},[]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -146,9 +184,12 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
 
   useEffect(() => {
     try {
-      const stored = window.sessionStorage.getItem(storageKey);
+      const stored = memorySessions.get(storageKey);
       if (stored) {
-        const parsed = JSON.parse(stored) as { messages?: ChatMessage[]; suggestions?: AdviserPrompt[]; grounding?: AdviserGrounding; planningDraft?: AdviserPlanningDraft };
+        const parsed = JSON.parse(stored) as { messages?: ChatMessage[]; suggestions?: AdviserPrompt[]; grounding?: AdviserGrounding; planningDraft?: AdviserPlanningDraft; entryDraft?: EntryDraft; attachments?: AdviserAttachment[] };
+        if (Array.isArray(parsed.attachments)) setAttachments(parsed.attachments.slice(0,3).filter(file=>typeof file?.id === "string" && typeof file.name === "string" && typeof file.size === "number"));
+        const restoredEntry = entryDraftSchema.safeParse(parsed.entryDraft);
+        if (restoredEntry.success && restoredEntry.data.workspaceId === workspaceId) setEntryDraft(restoredEntry.data);
         if (Array.isArray(parsed.messages)) {
           setMessages(parsed.messages.filter((message) => (message?.role === "user" || message?.role === "assistant") && typeof message.content === "string").slice(-10));
         }
@@ -193,14 +234,14 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
     }
 
     try {
-      window.sessionStorage.setItem(
+      memorySessions.set(
         storageKey,
-        JSON.stringify({ messages: messages.slice(-10), suggestions: suggestedPrompts.slice(0, 6), grounding, planningDraft })
+        JSON.stringify({ messages: messages.slice(-10), suggestions: suggestedPrompts.slice(0, 6), grounding, planningDraft, entryDraft, attachments })
       );
     } catch {
       // Session persistence is helpful but never required for chat.
     }
-  }, [grounding, isHydrated, messages, planningDraft, storageKey, suggestedPrompts]);
+  }, [grounding, isHydrated, messages, planningDraft, entryDraft, attachments, storageKey, suggestedPrompts]);
 
   const scrollToBottom = () => {
     const thread = threadRef.current;
@@ -212,8 +253,8 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
   };
 
   const sendMessage = async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed || isSending) {
+    const trimmed = text.trim() || (attachments.length ? "Help me understand the financial information in these attached files. Ask what I want to add before drafting entries." : "");
+    if (!trimmed || isSending || attaching || entryLocked) {
       return;
     }
 
@@ -229,7 +270,7 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
     setInput("");
 
     try {
-      const response = await fetch("/api/adviser/chat", {
+      const response = await fetch(`/api/adviser/chat?workspaceId=${encodeURIComponent(workspaceId)}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -240,9 +281,13 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
           // and model input tokens bounded.
           messages: nextMessages.slice(-6),
           stream: true,
+          attachmentIds: attachments.map(file=>file.id),
           surface,
           pageLabel,
-          activeDraft: planningDraft,
+          activeDraft: entryDraft ? undefined : planningDraft,
+          entryDraft: entryDraft || undefined,
+          clientDate: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}-${String(new Date().getDate()).padStart(2,"0")}`,
+          formContext: readAdviserFormContext(workspaceId),
         }),
       });
 
@@ -303,6 +348,8 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
           setSuggestedPrompts(streamedSuggestions);
         }
         setActions(streamedActions.slice(0, 1));
+        const streamedEntry = entryDraftSchema.safeParse(streamedActions.find(action => action.type === "create_entries")?.payload);
+        if (streamedEntry.success) setEntryDraft(streamedEntry.data);
         const nextDraft = streamedPlanningDraft ?? streamedActions.map(planningDraftFromAction).find(Boolean) ?? null;
         if (nextDraft) {
           setPlanningDraft(nextDraft);
@@ -337,6 +384,8 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
       setMessages((current) => [...current, { role: "assistant", content: reply }]);
       const responseActions = (payload.actions ?? []).slice(0, 1);
       setActions(responseActions);
+      const responseEntry = entryDraftSchema.safeParse(responseActions.find(action => action.type === "create_entries")?.payload);
+      if (responseEntry.success) setEntryDraft(responseEntry.data);
       const nextDraft = payload.planningDraft ?? responseActions.map(planningDraftFromAction).find(Boolean) ?? null;
       if (nextDraft) {
         setPlanningDraft(nextDraft);
@@ -432,6 +481,10 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
   };
 
   const startNewConversation = () => {
+    if (entryLocked || isSending || attaching) return;
+    setAttachments([]);
+    setEntryDraft(null);
+    clearAdviserFormContext();
     setMessages([]);
     setActions([]);
     setSuggestedPrompts([]);
@@ -441,7 +494,7 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
     setPlanningDetailsOpen(false);
     setError(null);
     try {
-      window.sessionStorage.removeItem(storageKey);
+      memorySessions.delete(storageKey);
     } catch {
       // Ignore storage failures; the visible conversation is still cleared.
     }
@@ -496,6 +549,21 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
     );
   }
 
+  const attachFile = async (file?: File) => {
+    if (!file || attachmentBusy.current || isSending || entryLocked) return;
+    const problem=adviserFileProblem(file);
+    if (problem || attachments.length>=3) {setError(problem || "Attach up to three files.");return;}
+    attachmentBusy.current=true;setAttaching(true);setError(null);
+    try {
+      const form=new FormData();form.append("file",file);
+      const response=await fetch(`/api/adviser/attachments?workspaceId=${encodeURIComponent(workspaceId)}`,{method:"POST",body:form});
+      const data=await response.json();
+      if(!response.ok) throw new Error(data.error || "Unable to attach this file.");
+      if(attachmentActive.current) setAttachments(current=>[...current,data.attachment]);
+    } catch(error) {if(attachmentActive.current)setError(error instanceof Error?error.message:"Unable to attach this file.");}
+    finally {attachmentBusy.current=false;if(attachmentActive.current)setAttaching(false);}
+  };
+
   const composer = (
     <form className="adviser-chat__composer" onSubmit={handleSubmit}>
       <label className="sr-only" htmlFor="adviser-chat-input">
@@ -517,7 +585,10 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
           ))}
         </div>
       ) : null}
-      <div className="adviser-chat__composer-bar">
+      {attachments.length ? <div className="adviser-chat__attachments" aria-label="Attached files">{attachments.map(file=><span key={file.id}><span>{file.name}</span><button type="button" aria-label={`Remove ${file.name}`} disabled={isSending||attaching||entryLocked} onClick={()=>setAttachments(current=>current.filter(item=>item.id!==file.id))}>×</button></span>)}</div> : null}
+      <div className="adviser-chat__composer-bar adviser-chat__composer-bar--files">
+        <input ref={attachmentInput} type="file" accept={adviserFileAccept} hidden aria-label="Choose an Adviser attachment" onChange={event=>{void attachFile(event.target.files?.[0]);event.target.value="";}} />
+        <button type="button" className="adviser-chat__attach" aria-label="Attach a file" title="Attach a file (up to 3.5 MB)" disabled={hasReachedLimit||isSending||attaching||entryLocked||attachments.length>=3} onClick={()=>attachmentInput.current?.click()}>+</button>
         <textarea
           ref={inputRef}
           id="adviser-chat-input"
@@ -526,8 +597,10 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={handleComposerKeyDown}
           placeholder="Ask Adviser about your money..."
-          disabled={hasReachedLimit}
+          disabled={hasReachedLimit || isSending || entryLocked}
         />
+        {(input.trim() || attachments.length) ? <button type="submit" className="adviser-chat__send" aria-label="Send message" disabled={hasReachedLimit||isSending||attaching||entryLocked}>↑</button> : null}
+        {attaching ? <span role="status" className="adviser-chat__status">Reading attachment…</span> : null}
         {isSending || error ? (
           <span className={`adviser-chat__status${isSending ? " adviser-chat__status--thinking" : ""}`}>
             {isSending ? (
@@ -544,7 +617,7 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
     ? String(planningDraft.payload.cadence || ((planningDraft.payload.goalPlan as Record<string, unknown> | undefined)?.cadence ?? "monthly"))
     : "monthly";
   const planningCadenceLabel = planningCadence === "annual" ? "Yearly" : planningCadence === "quarterly" ? "Quarterly" : planningCadence === "biweekly" ? "Every 2 weeks" : planningCadence.charAt(0).toUpperCase() + planningCadence.slice(1);
-  const nonPlanningActions = actions.filter((action) => action.id !== planningDraft?.action?.id);
+  const nonPlanningActions = actions.filter((action) => action.id !== planningDraft?.action?.id && action.type !== "create_entries");
 
   return (
     <div className={`adviser-chat${layout === "workspace" ? " adviser-chat--workspace" : ""}${messages.length === 0 ? " adviser-chat--empty" : ""}`}>
@@ -625,6 +698,7 @@ export function AdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey
         </div>
       ) : null}
 
+      {entryDraft ? <AdviserEntryEditor draft={entryDraft} onChange={setEntryDraft} onLockChange={setEntryLocked} onDiscard={() => setEntryDraft(null)} onSaved={() => { setEntryLocked(false); setEntryDraft(null); clearAdviserFormContext(); setMessages(current => [...current,{role:"assistant",content:"Your confirmed entries were saved in Clover."}]); }} /> : <button type="button" className="button button-secondary button-small" disabled={isSending || entryLocked} onClick={() => setEntryDraft({version:1,id:crypto.randomUUID(),workspaceId,sourceText:"Manual Adviser draft",confidence:0,accounts:[],transactions:[entryTransaction(crypto.randomUUID())],receipts:[]})}>New entry draft</button>}
       {planningDraft ? (
         <article className={`adviser-planning-card adviser-planning-card--${planningDraft.kind}`} aria-label={`${planningDraft.title} draft`}>
           <div className="adviser-planning-card__hero">

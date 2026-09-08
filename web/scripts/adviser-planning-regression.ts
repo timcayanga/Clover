@@ -57,7 +57,7 @@ assert.equal(buildAdviserPlanningTurn({
 }), null, "Budget status questions should stay in the existing Adviser analysis flow.");
 
 const chat = readFileSync("components/adviser-chat.tsx", "utf8");
-assert.match(chat, /activeDraft:\s*planningDraft/);
+assert.match(chat, /activeDraft:\s*entryDraft\s*\?\s*undefined\s*:\s*planningDraft/);
 assert.match(chat, /adviser-planning-card/);
 assert.match(chat, /planningDraft\.action/);
 assert.match(readFileSync("components/contextual-ask-clover.tsx", "utf8"), /budgeting:[\s\S]*goals:/);

@@ -1,3 +1,4 @@
+import { mobileAdviserInput } from "@/lib/mobile-adviser-input";
 import { verifyToken } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -98,6 +99,53 @@ async function handle(
     const workspaceId = url.searchParams.get("workspaceId");
     if (!workspaceId) return reply({ error: "Choose a Profile first." }, 400);
     await assertWorkspaceAccess(userId, workspaceId);
+    if (operation === "adviser-attachments") {
+      const response = await withMobileRequestContext(userId,request,async()=> (await import("@/app/api/adviser/attachments/route")).POST(request));
+      return reply(await response.json(),response.status);
+    }
+    if (operation === "adviser-entries") {
+      const text = request.method === "POST" ? await request.text() : undefined;
+      if (text && new TextEncoder().encode(text).length > 100000) return reply({error:"Please shorten this draft."},413);
+      const headers = new Headers(request.headers); headers.delete("cookie"); headers.delete("content-length"); headers.set("content-type","application/json");
+      const forwarded = new Request(request.url,{method:request.method,headers,body:text});
+      const response = await withMobileRequestContext(userId,forwarded,async()=>{
+        const route = await import("@/app/api/adviser/entries/route");
+        return request.method === "POST" ? route.POST(forwarded) : route.GET(forwarded);
+      });
+      return reply(await response.json(),response.status);
+    }
+    if (operation === "adviser-chat") {
+      const text = await request.text();
+      if (new TextEncoder().encode(text).length > 100000) return reply({ error: "Please shorten the conversation." }, 413);
+      let input: unknown;
+      try { input = JSON.parse(text); } catch { return reply({ error: "Please check your message." }, 400); }
+      const body = mobileAdviserInput.parse(input);
+      // Resolve record references inside the authorized Profile. No raw payloads,
+      // client-provided amounts, or cross-Profile identifiers enter the prompt.
+      let selectedRecord: unknown;
+      if (body.selection?.kind === "account") {
+        selectedRecord = await prisma.account.findFirst({
+          where: { id: body.selection.id, workspaceId },
+          select: { name: true, type: true, currency: true, balance: true },
+        });
+      } else if (body.selection?.kind === "transaction") {
+        selectedRecord = await prisma.transaction.findFirst({
+          where: { id: body.selection.id, workspaceId, deletedAt: null },
+          select: { date: true, amount: true, currency: true, type: true, merchantClean: true, reviewStatus: true, isExcluded: true },
+        });
+      }
+      if (body.selection && !selectedRecord) return reply({ error: "This record is not available in the selected Profile." }, 404);
+      const surface = ["accounts", "transactions", "recurring", "budgeting", "goals", "investments"].includes(body.page ?? "") ? body.page : "general";
+      const headers = new Headers(request.headers);
+      headers.delete("content-length");
+      headers.delete("cookie");
+      headers.set("content-type", "application/json");
+      const forwarded = new Request(request.url, { method: "POST", headers, body: JSON.stringify({ ...body, stream: false, surface, pageLabel: body.page ?? "general", selectedRecord }) });
+      const response = await withMobileRequestContext(userId, forwarded, async () =>
+        (await import("@/app/api/adviser/chat/route")).POST(forwarded));
+      return reply(mobileApiResponse(operation, await response.json()), response.status);
+    }
+
     if (operation === "budgets" && request.method === "GET") {
       const { loadCachedBudgetWorkspaceData } = await import("@/lib/budgeting-data");
       const { getBudgetAppearance } = await import("@/lib/budget-appearance");

@@ -3,6 +3,7 @@ import { detailDraftTypeToTransactionType, type TransactionDetailDraftValue } fr
 
 type TransactionUpdatePayloadSource = {
   rawPayload?: unknown;
+  normalizedPayload?: unknown;
   currency?: string | null;
 };
 
@@ -19,7 +20,11 @@ export const buildTransactionUpdatePayload = (
     options?.fallbackCurrency ||
     "PHP";
 
+  const normalized = selectedTransaction.normalizedPayload;
+  const hasConfirmedItems = normalized && typeof normalized === "object" && !Array.isArray(normalized) && "receiptLineItems" in normalized;
+  const receiptPayload = mergeReceiptLineItemsIntoPayload({}, detailDraft.receiptLineItems, currency);
   return {
+    ...(hasConfirmedItems ? { receiptLineItems: receiptPayload.receiptLineItems } : {}),
     merchantRaw: detailDraft.merchantRaw,
     merchantClean: detailDraft.merchantClean.trim() || null,
     date: detailDraft.date,
@@ -32,7 +37,7 @@ export const buildTransactionUpdatePayload = (
     userNote: detailDraft.description,
     isExcluded: detailDraft.isExcluded,
     isTransfer: detailDraft.type === "transfer",
-    rawPayload: mergeReceiptLineItemsIntoPayload(
+    rawPayload: hasConfirmedItems ? selectedTransaction.rawPayload : mergeReceiptLineItemsIntoPayload(
       selectedTransaction.rawPayload,
       detailDraft.receiptLineItems,
       currency

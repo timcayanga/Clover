@@ -59,7 +59,7 @@ export const buildTransactionDetailDraft = (
   }),
   isExcluded: transaction.isExcluded,
   isTransfer: options.isTransfer ?? Boolean(transaction.isTransfer || options.effectiveType === "transfer"),
-  receiptLineItems: parseReceiptLineItemsFromPayload(transaction.rawPayload).map(receiptLineItemToDraft),
+  receiptLineItems: parseReceiptLineItemsFromPayload(transaction.rawPayload, transaction.normalizedPayload).map(receiptLineItemToDraft),
 });
 
 export const detailDraftTypeToTransactionType = (type: TransactionDetailDraftValue["type"]) =>

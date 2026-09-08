@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "qa:notification-admin": "tsx scripts/notification-admin-regression.ts && tsx scripts/notification-delivery-regression.ts",
-    "qa:mobile-api": "tsx scripts/mobile-api-regression.ts",
+    "qa:mobile-api": "tsx scripts/mobile-api-regression.ts && tsx scripts/adviser-device-regression.ts && tsx scripts/adviser-entry-regression.ts && tsx scripts/adviser-attachments-regression.ts",
     "qa:knowledge": "tsx scripts/knowledge-regression.ts",
     "predev": "tsx scripts/sync-public-assets.ts",
     "dev": "next dev",
@@ -163,7 +163,11 @@
     "qa:release": "npm run qa:production-readiness && npm run qa:financial-scope-gates && npm run qa:adviser-model-usage && npm run qa:adviser-local-routing && npm run qa:import-model-usage && npm run qa:import-status-stream && npm run qa:import-account-race && npm run qa:import-wallet-progress && npm run qa:generic-parser-hardening && npm run qa:screenshot-routing && npm run qa:backup-parser-template && npm run qa:imported-accounts && npm run qa:auth-access && npm run qa:onboarding && npm run qa:starter-workspace-idempotency && npm run qa:onboarding-missions && npm run qa:billing-lifecycle && npm run qa:critical-page-loading && npm run qa:browser-compatibility && npm run qa:ui-consistency && npm run qa:pwa-ios && npm run qa:mobile-navigation && npm run qa:interaction-delight && npm run qa:manual-transaction-entry && npm run qa:transaction-bulk-delete && npm run qa:transaction-filter-controls && npm run qa:empty-cash-account-cleanup && npm run qa:mobile-swipe-delete && npm run qa:recurring-ledger && npm run qa:account-card-gallery && npm run qa:title-case && npm run qa:header-cta-typography && npm run qa:navigation-icons && npm run qa:integration-security && npm run qa:data-engine-safety && npm run qa:data-engine-validation && npm run qa:data-consistency-settlement && npm run qa:cross-page-consistency && npm run qa:origin-transfer && npm run qa:account-balance-sign && npm run qa:account-card-drag && npm run qa:account-deletion-markers && npm run qa:institution-deletion && npm run qa:confirmed-data && npm run qa:goal-intent && npm run qa:goal-persistence && npm run qa:split-bill-quick-add && npm run qa:budgeting && npm run qa:investments && npm run qa:circles && npm run qa:parser-routing && npm run qa:receipt-camera && npm run qa:image-formats && npm run qa:bpi-credit-safety && npm run qa:financial-identity && npm run qa:rcbc-credit-metadata && npm run qa:metrobank && npm run qa:paypal && npm run qa:wise-metadata-only && npm run qa:structured-csv && npm run qa:financial-exchange && npm run qa:spreadsheet-import && npm run qa:import-quality && npm run qa:import-arbitration && npm run qa:import-date-reconciliation && npm run qa:import-upload-handoff && npm run qa:large-import-cache",
     "qa:release:imports-live": "npm run qa:import-file-matrix && npm run qa:import-sequential-dedupe && npm run qa:import-enrichment-queue",
     "qa:release:live": "npm run qa:environment-readiness && npm run qa:supabase-security && tsx scripts/reconcile-workspace-data.ts",
-    "train:image-labels": "tsx --tsconfig tsconfig.json scripts/train-image-label-corpus.ts"
+    "train:image-labels": "tsx --tsconfig tsconfig.json scripts/train-image-label-corpus.ts",
+    "qa:adviser-entries": "tsx scripts/adviser-entry-regression.ts",
+    "qa:adviser-entries:database": "tsx scripts/adviser-entry-database-regression.ts",
+    "qa:adviser-attachments": "tsx scripts/adviser-attachments-regression.ts",
+    "qa:adviser-attachments:database": "tsx scripts/adviser-attachment-database-regression.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1095.0",

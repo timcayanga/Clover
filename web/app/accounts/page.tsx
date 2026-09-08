@@ -1,4 +1,5 @@
 "use client";
+import { AdviserFormAssist } from "@/components/adviser-form-assist";
 import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 
 import dynamic from "next/dynamic";
@@ -5237,6 +5238,7 @@ function AccountsPageContent() {
 
             <div className="accounts-add-grid">
               <form className="accounts-manual-form" onSubmit={createManualAccount}>
+<AdviserFormAssist workspaceId={selectedWorkspaceId} context={{kind: "account", fields: {name:manualName,institution:manualInstitution,type:manualType,currency:manualCurrency,balance:manualBalance}}} />
                 <div
                   className="accounts-add-layout"
                   style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 12, width: "100%" }}

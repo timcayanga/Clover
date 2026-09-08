@@ -1,4 +1,5 @@
 "use client";
+import { AdviserFormAssist } from "@/components/adviser-form-assist";
 import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 
 import Link from "next/link";
@@ -3601,7 +3602,7 @@ export default function InvestmentsPage() {
                   </div>
                 </div>
               </div>
-              <AdviserChat
+              <AdviserChat workspaceId={selectedWorkspaceId}
                 prompts={investmentAdviserPrompts}
                 isPro={canUseProTabs}
                 storageKey="clover-adviser-chat-investments-v1"
@@ -4006,6 +4007,7 @@ export default function InvestmentsPage() {
 
             <div className="accounts-add-grid">
               <form className="accounts-manual-form" onSubmit={createManualInvestment}>
+<AdviserFormAssist workspaceId={selectedWorkspaceId} context={{kind: "investment", fields: {name:manualName,institution:manualInstitution,type:"investment",currency:manualCurrency,balance:manualBalance,investmentSubtype:manualInvestmentSubtype,investmentSymbol:manualInvestmentSymbol,investmentQuantity:manualInvestmentQuantity,investmentCostBasis:manualInvestmentCostBasis}}} />
                 <label>
                   Holding name
                   <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Example: Bitcoin or BPI" />

@@ -1,5 +1,8 @@
 export function mobileOperation(method: string, segments: string[]) {
   const path = segments.join("/");
+  if (path === "adviser/attachments" && method === "POST") return "adviser-attachments";
+  if (path === "adviser/entries" && ["GET", "POST"].includes(method)) return "adviser-entries";
+  if (path === "adviser/chat" && method === "POST") return "adviser-chat";
   if (path === "circles" && ["GET", "POST"].includes(method)) return "circles";
   if (segments.length === 2 && segments[0] === "circles" && ["GET", "PATCH"].includes(method)) return "circle";
   if (path === "split-bills" && ["GET", "POST"].includes(method)) return "split-bills";

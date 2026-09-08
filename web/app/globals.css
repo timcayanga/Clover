@@ -64764,3 +64764,25 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
 .home-budget-progress__bar > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
 .home-budget-progress--warning .home-budget-progress__bar > span { background: #d97706; }
 .home-budget-progress__amounts > span { min-width: 0; overflow-wrap: anywhere; }
+
+.adviser-entry-editor { padding: 20px; border: 1px solid #cce1d8; border-radius: 20px; background: #f6faf7; display: grid; gap: 16px; }
+.adviser-entry-editor fieldset { border: 0; min-width: 0; padding: 0; display: grid; gap: 16px; }
+.adviser-entry-row { padding: 16px; background: white; border-radius: 14px; display: grid; gap: 12px; }
+.adviser-entry-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,160px),1fr)); gap: 12px; }
+.adviser-entry-editor label { display: grid; gap: 6px; font-size: 13px; }
+.adviser-entry-editor input,.adviser-entry-editor select { box-sizing: border-box; min-width: 0; width: 100%; border: 1px solid #cce1d8; border-radius: 8px; padding: 10px; background: white; color: #1f2933; }
+.adviser-entry-editor button { min-height: 42px; }
+
+/* Shared Adviser composer: desktop, mobile web, and embedded page entry points. */
+.adviser-chat .adviser-chat__composer-bar--files { position: relative; display: block; }
+.adviser-chat .adviser-chat__composer-bar--files textarea { box-sizing: border-box; padding-left: 54px; padding-right: 58px; min-height: 54px; }
+.adviser-chat .adviser-chat__composer-bar--files input[hidden] { display: none; }
+.adviser-chat__attach, .adviser-chat__send { position: absolute; top: 7px; width: 40px; height: 40px; border: 0; border-radius: 50%; font: inherit; font-size: 26px; cursor: pointer; display: grid; place-items: center; }
+.adviser-chat__attach { left: 7px; background: transparent; color: inherit; }
+.adviser-chat__send { right: 7px; background: #087f72; color: white; }
+.adviser-chat__attach:focus-visible, .adviser-chat__send:focus-visible { outline: 2px solid #087f72; outline-offset: 2px; }
+.adviser-chat__attach:disabled, .adviser-chat__send:disabled { opacity: .4; cursor: default; }
+.adviser-chat__attachments { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 auto 8px; max-width: 800px; }
+.adviser-chat__attachments > span { display: flex; gap: 8px; align-items: center; border: 1px solid #8885; border-radius: 12px; padding: 6px 10px; max-width: 100%; font-size: 13px; }
+.adviser-chat__attachments > span > span { overflow-wrap: anywhere; }
+.adviser-chat__attachments button { border: 0; background: transparent; color: inherit; min-width: 32px; min-height: 32px; font-size: 20px; cursor: pointer; }
