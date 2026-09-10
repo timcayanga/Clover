@@ -379,6 +379,7 @@ model User {
   adminDataSnapshots               AdminDataSnapshot[]          @relation("DataSnapshotTarget")
   brankasStatementSessions         BrankasStatementSession[]
   finverseConnections              FinverseConnection[]
+  lunchFlowConnections             LunchFlowConnection[]
   appErrorLogs                     AppErrorLog[]
   inAppNotificationDismissals      InAppNotificationDismissal[]
   inAppNotificationReads           InAppNotificationRead[]
@@ -782,6 +783,8 @@ model Workspace {
   brankasStatementSessions       BrankasStatementSession[]
   finverseConnections            FinverseConnection[]
   finverseAccountLinks           FinverseAccountLink[]
+  lunchFlowConnections           LunchFlowConnection[]
+  lunchFlowAccountLinks          LunchFlowAccountLink[]
   receiptDocuments               ReceiptDocument[]
   investmentSnapshots            InvestmentSnapshot[]
   investmentHoldings             InvestmentHolding[]
@@ -844,6 +847,7 @@ model Account {
   budgets                 Budget[]
   circleInvestmentShares  CircleInvestmentShare[]
   finverseAccountLink     FinverseAccountLink?
+  lunchFlowAccountLink    LunchFlowAccountLink?
 
   @@index([workspaceId])
 }
@@ -978,6 +982,7 @@ model Transaction {
   circleSharedEntries       CircleSharedTransaction[]
   circleContributions       CircleContribution[]
   finverseTransactionRecord FinverseTransactionRecord?
+  lunchFlowTransactionRecord LunchFlowTransactionRecord?
 
   @@index([workspaceId])
   @@index([accountId])
@@ -1053,6 +1058,69 @@ model FinverseTransactionRecord {
   updatedAt             DateTime           @updatedAt
   connection            FinverseConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   transaction           Transaction?       @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@unique([connectionId, externalTransactionId])
+  @@index([connectionId, externalAccountId])
+}
+
+model LunchFlowConnection {
+  id                    String                       @id @default(cuid())
+  userId                String
+  workspaceId           String                       @unique
+  stateHash             String                       @unique
+  stateExpiresAt        DateTime
+  status                String                       @default("link_pending")
+  externalUserId        String?
+  encryptedAccessToken  String?
+  encryptedRefreshToken String?
+  accessTokenExpiresAt  DateTime?
+  lastSyncedAt          DateTime?
+  syncError             String?
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  user                  User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace             Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  accountLinks          LunchFlowAccountLink[]
+  transactionRecords    LunchFlowTransactionRecord[]
+
+  @@index([userId])
+  @@index([workspaceId, status])
+}
+
+model LunchFlowAccountLink {
+  id                   String              @id @default(cuid())
+  connectionId         String
+  workspaceId          String
+  externalAccountId    String
+  externalConnectionId String?
+  accountId            String?             @unique
+  rawPayload           Json
+  normalizedPayload    Json
+  lastSeenAt           DateTime            @default(now())
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  connection           LunchFlowConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  workspace            Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account              Account?            @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@unique([connectionId, externalAccountId])
+  @@index([workspaceId])
+  @@index([connectionId, externalConnectionId])
+}
+
+model LunchFlowTransactionRecord {
+  id                    String              @id @default(cuid())
+  connectionId          String
+  externalTransactionId String
+  externalAccountId     String
+  transactionId         String?             @unique
+  rawPayload            Json
+  normalizedPayload     Json
+  lastSeenAt            DateTime            @default(now())
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  connection            LunchFlowConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  transaction           Transaction?        @relation(fields: [transactionId], references: [id], onDelete: SetNull)
 
   @@unique([connectionId, externalTransactionId])
   @@index([connectionId, externalAccountId])

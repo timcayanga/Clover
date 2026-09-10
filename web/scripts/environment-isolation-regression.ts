@@ -26,6 +26,7 @@ const stagingEnv = {
   CLOVER_EXPECTED_R2_BUCKET: "clover-imports-staging",
   R2_BUCKET_NAME: "clover-imports-staging",
   FINVERSE_ENABLED: "false",
+  LUNCHFLOW_ENABLED: "false",
 };
 
 assert.equal(assertStaticEnvironmentIsolation(stagingEnv)?.environment, "staging");
@@ -44,6 +45,14 @@ assert.throws(
 assert.throws(
   () => assertStaticEnvironmentIsolation({ ...stagingEnv, FINVERSE_ENABLED: "true" }),
   /ENVIRONMENT_ISOLATION_FINVERSE_NOT_ISOLATED/,
+);
+assert.equal(
+  assertStaticEnvironmentIsolation({ ...stagingEnv, LUNCHFLOW_ENABLED: "true", LUNCHFLOW_MODE: "sandbox" })?.environment,
+  "staging",
+);
+assert.throws(
+  () => assertStaticEnvironmentIsolation({ ...stagingEnv, LUNCHFLOW_ENABLED: "true", LUNCHFLOW_MODE: "live" }),
+  /ENVIRONMENT_ISOLATION_LUNCHFLOW_MODE_MISMATCH/,
 );
 
 const main = async () => {

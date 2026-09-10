@@ -15,6 +15,7 @@ import { CurrencySelector } from "@/components/currency-selector";
 import { FinancialAccountCard } from "@/components/financial-account-card";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
+import { LunchFlowConnectButton } from "@/components/lunch-flow-connect-button";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { MobileSwipeDelete } from "@/components/mobile-swipe-delete";
 import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
@@ -4595,6 +4596,10 @@ function AccountsPageContent() {
         optionClassName="accounts-currency-filter__option"
         menuAlignment="end"
         showChevron={false}
+      />
+      <LunchFlowConnectButton
+        workspaceId={selectedWorkspaceId}
+        onSynced={() => loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true, forceFresh: true })}
       />
       <button className="button button-secondary button-small accounts-toolbar-add" type="button" onClick={openAddAccount} aria-label="Add account">
         <ActionIcon name="plus" />

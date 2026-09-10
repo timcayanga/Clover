@@ -85,6 +85,13 @@ export const assertStaticEnvironmentIsolation = (env: IsolationEnv): IsolationCo
     fail("FINVERSE_NOT_ISOLATED");
   }
 
+  if (env.LUNCHFLOW_ENABLED === "true") {
+    const expectedMode = environment === "production" ? "live" : "sandbox";
+    if (env.LUNCHFLOW_MODE !== expectedMode) {
+      fail("LUNCHFLOW_MODE_MISMATCH");
+    }
+  }
+
   return { environment, databaseProjectRef };
 };
 

@@ -114,6 +114,7 @@
     "qa:currency-selection": "tsx scripts/currency-selection-regression.ts",
     "qa:confirmed-data": "tsx scripts/confirmed-data-regression.ts",
     "qa:finverse": "tsx scripts/finverse-integration-regression.ts",
+    "qa:lunchflow": "tsx scripts/lunch-flow-integration-regression.ts",
     "qa:billing-lifecycle": "tsx scripts/billing-lifecycle-regression.ts",
     "qa:goal-intent": "tsx scripts/goal-intent-regression.ts",
     "qa:goal-persistence": "tsx scripts/goal-persistence-regression.ts && tsx scripts/personal-goals-regression.ts",
