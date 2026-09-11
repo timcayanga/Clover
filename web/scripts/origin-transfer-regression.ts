@@ -13,11 +13,10 @@ const main = async () => {
     readFile(join(webRoot, "app/api/transactions/route.ts"), "utf8"),
   ]);
 
-  assert.doesNotMatch(
-    transactionsPage,
-    /summaryMode:\s*"full"/,
-    "Interactive transaction refreshes must not trigger full-history scans."
-  );
+  const fullSummaryRequests = transactionsPage.match(/summaryMode:\s*"full"/g) ?? [];
+  assert.equal(fullSummaryRequests.length, 1, "Only explicit expanded summary may request full aggregation.");
+  assert.match(transactionsPage, /if \(summaryOpen && selectedWorkspaceId\) \{\s*void loadTransactionsPage\(selectedWorkspaceId, \{ background: true, summaryMode: "full" \}\)/);
+  assert.match(transactionsPage, /summaryMode: options\?\.summaryMode \?\? "light"/, "Ordinary pagination and refresh default to light summaries.");
   assert.match(transactionsPage, /summaryMode:\s*"light"/);
   assert.match(
     transactionsRoute,
