@@ -148,7 +148,8 @@ const update = buildTransactionUpdatePayload(
   { ...detail, receiptLineItems: [] },
   source,
 );
-assert.deepEqual(update.rawPayload, evidence);
+assert.equal(Object.hasOwn(update, "rawPayload"), false, "Confirmed receipt edits must leave the original source payload untouched.");
+assert.deepEqual(source.rawPayload, evidence);
 assert.deepEqual(update.receiptLineItems, []);
 
 console.log(
