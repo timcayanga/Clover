@@ -182,10 +182,10 @@ const main = async () => {
     /accountConfirmationPhase === "account_match_needs_confirmation"[\s\S]{0,1800}progressLabel: "Confirming account"[\s\S]{0,3000}await monitorQueuedImportAndConfirm\(/,
     "A process response that pauses for deleted-account confirmation must stay visible and resume the durable server flow."
   );
-  assert.match(
+  assert.doesNotMatch(
     modalSource,
-    /accountConfirmationPhase === "account_match_needs_confirmation"[\s\S]{0,6000}const localRecoverableSummary/,
-    "Deleted-account confirmation must be handled before a local preview can be mistaken for durable success."
+    /const localRecoverableSummary/,
+    "A failed upload must never publish a local preview as durable success."
   );
   assert.match(
     modalSource,
