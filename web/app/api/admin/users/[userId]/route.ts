@@ -1,34 +1,19 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { adminUserUpdateSchema } from "@/lib/admin-user-payload";
 import { requireAdminAuth } from "@/lib/admin";
 import { updateAdminUser } from "@/lib/admin-users";
 import { recordAdminSupportAction } from "@/lib/admin-support";
 
 export const dynamic = "force-dynamic";
 
-const schema = z.object({
-  firstName: z.union([z.string(), z.null()]).optional(),
-  lastName: z.union([z.string(), z.null()]).optional(),
-  email: z.string().email().optional(),
-  planTier: z.enum(["free", "pro"]).optional(),
-  planTierLocked: z.boolean().optional(),
-  accountLimit: z.number().int().nullable().optional(),
-  monthlyUploadLimit: z.number().int().nullable().optional(),
-  transactionLimit: z.number().int().nullable().optional(),
-  verified: z.boolean().optional(),
-  financialExperience: z.enum(["beginner", "comfortable", "advanced"]).nullable().optional(),
-  primaryGoal: z.union([z.string(), z.null()]).optional(),
-  goalTargetAmount: z.union([z.string(), z.null()]).optional(),
-  goalTargetSource: z.union([z.string(), z.null()]).optional(),
-  onboardingCompletedAt: z.union([z.string(), z.null()]).optional(),
-  dataWipedAt: z.union([z.string(), z.null()]).optional(),
-});
+
 
 export async function PATCH(request: Request, context: { params: Promise<{ userId: string }> }) {
   try {
     const admin = await requireAdminAuth();
     const { userId } = await context.params;
-    const payload = schema.parse(await request.json());
+    const payload = adminUserUpdateSchema.parse(await request.json());
     const updated = await updateAdminUser(userId, payload);
     await recordAdminSupportAction({
       actorUserId: admin.userId,
@@ -60,7 +45,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ userI
     }
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+      return NextResponse.json({ error: `Invalid payload: ${error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ")}` }, { status: 400 });
     }
 
     return NextResponse.json({ error: message }, { status: 400 });

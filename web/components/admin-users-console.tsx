@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { buildAdminUserPatch, mergeAdminUserDraft } from "@/lib/admin-user-payload";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import type { AdminUserListItem, AdminUserListResponse, AdminUserOverview, AdminUserUpdateInput } from "@/lib/admin-users";
 import type { AdminErrorLogListResponse } from "@/lib/admin-error-logs";
@@ -19,16 +20,6 @@ type AdminUserDraft = {
 type DraftMap = Record<string, AdminUserDraft>;
 
 const USERS_PAGE_SIZE = 100;
-
-const EMPTY_DRAFT: AdminUserDraft = {
-  firstName: "",
-  lastName: "",
-  email: "",
-  planTier: "free",
-  accountLimit: "",
-  monthlyUploadLimit: "",
-  transactionLimit: "",
-};
 
 const EMPTY_OVERVIEW: AdminUserOverview = {
   totalUsers: 0,
@@ -379,12 +370,11 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
   }, [errorPage, errorQuery, errorRefreshNonce]);
 
   const updateDraft = (userId: string, patch: Partial<AdminUserDraft>) => {
+    const user = data.users.find((entry) => entry.id === userId);
+    if (!user) return;
     setDrafts((current) => ({
       ...current,
-      [userId]: {
-        ...(current[userId] ?? EMPTY_DRAFT),
-        ...patch,
-      },
+      [userId]: mergeAdminUserDraft(current[userId], initialDraft(user), patch),
     }));
     setSaveMessage(null);
   };
@@ -420,7 +410,7 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
       return;
     }
 
-    const payload: AdminUserUpdateInput = {
+    const payload = buildAdminUserPatch(user, {
       firstName: draft.firstName.trim() || null,
       lastName: draft.lastName.trim() || null,
       email: draft.email.trim(),
@@ -428,7 +418,7 @@ export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUse
       accountLimit,
       monthlyUploadLimit,
       transactionLimit,
-    };
+    });
 
     setSavingUserId(user.id);
     setSaveMessage(null);
