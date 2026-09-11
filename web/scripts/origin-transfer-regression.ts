@@ -20,8 +20,8 @@ const main = async () => {
   assert.match(transactionsPage, /summaryMode:\s*"light"/);
   assert.match(
     transactionsRoute,
-    /if \(summaryMode === "light" && !hasEffectiveCategoryFilters\)/,
-    "The lightweight transaction path must remain database-paginated."
+    /if \(summaryMode === "light" && !hasEffectiveCategoryFilters && !hasReviewCandidates\)/,
+    "The lightweight transaction path stays database-paginated when no derived category/review normalization is needed."
   );
   assert.match(eventRoute, /const compactImportSnapshot/);
   assert.doesNotMatch(eventRoute, /send\("snapshot", snapshot\)/);
