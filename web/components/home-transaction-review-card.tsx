@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceIcon } from "@/components/interface-icon";
+
 import { containDialogFocus } from "@/lib/dialog-focus";
 import { HomeSensitiveAmount } from "@/components/home-sensitive-amount";
 
@@ -272,7 +274,7 @@ export function HomeTransactionDetailModal({
               </div>
               <div className="transaction-drawer__head-actions">
                 {detail && !editing ? <button className="button button-secondary button-small" type="button" onClick={() => setEditing(true)}>Edit</button> : null}
-                <button ref={closeButtonRef} className="icon-button" type="button" onClick={closeDetail} aria-label="Close transaction details">×</button>
+                <button ref={closeButtonRef} className="icon-button" type="button" onClick={closeDetail} aria-label="Close transaction details"><InterfaceIcon name="close" /></button>
               </div>
             </div>
 

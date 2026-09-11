@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceIcon } from "@/components/interface-icon";
+
 import {
   useEffect,
   useLayoutEffect,
@@ -205,9 +207,7 @@ function CircleTitleTabs({
                     onClick={cancelEditing}
                     disabled={savingCircleId === circle.id}
                     aria-label="Cancel renaming"
-                  >
-                    ×
-                  </button>
+                  ><InterfaceIcon name="close" /></button>
                 </form>
               ) : (
                 <button

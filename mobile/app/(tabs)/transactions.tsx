@@ -10,6 +10,7 @@ import {
 import { useSession } from "../../src/session";
 import type { Transaction, TransactionPage } from "../../src/types";
 import {
+  CategoryMark,
   Body,
   Button,
   Field,
@@ -172,9 +173,12 @@ export default function Transactions() {
                 {money(item.amount, item.currency)}
               </Text>
             </View>
-            <Text style={{ fontSize: 15, color: colors.muted }}>
-              {item.accountName} · {item.categoryName ?? "Uncategorized"}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <CategoryMark name={item.categoryName} />
+              <Text style={{ fontSize: 15, color: colors.muted, flex: 1 }}>
+                {item.accountName} · {item.categoryName ?? "Uncategorized"}
+              </Text>
+            </View>
             <Text style={{ fontSize: 14, color: colors.muted }}>
               {dateLabel(item.date)}
               {item.reviewStatus === "pending_review" ? " · Needs review" : ""}

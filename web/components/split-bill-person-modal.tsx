@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceIcon } from "@/components/interface-icon";
+
 import { useEffect, useLayoutEffect, useState } from "react";
 import type { SplitBillPersonSummary } from "@/lib/split-bill-entities";
 
@@ -88,9 +90,7 @@ export function SplitBillPersonModal({ open, onClose, onSaved }: SplitBillPerson
           <div>
             <p className="eyebrow">Add Person</p>
           </div>
-          <button className="split-bill-icon-button" type="button" onClick={closeModal} aria-label="Close people window">
-            ×
-          </button>
+          <button className="split-bill-icon-button" type="button" onClick={closeModal} aria-label="Close people window"><InterfaceIcon name="close" /></button>
         </div>
 
         <label className="settings-field">

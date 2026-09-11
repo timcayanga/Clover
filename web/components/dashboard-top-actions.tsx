@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceIcon } from "@/components/interface-icon";
+
 import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -13,7 +15,7 @@ import { TransactionNameAutocomplete, type TransactionNameSuggestion } from "@/c
 import { getAccountBrand } from "@/lib/account-brand";
 import { getAccountDisplayName } from "@/lib/account-display";
 import { formatAccountOptionLabel } from "@/lib/account-option-label";
-import { getCategoryIconSrc, getCategoryIconTone } from "@/lib/category-icons";
+import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { createSplitBillFromTransaction, type SplitBillTransactionLinkDraft } from "@/lib/split-bill-transaction-link";
 import { sanitizeTransactionTagNames } from "@/lib/transaction-tags";
@@ -464,9 +466,7 @@ export function DashboardManualTransactionModal({
             <p className="eyebrow">Transactions</p>
             <h4 id="dashboard-manual-title">Add transaction</h4>
           </div>
-          <button className="icon-button" type="button" onClick={handleClose} aria-label="Close add transaction">
-            ×
-          </button>
+          <button className="icon-button" type="button" onClick={handleClose} aria-label="Close add transaction"><InterfaceIcon name="close" /></button>
         </div>
 
         <p className="modal-copy">Add it here and Clover will keep you on the Dashboard.</p>
@@ -509,9 +509,7 @@ export function DashboardManualTransactionModal({
 
             <div className="transactions-manual-row transactions-manual-row--name">
               <span className="transactions-manual-row-icon transactions-manual-row-icon--category" aria-hidden="true">
-                <span className="transaction-category-icon transaction-category-icon--manual" style={getCategoryIconTone(selectedCategory?.name ?? "Other")}>
-                  <img src={getCategoryIconSrc(selectedCategory?.name ?? "Other")} alt="" aria-hidden="true" />
-                </span>
+                <CategoryBrandMark categoryName={selectedCategory?.name ?? "Other"} />
               </span>
               <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-name-field">
                 <span className="transactions-manual-field__label">{form.type === "transfer" ? "Name (optional)" : "Name"}</span>
@@ -958,10 +956,7 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
           title="Upload files"
         >
           <span className="button-icon dashboard-top-actions__icon" aria-hidden="true">
-            <svg viewBox="0 0 20 20" role="img" focusable="false">
-              <path d="M10 3.25 5.8 7.45l1.1 1.1 2.3-2.3V13h1.6V6.25l2.3 2.3 1.1-1.1L10 3.25Z" fill="currentColor" />
-              <path d="M4.5 13.5h1.6v1.4h7.8v-1.4h1.6v3H4.5v-3Z" fill="currentColor" />
-            </svg>
+            <InterfaceIcon name="upload" size={20} />
           </span>
           <span>Upload files</span>
         </button>

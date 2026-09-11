@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceIcon } from "@/components/interface-icon";
+
 import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { FinancialCommitmentSummary } from "@/lib/commitments";
 import {
@@ -193,7 +195,7 @@ export function RecurringCalendarDetail({
               </h2>
             )}
           </div>
-          <button type="button" className="recurring-calendar-detail__close" onClick={onClose} aria-label="Close payment details">×</button>
+          <button type="button" className="recurring-calendar-detail__close" onClick={onClose} aria-label="Close payment details"><InterfaceIcon name="close" /></button>
         </header>
 
         <div className="recurring-calendar-detail__hero">

@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceIcon } from "@/components/interface-icon";
+
 import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CurrencySelector } from "@/components/currency-selector";
@@ -1741,10 +1743,7 @@ export function CommitmentsPanel({
               aria-label="Close recurring suggestion review"
               data-modal-close
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M6 6l12 12" />
-                <path d="M18 6 6 18" />
-              </svg>
+              <InterfaceIcon name="close" size={20} />
             </button>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
               <div className="recurring-suggestion-review__intro">
@@ -1991,10 +1990,7 @@ export function CommitmentsPanel({
             onClick={(event) => event.stopPropagation()}
           >
             <button className="recurring-modal-close" type="button" onClick={onCloseAdd} aria-label="Close add recurring">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M6 6l12 12" />
-                <path d="M18 6 6 18" />
-              </svg>
+              <InterfaceIcon name="close" size={20} />
             </button>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start", paddingRight: 44 }}>
               <div>

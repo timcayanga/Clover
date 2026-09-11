@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceIcon } from "@/components/interface-icon";
+
 import { useEffect, useMemo, useState } from "react";
 import { circleTemplates, type CircleTypeValue } from "@/lib/circles";
 
@@ -168,9 +170,7 @@ export function CircleCreateDialog({
             type="button"
             aria-label="Close Circle setup"
             onClick={close}
-          >
-            ×
-          </button>
+          ><InterfaceIcon name="close" /></button>
         </div>
 
         <div className="circles-stepper" aria-label="Circle setup progress">

@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceIcon } from "@/components/interface-icon";
+
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -4863,9 +4865,7 @@ function AccountDetailPageContent() {
                     {hasDistinctDetailRawName ? <p className="transaction-drawer__merchant-raw">{detailTransactionRawName}</p> : null}
                   </div>
                 </div>
-                <button className="icon-button transaction-drawer__close-button" type="button" onClick={closeTransactionDetail} aria-label="Close transaction details">
-                  ×
-                </button>
+                <button className="icon-button transaction-drawer__close-button" type="button" onClick={closeTransactionDetail} aria-label="Close transaction details"><InterfaceIcon name="close" /></button>
               </div>
 
               {selectedTransactionReviewChips.length > 0 ? (
@@ -5452,9 +5452,7 @@ function AccountDetailPageContent() {
                   <p className="eyebrow">{balanceAdjustmentIsCash ? "Cash account" : "Account balance"}</p>
                   <h4 id="balance-adjustment-title">{balanceAdjustmentLabel}</h4>
                 </div>
-                <button className="icon-button" type="button" onClick={closeBalanceAdjustment} aria-label="Close balance adjustment">
-                  ×
-                </button>
+                <button className="icon-button" type="button" onClick={closeBalanceAdjustment} aria-label="Close balance adjustment"><InterfaceIcon name="close" /></button>
               </div>
 
               <form className="accounts-detail__balance-adjustment-form" onSubmit={saveBalanceAdjustment}>

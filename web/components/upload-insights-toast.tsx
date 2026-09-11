@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceIcon } from "@/components/interface-icon";
+
 import { useEffect } from "react";
 import type { AccountType } from "@/lib/domain-types";
 import { buildImportResultChecklist, formatImportResultHeadline } from "@/lib/import-result-summary";
@@ -83,9 +85,7 @@ export function UploadInsightsToast({ summary, onClose }: UploadInsightsToastPro
           <h4>Your statement has been imported</h4>
           <p>{headline || `${summary.rowsImported} transaction${summary.rowsImported === 1 ? "" : "s"} imported`}</p>
         </div>
-          <button type="button" className="icon-button upload-insights-toast__close" onClick={onClose} aria-label="Close insights popup">
-            ×
-          </button>
+          <button type="button" className="icon-button upload-insights-toast__close" onClick={onClose} aria-label="Close insights popup"><InterfaceIcon name="close" /></button>
         </div>
 
       {checklist.length > 0 ? (

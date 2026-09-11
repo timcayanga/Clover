@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceIcon } from "@/components/interface-icon";
+
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -312,9 +314,7 @@ export function SplitBillImportModal({ open, currentUserName, onClose, onSaved }
         onClick={(event) => event.stopPropagation()}
       >
         <div className="accounts-import-modal__toolbar">
-          <button className="accounts-import-close" type="button" onClick={closeModal} aria-label="Close upload files" disabled={isUploading}>
-            ×
-          </button>
+          <button className="accounts-import-close" type="button" onClick={closeModal} aria-label="Close upload files" disabled={isUploading}><InterfaceIcon name="close" /></button>
         </div>
 
         <div

@@ -1,4 +1,5 @@
 "use client";
+import { InterfaceIcon } from "@/components/interface-icon";
 import { AdviserFormAssist } from "@/components/adviser-form-assist";
 import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 
@@ -1404,14 +1405,7 @@ function ActionIcon({
         </svg>
       );
     case "calendar":
-      return (
-        <svg {...common}>
-          <rect x="4" y="5" width="16" height="15" rx="2" />
-          <path d="M8 3v4" />
-          <path d="M16 3v4" />
-          <path d="M4 9h16" />
-        </svg>
-      );
+      return <InterfaceIcon name="date" size={14} />;
     case "chart":
       return (
         <svg {...common}>
@@ -1430,29 +1424,11 @@ function ActionIcon({
         </svg>
       );
     case "download":
-      return (
-        <svg {...common}>
-          <path d="M12 3v10" />
-          <path d="m8 9 4 4 4-4" />
-          <path d="M5 19h14" />
-        </svg>
-      );
+      return <InterfaceIcon name="download" size={14} />;
     case "upload":
-      return (
-        <svg {...common}>
-          <path d="M12 21V11" />
-          <path d="m8 15 4-4 4 4" />
-          <path d="M5 5h14" />
-        </svg>
-      );
+      return <InterfaceIcon name="upload" size={14} />;
     case "edit":
-      return (
-        <svg {...common}>
-          <path d="M4 20h16" />
-          <path d="M14.5 5.5 18.5 9.5" />
-          <path d="M6 18l1.5-4.5L15 6l3 3-7.5 7.5L6 18z" />
-        </svg>
-      );
+      return <InterfaceIcon name="edit" size={14} />;
     case "history":
       return (
         <svg {...common}>

@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceIcon } from "@/components/interface-icon";
+
 import { useEffect, useRef, useState } from "react";
 import { CloverShell } from "@/components/clover-shell";
 import { CollectionBack, useCollectionSelection } from "@/components/collection-navigation";
@@ -197,7 +199,7 @@ function BudgetEditor({ budget, data: initialData, mobile, onClose, onSaved }: {
   };
   return <div className={mobile ? "budget-editor-page" : "budget-editor__backdrop"} onClick={mobile ? undefined : () => { if (!saving) onClose(); }}>
     <div ref={dialog} className={`budget-editor glass${mobile ? " budget-editor--page" : ""}`} role={mobile ? undefined : "dialog"} aria-modal={mobile ? undefined : true} aria-label={budget ? "Edit budget" : "Create Budget"} onClick={(event) => event.stopPropagation()}>
-      <div className="budget-editor__head"><h2>{budget ? "Edit budget" : "Create Budget"}</h2>{!mobile ? <button className="icon-button" type="button" aria-label="Close budget editor" disabled={saving} onClick={onClose}>×</button> : null}</div>
+      <div className="budget-editor__head"><h2>{budget ? "Edit budget" : "Create Budget"}</h2>{!mobile ? <button className="icon-button" type="button" aria-label="Close budget editor" disabled={saving} onClick={onClose}><InterfaceIcon name="close" /></button> : null}</div>
       <form onSubmit={(event) => { event.preventDefault(); void request("save"); }}>
         {!optionsReady ? <p role={optionsError ? "alert" : "status"}>{optionsError || "Loading accounts and categories…"}{optionsError ? <button type="button" className="button button-secondary button-small" onClick={() => setOptionsRetry((value) => value + 1)}>Try again</button> : null}</p> : null}
         <fieldset disabled={saving || !optionsReady} className="budget-editor-fields">

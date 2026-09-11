@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceIcon } from "@/components/interface-icon";
+
 import Link from "next/link";
 
 type ImportErrorToastProps = {
@@ -34,9 +36,7 @@ export function ImportErrorToast({ code, title, message, nextSteps, fileName = n
           {fileName ? <p className="import-error-toast__file-name" title={fileName}>{truncateMiddle(fileName)}</p> : null}
           <p>{message}</p>
         </div>
-        <button type="button" className="icon-button import-error-toast__close" onClick={onClose} aria-label="Close import error popup">
-          ×
-        </button>
+        <button type="button" className="icon-button import-error-toast__close" onClick={onClose} aria-label="Close import error popup"><InterfaceIcon name="close" /></button>
       </div>
 
       <div className="import-error-toast__code">Import code {code}</div>

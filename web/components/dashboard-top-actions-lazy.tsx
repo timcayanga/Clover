@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceIcon } from "@/components/interface-icon";
+
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useState } from "react";
@@ -122,10 +124,7 @@ export function DashboardTopActionsLazy({ workspaceId, accounts }: DashboardTopA
           title="Upload files"
         >
           <span className="button-icon dashboard-top-actions__icon" aria-hidden="true">
-            <svg viewBox="0 0 20 20" role="img" focusable="false">
-              <path d="M10 3.25 5.8 7.45l1.1 1.1 2.3-2.3V13h1.6V6.25l2.3 2.3 1.1-1.1L10 3.25Z" fill="currentColor" />
-              <path d="M4.5 13.5h1.6v1.4h7.8v-1.4h1.6v3H4.5v-3Z" fill="currentColor" />
-            </svg>
+            <InterfaceIcon name="upload" size={20} />
           </span>
           <span>Upload files</span>
         </button>

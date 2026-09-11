@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceIcon } from "@/components/interface-icon";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
@@ -1387,9 +1389,7 @@ export function SplitBillWorkspace({
                 </p>
                 <h3>{selectedDetailLabel}</h3>
               </div>
-              <button className="split-bill-icon-button" type="button" onClick={closeDetail} aria-label="Close details">
-                ×
-              </button>
+              <button className="split-bill-icon-button" type="button" onClick={closeDetail} aria-label="Close details"><InterfaceIcon name="close" /></button>
             </div>
 
             {selectedBill ? (

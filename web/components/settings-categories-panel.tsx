@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceIcon } from "@/components/interface-icon";
+
 import { useEffect, useMemo, useState } from "react";
 import type { TransactionType } from "@/lib/domain-types";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
@@ -330,9 +332,7 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
             onClick={() => void archiveCategory(category.id)}
             disabled={busy}
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M5 12h14" />
-            </svg>
+            <InterfaceIcon name="delete" size={20} />
           </button>
         </div>
       </div>

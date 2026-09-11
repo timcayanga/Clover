@@ -11,7 +11,7 @@ import {
 const sourceRoot = fileURLToPath(new URL("../../assets/", import.meta.url));
 const destinationRoot = fileURLToPath(new URL("../public/assets/", import.meta.url));
 const navigationSourceRoot = fileURLToPath(new URL("../../assets/3d icons/", import.meta.url));
-const navigationDestinationRoot = fileURLToPath(new URL("../public/assets/3d icons/navigation/", import.meta.url));
+const navigationDestinationRoot = fileURLToPath(new URL("../public/assets/3d icons/navigation/figma-v1/", import.meta.url));
 const errorSourcePath = fileURLToPath(new URL("../../assets/3d icons/error.png", import.meta.url));
 const errorDestinationPath = fileURLToPath(new URL("../public/assets/error-clover.webp", import.meta.url));
 

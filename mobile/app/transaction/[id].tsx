@@ -1,10 +1,11 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Platform, Text } from "react-native";
+import { KeyboardAvoidingView, Platform, Text, View } from "react-native";
 import { useAccess } from "../../src/access";
 import { useSession } from "../../src/session";
 import type { Transaction } from "../../src/types";
 import {
+  CategoryMark,
   Body,
   Button,
   Card,
@@ -141,9 +142,10 @@ export default function TransactionDetail() {
                 {row.accountName} · {dateLabel(row.date)}
               </Body>
               <Heading>{money(row.amount, row.currency)}</Heading>
-              <Text style={{ color: colors.teal, fontSize: 16 }}>
-                {row.categoryName ?? "Uncategorized"}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <CategoryMark name={row.categoryName} />
+                <Text style={{ color: colors.teal, fontSize: 16 }}>{row.categoryName ?? "Uncategorized"}</Text>
+              </View>
               <Body>
                 {row.reviewStatus === "pending_review"
                   ? "Needs review"

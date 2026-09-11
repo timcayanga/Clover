@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceIcon } from "@/components/interface-icon";
+
 function SplitBillActionIcon({ name }: { name: "plus" | "upload" }) {
   const common = {
     width: 14,
@@ -13,15 +15,7 @@ function SplitBillActionIcon({ name }: { name: "plus" | "upload" }) {
     "aria-hidden": true,
   };
 
-  if (name === "upload") {
-    return (
-      <svg {...common}>
-        <path d="M12 16V4" />
-        <path d="m7 9 5-5 5 5" />
-        <path d="M20 16v4H4v-4" />
-      </svg>
-    );
-  }
+  if (name === "upload") return <InterfaceIcon name="upload" size={14} />;
 
   return (
     <svg {...common}>

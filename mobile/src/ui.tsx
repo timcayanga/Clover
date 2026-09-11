@@ -1,6 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
 import {
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,6 +13,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import type { ComponentProps, ReactNode } from "react";
+import { mobileNavigationIcons, mobileInterfaceIcons, mobileCategoryIcons } from "./icon-assets";
 import { useSession } from "./session";
 
 export const colors = {
@@ -34,7 +36,13 @@ export function Icon({
   color?: ColorValue;
   size?: number;
 }) {
+  const source = mobileNavigationIcons[name] ?? mobileInterfaceIcons[name];
+  if (source) return <Image source={source} accessible={false} resizeMode="contain" style={{ width: size, height: size, ...(mobileInterfaceIcons[name] ? { tintColor: color } : {}) }} />;
   return <Ionicons name={name} color={color} size={size} />;
+}
+export function CategoryMark({ name, size = 24 }: { name?: string | null; size?: number }) {
+  const key = name?.trim().toLowerCase() ?? "uncategorized";
+  return <Image source={mobileCategoryIcons[key] ?? mobileCategoryIcons.uncategorized} accessible={false} resizeMode="contain" style={{ width: size, height: size }} />;
 }
 export function Button({
   title,

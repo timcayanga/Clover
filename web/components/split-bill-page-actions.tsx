@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceIcon } from "@/components/interface-icon";
+
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useCloverChrome } from "@/components/clover-shell";
 import { SplitBillActionButtons } from "@/components/split-bill-action-buttons";
@@ -232,9 +234,7 @@ export function SplitBillPageActions({ currentUserName, people, groups, onBillSa
               <div>
                 <p className="eyebrow">{editingGroupId ? "Edit Group" : "Add Group"}</p>
               </div>
-              <button className="split-bill-icon-button" type="button" onClick={closeGroupModal} aria-label="Close group window">
-                ×
-              </button>
+              <button className="split-bill-icon-button" type="button" onClick={closeGroupModal} aria-label="Close group window"><InterfaceIcon name="close" /></button>
             </div>
 
             <label className="settings-field">

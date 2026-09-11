@@ -1,4 +1,5 @@
 "use client";
+import { InterfaceIcon } from "@/components/interface-icon";
 import { AdviserFormAssist } from "@/components/adviser-form-assist";
 import { AdviserChat } from "@/components/adviser-chat";
 import { formatTransactionAccountName } from "@/lib/transaction-account-sort";
@@ -1890,19 +1891,9 @@ function ActionIcon({
         </svg>
       );
     case "undo":
-      return (
-        <svg {...common}>
-          <path d="M9 7H5v4" />
-          <path d="M5 11c1.8-3 5-5 8.5-5 4.4 0 8 3.6 8 8s-3.6 8-8 8c-3.1 0-5.8-1.7-7.1-4.2" />
-        </svg>
-      );
+      return <InterfaceIcon name="undo" size={14} />;
     case "redo":
-      return (
-        <svg {...common}>
-          <path d="M15 7h4v4" />
-          <path d="M19 11c-1.8-3-5-5-8.5-5-4.4 0-8 3.6-8 8s3.6 8 8 8c3.1 0 5.8-1.7 7.1-4.2" />
-        </svg>
-      );
+      return <InterfaceIcon name="redo" size={14} />;
     case "search":
       return (
         <svg {...common}>
@@ -1911,14 +1902,7 @@ function ActionIcon({
         </svg>
       );
     case "calendar":
-      return (
-        <svg {...common}>
-          <rect x="4" y="5" width="16" height="15" rx="2" />
-          <path d="M8 3v4" />
-          <path d="M16 3v4" />
-          <path d="M4 9h16" />
-        </svg>
-      );
+      return <InterfaceIcon name="date" size={14} />;
     case "currency":
       return (
         <svg {...common}>
@@ -1952,21 +1936,9 @@ function ActionIcon({
         </svg>
       );
     case "download":
-      return (
-        <svg {...common}>
-          <path d="M12 4v10" />
-          <path d="m8 10 4 4 4-4" />
-          <path d="M5 19h14" />
-        </svg>
-      );
+      return <InterfaceIcon name="download" size={14} />;
     case "upload":
-      return (
-        <svg {...common}>
-          <path d="M12 14V4" />
-          <path d="m8 8 4-4 4 4" />
-          <path d="M5 19h14" />
-        </svg>
-      );
+      return <InterfaceIcon name="upload" size={14} />;
     case "more":
       return (
         <svg {...common}>
@@ -9082,9 +9054,7 @@ function TransactionsPageContent() {
                     Edit
                   </button>
                 )}
-                <button className="icon-button transaction-drawer__close-button" type="button" onClick={closeTransactionDetail} aria-label="Close transaction details">
-                  ×
-                </button>
+                <button className="icon-button transaction-drawer__close-button" type="button" onClick={closeTransactionDetail} aria-label="Close transaction details"><InterfaceIcon name="close" /></button>
               </div>
             </div>
 

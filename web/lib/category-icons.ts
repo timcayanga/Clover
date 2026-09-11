@@ -6,29 +6,31 @@ type CategoryTone = {
 const normalizeCategoryName = (value?: string | null) => value?.trim().toLowerCase() ?? "";
 
 const CATEGORY_ICON_SRC: Record<string, string> = {
-  income: "/category-icons/income.svg",
-  "food & dining": "/category-icons/food.svg",
-  transport: "/category-icons/transport.svg",
-  housing: "/category-icons/housing.svg",
-  "bills & utilities": "/category-icons/utilities.svg",
-  utilities: "/category-icons/utilities.svg",
-  "travel & lifestyle": "/category-icons/travel.svg",
-  entertainment: "/category-icons/entertainment.svg",
-  shopping: "/category-icons/shopping.svg",
-  subscriptions: "/category-icons/calendar.svg",
-  "health & wellness": "/category-icons/health.svg",
-  education: "/category-icons/education.svg",
-  financial: "/category-icons/financial.png",
-  "cash & atm": "/category-icons/cash-and-atm.png",
-  "gifts & donations": "/category-icons/gift.svg",
-  business: "/category-icons/business.png",
-  transfers: "/category-icons/transfer.svg",
-  other: "/category-icons/other.svg",
-  groceries: "/category-icons/groceries.svg",
-  medical: "/category-icons/medical.svg",
-  salary: "/category-icons/salary.svg",
-  investments: "/category-icons/investments.svg",
-  investment: "/category-icons/investments.svg",
+  "income": "/figma-icons/categories/income.svg",
+  "food & dining": "/figma-icons/categories/food-dining.svg",
+  "transport": "/figma-icons/categories/transport.svg",
+  "housing": "/figma-icons/categories/housing.svg",
+  "bills & utilities": "/figma-icons/categories/bills-utilities.svg",
+  "travel & lifestyle": "/figma-icons/categories/travel-lifestyle.svg",
+  "entertainment": "/figma-icons/categories/entertainment.svg",
+  "shopping": "/figma-icons/categories/shopping.svg",
+  "subscriptions": "/figma-icons/categories/subscriptions.svg",
+  "health & wellness": "/figma-icons/categories/health-wellness.svg",
+  "education": "/figma-icons/categories/education.svg",
+  "financial": "/figma-icons/categories/financial.svg",
+  "cash & atm": "/figma-icons/categories/cash-atm.svg",
+  "gifts & donations": "/figma-icons/categories/gifts-donations.svg",
+  "business": "/figma-icons/categories/business.svg",
+  "transfers": "/figma-icons/categories/transfers.svg",
+  "other": "/figma-icons/categories/other.svg",
+  "groceries": "/figma-icons/categories/groceries.svg",
+  "medical": "/figma-icons/categories/medical.svg",
+  "salary": "/figma-icons/categories/salary.svg",
+  "investments": "/figma-icons/categories/investments.svg",
+  "uncategorized": "/figma-icons/categories/uncategorized.svg",
+  "children": "/figma-icons/categories/children.svg",
+  "utilities": "/figma-icons/categories/bills-utilities.svg",
+  "investment": "/figma-icons/categories/investments.svg",
 };
 
 const CATEGORY_TONES: Record<string, CategoryTone> = {
@@ -89,7 +91,7 @@ const hashCategoryName = (value: string) => {
 
 export const getCategoryIconSrc = (categoryName?: string | null) => {
   const normalized = normalizeCategoryName(categoryName);
-  return CATEGORY_ICON_SRC[normalized] ?? "/category-icons/default.svg";
+  return CATEGORY_ICON_SRC[normalized] ?? "/figma-icons/categories/uncategorized.svg";
 };
 
 export const getCategoryIconTone = (categoryName?: string | null): CategoryTone => {

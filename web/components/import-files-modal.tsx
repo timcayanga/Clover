@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceIcon } from "@/components/interface-icon";
+
 import type { ChangeEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -8462,9 +8464,7 @@ export function ImportFilesModal({
             <h2>Add financial files</h2>
             <p>Take a photo or choose statements, receipts, spreadsheets, and screenshots.</p>
           </div>
-          <button className="accounts-import-close" type="button" onClick={onClose} aria-label="Close upload files">
-            ×
-          </button>
+          <button className="accounts-import-close" type="button" onClick={onClose} aria-label="Close upload files"><InterfaceIcon name="close" /></button>
         </div>
 
         <div

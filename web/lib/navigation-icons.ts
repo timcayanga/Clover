@@ -1,4 +1,4 @@
-export const NAVIGATION_ICON_ASSET_ROOT = "/assets/3d%20icons/navigation";
+export const NAVIGATION_ICON_ASSET_ROOT = "/assets/3d%20icons/navigation/figma-v1";
 
 export const NAVIGATION_ICON_SOURCE_FILES = {
   home: "home.png",
