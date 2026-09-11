@@ -64,7 +64,7 @@ export function DashboardBudgetPulse({ workspaceId, refreshKey }: { workspaceId:
                 <span>{budget.statusLabel}</span>
               </div>
               <span className="home-budget-progress__period">{budget.periodLabel}</span>
-              <div role="progressbar" aria-label={budget.name} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-valuetext={`${actual} of ${target} ${budget.kind === "savings_target" ? "saved" : "spent"}`} className="home-budget-progress__bar">
+              <div role="progressbar" aria-label={budget.name} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-valuetext={`${Math.round(progress)}% of target`} className="home-budget-progress__bar">
                 <span style={{ width: `${progress}%` }} />
               </div>
               <div className="home-budget-progress__amounts">

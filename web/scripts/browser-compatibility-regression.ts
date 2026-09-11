@@ -208,7 +208,8 @@ async function main() {
     readSource("components/public-account-actions.tsx"),
   ]);
 
-  assert.match(importModalSource, /role="region"[\s\S]{0,180}aria-label="Upload files"/, "Uploads must render as a full-page region instead of a dialog.");
+  assert.match(importModalSource, /role="dialog"[\s\S]{0,180}aria-label="Upload files"/, "The upload overlay must expose dialog semantics while filling the viewport.");
+  assert.match(importModalSource, /containDialogFocus\(dialog\)/, "Upload overlay must contain and restore keyboard focus.");
   assert.match(importModalSource, /capture="environment"/, "The full-page upload flow must expose the device camera directly.");
   assert.match(importModalSource, />\s*Take photo\s*</, "The full-page upload flow must lead with direct CTA buttons.");
   assert.match(globalStyles, /Final responsive overrides[\s\S]*\.modal-backdrop--import-fullscreen \.accounts-import-modal \{[\s\S]{0,240}height: 100dvh;/, "The upload surface must fill the viewport.");

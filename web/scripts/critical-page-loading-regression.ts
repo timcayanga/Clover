@@ -164,18 +164,12 @@ assert.match(dashboardSource, /const todayStart = toDayStart\(now\)/);
 assert.doesNotMatch(dashboardSource, /activityAnchorDate/);
 assert.match(dashboardSource, /Weekly Report/);
 assert.match(dashboardSource, /Monthly Report/);
-assert.match(dashboardSource, /Recorded spending in the past 7 days/);
-assert.match(dashboardSource, /Recorded spending in the past 30 days/);
-assert.match(
-  dashboardSource,
-  /const monthlyFlow = buildDailyFlow\(currentThirtyDayTransactions, thirtyDaysAgo, 30, \{ day: "numeric" \}\)/,
-  "The Monthly Report chart must represent a rolling 30-day window.",
-);
-assert.match(
-  dashboardSource,
-  /Monthly Report[\s\S]{0,350}formatCurrency\(rollingThirtyDaySummary\.expense/,
-  "The Monthly Report total must use the rolling 30-day summary.",
-);
+assert.match(dashboardSource, /title: "Weekly Report", label: "Weekly report", days: 7, start: sevenDaysAgo/);
+assert.match(dashboardSource, /title: "Monthly Report", label: "Monthly report", days: 30, start: thirtyDaysAgo/);
+assert.match(dashboardSource, /transactionCurrency\(transaction\) === currency/, "Reports must separate currencies.");
+assert.match(dashboardSource, /summary: summarizeWindow\(inWindow\(period.start, tomorrowStart\)/);
+assert.match(dashboardSource, /flow: buildDailyFlow\(inWindow\(period.start, tomorrowStart\), period.start, period.days/);
+assert.match(dashboardSource, /Recorded spending in the past \{days\} days/);
 assert.match(dashboardSource, /plannedPaymentsDueSoon\.length === 1 \? "is" : "are"/);
 assert.ok(
   dashboardSource.indexOf('aria-label="Home Adviser"') < dashboardSource.indexOf("<HomeNextSteps"),
@@ -192,8 +186,9 @@ assert.match(
 );
 assert.match(dashboardSource, /monthlyTimelineDays/);
 assert.match(dashboardSource, /dashboard-home__report-flow-tooltip/);
-assert.match(dashboardSource, /function HomeSensitiveAmount/);
-assert.match(dashboardSource, /home-sensitive-amount__mask/);
+const sensitiveAmountSource = readFileSync(resolve("components/home-sensitive-amount.tsx"), "utf8");
+assert.match(sensitiveAmountSource, /function HomeSensitiveAmount/);
+assert.match(sensitiveAmountSource, /home-sensitive-amount__mask/);
 assert.match(
   dashboardSource,
   /label: "Spending spike"[\s\S]{0,220}<HomeSensitiveAmount/,
@@ -208,12 +203,12 @@ assert.match(globalStylesSource, /\.content--transactions \.transactions-mobile-
 assert.match(globalStylesSource, /\.content--transactions \.transactions-mobile-date-divider \{\s*font-size: 0\.76rem;/, "Mobile transaction dates must retain the larger text size.");
 assert.match(
   dashboardSource,
-  /Weekly Report[\s\S]{0,240}<h4><HomeSensitiveAmount/,
+  /<h4><HomeSensitiveAmount value=\{formatCurrency\(summary.expense, currency\)\}/,
   "The weekly report total must respect the Home amount toggle.",
 );
 assert.match(
   dashboardSource,
-  /Monthly Report[\s\S]{0,240}<h4><HomeSensitiveAmount/,
+  /currencyReports.flatMap[\s\S]{0,650}<h4><HomeSensitiveAmount/,
   "The monthly report total must respect the Home amount toggle.",
 );
 assert.match(balanceVisibilitySource, /applyHomeAmountVisibility/);

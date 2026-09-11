@@ -1174,7 +1174,7 @@ async function DashboardStream({
                         ? <HomeSensitiveAmount value={pill.trend.label} currency={pill.currency} />
                         : pill.trend.label}
                     </span>
-                  ) : null}
+                  ) : <span className="dashboard-home__hero-mini-trend dashboard-home__hero-mini-trend--unavailable">No prior month</span>}
                 </div>
               </div>
             ))}

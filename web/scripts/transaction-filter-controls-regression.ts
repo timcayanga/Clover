@@ -86,10 +86,11 @@ async function main() {
     /authoritativeCurrencyWorkspaceRef\.current !== selectedWorkspaceId[\s\S]{0,350}setCurrencyFilter\(""\)/,
     "A saved currency with no remaining transactions must be cleared after an authoritative response."
   );
+  assert.match(transactionsPage, /const saved = readTransactionListContext\(selectedWorkspaceId\)/);
   assert.match(
     transactionsPage,
-    /setSelectedTransactionIds\(\[\]\);[\s\S]{0,900}setQuery\(""\);[\s\S]{0,900}setCategoryFilters\(\[\]\);[\s\S]{0,900}setSortField\("date"\);[\s\S]{0,300}setTransactionsPage\(1\);/,
-    "Switching Profiles must clear private filters, sorting, and pagination before loading the new Profile."
+    /setSelectedTransactionIds\(\[\]\);[\s\S]{0,900}setQuery\(saved\?\.query \?\? ""\);[\s\S]{0,900}setCategoryFilters\(saved\?\.categoryFilters \?\? \[\]\);[\s\S]{0,900}setSortField\(saved\?\.sortField \?\? "date"\);[\s\S]{0,300}setTransactionsPage\(1\);/,
+    "Switching Profiles clears selections and restores only that Profile’s saved filters/sort, with empty defaults and first-page pagination."
   );
   assert.match(
     transactionsPage,
