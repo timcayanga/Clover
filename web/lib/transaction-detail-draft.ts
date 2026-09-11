@@ -64,3 +64,16 @@ export const buildTransactionDetailDraft = (
 
 export const detailDraftTypeToTransactionType = (type: TransactionDetailDraftValue["type"]) =>
   type === "credit" ? "income" : type === "transfer" ? "transfer" : "expense";
+
+// Enrichment may arrive after editing starts. Refresh only fields the user
+// has not changed since the request began, including the line-item collection.
+export const mergeRefreshedTransactionDetailDraft = (
+  current: TransactionDetailDraftValue,
+  baseline: TransactionDetailDraftValue,
+  refreshed: TransactionDetailDraftValue
+): TransactionDetailDraftValue => Object.fromEntries(
+  (Object.keys(current) as Array<keyof TransactionDetailDraftValue>).map((key) => [
+    key,
+    JSON.stringify(current[key]) === JSON.stringify(baseline[key]) ? refreshed[key] : current[key],
+  ])
+) as TransactionDetailDraftValue;

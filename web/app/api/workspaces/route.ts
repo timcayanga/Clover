@@ -32,11 +32,9 @@ export async function GET() {
   try {
     if (await isLocalDevHost()) {
       const user = await getOrCreateCurrentUser("local-admin");
-      const workspace = await ensureStarterWorkspace(user, user.email, user.verified);
-
-      return NextResponse.json({
-        workspaces: [workspace],
-      });
+      await ensureStarterWorkspace(user, user.email, user.verified);
+      const workspaces = await prisma.workspace.findMany({ where: { userId: user.id } });
+      return NextResponse.json({ workspaces: orderWorkspaces(workspaces) });
     }
 
     const { userId } = await requireAuth();
@@ -117,7 +115,8 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     assertTrustedRequestOrigin(request);
-    const { userId } = await requireAuth();
+    // Match GET's local principal so newly created Profiles remain visible.
+    const { userId } = await isLocalDevHost() ? { userId: "local-admin" } : await requireAuth();
     const clerkUser = await syncClerkUser(userId);
     const currentEnvironment = getCurrentUserEnvironment();
     const existingUser = await prisma.user.findUnique({

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  detectStatementMetadata,
   parseGenericAccountSnapshotCsv,
   parseImportText,
   parseStructuredTransactionCsv,
@@ -426,6 +427,23 @@ assert.match(
   /shouldPersistWideAccountSnapshotCsvGroupBalances/,
   "Wide account-history balances must be persisted per account."
 );
+
+
+// Type/Currency columns must not identify a Wise screenshot.
+const namedAccountCsv = [
+  "Date,Description,Amount,Type,Currency,Account Name,Category,Reference",
+  "2026-09-08,QA Page 001,10000.00,income,PHP,QA TX 20260908 PHP,Income,QA-001",
+  "2026-09-07,QA Page 002,1250.50,expense,PHP,QA TX 20260908 PHP,Food & Dining,QA-002",
+].join("\r\n");
+const namedMetadata = detectStatementMetadata(namedAccountCsv, "transactions.csv");
+assert.notEqual(namedMetadata?.institution, "Wise");
+assert.equal(namedMetadata?.accountName, "QA TX 20260908 PHP");
+assert.equal(namedMetadata?.accountNumber, null);
+const namedRows = parseImportText(namedAccountCsv, "transactions.csv", "text/csv", namedMetadata ?? {});
+assert.equal(namedRows.length, 2);
+assert.ok(namedRows.every(row => row.accountName === "QA TX 20260908 PHP" && row.institution !== "Wise"));
+assert.equal(detectStatementMetadata(namedAccountCsv.replace("QA TX 20260908 PHP,Food", "Another account,Food"), "transactions.csv")?.accountName, null);
+assert.equal(detectStatementMetadata(signedCsv, "transactions.csv")?.institution, "BPI");
 
 console.log(
   "[PASS] Structured CSV parser covers encodings, TSV, mixed tables, histories, sections, statuses, locale dates, reconciliation, and fail-closed behavior."

@@ -18,7 +18,7 @@ export function PublicFooter() {
       <h2>Help &amp; Support</h2>
       <Link href="/help">Help</Link>
       <Link href="/guides">Guides</Link>
-      <Link href="/contact">Contact</Link>
+      <Link href="/contact-us">Contact</Link>
       <Link href="/pricing">Pricing</Link>
     </nav>
     <nav className={styles.resources} aria-label="Other Resources">

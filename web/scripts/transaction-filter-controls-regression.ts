@@ -30,7 +30,11 @@ async function main() {
   assert.doesNotMatch(transactionsPage, /transactions-selection-menu--footer/, "Selection actions should no longer be hidden in the footer.");
   assert.match(transactionsPage, /longPress.consume\(\)/);
   assert.match(transactionsPage, /hasSelectedTransactions \? <label className="transactions-mobile-select"/);
-  assert.doesNotMatch(transactionsPage, /<TransactionsManageMenu compact/);
+  assert.match(transactionsPage, /<TransactionsManageMenu compact \/>/, "Compact Transactions actions must include Manage.");
+  assert.match(transactionsPage, /<TransactionsManageMenu \/>/, "Desktop Transactions actions must include Manage.");
+  assert.doesNotMatch(transactionsPage, /transactions-column-header" role="row"/, "The visual column header must not claim incomplete table-row semantics.");
+  assert.match(transactionsPage, /<nav className="transactions-pagination" aria-label="Transaction pages">/);
+  assert.match(transactionsPage, /<section className="transactions-footer-snapshot" aria-label="Cash flow snapshot for all filtered transactions">/);
   assert.match(transactionsPage, /selectedTransactionCount\} selected/);
   const overlay = await readSource("components/transactions-header-overlay.tsx");
   const longPress = await readSource("components/use-transaction-long-press.ts");
@@ -60,6 +64,8 @@ async function main() {
     /\.transactions-manage-menu__popover a \{[\s\S]{0,300}font-weight: 400;/,
     "Manage actions must use regular rather than bold text."
   );
+  assert.match(styles, /\.line-item-header \{[\s\S]{0,500}color: #4b5563;/, "Sortable column labels must meet text-contrast requirements.");
+  assert.match(styles, /\.transactions-page \.transactions-toolbar-add \{[\s\S]{0,300}color: #006b7c;/, "Add transaction text must meet text-contrast requirements.");
   assert.match(
     transactionsPage,
     /buildTransactionAccountFilterOptions[\s\S]{0,1200}\.sort\(\(left, right\) => left\.label\.localeCompare\(right\.label/,
@@ -79,6 +85,11 @@ async function main() {
     transactionsPage,
     /authoritativeCurrencyWorkspaceRef\.current !== selectedWorkspaceId[\s\S]{0,350}setCurrencyFilter\(""\)/,
     "A saved currency with no remaining transactions must be cleared after an authoritative response."
+  );
+  assert.match(
+    transactionsPage,
+    /setSelectedTransactionIds\(\[\]\);[\s\S]{0,900}setQuery\(""\);[\s\S]{0,900}setCategoryFilters\(\[\]\);[\s\S]{0,900}setSortField\("date"\);[\s\S]{0,300}setTransactionsPage\(1\);/,
+    "Switching Profiles must clear private filters, sorting, and pagination before loading the new Profile."
   );
   assert.match(
     transactionsPage,

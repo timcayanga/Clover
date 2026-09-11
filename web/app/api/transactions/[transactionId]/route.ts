@@ -28,7 +28,12 @@ const patchSchema = z.object({
   userNote: z.string().nullable().optional(),
   tags: z.array(z.string()).optional(),
   tagAction: z.enum(["add", "remove"]).optional(),
-  date: z.string().optional(),
+  date: z.string().min(1).refine((value) => {
+    const day = value.slice(0, 10);
+    const parsedDay = new Date(`${day}T00:00:00Z`);
+    return /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(new Date(value).getTime()) &&
+      Number.isFinite(parsedDay.getTime()) && parsedDay.toISOString().slice(0, 10) === day;
+  }, "Choose a valid date.").optional(),
   amount: z.union([z.string(), z.number()]).optional(),
   currency: z.string().min(1).optional(),
   rawPayload: z.unknown().optional(),
@@ -106,6 +111,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tra
       prisma.transaction.findFirst({
         where: { id: transactionId, deletedAt: null },
         include: {
+          importFile: { select: { fileName: true } },
           account: true,
           category: true,
           splitBill: { select: { id: true, title: true } },
@@ -159,6 +165,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tra
         isExcluded: transaction.isExcluded,
         source: transaction.importFileId ? "upload" : "manual",
         importFileId: transaction.importFileId,
+        importFileName: transaction.importFile?.fileName ?? null,
         rawPayload: transaction.rawPayload,
         normalizedPayload: transaction.normalizedPayload,
         splitBill: transaction.splitBill,
@@ -513,7 +520,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         })),
       },
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json(
+        { error: "Sign in again, then retry saving. Your changes have not been saved." },
+        { status: 401 }
+      );
+    }
     return NextResponse.json({ error: "Unable to update transaction" }, { status: 400 });
   }
 }

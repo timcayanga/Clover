@@ -14,6 +14,8 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
   ]);
   const currentEnvironment = getCurrentUserEnvironment();
   const isLocalEnvironment = currentEnvironment === "local";
+  // Explicit administrator plan locks also apply in local development.
+  const applyLocalProOverride = isLocalEnvironment && !existing?.planTierLocked;
   const syncedEmail = clerkUser.authoritative ? clerkUser.email : existing?.email ?? clerkUser.email;
   const syncedFirstName = clerkUser.authoritative ? clerkUser.firstName : existing?.firstName ?? clerkUser.firstName;
   const syncedLastName = clerkUser.authoritative ? clerkUser.lastName : existing?.lastName ?? clerkUser.lastName;
@@ -30,7 +32,7 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
           existing.lastName !== syncedLastName ||
           existing.verified !== syncedVerified ||
           existing.environment !== resolvedEnvironment ||
-          (isLocalEnvironment && existing.planTier !== "pro")
+          (applyLocalProOverride && existing.planTier !== "pro")
         ? await prisma.user.update({
             where: { id: existing.id },
             data: {
@@ -39,7 +41,7 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
               lastName: syncedLastName,
               verified: syncedVerified,
               environment: resolvedEnvironment,
-              ...(isLocalEnvironment ? { planTier: "pro" } : {}),
+              ...(applyLocalProOverride ? { planTier: "pro" } : {}),
             },
           })
         : existing

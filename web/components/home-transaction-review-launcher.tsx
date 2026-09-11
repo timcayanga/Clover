@@ -1,5 +1,7 @@
 "use client";
 
+import { HomeSensitiveAmount } from "@/components/home-sensitive-amount";
+
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { formatCurrencyAmount } from "@/lib/currency-format";
@@ -33,7 +35,7 @@ export function HomeTransactionReviewLauncher({ transactions }: { transactions: 
                   day: "numeric",
                   timeZone: "UTC",
                 })}
-                {" · "}{formatCurrencyAmount(Math.abs(Number(transaction.amount)), transaction.currency)}
+                {" · "}<HomeSensitiveAmount value={formatCurrencyAmount(Math.abs(Number(transaction.amount)), transaction.currency)} currency={transaction.currency} />
               </small>
               <small className="dashboard-home__review-reason">{transaction.reviewReasons.join(" · ")}</small>
             </div>

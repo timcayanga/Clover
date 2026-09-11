@@ -14,7 +14,8 @@ const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
   const parsed = new Date(`${value}T00:00:00Z`);
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }, "Choose a valid date.");
-const amount = z.string().regex(/^-?\d{1,12}(\.\d{1,2})?$/);
+// Accept older clients' signed input, but persist the magnitude. Type carries direction.
+const amount = z.string().regex(/^-?\d{1,12}(\.\d{1,2})?$/).transform(value => value.replace(/^-/, ""));
 export const mobileEditSchema = z.object({
   merchantClean: z.string().trim().min(1).max(200).optional(),
   description: z.string().max(2000).optional(),

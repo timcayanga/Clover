@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { addCalendarMonths } from "@/lib/recurring-date";
 
 type CircleOption = { id: string; name: string };
 
@@ -17,13 +18,6 @@ type TransactionCrossFeatureActionsProps = {
   splitBillHref?: string | null;
   splitBillOpen?: boolean;
   onToggleSplitBill?: () => void;
-};
-
-const addMonths = (dateValue: string, months: number) => {
-  const date = new Date(`${dateValue.slice(0, 10)}T12:00:00`);
-  if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 10);
-  date.setMonth(date.getMonth() + months);
-  return date.toISOString().slice(0, 10);
 };
 
 export function TransactionCrossFeatureActions({
@@ -45,11 +39,11 @@ export function TransactionCrossFeatureActions({
   const [creatingCircle, setCreatingCircle] = useState(false);
   const [newCircleName, setNewCircleName] = useState("");
   const [recurrence, setRecurrence] = useState("monthly");
-  const [nextDueDate, setNextDueDate] = useState(() => addMonths(date, 1));
+  const [nextDueDate, setNextDueDate] = useState(() => addCalendarMonths(date, 1));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
-  useEffect(() => setNextDueDate(addMonths(date, 1)), [date]);
+  useEffect(() => setNextDueDate(addCalendarMonths(date, 1)), [date]);
 
   useEffect(() => {
     if (splitBillOpen) {

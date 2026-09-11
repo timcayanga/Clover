@@ -47,12 +47,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "One or more linked transactions are unavailable" }, { status: 400 });
     }
     const evidenceTransactionIds = validEvidence.map((transaction) => transaction.id);
+    const { workspaceId, kind, title } = payload;
 
-    const commitment = await prisma.financialCommitment.create({
+    const result = await prisma.$transaction(async (tx) => {
+      // Serialize linked creation within a Profile, including simultaneous retries.
+      if (evidenceTransactionIds.length) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`;
+        const existing = await tx.financialCommitment.findFirst({
+          where: { workspaceId, OR: [
+            { transactionId: { in: evidenceTransactionIds } },
+            ...evidenceTransactionIds.map((id) => ({ evidenceTransactionIds: { array_contains: [id] } })),
+          ] },
+          select: { id: true },
+        });
+        if (existing) return { duplicate: true as const, commitment: null };
+      }
+      const commitment = await tx.financialCommitment.create({
       data: {
-        workspaceId: payload.workspaceId,
-        kind: payload.kind,
-        title: payload.title,
+        workspaceId,
+        kind,
+        title,
         counterparty: payload.counterparty,
         amount: payload.amount,
         currency: payload.currency,
@@ -80,6 +94,10 @@ export async function POST(request: Request) {
         },
       },
     });
+      return { duplicate: false as const, commitment };
+    });
+    if (result.duplicate) return NextResponse.json({ error: "This transaction is already linked to a recurring item." }, { status: 409 });
+    const commitment = result.commitment;
     invalidateWorkspaceSummaryCache(payload.workspaceId);
 
     return NextResponse.json({ commitment: serializeFinancialCommitment(commitment) }, { status: 201 });

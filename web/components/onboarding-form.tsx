@@ -8,6 +8,7 @@ import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { analyticsOnceKey, PostHogEvent } from "@/components/posthog-analytics";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { getFinancialExperienceDefinition, type FinancialExperienceLevel } from "@/lib/goals";
+import { plannedProPrices, type PricingMarket } from "@/lib/public-plan-comparison";
 import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
 import { CloverRouteLoadingScreen } from "@/components/clover-route-loading-screen";
 import { CurrencySelector } from "@/components/currency-selector";
@@ -69,6 +70,7 @@ type OnboardingFormProps = {
   paypalMonthlyPlanId?: string | null;
   paypalAnnualPlanId?: string | null;
   paypalBuyerCountry?: string | null;
+  pricingMarket?: PricingMarket;
   completionUrl?: string;
   regionalDefaults: RegionalPreferences;
 };
@@ -88,6 +90,7 @@ export function OnboardingForm({
   paypalMonthlyPlanId = null,
   paypalAnnualPlanId = null,
   paypalBuyerCountry = null,
+  pricingMarket = "global",
   completionUrl = "/dashboard",
   regionalDefaults,
 }: OnboardingFormProps) {
@@ -395,7 +398,7 @@ export function OnboardingForm({
             aria-pressed={selectedUpgradeInterval === option}
             onClick={() => setSelectedUpgradeInterval(option)}
           >
-            {option === "monthly" ? "Monthly · USD 2.99" : "Annually · USD 29.99"}
+            {option === "monthly" ? "Monthly" : "Annually"} · {plannedProPrices(pricingMarket)[option]}
           </button>
         ))}
       </div>
@@ -463,6 +466,7 @@ export function OnboardingForm({
           onClose={() => {
             setImportOpen(false);
             setImportSeedFiles(null);
+            setMessage("");
           }}
           onImported={async (summary: UploadInsightsSummary) => {
             if (summary.optimistic) {

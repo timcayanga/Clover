@@ -9,7 +9,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "/help",
     "/guides",
     "/pricing",
-    "/contact",
+    "/contact-us",
     "/privacy-policy",
     "/terms-of-service",
     ...FEATURE_LINKS.map((l) => l.href),

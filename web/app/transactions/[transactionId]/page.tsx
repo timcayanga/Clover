@@ -1,6 +1,9 @@
 "use client";
 import { AdviserFormAssist } from "@/components/adviser-form-assist";
 
+import { getTransactionReviewReasons } from "@/lib/transaction-review-reasons";
+import { getRecordedTransactionConfidence } from "@/lib/transaction-confidence";
+
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
@@ -48,6 +51,7 @@ type Transaction = {
   isExcluded: boolean;
   source?: string | null;
   importFileId?: string | null;
+  importFileName?: string | null;
   rawPayload?: unknown;
   normalizedPayload?: unknown;
   reviewStatus?: string | null;
@@ -88,20 +92,8 @@ const displayAccountName = (account: AccountOption) => {
   return digits.length >= 4 ? `${base} ${digits.slice(-4)}` : base;
 };
 
-const getConfidenceScore = (transaction: Transaction) => {
-  const values = [
-    transaction.parserConfidence,
-    transaction.categoryConfidence,
-    transaction.accountMatchConfidence,
-    transaction.duplicateConfidence,
-    transaction.transferConfidence,
-  ].filter((value): value is number => typeof value === "number" && Number.isFinite(value));
-  if (values.length === 0) return transaction.source === "manual" ? 100 : 80;
-  return Math.round(values.reduce((sum, value) => {
-    const score = value <= 1 ? value * 100 : value;
-    return sum + Math.max(0, Math.min(100, score));
-  }, 0) / values.length);
-};
+const getConfidenceScore = (transaction: Transaction) =>
+  getRecordedTransactionConfidence(transaction) ?? (transaction.source === "manual" ? 100 : 80);
 
 export default function TransactionDetailPage() {
   const params = useParams<{ transactionId: string }>();
@@ -483,7 +475,7 @@ export default function TransactionDetailPage() {
                   inputAriaLabel="Add tags to transaction"
                 />
               </div>
-              <label data-transaction-detail-field="amount">
+              <label htmlFor="transaction-detail-amount" data-transaction-detail-field="amount">
                 Amount
                 <span className="transaction-detail-page__money-control">
                   <CurrencySelector
@@ -493,7 +485,9 @@ export default function TransactionDetailPage() {
                     ariaLabel="Select transaction currency"
                   />
                   <input
+                    id="transaction-detail-amount"
                     type="number"
+                    aria-label="Amount"
                     min="0"
                     step="0.01"
                     value={draft.amount}
@@ -528,6 +522,7 @@ export default function TransactionDetailPage() {
                     <strong>Line Items</strong>
                     <span>{formatCurrencyAmount(receiptLineTotal, draft.currency)}</span>
                   </div>
+                  {draft.receiptLineItems.length > 0 && Math.abs(receiptLineTotal - Number(draft.amount || 0)) > 0.005 ? <p role="status">Line items do not match the transaction total. Check for missing items, tax, or discounts. You can still save.</p> : null}
                   {draft.receiptLineItems.map((item, index) => (
                     <div className="transaction-detail-page__line-item" key={`line-item-${index}`}>
                       <input aria-label={`Line item ${index + 1} name`} placeholder="Item name" value={item.description} onChange={(event) => updateLineItem(index, "description", event.target.value)} />
@@ -553,6 +548,7 @@ export default function TransactionDetailPage() {
                   <div className="transaction-detail-page__confidence">
                     <span>Source</span>
                     <strong>{transaction.importFileId ? "Imported" : "Manual"}</strong>
+                    {transaction.importFileId ? <p>Source file: {transaction.importFileName ?? transaction.importFileId}</p> : null}
                   </div>
                   <div className="transaction-detail-page__confidence">
                     <span className={`transaction-detail-page__confidence-chip is-${confidenceScore >= 85 ? "high" : confidenceScore >= 65 ? "medium" : "low"}`}>{confidenceLabel}</span>
@@ -594,6 +590,13 @@ export default function TransactionDetailPage() {
               </section>
             ) : null}
 
+            {!editing && getTransactionReviewReasons(transaction).length > 0 ? (
+              <section aria-label="Review warnings">
+                <strong>Review warning</strong>
+                <ul>{getTransactionReviewReasons(transaction).map((reason) => <li key={reason}>{reason}</li>)}</ul>
+              </section>
+            ) : null}
+
             {!editing ? <TransactionCrossFeatureActions
               workspaceId={transaction.workspaceId}
               transactionId={transaction.id}
@@ -623,6 +626,14 @@ export default function TransactionDetailPage() {
                 />
               </div>
             ) : null}
+
+            {editing ? (
+              <label>
+                <input type="checkbox" checked={draft.isExcluded}
+                  onChange={(event) => setDraft({ ...draft, isExcluded: event.target.checked })} />
+                Exclude from totals
+              </label>
+            ) : transaction.isExcluded ? <p>Excluded from totals</p> : null}
 
             {message ? <p className="transaction-detail-page__message" role="status">{message}</p> : null}
             <footer className={`transaction-detail-page__actions ${editing ? "is-editing" : confirmingDelete ? "is-confirming-delete" : ""}`}>

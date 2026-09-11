@@ -251,7 +251,7 @@ export const hasVisibleImportData = (
       )
     );
   const localHasSettledAccountDetails = localHasAccountDetails && !summaryIsOptimistic;
-  const itemHasRows = item.importedRows !== null && item.importedRows !== undefined && item.importedRows > 0 && Boolean(item.targetAccountId);
+  const itemHasRows = (item.status === "done" || item.confirmationState === "confirmed") && item.importedRows !== null && item.importedRows !== undefined && item.importedRows > 0 && Boolean(item.targetAccountId);
   const importMode = inferImportModeForFile(item.file, item.importMode ?? "statement");
   const isStatementImageImport = isImageImportFile(item.file) && importMode === "statement";
 
@@ -263,7 +263,7 @@ export const hasVisibleImportData = (
     return itemHasRows || localHasSettledRows || (item.confirmationState === "confirmed" && localHasSettledAccountDetails);
   }
 
-  return itemHasRows || localHasRows || localHasAccountDetails;
+  return itemHasRows || localHasSettledRows || localHasSettledAccountDetails;
 };
 
 export const hasActiveServerImport = (items: VisibilityQueueItem[]) =>

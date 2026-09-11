@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { containDialogFocus } from "@/lib/dialog-focus";
 import { useRouter } from "next/navigation";
 import { ImportPasswordModal } from "@/components/import-password-modal";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
@@ -468,6 +469,7 @@ export function ImportFilesModal({
   const uploadRunnerActiveRef = useRef(false);
   const uploadRunnerTimerRef = useRef<number | null>(null);
   const importModalInstanceIdRef = useRef(crypto.randomUUID());
+  const uploadDialogRef = useRef<HTMLElement>(null);
   const wasOpenRef = useRef(open);
   const itemsRef = useRef<QueuedFile[]>([]);
   const visibleBatchProgressFloorRef = useRef(0);
@@ -6970,43 +6972,7 @@ export function ImportFilesModal({
           summary: null,
         };
       }
-      const localRecoverableSummary = localPreparseSummaryByItemIdRef.current.get(itemId) ?? null;
-      if (localRecoverableSummary && Number(localRecoverableSummary.rowsImported ?? 0) > 0) {
-        retiredImportActivityFileNamesRef.current.add(item.file.name);
-        seedImportedWorkspaceCaches(workspaceId, localRecoverableSummary);
-        await Promise.resolve(onImported(localRecoverableSummary));
-        updateItem(itemId, {
-          status: "done",
-          confirmationState: "confirmed",
-          error: null,
-          errorCode: null,
-          errorTitle: null,
-          errorNextSteps: null,
-          importFileId,
-          targetAccountId: localRecoverableSummary.accountId ?? item.targetAccountId,
-          importedRows: localRecoverableSummary.rowsImported,
-          progress: 100,
-          progressLabel: "Visible in Clover",
-        });
-        publishImportActivity({
-          workspaceId,
-          surface: importActivitySurfaceRef.current,
-          status: "done",
-          fileName: item.file.name,
-          fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
-          fileTotal: items.length,
-          completedFiles: Math.min(items.length, completedFileCount + 1),
-          progress: 100,
-          detail: "Accounts and transactions are visible. Clover will keep cleaning up names and categories in the background.",
-          summary: localRecoverableSummary,
-          errorMessage: null,
-        });
-        return {
-          status: "done",
-          importedRows: localRecoverableSummary.rowsImported,
-          summary: localRecoverableSummary,
-        };
-      }
+      // A local preview is not proof that a failed upload persisted.
       const recoverableImportFileId =
         typeof importFileId === "string" && importFileId.trim() ? importFileId.trim() : null;
       const recoverableIdentity = resolveStatementIdentityFromMetadata(recoverableStatus?.statementCheckpoint?.sourceMetadata);
@@ -7368,6 +7334,12 @@ export function ImportFilesModal({
   // as its own explicit interruption; every other upload uses one progress UI.
   const showImportProgressDock = items.length > 0 && progressSessionActive && !activePasswordItem;
   const targetDisplayProgress = showCompactProgress ? Math.max(overallProgress, activityProgressFloor) : 0;
+  useEffect(() => {
+    if (!open || backgroundOnly || activePasswordItem || showImportProgressDock) return;
+    const dialog = uploadDialogRef.current;
+    if (!dialog) return;
+    return containDialogFocus(dialog);
+  }, [open, backgroundOnly, activePasswordItem, showImportProgressDock]);
   const shouldLockPageInteraction =
     open && !backgroundOnly && !launchInBackground && Boolean(activePasswordItem);
   const hasImportIssue = items.some((item) => item.status === "error" || item.status === "needs_password") || Boolean(validationNotice);
@@ -8478,7 +8450,10 @@ export function ImportFilesModal({
     <div className="modal-backdrop modal-backdrop--import-fullscreen">
       <section
         className="modal-card modal-card--wide accounts-import-modal glass"
-        role="region"
+        ref={uploadDialogRef}
+        role="dialog"
+        aria-modal="true"
+        tabIndex={-1}
         aria-label="Upload files"
       >
         <div className="accounts-import-modal__toolbar">

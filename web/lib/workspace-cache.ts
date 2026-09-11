@@ -2345,6 +2345,7 @@ export const clearAllWorkspaceCaches = () => {
   }
 
   clearStorageKeys(window.sessionStorage, [
+    "clover.transaction-list-context.v1",
     accountsWorkspaceCacheKey,
     transactionsWorkspaceCacheKey,
     deletedAccountsWorkspaceCacheKey,

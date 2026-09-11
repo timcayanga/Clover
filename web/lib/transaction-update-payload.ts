@@ -1,4 +1,4 @@
-import { mergeReceiptLineItemsIntoPayload } from "@/lib/receipt-line-items";
+import { mergeReceiptLineItemsIntoPayload, parseReceiptLineItemsFromPayload, receiptLineItemSignature } from "@/lib/receipt-line-items";
 import { detailDraftTypeToTransactionType, type TransactionDetailDraftValue } from "@/lib/transaction-detail-draft";
 
 type TransactionUpdatePayloadSource = {
@@ -37,10 +37,10 @@ export const buildTransactionUpdatePayload = (
     userNote: detailDraft.description,
     isExcluded: detailDraft.isExcluded,
     isTransfer: detailDraft.type === "transfer",
-    rawPayload: hasConfirmedItems ? selectedTransaction.rawPayload : mergeReceiptLineItemsIntoPayload(
-      selectedTransaction.rawPayload,
-      detailDraft.receiptLineItems,
-      currency
-    ),
+    // Omitting unchanged source data preserves even legacy/unknown raw fields exactly.
+    ...(!hasConfirmedItems && receiptLineItemSignature(detailDraft.receiptLineItems) !==
+    receiptLineItemSignature(parseReceiptLineItemsFromPayload(selectedTransaction.rawPayload))
+      ? { rawPayload: mergeReceiptLineItemsIntoPayload(selectedTransaction.rawPayload, detailDraft.receiptLineItems, currency) }
+      : {}),
   };
 };

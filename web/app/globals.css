@@ -2939,6 +2939,17 @@ textarea:focus-visible {
   box-shadow: var(--focus-ring);
 }
 
+@media (forced-colors: active) {
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 3px;
+  }
+}
+
 button,
 input,
 select,
@@ -4282,8 +4293,20 @@ body.transactions-manual-open .shell-bug-report-button {
   position: relative;
 }
 
-.transactions-manage-menu__trigger {
+.transactions-manage-menu .transactions-manage-menu__trigger {
   cursor: pointer;
+  color: #006b7c !important;
+}
+
+html[data-theme="dark"] .transactions-manage-menu .transactions-manage-menu__trigger {
+  color: var(--accent-light) !important;
+}
+
+.transactions-manage-menu--mobile-leading .transactions-manage-menu__trigger {
+  min-width: 40px;
+  min-height: 40px;
+  padding-inline: 0;
+  justify-content: center;
 }
 
 .transactions-manage-menu__popover {
@@ -4843,8 +4866,10 @@ html[data-theme="dark"] .adviser-header-link {
   }
 
   .sidebar .sidebar-nav .nav-link {
-    height: 32px;
+    height: auto;
     min-height: 32px;
+    white-space: normal;
+    overflow-wrap: anywhere;
     padding-top: 0;
     padding-bottom: 0;
   }
@@ -7612,6 +7637,10 @@ html[data-theme="dark"] .contextual-ask-clover__close:focus-visible {
     font-size: 11px;
     line-height: 1.1;
     letter-spacing: -0.01em;
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .shell-bottom-nav__item.is-active {
@@ -20603,7 +20632,7 @@ html[data-theme="dark"] .adviser-footnote__metrics div {
   gap: 10px;
   align-items: center;
   padding: 2px 4px 1px;
-  color: var(--muted-2);
+  color: #4b5563;
   border-bottom: 1px solid var(--stroke);
   font-size: 0.86rem;
   letter-spacing: 0;
@@ -22617,6 +22646,17 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transaction-detail-page__amount.is-transfer {
   color: var(--text);
+}
+
+@media (max-width: 480px) {
+  .transaction-detail-page__summary {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .transaction-detail-page__summary > .transaction-detail-page__amount {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
 }
 
 .transaction-detail-page__fields {
@@ -26689,7 +26729,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 .transactions-page .transactions-toolbar-add {
   background: rgba(255, 255, 255, 0.92);
   border-color: rgba(3, 168, 192, 0.22);
-  color: var(--accent);
+  color: #006b7c;
   box-shadow: none;
   font-weight: 600;
   font-size: 0.78rem;
@@ -26699,8 +26739,14 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 .transactions-page .transactions-toolbar-add:focus {
   background: rgba(245, 252, 253, 0.98);
   border-color: rgba(3, 168, 192, 0.38);
-  color: var(--accent);
+  color: #006b7c;
   box-shadow: none;
+}
+
+.transactions-add-menu__toggle.transactions-toolbar-add,
+.transactions-add-menu__toggle.transactions-toolbar-add:hover,
+.transactions-add-menu__toggle.transactions-toolbar-add:focus-visible {
+  color: #006b7c;
 }
 
 .transactions-page .transactions-toolbar-add .button-icon {
@@ -61338,7 +61384,8 @@ html[data-theme="dark"] .content--reports .reports-range-menu__summary:focus-vis
 
 .transaction-inline-relation-picker .transactions-manual-picker__button {
   min-height: 28px;
-  height: 28px;
+  height: auto;
+  line-height: 1.4;
   padding: 2px 8px;
   border: 0;
   border-radius: 999px;
@@ -62573,8 +62620,8 @@ html[data-theme="dark"] .recurring-mobile-detail__header {
   box-shadow: 0 4px 12px rgba(3, 168, 192, 0.1), 0 0 0 1px rgba(3, 168, 192, 0.05);
 }
 
-.manual-form-layout--compact .transactions-manual-row--name { grid-column: span 4; }
-.manual-form-layout--compact .transactions-manual-row--money { grid-column: span 2; }
+.manual-form-layout--compact .transactions-manual-row--name { grid-column: span 3; }
+.manual-form-layout--compact .transactions-manual-row--money { grid-column: span 3; }
 .manual-form-layout--compact .transactions-manual-inline-row--account,
 .manual-form-layout--compact .transactions-manual-inline-row--category,
 .manual-form-layout--compact > label { grid-column: span 2; }
@@ -64580,6 +64627,7 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
   .content > :is(.topbar, .shell-compact-bar) .accounts-toolbar-add > span:not(.button-icon) { display: none !important; }
   .content .shell-mobile-trailing-actions .transaction-selection-toolbar--compact button { width: 36px; min-width: 36px; height: 36px; min-height: 36px; padding: 0; border-radius: 50%; }
   .content .shell-mobile-trailing-actions .transaction-selection-toolbar--compact { gap: 0; }
+  .content > :is(.topbar, .shell-compact-bar) :is(.topbar-actions, .shell-compact-bar__actions) .shell-mobile-trailing-actions .transactions-manage-menu { display: block !important; }
   .content > :is(.topbar, .shell-compact-bar) { gap: 4px !important; }
   .shell-mobile-trailing-actions .reports-range-menu__panel { left: auto; right: 0; max-width: calc(100vw - 24px); }
   #investment-header-filter .portfolio-filter-menu[data-open="true"] .portfolio-filter-menu__options {
@@ -64891,3 +64939,48 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
 .transaction-creation-panel p { color: #536b73; line-height: 1.5; }
 .transaction-creation-upload { display: grid; gap: 12px; margin-top: 24px; }
 .transaction-creation-upload button { min-height: 56px; }
+/* Keep the expanded transaction summary reachable on narrow layouts. */
+@media (max-width: 900px) {
+  .transactions-layout--summary-open { grid-template-columns: minmax(0, 1fr); }
+  .transactions-layout--summary-open .transactions-summary-panel { order: -1; position: static; }
+}
+
+/* Reflow financial entry when text-only zoom leaves the viewport unchanged. */
+.modal-card--enlarged-text .manual-form-layout--compact {
+  grid-template-columns: minmax(0, 1fr);
+}
+.modal-card--enlarged-text .manual-form-layout--compact > * {
+  grid-column: 1 / -1 !important;
+}
+.modal-card--enlarged-text .transactions-manual-type-toggle {
+  grid-template-columns: minmax(0, 1fr);
+}
+.modal-card--enlarged-text .transactions-manual-type-toggle__button,
+.modal-card--enlarged-text input,
+.modal-card--enlarged-text .transactions-manual-picker__button,
+.modal-card--enlarged-text .transactions-manual-currency__button {
+  height: auto;
+  min-height: 1.6em;
+  line-height: 1.4;
+}
+.modal-card--enlarged-text .manual-form-actions {
+  flex-wrap: wrap;
+}
+.modal-card--enlarged-text .transactions-manual-row--money {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Home uses a narrow dialog, including when opened from global quick add. */
+.dashboard-manual-form.manual-form-layout--compact {
+  grid-template-columns: minmax(0, 1fr);
+}
+.dashboard-manual-form.manual-form-layout--compact > * {
+  grid-column: 1 / -1;
+}
+
+/* Keep full precision readable for unusually large Home balances. */
+.dashboard-home__hero-main--large-balance { min-width: 0; }
+.dashboard-home__hero-main--large-balance > strong {
+  font-size: clamp(0.85rem, 2vw, 1.4rem);
+  white-space: nowrap;
+}

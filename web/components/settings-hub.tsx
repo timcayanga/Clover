@@ -902,7 +902,7 @@ export function SettingsHub({
     let cancelled = false;
 
     const loadProfiles = async () => {
-      if (profilesLoaded || profilesLoading || activeSection !== "profiles") {
+      if (profilesLoaded || activeSection !== "profiles") {
         return;
       }
 
@@ -939,7 +939,7 @@ export function SettingsHub({
     return () => {
       cancelled = true;
     };
-  }, [activeSection, profilesLoaded, profilesLoading, workspaceId, workspaceName]);
+  }, [activeSection, profilesLoaded, workspaceId, workspaceName]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1606,11 +1606,14 @@ export function SettingsHub({
           }),
         });
 
-        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        const payload = (await response.json().catch(() => ({}))) as { workspace?: ProfileSummary; error?: string };
         if (!response.ok) {
           throw new Error(payload.error ?? "Unable to create profile.");
         }
 
+        if (payload.workspace?.id) {
+          setProfileList((current) => normalizeProfileList([...current, payload.workspace!]));
+        }
         setNewProfileName("");
         setProfileMessage("Profile created.");
         setProfilesLoaded(false);

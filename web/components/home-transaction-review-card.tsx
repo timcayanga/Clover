@@ -1,5 +1,8 @@
 "use client";
 
+import { containDialogFocus } from "@/lib/dialog-focus";
+import { HomeSensitiveAmount } from "@/components/home-sensitive-amount";
+
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
@@ -124,6 +127,8 @@ export function HomeTransactionDetailModal({
 }) {
   const router = useRouter();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const detailRequest = useRef(0);
   const [detail, setDetail] = useState<DetailTransaction | null>(null);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
@@ -152,7 +157,8 @@ export function HomeTransactionDetailModal({
     [accounts]
   );
 
-  const hydrateDetail = (force = false) => {
+  const hydrateDetail = (force = true) => {
+    const request = ++detailRequest.current;
     setDetail(null);
     setDraft(null);
     setAccounts([]);
@@ -164,6 +170,7 @@ export function HomeTransactionDetailModal({
 
     void loadTransactionDetail(selected.id, force)
       .then((payload) => {
+        if (request !== detailRequest.current) return;
         const next = payload.transaction!;
         setDetail(next);
         setAccounts(payload.accounts ?? []);
@@ -171,8 +178,10 @@ export function HomeTransactionDetailModal({
         setDraft(createDraft(next));
         setTags((next.tags ?? []).map((tag) => tag.name));
       })
-      .catch((error) => setMessage(error instanceof Error ? error.message : "Unable to load transaction."))
-      .finally(() => setLoading(false));
+      .catch((error) => {
+        if (request === detailRequest.current) setMessage(error instanceof Error ? error.message : "Unable to load transaction.");
+      })
+      .finally(() => { if (request === detailRequest.current) setLoading(false); });
   };
 
   const closeDetail = () => {
@@ -184,13 +193,17 @@ export function HomeTransactionDetailModal({
 
   useEffect(() => {
     hydrateDetail();
+    return () => { detailRequest.current += 1; };
+  }, [selected.id]);
+
+  useEffect(() => {
+    if (dialogRef.current) return containDialogFocus(dialogRef.current, closeButtonRef.current);
   }, [selected.id]);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     document.body.setAttribute("data-clover-page-modal", "home-transaction-detail");
-    closeButtonRef.current?.focus();
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !saving) {
@@ -249,7 +262,7 @@ export function HomeTransactionDetailModal({
     <div className="modal-backdrop modal-backdrop--transaction-detail" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget) closeDetail();
     }}>
-          <section className="modal-card modal-card--wide transaction-drawer transaction-drawer--sidepanel home-transaction-detail" role="dialog" aria-modal="true" aria-labelledby="home-transaction-detail-title">
+          <section ref={dialogRef} className="modal-card modal-card--wide transaction-drawer transaction-drawer--sidepanel home-transaction-detail" role="dialog" aria-modal="true" aria-labelledby="home-transaction-detail-title">
             <div className="modal-head transaction-drawer__head">
               <div className="transaction-drawer__head-title">
                 <div>
@@ -272,7 +285,7 @@ export function HomeTransactionDetailModal({
 
             <div className={`transaction-drawer-view__amount is-${draft?.type ?? (selected.type === "income" ? "credit" : selected.type === "transfer" ? "transfer" : "debit")}`}>
               <CategoryBrandMark categoryName={selectedCategory?.name ?? detail?.categoryName ?? selected.categoryName ?? "Other"} size={34} radius={11} />
-              <strong>{formatCurrencyAmount(Number(draft?.amount ?? detail?.amount ?? selected.amount), draft?.currency ?? detail?.currency ?? selected.currency)}</strong>
+              <strong><HomeSensitiveAmount value={formatCurrencyAmount(Number(draft?.amount ?? detail?.amount ?? selected.amount), draft?.currency ?? detail?.currency ?? selected.currency)} currency={draft?.currency ?? detail?.currency ?? selected.currency} /></strong>
               <em>{new Date(draft?.date ?? detail?.date ?? selected.date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}</em>
             </div>
 
@@ -302,15 +315,16 @@ export function HomeTransactionDetailModal({
                       </div>
                     </div>
                     <label>Name<input value={draft.merchantClean} onChange={(event) => setDraft({ ...draft, merchantClean: event.target.value })} /></label>
-                    <label>Date<input type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} /></label>
+                    <label>Date<input type="date" required value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} /></label>
                     <label>Account<TransactionAccountPicker accounts={accountPickerOptions} selectedId={draft.accountId} onSelect={(account) => setDraft({ ...draft, accountId: account.id })} ariaLabel="Choose transaction account" className="transaction-detail-page__relation-picker" /></label>
                     <label>Category<TransactionCategoryPicker categories={categories} selectedId={draft.categoryId} onSelect={(category) => setDraft({ ...draft, categoryId: category.id })} ariaLabel="Choose transaction category" className="transaction-detail-page__relation-picker" /></label>
                     <div className="transaction-detail-page__tags-field"><span>Tags</span><TransactionTagsEditor tags={tags} onChange={setTags} placeholder="Examples: Work, Family" inputAriaLabel="Add tags to transaction" /></div>
-                    <label>Amount<span className="transaction-detail-page__money-control"><CurrencySelector value={draft.currency} onChange={(currency) => setDraft({ ...draft, currency })} options={getCurrencyCatalogCodes()} ariaLabel="Select transaction currency" /><input type="number" min="0" step="0.01" value={draft.amount} onChange={(event) => setDraft({ ...draft, amount: event.target.value })} /></span></label>
+                    <label>Amount<span className="transaction-detail-page__money-control"><CurrencySelector value={draft.currency} onChange={(currency) => setDraft({ ...draft, currency })} options={getCurrencyCatalogCodes()} ariaLabel="Select transaction currency" /><input type="number" required min="0.01" step="0.01" value={draft.amount} onChange={(event) => setDraft({ ...draft, amount: event.target.value })} /></span></label>
                     <label className="transaction-detail-page__notes">Notes<textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} placeholder="Optional note" /></label>
                   </div>
                 ) : (
                   <dl className="transaction-drawer-view__facts">
+                    <div><dt>Original description</dt><dd>{detail.merchantRaw}</dd></div>
                     <div><dt>Type</dt><dd>{draft.type === "credit" ? "Income" : draft.type === "transfer" ? "Transfer" : "Expense"}</dd></div>
                     <div><dt>Account</dt><dd>{selectedAccount ? displayAccountName(selectedAccount) : detail.accountName}</dd></div>
                     <div><dt>Category</dt><dd>{selectedCategory?.name ?? detail.categoryName ?? "Other"}</dd></div>

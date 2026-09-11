@@ -17,6 +17,9 @@ export function FeatureStory({ story, authEnabled, initialMarket, countryResolve
   const root = useRef<HTMLDivElement>(null);
   useLandingTableFit(root);
   const frame = useRef<number | null>(null);
+  const copyRef = useRef<HTMLElement>(null);
+  const nextRef = useRef<HTMLButtonElement>(null);
+  const focusFinalAction = useRef(false);
   const [position, setPosition] = useState(0);
   const [market, setMarket] = useState(initialMarket);
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -24,6 +27,15 @@ export function FeatureStory({ story, authEnabled, initialMarket, countryResolve
   const current = story.chapters[active];
   const final = active === story.chapters.length-1;
   const pricing = current.visual === "pricing";
+
+  useEffect(() => {
+    if (!final || !focusFinalAction.current) return;
+    focusFinalAction.current = false;
+    // The final chapter removes Next; retain the keyboard user's place in the story.
+    if (document.activeElement === document.body) {
+      copyRef.current?.querySelector<HTMLElement>('a[href],button:not([disabled])')?.focus({ preventScroll: true });
+    }
+  }, [final]);
 
   useEffect(() => {
     if (countryResolved || initialMarket === "ph") return;
@@ -43,7 +55,9 @@ export function FeatureStory({ story, authEnabled, initialMarket, countryResolve
     };
     const requestUpdate = () => { if(frame.current===null) frame.current=requestAnimationFrame(update); };
     const hashTarget = () => {
-      const index = story.chapters.findIndex(chapter=>`#${chapter.id}`===location.hash);
+      let fragment = location.hash.slice(1);
+      try { fragment = decodeURIComponent(fragment); } catch { /* Ignore malformed escapes. */ }
+      const index = story.chapters.findIndex(chapter=>chapter.id===fragment);
       const element = root.current;
       if(index>=0 && element) window.scrollTo({top:window.scrollY+element.getBoundingClientRect().top+(element.offsetHeight-innerHeight)*featureChapterProgress(index,story.chapters.length),behavior:"instant"});
       requestUpdate();
@@ -71,7 +85,7 @@ export function FeatureStory({ story, authEnabled, initialMarket, countryResolve
         </picture>)}
       </div>
       <div className={styles.wash} aria-hidden="true" />
-      <section className={`${styles.content} ${pricing?styles.pricingContent:""}`} data-landing-copy data-final={final} aria-live="polite" aria-atomic="true">
+      <section ref={copyRef} className={`${styles.content} ${pricing?styles.pricingContent:""}`} data-landing-copy data-final={final} aria-live="polite" aria-atomic="true">
         <div className={styles.copy} key={current.id}>
           <h1>{current.title} <em>{current.accent}</em></h1>
           {current.copy && <p className={styles.description}>{current.copy}</p>}
@@ -89,7 +103,10 @@ export function FeatureStory({ story, authEnabled, initialMarket, countryResolve
         {story.chapters.map((chapter,index)=><button type="button" key={chapter.id} onClick={()=>goTo(index)} aria-label={`Go to ${chapter.id.replaceAll("-"," ")}`} aria-current={index===active?"step":undefined}><span /></button>)}
         <small>{active+1}/{story.chapters.length}</small>
       </nav>
-      {!final && <button className={styles.next} type="button" onClick={()=>goTo(active+1)}>Keep scrolling <span aria-hidden="true">↓</span></button>}
+      {!final && <button ref={nextRef} className={styles.next} type="button" onClick={(event)=>{
+        focusFinalAction.current = active === story.chapters.length - 2 && event.detail === 0 && document.activeElement === nextRef.current;
+        goTo(active+1);
+      }}>Keep scrolling <span aria-hidden="true">↓</span></button>}
     </div>
   </div><PublicFooter /></>;
 }

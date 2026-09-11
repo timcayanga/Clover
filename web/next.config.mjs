@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -26,6 +28,9 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Keep worktree builds scoped to their own repository, rather than inferring
+  // the outer checkout from its lockfile and watching sibling worktrees.
+  outputFileTracingRoot: fileURLToPath(new URL("..", import.meta.url)),
   // Keep each open document pinned to the Vercel deployment that rendered it.
   // This prevents HTML and hashed chunks from different builds being mixed.
   deploymentId: process.env.VERCEL_DEPLOYMENT_ID ?? process.env.NEXT_DEPLOYMENT_ID,

@@ -472,7 +472,7 @@ export function DashboardManualTransactionModal({
         <p className="modal-copy">Add it here and Clover will keep you on the Dashboard.</p>
 
         <form onSubmit={handleSubmit}>
-          <div className="manual-form-layout manual-form-layout--compact">
+          <div className="manual-form-layout manual-form-layout--compact dashboard-manual-form">
             <div className="transactions-manual-type-toggle" role="group" aria-label="Transaction type">
               <button
                 type="button"
@@ -561,6 +561,11 @@ export function DashboardManualTransactionModal({
                 />
               </label>
             </div>
+
+            <label className="transactions-manual-field transactions-manual-field--embedded-label">
+              <span className="transactions-manual-field__label">Date</span>
+              <input type="date" value={form.date} required onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} />
+            </label>
 
             <div className="transactions-manual-inline-row transactions-manual-inline-row--account">
               <span className="transactions-manual-inline-row__icon transactions-manual-inline-row__icon--account" aria-hidden="true">
@@ -930,13 +935,9 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
     setImportOpen(true);
   };
 
-  if (isCompactViewport) {
-    return null;
-  }
-
   return (
     <>
-      <div className="dashboard-top-actions">
+      <div className="dashboard-top-actions" hidden={isCompactViewport}>
         <button
           className="button button-secondary button-small transactions-action-button transactions-toolbar-add dashboard-top-actions__button"
           type="button"

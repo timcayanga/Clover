@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { assertTrustedRequestOrigin } from "@/lib/request-security";
 import { sanitizeTransactionTagNames } from "@/lib/transaction-tags";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { parsePositiveTransactionAmount } from "@/lib/transaction-amount-input";
 
 export const dynamic = "force-dynamic";
 
@@ -57,9 +58,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Choose two different accounts." }, { status: 400 });
     }
 
-    const amount = Math.abs(Number(payload.amount));
-    const feeAmount = Math.abs(Number(payload.feeAmount ?? 0));
-    if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(feeAmount)) {
+    const amount = parsePositiveTransactionAmount(payload.amount);
+    const feeAmount = payload.feeAmount === null || payload.feeAmount === undefined || payload.feeAmount === ""
+      ? 0
+      : parsePositiveTransactionAmount(payload.feeAmount);
+    if (amount === null || feeAmount === null) {
       return NextResponse.json({ error: "Enter a valid transfer amount." }, { status: 400 });
     }
 

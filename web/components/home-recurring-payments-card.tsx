@@ -1,14 +1,18 @@
 "use client";
 
+import { HomeSensitiveAmount } from "@/components/home-sensitive-amount";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 
 export type HomeRecurringPaymentItem = {
   id: string;
   title: string;
   detail: string;
+  amountLabel?: string | null;
+  currency?: string | null;
   dueDate: string;
   completed: boolean;
 };
@@ -17,6 +21,8 @@ export type HomeRecurringSuggestionItem = {
   id: string;
   title: string;
   detail: string;
+  amountLabel?: string | null;
+  currency?: string | null;
 };
 
 export function HomeRecurringPaymentsCard({
@@ -28,19 +34,21 @@ export function HomeRecurringPaymentsCard({
 }) {
   const router = useRouter();
   const [items, setItems] = useState(payments);
+  const savingRef = useRef<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setItems(payments);
+    if (!savingRef.current) setItems(payments);
   }, [payments]);
 
   const toggleCompleted = async (item: HomeRecurringPaymentItem) => {
-    if (savingId) {
+    if (savingRef.current) {
       return;
     }
 
     const completed = !item.completed;
+    savingRef.current = item.id;
     setSavingId(item.id);
     setError(null);
     setItems((current) =>
@@ -69,6 +77,7 @@ export function HomeRecurringPaymentsCard({
       );
       setError(caughtError instanceof Error ? caughtError.message : "Unable to update this payment yet");
     } finally {
+      savingRef.current = null;
       setSavingId(null);
     }
   };
@@ -105,7 +114,7 @@ export function HomeRecurringPaymentsCard({
               </button>
               <div className="dashboard-home__action-row-copy">
                 <strong>{item.title}</strong>
-                <small>{item.detail}</small>
+                <small>{item.detail}{item.amountLabel ? <> · <HomeSensitiveAmount value={item.amountLabel} currency={item.currency} /></> : null}</small>
               </div>
             </div>
           ))}
@@ -114,7 +123,7 @@ export function HomeRecurringPaymentsCard({
               <span className="dashboard-home__payment-check dashboard-home__payment-check--suggestion" aria-hidden="true">?</span>
               <div className="dashboard-home__action-row-copy">
                 <strong>{suggestion.title}</strong>
-                <small>{suggestion.detail}</small>
+                <small>{suggestion.detail}{suggestion.amountLabel ? <> · <HomeSensitiveAmount value={suggestion.amountLabel} currency={suggestion.currency} /></> : null}</small>
               </div>
               <Link className="dashboard-home__mini-action" href="/recurring?tab=planned">Review</Link>
             </div>

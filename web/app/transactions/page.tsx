@@ -1,7 +1,14 @@
 "use client";
 import { AdviserFormAssist } from "@/components/adviser-form-assist";
 import { AdviserChat } from "@/components/adviser-chat";
+import { formatTransactionAccountName } from "@/lib/transaction-account-sort";
+import { containDialogFocus } from "@/lib/dialog-focus";
+import { getRecordedTransactionConfidence } from "@/lib/transaction-confidence";
+import { normalizeTransactionAmountInput, transactionAmountFormatMessage } from "@/lib/transaction-amount-input";
+import { createTransactionRequestGate } from "@/lib/transaction-request-gate";
+import { readTransactionListContext, writeTransactionListContext } from "@/lib/transaction-list-context";
 import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
+import { useEnlargedText } from "@/lib/use-enlarged-text";
 
 import dynamic from "next/dynamic";
 import {
@@ -51,6 +58,7 @@ import {
 import { buildTransactionInlineRelationPatches } from "@/lib/transaction-inline-relation-patches";
 import {
   buildTransactionDetailDraft,
+  mergeRefreshedTransactionDetailDraft,
   type TransactionDetailDraftValue,
 } from "@/lib/transaction-detail-draft";
 import { applyTransactionPatchToDetailDraft } from "@/lib/transaction-detail-draft-patch";
@@ -235,28 +243,6 @@ const resolvePersistedImportedAccountId = (summary: UploadInsightsSummary, accou
   );
 };
 
-const formatTransactionAccountName = (account: Account) => {
-  if (account.type === "cash") {
-    return getAccountDisplayName(account);
-  }
-
-  const accountLabel =
-    account.source === "upload"
-      ? getAccountCardName({
-          name: account.name,
-          institution: account.institution,
-          accountNumber: account.accountNumber,
-          type: account.type,
-          source: account.source,
-        })
-      : getAccountDisplayName(account);
-
-  if (isWiseWalletWithoutVisibleAccountNumber(account)) {
-    return appendWiseWalletCurrency(accountLabel, account.currency);
-  }
-
-  return appendImportedAccountLastFour(accountLabel, account.accountNumber);
-};
 
 const getTransactionAccountFilterKey = (account: Account) => {
   if (account.type === "cash") {
@@ -428,6 +414,7 @@ type Transaction = {
   splitBill?: { id: string; title: string } | null;
   source?: string | null;
   importFileId?: string | null;
+  importFileName?: string | null;
   warningReason?: string | null;
   rawPayload?: unknown;
   normalizedPayload?: unknown;
@@ -620,10 +607,7 @@ const formatTransactionAmount = (value: number, currency?: string | null) => for
 const getCurrencyCodes = (transactions: Array<{ currency: string }>) =>
   Array.from(new Set(transactions.map((transaction) => formatCurrencyCode(transaction.currency))));
 
-const getWorkspaceCurrencyCodes = (transactions: Array<{ currency: string }>, fallback = "PHP") => {
-  const codes = getCurrencyCodes(transactions);
-  return codes.length > 0 ? codes : [fallback];
-};
+const getWorkspaceCurrencyCodes = (transactions: Array<{ currency: string }>) => getCurrencyCodes(transactions);
 
 const formatTransactionAggregate = (value: number, transactions: Array<{ currency: string }>) => {
   const currencies = getCurrencyCodes(transactions);
@@ -1644,15 +1628,6 @@ const getConfidenceLabel = (value: number) => {
   return "Low confidence";
 };
 
-const normalizeConfidenceScore = (value: number | null | undefined) => {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return null;
-  }
-
-  const score = value <= 1 ? value * 100 : value;
-  return Math.max(0, Math.min(100, Math.round(score)));
-};
-
 const inferTransactionConfidenceSignals = (transaction: Transaction, warningReason: string | null): TransactionConfidenceSignal[] => {
   const source = transaction.source ?? "upload";
   const hasWarning = Boolean(warningReason);
@@ -1700,16 +1675,8 @@ const inferTransactionConfidenceSignals = (transaction: Transaction, warningReas
 };
 
 const getTransactionConfidenceScore = (transaction: Transaction, warningReason: string | null) => {
-  const confidenceSignals = [
-    normalizeConfidenceScore(transaction.parserConfidence),
-    normalizeConfidenceScore(transaction.categoryConfidence),
-    normalizeConfidenceScore(transaction.accountMatchConfidence),
-    transaction.type === "transfer" ? normalizeConfidenceScore(transaction.transferConfidence) : null,
-  ].filter((value): value is number => typeof value === "number");
-
-  if (confidenceSignals.length > 0) {
-    return Math.round(confidenceSignals.reduce((sum, value) => sum + value, 0) / confidenceSignals.length);
-  }
+  const recorded = getRecordedTransactionConfidence(transaction);
+  if (recorded !== null) return recorded;
 
   const inferredSignals = inferTransactionConfidenceSignals(transaction, warningReason);
   return Math.round(inferredSignals.reduce((sum, signal) => sum + signal.value, 0) / inferredSignals.length);
@@ -2230,6 +2197,8 @@ function TransactionsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlSearchParams = useMemo(() => searchParams ?? new URLSearchParams(), [searchParams]);
+  const manualDialogRef = useRef<HTMLElement>(null);
+  const bulkEditDialogRef = useRef<HTMLElement>(null);
   const manualNameInputRef = useRef<HTMLInputElement>(null);
   const manualCategoryButtonRef = useRef<HTMLButtonElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
@@ -2243,6 +2212,10 @@ function TransactionsPageContent() {
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(initialWorkspaceId);
+  const activeAccountWorkspaceRef = useRef(selectedWorkspaceId);
+  useLayoutEffect(() => {
+    activeAccountWorkspaceRef.current = selectedWorkspaceId;
+  }, [selectedWorkspaceId]);
   const [accounts, setAccounts] = useState<Account[]>(
     () => []
   );
@@ -2294,7 +2267,7 @@ function TransactionsPageContent() {
   const [accountFilters, setAccountFilters] = useState<string[]>([]);
   const [typeFilters, setTypeFilters] = useState<TransactionTypeFilter[]>([]);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [message, setMessage] = useState("Select a workspace to review transactions.");
+  const [message, setMessage] = useState("");
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [addMenuPortalStyle, setAddMenuPortalStyle] = useState<React.CSSProperties | null>(null);
@@ -2307,6 +2280,8 @@ function TransactionsPageContent() {
   const [manualOpen, setManualOpen] = useState(false);
   const [creationTab, setCreationTab] = useState<"manual" | "ask" | "upload">("manual");
   const [creationChatVisited, setCreationChatVisited] = useState(false);
+  const enlargedText = useEnlargedText();
+  const [manualSaveError, setManualSaveError] = useState("");
   const mobileCreation = useMobileCreationRoute(manualOpen, setManualOpen, "/transactions");
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
@@ -2317,6 +2292,23 @@ function TransactionsPageContent() {
   const [tagError, setTagError] = useState("");
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
+  const selectedRowsRef = useRef<{ workspaceId: string; rows: Map<string, Transaction> }>({
+    workspaceId: selectedWorkspaceId,
+    rows: new Map(),
+  });
+  useEffect(() => {
+    const previous = selectedRowsRef.current;
+    const visible = new Map(transactions.map((transaction) => [transaction.id, transaction]));
+    const rows = new Map<string, Transaction>();
+    // Server pagination replaces transactions; retain only explicitly selected rows.
+    if (previous.workspaceId === selectedWorkspaceId) {
+      for (const id of selectedTransactionIds) {
+        const transaction = visible.get(id) ?? previous.rows.get(id);
+        if (transaction) rows.set(id, transaction);
+      }
+    }
+    selectedRowsRef.current = { workspaceId: selectedWorkspaceId, rows };
+  }, [transactions, selectedTransactionIds, selectedWorkspaceId]);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const transactionDetailRefreshRequestRef = useRef(0);
   const selectedTransactionCount = selectedTransactionIds.length;
@@ -2340,6 +2332,7 @@ function TransactionsPageContent() {
   const [bulkEditForm, setBulkEditForm] = useState<BulkEditForm>(createEmptyBulkEditForm());
   const [manualForm, setManualForm] = useState<ManualTransactionForm>(createEmptyManualForm());
   const [isSaving, setIsSaving] = useState(false);
+  const manualSaveInFlightRef = useRef(false);
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
   const [planUsage, setPlanUsage] = useState<PlanUsage | null>(null);
@@ -2349,7 +2342,7 @@ function TransactionsPageContent() {
   const transactionsAutoRetryRef = useRef(0);
   const [, setHasInitialTransactionsLoaded] = useState(false);
   const [hasLoadedWorkspaceList, setHasLoadedWorkspaceList] = useState(false);
-  const [workspaceCurrencyCodes, setWorkspaceCurrencyCodes] = useState<string[]>(() => ["PHP"]);
+  const [workspaceCurrencyCodes, setWorkspaceCurrencyCodes] = useState<string[]>([]);
   const [undoStack, setUndoStack] = useState<TransactionHistoryEntry[]>([]);
   const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
@@ -2393,6 +2386,28 @@ function TransactionsPageContent() {
   const warningPopoverRefs = useRef(new Map<string, HTMLDivElement | null>());
   const selectionActionsMenuRef = useRef<HTMLDivElement | null>(null);
   const transactionsLoadRequestRef = useRef(0);
+  const requestGateRef = useRef(createTransactionRequestGate());
+  const hasActiveTransactionFilters = Boolean(query.trim() || currencyFilter || categoryFilters.length || tagFilters.length ||
+    accountFilters.length || typeFilters.length || dateFilterMode !== "ltd" || customStart || customEnd || amountMin || amountMax);
+  const transactionQueryKey = JSON.stringify([
+    selectedWorkspaceId, query, currencyFilter, categoryFilters, tagFilters,
+    accountFilters, typeFilters, dateFilterMode, dateFilterAnchor, customStart,
+    customEnd, sortField, sortDirection, amountMin, amountMax, transactionsPage, transactionsPageSize, summaryOpen,
+  ]);
+  const skipContextWriteRef = useRef(true);
+  const [contextRestoreVersion, setContextRestoreVersion] = useState(0);
+  useEffect(() => {
+    if (skipContextWriteRef.current) { skipContextWriteRef.current = false; return; }
+    const context = {
+      query, categoryFilters, tagFilters, accountFilters, typeFilters,
+      dateFilterMode, dateFilterAnchor, customStart, customEnd, amountMin, amountMax, sortField, sortDirection,
+    };
+    if (selectedWorkspaceId) writeTransactionListContext(selectedWorkspaceId, context);
+  }, [transactionQueryKey, contextRestoreVersion]);
+  useLayoutEffect(() => {
+    requestGateRef.current.select(transactionQueryKey);
+  }, [transactionQueryKey]);
+
   const authoritativeCurrencyWorkspaceRef = useRef("");
   const deletedTransactionIdsRef = useRef(new Set<string>());
   const transactionsHydrationVersionRef = useRef(new Map<string, number>());
@@ -2466,7 +2481,12 @@ function TransactionsPageContent() {
     const close = (event: PointerEvent) => {
       if (event.target instanceof Element && !event.target.closest(".transactions-inline-filters, .transaction-selection-toolbar, .transactions-filter-currency__menu")) setFilterOpen(false);
     };
-    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setFilterOpen(false); };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setFilterOpen(false);
+        document.querySelector<HTMLButtonElement>(".transaction-selection-toolbar__filter")?.focus();
+      }
+    };
     document.addEventListener("pointerdown", close);
     document.addEventListener("keydown", escape);
     return () => { controller.abort(); document.removeEventListener("pointerdown", close); document.removeEventListener("keydown", escape); };
@@ -2795,6 +2815,9 @@ function TransactionsPageContent() {
       preserveKnownTotal?: boolean;
     }
   ) => {
+    if (dateFilterMode === "custom" && customStart && customEnd && customStart > customEnd) return;
+    const requestToken = options?.prefetchOnly ? null : requestGateRef.current.begin(transactionQueryKey, Boolean(options?.append));
+    if (!options?.prefetchOnly && !requestToken) return;
     const requestId = options?.prefetchOnly ? transactionsLoadRequestRef.current : ++transactionsLoadRequestRef.current;
     const hasResilientFallbackEvidence = () =>
       hasCachedTransactionsWorkspaceEvidence(workspaceId) ||
@@ -2868,7 +2891,7 @@ function TransactionsPageContent() {
         pageSize: requestPageSize,
       }
     );
-    searchParams.set("summaryMode", options?.summaryMode ?? "light");
+    searchParams.set("summaryMode", summaryOpen ? "full" : options?.summaryMode ?? "light");
     const largePageSearchParams = buildTransactionQuerySearchParams(
       workspaceId,
       {
@@ -2892,6 +2915,7 @@ function TransactionsPageContent() {
     largePageSearchParams.set("summaryMode", "light");
     const largePageKey = `transactions:list:${workspaceId}:${largePageSearchParams.toString()}`;
     const cachedPrefetch =
+      !summaryOpen &&
       !options?.background &&
       !options?.append &&
       !options?.includeAll &&
@@ -2930,7 +2954,7 @@ function TransactionsPageContent() {
         return;
       }
 
-      if (requestId !== transactionsLoadRequestRef.current) {
+      if (requestId !== transactionsLoadRequestRef.current || (requestToken && !requestGateRef.current.isCurrent(requestToken))) {
         return;
       }
 
@@ -2947,6 +2971,7 @@ function TransactionsPageContent() {
               !deletedTransactionIdsRef.current.has(transaction.id)
           )
         : [];
+      if (requestToken) requestGateRef.current.finish(requestToken, true);
       const cachedWorkspaceSnapshot = getCachedTransactionsWorkspace(workspaceId);
       const cachedWorkspaceTransactions = cachedWorkspaceSnapshot?.transactions as Transaction[] | undefined;
       const visibleCachedWorkspaceTransactions = (cachedWorkspaceTransactions ?? []).filter(
@@ -2962,18 +2987,7 @@ function TransactionsPageContent() {
         transaction.id.startsWith("optimistic-")
       );
       const hasFreshTransactions = fetchedTransactions.length > 0;
-      const hasServerSideFilters = Boolean(
-        query.trim() ||
-          currencyFilter.trim() ||
-          categoryFilters.length > 0 || tagFilters.length > 0 ||
-          expandedAccountFilters.length > 0 ||
-          typeFilters.length > 0 ||
-          dateFilterMode !== "ltd" ||
-          customStart.trim() ||
-          customEnd.trim() ||
-          amountMin.trim() ||
-          amountMax.trim()
-      );
+      const hasServerSideFilters = hasActiveTransactionFilters;
       const stableBaseTransactions =
         transactionsRef.current.length > 0
           ? transactionsRef.current.filter(
@@ -2995,7 +3009,7 @@ function TransactionsPageContent() {
       // length while the cached/previous summary already knows about older rows.
       // Keep the largest trustworthy count so mobile pagination is not marked
       // complete before those rows have been requested.
-      const knownServerTotalCount = getKnownMobileTransactionTotal(
+      const knownServerTotalCount = hasServerSideFilters ? exactServerTotalCount : getKnownMobileTransactionTotal(
         exactServerTotalCount,
         transactionsSummary.totalCount,
         Number.isFinite(cachedTotalCount) ? cachedTotalCount : 0
@@ -3020,7 +3034,7 @@ function TransactionsPageContent() {
             fetchedTransactions.length < stableBaseTransactions.length &&
             exactServerTotalCount <= stableBaseTransactions.length)
         );
-      const shouldPatchExistingTransactions = Boolean(options?.append || !hasFreshTransactions);
+      const shouldPatchExistingTransactions = Boolean(options?.append || (!hasServerSideFilters && !hasFreshTransactions));
       const baseTransactions = shouldPatchExistingTransactions ? stableBaseTransactions : [];
       const mergedTransactions = options?.append
         ? appendUniqueTransactions(baseTransactions, fetchedTransactions)
@@ -3038,8 +3052,7 @@ function TransactionsPageContent() {
             })
           : importedTransactionsToPreserve;
       const shouldPreserveImportedTransactions =
-        (!hasServerSideFilters ||
-          (Boolean(options?.background) && (hasRecentImportEvidence || hasOptimisticImportedTransactions))) &&
+        !hasServerSideFilters &&
         (requestPage === 1 || Boolean(options?.append)) &&
         importedTransactionsToPreserveAfterServerResponse.length > 0 &&
         (exactServerTotalCount > 0 || hasRecentImportEvidence || hasOptimisticImportedTransactions) &&
@@ -3059,7 +3072,7 @@ function TransactionsPageContent() {
       const workspaceCurrencyCodesFromData = getWorkspaceCurrencyCodes(
         mergedTransactionsWithImports.length > 0 ? mergedTransactionsWithImports : fetchedTransactions
       );
-      const nextCurrencyCodes = responseCurrencyCodes.length > 0 ? responseCurrencyCodes : workspaceCurrencyCodesFromData;
+      const nextCurrencyCodes = Array.isArray(payload?.currencyCodes) ? responseCurrencyCodes : workspaceCurrencyCodesFromData;
       authoritativeCurrencyWorkspaceRef.current = workspaceId;
       const serverDisplayedTotalCount =
         hasServerSideFilters
@@ -3194,7 +3207,7 @@ function TransactionsPageContent() {
           nextTransactionsSummary.transfers === 0;
         const currentFinancialsHaveValue =
           currentSummary.income !== 0 || currentSummary.spending !== 0 || currentSummary.transfers !== 0;
-        if (nextFinancialsAreEmpty && currentFinancialsHaveValue && hasRecentImportEvidence) {
+        if (!hasServerSideFilters && nextFinancialsAreEmpty && currentFinancialsHaveValue && hasRecentImportEvidence) {
           return {
             ...nextTransactionsSummary,
             totalCount: Math.max(currentSummary.totalCount, nextTransactionsSummary.totalCount),
@@ -3214,7 +3227,7 @@ function TransactionsPageContent() {
           currentSummary.income !== 0 ||
           currentSummary.spending !== 0 ||
           currentSummary.transfers !== 0;
-        if (nextIsEmpty && currentHasValue && mergedTransactionsWithImports.length > 0) {
+        if (!hasServerSideFilters && nextIsEmpty && currentHasValue && mergedTransactionsWithImports.length > 0) {
           return {
             ...currentSummary,
             totalCount: Math.max(currentSummary.totalCount, mergedTransactionsWithImports.length),
@@ -3239,9 +3252,11 @@ function TransactionsPageContent() {
       // with a full-history scan or a hidden 200-row prefetch; both multiplied
       // Supabase egress whenever Transactions opened or refreshed after import.
     } catch {
-      if (requestId !== transactionsLoadRequestRef.current) {
+      if (requestId !== transactionsLoadRequestRef.current || (requestToken && !requestGateRef.current.isCurrent(requestToken))) {
         return;
       }
+
+      if (requestToken) requestGateRef.current.finish(requestToken, false);
 
       if (options?.append) {
         setIsMobileLoadingMore(false);
@@ -3284,6 +3299,12 @@ function TransactionsPageContent() {
     }
   };
 
+  useEffect(() => {
+    if (summaryOpen && selectedWorkspaceId) {
+      void loadTransactionsPage(selectedWorkspaceId, { background: true, summaryMode: "full" });
+    }
+  }, [summaryOpen]);
+
   const refreshTransactionsAfterImport = async (workspaceId: string) => {
     for (const delay of importedTransactionsRefreshDelays) {
       if (delay > 0) {
@@ -3292,7 +3313,7 @@ function TransactionsPageContent() {
 
       try {
         await Promise.all([
-          loadWorkspaceMetadata(workspaceId, { skipImports: true, background: true }),
+          loadWorkspaceMetadata(workspaceId, { background: true }),
           loadTransactionsPage(workspaceId, {
             background: true,
             pageOverride: 1,
@@ -3502,6 +3523,7 @@ function TransactionsPageContent() {
   }, [applyImportedSummary, selectedWorkspaceId]);
 
   const hydrateWorkspaceFromCache = (workspaceId: string) => {
+    if (hasActiveTransactionFilters) return false;
     if (!workspaceId) {
       return false;
     }
@@ -3653,11 +3675,29 @@ function TransactionsPageContent() {
 
   useLayoutEffect(() => {
     authoritativeCurrencyWorkspaceRef.current = "";
+    skipContextWriteRef.current = true;
+    const saved = readTransactionListContext(selectedWorkspaceId);
+    setContextRestoreVersion((version) => version + 1);
     setSelectedTransactionIds([]);
     setSelectedTransaction(null);
     setDetailDraft(null);
     setUndoStack([]);
     setRedoStack([]);
+    setQuery(saved?.query ?? "");
+    setCategoryFilters(saved?.categoryFilters ?? []);
+    setTagFilters(saved?.tagFilters ?? []);
+    setAccountFilters(saved?.accountFilters ?? []);
+    setTypeFilters(saved?.typeFilters ?? []);
+    setDateFilterMode(saved?.dateFilterMode ?? "ltd");
+    setDateFilterAnchor(saved?.dateFilterAnchor ?? todayIso);
+    setCustomStart(saved?.customStart ?? "");
+    setCustomEnd(saved?.customEnd ?? "");
+    setAmountMin(saved?.amountMin ?? "");
+    setAmountMax(saved?.amountMax ?? "");
+    setSortField(saved?.sortField ?? "date");
+    setSortDirection(saved?.sortDirection ?? "desc");
+    setTransactionsPage(1);
+    setFilterOpen(false);
 
     if (!selectedWorkspaceId) {
       setAccounts([]);
@@ -3678,14 +3718,14 @@ function TransactionsPageContent() {
         firstReviewTransaction: null,
         firstReviewTransactionIndex: null,
       });
-      setWorkspaceCurrencyCodes(["PHP"]);
+      setWorkspaceCurrencyCodes([]);
       setIsWorkspaceDataReady(hasLoadedWorkspaceList);
       setHasInitialTransactionsLoaded(hasLoadedWorkspaceList);
       return;
     }
 
     if (hydrateWorkspaceFromCache(selectedWorkspaceId)) {
-      void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
+      void loadWorkspaceMetadata(selectedWorkspaceId, { background: true });
       void loadTransactionsPage(selectedWorkspaceId, { background: true });
       return;
     }
@@ -3708,10 +3748,10 @@ function TransactionsPageContent() {
       firstReviewTransaction: null,
       firstReviewTransactionIndex: null,
     });
-    setWorkspaceCurrencyCodes(["PHP"]);
+    setWorkspaceCurrencyCodes([]);
     setIsWorkspaceDataReady(false);
     setHasInitialTransactionsLoaded(false);
-    void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true });
+    void loadWorkspaceMetadata(selectedWorkspaceId);
   }, [hasLoadedWorkspaceList, selectedWorkspaceId]);
 
   useEffect(() => {
@@ -3940,13 +3980,17 @@ function TransactionsPageContent() {
     };
   }, [addMenuOpen]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (manualOpen) {
-      manualNameInputRef.current?.focus();
       setManualAccountMenuOpen(false);
       setManualCategoryMenuOpen(false);
+      if (manualDialogRef.current && !mobileCreation) return containDialogFocus(manualDialogRef.current, manualNameInputRef.current, addMenuRef.current?.querySelector("button"));
     }
-  }, [manualOpen]);
+  }, [manualOpen, mobileCreation]);
+
+  useEffect(() => {
+    if (bulkEditOpen && bulkEditDialogRef.current) return containDialogFocus(bulkEditDialogRef.current);
+  }, [bulkEditOpen]);
 
   useEffect(() => {
     const reviewTransactionId = urlSearchParams.get("review");
@@ -4108,6 +4152,11 @@ function TransactionsPageContent() {
     const hasDrilldownParams = Boolean(q || month || categoriesFromUrl.length > 0 || accountsFromUrl.length > 0 || currencyFromUrl);
 
     if (!hasDrilldownParams) {
+      // An ordinary return/reload keeps the Profile's restored list context.
+      if (drilldownParamRef.current === null) {
+        drilldownParamRef.current = drilldownSignature;
+        return;
+      }
       if (drilldownParamRef.current === drilldownSignature) {
         return;
       }
@@ -4186,13 +4235,40 @@ function TransactionsPageContent() {
       throw new Error("Default account was not created.");
     }
 
-    setAccounts([data.account]);
+    setAccounts((current) => {
+      // A delayed Cash response must not replace existing accounts or enter another Profile.
+      if (activeAccountWorkspaceRef.current !== workspaceId) return current;
+      return current.some((account) => account.id === accountId)
+        ? current
+        : [...current, data.account];
+    });
     return accountId;
   };
+  const getDisplayCategoryNameForTransaction = useCallback(
+    (transaction: Transaction) => {
+      if (hasTransactionUserEdits(transaction)) return transaction.categoryName ?? getCategoryNameById(categories, transaction.categoryId ?? "") ?? "Other";
+      const categoryValue = transaction.categoryId ?? otherCategoryId;
+      const accountInstitution = transaction.institution ?? accountInstitutionById.get(transaction.accountId) ?? null;
+
+      return (
+        getEffectiveTransactionCategoryName({
+          categoryName: transaction.categoryName ?? getCategoryNameById(categories, categoryValue) ?? null,
+          rawPayload: transaction.rawPayload as never,
+          merchantRaw: transaction.merchantRaw,
+          merchantClean: transaction.merchantClean,
+          institution: accountInstitution,
+          source: transaction.source ?? null,
+          type: transaction.type,
+        }) ??
+        guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
+        "Other"
+      );
+    },
+    [accountInstitutionById, categories, otherCategoryId]
+  );
   const visibleTransactions = useMemo(() => {
     const filteredTransactions = transactions.filter(
       (transaction) =>
-        !transaction.isExcluded &&
         matchesTransactionSearch(transaction, searchText) &&
         matchesTransactionFilters(transaction, {
           currencyFilter,
@@ -4248,6 +4324,8 @@ function TransactionsPageContent() {
   }, [
     accountInstitutionById,
     accountNameById,
+    accountNumberById,
+    getDisplayCategoryNameForTransaction,
     categories,
     categoryNameById,
     currencyFilter,
@@ -4569,9 +4647,8 @@ function TransactionsPageContent() {
   const someVisibleSelected = desktopPageTransactionIds.some((transactionId) => selectedTransactionIds.includes(transactionId));
   const hasMoreMobileTransactions =
     isCompactViewport &&
-    !mobilePaginationExhausted &&
-    !searchText &&
-    (mobileVisibleTransactions.length < visibleTransactions.length || transactions.length < transactionsSummary.totalCount);
+    (mobileVisibleTransactions.length < visibleTransactions.length ||
+      (!mobilePaginationExhausted && !searchText && transactions.length < transactionsSummary.totalCount));
 
   const currentPageLabel = useMemo(() => {
     if (totalTransactionCountForDisplay === 0) {
@@ -4612,7 +4689,7 @@ function TransactionsPageContent() {
   }, [currentTransactionPage, totalTransactionPages]);
 
   const loadMoreMobileTransactions = useCallback(async () => {
-    if (!isCompactViewport || !hasMoreMobileTransactions) {
+    if (!isCompactViewport || !hasMoreMobileTransactions || !requestGateRef.current.canAppend(transactionQueryKey)) {
       return;
     }
 
@@ -4644,6 +4721,7 @@ function TransactionsPageContent() {
       setIsMobileLoadingMore(false);
     }
   }, [
+    transactionQueryKey,
     hasMoreMobileTransactions,
     isCompactViewport,
     isMobileLoadingMore,
@@ -4807,28 +4885,6 @@ function TransactionsPageContent() {
     : [];
   const selectedTransactionPrimaryReviewChips = selectedTransactionReviewChips.filter((chip) => chip.label !== "High confidence");
   const selectedTransactionConfidenceChips = selectedTransactionReviewChips.filter((chip) => chip.label === "High confidence");
-  const getDisplayCategoryNameForTransaction = useCallback(
-    (transaction: Transaction) => {
-      if (hasTransactionUserEdits(transaction)) return transaction.categoryName ?? getCategoryNameById(categories, transaction.categoryId ?? "") ?? "Other";
-      const categoryValue = transaction.categoryId ?? otherCategoryId;
-      const accountInstitution = transaction.institution ?? accountInstitutionById.get(transaction.accountId) ?? null;
-
-      return (
-        getEffectiveTransactionCategoryName({
-          categoryName: transaction.categoryName ?? getCategoryNameById(categories, categoryValue) ?? null,
-          rawPayload: transaction.rawPayload as never,
-          merchantRaw: transaction.merchantRaw,
-          merchantClean: transaction.merchantClean,
-          institution: accountInstitution,
-          source: transaction.source ?? null,
-          type: transaction.type,
-        }) ??
-        guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
-        "Other"
-      );
-    },
-    [accountInstitutionById, categories, otherCategoryId]
-  );
   const getDisplayCategoryIdForTransaction = useCallback(
     (transaction: Transaction) => {
       const displayCategoryName = getDisplayCategoryNameForTransaction(transaction);
@@ -4981,7 +5037,7 @@ function TransactionsPageContent() {
     }
   };
 
-  const refreshOpenTransactionDetail = async (transactionId: string) => {
+  const refreshOpenTransactionDetail = async (transactionId: string, baseline: TransactionDetailDraft) => {
     const requestId = transactionDetailRefreshRequestRef.current + 1;
     transactionDetailRefreshRequestRef.current = requestId;
     try {
@@ -4996,14 +5052,14 @@ function TransactionsPageContent() {
       setSelectedTransaction((current) => (current?.id === refreshed.id ? refreshed : current));
       setDetailDraft((current) => {
         if (!current) return current;
-        return createDetailDraft(refreshed, {
+        return mergeRefreshedTransactionDetailDraft(current, baseline, createDetailDraft(refreshed, {
           categoryId: getDisplayCategoryIdForTransaction(refreshed),
           type: getTransactionDisplayType(
             refreshed,
             accountNumberById.get(refreshed.accountId) ?? null,
             workspaceAccountNumbers
           ),
-        });
+        }));
       });
     } catch {
       // The existing row is already usable. Keep the drawer instant if the
@@ -5032,17 +5088,16 @@ function TransactionsPageContent() {
       participantNames: [],
     });
     setTransactionSplitBillSaving(false);
-    setDetailDraft({
-      ...createDetailDraft(transaction, {
+    const initialDraft = createDetailDraft(transaction, {
         categoryId: getDisplayCategoryIdForTransaction(transaction),
         type: getTransactionDisplayType(
           transaction,
           accountNumberById.get(transaction.accountId) ?? null,
           workspaceAccountNumbers
         ),
-      }),
-    });
-    void refreshOpenTransactionDetail(transaction.id);
+      });
+    setDetailDraft(initialDraft);
+    void refreshOpenTransactionDetail(transaction.id, initialDraft);
 
     if (syncRoute && isCompactViewport) {
       detailTransactionParamRef.current = transaction.id;
@@ -5156,6 +5211,7 @@ function TransactionsPageContent() {
       return;
     }
 
+    transactionDetailRefreshRequestRef.current += 1;
     setSelectedTransaction(null);
     setDetailDraft(null);
     setDetailEditing(false);
@@ -5183,6 +5239,18 @@ function TransactionsPageContent() {
       window.requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: "auto" }));
     }
   };
+
+  useEffect(() => {
+    if (!selectedTransaction) return;
+    const dialog = document.querySelector<HTMLElement>(".transaction-drawer");
+    if (dialog) return containDialogFocus(dialog);
+  }, [selectedTransaction?.id]);
+
+  useEffect(() => {
+    if (!bulkDeleteConfirmOpen) return;
+    const dialog = document.querySelector<HTMLElement>('[aria-labelledby="bulk-delete-title"]');
+    if (dialog) return containDialogFocus(dialog);
+  }, [bulkDeleteConfirmOpen]);
 
   const beginDrawerEdit = (label: string) => {
     setDetailTags((selectedTransaction?.tags ?? []).map((tag) => tag.name));
@@ -5376,7 +5444,9 @@ function TransactionsPageContent() {
 
   const editSelection = () => {
     if (selectedTransactionIds.length !== 1) { openBulkEdit(); return; }
-    const transaction = transactions.find((entry) => entry.id === selectedTransactionIds[0]);
+    const transaction = transactions.find((entry) => entry.id === selectedTransactionIds[0])
+      ?? (selectedRowsRef.current.workspaceId === selectedWorkspaceId
+        ? selectedRowsRef.current.rows.get(selectedTransactionIds[0]) : undefined);
     if (!transaction) return;
     if (isCompactViewport) { router.push(`/transactions/${encodeURIComponent(transaction.id)}?edit=1`); return; }
     openTransactionDetail(transaction);
@@ -5508,6 +5578,7 @@ function TransactionsPageContent() {
   };
 
   const openManualAdd = async () => {
+    setManualSaveError("");
     flushSync(() => {
       closeChrome();
       setAddMenuOpen(false);
@@ -5547,6 +5618,7 @@ function TransactionsPageContent() {
 
     try {
       const accountId = await ensureDefaultAccount(activeWorkspaceId, defaultCurrency);
+      if (activeAccountWorkspaceRef.current !== activeWorkspaceId) return;
       const accountCurrency = formatCurrencyCode(
         accounts.find((account) => account.id === accountId)?.currency || defaultCurrency
       );
@@ -5707,9 +5779,16 @@ function TransactionsPageContent() {
 
   const saveManualTransaction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (manualSaveInFlightRef.current) return;
     const submitter = event.nativeEvent instanceof SubmitEvent ? event.nativeEvent.submitter : null;
     const submitMode = submitter instanceof HTMLElement ? submitter.getAttribute("data-submit-mode") : null;
     const keepOpenAfterSave = submitMode === "add-another";
+
+    const normalizedManualAmount = normalizeTransactionAmountInput(manualForm.amount);
+    if (normalizedManualAmount === null) {
+      setMessage(transactionAmountFormatMessage);
+      return;
+    }
 
     const activeWorkspaceId = selectedWorkspaceId || readTransactionsWorkspaceCache()?.selectedWorkspaceId || workspaces[0]?.id || null;
 
@@ -5722,6 +5801,8 @@ function TransactionsPageContent() {
       setSelectedWorkspaceId(activeWorkspaceId);
     }
 
+    setManualSaveError("");
+    manualSaveInFlightRef.current = true;
     setIsSaving(true);
     let optimisticTransactionId = "";
     let optimisticTransactionAmount = 0;
@@ -5747,7 +5828,7 @@ function TransactionsPageContent() {
             sourceAccountId: accountId,
             destinationAccountId: manualForm.destinationAccountId,
             date: manualForm.date,
-            amount: manualForm.amount,
+            amount: normalizedManualAmount,
             currency: transactionCurrency,
             name: manualForm.merchantRaw.trim() || null,
             description: manualForm.description.trim() || null,
@@ -5793,7 +5874,7 @@ function TransactionsPageContent() {
         categoryName,
         reviewStatus: "confirmed",
         date: manualForm.date,
-        amount: Number(manualForm.amount).toFixed(2),
+        amount: Number(normalizedManualAmount).toFixed(2),
         currency: transactionCurrency,
         type: manualForm.type === "credit" ? "income" : "expense",
         merchantRaw: manualForm.merchantRaw,
@@ -5832,9 +5913,6 @@ function TransactionsPageContent() {
         setManualMoreOpen(false);
         setManualAccountMenuOpen(false);
         setManualCategoryMenuOpen(false);
-        if (!keepOpenAfterSave) {
-          setManualOpen(false);
-        }
       });
 
       const response = await fetch("/api/transactions", {
@@ -5845,12 +5923,13 @@ function TransactionsPageContent() {
           accountId,
           categoryId: categoryId ?? null,
           date: manualForm.date,
-          amount: manualForm.amount,
+          amount: normalizedManualAmount,
           currency: transactionCurrency,
           type: manualForm.type === "credit" ? "income" : "expense",
           merchantRaw: manualForm.merchantRaw,
           merchantClean: null,
           description: manualForm.description.trim() || null,
+          tags: sanitizeTransactionTagNames(manualForm.tags),
           receiptLineItems,
           isTransfer: false,
           isExcluded: false,
@@ -5862,16 +5941,6 @@ function TransactionsPageContent() {
         const limitPayload = parsePlanLimitPayload(payload);
         if (limitPayload) {
           setPlanLimitNudge(limitPayload);
-        }
-        if (optimisticTransactionId) {
-          setTransactions((current) => current.filter((entry) => entry.id !== optimisticTransactionId));
-          setTransactionsSummary((current) => ({
-            ...current,
-            totalCount: Math.max(0, current.totalCount - 1),
-            income: current.income - (optimisticTransactionType === "income" ? optimisticTransactionAmount : 0),
-            spending: current.spending - (optimisticTransactionType === "expense" ? optimisticTransactionAmount : 0),
-            transfers: current.transfers - (optimisticTransactionType === "transfer" ? optimisticTransactionAmount : 0),
-          }));
         }
         throw new Error(payload?.error ?? "Unable to create transaction.");
       }
@@ -5894,6 +5963,7 @@ function TransactionsPageContent() {
         summaryMode: "light",
       });
       setMessage(`Transaction "${created.merchantRaw}" added.`);
+      if (!keepOpenAfterSave) setManualOpen(false);
 
       if (keepOpenAfterSave) {
         const nextAccountId =
@@ -5921,9 +5991,19 @@ function TransactionsPageContent() {
     } catch (error) {
       if (optimisticTransactionId) {
         setTransactions((current) => current.filter((entry) => entry.id !== optimisticTransactionId));
+        setTransactionsSummary((current) => ({
+          ...current,
+          totalCount: Math.max(0, current.totalCount - 1),
+          income: current.income - (optimisticTransactionType === "income" ? optimisticTransactionAmount : 0),
+          spending: current.spending - (optimisticTransactionType === "expense" ? optimisticTransactionAmount : 0),
+          transfers: current.transfers - (optimisticTransactionType === "transfer" ? optimisticTransactionAmount : 0),
+        }));
       }
-      setMessage(error instanceof Error ? error.message : "Unable to create transaction.");
+      const errorMessage = error instanceof Error ? error.message : "Unable to create transaction.";
+      setManualSaveError(errorMessage);
+      setMessage(errorMessage);
     } finally {
+      manualSaveInFlightRef.current = false;
       setIsSaving(false);
     }
   };
@@ -6176,7 +6256,7 @@ function TransactionsPageContent() {
         transactionIds,
       }),
     });
-    const payload = await response.json().catch(() => null) as { error?: string; removedAccountIds?: string[] } | null;
+    const payload = await response.json().catch(() => null) as { error?: string; removedAccountIds?: string[]; deletedIds?: string[] } | null;
 
     if (!response.ok) {
       throw new Error(payload?.error || "Unable to delete the selected transactions.");
@@ -6186,6 +6266,7 @@ function TransactionsPageContent() {
     clearJsonRequestCache("transactions:list:");
     transactionPrefetchRef.current.clear();
     clearAccountsWorkspaceCache(selectedWorkspaceId);
+    return Array.isArray(payload?.deletedIds) ? payload.deletedIds.filter((id) => transactionIds.includes(id)) : [];
   };
 
   const deleteTransaction = async (transactionId: string) => {
@@ -6196,11 +6277,11 @@ function TransactionsPageContent() {
 
   const deleteWarningTransaction = async (transaction: Transaction) => {
     setActiveWarningTransactionId(null);
-    syncAfterTransactionRemoval(transaction.id);
     setMessage("Deleting transaction...");
 
     try {
       await deleteTransactionRemote(transaction.id);
+      syncAfterTransactionRemoval(transaction.id);
       refreshTransactionsSummary();
       setMessage("Transaction deleted.");
     } catch (error) {
@@ -6426,11 +6507,17 @@ function TransactionsPageContent() {
       return;
     }
 
-    setIsSaving(true);
     const count = selectedTransactionIds.length;
     const selected = selectedTransactionIds
-      .map((transactionId) => transactions.find((entry) => entry.id === transactionId))
+      .map((transactionId) => transactions.find((entry) => entry.id === transactionId)
+        ?? (selectedRowsRef.current.workspaceId === selectedWorkspaceId
+          ? selectedRowsRef.current.rows.get(transactionId) : undefined))
       .filter((entry): entry is Transaction => Boolean(entry));
+    if (selected.length !== count) {
+      setMessage("Some selected transactions are unavailable. Refresh and select them again before applying changes.");
+      return;
+    }
+    setIsSaving(true);
     const originalTransactions = new Map(selected.map((transaction) => [transaction.id, transaction] as const));
     const accountNames = new Map(accounts.map((account) => [account.id, formatTransactionAccountName(account)] as const));
     const categoryNames = new Map(categories.map((category) => [category.id, category.name] as const));
@@ -6483,7 +6570,7 @@ function TransactionsPageContent() {
     clearSelection();
     setUndoStack([]);
     setRedoStack([]);
-    setMessage(`${count} transaction${count === 1 ? "" : "s"} updated.`);
+    setMessage(`Updating ${count} transaction${count === 1 ? "" : "s"}...`);
 
     void (async () => {
       try {
@@ -6515,9 +6602,12 @@ function TransactionsPageContent() {
               patch: originalTransactions.get(transaction.id) ?? transaction,
             }))
           );
-          setMessage("Some transactions could not be updated. Please try again.");
+          const updatedCount = results.length - failedTransactions.length;
+          setMessage(`${updatedCount} of ${results.length} transactions updated. ${failedTransactions.length} could not be updated. Please try again.`);
           return;
         }
+
+        setMessage(`${results.length} transaction${results.length === 1 ? "" : "s"} updated.`);
 
         const updatedFields = Array.from(
           new Set(
@@ -6550,28 +6640,22 @@ function TransactionsPageContent() {
 
     const transactionIds = Array.from(new Set(selectedTransactionIds));
     const count = transactionIds.length;
-    const deletedIds = new Set(transactionIds);
-    const hasRemainingVisibleTransactions = visibleTransactions.some((transaction) => !deletedIds.has(transaction.id));
     setIsSaving(true);
-    // Invalidate any list request that began before this deletion. Its response
-    // must not be allowed to put a just-deleted row back into the table.
-    transactionsLoadRequestRef.current += 1;
-    syncAfterTransactionRemovals(transactionIds);
-    setTransactionsSummary((current) => ({
-      ...current,
-      totalCount: Math.max(0, current.totalCount - count),
-    }));
-    setIsMobileLoadingMore(false);
-    mobileLoadMoreInFlightRef.current = false;
-    setMobilePaginationExhausted(!hasRemainingVisibleTransactions);
-    clearSelection();
-    setBulkDeleteConfirmOpen(false);
-    setUndoStack([]);
-    setRedoStack([]);
     setMessage(`Deleting ${count} transaction${count === 1 ? "" : "s"}...`);
 
     try {
-      await deleteTransactionsRemote(transactionIds);
+      const deletedIds = await deleteTransactionsRemote(transactionIds);
+      // Commit removal only after the server confirms which records were deleted.
+      transactionsLoadRequestRef.current += 1;
+      syncAfterTransactionRemovals(deletedIds);
+      setIsMobileLoadingMore(false);
+      mobileLoadMoreInFlightRef.current = false;
+      const hasRemainingVisibleTransactions = visibleTransactions.some((transaction) => !deletedIds.includes(transaction.id));
+      setMobilePaginationExhausted(!hasRemainingVisibleTransactions);
+      clearSelection();
+      setBulkDeleteConfirmOpen(false);
+      setUndoStack([]);
+      setRedoStack([]);
       setTransactionsPage(1);
       if (selectedWorkspaceId) {
         await loadTransactionsPage(selectedWorkspaceId, {
@@ -6585,21 +6669,14 @@ function TransactionsPageContent() {
       capturePostHogClientEvent("bulk_transaction_deleted", {
         workspace_id: selectedWorkspaceId || null,
         selected_count: count,
-        deleted_count: count,
+        deleted_count: deletedIds.length,
       });
 
-      setMessage(`${count} transaction${count === 1 ? "" : "s"} deleted.`);
+      setMessage(deletedIds.length === count
+        ? `${count} transaction${count === 1 ? "" : "s"} deleted.`
+        : `${deletedIds.length} of ${count} transactions deleted. Some transactions could not be deleted.`);
     } catch (error) {
-      deletedIds.forEach((transactionId) => deletedTransactionIdsRef.current.delete(transactionId));
-      clearJsonRequestCache("transactions:list:");
-      if (selectedWorkspaceId) {
-        await loadTransactionsPage(selectedWorkspaceId, {
-          background: true,
-          pageOverride: 1,
-          pageSizeOverride: transactionsPageSize,
-          summaryMode: "light",
-        });
-      }
+      setBulkDeleteConfirmOpen(false);
       setMessage(error instanceof Error ? error.message : "Unable to delete transactions.");
     } finally {
       setIsSaving(false);
@@ -7057,6 +7134,7 @@ function TransactionsPageContent() {
     !transactionExchangeRates.loading &&
     missingContributingTransactionCurrencies.length > 0;
   const formatTransactionSummary = (value: number) => {
+    if (transactionsLoadFailed) return "Unavailable";
     if (transactionEstimateLoading || transactionEstimateUnavailable) {
       return "—";
     }
@@ -7478,6 +7556,7 @@ function TransactionsPageContent() {
         menuAlignment="end"
         showChevron={false}
       /> : null}
+      <TransactionsManageMenu />
 
       <input
         ref={addFileInputRef}
@@ -7543,7 +7622,9 @@ function TransactionsPageContent() {
     </div>
   );
   useEffect(() => {
-    if (!selectedWorkspaceId || !isWorkspaceDataReady) {
+    // This cache is shared with unfiltered workspace views. Never publish a
+    // filtered subset and its totals as though it were the full workspace.
+    if (!selectedWorkspaceId || !isWorkspaceDataReady || hasActiveTransactionFilters) {
       return;
     }
 
@@ -7564,7 +7645,7 @@ function TransactionsPageContent() {
     } finally {
       publishingTransactionsCacheRef.current = false;
     }
-  }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary, workspaceCurrencyCodes]);
+  }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary, workspaceCurrencyCodes, hasActiveTransactionFilters]);
 
   useEffect(() => {
     if (bulkDeleteConfirmOpen) {
@@ -7597,7 +7678,8 @@ function TransactionsPageContent() {
       }
       mobileTrailingAction={isCompactViewport ? <>
         <TransactionSelectionToolbar compact searchTargetId="transactions-mobile-search-trigger" count={selectedTransactionCount} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} />
-        {workspaceCurrencyCodes.length > 0 ? <CurrencySelector value={currencyFilter} onChange={(next) => { const code = next.toLowerCase() === "all" ? "" : next; setCurrencyFilter(code); persistSelectedCurrency(selectedWorkspaceId, code); }} options={workspaceCurrencyCodes} includeAllOption compact ariaLabel="Filter transactions by currency" /> : null}
+        {workspaceCurrencyCodes.length > 0 ? <CurrencySelector value={currencyFilter} onChange={(next) => { const code = next.toLowerCase() === "all" ? "" : next; setCurrencyFilter(code); persistSelectedCurrency(selectedWorkspaceId, code); }} options={workspaceCurrencyCodes} includeAllOption compact portalMenu menuAlignment="end" ariaLabel="Filter transactions by currency" /> : null}
+        <TransactionsManageMenu compact />
       </> : null}
       actions={transactionsShellActions}
     >
@@ -7608,6 +7690,19 @@ function TransactionsPageContent() {
       />
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`} style={transactionsLayoutStyle}>
         <div className="transactions-main-panel">
+          <button type="button" className="button button-secondary button-small"
+            aria-expanded={summaryOpen} aria-controls="transactions-expanded-summary"
+            onClick={() => setSummaryOpen((current) => !current)}>
+            {summaryOpen ? "Hide summary" : "Show summary"}
+          </button>
+          {dateFilterMode === "custom" && customStart && customEnd && customStart > customEnd ? <p role="alert">From date must be on or before To date. Choose a valid range to update the results.</p> : null}
+          {message ? <p role="status" aria-live="polite" style={isCompactViewport && hasSelectedTransactions ? { paddingTop: 56 } : undefined}>{message}</p> : null}
+          {isCompactViewport && warningTransactionCount > 0 && firstReviewTransaction ? (
+            <button type="button" className="button button-secondary button-small"
+              onClick={() => openTransactionDetail(firstReviewTransaction)}>
+              Review {warningTransactionCount} transaction{warningTransactionCount === 1 ? "" : "s"}
+            </button>
+          ) : null}
           {showFinalizingNotice ? (
             <div className="transactions-status-line" role="status" aria-live="polite">
               <div className="transactions-status-line__meta">
@@ -7632,7 +7727,7 @@ function TransactionsPageContent() {
           ) : null}
       {filterOpen ? <TransactionsHeaderOverlay className="transactions-filters-overlay">
         <section className="transactions-inline-filters" aria-label="Transaction filters">
-          <div className="transactions-inline-filters__head"><span>Filters</span><button className="icon-button" type="button" onClick={toggleFiltersPanel} aria-label="Close filters">×</button></div>
+          <div className="transactions-inline-filters__head"><span>Filters</span><button className="icon-button" type="button" onClick={() => { setFilterOpen(false); document.querySelector<HTMLButtonElement>(".transaction-selection-toolbar__filter")?.focus(); }} aria-label="Close filters">×</button></div>
           <TransactionFilterRow label="Currency" summary={currencyFilter || "All currencies"}>
             <div className="transactions-filter-group__options">
               {["", ...workspaceCurrencyCodes].map((code) => <button key={code} type="button" className="transactions-filter-pill" aria-pressed={currencyFilter === code} onClick={() => { setCurrencyFilter(code); persistSelectedCurrency(selectedWorkspaceId, code); }}>{code || "All currencies"}</button>)}
@@ -7726,7 +7821,7 @@ function TransactionsPageContent() {
               className={`table-wrap transactions-table-wrap${!hasVisibleTransactions && !showTransactionsLoadingState ? " transactions-table-wrap--empty" : ""}`}
               aria-busy={showTransactionsLoadingState}
             >
-              <div className="line-item-header transactions-column-header" role="row" aria-label="Transaction columns">
+              <div className="line-item-header transactions-column-header">
                 <label className="line-item-header-cell line-item-header-cell--select line-item-header-cell--select-all">
                   <input
                     ref={selectAllRef}
@@ -8244,7 +8339,7 @@ function TransactionsPageContent() {
                         openTransactionReview(
                           targetReviewTransaction,
                           visibleTargetIndex >= 0
-                            ? visibleTargetIndex
+                            ? (currentTransactionPage - 1) * transactionsPageSize + visibleTargetIndex
                             : targetReviewTransaction.id === firstReviewTransaction?.id
                               ? transactionsSummary.firstReviewTransactionIndex
                               : null
@@ -8262,7 +8357,7 @@ function TransactionsPageContent() {
                   </button>
                 ) : null}
               </div>
-              <div className="transactions-pagination" aria-label="Transaction pages">
+              <nav className="transactions-pagination" aria-label="Transaction pages">
                 <div className="transactions-pagination__nav">
                   <button
                     className="button button-secondary button-small transactions-action-button"
@@ -8317,8 +8412,8 @@ function TransactionsPageContent() {
                     ))}
                   </select>
                 </label>
-              </div>
-              <div className="transactions-footer-snapshot" aria-label="Cash flow snapshot for all filtered transactions">
+              </nav>
+              <section className="transactions-footer-snapshot" aria-label="Cash flow snapshot for all filtered transactions">
                 <div className="transactions-footer-snapshot__metrics">
                   <div className="transactions-footer-snapshot__metric">
                     <span className="transactions-footer-snapshot__metric-label">{isAllCurrenciesView && transactionSummaryCurrencies.length > 1 ? "Est. Income" : "Income"}</span>
@@ -8339,19 +8434,22 @@ function TransactionsPageContent() {
                     </span>
                   </div>
                 </div>
-              </div>
+              </section>
             </div>
           ) : null}
         </div>
 
         <aside
           className={`transactions-summary-panel glass ${summaryOpen ? "" : "is-hidden"}`}
+          id="transactions-expanded-summary"
           aria-label="Transaction summary"
-          hidden={isCompactViewport}
+          hidden={!summaryOpen}
         >
           <div className="transactions-summary-panel__head">
             <p className="eyebrow">Summary</p>
             <h4>Overview</h4>
+            <button type="button" className="button button-secondary button-small" onClick={() => setSummaryOpen(false)}>Close summary</button>
+            <p>All transactions matching the current filters.</p>
           </div>
 
           <dl className="transactions-summary-list">
@@ -8422,6 +8520,8 @@ function TransactionsPageContent() {
             className="modal-card modal-card--manual glass"
             role="dialog"
             aria-modal="true"
+            ref={bulkEditDialogRef}
+            tabIndex={-1}
             aria-labelledby="bulk-edit-title"
             onClick={(event) => event.stopPropagation()}
           >
@@ -8440,7 +8540,7 @@ function TransactionsPageContent() {
               <div className="form-grid transactions-bulk-grid">
                 <label>
                   Category
-                  <select value={bulkEditForm.categoryId} onChange={(event) => setBulkEditForm((current) => ({ ...current, categoryId: event.target.value }))}>
+                  <select aria-label="Category" value={bulkEditForm.categoryId} onChange={(event) => setBulkEditForm((current) => ({ ...current, categoryId: event.target.value }))}>
                     <option value="">Leave unchanged</option>
                     {categories.map((category) => (
                       <option key={category.id} value={category.id}>
@@ -8451,7 +8551,7 @@ function TransactionsPageContent() {
                 </label>
                 <label>
                   Account
-                  <select value={bulkEditForm.accountId} onChange={(event) => setBulkEditForm((current) => ({ ...current, accountId: event.target.value }))}>
+                  <select aria-label="Account" value={bulkEditForm.accountId} onChange={(event) => setBulkEditForm((current) => ({ ...current, accountId: event.target.value }))}>
                     <option value="">Leave unchanged</option>
                     {selectableTransactionAccounts.map((account) => (
                       <option key={account.id} value={account.id}>
@@ -8462,7 +8562,7 @@ function TransactionsPageContent() {
                 </label>
                 <label>
                   Type
-                  <select value={bulkEditForm.type} onChange={(event) => setBulkEditForm((current) => ({ ...current, type: event.target.value as BulkEditForm["type"] }))}>
+                  <select aria-label="Type" value={bulkEditForm.type} onChange={(event) => setBulkEditForm((current) => ({ ...current, type: event.target.value as BulkEditForm["type"] }))}>
                     <option value="">Leave unchanged</option>
                     <option value="debit">Debit</option>
                     <option value="credit">Credit</option>
@@ -8485,9 +8585,11 @@ function TransactionsPageContent() {
       ) : null}
 
       {manualOpen ? (
-        <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={() => setManualOpen(false)}>
+        <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={() => { if (!isSaving) setManualOpen(false); }}>
           <section
-            className="modal-card modal-card--manual glass"
+            className={`modal-card modal-card--manual glass${enlargedText ? " modal-card--enlarged-text" : ""}`}
+            ref={manualDialogRef}
+            tabIndex={-1}
             style={manualModalStyle}
             role={mobileCreation ? "region" : "dialog"}
             aria-modal={mobileCreation ? undefined : true}
@@ -8499,7 +8601,7 @@ function TransactionsPageContent() {
                 <p className="eyebrow">Transactions</p>
                 <h4 id="add-transaction-title">Add transaction</h4>
               </div>
-              <button className="icon-button" type="button" onClick={() => setManualOpen(false)} aria-label="Close add transaction dialog">
+              <button className="icon-button" type="button" onClick={() => { if (!isSaving) setManualOpen(false); }} disabled={isSaving} aria-label="Close add transaction dialog">
                 ×
               </button>
             </div>
@@ -8519,6 +8621,8 @@ function TransactionsPageContent() {
             <div id="creation-panel-manual" role={mobileCreation ? "tabpanel" : undefined} aria-labelledby={mobileCreation ? "creation-tab-manual" : undefined} hidden={mobileCreation && creationTab !== "manual"}>
             <form onSubmit={saveManualTransaction}>
 <AdviserFormAssist workspaceId={selectedWorkspaceId} context={{kind:"transaction", fields: Object.fromEntries(Object.entries(manualForm).filter(([key,value]) => ["accountId","categoryId","merchantRaw","merchantClean","amount","date","currency","type","description"].includes(key) && typeof value === "string")) as Record<string,string>}} />
+              {manualSaveError ? <p role="alert">{manualSaveError}</p> : null}
+              <fieldset disabled={isSaving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
               <div className="manual-form-layout manual-form-layout--compact" data-transaction-type={manualForm.type}>
                 <div className="transactions-manual-type-section">
                   <span className="transactions-manual-type-section__label">Transaction type</span>
@@ -8599,10 +8703,18 @@ function TransactionsPageContent() {
                   <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-money-row__amount">
                     <span className="transactions-manual-field__label">Amount</span>
                     <input
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       value={manualForm.amount}
-                      onChange={(event) => setManualForm((current) => ({ ...current, amount: event.target.value }))}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        event.target.setCustomValidity(value && normalizeTransactionAmountInput(value) === null ? transactionAmountFormatMessage : "");
+                        setManualForm((current) => ({ ...current, amount: value }));
+                      }}
+                      onBlur={(event) => {
+                        const amount = normalizeTransactionAmountInput(event.target.value);
+                        if (amount !== null) setManualForm((current) => ({ ...current, amount }));
+                      }}
                       placeholder="0.00"
                       required
                     />
@@ -8914,6 +9026,7 @@ function TransactionsPageContent() {
                   </>
                 ) : null}
               </div>
+                          </fieldset>
             </form>
             </div>
             {mobileCreation && creationChatVisited ? <div id="creation-panel-ask" role="tabpanel" aria-labelledby="creation-tab-ask" hidden={creationTab !== "ask"} className="transaction-creation-panel">
@@ -9050,6 +9163,7 @@ function TransactionsPageContent() {
                     <input
                       type="number"
                       step="0.01"
+                      aria-label="Amount"
                       value={detailDraft?.amount ?? selectedTransaction.amount}
                       onChange={(event) => setDetailDraft((current) => (current ? { ...current, amount: event.target.value } : current))}
                     />
@@ -9123,6 +9237,14 @@ function TransactionsPageContent() {
               </div>
             )}
 
+            {detailEditing ? (
+              <label>
+                <input type="checkbox" checked={detailDraft?.isExcluded ?? false}
+                  onChange={(event) => setDetailDraft((current) => current ? { ...current, isExcluded: event.target.checked } : current)} />
+                Exclude from totals
+              </label>
+            ) : selectedTransaction.isExcluded ? <p>Excluded from totals</p> : null}
+
             {selectedTransactionWarningReasonSummary ? (
               <div className="detail-warning-box detail-warning-box--compact transaction-drawer-warning">
                 <div className="detail-warning-box__header">
@@ -9191,6 +9313,7 @@ function TransactionsPageContent() {
                       {formatTransactionAmount(detailReceiptLineItemTotal, detailDraft?.currency ?? selectedTransaction.currency)}
                     </span>
                   </div>
+                  {detailReceiptLineItems.length > 0 && Math.abs(detailReceiptLineItemTotal - Number(detailDraft?.amount || 0)) > 0.005 ? <p role="status">Line items do not match the transaction total. Check for missing items, tax, or discounts. You can still save.</p> : null}
                   <div className="transaction-drawer-receipt-table" role="table" aria-label="Receipt line items">
                     <div className="transaction-drawer-receipt-table__row transaction-drawer-receipt-table__row--head" role="row">
                       <span role="columnheader">Name</span>
@@ -9271,6 +9394,7 @@ function TransactionsPageContent() {
                   <div className="transaction-drawer-more__row">
                     <span>Source</span>
                     <strong>{selectedTransaction.importFileId ? "Imported" : "Manual"}</strong>
+                    {selectedTransaction.importFileId ? <p>Source file: {selectedTransaction.importFileName ?? selectedTransaction.importFileId}</p> : null}
                   </div>
                   <div className="transaction-drawer-more__row">
                     <span>Confidence score</span>

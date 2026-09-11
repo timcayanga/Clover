@@ -1,7 +1,12 @@
 export type PricingMarket = "ph" | "global";
-export const plannedProPrices = (market: PricingMarket) => market === "ph"
-  ? { monthly: "₱169", annual: "₱1,699" }
-  : { monthly: "US$9.99", annual: "US$99.99" };
+export const regionalProPricing = {
+  ph: { currency: "PHP", monthly: { label: "₱169", amount: 169 }, annual: { label: "₱1,699", amount: 1699 } },
+  global: { currency: "USD", monthly: { label: "US$9.99", amount: 9.99 }, annual: { label: "US$99.99", amount: 99.99 } },
+} as const;
+export const plannedProPrices = (market: PricingMarket) => ({
+  monthly: regionalProPricing[market].monthly.label,
+  annual: regionalProPricing[market].annual.label,
+});
 
 export const PLAN_COMPARISON_ROWS = {
   uploads: ["Statement and receipt uploads", "Upload records and review extracted transactions", "Everything in Free"],

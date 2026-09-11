@@ -18,22 +18,24 @@ export function BalanceVisibilityToggle() {
   const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY) === "true";
+    let stored = true;
+    try { stored = window.localStorage.getItem(STORAGE_KEY) === "true"; } catch { /* Keep amounts private if storage is unavailable. */ }
     setHidden(stored);
     applyHomeAmountVisibility(stored);
 
+    const observer = new MutationObserver(() => applyHomeAmountVisibility(document.body.hasAttribute("data-clover-home-balances-hidden")));
+    observer.observe(document.body, { childList: true, subtree: true });
     return () => {
+      observer.disconnect();
       document.body.removeAttribute("data-clover-home-balances-hidden");
     };
   }, []);
 
   const toggle = () => {
-    setHidden((current) => {
-      const next = !current;
-      window.localStorage.setItem(STORAGE_KEY, String(next));
-      applyHomeAmountVisibility(next);
-      return next;
-    });
+    const next = !hidden;
+    setHidden(next);
+    try { window.localStorage.setItem(STORAGE_KEY, String(next)); } catch { /* Toggling remains available for this page. */ }
+    applyHomeAmountVisibility(next);
   };
 
   return (

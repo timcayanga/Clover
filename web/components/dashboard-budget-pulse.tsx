@@ -1,5 +1,7 @@
 "use client";
 
+import { HomeSensitiveAmount } from "@/components/home-sensitive-amount";
+
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { formatCurrencyAmount } from "@/lib/currency-format";
@@ -18,23 +20,24 @@ type BudgetProgress = {
 };
 type BudgetPulse = { activeBudgetCount: number; budgets: BudgetProgress[] };
 
-export function DashboardBudgetPulse() {
+export function DashboardBudgetPulse({ workspaceId, refreshKey }: { workspaceId: string; refreshKey: string }) {
   const [pulse, setPulse] = useState<BudgetPulse | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
+    setPulse(null);
 
     void fetch("/api/budgets", { cache: "no-store", signal: controller.signal })
       .then((response) => (response.ok ? response.json() : null))
-      .then((result: { overview?: BudgetPulse } | null) => {
-        if (result?.overview) {
+      .then((result: { workspaceId?: string; overview?: BudgetPulse } | null) => {
+        if (!controller.signal.aborted && result?.workspaceId === workspaceId && result.overview) {
           setPulse(result.overview);
         }
       })
       .catch(() => undefined);
 
     return () => controller.abort();
-  }, []);
+  }, [workspaceId, refreshKey]);
 
   if (!pulse || pulse.activeBudgetCount === 0) {
     return null;
@@ -65,8 +68,8 @@ export function DashboardBudgetPulse() {
                 <span style={{ width: `${progress}%` }} />
               </div>
               <div className="home-budget-progress__amounts">
-                <span>{actual} {budget.kind === "savings_target" ? "saved" : "spent"}</span>
-                <span>of {target}</span>
+                <span><HomeSensitiveAmount value={actual} currency={budget.currency} /> {budget.kind === "savings_target" ? "saved" : "spent"}</span>
+                <span>of <HomeSensitiveAmount value={target} currency={budget.currency} /></span>
               </div>
             </Link>
           );

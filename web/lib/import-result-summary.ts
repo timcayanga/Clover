@@ -10,6 +10,7 @@ type ImportResultPreviewTransaction = {
 
 type ImportResultSummaryInput = {
   fileName?: string | null;
+  currency?: string | null;
   rowsImported?: number | null;
   accountName?: string | null;
   institution?: string | null;
@@ -19,7 +20,7 @@ type ImportResultSummaryInput = {
   topCategoryName?: string | null;
   topMerchantName?: string | null;
   previewTransactions?: ImportResultPreviewTransaction[] | null;
-  accountSummaries?: Array<unknown> | null;
+  accountSummaries?: Array<{ currency?: string | null }> | null;
 };
 
 const normalizeLabel = (value: unknown) => (typeof value === "string" ? value.trim() : "");
@@ -121,11 +122,18 @@ export const formatImportResultHeadline = (summary: ImportResultSummaryInput | n
     return `${accountCount.toLocaleString("en-US")} account${accountCount === 1 ? "" : "s"} updated`;
   }
 
-  if (expenseTotal > 0) {
+  const currencies = new Set(getPreviewRows(summary).map(row => row.currency?.trim().toUpperCase()).filter(Boolean));
+  if (summary.currency) currencies.add(summary.currency.trim().toUpperCase());
+  for (const account of summary.accountSummaries ?? []) {
+    if (account.currency) currencies.add(account.currency.trim().toUpperCase());
+  }
+  const currency = currencies.size === 1 ? [...currencies][0] : null;
+  // Do not combine different currencies or invent PHP when currency is unknown.
+  if (expenseTotal > 0 && currency && /^[A-Z]{3}$/.test(currency)) {
     const hasCents = Math.round(expenseTotal * 100) % 100 !== 0;
     const amount = new Intl.NumberFormat("en-PH", {
       style: "currency",
-      currency: "PHP",
+      currency,
       minimumFractionDigits: hasCents ? 2 : 0,
       maximumFractionDigits: hasCents ? 2 : 0,
     }).format(expenseTotal);

@@ -1,3 +1,4 @@
+import { planTransactionAccountPage, compareTransactionsByAccount } from "@/lib/transaction-account-sort";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
@@ -35,6 +36,7 @@ import {
   type TransactionSummaryCandidate,
 } from "@/lib/transaction-summary";
 import { invalidateWorkspaceSummaryCache } from "@/lib/workspace-summary-cache";
+import { parsePositiveTransactionAmount } from "@/lib/transaction-amount-input";
 
 export const dynamic = "force-dynamic";
 
@@ -629,7 +631,7 @@ const mapTransactionRow = (transaction: {
 
 // Only hydrate labels for the returned page, not every transaction used by
 // summary calculations. This keeps search-by-tag and the row cache consistent.
-const withTransactionTags = async <T extends { id: string }>(rows: T[], workspaceId: string) => {
+const withTransactionTags = async <T extends { id: string; importFileId?: string | null }>(rows: T[], workspaceId: string) => {
   if (!rows.length) return rows;
   const links = await prisma.transactionTag.findMany({
     where: { transactionId: { in: rows.map((row) => row.id) }, transaction: { workspaceId } },
@@ -637,7 +639,12 @@ const withTransactionTags = async <T extends { id: string }>(rows: T[], workspac
   });
   const tagsById = new Map<string, Array<{ id: string; name: string }>>();
   for (const link of links) tagsById.set(link.transactionId, [...(tagsById.get(link.transactionId) ?? []), link.tag]);
-  return rows.map((row) => ({ ...row, tags: tagsById.get(row.id) ?? [] }));
+  const sourceIds = [...new Set(rows.flatMap((row) => row.importFileId ? [row.importFileId] : []))];
+  const sources = sourceIds.length ? await prisma.importFile.findMany({
+    where: { workspaceId, id: { in: sourceIds } }, select: { id: true, fileName: true },
+  }) : [];
+  const sourceNames = new Map(sources.map((source) => [source.id, source.fileName]));
+  return rows.map((row) => ({ ...row, tags: tagsById.get(row.id) ?? [], importFileName: row.importFileId ? sourceNames.get(row.importFileId) ?? null : null }));
 };
 
 const transactionMatchesEffectiveCategoryFilters = (transaction: TransactionApiRow, categoryFilterNames: Set<string>) => {
@@ -713,10 +720,13 @@ export async function GET(request: Request) {
 
     await assertWorkspaceAccess(userId, workspaceId);
     const parsedFilters: TransactionQueryFilters = parseTransactionQueryFilters(searchParams);
+    if (parsedFilters.dateFilterMode === "custom" && parsedFilters.customStart && parsedFilters.customEnd && parsedFilters.customStart > parsedFilters.customEnd) {
+      return NextResponse.json({ error: "From date must be on or before To date" }, { status: 400 });
+    }
     const [workspaceAccountRows, expandedAccountIds, expandedIdentityAccountIds] = await Promise.all([
       prisma.account.findMany({
         where: { workspaceId },
-        select: { id: true, accountNumber: true, institution: true, type: true },
+        select: { id: true, name: true, source: true, currency: true, accountNumber: true, institution: true, type: true },
       }),
       expandImportedAccountFilters(workspaceId, parsedFilters.accountIds),
       expandImportedAccountIdentityFilters(workspaceId, {
@@ -740,7 +750,8 @@ export async function GET(request: Request) {
     const hasEffectiveCategoryFilters = categoryFilterNames.size > 0;
     const where = buildTransactionQueryWhere(
       workspaceId,
-      hasEffectiveCategoryFilters ? { ...filters, categoryIds: [] } : filters
+      hasEffectiveCategoryFilters ? { ...filters, categoryIds: [] } : filters,
+      { includeExcluded: true }
     );
     const visibleWhere = {
       ...where,
@@ -748,6 +759,7 @@ export async function GET(request: Request) {
         ? { account: { is: { type: "investment" as const } } }
         : {}),
     };
+    const financialWhere = { ...visibleWhere, isExcluded: false };
     const orderBy = buildTransactionQueryOrderBy(filters);
     const pageSizeParam = searchParams.get("pageSize");
     const includeAll = pageSizeParam === "all";
@@ -782,7 +794,13 @@ export async function GET(request: Request) {
       });
     }
 
-    if (summaryMode === "light" && !hasEffectiveCategoryFilters) {
+    // Review navigation needs the complete filtered scope, including unloaded rows.
+    // Reuse full mapping for unresolved records so heuristic reasons stay consistent.
+    const hasReviewCandidates = summaryMode === "light" && await prisma.transaction.findFirst({
+      where: { AND: [visibleWhere, { reviewStatus: { notIn: ["confirmed", "rejected", "duplicate_skipped"] } }] },
+      select: { id: true },
+    });
+    if (summaryMode === "light" && !hasEffectiveCategoryFilters && !hasReviewCandidates) {
       const pageStart = (requestedPage - 1) * (requestedPageSize ?? 25);
       const shouldBoostRecentImportRows =
         requestedPage === 1 &&
@@ -804,9 +822,24 @@ export async function GET(request: Request) {
       const bdoAccountIds = workspaceAccountRows
         .filter((account) => /\bbdo\b|\bbanco de oro\b/i.test(account.institution ?? ""))
         .map((account) => account.id);
+      const accountPageIds = filters.sortField === "account" ? await (async () => {
+        const counts = await prisma.transaction.groupBy({ by: ["accountId"], where: visibleWhere, _count: { _all: true } });
+        const segments = planTransactionAccountPage(workspaceAccountRows,
+          counts.map(row => ({ accountId: row.accountId, count: row._count._all })),
+          includeAll ? 0 : pageStart, includeAll ? totalCount : requestedPageSize ?? 25,
+          filters.sortDirection ?? "desc");
+        const pages = await Promise.all(segments.map(segment => prisma.transaction.findMany({
+          where: { AND: [visibleWhere, { accountId: { in: segment.accountIds } }] },
+          select: { id: true },
+          orderBy: [{ date: "desc" }, { id: filters.sortDirection ?? "desc" }],
+          skip: segment.skip,
+          take: segment.take,
+        })));
+        return pages.flat().map(row => row.id);
+      })() : null;
       const [pageRows, recentImportRows, duplicateRows, summaryGroups, summaryCategories, bdoSummaryRows, summaryAdjustmentRows, summaryMatchingRows] = await Promise.all([
         prisma.transaction.findMany({
-          where: visibleWhere,
+          where: accountPageIds ? { AND: [visibleWhere, { id: { in: accountPageIds } }] } : visibleWhere,
           select: {
             id: true,
             accountId: true,
@@ -851,7 +884,7 @@ export async function GET(request: Request) {
             isExcluded: true,
           },
           orderBy,
-          skip: pageStart,
+          skip: accountPageIds ? 0 : pageStart,
           take: includeAll ? totalCount : requestedPageSize ?? 25,
         }),
         shouldBoostRecentImportRows
@@ -926,7 +959,7 @@ export async function GET(request: Request) {
           take: 250,
         }),
         prisma.transaction.groupBy({
-          where: visibleWhere,
+          where: financialWhere,
           by: ["type", "isTransfer", "categoryId", "accountId", "currency"],
           _sum: {
             amount: true,
@@ -939,7 +972,7 @@ export async function GET(request: Request) {
         bdoAccountIds.length > 0
           ? prisma.transaction.findMany({
               where: {
-                AND: [visibleWhere, { accountId: { in: bdoAccountIds } }],
+                AND: [financialWhere, { accountId: { in: bdoAccountIds } }],
               },
               select: {
                 amount: true,
@@ -957,7 +990,7 @@ export async function GET(request: Request) {
         prisma.transaction.findMany({
           where: {
             AND: [
-              visibleWhere,
+              financialWhere,
               {
                 OR: [
                   { merchantRaw: { contains: "payment", mode: "insensitive" } },
@@ -1017,6 +1050,10 @@ export async function GET(request: Request) {
           },
         }),
       ]);
+      if (accountPageIds) {
+        const position = new Map(accountPageIds.map((id, index) => [id, index]));
+        pageRows.sort((a, b) => position.get(a.id)! - position.get(b.id)!);
+      }
       const recentImportRowIds = new Set(recentImportRows.map((transaction) => transaction.id));
       const boostedPageRows = [
         ...recentImportRows,
@@ -1038,6 +1075,7 @@ export async function GET(request: Request) {
         mapTransactionRow({
           id: transaction.id,
           workspaceId,
+          importFileId: transaction.importFileId,
           accountId: transaction.accountId,
           account: transaction.account,
           accountNumber: transaction.account?.accountNumber ?? null,
@@ -1355,6 +1393,7 @@ export async function GET(request: Request) {
         mappedTransaction: mapTransactionRow({
           id: transaction.id,
           workspaceId,
+          importFileId: transaction.importFileId,
           accountId: transaction.accountId,
           account: transaction.account,
           accountNumber: transaction.account?.accountNumber ?? null,
@@ -1388,8 +1427,11 @@ export async function GET(request: Request) {
         .map((entry) => entry.mappedTransaction)
         .filter((transaction) => transactionMatchesEffectiveCategoryFilters(transaction, categoryFilterNames))
     );
+    if (filters.sortField === "account") {
+      transactions.sort(compareTransactionsByAccount(workspaceAccountRows, filters.sortDirection ?? "desc"));
+    }
     const transactionById = new Map(mappedSummaryRows.map((entry) => [entry.mappedTransaction.id, entry] as const));
-    const visibleSummaryCandidates = transactions.map((mappedTransaction) => {
+    const visibleSummaryCandidates = transactions.filter((transaction) => !transaction.isExcluded).map((mappedTransaction) => {
         const transaction = transactionById.get(mappedTransaction.id)?.transaction;
         return {
           id: mappedTransaction.id,
@@ -1472,16 +1514,19 @@ export async function GET(request: Request) {
         else if (effectiveType === "transfer") summaryState.currencyTotals[currency].transfers += amount;
         else summaryState.currencyTotals[currency].spending += amount;
 
-        const summaryCategoryName = mappedTransaction.categoryName ?? "Other";
-        summaryState.topCategories.set(summaryCategoryName, (summaryState.topCategories.get(summaryCategoryName) ?? 0) + amount);
-        summaryState.topAccounts.set(accountName, (summaryState.topAccounts.get(accountName) ?? 0) + amount);
+        // Rank income and spending only; transfer volume has its own summary total.
+        if (effectiveType !== "transfer") {
+          const summaryCategoryName = mappedTransaction.categoryName ?? "Other";
+          summaryState.topCategories.set(summaryCategoryName, (summaryState.topCategories.get(summaryCategoryName) ?? 0) + amount);
+          summaryState.topAccounts.set(accountName, (summaryState.topAccounts.get(accountName) ?? 0) + amount);
+        }
       }
 
       if (warningReason) {
         summaryState.review += 1;
         if (!summaryState.firstReviewTransaction) {
           summaryState.firstReviewTransaction = mappedTransaction;
-          summaryState.firstReviewTransactionIndex = index + 1;
+          summaryState.firstReviewTransactionIndex = index;
         }
       }
     });
@@ -1533,6 +1578,11 @@ export async function POST(request: Request) {
     assertTrustedRequestOrigin(request);
     const userId = await resolveTransactionsRouteUserId();
     const payload = transactionSchema.parse(await request.json());
+
+    const amount = parsePositiveTransactionAmount(payload.amount);
+    if (amount === null) {
+      return NextResponse.json({ error: "Enter an amount greater than zero with no more than two decimal places." }, { status: 400 });
+    }
 
     await assertWorkspaceAccess(userId, payload.workspaceId);
     const user = await getOrCreateCurrentUser(userId);
@@ -1606,7 +1656,7 @@ export async function POST(request: Request) {
         accountId: payload.accountId,
         categoryId: resolvedCategoryId,
         date: new Date(payload.date),
-        amount: payload.amount.toString(),
+        amount: amount.toFixed(2),
         currency: transactionCurrency,
         type: resolvedType,
         merchantRaw: payload.merchantRaw,

@@ -654,3 +654,8 @@
  .proActions{margin-top:12px;gap:6px}
  .markers .activeMarker span{height:13px;border-radius:8px}
 }
+
+/* Keep bottom-anchored chapter copy inside short phone/landscape viewports. */
+@media (max-width:900px) and (max-height:590px) {
+  .journey[data-chapter] .stage { min-height:0; height:100svh; }
+}

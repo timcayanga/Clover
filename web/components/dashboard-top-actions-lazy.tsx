@@ -93,13 +93,9 @@ export function DashboardTopActionsLazy({ workspaceId, accounts }: DashboardTopA
     return () => mediaQuery.removeEventListener("change", updateViewport);
   }, []);
 
-  if (isCompactViewport) {
-    return null;
-  }
-
   return (
     <>
-      <div className="dashboard-top-actions">
+      <div className="dashboard-top-actions" hidden={isCompactViewport}>
         <button
           className="button button-secondary button-small transactions-action-button transactions-toolbar-add dashboard-top-actions__button"
           type="button"

@@ -137,6 +137,16 @@ async function getPayPalAccessToken(env = getEnv()) {
   return tokenCache.accessToken;
 }
 
+// Read-only price verification before offering a subscription during onboarding.
+export async function fetchPayPalPlan(planId: string, env = getEnv()) {
+  const accessToken = await getPayPalAccessToken(env);
+  const response = await fetch(`${getPayPalBaseUrl(env)}/v1/billing/plans/${encodeURIComponent(planId)}`, {
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+    signal: AbortSignal.timeout(PAYPAL_REQUEST_TIMEOUT_MS),
+  });
+  return response.ok ? await response.json() as Record<string, unknown> : null;
+}
+
 export async function fetchPayPalSubscription(subscriptionId: string, env = getEnv()) {
   const accessToken = await getPayPalAccessToken(env);
   const response = await fetch(`${getPayPalBaseUrl(env)}/v1/billing/subscriptions/${subscriptionId}`, {

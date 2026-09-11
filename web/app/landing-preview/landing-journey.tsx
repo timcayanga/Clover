@@ -144,6 +144,15 @@ export function JourneyHeader() {
   const [featuresOpen, setFeaturesOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   useEffect(() => {
+    const mobileLayout = window.matchMedia("(max-width: 900px)");
+    const closeNavigation = () => {
+      setMobileMenuOpen(false);
+      setFeaturesOpen(false);
+    };
+    mobileLayout.addEventListener("change", closeNavigation);
+    return () => mobileLayout.removeEventListener("change", closeNavigation);
+  }, []);
+  useEffect(() => {
     if (!mobileMenuOpen) return;
     const previousFocus = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
@@ -180,6 +189,10 @@ export function JourneyHeader() {
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        const menu = featuresRef.current;
+        if (menu?.contains(document.activeElement)) {
+          menu.querySelector<HTMLButtonElement>('button[aria-controls="preview-features-menu"]')?.focus({ preventScroll: true });
+        }
         setFeaturesOpen(false);
         setMobileMenuOpen(false);
       }
@@ -299,7 +312,7 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
     if (!journey) return;
     const distance = journey.offsetHeight - window.innerHeight;
     const top = window.scrollY + journey.getBoundingClientRect().top + distance * (index / (chapters.length - 1));
-    window.scrollTo({ top, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    window.scrollTo({ top, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
   };
 
   const local = marketContent[market];

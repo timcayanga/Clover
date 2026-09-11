@@ -25426,6 +25426,27 @@ const filterSharedScreenshotParsedRows = (
 };
 
 export const detectStatementMetadata = (text: string, fileName = ""): DetectedStatementMetadata | null => {
+  // Recognized tabular exports have explicit columns. Their headings and row
+  // descriptions are not screenshot controls or evidence of a bank identity.
+  const structuredRows = parseStructuredTransactionCsv(text, fileName, "");
+  if (structuredRows) {
+    const unique = (values: Array<string | null | undefined>) => {
+      const present = new Set(values.filter((value): value is string => Boolean(value)));
+      return present.size === 1 ? [...present][0] : null;
+    };
+    const institution = unique(structuredRows.map(row => row.institution));
+    return {
+      institution,
+      accountName: unique(structuredRows.map(row => row.accountName)),
+      accountNumber: unique(structuredRows.map(row => row.accountNumber)),
+      accountType: unique(structuredRows.map(row => row.rawPayload?.accountType as string | null)) as ImportedAccountType | null,
+      currency: unique(structuredRows.map(row => row.currency)),
+      openingBalance: null, endingBalance: null, startDate: null, endDate: null,
+      confidence: 96, institutionConfidence: institution ? 96 : 0,
+      identityEvidence: ["structured_transaction_columns"],
+    };
+  }
+
   const wisePdfStatement = parseWisePdfStatement(text);
   if (wisePdfStatement) {
     return wisePdfStatement.metadata;

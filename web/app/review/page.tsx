@@ -1,5 +1,7 @@
 import nextDynamic from "next/dynamic";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
@@ -52,7 +54,8 @@ export default async function ReviewPage() {
     orderBy: { createdAt: "asc" },
   });
 
-  const selectedWorkspace = workspaces[0] ?? starterWorkspace;
+  const selectedId = (await cookies()).get(selectedWorkspaceKey)?.value;
+  const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedId) ?? workspaces[0] ?? starterWorkspace;
 
   const [accounts, categories, reviewTransactions] = await Promise.all([
     prisma.account.findMany({
@@ -97,6 +100,7 @@ export default async function ReviewPage() {
 
   return (
     <CloverShell
+      workspaceId={selectedWorkspace.id}
       active="transactions"
       title="Review queue"
       kicker="Learning backbone"

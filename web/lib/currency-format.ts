@@ -7,11 +7,12 @@ const normalizeCurrencyCode = (value?: string | null) => {
   return normalized || "PHP";
 };
 
-const formatPlainAmount = (value: number, locale = DEFAULT_LOCALE) =>
+// Intl preserves decimal strings without first rounding them through a Number.
+const formatPlainAmount = (value: number | string, locale = DEFAULT_LOCALE) =>
   new Intl.NumberFormat(locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(value);
+  }).format(value as number);
 
 const shouldUseSpacing = (symbol: string) => symbol.length > 2 && !symbol.endsWith("$");
 
@@ -20,7 +21,7 @@ export const makeCurrencyFormatter = (currency?: string | null, locale = DEFAULT
 
   if (normalized === "MIXED") {
     return {
-      format: (value: number) => formatPlainAmount(value, locale),
+      format: (value: number | string) => formatPlainAmount(value, locale),
     };
   }
 
@@ -28,11 +29,11 @@ export const makeCurrencyFormatter = (currency?: string | null, locale = DEFAULT
   const spacer = shouldUseSpacing(symbol) ? " " : "";
 
   return {
-    format: (value: number) => `${symbol}${spacer}${formatPlainAmount(value, locale)}`,
+    format: (value: number | string) => `${symbol}${spacer}${formatPlainAmount(value, locale)}`,
   };
 };
 
-export const formatCurrencyAmount = (value: number, currency?: string | null, locale = DEFAULT_LOCALE) =>
+export const formatCurrencyAmount = (value: number | string, currency?: string | null, locale = DEFAULT_LOCALE) =>
   makeCurrencyFormatter(currency, locale).format(value);
 
 export const formatSignedCurrencyAmount = (value: number, currency?: string | null, locale = DEFAULT_LOCALE) =>

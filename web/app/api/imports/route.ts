@@ -108,15 +108,17 @@ export async function GET(request: Request) {
   try {
     if (await isLocalDevHost()) {
       const user = await getOrCreateCurrentUser("local-admin");
-      const workspace = await ensureStarterWorkspace(user, user.email, user.verified);
+      const requestedWorkspaceId = new URL(request.url).searchParams.get("workspaceId");
+      const workspaceId = requestedWorkspaceId || (await ensureStarterWorkspace(user, user.email, user.verified)).id;
+      if (requestedWorkspaceId) await assertWorkspaceAccess(user.clerkUserId, workspaceId);
       await recoverWorkspaceImportEnrichment({
-        workspaceId: workspace.id,
+        workspaceId,
         workerId: "api-imports-local-recovery",
         maxJobs: 2,
       }).catch(() => null);
-      const importFiles = await listImportFilesCompat(workspace.id);
+      const importFiles = await listImportFilesCompat(workspaceId);
 
-      return NextResponse.json({ importFiles: await attachEnrichmentJobs(workspace.id, importFiles) });
+      return NextResponse.json({ importFiles: await attachEnrichmentJobs(workspaceId, importFiles) });
     }
 
     const { userId } = await requireAuth();

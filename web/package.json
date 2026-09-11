@@ -169,7 +169,11 @@
     "qa:adviser-entries": "tsx scripts/adviser-entry-regression.ts",
     "qa:adviser-entries:database": "tsx scripts/adviser-entry-database-regression.ts",
     "qa:adviser-attachments": "tsx scripts/adviser-attachments-regression.ts",
-    "qa:adviser-attachments:database": "tsx scripts/adviser-attachment-database-regression.ts"
+    "qa:adviser-attachments:database": "tsx scripts/adviser-attachment-database-regression.ts",
+    "qa:transactions-fixes": "tsx scripts/transactions-qa-fixes-regression.ts && tsx scripts/profile-route-regression.ts && tsx scripts/transactions-create-payload-regression.ts && tsx scripts/transactions-ui-defects-regression.ts && tsx scripts/transactions-final-defects-regression.ts && tsx scripts/transaction-amount-input-regression.ts",
+    "dev:qa": "next dev --hostname localhost --port 4321",
+    "qa:transaction-pagination:live": "tsx scripts/transactions-pagination-live-regression.ts",
+    "predev:qa": "npm run predev"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1095.0",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type KeyboardEvent } from "react";
+import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { sanitizeTransactionTagNames } from "@/lib/transaction-tags";
 
 type TransactionTagsEditorProps = {
@@ -18,6 +18,7 @@ export function TransactionTagsEditor({
   placeholder = "Add a tag and press Enter",
   inputAriaLabel = "Add transaction tag",
 }: TransactionTagsEditorProps) {
+  const editorRef = useRef<HTMLDivElement>(null);
   const [inputValue, setInputValue] = useState("");
 
   const availableSuggestions = useMemo(() => {
@@ -61,7 +62,7 @@ export function TransactionTagsEditor({
   };
 
   return (
-    <div className="transaction-tags-editor">
+    <div ref={editorRef} className="transaction-tags-editor">
       <div className="transaction-tags-editor__chips">
         {tags.map((tag) => (
           <span key={tag} className="transaction-tags-editor__chip">
@@ -78,7 +79,10 @@ export function TransactionTagsEditor({
           value={inputValue}
           onChange={(event) => setInputValue(event.target.value)}
           onKeyDown={handleKeyDown}
-          onBlur={() => {
+          onBlur={(event) => {
+            // Controls inside the editor commit their own action. A blur before
+            // Add must not clear the input and disable the button before click.
+            if (event.relatedTarget instanceof Node && editorRef.current?.contains(event.relatedTarget)) return;
             if (inputValue.trim()) {
               commitInput();
             }
@@ -86,7 +90,7 @@ export function TransactionTagsEditor({
           placeholder={placeholder}
           aria-label={inputAriaLabel}
         />
-        <button type="button" className="button button-secondary button-small" onClick={commitInput} disabled={!inputValue.trim()}>
+        <button type="button" className="button button-secondary button-small" onPointerDown={(event) => event.preventDefault()} onClick={commitInput} disabled={!inputValue.trim()}>
           Add
         </button>
       </div>
@@ -94,7 +98,7 @@ export function TransactionTagsEditor({
       {availableSuggestions.length > 0 ? (
         <div className="transaction-tags-editor__suggestions">
           {availableSuggestions.map((suggestion) => (
-            <button key={suggestion} type="button" className="transaction-tags-editor__suggestion" onClick={() => addTags([suggestion])}>
+            <button key={suggestion} type="button" className="transaction-tags-editor__suggestion" onPointerDown={(event) => event.preventDefault()} onClick={() => addTags([suggestion])}>
               {suggestion}
             </button>
           ))}

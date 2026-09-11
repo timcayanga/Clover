@@ -1,4 +1,6 @@
+import { HomeSensitiveAmount } from "@/components/home-sensitive-amount";
 import Link from "next/link";
+import { Prisma } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import type { ReactNode } from "react";
@@ -9,8 +11,8 @@ import { CloverShell } from "@/components/clover-shell";
 import { getPageSessionContext } from "@/lib/page-auth";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
-import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
-import { deriveReconciledBalance, normalizeAccountBalanceSign } from "@/lib/account-balance";
+import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
+import { deriveReconciledBalance } from "@/lib/account-balance";
 import { isLiabilityAccountType, isSpendableAccountType } from "@/lib/account-types";
 import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
 import { DashboardTopActionsLazy } from "@/components/dashboard-top-actions-lazy";
@@ -89,6 +91,7 @@ type DashboardTransaction = {
   id: string;
   date: Date;
   amount: unknown;
+  currency: string;
   isExcluded: boolean;
   reviewStatus: "pending_review" | "suggested" | "confirmed" | "edited" | "rejected" | "duplicate_skipped";
   categoryConfidence: number | null;
@@ -192,16 +195,6 @@ const formatCurrency = (value: number, currency?: string | null) => formatCurren
 const formatSignedCurrency = (value: number, currency?: string | null) =>
   `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency ?? "MIXED")}`;
 
-function HomeSensitiveAmount({ value, currency }: { value: string; currency?: string | null }) {
-  const symbol = formatCurrencySymbol(currency);
-  const spacing = symbol.length > 2 && !symbol.endsWith("$") ? " " : "";
-  return (
-    <span className="home-sensitive-amount" data-home-sensitive-amount>
-      <span className="home-sensitive-amount__actual" aria-hidden="false">{value}</span>
-      <span className="home-sensitive-amount__mask" aria-hidden="true">{symbol}{spacing}******</span>
-    </span>
-  );
-}
 
 const toIsoDay = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -668,8 +661,8 @@ async function DashboardStream({
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
   const thirtyDaysAgo = new Date(todayStart);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
-  const sixtyDaysAgo = new Date(todayStart);
-  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+  const previousThirtyDayStart = new Date(thirtyDaysAgo);
+  previousThirtyDayStart.setDate(previousThirtyDayStart.getDate() - 30);
   const ninetyDaysAgo = new Date(todayStart);
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
@@ -741,11 +734,13 @@ async function DashboardStream({
     ? prisma.transaction.findMany({
         where: buildActiveWorkspaceTransactionWhere(workspaceSummary.id, {
           date: { gte: ninetyDaysAgo, lt: tomorrowStart },
+          reviewStatus: { notIn: ["rejected", "duplicate_skipped"] },
         }),
         select: {
           id: true,
           date: true,
           amount: true,
+          currency: true,
           isExcluded: true,
           reviewStatus: true,
           parserConfidence: true,
@@ -771,7 +766,6 @@ async function DashboardStream({
           },
         },
         orderBy: { date: "desc" },
-        take: 180,
       })
     : Promise.resolve([] as DashboardTransaction[]);
 
@@ -781,7 +775,11 @@ async function DashboardStream({
     dashboardAccountsPromise,
   ]);
 
-  const currentTransactions = recentTransactions as DashboardTransaction[];
+  const allTransactions = recentTransactions as DashboardTransaction[];
+  const transactionCurrency = (transaction: DashboardTransaction) => formatCurrencyCode(transaction.currency || transaction.account?.currency || defaultCurrency);
+  const reportCurrencies = Array.from(new Set([preferredDashboardCurrency, ...allTransactions.map(transactionCurrency)])).sort();
+  // Advice is scoped to its labeled currency; review previews include every currency.
+  const currentTransactions = allTransactions.filter((transaction) => transactionCurrency(transaction) === preferredDashboardCurrency);
   const displayCurrency = preferredDashboardCurrency;
   const formatCurrency = (value: number, currency: string | null = displayCurrency) => formatCurrencyAmount(value, currency);
   const formatSignedCurrency = (value: number, currency: string | null = displayCurrency) =>
@@ -809,7 +807,7 @@ async function DashboardStream({
       checkpointBalance: latestCheckpoint?.endingBalance ?? null,
     });
 
-    return Number(reconciledBalance ?? account.balance ?? 0);
+    return String(reconciledBalance ?? account.balance ?? 0);
   };
 
   const spendableAccounts = dashboardAccounts.filter((account) =>
@@ -824,12 +822,13 @@ async function DashboardStream({
   );
   const balanceRates = Object.fromEntries(balanceRateEntries);
   const balanceEstimateUnavailable = balanceRateEntries.some(([, rate]) => rate === null);
+  const BalanceDecimal = Prisma.Decimal.clone({ precision: 40 });
   const savingsTotal = spendableAccounts.reduce((sum, account) => {
-    const signedBalance = normalizeAccountBalanceSign(account.type, reconcileAccountBalance(account));
+    const signedBalance = new BalanceDecimal(reconcileAccountBalance(account));
     const rate = balanceRates[formatCurrencyCode(account.currency)];
     if (rate === null || rate === undefined) return sum;
-    return sum + Math.max(signedBalance, 0) * rate;
-  }, 0);
+    return sum.plus(BalanceDecimal.max(signedBalance, 0).times(String(rate)));
+  }, new BalanceDecimal(0));
   const currentThirtyDayTransactions = currentTransactions.filter(
     (transaction) => transaction.date >= thirtyDaysAgo && transaction.date < tomorrowStart
   );
@@ -842,7 +841,7 @@ async function DashboardStream({
     (transaction) => transaction.date >= previousSevenDaysAgo && transaction.date < sevenDaysAgo
   );
   const previousTransactionsWindow = currentTransactions.filter(
-    (transaction) => transaction.date >= sixtyDaysAgo && transaction.date < thirtyDaysAgo
+    (transaction) => transaction.date >= previousThirtyDayStart && transaction.date < thirtyDaysAgo
   );
   const currentSummary = comparePeriods(currentThirtyDayTransactions, previousTransactionsWindow);
   const weeklySummary = comparePeriods(currentSevenDayTransactions, previousSevenDayTransactions);
@@ -851,20 +850,11 @@ async function DashboardStream({
   const currentMonthTransactions = currentTransactions.filter(
     (transaction) => transaction.date >= monthStart && transaction.date < tomorrowStart
   );
-  const previousMonthTransactions = currentTransactions.filter(
-    (transaction) => transaction.date >= previousMonthStart && transaction.date < monthStart
-  );
   const monthSummary = summarizeWindow(currentMonthTransactions, "This month");
-  const previousMonthSummary = summarizeWindow(previousMonthTransactions, "Previous month");
-  const weeklyFlowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
-  const weeklyFlow = buildDailyFlow(currentTransactions, weeklyFlowStart, 7, { weekday: "short" });
-  const rollingThirtyDaySummary = currentSummary.current;
-  const rollingThirtyDayNet = currentSummary.net;
-  const monthlyFlow = buildDailyFlow(currentThirtyDayTransactions, thirtyDaysAgo, 30, { day: "numeric" });
   const currentSavingsRate = currentSummary.current.income > 0 ? currentSummary.net / currentSummary.current.income : null;
   const previousNet = currentSummary.previous.income - currentSummary.previous.expense;
   const previousSavingsRate = currentSummary.previous.income > 0 ? previousNet / currentSummary.previous.income : null;
-  const reviewAttentionTransactions: HomeReviewTransaction[] = currentThirtyDayTransactions.flatMap((transaction) => {
+  const reviewAttentionTransactions: HomeReviewTransaction[] = allTransactions.filter((transaction) => transaction.date >= thirtyDaysAgo && transaction.date < tomorrowStart).flatMap((transaction) => {
     const reviewReasons = getDashboardTransactionReviewReasons(transaction);
     if (reviewReasons.length === 0) return [];
     return [{
@@ -872,7 +862,7 @@ async function DashboardStream({
       title: transaction.merchantClean?.trim() || transaction.merchantRaw?.trim() || "Imported transaction",
       date: transaction.date.toISOString(),
       amount: String(transaction.amount),
-      currency: transaction.account?.currency ?? displayCurrency,
+      currency: transactionCurrency(transaction),
       type: transaction.type,
       accountName: transaction.account?.name ?? "Account",
       categoryName: transaction.category?.name ?? null,
@@ -973,7 +963,9 @@ async function DashboardStream({
     return {
       id: commitment.id,
       title: commitment.title,
-      detail: [formatPaymentDate(dueDate), amountLabel].filter(Boolean).join(" · "),
+      detail: formatPaymentDate(dueDate),
+      amountLabel,
+      currency: commitment.currency,
       dueDate: occurrenceKey,
       completed: completedOccurrenceKeys.has(`${commitment.id}:${occurrenceKey}`),
     };
@@ -991,8 +983,9 @@ async function DashboardStream({
       title: suggestion.title,
       detail: [
         suggestion.dueDate ? formatPaymentDate(new Date(suggestion.dueDate)) : "Date to confirm",
-        suggestion.amount ? formatCurrencyAmount(Number(suggestion.amount), suggestion.currency) : null,
       ].filter(Boolean).join(" · "),
+      amountLabel: suggestion.amount != null ? formatCurrencyAmount(Number(suggestion.amount), suggestion.currency) : null,
+      currency: suggestion.currency,
     }));
   const insightCandidates: Array<HomeAdviserItem | null> = [
     daysSinceLastImport === null || daysSinceLastImport >= 7
@@ -1058,8 +1051,8 @@ async function DashboardStream({
     currentSevenDayTransactions.length > 0 && reviewAttentionCount === 0
       ? {
           emoji: "✅",
-          label: "All caught up",
-          copy: "Your recent transactions look tidy and ready to use.",
+          label: "Recent review",
+          copy: "No recent transactions need review. Older transactions may still need attention.",
           href: "/transactions",
           actionLabel: "View transactions",
           tone: "positive",
@@ -1098,23 +1091,27 @@ async function DashboardStream({
   const insightItems = insightCandidates.filter((item): item is HomeAdviserItem => Boolean(item)).slice(0, 3);
   const totalBalanceLabel = balanceEstimateUnavailable
     ? "—"
-    : formatCurrency(savingsTotal, balanceCurrency);
-  const balanceHighlights = [
-    {
-      key: "income",
-      label: "Monthly Income",
-      value: formatCurrency(monthSummary.income, displayCurrency),
-      trend: getHomePeriodChange(monthSummary.income, previousMonthSummary.income, displayCurrency),
-    },
-    {
-      key: "expenses",
-      label: "Monthly Expenses",
-      value: formatCurrency(monthSummary.expense, displayCurrency),
-      trend: getHomePeriodChange(monthSummary.expense, previousMonthSummary.expense, displayCurrency),
-    },
-  ];
-  const weeklyReportTone = weeklySummary.net >= 0 ? "positive" : "warning";
-  const monthlyReportTone = rollingThirtyDayNet >= 0 ? "positive" : "warning";
+    : formatCurrencyAmount(savingsTotal.toFixed(2), balanceCurrency);
+  const currencyReports = reportCurrencies.map((currency) => {
+    const transactions = allTransactions.filter((transaction) => transactionCurrency(transaction) === currency);
+    const inWindow = (start: Date, end: Date) => transactions.filter((transaction) => transaction.date >= start && transaction.date < end);
+    const month = summarizeWindow(inWindow(monthStart, tomorrowStart), "This month");
+    const previousMonth = summarizeWindow(inWindow(previousMonthStart, monthStart), "Previous month");
+    return {
+      currency, month, previousMonth,
+      periods: [
+        { title: "Weekly Report", label: "Weekly report", days: 7, start: sevenDaysAgo },
+        { title: "Monthly Report", label: "Monthly report", days: 30, start: thirtyDaysAgo },
+      ].map((period) => ({ ...period,
+        summary: summarizeWindow(inWindow(period.start, tomorrowStart), period.title),
+        flow: buildDailyFlow(inWindow(period.start, tomorrowStart), period.start, period.days, period.days === 7 ? { weekday: "short" } : { day: "numeric" }),
+      })),
+    };
+  });
+  const balanceHighlights = currencyReports.flatMap(({currency, month, previousMonth}) => [
+    { key: `${currency}-income`, isExpense: false, currency, label: `Monthly Income${reportCurrencies.length > 1 ? ` (${currency})` : ""}`, value: formatCurrency(month.income, currency), trend: getHomePeriodChange(month.income, previousMonth.income, currency) },
+    { key: `${currency}-expenses`, isExpense: true, currency, label: `Monthly Expenses${reportCurrencies.length > 1 ? ` (${currency})` : ""}`, value: formatCurrency(month.expense, currency), trend: getHomePeriodChange(month.expense, previousMonth.expense, currency) },
+  ]);
   return (
     <>
       <PostHogPersonProperties
@@ -1148,7 +1145,7 @@ async function DashboardStream({
           className="dashboard-home__hero dashboard-home__hero--fresh dashboard-home__hero--balance glass"
           style={{ background: "linear-gradient(135deg, #03A8C0 0%, #5ED3D0 100%)" }}
         >
-          <div className="dashboard-home__hero-main">
+          <div className={`dashboard-home__hero-main${totalBalanceLabel.length > 18 ? " dashboard-home__hero-main--large-balance" : ""}`}>
             <div className="dashboard-home__balance-heading">
               <p className="eyebrow">My Balance</p>
               <BalanceVisibilityToggle />
@@ -1166,15 +1163,15 @@ async function DashboardStream({
                 <span className="dashboard-home__hero-mini-label">{pill.label}</span>
                 <div className="dashboard-home__hero-mini-row">
                   <strong className="dashboard-home__hero-mini-value">
-                    <HomeSensitiveAmount value={pill.value} currency={displayCurrency} />
+                    <HomeSensitiveAmount value={pill.value} currency={pill.currency} />
                   </strong>
                   {pill.trend ? (
                     <span
-                      className={`dashboard-home__hero-mini-trend${pill.trend.direction === 0 ? "" : (pill.key === "income" ? pill.trend.direction > 0 : pill.trend.direction < 0) ? " positive" : " negative"}`}
+                      className={`dashboard-home__hero-mini-trend${pill.trend.direction === 0 ? "" : (pill.isExpense ? pill.trend.direction < 0 : pill.trend.direction > 0) ? " positive" : " negative"}`}
                       title="Compared with last month"
                     >
                       {pill.trend.amountBased
-                        ? <HomeSensitiveAmount value={pill.trend.label} currency={displayCurrency} />
+                        ? <HomeSensitiveAmount value={pill.trend.label} currency={pill.currency} />
                         : pill.trend.label}
                     </span>
                   ) : null}
@@ -1221,68 +1218,26 @@ async function DashboardStream({
         />
 
         <div className="dashboard-home__snapshot-grid" aria-label="Week and month snapshot">
-          <article className={`dashboard-home__report-card dashboard-home__report-card--${weeklyReportTone} glass`}>
-            <div className="dashboard-home__report-card-head">
-              <div>
-                <p className="eyebrow">Weekly Report</p>
-                <h4><HomeSensitiveAmount value={formatCurrency(weeklySummary.current.expense, displayCurrency)} currency={displayCurrency} /></h4>
-                <p className="dashboard-home__report-note">Recorded spending in the past 7 days</p>
+          {currencyReports.flatMap(({currency, periods}) => periods.map(({title, label, days, summary, flow}) => (
+            <article key={`${currency}-${days}`} data-report-currency={currency} className={`dashboard-home__report-card dashboard-home__report-card--${summary.net >= 0 ? "positive" : "warning"} glass`}>
+              <div className="dashboard-home__report-card-head"><div>
+                <p className="eyebrow">{title}</p>
+                {reportCurrencies.length > 1 ? <p>{currency}</p> : null}
+                <h4><HomeSensitiveAmount value={formatCurrency(summary.expense, currency)} currency={currency} /></h4>
+                <p className="dashboard-home__report-note">Recorded spending in the past {days} days</p>
+              </div></div>
+              <div className="dashboard-home__report-metrics" aria-label={`${label} metrics`}>
+                <span><small>Income</small><strong className="dashboard-home__report-metric-value--income"><HomeSensitiveAmount value={formatCurrency(summary.income, currency)} currency={currency} /></strong></span>
+                <span><small>Expenses</small><strong className="dashboard-home__report-metric-value--expense"><HomeSensitiveAmount value={formatCurrency(summary.expense, currency)} currency={currency} /></strong></span>
+                <span><small>Net Cash Flow</small><strong className={summary.net >= 0 ? "dashboard-home__report-metric-value--income" : "dashboard-home__report-metric-value--expense"}><HomeSensitiveAmount value={formatSignedCurrency(summary.net, currency)} currency={currency} /></strong></span>
               </div>
-            </div>
-            <div className="dashboard-home__report-metrics" aria-label="Weekly report metrics">
-              <span>
-                <small>Income</small>
-                <strong className="dashboard-home__report-metric-value--income"><HomeSensitiveAmount value={formatCurrency(weeklySummary.current.income, displayCurrency)} currency={displayCurrency} /></strong>
-              </span>
-              <span>
-                <small>Expenses</small>
-                <strong className="dashboard-home__report-metric-value--expense"><HomeSensitiveAmount value={formatCurrency(weeklySummary.current.expense, displayCurrency)} currency={displayCurrency} /></strong>
-              </span>
-              <span>
-                <small>Net Cash Flow</small>
-                <strong className={weeklySummary.net >= 0 ? "dashboard-home__report-metric-value--income" : "dashboard-home__report-metric-value--expense"}>
-                  <HomeSensitiveAmount value={formatSignedCurrency(weeklySummary.net, displayCurrency)} currency={displayCurrency} />
-                </strong>
-              </span>
-            </div>
-            <DailyFlowChart days={weeklyFlow} label="Weekly report" currency={displayCurrency} />
-            <Link className="dashboard-home__report-link" href="/reports?section=trends">
-              View report
-            </Link>
-          </article>
-
-          <article className={`dashboard-home__report-card dashboard-home__report-card--${monthlyReportTone} glass`}>
-            <div className="dashboard-home__report-card-head">
-              <div>
-                <p className="eyebrow">Monthly Report</p>
-                <h4><HomeSensitiveAmount value={formatCurrency(rollingThirtyDaySummary.expense, displayCurrency)} currency={displayCurrency} /></h4>
-                <p className="dashboard-home__report-note">Recorded spending in the past 30 days</p>
-              </div>
-            </div>
-            <div className="dashboard-home__report-metrics" aria-label="Monthly report metrics">
-              <span>
-                <small>Income</small>
-                <strong className="dashboard-home__report-metric-value--income"><HomeSensitiveAmount value={formatCurrency(rollingThirtyDaySummary.income, displayCurrency)} currency={displayCurrency} /></strong>
-              </span>
-              <span>
-                <small>Expenses</small>
-                <strong className="dashboard-home__report-metric-value--expense"><HomeSensitiveAmount value={formatCurrency(rollingThirtyDaySummary.expense, displayCurrency)} currency={displayCurrency} /></strong>
-              </span>
-              <span>
-                <small>Net Cash Flow</small>
-                <strong className={rollingThirtyDayNet >= 0 ? "dashboard-home__report-metric-value--income" : "dashboard-home__report-metric-value--expense"}>
-                  <HomeSensitiveAmount value={formatSignedCurrency(rollingThirtyDayNet, displayCurrency)} currency={displayCurrency} />
-                </strong>
-              </span>
-            </div>
-            <DailyFlowChart days={monthlyFlow} label="Monthly report" currency={displayCurrency} />
-            <Link className="dashboard-home__report-link" href="/reports?section=trends">
-              View report
-            </Link>
-          </article>
+              <DailyFlowChart days={flow} label={label} currency={currency} />
+              <Link className="dashboard-home__report-link" href="/reports?section=trends">View report</Link>
+            </article>
+          )))}
         </div>
 
-        <DashboardBudgetPulse />
+        <DashboardBudgetPulse key={workspaceSummary.id} workspaceId={workspaceSummary.id} refreshKey={now.toISOString()} />
 
         <div className="dashboard-home__snapshot-grid dashboard-home__snapshot-grid--lower">
           <HomeRecurringPaymentsCard
@@ -1313,19 +1268,19 @@ async function DashboardStream({
                   {reviewAttentionCount > 0 ? "!" : "✓"}
                 </span>
                 <div>
-                  <strong>{reviewAttentionCount > 0 ? "Transactions to review" : "Transactions look tidy"}</strong>
+                  <strong>{reviewAttentionCount > 0 ? "Transactions to review" : "Recent transactions look tidy"}</strong>
                   <small>
                     {reviewAttentionCount > 0
                       ? "Review these details before using them in reports."
-                      : "Everything is categorized and ready for reports."}
+                      : "No recent transactions need review. Older transactions may still need attention."}
                   </small>
                 </div>
               </div>
               {reviewAttentionCount > 0 ? (
                 <HomeTransactionReviewLauncher transactions={reviewAttentionTransactions.slice(0, 3)} />
               ) : null}
-              <Link className="dashboard-home__report-link" href={reviewAttentionCount > 0 ? "/review" : "/transactions"}>
-                {reviewAttentionCount > 0 ? "Open review" : "Open transactions"}
+              <Link className="dashboard-home__report-link" href="/review">
+                Open review
               </Link>
             </div>
           )}

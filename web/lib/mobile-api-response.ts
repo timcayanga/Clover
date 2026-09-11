@@ -1,6 +1,7 @@
 import { parseReceiptLineItemsFromPayload } from "./receipt-line-items";
 import { entryDraftSchema } from "./adviser-entry-schema";
 import { projectAdviserDeviceContext } from "./adviser-device-context";
+import { getRecordedTransactionConfidence } from "./transaction-confidence";
 import { getTransactionUserNoteValue, getTransactionParsedNoteValue } from "./transaction-notes";
 
 const record = (value: unknown): Record<string, unknown> =>
@@ -99,7 +100,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
   if (operation === "transaction") {
     const row = record(data.transaction);
     return {
-      transaction: { ...pick(row, transactionFields), receiptLineItems: parseReceiptLineItemsFromPayload(row.rawPayload,row.normalizedPayload), userNote: getTransactionUserNoteValue(row), parsedNote: getTransactionParsedNoteValue(row), source: row.source },
+      transaction: { ...pick(row, transactionFields), confidenceScore: getRecordedTransactionConfidence(row), receiptLineItems: parseReceiptLineItemsFromPayload(row.rawPayload,row.normalizedPayload), userNote: getTransactionUserNoteValue(row), parsedNote: getTransactionParsedNoteValue(row), source: row.source },
       accounts: Array.isArray(data.accounts) ? data.accounts.map(row => pick(row, ["id", "name", "institution", "currency", "type"])) : [],
       categories: Array.isArray(data.categories) ? data.categories.map(row => pick(row, ["id", "name", "type"])) : [],
     };

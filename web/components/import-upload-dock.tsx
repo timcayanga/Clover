@@ -83,7 +83,7 @@ export function ImportUploadDock({
     safeFileTotal > 0 ? Math.min(Math.max(1, fileIndex || 1), safeFileTotal) : Math.max(0, fileIndex || 0);
   const safeCompletedFiles = safeFileTotal > 0 ? Math.min(Math.max(0, completedFiles), safeFileTotal) : Math.max(0, completedFiles);
   const rawValue = clampProgress(progress);
-  const isComplete = safeFileTotal > 0 && safeCompletedFiles >= safeFileTotal && rawValue >= 100;
+  const isComplete = tone === "success" && safeFileTotal > 0 && safeCompletedFiles >= safeFileTotal && rawValue >= 100;
   const activeFileBatchCeiling =
     safeFileTotal > 0 && safeFileIndex > 0 ? Math.max(1, ((safeFileIndex - 0.02) / safeFileTotal) * 100) : 99;
   const value = safeFileTotal > 0 && !isComplete ? Math.min(rawValue, activeFileBatchCeiling, 99) : rawValue;
@@ -103,7 +103,7 @@ export function ImportUploadDock({
   const progressCaption =
     safeFileTotal > 0
       ? isComplete
-        ? tone === "error" ? "files checked" : "files ready"
+        ? "files ready"
         : `file ${safeFileIndex} of ${safeFileTotal}`
       : "import queue";
   const resultHeadline = isComplete ? formatImportResultHeadline(summary) : "";

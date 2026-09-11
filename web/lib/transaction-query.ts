@@ -286,8 +286,15 @@ const buildMerchantFilters = (merchantFilters: string[]) =>
       ],
     }));
 
-export const buildTransactionQueryWhere = (workspaceId: string, filters: TransactionQueryFilters): Prisma.TransactionWhereInput => {
-  const where = buildActiveWorkspaceTransactionWhere(workspaceId);
+export const buildTransactionQueryWhere = (
+  workspaceId: string,
+  filters: TransactionQueryFilters,
+  options: { includeExcluded?: boolean } = {}
+): Prisma.TransactionWhereInput => {
+  // History includes exclusions; financial consumers retain the active-only default.
+  const where = options.includeExcluded
+    ? buildVisibleWorkspaceTransactionWhere(workspaceId)
+    : buildActiveWorkspaceTransactionWhere(workspaceId);
 
   const query = filters.query?.trim();
   const categoryIds = (filters.categoryIds ?? []).filter(Boolean);
@@ -403,30 +410,37 @@ export const buildTransactionQueryOrderBy = (
   filters: TransactionQueryFilters
 ): Prisma.TransactionOrderByWithRelationInput[] => {
   const direction = filters.sortDirection ?? "desc";
+  // Offset pages must have a total order even when imported rows share every
+  // visible sort value and creation timestamp. Otherwise ties can cross pages.
+  const tieBreaker = { id: direction };
   switch (filters.sortField ?? "date") {
     case "name":
       return [
         { merchantClean: direction },
         { merchantRaw: direction },
         { date: "desc" },
+        tieBreaker,
       ];
     case "account":
       return [
         { account: { name: direction } },
         { date: "desc" },
+        tieBreaker,
       ];
     case "category":
       return [
         { category: { name: direction } },
         { date: "desc" },
+        tieBreaker,
       ];
     case "amount":
       return [
         { amount: direction },
         { date: "desc" },
+        tieBreaker,
       ];
     case "date":
     default:
-      return [{ date: direction }, { createdAt: direction }];
+      return [{ date: direction }, { createdAt: direction }, tieBreaker];
   }
 };

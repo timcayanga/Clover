@@ -115,3 +115,11 @@ Rules:
 - Make accounts, transactions, and receivables durable before template promotion, analytics, QA, or representative training signals run.
 - Evaluate enrichment only for suggested or review-pending rows, reuse one parallel-loaded training snapshot across batches, batch database writes, and resume from the saved cursor after a timeout.
 - Large imports may sample redundant learning and analytics events; confirmed user edits remain authoritative and are never sampled away.
+
+## Metadata routing
+
+Recognized transaction tables take precedence over screenshot institution detection.
+Generic headings such as Type and Currency are not evidence of Wise. Use explicit
+row/preamble account identity, keep absent account numbers absent, and leave shared
+file identity unset when rows identify different accounts. Preserve each row's
+Account Name through normalization; do not replace it with a guessed institution.

@@ -167,12 +167,23 @@ export function CurrencySelector({
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
       const width = Math.min(224, viewportWidth - 24);
-      const top = Math.min(rect.bottom + 8, viewportHeight - 16);
-      const left =
-        menuAlignment === "end"
-          ? Math.max(12, rect.right - width)
-          : Math.min(Math.max(12, rect.left), viewportWidth - width - 12);
-      const maxHeight = Math.max(160, viewportHeight - top - 16);
+      const below = Math.max(0, viewportHeight - rect.bottom - 20);
+      const above = Math.max(0, rect.top - 20);
+      const desiredHeight = Math.min(320, (menuRef.current?.scrollHeight ?? 318) + 2);
+      const placeAbove = below < desiredHeight && above > below;
+      const maxHeight = Math.min(320, placeAbove ? above : below);
+      const top = placeAbove
+        ? Math.max(12, rect.top - 8 - Math.min(desiredHeight, maxHeight))
+        : Math.min(rect.bottom + 8, viewportHeight - 12);
+      const preferredLeft = menuAlignment === "end" ? rect.right - width : rect.left;
+      const left = Math.min(Math.max(12, preferredLeft), viewportWidth - width - 12);
+
+      // A body portal must sit above its trigger's modal stacking context.
+      let zIndex = 140;
+      for (let ancestor: HTMLElement | null = trigger; ancestor; ancestor = ancestor.parentElement) {
+        const layer = Number.parseInt(window.getComputedStyle(ancestor).zIndex, 10);
+        if (Number.isFinite(layer)) zIndex = Math.max(zIndex, layer + 1);
+      }
 
       setPortalMenuStyle({
         position: "fixed",
@@ -180,7 +191,7 @@ export function CurrencySelector({
         left,
         width,
         maxHeight,
-        zIndex: 140,
+        zIndex,
       });
     };
 
@@ -193,16 +204,19 @@ export function CurrencySelector({
     };
   }, [menuAlignment, open, portalMenu]);
 
+  const selectCurrency = (code: string) => {
+    onChange(code);
+    setOpen(false);
+    rootRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+  };
+
   const allCurrenciesOption = includeAllOption ? (
     <button
       type="button"
       className={`currency-selector__option ${optionClassName ?? ""} ${isAllSelected ? "is-selected" : ""}`.trim()}
       role="option"
       aria-selected={isAllSelected}
-      onClick={() => {
-        onChange("all");
-        setOpen(false);
-      }}
+      onClick={() => selectCurrency("all")}
     >
       <span className="currency-selector__option-text">
         <strong>{allLabel}</strong>
@@ -231,10 +245,7 @@ export function CurrencySelector({
               options={section.options}
               selectedCode={selectedCode}
               optionClassName={optionClassName}
-              onSelect={(nextCode) => {
-                onChange(nextCode);
-                setOpen(false);
-              }}
+              onSelect={selectCurrency}
             />
           ))}
         </>
@@ -250,10 +261,7 @@ export function CurrencySelector({
                 className={`currency-selector__option ${optionClassName ?? ""} ${isSelected ? "is-selected" : ""}`.trim()}
                 role="option"
                 aria-selected={isSelected}
-                onClick={() => {
-                  onChange(option.code);
-                  setOpen(false);
-                }}
+                onClick={() => selectCurrency(option.code)}
               >
                 <span className="currency-selector__option-text">
                   <strong>{option.symbol}</strong>
