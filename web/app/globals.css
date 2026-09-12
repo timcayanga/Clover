@@ -65093,3 +65093,74 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
 .dashboard-home--figma .home-next-steps__copy p { font-size: 12px; }
 .dashboard-home--figma .home-next-steps__count { color: #ff474d; }
 .dashboard-home--figma .dashboard-home__goal-card { min-height: 166px; align-content: start; }
+
+/* Accounts: compact Figma form and shared detail surfaces (September 2026). */
+.accounts-add-modal .modal-head .eyebrow { display: none; }
+.accounts-add-modal .modal-head h4 { font-size: 24px; }
+.accounts-add-modal .accounts-manual-form { gap: 20px; }
+.accounts-add-modal .accounts-add-fields { gap: 20px; }
+.accounts-add-modal .accounts-add-fields__type-field {
+  display: grid; grid-template-columns: 110px minmax(0, 1fr); align-items: center; gap: 12px;
+}
+.accounts-add-modal .accounts-add-fields__type-field select {
+  border-color: transparent; background-color: transparent; color: var(--text); min-height: 44px;
+}
+.accounts-add-modal .accounts-add-fields__row--amount {
+  position: relative; padding: 0; border: 0; background: transparent;
+}
+.accounts-add-modal .accounts-add-fields__amount-grow { width: 100%; }
+.accounts-add-modal .accounts-add-fields__balance { gap: 12px; }
+.accounts-add-modal .accounts-add-fields__balance input {
+  height: 92px; min-height: 92px; padding: 16px 116px 16px 16px;
+  border: 1px solid transparent; border-radius: 18px; background: var(--surface-muted, #f4f6f8);
+  color: var(--text); font-size: clamp(24px, 4vw, 40px); font-weight: 600; box-shadow: none;
+}
+.accounts-add-modal .accounts-add-fields__currency { position: absolute; right: 16px; bottom: 24px; width: 88px; z-index: 1; }
+.accounts-add-modal .accounts-add-fields__currency .currency-selector__button { height: 44px; min-height: 44px; border-radius: 999px; }
+.accounts-add-modal .accounts-add-brand-inline { display: none; }
+.accounts-add-modal .accounts-add-fields__name-grow { width: 100%; }
+.accounts-add-modal details.accounts-add-advanced { display: block; padding: 0; }
+.accounts-add-advanced > summary { padding: 12px; text-align: center; cursor: pointer; color: var(--text); font-size: 14px; font-weight: 600; }
+.accounts-add-advanced__body { display: grid; gap: 16px; padding-top: 16px; }
+.accounts-add-modal .accounts-add-actions__buttons { display: flex; flex-direction: column-reverse; width: 100%; gap: 12px; }
+.accounts-add-modal .accounts-add-actions__buttons > button { width: 100%; min-height: 44px; border-radius: 999px; }
+.accounts-page .accounts-overview-card { border-radius: 16px; min-height: 92px; }
+.accounts-page .accounts-overview-card__amount { text-align: center; font-size: clamp(18px, 1.6vw, 24px); overflow-wrap: anywhere; }
+.accounts-detail__card-text-actions { flex-wrap: wrap; }
+.accounts-detail__type-edit-button { min-height: 44px; padding: 8px; }
+.accounts-detail__credit-inline { border: 1px solid var(--border, #d9e5ea); border-radius: 18px; padding: 18px; background: var(--surface, #fff); }
+.institution-detail-metric span { letter-spacing: 0; text-transform: none; }
+.institution-detail-metric { border-radius: 16px; }
+.accounts-detail__investment-grid { align-items: start; }
+@media (min-width: 901px) {
+  .accounts-detail__hero-layout.is-credit-account { width: min(100%, 740px); grid-template-columns: 280px minmax(0, 1fr); align-items: start; gap: 40px; }
+  .accounts-detail__hero-layout.is-credit-account .accounts-detail__credit-inline { width: 100%; margin-top: 28px; }
+}
+@media (max-width: 600px) {
+  .accounts-add-modal { padding: 20px; }
+  .accounts-add-modal .accounts-add-fields__type-field { grid-template-columns: 100px minmax(0, 1fr); }
+  .accounts-add-modal .accounts-add-fields__balance input { padding-right: 106px; font-size: clamp(24px, 8vw, 36px); }
+  .accounts-add-modal .accounts-add-fields__currency { right: 12px; width: 82px; }
+  .accounts-detail__credit-inline { width: 100%; }
+  .institution-detail-hero__metrics { gap: 8px; }
+  .institution-detail-metric { min-width: 0; padding: 12px; }
+  .institution-detail-metric strong { overflow-wrap: anywhere; }
+}
+html[data-theme="dark"] .accounts-add-modal .accounts-add-fields__balance input { background: #172c35; }
+html[data-theme="dark"] .accounts-detail__credit-inline { background: #132933; }
+.accounts-add-modal .accounts-add-fields__balance input { font-size: clamp(24px, 4vw, 40px) !important; }
+@media (max-width: 600px) {
+  .accounts-add-modal .accounts-add-fields__balance input { font-size: clamp(24px, 8vw, 36px) !important; }
+}
+.financial-account-card__edit {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; flex: 0 0 44px; padding: 10px;
+  border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer;
+}
+.financial-account-card__edit:hover { background: rgba(255,255,255,.16); }
+.financial-account-card__edit:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.reports-account-scope { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; color: var(--text); }
+.accounts-detail__credit-inline { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.accounts-detail__credit-inline-meta { grid-column: 1 / -1; }
+.accounts-add-modal { overflow-y: auto; overscroll-behavior: contain; }
+.accounts-detail__footer-actions { justify-content: flex-end; flex-wrap: wrap; }

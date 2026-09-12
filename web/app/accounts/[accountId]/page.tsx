@@ -4072,6 +4072,7 @@ function AccountDetailPageContent() {
                   logoUrl={account.logoUrl}
                   onLogoCommit={saveAccountLogo}
                   showChevron={false}
+                  showEditAction
                 />
 
                 <div className="accounts-detail__card-text-actions">
@@ -4086,6 +4087,11 @@ function AccountDetailPageContent() {
                   >
                     Edit Type
                   </button>
+                  {account.type !== "investment" ? (
+                    <Link className="button button-secondary button-small accounts-detail__reports-link" href={`/reports?accountId=${encodeURIComponent(account.id)}&currency=${encodeURIComponent(account.currency)}`} prefetch={false}>
+                      View Account Reports
+                    </Link>
+                  ) : null}
                 </div>
 
                 {accountTypeEditorOpen ? (

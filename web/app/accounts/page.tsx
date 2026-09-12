@@ -4970,6 +4970,7 @@ function AccountsPageContent() {
                             onChange={setAccountEditCurrency}
                             options={currencyCatalogCodes}
                             ariaLabel="Select account currency"
+                            showCurrencyCode
                             className="accounts-form-currency-field__selector"
                             buttonClassName="accounts-form-currency-field__button"
                             menuClassName="accounts-form-currency-field__menu"
@@ -5210,74 +5211,22 @@ function AccountsPageContent() {
             <div className="modal-head">
               <div>
                 <p className="eyebrow">Accounts</p>
-                <h4 id="add-account-title">Add an account</h4>
+                <h4 id="add-account-title">Add account</h4>
               </div>
               <button className="icon-button" type="button" onClick={() => setAddOpen(false)} aria-label="Close add account">
-                ×
+                <InterfaceIcon name="close" />
               </button>
             </div>
 
             <div className="accounts-add-grid">
               <form className="accounts-manual-form" onSubmit={createManualAccount}>
-<AdviserFormAssist workspaceId={selectedWorkspaceId} context={{kind: "account", fields: {name:manualName,institution:manualInstitution,type:manualType,currency:manualCurrency,balance:manualBalance}}} />
                 <div
                   className="accounts-add-layout"
                   style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 12, width: "100%" }}
                 >
                   <div className="accounts-add-fields" style={{ width: "100%", minWidth: 0 }}>
-                    <div className="accounts-add-fields__name-row" style={{ display: "flex", alignItems: "flex-end", gap: 12, width: "100%", minWidth: 0 }}>
-                      <span className="accounts-add-brand-inline" aria-label="Account logo preview">
-                        <AccountBrandMark accountBrand={manualAccountBrand} label={manualName || manualInstitution || "Account"} />
-                      </span>
-                      <div className="accounts-add-fields__name-grow" style={{ flex: "1 1 auto", minWidth: 0, width: "100%" }}>
-                        <InstitutionAutocomplete
-                          label="Name"
-                          value={manualName}
-                          onChange={setManualName}
-                          onSelectSuggestion={applyManualNameSuggestion}
-                          placeholder={manualType === "investment" ? "Example: FMETF" : "Example: BDO"}
-                          variant="account"
-                        />
-                      </div>
-                    </div>
-                    <div className="accounts-add-fields__row accounts-add-fields__row--amount" style={{ display: "flex", alignItems: "flex-end", gap: 12, width: "100%", minWidth: 0 }}>
-                      <label className="accounts-add-fields__currency">
-                        <span className="sr-only">Currency</span>
-                        <div className="accounts-form-currency-field accounts-form-currency-field--inline">
-                          <CurrencySelector
-                            value={manualCurrency}
-                            onChange={setManualCurrency}
-                            options={currencyCatalogCodes}
-                            ariaLabel="Select account currency"
-                            className="accounts-form-currency-field__selector"
-                            buttonClassName="accounts-form-currency-field__button"
-                            menuClassName="accounts-form-currency-field__menu"
-                            optionClassName="accounts-form-currency-field__option"
-                            compact
-                            showGroupedSections
-                            portalMenu
-                          />
-                        </div>
-                      </label>
-                      <div className="accounts-add-fields__amount-grow" style={{ flex: "1 1 auto", minWidth: 0, width: "100%" }}>
-                        <label className="accounts-add-fields__balance">
-                          Amount
-                          <input
-                            value={manualBalance}
-                            onChange={(event) => setManualBalance(event.target.value)}
-                            inputMode="decimal"
-                            placeholder="0.00"
-                          />
-                        </label>
-                      </div>
-                    </div>
-                    <div className="accounts-add-advanced" style={{ width: "100%", minWidth: 0 }}>
-                        <div
-                          className="accounts-add-fields__row accounts-add-fields__row--meta"
-                          style={{ display: "flex", alignItems: "flex-end", gap: 12, width: "100%", minWidth: 0 }}
-                        >
-                          <label className="accounts-add-fields__type-field" style={{ flex: "0 0 180px", minWidth: 0 }}>
-                            Type
+                          <label className="accounts-add-fields__type-field" >
+                            <span>Account type</span>
                             <select
                               value={manualType}
                               onChange={(event) => setManualType(event.target.value as Account["type"])}
@@ -5293,6 +5242,62 @@ function AccountsPageContent() {
                               ))}
                             </select>
                           </label>
+
+                    <div className="accounts-add-fields__row accounts-add-fields__row--amount" style={{ display: "flex", alignItems: "flex-end", gap: 12, width: "100%", minWidth: 0 }}>
+                      <label className="accounts-add-fields__currency">
+                        <span className="sr-only">Currency</span>
+                        <div className="accounts-form-currency-field accounts-form-currency-field--inline">
+                          <CurrencySelector
+                            value={manualCurrency}
+                            onChange={setManualCurrency}
+                            options={currencyCatalogCodes}
+                            ariaLabel="Select account currency"
+                            showCurrencyCode
+                            className="accounts-form-currency-field__selector"
+                            buttonClassName="accounts-form-currency-field__button"
+                            menuClassName="accounts-form-currency-field__menu"
+                            optionClassName="accounts-form-currency-field__option"
+                            compact
+                            showGroupedSections
+                            portalMenu
+                          />
+                        </div>
+                      </label>
+                      <div className="accounts-add-fields__amount-grow" style={{ flex: "1 1 auto", minWidth: 0, width: "100%" }}>
+                        <label className="accounts-add-fields__balance">
+                          {manualType === "investment" ? "Current value" : manualType === "receivable" ? "Amount owed to you" : isLiabilityAccountType(manualType) ? "Outstanding balance" : "Current balance"}
+                          <input
+                            value={manualBalance}
+                            onChange={(event) => setManualBalance(event.target.value)}
+                            inputMode="decimal"
+                            placeholder="0.00"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                    <div className="accounts-add-fields__name-row" style={{ display: "flex", alignItems: "flex-end", gap: 12, width: "100%", minWidth: 0 }}>
+                      <span className="accounts-add-brand-inline" aria-label="Account logo preview">
+                        <AccountBrandMark accountBrand={manualAccountBrand} label={manualName || manualInstitution || "Account"} />
+                      </span>
+                      <div className="accounts-add-fields__name-grow" style={{ flex: "1 1 auto", minWidth: 0, width: "100%" }}>
+                        <InstitutionAutocomplete
+                          label="Account name"
+                          value={manualName}
+                          onChange={setManualName}
+                          onSelectSuggestion={applyManualNameSuggestion}
+                          placeholder={manualType === "investment" ? "Example: FMETF" : "Example: BDO"}
+                          variant="account"
+                        />
+                      </div>
+                    </div>
+                    <details className="accounts-add-advanced">
+                      <summary>More details</summary>
+                      <div className="accounts-add-advanced__body">
+                        <AdviserFormAssist workspaceId={selectedWorkspaceId} context={{kind: "account", fields: {name:manualName,institution:manualInstitution,type:manualType,currency:manualCurrency,balance:manualBalance}}} />
+                        <div
+                          className="accounts-add-fields__row accounts-add-fields__row--meta"
+                          style={{ display: "flex", alignItems: "flex-end", gap: 12, width: "100%", minWidth: 0 }}
+                        >
                           <label className="accounts-add-fields__account-number" style={{ flex: "1 1 auto", minWidth: 0, width: "100%" }}>
                             <span className="field-label-inline">
                               {manualAccountReference.label} <span className="field-optional">(optional)</span>
@@ -5370,7 +5375,8 @@ function AccountsPageContent() {
                             ) : null}
                           </div>
                         ) : null}
-                    </div>
+                      </div>
+                    </details>
                   </div>
                 </div>
                 {manualType === "investment" ? (
@@ -5456,11 +5462,11 @@ function AccountsPageContent() {
                 ) : null}
                 <div className="accounts-add-actions">
                   <div className="accounts-add-actions__buttons">
-                    <button className="button button-secondary" type="button" onClick={() => void createAnotherManualAccount()} disabled={isSaving}>
+                    <button className="button button-secondary" type="button" onClick={() => void createAnotherManualAccount()} disabled={isSaving || !manualName.trim()}>
                       {isSaving ? "Saving..." : "Add another"}
                     </button>
-                    <button className="button button-primary" type="submit" disabled={isSaving}>
-                      {isSaving ? "Saving..." : "Create account"}
+                    <button className="button button-primary" type="submit" disabled={isSaving || !manualName.trim()}>
+                      {isSaving ? "Saving..." : "Add account"}
                     </button>
                   </div>
                 </div>

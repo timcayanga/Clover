@@ -380,7 +380,7 @@ export async function ReportsStream({
   sessionIsGuest,
 }: {
   active?: "reports" | "adviser";
-  searchParams?: { range?: string; section?: string; filter?: string; from?: string; to?: string; currency?: string };
+  searchParams?: { range?: string; section?: string; filter?: string; from?: string; to?: string; currency?: string; accountId?: string };
   user: User;
   sessionIsGuest: boolean;
 }) {
@@ -474,6 +474,7 @@ export async function ReportsStream({
     const sixMonthsAgo = new Date(currentWindowEnd.getFullYear(), currentWindowEnd.getMonth() - 5, 1);
     const reportQueryStart = new Date(Math.min(previousWindowStart.getTime(), sixMonthsAgo.getTime()));
 
+    const requestedAccountId = searchParams?.accountId?.trim() || undefined;
     const [
       reportTransactions,
       workspaceAccountSnapshots,
@@ -483,10 +484,11 @@ export async function ReportsStream({
     ] = await loadCachedWorkspaceSummary({
       workspaceId: selectedWorkspaceId,
       area: "reports",
-      keyParts: [reportQueryStart.toISOString(), currentWindowEnd.toISOString(), needsAdvancedData ? "advanced" : "core"],
+      keyParts: [reportQueryStart.toISOString(), currentWindowEnd.toISOString(), needsAdvancedData ? "advanced" : "core", requestedAccountId ?? "all-accounts"],
       load: () => Promise.all([
       prisma.transaction.findMany({
         where: buildActiveWorkspaceTransactionWhere(selectedWorkspaceId, {
+          ...(requestedAccountId ? { accountId: requestedAccountId } : {}),
           date: { gte: reportQueryStart, lte: currentWindowEnd },
         }),
         select: {
@@ -521,6 +523,7 @@ export async function ReportsStream({
       (prisma.account.findMany({
             where: {
               workspaceId: selectedWorkspaceId,
+              ...(requestedAccountId ? { id: requestedAccountId } : {}),
             },
             select: {
               id: true,
@@ -534,7 +537,7 @@ export async function ReportsStream({
           }) as Promise<WorkspaceAccountSnapshot[]>),
       needsAdvancedData
         ? prisma.importFile.findFirst({
-            where: { workspaceId: selectedWorkspaceId },
+            where: { workspaceId: selectedWorkspaceId, ...(requestedAccountId ? { accountId: requestedAccountId } : {}) },
             orderBy: { uploadedAt: "desc" },
             select: {
               fileName: true,
@@ -546,7 +549,7 @@ export async function ReportsStream({
       needsAdvancedData
         ? prisma.importFile.groupBy({
             by: ["status"],
-            where: { workspaceId: selectedWorkspaceId },
+            where: { workspaceId: selectedWorkspaceId, ...(requestedAccountId ? { accountId: requestedAccountId } : {}) },
             _count: { _all: true },
           })
         : Promise.resolve([]),
@@ -557,6 +560,7 @@ export async function ReportsStream({
             date: { not: null, gte: reportQueryStart, lte: currentWindowEnd },
             amount: { not: null },
             importFile: {
+              ...(requestedAccountId ? { accountId: requestedAccountId } : {}),
               OR: [{ status: "done" }, { confirmedAt: { not: null } }, { parsedRowsCount: { gt: 0 } }],
             },
           },
@@ -1586,6 +1590,12 @@ export async function ReportsStream({
 
     return (
       <>
+        {requestedAccountId ? (
+          <div className="reports-account-scope">
+            <span>Account: {workspaceAccountSnapshots[0]?.name ?? "Account unavailable in this profile"}</span>
+            <Link className="button button-secondary button-small" href="/reports" prefetch={false}>View all accounts</Link>
+          </div>
+        ) : null}
         <PostHogEvent
           event="report_viewed"
           onceKey={analyticsOnceKey("report_viewed", `workspace:${selectedWorkspaceId}:${selectedRange}`)}
@@ -2207,7 +2217,7 @@ export async function ReportsStream({
   }
 }
 
-async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string; from?: string; to?: string; currency?: string }> }) {
+async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string; from?: string; to?: string; currency?: string; accountId?: string }> }) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const session = await getPageSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
@@ -2259,6 +2269,6 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
   );
 }
 
-export default function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string; from?: string; to?: string; currency?: string }> }) {
+export default function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string; filter?: string; from?: string; to?: string; currency?: string; accountId?: string }> }) {
   return <RouteSplash label="reports"><ReportsPageStream searchParams={searchParams} /></RouteSplash>;
 }

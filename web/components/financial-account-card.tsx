@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { InterfaceIcon } from "@/components/interface-icon";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { AccountLogoPicker } from "@/components/account-logo-picker";
 import type { AccountBrand } from "@/lib/account-brand";
@@ -23,6 +24,7 @@ type FinancialAccountCardProps = {
   className?: string;
   state?: "deleting" | "loading" | undefined;
   showChevron?: boolean;
+  showEditAction?: boolean;
 };
 
 function InlineCardField({
@@ -142,7 +144,9 @@ export function FinancialAccountCard({
   className,
   state,
   showChevron = true,
+  showEditAction = false,
 }: FinancialAccountCardProps) {
+  const contentRef = useRef<HTMLDivElement>(null);
   const interactive = typeof onOpen === "function";
   const amountInteractive = typeof onAmountClick === "function";
   const handleOpen = () => {
@@ -167,7 +171,7 @@ export function FinancialAccountCard({
       onKeyDown={
         interactive
           ? (event) => {
-              if (event.key === "Enter" || event.key === " ") {
+              if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
                 event.preventDefault();
                 handleOpen();
               }
@@ -175,7 +179,7 @@ export function FinancialAccountCard({
           : undefined
       }
     >
-      <div className="financial-account-card__content">
+      <div className="financial-account-card__content" ref={contentRef}>
         <div className="financial-account-card__head">
           <div className="financial-account-card__identity">
             {onLogoCommit ? (
@@ -200,6 +204,19 @@ export function FinancialAccountCard({
               <strong className="financial-account-card__name">{name}</strong>
             )}
           </div>
+          {showEditAction && onNameCommit ? (
+            <button
+              type="button"
+              className="financial-account-card__edit"
+              aria-label={`Edit ${name} details`}
+              onClick={(event) => {
+                event.stopPropagation();
+                contentRef.current?.querySelector<HTMLButtonElement>("button.financial-account-card__name")?.click();
+              }}
+            >
+              <InterfaceIcon name="edit" />
+            </button>
+          ) : null}
           {showChevron ? (
             <button
               className="financial-account-card__chevron"
