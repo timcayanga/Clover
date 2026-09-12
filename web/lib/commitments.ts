@@ -1,3 +1,4 @@
+import { parseRecurringTracking, type RecurringTracking } from "@/lib/recurring-tracking";
 import { type CommitmentKind, type CommitmentRecurrence, type CommitmentStatus } from "@prisma/client";
 
 export type FinancialCommitmentAccount = {
@@ -33,6 +34,7 @@ export type FinancialCommitmentSummary = {
   plannedPaymentDate: string | null;
   recurrence: CommitmentRecurrence;
   nextDueDate: string | null;
+  tracking?: RecurringTracking | null;
   notes: string | null;
   categoryName?: string | null;
   accountId: string | null;
@@ -49,6 +51,8 @@ export type FinancialCommitmentSummary = {
   categorySource?: "manual" | "transaction" | "inferred" | null;
   inferredAccountId?: string | null;
   inferredAccount?: FinancialCommitmentAccount | null;
+  completedPaymentCount?: number;
+  completedPaymentDates?: string[];
   occurrenceDueDate?: string | null;
   occurrenceCompletedAt?: string | null;
 };
@@ -143,6 +147,7 @@ export const serializeFinancialCommitment = <T extends {
   plannedPaymentDate: Date | null;
   recurrence: CommitmentRecurrence;
   nextDueDate: Date | null;
+  tracking?: unknown;
   notes: string | null;
   categoryName?: string | null;
   accountId: string | null;
@@ -180,6 +185,7 @@ export const serializeFinancialCommitment = <T extends {
   plannedPaymentDate: commitment.plannedPaymentDate?.toISOString() ?? null,
   recurrence: commitment.recurrence,
   nextDueDate: commitment.nextDueDate?.toISOString() ?? null,
+  tracking: parseRecurringTracking(commitment.tracking),
   notes: commitment.notes,
   categoryName: commitment.categoryName ?? null,
   accountId: commitment.accountId,
@@ -230,6 +236,7 @@ export const parseCommitmentPayload = (payload: Record<string, unknown>) => {
     plannedPaymentDate: parseNullableDate(payload.plannedPaymentDate),
     recurrence: typeof recurrence === "string" && recurrence in commitmentRecurrenceLabels ? (recurrence as CommitmentRecurrence) : "once",
     nextDueDate: parseNullableDate(payload.nextDueDate),
+    tracking: parseRecurringTracking(payload.tracking),
     notes: parseNullableText(payload.notes),
     categoryName: parseNullableText(payload.categoryName),
     accountId: parseNullableText(payload.accountId),

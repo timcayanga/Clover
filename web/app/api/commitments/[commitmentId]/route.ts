@@ -46,6 +46,7 @@ export async function PATCH(
       plannedPaymentDate: Object.hasOwn(body, "plannedPaymentDate") ? body.plannedPaymentDate : current.plannedPaymentDate?.toISOString(),
       recurrence: body.recurrence ?? current.recurrence,
       nextDueDate: Object.hasOwn(body, "nextDueDate") ? body.nextDueDate : current.nextDueDate?.toISOString(),
+      tracking: Object.hasOwn(body, "tracking") ? body.tracking : current.tracking,
       notes: Object.hasOwn(body, "notes") ? body.notes : current.notes,
       categoryName: Object.hasOwn(body, "categoryName") ? body.categoryName : current.categoryName,
       accountId: Object.hasOwn(body, "accountId") ? body.accountId : current.accountId,
@@ -60,6 +61,15 @@ export async function PATCH(
     }
     if (payload.plannedPaymentDate && payload.dueDate && new Date(payload.plannedPaymentDate) > new Date(payload.dueDate)) {
       return NextResponse.json({ error: "Planned payment date must be on or before the due date" }, { status: 400 });
+    }
+
+    if (payload.tracking) {
+      if (payload.amount !== null && Number(payload.amount) < 0) return NextResponse.json({ error: "Amount must be non-negative" }, { status: 400 });
+      if (payload.tracking.endDate && payload.dueDate && payload.tracking.endDate < payload.dueDate.slice(0, 10)) return NextResponse.json({ error: "End date must be on or after the next due date" }, { status: 400 });
+      if (payload.kind === "reminder" && (!payload.tracking.totalPayments || !payload.dueDate || payload.recurrence === "once")) return NextResponse.json({ error: "Installments need a payment count, next date, and repeating frequency" }, { status: 400 });
+      const linkedAccountIds = [payload.accountId, payload.tracking.liabilityAccountId].filter((id): id is string => Boolean(id));
+      const uniqueIds = [...new Set(linkedAccountIds)];
+      if (uniqueIds.length && await prisma.account.count({ where: { id: { in: uniqueIds }, workspaceId: payload.workspaceId! } }) !== uniqueIds.length) return NextResponse.json({ error: "Choose an account in this Profile" }, { status: 400 });
     }
 
     const requestedEvidenceIds = payload.evidenceTransactionIds.length > 0
@@ -90,6 +100,7 @@ export async function PATCH(
         plannedPaymentDate: payload.plannedPaymentDate ? new Date(payload.plannedPaymentDate) : null,
         recurrence: payload.recurrence,
         nextDueDate: payload.nextDueDate ? new Date(payload.nextDueDate) : payload.dueDate ? new Date(payload.dueDate) : null,
+        tracking: payload.tracking ?? undefined,
         notes: payload.notes,
         categoryName: payload.categoryName,
         accountId: payload.accountId,

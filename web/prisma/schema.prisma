@@ -1968,6 +1968,7 @@ model FinancialCommitment {
   plannedPaymentDate    DateTime?
   recurrence            CommitmentRecurrence            @default(once)
   nextDueDate           DateTime?
+  tracking              Json?
   notes                 String?
   categoryName          String?
   accountId             String?

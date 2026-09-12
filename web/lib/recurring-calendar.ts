@@ -1,3 +1,4 @@
+import { isWithinRecurringTerm } from "@/lib/recurring-tracking";
 import type { FinancialCommitmentSummary } from "@/lib/commitments";
 
 export type RecurringCalendarKind = FinancialCommitmentSummary["kind"];
@@ -29,6 +30,9 @@ const addOccurrence = (
   commitment: FinancialCommitmentSummary,
   date: Date,
 ) => {
+  const anchorValue = commitment.plannedPaymentDate ?? commitment.dueDate ?? commitment.nextDueDate;
+  const anchor = parseCommitmentDate(anchorValue);
+  if (anchor && !isWithinRecurringTerm(commitment, date, anchor)) return;
   result.push({
     commitment,
     dateKey: toRecurringCalendarDateKey(date),
@@ -79,7 +83,7 @@ export const buildRecurringCalendarOccurrences = (
     const cadenceMonths = commitment.recurrence === "monthly" ? 1 : commitment.recurrence === "quarterly" ? 3 : 12;
     if (monthDifference < 0 || monthDifference % cadenceMonths !== 0) continue;
 
-    const occurrenceDay = Math.min(anchor.getDate(), monthEnd.getDate());
+    const occurrenceDay = commitment.tracking?.monthEnd ? monthEnd.getDate() : Math.min(anchor.getDate(), monthEnd.getDate());
     addOccurrence(result, commitment, new Date(year, month, occurrenceDay, 12));
   }
 

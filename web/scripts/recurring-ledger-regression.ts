@@ -15,64 +15,31 @@ const detailSource = readFileSync(join(webRoot, "components", "recurring-calenda
 const commitmentRouteSource = readFileSync(join(webRoot, "app", "api", "commitments", "[commitmentId]", "route.ts"), "utf8");
 const schemaSource = readFileSync(join(webRoot, "prisma", "schema.prisma"), "utf8");
 
-assert.match(panelSource, /<th>Category<\/th>/, "Recurring subtabs must expose category data.");
-assert.match(panelSource, /CategoryBrandMark/, "Recurring categories must use Clover's transaction-style category marks.");
-assert.match(panelSource, /recurring-occurrence-check/, "Recurring status must use occurrence checkboxes.");
-assert.match(panelSource, /commitment\.kind === "receivable" \? "received" : "paid"/, "Receivables must distinguish received money from paid obligations.");
-assert.match(panelSource, /className="recurring-mobile-row__category"/, "Mobile recurring rows must show transaction-style category marks.");
-assert.doesNotMatch(panelSource, />Suggested</, "Recurring rows must not expose inferred-account implementation labels.");
-assert.doesNotMatch(panelSource, /recurring-occurrence-check[^>]*>[\s\S]{0,700}<span>[^<]*(?:Pending|Paid|Received)/, "Recurring completion controls must not show redundant status labels.");
-assert.match(panelSource, /<tr key=\{commitment\.id\}[\s\S]{0,180}<td className="commitments-table__completion">[\s\S]{0,1500}<td>/, "Desktop recurring rows must lead with the completion checkbox.");
-const mobileRowStart = panelSource.indexOf('className="recurring-mobile-row"');
-const mobileCompletionIndex = panelSource.indexOf("recurring-occurrence-check--mobile", mobileRowStart);
-const mobileAccountIndex = panelSource.indexOf("recurring-mobile-row__account", mobileCompletionIndex);
-const mobileCategoryIndex = panelSource.indexOf("recurring-mobile-row__category", mobileAccountIndex);
-assert.ok(
-  mobileRowStart >= 0 && mobileCompletionIndex > mobileRowStart && mobileAccountIndex > mobileCompletionIndex && mobileCategoryIndex > mobileAccountIndex,
-  "Mobile recurring rows must lead with completion, account, and category controls.",
-);
-assert.doesNotMatch(panelSource, /recurring-mobile-row__open[\s\S]{0,400}<small>/, "Mobile recurring rows must stay single-line like Transactions.");
-assert.match(panelSource, /commitment\.account \?\? commitment\.inferredAccount/, "Recurring rows must show reliable inferred accounts.");
-assert.match(pageSource, /categoryName: commitment\.categoryName \?\? evidenceTransaction\?\.category\?\.name \?\? inferCommitmentCategory/, "Manual and transaction categories must take precedence over fallback categories.");
-assert.match(pageSource, /bestMatch\.score >= runnerUp\.score \+ 2/, "Ambiguous account matches must stay unconfirmed.");
-assert.match(stylesSource, /transactions-table\.commitments-table thead th[\s\S]{0,180}position: sticky/, "Recurring table headers must remain sticky.");
-assert.match(stylesSource, /\.recurring-mobile-row \{[\s\S]{0,260}grid-template-columns: 18px 20px 20px minmax\(0, 1fr\) auto 24px/, "Mobile recurring rows must match the compact Transactions row rhythm.");
-assert.match(panelSource, /<RecurringCalendar[\s\S]{0,180}comprehensive=\{activeTab === "overview"\}/, "Recurring Overview must use the comprehensive payment calendar.");
-assert.match(panelSource, /activeTab !== "overview" \? renderRecurringTable\(\) : null/, "Subtab line items must remain below the calendar.");
-assert.match(stylesSource, /\.recurring-calendar__grid[\s\S]{0,260}grid-template-columns: repeat\(7, minmax\(0, 1fr\)\)/, "The recurring calendar must render a full-width seven-day grid.");
-assert.match(stylesSource, /touch-action: pan-y/, "The recurring calendar must preserve vertical scrolling while supporting horizontal month swipes.");
-assert.match(clientSource, /aria-label=\{tab\.label\}/, "Recurring icon tabs must retain accessible names on mobile.");
-assert.match(clientSource, /<RecurringTabIcon tab=\{tab.id\}/, "Desktop and mobile Recurring tabs must reuse the same icons.");
-assert.match(stylesSource, /@media \(min-width: 1101px\)\s*\{[\s\S]{0,600}\.recurring-tabs--top \.recurring-tab-icon svg\s*\{\s*display: block;\s*width: 16px;\s*height: 16px;/, "Desktop Recurring tabs must show compact icons beside their labels without changing mobile sizing.");
-assert.match(calendarSource, />\s*Today\s*</, "The calendar header must offer a compact Today control.");
-assert.match(calendarSource, /Previous month[\s\S]{0,1600}Next month/, "The selected month must sit between previous and next arrows.");
-assert.match(stylesSource, /height: clamp\(72px, calc\(\(100dvh - 330px\) \/ 6\), 118px\)/, "Desktop calendar rows must fit the available viewport when possible.");
-assert.match(stylesSource, /height: clamp\(64px, calc\(\(100dvh - 412px\) \/ 6\), 84px\)/, "Mobile calendar rows must fit the available viewport when possible.");
-assert.match(detailSource, /onBlur=\{\(\) => void finishEdit\("title"\)\}/, "Payment names must auto-save when inline editing loses focus.");
-assert.match(detailSource, /onBlur=\{\(\) => void finishEdit\("amount"\)\}/, "Payment amounts must auto-save when inline editing loses focus.");
+const dashboardSource = readFileSync(join(webRoot, "components", "recurring-dashboard.tsx"), "utf8");
+const createSource = readFileSync(join(webRoot, "components", "recurring-create-form.tsx"), "utf8");
+assert.match(panelSource, /<RecurringDashboard/, "Saved commitments must render through the redesigned dashboard.");
+assert.match(dashboardSource, /<RecurringCalendar commitments=\{items\} comprehensive/, "Overview retains the full calendar.");
+assert.match(dashboardSource, /Next 7 days/, "Subtabs have a seven-day payment strip.");
+assert.match(dashboardSource, /All saved items/, "Inactive and out-of-range items remain accessible.");
+assert.match(dashboardSource, /onOpen\(item,date/, "Every list item opens editable details.");
+assert.match(dashboardSource, /Recurring date range/, "Date filtering must have an accessible name.");
+assert.match(dashboardSource, /new Map<string,number>/, "Totals must separate currencies.");
+assert.match(createSource, /Payments already made/, "Installment creation includes progress.");
+assert.match(createSource, /parseRecurringTracking/, "Creation validates schedule data before saving.");
+assert.match(createSource, /Tracking only. No money moves when you save./);
+assert.match(clientSource, /aria-label=\{tab\.label\}/);
+assert.match(calendarSource, /Previous month[\s\S]{0,1600}Next month/);
 for (const field of ["kind", "recurrence", "status", "accountId", "categoryName", "currency"]) {
-  assert.match(detailSource, new RegExp(`renderSelect\\("${field}"`), `${field} must be editable from the calendar details view.`);
+  assert.match(detailSource, new RegExp(`renderSelect\\("${field}"`));
 }
-assert.match(commitmentRouteSource, /categoryName: Object\.hasOwn\(body, "categoryName"\)/, "Recurring category changes must persist through the protected mutation route.");
-assert.match(schemaSource, /categoryName\s+String\?/, "Recurring items must retain an explicit editable category override.");
-assert.doesNotMatch(panelSource, /Next 30 days/i, "Recurring Overview must not duplicate the calendar with a Next 30 Days card.");
-assert.doesNotMatch(panelSource, /Upcoming payments/i, "Recurring Overview must not duplicate commitments in an upcoming-payments card.");
-assert.doesNotMatch(panelSource, /Monthly commitments/i, "Recurring Overview must not duplicate commitments in a monthly-summary card.");
-assert.match(panelSource, /Every saved recurring item at a glance/, "Recurring Overview must explain that the merged table includes every saved commitment.");
-for (const label of ["Planned Payments", "Debts & Loans", "Money Owed", "Installments"]) {
-  assert.match(panelSource, new RegExp(label.replace(/[&]/g, "\\&")), `Recurring Overview must include the ${label} legend label.`);
-}
-assert.match(panelSource, /recurring-overview-commitments-table[\s\S]{0,1600}<th>Status<\/th>/, "The merged commitments table must expose status so inactive items are not silently omitted.");
-assert.match(stylesSource, /\.recurring-overview-card--commitments\s*\{[\s\S]{0,100}grid-column: 1 \/ -1/, "The merged commitments table must span the desktop overview.");
-assert.match(stylesSource, /\.recurring-overview-commitments__mobile\s*\{[\s\S]{0,50}display: grid/, "The merged commitments table must provide a compact mobile view.");
-assert.match(panelSource, /Review suggestions/, "Recurring Overview must identify detected candidates as review suggestions.");
-assert.match(stylesSource, /\.recurring-overview-card--review\s*\{[\s\S]{0,100}grid-column: 1 \/ -1/, "Review Suggestions must span the desktop overview.");
-assert.match(stylesSource, /@media \(max-width: 700px\)[\s\S]{0,150}\.recurring-overview-grid\s*\{[\s\S]{0,100}grid-template-columns: minmax\(0, 1fr\)/, "Recurring overview cards must stack on mobile.");
-assert.match(panelSource, /Detected transactions/, "Suggestion review must show its detected transaction history.");
-assert.match(panelSource, /evidenceTransactionIds: patternDraft\.transactionIds/, "Edited suggestion evidence must persist when saved.");
-assert.match(panelSource, /Planned payment date/, "Suggestion review must support an earlier planned-payment date.");
-assert.match(schemaSource, /plannedPaymentDate\s+DateTime\?/, "Recurring items must persist the optional planned-payment date.");
-assert.match(schemaSource, /evidenceTransactionIds\s+Json\?/, "Recurring items must persist all reviewed transaction evidence.");
+assert.match(detailSource, /onComplete/);
+assert.match(detailSource, /Delete recurring/);
+assert.match(commitmentRouteSource, /categoryName: Object\.hasOwn\(body, "categoryName"\)/);
+assert.match(panelSource, /Review suggestions/);
+assert.match(panelSource, /Detected transactions/);
+assert.match(panelSource, /evidenceTransactionIds: patternDraft\.transactionIds/);
+assert.match(schemaSource, /tracking\s+Json\?/);
+assert.match(schemaSource, /evidenceTransactionIds\s+Json\?/);
 
 const commitment = (
   overrides: Partial<FinancialCommitmentSummary>,

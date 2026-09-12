@@ -23,7 +23,7 @@ async function main() {
     readSource("app/accounts/page.tsx"),
     readSource("app/accounts/[accountId]/page.tsx"),
     readSource("app/transactions/page.tsx"),
-    readSource("components/commitments-panel.tsx"),
+    Promise.all([readSource("components/recurring-dashboard.tsx"), readSource("components/commitments-panel.tsx")]).then(parts => parts.join("\n")),
     readSource("app/investments/page.tsx"),
     readSource("components/split-bill-home.tsx"),
     readSource("components/split-bill-workspace.tsx"),

@@ -32,6 +32,15 @@ export async function POST(request: Request) {
 
     await assertWorkspaceAccess(userId, payload.workspaceId);
 
+    if (payload.tracking) {
+      if (payload.amount !== null && Number(payload.amount) < 0) return NextResponse.json({ error: "Amount must be non-negative" }, { status: 400 });
+      if (payload.tracking.endDate && payload.dueDate && payload.tracking.endDate < payload.dueDate.slice(0, 10)) return NextResponse.json({ error: "End date must be on or after the next due date" }, { status: 400 });
+      if (payload.kind === "reminder" && (!payload.tracking.totalPayments || !payload.dueDate || payload.recurrence === "once")) return NextResponse.json({ error: "Installments need a payment count, next date, and repeating frequency" }, { status: 400 });
+      const linkedAccountIds = [payload.accountId, payload.tracking.liabilityAccountId].filter((id): id is string => Boolean(id));
+      const uniqueIds = [...new Set(linkedAccountIds)];
+      if (uniqueIds.length && await prisma.account.count({ where: { id: { in: uniqueIds }, workspaceId: payload.workspaceId! } }) !== uniqueIds.length) return NextResponse.json({ error: "Choose an account in this Profile" }, { status: 400 });
+    }
+
     const requestedEvidenceIds = payload.evidenceTransactionIds.length > 0
       ? payload.evidenceTransactionIds
       : payload.transactionId
@@ -70,10 +79,12 @@ export async function POST(request: Request) {
         counterparty: payload.counterparty,
         amount: payload.amount,
         currency: payload.currency,
+        categoryName: payload.categoryName,
         dueDate: payload.dueDate ? new Date(payload.dueDate) : null,
         plannedPaymentDate: payload.plannedPaymentDate ? new Date(payload.plannedPaymentDate) : null,
         recurrence: payload.recurrence,
         nextDueDate: payload.nextDueDate ? new Date(payload.nextDueDate) : payload.dueDate ? new Date(payload.dueDate) : null,
+        tracking: payload.tracking ?? undefined,
         notes: payload.notes,
         accountId: payload.accountId,
         transactionId: evidenceTransactionIds[0] ?? payload.transactionId,

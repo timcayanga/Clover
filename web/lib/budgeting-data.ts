@@ -1,3 +1,4 @@
+import { parseRecurringTracking } from "@/lib/recurring-tracking";
 import { prisma } from "@/lib/prisma";
 import { buildBudgetOverview, buildBudgetSuggestions, getBudgetPeriodStart, type BudgetRecord } from "@/lib/budgeting";
 import { buildActiveWorkspaceTransactionWhere } from "@/lib/transaction-query";
@@ -83,7 +84,7 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
   if (directoryBudgets) lookbackStart = getBudgetDirectoryStart(directoryBudgets, now);
   const readCommitments = () => prisma.financialCommitment.findMany({
     where: { workspaceId, status: "active", kind: { in: ["planned_payment", "debt"] } },
-    select: { amount: true, currency: true, accountId: true, dueDate: true, nextDueDate: true, kind: true, status: true },
+    select: { amount: true, tracking: true, currency: true, accountId: true, dueDate: true, nextDueDate: true, kind: true, status: true },
   });
   const [budgets, transactions, directoryCommitments] = await Promise.all([
     directoryBudgets ?? budgetsPromise,
@@ -111,7 +112,7 @@ export const loadBudgetWorkspaceData = async (workspaceId: string, now = new Dat
     : await loadBudgetEditorOptions(workspaceId);
   let categories = editorOptions.categories;
   const accounts = editorOptions.accounts;
-  const commitments = directoryCommitments ?? await readCommitments();
+  const commitments = (directoryCommitments ?? await readCommitments()).map(item => ({ ...item, amount: item.kind === "debt" && item.tracking ? parseRecurringTracking(item.tracking)?.paymentAmount ?? null : item.amount }));
 
   // Parsed rows can be visible in Transactions before the normalization worker finishes.
   // Use them as a read-only fallback so budgets do not look empty during that window.

@@ -334,7 +334,7 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
         },
         occurrences: {
           orderBy: { dueDate: "desc" },
-          take: 24,
+          take: 1200,
           select: { dueDate: true, completedAt: true },
         },
       },
@@ -513,6 +513,8 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
       : null;
     return {
       ...commitment,
+      completedPaymentCount: sourceCommitment?.occurrences.length ?? 0,
+      completedPaymentDates: sourceCommitment?.occurrences.map(o => toCommitmentOccurrenceKey(o.dueDate)) ?? [],
       occurrenceCompletedAt: completedOccurrence?.completedAt.toISOString() ?? null,
     };
   });

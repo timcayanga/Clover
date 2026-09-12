@@ -65250,3 +65250,143 @@ html[data-theme="dark"] .accounts-detail__credit-inline { background: #132933; }
   .transaction-drawer-view__facts > div { min-height: 46px; padding: 8px 14px; align-items: center; }
   .transaction-drawer-view__facts dd { font-weight: 400; }
 }
+
+/* Recurring — September Figma redesign. */
+.recurring-redesign { display:grid; gap:20px; min-width:0; }
+.recurring-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+.recurring-summary article { display:grid; gap:7px; padding:14px; background:var(--surface,white); border:1px solid #d1e0e5; border-radius:14px; }
+.recurring-summary strong { color:#03a8c0; font-size:21px; line-height:1.3; overflow-wrap:anywhere; }
+.recurring-summary small { color:var(--muted,#69818c); font-size:11px; }
+.recurring-summary article[data-tone="1"] strong { color:#17b978; }
+.recurring-summary article[data-tone="2"] strong { color:#8c5be8; }
+.recurring-summary article[data-tone="3"] strong { color:#e99a00; }
+.recurring-redesign:not(.recurring-redesign--overview) .recurring-summary { grid-template-columns:repeat(3,minmax(0,1fr)); max-width:900px; }
+.recurring-redesign__overview { display:grid; grid-template-columns:minmax(0,2fr) minmax(280px,1fr); gap:20px; align-items:stretch; }
+.recurring-redesign .panel { background:var(--surface,white); border:1px solid #d1e0e5; border-radius:16px; box-shadow:none; padding:18px; min-width:0; }
+.recurring-redesign h2 { font-size:17px; margin:0; }
+.recurring-redesign .recurring-calendar { width:100%; margin:0; }
+.recurring-redesign .recurring-calendar__legend { display:none; }
+.recurring-redesign .recurring-calendar__grid { gap:5px; }
+.recurring-redesign .recurring-calendar__day { min-height:64px; border-radius:7px; }
+.recurring-redesign .recurring-calendar__event { border-radius:7px; }
+.recurring-redesign .recurring-calendar__event > span { display:none; }
+.recurring-redesign .recurring-calendar__event small { font-size:9px; }
+.recurring-redesign__review > article { height:100%; }
+.recurring-redesign .recurring-overview-list__item { border:1px solid #d1e0e5; border-radius:12px; padding:12px; margin-top:10px; }
+.recurring-redesign .recurring-overview-card__heading { margin-bottom:14px; }
+.recurring-redesign .recurring-overview-card__heading .eyebrow { text-transform:none; letter-spacing:0; font-size:17px; color:var(--text); }
+.recurring-redesign .recurring-overview-card__heading small { font-size:10px; }
+.recurring-week > div { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; margin-top:12px; }
+.recurring-week button { min-width:0; min-height:76px; display:grid; text-align:left; gap:6px; background:var(--surface-muted,#f9fbfc); color:var(--text); border:1px solid #d1e0e5; border-radius:9px; padding:10px; }
+.recurring-week button:disabled { opacity:1; }
+.recurring-week button.has-payments { background:#e8f9fb; border-color:#03a8c0; cursor:pointer; }
+.recurring-week button small,.recurring-week button span { font-size:10px; color:var(--muted); }
+.recurring-payment-list header { display:flex; justify-content:space-between; align-items:start; gap:16px; margin-bottom:20px; }
+.recurring-payment-list header small { display:block; margin-top:6px; color:var(--muted); font-size:11px; }
+.recurring-payment-list__filters { display:flex; gap:8px; }
+.recurring-payment-list__filters select { max-width:160px; min-width:0; background:var(--surface,white); border:1px solid #d1e0e5; border-radius:24px; color:var(--muted); padding:8px 10px; font:inherit; font-size:10px; }
+.recurring-payment-list__filters select:last-child { background:#03a8c0; color:white; }
+.recurring-payment-row { --recurring-color:#03a8c0; width:100%; display:grid; grid-template-columns:minmax(0,1fr) auto 16px; gap:20px; align-items:center; padding:15px 16px; background:transparent; border:1px solid #d1e0e5; border-left:4px solid var(--recurring-color); text-align:left; color:var(--text); cursor:pointer; }
+.recurring-payment-row[data-kind="debt"] { --recurring-color:#f49a12; }
+.recurring-payment-row[data-kind="reminder"] { --recurring-color:#8c5be8; }
+.recurring-payment-row[data-kind="receivable"] { --recurring-color:#17b978; }
+.recurring-payment-row:hover { background:var(--surface-muted,#f6fbfc); }
+.recurring-payment-row span { display:grid; min-width:0; gap:6px; }
+.recurring-payment-row strong { font-size:12px; overflow-wrap:anywhere; }
+.recurring-payment-row small { color:var(--muted); font-size:10px; }
+.recurring-payment-row small[data-overdue="true"] { color:#c65424; }
+.recurring-payment-row b { color:#03a8c0; }
+.recurring-payment-list__empty { text-align:center; padding:28px; }
+.recurring-create { width:min(640px,100%)!important; max-height:92dvh; overflow:auto; padding:24px!important; background:var(--surface,white)!important; position:relative; }
+.recurring-create header { display:flex; justify-content:space-between; align-items:center; margin-bottom:22px; }
+.recurring-create h2 { font-size:22px; margin:0; }
+.recurring-create header .recurring-modal-close { position:static; }
+.recurring-create form,.recurring-create__details { display:grid; gap:18px; }
+.recurring-create__types { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; padding:0; margin:0; border:0; }
+.recurring-create__types button { background:transparent; border:1px solid #d1e0e5; padding:12px 4px; border-radius:24px; font:inherit; font-size:11px; color:var(--text); }
+.recurring-create__types button[aria-pressed="true"] { border-color:#03a8c0; background:var(--surface-muted,#f4f8fa); }
+.recurring-create .settings-field > span,.recurring-create__row > span { font-size:12px; color:var(--muted); }
+.recurring-create .settings-input { min-height:44px; border-radius:12px; }
+.recurring-create__amount { display:flex; gap:12px; align-items:center; background:var(--surface-muted,#f4f7f8); border-radius:18px; padding:18px; }
+.recurring-create__amount > input { width:100%; min-width:0; background:transparent; border:0; font:inherit; font-size:38px; font-weight:600; color:var(--text); }
+.recurring-create__row { display:grid; grid-template-columns:minmax(110px,1fr) minmax(0,2fr); gap:12px; align-items:center; min-height:56px; }
+.recurring-create__row > span { display:flex; align-items:center; gap:8px; }
+.recurring-create__row > :is(input,select) { width:100%; min-width:0; color:var(--text); border:0; background:transparent; padding:10px 0; font:inherit; font-size:13px; }
+.recurring-create__more { border:0; background:transparent; color:var(--text); padding:10px; font:inherit; font-size:13px; cursor:pointer; }
+.recurring-create__summary { background:var(--surface-muted,#f4f7f8); border-radius:20px; padding:22px; display:grid; gap:8px; }
+.recurring-create__summary strong { font-size:15px; }
+.recurring-create__summary small,.recurring-create__disclaimer { color:var(--muted); font-size:11px; }
+.recurring-create__save { width:100%; border-radius:24px!important; background:linear-gradient(90deg,#03a8c0,#5ed3d0)!important; }
+.recurring-create__error { margin:0; color:#ba312e; font-size:13px; }
+.content--recurring .recurring-tabs--top .investments-tab { border:1px solid #d1e0e5; background:var(--surface,white); border-radius:24px; padding:9px 13px; font-size:11px; }
+.content--recurring .recurring-tabs--top .investments-tab.is-active { background:#03a8c0; color:white; border-color:#03a8c0; }
+.content--recurring .recurring-tab-icon { display:none!important; }
+.recurring-calendar-detail__card { width:min(540px,100%); }
+@media(max-width:760px) {
+ .recurring-summary { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+ .recurring-redesign:not(.recurring-redesign--overview) .recurring-summary { grid-template-columns:repeat(3,minmax(0,1fr)); }
+ .recurring-summary article { padding:10px; }
+ .recurring-summary strong { font-size:16px; }
+ .recurring-summary small { font-size:9px; }
+ .recurring-redesign__overview { grid-template-columns:minmax(0,1fr); }
+ .recurring-redesign .panel { padding:14px; }
+ .recurring-redesign .recurring-calendar__header { flex-wrap:wrap; gap:8px; }
+ .recurring-redesign .recurring-calendar__day { min-height:48px; padding:3px; }
+ .recurring-redesign .recurring-calendar__controls { gap:3px; }
+ .recurring-redesign .recurring-calendar__event small { font-size:7px; }
+ .recurring-week button { padding:6px; min-height:66px; }
+ .recurring-week button span { font-size:8px; }
+ .recurring-payment-list header { flex-wrap:wrap; }
+ .recurring-payment-row { gap:8px; padding:13px 9px; grid-template-columns:minmax(0,1fr) minmax(70px,100px) 10px; }
+ .recurring-payment-row strong { font-size:11px; }
+ .recurring-payment-row small { font-size:9px; }
+ .recurring-create { width:100%!important; max-height:none!important; overflow:visible!important; padding:20px!important; }
+ .recurring-create__types { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .recurring-create__amount > input { font-size:32px; }
+ .recurring-create__row { grid-template-columns:125px minmax(0,1fr); }
+}
+.content--recurring .recurring-tab-label--desktop { display:inline!important; opacity:1!important; font-size:11px!important; color:inherit!important; }
+.content--recurring .recurring-tab-label--mobile { display:none!important; }
+.recurring-redesign .recurring-calendar__header { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+.recurring-redesign .recurring-calendar__eyebrow { color:var(--text); letter-spacing:0; font-size:17px; }
+.recurring-redesign .recurring-calendar__controls { display:flex; gap:4px; }
+.recurring-redesign .recurring-calendar__date-picker select { font-size:12px; color:#03a8c0; height:30px; }
+.recurring-redesign .recurring-calendar__today,.recurring-redesign .recurring-calendar__nav { height:30px; min-height:30px; font-size:10px; width:30px; }
+.recurring-redesign .recurring-calendar__today { width:auto; padding:0 10px; }
+.recurring-detail-actions { display:grid; gap:16px; padding-top:18px; }
+.recurring-detail-actions label { display:flex; align-items:center; gap:8px; font-size:12px; }
+@media(max-width:1100px) {
+ .content--recurring .recurring-tab-label--desktop { display:none!important; }
+ .content--recurring .recurring-tab-label--mobile { display:inline!important; opacity:1!important; color:inherit!important; font-size:10px!important; }
+ .recurring-redesign__overview { grid-template-columns:minmax(0,1fr); }
+ .recurring-create { width:100%!important; max-height:none!important; overflow:visible!important; }
+}
+.recurring-tabs--top .investments-tab { border:1px solid #d1e0e5!important; border-radius:24px!important; padding:9px 12px!important; background:var(--surface,white)!important; }
+.recurring-tabs--top .investments-tab.is-active { color:white!important; background:#03a8c0!important; }
+.recurring-tabs--top .investments-tab .recurring-tab-label { color:inherit!important; }
+.recurring-redesign .recurring-calendar__day { height:72px; }
+.recurring-redesign .recurring-calendar__event small { display:block; white-space:nowrap; overflow:hidden; }
+@media(max-width:1100px) {
+ .recurring-redesign .recurring-calendar__day { height:64px; min-height:64px; }
+ .recurring-redesign .recurring-calendar__event { min-height:14px; padding:2px; }
+ .recurring-create .recurring-create__amount > input { font-size:32px!important; }
+ .recurring-redesign--overview .recurring-summary { grid-template-columns:1fr; }
+ .recurring-redesign--overview .recurring-summary article:not(:first-child) { display:none; }
+ .recurring-redesign--overview .recurring-summary article:first-child { background:linear-gradient(100deg,#e0f7f8,#f3fbfc); padding:16px; }
+}
+@media(min-width:1101px) {
+ .recurring-calendar-detail { justify-content:flex-end; padding:0; }
+ .recurring-calendar-detail__card { border-radius:0; width:540px; height:100dvh; max-height:100dvh; align-content:start; }
+}
+.shell-mobile-subheader .recurring-tabs--top .investments-tab.is-active,
+.shell-mobile-subheader .recurring-tabs--top .investments-tab.is-active .recurring-tab-label { color:white!important; }
+.recurring-redesign .mobile-swipe-delete:not(.is-open):not(.is-dragging) > .mobile-swipe-delete__action { visibility:hidden; }
+.recurring-redesign .recurring-payment-row { background:var(--surface,white); }
+.recurring-redesign .recurring-calendar__day { height:auto; min-height:72px; }
+.recurring-redesign .recurring-calendar__event { min-height:14px; padding:2px 4px; background:var(--recurring-kind); }
+.recurring-redesign .recurring-calendar__event small { color:white; font-size:9px; }
+.recurring-redesign .recurring-calendar__event[data-kind="debt"] { --recurring-kind:#f49a12; }
+@media(max-width:1100px) {
+ .recurring-redesign .recurring-calendar__day { min-height:64px; }
+ .recurring-redesign .recurring-calendar__event small { font-size:7px; }
+}

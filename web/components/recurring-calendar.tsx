@@ -7,6 +7,7 @@ import {
   getRecurringCalendarYearOptions,
   toRecurringCalendarDateKey,
 } from "@/lib/recurring-calendar";
+import { recurringPaymentAmount } from "@/lib/recurring-tracking";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 
 const monthNames = Array.from({ length: 12 }, (_, month) =>
@@ -26,9 +27,9 @@ const changeMonth = (year: number, month: number, offset: number) => {
   return { year: next.getFullYear(), month: next.getMonth() };
 };
 
-const formatCommitmentAmount = (commitment: FinancialCommitmentSummary) => {
-  if (commitment.amount === null || !Number.isFinite(Number(commitment.amount))) return "No amount set";
-  return formatCurrencyAmount(Number(commitment.amount), commitment.currency);
+const formatCommitmentAmount = (commitment: FinancialCommitmentSummary, compact = false, occurrenceDate?: string) => {
+  if (recurringPaymentAmount(commitment, occurrenceDate) === null || !Number.isFinite(recurringPaymentAmount(commitment, occurrenceDate))) return "No amount set";
+  return compact ? new Intl.NumberFormat("en-PH", { style: "currency", currency: commitment.currency, notation: "compact", maximumFractionDigits: 1 }).format(recurringPaymentAmount(commitment, occurrenceDate)!) : formatCurrencyAmount(recurringPaymentAmount(commitment, occurrenceDate)!, commitment.currency);
 };
 
 export function RecurringCalendar({
@@ -66,7 +67,7 @@ export function RecurringCalendar({
 
   const firstWeekday = new Date(selectedYear, selectedMonth, 1, 12).getDay();
   const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0, 12).getDate();
-  const cells = Array.from({ length: 42 }, (_, index) => {
+  const cells = Array.from({ length: Math.ceil((firstWeekday + daysInMonth) / 7) * 7 }, (_, index) => {
     const day = index - firstWeekday + 1;
     return day >= 1 && day <= daysInMonth ? day : null;
   });
@@ -156,11 +157,11 @@ export function RecurringCalendar({
                     className={`recurring-calendar__event${eventIndex === 2 ? " recurring-calendar__event--desktop-third" : ""}`}
                     data-kind={commitment.kind}
                     onClick={() => onSelectCommitment(commitment, occurrenceKey)}
-                    title={`${commitment.title} · ${formatCommitmentAmount(commitment)}`}
+                    title={`${commitment.title} · ${formatCommitmentAmount(commitment, false, occurrenceKey)}`}
                     aria-label={`Open ${commitment.title}, due ${monthNames[selectedMonth]} ${day}`}
                   >
                     <span>{commitment.title}</span>
-                    <small>{formatCommitmentAmount(commitment)}</small>
+                    <small>{formatCommitmentAmount(commitment, true, occurrenceKey)}</small>
                   </button>
                 ))}
                 {dayEvents.length > 3 ? <span className="recurring-calendar__more recurring-calendar__more--desktop">••• +{dayEvents.length - 3}</span> : null}

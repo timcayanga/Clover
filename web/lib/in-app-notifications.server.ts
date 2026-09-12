@@ -1,3 +1,4 @@
+import { parseRecurringTracking } from "@/lib/recurring-tracking";
 import type { BillingSubscriptionStatus, CommitmentKind, ImportFileStatus } from "@prisma/client";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import type { InAppNotification, InAppNotificationPriority } from "@/lib/in-app-notifications";
@@ -149,6 +150,7 @@ export const buildInAppNotificationCandidates = async (
         kind: true,
         title: true,
         amount: true,
+        tracking: true,
         currency: true,
         dueDate: true,
         nextDueDate: true,
@@ -389,8 +391,10 @@ export const buildInAppNotificationCandidates = async (
   commitments.forEach((commitment) => {
     const dueDate = commitment.nextDueDate ?? commitment.dueDate;
     if (!dueDate) return;
+    const tracking = parseRecurringTracking(commitment.tracking);
+    if (tracking && (tracking.reminderDays === null || dueDate.getTime() - now.getTime() > tracking.reminderDays * 86400000)) return;
     const overdue = dueDate < now;
-    const amount = toAmount(commitment.amount);
+    const amount = tracking && (commitment.kind === "debt" || commitment.kind === "receivable") ? tracking.paymentAmount ?? toAmount(commitment.amount) : toAmount(commitment.amount);
     const amountCopy = amount > 0 ? ` of ${formatCurrencyAmount(amount, commitment.currency)}` : "";
     items.push({
       id: `recurring:${commitment.id}:${toDateKey(dueDate)}`,

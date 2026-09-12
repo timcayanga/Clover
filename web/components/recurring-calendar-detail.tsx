@@ -25,6 +25,7 @@ const formatDetailDate = (value: string | null) => {
 };
 
 export type RecurringDetailEditableField =
+  | "notes"
   | "title"
   | "amount"
   | "kind"
@@ -46,21 +47,29 @@ type RecurringCalendarDetailProps = {
   currencyOptions: string[];
   transactionOptions: Array<{ id: string; date: string; amount: string; currency: string; merchantRaw: string; merchantClean: string | null; account: { id: string; name: string } }>;
   saving: boolean;
-  onSaveField: (field: RecurringDetailEditableField, value: string) => Promise<boolean>;
+  onSaveChanges: (changes: Partial<Record<RecurringDetailEditableField, string>>) => Promise<boolean>;
   onClose: () => void;
+  onDelete?: () => void;
+  onComplete?: (completed: boolean) => void;
+  completing?: boolean;
 };
 
 export function RecurringCalendarDetail({
-  commitment,
+  commitment: savedCommitment,
   occurrenceDate,
   accountOptions,
   categoryOptions,
   currencyOptions,
   transactionOptions,
   saving,
-  onSaveField,
+  onSaveChanges,
   onClose,
+  onDelete, onComplete, completing,
 }: RecurringCalendarDetailProps) {
+  const [pending, setPending] = useState<Partial<Record<RecurringDetailEditableField, string>>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const commitment = { ...savedCommitment, ...pending } as FinancialCommitmentSummary;
   const [editingField, setEditingField] = useState<RecurringDetailEditableField | null>(null);
   const [draft, setDraft] = useState("");
 
@@ -82,14 +91,14 @@ export function RecurringCalendarDetail({
   const accountValue = commitment.accountId ?? commitment.inferredAccountId ?? "";
 
   const beginEdit = (field: RecurringDetailEditableField, value: string) => {
-    if (saving) return;
+    if (saving || submitting) return;
     setEditingField(field);
     setDraft(value);
   };
 
   const finishEdit = async (field: RecurringDetailEditableField, value = draft) => {
-    const saved = await onSaveField(field, value);
-    if (saved) setEditingField(null);
+    setPending(current => ({ ...current, [field]: value }));
+    setEditingField(null);
   };
 
   const handleInputKeyDown = (
@@ -225,7 +234,7 @@ export function RecurringCalendarDetail({
         <dl className="recurring-calendar-detail__facts">
           {renderDate("dueDate", commitment.dueDate, "Due date")}
           {renderDate("plannedPaymentDate", commitment.plannedPaymentDate, "Planned payment")}
-          {renderSelect("kind", commitment.kind, "Type", commitmentKindOptions)}
+          {!commitment.tracking ? renderSelect("kind", commitment.kind, "Type", commitmentKindOptions) : null}
           {renderSelect("recurrence", commitment.recurrence, "Repeats", commitmentRecurrenceOptions)}
           {renderSelect("status", commitment.status, "Status", commitmentStatusOptions)}
           {renderSelect("accountId", accountValue, "Account", [
@@ -242,6 +251,14 @@ export function RecurringCalendarDetail({
           {renderSelect("currency", commitment.currency, "Currency", currencyOptions.map((currency) => ({ value: currency, label: currency })))}
         </dl>
 
+        {commitment.tracking ? <dl className="recurring-calendar-detail__facts">
+          {commitment.tracking.paymentAmount !== null ? <div><dt>Payment amount</dt><dd>{formatCurrencyAmount(commitment.tracking.paymentAmount, commitment.currency)}</dd></div> : null}
+          {commitment.tracking.totalPayments !== null ? <><div><dt>Total payments</dt><dd>{commitment.tracking.totalPayments}</dd></div><div><dt>Payments already made</dt><dd>{commitment.tracking.paymentsMade}</dd></div></> : null}
+          <div><dt>Remind me</dt><dd>{commitment.tracking.reminderDays === null ? "No reminder" : `${commitment.tracking.reminderDays} days before`}</dd></div>
+          {commitment.tracking.endDate ? <div><dt>Ends</dt><dd>{commitment.tracking.endDate}</dd></div> : null}
+          {commitment.tracking.reference ? <div><dt>Reference</dt><dd>{commitment.tracking.reference}</dd></div> : null}
+        </dl> : null}
+
         {commitment.evidenceTransactionIds.length > 0 ? (
           <section className="recurring-calendar-detail__notes recurring-saved-evidence">
             <span>Transaction history</span>
@@ -255,12 +272,22 @@ export function RecurringCalendarDetail({
           </section>
         ) : null}
 
-        {commitment.notes ? (
-          <section className="recurring-calendar-detail__notes">
-            <span>Notes</span>
-            <p>{commitment.notes}</p>
-          </section>
-        ) : null}
+        <label className="recurring-calendar-detail__notes"><span>Notes</span><textarea className="settings-textarea" aria-label="Notes" value={commitment.notes ?? ""} onChange={event => setPending(current => ({ ...current, notes: event.target.value }))}/></label>
+        <footer className="recurring-detail-actions">
+          {saveError ? <p role="alert">{saveError}</p> : null}
+          {onComplete && commitment.status !== "resolved" ? <label><input type="checkbox" checked={Boolean(commitment.occurrenceCompletedAt)} disabled={completing || submitting || Object.keys(pending).length > 0} onChange={event => onComplete(event.target.checked)}/> Mark this payment as complete</label> : null}
+          {onDelete ? <button type="button" className="button button-danger" onClick={onDelete}>Delete recurring</button> : null}
+          <button type="button" className="button button-primary" disabled={submitting || saving} onClick={async () => {
+            setSaveError("");
+            if (pending.title !== undefined && !pending.title.trim()) { setSaveError("Name is required."); return; }
+            setSubmitting(true);
+            try {
+              if (!await onSaveChanges(pending)) return;
+              setPending({});
+              onClose();
+            } finally { setSubmitting(false); }
+          }}>{submitting ? "Saving…" : "Save changes"}</button>
+        </footer>
       </article>
     </div>
   );

@@ -1,3 +1,4 @@
+import { parseRecurringTracking } from "@/lib/recurring-tracking";
 import { prisma } from "./prisma";
 import { buildActiveWorkspaceTransactionWhere } from "./transaction-query";
 import { deriveReconciledBalance, normalizeAccountBalanceSign, type BalanceLikeTransaction } from "./account-balance";
@@ -21,7 +22,7 @@ export async function mobileHome(workspaceId: string, currency: string) {
       statementCheckpoints: { select: { endingBalance: true, status: true, statementEndDate: true, createdAt: true, sourceMetadata: true }, orderBy: { createdAt: "desc" }, take: 50 },
     } }),
     prisma.transaction.findMany({ where: buildActiveWorkspaceTransactionWhere(workspaceId, { date: { gte: since, lt: tomorrow }, currency }), select: { date: true, amount: true, type: true, isTransfer: true, reviewStatus: true, category: { select: { name: true } } } }),
-    prisma.financialCommitment.findMany({ where: { workspaceId, status: "active", currency }, select: { id: true, title: true, amount: true, dueDate: true, nextDueDate: true, plannedPaymentDate: true }, take: 100, orderBy: { nextDueDate: "asc" } }),
+    prisma.financialCommitment.findMany({ where: { workspaceId, status: "active", currency }, select: { id: true, title: true, amount: true, kind: true, tracking: true, dueDate: true, nextDueDate: true, plannedPaymentDate: true }, take: 100, orderBy: { nextDueDate: "asc" } }),
   ]);
   const spendable = accounts.filter(a => isSpendableAccountType(a.type));
   const rates = new Map<string, number>();
@@ -57,7 +58,7 @@ export async function mobileHome(workspaceId: string, currency: string) {
       return { date: date.toISOString().slice(0, 10), ...totals(date, new Date(+date + 86400000)) };
     }) };
   };
-  const upcoming = commitments.map(c => ({ id: c.id, title: c.title, amount: c.amount?.toString() ?? null, date: c.plannedPaymentDate ?? c.nextDueDate ?? c.dueDate }))
+  const upcoming = commitments.map(c => ({ id: c.id, title: c.title, amount: c.kind === "debt" && c.tracking ? parseRecurringTracking(c.tracking)?.paymentAmount?.toString() ?? null : c.amount?.toString() ?? null, date: c.plannedPaymentDate ?? c.nextDueDate ?? c.dueDate }))
     .filter(c => c.date && c.date >= day && +c.date < +day + 30 * 86400000)
     .sort((a, b) => +a.date! - +b.date!).slice(0, 5).map(c => ({ ...c, date: c.date!.toISOString() }));
   return { currency, balance, month: totals(month, tomorrow), previousMonth: totals(previousMonth, month), weekly: report(7), monthly: report(30), upcoming };

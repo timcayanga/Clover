@@ -1,3 +1,4 @@
+import { parseRecurringTracking, isWithinRecurringTerm } from "@/lib/recurring-tracking";
 import { HomeSensitiveAmount } from "@/components/home-sensitive-amount";
 import Link from "next/link";
 import { Prisma } from "@prisma/client";
@@ -909,6 +910,7 @@ async function DashboardStream({
         dueDate: true,
         nextDueDate: true,
         recurrence: true,
+        tracking: true,
       },
       take: 30,
     }).catch(() => []),
@@ -932,6 +934,7 @@ async function DashboardStream({
       }),
     }))
     .filter((entry): entry is typeof entry & { dueDate: Date } => Boolean(entry.dueDate))
+    .filter(({ commitment, dueDate }) => isWithinRecurringTerm({ recurrence: commitment.recurrence, tracking: parseRecurringTracking(commitment.tracking) }, dueDate, commitment.dueDate ?? commitment.nextDueDate ?? dueDate))
     .sort((left, right) => left.dueDate.getTime() - right.dueDate.getTime())
     .slice(0, 4);
   const hasCommitmentOccurrenceTable = await hasCompatibleTable("FinancialCommitmentOccurrence").catch(() => false);

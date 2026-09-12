@@ -420,10 +420,7 @@ assert.doesNotMatch(commitmentsSource, /Next 30 days/i);
 assert.doesNotMatch(commitmentsSource, /Add this to Recurring\?/);
 assert.doesNotMatch(commitmentsSource, /overviewStats\.upcoming\.length\} scheduled/);
 assert.doesNotMatch(commitmentsSource, /overviewStats\.activeCount\} active/);
-assert.doesNotMatch(
-  commitmentsSource,
-  /actionablePlannedPaymentSuggestions\.length \+ suggestedRecurringPatterns\.length/,
-);
+assert.match(commitmentsSource, /reviewCount=\{actionablePlannedPaymentSuggestions\.length \+ suggestedRecurringPatterns\.length\}/, "The redesigned summary shows the full review count.");
 
 console.log("Critical page loading regression passed.");
 
