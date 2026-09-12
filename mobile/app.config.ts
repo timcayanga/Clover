@@ -31,7 +31,7 @@ const config: ExpoConfig = {
         photosPermission:
           "Choose a receipt or financial screenshot to import into Clover.",
         cameraPermission: "Take a photo of a receipt to import into Clover.",
-        microphonePermission: false,
+        microphonePermission: "Use your microphone to dictate a Clover message.",
       },
     ],
     "expo-document-picker",
