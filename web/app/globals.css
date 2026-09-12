@@ -65012,3 +65012,84 @@ html[data-theme="dark"] .adviser-planning-card__details dl div {
   -webkit-mask-position: center;
   vertical-align: middle;
 }
+
+/* Home: approved Figma desktop/mobile layout, with content-driven heights. */
+.dashboard-home--figma { gap: 16px; }
+.dashboard-home--figma :is(.dashboard-home__insight-strip, .home-next-steps, .dashboard-home__report-card, .dashboard-home__goal-card) {
+  min-width: 0; border-radius: 16px; padding: 16px; box-shadow: none;
+  border: 1px solid var(--stroke); background: var(--surface);
+}
+.dashboard-home--figma .eyebrow { letter-spacing: 0; text-transform: none; }
+.dashboard-home--figma .dashboard-home__hero--balance {
+  position: relative; top: auto; min-height: 124px; padding: 12px 18px;
+  border-radius: 18px; box-shadow: none; gap: 20px;
+}
+.dashboard-home--figma .dashboard-home__hero--balance::after { display: none; }
+.dashboard-home--figma .dashboard-home__hero-main > strong { font-size: 28px; line-height: 1.3; letter-spacing: 0; }
+.dashboard-home--figma .dashboard-home__balance-heading .eyebrow { font-size: 18px; font-weight: 600; }
+.dashboard-home--figma .dashboard-home__balance-visibility { width: 44px; height: 44px; flex: 0 0 44px; background: transparent; }
+.dashboard-home--figma .dashboard-home__balance-visibility:focus-visible { outline: 2px solid white; outline-offset: -4px; }
+.dashboard-home--figma .dashboard-home__balance-visibility :is(svg,img) { width: 20px; height: 20px; }
+.dashboard-home--figma .dashboard-home__hero-aside { gap: 8px; }
+.dashboard-home--figma .dashboard-home__hero-mini-pill {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  gap: 4px 8px; min-height: 40px; padding: 8px 10px; border-radius: 12px;
+  background: var(--surface); border: 0;
+}
+.dashboard-home--figma .dashboard-home__hero-mini-label { font-size: 11px; line-height: 1.4; color: var(--muted); letter-spacing: 0; }
+.dashboard-home--figma .dashboard-home__hero-mini-row { display: flex; align-items: center; gap: 8px; }
+.dashboard-home--figma .dashboard-home__hero-mini-value { font-size: 13px; line-height: 1.4; letter-spacing: 0; }
+.dashboard-home--figma .dashboard-home__hero-mini-pill--income .dashboard-home__hero-mini-value { color: #05b257; }
+.dashboard-home--figma .dashboard-home__hero-mini-pill--expense .dashboard-home__hero-mini-value { color: #ff474d; }
+.dashboard-home--figma .dashboard-home__hero-mini-trend { font-size: 11px; }
+.dashboard-home--figma .dashboard-home__insight-strip-list { gap: 16px; }
+.dashboard-home--figma .dashboard-home__insight-strip-item { border: 0; border-radius: 12px; min-height: 80px; padding: 12px; }
+.dashboard-home--figma .dashboard-home__report-card { gap: 14px; }
+.dashboard-home--figma .dashboard-home__report-card h4 { font-size: 20px; line-height: 1.4; letter-spacing: 0; }
+.dashboard-home--figma .dashboard-home__report-metrics > span { padding: 0; background: none; border: 0; gap: 6px; }
+.dashboard-home--figma .dashboard-home__report-metrics > span > strong { border: 1px solid var(--stroke); border-radius: 20px; padding: 10px; overflow: visible; overflow-wrap: anywhere; }
+.dashboard-home--figma .dashboard-home__report-metrics small { letter-spacing: 0; font-weight: 400; }
+.dashboard-home--figma .dashboard-home__report-metrics .home-sensitive-amount,
+.dashboard-home--figma .dashboard-home__report-metrics .home-sensitive-amount > span { padding: 0; border: 0; border-radius: 0; background: none; color: inherit; }
+.dashboard-home--figma .dashboard-home__report-flow-track { flex-direction: row; align-items: flex-end; gap: 2px; background: transparent; border-radius: 0; }
+.dashboard-home--figma .dashboard-home__report-flow-segment { flex: 1 1 0; min-width: 0; border-radius: 5px 5px 0 0; }
+.dashboard-home--figma .dashboard-home__report-flow-segment--income { background: #05b257; }
+.dashboard-home--figma .dashboard-home__report-flow-segment--expense { background: #ff474d; }
+.dashboard-home--figma .home-budget-progress__list { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.dashboard-home--figma .home-budget-progress { padding: 12px; border-radius: 12px; background: var(--surface-2); gap: 10px; }
+.dashboard-home--figma .home-budget-progress__heading strong { font-size: 13px; }
+.dashboard-home--figma .home-budget-progress__heading > span { font-size: 11px; }
+.dashboard-home--figma .home-budget-progress__bar { background: var(--stroke); }
+.dashboard-home--figma .home-budget-progress__bar > span { background: linear-gradient(90deg,#03a8c0,#34d3d0); }
+.dashboard-home--figma .home-budget-progress:nth-child(2):not(.home-budget-progress--warning) .home-budget-progress__bar > span { background: linear-gradient(90deg,#69cd95,#99dfb2); }
+.dashboard-home--figma .home-budget-progress--warning .home-budget-progress__bar > span { background: #ff474d; }
+.home-review-summary { display: grid; gap: 8px; }
+.home-review-summary__row { display: grid; grid-template-columns: 20px minmax(80px,1fr) minmax(0,1.5fr) auto; gap: 10px; align-items: center; min-height: 36px; }
+.home-review-summary__row strong { font-size: 12px; font-weight: 600; }
+.home-review-summary__row small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.home-review-summary__row a { color: var(--accent); font-size: 12px; padding: 8px 0; }
+.home-review-summary__row .dashboard-home__status-check { width: 18px; height: 18px; font-size: 12px; }
+.home-review-summary__preview { margin-top: 12px; }
+.home-review-summary__preview summary { color: var(--accent); font-size: 12px; cursor: pointer; padding: 8px 0; }
+@media (min-width:1101px) {
+  .dashboard-home--figma .home-next-steps__copy { display: grid; grid-template-columns: minmax(250px,1fr) minmax(0,2fr); align-items: center; gap: 16px; }
+  .dashboard-home--figma .home-next-steps__copy h3 { display: flex; justify-content: space-between; gap: 12px; }
+  .dashboard-home--figma .home-next-steps__copy p { margin: 0; }
+}
+@media (max-width:1100px) {
+  .dashboard-home--figma .dashboard-home__hero--balance { min-height: 184px; }
+  .dashboard-home--figma .home-feature-grid__panel { padding: 18px 4px; }
+  .dashboard-home--figma .home-feature-grid__item img { width: 52px; height: 52px; }
+  .dashboard-home--figma .home-budget-progress__list { grid-template-columns: minmax(0,1fr); }
+  .dashboard-home--figma .dashboard-home__report-card { min-height: 300px; }
+  .home-review-summary__row { grid-template-columns: 20px minmax(0,1fr) auto; gap: 4px 10px; min-height: 52px; }
+  .home-review-summary__row small { grid-column: 2; grid-row: 2; }
+  .home-review-summary__row a { grid-column: 3; grid-row: 1 / 3; min-height: 44px; display: flex; align-items: center; }
+}
+.dashboard-home--figma .dashboard-home__insight-strip { gap: 8px; }
+.dashboard-home--figma .dashboard-home__insight-strip-label { font-size: 12px; letter-spacing: 0; text-transform: none; }
+.dashboard-home--figma .dashboard-home__insight-strip-copy { font-size: 12px; line-height: 1.5; }
+.dashboard-home--figma .home-next-steps__copy h3,
+.dashboard-home--figma .home-next-steps__copy p { font-size: 12px; }
+.dashboard-home--figma .home-next-steps__count { color: #ff474d; }
+.dashboard-home--figma .dashboard-home__goal-card { min-height: 166px; align-content: start; }

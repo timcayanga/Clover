@@ -490,18 +490,18 @@ async function main() {
   );
   assert.match(
     globalStyles,
-    /\.dashboard-home__report-flow-segment\[data-edge="only"\] \{[\s\S]{0,80}border-radius: 4px;/,
-    "Single-value Home report bars must keep compact rounded edges."
-  );
-  assert.match(
-    globalStyles,
-    /\.dashboard-home__report-flow-segment\[data-edge="bottom"\][\s\S]{0,180}\.dashboard-home__report-flow-segment\[data-edge="top"\]/,
-    "Mixed Home report bars must round only the outside edges of one continuous stack."
+    /\.dashboard-home--figma \.dashboard-home__report-flow-track \{[^}]*flex-direction: row;[^}]*align-items: flex-end;/,
+    "Home must show income and expense side by side from the same baseline."
   );
   assert.match(
     dashboardSource,
-    /days\.map\(\(day\) => day\.income \+ day\.expense\)[\s\S]{0,1800}\.filter\(\(segment\) => segment\.value > 0\)/,
-    "Home report bars must scale combined daily movement and omit empty colored segments."
+    /Math\.max\(1, \.\.\.days\.flatMap\(\(day\) => \[day\.income, day\.expense\]\)\)/,
+    "Paired Home bars must share a scale based on the largest individual amount, with a nonzero floor."
+  );
+  assert.match(
+    dashboardSource,
+    /kind: "income", value: day\.income[\s\S]{0,120}kind: "expense", value: day\.expense[\s\S]{0,80}\];/,
+    "Keep both category positions even on days with only income or only expenses."
   );
   assert.match(
     globalStyles,

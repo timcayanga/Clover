@@ -46,19 +46,12 @@ export function BalanceVisibilityToggle() {
       aria-pressed={hidden}
       onClick={toggle}
     >
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        {hidden ? (
-          <>
-            <path d="M4 14c2.2-2.5 4.9-3.8 8-3.8s5.8 1.3 8 3.8" />
-            <path d="m6.2 15.2-1.3 1.6M10 16.7l-.4 2M14 16.7l.4 2M17.8 15.2l1.3 1.6" />
-          </>
-        ) : (
-          <>
-            <path d="M2.8 12s3.2-5 9.2-5 9.2 5 9.2 5-3.2 5-9.2 5-9.2-5-9.2-5Z" />
-            <circle cx="12" cy="12" r="2.4" />
-          </>
-        )}
-      </svg>
+      {hidden ? (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 14c2.2-2.5 4.9-3.8 8-3.8s5.8 1.3 8 3.8" />
+          <path d="m6.2 15.2-1.3 1.6M10 16.7l-.4 2M14 16.7l.4 2M17.8 15.2l1.3 1.6" />
+        </svg>
+      ) : <img src="/figma-icons/home/eye-open.svg" alt="" aria-hidden="true" width={20} height={20} />}
     </button>
   );
 }

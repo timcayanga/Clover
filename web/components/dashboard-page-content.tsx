@@ -259,7 +259,7 @@ const buildDailyFlow = (transactions: DashboardTransaction[], start: Date, dayCo
 };
 
 function DailyFlowChart({ days, label, currency }: { days: DailyFlow[]; label: string; currency: string }) {
-  const scale = Math.max(1, ...days.map((day) => day.income + day.expense));
+  const scale = Math.max(1, ...days.flatMap((day) => [day.income, day.expense]));
   const isMonthly = days.length > 7;
   const monthlyTimelineIndexes = new Set(
     Array.from({ length: 5 }, (_, index) => Math.round((index * Math.max(days.length - 1, 0)) / 4))
@@ -275,7 +275,7 @@ function DailyFlowChart({ days, label, currency }: { days: DailyFlow[]; label: s
           const segments = [
             { kind: "income", value: day.income },
             { kind: "expense", value: day.expense },
-          ].filter((segment) => segment.value > 0);
+          ];
 
           return (
             <div
@@ -419,7 +419,7 @@ const comparePeriods = (currentTransactions: DashboardTransaction[], previousTra
 
 function DashboardUnavailableContent() {
   return (
-    <section className="dashboard-home">
+    <section className="dashboard-home dashboard-home--figma">
       <TransientDataRecovery eyebrow="Home" pageLabel="Home" />
     </section>
   );
@@ -436,7 +436,7 @@ function DashboardUnavailableState() {
 
 function DashboardStreamFallback() {
   return (
-    <section className="dashboard-home" aria-label="Loading dashboard content">
+    <section className="dashboard-home dashboard-home--figma" aria-label="Loading dashboard content">
       <article className="dashboard-home__hero dashboard-home__hero--balance dashboard-home__hero--loading glass">
         <div className="dashboard-home__hero-main">
           <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 108 }} />
@@ -920,6 +920,7 @@ async function DashboardStream({
     (suggestion) => suggestion.sourceKind === "recurring_transaction" || suggestion.sourceKind === "installment"
   );
   const recurringSuggestionCount = recurringSuggestions.length;
+  const statementReminderCount = plannedPaymentSuggestions.filter((suggestion) => suggestion.sourceKind === "statement_reminder").length;
   const recurringPaymentOccurrences = recurringCommitments
     .map((commitment) => ({
       commitment,
@@ -1140,10 +1141,10 @@ async function DashboardStream({
           import_count: workspaceSummary._count.importFiles,
         }}
       />
-      <section className="dashboard-home">
+      <section className="dashboard-home dashboard-home--figma">
         <article
           className="dashboard-home__hero dashboard-home__hero--fresh dashboard-home__hero--balance glass"
-          style={{ background: "linear-gradient(135deg, #03A8C0 0%, #5ED3D0 100%)" }}
+          style={{ background: "linear-gradient(90deg, #03A8C0 0%, #34D3D0 100%)" }}
         >
           <div className={`dashboard-home__hero-main${totalBalanceLabel.length > 18 ? " dashboard-home__hero-main--large-balance" : ""}`}>
             <div className="dashboard-home__balance-heading">
@@ -1159,7 +1160,7 @@ async function DashboardStream({
           <div className="dashboard-home__hero-aside" aria-label="Monthly balance summary">
             <span className="dashboard-home__balance-month">{monthStart.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</span>
             {balanceHighlights.map((pill) => (
-              <div key={pill.key} className="dashboard-home__hero-mini-pill">
+              <div key={pill.key} className={`dashboard-home__hero-mini-pill dashboard-home__hero-mini-pill--${pill.isExpense ? "expense" : "income"}`}>
                 <span className="dashboard-home__hero-mini-label">{pill.label}</span>
                 <div className="dashboard-home__hero-mini-row">
                   <strong className="dashboard-home__hero-mini-value">
@@ -1172,7 +1173,7 @@ async function DashboardStream({
                     >
                       {pill.trend.amountBased
                         ? <HomeSensitiveAmount value={pill.trend.label} currency={pill.currency} />
-                        : pill.trend.label}
+                        : pill.trend.label === "0%" ? "0%" : `${pill.trend.direction > 0 ? "↑" : "↓"} ${pill.trend.label.replace(/^[+-]/, "")}`}
                     </span>
                   ) : <span className="dashboard-home__hero-mini-trend dashboard-home__hero-mini-trend--unavailable">No prior month</span>}
                 </div>
@@ -1214,7 +1215,7 @@ async function DashboardStream({
         <HomeNextSteps
           transactionCount={outstandingReviewCount}
           recurringCount={recurringSuggestionCount}
-          statementCount={plannedPaymentSuggestions.filter((suggestion) => suggestion.sourceKind === "statement_reminder").length}
+          statementCount={statementReminderCount}
         />
 
         <div className="dashboard-home__snapshot-grid" aria-label="Week and month snapshot">
@@ -1263,25 +1264,34 @@ async function DashboardStream({
               <div className="dashboard-home__goal-card-head">
                 <p className="eyebrow">Things to review</p>
               </div>
-              <div className="dashboard-home__action-card-heading">
-                <span className={`dashboard-home__status-check${reviewAttentionCount > 0 ? " dashboard-home__status-check--attention" : ""}`} aria-hidden="true">
-                  {reviewAttentionCount > 0 ? "!" : "✓"}
-                </span>
-                <div>
-                  <strong>{reviewAttentionCount > 0 ? "Transactions to review" : "Recent transactions look tidy"}</strong>
-                  <small>
-                    {reviewAttentionCount > 0
-                      ? "Review these details before using them in reports."
-                      : "No recent transactions need review. Older transactions may still need attention."}
-                  </small>
+              <div className="home-review-summary">
+                <div className="home-review-summary__row">
+                  <span className={`dashboard-home__status-check${outstandingReviewCount > 0 ? " dashboard-home__status-check--attention" : ""}`} aria-hidden="true">{outstandingReviewCount > 0 ? "!" : "✓"}</span>
+                  <strong>Transactions</strong>
+                  <small>{outstandingReviewCount > 0 ? `${outstandingReviewCount} items need confirmation` : "No transactions need review"}</small>
+                  <Link href="/review" aria-label="Review transactions">Review</Link>
+                </div>
+                <div className="home-review-summary__row">
+                  <span aria-hidden="true" />
+                  <strong>Recurring</strong>
+                  <small>{recurringSuggestionCount > 0 ? `${recurringSuggestionCount} suggestions to review` : "No new suggestions"}</small>
+                  <Link href="/recurring?tab=planned" aria-label="Review recurring suggestions">Review</Link>
+                </div>
+                <div className="home-review-summary__row">
+                  <span aria-hidden="true" />
+                  <strong>Statements</strong>
+                  <small>{statementReminderCount > 0
+                    ? `${statementReminderCount} payment reminders to review`
+                    : "No payment reminders to review"}</small>
+                  <Link href="/recurring?tab=planned" aria-label="Review statement payment reminders">Review</Link>
                 </div>
               </div>
               {reviewAttentionCount > 0 ? (
-                <HomeTransactionReviewLauncher transactions={reviewAttentionTransactions.slice(0, 3)} />
+                <details className="home-review-summary__preview">
+                  <summary>Review recent transaction details</summary>
+                  <HomeTransactionReviewLauncher transactions={reviewAttentionTransactions.slice(0, 3)} />
+                </details>
               ) : null}
-              <Link className="dashboard-home__report-link" href="/review">
-                Open review
-              </Link>
             </div>
           )}
         </div>

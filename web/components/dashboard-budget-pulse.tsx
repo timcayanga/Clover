@@ -63,14 +63,13 @@ export function DashboardBudgetPulse({ workspaceId, refreshKey }: { workspaceId:
                 <strong>{budget.name}</strong>
                 <span>{budget.statusLabel}</span>
               </div>
-              <span className="home-budget-progress__period">{budget.periodLabel}</span>
+              <div className="home-budget-progress__amounts">
+                <span><HomeSensitiveAmount value={actual} currency={budget.currency} /> {budget.kind === "savings_target" ? "saved" : "spent"} of <HomeSensitiveAmount value={target} currency={budget.currency} /></span>
+              </div>
               <div role="progressbar" aria-label={budget.name} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-valuetext={`${Math.round(progress)}% of target`} className="home-budget-progress__bar">
                 <span style={{ width: `${progress}%` }} />
               </div>
-              <div className="home-budget-progress__amounts">
-                <span><HomeSensitiveAmount value={actual} currency={budget.currency} /> {budget.kind === "savings_target" ? "saved" : "spent"}</span>
-                <span>of <HomeSensitiveAmount value={target} currency={budget.currency} /></span>
-              </div>
+              <span className="home-budget-progress__period">{Math.round(budget.progressPercent)}% {budget.kind === "savings_target" ? "saved" : "used"} · {budget.periodLabel}</span>
             </Link>
           );
         })}
