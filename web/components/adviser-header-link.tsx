@@ -1,6 +1,6 @@
+import { getNavigationIconSrc } from "@/lib/navigation-icons";
 import Image from "next/image";
 import Link from "next/link";
-import { getNavigationIconSrc } from "@/lib/navigation-icons";
 
 export function AdviserHeaderLink() {
   return (

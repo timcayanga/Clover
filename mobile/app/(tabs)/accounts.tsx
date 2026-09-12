@@ -1,0 +1,201 @@
+import { useFocusEffect } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { useCallback, useState } from "react";
+import { Pressable, Text, View } from "react-native";
+import { useSession } from "../../src/session";
+import {
+  Body,
+  Button,
+  Card,
+  Field,
+  Heading,
+  Icon,
+  Notice,
+  Screen,
+  money,
+  useTheme,
+} from "../../src/ui";
+type Account = {
+  id: string;
+  name: string;
+  institution: string | null;
+  type: string;
+  currency: string;
+  balance: string | null;
+  lastFour?: string;
+};
+export default function Accounts() {
+  const { colors, styles, dark } = useTheme();
+  const session = useSession();
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [query, setQuery] = useState("");
+  const [currency, setCurrency] = useState("");
+  const [filters, setFilters] = useState(false);
+  const [selected, setSelected] = useState<Account | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      setLoading(true);
+      setError("");
+      setSelected(null);
+      const load = session.demo
+        ? Promise.resolve({
+            accounts: [
+              {
+                id: "sample",
+                name: "Sample cash",
+                institution: null,
+                type: "cash",
+                currency: "PHP",
+                balance: "5000",
+              },
+            ],
+          })
+        : session.request<{ accounts: Account[] }>(
+            `accounts?workspaceId=${encodeURIComponent(session.profileId)}`,
+          );
+      void load
+        .then((data) => {
+          if (active) setAccounts(data.accounts);
+        })
+        .catch((e) => {
+          if (active) setError(e.message);
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+      return () => {
+        active = false;
+      };
+    }, [session.demo, session.profileId, session.request]),
+  );
+  const label = (account: Account) =>
+    [account.name, account.lastFour].filter(Boolean).join(" ");
+  const amountLabel = (account: Account) =>
+    ["credit_card", "loan", "mortgage", "liability"].includes(account.type)
+      ? "Outstanding balance"
+      : account.type === "investment"
+        ? "Recorded value"
+        : "Balance";
+  return (
+    <Screen>
+      <Field
+        label="Search accounts"
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Name or institution"
+      />
+      <Button
+        title="Filters"
+        secondary
+        onPress={() => setFilters((value) => !value)}
+      />
+      {filters ? (
+        <Card>
+          <Body>Currency</Body>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {["", ...new Set(accounts.map((account) => account.currency))].map(
+              (value) => (
+                <Button
+                  key={value}
+                  title={value || "All"}
+                  secondary={currency !== value}
+                  onPress={() => setCurrency(value)}
+                />
+              ),
+            )}
+          </View>
+        </Card>
+      ) : null}
+      {loading ? (
+        <Body>Loading accounts…</Body>
+      ) : error ? (
+        <Notice>{error}</Notice>
+      ) : (
+        accounts
+          .filter(
+            (account) =>
+              (!currency || account.currency === currency) &&
+              `${account.name} ${account.institution}`
+                .toLowerCase()
+                .includes(query.toLowerCase()),
+          )
+          .map((account) => (
+            <Pressable
+              key={account.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${label(account)}`}
+              onPress={() => setSelected(account)}
+            >
+              <LinearGradient
+                colors={dark ? ["#193A43", "#15252D"] : ["#DEF6F4", "#FFFFFF"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  borderRadius: 22,
+                  borderWidth: 1,
+                  borderColor: colors.line,
+                  padding: 20,
+                  gap: 12,
+                }}
+              >
+                <View style={styles.row}>
+                  <Icon name="card-outline" size={36} />
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: colors.ink,
+                        fontSize: 18,
+                        fontWeight: "600",
+                      }}
+                    >
+                      {label(account)}
+                    </Text>
+                    <Body>
+                      {account.institution || account.type.replaceAll("_", " ")}
+                    </Body>
+                  </View>
+                </View>
+                <Body>{amountLabel(account)}</Body>
+                <Text
+                  style={{ color: colors.ink, fontSize: 28, fontWeight: "600" }}
+                >
+                  {account.balance === null
+                    ? "Not recorded"
+                    : money(account.balance, account.currency)}
+                </Text>
+                <Body>{account.currency} · View account ›</Body>
+              </LinearGradient>
+            </Pressable>
+          ))
+      )}
+      {!loading && !error && !accounts.length ? (
+        <Notice>
+          No accounts yet. Add a record using the Add tab to get started.
+        </Notice>
+      ) : null}
+      {selected ? (
+        <Card>
+          <Heading>{label(selected)}</Heading>
+          <Body>
+            {selected.type.replaceAll("_", " ")} · {selected.currency}
+          </Body>
+          <Body>
+            {amountLabel(selected)}:{" "}
+            {selected.balance === null
+              ? "Not recorded"
+              : money(selected.balance, selected.currency)}
+          </Body>
+          <Body>{selected.institution || "Manual account"}</Body>
+          <Button
+            title="Close details"
+            secondary
+            onPress={() => setSelected(null)}
+          />
+        </Card>
+      ) : null}
+    </Screen>
+  );
+}

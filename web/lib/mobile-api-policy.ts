@@ -16,7 +16,7 @@ export function mobileOperation(method: string, segments: string[]) {
   if (method === "POST" && path === "accounts") return "account-create";
   if (
     method === "GET" &&
-    ["bootstrap", "transactions", "accounts", "imports", "options", "home"].includes(path)
+    ["bootstrap", "transactions", "accounts", "imports", "options", "home", "recurring"].includes(path)
   )
     return path;
   if (

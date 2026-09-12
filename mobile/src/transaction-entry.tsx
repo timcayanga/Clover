@@ -1,10 +1,12 @@
+import * as ImagePicker from "expo-image-picker";
+import { AdviserInputTools } from "./adviser-input-tools";
 import { ApiError } from "./api";
 import * as Crypto from "expo-crypto";
 import type { EntryDraft } from "./adviser-entry-types";
 import { useEffect, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Platform, Pressable, Text, View } from "react-native";
 import { useSession } from "./session";
-import { Body, Button, Card, Field, Notice, colors } from "./ui";
+import { Body, Button, Card, Field, Notice, useTheme } from "./ui";
 
 export type TransactionDraft = {
   adviserEntry?: EntryDraft;
@@ -44,6 +46,7 @@ export function Choices({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const { colors, styles, dark } = useTheme();
   return (
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
       {options.map((option) => (
@@ -371,15 +374,73 @@ export function TransactionChat({
 }: {
   onReview: (draft: TransactionDraft) => void;
 }) {
+  const { colors, styles, dark } = useTheme();
   const session = useSession();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [actions, setActions] = useState<Suggestion[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [attachments, setAttachments] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const [attaching, setAttaching] = useState(false);
+  const takePhoto = async () => {
+    if (session.demo) {
+      setError(
+        "Sign in to attach a photo. Sample mode never uploads your files.",
+      );
+      return;
+    }
+    if (attaching || busy || attachments.length >= 3) return;
+    setError("");
+    setAttaching(true);
+    try {
+      if (!(await ImagePicker.requestCameraPermissionsAsync()).granted) {
+        setError("Camera permission is needed to photograph a receipt.");
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        quality: 0.75,
+        exif: false,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if ((asset.fileSize ?? 0) > 3.5 * 1024 * 1024) {
+        setError("Choose a photo smaller than 3.5 MB.");
+        return;
+      }
+      const form = new FormData();
+      if (Platform.OS === "web")
+        form.append(
+          "file",
+          await (await fetch(asset.uri)).blob(),
+          "receipt.jpg",
+        );
+      else
+        form.append("file", {
+          uri: asset.uri,
+          name: "receipt.jpg",
+          type: asset.mimeType ?? "image/jpeg",
+        } as unknown as Blob);
+      const response = await session.request<{
+        attachment: { id: string; name: string };
+      }>(
+        `adviser/attachments?workspaceId=${encodeURIComponent(session.profileId)}`,
+        { method: "POST", body: form },
+      );
+      setAttachments((current) => [...current, response.attachment]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to attach the photo.");
+    } finally {
+      setAttaching(false);
+    }
+  };
   const lock = useRef(false);
   const send = async () => {
-    if (lock.current || !input.trim()) return;
+    if (lock.current || attaching || (!input.trim() && !attachments.length))
+      return;
     if (session.demo) {
       setError(
         "Ask Clover uses your signed-in account. Sample mode never sends your message.",
@@ -391,7 +452,12 @@ export function TransactionChat({
     setError("");
     const next: Message[] = [
       ...messages,
-      { role: "user", content: input.trim() },
+      {
+        role: "user",
+        content:
+          input.trim() ||
+          "Read this receipt and suggest transactions for me to review.",
+      },
     ];
     try {
       const result = await session.request<{
@@ -403,6 +469,7 @@ export function TransactionChat({
           messages: next.slice(-6),
           page: "transactions",
           clientDate: today(),
+          attachmentIds: attachments.map((item) => item.id),
         }),
       });
       setMessages([...next, { role: "assistant", content: result.reply }]);
@@ -431,6 +498,7 @@ export function TransactionChat({
         })) ?? [],
       );
       setInput("");
+      setAttachments([]);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -440,6 +508,26 @@ export function TransactionChat({
   };
   return (
     <View style={{ gap: 16 }}>
+      <AdviserInputTools
+        disabled={busy || attaching}
+        onText={(text) =>
+          setInput((current) => `${current}${current ? " " : ""}${text}`)
+        }
+        onPhoto={() => void takePhoto()}
+      />
+      {attachments.map((item) => (
+        <Button
+          key={item.id}
+          title={`Remove ${item.name}`}
+          secondary
+          onPress={() =>
+            setAttachments((current) =>
+              current.filter((value) => value.id !== item.id),
+            )
+          }
+        />
+      ))}
+      {attaching ? <Body>Reading photo…</Body> : null}
       <Body muted={false}>Tell Clover what to add</Body>
       <Body>
         For example: “Lunch ₱250 with cash, groceries ₱1,200 from BPI.” Review
@@ -486,7 +574,7 @@ export function TransactionChat({
       {error ? <Notice>{error}</Notice> : null}
       <Button
         title={busy ? "Clover is preparing your draft…" : "Send"}
-        disabled={busy || !input.trim()}
+        disabled={busy || attaching || (!input.trim() && !attachments.length)}
         onPress={() => void send()}
       />
     </View>

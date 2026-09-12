@@ -2608,7 +2608,7 @@ export function CloverShell({
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
               <div className="topbar__title-row">
                 <h1>{mobileOverlayChrome?.title ?? title}</h1>
-                {desktopTitleAction ? <div className="topbar__desktop-title-action">{desktopTitleAction}</div> : null}
+                {active !== "adviser" && !desktopTitleAction ? <div className="topbar__desktop-adviser"><AdviserHeaderLink /></div> : null}{desktopTitleAction ? <div className="topbar__desktop-title-action">{desktopTitleAction}</div> : null}
                 {titleAddon ? <div className="topbar__title-addon">{titleAddon}</div> : null}
               </div>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
@@ -2651,7 +2651,7 @@ export function CloverShell({
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
               <div className="topbar__title-row">
                 <h1>{mobileOverlayChrome?.title ?? title}</h1>
-                {desktopTitleAction ? <div className="topbar__desktop-title-action">{desktopTitleAction}</div> : null}
+                {active !== "adviser" && !desktopTitleAction ? <div className="topbar__desktop-adviser"><AdviserHeaderLink /></div> : null}{desktopTitleAction ? <div className="topbar__desktop-title-action">{desktopTitleAction}</div> : null}
                 {titleAddon ? <div className="topbar__title-addon">{titleAddon}</div> : null}
               </div>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}

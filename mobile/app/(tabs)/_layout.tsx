@@ -3,8 +3,9 @@ import { Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAccess } from "../../src/access";
 import { useSession } from "../../src/session";
-import { AppHeader, Icon, ProfileGate, colors } from "../../src/ui";
+import { AppHeader, Icon, ProfileGate, useTheme } from "../../src/ui";
 export default function TabLayout() {
+  const { colors, styles, dark } = useTheme();
   const access = useAccess();
   const session = useSession();
   const insets = useSafeAreaInsets();
@@ -42,6 +43,8 @@ export default function TabLayout() {
             tabBarLabelStyle: { fontSize: 10, fontWeight: "500" },
           }}
         >
+          <Tabs.Screen name="accounts" options={{ title: "Accounts", href: null }} />
+          <Tabs.Screen name="recurring" options={{ title: "Recurring", href: null }} />
           <Tabs.Screen
             name="index"
             options={{

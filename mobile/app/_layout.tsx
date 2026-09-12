@@ -1,7 +1,7 @@
 import { ClerkProvider, useAuth } from "@clerk/expo";
 import { useHostedAuth } from "@clerk/expo/hosted-auth";
 import { tokenCache } from "@clerk/expo/token-cache";
-import { Stack } from "expo-router";
+import { Stack, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useState, type ReactNode } from "react";
 import { AppState, Platform, StyleSheet, Text, View } from "react-native";
@@ -9,9 +9,10 @@ import { useEffect } from "react";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { AccessContext, useAccess } from "../src/access";
 import { SessionProvider } from "../src/session";
-import { colors } from "../src/ui";
+import { useTheme, AppHeader, DetailNavigation } from "../src/ui";
 
 function PrivacyShield({ children }: { children: ReactNode }) {
+  const { colors, styles, dark } = useTheme();
   const [hidden, setHidden] = useState(false);
   useEffect(() => {
     const listener = AppState.addEventListener("change", (state) =>
@@ -44,15 +45,18 @@ function PrivacyShield({ children }: { children: ReactNode }) {
   );
 }
 function Routes() {
+  const { colors, styles, dark } = useTheme();
   const { active } = useAccess();
+  const path = usePathname();
   return (
     <PrivacyShield>
-      <StatusBar style="dark" />
+      <StatusBar style={dark ? "light" : "dark"} />
       <Stack
         screenOptions={{
           headerTintColor: colors.teal,
           headerTitleStyle: { color: colors.ink },
           headerShadowVisible: false,
+          headerStyle: { backgroundColor: colors.white },
           contentStyle: { backgroundColor: colors.bg },
           headerBackButtonDisplayMode: "minimal",
         }}
@@ -67,14 +71,24 @@ function Routes() {
           />
           <Stack.Screen
             name="transaction/[id]"
-            options={{ title: "Transaction" }}
+            options={{
+              title: "Transaction",
+              header: () => <AppHeader title="Transaction" back />,
+            }}
           />
           <Stack.Screen
             name="import/[id]"
-            options={{ title: "Import status" }}
+            options={{
+              title: "Import status",
+              header: () => <AppHeader title="Import status" back />,
+            }}
           />
         </Stack.Protected>
       </Stack>
+      {active &&
+      (path.startsWith("/transaction/") || path.startsWith("/import/")) ? (
+        <DetailNavigation />
+      ) : null}
     </PrivacyShield>
   );
 }
@@ -94,6 +108,7 @@ function AppSession({
   login: () => Promise<void>;
   logout: () => Promise<void>;
 }) {
+  const { colors, styles, dark } = useTheme();
   const [demo, setDemo] = useState(false);
   const active = demo || Boolean(userId);
   return (

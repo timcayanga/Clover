@@ -4,21 +4,10 @@ import { KeyboardAvoidingView, Platform, Text, View } from "react-native";
 import { useAccess } from "../../src/access";
 import { useSession } from "../../src/session";
 import type { Transaction } from "../../src/types";
-import {
-  CategoryMark,
-  Body,
-  Button,
-  Card,
-  Field,
-  Heading,
-  Notice,
-  Screen,
-  colors,
-  dateLabel,
-  money,
-} from "../../src/ui";
+import { CategoryMark, Body, Button, Card, Field, Heading, Notice, Screen, dateLabel, money, useTheme } from "../../src/ui";
 
 export default function TransactionDetail() {
+  const { colors, styles, dark } = useTheme();
   const access = useAccess();
   const session = useSession();
   const { id } = useLocalSearchParams<{ id: string }>();

@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { Choices } from "../../src/transaction-entry";
 import { useSession } from "../../src/session";
 import type { Transaction, TransactionPage } from "../../src/types";
 import {
@@ -15,14 +16,17 @@ import {
   Button,
   Field,
   Notice,
-  colors,
   dateLabel,
   money,
-  styles,
+  useTheme,
 } from "../../src/ui";
 
 export default function Transactions() {
+  const { colors, styles, dark } = useTheme();
   const { demo, rows: samples, profileId, request } = useSession();
+  const [filters, setFilters] = useState(false);
+  const [review, setReview] = useState("");
+  const [type, setType] = useState("");
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<Transaction[]>([]);
@@ -46,16 +50,19 @@ export default function Transactions() {
       try {
         const data: TransactionPage = demo
           ? {
-              transactions: samples.filter((r) =>
-                `${r.merchantClean} ${r.accountName} ${r.categoryName} ${r.tags?.map((t) => t.name).join(" ")}`
-                  .toLowerCase()
-                  .includes(search.toLowerCase()),
+              transactions: samples.filter(
+                (r) =>
+                  (!review || r.reviewStatus === review) &&
+                  (!type || r.type === type) &&
+                  `${r.merchantClean} ${r.accountName} ${r.categoryName} ${r.tags?.map((t) => t.name).join(" ")}`
+                    .toLowerCase()
+                    .includes(search.toLowerCase()),
               ),
               totalCount: samples.length,
               page: 1,
             }
           : await request(
-              `transactions?workspaceId=${encodeURIComponent(profileId)}&query=${encodeURIComponent(search)}&page=${next}`,
+              `transactions?workspaceId=${encodeURIComponent(profileId)}&query=${encodeURIComponent(search)}&page=${next}&reviewFilter=${review === "pending_review" ? "pending" : review}&type=${type === "income" ? "credit" : type === "expense" ? "debit" : type}`,
             );
         if (ticket !== sequence.current) return;
         setRows((previous) =>
@@ -79,7 +86,7 @@ export default function Transactions() {
         }
       }
     },
-    [demo, samples, profileId, request, search],
+    [demo, samples, profileId, request, search, review, type],
   );
   useFocusEffect(
     useCallback(() => {
@@ -110,6 +117,36 @@ export default function Transactions() {
           returnKeyType="search"
           autoCorrect={false}
         />
+        <Button
+          title="Filters"
+          secondary
+          onPress={() => setFilters((value) => !value)}
+        />
+        {filters ? (
+          <View style={{ gap: 8 }}>
+            <Body>Warnings</Body>
+            <Choices
+              options={[
+                { value: "", label: "All" },
+                { value: "pending_review", label: "Needs review" },
+                { value: "confirmed", label: "Confirmed" },
+              ]}
+              value={review}
+              onChange={setReview}
+            />
+            <Body>Type</Body>
+            <Choices
+              options={[
+                { value: "", label: "All" },
+                { value: "expense", label: "Expense" },
+                { value: "income", label: "Income" },
+                { value: "transfer", label: "Transfer" },
+              ]}
+              value={type}
+              onChange={setType}
+            />
+          </View>
+        ) : null}
         {error ? (
           <Notice>{error}</Notice>
         ) : (
@@ -133,62 +170,90 @@ export default function Transactions() {
           maxWidth: 760,
           alignSelf: "center",
         }}
-        renderItem={({ item }) => (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`${item.merchantClean ?? item.merchantRaw}, ${money(item.amount, item.currency)}, ${dateLabel(item.date)}. Open transaction.`}
-            onPress={() =>
-              router.push({
-                pathname: "/transaction/[id]",
-                params: { id: item.id },
-              })
-            }
-            style={({ pressed }) => ({
-              paddingVertical: 21,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.line,
-              gap: 7,
-              opacity: pressed ? 0.6 : 1,
-            })}
-          >
-            <View style={[styles.row, { alignItems: "flex-start" }]}>
+        renderItem={({ item, index }) => (
+          <View>
+            {index === 0 ||
+            rows[index - 1].date.slice(0, 10) !== item.date.slice(0, 10) ? (
               <Text
-                style={{
-                  flex: 1,
-                  fontSize: 18,
-                  fontWeight: "600",
-                  color: colors.ink,
-                }}
+                accessibilityRole="header"
+                style={{ color: colors.muted, fontSize: 13, paddingTop: 16 }}
               >
-                {item.merchantClean ?? item.merchantRaw}
-              </Text>
-              <Text
-                style={{
-                  maxWidth: "46%",
-                  fontSize: 18,
-                  fontWeight: "700",
-                  color: item.type === "income" ? colors.teal : colors.ink,
-                }}
-              >
-                {money(item.amount, item.currency)}
-              </Text>
-            </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <CategoryMark name={item.categoryName} />
-              <Text style={{ fontSize: 15, color: colors.muted, flex: 1 }}>
-                {item.accountName} · {item.categoryName ?? "Uncategorized"}
-              </Text>
-            </View>
-            <Text style={{ fontSize: 14, color: colors.muted }}>
-              {dateLabel(item.date)}
-              {item.reviewStatus === "pending_review" ? " · Needs review" : ""}
-            </Text>
-            {item.tags?.length ? (
-              <Text style={{ color: colors.teal, fontSize: 14 }}>
-                {item.tags.map((tag) => `#${tag.name}`).join("  ")}
+                {dateLabel(item.date)}
               </Text>
             ) : null}
-          </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${item.merchantClean ?? item.merchantRaw}, ${money(item.amount, item.currency)}, ${dateLabel(item.date)}. Open transaction.`}
+              onPress={() =>
+                router.push({
+                  pathname: "/transaction/[id]",
+                  params: { id: item.id },
+                })
+              }
+              style={({ pressed }) => ({
+                paddingVertical: 21,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.line,
+                gap: 7,
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <View style={[styles.row, { alignItems: "flex-start" }]}>
+                <Text
+                  style={{
+                    flex: 1,
+                    fontSize: 18,
+                    fontWeight: "600",
+                    color: colors.ink,
+                  }}
+                >
+                  {item.merchantClean ?? item.merchantRaw}
+                </Text>
+                <Text
+                  style={{
+                    maxWidth: "46%",
+                    fontSize: 18,
+                    fontWeight: "700",
+                    color: item.type === "income" ? colors.teal : colors.ink,
+                  }}
+                >
+                  {money(item.amount, item.currency)}
+                </Text>
+              </View>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+              >
+                <CategoryMark name={item.categoryName} />
+                <Text style={{ fontSize: 15, color: colors.muted, flex: 1 }}>
+                  {item.categoryName ?? "Uncategorized"} · {item.accountName}
+                  {item.lastFour && !item.accountName.endsWith(item.lastFour)
+                    ? ` ${item.lastFour}`
+                    : ""}
+                </Text>
+              </View>
+              {item.reviewStatus === "pending_review" ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Review transaction warning"
+                  onPress={() =>
+                    router.push({
+                      pathname: "/transaction/[id]",
+                      params: { id: item.id },
+                    })
+                  }
+                  style={{
+                    minWidth: 44,
+                    minHeight: 44,
+                    alignSelf: "flex-end",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text style={{ color: "#D6A226", fontSize: 22 }}>⚠</Text>
+                </Pressable>
+              ) : null}
+            </Pressable>
+          </View>
         )}
         ListEmptyComponent={
           !busy ? (

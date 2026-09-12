@@ -41,6 +41,7 @@ export function RecurringCalendar({
   comprehensive: boolean;
   onSelectCommitment: (commitment: FinancialCommitmentSummary, occurrenceDate: string) => void;
 }) {
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const now = new Date();
   const currentYear = now.getFullYear();
   const [selectedYear, setSelectedYear] = useState(() => now.getFullYear());
@@ -156,7 +157,7 @@ export function RecurringCalendar({
                     type="button"
                     className={`recurring-calendar__event${eventIndex === 2 ? " recurring-calendar__event--desktop-third" : ""}`}
                     data-kind={commitment.kind}
-                    onClick={() => onSelectCommitment(commitment, occurrenceKey)}
+                    onClick={() => { setSelectedDay(occurrenceKey); onSelectCommitment(commitment, occurrenceKey); }}
                     title={`${commitment.title} · ${formatCommitmentAmount(commitment, false, occurrenceKey)}`}
                     aria-label={`Open ${commitment.title}, due ${monthNames[selectedMonth]} ${day}`}
                   >
@@ -164,13 +165,14 @@ export function RecurringCalendar({
                     <small>{formatCommitmentAmount(commitment, true, occurrenceKey)}</small>
                   </button>
                 ))}
-                {dayEvents.length > 3 ? <span className="recurring-calendar__more recurring-calendar__more--desktop">••• +{dayEvents.length - 3}</span> : null}
-                {dayEvents.length > 2 ? <span className="recurring-calendar__more recurring-calendar__more--mobile">••• +{dayEvents.length - 2}</span> : null}
+                {dayEvents.length > 3 ? <button type="button" className="recurring-calendar__more recurring-calendar__more--desktop" onClick={() => setSelectedDay(dateKey)} aria-label={`Show all ${dayEvents.length} bills due ${dateKey}`}>+{dayEvents.length - 3}</button> : null}
+                {dayEvents.length > 2 ? <button type="button" className="recurring-calendar__more recurring-calendar__more--mobile" onClick={() => setSelectedDay(dateKey)} aria-label={`Show all ${dayEvents.length} bills due ${dateKey}`}>+{dayEvents.length - 2}</button> : null}
               </div>
             </div>
           );
         })}
       </div>
+      {selectedDay && occurrences.some(o => o.dateKey === selectedDay) ? <div className="recurring-calendar__agenda"><strong>{selectedDay} · All bills due</strong>{occurrences.filter(o => o.dateKey === selectedDay).map(o => <button type="button" key={o.commitment.id} onClick={() => onSelectCommitment(o.commitment, o.dateKey)}>{o.commitment.title} · {formatCommitmentAmount(o.commitment, false, o.dateKey)}</button>)}</div> : null}
       <p className="recurring-calendar__gesture-hint">Swipe the calendar to move between months.</p>
     </section>
   );

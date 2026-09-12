@@ -4,7 +4,7 @@ import * as Crypto from "expo-crypto";
 import { File } from "expo-file-system";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Platform, View } from "react-native";
+import { Platform, View, Pressable, Text, Image } from "react-native";
 import {
   Choices,
   ManualTransaction,
@@ -25,14 +25,17 @@ import {
   Icon,
   Notice,
   Screen,
+  useTheme,
 } from "../../src/ui";
 export default function Add() {
+  const { colors } = useTheme();
   const session = useSession();
   const [tab, setTab] = useState("manual");
   const [draft, setDraft] = useState(emptyTransaction);
   const { entry } = useLocalSearchParams<{ entry?: string }>();
   useEffect(() => {
     setTab(entry?.startsWith("upload-") ? "upload" : "manual");
+    setDraft(emptyTransaction());
   }, [entry]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -142,77 +145,135 @@ export default function Add() {
   };
   return (
     <Screen>
-      <Heading>Add transaction</Heading>
-      <Choices
-        options={[
-          { value: "manual", label: "Manual" },
-          { value: "ask", label: "Ask Clover" },
-          { value: "upload", label: "Upload" },
-        ]}
-        value={tab}
-        onChange={setTab}
-      />
-      <View style={{ display: tab === "manual" ? "flex" : "none" }}>
-        <ManualTransaction draft={draft} onChange={setDraft} />
-      </View>
-      <View style={{ display: tab === "ask" ? "flex" : "none" }}>
-        <TransactionChat
-          onReview={(value) => {
-            setDraft(value);
-            setTab(entry?.startsWith("upload-") ? "upload" : "manual");
+      <View
+        style={{
+          backgroundColor: colors.white,
+          borderRadius: 24,
+          padding: 18,
+          gap: 16,
+          minHeight: 650,
+        }}
+      >
+        <View
+          style={{
+            width: 36,
+            height: 4,
+            borderRadius: 4,
+            backgroundColor: colors.line,
+            alignSelf: "center",
           }}
         />
-      </View>
-      <View style={{ display: tab === "upload" ? "flex" : "none", gap: 18 }}>
-        <Heading>Add from a receipt or statement</Heading>
-        <Body>
-          Statements, receipts, wallet screenshots, or spreadsheets. Choose one
-          file to get started.
-        </Body>
-        <Card>
-          <Icon name="documents-outline" size={40} />
-          <Button
-            title="Upload files"
-            disabled={busy}
-            onPress={() => void choose("file")}
-          />
-          <Button
-            title="Choose photos"
-            secondary
-            disabled={busy}
-            onPress={() => void choose("library")}
-          />
-          <Button
-            title="Scan receipt"
-            secondary
-            disabled={busy}
-            onPress={() => void choose("camera")}
-          />
-        </Card>
-        {error ? <Notice>{error}</Notice> : null}
-        <Body>
-          {session.demo
-            ? "Sample mode shows a completed sample import. It never opens or uploads your files."
-            : "Preview limit: 3.5 MB per file. Your upload uses Clover’s existing parser and review rules."}
-        </Body>
-        {history.length > 0 && (
-          <Card>
-            <Body>Recent imports</Body>
-            {history.map((item) => (
-              <Button
-                key={item.id}
-                title={`${item.fileName} · ${item.status}`}
-                secondary
-                onPress={() =>
-                  router.push({
-                    pathname: "/import/[id]",
-                    params: { id: item.id },
-                  })
-                }
-              />
+        <Heading>Add transaction</Heading>
+        <Button
+          title="Close"
+          secondary
+          onPress={() => {
+            setDraft(emptyTransaction());
+            router.navigate("/(tabs)/transactions");
+          }}
+        />
+        <Choices
+          options={[
+            { value: "manual", label: "Manual" },
+            { value: "ask", label: "Ask Clover" },
+            { value: "upload", label: "Upload" },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
+        <View style={{ display: tab === "manual" ? "flex" : "none" }}>
+          <ManualTransaction draft={draft} onChange={setDraft} />
+        </View>
+        <View style={{ display: tab === "ask" ? "flex" : "none" }}>
+          {tab === "ask" ? (
+            <TransactionChat
+              onReview={(value) => {
+                setDraft(value);
+                setTab("manual");
+              }}
+            />
+          ) : null}
+        </View>
+        <View style={{ display: tab === "upload" ? "flex" : "none", gap: 18 }}>
+          <Heading>Add from a receipt or statement</Heading>
+          <Body>
+            Statements, receipts, wallet screenshots, or spreadsheets. Choose
+            one file to get started.
+          </Body>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            {(
+              [
+                ["file", "Choose files"],
+                ["camera", "Take photo"],
+                ["library", "Photo library"],
+              ] as const
+            ).map(([source, label]) => (
+              <Pressable
+                key={source}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityLabel={label}
+                onPress={() => void choose(source)}
+                style={{
+                  flex: 1,
+                  minHeight: 120,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: colors.line,
+                  borderRadius: 16,
+                  backgroundColor:
+                    source === "file" ? colors.teal : colors.white,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 10,
+                }}
+              >
+                {source === "file" ? (
+                  <Icon name="server-outline" size={40} />
+                ) : (
+                  <Image
+                    source={require("../../assets/organize/camera.png")}
+                    style={{ width: 40, height: 40 }}
+                  />
+                )}
+                <Text
+                  style={{
+                    color: source === "file" ? "white" : colors.ink,
+                    textAlign: "center",
+                    fontSize: 12,
+                    fontWeight: "600",
+                  }}
+                >
+                  {label}
+                </Text>
+              </Pressable>
             ))}
-          </Card>
-        )}
+          </View>
+          {error ? <Notice>{error}</Notice> : null}
+          <Body>
+            {session.demo
+              ? "Sample mode shows a completed sample import. It never opens or uploads your files."
+              : "Preview limit: 3.5 MB per file. Your upload uses Clover’s existing parser and review rules."}
+          </Body>
+          {history.length > 0 && (
+            <Card>
+              <Body>Recent imports</Body>
+              {history.map((item) => (
+                <Button
+                  key={item.id}
+                  title={`${item.fileName} · ${item.status}`}
+                  secondary
+                  onPress={() =>
+                    router.push({
+                      pathname: "/import/[id]",
+                      params: { id: item.id },
+                    })
+                  }
+                />
+              ))}
+            </Card>
+          )}
+        </View>
       </View>
     </Screen>
   );

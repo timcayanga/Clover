@@ -425,6 +425,7 @@ export function ImportFilesModal({
 }: ImportFilesModalProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoLibraryInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const accountIdByKeyRef = useRef(new Map<string, string>());
   const autoStartRef = useRef(false);
@@ -8513,12 +8514,16 @@ export function ImportFilesModal({
           />
           <strong>Drop files anywhere on this page</strong>
           <span>Or use one of the options below.</span>
-          <div className="accounts-import-dropzone__actions">
-            <button className="button button-primary button-small" type="button" onClick={() => cameraInputRef.current?.click()}>
-              Take photo
+          <input ref={photoLibraryInputRef} className="hidden-file-input" type="file" accept="image/*" multiple onChange={handleInputChange} />
+          <div className="accounts-import-dropzone__actions organize-upload-choices">
+            <button className="button button-primary" type="button" onClick={openFilePicker}>
+              <img src="/assets/3d%20icons/navigation/figma-v1/data.webp" alt="" width="48" height="48" />Choose files
             </button>
-            <button className="button button-secondary button-small" type="button" onClick={openFilePicker}>
-              Choose files
+            <button className="button button-secondary" type="button" onClick={() => cameraInputRef.current?.click()}>
+              <img src="/assets/organize/camera.svg" alt="" width="48" height="48" />Take photo
+            </button>
+            <button className="button button-secondary" type="button" onClick={() => photoLibraryInputRef.current?.click()}>
+              <img src="/assets/organize/camera.svg" alt="" width="48" height="48" />Photo library
             </button>
           </div>
         </div>

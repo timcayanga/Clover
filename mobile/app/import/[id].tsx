@@ -5,18 +5,9 @@ import { useAccess } from "../../src/access";
 import { useSession } from "../../src/session";
 import type { ImportStatus } from "../../src/types";
 import { removeUploadCopy } from "../../src/upload";
-import {
-  Body,
-  Button,
-  Card,
-  Field,
-  Heading,
-  Icon,
-  Notice,
-  Screen,
-  colors,
-} from "../../src/ui";
+import { Body, Button, Card, Field, Heading, Icon, Notice, Screen, useTheme } from "../../src/ui";
 export default function ImportDetail() {
+  const { colors, styles, dark } = useTheme();
   const access = useAccess();
   const { demo, profileId, request, uploads, markUploadStarted } = useSession();
   const { id } = useLocalSearchParams<{ id: string }>();

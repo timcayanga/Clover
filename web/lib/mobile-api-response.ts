@@ -16,6 +16,11 @@ const pick = (value: unknown, fields: string[]) => {
       .map((field) => [field, data[field]]),
   );
 };
+const lastFour = (value: unknown) => {
+  const number = record(value).accountNumber;
+  const digits = typeof number === "string" ? number.replace(/\D/g, "") : "";
+  return digits.length >= 4 ? { lastFour: digits.slice(-4) } : {};
+};
 const transactionFields = [
   "id",
   "workspaceId",
@@ -94,7 +99,7 @@ export function mobileApiResponse(operation: string, value: unknown) {
     return {
       ...pick(data, ["page", "totalCount"]),
       transactions: Array.isArray(data.transactions)
-        ? data.transactions.map((row) => pick(row, transactionFields))
+        ? data.transactions.map((row) => ({ ...pick(row, transactionFields), ...lastFour(row) }))
         : [],
     };
   if (operation === "transaction") {
@@ -109,14 +114,14 @@ export function mobileApiResponse(operation: string, value: unknown) {
     return {
       accounts: Array.isArray(data.accounts)
         ? data.accounts.map((row) =>
-            pick(row, [
+            ({ ...pick(row, [
               "id",
               "name",
               "type",
               "institution",
               "currency",
               "balance",
-            ]),
+            ]), ...lastFour(row) }),
           )
         : [],
     };

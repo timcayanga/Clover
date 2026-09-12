@@ -160,8 +160,8 @@ export function FinancialAccountCard({
       style={
         {
           ["--card-accent" as string]: accountBrand.accent,
-          background: accountBrand.background,
-          color: accountBrand.foreground,
+          background: `linear-gradient(135deg, color-mix(in srgb, ${accountBrand.accent} 15%, var(--surface)) 0%, var(--surface) 65%)`,
+          color: "var(--text)",
         } as CSSProperties
       }
       data-state={state}

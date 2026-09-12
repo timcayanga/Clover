@@ -3,6 +3,7 @@ export type Transaction = {
   workspaceId: string;
   accountId: string;
   accountName: string;
+  lastFour?: string;
   date: string;
   amount: string;
   currency: string;

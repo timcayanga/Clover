@@ -53,7 +53,7 @@ async function main() {
   assert.match(longPress, /450/);
   assert.match(longPress, /Math.hypot[\s\S]{0,100}cancel\(\)/);
   assert.match(toolbarStyles, /text-overflow: ellipsis/);
-  assert.match(transactionsPage, /label="Dates"[\s\S]*label="Accounts"[\s\S]*label="Categories"[\s\S]*label="Types"[\s\S]*aria-label="Amount Range"[\s\S]*label="Review status"[\s\S]*label="Currency"[\s\S]*label="Tags"/);
+  assert.match(transactionsPage, /label="Dates"[\s\S]*label="Accounts"[\s\S]*label="Categories"[\s\S]*label="Types"[\s\S]*aria-label="Amount Range"[\s\S]*label="Warnings"[\s\S]*label="Currency"[\s\S]*label="Tags"/);
   assert.match(transactionsPage, /transactions-mobile-select/);
   assert.match(transactionsRoute, /transactions: await withTransactionTags\(transactions, workspaceId\)/);
   assert.match(transactionsRoute, /transactions: await withTransactionTags\(pageTransactions, workspaceId\)/);

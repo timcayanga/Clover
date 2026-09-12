@@ -1,4 +1,5 @@
 "use client";
+import { AdviserInputTools } from "@/components/adviser-input-tools";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { adviserFileAccept, adviserFileProblem, type AdviserAttachment } from "@/lib/adviser-attachments";
@@ -586,6 +587,7 @@ function ScopedAdviserChat({ prompts, isPro, storageKey = adviserChatStorageKey,
         </div>
       ) : null}
       {attachments.length ? <div className="adviser-chat__attachments" aria-label="Attached files">{attachments.map(file=><span key={file.id}><span>{file.name}</span><button type="button" aria-label={`Remove ${file.name}`} disabled={isSending||attaching||entryLocked} onClick={()=>setAttachments(current=>current.filter(item=>item.id!==file.id))}>×</button></span>)}</div> : null}
+      <AdviserInputTools disabled={hasReachedLimit || isSending || attaching || entryLocked} onText={text => setInput(current => `${current}${current ? " " : ""}${text}`)} onPhoto={file => void attachFile(file)} />
       <div className="adviser-chat__composer-bar adviser-chat__composer-bar--files">
         <input ref={attachmentInput} type="file" accept={adviserFileAccept} hidden aria-label="Choose an Adviser attachment" onChange={event=>{void attachFile(event.target.files?.[0]);event.target.value="";}} />
         <button type="button" className="adviser-chat__attach" aria-label="Attach a file" title="Attach a file (up to 3.5 MB)" disabled={hasReachedLimit||isSending||attaching||entryLocked||attachments.length>=3} onClick={()=>attachmentInput.current?.click()}>+</button>

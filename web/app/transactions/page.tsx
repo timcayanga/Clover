@@ -1,4 +1,6 @@
 "use client";
+import { TransactionColumns, TransactionTagPreview, useTransactionColumns } from "@/components/transaction-columns";
+import { organizeAccountLabels } from "@/lib/organize-account-label";
 import { InterfaceIcon } from "@/components/interface-icon";
 import { AdviserFormAssist } from "@/components/adviser-form-assist";
 import { AdviserChat } from "@/components/adviser-chat";
@@ -253,17 +255,10 @@ const getTransactionAccountFilterKey = (account: Account) => {
   return normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type, account.currency);
 };
 
-const buildTransactionAccountLabels = (accounts: Account[]) => {
-  return new Map(
-    accounts.map((account) => {
-      const baseLabel = formatTransactionAccountName(account);
-      const label = formatAccountOptionLabel(account, baseLabel);
-      return [account.id, label] as const;
-    })
-  );
-};
+const buildTransactionAccountLabels = (accounts: Account[]) => organizeAccountLabels(accounts);
 
 const buildTransactionAccountFilterOptions = (accounts: Account[]) => {
+  const labels = organizeAccountLabels(accounts);
   const seenKeys = new Set<string>();
 
   return accounts
@@ -278,7 +273,7 @@ const buildTransactionAccountFilterOptions = (accounts: Account[]) => {
       return [
         {
           value: account.id,
-          label: formatAccountOptionLabel(account, isCash ? "Cash" : formatTransactionAccountName(account)),
+          label: labels.get(account.id) ?? account.name,
         },
       ];
     })
@@ -2189,6 +2184,7 @@ export default function TransactionsPage() {
 }
 
 function TransactionsPageContent() {
+  const columnSettings = useTransactionColumns();
   const defaultCurrency = useDefaultCurrency();
   const { closeChrome } = useCloverChrome();
   const router = useRouter();
@@ -2514,7 +2510,7 @@ function TransactionsPageContent() {
     [accounts]
   );
   const accountById = useMemo(() => new Map(accounts.map((account) => [account.id, account] as const)), [accounts]);
-  const accountNameById = useMemo(() => new Map(accounts.map((account) => [account.id, formatTransactionAccountName(account)] as const)), [accounts]);
+  const accountNameById = useMemo(() => organizeAccountLabels(accounts), [accounts]);
   const selectableTransactionAccounts = useMemo(() => {
     const hiddenAccountIds = new Set([
       ...getDeletedWorkspaceAccountIds(selectedWorkspaceId),
@@ -7711,7 +7707,7 @@ function TransactionsPageContent() {
       />
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`} style={transactionsLayoutStyle}>
         <div className="transactions-main-panel">
-          {isCompactViewport ? <TransactionSelectionToolbar compact count={selectedTransactionCount} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} /> : null}
+          {isCompactViewport ? <TransactionSelectionToolbar compact warningCount={warningTransactionCount} count={selectedTransactionCount} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} /> : null}
           {!isCompactViewport && selectedTransactionCount > 0 ? <TransactionSelectionToolbar count={selectedTransactionCount} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} /> : null}
           {activeFilterChips.length ? <div className="transactions-active-filters" aria-label="Active filters">{activeFilterChips.map((chip, index) => <button key={`${chip.label}-${index}`} type="button" className="button button-secondary button-small" onClick={chip.clear} aria-label={`Remove ${chip.label} filter`}>{chip.label}<InterfaceIcon name="close" size={12} /></button>)}</div> : null}
           {dateFilterMode === "custom" && customStart && customEnd && customStart > customEnd ? <p role="alert">From date must be on or before To date. Choose a valid range to update the results.</p> : null}
@@ -7766,7 +7762,7 @@ function TransactionsPageContent() {
               <label className="transactions-column-menu__field"><span>Maximum</span><input type="number" inputMode="decimal" value={amountMax} onChange={(event) => setAmountMax(event.target.value)} placeholder="0.00" /></label>
             </div>
           </div></TransactionFilterRow>
-          <TransactionFilterRow label="Review status" summary={reviewFilter === "pending" ? "Needs review" : reviewFilter === "confirmed" ? "Confirmed" : "All transactions"}>
+          <TransactionFilterRow label="Warnings" summary={reviewFilter === "pending" ? "Needs review" : reviewFilter === "confirmed" ? "Confirmed" : "All transactions"}>
             <div className="transactions-filter-group__options">{[["", "All transactions"], ["pending", "Needs review"], ["confirmed", "Confirmed"]].map(([value, label]) => <button key={value} type="button" className="transactions-filter-pill" aria-pressed={reviewFilter === value} onClick={() => setReviewFilter(value)}>{label}</button>)}</div>
           </TransactionFilterRow>
           <details className="transactions-more-filters"><summary>More filters</summary>
@@ -7851,6 +7847,10 @@ function TransactionsPageContent() {
             <div
               className={`table-wrap transactions-table-wrap${!hasVisibleTransactions && !showTransactionsLoadingState ? " transactions-table-wrap--empty" : ""}`}
               aria-busy={showTransactionsLoadingState}
+              data-columns-date={columnSettings.columns.date}
+              data-columns-account={columnSettings.columns.account}
+              data-columns-category={columnSettings.columns.category}
+              data-columns-tags={columnSettings.columns.tags}
             >
               <div className="line-item-header transactions-column-header">
                 <label className="line-item-header-cell line-item-header-cell--select line-item-header-cell--select-all">
@@ -7906,6 +7906,7 @@ function TransactionsPageContent() {
                 >
                   Category
                 </button>
+                <span className="line-item-header-cell transaction-tags-cell">Tags</span>
                 <button
                   className="line-item-header-cell line-item-header-cell--amount"
                   type="button"
@@ -7915,7 +7916,7 @@ function TransactionsPageContent() {
                   Amount
                 </button>
                 <span className="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true" />
-                <span className="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true" />
+                <TransactionColumns {...columnSettings} />
               </div>
             {transactionsLoadFailed ? (
               <div className="empty-state transactions-empty-state transactions-empty-state--table">
@@ -7940,6 +7941,7 @@ function TransactionsPageContent() {
                       <span className="skeleton-block skeleton-block--account-line" />
                     </span>
                     <span className="skeleton-block skeleton-block--category" />
+                    <span className="skeleton-block transaction-tags-cell" />
                     <span className="skeleton-block skeleton-block--amount" />
                     <span className="skeleton-block skeleton-block--chevron" />
                     <span aria-hidden="true" />
@@ -8082,6 +8084,7 @@ function TransactionsPageContent() {
                         onSelect={(category) => void commitInlineEdit(transaction, "categoryId", category.id)}
                       />
                     </div>
+                    <div className="transaction-tags-cell"><TransactionTagPreview tags={transaction.tags} /></div>
                     <div className={`transaction-amount-cell ${amountToneClass}`}>
                       <select
                         className="transaction-amount-type-select"
@@ -8299,13 +8302,13 @@ function TransactionsPageContent() {
                                 radius={7}
                                 className="transactions-mobile-simple-row__category-icon"
                               />
-                              <span className="transactions-mobile-simple-row__text"><span className="transactions-mobile-simple-row__name-main">{merchantSummary}</span><span className="transactions-mobile-simple-row__meta">{formatDate(transaction.date)} · {categoryLabel}</span></span>
+                              <span className="transactions-mobile-simple-row__text"><span className="transactions-mobile-simple-row__name-main">{merchantSummary}</span><span className="transactions-mobile-simple-row__meta">{categoryLabel} · {accountDisplayName}</span></span>
                             </div>
                             <div className={`transactions-mobile-simple-row__amount-group ${amountToneClass}`}>
                               <span className={`transactions-mobile-simple-row__amount ${amountToneClass}`}>
                                 {effectiveType === "income" ? "+" : effectiveType === "expense" ? "−" : ""}{formatTransactionAmount(Math.abs(amount), transaction.currency)}
                               </span>
-                              {warningReasonFor(transaction) ? <span className="warning-mark warning-mark--small" role="img" aria-label={warningReasonFor(transaction) ?? "Needs review"} /> : null}
+                              {warningReasonFor(transaction) ? <button type="button" className="transactions-mobile-warning-button" aria-label={warningReasonFor(transaction) ?? "Needs review"} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); openTransactionDetail(transaction); }}><span className="warning-mark warning-mark--small" aria-hidden="true" /></button> : null}
                             </div>
                             <button
                               type="button"
@@ -8347,12 +8350,6 @@ function TransactionsPageContent() {
           </div>
           ) : null}
 
-          {isCompactViewport && warningTransactionCount > 0 && firstReviewTransaction ? (
-            <button type="button" className="warning-summary-button"
-              onClick={() => openTransactionDetail(firstReviewTransaction)}>
-              {warningTransactionCount} need review
-            </button>
-          ) : null}
           <button type="button" className="button button-secondary button-small"
             aria-expanded={summaryOpen} aria-controls="transactions-expanded-summary"
             onClick={() => setSummaryOpen((current) => !current)}>
@@ -8369,7 +8366,7 @@ function TransactionsPageContent() {
                   <button
                     type="button"
                     className="warning-summary-button"
-                    data-tooltip={`${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"}`}
+                    data-tooltip={`${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"} need review. ${firstReviewTransaction ? warningReasonFor(firstReviewTransaction) ?? "" : ""} Open to review and edit the name, date, account, category, amount, or receipt details.`}
                     title={`${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"}`}
                     onClick={() => {
                       const nextReviewTransaction =

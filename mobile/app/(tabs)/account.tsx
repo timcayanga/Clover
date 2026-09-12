@@ -2,17 +2,9 @@ import { Linking, Text } from "react-native";
 import { router } from "expo-router";
 import { useState } from "react";
 import { useSession } from "../../src/session";
-import {
-  Body,
-  Button,
-  Card,
-  Heading,
-  Notice,
-  Screen,
-  colors,
-  dateLabel,
-} from "../../src/ui";
+import { Body, Button, Card, Heading, Notice, Screen, dateLabel, useTheme } from "../../src/ui";
 export default function Account() {
+  const { colors, styles, dark } = useTheme();
   const session = useSession();
   const [error, setError] = useState("");
   const access = session.data?.entitlement;

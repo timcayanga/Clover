@@ -1175,7 +1175,7 @@ async function DashboardStream({
                       title="Compared with last month"
                     >
                       {pill.trend.amountBased
-                        ? <HomeSensitiveAmount value={pill.trend.label} currency={pill.currency} />
+                        ? "—"
                         : pill.trend.label === "0%" ? "0%" : `${pill.trend.direction > 0 ? "↑" : "↓"} ${pill.trend.label.replace(/^[+-]/, "")}`}
                     </span>
                   ) : <span className="dashboard-home__hero-mini-trend dashboard-home__hero-mini-trend--unavailable">No prior month</span>}

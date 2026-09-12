@@ -1,17 +1,9 @@
 import { useState } from "react";
 import { Text, View } from "react-native";
 import { useAccess } from "../src/access";
-import {
-  Body,
-  Button,
-  Card,
-  Heading,
-  Icon,
-  Notice,
-  Screen,
-  colors,
-} from "../src/ui";
+import { Body, Button, Card, Heading, Icon, Notice, Screen, useTheme } from "../src/ui";
 export default function Welcome() {
+  const { colors, styles, dark } = useTheme();
   const access = useAccess();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
