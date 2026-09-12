@@ -23,7 +23,7 @@ const reportsSectionLabels: Record<ReportsSection, string> = {
 const ReportsTabsContext = createContext<ReportsTabsContextValue | null>(null);
 const reportsSectionStorageKey = "clover.adviser.active-section.v1";
 
-function ReportsTabIcon({ section }: { section: ReportsSection }) {
+export function ReportsTabIcon({ section }: { section: ReportsSection }) {
   if (section === "spending") {
     return <svg viewBox="0 0 24 24" fill="none"><path d="M5 19V9m7 10V5m7 14v-7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>;
   }
@@ -110,7 +110,7 @@ export function ReportsTopTabs() {
         key: section,
         label: reportsSectionLabels[section],
         icon: <ReportsTabIcon section={section} />,
-        badge: section === "advanced" && !BETA_FULL_ACCESS_ENABLED ? "Pro" : null,
+        badge: section === "advanced" ? "Pro" : null,
         locked: lockedSections.includes(section),
       }))}
     />

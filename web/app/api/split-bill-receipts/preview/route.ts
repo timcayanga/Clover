@@ -1,3 +1,4 @@
+import { getMobileRequestContext } from "@/lib/mobile-request-context";
 import { after, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { normalizeReceiptImageForVision, readUploadedFileText, renderReceiptPdfPagesForVision } from "@/lib/import-file-text.server";
@@ -224,7 +225,8 @@ export async function POST(request: Request) {
     }
     assertContentLengthWithin(request, MAX_RECEIPT_REQUEST_BYTES);
     const user = await getSplitBillCurrentUser();
-    const selectedWorkspaceId = (await cookies()).get(selectedWorkspaceKey)?.value ?? "";
+    const mobileContext = getMobileRequestContext();
+    const selectedWorkspaceId = mobileContext ? new URL(mobileContext.request.url).searchParams.get("workspaceId") ?? "" : (await cookies()).get(selectedWorkspaceKey)?.value ?? "";
     const workspace =
       (selectedWorkspaceId
         ? await prisma.workspace.findFirst({

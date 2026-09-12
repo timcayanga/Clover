@@ -35,6 +35,7 @@ export function CollectionCard({ name, subtitle, icon, children, color, editable
       <span className="collection-card__chevron" aria-hidden="true">›</span>
     </div>
     {children}
+    <button type="button" className="button plan-action-view collection-card__view" onClick={onOpen} disabled={saving}>Open {kind === "circle" ? "Circle" : kind}</button>
     {editing ? <form className="collection-card__editor" aria-label={`Edit ${kind}`} onKeyDown={(event) => { if (event.key === "Escape" && !saving) { event.preventDefault(); close(); } }} onSubmit={async (event) => {
       event.preventDefault();
       if (inFlight.current) return;
@@ -46,8 +47,8 @@ export function CollectionCard({ name, subtitle, icon, children, color, editable
       <label>Name<input autoFocus required minLength={kind === "budget" ? 2 : 1} maxLength={kind === "budget" ? 80 : 100} value={draft} onChange={(event) => setDraft(event.target.value)} disabled={saving} /></label>
       {kind === "budget" ? <label>Icon<select value={draftEmoji ?? ""} disabled={saving} onChange={(event) => setDraftEmoji(event.target.value || null)}><option value="">Automatic — {getBudgetAppearance({ name: draft }).emoji}</option>{budgetIcons.map((item) => <option key={item.emoji} value={item.emoji}>{item.emoji} {item.label}</option>)}</select></label> : <>
         <label>Circle photo<input type="file" accept="image/*" disabled={saving} onChange={(event) => setPhoto(event.target.files?.[0])} /></label>
-        <button type="button" className="button button-secondary button-small" disabled={saving} onClick={() => setPhoto(null)}>Use Clover logo</button>
-        {photo === null ? <small>Default Clover logo selected</small> : null}
+        <button type="button" className="button button-secondary button-small" disabled={saving} onClick={() => setPhoto(null)}>Use default icon</button>
+        {photo === null ? <small>Default category icon selected</small> : null}
       </>}
       {error ? <p role="alert">{error}</p> : null}
       <div><button className="button button-secondary button-small" type="button" onClick={close} disabled={saving}>Cancel</button><button className="button button-primary button-small" type="submit" disabled={saving}>{saving ? "Saving…" : "Save"}</button></div>

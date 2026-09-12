@@ -1,3 +1,4 @@
+import { hasFullFeatureAccess } from "@/lib/beta-access";
 import { mobileAccountPatch, mobileRecurringCreate, mobileRecurringPatch, mobileRecurringCompletion, mobileRecurringDismiss } from "@/lib/mobile-organize-input";
 import { mobileAdviserInput } from "@/lib/mobile-adviser-input";
 import { verifyToken } from "@clerk/nextjs/server";
@@ -90,6 +91,7 @@ async function handle(
         profiles,
         entitlement: {
           planTier: access.planTier,
+          fullFeatureAccess: hasFullFeatureAccess(access.planTier),
           accessEndsAt: access.accessEndsAt,
           renewing: access.renewing,
           nativePurchasesAvailable: false,
@@ -147,6 +149,31 @@ async function handle(
       return reply(mobileApiResponse(operation, await response.json()), response.status);
     }
 
+    if (operation === "reports") {
+      const currency = z.string().regex(/^[A-Z]{3}$/).parse(url.searchParams.get("currency") ?? "PHP");
+      const {mobileHome} = await import("@/lib/mobile-home");
+      const {loadReportNetWorth} = await import("@/lib/report-net-worth");
+      const [data, netWorth] = await Promise.all([mobileHome(workspaceId,currency),loadReportNetWorth(workspaceId,currency,new Date(Date.now()-90*86400000),new Date())]);
+      return reply({...data,netWorth});
+    }
+    if (operation === "together-options") {
+      const [groups, people, profiles] = await Promise.all([
+        prisma.splitBillGroup.findMany({ where:{ OR:[{userId:user.id},{collaborators:{some:{userId:user.id}}}], archivedAt:null }, select:{id:true,name:true,members:{select:{id:true,name:true}},_count:{select:{bills:true}}} }),
+        prisma.splitBillPerson.findMany({where:{userId:user.id},select:{id:true,name:true}}),
+        prisma.splitBillPaymentProfile.findMany({where:{userId:user.id},select:{id:true,label:true,provider:true,currency:true,accountName:true,isDefault:true}}),
+      ]);
+      return reply({groups,people,profiles});
+    }
+    if (operation === "investments") {
+      const accounts = await prisma.account.findMany({ where: { workspaceId, type: "investment" }, orderBy: { name: "asc" }, select: { id:true, name:true, institution:true, type:true, currency:true, balance:true, investmentSubtype:true, investmentSymbol:true, investmentQuantity:true, investmentCostBasis:true, investmentPrincipal:true, investmentStartDate:true, investmentMaturityDate:true, investmentInterestRate:true, investmentMaturityValue:true } });
+      return reply({ accounts });
+    }
+    if (operation === "market-history" || operation === "market-news") {
+      const access = await getProAccess(user.id);
+      if (!hasFullFeatureAccess(access.planTier)) return reply({ error:"Market tools require Clover Pro." }, 403);
+      const response = await withMobileRequestContext(userId, request, async () => operation === "market-history" ? (await import("@/app/api/market-history/route")).GET(request) : (await import("@/app/api/market-news/route")).GET(request));
+      return reply(await response.json(), response.status);
+    }
     if (operation === "budgets" && request.method === "GET") {
       const { loadCachedBudgetWorkspaceData } = await import("@/lib/budgeting-data");
       const { getBudgetAppearance } = await import("@/lib/budget-appearance");
@@ -217,7 +244,7 @@ async function handle(
     let forwarded = request;
     if ((operation === "circles" && request.method === "POST") || (operation === "circle" && request.method === "PATCH") || (operation === "split-bills" && request.method === "POST")) {
       const text = await request.text();
-      if (new TextEncoder().encode(text).length > 12000) return reply({ error: "Details are too large." }, 413);
+      if (new TextEncoder().encode(text).length > (operation === "split-bills" ? 300000 : 12000)) return reply({ error: "Details are too large." }, 413);
       let input: unknown;
       try { input = JSON.parse(text); } catch { return reply({ error: "Check the entered details." }, 400); }
       const body = operation === "split-bills" ? mobileSplitBillPayload(mobileSplitBillInput.parse(input)) : mobileCircleInput.parse(input);
@@ -303,7 +330,7 @@ async function handle(
       );
       forwarded = new Request(url, { headers: request.headers });
     }
-    if (operation === "import-process") {
+    if (operation === "import-process" || operation === "split-receipt-preview") {
       if (!request.headers.get("content-type")?.includes("multipart/form-data"))
         return reply({ error: "Choose a file to upload." }, 400);
       // This first native transport respects the host's 4.5 MB request limit.
@@ -345,6 +372,8 @@ async function handle(
             return request.method === "POST" ? (await import("@/app/api/circles/route")).POST(forwarded) : (await import("@/app/api/circles/route")).GET(forwarded);
           case "circle":
             return request.method === "PATCH" ? (await import("@/app/api/circles/[circleId]/route")).PATCH(forwarded, { params: Promise.resolve({ circleId: path[1] }) }) : (await import("@/app/api/circles/route")).GET(forwarded);
+          case "split-receipt-preview":
+            return (await import("@/app/api/split-bill-receipts/preview/route")).POST(forwarded);
           case "split-bills":
             return request.method === "POST" ? (await import("@/app/api/split-bills/route")).POST(forwarded) : (await import("@/app/api/split-bills/route")).GET(forwarded);
           case "split-bill":

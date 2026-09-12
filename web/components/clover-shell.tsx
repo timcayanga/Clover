@@ -2563,7 +2563,7 @@ export function CloverShell({
       </nav>
 
       <main
-        className={`content content--${active} ${titleAddon ? "content--has-title-addon" : "content--plain-title"}${
+        className={`content content--${active} ${mobileBackAction || /Details|Edit |Create |Add /.test(title) ? "content--plan-detail" : ""} ${titleAddon ? "content--has-title-addon" : "content--plain-title"}${
           mobileLeadingAction ? " content--has-mobile-leading-action" : ""
         }${mobileSubheader ? " content--has-mobile-subheader" : ""}`}
         onClickCapture={(event) => {
@@ -2608,7 +2608,7 @@ export function CloverShell({
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
               <div className="topbar__title-row">
                 <h1>{mobileOverlayChrome?.title ?? title}</h1>
-                {!["adviser", "dashboard", "recurring"].includes(active) && !desktopTitleAction ? <div className="topbar__desktop-adviser"><AdviserHeaderLink /></div> : null}{desktopTitleAction ? <div className="topbar__desktop-title-action">{desktopTitleAction}</div> : null}
+                {!["adviser", "dashboard", "recurring", "reports", "investments"].includes(active) && !desktopTitleAction ? <div className="topbar__desktop-adviser"><AdviserHeaderLink /></div> : null}{desktopTitleAction ? <div className="topbar__desktop-title-action">{desktopTitleAction}</div> : null}
                 {titleAddon ? <div className="topbar__title-addon">{titleAddon}</div> : null}
               </div>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
@@ -2652,7 +2652,7 @@ export function CloverShell({
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
               <div className="topbar__title-row">
                 <h1>{mobileOverlayChrome?.title ?? title}</h1>
-                {!["adviser", "dashboard", "recurring"].includes(active) && !desktopTitleAction ? <div className="topbar__desktop-adviser"><AdviserHeaderLink /></div> : null}{desktopTitleAction ? <div className="topbar__desktop-title-action">{desktopTitleAction}</div> : null}
+                {!["adviser", "dashboard", "recurring", "reports", "investments"].includes(active) && !desktopTitleAction ? <div className="topbar__desktop-adviser"><AdviserHeaderLink /></div> : null}{desktopTitleAction ? <div className="topbar__desktop-title-action">{desktopTitleAction}</div> : null}
                 {titleAddon ? <div className="topbar__title-addon">{titleAddon}</div> : null}
               </div>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}

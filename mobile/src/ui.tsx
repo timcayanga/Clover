@@ -252,6 +252,11 @@ export function AppHeader({
       | "/(tabs)/account"
       | "/(tabs)/add"
       | "/budgeting"
+      | "/goals"
+      | "/investments"
+      | "/circles"
+      | "/reports"
+      | "/split-bills"
     > = {
       "/": "/(tabs)",
       "/dashboard": "/(tabs)",
@@ -262,6 +267,11 @@ export function AppHeader({
       "/account": "/(tabs)/account",
       "/add": "/(tabs)/add",
       "/budgeting": "/budgeting",
+      "/goals": "/goals",
+      "/investments": "/investments",
+      "/circles": "/circles",
+      "/reports": "/reports",
+      "/split-bills": "/split-bills",
     };
     if (native[href]) router.navigate(native[href]);
     else if (href.startsWith("/") && !href.startsWith("//"))

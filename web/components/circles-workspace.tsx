@@ -1,6 +1,7 @@
 "use client";
 import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
 
+import { CategoryBrandMark } from "@/components/category-brand-mark";
 import Link from "next/link";
 import { CollectionCard } from "@/components/collection-card";
 import {
@@ -603,7 +604,7 @@ export function CirclesWorkspace({
         <>
         <div className="collection-directory-heading"><p>Split bills, coordinate shared expenses, track commitments, and work toward budgets and goals together—while keeping personal accounts private.</p></div>
         <div className="collection-card-grid" aria-label="Your Circles">
-          {data.circles.map((circle) => <CollectionCard key={circle.id} kind="circle" name={circle.name} subtitle={`${circle.memberCount} member${circle.memberCount === 1 ? "" : "s"}`} editable={circle.role === "organizer"} icon={<img className={getCircleAvatarUrl(circle) === CIRCLE_MARK_URL ? "collection-clover-logo" : "collection-custom-photo"} src={getCircleAvatarUrl(circle)} alt="" width={48} height={48} />} onOpen={() => onSelectedCircleChange(circle.id)} onSave={(name, _emoji, photo) => updateCardIdentity(circle, name, photo)}>
+          {data.circles.map((circle) => <CollectionCard key={circle.id} kind="circle" color={circle.type === "household" ? "#b66e71" : circle.type === "travel" ? "#5ca6d0" : "#efa96a"} name={circle.name} subtitle={`${circle.memberCount} member${circle.memberCount === 1 ? "" : "s"}`} editable={circle.role === "organizer"} icon={getCircleAvatarUrl(circle) === CIRCLE_MARK_URL ? <CategoryBrandMark categoryName={circle.type === "household" ? "Housing" : circle.type === "travel" ? "Travel" : "Food & Dining"} size={36}/> : <img className="collection-custom-photo" src={getCircleAvatarUrl(circle)} alt="" width={48} height={48}/> } onOpen={() => onSelectedCircleChange(circle.id)} onSave={(name, _emoji, photo) => updateCardIdentity(circle, name, photo)}>
             <span className="collection-card__value"><small>Shared expenses this month</small><strong>{formatMoney(circle.expenseTotalThisMonth, circle.currency)}</strong></span>
           </CollectionCard>)}
           <button type="button" className="collection-create-card" onClick={() => openCreate()}><span aria-hidden="true">＋</span><strong>Create Circle</strong><small>Start sharing with a new group</small></button>
@@ -653,6 +654,7 @@ export function CirclesWorkspace({
         <div className="circles-layout">
           {selectedCircle ? (
             <main ref={workspaceRef} className="circles-workspace">
+              <h2 className="collection-detail-name">{selectedCircle.name}</h2>
               <AnimatedTabs
                 className="investments-tabs circles-section-tabs mobile-icon-tabs"
                 activeKey={activeTab}

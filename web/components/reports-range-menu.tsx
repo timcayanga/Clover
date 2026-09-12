@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 type ReportsRange = "30d" | "90d" | "ytd";
@@ -10,6 +10,7 @@ type ReportsRangeMenuProps = {
   currentRangeLabel: string;
   currentFrom?: string;
   currentTo?: string;
+  children?: ReactNode;
 };
 
 const reportsRangeLabels: Record<ReportsRange, string> = {
@@ -23,6 +24,7 @@ export function ReportsRangeMenu({
   currentRangeLabel,
   currentFrom,
   currentTo,
+  children,
 }: ReportsRangeMenuProps) {
   const [open, setOpen] = useState(false);
   const [from, setFrom] = useState(currentFrom ?? "");
@@ -95,18 +97,15 @@ export function ReportsRangeMenu({
       <button
         className="reports-range-menu__summary"
         type="button"
-        aria-label={`Change report range. Current range: ${currentRangeLabel}`}
+        aria-label={`Filters. Current range: ${currentRangeLabel}`}
         aria-haspopup="menu"
         aria-expanded={open}
-      title="Change report range"
+      title="Filters"
         onClick={() => {
           setOpen((current) => !current);
         }}
       >
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1.5A2.5 2.5 0 0 1 22 6.5v12A2.5 2.5 0 0 1 19.5 21h-15A2.5 2.5 0 0 1 2 18.5v-12A2.5 2.5 0 0 1 4.5 4H6V3a1 1 0 0 1 1-1Zm12.5 8h-15v8.5c0 .276.224.5.5.5h14a.5.5 0 0 0 .5-.5V10Zm-14-4A.5.5 0 0 0 5 8.5V8h14v.5a.5.5 0 0 0-.5-.5h-14Z" />
-        </svg>
-        <span className="sr-only">Change report range</span>
+        <img src="/assets/organize/filter.svg" alt="" width={18} height={18}/><span className="reports-filter-label">Filters</span>
       </button>
 
       {open ? (
@@ -122,6 +121,7 @@ export function ReportsRangeMenu({
               ×
             </button>
           </div>
+          {children}
           <div className="reports-range-menu__choices">
             {(["30d", "90d", "ytd"] as const).map((range) => (
               <button

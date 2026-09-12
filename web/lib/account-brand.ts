@@ -1139,7 +1139,7 @@ const getBaseAccountBrand = (params: AccountBrandInput): AccountBrand => {
       label: params.institution?.trim() || "Investment",
       logoSrc: null,
       logoSrcs: [],
-      fallbackIconSrc: investmentIcon,
+      fallbackIconSrc: "/assets/investment-types/institution.png",
       accent: "#5B4BFF",
       background: "linear-gradient(135deg, #312E81 0%, #4F46E5 48%, #6D5CFF 100%)",
       foreground: "#f8fafc",

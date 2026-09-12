@@ -259,7 +259,14 @@ assert.equal(getLocalInvestmentLogo({ symbol: "AAPL", subtype: "stock", currency
 assert.equal(getLocalInvestmentLogo({ symbol: "MISSING", subtype: "stock", currency: "USD" }), null);
 assert.equal(getInvestmentAssetBrand({ symbol: "BTC", subtype: "crypto", logoUrl: "/custom-logo.png" }).logoSrc, "/custom-logo.png");
 assert.equal(logoCandidates[0], "/assets/investments/philippines/MER.svg", "Known securities use the uploaded local artwork.");
-assert.match(logoCandidates[1] ?? "", /^data:image\/svg\+xml,/, "Keep a stable fallback for a failed image.");
+assert.equal(getInvestmentAssetBrand({symbol:"MER",subtype:"stock",currency:"PHP"}).fallbackIconSrc,"/assets/investment-types/stock.png", "Failed company artwork falls back to the approved type icon.");
+for (const subtype of ["stock","etf","mutual_fund","money_market_fund","uitf","reit","crypto","real_world_asset","bond","time_deposit","savings","other"] as const) {
+  const brand=getInvestmentAssetBrand({symbol:"MISSING",subtype});
+  assert.equal(brand.fallbackIconSrc,`/assets/investment-types/${subtype}.png`);
+  const artwork=readFileSync(resolve(process.cwd(),`../assets/investment-types/${subtype}.png`));
+  assert.equal(artwork.subarray(0,8).toString("hex"),"89504e470d0a1a0a");
+  assert.deepEqual(artwork,readFileSync(resolve(process.cwd(),`../mobile/assets/investment-types/${subtype}.png`)),"Web and native use identical Figma exports.");
+}
 
 const hsbcBrand = getInvestmentAssetBrand({
   name: "HSBC Savings",

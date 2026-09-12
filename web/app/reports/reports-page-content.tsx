@@ -1,3 +1,5 @@
+import { ReportChartSwitch } from "@/components/report-chart-switch";
+import { loadReportNetWorth } from "@/lib/report-net-worth";
 import nextDynamic from "next/dynamic";
 import Link from "next/link";
 import { cookies } from "next/headers";
@@ -396,8 +398,8 @@ export async function ReportsStream({
   const requestedSection = normalizeReportsSection(searchParams?.section);
 
   const isPro = hasFullFeatureAccess(user.planTier);
-  const initialSection = isPro || requestedSection !== "advanced" ? requestedSection : "overview";
-  const sectionTabs: ReportsSection[] = isPro ? ["overview", "spending", "trends", "advanced"] : ["overview", "spending", "trends"];
+  const initialSection = requestedSection;
+  const sectionTabs: ReportsSection[] = ["overview", "spending", "trends", "advanced"];
   const needsSpendingData = true;
   const needsTrendData = true;
   const needsAdvancedData = isPro;
@@ -1294,6 +1296,7 @@ export async function ReportsStream({
       const dateKey = reportDateKey(transaction.date);
       dailyNetByDate.set(dateKey, (dailyNetByDate.get(dateKey) ?? 0) + signedAmount);
     });
+    const netWorthHistory = await loadReportNetWorth(selectedWorkspaceId, displayCurrency, currentWindowStart, currentWindowEnd, requestedAccountId ?? undefined);
     const reportMoneyPoints: ReportsMoneyPoint[] = [];
     let runningBalance = totalAccountBalance - currentNet;
     const timelineDate = new Date(currentWindowStart);
@@ -1712,7 +1715,10 @@ export async function ReportsStream({
                   points={reportMoneyPoints}
                   currency={displayCurrency}
                 />
+                <div className="reports-chart-insight"><strong>{currentNet >= 0 ? `You kept ${formatCurrency(currentNet)} after spending` : `Spending exceeded income by ${formatCurrency(Math.abs(currentNet))}`}</strong><p>{savingsRate === null ? "Add income to compare your savings rate." : `${Math.round(savingsRate * 100)}% of income remains in this period.`}</p><Link className="button button-primary button-small" href="/accounts">View balance details</Link><Link className="button plan-action-view" href={buildTransactionsHref({type:"expense"})}>Explore spending</Link></div>
               </article>
+              <article className="report-card glass report-card--wide"><ReportsMoneyOverTimeChart points={netWorthHistory.points} currency={displayCurrency} title="Net worth over time"/><p className="muted">Assets minus liabilities in {displayCurrency}, using dated balance records for all {netWorthHistory.accountCount} selected accounts. Values between statements are carried forward; incomplete history is not shown.</p></article>
+              <article className="report-card glass report-card--wide report-card--compact-empty"><h4 className="reports-subtab-title">Income sources</h4>{currentSummary.income === 0 ? <p className="muted">No income recorded in this period.</p> : null}{Array.from(reportDisplayTransactions.filter(transaction => getResolvedReportTransactionType(transaction) === "income").reduce((map,transaction)=>{const name=transaction.merchantClean||transaction.merchantRaw||"Other income";map.set(name,(map.get(name)??0)+toReportMagnitude(transaction.amount));return map;},new Map<string,number>())).sort((a,b)=>b[1]-a[1]).map(([name,amount])=><div className="reports-income-source" key={name}><span>{name}</span><strong>{formatCurrency(amount)}</strong><progress max={Math.max(currentSummary.income,1)} value={amount} aria-label={name}/></div>)}</article>
             </section>
           </>
         </ReportsSectionPanel> : null}
@@ -1859,7 +1865,7 @@ export async function ReportsStream({
                               borderColor: segment.color.borderColor,
                             }}
                           />
-                          <small className="report-flow-map__value">{formatCurrency(segment.amount)} · {formatPercent(segment.share * 100)}</small>
+                          <small className="report-flow-map__value">{formatCurrency(segment.amount)} · {(segment.share * 100).toFixed(1)}% of spending</small>
                         </div>
                       </Link>
                     ))}
@@ -1887,15 +1893,8 @@ export async function ReportsStream({
           </article>
 
           <article className="report-card reports-subtab-card glass">
-            <div className="report-card__head">
-              <div className="report-card__head-title">
-                <h4 className="reports-subtab-title">Spending Mix</h4>
-              </div>
-              <ReportInfoTip className="reports-container-info" label="The biggest spending groups in this period." />
-            </div>
-
-            <div className="report-donut report-donut--pie">
-              <div className="report-donut__chart" role="img" aria-label="Spending breakdown pie chart">
+<ReportChartSwitch title="Spending Mix" donut={<>            <div className="report-donut report-donut--pie">
+              <div className="report-donut__chart" role="img" aria-label="Spending breakdown donut chart">
                 <svg viewBox="0 0 240 240">
                   {reportSpendingMixSegments.length > 0
                     ? (() => {
@@ -1917,6 +1916,7 @@ export async function ReportsStream({
                         });
                       })()
                     : null}
+                  <circle cx="120" cy="120" r="65" style={{fill:"var(--surface)"}} />
                 </svg>
               </div>
 
@@ -1933,7 +1933,7 @@ export async function ReportsStream({
                         <div className="report-donut__meta">
                           <strong>{segment.categoryName}</strong>
                           <span>
-                            {formatCurrency(segment.amount)} · {formatPercent(segment.share * 100)}
+                            {formatCurrency(segment.amount)} · {(segment.share * 100).toFixed(1)}% of spending
                           </span>
                         </div>
                       </Link>
@@ -1947,6 +1947,7 @@ export async function ReportsStream({
                 )}
               </div>
             </div>
+</>} bars={<div>{reportSpendingMixSegments.map(segment=><div className="reports-income-source" key={segment.categoryName}><span>{segment.categoryName}</span><strong>{formatCurrency(segment.amount)} · {Math.round(segment.share*100)}% of spending</strong><progress max={100} value={segment.share*100} aria-label={segment.categoryName}/></div>)}</div>} table={<div className="plan-transaction-table"><table><thead><tr><th>Category</th><th>Amount</th><th>Share</th></tr></thead><tbody>{reportSpendingMixSegments.map(segment=><tr key={segment.categoryName}><td>{segment.categoryName}</td><td>{formatCurrency(segment.amount)}</td><td>{(segment.share*100).toFixed(1)}%</td></tr>)}</tbody></table></div>}/>
 
           </article>
         </section>
@@ -2167,6 +2168,7 @@ export async function ReportsStream({
         </section>
         </ReportsSectionPanel>
 
+        {!isPro ? <ReportsSectionPanel section="advanced"><article className="report-card glass"><h2>See where your money goes</h2><p>Pro Insights connects income, accounts and spending, with deeper comparisons and analysis.</p><Link href="/pricing" className="button button-primary">Explore Pro</Link></article></ReportsSectionPanel> : null}
         {!isPro ? (
           <div className="reports-footer-upsell">
             <p>
@@ -2233,8 +2235,8 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
   const selectedRangeLabel = reportWindow.label;
   const requestedSection = normalizeReportsSection(resolvedSearchParams?.section);
   const isPro = hasFullFeatureAccess(user.planTier);
-  const sectionTabs: ReportsSection[] = isPro ? ["overview", "spending", "trends", "advanced"] : ["overview", "spending", "trends"];
-  const initialSection = isPro || requestedSection !== "advanced" ? requestedSection : "overview";
+  const sectionTabs: ReportsSection[] = ["overview", "spending", "trends", "advanced"];
+  const initialSection = requestedSection;
 
   return (
     <ReportsTabsProvider initialSection={initialSection} availableSections={sectionTabs}>
@@ -2244,17 +2246,16 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
         titleAddon={<ReportsTopTabs />}
         mobileSubheader={<ReportsTopTabs />}
         mobileLeadingAction={<AdviserHeaderLink />}
-        mobileTrailingAction={<ReportsRangeMenu currentRange={selectedRange} currentRangeLabel={selectedRangeLabel} currentFrom={reportWindow.from} currentTo={reportWindow.to} />}
+        mobileTrailingAction={<ReportsRangeMenu currentRange={selectedRange} currentRangeLabel={selectedRangeLabel} currentFrom={reportWindow.from} currentTo={reportWindow.to}><ReportsCurrencyFilter currentCurrency={resolvedSearchParams?.currency?.trim().toUpperCase()} /></ReportsRangeMenu>}
         actions={
           <div className="reports-page__actions">
-            <AdviserHeaderLink />
-            <ReportsCurrencyFilter currentCurrency={resolvedSearchParams?.currency?.trim().toUpperCase()} />
             <ReportsRangeMenu
               currentRange={selectedRange}
               currentRangeLabel={selectedRangeLabel}
               currentFrom={reportWindow.from}
               currentTo={reportWindow.to}
-            />
+            ><ReportsCurrencyFilter currentCurrency={resolvedSearchParams?.currency?.trim().toUpperCase()} /></ReportsRangeMenu>
+            <AdviserHeaderLink />
           </div>
         }
       >

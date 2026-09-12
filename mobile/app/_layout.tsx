@@ -70,11 +70,16 @@ function Routes() {
             name="(tabs)"
             options={{ headerShown: false, title: "Clover" }}
           />
+          <Stack.Screen name="reports" options={{ headerShown:false }} />
+          <Stack.Screen name="circles" options={{ headerShown:false }} />
+          <Stack.Screen name="split-bills" options={{ headerShown:false }} />
+          <Stack.Screen name="investments" options={{ headerShown:false }} />
+          <Stack.Screen name="goals" options={{ headerShown:false }} />
           <Stack.Screen
             name="budgeting"
             options={{
               title: "Budgeting",
-              header: () => <AppHeader title="Budgeting" back />,
+              headerShown: false,
             }}
           />
           <Stack.Screen
@@ -96,7 +101,7 @@ function Routes() {
       {active &&
       (path.startsWith("/transaction/") ||
         path.startsWith("/import/") ||
-        path === "/budgeting") ? (
+        ["/budgeting", "/goals", "/investments", "/circles", "/split-bills", "/reports"].includes(path)) ? (
         <DetailNavigation />
       ) : null}
     </PrivacyShield>

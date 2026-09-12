@@ -285,23 +285,7 @@ export function CirclesPageClient({
       active="circles"
       title="Circles"
       mobileBackAction={selectedCircleId ? () => setSelectedCircleId(null) : undefined}
-      desktopTitleAction={selectedCircleId ? <CollectionBack label="All Circles" onClick={() => setSelectedCircleId(null)} /> : undefined}
-      titleAddon={
-        selectedCircleId ? (
-          <div className="collection-title-controls">
-          <CircleTitleTabs
-            circles={circles.filter((circle) => circle.id === selectedCircleId)}
-            activeCircleId={selectedCircleId}
-            onChange={setSelectedCircleId}
-            onRename={renameCircle}
-          />
-          {circles.length > 1 ? <select className="collection-switcher" aria-label="Switch Circle" value={selectedCircleId} onChange={(event) => setSelectedCircleId(event.target.value)}>
-            {circles.map((circle) => <option key={circle.id} value={circle.id}>{circle.name}</option>)}
-          </select> : null}
-          </div>
-        ) : null
-      }
-      actions={
+      actions={selectedCircleId ? <CollectionBack label="Circles" onClick={() => setSelectedCircleId(null)} /> :
         <button
           className="button button-primary button-small accounts-toolbar-add circles-topbar-action"
           type="button"

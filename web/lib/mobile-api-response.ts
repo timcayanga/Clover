@@ -71,6 +71,7 @@ const splitDetail = (value: unknown) => {
 export function mobileApiResponse(operation: string, value: unknown) {
   const data = record(value);
   if (data.error) return pick(data, ["error"]);
+  if (operation === "split-receipt-preview") return { receiptStorageKey: data.receiptStorageKey, preview: pick(data.preview, ["merchantName", "billDate", "currency", "total", "receiptText", "confidence", "requiresReview", "currencyWarning", "items"]) };
   if (operation === "adviser-chat") return {
     ...pick(data, ["reply", "degraded", "scopeRejected", "answerSource"]),
     ...(projectAdviserDeviceContext(data.deviceContext) ? { deviceContext: projectAdviserDeviceContext(data.deviceContext) } : {}),

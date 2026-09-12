@@ -10,8 +10,9 @@ import { GOAL_OPTIONS, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Goals" };
 
-export default async function NewGoalPage({ searchParams }: { searchParams: Promise<{ edit?: string }> }) {
-  const { edit } = await searchParams;
+export default async function NewGoalPage({ searchParams }: { searchParams: Promise<{ edit?: string; preset?: string }> }) {
+  const { edit, preset } = await searchParams;
+  const presetGoal = GOAL_OPTIONS.find(option => option.value === preset)?.value;
   const context = await resolveBudgetingWorkspace(await getPageSessionContext());
   if (!context.workspaceId) redirect("/onboarding");
   const goal = edit ? await prisma.personalGoal.findFirst({ where: { id: edit, workspaceId: context.workspaceId } }) : null;
@@ -21,7 +22,7 @@ export default async function NewGoalPage({ searchParams }: { searchParams: Prom
     <section className="goals-blank-state glass">
       <Link href="/goals" className="pill-link">← All goals</Link>
       <h2>{edit ? "Update your plan" : "What would you like to work toward?"}</h2>
-      <GoalInlineSetup goals={GOAL_OPTIONS} suggestedTargetAmount={null} monthlyIncome={null} currency={goal?.currency ?? "PHP"} personalGoal={{ id: goal?.id, goal: goal?.goalKey as GoalKey | undefined, amount: goal ? Number(goal.targetAmount) : undefined, purpose: plan?.purpose ?? undefined, cadence: plan?.cadence }} />
+      <GoalInlineSetup goals={GOAL_OPTIONS} suggestedTargetAmount={null} monthlyIncome={null} currency={goal?.currency ?? "PHP"} personalGoal={{ id: goal?.id, goal: (goal?.goalKey ?? presetGoal) as GoalKey | undefined, amount: goal ? Number(goal.targetAmount) : undefined, purpose: plan?.purpose ?? undefined, cadence: plan?.cadence }} />
     </section>
   </CloverShell>;
 }

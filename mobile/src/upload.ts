@@ -1,8 +1,13 @@
+import { Platform } from "react-native";
 import type { DocumentPickerAsset } from "expo-document-picker";
 import { File, Paths } from "expo-file-system";
 
 // Only delete copies inside this app's cache, never the user's original file.
 export function removeUploadCopy(uri: string) {
+  if (Platform.OS === "web") {
+    if (uri.startsWith("blob:")) URL.revokeObjectURL(uri);
+    return;
+  }
   if (uri.startsWith(Paths.cache.uri)) {
     try {
       const file = new File(uri);

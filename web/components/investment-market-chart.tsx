@@ -1,5 +1,6 @@
 "use client";
 
+import { MarketAssetNews } from "@/components/market-asset-news";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AccountBrandMark } from "@/components/account-brand-mark";
@@ -337,7 +338,8 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
 
   const tickerSuggestions = useMemo(() => {
     const query = normalizeMarketSymbol(tickerInput);
-    const pool = POPULAR_TICKERS[selectedMarket];
+    const owned = trackablePortfolioAssets.filter(account => getMarketForInvestment(account) === selectedMarket && account.investmentSymbol).map(account => ({ symbol:normalizeMarketSymbol(account.investmentSymbol!), name:account.name, market:selectedMarket, popularity:100000 }));
+    const pool = [...owned, ...POPULAR_TICKERS[selectedMarket].filter(item => !owned.some(account => account.symbol === item.symbol))];
 
     return pool
       .filter((suggestion) => {
@@ -371,7 +373,7 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
         return leftScore - rightScore || right.popularity - left.popularity;
       })
       .slice(0, 8);
-  }, [selectedMarket, tickerInput]);
+  }, [selectedMarket, tickerInput, trackablePortfolioAssets]);
 
   const submitTicker = (symbolValue = tickerInput, marketValue: MarketKey = selectedMarket) => {
     const next = normalizeMarketSymbol(symbolValue);
@@ -714,7 +716,7 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
         >
           <div className="investments-market__ticker-field">
             <label>
-              <span className="investments-market__field-label">Ticker</span>
+              <span className="investments-market__field-label">Search your assets or ticker</span>
               <input
                 value={tickerInput}
                 onChange={(event) => {
@@ -1042,6 +1044,7 @@ export function InvestmentMarketChart({ investmentAccounts, onOpenPortfolio, foc
         )}
       </div>
 
+      <MarketAssetNews symbol={submittedSymbol} market={submittedMarket} />
       <section className="investments-market-insights" aria-label="Market insights">
         <div className="investments-market-insights__head">
           <div>

@@ -1061,7 +1061,7 @@ export function SplitBillWorkspace({
             aria-selected={detailTab === tab.id}
             onClick={() => setDetailTab(tab.id)}
           >
-            {tab.label}
+            <InterfaceIcon name={tab.id === "activity" ? "date" : "details"} size={16} />{tab.label}
           </button>
         ))}
       </div>

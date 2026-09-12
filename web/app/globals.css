@@ -65562,3 +65562,69 @@ html[data-theme="dark"] :is(.transaction-creation-panel,.accounts-import-footer-
  .transaction-creation-tabs.transaction-creation-tabs button { font-size:12px; }
  .shell-bottom-nav .shell-bottom-nav__label { white-space:nowrap; font-size:9px; }
 }
+
+/* Understand & Plan — Figma refresh, September 2026. */
+:root { --plan-view-bg:#e9f2ff; --plan-view-fg:#1e5aa6; --plan-edit-bg:#fff1d6; --plan-edit-fg:#895000; --plan-ask-bg:#f0eaff; --plan-ask-fg:#6741a5; --plan-delete-bg:#fdeaea; --plan-delete-fg:#b83a3a; }
+[data-theme="dark"] { --plan-view-bg:#193b58; --plan-view-fg:#b8d9ff; --plan-edit-bg:#493718; --plan-edit-fg:#ffd68a; --plan-ask-bg:#36264f; --plan-ask-fg:#d8bdff; --plan-delete-bg:#49292d; --plan-delete-fg:#ffb6ba; }
+.plan-action-view, .collection-card__view { background:var(--plan-view-bg)!important; color:var(--plan-view-fg)!important; }
+.plan-action-edit { background:var(--plan-edit-bg)!important; color:var(--plan-edit-fg)!important; }
+.plan-action-ask, .plan-action-ask button { background:var(--plan-ask-bg)!important; color:var(--plan-ask-fg)!important; border-radius:999px; }
+.plan-action-delete { background:var(--plan-delete-bg)!important; color:var(--plan-delete-fg)!important; }
+.plan-actions { display:flex; flex-wrap:wrap; gap:12px; margin:24px 0; }
+.plan-actions .button { min-height:44px; border-radius:999px; padding:10px 20px; border:0; }
+.plan-detail-heading { display:flex; align-items:center; flex-wrap:wrap; gap:20px; margin:20px 0; }
+.plan-detail-heading h2 { margin:0; font:600 24px/1.4 var(--font-poppins),sans-serif; }
+.plan-detail-heading .budget-single-view__head { margin:0; flex:0 1 auto; }
+.plan-tabs { display:flex; flex:1; gap:4px; min-width:0; }
+.plan-tabs button { flex:1; display:flex; align-items:center; justify-content:center; gap:6px; min-height:44px; border:1px solid var(--line,#dfe7eb); border-radius:8px 8px 0 0; background:var(--surface,#fff); color:var(--accent,#03a8c0); cursor:pointer; }
+.plan-tabs button[aria-selected="true"] { border-color:var(--accent,#03a8c0); background:var(--surface-2,#f5f7f9); }
+.plan-tabs button > span { display:inline-flex; width:16px; height:16px; }
+.plan-tabs svg { width:16px; height:16px; }
+[role="tabpanel"][hidden] { display:none!important; }
+.plan-progress { width:100%; height:10px; border:0; border-radius:5px; overflow:hidden; accent-color:#03a8c0; margin:12px 0 24px; }
+.plan-progress::-webkit-progress-bar { background:var(--surface-2,#edf1f5); }
+.plan-progress::-webkit-progress-value { background:linear-gradient(90deg,#03a8c0,#2ccfca); }
+.collection-card { background:linear-gradient(105deg,color-mix(in srgb,var(--collection-color,#35b875) 17%,var(--surface,#fff)),color-mix(in srgb,var(--collection-color,#35b875) 5%,var(--surface,#fff))); border:1px solid color-mix(in srgb,var(--collection-color,#35b875) 45%,var(--surface,#fff)); }
+.collection-card__view { position:relative; z-index:2; width:100%; min-height:44px; border:0; border-radius:999px; margin-top:auto; }
+.collection-card-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.plan-presets { margin:24px 0; }
+.investments-overview-metrics { grid-template-columns:repeat(3,minmax(0,1fr)); }
+@media(max-width:1100px) {
+ .collection-card-grid { grid-template-columns:1fr; }
+ .plan-detail-heading { display:block; }
+ .plan-tabs { margin-top:16px; flex-wrap:nowrap; }
+ .plan-tabs button { padding:8px 3px; font-size:11px; gap:4px; }
+ .plan-detail-heading h2 { font-size:20px; }
+ .plan-back { display:none!important; }
+ .plan-actions { flex-direction:column; align-items:flex-start; }
+ .investments-overview-metrics { grid-template-columns:1fr; }
+}
+
+.plan-transaction-table { overflow-x:auto; margin:20px 0; } .plan-transaction-table table { width:100%; border-collapse:collapse; } .plan-transaction-table th,.plan-transaction-table td { padding:14px 10px; border-bottom:1px solid var(--stroke,#dfe7eb); text-align:left; } .plan-transaction-table th:last-child,.plan-transaction-table td:last-child { text-align:right; white-space:nowrap; }
+
+.market-asset-news { margin:24px 0; padding:20px; border:1px solid var(--stroke,#dfe7eb); border-radius:20px; } .market-asset-news article { margin:16px 0; padding-bottom:16px; border-bottom:1px solid var(--stroke,#dfe7eb); } .market-asset-news h3 { font:600 16px/1.5 var(--font-poppins),sans-serif; } .market-asset-news small { color:var(--muted); }
+.institution-detail-hero .account-brand-mark,.institution-assets-table .account-brand-mark,.accounts-detail .account-brand-mark { border-radius:25%!important; overflow:hidden; }
+.institution-detail-panel--assets > .institution-detail-panel__head .button-primary { background:linear-gradient(100deg,#03a8c0,#2ccfca); color:white; }
+
+.content--reports .reports-overview-grid .metric { border:1px solid var(--stroke,#dfe7eb)!important; border-radius:18px!important; background:var(--surface,#fff)!important; padding:22px!important; } .reports-chart-insight { margin-top:24px; display:flex; flex-wrap:wrap; gap:12px; } .reports-chart-insight strong,.reports-chart-insight p { width:100%; } .reports-chart-insight .button { width:auto; flex:none; border-radius:999px; } .reports-income-source { display:grid; grid-template-columns:1fr auto; gap:10px; margin:18px 0; } .reports-income-source progress { grid-column:1/-1; width:100%; height:8px; accent-color:#03a8c0; } .report-chart-switch { display:flex; gap:6px; } .report-chart-switch button { width:34px;height:34px; display:grid; place-items:center; border:1px solid var(--stroke,#dfe7eb); border-radius:8px; color:var(--accent,#03a8c0);background:var(--surface,#fff); } .report-chart-switch svg {width:16px;height:16px;} .report-chart-switch button[aria-pressed="true"] { background:var(--accent,#03a8c0);color:white; } .reports-range-menu__summary { width:auto!important; display:flex;gap:6px;padding:8px 14px!important; } .reports-filter-label {font-size:12px;} .content--reports .topbar__title-row h1 {font-size:18px;}
+@media(max-width:1100px){.reports-filter-label{display:none}.reports-range-menu__summary{padding:10px!important}.reports-income-source{grid-template-columns:1fr}.reports-income-source strong{font-size:13px;}.reports-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;}}
+
+.collection-card__progress { display:grid; gap:8px; }
+.collection-card__progress progress { width:100%; accent-color:var(--collection-color, #03a8c0); }
+.content--circles .collection-card-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+@media(max-width:700px){.content--circles .collection-card-grid{grid-template-columns:1fr;}}
+
+/* Keep Understand & Plan titles centered regardless of the action width. */
+.content:is(.content--reports,.content--budgeting,.content--goals,.content--investments,.content--circles,.content--split-bill) > :is(.topbar,.shell-compact-bar) h1 { font-size:18px; }
+@media(max-width:1100px) {
+ .content:is(.content--reports,.content--budgeting,.content--goals,.content--investments,.content--circles,.content--split-bill) > :is(.topbar,.shell-compact-bar) :is(.topbar__title-wrap,.shell-compact-bar__copy) { width:100%!important; max-width:none!important; justify-self:stretch!important; }
+ .content:is(.content--reports,.content--budgeting,.content--goals,.content--investments,.content--circles,.content--split-bill) > :is(.topbar,.shell-compact-bar) .shell-mobile-more-link { display:none!important; }
+ .content:is(.content--reports,.content--budgeting,.content--goals,.content--investments,.content--circles,.content--split-bill):not(.content--plan-detail) > :is(.topbar,.shell-compact-bar) .shell-back-button {display:none!important;}
+ .content.content--plan-detail > :is(.topbar,.shell-compact-bar) .shell-topbar-leading__actions { position:absolute; right:10px; top:10px; }
+ .content.content--plan-detail > :is(.topbar,.shell-compact-bar) .shell-back-button { border:0; background:transparent; box-shadow:none; }
+ .content--reports .report-card--compact-empty {min-height:0!important;}
+}
+@media(max-width:1100px) {
+ .reports-top-tabs .animated-tabs__tab {position:relative;}
+ .reports-top-tabs .animated-tabs__badge {display:inline-flex;position:absolute;top:2px;right:2px;font-size:8px;line-height:1;padding:2px 4px;}
+}

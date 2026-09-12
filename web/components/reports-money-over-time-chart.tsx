@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 
 export type ReportsMoneyPoint = {
@@ -28,10 +28,13 @@ const parseReportDate = (value: string) => new Date(`${value}T12:00:00`);
 export function ReportsMoneyOverTimeChart({
   points,
   currency,
+  title = "Money over time",
 }: {
   points: ReportsMoneyPoint[];
   currency: string;
+  title?: string;
 }) {
+  const gradientId = useId();
   const chartRef = useRef<SVGSVGElement>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -105,7 +108,7 @@ export function ReportsMoneyOverTimeChart({
   };
 
   if (chart.plotted.length === 0) {
-    return <div className="reports-money-chart__empty">No balance history is available for this period.</div>;
+    return <><h4 className="reports-money-over-time__title">{title}</h4><div className="reports-money-chart__empty">No balance history is available for this period.</div></>;
   }
 
   const latest = chart.plotted[chart.plotted.length - 1];
@@ -128,7 +131,7 @@ export function ReportsMoneyOverTimeChart({
     <>
       <div className="report-card__head reports-money-over-time__head">
         <div className="report-card__head-title">
-          <h4 className="reports-money-over-time__title">Money over time</h4>
+          <h4 className="reports-money-over-time__title">{title}</h4>
         </div>
         <div className="report-card__stat reports-money-over-time__stat" aria-live="polite">
           <strong>{formatCurrencyAmount(activePoint.balance, currency)}</strong>
@@ -154,7 +157,7 @@ export function ReportsMoneyOverTimeChart({
           onTouchMove={(event) => handlePointerMove(event.touches[0]?.clientX ?? 0)}
         >
           <defs>
-            <linearGradient id="reportsMoneyBalanceFill" x1="0" x2="0" y1="0" y2="1">
+            <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
               <stop offset="0%" stopColor="rgba(3, 168, 192, 0.22)" />
               <stop offset="100%" stopColor="rgba(3, 168, 192, 0.02)" />
             </linearGradient>
@@ -171,6 +174,7 @@ export function ReportsMoneyOverTimeChart({
           ))}
           <path
             className="reports-money-chart__area"
+            style={{ fill: `url(#${gradientId})` }}
             d={`${chart.path} L ${latest.x} ${chartHeight - chartPadding.bottom} L ${chart.plotted[0].x} ${chartHeight - chartPadding.bottom} Z`}
           />
           <path className="reports-money-chart__line" d={chart.path} />

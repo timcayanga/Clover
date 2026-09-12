@@ -1,3 +1,6 @@
+import { mobileGoals } from "@/lib/mobile-goals";
+import { PlanTabs } from "@/components/plan-tabs";
+import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -282,22 +285,13 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
   }
 
   if (!goalId) {
-    const [savedGoals, currencies] = await Promise.all([
-      prisma.personalGoal.findMany({ where: { workspaceId: resolvedWorkspace.id }, orderBy: { createdAt: "asc" } }),
-      prisma.account.findMany({ where: { workspaceId: resolvedWorkspace.id }, select: { currency: true }, distinct: ["currency"] }),
-    ]);
-    const currency = currencies.length === 1 ? currencies[0].currency ?? "PHP" : "PHP";
-    const cards: GoalCardData[] = savedGoals.map((goal) => {
-      const plan = normalizeGoalPlan(goal.goalPlan, goal.goalKey as GoalKey, Number(goal.targetAmount));
-      return { id: goal.id, name: plan?.purpose || getGoalDefinition(goal.goalKey).title, category: getGoalDefinition(goal.goalKey).title, amount: Number(goal.targetAmount), currency: goal.currency, cadence: plan?.cadence === "annual" ? "Annual" : "Monthly", emoji: "🎯" };
-    });
-    // Keep the existing account-level focus and history intact, rather than
-    // treating its historical updates as separate active goals.
-    if (user.primaryGoal) {
-      const plan = normalizeGoalPlan(user.goalPlan, user.primaryGoal as GoalKey, user.goalTargetAmount ? Number(user.goalTargetAmount) : null);
-      cards.unshift({ id: "primary", name: plan?.purpose || getGoalDefinition(user.primaryGoal).title, category: "Existing account goal", amount: plan?.targetMode === "amount" ? plan.targetAmount : user.goalTargetAmount ? Number(user.goalTargetAmount) : null, currency, cadence: plan?.cadence === "annual" ? "Annual" : "Monthly", emoji: "🌱" });
-    }
-    return <RouteSplash label="goals"><CloverShell active="goals" title="Goals" mobileBackHref="/more" actions={<><ContextualAskClover context="goals" planTier={isPro ? "pro" : "free"} /><Link href="/goals/new" className="button button-primary button-small accounts-toolbar-add" aria-label="Create goal"><span className="button-icon" aria-hidden="true">＋</span><span>Create goal</span></Link></>}><GoalDirectory goals={cards} /></CloverShell></RouteSplash>;
+    const result = await mobileGoals(resolvedWorkspace.id, user.id);
+    const cards: GoalCardData[] = result.goals.map((goal) => ({
+      id: goal.id, name: goal.name, category: goal.category, amount: goal.targetAmount,
+      currency: goal.currency, cadence: goal.cadence === "annual" ? "Annual" : "Monthly", emoji: "",
+      progress: "progress" in goal ? goal.progress : undefined,
+    }));
+    return <RouteSplash label="goals"><CloverShell active="goals" title="Goals" mobileBackHref="/more" actions={<><Link href="/goals/new" className="button button-primary button-small accounts-toolbar-add" aria-label="Create goal"><span className="button-icon" aria-hidden="true">＋</span><span>Create goal</span></Link></>}><GoalDirectory goals={cards} /></CloverShell></RouteSplash>;
   }
   const savedGoal = goalId === "primary" ? null : await prisma.personalGoal.findFirst({ where: { id: goalId, workspaceId: resolvedWorkspace.id } });
   if (goalId !== "primary" && !savedGoal) notFound();
@@ -772,13 +766,11 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
         active="goals"
         title="Goals"
         mobileBackHref="/goals"
-        actions={<ContextualAskClover context="goals" planTier={isPro ? "pro" : "free"} />}
+        actions={<Link href="/goals" className="button button-secondary plan-back">Back to Goals</Link>}
       >
         <section className="goals-page">
-          <Link href="/goals" className="collection-back">← All goals</Link>
-          {currentGoalPlan?.purpose ? <h2 className="collection-detail-name">{currentGoalPlan.purpose}</h2> : null}
           {savedGoal ? <p className="muted">Progress reflects this Profile’s recent financial activity in {goalCurrency}, not money reserved separately for this goal. Annual targets are shown as a monthly pace.</p> : null}
-          {!hasGoalSelection ? (
+<PlanTabs title={<h2 className="collection-detail-name">{currentGoalPlan?.purpose || selectedGoal.title}</h2>} tabs={[{key:"overview",label:"Overview",content:<>          {!hasGoalSelection ? (
             <section className="goals-blank-state glass">
               <span className="goals-blank-state__emoji" aria-hidden="true">🎯</span>
               <h3>What do you want your money to help you do?</h3>
@@ -806,7 +798,7 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
             </section>
           )}
 
-          <section className="goals-section goals-section--roadmap">
+</>},{key:"roadmap",label:"Roadmap",content:<>          <section className="goals-section goals-section--roadmap">
             <article className="goals-roadmap glass">
               <div className="goals-panel__head">
                 <div>
@@ -816,23 +808,23 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
                 {hasGoalTarget ? <span className="goals-roadmap__badge">{goalProgress.bandLabel}</span> : null}
               </div>
               {hasGoalTarget ? (
-                <div className="goals-roadmap__track" aria-label="Goal milestones">
+                <><p>{formatCurrency(goalProgress.currentAmount, goalCurrency)} of {formatCurrency(goalProgress.targetAmount ?? 0, goalCurrency)} · {Math.round(progressRingPercent)}%</p><progress className="plan-progress" max={100} value={Math.max(0, Math.min(100, progressRingPercent))} aria-label="Goal progress" /><div className="goals-roadmap__track" aria-label="Goal milestones">
                   {roadmapMilestones.map((milestone, index) => (
                     <div key={milestone.label} className={`goals-roadmap__milestone${milestone.reached ? " is-reached" : ""}${milestone.current ? " is-current" : ""}`}>
-                      <div className="goals-roadmap__node"><span>{milestone.reached ? "✓" : index + 1}</span></div>
-                      <strong>{milestone.label}</strong>
+                      <CategoryBrandMark categoryName={["Income", "Investments", "Health & Wellness", "Income"][index % 4]} size={40} />
+                      <strong>{["Getting started", "Building momentum", "Almost there", "Target reached"][index] ?? milestone.label}</strong>
                       <span>{milestone.threshold}%</span>
                       <small>{milestone.detail}</small>
                     </div>
                   ))}
-                </div>
+                </div></>
               ) : (
                 <div className="goals-roadmap__empty">Clover will create milestones from your target, pace, and real cash flow once you confirm a goal.</div>
               )}
             </article>
           </section>
 
-          <section className="goals-section goals-section--signals">
+</>},{key:"progress",label:"Progress",content:<>          <section className="goals-section goals-section--signals">
             <article className="goals-progress-panel glass">
               <div className="goals-panel__head">
                 <div>
@@ -873,7 +865,7 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
             </article>
           </section>
 
-          <section className="goals-section goals-section--history">
+</>},{key:"history",label:"History",content:<>          <section className="goals-section goals-section--history">
             <article className="goals-history glass">
               <div className="goals-panel__head">
                 <div>
@@ -898,6 +890,7 @@ async function GoalsPageStream({ goalId }: { goalId?: string }) {
             </article>
           </section>
 
+</>}]} />
           {hasGoalSelection ? (
             <section className="goals-goal-actions">
               <span>Want to change direction?</span>

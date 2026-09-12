@@ -2896,7 +2896,7 @@ export default function InvestmentsPage() {
         label: tab.label,
         icon: tab.icon,
         disabled: false,
-        badge: tab.proOnly && !BETA_FULL_ACCESS_ENABLED ? "PRO" : null,
+        badge: tab.proOnly ? "PRO" : null,
         locked: tab.proOnly && !canUseProTabs,
         ariaLabel: tab.label,
       }))}
@@ -2910,10 +2910,10 @@ export default function InvestmentsPage() {
       titleAddon={renderInvestmentTabs()}
       mobileSubheader={renderInvestmentTabs(true)}
       mobileLeadingAction={<AdviserHeaderLink />}
-      mobileTrailingAction={selectedTab === "portfolio" ? <span id="investment-header-filter" /> : undefined}
       actions={
         <>
           <AdviserHeaderLink />
+                  <InvestmentPortfolioFilters active={investmentSubtypeFilter !== "all" || investmentSortKey !== "value_desc" || portfolioView !== "all"}>
           <CurrencySelector
             value={portfolioCurrencyFilter}
             onChange={(next) => {
@@ -2933,6 +2933,44 @@ export default function InvestmentsPage() {
             menuAlignment="end"
             showChevron={false}
           />
+                  <label aria-label="Filter by investment type">
+                    <span className="portfolio-filter-menu__label">Asset subtype</span>
+                    <select value={investmentSubtypeFilter} onChange={(event) => setInvestmentSubtypeFilter(event.target.value as InvestmentSubtype | "all")}>
+                      <option value="all">All subtypes</option>
+                      {SORTED_INVESTMENT_SUBTYPES.map((subtype) => (
+                        <option key={subtype} value={subtype}>
+                          {getInvestmentSubtypeLabel(subtype)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label aria-label="Sort portfolio">
+                    <span className="portfolio-filter-menu__label">Sort by</span>
+                    <select value={investmentSortKey} onChange={(event) => setInvestmentSortKey(event.target.value as InvestmentSortKey)}>
+                      {INVESTMENT_SORT_OPTIONS.map((option) => (
+                        <option key={option.key} value={option.key}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="investments-portfolio-view-toggle" role="group" aria-label="Portfolio rows">
+                    {([
+                      ["all", "All"],
+                      ["assets", "Assets"],
+                      ["institutions", "Institutions"],
+                    ] as Array<[PortfolioView, string]>).map(([value, label]) => (
+                      <button
+                        key={value}
+                        className={portfolioView === value ? "is-active" : ""}
+                        type="button"
+                        onClick={() => setPortfolioView(value)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  </InvestmentPortfolioFilters>
           {renderAddInvestmentButton()}
         </>
       }
@@ -2965,23 +3003,17 @@ export default function InvestmentsPage() {
               </article>
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
                 <InfoTooltip className="summary-card-info" label={getPortfolioSummaryTooltip("Recorded gain or loss for visible holdings with an available purchase value.")} />
-                <p className="eyebrow">Total returns</p>
+                <p className="eyebrow">Unrealized gain / loss</p>
                 <strong className={`accounts-overview-card__amount ${portfolioEstimateUnavailable ? "is-neutral" : estimatedPortfolioTotals.gainLoss > 0 ? "is-good" : estimatedPortfolioTotals.gainLoss < 0 ? "is-danger" : "is-neutral"}`}>
                   {hasVisibleCurrencySelection
                     ? formatPortfolioSummary(estimatedPortfolioTotals.gainLoss)
                     : "—"}
                 </strong>
               </article>
-              <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
-                <InfoTooltip className="summary-card-info" label="A portfolio-level indicator based on the mix of asset types and concentration in the largest category." />
-                <p className="eyebrow">Risk level</p>
-                <strong className={`accounts-overview-card__amount investments-risk-level investments-risk-level--${portfolioRisk.label.toLowerCase()}`}>
-                  {portfolioRisk.label}
-                </strong>
-              </article>
+
               <article className="accounts-overview-card dashboard-home__hero-mobile-card investments-overview-metrics__card glass">
                 <InfoTooltip className="summary-card-info" label="Total recorded return divided by the available purchase value for visible holdings." />
-                <p className="eyebrow">ROI percentage</p>
+                <p className="eyebrow">Return on recorded purchase value</p>
                 <strong className={`accounts-overview-card__amount ${portfolioRoi === null ? "is-neutral" : portfolioRoi > 0 ? "is-good" : portfolioRoi < 0 ? "is-danger" : "is-neutral"}`}>
                   {portfolioRoi === null ? "—" : percentFormatter.format(portfolioRoi)}
                 </strong>
@@ -3112,45 +3144,7 @@ export default function InvestmentsPage() {
                       placeholder="Search"
                     />
                   </label>
-                  <InvestmentPortfolioFilters active={investmentSubtypeFilter !== "all" || investmentSortKey !== "value_desc" || portfolioView !== "all"}>
-                  <label aria-label="Filter by investment type">
-                    <span className="portfolio-filter-menu__label">Asset subtype</span>
-                    <select value={investmentSubtypeFilter} onChange={(event) => setInvestmentSubtypeFilter(event.target.value as InvestmentSubtype | "all")}>
-                      <option value="all">All subtypes</option>
-                      {SORTED_INVESTMENT_SUBTYPES.map((subtype) => (
-                        <option key={subtype} value={subtype}>
-                          {getInvestmentSubtypeLabel(subtype)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label aria-label="Sort portfolio">
-                    <span className="portfolio-filter-menu__label">Sort by</span>
-                    <select value={investmentSortKey} onChange={(event) => setInvestmentSortKey(event.target.value as InvestmentSortKey)}>
-                      {INVESTMENT_SORT_OPTIONS.map((option) => (
-                        <option key={option.key} value={option.key}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="investments-portfolio-view-toggle" role="group" aria-label="Portfolio rows">
-                    {([
-                      ["all", "All"],
-                      ["assets", "Assets"],
-                      ["institutions", "Institutions"],
-                    ] as Array<[PortfolioView, string]>).map(([value, label]) => (
-                      <button
-                        key={value}
-                        className={portfolioView === value ? "is-active" : ""}
-                        type="button"
-                        onClick={() => setPortfolioView(value)}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  </InvestmentPortfolioFilters>
+
                 </div>
               </div>
 
@@ -4128,7 +4122,7 @@ export default function InvestmentsPage() {
                       })}
                       {manualCanTrackPurchases ? (
                         <div className="accounts-manual-form__optional-block">
-                          <p className="eyebrow">Purchase history</p>
+                          <p className="eyebrow">Trading History</p>
                           <label>
                             Purchase date
                             <input type="date" value={manualPurchaseDate} onChange={(event) => setManualPurchaseDate(event.target.value)} />

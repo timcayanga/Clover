@@ -27,7 +27,7 @@ export async function apiRequest<T>(
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),
-    path.includes("/process") || path.startsWith("adviser/chat") ? 120000 : 25000,
+    path.includes("/process") || path.startsWith("split-bill-receipts/") || path.startsWith("adviser/chat") ? 120000 : 25000,
   );
   try {
     const url = new URL(`${apiBase()}/api/mobile/v1/${path}`);

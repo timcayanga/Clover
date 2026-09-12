@@ -90,10 +90,12 @@ const numericFields = new Set([
 ]);
 export function AccountEditor({
   initial,
+  defaultType = "bank",
   onClose,
   onSaved,
 }: {
   initial: AccountRecord | null;
+  defaultType?: string;
   onClose: () => void;
   onSaved: (record: AccountRecord | null) => void;
 }) {
@@ -107,7 +109,7 @@ export function AccountEditor({
   const [draft, setDraft] = useState<Record<string, string>>({
     name: "",
     institution: "",
-    type: "bank",
+    type: defaultType,
     currency: "PHP",
     balance: "",
   });

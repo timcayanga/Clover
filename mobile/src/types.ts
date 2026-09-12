@@ -26,6 +26,7 @@ export type Bootstrap = {
   profiles: Profile[];
   entitlement: {
     planTier: "free" | "pro";
+    fullFeatureAccess?: boolean;
     accessEndsAt: string | null;
     renewing: boolean;
     nativePurchasesAvailable: false;
