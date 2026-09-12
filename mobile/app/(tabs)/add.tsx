@@ -1,3 +1,4 @@
+import { LinearGradient } from "expo-linear-gradient";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import * as Crypto from "expo-crypto";
@@ -28,7 +29,7 @@ import {
   useTheme,
 } from "../../src/ui";
 export default function Add() {
-  const { colors } = useTheme();
+  const { colors, dark } = useTheme();
   const session = useSession();
   const [tab, setTab] = useState("manual");
   const [draft, setDraft] = useState(emptyTransaction);
@@ -172,15 +173,71 @@ export default function Add() {
             router.navigate("/(tabs)/transactions");
           }}
         />
-        <Choices
-          options={[
-            { value: "manual", label: "Manual" },
-            { value: "ask", label: "Ask Clover" },
-            { value: "upload", label: "Upload" },
-          ]}
-          value={tab}
-          onChange={setTab}
-        />
+        <View
+          accessibilityRole="tablist"
+          style={{
+            flexDirection: "row",
+            padding: 4,
+            borderRadius: 999,
+            borderWidth: 1,
+            borderColor: colors.line,
+            backgroundColor: dark ? "#0e1b21" : "#ecf4f5",
+          }}
+        >
+          {(["manual", "ask", "upload"] as const).map((method) => (
+            <Pressable
+              key={method}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: tab === method }}
+              aria-selected={tab === method}
+              onPress={() => setTab(method)}
+              style={{ flex: 1, borderRadius: 999, overflow: "hidden" }}
+            >
+              <LinearGradient
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                colors={
+                  tab === method
+                    ? ["#03a8c0", "#28cfca"]
+                    : ["transparent", "transparent"]
+                }
+                style={{
+                  minHeight: 52,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 4,
+                }}
+              >
+                <Image
+                  source={
+                    method === "manual"
+                      ? require("../../assets/organize/method-manual.png")
+                      : method === "ask"
+                        ? require("../../assets/organize/method-ask.png")
+                        : require("../../assets/organize/method-upload.png")
+                  }
+                  style={{
+                    width: 20,
+                    height: 20,
+                    tintColor: tab === method ? "white" : colors.teal,
+                  }}
+                />
+                <Text
+                  style={{
+                    color: tab === method ? "white" : colors.ink,
+                    fontSize: 12,
+                  }}
+                >
+                  {method === "manual"
+                    ? "Manual"
+                    : method === "ask"
+                      ? "Ask Clover"
+                      : "Upload"}
+                </Text>
+              </LinearGradient>
+            </Pressable>
+          ))}
+        </View>
         <View style={{ display: tab === "manual" ? "flex" : "none" }}>
           <ManualTransaction draft={draft} onChange={setDraft} />
         </View>
@@ -200,7 +257,7 @@ export default function Add() {
             Statements, receipts, wallet screenshots, or spreadsheets. Choose
             one file to get started.
           </Body>
-          <View style={{ flexDirection: "row", gap: 8 }}>
+          <View style={{ gap: 10 }}>
             {(
               [
                 ["file", "Choose files"],
@@ -215,33 +272,34 @@ export default function Add() {
                 accessibilityLabel={label}
                 onPress={() => void choose(source)}
                 style={{
-                  flex: 1,
-                  minHeight: 120,
-                  padding: 10,
+                  flexDirection: "row",
+                  minHeight: 80,
+                  padding: 14,
                   borderWidth: 1,
                   borderColor: colors.line,
                   borderRadius: 16,
-                  backgroundColor:
-                    source === "file" ? colors.teal : colors.white,
+                  backgroundColor: colors.white,
                   alignItems: "center",
-                  justifyContent: "center",
-                  gap: 10,
+                  justifyContent: "flex-start",
+                  gap: 14,
                 }}
               >
-                {source === "file" ? (
-                  <Icon name="server-outline" size={40} />
-                ) : (
-                  <Image
-                    source={require("../../assets/organize/camera.png")}
-                    style={{ width: 40, height: 40 }}
-                  />
-                )}
+                <Image
+                  source={
+                    source === "file"
+                      ? require("../../assets/organize/upload-files.png")
+                      : source === "camera"
+                        ? require("../../assets/organize/upload-camera.png")
+                        : require("../../assets/organize/upload-library.png")
+                  }
+                  style={{ width: 56, height: 56 }}
+                />
                 <Text
                   style={{
-                    color: source === "file" ? "white" : colors.ink,
+                    color: colors.ink,
                     textAlign: "center",
-                    fontSize: 12,
-                    fontWeight: "600",
+                    fontSize: 15,
+                    fontWeight: "500",
                   }}
                 >
                   {label}
@@ -255,6 +313,11 @@ export default function Add() {
               ? "Sample mode shows a completed sample import. It never opens or uploads your files."
               : "Preview limit: 3.5 MB per file. Your upload uses Clover’s existing parser and review rules."}
           </Body>
+          <Body>
+            Your files are protected with encrypted connections and restricted
+            access. Clover never sells your data.
+          </Body>
+          <Body>Password-protected PDFs supported.</Body>
           {history.length > 0 && (
             <Card>
               <Body>Recent imports</Body>

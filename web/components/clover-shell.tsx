@@ -2598,7 +2598,7 @@ export function CloverShell({
                   <MenuIcon name="chevron-left" />
                 </button>
               ) : null}
-              <div className="shell-topbar-leading__actions">{active === "adviser" ? null : mobileLeadingAction ?? <AdviserHeaderLink />}</div>
+              <div className="shell-topbar-leading__actions">{active === "adviser" || active === "dashboard" ? null : mobileLeadingAction ?? <AdviserHeaderLink />}</div>
             </div>
             <div
               className={`shell-compact-bar__copy ${hideCompactBarCopyOnMobile ? "shell-compact-bar__copy--hide-mobile" : ""} ${
@@ -2608,14 +2608,15 @@ export function CloverShell({
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
               <div className="topbar__title-row">
                 <h1>{mobileOverlayChrome?.title ?? title}</h1>
-                {active !== "adviser" && !desktopTitleAction ? <div className="topbar__desktop-adviser"><AdviserHeaderLink /></div> : null}{desktopTitleAction ? <div className="topbar__desktop-title-action">{desktopTitleAction}</div> : null}
+                {!["adviser", "dashboard", "recurring"].includes(active) && !desktopTitleAction ? <div className="topbar__desktop-adviser"><AdviserHeaderLink /></div> : null}{desktopTitleAction ? <div className="topbar__desktop-title-action">{desktopTitleAction}</div> : null}
                 {titleAddon ? <div className="topbar__title-addon">{titleAddon}</div> : null}
               </div>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
             </div>
             {actions || homeNotificationsAction || mobileTrailingAction ? (
               <div className="shell-compact-bar__actions">
-                {homeNotificationsAction}
+                {active === "dashboard" ? <span className="home-header-adviser"><AdviserHeaderLink /></span> : null}
+              {homeNotificationsAction}
                 {mobileTrailingAction ? <div className="shell-mobile-trailing-actions">{mobileTrailingAction}</div> : null}
                 {actions}
               </div>
@@ -2645,18 +2646,19 @@ export function CloverShell({
                   <MenuIcon name="chevron-left" />
                 </button>
               ) : null}
-              <div className="shell-topbar-leading__actions">{active === "adviser" ? null : mobileLeadingAction ?? <AdviserHeaderLink />}</div>
+              <div className="shell-topbar-leading__actions">{active === "adviser" || active === "dashboard" ? null : mobileLeadingAction ?? <AdviserHeaderLink />}</div>
             </div>
             <div className="topbar__title-wrap">
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
               <div className="topbar__title-row">
                 <h1>{mobileOverlayChrome?.title ?? title}</h1>
-                {active !== "adviser" && !desktopTitleAction ? <div className="topbar__desktop-adviser"><AdviserHeaderLink /></div> : null}{desktopTitleAction ? <div className="topbar__desktop-title-action">{desktopTitleAction}</div> : null}
+                {!["adviser", "dashboard", "recurring"].includes(active) && !desktopTitleAction ? <div className="topbar__desktop-adviser"><AdviserHeaderLink /></div> : null}{desktopTitleAction ? <div className="topbar__desktop-title-action">{desktopTitleAction}</div> : null}
                 {titleAddon ? <div className="topbar__title-addon">{titleAddon}</div> : null}
               </div>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
             </div>
             <div className="topbar-actions">
+              {active === "dashboard" ? <span className="home-header-adviser"><AdviserHeaderLink /></span> : null}
               {homeNotificationsAction}
               {mobileTrailingAction ? <div className="shell-mobile-trailing-actions">{mobileTrailingAction}</div> : null}
               {actions}

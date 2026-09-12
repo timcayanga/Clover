@@ -1,5 +1,5 @@
-import { useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useSession } from "../../src/session";
 import { Choices } from "../../src/transaction-entry";
@@ -9,6 +9,7 @@ import {
   Card,
   Field,
   Heading,
+  Icon,
   Notice,
   Screen,
   money,
@@ -49,6 +50,14 @@ export default function Recurring() {
   const [day, setDay] = useState<string | null>(null);
   const [selected, setSelected] = useState<Item | null>(null);
   const [editor, setEditor] = useState(false);
+  const { add } = useLocalSearchParams<{ add?: string }>();
+  useEffect(() => {
+    if (add) {
+      setSelected(null);
+      setSuggestion(null);
+      setEditor(true);
+    }
+  }, [add]);
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
   const [revision, setRevision] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -146,15 +155,55 @@ export default function Recurring() {
     );
   return (
     <Screen>
-      <Button
-        title="Add recurring"
-        onPress={() => {
-          setSelected(null);
-          setSuggestion(null);
-          setEditor(true);
+      <View
+        accessibilityRole="tablist"
+        style={{
+          flexDirection: "row",
+          borderBottomWidth: 1,
+          borderBottomColor: colors.line,
         }}
-      />
-      <Choices options={kinds} value={kind} onChange={setKind} />
+      >
+        {kinds.map((item, index) => (
+          <Pressable
+            key={item.value}
+            accessibilityRole="tab"
+            accessibilityLabel={item.label}
+            accessibilityState={{ selected: kind === item.value }}
+            aria-selected={kind === item.value}
+            onPress={() => setKind(item.value)}
+            style={{
+              flex: 1,
+              minHeight: 60,
+              padding: 5,
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 5,
+              borderTopLeftRadius: 10,
+              borderTopRightRadius: 10,
+              backgroundColor: kind === item.value ? colors.white : colors.bg,
+              borderWidth: 1,
+              borderColor: kind === item.value ? colors.line : "transparent",
+            }}
+          >
+            <Text
+              style={{
+                color: kind === item.value ? colors.teal : colors.muted,
+                fontSize: 18,
+              }}
+            >
+              {["▦", "◷", "↙︎", "↗︎", "▤"][index]}
+            </Text>
+            <Text
+              style={{
+                color: kind === item.value ? colors.teal : colors.muted,
+                fontSize: 10,
+              }}
+            >
+              {["Overview", "Planned", "Debts", "Owed", "Installments"][index]}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
       <Field label="Search recurring" value={query} onChangeText={setQuery} />
       <Button
         title="Filters"
@@ -188,19 +237,71 @@ export default function Recurring() {
         <>
           <Card>
             <Text
-              style={{ color: colors.ink, fontWeight: "600", fontSize: 18 }}
+              style={{
+                color: colors.ink,
+                fontFamily: "Poppins-SemiBold",
+                fontSize: 16,
+              }}
             >
               Payment calendar
             </Text>
-            <View style={[styles.row, { justifyContent: "space-between" }]}>
-              <Button title="‹" secondary onPress={() => navigateMonth(-1)} />
-              <Body muted={false}>
-                {month.toLocaleDateString(undefined, {
-                  month: "long",
-                  year: "numeric",
-                })}
-              </Body>
-              <Button title="›" secondary onPress={() => navigateMonth(1)} />
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 4,
+              }}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Today"
+                onPress={() =>
+                  setMonth(
+                    new Date(
+                      new Date().getFullYear(),
+                      new Date().getMonth(),
+                      1,
+                    ),
+                  )
+                }
+                style={{ padding: 8, minHeight: 44, justifyContent: "center" }}
+              >
+                <Text style={{ color: colors.teal }}>Today</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Previous month"
+                onPress={() => navigateMonth(-1)}
+                style={styles.iconButton}
+              >
+                <Icon name="chevron-back" size={18} />
+              </Pressable>
+              <View
+                style={{
+                  flex: 1,
+                  minWidth: 100,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 5,
+                }}
+              >
+                <Icon name="calendar-outline" size={18} />
+                <Text style={{ flex: 1, color: colors.ink, fontSize: 12 }}>
+                  {month.toLocaleDateString(undefined, {
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Next month"
+                onPress={() => navigateMonth(1)}
+                style={styles.iconButton}
+              >
+                <Icon name="chevron-forward" size={18} />
+              </Pressable>
             </View>
             <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
               {["S", "M", "T", "W", "T", "F", "S"].map((name, index) => (
@@ -301,7 +402,16 @@ export default function Recurring() {
           </Card>
           {data.suggestions?.length ? (
             <Card>
-              <Heading>Review suggestions</Heading>
+              <Text
+                accessibilityRole="header"
+                style={{
+                  color: colors.ink,
+                  fontFamily: "Poppins-SemiBold",
+                  fontSize: 16,
+                }}
+              >
+                Review suggestions
+              </Text>
               {data.suggestions.map((s) => (
                 <View key={s.id} style={{ gap: 8 }}>
                   <Body muted={false}>
@@ -333,7 +443,11 @@ export default function Recurring() {
           ) : null}
           <Card>
             <Text
-              style={{ color: colors.ink, fontWeight: "600", fontSize: 18 }}
+              style={{
+                color: colors.ink,
+                fontFamily: "Poppins-SemiBold",
+                fontSize: 16,
+              }}
             >
               All saved items
             </Text>

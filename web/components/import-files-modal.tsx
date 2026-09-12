@@ -1,4 +1,5 @@
 "use client";
+import { UploadSourceButtons } from "@/components/upload-source-buttons";
 
 import { InterfaceIcon } from "@/components/interface-icon";
 
@@ -8515,17 +8516,7 @@ export function ImportFilesModal({
           <strong>Drop files anywhere on this page</strong>
           <span>Or use one of the options below.</span>
           <input ref={photoLibraryInputRef} className="hidden-file-input" type="file" accept="image/*" multiple onChange={handleInputChange} />
-          <div className="accounts-import-dropzone__actions organize-upload-choices">
-            <button className="button button-primary" type="button" onClick={openFilePicker}>
-              <img src="/assets/3d%20icons/navigation/figma-v1/data.webp" alt="" width="48" height="48" />Choose files
-            </button>
-            <button className="button button-secondary" type="button" onClick={() => cameraInputRef.current?.click()}>
-              <img src="/assets/organize/camera.svg" alt="" width="48" height="48" />Take photo
-            </button>
-            <button className="button button-secondary" type="button" onClick={() => photoLibraryInputRef.current?.click()}>
-              <img src="/assets/organize/camera.svg" alt="" width="48" height="48" />Photo library
-            </button>
-          </div>
+          <UploadSourceButtons onFiles={openFilePicker} onCamera={() => cameraInputRef.current?.click()} onLibrary={() => photoLibraryInputRef.current?.click()} />
         </div>
 
         <div className="accounts-import-footer-copy">
@@ -8540,6 +8531,9 @@ export function ImportFilesModal({
           <p>
             Accepted files: PDF, CSV, TSV, XLSX, XLS, XLSM, XLSB, ODS, JPG, JPEG, PNG, WEBP, HEIC, and HEIF.
             <br />
+          </p>
+          <p className="accounts-import-footer-copy__security">Your files are protected with encrypted connections and restricted access. Clover never sells your data.</p>
+          <p>
             Password-protected PDFs are supported.
           </p>
         </div>

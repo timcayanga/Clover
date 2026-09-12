@@ -103,8 +103,8 @@ async function main() {
   );
   assert.match(
     transactionsPage,
-    /workspaceCurrencyCodes\.length > 0 \? <CurrencySelector/,
-    "The toolbar must hide its currency selector when the workspace has no transaction currencies."
+    /TransactionFilterRow label="Currency"[\s\S]{0,250}\["", \.\.\.workspaceCurrencyCodes\]\.map/,
+    "Currency choices belong in Filters and must come from the workspace, with only All currencies when empty."
   );
   assert.match(
     styles,

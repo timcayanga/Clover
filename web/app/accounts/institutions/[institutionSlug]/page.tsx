@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -1525,8 +1526,9 @@ export default function InvestmentInstitutionDetailPage() {
   return (
     <CloverShell
       active="accounts"
-      title={tradeMode ? "Add Trade" : routeInstitution || "Institution"}
+      title={tradeMode ? "Add Trade" : "Institution Details"}
       mobileBackHref={tradeMode ? institutionPath : "/accounts"}
+      mobileTrailingAction={<Link className="icon-button" href={tradeMode ? institutionPath : "/accounts"} aria-label="Close institution details">×</Link>}
       actions={!tradeMode ? (
         <button className="button button-secondary button-small institution-back-to-accounts" type="button" onClick={() => router.push("/accounts")}>
           Back to Accounts

@@ -1,0 +1,28 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="3D Clover icon / Choose Files">
+<path id="Vector" opacity="0.12" d="M28.875 53.375C39.5065 53.375 48.125 51.4162 48.125 49C48.125 46.5838 39.5065 44.625 28.875 44.625C18.2435 44.625 9.625 46.5838 9.625 49C9.625 51.4162 18.2435 53.375 28.875 53.375Z" fill="#07536B"/>
+<path id="Vector_2" d="M14.875 9.625H35.875L43.75 18.375V43.75L40.25 48.125H14.875V9.625Z" fill="#068CA6"/>
+<path id="Vector_3" d="M12.25 6.125H33.25L42 14.875V42.875H12.25V6.125Z" fill="url(#paint0_linear_0_47)"/>
+<path id="Vector_4" d="M17.5 7.875H33.25L42 16.625V42H17.5V7.875Z" fill="url(#paint1_linear_0_47)"/>
+<path id="Vector_5" d="M33.25 7.875V17.5H42" fill="#94DFD8"/>
+<g id="Vector_6">
+<path d="M22.75 24.5H35.875ZM22.75 29.75H35.875ZM22.75 35H31.5Z" fill="black"/>
+<path d="M22.75 24.5H35.875M22.75 29.75H35.875M22.75 35H31.5" stroke="#36AAB8" stroke-width="2.1875" stroke-linecap="round"/>
+</g>
+<g id="Vector_7" opacity="0.8">
+<path d="M12.25 7V42Z" fill="black"/>
+<path d="M12.25 7V42" stroke="#B5FFF0" stroke-width="1.75"/>
+</g>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_47" x1="12.25" y1="6.125" x2="48.1945" y2="35.2229" gradientUnits="userSpaceOnUse">
+<stop stop-color="#78F0D6"/>
+<stop offset="0.52" stop-color="#27CACC"/>
+<stop offset="1" stop-color="#039BB6"/>
+</linearGradient>
+<linearGradient id="paint1_linear_0_47" x1="17.5" y1="7.875" x2="49.8336" y2="31.0889" gradientUnits="userSpaceOnUse">
+<stop stop-color="white"/>
+<stop offset="1" stop-color="#D5F8F2"/>
+</linearGradient>
+</defs>
+</svg>

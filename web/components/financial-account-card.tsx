@@ -204,14 +204,14 @@ export function FinancialAccountCard({
               <strong className="financial-account-card__name">{name}</strong>
             )}
           </div>
-          {showEditAction && onNameCommit ? (
+          {showEditAction && (onNameCommit || onAmountCommit) ? (
             <button
               type="button"
               className="financial-account-card__edit"
               aria-label={`Edit ${name} details`}
               onClick={(event) => {
                 event.stopPropagation();
-                contentRef.current?.querySelector<HTMLButtonElement>("button.financial-account-card__name")?.click();
+                contentRef.current?.querySelector<HTMLButtonElement>(onNameCommit ? "button.financial-account-card__name" : "button.financial-account-card__amount")?.click();
               }}
             >
               <InterfaceIcon name="edit" />

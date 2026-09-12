@@ -4554,7 +4554,6 @@ function AccountsPageContent() {
 
   const accountsShellActions = (
     <>
-      <ContextualAskClover context="accounts" planTier={planTier} />
       <CurrencySelector
         value={selectedCurrency}
         onChange={(next) => {
@@ -4593,9 +4592,12 @@ function AccountsPageContent() {
       active="accounts"
       title="Accounts"
       mobileLeadingAction={<ContextualAskClover context="accounts" planTier={planTier} />}
-      actions={accountsShellActions}
+      desktopTitleAction={<ContextualAskClover context="accounts" planTier={planTier} />}
+      mobileTrailingAction={<button className="icon-button" type="button" aria-label="Add account" onClick={openAddAccount}><ActionIcon name="plus" /></button>}
+      actions={<div className="accounts-desktop-tools">{accountsShellActions}</div>}
       >
       <div className="accounts-page">
+        <details className="accounts-mobile-tools"><summary>Account tools</summary><div>{accountsShellActions}</div></details>
         {visibleAccounts.length > 0 ? (
           <section className="accounts-overview-grid" aria-label="Account summary">
             <article className="accounts-overview-card glass">

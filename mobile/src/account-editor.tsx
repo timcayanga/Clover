@@ -1,3 +1,4 @@
+import { Pressable, View, Text } from "react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   Body,
@@ -5,6 +6,8 @@ import {
   Card,
   Field,
   Heading,
+  Icon,
+  useTheme,
   Notice,
   Screen,
   money,
@@ -246,11 +249,12 @@ export function AccountEditor({
           : []),
       ]
     : ["balance"];
+  const { colors } = useTheme();
   return (
     <Screen>
-      <Heading>
-        {editing ? (record ? "Edit account" : "Add account") : record?.name}
-      </Heading>
+      {editing ? (
+        <Heading>{record ? "Edit account" : "Add account"}</Heading>
+      ) : null}
       {error ? <Notice>{error}</Notice> : null}
       {loading ? (
         <Body>Loading account details…</Body>
@@ -310,6 +314,33 @@ export function AccountEditor({
         </Card>
       ) : record ? (
         <Card>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <Text
+              style={{
+                flex: 1,
+                color: colors.ink,
+                fontFamily: "Poppins-SemiBold",
+                fontSize: 16,
+              }}
+            >
+              {record.name}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Edit account"
+              onPress={beginEdit}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 8,
+                backgroundColor: "white",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Icon name="create-outline" color="#18343e" />
+            </Pressable>
+          </View>
           <Body>
             {record.institution || "Manual account"} ·{" "}
             {record.type.replaceAll("_", " ")}
@@ -343,7 +374,6 @@ export function AccountEditor({
                 )}
               </Body>
             ))}
-          <Button title="Edit account" onPress={beginEdit} />
           <Button
             title="Delete account"
             secondary

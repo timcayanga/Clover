@@ -17,7 +17,7 @@ export function TransactionSelectionToolbar({ compact, warningCount = 0, count, 
       </div>
     </> : <>
       <input type="search" aria-label="Search" placeholder="Search" value={query} onChange={(event) => onQueryChange(event.target.value)} />
-      <button type="button" className="button button-secondary button-small transactions-action-button transaction-selection-toolbar__filter" onClick={onFilter} aria-label="Filter transactions" aria-expanded={filterOpen}>Filters{compact && warningCount > 0 ? <span className="transaction-filter-warning" aria-label={`${warningCount} warnings`}><span className="warning-mark warning-mark--small" aria-hidden="true" />{warningCount}</span> : null}</button>
+      <button type="button" className="button button-secondary button-small transactions-action-button transaction-selection-toolbar__filter" onClick={onFilter} aria-label="Filter transactions" aria-expanded={filterOpen}><img src="/assets/organize/filter.svg" alt="" width="16" height="16" />Filters{compact && warningCount > 0 ? <span className="transaction-filter-warning" aria-label={`${warningCount} warnings`}><span className="warning-mark warning-mark--small" aria-hidden="true" />{warningCount}</span> : null}</button>
     </>}
   </div>;
 }

@@ -358,7 +358,7 @@ export default function TransactionDetailPage() {
   };
 
   return (
-    <CloverShell active="transactions" title="Transaction Details" showTopbar={false} mobileBackHref="/transactions">
+    <CloverShell active="transactions" title="Transaction Details" showTopbar={false} mobileBackHref="/transactions" mobileTrailingAction={<button className="icon-button" type="button" aria-label="Close transaction details" onClick={goBack}><span aria-hidden="true">×</span></button>}>
       <main className="transaction-detail-page">
         <header className="transaction-detail-page__header">
           <button className="transaction-detail-page__back" type="button" onClick={goBack} aria-label="Back to transactions">

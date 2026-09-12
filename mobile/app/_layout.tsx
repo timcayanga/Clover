@@ -2,6 +2,7 @@ import { ClerkProvider, useAuth } from "@clerk/expo";
 import { useHostedAuth } from "@clerk/expo/hosted-auth";
 import { tokenCache } from "@clerk/expo/token-cache";
 import { Stack, usePathname } from "expo-router";
+import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
 import { useState, type ReactNode } from "react";
 import { AppState, Platform, StyleSheet, Text, View } from "react-native";
@@ -80,7 +81,7 @@ function Routes() {
             name="transaction/[id]"
             options={{
               title: "Transaction",
-              header: () => <AppHeader title="Transaction" back />,
+              header: () => <AppHeader title="Transaction Details" back />,
             }}
           />
           <Stack.Screen
@@ -168,7 +169,11 @@ function AuthenticatedApp() {
   );
 }
 export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    "Poppins-SemiBold": require("../assets/fonts/Poppins-SemiBold.ttf"),
+  });
   const key = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  if (!fontsLoaded && !fontError) return null;
   return (
     <SafeAreaProvider>
       {key ? (

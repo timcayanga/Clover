@@ -1,4 +1,5 @@
 "use client";
+import { UploadSourceButtons, UploadSecurityCopy } from "@/components/upload-source-buttons";
 import { TransactionColumns, TransactionTagPreview, useTransactionColumns } from "@/components/transaction-columns";
 import { organizeAccountLabels } from "@/lib/organize-account-label";
 import { InterfaceIcon } from "@/components/interface-icon";
@@ -7521,17 +7522,6 @@ function TransactionsPageContent() {
   }, [selectedWorkspaceId, shouldShowSyncingInsteadOfEmpty, transactionsPage, transactionsPageSize]);
   const transactionsShellActions = isCompactViewport ? (
     <div className="transactions-shell-actions transactions-shell-actions--compact" style={transactionsShellActionsStyle}>
-      <input
-        ref={addFileInputRef}
-        className="hidden-file-input"
-        type="file"
-        accept=".csv,.tsv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
-        multiple
-        onChange={handleMobileFileChange}
-        aria-hidden="true"
-        tabIndex={-1}
-      />
-
       <button
         className="button button-secondary button-small accounts-toolbar-add transactions-toolbar-add transactions-toolbar-add--compact"
         type="button"
@@ -7560,57 +7550,7 @@ function TransactionsPageContent() {
     <div className="transactions-shell-actions" style={transactionsShellActionsStyle}>
       <TransactionSelectionToolbar count={0} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} />
 
-      {workspaceCurrencyCodes.length > 0 ? <CurrencySelector
-        value={workspaceCurrencyCodes.length > 1 ? currencyFilter : workspaceCurrencyCodes[0] ?? "PHP"}
-        onChange={(next) => {
-          const nextCurrency = next && next.toLowerCase() !== "all" ? formatCurrencyCode(next) : "";
-          setCurrencyFilter(nextCurrency);
-          persistSelectedCurrency(selectedWorkspaceId, nextCurrency);
-        }}
-        options={workspaceCurrencyCodes}
-        includeAllOption={workspaceCurrencyCodes.length > 1}
-        allLabel="All currencies"
-        ariaLabel="Filter transactions by currency"
-        className="transactions-currency-filter"
-        buttonClassName="transactions-currency-filter__button transactions-action-button transactions-toolbar-chip"
-        menuClassName="transactions-currency-filter__menu"
-        optionClassName="transactions-currency-filter__option"
-        menuAlignment="end"
-        showChevron={false}
-      /> : null}
       <TransactionsManageMenu />
-
-      <input
-        ref={addFileInputRef}
-        className="hidden-file-input"
-        type="file"
-        accept=".csv,.tsv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
-        multiple
-        onChange={handleMobileFileChange}
-        aria-hidden="true"
-        tabIndex={-1}
-      />
-
-      <input
-        ref={addPhotoInputRef}
-        className="hidden-file-input"
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={handlePhotoCaptureChange}
-        aria-hidden="true"
-        tabIndex={-1}
-      />
-      <input
-        ref={addPhotoLibraryInputRef}
-        className="hidden-file-input"
-        type="file"
-        accept="image/*"
-        multiple
-        onChange={handlePhotoCaptureChange}
-        aria-hidden="true"
-        tabIndex={-1}
-      />
 
       <div className="transactions-add-menu" id="transactions-add-menu" ref={addMenuRef} style={transactionsMenuStyle}>
         <button
@@ -7698,8 +7638,41 @@ function TransactionsPageContent() {
         </div>
       }
 
+      mobileTrailingAction={<button className="icon-button" type="button" aria-label="Add transaction" onClick={() => void openManualAdd()}><ActionIcon name="plus" /></button>}
       actions={transactionsShellActions}
     >
+      <input
+        ref={addFileInputRef}
+        className="hidden-file-input"
+        type="file"
+        accept=".csv,.tsv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
+        multiple
+        onChange={handleMobileFileChange}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+
+      <input
+        ref={addPhotoInputRef}
+        className="hidden-file-input"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handlePhotoCaptureChange}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+      <input
+        ref={addPhotoLibraryInputRef}
+        className="hidden-file-input"
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={handlePhotoCaptureChange}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+
       <PageFileDropZone
         enabled={true}
         title="Drop statement files anywhere"
@@ -8654,7 +8627,7 @@ function TransactionsPageContent() {
                     const index = tabs.indexOf(tab);
                     const next = event.key === "ArrowRight" ? tabs[(index + 1) % 3] : event.key === "ArrowLeft" ? tabs[(index + 2) % 3] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[2] : null;
                     if (next) { event.preventDefault(); setCreationTab(next); if (next === "ask") setCreationChatVisited(true); document.getElementById(`creation-tab-${next}`)?.focus(); }
-                  }} onClick={() => { setCreationTab(tab); if (tab === "ask") setCreationChatVisited(true); }}>{label}</button>
+                  }} onClick={() => { setCreationTab(tab); if (tab === "ask") setCreationChatVisited(true); }}><img src={`/assets/organize/method-${tab}.svg`} alt="" width="20" height="20" />{label}</button>
                 ))}
               </div>
             )}
@@ -9078,11 +9051,7 @@ function TransactionsPageContent() {
             {true ? <div id="creation-panel-upload" role="tabpanel" aria-labelledby="creation-tab-upload" hidden={creationTab !== "upload"} className="transaction-creation-panel">
               <h4>Add from a receipt or statement</h4>
               <p>Choose a source to open it directly.</p>
-              <div className="transaction-creation-upload">
-                <button className="button button-secondary" type="button" onClick={openPhotoCapture}>Scan receipt</button>
-                <button className="button button-secondary" type="button" onClick={openPhotoLibrary}>Choose photos</button>
-                <button className="button button-secondary" type="button" onClick={openMobileFilePicker}>Upload files</button>
-              </div>
+              <UploadSourceButtons onFiles={openMobileFilePicker} onCamera={openPhotoCapture} onLibrary={openPhotoLibrary} /><UploadSecurityCopy />
             </div> : null}
           </section>
         </div>
@@ -9097,6 +9066,7 @@ function TransactionsPageContent() {
             aria-labelledby="transaction-notes-title"
             onClick={(event) => event.stopPropagation()}
           >
+            <div className="transaction-drawer__mobile-header"><ContextualAskClover context="transactions" planTier={planTier} /><h4>Transaction Details</h4><button className="icon-button" type="button" aria-label="Close transaction details" onClick={closeTransactionDetail}><InterfaceIcon name="close" /></button></div>
             <div className="modal-head transaction-drawer__head">
               <div className="transaction-drawer__head-title">
                 <button

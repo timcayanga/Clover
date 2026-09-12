@@ -1,4 +1,5 @@
 "use client";
+import { UploadSourcePicker, UploadSecurityCopy } from "@/components/upload-source-buttons";
 
 import dynamic from "next/dynamic";
 const AdviserChat = dynamic(() => import("@/components/adviser-chat").then(module => module.AdviserChat));
@@ -103,6 +104,7 @@ export function DashboardManualTransactionModal({
   const [askVisited, setAskVisited] = useState(false);
   const [isPro, setIsPro] = useState(false);
   const [entryUploadOpen, setEntryUploadOpen] = useState(false);
+  const [entryUploadFiles, setEntryUploadFiles] = useState<File[]>([]);
   useEffect(() => {
     let active = true;
     void fetch("/api/me").then(response => response.ok ? response.json() : null).then(data => { if (active) setIsPro(data?.user?.planTier === "pro"); }).catch(() => {});
@@ -491,7 +493,7 @@ export function DashboardManualTransactionModal({
             const tabs = ["manual", "ask", "upload"] as const;
             const next = event.key === "ArrowRight" ? tabs[(index + 1) % 3] : event.key === "ArrowLeft" ? tabs[(index + 2) % 3] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[2] : null;
             if (next) { event.preventDefault(); setEntryTab(next); if (next === "ask") setAskVisited(true); document.getElementById(`quick-entry-tab-${next}`)?.focus(); }
-          }}>{tab === "manual" ? "Manual" : tab === "ask" ? "Ask Clover" : "Upload"}</button>)}
+          }}><img src={`/assets/organize/method-${tab}.svg`} alt="" width="20" height="20" />{tab === "manual" ? "Manual" : tab === "ask" ? "Ask Clover" : "Upload"}</button>)}
         </div>
         <div id="quick-entry-panel-manual" role="tabpanel" aria-labelledby="quick-entry-tab-manual" hidden={entryTab !== "manual"}>
         <form onSubmit={handleSubmit}>
@@ -870,10 +872,10 @@ export function DashboardManualTransactionModal({
         </div> : null}
         <div id="quick-entry-panel-upload" role="tabpanel" aria-labelledby="quick-entry-tab-upload" hidden={entryTab !== "upload"} className="transaction-creation-panel">
           <h4>Add from a receipt or statement</h4><p>Choose files to review and import.</p>
-          <button type="button" className="button button-primary" onClick={() => setEntryUploadOpen(true)}>Choose files</button>
+          <UploadSourcePicker onSelect={files => { setEntryUploadFiles(files); setEntryUploadOpen(true); }} /><UploadSecurityCopy />
         </div>
       </section>
-      <ImportFilesModal open={entryUploadOpen} workspaceId={workspaceId} accounts={accounts} onClose={() => setEntryUploadOpen(false)} onImported={() => router.refresh()} />
+      <ImportFilesModal initialFiles={entryUploadFiles} onInitialFilesConsumed={() => setEntryUploadFiles([])} open={entryUploadOpen} workspaceId={workspaceId} accounts={accounts} onClose={() => setEntryUploadOpen(false)} onImported={() => router.refresh()} />
     </div>,
     document.body
   );

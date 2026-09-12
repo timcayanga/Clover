@@ -272,7 +272,7 @@ export default function Home() {
           </View>
           <Card>
             <Text
-              style={{ color: colors.ink, fontSize: 18, fontWeight: "600" }}
+              style={{ color: colors.ink, fontSize: 16, fontFamily: "Poppins-SemiBold" }}
             >
               Next steps
             </Text>
@@ -303,7 +303,7 @@ export default function Home() {
           {data.budgets?.length ? (
             <Card>
               <Text
-                style={{ color: colors.ink, fontSize: 18, fontWeight: "600" }}
+                style={{ color: colors.ink, fontSize: 16, fontFamily: "Poppins-SemiBold" }}
               >
                 Budgeting
               </Text>
@@ -369,7 +369,7 @@ export default function Home() {
           ).map(([key, title]) => (
             <Card key={key}>
               <Text
-                style={{ color: colors.ink, fontSize: 18, fontWeight: "600" }}
+                style={{ color: colors.ink, fontSize: 16, fontFamily: "Poppins-SemiBold" }}
               >
                 {title}
               </Text>
@@ -414,7 +414,7 @@ export default function Home() {
           ))}
           <Card>
             <Text
-              style={{ color: colors.ink, fontSize: 18, fontWeight: "600" }}
+              style={{ color: colors.ink, fontSize: 16, fontFamily: "Poppins-SemiBold" }}
             >
               Spending by category
             </Text>
@@ -450,7 +450,7 @@ export default function Home() {
           {data.overdue?.length ? (
             <Card>
               <Text
-                style={{ color: colors.ink, fontSize: 18, fontWeight: "600" }}
+                style={{ color: colors.ink, fontSize: 16, fontFamily: "Poppins-SemiBold" }}
               >
                 Recent overdue payments
               </Text>
@@ -471,7 +471,7 @@ export default function Home() {
           ) : null}
           <Card>
             <Text
-              style={{ color: colors.ink, fontSize: 18, fontWeight: "600" }}
+              style={{ color: colors.ink, fontSize: 16, fontFamily: "Poppins-SemiBold" }}
             >
               Upcoming payments
             </Text>

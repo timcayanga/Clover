@@ -122,3 +122,5 @@
 .transactions-filters-overlay { width: min(500px, calc(100vw - 32px)); border-radius: 12px; }
 .transaction-filter-row > summary { grid-template-columns: 130px minmax(0, 1fr) 16px; min-height: 50px; }
 @media (max-width: 1100px) { .transactions-filters-overlay { width: auto; } }
+
+.transaction-selection-toolbar input[type="search"] { background-image:url("/assets/organize/search.svg"); background-repeat:no-repeat; background-position:12px center; background-size:16px; padding-left:36px; }

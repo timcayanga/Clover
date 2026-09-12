@@ -1,4 +1,5 @@
 "use client";
+import { InterfaceIcon } from "@/components/interface-icon";
 
 import { useMemo, useRef, useState, type PointerEvent } from "react";
 import type { FinancialCommitmentSummary } from "@/lib/commitments";
@@ -110,7 +111,7 @@ export function RecurringCalendar({
           <button type="button" className="recurring-calendar__nav" onClick={() => navigateMonth(-1)} aria-label="Previous month">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
           </button>
-          <div className="recurring-calendar__date-picker" aria-live="polite">
+          <div className="recurring-calendar__date-picker" aria-live="polite"><InterfaceIcon name="date" size={16} />
             <label>
               <span className="sr-only">Month</span>
               <select value={selectedMonth} onChange={(event) => setSelectedMonth(Number(event.target.value))} aria-label="Calendar month">
