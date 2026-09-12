@@ -21,6 +21,7 @@ const config: ExpoConfig = {
   plugins: [
     "expo-router",
     "./plugins/with-unique-pod-uuids.cjs",
+    "./plugins/with-quoted-ios-paths.cjs",
     "expo-secure-store",
     "expo-web-browser",
     "expo-font",

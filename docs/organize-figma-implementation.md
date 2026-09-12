@@ -23,3 +23,14 @@ The native browser preview checks verify shared React Native rendering, not oper
 New presentation regressions cover account label disambiguation, last-four-only mobile projection and read-only recurring API access. The required repository pre-push gate includes web regressions, native type/dependency checks, iOS/Android JavaScript bundles and the production web build.
 
 A local Expo config plugin prevents CocoaPods post-install UUID collisions, related to React Native PR 57576. Generated native projects and dependency directories are not committed.
+
+Expo 57’s Constants build phase and React Native bundle launcher use quoted paths so native iOS builds work from this repository’s `Finance Manager` folder. It uses the upstream Node wrapper and preserves the resource bundle destination.
+
+## Verification results
+
+- 19/19 local desktop/mobile-web presentation and interaction checks passed.
+- 12/12 React Native browser-preview checks passed across light and dark mode. These are not OS device tests.
+- Android arm64 debug APK build passed; recording permission verified in the packaged manifest.
+- iOS arm64 simulator build passed; packaged microphone/speech descriptions, automatic appearance and generated Expo configuration verified.
+- Full repository pre-push gate passed, including the presentation updates, microphone permissions and iOS build-script fixes.
+- TestFlight/Google Play distribution and physical-device camera/speech QA are not included.
