@@ -802,6 +802,9 @@ function InlineEditableCell({
   className,
 }: InlineEditableCellProps) {
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const [draft, setDraft] = useState(value);
   const fieldRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
 
@@ -825,15 +828,18 @@ function InlineEditableCell({
 
   const openEditor = () => {
     setDraft(kind === "date" ? displayValue : value);
+    setError("");
     setEditing(true);
   };
 
   const cancelEditor = () => {
     setDraft(value);
     setEditing(false);
+    requestAnimationFrame(() => triggerRef.current?.focus());
   };
 
   const commit = async (nextValue = draft) => {
+    if (saving) return;
     const normalized =
       kind === "text"
         ? nextValue.trim()
@@ -841,6 +847,7 @@ function InlineEditableCell({
           ? parseInlineDate(nextValue)
           : nextValue;
     if (normalized === null) {
+      setError("Enter a valid date.");
       return;
     }
     if (normalized === value) {
@@ -848,12 +855,16 @@ function InlineEditableCell({
       return;
     }
 
+    setSaving(true);
+    setError("");
     try {
       await onCommit(normalized);
       setEditing(false);
+      requestAnimationFrame(() => triggerRef.current?.focus());
     } catch {
-      setDraft(value);
-      setEditing(false);
+      setError("Could not save. Try again.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -906,6 +917,8 @@ function InlineEditableCell({
 
   if (editing) {
     return (
+      <div className="transaction-inline-editor"><div className="transaction-inline-editor__panel" role="group" aria-label={ariaLabel}>
+      <span className="transaction-inline-editor__label">{kind === "date" ? "Date" : kind === "number" ? "Amount" : "Name"}</span>
       <input
         ref={(node) => {
           fieldRef.current = node;
@@ -916,9 +929,7 @@ function InlineEditableCell({
         type={kind === "date" ? "text" : kind}
         placeholder={kind === "date" ? "Jul 24, 2026" : undefined}
         onChange={(event) => setDraft(event.target.value)}
-        onBlur={() => {
-          void commit();
-        }}
+        disabled={saving}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault();
@@ -931,11 +942,16 @@ function InlineEditableCell({
           }
         }}
       />
+      {error ? <p role="alert">{error}</p> : null}
+      <div className="transaction-inline-editor__actions">
+        <button type="button" className="button button-ghost button-small" disabled={saving} onClick={cancelEditor}>Cancel</button>
+        <button type="button" className="button button-primary button-small" disabled={saving} onClick={() => void commit()}>{saving ? "Saving…" : "Save"}</button>
+      </div></div></div>
     );
   }
 
   return (
-    <button type="button" className={className} onClick={openEditor} aria-label={ariaLabel} title={displayValue}>
+    <button ref={triggerRef} type="button" className={className} onClick={openEditor} aria-label={ariaLabel} title={displayValue}>
       {displayValue}
     </button>
   );
@@ -1237,6 +1253,7 @@ const matchesTransactionFilters = (
     customEnd: string;
     amountMin: string;
     amountMax: string;
+    reviewFilter: string; sourceFilter: string; confidenceFilter: string;
     otherCategoryId: string;
     categoryNameById: Map<string, string>;
   },
@@ -1248,6 +1265,14 @@ const matchesTransactionFilters = (
       .filter(Boolean)
   );
 
+  if (filters.reviewFilter === "confirmed" && transaction.reviewStatus !== "confirmed") return false;
+  if (filters.reviewFilter === "pending" && ["confirmed", "rejected", "duplicate_skipped"].includes(transaction.reviewStatus ?? "")) return false;
+  if (filters.sourceFilter === "manual" && transaction.importFileId) return false;
+  if (filters.sourceFilter === "upload" && !transaction.importFileId) return false;
+  const recordedConfidence = Number(transaction.parserConfidence ?? 0);
+  if (filters.confidenceFilter === "high" && recordedConfidence < 85) return false;
+  if (filters.confidenceFilter === "medium" && (recordedConfidence < 65 || recordedConfidence >= 85)) return false;
+  if (filters.confidenceFilter === "low" && recordedConfidence >= 65) return false;
   if (filters.tagFilters.length && !transaction.tags?.some((tag) => filters.tagFilters.includes(tag.id))) return false;
 
   if (filters.currencyFilter && formatCurrencyCode(transaction.currency) !== formatCurrencyCode(filters.currencyFilter)) {
@@ -2233,6 +2258,9 @@ function TransactionsPageContent() {
   } | null>(null);
   const [amountMin, setAmountMin] = useState("");
   const [amountMax, setAmountMax] = useState("");
+  const [reviewFilter, setReviewFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [confidenceFilter, setConfidenceFilter] = useState("");
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [filterTags, setFilterTags] = useState<Array<{ id: string; name: string }>>([]);
   const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
@@ -2360,11 +2388,11 @@ function TransactionsPageContent() {
   const transactionsLoadRequestRef = useRef(0);
   const requestGateRef = useRef(createTransactionRequestGate());
   const hasActiveTransactionFilters = Boolean(query.trim() || currencyFilter || categoryFilters.length || tagFilters.length ||
-    accountFilters.length || typeFilters.length || dateFilterMode !== "ltd" || customStart || customEnd || amountMin || amountMax);
+    accountFilters.length || typeFilters.length || dateFilterMode !== "ltd" || customStart || customEnd || amountMin || amountMax || reviewFilter || sourceFilter || confidenceFilter);
   const transactionQueryKey = JSON.stringify([
     selectedWorkspaceId, query, currencyFilter, categoryFilters, tagFilters,
     accountFilters, typeFilters, dateFilterMode, dateFilterAnchor, customStart,
-    customEnd, sortField, sortDirection, amountMin, amountMax, transactionsPage, transactionsPageSize, summaryOpen,
+    customEnd, sortField, sortDirection, amountMin, amountMax, reviewFilter, sourceFilter, confidenceFilter, transactionsPage, transactionsPageSize, summaryOpen,
   ]);
   const skipContextWriteRef = useRef(true);
   const [contextRestoreVersion, setContextRestoreVersion] = useState(0);
@@ -2372,7 +2400,7 @@ function TransactionsPageContent() {
     if (skipContextWriteRef.current) { skipContextWriteRef.current = false; return; }
     const context = {
       query, categoryFilters, tagFilters, accountFilters, typeFilters,
-      dateFilterMode, dateFilterAnchor, customStart, customEnd, amountMin, amountMax, sortField, sortDirection,
+      dateFilterMode, dateFilterAnchor, customStart, customEnd, amountMin, amountMax, reviewFilter, sourceFilter, confidenceFilter, sortField, sortDirection,
     };
     if (selectedWorkspaceId) writeTransactionListContext(selectedWorkspaceId, context);
   }, [transactionQueryKey, contextRestoreVersion]);
@@ -2399,7 +2427,7 @@ function TransactionsPageContent() {
   const headerMenuRef = useRef<HTMLDivElement | null>(null);
   const manualModalStyle = useMemo<React.CSSProperties>(
     () => ({
-      width: isCompactViewport ? "100vw" : "620px",
+      width: isCompactViewport ? "100vw" : "640px",
       maxHeight: isCompactViewport ? "100dvh" : "calc(100dvh - 24px)",
       overflow: "auto",
     }),
@@ -2838,7 +2866,7 @@ function TransactionsPageContent() {
         customStart.trim() ||
         customEnd.trim() ||
         amountMin.trim() ||
-        amountMax.trim()
+        (amountMax.trim() || reviewFilter || sourceFilter || confidenceFilter)
     );
     const searchParams = buildTransactionQuerySearchParams(
       workspaceId,
@@ -2856,7 +2884,7 @@ function TransactionsPageContent() {
         sortField,
         sortDirection,
         amountMin,
-        amountMax,
+        amountMax, reviewFilter, sourceFilter, confidenceFilter,
       },
       {
         page: requestPage,
@@ -2880,7 +2908,7 @@ function TransactionsPageContent() {
         sortField,
         sortDirection,
         amountMin,
-        amountMax,
+        amountMax, reviewFilter, sourceFilter, confidenceFilter,
       },
       { page: 1, pageSize: 200 }
     );
@@ -3341,6 +3369,7 @@ function TransactionsPageContent() {
         setCustomEnd("");
         setAmountMin("");
         setAmountMax("");
+        setReviewFilter(""); setSourceFilter(""); setConfidenceFilter("");
         setSortField("date");
         setSortDirection("desc");
         setActiveHeaderSort(null);
@@ -3666,6 +3695,7 @@ function TransactionsPageContent() {
     setCustomEnd(saved?.customEnd ?? "");
     setAmountMin(saved?.amountMin ?? "");
     setAmountMax(saved?.amountMax ?? "");
+    setReviewFilter(saved?.reviewFilter ?? ""); setSourceFilter(saved?.sourceFilter ?? ""); setConfidenceFilter(saved?.confidenceFilter ?? "");
     setSortField(saved?.sortField ?? "date");
     setSortDirection(saved?.sortDirection ?? "desc");
     setTransactionsPage(1);
@@ -3808,7 +3838,7 @@ function TransactionsPageContent() {
     sortField,
     sortDirection,
     amountMin,
-    amountMax,
+    amountMax, reviewFilter, sourceFilter, confidenceFilter,
     transactionsPage,
     transactionsPageSize,
   ]);
@@ -3864,7 +3894,7 @@ function TransactionsPageContent() {
     sortField,
     sortDirection,
     amountMin,
-    amountMax,
+    amountMax, reviewFilter, sourceFilter, confidenceFilter,
   ]);
 
   useEffect(() => {
@@ -4253,7 +4283,7 @@ function TransactionsPageContent() {
           customStart,
           customEnd,
           amountMin,
-          amountMax,
+          amountMax, reviewFilter, sourceFilter, confidenceFilter,
           otherCategoryId,
           categoryNameById,
         }, accountNumberById)
@@ -4310,7 +4340,7 @@ function TransactionsPageContent() {
     customStart,
     customEnd,
     amountMin,
-    amountMax,
+    amountMax, reviewFilter, sourceFilter, confidenceFilter,
     otherCategoryId,
     searchText,
     sortDirection,
@@ -4327,7 +4357,7 @@ function TransactionsPageContent() {
       customStart.trim() ||
       customEnd.trim() ||
       amountMin.trim() ||
-      amountMax.trim()
+      (amountMax.trim() || reviewFilter || sourceFilter || confidenceFilter)
   );
   const visibleFilteredSummary = useMemo(
     () =>
@@ -4804,7 +4834,7 @@ function TransactionsPageContent() {
     sortField,
     sortDirection,
     amountMin,
-    amountMax,
+    amountMax, reviewFilter, sourceFilter, confidenceFilter,
   ]);
 
   useEffect(() => {
@@ -6724,7 +6754,7 @@ function TransactionsPageContent() {
         sortField,
         sortDirection,
         amountMin,
-        amountMax,
+        amountMax, reviewFilter, sourceFilter, confidenceFilter,
       },
       {
         pageSize: "all",
@@ -7397,14 +7427,38 @@ function TransactionsPageContent() {
     totalTransactionCountForDisplay > 0;
   const showTransactionsLoadingState =
     !isCanceledImport && (isTableLoading || shouldShowSyncingInsteadOfEmpty || hasKnownTransactionsAwaitingRows);
+  const clearTransactionFilters = () => {
+    setQuery(""); setCurrencyFilter(""); persistSelectedCurrency(selectedWorkspaceId, "");
+    setCategoryFilters([]); setAccountFilters([]); setTypeFilters([]); setTagFilters([]);
+    setDateFilterMode("ltd"); setDateFilterAnchor(todayIso); setCustomStart(""); setCustomEnd("");
+    setAmountMin(""); setAmountMax(""); setReviewFilter(""); setSourceFilter(""); setConfidenceFilter(""); setTransactionsPage(1);
+  };
+  const activeFilterChips = [
+    ...(currencyFilter ? [{ label: currencyFilter, clear: () => { setCurrencyFilter(""); persistSelectedCurrency(selectedWorkspaceId, ""); } }] : []),
+    ...accountFilters.map(id => ({ label: accountFilterOptions.find(option => option.value === id)?.label ?? "Account", clear: () => setAccountFilters(current => current.filter(value => value !== id)) })),
+    ...categoryFilters.map(id => ({ label: categories.find(category => category.id === id)?.name ?? "Category", clear: () => setCategoryFilters(current => current.filter(value => value !== id)) })),
+    ...typeFilters.map(type => ({ label: type === "debit" ? "Expense" : type === "credit" ? "Income" : "Transfer", clear: () => setTypeFilters(current => current.filter(value => value !== type)) })),
+    ...(dateFilterMode !== "ltd" ? [{ label: ({ day: "Today", week: "This week", month: "This month", quarter: "This quarter", year: "This year", custom: "Custom dates" })[dateFilterMode], clear: () => { setDateFilterMode("ltd"); setCustomStart(""); setCustomEnd(""); } }] : []),
+    ...(reviewFilter ? [{ label: reviewFilter === "pending" ? "Needs review" : "Confirmed", clear: () => setReviewFilter("") }] : []),
+    ...(sourceFilter ? [{ label: sourceFilter === "upload" ? "Imported" : "Manual", clear: () => setSourceFilter("") }] : []),
+    ...(confidenceFilter ? [{ label: `${confidenceFilter} extraction confidence`, clear: () => setConfidenceFilter("") }] : []),
+    ...(amountMin || amountMax ? [{ label: "Amount range", clear: () => { setAmountMin(""); setAmountMax(""); } }] : []),
+    ...tagFilters.map(id => ({ label: filterTags.find(tag => tag.id === id)?.name ?? "Tag", clear: () => setTagFilters(current => current.filter(value => value !== id)) })),
+  ];
+  const transactionsNoResults = <div className="empty-state transactions-empty-state transactions-empty-state--table" role="status">
+    <strong className="transactions-empty-state__title">No matching transactions</strong>
+    <p>Try a different search or remove a filter.</p>
+    <button type="button" className="button button-secondary" onClick={clearTransactionFilters}>Clear filters</button>
+  </div>;
   const transactionsBlankState = (
     <div className="empty-state transactions-empty-state transactions-empty-state--table">
       <div className="transactions-empty-state__art" aria-hidden="true">
         <img src={transactionsEmptyStateIllustration} alt="" loading="lazy" decoding="async" />
       </div>
       <strong className="transactions-empty-state__title">
-        Upload <span>statements, receipts, screenshots</span>, or add a transaction manually
+        No transactions yet
       </strong>
+      <p>Add a transaction or upload files to build your history.</p>
       <div className="transactions-empty-state__actions">
         <button
           className={
@@ -7508,7 +7562,7 @@ function TransactionsPageContent() {
     </div>
   ) : (
     <div className="transactions-shell-actions" style={transactionsShellActionsStyle}>
-      <TransactionSelectionToolbar count={selectedTransactionCount} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} />
+      <TransactionSelectionToolbar count={0} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} />
 
       {workspaceCurrencyCodes.length > 0 ? <CurrencySelector
         value={workspaceCurrencyCodes.length > 1 ? currencyFilter : workspaceCurrencyCodes[0] ?? "PHP"}
@@ -7645,14 +7699,9 @@ function TransactionsPageContent() {
       mobileLeadingAction={
         <div className="transactions-mobile-leading-actions">
           <ContextualAskClover context="transactions" planTier={planTier} />
-          <span id="transactions-mobile-search-trigger" />
         </div>
       }
-      mobileTrailingAction={isCompactViewport ? <>
-        <TransactionSelectionToolbar compact searchTargetId="transactions-mobile-search-trigger" count={selectedTransactionCount} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} />
-        {workspaceCurrencyCodes.length > 0 ? <CurrencySelector value={currencyFilter} onChange={(next) => { const code = next.toLowerCase() === "all" ? "" : next; setCurrencyFilter(code); persistSelectedCurrency(selectedWorkspaceId, code); }} options={workspaceCurrencyCodes} includeAllOption compact portalMenu menuAlignment="end" ariaLabel="Filter transactions by currency" /> : null}
-        <TransactionsManageMenu compact />
-      </> : null}
+
       actions={transactionsShellActions}
     >
       <PageFileDropZone
@@ -7662,19 +7711,11 @@ function TransactionsPageContent() {
       />
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`} style={transactionsLayoutStyle}>
         <div className="transactions-main-panel">
-          <button type="button" className="button button-secondary button-small"
-            aria-expanded={summaryOpen} aria-controls="transactions-expanded-summary"
-            onClick={() => setSummaryOpen((current) => !current)}>
-            {summaryOpen ? "Hide summary" : "Show summary"}
-          </button>
+          {isCompactViewport ? <TransactionSelectionToolbar compact count={selectedTransactionCount} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} /> : null}
+          {!isCompactViewport && selectedTransactionCount > 0 ? <TransactionSelectionToolbar count={selectedTransactionCount} query={query} onQueryChange={setQuery} filterOpen={filterOpen} onFilter={toggleFiltersPanel} onEdit={editSelection} onTags={openSelectionTags} onDelete={() => setBulkDeleteConfirmOpen(true)} onClear={clearSelection} /> : null}
+          {activeFilterChips.length ? <div className="transactions-active-filters" aria-label="Active filters">{activeFilterChips.map((chip, index) => <button key={`${chip.label}-${index}`} type="button" className="button button-secondary button-small" onClick={chip.clear} aria-label={`Remove ${chip.label} filter`}>{chip.label}<InterfaceIcon name="close" size={12} /></button>)}</div> : null}
           {dateFilterMode === "custom" && customStart && customEnd && customStart > customEnd ? <p role="alert">From date must be on or before To date. Choose a valid range to update the results.</p> : null}
           {message ? <p role="status" aria-live="polite" style={isCompactViewport && hasSelectedTransactions ? { paddingTop: 56 } : undefined}>{message}</p> : null}
-          {isCompactViewport && warningTransactionCount > 0 && firstReviewTransaction ? (
-            <button type="button" className="button button-secondary button-small"
-              onClick={() => openTransactionDetail(firstReviewTransaction)}>
-              Review {warningTransactionCount} transaction{warningTransactionCount === 1 ? "" : "s"}
-            </button>
-          ) : null}
           {showFinalizingNotice ? (
             <div className="transactions-status-line" role="status" aria-live="polite">
               <div className="transactions-status-line__meta">
@@ -7699,33 +7740,51 @@ function TransactionsPageContent() {
           ) : null}
       {filterOpen ? <TransactionsHeaderOverlay className="transactions-filters-overlay">
         <section className="transactions-inline-filters" aria-label="Transaction filters">
-          <div className="transactions-inline-filters__head"><span>Filters</span><button className="icon-button" type="button" onClick={() => { setFilterOpen(false); document.querySelector<HTMLButtonElement>(".transaction-selection-toolbar__filter")?.focus(); }} aria-label="Close filters">×</button></div>
-          <TransactionFilterRow label="Currency" summary={currencyFilter || "All currencies"}>
-            <div className="transactions-filter-group__options">
-              {["", ...workspaceCurrencyCodes].map((code) => <button key={code} type="button" className="transactions-filter-pill" aria-pressed={currencyFilter === code} onClick={() => { setCurrencyFilter(code); persistSelectedCurrency(selectedWorkspaceId, code); }}>{code || "All currencies"}</button>)}
-            </div>
-          </TransactionFilterRow>
+          <div className="transactions-inline-filters__head"><strong>Filters</strong><button className="button button-ghost button-small" type="button" onClick={clearTransactionFilters}>Reset</button><button className="icon-button" type="button" onClick={() => { setFilterOpen(false); document.querySelector<HTMLButtonElement>(".transaction-selection-toolbar__filter")?.focus(); }} aria-label="Close filters"><InterfaceIcon name="close" /></button></div>
+          <div className="transactions-filter-presets" role="group" aria-label="Filter presets">
+            <button type="button" className="button button-secondary button-small" aria-pressed={dateFilterMode === "month"} onClick={() => applyDateFilterMode("month")}>This month</button>
+            <button type="button" className="button button-secondary button-small" aria-pressed={typeFilters.length === 1 && typeFilters[0] === "debit"} onClick={() => setTypeFilters(["debit"])}>Expenses</button>
+            <button type="button" className="button button-secondary button-small" aria-pressed={reviewFilter === "pending"} onClick={() => setReviewFilter("pending")}>Needs review</button>
+          </div>
           <TransactionFilterRow label="Dates" summary={({ ltd: "Lifetime", day: "Today", week: "This week", month: "This month", year: "This year", quarter: "This quarter", custom: [customStart, customEnd].filter(Boolean).join(" – ") || "Custom" })[dateFilterMode]}>
             <div className="transactions-filter-group__options">
               {([["ltd", "Lifetime"], ["day", "Today"], ["week", "This week"], ["month", "This month"], ["quarter", "This quarter"], ["year", "This year"], ["custom", "Custom range"]] as const).map(([mode, label]) => <button key={mode} className="transactions-filter-pill" type="button" aria-pressed={dateFilterMode === mode} onClick={() => applyDateFilterMode(mode)}>{label}</button>)}
             </div>
             {dateFilterMode === "custom" ? <div className="transactions-column-menu__fields transactions-column-menu__fields--amount-range"><label className="transactions-column-menu__field">From<input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></label><label className="transactions-column-menu__field">To<input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></label></div> : null}
           </TransactionFilterRow>
-          <MultiSelectFilterGroup label="Tags" options={filterTags.map((tag) => ({ value: tag.id, label: tag.name }))} selected={tagFilters} onToggle={(value) => setTagFilters((current) => toggleFilterValue(current, value))} onClear={() => setTagFilters([])} />
-          <MultiSelectFilterGroup label="Categories" options={categories.map((category) => ({ value: category.id, label: category.name, icon: <CategoryBrandMark categoryName={category.name} size={22} radius={7} /> }))} selected={categoryFilters} onToggle={(value) => setCategoryFilters((current) => toggleFilterValue(current, value))} onClear={() => setCategoryFilters([])} />
           <MultiSelectFilterGroup label="Accounts" options={accountFilterOptions.map((option) => ({ ...option, icon: <AccountBrandMark accountBrand={accountBrandById.get(option.value) ?? getAccountBrand({ name: option.label, institution: option.label, type: "bank" })} label={option.label} /> }))} selected={accountFilters} onToggle={(value) => setAccountFilters((current) => toggleFilterValue(current, value))} onClear={() => setAccountFilters([])} />
+          <MultiSelectFilterGroup label="Categories" options={categories.map((category) => ({ value: category.id, label: category.name, icon: <CategoryBrandMark categoryName={category.name} size={22} radius={7} /> }))} selected={categoryFilters} onToggle={(value) => setCategoryFilters((current) => toggleFilterValue(current, value))} onClear={() => setCategoryFilters([])} />
           <MultiSelectFilterGroup label="Types" options={[
             { value: "debit", label: "Expense", icon: <span className="negative">↓</span> },
             { value: "credit", label: "Income", icon: <span className="positive">↑</span> },
             { value: "transfer", label: "Transfer", icon: <span>↔</span> },
           ]} selected={typeFilters} onToggle={(value) => setTypeFilters((current) => toggleTypedFilterValue(current, value as TransactionTypeFilter))} onClear={() => setTypeFilters([])} />
-          <div className="transactions-filter-group transactions-filter-group--amount" role="group" aria-label="Amount Range">
+          <TransactionFilterRow label="Amount" summary={amountMin || amountMax ? `${amountMin || "0"} – ${amountMax || "Any"}` : "Any amount"}><div className="transactions-filter-group transactions-filter-group--amount" role="group" aria-label="Amount Range">
             <span className="transactions-filter-group__label">Amount Range</span>
             <div className="transactions-column-menu__fields transactions-column-menu__fields--amount-range">
               <label className="transactions-column-menu__field"><span>Minimum</span><input type="number" inputMode="decimal" value={amountMin} onChange={(event) => setAmountMin(event.target.value)} placeholder="0.00" /></label>
               <label className="transactions-column-menu__field"><span>Maximum</span><input type="number" inputMode="decimal" value={amountMax} onChange={(event) => setAmountMax(event.target.value)} placeholder="0.00" /></label>
             </div>
-          </div>
+          </div></TransactionFilterRow>
+          <TransactionFilterRow label="Review status" summary={reviewFilter === "pending" ? "Needs review" : reviewFilter === "confirmed" ? "Confirmed" : "All transactions"}>
+            <div className="transactions-filter-group__options">{[["", "All transactions"], ["pending", "Needs review"], ["confirmed", "Confirmed"]].map(([value, label]) => <button key={value} type="button" className="transactions-filter-pill" aria-pressed={reviewFilter === value} onClick={() => setReviewFilter(value)}>{label}</button>)}</div>
+          </TransactionFilterRow>
+          <details className="transactions-more-filters"><summary>More filters</summary>
+          <TransactionFilterRow label="Currency" summary={currencyFilter || "All currencies"}>
+            <div className="transactions-filter-group__options">
+              {["", ...workspaceCurrencyCodes].map((code) => <button key={code} type="button" className="transactions-filter-pill" aria-pressed={currencyFilter === code} onClick={() => { setCurrencyFilter(code); persistSelectedCurrency(selectedWorkspaceId, code); }}>{code || "All currencies"}</button>)}
+            </div>
+          </TransactionFilterRow>
+          <MultiSelectFilterGroup label="Tags" options={filterTags.map((tag) => ({ value: tag.id, label: tag.name }))} selected={tagFilters} onToggle={(value) => setTagFilters((current) => toggleFilterValue(current, value))} onClear={() => setTagFilters([])} />
+            <TransactionFilterRow label="Source" summary={sourceFilter === "upload" ? "Imported" : sourceFilter === "manual" ? "Manual" : "All sources"}>
+              <div className="transactions-filter-group__options">{[["", "All sources"], ["manual", "Manual"], ["upload", "Imported"]].map(([value, label]) => <button key={value} type="button" className="transactions-filter-pill" aria-pressed={sourceFilter === value} onClick={() => setSourceFilter(value)}>{label}</button>)}</div>
+            </TransactionFilterRow>
+            <TransactionFilterRow label="Extraction confidence" summary={confidenceFilter || "Any confidence"}>
+              <div className="transactions-filter-group__options">{[["", "Any confidence"], ["high", "High · 85–100%"], ["medium", "Medium · 65–84%"], ["low", "Low · below 65%"]].map(([value, label]) => <button key={value} type="button" className="transactions-filter-pill" aria-pressed={confidenceFilter === value} onClick={() => setConfidenceFilter(value)}>{label}</button>)}</div>
+            </TransactionFilterRow>
+          </details>
+          {isCompactViewport ? <TransactionsManageMenu compact /> : null}
+          <button type="button" className="button button-primary transactions-filter-show" onClick={() => setFilterOpen(false)}>Show transactions</button>
         </section>
       </TransactionsHeaderOverlay> : null}
 
@@ -8124,7 +8183,7 @@ function TransactionsPageContent() {
             ) : totalTransactionCountForDisplay === 0 && !hasActiveServerSideFilters ? (
               transactionsBlankState
             ) : !hasVisibleTransactions ? (
-              <div className="empty-state">No transactions match the current filters.</div>
+              transactionsNoResults
             ) : null}
           </div>
           ) : null}
@@ -8240,12 +8299,13 @@ function TransactionsPageContent() {
                                 radius={7}
                                 className="transactions-mobile-simple-row__category-icon"
                               />
-                              <span className="transactions-mobile-simple-row__name-main">{merchantSummary}</span>
+                              <span className="transactions-mobile-simple-row__text"><span className="transactions-mobile-simple-row__name-main">{merchantSummary}</span><span className="transactions-mobile-simple-row__meta">{formatDate(transaction.date)} · {categoryLabel}</span></span>
                             </div>
                             <div className={`transactions-mobile-simple-row__amount-group ${amountToneClass}`}>
                               <span className={`transactions-mobile-simple-row__amount ${amountToneClass}`}>
-                                {formatTransactionAmount(amount, transaction.currency)}
+                                {effectiveType === "income" ? "+" : effectiveType === "expense" ? "−" : ""}{formatTransactionAmount(Math.abs(amount), transaction.currency)}
                               </span>
+                              {warningReasonFor(transaction) ? <span className="warning-mark warning-mark--small" role="img" aria-label={warningReasonFor(transaction) ?? "Needs review"} /> : null}
                             </div>
                             <button
                               type="button"
@@ -8282,11 +8342,22 @@ function TransactionsPageContent() {
             ) : totalTransactionCountForDisplay === 0 && !hasActiveServerSideFilters ? (
               transactionsBlankState
             ) : !hasVisibleTransactions ? (
-              <div className="empty-state">No transactions match the current filters.</div>
+              transactionsNoResults
             ) : null}
           </div>
           ) : null}
 
+          {isCompactViewport && warningTransactionCount > 0 && firstReviewTransaction ? (
+            <button type="button" className="warning-summary-button"
+              onClick={() => openTransactionDetail(firstReviewTransaction)}>
+              {warningTransactionCount} need review
+            </button>
+          ) : null}
+          <button type="button" className="button button-secondary button-small"
+            aria-expanded={summaryOpen} aria-controls="transactions-expanded-summary"
+            onClick={() => setSummaryOpen((current) => !current)}>
+            {summaryOpen ? "Hide summary" : "Show summary"}
+          </button>
           {isCompactViewport && hasSelectedTransactions ? <div className="transactions-mobile-selection-status" role="status"><span>{selectedTransactionCount} selected</span><button className="button button-secondary button-small" type="button" onClick={clearSelection}>Clear selection</button></div> : null}
           {!isCompactViewport ? (
             <div className="transactions-footer" style={{ ...transactionsFooterStyle, marginTop: "auto" }}>
@@ -8559,7 +8630,7 @@ function TransactionsPageContent() {
       {manualOpen ? (
         <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={() => { if (!isSaving) setManualOpen(false); }}>
           <section
-            className={`modal-card modal-card--manual glass${enlargedText ? " modal-card--enlarged-text" : ""}`}
+            className={`modal-card modal-card--manual transactions-entry--figma glass${enlargedText ? " modal-card--enlarged-text" : ""}`}
             ref={manualDialogRef}
             tabIndex={-1}
             style={manualModalStyle}
@@ -8574,14 +8645,14 @@ function TransactionsPageContent() {
                 <h4 id="add-transaction-title">Add transaction</h4>
               </div>
               <button className="icon-button" type="button" onClick={() => { if (!isSaving) setManualOpen(false); }} disabled={isSaving} aria-label="Close add transaction dialog">
-                ×
+                <InterfaceIcon name="close" />
               </button>
             </div>
 
-            {mobileCreation ? (
+            {(
               <div className="transaction-creation-tabs" role="tablist" aria-label="How to add transactions">
                 {([['manual', 'Manual'], ['ask', 'Ask Clover'], ['upload', 'Upload']] as const).map(([tab, label]) => (
-                  <button key={tab} type="button" role="tab" id={`creation-tab-${tab}`} aria-selected={creationTab === tab} aria-controls={`creation-panel-${tab}`} tabIndex={creationTab === tab ? 0 : -1} onKeyDown={(event) => {
+                  <button key={tab} type="button" disabled={isSaving} role="tab" id={`creation-tab-${tab}`} aria-selected={creationTab === tab} aria-controls={`creation-panel-${tab}`} tabIndex={creationTab === tab ? 0 : -1} onKeyDown={(event) => {
                     const tabs = ["manual", "ask", "upload"] as const;
                     const index = tabs.indexOf(tab);
                     const next = event.key === "ArrowRight" ? tabs[(index + 1) % 3] : event.key === "ArrowLeft" ? tabs[(index + 2) % 3] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[2] : null;
@@ -8589,10 +8660,10 @@ function TransactionsPageContent() {
                   }} onClick={() => { setCreationTab(tab); if (tab === "ask") setCreationChatVisited(true); }}>{label}</button>
                 ))}
               </div>
-            ) : null}
-            <div id="creation-panel-manual" role={mobileCreation ? "tabpanel" : undefined} aria-labelledby={mobileCreation ? "creation-tab-manual" : undefined} hidden={mobileCreation && creationTab !== "manual"}>
+            )}
+            <div id="creation-panel-manual" role="tabpanel" aria-labelledby="creation-tab-manual" hidden={creationTab !== "manual"}>
             <form onSubmit={saveManualTransaction}>
-<AdviserFormAssist workspaceId={selectedWorkspaceId} context={{kind:"transaction", fields: Object.fromEntries(Object.entries(manualForm).filter(([key,value]) => ["accountId","categoryId","merchantRaw","merchantClean","amount","date","currency","type","description"].includes(key) && typeof value === "string")) as Record<string,string>}} />
+
               {manualSaveError ? <p role="alert">{manualSaveError}</p> : null}
               <fieldset disabled={isSaving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
               <div className="manual-form-layout manual-form-layout--compact" data-transaction-type={manualForm.type}>
@@ -8633,28 +8704,6 @@ function TransactionsPageContent() {
                   </div>
                 </div>
 
-                <div className="transactions-manual-row transactions-manual-row--name">
-                  <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-name-field">
-                    <span className="transactions-manual-field__label">{manualForm.type === "transfer" ? "Name (optional)" : "Name"}</span>
-                    <TransactionNameAutocomplete
-                      workspaceId={selectedWorkspaceId}
-                      inputRef={manualNameInputRef}
-                      value={manualForm.merchantRaw}
-                      onChange={(merchantRaw) => setManualForm((current) => ({ ...current, merchantRaw }))}
-                      onSelect={(suggestion: TransactionNameSuggestion) => {
-                        setManualForm((current) => ({
-                          ...current,
-                          merchantRaw: suggestion.name,
-                          ...(!manualCategoryTouched && suggestion.categoryId ? { categoryId: suggestion.categoryId } : {}),
-                        }));
-                        manualCategoryButtonRef.current?.focus();
-                      }}
-                      placeholder={manualForm.type === "transfer" ? "Transfer between my accounts" : "Lunch in Makati"}
-                      required={manualForm.type !== "transfer"}
-                    />
-                  </label>
-                </div>
-
                 <div className="transactions-manual-row transactions-manual-row--money">
                   <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-money-row__currency">
                     <span className="transactions-manual-field__label">Currency</span>
@@ -8668,7 +8717,7 @@ function TransactionsPageContent() {
                       menuClassName="transactions-manual-currency__menu"
                       optionClassName="transactions-manual-currency__option"
                       menuAlignment="end"
-                      showChevron={false}
+                      showCurrencyCode
                       portalMenu
                     />
                   </label>
@@ -8689,6 +8738,28 @@ function TransactionsPageContent() {
                       }}
                       placeholder="0.00"
                       required
+                    />
+                  </label>
+                </div>
+
+                <div className="transactions-manual-row transactions-manual-row--name">
+                  <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-name-field">
+                    <span className="transactions-manual-field__label">{manualForm.type === "transfer" ? "What was it for? (optional)" : "What was it for?"}</span>
+                    <TransactionNameAutocomplete
+                      workspaceId={selectedWorkspaceId}
+                      inputRef={manualNameInputRef}
+                      value={manualForm.merchantRaw}
+                      onChange={(merchantRaw) => setManualForm((current) => ({ ...current, merchantRaw }))}
+                      onSelect={(suggestion: TransactionNameSuggestion) => {
+                        setManualForm((current) => ({
+                          ...current,
+                          merchantRaw: suggestion.name,
+                          ...(!manualCategoryTouched && suggestion.categoryId ? { categoryId: suggestion.categoryId } : {}),
+                        }));
+                        manualCategoryButtonRef.current?.focus();
+                      }}
+                      placeholder={manualForm.type === "transfer" ? "Transfer between my accounts" : "e.g. Lunch at Mendokoro"}
+                      required={manualForm.type !== "transfer"}
                     />
                   </label>
                 </div>
@@ -8798,8 +8869,8 @@ function TransactionsPageContent() {
                   </label>
                 </div> : null}
 
-                <label className="transactions-manual-field transactions-manual-field--embedded-label">
-                  <span className="transactions-manual-field__label">Date</span>
+                <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-date">
+                  <span className="transactions-manual-field__label"><InterfaceIcon name="date" /> Date</span>
                   <input
                     type="date"
                     value={manualForm.date}
@@ -8815,7 +8886,7 @@ function TransactionsPageContent() {
                     onClick={() => setManualMoreOpen((current) => !current)}
                     aria-expanded={manualMoreOpen}
                   >
-                    <span>{manualMoreOpen ? "Hide optional details" : "Optional details"}</span>
+                    <span>{manualMoreOpen ? "Fewer details" : "More details"}</span>
                     <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
                       <ActionIcon name="chevron-down" />
                     </span>
@@ -8828,7 +8899,7 @@ function TransactionsPageContent() {
                       onClick={() => setManualMoreOpen((current) => !current)}
                       aria-expanded={manualMoreOpen}
                     >
-                      <span>{manualMoreOpen ? "Hide optional details" : "Optional details"}</span>
+                      <span>{manualMoreOpen ? "Fewer details" : "More details"}</span>
                       <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
                         <ActionIcon name="chevron-down" />
                       </span>
@@ -8852,6 +8923,7 @@ function TransactionsPageContent() {
                 {manualMoreOpen ? (
                   <>
                     <div className="manual-more-panel manual-more-panel--compact">
+<AdviserFormAssist workspaceId={selectedWorkspaceId} context={{kind:"transaction", fields: Object.fromEntries(Object.entries(manualForm).filter(([key,value]) => ["accountId","categoryId","merchantRaw","merchantClean","amount","date","currency","type","description"].includes(key) && typeof value === "string")) as Record<string,string>}} />
                       {manualForm.type === "transfer" ? (
                         <label className="transactions-manual-field transactions-manual-field--embedded-label">
                           <span className="transactions-manual-field__label">Transfer fee (optional)</span>
@@ -9001,12 +9073,12 @@ function TransactionsPageContent() {
                           </fieldset>
             </form>
             </div>
-            {mobileCreation && creationChatVisited ? <div id="creation-panel-ask" role="tabpanel" aria-labelledby="creation-tab-ask" hidden={creationTab !== "ask"} className="transaction-creation-panel">
+            {creationChatVisited ? <div id="creation-panel-ask" role="tabpanel" aria-labelledby="creation-tab-ask" hidden={creationTab !== "ask"} className="transaction-creation-panel">
               <h4>Tell Clover what to add</h4>
               <p>For example: “Lunch ₱250 with cash, groceries ₱1,200 from BPI.” Review each draft before saving.</p>
               <AdviserChat workspaceId={selectedWorkspaceId} prompts={[]} isPro={planTier === "pro"} surface="transactions" pageLabel="Add transactions: prepare editable drafts for review" />
             </div> : null}
-            {mobileCreation ? <div id="creation-panel-upload" role="tabpanel" aria-labelledby="creation-tab-upload" hidden={creationTab !== "upload"} className="transaction-creation-panel">
+            {true ? <div id="creation-panel-upload" role="tabpanel" aria-labelledby="creation-tab-upload" hidden={creationTab !== "upload"} className="transaction-creation-panel">
               <h4>Add from a receipt or statement</h4>
               <p>Choose a source to open it directly.</p>
               <div className="transaction-creation-upload">

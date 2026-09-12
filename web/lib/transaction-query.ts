@@ -20,6 +20,9 @@ export type TransactionQueryFilters = {
   sortDirection?: TransactionSortDirection;
   amountMin?: string;
   amountMax?: string;
+  reviewFilter?: string;
+  sourceFilter?: string;
+  confidenceFilter?: string;
 };
 
 export type TransactionQueryPagination = {
@@ -189,6 +192,9 @@ export const parseTransactionQueryFilters = (searchParams: Pick<URLSearchParams,
   const amountMax = searchParams.get("amountMax") ?? "";
 
   return {
+    reviewFilter: searchParams.get("reviewFilter") ?? "",
+    sourceFilter: searchParams.get("sourceFilter") ?? "",
+    confidenceFilter: searchParams.get("confidenceFilter") ?? "",
     query,
     currencyFilter,
     categoryIds,
@@ -214,6 +220,9 @@ export const buildTransactionQuerySearchParams = (
 ) => {
   const params = new URLSearchParams();
   params.set("workspaceId", workspaceId);
+  for (const key of ["reviewFilter", "sourceFilter", "confidenceFilter"] as const) {
+    if (filters[key]) params.set(key, filters[key]);
+  }
 
   if (filters.query?.trim()) {
     params.set("query", filters.query.trim());
@@ -296,6 +305,13 @@ export const buildTransactionQueryWhere = (
     ? buildVisibleWorkspaceTransactionWhere(workspaceId)
     : buildActiveWorkspaceTransactionWhere(workspaceId);
 
+  if (filters.reviewFilter === "confirmed") appendAndFilter(where, { reviewStatus: "confirmed" });
+  if (filters.reviewFilter === "pending") appendAndFilter(where, { reviewStatus: { notIn: ["confirmed", "rejected", "duplicate_skipped"] } });
+  if (filters.sourceFilter === "manual") appendAndFilter(where, { importFileId: null });
+  if (filters.sourceFilter === "upload") appendAndFilter(where, { importFileId: { not: null } });
+  if (filters.confidenceFilter === "high") appendAndFilter(where, { parserConfidence: { gte: 85 } });
+  if (filters.confidenceFilter === "medium") appendAndFilter(where, { parserConfidence: { gte: 65, lt: 85 } });
+  if (filters.confidenceFilter === "low") appendAndFilter(where, { parserConfidence: { lt: 65 } });
   const query = filters.query?.trim();
   const categoryIds = (filters.categoryIds ?? []).filter(Boolean);
   const accountIds = (filters.accountIds ?? []).filter(Boolean);

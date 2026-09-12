@@ -24,7 +24,7 @@ const context = {
   transactions: [{id:'z', categoryName:'Travel'}, {id:'a', categoryName:'Food'}],
   matchesTransactionSearch: () => true, matchesTransactionFilters: () => true, hasTransactionUserEdits: () => true,
   categories: [], otherCategoryId: 'other', accountInstitutionById: new Map(), accountNameById: new Map(), accountNumberById: new Map(), categoryNameById: new Map(),
-  searchText:'', currencyFilter:'', categoryFilters:[], tagFilters:[], expandedAccountFilters:[], typeFilters:[], dateFilterMode:'ltd', dateFilterAnchor:'2026-09-08', customStart:'', customEnd:'', amountMin:'', amountMax:'', sortField:'category',
+  searchText:'', currencyFilter:'', categoryFilters:[], tagFilters:[], expandedAccountFilters:[], typeFilters:[], dateFilterMode:'ltd', dateFilterAnchor:'2026-09-08', customStart:'', customEnd:'', amountMin:'', amountMax:'', reviewFilter:'', sourceFilter:'', confidenceFilter:'', sortField:'category',
 };
 for (const [sortDirection, expected] of [['asc','a,z'], ['desc','z,a']]) {
   assert.equal(evaluate(['getDisplayCategoryNameForTransaction','visibleTransactions'], {...context,sortDirection}, 'visibleTransactions.map(row=>row.id).join(",")'), expected);

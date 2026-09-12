@@ -33,7 +33,7 @@ for (const type of ["debit", "credit"]) {
 console.log("Manual expense/income request preserves selected tags, amount and note");
 
 assert.ok(historyPredicate, "History must apply its client filters");
-const names = ["searchText", "currencyFilter", "categoryFilters", "tagFilters", "expandedAccountFilters", "typeFilters", "dateFilterMode", "dateFilterAnchor", "customStart", "customEnd", "amountMin", "amountMax", "otherCategoryId", "categoryNameById", "accountNumberById"];
+const names = ["searchText", "currencyFilter", "categoryFilters", "tagFilters", "expandedAccountFilters", "typeFilters", "dateFilterMode", "dateFilterAnchor", "customStart", "customEnd", "amountMin", "amountMax", "reviewFilter", "sourceFilter", "confidenceFilter", "otherCategoryId", "categoryNameById", "accountNumberById"];
 const predicateFactory = new Function("matchesTransactionSearch", "matchesTransactionFilters", ...names, `return (${historyPredicate.getText(source)});`);
 for (const isExcluded of [false, true]) {
   assert.equal(predicateFactory(() => true, () => true)({ isExcluded }), true, "Exclusions stay visible in matching history");

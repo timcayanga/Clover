@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { applyTransactionTagSelection } from "../lib/transaction-tags";
-import { buildTransactionQueryWhere } from "../lib/transaction-query";
+import { buildTransactionQueryWhere, buildTransactionQuerySearchParams, parseTransactionQueryFilters } from "../lib/transaction-query";
 
 const readSource = (relativePath: string) => readFile(path.join(process.cwd(), relativePath), "utf8");
 
@@ -11,14 +11,23 @@ async function main() {
   assert.deepEqual(applyTransactionTagSelection(["Work", "Travel"], ["WORK"], "remove"), ["Travel"]);
   assert.deepEqual(applyTransactionTagSelection(["Work"], ["Missing"], "remove"), ["Work"]);
   assert.match(JSON.stringify(buildTransactionQueryWhere("workspace", { query: "Family" })), /transactionTags/);
+  const filterParams = buildTransactionQuerySearchParams("workspace", { reviewFilter: "confirmed", sourceFilter: "manual", confidenceFilter: "high" });
+  const parsedFilters = parseTransactionQueryFilters(filterParams);
+  assert.equal(parsedFilters.reviewFilter, "confirmed");
+  assert.equal(parsedFilters.sourceFilter, "manual");
+  assert.equal(parsedFilters.confidenceFilter, "high");
+  const filteredWhere = JSON.stringify(buildTransactionQueryWhere("workspace", parsedFilters));
+  assert.match(filteredWhere, /"reviewStatus":"confirmed"/);
+  assert.match(filteredWhere, /"importFileId":null/);
+  assert.match(filteredWhere, /"parserConfidence":\{"gte":85\}/);
   const toolbar = await readSource("components/transaction-selection-toolbar.tsx");
   const toolbarStyles = await readSource("components/transaction-selection-toolbar.css");
   const patchRoute = await readSource("app/api/transactions/[transactionId]/route.ts");
   assert.match(toolbar, /placeholder="Search"/);
-  assert.doesNotMatch(toolbar, /Actions ·|__count|onClick=\{onClear\}/);
-  assert.match(toolbar, />Edit Selected<\/button>/);
-  assert.match(toolbar, /transaction-selection-toolbar__search/);
-  assert.match(toolbar, /document.addEventListener\("pointerdown", outside\)/);
+  assert.match(toolbar, /__count[\s\S]*onClick=\{onClear\}/, "Selection must expose its count and clear action.");
+  assert.match(toolbar, />Edit<\/button>/);
+  assert.match(toolbar, /type="search" aria-label="Search"/);
+  assert.doesNotMatch(toolbar, /searchOpen/, "Mobile search stays visible in the page.");
   assert.match(toolbarStyles, /height: 48px;[\s\S]{0,80}flex: 0 0 48px;/, "Toolbar space must remain fixed during selection.");
   assert.match(patchRoute, /payload.tagAction === "add"[\s\S]{0,250}create: buildTransactionTagWrites/);
   assert.match(patchRoute, /payload.tagAction === "remove"[\s\S]{0,130}deleteMany: \{ tagId: \{ in: removedTagIds/, "Removing selected tags must not delete other tags.");
@@ -44,7 +53,7 @@ async function main() {
   assert.match(longPress, /450/);
   assert.match(longPress, /Math.hypot[\s\S]{0,100}cancel\(\)/);
   assert.match(toolbarStyles, /text-overflow: ellipsis/);
-  assert.match(transactionsPage, /label="Currency"[\s\S]*label="Dates"[\s\S]*label="Tags"[\s\S]*label="Categories"[\s\S]*label="Accounts"[\s\S]*label="Types"[\s\S]*aria-label="Amount Range"/);
+  assert.match(transactionsPage, /label="Dates"[\s\S]*label="Accounts"[\s\S]*label="Categories"[\s\S]*label="Types"[\s\S]*aria-label="Amount Range"[\s\S]*label="Review status"[\s\S]*label="Currency"[\s\S]*label="Tags"/);
   assert.match(transactionsPage, /transactions-mobile-select/);
   assert.match(transactionsRoute, /transactions: await withTransactionTags\(transactions, workspaceId\)/);
   assert.match(transactionsRoute, /transactions: await withTransactionTags\(pageTransactions, workspaceId\)/);
@@ -89,7 +98,7 @@ async function main() {
   assert.match(transactionsPage, /const saved = readTransactionListContext\(selectedWorkspaceId\)/);
   assert.match(
     transactionsPage,
-    /setSelectedTransactionIds\(\[\]\);[\s\S]{0,900}setQuery\(saved\?\.query \?\? ""\);[\s\S]{0,900}setCategoryFilters\(saved\?\.categoryFilters \?\? \[\]\);[\s\S]{0,900}setSortField\(saved\?\.sortField \?\? "date"\);[\s\S]{0,300}setTransactionsPage\(1\);/,
+    /setSelectedTransactionIds\(\[\]\);[\s\S]{0,900}setQuery\(saved\?\.query \?\? ""\);[\s\S]{0,900}setCategoryFilters\(saved\?\.categoryFilters \?\? \[\]\);[\s\S]{0,1300}setSortField\(saved\?\.sortField \?\? "date"\);[\s\S]{0,300}setTransactionsPage\(1\);/,
     "Switching Profiles clears selections and restores only that Profile’s saved filters/sort, with empty defaults and first-page pagination."
   );
   assert.match(

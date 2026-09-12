@@ -65164,3 +65164,89 @@ html[data-theme="dark"] .accounts-detail__credit-inline { background: #132933; }
 .accounts-detail__credit-inline-meta { grid-column: 1 / -1; }
 .accounts-add-modal { overflow-y: auto; overscroll-behavior: contain; }
 .accounts-detail__footer-actions { justify-content: flex-end; flex-wrap: wrap; }
+
+/* Transactions / Add and Quick Add — Figma 52:413 and 478:3220. */
+.transactions-entry--figma { border: 1px solid var(--stroke); border-radius: 24px; padding: 24px; }
+.transactions-entry--figma .modal-head { margin-bottom: 24px; }
+.transactions-entry--figma .modal-head .eyebrow,
+.transactions-entry--figma .transactions-manual-type-section__label { display: none; }
+.transactions-entry--figma .modal-head h4 { font-size: 24px; }
+.transactions-entry--figma .manual-form-layout--compact { display: flex; flex-direction: column; gap: 16px; }
+.transactions-entry--figma .manual-form-layout--compact > * { width: 100%; }
+.transactions-entry--figma .transactions-manual-type-toggle { background: transparent; border: 0; padding: 0; gap: 8px; }
+.transactions-entry--figma .transactions-manual-type-toggle__button { border: 1px solid var(--stroke); border-radius: 999px; background: var(--surface); color: var(--text); box-shadow: none; }
+.transactions-entry--figma [data-transaction-type="debit"] .transactions-manual-type-toggle__button.is-active { border-color: #ff3653; background: var(--surface-2); color: var(--text); box-shadow: none; }
+.transactions-entry--figma [data-transaction-type="credit"] .transactions-manual-type-toggle__button.is-active { border-color: #00bb65; background: var(--surface-2); color: var(--text); box-shadow: none; }
+.transactions-entry--figma .transactions-manual-row--money { position: relative; display: flex; flex-direction: row-reverse; align-items: center; min-height: 92px; border-radius: 16px; background: var(--surface-2); padding: 16px; gap: 12px; }
+.transactions-entry--figma .transactions-manual-money-row__amount { flex: 1; min-width: 0; }
+.transactions-entry--figma .transactions-manual-money-row__amount input { min-height: 56px; height: auto; width: 100%; background: transparent; border: 0; padding: 0; font-size: clamp(28px, 4vw, 40px) !important; font-weight: 600; }
+.transactions-entry--figma .transactions-manual-money-row__currency { flex: 0 0 90px; width: 90px; }
+.transactions-entry--figma .transactions-manual-currency__button { min-width: 90px; height: 44px; border: 1px solid var(--stroke); border-radius: 999px; background: var(--surface); }
+.transactions-entry--figma .transactions-manual-row--money .transactions-manual-field__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.transactions-entry--figma .transactions-manual-row--name { display: block; }
+.transactions-entry--figma .transactions-manual-row--name > .transactions-manual-row-icon { display: none; }
+.transactions-entry--figma .transactions-manual-field { min-width: 0; }
+.transactions-entry--figma .transactions-manual-name-field { display: grid; gap: 8px; }
+.transactions-entry--figma .transactions-manual-name-field input { border: 1px solid var(--stroke); border-radius: 14px; min-height: 44px; }
+.transactions-entry--figma .transactions-manual-inline-row { min-height: 52px; }
+.transactions-entry--figma .transactions-manual-inline-row__icon { width: 24px; height: 24px; flex: 0 0 24px; }
+.transactions-entry--figma .transactions-manual-inline-row__field { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: 8px; }
+.transactions-entry--figma .transactions-manual-more { justify-content: center; width: 100%; min-height: 44px; }
+.transactions-entry--figma .manual-form-actions,
+.transactions-entry--figma .manual-form-actions__right { display: flex; flex-direction: column; width: 100%; gap: 12px; }
+.transactions-entry--figma .manual-form-actions__right > .button-primary { order: -1; width: 100%; min-height: 44px; border-radius: 999px; background: linear-gradient(105deg, #03a8c0, #2bcfcd); }
+.transactions-entry--figma .transactions-manual-add-another { align-self: center; }
+.transactions-entry--figma .transaction-creation-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 16px; background: var(--surface-2); margin-bottom: 20px; }
+.transactions-entry--figma .transaction-creation-tabs button { border: 0; border-radius: 12px; min-height: 44px; color: var(--muted); background: transparent; font: inherit; cursor: pointer; }
+.transactions-entry--figma .transaction-creation-tabs button[aria-selected="true"] { background: var(--surface); color: var(--text); font-weight: 600; }
+.transactions-entry--figma [hidden] { display: none !important; }
+.transactions-mobile-add { width: 36px; height: 36px; padding: 0; min-width: 36px; border-radius: 50%; font-size: 24px; }
+.transactions-main-panel > .transaction-selection-toolbar--selected { margin-bottom: 12px; }
+.transactions-empty-state__title { font-size: 20px; }
+.transactions-empty-state > p { color: var(--muted); max-width: 440px; }
+@media (max-width: 1100px) {
+  .transactions-entry--figma { padding: 20px 16px calc(110px + env(safe-area-inset-bottom)); }
+  .transactions-entry--figma .transactions-manual-type-toggle__button { padding: 0 6px; font-size: 13px; }
+  .transactions-entry--figma .transactions-manual-inline-row__field { grid-template-columns: 72px minmax(0, 1fr); }
+}
+.transactions-entry--figma .transactions-manual-field--embedded-label { padding-top: 0; }
+.transactions-entry--figma .transactions-manual-field--embedded-label > .transactions-manual-field__label { position: static; padding: 0; background: transparent; line-height: 1.4; font-size: 13px; font-weight: 400; }
+.transactions-entry--figma .transactions-manual-inline-row { grid-template-columns: 24px minmax(0, 1fr); align-items: center; }
+.transactions-entry--figma .transactions-manual-inline-row__field { width: 100%; }
+.transactions-entry--figma .transactions-manual-inline-row__icon .accounts-brand-mark { width: 24px; height: 24px; border-radius: 8px; }
+.transactions-entry--figma .transactions-manual-picker__button { border: 0; background: transparent; font-weight: 400; padding: 8px 0; }
+.transactions-entry--figma .transactions-manual-date { display: grid; grid-template-columns: 112px minmax(0, 1fr); align-items: center; min-height: 52px; gap: 8px; }
+.transactions-entry--figma .transactions-manual-date > .transactions-manual-field__label { display: flex; align-items: center; gap: 12px; }
+.transactions-entry--figma .transactions-manual-date input { border: 0; background: transparent; padding: 8px 0; }
+.transactions-entry--figma .transactions-manual-row--money .transactions-manual-field__label { position: absolute; }
+.transactions-entry--figma .transactions-manual-money-row__amount input::placeholder { color: var(--text); opacity: 1; }
+@media (max-width: 1100px) {
+  .content--transactions .transactions-mobile-date-divider { display: none; }
+  .content--transactions .transactions-mobile-date-group { margin: 0; }
+  .content--transactions .transactions-mobile-simple-row { min-height: 70px; padding: 12px; }
+  .content--transactions .transactions-mobile-simple-row__account-brand { display: none; }
+  .content--transactions .transactions-mobile-simple-row__name { min-width: 0; gap: 14px; }
+  .content--transactions .transactions-mobile-simple-row__category-icon { flex: 0 0 24px; width: 24px; height: 24px; }
+  .content--transactions .transactions-mobile-simple-row__text { min-width: 0; display: grid; gap: 6px; }
+  .content--transactions .transactions-mobile-simple-row__name-main { font-size: 13px; font-weight: 600; }
+  .content--transactions .transactions-mobile-simple-row__meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 400; color: var(--muted); }
+  .content--transactions .transactions-mobile-simple-row__amount { font-size: 12px; }
+  .transactions-entry--figma .transactions-manual-inline-row__field { grid-template-columns: 72px minmax(0, 1fr); }
+  .transactions-entry--figma .transactions-manual-date { grid-template-columns: 104px minmax(0, 1fr); }
+}
+.transaction-inline-editor { position: relative; min-width: 0; }
+.transaction-inline-editor__panel { position: absolute; z-index: 30; top: -24px; left: 0; width: min(250px, 70vw); padding: 12px; border: 1px solid var(--accent); border-radius: 10px; background: var(--surface); box-shadow: 0 8px 24px #16383f26; display: grid; gap: 8px; }
+.transaction-inline-editor__panel:has(input[type="number"]) { left: auto; right: 0; }
+.transaction-inline-editor__label { color: var(--muted); font-size: 12px; }
+.transaction-inline-editor__panel input { min-height: 40px; border: 1px solid var(--stroke); border-radius: 8px; padding: 8px; width: 100%; }
+.transaction-inline-editor__actions { display: flex; justify-content: flex-end; gap: 8px; }
+@media (max-width: 1100px) {
+  .content--transactions .transactions-mobile-simple-row__name { grid-template-columns: 24px minmax(0, 1fr); }
+  .content--transactions .transactions-mobile-simple-row__text { width: 100%; }
+  .content--transactions .transactions-mobile-list { gap: 0; }
+}
+@media (min-width: 1101px) {
+  .modal-card.transaction-drawer--sidepanel { width: min(520px, calc(100vw - 32px)); max-width: 520px; }
+  .transaction-drawer-view__facts > div { min-height: 46px; padding: 8px 14px; align-items: center; }
+  .transaction-drawer-view__facts dd { font-weight: 400; }
+}

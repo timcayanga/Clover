@@ -94,3 +94,31 @@
   .transaction-filter-row .transactions-filter-pill { min-height: 44px; }
   .transactions-mobile-search input { font-size: 16px; border-radius: 999px; }
 }
+
+/* Figma Transactions: persistent search and an explicit selection strip. */
+.transaction-selection-toolbar--selected {
+  width: 100%; height: auto; min-height: 52px; flex: 0 0 auto;
+  justify-content: space-between; padding: 8px 12px;
+  border: 1px solid var(--accent, #03a8c0); border-radius: 10px;
+  background: color-mix(in srgb, var(--accent, #03a8c0) 6%, var(--surface, white));
+}
+.transaction-selection-toolbar__actions button { border-radius: 999px; }
+.transaction-selection-toolbar--selected .transaction-selection-toolbar__delete { border-color: #ff3653; color: #ff3653; }
+.transaction-selection-toolbar__count { font-size: .8rem; font-weight: 600; }
+.transactions-filter-show { width: 100%; margin-top: 16px; }
+.transactions-more-filters { margin-top: 12px; }
+.transactions-more-filters > summary { min-height: 44px; cursor: pointer; display: flex; align-items: center; font-weight: 600; }
+@media (max-width: 1100px) {
+  .transactions-main-panel > .transaction-selection-toolbar--compact { width: 100%; gap: 12px; margin-bottom: 12px; }
+  .transaction-selection-toolbar--compact input[type="search"] { flex: 1; min-width: 0; max-width: none; width: 0; height: 44px; font-size: 16px; }
+  .transaction-selection-toolbar--compact .transaction-selection-toolbar__filter { min-width: 94px; border-radius: 999px; }
+  .transaction-selection-toolbar--selected { flex-wrap: wrap; }
+  .transaction-selection-toolbar--compact .transaction-selection-toolbar__actions { flex: 1; justify-content: flex-end; gap: 4px; flex-wrap: wrap; }
+  .transaction-selection-toolbar--compact .transaction-selection-toolbar__actions button { padding: 0 10px; font-size: 12px; }
+}
+.transactions-active-filters, .transactions-filter-presets { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+.transactions-active-filters .button { display: inline-flex; gap: 8px; align-items: center; font-weight: 400; }
+.transactions-filter-presets .button[aria-pressed="true"] { background: #e6f8f8; border-color: #03a8c0; }
+.transactions-filters-overlay { width: min(500px, calc(100vw - 32px)); border-radius: 12px; }
+.transaction-filter-row > summary { grid-template-columns: 130px minmax(0, 1fr) 16px; min-height: 50px; }
+@media (max-width: 1100px) { .transactions-filters-overlay { width: auto; } }

@@ -6,6 +6,7 @@ const schema = z.object({
   accountFilters: z.array(z.string()), typeFilters: z.array(z.enum(["debit", "credit", "transfer"])),
   dateFilterMode: z.enum(["ltd", "day", "week", "month", "quarter", "year", "custom"]),
   dateFilterAnchor: z.string(), customStart: z.string(), customEnd: z.string(),
+  reviewFilter: z.string().default(""), sourceFilter: z.string().default(""), confidenceFilter: z.string().default(""),
   amountMin: z.string(), amountMax: z.string(),
   sortField: z.enum(["date", "name", "account", "category", "amount"]),
   sortDirection: z.enum(["asc", "desc"]),

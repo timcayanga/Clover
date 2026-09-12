@@ -295,8 +295,8 @@ async function main() {
   assert.match(styles, /Mobile navigation: Menu or Back[\s\S]*position: static !important/, "The mobile Menu belongs in the left leading group.");
   assert.match(shell, /shell-mobile-more-link--replaced/);
   assert.match(shell, /if \(mobileBackAction\)[\s\S]{0,100}mobileBackAction\(\)/, "In-place collection details must use their explicit Back action.");
-  assert.match(transactionsPage, /mobileTrailingAction=\{isCompactViewport/, "Mobile transaction filters belong beside right-side actions.");
-  assert.match(transactionsPage, /ContextualAskClover context="transactions"[^\n]*\n\s*<span id="transactions-mobile-search-trigger"/, "Search must follow Adviser in the left header group.");
+  assert.match(transactionsPage, /transactions-main-panel[\s\S]{0,120}isCompactViewport \? <TransactionSelectionToolbar compact/, "Mobile search and filters belong above the transaction list.");
+  assert.match(await readSource("components/transaction-selection-toolbar.tsx"), /type="search" aria-label="Search"/, "Mobile search must remain visible rather than hidden in a header overlay.");
   assert.match(shell, /label: "Plan", icon: "plan"/);
   assert.match(shell, /active === "adviser" \? null : mobileLeadingAction/);
   const splitBillManual = await readSource("components/split-bill-manual-modal.tsx");

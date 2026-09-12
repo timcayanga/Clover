@@ -817,7 +817,7 @@ export async function GET(request: Request) {
         !filters.customStart?.trim() &&
         !filters.customEnd?.trim() &&
         !filters.amountMin?.trim() &&
-        !filters.amountMax?.trim();
+        !filters.reviewFilter && !filters.sourceFilter && !filters.confidenceFilter && !filters.amountMax?.trim();
       const recentImportCutoff = new Date(Date.now() - RECENT_IMPORT_VISIBILITY_WINDOW_MS);
       const bdoAccountIds = workspaceAccountRows
         .filter((account) => /\bbdo\b|\bbanco de oro\b/i.test(account.institution ?? ""))
@@ -1230,7 +1230,7 @@ export async function GET(request: Request) {
       !filters.customStart?.trim() &&
       !filters.customEnd?.trim() &&
       !filters.amountMin?.trim() &&
-      !filters.amountMax?.trim() &&
+      !filters.reviewFilter && !filters.sourceFilter && !filters.confidenceFilter && !filters.amountMax?.trim() &&
       !hasEffectiveCategoryFilters;
     const recentImportCutoff = new Date(Date.now() - RECENT_IMPORT_VISIBILITY_WINDOW_MS);
     const [summaryRows, recentImportRows, summaryMatchingRows] = await Promise.all([

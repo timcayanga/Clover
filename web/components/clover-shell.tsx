@@ -1857,7 +1857,8 @@ export function CloverShell({
     // choice instead of starting the download after "Add Manually" is clicked.
     void loadDashboardManualTransactionModal();
     void loadImportFilesModal();
-    setIsQuickAddOpen((current) => !current);
+    setIsQuickAddOpen(false);
+    setQuickAddModal("transaction");
   };
 
   const closeQuickAddModal = () => {

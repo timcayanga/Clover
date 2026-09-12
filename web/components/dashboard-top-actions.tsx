@@ -1,5 +1,8 @@
 "use client";
 
+import dynamic from "next/dynamic";
+const AdviserChat = dynamic(() => import("@/components/adviser-chat").then(module => module.AdviserChat));
+import { containDialogFocus } from "@/lib/dialog-focus";
 import { InterfaceIcon } from "@/components/interface-icon";
 
 import { createPortal } from "react-dom";
@@ -96,6 +99,15 @@ export function DashboardManualTransactionModal({
 }) {
   const router = useRouter();
   const initialAccount = accounts.find((account) => account.id === initialAccountId) ?? accounts[0] ?? null;
+  const [entryTab, setEntryTab] = useState<"manual" | "ask" | "upload">("manual");
+  const [askVisited, setAskVisited] = useState(false);
+  const [isPro, setIsPro] = useState(false);
+  const [entryUploadOpen, setEntryUploadOpen] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/me").then(response => response.ok ? response.json() : null).then(data => { if (active) setIsPro(data?.user?.planTier === "pro"); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
   const [categories, setCategories] = useState<DashboardCategory[]>([]);
   const [form, setForm] = useState<ManualFormState>(() => ({
     accountId: initialAccount?.id ?? "",
@@ -126,13 +138,16 @@ export function DashboardManualTransactionModal({
   const categoryButtonRef = useRef<HTMLButtonElement | null>(null);
   const manualModalStyle = useMemo<CSSProperties>(
     () => ({
-      width: "min(420px, calc(100vw - 24px))",
+      width: "min(640px, calc(100vw - 24px))",
       maxHeight: "calc(100dvh - 24px)",
       overflow: "auto",
     }),
     []
   );
 
+  useEffect(() => {
+    if (!entryUploadOpen && rootRef.current) return containDialogFocus(rootRef.current);
+  }, [entryUploadOpen]);
   useLayoutEffect(() => {
     document.body.classList.add("transactions-manual-open");
     document.body.setAttribute("data-clover-page-modal", "true");
@@ -453,7 +468,7 @@ export function DashboardManualTransactionModal({
   return createPortal(
     <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={handleClose}>
       <section
-        className="modal-card modal-card--manual glass"
+        className="modal-card modal-card--manual transactions-entry--figma glass"
         style={manualModalStyle}
         ref={rootRef}
         role="dialog"
@@ -469,10 +484,18 @@ export function DashboardManualTransactionModal({
           <button className="icon-button" type="button" onClick={handleClose} aria-label="Close add transaction"><InterfaceIcon name="close" /></button>
         </div>
 
-        <p className="modal-copy">Add it here and Clover will keep you on the Dashboard.</p>
 
+
+        <div className="transaction-creation-tabs" role="tablist" aria-label="How to add transactions">
+          {(["manual", "ask", "upload"] as const).map((tab, index) => <button key={tab} type="button" disabled={isSaving} role="tab" id={`quick-entry-tab-${tab}`} aria-controls={`quick-entry-panel-${tab}`} aria-selected={entryTab === tab} tabIndex={entryTab === tab ? 0 : -1} onClick={() => { setEntryTab(tab); if (tab === "ask") setAskVisited(true); }} onKeyDown={event => {
+            const tabs = ["manual", "ask", "upload"] as const;
+            const next = event.key === "ArrowRight" ? tabs[(index + 1) % 3] : event.key === "ArrowLeft" ? tabs[(index + 2) % 3] : event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[2] : null;
+            if (next) { event.preventDefault(); setEntryTab(next); if (next === "ask") setAskVisited(true); document.getElementById(`quick-entry-tab-${next}`)?.focus(); }
+          }}>{tab === "manual" ? "Manual" : tab === "ask" ? "Ask Clover" : "Upload"}</button>)}
+        </div>
+        <div id="quick-entry-panel-manual" role="tabpanel" aria-labelledby="quick-entry-tab-manual" hidden={entryTab !== "manual"}>
         <form onSubmit={handleSubmit}>
-          <div className="manual-form-layout manual-form-layout--compact dashboard-manual-form">
+          <div className="manual-form-layout manual-form-layout--compact dashboard-manual-form" data-transaction-type={form.type}>
             <div className="transactions-manual-type-toggle" role="group" aria-label="Transaction type">
               <button
                 type="button"
@@ -483,7 +506,7 @@ export function DashboardManualTransactionModal({
                 <span className="transactions-manual-type-symbol" aria-hidden="true">
                   −
                 </span>
-                <span>Expenses</span>
+                <span>Expense</span>
               </button>
               <button
                 type="button"
@@ -507,30 +530,6 @@ export function DashboardManualTransactionModal({
               </button>
             </div>
 
-            <div className="transactions-manual-row transactions-manual-row--name">
-              <span className="transactions-manual-row-icon transactions-manual-row-icon--category" aria-hidden="true">
-                <CategoryBrandMark categoryName={selectedCategory?.name ?? "Other"} />
-              </span>
-              <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-name-field">
-                <span className="transactions-manual-field__label">{form.type === "transfer" ? "Name (optional)" : "Name"}</span>
-                <TransactionNameAutocomplete
-                  workspaceId={workspaceId}
-                  value={form.merchantRaw}
-                  onChange={(merchantRaw) => setForm((current) => ({ ...current, merchantRaw }))}
-                  onSelect={(suggestion: TransactionNameSuggestion) => {
-                    setForm((current) => ({
-                      ...current,
-                      merchantRaw: suggestion.name,
-                      ...(!manualCategoryTouched && suggestion.categoryId ? { categoryId: suggestion.categoryId } : {}),
-                    }));
-                    categoryButtonRef.current?.focus();
-                  }}
-                  placeholder={form.type === "transfer" ? "Transfer between my accounts" : "Salary, groceries, rent..."}
-                  required={form.type !== "transfer"}
-                />
-              </label>
-            </div>
-
             <div className="transactions-manual-row transactions-manual-row--money">
               <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-money-row__currency">
                 <span className="transactions-manual-field__label">Currency</span>
@@ -544,6 +543,7 @@ export function DashboardManualTransactionModal({
                   menuClassName="transactions-manual-currency__menu"
                   optionClassName="transactions-manual-currency__option"
                   menuAlignment="end"
+                  showCurrencyCode
                   portalMenu
                 />
               </label>
@@ -560,10 +560,29 @@ export function DashboardManualTransactionModal({
               </label>
             </div>
 
-            <label className="transactions-manual-field transactions-manual-field--embedded-label">
-              <span className="transactions-manual-field__label">Date</span>
-              <input type="date" value={form.date} required onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} />
-            </label>
+            <div className="transactions-manual-row transactions-manual-row--name">
+              <span className="transactions-manual-row-icon transactions-manual-row-icon--category" aria-hidden="true">
+                <CategoryBrandMark categoryName={selectedCategory?.name ?? "Other"} />
+              </span>
+              <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-name-field">
+                <span className="transactions-manual-field__label">{form.type === "transfer" ? "What was it for? (optional)" : "What was it for?"}</span>
+                <TransactionNameAutocomplete
+                  workspaceId={workspaceId}
+                  value={form.merchantRaw}
+                  onChange={(merchantRaw) => setForm((current) => ({ ...current, merchantRaw }))}
+                  onSelect={(suggestion: TransactionNameSuggestion) => {
+                    setForm((current) => ({
+                      ...current,
+                      merchantRaw: suggestion.name,
+                      ...(!manualCategoryTouched && suggestion.categoryId ? { categoryId: suggestion.categoryId } : {}),
+                    }));
+                    categoryButtonRef.current?.focus();
+                  }}
+                  placeholder={form.type === "transfer" ? "Transfer between my accounts" : "e.g. Lunch at Mendokoro"}
+                  required={form.type !== "transfer"}
+                />
+              </label>
+            </div>
 
             <div className="transactions-manual-inline-row transactions-manual-inline-row--account">
               <span className="transactions-manual-inline-row__icon transactions-manual-inline-row__icon--account" aria-hidden="true">
@@ -647,12 +666,17 @@ export function DashboardManualTransactionModal({
               />
             </div> : null}
 
-            <div className="transactions-manual-field transactions-manual-field--embedded-label">
+            <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-date">
+              <span className="transactions-manual-field__label"><InterfaceIcon name="date" /> Date</span>
+              <input type="date" value={form.date} required onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} />
+            </label>
+
+            {manualMoreOpen ? <div className="transactions-manual-field transactions-manual-field--embedded-label">
               <span className="transactions-manual-field__label">Preview</span>
               <div className="dashboard-manual-modal__preview">{previewLabel}</div>
-            </div>
+            </div> : null}
 
-            {error ? <p className="dashboard-manual-modal__error">{error}</p> : null}
+            {error ? <p role="alert" className="dashboard-manual-modal__error">{error}</p> : null}
 
             <div className={`transactions-manual-more-row ${manualMoreOpen ? "is-open" : ""}`}>
               <button
@@ -661,7 +685,7 @@ export function DashboardManualTransactionModal({
                 onClick={() => setManualMoreOpen((current) => !current)}
                 aria-expanded={manualMoreOpen}
               >
-                <span>{manualMoreOpen ? "Hide optional details" : "Optional details"}</span>
+                <span>{manualMoreOpen ? "Fewer details" : "More details"}</span>
                 <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
                   ▾
                 </span>
@@ -839,7 +863,17 @@ export function DashboardManualTransactionModal({
             ) : null}
           </div>
         </form>
+        </div>
+        {askVisited ? <div id="quick-entry-panel-ask" role="tabpanel" aria-labelledby="quick-entry-tab-ask" hidden={entryTab !== "ask"} className="transaction-creation-panel">
+          <h4>Tell Clover what to add</h4><p>Describe your transactions, then review each draft before saving.</p>
+          <AdviserChat workspaceId={workspaceId} prompts={[]} isPro={isPro} surface="transactions" pageLabel="Add transactions: prepare editable drafts for review" />
+        </div> : null}
+        <div id="quick-entry-panel-upload" role="tabpanel" aria-labelledby="quick-entry-tab-upload" hidden={entryTab !== "upload"} className="transaction-creation-panel">
+          <h4>Add from a receipt or statement</h4><p>Choose files to review and import.</p>
+          <button type="button" className="button button-primary" onClick={() => setEntryUploadOpen(true)}>Choose files</button>
+        </div>
       </section>
+      <ImportFilesModal open={entryUploadOpen} workspaceId={workspaceId} accounts={accounts} onClose={() => setEntryUploadOpen(false)} onImported={() => router.refresh()} />
     </div>,
     document.body
   );
