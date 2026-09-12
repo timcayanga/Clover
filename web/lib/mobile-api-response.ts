@@ -93,6 +93,8 @@ export function mobileApiResponse(operation: string, value: unknown) {
     budget: pick(data.budget, ["id"]),
     ...(data.history ? { history: pick(data.history, ["points", "recentTransactions"]) } : {}),
   };
+  if (operation.startsWith("recurring-")) return { ...pick(data, ["ok", "completed", "completedAt"]), ...(data.commitment ? { commitment: pick(data.commitment, ["id"]) } : {}) };
+  if (operation === "account") return { account: { ...pick(data.account, ["id", "name", "institution", "type", "currency", "balance", "source", "favorite", "creditLimit", "creditPeriodStart", "creditPeriodEnd", "investmentSubtype", "investmentSymbol", "investmentQuantity", "investmentCostBasis", "investmentPrincipal", "investmentStartDate", "investmentMaturityDate", "investmentInterestRate", "investmentMaturityValue", "transactionCount"]), ...lastFour(data.account) }, ...pick(data, ["deletedTransactions"]) };
   if (operation === "account-create") return { account: pick(data.account, ["id", "name", "institution", "type", "currency", "balance"]) };
   if (operation === "transaction-create") return { transaction: pick(data.transaction, ["id"]) };
   if (operation === "transactions")

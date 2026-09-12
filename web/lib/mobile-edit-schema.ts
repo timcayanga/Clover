@@ -5,7 +5,7 @@ import { z } from "zod";
 export const mobileAccountCreateSchema = z.object({
   name: z.string().trim().min(1).max(200),
   institution: z.string().trim().max(200).optional(),
-  type: z.enum(["bank", "wallet", "credit_card", "cash", "loan", "mortgage", "line_of_credit", "receivable", "payable", "bnpl", "prepaid", "insurance", "other"]),
+  type: z.enum(["bank", "wallet", "credit_card", "cash", "investment", "loan", "mortgage", "line_of_credit", "receivable", "payable", "bnpl", "prepaid", "insurance", "other"]),
   currency: z.string().regex(/^[A-Z]{3}$/),
   balance: z.string().regex(/^-?\d{1,12}(\.\d{1,2})?$/).nullable(),
 }).strict();

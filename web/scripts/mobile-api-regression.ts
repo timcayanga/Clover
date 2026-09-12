@@ -95,7 +95,7 @@ async function main() {
   assert.equal(mobileOperation("POST", ["accounts"]), "account-create");
   const newAccount = { name: "Travel", institution: "BPI", type: "bank", currency: "PHP", balance: "100.00" };
   assert.equal(mobileAccountCreateSchema.safeParse(newAccount).success, true);
-  for (const extra of [{ workspaceId: "other" }, { accountNumber: "change-existing" }, { balance: "NaN" }, { type: "investment" }, { name: "" }, { rawPayload: {} }]) {
+  for (const extra of [{ workspaceId: "other" }, { accountNumber: "change-existing" }, { balance: "NaN" }, { name: "" }, { rawPayload: {} }]) {
     assert.equal(mobileAccountCreateSchema.safeParse({ ...newAccount, ...extra }).success, false);
   }
   assert.deepEqual(mobileApiResponse("account-create", { account: { id: "a", name: "Travel", rawPayload: { secret: true } } }), { account: { id: "a", name: "Travel" } });
@@ -105,7 +105,7 @@ async function main() {
   assert.equal(mobileOperation("DELETE", ["notifications"]), null);
   assert.ok(routeSource.includes('body.ids.some(id => !allowed.has(id))'));
   assert.equal(mobileOperation("GET", ["options"]), "options");
-  assert.equal(mobileOperation("DELETE", ["accounts", "abc"]), null);
+  assert.equal(mobileOperation("DELETE", ["accounts", "abc"]), "account");
   for (const input of [{rawPayload:{tampered:true}}, {workspaceId:"other"}, {amount:"NaN"}, {date:"2026-02-30"}, {date:"2026-1-1"}, {amount:"1e6"}, {userNote:"x".repeat(2001)}]) assert.equal(mobileEditSchema.safeParse(input).success, false);
   assert.equal(mobileEditSchema.safeParse({amount:"-123.45",date:"2026-09-07",type:"expense",accountId:"owned",categoryId:null,userNote:"User note",tags:["Work"]}).success,true);
   assert.equal(mobileCreateSchema.safeParse({accountId:"owned",categoryId:null,merchantRaw:"Sample",date:"2026-09-07",amount:"-20.00",currency:"PHP",type:"expense"}).success,true);

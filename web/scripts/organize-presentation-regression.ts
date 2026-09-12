@@ -26,7 +26,7 @@ const response = mobileApiResponse("accounts", {
 assert.equal(response.accounts[0].lastFour, "6453");
 assert.equal(response.accounts[0].accountNumber, undefined);
 assert.equal(mobileOperation("GET", ["recurring"]), "recurring");
-assert.equal(mobileOperation("POST", ["recurring"]), null);
+assert.equal(mobileOperation("POST", ["recurring"]), "recurring-create");
 console.log(
-  "Organize presentation: 8 assertions passed (labels, disambiguation, native projection and read-only route).",
+  "Organize presentation: 8 assertions passed (labels, disambiguation, native projection and explicit recurring routes).",
 );

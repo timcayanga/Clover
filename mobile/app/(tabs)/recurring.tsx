@@ -14,24 +14,20 @@ import {
   money,
   useTheme,
 } from "../../src/ui";
-type Item = {
-  id: string;
-  title: string;
-  kind: string;
-  amount: number | null;
-  currency: string;
-  date: string | null;
-  status: string;
-  recurrence: string;
-  accountName: string | null;
-  categoryName: string | null;
-  notes: string | null;
-};
+import {
+  RecurringEditor,
+  type RecurringItem as Item,
+  type Suggestion,
+} from "../../src/recurring-editor";
 type Occurrence = Pick<
   Item,
   "id" | "title" | "kind" | "amount" | "currency"
-> & { date: string };
-type Data = { items: Item[]; occurrences: Occurrence[] };
+> & { date: string; dueDate: string; completed: boolean };
+type Data = {
+  items: Item[];
+  occurrences: Occurrence[];
+  suggestions: Suggestion[];
+};
 const kinds = [
   { value: "", label: "Overview" },
   { value: "planned_payment", label: "Planned Payments" },
@@ -52,22 +48,28 @@ export default function Recurring() {
   const [account, setAccount] = useState("");
   const [day, setDay] = useState<string | null>(null);
   const [selected, setSelected] = useState<Item | null>(null);
+  const [editor, setEditor] = useState(false);
+  const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
+  const [revision, setRevision] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      setData(null);
+      if (!session.demo) setData(null);
       setError("");
       setDay(null);
       setSelected(null);
       const load = session.demo
-        ? Promise.resolve({ items: [], occurrences: [] })
+        ? Promise.resolve({ items: [], occurrences: [], suggestions: [] })
         : session.request<Data>(
             `recurring?workspaceId=${encodeURIComponent(session.profileId)}&year=${month.getFullYear()}&month=${month.getMonth()}`,
           );
       void load
         .then((value) => {
-          if (active) setData(value);
+          if (active)
+            setData((current) => (session.demo && current ? current : value));
         })
         .catch((e) => {
           if (active) setError(e.message);
@@ -75,7 +77,7 @@ export default function Recurring() {
       return () => {
         active = false;
       };
-    }, [session.demo, session.profileId, session.request, month]),
+    }, [session.demo, session.profileId, session.request, month, revision]),
   );
   const matches = (item: Item) =>
     (!kind || item.kind === kind) &&
@@ -94,8 +96,64 @@ export default function Recurring() {
     setMonth(
       (value) => new Date(value.getFullYear(), value.getMonth() + offset, 1),
     );
+  const mutate = async (path: string, method: string, body?: unknown) => {
+    setBusy(true);
+    setError("");
+    try {
+      if (!session.demo)
+        await session.request(
+          `${path}?workspaceId=${encodeURIComponent(session.profileId)}`,
+          { method, ...(body ? { body: JSON.stringify(body) } : {}) },
+        );
+      if (session.demo && method === "DELETE")
+        setData((d) =>
+          d ? { ...d, items: d.items.filter((i) => i.id !== selected?.id) } : d,
+        );
+      setSelected(null);
+      setConfirmDelete(false);
+      setRevision((v) => v + 1);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (editor)
+    return (
+      <RecurringEditor
+        initial={selected}
+        suggestion={suggestion}
+        onClose={() => {
+          setEditor(false);
+          setSuggestion(null);
+        }}
+        onSaved={(item) => {
+          if (session.demo)
+            setData((d) => ({
+              items: [
+                ...(d?.items ?? []).filter((i) => i.id !== item.id),
+                item,
+              ],
+              occurrences: d?.occurrences ?? [],
+              suggestions: [],
+            }));
+          setEditor(false);
+          setSuggestion(null);
+          setSelected(null);
+          setRevision((v) => v + 1);
+        }}
+      />
+    );
   return (
     <Screen>
+      <Button
+        title="Add recurring"
+        onPress={() => {
+          setSelected(null);
+          setSuggestion(null);
+          setEditor(true);
+        }}
+      />
       <Choices options={kinds} value={kind} onChange={setKind} />
       <Field label="Search recurring" value={query} onChangeText={setQuery} />
       <Button
@@ -241,6 +299,38 @@ export default function Recurring() {
               </View>
             ) : null}
           </Card>
+          {data.suggestions?.length ? (
+            <Card>
+              <Heading>Review suggestions</Heading>
+              {data.suggestions.map((s) => (
+                <View key={s.id} style={{ gap: 8 }}>
+                  <Body muted={false}>
+                    {s.title} · {s.confidence}% confidence
+                  </Body>
+                  <Body>{s.reason}</Body>
+                  <Button
+                    title={`Review ${s.title}`}
+                    secondary
+                    onPress={() => {
+                      setSelected(null);
+                      setSuggestion(s);
+                      setEditor(true);
+                    }}
+                  />
+                  <Button
+                    title={`Dismiss ${s.title}`}
+                    secondary
+                    disabled={busy}
+                    onPress={() =>
+                      void mutate("recurring-suggestions/dismiss", "POST", {
+                        suggestionId: s.id,
+                      })
+                    }
+                  />
+                </View>
+              ))}
+            </Card>
+          ) : null}
           <Card>
             <Text
               style={{ color: colors.ink, fontWeight: "600", fontSize: 18 }}
@@ -273,6 +363,64 @@ export default function Recurring() {
           {selected.accountName ? <Body>{selected.accountName}</Body> : null}
           {selected.categoryName ? <Body>{selected.categoryName}</Body> : null}
           {selected.notes ? <Body>{selected.notes}</Body> : null}
+          <Button
+            title="Edit recurring"
+            onPress={() => {
+              setSuggestion(null);
+              setEditor(true);
+            }}
+          />
+          {occurrences
+            .filter((o) => o.id === selected.id)
+            .map((o) => (
+              <View key={o.date} style={{ gap: 8 }}>
+                <Body>
+                  {o.date} · {o.completed ? "Completed" : "Due"}
+                </Body>
+                <Button
+                  title={`${o.completed ? "Undo completion" : "Mark completed"} · ${o.date}`}
+                  secondary
+                  disabled={busy}
+                  onPress={() =>
+                    void mutate(
+                      `recurring/${selected.id}/completion`,
+                      "PATCH",
+                      { dueDate: o.dueDate, completed: !o.completed },
+                    )
+                  }
+                />
+              </View>
+            ))}
+          <Body>
+            Completion tracks this payment only; it does not create a
+            transaction or move money.
+          </Body>
+          <Button
+            title="Delete recurring"
+            secondary
+            onPress={() => setConfirmDelete(true)}
+          />
+          {confirmDelete ? (
+            <Notice>
+              <Body>
+                Delete this schedule and its completion history? Existing
+                transactions stay unchanged.
+              </Body>
+              <Button
+                title="Confirm recurring deletion"
+                disabled={busy}
+                onPress={() =>
+                  void mutate(`recurring/${selected.id}`, "DELETE")
+                }
+              />
+              <Button
+                title="Keep recurring"
+                secondary
+                disabled={busy}
+                onPress={() => setConfirmDelete(false)}
+              />
+            </Notice>
+          ) : null}
           <Button
             title="Close details"
             secondary

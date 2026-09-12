@@ -1,5 +1,10 @@
 export function mobileOperation(method: string, segments: string[]) {
   const path = segments.join("/");
+  if (segments.length === 2 && segments[0] === "accounts" && ["GET", "PATCH", "DELETE"].includes(method)) return "account";
+  if (path === "recurring" && method === "POST") return "recurring-create";
+  if (path === "recurring-suggestions/dismiss" && method === "POST") return "recurring-dismiss";
+  if (segments.length === 2 && segments[0] === "recurring" && ["PATCH", "DELETE"].includes(method)) return "recurring-edit";
+  if (segments.length === 3 && segments[0] === "recurring" && segments[2] === "completion" && method === "PATCH") return "recurring-completion";
   if (path === "adviser/attachments" && method === "POST") return "adviser-attachments";
   if (path === "adviser/entries" && ["GET", "POST"].includes(method)) return "adviser-entries";
   if (path === "adviser/chat" && method === "POST") return "adviser-chat";

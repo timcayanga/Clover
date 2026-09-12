@@ -70,6 +70,13 @@ function Routes() {
             options={{ headerShown: false, title: "Clover" }}
           />
           <Stack.Screen
+            name="budgeting"
+            options={{
+              title: "Budgeting",
+              header: () => <AppHeader title="Budgeting" back />,
+            }}
+          />
+          <Stack.Screen
             name="transaction/[id]"
             options={{
               title: "Transaction",
@@ -86,7 +93,9 @@ function Routes() {
         </Stack.Protected>
       </Stack>
       {active &&
-      (path.startsWith("/transaction/") || path.startsWith("/import/")) ? (
+      (path.startsWith("/transaction/") ||
+        path.startsWith("/import/") ||
+        path === "/budgeting") ? (
         <DetailNavigation />
       ) : null}
     </PrivacyShield>

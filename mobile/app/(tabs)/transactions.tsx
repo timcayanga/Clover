@@ -1,4 +1,4 @@
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -25,7 +25,14 @@ export default function Transactions() {
   const { colors, styles, dark } = useTheme();
   const { demo, rows: samples, profileId, request } = useSession();
   const [filters, setFilters] = useState(false);
+  const params = useLocalSearchParams<{ review?: string }>();
   const [review, setReview] = useState("");
+  useEffect(() => {
+    if (params.review === "pending_review") {
+      setReview("pending_review");
+      setFilters(true);
+    }
+  }, [params.review]);
   const [type, setType] = useState("");
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");

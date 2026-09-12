@@ -15,16 +15,15 @@ import {
   money,
   useTheme,
 } from "../../src/ui";
-type Account = {
-  id: string;
-  name: string;
-  institution: string | null;
-  type: string;
-  currency: string;
-  balance: string | null;
-  lastFour?: string;
-};
+import {
+  AccountEditor,
+  type AccountRecord as Account,
+} from "../../src/account-editor";
 export default function Accounts() {
+  const session = useSession();
+  return <AccountsContent key={session.profileId} />;
+}
+function AccountsContent() {
   const { colors, styles, dark } = useTheme();
   const session = useSession();
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -32,6 +31,8 @@ export default function Accounts() {
   const [currency, setCurrency] = useState("");
   const [filters, setFilters] = useState(false);
   const [selected, setSelected] = useState<Account | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [revision, setRevision] = useState(0);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   useFocusEffect(
@@ -69,7 +70,7 @@ export default function Accounts() {
       return () => {
         active = false;
       };
-    }, [session.demo, session.profileId, session.request]),
+    }, [session.demo, session.profileId, session.request, revision]),
   );
   const label = (account: Account) =>
     [account.name, account.lastFour].filter(Boolean).join(" ");
@@ -79,8 +80,30 @@ export default function Accounts() {
       : account.type === "investment"
         ? "Recorded value"
         : "Balance";
+  if (selected || adding)
+    return (
+      <AccountEditor
+        initial={selected}
+        onClose={() => {
+          setSelected(null);
+          setAdding(false);
+        }}
+        onSaved={(record) => {
+          if (session.demo)
+            setAccounts((list) =>
+              record
+                ? [...list.filter((a) => a.id !== record.id), record]
+                : list.filter((a) => a.id !== selected?.id),
+            );
+          else setRevision((v) => v + 1);
+          setSelected(null);
+          setAdding(false);
+        }}
+      />
+    );
   return (
     <Screen>
+      <Button title="Add account" onPress={() => setAdding(true)} />
       <Field
         label="Search accounts"
         value={query}
@@ -175,26 +198,6 @@ export default function Accounts() {
         <Notice>
           No accounts yet. Add a record using the Add tab to get started.
         </Notice>
-      ) : null}
-      {selected ? (
-        <Card>
-          <Heading>{label(selected)}</Heading>
-          <Body>
-            {selected.type.replaceAll("_", " ")} · {selected.currency}
-          </Body>
-          <Body>
-            {amountLabel(selected)}:{" "}
-            {selected.balance === null
-              ? "Not recorded"
-              : money(selected.balance, selected.currency)}
-          </Body>
-          <Body>{selected.institution || "Manual account"}</Body>
-          <Button
-            title="Close details"
-            secondary
-            onPress={() => setSelected(null)}
-          />
-        </Card>
       ) : null}
     </Screen>
   );

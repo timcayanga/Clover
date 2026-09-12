@@ -1,3 +1,4 @@
+import { HomeChart } from "../../src/home-chart";
 import { router, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import * as SecureStore from "expo-secure-store";
@@ -16,12 +17,32 @@ import {
 } from "../../src/ui";
 type Totals = { income: number; expense: number };
 type HomeData = {
+  currencies?: string[];
+  reviewCount?: number;
+  categories?: { name: string; amount: number }[];
+  budgets?: {
+    id: string;
+    name: string;
+    currency: string;
+    actualAmount: number;
+    targetAmount: number;
+    progressPercent: number;
+    statusLabel: string;
+    periodLabel: string;
+    isAtRisk: boolean;
+  }[];
   currency: string;
   balance: number | null;
   month: Totals;
   previousMonth: Totals;
-  weekly: Totals & { days: (Totals & { date: string })[] };
-  monthly: Totals & { days: (Totals & { date: string })[] };
+  weekly: Totals & { previous?: Totals; days: (Totals & { date: string })[] };
+  monthly: Totals & { previous?: Totals; days: (Totals & { date: string })[] };
+  overdue?: {
+    id: string;
+    title: string;
+    amount: string | null;
+    date: string;
+  }[];
   upcoming: {
     id: string;
     title: string;
@@ -139,7 +160,14 @@ export default function Home() {
           accessibilityLabel={`Reporting currency ${currency}. Switch currency`}
           style={{ padding: 12 }}
           onPress={() =>
-            setCurrency((current) => (current === "PHP" ? "USD" : "PHP"))
+            setCurrency((current) => {
+              const currencies = data?.currencies?.length
+                ? data.currencies
+                : ["PHP", "USD"];
+              return currencies[
+                (currencies.indexOf(current) + 1) % currencies.length
+              ];
+            })
           }
         >
           <Text style={{ color: colors.teal }}>{currency} ⌄</Text>
@@ -249,8 +277,17 @@ export default function Home() {
               Next steps
             </Text>
             <Button
-              title="Review transactions"
-              onPress={() => router.navigate("/(tabs)/transactions")}
+              title={
+                data.reviewCount === undefined
+                  ? "Review transactions"
+                  : `Review transactions · ${data.reviewCount} unresolved`
+              }
+              onPress={() =>
+                router.navigate({
+                  pathname: "/(tabs)/transactions",
+                  params: { review: "pending_review" },
+                })
+              }
             />
             <Button
               title="Upload a record"
@@ -263,6 +300,67 @@ export default function Home() {
               }
             />
           </Card>
+          {data.budgets?.length ? (
+            <Card>
+              <Text
+                style={{ color: colors.ink, fontSize: 18, fontWeight: "600" }}
+              >
+                Budgeting
+              </Text>
+              {[...data.budgets]
+                .sort((a, b) => Number(b.isAtRisk) - Number(a.isAtRisk))
+                .slice(0, 3)
+                .map((b) => (
+                  <View key={b.id} style={{ gap: 8 }}>
+                    <Body muted={false}>
+                      {b.name} · {b.statusLabel}
+                    </Body>
+                    <Body>
+                      {hidden
+                        ? "••••"
+                        : money(String(b.actualAmount), b.currency)}{" "}
+                      of{" "}
+                      {hidden
+                        ? "••••"
+                        : money(String(b.targetAmount), b.currency)}
+                    </Body>
+                    <View
+                      accessibilityRole="progressbar"
+                      accessibilityLabel={b.name}
+                      accessibilityValue={{
+                        min: 0,
+                        max: 100,
+                        now: Math.max(0, Math.min(100, b.progressPercent)),
+                      }}
+                      style={{
+                        height: 8,
+                        backgroundColor: colors.line,
+                        borderRadius: 4,
+                      }}
+                    >
+                      <View
+                        style={{
+                          height: 8,
+                          width: `${Math.max(0, Math.min(100, b.progressPercent))}%`,
+                          backgroundColor: b.isAtRisk
+                            ? "#D59A39"
+                            : colors.bright,
+                          borderRadius: 4,
+                        }}
+                      />
+                    </View>
+                    <Body>
+                      {Math.round(b.progressPercent)}% · {b.periodLabel}
+                    </Body>
+                  </View>
+                ))}
+              <Button
+                title="Open budgeting"
+                secondary
+                onPress={() => router.navigate("/budgeting")}
+              />
+            </Card>
+          ) : null}
           {(
             [
               ["weekly", "This week"],
@@ -283,6 +381,18 @@ export default function Home() {
               <Body>
                 Recorded spending · past {key === "weekly" ? 7 : 30} days
               </Body>
+              {data[key].previous ? (
+                <Body>
+                  {trend(data[key].expense, data[key].previous.expense)}{" "}
+                  compared with previous {key === "weekly" ? 7 : 30} days
+                </Body>
+              ) : null}
+              <HomeChart
+                key={`${key}-${currency}`}
+                days={data[key].days}
+                hidden={hidden}
+                currency={currency}
+              />
               <View style={{ gap: 8 }}>
                 {(["income", "expense"] as const).map((kind) => (
                   <View
@@ -302,6 +412,63 @@ export default function Home() {
               </View>
             </Card>
           ))}
+          <Card>
+            <Text
+              style={{ color: colors.ink, fontSize: 18, fontWeight: "600" }}
+            >
+              Spending by category
+            </Text>
+            <Body>This calendar month · {currency}</Body>
+            {data.categories?.length ? (
+              data.categories.map((c) => (
+                <View key={c.name} style={{ gap: 6 }}>
+                  <Body muted={false}>
+                    {c.name} · {amount(c.amount)}
+                  </Body>
+                  <View
+                    style={{
+                      height: 7,
+                      borderRadius: 4,
+                      backgroundColor: colors.line,
+                    }}
+                  >
+                    <View
+                      style={{
+                        height: 7,
+                        borderRadius: 4,
+                        backgroundColor: colors.bright,
+                        width: `${Math.min(100, (c.amount / Math.max(1, data.month.expense)) * 100)}%`,
+                      }}
+                    />
+                  </View>
+                </View>
+              ))
+            ) : (
+              <Body>No recorded spending in this currency.</Body>
+            )}
+          </Card>
+          {data.overdue?.length ? (
+            <Card>
+              <Text
+                style={{ color: colors.ink, fontSize: 18, fontWeight: "600" }}
+              >
+                Recent overdue payments
+              </Text>
+              {data.overdue.map((item) => (
+                <View key={item.id} style={{ gap: 4 }}>
+                  <Body muted={false}>
+                    {item.title} · {amount(item.amount)}
+                  </Body>
+                  <Body>Overdue · {item.date}</Body>
+                </View>
+              ))}
+              <Button
+                title="Review overdue payments"
+                secondary
+                onPress={() => router.navigate("/(tabs)/recurring")}
+              />
+            </Card>
+          ) : null}
           <Card>
             <Text
               style={{ color: colors.ink, fontSize: 18, fontWeight: "600" }}

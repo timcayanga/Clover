@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "qa:notification-admin": "tsx scripts/notification-admin-regression.ts && tsx scripts/notification-delivery-regression.ts",
-    "qa:mobile-api": "tsx scripts/mobile-api-regression.ts && tsx scripts/adviser-device-regression.ts && tsx scripts/adviser-entry-regression.ts && tsx scripts/adviser-attachments-regression.ts && tsx scripts/organize-presentation-regression.ts",
+    "qa:mobile-api": "tsx scripts/mobile-api-regression.ts && tsx scripts/adviser-device-regression.ts && tsx scripts/adviser-entry-regression.ts && tsx scripts/adviser-attachments-regression.ts && tsx scripts/organize-presentation-regression.ts && tsx scripts/mobile-organize-regression.ts",
     "qa:knowledge": "tsx scripts/knowledge-regression.ts",
     "predev": "tsx scripts/sync-public-assets.ts",
     "dev": "next dev",

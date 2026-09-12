@@ -1,3 +1,4 @@
+import { mobileAccountPatch, mobileRecurringCreate, mobileRecurringPatch, mobileRecurringCompletion, mobileRecurringDismiss } from "@/lib/mobile-organize-input";
 import { mobileAdviserInput } from "@/lib/mobile-adviser-input";
 import { verifyToken } from "@clerk/nextjs/server";
 import { z } from "zod";
@@ -240,11 +241,38 @@ async function handle(
       }
       forwarded = new Request(request.url, { method: request.method, headers: request.headers, body: JSON.stringify(body) });
     }
+    if (["account", "recurring-edit", "recurring-completion"].includes(operation)) {
+      const exists = operation === "account"
+        ? await prisma.account.findFirst({ where: { id: path[1], workspaceId }, select: { id: true } })
+        : await prisma.financialCommitment.findFirst({ where: { id: path[1], workspaceId }, select: { id: true } });
+      if (!exists) return reply({ error: "Record not found in this Profile." }, 404);
+    }
+    if (["account", "recurring-create", "recurring-edit", "recurring-completion", "recurring-dismiss"].includes(operation)) {
+      const headers = new Headers(request.headers);
+      headers.delete("cookie"); headers.delete("content-length");
+      let payload: string | undefined;
+      if (["POST", "PATCH"].includes(request.method)) {
+        const raw = await request.text();
+        if (new TextEncoder().encode(raw).length > 16384) return reply({ error: "Details are too large." }, 413);
+        let input: unknown;
+        try { input = JSON.parse(raw); } catch { return reply({ error: "Please check the entered fields." }, 400); }
+        const schema = operation === "account" ? mobileAccountPatch : operation === "recurring-create" ? mobileRecurringCreate : operation === "recurring-edit" ? mobileRecurringPatch : operation === "recurring-completion" ? mobileRecurringCompletion : mobileRecurringDismiss;
+        const body = schema.parse(input);
+        if ("accountId" in body && body.accountId && !(await prisma.account.findFirst({ where: { id: body.accountId, workspaceId }, select: { id: true } }))) return reply({ error: "Choose an account in this Profile." }, 400);
+        if ("statementCheckpointId" in body && body.statementCheckpointId && !(await prisma.accountStatementCheckpoint.findFirst({ where: { id: body.statementCheckpointId, workspaceId }, select: { id: true } }))) return reply({ error: "Statement not found in this Profile." }, 400);
+        if ("tracking" in body && body.tracking?.liabilityAccountId && !(await prisma.account.findFirst({ where: { id: body.tracking.liabilityAccountId, workspaceId }, select: { id: true } }))) return reply({ error: "Choose a liability account in this Profile." }, 400);
+        // Transaction evidence is also checked
+        // by the shared commitment handlers inside this verified request context.
+        payload = JSON.stringify({ ...body, workspaceId });
+        headers.set("content-type", "application/json");
+      }
+      forwarded = new Request(request.url, { method: request.method, headers, body: payload });
+    }
     if (operation === "account-create") {
       if (Number(request.headers.get("content-length") ?? 0) > 4096)
         return reply({ error: "Account details are too large." }, 413);
       const body = mobileAccountCreateSchema.parse(await request.json());
-      forwarded = new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify({ ...body, workspaceId }) });
+      forwarded = new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify({ ...body, workspaceId, source: "manual" }) });
     }
     if (operation === "transaction-create") {
       const body = mobileCreateSchema.parse(await request.json());
@@ -334,6 +362,22 @@ async function handle(
             );
           case "transaction-create":
             return (await import("@/app/api/transactions/route")).POST(forwarded);
+          case "account": {
+            const route = await import("@/app/api/accounts/[accountId]/route");
+            const params = { params: Promise.resolve({ accountId: path[1] }) };
+            return request.method === "PATCH" ? route.PATCH(forwarded, params) : request.method === "DELETE" ? route.DELETE(forwarded, params) : route.GET(forwarded, params);
+          }
+          case "recurring-create":
+            return (await import("@/app/api/commitments/route")).POST(forwarded);
+          case "recurring-edit": {
+            const route = await import("@/app/api/commitments/[commitmentId]/route");
+            const params = { params: Promise.resolve({ commitmentId: path[1] }) };
+            return request.method === "PATCH" ? route.PATCH(forwarded, params) : route.DELETE(forwarded, params);
+          }
+          case "recurring-completion":
+            return (await import("@/app/api/commitments/[commitmentId]/completion/route")).PATCH(forwarded, { params: Promise.resolve({ commitmentId: path[1] }) });
+          case "recurring-dismiss":
+            return (await import("@/app/api/recurring-suggestions/dismiss/route")).POST(forwarded);
           case "accounts":
             return (await import("@/app/api/accounts/route")).GET(forwarded);
           case "account-create":
