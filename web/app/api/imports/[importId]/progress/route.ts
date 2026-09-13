@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
-import { fetchImportFileCompat } from "@/lib/data-engine";
+import { fetchImportFileStatusCompat } from "@/lib/data-engine";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
   const { importId } = await params;
   const localDev = await isLocalDevHost();
   const { userId } = localDev ? { userId: "local-admin" } : await requireAuth();
-  const importFile = await fetchImportFileCompat(importId);
+  const importFile = await fetchImportFileStatusCompat(importId);
 
   if (!importFile) {
     return NextResponse.json({ error: "Import not found" }, { status: 404 });

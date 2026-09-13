@@ -4435,32 +4435,44 @@ function TransactionsPageContent() {
     }
 
     let cancelled = false;
+    let refreshInFlight = false;
+    const skipDisplayRefresh = () => cancelled || document.visibilityState === "hidden";
     const refreshEnrichmentDeltas = async () => {
-      const importFileIds = activeFinalizingImportKey.split("|").filter(Boolean);
-      await Promise.allSettled(
-        importFileIds.map((importFileId) =>
-          fetch("/api/import-enrichment/run", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ importFileId, limit: 3, batchSize: 500 }),
-            keepalive: true,
-          })
-        )
-      );
-      if (cancelled) {
-        return;
+      if (cancelled || refreshInFlight) return;
+      refreshInFlight = true;
+      try {
+        const importFileIds = activeFinalizingImportKey.split("|").filter(Boolean);
+        await Promise.allSettled(
+          importFileIds.map((importFileId) =>
+            fetch("/api/import-enrichment/run", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ importFileId, limit: 3, batchSize: 500 }),
+              keepalive: true,
+            })
+          )
+        );
+        if (skipDisplayRefresh()) {
+          return;
+        }
+        await loadWorkspaceMetadata(selectedWorkspaceId, { background: true });
+        if (skipDisplayRefresh()) {
+          return;
+        }
+        await loadTransactionsPage(selectedWorkspaceId, {
+          background: true,
+          pageOverride: transactionsPage,
+          pageSizeOverride: transactionsPageSize,
+          summaryMode: "light",
+        });
+      } finally {
+        refreshInFlight = false;
       }
-      await loadWorkspaceMetadata(selectedWorkspaceId, { background: true });
-      if (cancelled) {
-        return;
-      }
-      await loadTransactionsPage(selectedWorkspaceId, {
-        background: true,
-        pageOverride: transactionsPage,
-        pageSizeOverride: transactionsPageSize,
-        summaryMode: "light",
-      });
     };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void refreshEnrichmentDeltas();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     void refreshEnrichmentDeltas();
     const intervalId = window.setInterval(() => {
@@ -4469,6 +4481,7 @@ function TransactionsPageContent() {
 
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.clearInterval(intervalId);
     };
   }, [activeFinalizingImportKey, selectedWorkspaceId, transactionsPage, transactionsPageSize]);

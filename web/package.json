@@ -25,7 +25,7 @@
     "qa:supabase-query-budget": "tsx scripts/supabase-query-budget-regression.ts",
     "qa:data-consistency-settlement": "tsx scripts/data-consistency-settlement-regression.ts",
     "qa:cross-page-consistency": "tsx scripts/cross-page-data-consistency-regression.ts",
-    "qa:import-upload-handoff": "tsx scripts/import-upload-handoff-regression.ts",
+    "qa:import-upload-handoff": "tsx scripts/import-upload-handoff-regression.ts && tsx scripts/import-egress-regression.ts",
     "qa:import-wallet-progress": "tsx scripts/import-wallet-progress-regression.ts",
     "qa:import-account-race": "tsx scripts/import-account-creation-race-regression.ts",
     "qa:import-enrichment-queue": "tsx scripts/import-enrichment-queue-regression.ts",
