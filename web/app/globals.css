@@ -65875,3 +65875,41 @@ html[data-theme=dark] .notifications-filters button[aria-pressed=true] { backgro
   .circles-metric-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .circles-metric-grid > article:nth-child(3) { display:none; }
 }
+
+/* Fit the September 13 compact summaries to their contents. Keep a minimum
+   card height, but let translated labels and large text expand the row. */
+.content--accounts .accounts-page { gap: 24px; }
+.content--accounts .accounts-overview-grid { gap: 12px; align-content: start; }
+.content--accounts .accounts-page .accounts-overview-card {
+  min-height: 94px;
+  height: auto;
+  padding: 12px;
+  gap: 6px;
+}
+.content--accounts .accounts-sections { gap: 24px; }
+.content--accounts .accounts-group { gap: 10px; }
+.content--accounts .accounts-group + .accounts-group { padding-top: 0; }
+.content--investments .investments-overview-metrics,
+.circles-metric-grid { height: auto; align-content: start; }
+.content--investments .investments-overview-metrics { margin-top: 0; }
+.content--investments .accounts-page { gap: 20px; }
+.circles-metric-grid { gap: 12px; }
+.circles-page,
+.circles-workspace,
+.circles-panel-stack { gap: 20px; align-content: start; }
+.circles-metric-grid .summary-aligned-card {
+  min-height: 94px;
+  height: auto;
+  padding: 12px 16px;
+  gap: 6px;
+}
+@media (min-width: 1101px) {
+  .content--accounts .accounts-overview-grid { padding-bottom: 0; }
+}
+@media (max-width: 1100px) {
+  .content--investments .investments-overview-metrics__card {
+    min-height: 94px;
+    height: auto;
+    padding: 12px 4px;
+  }
+}

@@ -133,7 +133,7 @@ export default function Circles() {
       />
     );
   return (
-    <Screen>
+    <Screen gap={20}>
       <PlanHeader
         title={selected ? "Circle Details" : "Circles"}
         back={selected ? () => setSelected(null) : undefined}

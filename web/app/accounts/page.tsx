@@ -1,4 +1,5 @@
 "use client";
+import { compactSummaryMoney } from "../../../shared/summary-format";
 import { InterfaceIcon } from "@/components/interface-icon";
 import { AdviserFormAssist } from "@/components/adviser-form-assist";
 import { useMobileCreationRoute } from "@/lib/use-mobile-creation-route";
@@ -3187,11 +3188,19 @@ function AccountsPageContent() {
     if (accountEstimateUnavailable) {
       return "—";
     }
-    if (usesFxEstimates) {
-      const amount = formatDisplayAccountAmount(value, defaultCurrency);
-      return signed && value !== 0 ? `${value > 0 ? "+" : "-"}${amount}` : amount;
-    }
-    return signed ? formatSignedAggregateAmount(value, visibleAccounts) : formatAggregateAmount(value, visibleAccounts);
+    const currencies = getCurrencyCodes(visibleAccounts);
+    const currency = usesFxEstimates ? defaultCurrency : currencies.length <= 1 ? currencies[0] ?? "PHP" : null;
+    const sign = signed && value !== 0 ? value > 0 ? "+" : "-" : "";
+    const amount = usesFxEstimates
+      ? `${sign}${formatDisplayAccountAmount(value, defaultCurrency)}`
+      : signed ? formatSignedAggregateAmount(value, visibleAccounts) : formatAggregateAmount(value, visibleAccounts);
+    if (!currency) return amount;
+    const compact = `${sign}${compactSummaryMoney(Math.abs(value), currency)}`;
+    return <span title={amount}>
+      <span className="sr-only">{amount}</span>
+      <span className="summary-desktop-label" aria-hidden="true">{amount}</span>
+      <span className="summary-mobile-label" aria-hidden="true">{compact}</span>
+    </span>;
   };
   const getAccountSummaryTooltip = (calculation: string) => {
     if (!usesFxEstimates) {

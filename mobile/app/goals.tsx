@@ -96,7 +96,7 @@ export default function Goals() {
         ? "Health & Wellness"
         : "Income";
   return (
-    <Screen>
+    <Screen gap={20}>
       <PlanHeader
         title={selected ? "Goal Details" : "Goals"}
         back={selected ? () => setSelected(null) : undefined}

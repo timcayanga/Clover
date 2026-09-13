@@ -163,7 +163,7 @@ export default function Investments() {
     );
   };
   return (
-    <Screen>
+    <Screen gap={20}>
       <PlanHeader
         title="Investments"
         trailing={

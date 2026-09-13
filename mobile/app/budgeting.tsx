@@ -127,7 +127,7 @@ export default function Budgeting() {
       />
     );
   return (
-    <Screen>
+    <Screen gap={20}>
       <PlanHeader
         title={selected ? "Budget Details" : "Budgeting"}
         back={selected ? () => setSelected(null) : undefined}

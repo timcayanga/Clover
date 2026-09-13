@@ -71,7 +71,7 @@ export default function Reports() {
   const summary = data?.[period];
   const net = (summary?.income ?? 0) - (summary?.expense ?? 0);
   return (
-    <Screen>
+    <Screen gap={20}>
       <PlanHeader
         title="Reports"
         trailing={

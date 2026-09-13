@@ -159,12 +159,12 @@ export function Card({
   const { colors, styles, dark } = useTheme();
   return <View style={[styles.card, style]}>{children}</View>;
 }
-export function Screen({ children }: { children: ReactNode }) {
+export function Screen({ children, gap = 16 }: { children: ReactNode; gap?: number }) {
   const { colors, styles, dark } = useTheme();
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.bg }}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { gap }]}
       keyboardShouldPersistTaps="handled"
       automaticallyAdjustKeyboardInsets
     >

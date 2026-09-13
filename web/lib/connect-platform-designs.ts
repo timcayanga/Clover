@@ -1,4 +1,18 @@
 // Composed backgrounds and current phone displays exported from Figma, 13 Sep 2026.
+// Reuse the approved viewport exports wherever a public phone preview appears.
+export const cloverPhoneScreens: Record<string, string> = {
+  accounts: "/assets/connect-platform/screen-50-660.webp",
+  transactions: "/assets/connect-platform/screen-50-723.webp",
+  recurring: "/assets/connect-platform/screen-50-755.webp",
+  reports: "/assets/connect-platform/screen-571-25734.webp",
+  adviser: "/assets/connect-platform/screen-561-25437.webp",
+  investments: "/assets/connect-platform/screen-612-38129.webp",
+  budget: "/assets/connect-platform/screen-584-27896.webp",
+  goal: "/assets/connect-platform/screen-598-31795.webp",
+  circles: "/assets/connect-platform/screen-641-40491.webp",
+  split: "/assets/connect-platform/screen-629-49324.webp",
+};
+
 export const connectPlatformDesigns: Record<
   string,
   { background: string; screen?: string }

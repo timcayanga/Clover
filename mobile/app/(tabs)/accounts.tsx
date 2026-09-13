@@ -166,7 +166,7 @@ function AccountsContent() {
       />
     );
   return (
-    <Screen>
+    <Screen gap={24}>
       <Field
         label="Search accounts"
         value={query}

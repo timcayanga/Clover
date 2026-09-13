@@ -295,7 +295,8 @@ export function SummaryCard({
         borderRadius: 16,
         paddingVertical: 12,
         paddingHorizontal: 4,
-        gap: 8,
+        gap: 6,
+        minHeight: 94,
         justifyContent: "center",
         alignItems: "center",
       }}

@@ -1,4 +1,4 @@
-import { connectPlatformDesigns } from "../lib/connect-platform-designs";
+import { cloverPhoneScreens, connectPlatformDesigns } from "../lib/connect-platform-designs";
 import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -54,8 +54,12 @@ async function main() {
     assert.equal(image.height, name.includes("-mobile-") ? 844 : 1000);
     if (design.screen) {
       const screen = await sharp(path.join(root, "..", design.screen.replace("/assets/", "assets/"))).metadata();
-      assert.equal(screen.width, 400); assert.equal(screen.height, 766);
+      assert.equal(screen.width, 1200); assert.equal(screen.height, 2298);
     }
+  }
+  const approvedPhones = new Set(Object.values(connectPlatformDesigns).flatMap(design => design.screen ? [design.screen] : []));
+  for (const screen of Object.values(cloverPhoneScreens)) {
+    assert.ok(approvedPhones.has(screen), "Fallback phone previews must reuse an approved current Figma viewport.");
   }
   const landingSceneNames = ["01-organize", "02-upload", "03-picture", "04-adviser", "05-plan", "06-life"];
 
