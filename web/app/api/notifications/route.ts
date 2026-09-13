@@ -47,6 +47,7 @@ export async function GET() {
   const feed = await loadActiveInAppNotificationFeed(context.user, context.workspaceId);
   return NextResponse.json({
     notifications: feed.notifications,
+    readIds: (await prisma.inAppNotificationRead.findMany({ where: { userId: context.user.id, notificationKey: { in: feed.notifications.map(item => item.id) } }, select: { notificationKey: true } })).map(item => item.notificationKey),
     count: feed.unreadCount,
     workspaceId: context.workspaceId,
   });
@@ -91,6 +92,7 @@ export async function POST(request: Request) {
     : await loadActiveInAppNotificationFeed(context.user, context.workspaceId);
   return NextResponse.json({
     notifications: feed.notifications,
+    readIds: (await prisma.inAppNotificationRead.findMany({ where: { userId: context.user.id, notificationKey: { in: feed.notifications.map(item => item.id) } }, select: { notificationKey: true } })).map(item => item.notificationKey),
     count: feed.unreadCount,
     workspaceId: context.workspaceId,
   });

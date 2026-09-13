@@ -24,6 +24,7 @@ export type InAppNotification = {
 };
 
 export type InAppNotificationFeed = {
+  readIds?: string[];
   notifications: InAppNotification[];
   count: number;
   workspaceId: string | null;

@@ -23,6 +23,8 @@ export type TransactionPage = {
 };
 export type Profile = { id: string; name: string };
 export type Bootstrap = {
+  needsOnboarding?: boolean;
+  currencyChoices?: {code:string;name:string}[];
   firstName: string | null;
   profiles: Profile[];
   entitlement: {

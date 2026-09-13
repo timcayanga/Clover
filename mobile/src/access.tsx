@@ -5,6 +5,7 @@ export type Access = {
   loaded: boolean;
   enterDemo: () => void;
   signIn: () => Promise<void>;
+  signUp: () => Promise<void>;
 };
 export const AccessContext = createContext<Access>({
   active: false,
@@ -12,5 +13,6 @@ export const AccessContext = createContext<Access>({
   loaded: true,
   enterDemo: () => {},
   signIn: async () => {},
+  signUp: async () => {},
 });
 export const useAccess = () => useContext(AccessContext);

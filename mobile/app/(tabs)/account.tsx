@@ -11,6 +11,8 @@ export default function Account() {
   return (
     <Screen>
       <Heading>Your Clover account</Heading>
+      <Button title="Settings" secondary onPress={() => router.push("/settings")} />
+      <Button title="Notifications" secondary onPress={() => router.push("/notifications")} />
       <Card>
         <Text style={{ fontSize: 24, fontWeight: "700", color: colors.teal }}>
           {access?.planTier === "pro" ? "Clover Pro" : "Clover Free"}

@@ -1,7 +1,8 @@
 import { hasFullFeatureAccess } from "@/lib/beta-access";
 import { mobileAccountPatch, mobileRecurringCreate, mobileRecurringPatch, mobileRecurringCompletion, mobileRecurringDismiss } from "@/lib/mobile-organize-input";
 import { mobileAdviserInput } from "@/lib/mobile-adviser-input";
-import { verifyToken } from "@clerk/nextjs/server";
+import { revalidateTag } from "next/cache";
+import { verifyToken, clerkClient } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { isAdminOnlyUserId, isConfiguredAdminEmail } from "@/lib/admin-access";
@@ -62,12 +63,31 @@ async function handle(
   try {
     if (isAdminOnlyUserId(userId) || (await isConfiguredAdminEmail(userId)))
       return reply({ error: "Use the Admin website for this account." }, 403);
-    // Existing accounts only during the first native preview; onboarding stays
-    // on the website until its native equivalent is ready.
+    if (operation === "onboarding") {
+      const body = z.object({ experience: z.enum(["beginner", "comfortable", "advanced"]), currency: z.string().regex(/^[A-Z]{3}$/), locale: z.string().min(2).max(40).default("en-PH"), timeZone: z.string().min(1).max(100).default("Asia/Manila") }).strict().parse(await request.json());
+      const { getCurrencyCatalogCodes } = await import("@/lib/currencies");
+      if (!getCurrencyCatalogCodes().some(code => code === body.currency)) return reply({ error: "Choose a supported currency." }, 400);
+      const forwarded = new Request(request.url, { method: "POST", headers: request.headers, body: JSON.stringify({ experience: body.experience, startAction: "native", regionalPreferences: { baseCurrency: body.currency, dateFormat: "MM/DD/YYYY", numberFormat: "1,234.56", timeZone: body.timeZone, locale: body.locale, countryCode: null, detectionSource: "manual" } }) });
+      return await withMobileRequestContext(userId, forwarded, async () => {
+        const { getOrCreateCurrentUser } = await import("@/lib/user-context");
+        const current = await getOrCreateCurrentUser(userId);
+        // Replay must never change the currency of an already configured account.
+        if (current.onboardingCompletedAt) return reply({ completed: true });
+        const { ensureStarterWorkspace } = await import("@/lib/starter-data");
+        await ensureStarterWorkspace(current, undefined, undefined, body.currency);
+        const result = await (await import("@/app/api/onboarding/route")).POST(forwarded);
+        if (!result.ok) return reply({ error: "Unable to finish setup. Please try again." }, result.status);
+
+        return reply({ completed: true });
+      });
+    }
     const user = await prisma.user.findUnique({
       where: { clerkUserId: userId },
-      select: { id: true, firstName: true, email: true, clerkUserId: true, planTier: true },
+      select: { id: true, firstName: true, lastName: true, email: true, clerkUserId: true, planTier: true, onboardingCompletedAt: true },
     });
+    const catalog = operation === "bootstrap" ? await import("@/lib/currencies") : null;
+    const currencyChoices = catalog ? catalog.getCurrencyCatalogOptions(catalog.getCurrencyCatalogCodes()) : undefined;
+    if (!user && operation === "bootstrap") return reply({ currencyChoices, apiVersion: 1, firstName: null, needsOnboarding: true, profiles: [], entitlement: { planTier: "free", fullFeatureAccess: false, accessEndsAt: null, renewing: false, nativePurchasesAvailable: false } });
     if (!user)
       return reply(
         {
@@ -76,6 +96,22 @@ async function handle(
         },
         409,
       );
+    if (operation === "settings-account") {
+      if (request.method === "GET") return reply({ firstName: user.firstName, lastName: user.lastName, email: user.email });
+      const data = z.object({ firstName: z.string().trim().max(80), lastName: z.string().trim().max(80) }).strict().parse(await request.json());
+      await (await clerkClient()).users.updateUser(userId, data);
+      revalidateTag("clover-clerk-user");
+      const updated = await prisma.user.update({ where: { id: user.id }, data, select: { firstName: true, lastName: true, email: true } });
+      return reply(updated);
+    }
+    if (operation === "settings-regional") {
+      return await withMobileRequestContext(userId, request, async () => {
+        const route = await import("@/app/api/settings/regional/route");
+        const result = request.method === "GET" ? await route.GET() : await route.PATCH(request);
+        const data = await result.json();
+        return reply(result.ok ? { regionalPreferences: data.regionalPreferences } : { error: "Unable to update regional preferences." }, result.status);
+      });
+    }
     if (operation === "bootstrap") {
       const [profiles, access] = await Promise.all([
         prisma.workspace.findMany({
@@ -87,6 +123,8 @@ async function handle(
       ]);
       return reply({
         apiVersion: 1,
+        needsOnboarding: !user.onboardingCompletedAt,
+        currencyChoices,
         firstName: user.firstName,
         profiles,
         entitlement: {
@@ -205,14 +243,16 @@ async function handle(
     if (operation === "notifications") {
       const feed = await loadActiveInAppNotificationFeed(user, workspaceId);
       if (request.method === "PATCH") {
-        const body = z.object({ ids: z.array(z.string().min(1).max(240)).min(1).max(40) }).strict().parse(await request.json());
+        const body = z.object({ ids: z.array(z.string().min(1).max(240)).min(1).max(40), action: z.enum(["read", "dismiss"]).default("read") }).strict().parse(await request.json());
         const allowed = new Set(feed.notifications.map(item => item.id));
         if (body.ids.some(id => !allowed.has(id))) return reply({ error: "Notification not found in this Profile." }, 400);
-        await prisma.inAppNotificationRead.createMany({ data: [...new Set(body.ids)].map(notificationKey => ({ userId: user.id, notificationKey })), skipDuplicates: true });
+        const records = { data: [...new Set(body.ids)].map(notificationKey => ({ userId: user.id, notificationKey })), skipDuplicates: true };
+        if (body.action === "dismiss") await prisma.inAppNotificationDismissal.createMany(records);
+        else await prisma.inAppNotificationRead.createMany(records);
         const refreshed = await loadActiveInAppNotificationFeed(user, workspaceId);
-        return reply({ notifications: refreshed.notifications, count: refreshed.unreadCount });
+        return reply({ notifications: refreshed.notifications, count: refreshed.unreadCount, readIds: (await prisma.inAppNotificationRead.findMany({ where: { userId: user.id, notificationKey: { in: refreshed.notifications.map(item => item.id) } }, select: { notificationKey: true } })).map(row => row.notificationKey) });
       }
-      return reply({ notifications: feed.notifications, count: feed.unreadCount });
+      return reply({ notifications: feed.notifications, count: feed.unreadCount, readIds: (await prisma.inAppNotificationRead.findMany({ where: { userId: user.id, notificationKey: { in: feed.notifications.map(item => item.id) } }, select: { notificationKey: true } })).map(row => row.notificationKey) });
     }
     if (operation === "options") {
       const [accounts, categories, tags] = await Promise.all([

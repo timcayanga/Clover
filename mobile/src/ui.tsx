@@ -1,3 +1,4 @@
+import { useDisplayPreferences } from "./display-preferences";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
 import {
@@ -109,7 +110,7 @@ export function Button({
         (pressed || disabled) && { opacity: 0.6 },
       ]}
     >
-      <Text style={[styles.buttonText, secondary && { color: colors.teal }]}>
+      <Text style={[styles.buttonText, secondary && { color: dark ? colors.bright : colors.teal }]}>
         {title}
       </Text>
     </Pressable>
@@ -472,7 +473,7 @@ export function AppHeader({
                                 `notifications?workspaceId=${encodeURIComponent(profileId)}`,
                                 {
                                   method: "PATCH",
-                                  body: JSON.stringify({ ids: [item.id] }),
+                                  body: JSON.stringify({ ids: [item.id], action: "dismiss" }),
                                 },
                               )
                               .then((data) => {
@@ -650,7 +651,7 @@ const makeStyles = (colors: typeof lightColors) =>
 const darkColors: typeof lightColors = {
   ink: "#EDF5F7",
   muted: "#A6BBC4",
-  teal: "#168D9D",
+  teal: "#007F90",
   bright: "#5ED3D0",
   pale: "#193A43",
   bg: "#0D171D",
@@ -661,7 +662,9 @@ const darkColors: typeof lightColors = {
 const lightStyles = makeStyles(lightColors);
 const darkStyles = makeStyles(darkColors);
 export function useTheme() {
-  const dark = useColorScheme() === "dark";
+  const systemDark = useColorScheme() === "dark";
+  const { appearance } = useDisplayPreferences();
+  const dark = appearance === "system" ? systemDark : appearance === "dark";
   return {
     dark,
     colors: dark ? darkColors : lightColors,

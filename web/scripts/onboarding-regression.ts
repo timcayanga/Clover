@@ -32,8 +32,9 @@ assert.match(
   "A completed, non-optimistic import must finish onboarding",
 );
 assert.match(onboardingForm, /capture="environment"/u, "Mobile onboarding must offer the rear camera");
-assert.match(onboardingForm, /Upload photos/u, "Onboarding must offer photo upload");
-assert.match(onboardingForm, /Upload files/u, "Onboarding must offer file upload");
+assert.match(onboardingForm, /Photo Library/u, "Onboarding must offer the Figma photo-library choice");
+assert.match(onboardingForm, /Take Photo/u, "Onboarding must offer an explicit camera choice");
+assert.match(onboardingForm, /Choose Files/u, "Onboarding must offer the Figma file-picker choice");
 assert.match(
   onboardingForm,
   /Add a statement, receipt, or financial screenshot\. Clover will read it and create your transactions\./u,

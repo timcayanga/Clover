@@ -96,6 +96,7 @@ export function OnboardingForm({
 }: OnboardingFormProps) {
   const router = useRouter();
   const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const libraryInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [experience, setExperience] = useState<FinancialExperienceLevel | null>(
     (currentExperience as FinancialExperienceLevel | null) ?? null,
@@ -205,7 +206,7 @@ export function OnboardingForm({
   const experienceStep = (
     <>
       <h3>How comfortable are you with financial management?</h3>
-      <div className="onboarding-grid onboarding-grid--experience" role="list" aria-label="Financial experience">
+      <div className="onboarding-grid onboarding-grid--experience" role="group" aria-label="Financial experience">
         {EXPERIENCE_OPTIONS.map((option) => (
           <button
             key={option.value}
@@ -215,7 +216,7 @@ export function OnboardingForm({
               setExperience(option.value);
               setMessage(option.description);
             }}
-            role="listitem"
+
             aria-pressed={experience === option.value}
           >
             <span className="onboarding-option__icon" aria-hidden="true">
@@ -252,6 +253,7 @@ export function OnboardingForm({
               detectionSource: "manual",
             }));
           }}
+          showFullName
           ariaLabel="Select your default currency"
           className="onboarding-currency__selector"
           buttonClassName="onboarding-currency__button"
@@ -332,11 +334,14 @@ export function OnboardingForm({
         </div>
 
         <div className="onboarding-upload__actions">
-          <button className="button button-primary" type="button" disabled={isPending} onClick={() => photoInputRef.current?.click()}>
-            Upload photos
+          <button className="button button-primary" type="button" disabled={isPending} onClick={() => fileInputRef.current?.click()}>
+            <img src="/assets/connect-platform/choose-files.svg" alt="" />Choose Files
           </button>
-          <button className="button button-secondary" type="button" disabled={isPending} onClick={() => fileInputRef.current?.click()}>
-            Upload files
+          <button className="button button-secondary onboarding-upload__mobile-choice" type="button" disabled={isPending} onClick={() => photoInputRef.current?.click()}>
+            <img src="/assets/connect-platform/take-photo.svg" alt="" />Take Photo
+          </button>
+          <button className="button button-secondary onboarding-upload__mobile-choice" type="button" disabled={isPending} onClick={() => libraryInputRef.current?.click()}>
+            <img src="/assets/connect-platform/photo-library.svg" alt="" />Photo Library
           </button>
         </div>
       </div>
@@ -347,9 +352,9 @@ export function OnboardingForm({
         type="file"
         accept="image/*"
         capture="environment"
-        multiple
         onChange={handleFilePickerChange}
       />
+      <input ref={libraryInputRef} className="sr-only" type="file" accept="image/*" multiple onChange={handleFilePickerChange} />
       <input
         ref={fileInputRef}
         className="sr-only"
@@ -359,7 +364,7 @@ export function OnboardingForm({
         onChange={handleFilePickerChange}
       />
 
-      <div className="onboarding-actions">
+      <div className="onboarding-actions onboarding-actions--upload">
         <div className="onboarding-actions__group onboarding-actions__group--secondary">
           <button
             className="button button-secondary"

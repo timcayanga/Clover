@@ -893,3 +893,29 @@
     grid-template-columns: minmax(54px, 1fr) 14px minmax(54px, 1fr) 14px minmax(54px, 1fr);
   }
 }
+
+/* Admin command center: responsive navigation and compact working surfaces. */
+.admin-page-shell { display: grid; grid-template-columns: 208px minmax(0, 1fr); gap: 20px 24px; align-items: flex-start; }
+.admin-page-header { grid-column: 1 / -1; padding-block: 8px 16px; border-bottom: 1px solid var(--stroke, #dbe3e8); }
+.admin-page-shell > .admin-section-nav { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 12px; border: 1px solid var(--stroke, #dbe3e8); border-radius: 16px; background: var(--surface, #fff); position: sticky; top: 88px; }
+.admin-page-shell > .admin-section-nav .admin-section-nav__link { display: block; border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+.admin-page-shell > .admin-section-nav .admin-section-nav__link.is-active { color: #007f90; background: #e7f7f6; font-weight: 600; }
+.admin-page__content { min-width: 0; }
+.admin-kpi, .admin-compact-panel { border: 1px solid var(--stroke, #dbe3e8); border-radius: 16px; box-shadow: none; background: var(--surface, #fff); }
+.admin-page__content .button-primary { background: linear-gradient(100deg,#03a8c0,#5ed3d0); color: #fff; }
+html[data-theme="dark"] .admin-section-nav,
+html[data-theme="dark"] .admin-kpi,
+html[data-theme="dark"] .admin-compact-panel { background: #172831; border-color: #30434c; }
+html[data-theme="dark"] .admin-page-shell > .admin-section-nav .admin-section-nav__link.is-active { color: #5ed3d0; background: #203f46; }
+html[data-theme="dark"] .admin-root { background: radial-gradient(circle at 0 0, rgba(39,190,196,.08), transparent 28rem), #0b1521; }
+html[data-theme="dark"] .admin-feature-line { background: #10202b; border-color: #30434c; }
+html[data-theme="dark"] .admin-analysis-card,
+html[data-theme="dark"] .admin-adoption-range > a { background: #172831; }
+html[data-theme="dark"] .admin-analysis-intro { background: linear-gradient(125deg,#16383e,#172831); }
+html[data-theme="dark"] .admin-adoption-range input { background: #0b1521; color: #edf5f7; color-scheme: dark; }
+@media (max-width: 1000px) {
+ .admin-page-shell { display: flex; flex-direction: column; gap: 16px; }
+ .admin-page-header, .admin-page__content { width: 100%; }
+ .admin-page-shell > .admin-section-nav { position: static; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; max-width: 100%; width: 100%; border-radius: 12px; padding: 6px; }
+ .admin-page-shell > .admin-section-nav .admin-section-nav__link { white-space: nowrap; min-height: 44px; display: flex; align-items: center; }
+}

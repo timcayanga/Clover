@@ -65765,3 +65765,45 @@ html[data-theme="dark"] :is(.transaction-creation-panel,.accounts-import-footer-
 .circles-page .collection-card--circle {background:var(--surface);color:var(--text);border:1px solid var(--stroke);border-radius:16px;box-shadow:none;gap:16px;}
 .circles-page .collection-card--circle small {color:var(--muted);}
 .circles-page .collection-card--circle .collection-card__view {align-self:flex-start;background:var(--surface);color:var(--text);border:1px solid var(--stroke);}
+
+/* Connect & Platform, Figma September 13: shared Settings and setup surfaces. */
+.auth-page, .onboarding-page {
+  background: radial-gradient(ellipse at 10% 15%, rgba(5,168,191,.12), transparent 55%), radial-gradient(ellipse at 75% 85%, rgba(94,214,207,.22), transparent 60%), #f7fcfc;
+}
+.auth-page .clover-auth-card input { background: #fff; color: #0f262e; }
+.onboarding-currency__button .currency-selector__trigger-token { width: auto; height: auto; white-space: normal; }
+.onboarding-upload__actions .button-primary { color: #fff; background: linear-gradient(100deg,#03a8c0,#5ed3d0); }
+.onboarding-upload__mobile-choice { display: none; }
+.onboarding-actions--upload .onboarding-actions__group--secondary { width: 100%; justify-content: space-between; }
+.onboarding-actions--upload .onboarding-actions__group--primary { display: none; }
+.settings-action-card { border-radius: 16px; border: 1px solid var(--stroke, #dbe3e8); background: var(--surface, #fff); box-shadow: none; }
+.settings-account-card__head { padding-bottom: 16px; }
+.settings-action-card h5 { font-size: 15px; font-weight: 600; }
+.settings-action-card .button { min-height: 40px; border-radius: 20px; }
+.settings-action-card .button-primary { background: linear-gradient(100deg,#03a8c0,#5ed3d0); color: #fff; }
+.settings-hub__menu-item.is-active { background: var(--surface-soft, #e7f7f6); }
+@media (max-width: 760px) {
+ .onboarding-upload__mobile-choice { display: flex; }
+ .onboarding-upload__actions { display: grid; grid-template-columns: 1fr; gap: 12px; }
+ .onboarding-upload__actions .button { min-height: 64px; border-radius: 16px; }
+ .settings-section__intro h3 { text-align: center; }
+ .settings-account-layout { grid-template-columns: minmax(0, 1fr); }
+}
+html[data-theme="dark"] .settings-action-card { background: #172831; border-color: #30434c; }
+html[data-theme="dark"] .settings-hub__menu-item.is-active { background: #203f46; }
+.onboarding-upload__actions img { width: 44px; height: 44px; object-fit: contain; }
+.onboarding-upload__actions .button { gap: 12px; }
+
+.notifications-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+.notifications-filters button { border: 1px solid var(--stroke,#dbe3e8); background: var(--surface,#fff); color: var(--text,#0f262e); border-radius: 20px; padding: 10px 18px; min-height: 44px; }
+.notifications-filters button[aria-pressed=true] { background: #e0f7f5; border-color: #03a8c0; color: #007f90; }
+.notification-item { border-radius: 16px; background: var(--surface,#fff); border: 1px solid var(--stroke,#dbe3e8); box-shadow: none; }
+.notification-item--warning { border-left: 3px solid #e4b348; }
+.notification-item--danger { border-left: 3px solid #d96d72; }
+.notifications-confirm { width: min(440px,calc(100vw - 32px)); padding: 24px; border: 1px solid var(--stroke,#dbe3e8); border-radius: 20px; background: var(--surface,#fff); color: var(--text,#0f262e); }
+.notifications-confirm::backdrop { background: rgba(15,38,46,.4); backdrop-filter: blur(4px); }
+.notifications-confirm>div { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; }
+html[data-theme=dark] .notification-item, html[data-theme=dark] .notifications-confirm { background: #172831; border-color: #30434c; color: #edf5f7; }
+html[data-theme=dark] .notifications-filters button { background: #172831; color: #edf5f7; border-color: #30434c; }
+html[data-theme=dark] .notifications-filters button[aria-pressed=true] { background: #203f46; color: #5ed3d0; border-color: #168d9d; }
+@media(max-width:760px) { .notification-item { padding: 16px; } .notifications-filters { gap: 6px; } .notifications-filters button { padding: 8px 12px; font-size: 12px; } }

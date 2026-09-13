@@ -24,19 +24,19 @@ type AdminPageChromeProps = {
 };
 
 const adminNavItems = [
-  { key: "home", href: "/admin", label: "Home" },
+  { key: "home", href: "/admin", label: "Overview" },
   { key: "content", href: "/admin/content", label: "Content" },
   { key: "users", href: "/admin/users", label: "Users" },
   { key: "campaigns", href: "/admin/campaigns", label: "Campaigns & Referrals" },
   { key: "notifications", href: "/admin/notifications", label: "Notifications" },
   { key: "support", href: "/admin/support", label: "Support" },
-  { key: "operations", href: "/admin/operations", label: "Operations" },
+  { key: "operations", href: "/admin/operations", label: "Import operations" },
   { key: "analytics", href: "/admin/analytics", label: "Analytics" },
   { key: "analysis", href: "/admin/analysis", label: "Analysis" },
   { key: "logs", href: "/admin/logs", label: "Audit logs" },
   { key: "errors", href: "/admin/errors", label: "Errors" },
   { key: "inquiries", href: "/admin/inquiries", label: "Inquiries" },
-  { key: "data-qa", href: "/admin/data-qa", label: "Data QA" },
+  { key: "data-qa", href: "/admin/data-qa", label: "Data quality" },
 ] as const;
 
 export function AdminPageChrome({

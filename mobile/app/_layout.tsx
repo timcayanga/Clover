@@ -1,7 +1,8 @@
+import { DisplayPreferences } from "../src/display-preferences";
 import { ClerkProvider, useAuth } from "@clerk/expo";
 import { useHostedAuth } from "@clerk/expo/hosted-auth";
 import { tokenCache } from "@clerk/expo/token-cache";
-import { Stack, usePathname } from "expo-router";
+import { Stack, usePathname, router } from "expo-router";
 import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
 import { useState, type ReactNode } from "react";
@@ -9,7 +10,7 @@ import { AppState, Platform, StyleSheet, Text, View } from "react-native";
 import { useEffect } from "react";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { AccessContext, useAccess } from "../src/access";
-import { SessionProvider } from "../src/session";
+import { SessionProvider, useSession } from "../src/session";
 import { useTheme, AppHeader, DetailNavigation } from "../src/ui";
 
 function PrivacyShield({ children }: { children: ReactNode }) {
@@ -49,9 +50,15 @@ function Routes() {
   const { colors, styles, dark } = useTheme();
   const { active } = useAccess();
   const path = usePathname();
+  const session = useSession();
+  useEffect(() => {
+    if (active && session.data?.needsOnboarding && path !== "/onboarding") {
+      router.replace("/onboarding");
+    }
+  }, [active, session.data?.needsOnboarding, path]);
   return (
     <PrivacyShield>
-      <StatusBar style={dark ? "light" : "dark"} />
+      <StatusBar style={active && dark ? "light" : "dark"} />
       <Stack
         screenOptions={{
           headerTintColor: colors.teal,
@@ -70,11 +77,14 @@ function Routes() {
             name="(tabs)"
             options={{ headerShown: false, title: "Clover" }}
           />
-          <Stack.Screen name="reports" options={{ headerShown:false }} />
-          <Stack.Screen name="circles" options={{ headerShown:false }} />
-          <Stack.Screen name="split-bills" options={{ headerShown:false }} />
-          <Stack.Screen name="investments" options={{ headerShown:false }} />
-          <Stack.Screen name="goals" options={{ headerShown:false }} />
+          <Stack.Screen name="settings" options={{ headerShown: false }} />
+          <Stack.Screen name="notifications" options={{ headerShown: false }} />
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+          <Stack.Screen name="reports" options={{ headerShown: false }} />
+          <Stack.Screen name="circles" options={{ headerShown: false }} />
+          <Stack.Screen name="split-bills" options={{ headerShown: false }} />
+          <Stack.Screen name="investments" options={{ headerShown: false }} />
+          <Stack.Screen name="goals" options={{ headerShown: false }} />
           <Stack.Screen
             name="budgeting"
             options={{
@@ -101,7 +111,17 @@ function Routes() {
       {active &&
       (path.startsWith("/transaction/") ||
         path.startsWith("/import/") ||
-        ["/budgeting", "/goals", "/investments", "/circles", "/split-bills", "/reports"].includes(path)) ? (
+        [
+          "/settings",
+          "/notifications",
+          "/onboarding",
+          "/budgeting",
+          "/goals",
+          "/investments",
+          "/circles",
+          "/split-bills",
+          "/reports",
+        ].includes(path)) ? (
         <DetailNavigation />
       ) : null}
     </PrivacyShield>
@@ -120,7 +140,7 @@ function AppSession({
   loaded: boolean;
   userId?: string | null;
   getToken?: () => Promise<string | null>;
-  login: () => Promise<void>;
+  login: (mode?: "sign-in" | "sign-up") => Promise<void>;
   logout: () => Promise<void>;
 }) {
   const { colors, styles, dark } = useTheme();
@@ -133,7 +153,8 @@ function AppSession({
         configured,
         loaded,
         enterDemo: () => setDemo(true),
-        signIn: login,
+        signIn: () => login("sign-in"),
+        signUp: () => login("sign-up"),
       }}
     >
       <SessionProvider
@@ -146,7 +167,7 @@ function AppSession({
         }}
       >
         <SafeAreaView
-          style={{ flex: 1, backgroundColor: colors.white }}
+          style={{ flex: 1, backgroundColor: active ? colors.white : "#f7fcfc" }}
           edges={["top", "left", "right"]}
         >
           <Routes />
@@ -164,8 +185,8 @@ function AuthenticatedApp() {
       loaded={isLoaded}
       userId={userId}
       getToken={getToken}
-      login={async () => {
-        await startHostedAuth({ mode: "sign-in" });
+      login={async (mode = "sign-in") => {
+        await startHostedAuth({ mode });
       }}
       logout={async () => {
         await signOut();
@@ -183,18 +204,20 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
   return (
     <SafeAreaProvider>
-      {key ? (
-        <ClerkProvider publishableKey={key} tokenCache={tokenCache}>
-          <AuthenticatedApp />
-        </ClerkProvider>
-      ) : (
-        <AppSession
-          configured={false}
-          loaded
-          login={async () => {}}
-          logout={async () => {}}
-        />
-      )}
+      <DisplayPreferences>
+        {key ? (
+          <ClerkProvider publishableKey={key} tokenCache={tokenCache}>
+            <AuthenticatedApp />
+          </ClerkProvider>
+        ) : (
+          <AppSession
+            configured={false}
+            loaded
+            login={async () => {}}
+            logout={async () => {}}
+          />
+        )}
+      </DisplayPreferences>
     </SafeAreaProvider>
   );
 }

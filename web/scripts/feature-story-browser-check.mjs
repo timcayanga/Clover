@@ -28,7 +28,7 @@ for(const [width,height] of [[1440,900],[390,844],[320,568],[1024,768],[1440,600
    assert.equal(overlay.labels,false,"Redundant feature labels remain");
    if(overlay.kind){
     assert.ok(["transactions","accounts","recurring","reports","adviser","investments","budget","goal","circles","split"].includes(overlay.kind),"Unverified marketing screen");
-    assert.match(overlay.capture,new RegExp("landing-screens/"+overlay.kind+"-(ph|global)\\.webp"));
+    assert.match(overlay.capture,/connect-platform\/screen-[0-9]+-[0-9]+\.webp/);
     if(width>900){
      assert.ok(overlay.box.left>=width*.6,"Phone leaves the clear right-hand area");
      const expectedWidth=(height-108)*.4793333333;

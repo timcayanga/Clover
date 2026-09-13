@@ -34,7 +34,10 @@ assert.match(notificationPageSource, /className="notification-item__product-link
 assert.match(notificationPageSource, /href=\{notification\.productHref\}/);
 assert.match(notificationPageSource, /Clear All/);
 assert.match(notificationPageSource, /markInAppNotificationsRead/);
-assert.match(notificationPageSource, /feed\.notifications\.map\(\(item\) => item\.id\)/);
+assert.match(notificationPageSource, /Mark all as read/);
+assert.match(notificationPageSource, /onClick=\{\(\) => void markRead\(\[notification\.id\]\)\}/);
+assert.match(notificationPageSource, /setReadIds\(feed\.readIds \?\? \[\]\)/);
+assert.doesNotMatch(notificationPageSource.split("const loadNotifications")[1].split("useEffect")[0], /markInAppNotificationsRead/, "Loading the Unread view must not mark its contents read automatically.");
 assert.doesNotMatch(notificationPageSource, /notification-item__tone/);
 assert.match(notificationPageSource, /formatInAppNotificationDateTime\(notification\.createdAt\)/);
 assert.match(notificationPageSource, /dismissInAppNotifications\(\{ ids: \[notificationId\] \}\)/);

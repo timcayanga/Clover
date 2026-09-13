@@ -33,7 +33,7 @@ const loadClerkUser = unstable_cache(
     };
   },
   ["clover-clerk-user-v1"],
-  { revalidate: 300 },
+  { revalidate: 300, tags: ["clover-clerk-user"] },
 );
 
 export const syncClerkUser = async (clerkUserId: string): Promise<SyncedClerkUser> => {

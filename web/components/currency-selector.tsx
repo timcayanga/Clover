@@ -22,6 +22,7 @@ type CurrencySelectorProps = {
   optionClassName?: string;
   compact?: boolean;
   showCurrencyCode?: boolean;
+  showFullName?: boolean;
   disabled?: boolean;
   menuAlignment?: "start" | "end";
   showGroupedSections?: boolean;
@@ -83,6 +84,7 @@ export function CurrencySelector({
   optionClassName,
   compact = false,
   showCurrencyCode = false,
+  showFullName = false,
   disabled = false,
   menuAlignment = "start",
   showGroupedSections = false,
@@ -296,7 +298,7 @@ export function CurrencySelector({
       >
         {!isAllSelected ? (
           <span className="currency-selector__trigger-token" aria-hidden="true">
-            {showCurrencyCode ? selectedOption.code : selectedOption.symbol}
+            {showFullName ? `${selectedOption.name} (${selectedOption.code})` : showCurrencyCode ? selectedOption.code : selectedOption.symbol}
           </span>
         ) : (
           <span className="currency-selector__trigger-all" aria-hidden="true">

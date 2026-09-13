@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CloverShell } from "@/components/clover-shell";
 import { OnboardingMissions } from "@/components/onboarding-missions";
 import {
@@ -16,23 +16,28 @@ import { TokenUsageDonut } from "@/components/token-usage-donut";
 
 export function NotificationsClient() {
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
+  const [filter, setFilter] = useState("All");
+  const [readIds, setReadIds] = useState<string[]>([]);
+  const [marking, setMarking] = useState(false);
+  const confirm = useRef<HTMLDialogElement>(null);
+  const requestVersion = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dismissing, setDismissing] = useState<Set<string>>(new Set());
   const [dismissingAll, setDismissingAll] = useState(false);
 
   const loadNotifications = useCallback(async (fresh = false) => {
+    const version = ++requestVersion.current;
     try {
       const feed = await loadInAppNotificationFeed(null, fresh);
+      if (version !== requestVersion.current) return;
       setNotifications(feed.notifications);
       setError(null);
-      if (feed.count > 0) {
-        void markInAppNotificationsRead(feed.notifications.map((item) => item.id)).catch(() => null);
-      }
+      setReadIds(feed.readIds ?? []);
     } catch {
-      setError("Clover could not load notifications right now.");
+      if (version === requestVersion.current) setError("Clover could not load notifications right now.");
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   }, []);
 
@@ -42,6 +47,7 @@ export function NotificationsClient() {
     window.addEventListener(inAppNotificationsChangedEvent, refresh);
     const usageRefreshTimer = window.setInterval(refresh, 60_000);
     return () => {
+      requestVersion.current++;
       window.removeEventListener(inAppNotificationsChangedEvent, refresh);
       window.clearInterval(usageRefreshTimer);
     };
@@ -79,25 +85,35 @@ export function NotificationsClient() {
     }
   };
 
+  const visible = notifications.filter(item => filter === "All" || (filter === "Unread" ? !readIds.includes(item.id) : filter === "Needs attention" ? ["warning", "danger"].includes(item.tone) : !["warning", "danger"].includes(item.tone)));
+  const markRead = async (ids: string[]) => {
+    setMarking(true);
+    try { await markInAppNotificationsRead(ids); setReadIds(current => [...new Set([...current, ...ids])]); }
+    catch { setError("Unable to mark notifications as read. Please try again."); }
+    finally { setMarking(false); }
+  };
   return (
     <CloverShell active="notifications" title="Notifications">
       <section className="notifications-layout">
         <OnboardingMissions surface="notifications" />
+        <nav className="notifications-filters" aria-label="Notification views">{["All", "Unread", "Needs attention", "Activity"].map(tab => <button type="button" key={tab} aria-pressed={filter === tab} onClick={() => setFilter(tab)}>{tab}</button>)}</nav>
         <div className="notifications-toolbar">
           <p>{notifications.length} active notification{notifications.length === 1 ? "" : "s"}</p>
           <button
             type="button"
             className="button button-secondary button-small"
-            onClick={() => void dismissAll()}
+            onClick={() => confirm.current?.showModal()}
             disabled={loading || dismissingAll || notifications.length === 0}
           >
             {dismissingAll ? "Clearing..." : "Clear All"}
           </button>
         </div>
 
-        {error ? <p className="notifications-status notifications-status--error" role="alert">{error}</p> : null}
+        <dialog ref={confirm} className="notifications-confirm" aria-labelledby="clear-notifications-title"><h2 id="clear-notifications-title">Clear notifications?</h2><p>This clears the feed without changing your underlying records.</p><div><button className="button button-secondary" type="button" disabled={dismissingAll} onClick={() => confirm.current?.close()}>Cancel</button><button className="button button-primary" type="button" disabled={dismissingAll} onClick={() => { void dismissAll().finally(() => confirm.current?.close()); }}>Clear notifications</button></div></dialog>
+        <button type="button" className="button button-secondary button-small" disabled={loading || marking || !notifications.some(item=>!readIds.includes(item.id))} onClick={() => void markRead(notifications.map(item=>item.id))}>Mark all as read</button>
+        {error ? <div className="notifications-status notifications-status--error" role="alert">{error}<button type="button" className="button button-secondary" onClick={() => void loadNotifications(true)}>Try again</button></div> : null}
         {loading ? <p className="notifications-status">Loading notifications...</p> : null}
-        {!loading && notifications.length === 0 ? (
+        {!loading && !error && visible.length === 0 ? (
           <div className="notifications-empty">
             <img src={getNavigationIconSrc("notifications")} alt="" aria-hidden="true" />
             <h3>You’re all caught up</h3>
@@ -106,7 +122,7 @@ export function NotificationsClient() {
         ) : null}
 
         <div className="notifications-list">
-          {notifications.map((notification) => (
+          {visible.map((notification) => (
             <article key={notification.id} className={`notification-item notification-item--${notification.tone}`}>
               <Link
                 href={notification.productHref}
@@ -135,6 +151,7 @@ export function NotificationsClient() {
                     {notification.ctaLabel}
                   </Link>
                 ) : null}
+                {!readIds.includes(notification.id) ? <button type="button" className="notification-item__dismiss" disabled={marking} onClick={() => void markRead([notification.id])}>Mark as read</button> : null}
                 <button
                   type="button"
                   className="notification-item__dismiss"

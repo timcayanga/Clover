@@ -85,3 +85,17 @@
  .pricingContent table th,.pricingContent table td{padding:7px 6px;overflow-wrap:anywhere}
  .markers [aria-current=step] span{height:13px;border-radius:8px}
 }
+
+/* Connect & Platform: photographs fill the viewport; copy has a reading fade. */
+.background { inset: 0; mask-image: none; }
+.journey[data-feature-story=manage-money-together] .background { right: 0; }
+.journey[data-feature-story=manage-money-together] .photograph { mask-image: none; }
+.journey[data-feature-story=manage-money-together] .photograph img { object-fit: cover; }
+/* The exported composition includes the exact Figma crop and reading fade. */
+.journey .wash { display: none; }
+.journey .background, .journey[data-feature-story=manage-money-together] .background { inset: 0; filter: none; transform: none; }
+.journey .photograph img { object-fit: cover; object-position: center; }
+@media(min-width:901px) {
+ .journey:not([data-pricing=true]) .content { width: 31vw; max-width: 445px; }
+ .journey .content h1 em { display: block; }
+}

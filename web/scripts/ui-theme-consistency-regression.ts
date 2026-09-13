@@ -87,10 +87,11 @@ async function main() {
   ]);
   for (const source of [journey, featureStory]) {
     assert.ok(source.includes("useLandingTableFit("), "Both public stories must fit complete mobile tables.");
-    assert.ok(source.includes("<LandingSectionStatus"), "Mobile stories must identify the current section.");
+    assert.ok(source.includes("aria-current="), "Public chapter navigation must identify the current section accessibly.");
+    assert.ok(source.includes("connectPlatformDesigns"), "Public chapters must use their approved composed backgrounds.");
   }
   for (const css of [journeyCss, featureCss]) {
-    assert.match(css, /transparent 0 60%/, "Mobile image fading must begin at 60%.");
+
     assert.match(css, /scale:\s*var\(--landing-table-scale,\s*1\)/);
     assert.match(css, /max-height:\s*none;\s*overflow:\s*visible/);
   }

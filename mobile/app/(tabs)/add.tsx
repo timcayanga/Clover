@@ -4,7 +4,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as Crypto from "expo-crypto";
 import { File } from "expo-file-system";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform, View, Pressable, Text, Image } from "react-native";
 import {
   Choices,
@@ -33,7 +33,11 @@ export default function Add() {
   const session = useSession();
   const [tab, setTab] = useState("manual");
   const [draft, setDraft] = useState(emptyTransaction);
-  const { entry } = useLocalSearchParams<{ entry?: string }>();
+  const { entry, picker } = useLocalSearchParams<{
+    entry?: string;
+    picker?: string;
+  }>();
+  const handledPicker = useRef(false);
   useEffect(() => {
     setTab(entry?.startsWith("upload-") ? "upload" : "manual");
     setDraft(emptyTransaction());
@@ -144,6 +148,18 @@ export default function Add() {
       setBusy(false);
     }
   };
+  // Only onboarding's explicit upload choice sets this parameter. Consume it once.
+  useEffect(() => {
+    if (
+      handledPicker.current ||
+      !session.data ||
+      !["file", "camera", "library"].includes(picker ?? "")
+    )
+      return;
+    handledPicker.current = true;
+    router.setParams({ picker: undefined });
+    void choose(picker as "file" | "camera" | "library");
+  }, [picker, session.data]);
   return (
     <Screen>
       <View

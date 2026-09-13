@@ -1,5 +1,5 @@
 "use client";
-import { LandingSectionStatus } from "@/components/landing-section-status";
+import { connectPlatformDesigns } from "@/lib/connect-platform-designs";
 import { useLandingTableFit } from "@/lib/use-landing-table-fit";
 
 import Image from "next/image";
@@ -10,7 +10,6 @@ import { plannedProPrices } from "@/lib/public-plan-comparison";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { LandingSignupModal } from "@/components/landing-signup-modal";
 import { FEATURE_LINKS } from "@/lib/public-site";
-import { landingScenePosition } from "@/lib/landing-motion";
 import typography from "@/components/landing-type.module.css";
 import styles from "./landing-preview.module.css";
 
@@ -25,7 +24,6 @@ const chapters = [
   { title: <>Feel clearer about your money, and more confident <em>about what comes next.</em></>, copy: null },
 ] as const;
 
-const scenes = ["01-organize", "07-trust", "03-picture", "04-adviser", "05-plan", "08-pro", "06-life"] as const;
 // Preserve each scene's responsive composition when its place in the story changes.
 const chapterLayouts = [0, 0, 5, 2, 3, 4, 6, 7] as const;
 const productChapters = [0, 3, 4, 5] as const;
@@ -80,14 +78,7 @@ const marketContent = {
 } as const;
 
 const clamp = (value: number, minimum = 0, maximum = 1) => Math.min(maximum, Math.max(minimum, value));
-const sceneAsset = (scene: (typeof scenes)[number], mobile = false) => {
-  if (scene === "07-trust") return `/assets/landing-story-v3/07-records-away${mobile ? "-mobile" : ""}.webp`;
-  // Keep Pro in the airport setting rather than returning home before the finale.
-  if (scene === "08-pro") return `/assets/landing-story-v2/05-plan${mobile ? "-mobile" : ""}.webp`;
-  if (scene === "06-life" && mobile) return "/assets/landing-story-v3/06-life-mobile-clear.webp";
-  const folder = scene === "06-life" || scene === "05-plan" ? "landing-story-v2" : "landing-story-v3";
-  return `/assets/${folder}/${scene}${mobile ? "-mobile" : ""}.webp`;
-};
+
 
 function ComparisonTable() {
   return <table className={styles.comparisonTable}>
@@ -125,12 +116,12 @@ export function ProComparison({ market, style, showActions = true, variant = "la
   </div>;
 }
 
-export function LandingTransactionPhone({ market, style, screen = "transactions" }: { market: LandingMarket; style?: CSSProperties; screen?: string }) {
+export function LandingTransactionPhone({ market, style, screen = "transactions", screenSource }: { market: LandingMarket; style?: CSSProperties; screen?: string; screenSource?: string }) {
   return <div className={styles.iphoneFrame} data-story-visual="phone" style={style}>
         <span className={styles.iphoneSideButtons} />
         <div className={styles.iphoneDisplay}>
           <div className={styles.iphoneStatusBar}><b>9:41</b><span className={styles.iphoneIsland} /><span className={styles.iphoneIndicators}><svg viewBox="0 0 18 12"><path d="M1 11V8h2v3M5 11V6h2v5M9 11V3h2v8M13 11V1h2v10" stroke="currentColor" strokeWidth="1.5" /></svg><svg viewBox="0 0 16 12"><path d="M1 3q7-5 14 0M4 6q4-3 8 0M7 9q1-1 2 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg><i /></span></div>
-          <Image className={styles.iphoneAppScreen} src={`/assets/landing-screens/${screen}-${market}.webp`} alt={`Clover mobile ${screen} screen with fictional sample data`} width={1206} height={2334} sizes="(max-width: 900px) 1px, 40vw" draggable={false} unoptimized />
+          <Image className={styles.iphoneAppScreen} src={screenSource ?? ({accounts:"/assets/connect-platform/screen-50-660.webp",adviser:"/assets/connect-platform/screen-561-25437.webp",split:"/assets/connect-platform/screen-629-49324.webp"}[screen] ?? `/assets/landing-screens/${screen}-${market}.webp`)} alt={`Clover mobile ${screen} screen with fictional sample data`} width={1206} height={2334} sizes="(max-width: 900px) 1px, 40vw" draggable={false} unoptimized />
           <span className={styles.iphoneHomeIndicator} />
         </div>
         <span className={styles.iphoneGlass} />
@@ -319,14 +310,6 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
   const chapterFloor = Math.min(chapters.length - 1, Math.floor(storyPosition));
   const chapterPhase = storyPosition - chapterFloor;
   const displayedChapter = chapterPhase < 0.5 ? chapterFloor : Math.min(chapters.length - 1, chapterFloor + 1);
-  const sceneMotion = (index: number): CSSProperties => {
-    // The comparison shares the hero setting; subsequent scenes start one chapter later.
-    return {
-      opacity: Math.round(landingScenePosition(storyPosition)) === index ? 1 : 0,
-      // Keep the photo's reserved phone gutter fixed, including between chapters.
-      transform: "none",
-    };
-  };
   const chapterMotion = (index: number): CSSProperties => {
     return {
       opacity: index === 1 || index === 6 || index === displayedChapter ? 1 : 0,
@@ -359,15 +342,8 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
       <JourneyHeader />
 
       <div className={styles.world} aria-hidden="true">
-        <div className={styles.sceneStack}>
-          {scenes.map((scene, index) => (
-            <div className={styles.scene} data-scene={scene} data-active={Math.max(0, chapter - 1) === index} key={scene} style={sceneMotion(index)}>
-              <picture className={styles.sceneSubject}>
-                <source media="(max-width: 900px)" srcSet={sceneAsset(scene, true)} />
-                <img src={sceneAsset(scene)} alt="" draggable={false} fetchPriority={index === 0 ? "high" : "auto"} />
-              </picture>
-            </div>
-          ))}
+        <div className={styles.figmaBackground}>
+          <picture><source media="(max-width:900px)" srcSet={connectPlatformDesigns[`landing-mobile-${displayedChapter}`].background} /><img src={connectPlatformDesigns[`landing-desktop-${displayedChapter}`].background} alt="" draggable={false} fetchPriority="high" /></picture>
         </div>
         <div className={styles.worldWash} />
       </div>
@@ -384,29 +360,12 @@ export function LandingJourney({ authEnabled, initialMarket, countryResolved }: 
         </div>)}
       </section>
 
-      <div className={styles.supportStage} data-active={displayedChapter !== 1 && displayedChapter < chapters.length - 1} aria-hidden="true">
-      <div className={styles.heroEvidence} data-story-visual="evidence" style={productMotion(0)}>
-        <div className={styles.evidenceDocuments}>
-          {local.documents.slice(0, 3).map(([label, detail], index) => <div className={styles.evidenceDocument} key={label}>
-            <Image src={local.uploadRows[index][1]} alt="" width={34} height={34} />
-            <small>{label}</small><strong>{detail}</strong>
-            <div className={styles.documentLineItems}>{local.documentLines[index].map(([name, amount]) => <span key={name}><b>{name}</b><i>{amount}</i></span>)}</div>
-          </div>)}
-        </div>
-        <div className={styles.evidenceFlow}><span /><span /><span /></div>
-        <div className={styles.evidenceDestination}>
-          <Image src="/clover-mark.svg" alt="" width={34} height={34} />
-          <span><small>CLOVER IMPORT</small><strong>Accounts and transactions ready</strong></span>
-          <b>{market === "ph" ? "248 organized" : "186 organized"}</b>
-        </div>
-      </div>
-
+      <div className={styles.supportStage} data-active={[3,4,5].includes(displayedChapter)} aria-hidden="true">
       <LandingTransactionPhone market={market} screen="accounts" style={productMotion(1)} />
       <LandingTransactionPhone market={market} screen="adviser" style={productMotion(2, -1)} />
       <LandingTransactionPhone market={market} screen="split" style={productMotion(3)} />
       </div>
 
-      <LandingSectionStatus index={chapter} total={chapters.length} label={["Get organized", "Skip manual typing", "Your privacy", "Understand your finances", "Your Adviser", "Shared money", "Free and Pro", "Get started"][chapter]} />
       <nav className={styles.markers} aria-label="Landing page chapters" data-progress={`${chapter + 1}/${chapters.length}`}>
         {chapters.map((_, index) => <button key={index} type="button" className={chapter === index ? styles.activeMarker : ""} onClick={() => goToChapter(index)} aria-label={`Go to chapter ${index + 1}`} aria-current={chapter === index ? "step" : undefined}><span /></button>)}
         <b>{chapter + 1} / {chapters.length}</b>

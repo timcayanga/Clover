@@ -1,3 +1,4 @@
+import { connectPlatformDesigns } from "../lib/connect-platform-designs";
 import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -46,6 +47,16 @@ async function main() {
   assert.match(landingJourneyStyles, /\.comparisonChapter,\.proChapter\{scrollbar-width:none\}/, "Scrollable mobile tables must not paint an extra scrollbar.");
   assert.match(landingJourneyStyles, /\.comparisonChapter::-webkit-scrollbar,\.proChapter::-webkit-scrollbar\{display:none;width:0;height:0\}/, "Mobile Safari must also hide nested table scrollbars.");
   assert.match(landingJourneyStyles, /\.markers\{gap:4px;background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;border:0;box-shadow:none;border-radius:0\}/, "Mobile chapter dots must remain frameless like desktop.");
+  assert.equal(Object.keys(connectPlatformDesigns).length, 76, "Every approved public chapter has a composition.");
+  for (const [name, design] of Object.entries(connectPlatformDesigns)) {
+    const image = await sharp(path.join(root, "..", design.background.replace("/assets/", "assets/"))).metadata();
+    assert.equal(image.width, name.includes("-mobile-") ? 390 : 1440);
+    assert.equal(image.height, name.includes("-mobile-") ? 844 : 1000);
+    if (design.screen) {
+      const screen = await sharp(path.join(root, "..", design.screen.replace("/assets/", "assets/"))).metadata();
+      assert.equal(screen.width, 400); assert.equal(screen.height, 766);
+    }
+  }
   const landingSceneNames = ["01-organize", "02-upload", "03-picture", "04-adviser", "05-plan", "06-life"];
 
   await Promise.all(
@@ -65,14 +76,11 @@ async function main() {
     mobileSceneMetadata.every((metadata) => (metadata.height ?? 0) > (metadata.width ?? 0)),
     "Every mobile landing scene must use a portrait source so full-viewport cover does not crop out the cast.",
   );
-  assert.match(landingJourneySource, /const scenes = \["01-organize", "07-trust", "03-picture", "04-adviser", "05-plan", "08-pro", "06-life"\]/, "The condensed story must remove the standalone upload scene and preserve the remaining photo sequence.");
   assert.match(landingJourneySource, /const chapterLayouts = \[0, 0, 5, 2, 3, 4, 6, 7\]/);
   assert.match(landingJourneySource, /const productChapters = \[0, 3, 4, 5\]/);
   assert.doesNotMatch(landingJourneySource, /rebuilding\.<\/em>|Once your records are organized|Clover Adviser helps turn your financial history/);
   assert.match(landingJourneySource, /Most finance apps require you to enter transactions manually\. With Clover, simply upload your records and gain insights right away\./);
   assert.match(landingJourneyStyles, /background:transparent!important;border-radius:0!important;backdrop-filter:none;-webkit-backdrop-filter:none;text-align:center/, "Mobile table sections must have centered copy without an enclosing frosted panel.");
-  assert.match(landingJourneySource, /const folder = scene === "06-life" \|\| scene === "05-plan" \? "landing-story-v2" : "landing-story-v3"/, "Shared finances and the finale use the group scenes; personal finance keeps the individual scenes.");
-  assert.match(landingJourneySource, /<source media="\(max-width: 900px\)" srcSet=\{sceneAsset\(scene, true\)\}/, "The landing story must use mobile-specific crops that keep its recurring cast visible.");
   assert.doesNotMatch(landingJourneySource, /className=\{styles\.sceneBackdrop\}/, "Each scene must use one photo layer rather than offset duplicates of the cast.");
   assert.match(landingJourneyStyles, /\.journey \.scene \.sceneSubject\{width:100%;mask-image:none;-webkit-mask-image:none\}/, "The single scene photo must cover the full stage without a duplicate backdrop.");
   assert.match(landingJourneyStyles, /@media\(max-width:900px\)\{[\s\S]*?\.markers\{right:8px;top:50%;bottom:auto;flex-direction:column;/, "The landing-story chapter tracker must remain on the right on mobile.");
@@ -81,10 +89,8 @@ async function main() {
   assert.match(landingJourneySource, /data-market=\{market\}/, "The selected landing market must remain observable for browser verification.");
   assert.match(landingJourneyStyles, /Keep the cast in a clear, unfiltered scene plane/, "The landing composition must preserve an unobstructed people layer.");
   assert.match(landingJourneySource, /progress \* \(chapters\.length - 1\)/, "Landing chapters must advance continuously with scroll progress.");
-  assert.match(landingJourneySource, /style=\{sceneMotion\(index\)\}/, "Landing backgrounds must interpolate on every scroll update.");
-  assert.match(landingJourneySource, /data-story-visual="evidence"[\s\S]*?evidenceDocuments[\s\S]*?local\.uploadRows\[index\]\[1\][\s\S]*?CLOVER IMPORT/, "The hero must connect localized, real-logo documents to a Clover import result.");
-  assert.match(landingJourneySource, /documentLineItems[\s\S]*?local\.documentLines/, "Hero statements and receipts must show realistic imported line items.");
-  assert.match(landingJourneySource, /LandingTransactionPhone\(\{ market, style, screen = "transactions" \}/, "The main landing phone must default to the actual Transactions capture.");
+  assert.doesNotMatch(landingJourneySource, /data-story-visual="evidence"/, "The refreshed Figma hero must remain free of the retired document overlay.");
+  assert.match(landingJourneySource, /LandingTransactionPhone\(\{ market, style, screen = "transactions", screenSource \}/, "The main landing phone must default to the actual Transactions capture.");
   assert.match(landingJourneySource, /landing-screens\/\$\{screen\}-\$\{market\}/, "Shared phones must select a localized real capture.");
   for (const page of ["accounts", "recurring", "reports", "adviser", "investments", "budget", "goal", "circles", "split"]) {
     for (const market of ["ph", "global"]) {
