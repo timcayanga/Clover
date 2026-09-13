@@ -4088,7 +4088,7 @@ function AccountDetailPageContent() {
                   >
                     Edit Type
                   </button>
-                  {account.type !== "investment" ? (
+                  {account.type === "bank" ? (
                     <Link className="button button-secondary button-small accounts-detail__reports-link" href={`/reports?accountId=${encodeURIComponent(account.id)}&currency=${encodeURIComponent(account.currency)}`} prefetch={false}>
                       View Account Reports
                     </Link>

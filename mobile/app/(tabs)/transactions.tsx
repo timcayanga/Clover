@@ -129,6 +129,7 @@ export default function Transactions() {
         />
         <Button
           title="Filters"
+          icon="options-outline"
           secondary
           onPress={() => setFilters((value) => !value)}
         />

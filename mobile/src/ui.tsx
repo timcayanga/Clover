@@ -41,6 +41,7 @@ const lightColors = {
   line: "#DCE9EB",
   white: "#FFFFFF",
   danger: "#AE303B",
+  positive: "#00875A",
 };
 export function Icon({
   name,
@@ -92,16 +93,19 @@ export function Button({
   onPress,
   secondary = false,
   disabled = false,
+  icon,
 }: {
   title: string;
   onPress: () => void;
   secondary?: boolean;
   disabled?: boolean;
+  icon?: ComponentProps<typeof Ionicons>["name"];
 }) {
-  const { colors, styles, dark } = useTheme();
+  const { colors, styles } = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={title}
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
@@ -111,10 +115,11 @@ export function Button({
         (pressed || disabled) && { opacity: 0.6 },
       ]}
     >
+      {icon ? <Icon name={icon} size={18} color={secondary ? colors.ink : "#FFFFFF"} /> : null}
       <Text
         style={[
           styles.buttonText,
-          secondary && { color: dark ? colors.bright : colors.teal },
+          secondary && { color: colors.ink },
         ]}
       >
         {title}
@@ -603,9 +608,13 @@ const makeStyles = (colors: typeof lightColors) =>
     },
     notice: { padding: 15, borderRadius: 16, backgroundColor: colors.pale },
     button: {
-      minHeight: 50,
-      paddingHorizontal: 22,
-      paddingVertical: 14,
+      minHeight: 44,
+      alignSelf: "flex-start",
+      maxWidth: "100%",
+      flexDirection: "row",
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
       borderRadius: 26,
       backgroundColor: colors.teal,
       alignItems: "center",
@@ -617,6 +626,7 @@ const makeStyles = (colors: typeof lightColors) =>
       borderColor: colors.line,
     },
     buttonText: {
+      flexShrink: 1,
       fontSize: 15,
       fontFamily: "Poppins-Medium",
       color: "#FFFFFF",
@@ -667,6 +677,7 @@ const darkColors: typeof lightColors = {
   line: "#2A4653",
   white: "#15252D",
   danger: "#FF9D9D",
+  positive: "#69DB9E",
 };
 const lightStyles = makeStyles(lightColors);
 const darkStyles = makeStyles(darkColors);

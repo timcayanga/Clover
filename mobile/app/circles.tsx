@@ -1,7 +1,8 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { SplitGroupDetails } from "../src/split-group-details";
 import { router } from "expo-router";
 import { useEffect, useState, useRef } from "react";
-import { Text, View } from "react-native";
+import { Image, Text, View } from "react-native";
 import { useSession } from "../src/session";
 import {
   Body,
@@ -15,6 +16,7 @@ import {
 } from "../src/ui";
 import {
   PlanAction,
+  SummaryCard,
   PlanHeader,
   PlanTabs,
   Progress,
@@ -27,6 +29,7 @@ type Circle = {
   description: string;
   currency: string;
   color: string;
+  avatarUrl?: string | null;
   role: string;
   memberCount: number;
   splitBillGroupId?: string | null;
@@ -178,36 +181,10 @@ export default function Circles() {
             </>
           ) : tab === "Overview" ? (
             <>
-              <Card>
-                <CategoryMark
-                  name={
-                    selected.type === "household"
-                      ? "Housing"
-                      : selected.type === "travel"
-                        ? "Travel"
-                        : "Food & Dining"
-                  }
-                  size={40}
-                />
-                <Body>{selected.description}</Body>
-                <Body>
-                  {selected.memberCount} people · {selected.role}
-                </Body>
-                <Body muted={false}>
-                  {money(
-                    String(selected.expenseTotalThisMonth ?? 0),
-                    selected.currency,
-                  )}
-                </Body>
-                <Body>Shared expenses this month</Body>
-                <Body>
-                  Contributions{" "}
-                  {money(
-                    String(selected.contributionTotalThisMonth ?? 0),
-                    selected.currency,
-                  )}
-                </Body>
-              </Card>
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                <SummaryCard title="Shared expenses" value={money(String(selected.expenseTotalThisMonth ?? 0), selected.currency)} color={colors.positive} />
+                <SummaryCard title="Contributions" value={money(String(selected.contributionTotalThisMonth ?? 0), selected.currency)} color={colors.positive} />
+              </View>
               <Body>
                 Only data shared with this Circle is shown. Personal accounts
                 stay private.
@@ -308,7 +285,7 @@ export default function Circles() {
               <Card
                 key={circle.id}
                 style={{
-                  backgroundColor: colors.white,
+                  backgroundColor: dark ? (circle.type === "household" ? "#193A38" : "#302A45") : (circle.type === "household" ? "#E0F6F0" : "#F0E9FC"),
                 }}
               >
                 <View
@@ -318,16 +295,6 @@ export default function Circles() {
                     alignItems: "center",
                   }}
                 >
-                  <CategoryMark
-                    name={
-                      circle.type === "household"
-                        ? "Housing"
-                        : circle.type === "travel"
-                          ? "Travel"
-                          : "Food & Dining"
-                    }
-                    size={36}
-                  />
                   <Text
                     style={{
                       color: colors.ink,
@@ -338,25 +305,13 @@ export default function Circles() {
                   >
                     {circle.name}
                   </Text>
+                  <Image source={circle.avatarUrl && /^(https:|data:image\/)/.test(circle.avatarUrl) ? { uri: circle.avatarUrl } : circle.type === "household" ? require("../assets/circles/household.jpg") : require("../assets/circles/social.jpg")} accessible={false} style={{ width:64, height:64, borderRadius:16 }} />
                 </View>
                 <View style={{ flexDirection: "row", gap: 6 }}>
                   {(circle.members ?? []).slice(0, 5).map((member) => (
-                    <Text
-                      key={member.id}
-                      accessibilityLabel={member.displayName}
-                      style={{
-                        backgroundColor: colors.bright,
-                        borderRadius: 18,
-                        padding: 8,
-                        color: colors.ink,
-                      }}
-                    >
-                      {member.displayName
-                        .split(" ")
-                        .map((n) => n[0])
-                        .slice(0, 2)
-                        .join("")}
-                    </Text>
+                    <LinearGradient key={member.id} colors={["#03a8c0", "#5ed3d0"]} start={{ x:0,y:0 }} end={{ x:1,y:1 }} style={{ width:36,height:36,borderRadius:18,alignItems:"center",justifyContent:"center" }}>
+                      <Text accessibilityLabel={member.displayName} style={{color:"#fff",fontFamily:"Poppins-Medium"}}>{member.displayName.split(" ").map(n=>n[0]).slice(0,2).join("")}</Text>
+                    </LinearGradient>
                   ))}
                   {circle.memberCount > 5 ? (
                     <Body>+{circle.memberCount - 5}</Body>
@@ -371,6 +326,7 @@ export default function Circles() {
                 <Body>Shared expenses this month</Body>
                 <PlanAction
                   title="View Circle"
+                  tone="primary"
                   onPress={() => {
                     setSelected(circle);
                     setTab("Overview");

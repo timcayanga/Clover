@@ -134,3 +134,6 @@
   .budget-editor--page .budget-editor__actions { position: static; }
   .budgeting-page--editing .budget-directory-content { display: none; }
 }
+
+/* Preserve the Circle primary treatment when the card is hovered. */
+.circles-page .collection-create-card:hover { background:var(--brand-gradient); color:#fff; filter:brightness(.97); }

@@ -55,7 +55,8 @@ async function main() {
   assert.equal(splitPayload.sourceType, "manual");
   assert.equal(splitPayload.payments[0].participantId, splitPayload.participants[0].id);
   assert.equal(new Set(splitPayload.participants.map(person => person.id)).size, 2);
-  const circleResponse = mobileApiResponse("circle", { personalTransactions: ["private"], investmentAccounts: ["private"], circles: [{ id: "one", members: [{ id: "m", displayName: "Mia", userId: "private", email: "private" }], investmentShares: [{ id: "share", name: "Investment summary", accountId: "private" }], invitations: [{ token: "secret" }] }] });
+  const circleResponse = mobileApiResponse("circle", { personalTransactions: ["private"], investmentAccounts: ["private"], circles: [{ id: "one", avatarUrl: "https://images.example.test/circle.jpg", members: [{ id: "m", displayName: "Mia", userId: "private", email: "private" }], investmentShares: [{ id: "share", name: "Investment summary", accountId: "private" }], invitations: [{ token: "secret" }] }] });
+  assert.ok(JSON.stringify(circleResponse).includes("https://images.example.test/circle.jpg"), "Native Circle cards retain their shared photo");
   assert.ok(!JSON.stringify(circleResponse).includes("private"));
   assert.ok(!JSON.stringify(circleResponse).includes("secret"));
   const splitResponse = mobileApiResponse("split-bill", { bill: { id: "one", userId: "private", transaction: { account: "private" }, rawPayload: "private", receiptStorageKey: "private", settlement: { participants: [], transfers: [] } } });

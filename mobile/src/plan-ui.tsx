@@ -176,6 +176,8 @@ export function PlanAction({
         borderRadius: 24,
         overflow: "hidden",
         alignItems: "stretch",
+        alignSelf: "flex-start",
+        maxWidth: "100%",
         opacity: disabled ? 0.5 : 1,
       }}
     >
@@ -187,7 +189,7 @@ export function PlanAction({
         }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
-        style={{ padding: 13, alignItems: "center" }}
+        style={{ minHeight: 44, paddingVertical: 10, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" }}
       >
         <Text
           style={{
@@ -273,11 +275,13 @@ export function SummaryCard({
   value,
   detail,
   color,
+  detailColor,
 }: {
   title: string;
   value: string;
   detail?: string;
   color?: string;
+  detailColor?: string;
 }) {
   const { colors } = useTheme();
   return (
@@ -328,7 +332,7 @@ export function SummaryCard({
             fontSize: 13,
             lineHeight: 20,
             textAlign: "center",
-            color: colors.muted,
+            color: detailColor ?? colors.muted,
           }}
         >
           {detail}

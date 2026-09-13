@@ -76,10 +76,10 @@ const emptyStateCircleTypes = [
 
 const CIRCLE_MARK_URL = "/clover-mark.svg";
 
-const getCircleAvatarUrl = (circle: Pick<CircleSummary, "avatarUrl">) =>
+const getCircleAvatarUrl = (circle: Pick<CircleSummary, "avatarUrl" | "type">) =>
   circle.avatarUrl && !isSplitBillBuiltInAvatarUrl(circle.avatarUrl)
     ? circle.avatarUrl
-    : CIRCLE_MARK_URL;
+    : circle.type === "household" ? "/assets/circles/household.jpg" : "/assets/circles/social.jpg";
 
 const createCircleAvatarDataUrl = async (file: File) => {
   if (!file.type.startsWith("image/")) {
@@ -604,7 +604,7 @@ export function CirclesWorkspace({
         <>
         <div className="collection-directory-heading"><p>Split bills, coordinate shared expenses, track commitments, and work toward budgets and goals together—while keeping personal accounts private.</p></div>
         <div className="collection-card-grid" aria-label="Your Circles">
-          {data.circles.map(circle => <CollectionCard key={circle.id} kind="circle" name={circle.name} subtitle="" editable={circle.role === "organizer"} icon={getCircleAvatarUrl(circle) === CIRCLE_MARK_URL ? <CategoryBrandMark categoryName={circle.type === "household" ? "Housing" : circle.type === "travel" ? "Travel" : "Food & Dining"} size={36}/> : <img className="collection-custom-photo" src={getCircleAvatarUrl(circle)} alt="" width={48} height={48}/>} onOpen={() => onSelectedCircleChange(circle.id)} onSave={(name, _emoji, photo) => updateCardIdentity(circle, name, photo)}>
+          {data.circles.map(circle => <CollectionCard key={circle.id} kind="circle" color={circle.type === "household" ? "#63cdbb" : "#b19be8"} name={circle.name} subtitle="" editable={circle.role === "organizer"} icon={<img className="collection-custom-photo" src={getCircleAvatarUrl(circle)} alt="" width={64} height={64}/>} onOpen={() => onSelectedCircleChange(circle.id)} onSave={(name, _emoji, photo) => updateCardIdentity(circle, name, photo)}>
             <div className="split-bill-avatars">{circle.members.filter(m => m.status === "active").slice(0,5).map(member => <span key={member.id} className="circles-avatar" title={member.displayName}>{getInitials(member.displayName)}</span>)}{circle.memberCount > 5 ? <span>+{circle.memberCount - 5}</span> : null}</div>
             <span>{formatMoney(circle.expenseTotalThisMonth,circle.currency)} shared this month</span>
           </CollectionCard>)}
@@ -834,7 +834,7 @@ function CircleOverview({
             label="Total expenses shared with this Circle during the current month."
           />
           <p className="eyebrow">Shared Expenses</p>
-          <strong className="accounts-overview-card__amount is-neutral">
+          <strong className="accounts-overview-card__amount is-good">
             {formatMoney(circle.expenseTotalThisMonth, circle.currency)}
           </strong>
         </article>
@@ -844,18 +844,8 @@ function CircleOverview({
             label="Total contributions recorded for this Circle during the current month."
           />
           <p className="eyebrow">Contributions</p>
-          <strong className="accounts-overview-card__amount is-neutral">
+          <strong className="accounts-overview-card__amount is-good">
             {formatMoney(circle.contributionTotalThisMonth, circle.currency)}
-          </strong>
-        </article>
-        <article className="accounts-overview-card summary-aligned-card panel glass">
-          <InfoTooltip
-            className="summary-card-info"
-            label="The number of shared Circle goals currently marked active."
-          />
-          <p className="eyebrow">Goals</p>
-          <strong className="accounts-overview-card__amount is-neutral">
-            {circle.goals.filter((goal) => goal.status === "active").length}
           </strong>
         </article>
         <article className="accounts-overview-card summary-aligned-card panel glass">

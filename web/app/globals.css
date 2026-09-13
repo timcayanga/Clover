@@ -65470,7 +65470,7 @@ html[data-theme="dark"]:has(.app-shell) { --bg:#0d171d; --surface:#15252d; --sur
 .accounts-group__title-row h5 { flex:1 1 160px; min-width:0; overflow-wrap:anywhere; }
 .accounts-group__title-row strong { position:static; flex:0 1 auto; overflow-wrap:anywhere; }
 .accounts-toolbar-add,.accounts-toolbar-button--upload { min-height:40px; padding:8px 14px; }
-.financial-account-card .financial-account-card__edit { background:white; color:#18343e; border-radius:8px; }
+.financial-account-card .financial-account-card__edit { background:transparent; color:inherit; border-radius:50%; opacity:.8; }
 .content--dashboard .dashboard-home__section-title,
 .content--dashboard .dashboard-home__section-head :is(h2,h3,h4),
 .accounts-group__title-row h5,
@@ -65807,3 +65807,71 @@ html[data-theme=dark] .notification-item, html[data-theme=dark] .notifications-c
 html[data-theme=dark] .notifications-filters button { background: #172831; color: #edf5f7; border-color: #30434c; }
 html[data-theme=dark] .notifications-filters button[aria-pressed=true] { background: #203f46; color: #5ed3d0; border-color: #168d9d; }
 @media(max-width:760px) { .notification-item { padding: 16px; } .notifications-filters { gap: 6px; } .notifications-filters button { padding: 8px 12px; font-size: 12px; } }
+
+/* Figma UI consistency refresh — September 2026. */
+.content:is(.content--accounts,.content--transactions,.content--recurring,.content--reports,.content--budgeting,.content--goals,.content--investments,.content--circles,.content--split-bill) .button,
+.adviser-chat__reset {
+  min-height: 40px;
+  height: auto;
+  width: fit-content;
+  max-width: 100%;
+  flex: 0 1 auto;
+  padding: 8px 14px;
+  font: 500 15px/22px var(--font-body);
+  white-space: normal;
+  border-radius: 999px;
+}
+.transaction-selection-toolbar .transaction-selection-toolbar__filter {
+  border: 1px solid var(--stroke);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 8px 14px;
+  color: var(--accent);
+}
+.recurring-summary article { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:6px; }
+.content--reports .reports-overview-grid .metric { padding:12px!important; gap:6px; min-height:112px; }
+.reports-overview-grid .metric > .reports-summary-comparison { margin:0; font:400 13px/20px var(--font-body); }
+.reports-overview-grid .metric .positive { color:var(--good); }
+.reports-overview-grid .metric .negative { color:var(--bad); }
+.content:is(.content--budgeting,.content--goals,.content--investments,.content--circles) :is(.button-secondary,.plan-action-view,.plan-action-edit) { background:var(--surface); color:var(--text); border:1px solid var(--stroke); }
+.circles-page .collection-card--circle .collection-card__view,
+.circles-page .collection-create-card { background:var(--brand-gradient); color:#fff; }
+.circles-page .collection-create-card small { color:inherit; }
+.circles-page .circles-avatar:not(:has(img)) { background:var(--brand-gradient); color:#fff; }
+.circles-metric-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+@media (min-width:1101px) {
+  .shell-quick-add-button { width:56px; height:56px; right:24px; bottom:24px; }
+  .shell-bug-report-button { right:92px; bottom:30px; }
+  .shell-quick-add-popover { right:24px; bottom:92px; }
+  .accounts-detail__hero-layout.is-credit-account { display:flex; flex-direction:column; align-items:center; gap:24px; }
+  .accounts-detail__hero-layout.is-credit-account .accounts-detail__hero-card-row { width:min(100%,420px); justify-content:center; }
+  .accounts-detail__hero-layout.is-credit-account .accounts-detail__credit-inline { width:min(100%,420px); align-self:center; }
+  .transactions-page .transactions-footer { flex-wrap:wrap; }
+  .transactions-page .transactions-footer-snapshot { width:min(760px,100%); margin:16px 84px 0 auto; }
+  .transactions-footer-snapshot__metrics { gap:12px; }
+}
+@media (max-width:1100px) {
+  .content:is(.content--accounts,.content--transactions,.content--recurring,.content--reports,.content--budgeting,.content--goals,.content--investments,.content--circles,.content--split-bill) .button { min-height:44px; }
+  .accounts-overview-card > small, .accounts-overview-card > p:not(.eyebrow) { display:none; }
+  .investments-overview-metrics .accounts-overview-card > small { display:none; }
+}
+
+.circles-page .collection-card--circle { background:color-mix(in srgb,var(--collection-color,#63cdbb) 18%,var(--surface)); }
+.circles-page .collection-card--circle .collection-card__head { flex-direction:row-reverse; }
+.circles-page .collection-card--circle .collection-card__head > span:not(.collection-card__icon):not(.collection-card__chevron) { flex:1; }
+.circles-page .collection-card--circle .collection-card__chevron { display:none; }
+.circles-page .collection-card--circle .collection-card__icon,
+.circles-page .collection-card--circle .collection-custom-photo { width:64px; height:64px; border-radius:16px; object-fit:cover; }
+
+.circles-page .collection-card--circle .collection-card__view { --plan-view-bg:var(--brand-gradient); --plan-view-fg:#fff; }
+.circles-page .collection-card--circle .collection-card__icon { flex-basis:64px; }
+@media(max-width:1100px) { .accounts-mobile-tools .accounts-currency-filter { display:none; } }
+
+.collection-card:is(.collection-card--budget,.collection-card--goal) { background:linear-gradient(105deg,color-mix(in srgb,var(--collection-color,#35b875) 17%,var(--surface)),color-mix(in srgb,var(--collection-color,#35b875) 5%,var(--surface))); color:var(--text); border-color:color-mix(in srgb,var(--collection-color,#35b875) 45%,var(--surface)); }
+.collection-card:is(.collection-card--budget,.collection-card--goal) small { color:var(--muted); }
+
+.circles-metric-grid > article:last-child strong { color:var(--accent); }
+@media(max-width:700px) {
+  .circles-metric-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .circles-metric-grid > article:nth-child(3) { display:none; }
+}

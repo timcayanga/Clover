@@ -4576,7 +4576,7 @@ function AccountsPageContent() {
         workspaceId={selectedWorkspaceId}
         onSynced={() => loadWorkspaceData(selectedWorkspaceId, { silent: true, awaitHydration: true, forceFresh: true })}
       />
-      <button className="button button-secondary button-small accounts-toolbar-add" type="button" onClick={openAddAccount} aria-label="Add account">
+      <button className="button button-primary button-small accounts-toolbar-add" type="button" onClick={openAddAccount} aria-label="Add account">
         <ActionIcon name="plus" />
         <span>Add account</span>
       </button>

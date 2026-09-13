@@ -44,7 +44,7 @@ const rows = (value: unknown, fields: string[]) => Array.isArray(value) ? value.
 const circleSummary = (value: unknown) => {
   const circle = record(value);
   return {
-    ...pick(circle, ["id", "name", "type", "description", "color", "currency", "role", "isOwner", "memberCount", "pendingCount", "expenseTotalThisMonth", "contributionTotalThisMonth", "detailsLoaded", "splitBillGroupId"]),
+    ...pick(circle, ["id", "name", "type", "description", "color", "avatarUrl", "currency", "role", "isOwner", "memberCount", "pendingCount", "expenseTotalThisMonth", "contributionTotalThisMonth", "detailsLoaded", "splitBillGroupId"]),
     members: rows(circle.members, ["id", "displayName", "role", "status", "isOwner", "contributionTarget", "contributionCadence", "contributedThisMonth"]),
     budgets: rows(circle.budgets, ["id", "name", "targetAmount", "spentAmount", "currency", "cadence", "progressPercent", "isActive"]),
     goals: rows(circle.goals, ["id", "name", "targetAmount", "currentAmount", "currency", "targetDate", "progressPercent", "status", "estimateConfidence", "estimateReason", "estimatedCompletionDate"]),

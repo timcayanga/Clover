@@ -901,6 +901,14 @@ export async function ReportsStream({
     const savingsRate = currentSummary.income > 0
       ? Math.min(1, Math.max(0, currentNet / currentSummary.income))
       : null;
+    const previousSavingsRate = previousSummary.income > 0
+      ? Math.min(1, Math.max(0, previousNet / previousSummary.income)) : null;
+    const savingsRateDelta = savingsRate !== null && previousSavingsRate !== null
+      ? (savingsRate - previousSavingsRate) * 100 : null;
+    const comparisonTone = (delta: number | null, lowerIsBetter = false) =>
+      delta === null || delta === 0 ? "" : (lowerIsBetter ? delta < 0 : delta > 0) ? "positive" : "negative";
+    const percentComparison = (delta: number | null) => delta === null
+      ? "No prior income or spending to compare" : `${delta > 0 ? "+" : ""}${delta.toFixed(1)}% vs prior period`;
     const spendDelta = previousSpend > 0 ? ((currentSpend - previousSpend) / previousSpend) * 100 : null;
     const incomeDelta = previousSummary.income > 0 ? ((currentSummary.income - previousSummary.income) / previousSummary.income) * 100 : null;
 
@@ -1689,22 +1697,26 @@ export async function ReportsStream({
               <article className="metric compact metric--highlight glass">
                 <InfoTooltip className="reports-container-info" align="left" label="All money coming in during the selected range." />
                 <div className="metric__label"><span>Income</span></div>
-                <strong className="positive">{formatCurrency(currentSummary.income)}</strong>
+                <strong className={comparisonTone(incomeDelta)}>{formatCurrency(currentSummary.income)}</strong>
+                <p className={`reports-summary-comparison ${comparisonTone(incomeDelta)}`}>{percentComparison(incomeDelta)}</p>
               </article>
               <article className="metric compact metric--highlight glass">
                 <ReportInfoTip className="reports-container-info" label="All spending recorded in the selected range." />
                 <div className="metric__label"><span>Expenses</span></div>
-                <strong className="negative">{formatCurrency(currentSummary.expense)}</strong>
+                <strong className={comparisonTone(spendDelta, true)}>{formatCurrency(currentSummary.expense)}</strong>
+                <p className={`reports-summary-comparison ${comparisonTone(spendDelta, true)}`}>{percentComparison(spendDelta)}</p>
               </article>
               <article className="metric compact metric--highlight glass">
                 <ReportInfoTip className="reports-container-info" label="Income minus spending for the selected range." />
                 <div className="metric__label"><span>Net income</span></div>
-                <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
+                <strong className={comparisonTone(currentNet - previousNet)}>{formatSignedCurrency(currentNet)}</strong>
+                <p className={`reports-summary-comparison ${comparisonTone(currentNet - previousNet)}`}>{formatSignedCurrency(currentNet - previousNet)} vs prior period</p>
               </article>
               <article className="metric compact metric--highlight glass">
                 <ReportInfoTip className="reports-container-info" label="The share of income left after spending." />
                 <div className="metric__label"><span>Savings rate</span></div>
-                <strong>{savingsRate === null ? "N/A" : `${Math.round(savingsRate * 100)}%`}</strong>
+                <strong className={comparisonTone(savingsRateDelta)}>{savingsRate === null ? "N/A" : `${Math.round(savingsRate * 100)}%`}</strong>
+                <p className={`reports-summary-comparison ${comparisonTone(savingsRateDelta)}`}>{savingsRateDelta === null ? "No prior savings rate to compare" : `${savingsRateDelta > 0 ? "+" : ""}${savingsRateDelta.toFixed(1)} percentage points`}</p>
               </article>
             </section>
 

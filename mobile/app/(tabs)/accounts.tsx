@@ -11,7 +11,6 @@ import { useSession } from "../../src/session";
 import {
   AppHeader,
   Body,
-  Button,
   Card,
   Field,
   Heading,
@@ -34,8 +33,6 @@ function AccountsContent() {
   const session = useSession();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [query, setQuery] = useState("");
-  const [currency, setCurrency] = useState("");
-  const [filters, setFilters] = useState(false);
   const [selected, setSelected] = useState<Account | null>(null);
   const [adding, setAdding] = useState(false);
   const { add } = useLocalSearchParams<{ add?: string }>();
@@ -139,7 +136,6 @@ function AccountsContent() {
   >();
   for (const account of accounts.filter(
     (a) =>
-      (!currency || a.currency === currency) &&
       `${a.name} ${a.institution}`.toLowerCase().includes(query.toLowerCase()),
   )) {
     const title = sectionName(account.type),
@@ -177,28 +173,6 @@ function AccountsContent() {
         onChangeText={setQuery}
         placeholder="Name or institution"
       />
-      <Button
-        title="Filters"
-        secondary
-        onPress={() => setFilters((value) => !value)}
-      />
-      {filters ? (
-        <Card>
-          <Body>Currency</Body>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {["", ...new Set(accounts.map((account) => account.currency))].map(
-              (value) => (
-                <Button
-                  key={value}
-                  title={value || "All"}
-                  secondary={currency !== value}
-                  onPress={() => setCurrency(value)}
-                />
-              ),
-            )}
-          </View>
-        </Card>
-      ) : null}
       {loading ? (
         <Body>Loading accounts…</Body>
       ) : error ? (
@@ -206,7 +180,7 @@ function AccountsContent() {
       ) : (
         Array.from(groups, ([key, group]) => (
           <View key={key} style={{ gap: 12 }}>
-            <SummaryCard title={group.title} value={group.rows.some(a=>a.balance===null || !Number.isFinite(Number(a.balance))) ? "Balance not recorded" : money(String(group.rows.reduce((sum,a)=>sum+Number(a.balance),0)),group.currency)} detail={`${group.rows.length} accounts · ${group.currency}`}/>
+            <SummaryCard title={group.title} value={group.rows.some(a=>a.balance===null || !Number.isFinite(Number(a.balance))) ? "Balance not recorded" : money(String(group.rows.reduce((sum,a)=>sum+Number(a.balance),0)),group.currency)}/>
             {group.rows.map((account) => (
               <Pressable
                 key={account.id}

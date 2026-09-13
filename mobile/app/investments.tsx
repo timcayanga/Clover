@@ -250,17 +250,14 @@ export default function Investments() {
             <SummaryCard
               title="Est. value"
               value={compactSummaryMoney(total, selectedCurrency)}
-              detail={money(String(total), selectedCurrency)}
             />
             <SummaryCard
               title="Gain/loss"
               value={known.length ? compactSummaryMoney(gain, selectedCurrency) : "—"}
-              detail={known.length ? money(String(gain), selectedCurrency) : "No purchase value"}
               color={gain >= 0 ? colors.teal : colors.danger}
             />
             <SummaryCard
               title="Return"
-              detail="On cost"
               value={cost > 0 ? `${((gain / cost) * 100).toFixed(2)}%` : "—"}
               color={gain >= 0 ? colors.teal : colors.danger}
             />
