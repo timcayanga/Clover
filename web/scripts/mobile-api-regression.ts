@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { mock } from "node:test";
+import { prisma } from "../lib/prisma";
 import { readFileSync } from "node:fs";
 import {
   mobileOperation,
@@ -124,20 +126,42 @@ async function main() {
     headers: { "X-Mobile-User-Id": "victim", Authorization: "Bearer fake" },
   });
   assert.throws(() => assertTrustedRequestOrigin(spoofed));
-  await Promise.all(
-    ["first", "second"].map(async (userId) =>
-      withMobileRequestContext(userId, request, async () => {
-        await Promise.resolve();
-        assert.equal(getMobileRequestContext()?.userId, userId);
-        assert.deepEqual(await getSessionContext(), { userId, isGuest: false });
-        assert.equal(await isLocalDevHost(), false);
-        assert.doesNotThrow(() => assertTrustedRequestOrigin(request));
-        assert.throws(() =>
-          assertTrustedRequestOrigin(new Request(request.url)),
-        );
-      }),
-    ),
-  );
+  // This regression exercises authentication policy, not database connectivity.
+  // Keep the real session guard while isolating its identity lookup from local env files.
+  const originalIdentityLookup = prisma.clerkIdentityDeletion.findUnique;
+  const identityLookup = mock.fn(async ({ where }: { where: { clerkUserId: string } }) => {
+    if (where.clerkUserId === "lookup-error") throw new Error("Identity lookup unavailable");
+    return where.clerkUserId === "deleted" ? { clerkUserId: "deleted" } : null;
+  });
+  prisma.clerkIdentityDeletion.findUnique = identityLookup as typeof originalIdentityLookup;
+  try {
+    await Promise.all(
+      ["first", "second"].map(async (userId) =>
+        withMobileRequestContext(userId, request, async () => {
+          await Promise.resolve();
+          assert.equal(getMobileRequestContext()?.userId, userId);
+          assert.deepEqual(await getSessionContext(), { userId, isGuest: false });
+          assert.equal(await isLocalDevHost(), false);
+          assert.doesNotThrow(() => assertTrustedRequestOrigin(request));
+          assert.throws(() =>
+            assertTrustedRequestOrigin(new Request(request.url)),
+          );
+        }),
+      ),
+    );
+    assert.deepEqual(identityLookup.mock.calls.map(call => call.arguments[0]), [
+      { where: { clerkUserId: "first" }, select: { clerkUserId: true } },
+      { where: { clerkUserId: "second" }, select: { clerkUserId: true } },
+    ]);
+    await withMobileRequestContext("deleted", request, async () => {
+      await assert.rejects(getSessionContext(), /^Error: UNAUTHORIZED$/);
+    });
+    await withMobileRequestContext("lookup-error", request, async () => {
+      await assert.rejects(getSessionContext(), /^Error: Identity lookup unavailable$/);
+    });
+  } finally {
+    prisma.clerkIdentityDeletion.findUnique = originalIdentityLookup;
+  }
   assert.equal(getMobileRequestContext(), undefined);
   assert.throws(() => assertTrustedRequestOrigin(request));
   assert.doesNotThrow(() =>
@@ -186,7 +210,7 @@ async function main() {
     { error: "Invalid file" },
   );
   console.log(
-    "PASS mobile API allowlist, response minimization, exact-request origin exemption, async principal isolation, and browser CSRF preservation",
+    "PASS mobile API allowlist, response minimization, exact-request origin exemption, async principal isolation, deleted-identity rejection, fail-closed lookup errors, and browser CSRF preservation",
   );
 }
 void main();
